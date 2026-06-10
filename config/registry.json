@@ -1,0 +1,1302 @@
+{
+  "0": {
+    "id": 0,
+    "name": "Root",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "1": {
+    "id": 1,
+    "name": "Apex",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "2": {
+    "id": 2,
+    "name": "Omron",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "3": {
+    "id": 3,
+    "name": "deprecated",
+    "status": "deprecated",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "4": {
+    "id": 4,
+    "name": "Targon",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "5": {
+    "id": 5,
+    "name": "Open Kaito",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "6": {
+    "id": 6,
+    "name": "Infinite Games",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "7": {
+    "id": 7,
+    "name": "Subvortex",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "8": {
+    "id": 8,
+    "name": "Proprietary Trading Network",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "9": {
+    "id": 9,
+    "name": "Pretraining",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "10": {
+    "id": 10,
+    "name": "Sturdy",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "11": {
+    "id": 11,
+    "name": "Dippy Roleplay",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "12": {
+    "id": 12,
+    "name": "Horde",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "13": {
+    "id": 13,
+    "name": "Data Universe",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "14": {
+    "id": 14,
+    "name": "VectorStore",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "15": {
+    "id": 15,
+    "name": "De-Val",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "16": {
+    "id": 16,
+    "name": "BitAds",
+    "status": "at-risk",
+    "risk_flags": [
+      "pruning-risk"
+    ],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "17": {
+    "id": 17,
+    "name": "Three Gen",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "18": {
+    "id": 18,
+    "name": "Cortex.t",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "19": {
+    "id": 19,
+    "name": "Nineteen",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "20": {
+    "id": 20,
+    "name": "BitAgent - Rizzo",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "21": {
+    "id": 21,
+    "name": "Omega Any-to-any",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "22": {
+    "id": 22,
+    "name": "Desearch",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "23": {
+    "id": 23,
+    "name": "SocialTensor",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "24": {
+    "id": 24,
+    "name": "Omega",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "25": {
+    "id": 25,
+    "name": "Protein Folding",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "26": {
+    "id": 26,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "27": {
+    "id": 27,
+    "name": "NI Compute",
+    "status": "at-risk",
+    "risk_flags": [
+      "pruning-risk"
+    ],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "28": {
+    "id": 28,
+    "name": "LOL",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "29": {
+    "id": 29,
+    "name": "Coldint",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "30": {
+    "id": 30,
+    "name": "Bettensor",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "31": {
+    "id": 31,
+    "name": "NAS Chain",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "32": {
+    "id": 32,
+    "name": "It's AI",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "33": {
+    "id": 33,
+    "name": "ReadyAI",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "34": {
+    "id": 34,
+    "name": "BitMind",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "35": {
+    "id": 35,
+    "name": "LogicNet",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "36": {
+    "id": 36,
+    "name": "Web Agents - Autoppia",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "37": {
+    "id": 37,
+    "name": "Finetuning",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "38": {
+    "id": 38,
+    "name": "ChronoLLM",
+    "status": "bootstrap",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "39": {
+    "id": 39,
+    "name": "EdgeMaxxing",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "40": {
+    "id": 40,
+    "name": "Chunking",
+    "status": "at-risk",
+    "risk_flags": [
+      "pruning-risk"
+    ],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "41": {
+    "id": 41,
+    "name": "Sportstensor",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "42": {
+    "id": 42,
+    "name": "Real-Time Data by Masa",
+    "status": "at-risk",
+    "risk_flags": [
+      "pruning-risk"
+    ],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "43": {
+    "id": 43,
+    "name": "Graphite",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "44": {
+    "id": 44,
+    "name": "Score",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "45": {
+    "id": 45,
+    "name": "SWE - Rizzo",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "46": {
+    "id": 46,
+    "name": "Neural3D",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "47": {
+    "id": 47,
+    "name": "Condense AI",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "48": {
+    "id": 48,
+    "name": "Nextplace AI",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "49": {
+    "id": 49,
+    "name": "Hivetrain AutoML",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "50": {
+    "id": 50,
+    "name": "Synth",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "51": {
+    "id": 51,
+    "name": "Compute Subnet",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "52": {
+    "id": 52,
+    "name": "Dojo",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "53": {
+    "id": 53,
+    "name": "Efficient Frontier",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "54": {
+    "id": 54,
+    "name": "WebGenieAI",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "55": {
+    "id": 55,
+    "name": "Precog",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "56": {
+    "id": 56,
+    "name": "Gradients",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "57": {
+    "id": 57,
+    "name": "Gaia",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "58": {
+    "id": 58,
+    "name": "Dippy Speech",
+    "status": "at-risk",
+    "risk_flags": [
+      "pruning-risk"
+    ],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "59": {
+    "id": 59,
+    "name": "Agent Arena by Masa",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "60": {
+    "id": 60,
+    "name": "Bitsec",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "61": {
+    "id": 61,
+    "name": "Red Team",
+    "status": "at-risk",
+    "risk_flags": [
+      "pruning-risk"
+    ],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "62": {
+    "id": 62,
+    "name": "AgenTao",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "63": {
+    "id": 63,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "64": {
+    "id": 64,
+    "name": "Chutes",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "65": {
+    "id": 65,
+    "name": "TAO Private Network",
+    "status": "at-risk",
+    "risk_flags": [
+      "pruning-risk"
+    ],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "66": {
+    "id": 66,
+    "name": "FakeNews",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "67": {
+    "id": 67,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "68": {
+    "id": 68,
+    "name": "Nova",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "69": {
+    "id": 69,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "70": {
+    "id": 70,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "71": {
+    "id": 71,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "72": {
+    "id": 72,
+    "name": "Unknown",
+    "status": "at-risk",
+    "risk_flags": [
+      "pruning-risk"
+    ],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "73": {
+    "id": 73,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "74": {
+    "id": 74,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "75": {
+    "id": 75,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "76": {
+    "id": 76,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "77": {
+    "id": 77,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "78": {
+    "id": 78,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "79": {
+    "id": 79,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "80": {
+    "id": 80,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "81": {
+    "id": 81,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "82": {
+    "id": 82,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "83": {
+    "id": 83,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "84": {
+    "id": 84,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "85": {
+    "id": 85,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "86": {
+    "id": 86,
+    "name": "Unknown",
+    "status": "at-risk",
+    "risk_flags": [
+      "pruning-risk"
+    ],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "87": {
+    "id": 87,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "88": {
+    "id": 88,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "89": {
+    "id": 89,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "90": {
+    "id": 90,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "91": {
+    "id": 91,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "92": {
+    "id": 92,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "93": {
+    "id": 93,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "94": {
+    "id": 94,
+    "name": "Unknown",
+    "status": "at-risk",
+    "risk_flags": [
+      "pruning-risk"
+    ],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "95": {
+    "id": 95,
+    "name": "Actual",
+    "status": "active",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "96": {
+    "id": 96,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "97": {
+    "id": 97,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "98": {
+    "id": 98,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "99": {
+    "id": 99,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "100": {
+    "id": 100,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "101": {
+    "id": 101,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "102": {
+    "id": 102,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "103": {
+    "id": 103,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "104": {
+    "id": 104,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "105": {
+    "id": 105,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "106": {
+    "id": 106,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "107": {
+    "id": 107,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "108": {
+    "id": 108,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "109": {
+    "id": 109,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "110": {
+    "id": 110,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "111": {
+    "id": 111,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "112": {
+    "id": 112,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "113": {
+    "id": 113,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "114": {
+    "id": 114,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "115": {
+    "id": 115,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "116": {
+    "id": 116,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "117": {
+    "id": 117,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "118": {
+    "id": 118,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "119": {
+    "id": 119,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "120": {
+    "id": 120,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "121": {
+    "id": 121,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "122": {
+    "id": 122,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "123": {
+    "id": 123,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "124": {
+    "id": 124,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "125": {
+    "id": 125,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "126": {
+    "id": 126,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  },
+  "127": {
+    "id": 127,
+    "name": "Unknown",
+    "status": "unknown",
+    "risk_flags": [],
+    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "sources": [
+      "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
+    ]
+  }
+}
