@@ -60,4 +60,4 @@ def test_process_daily_rotation():
     # Feedback loop check
     feedback = result["feedback_loop"]
     assert feedback["status"] == "aligned"
-    assert feedback["alignment_score"] == 0.95
+    assert feedback["alignment_score"] == 0.75

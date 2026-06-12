@@ -23,7 +23,7 @@ def daily_rotation():
 
 @app.route('/api/registry', methods=['GET'])
 def get_registry():
-    data = load_data('registry.json')
+    data = load_data('config/registry.json')
     return jsonify(data)
 
 @app.route('/api/subnet/<int:subnet_id>', methods=['GET'])

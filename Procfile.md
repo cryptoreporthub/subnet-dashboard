@@ -1,3 +1,3 @@
 ```
-web: python -u main.py
+web: python server.py
 ```

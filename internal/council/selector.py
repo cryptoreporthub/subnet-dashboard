@@ -97,18 +97,19 @@ class Selector:
             }
         }
 
-    def track_against_brain(self, daily_output: Dict[str, Any]) -> Dict[str, Any]:
+    def track_against_brain(self, daily_output: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Fetches the Brain's recommendations from the MindmapBridge, compares the Selector's
         daily output against them, and logs/tracks the feedback loop.
         
         Args:
             daily_output (dict): The Selector's daily output.
+            context (dict, optional): Real context to pass to the MindmapBridge.
             
         Returns:
             dict: The feedback loop analysis.
         """
-        brain_recommendations = self.mindmap_bridge.get_brain_recommendations()
+        brain_recommendations = self.mindmap_bridge.get_brain_recommendations(context=context)
         feedback = self.mindmap_bridge.log_feedback(daily_output, brain_recommendations)
         
         # Update the Soul-Map state with the daily output
@@ -116,22 +117,49 @@ class Selector:
         
         return feedback
 
-    def process_daily_rotation(self, subnet_ids: List[int], context_map: Optional[Dict[int, Dict[str, Any]]] = None) -> Dict[str, Any]:
+    def process_daily_rotation(self, subnet_ids: Optional[List[int]] = None, context_map: Optional[Dict[int, Dict[str, Any]]] = None) -> Dict[str, Any]:
         """
         The main entry point for the Daily Rotation Engine.
         Processes a list of subnets, aggregates expert opinions, structures the decision payload,
         tracks against the Brain's recommendations, and returns the final structured daily rotation output.
         
         Args:
-            subnet_ids (list): List of subnet IDs to process.
+            subnet_ids (list, optional): List of subnet IDs to process. If None, reads from registry.json.
             context_map (dict, optional): A mapping of subnet ID to its specific context dictionary.
             
         Returns:
             dict: The final structured daily rotation output.
         """
-        context_map = context_map or {}
-        decisions = []
+        import json
+        import os
         
+        context_map = context_map or {}
+        registry_path = getattr(self.mindmap_bridge, "registry_path", "config/registry.json")
+        
+        # Load registry to get actual subnet IDs and context if needed
+        registry = {}
+        if os.path.exists(registry_path):
+            try:
+                with open(registry_path, "r") as f:
+                    registry = json.load(f)
+            except Exception:
+                pass
+                
+        if not subnet_ids:
+            subnet_ids = [int(k) for k in registry.keys()]
+            
+        # Enrich context_map with real data from registry.json if not already present
+        for sub_id in subnet_ids:
+            if sub_id not in context_map:
+                info = registry.get(str(sub_id))
+                if info:
+                    context_map[sub_id] = {
+                        "emission": info.get("emission", 0.0),
+                        "social_mentions": info.get("social_mentions", 0),
+                        "is_overvalued": info.get("is_overvalued", False)
+                    }
+                    
+        decisions = []
         for subnet_id in subnet_ids:
             context = context_map.get(subnet_id)
             opinions = self.get_expert_opinions(subnet_id, context)
@@ -144,7 +172,7 @@ class Selector:
         }
         
         # Track against the Brain's recommendations via the feedback loop
-        feedback = self.track_against_brain(daily_output)
+        feedback = self.track_against_brain(daily_output, context=context_map)
         
         final_output = {
             "daily_output": daily_output,
