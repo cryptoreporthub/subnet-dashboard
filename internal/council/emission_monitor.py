@@ -6,7 +6,7 @@ within the hierarchical, Mindmap-integrated Engine.
 """
 
 class EmissionMonitor:
-    def __init__(self, registry_path: str = "config/registry.json"):
+    def __init__(self, registry_path: str = "registry.json"):
         self.registry_path = registry_path
 
     def check_emission_deltas(self, subnet_id: int, current_emission: float) -> dict:
