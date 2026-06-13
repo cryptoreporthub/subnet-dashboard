@@ -28,7 +28,11 @@ def get_registry():
 
 @app.route('/api/subnet/<int:subnet_id>', methods=['GET'])
 def get_subnet(subnet_id):
-    return jsonify({"subnet_id": subnet_id, "data": "subnet_details"})
+    data = load_data('config/registry.json')
+    subnet_data = data.get(str(subnet_id))
+    if subnet_data:
+        return jsonify({"subnet_id": subnet_id, "data": subnet_data})
+    return jsonify({"error": "Subnet not found"}), 404
 
 @app.route('/api/mindmap/feedback', methods=['POST'])
 def post_feedback():
