@@ -39,6 +39,10 @@ def post_feedback():
     feedback = request.json
     return jsonify({"status": "received", "feedback": feedback})
 
+@app.route('/health', methods=['GET'])
+def health():
+    return "OK"
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 50745))
     app.run(host='0.0.0.0', port=port, debug=True)

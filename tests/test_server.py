@@ -32,3 +32,8 @@ def test_subnet_route_not_found(client):
     assert response.status_code == 404
     data = json.loads(response.data)
     assert 'error' in data
+
+def test_health_route(client):
+    response = client.get('/health')
+    assert response.status_code == 200
+    assert response.data == b"OK"
