@@ -4,8 +4,14 @@ import os
 from flask import Flask, jsonify, render_template, request
 
 from internal.council.mindmap_bridge import MindmapBridge
+from internal import freshness
 
 app = Flask(__name__)
+
+# Freshness configuration
+app.config["ENABLE_BACKGROUND_SYNC"] = (
+    os.environ.get("ENABLE_BACKGROUND_SYNC", "true").lower() != "false"
+)
 
 
 def load_data(filename):
@@ -13,6 +19,21 @@ def load_data(filename):
         with open(filename, "r") as f:
             return json.load(f)
     return {}
+
+
+# Lazily start the background sync once on the first request so it works
+# under both `python server.py` and gunicorn without import-time side effects.
+_background_sync_started = False
+
+
+@app.before_request
+def _ensure_background_sync():
+    global _background_sync_started
+    if _background_sync_started:
+        return
+    _background_sync_started = True
+    if app.config["ENABLE_BACKGROUND_SYNC"] and not app.config.get("TESTING"):
+        freshness.start_background_sync(immediate=False)
 
 
 def _consensus_map():
@@ -40,6 +61,24 @@ def _enrich_registry(data):
             }
         enriched.append(item)
     return enriched
+
+
+def _freshness_meta(source: str = "registry") -> dict:
+    """Build a consistent freshness metadata block for API responses."""
+    if source == "registry":
+        info = freshness.registry_freshness()
+    elif source == "soul_map":
+        info = freshness.soul_map_freshness()
+    elif source == "recommendations":
+        info = freshness.recommendations_freshness()
+    else:
+        info = freshness.source_freshness(source, 300)
+    return {
+        "last_updated": info.get("last_updated"),
+        "age_seconds": info.get("age_seconds"),
+        "is_stale": info.get("is_stale"),
+        "threshold_seconds": info.get("threshold_seconds"),
+    }
 
 
 def _summarize_registry(data):
@@ -141,6 +180,7 @@ def _summarize_registry(data):
 
     return {
         "status": "success",
+        "freshness": _freshness_meta("registry"),
         "summary": {
             "total_subnets": len(subnets),
             "status_counts": status_counts,
@@ -200,6 +240,7 @@ def index():
         reverse=True,
     )[:12]
 
+    freshness_state = freshness.overall_freshness()
     return render_template(
         "index.html",
         summary=summary_payload,
@@ -207,6 +248,7 @@ def index():
         recommendations=recommendations,
         health_status=health_status,
         ticker_items=ticker_items,
+        freshness=freshness_state,
     )
 
 
@@ -219,6 +261,7 @@ def daily_rotation():
     return jsonify(
         {
             "status": "success",
+            "freshness": _freshness_meta("soul_map"),
             "data": {
                 "date": last_output.get("date"),
                 "decisions": last_output.get("decisions", []),
@@ -232,10 +275,13 @@ def daily_rotation():
 @app.route("/api/registry", methods=["GET"])
 def get_registry():
     data = load_data("config/registry.json")
-    # Preserve the original string-keyed shape for API consumers.
+    # Preserve the original string-keyed shape for API consumers; freshness
+    # metadata is added alongside the subnet keys so existing integrations
+    # that iterate by id keep working without change.
     enriched = {}
     for item in _enrich_registry(data):
         enriched[str(item["id"])] = item
+    enriched["freshness"] = _freshness_meta("registry")
     return jsonify(enriched)
 
 
@@ -285,7 +331,14 @@ def list_subnets():
     if limit > 0:
         items = items[:limit]
 
-    return jsonify({"status": "success", "meta": {"total": total, "limit": limit, "offset": offset}, "subnets": items})
+    return jsonify(
+        {
+            "status": "success",
+            "freshness": _freshness_meta("registry"),
+            "meta": {"total": total, "limit": limit, "offset": offset},
+            "subnets": items,
+        }
+    )
 
 
 @app.route("/api/subnet/<int:subnet_id>", methods=["GET"])
@@ -367,6 +420,7 @@ def get_stats():
     return jsonify(
         {
             "status": "success",
+            "freshness": _freshness_meta("registry"),
             "summary": {
                 "total_subnets": len(subnets),
                 "status_counts": status_counts,
@@ -388,20 +442,45 @@ def get_stats():
 def get_soul_map():
     """Expose the persisted Soul-Map state and feedback history."""
     data = load_data("data/soul_map.json")
-    return jsonify({"status": "success", "data": data})
+    return jsonify(
+        {
+            "status": "success",
+            "freshness": _freshness_meta("soul_map"),
+            "data": data,
+        }
+    )
 
 
 @app.route("/api/recommendations", methods=["GET"])
 def get_recommendations():
     """Live Brain recommendations derived from the current registry."""
     bridge = MindmapBridge()
-    return jsonify({"status": "success", "data": bridge.get_brain_recommendations()})
+    return jsonify(
+        {
+            "status": "success",
+            "freshness": _freshness_meta("recommendations"),
+            "data": bridge.get_brain_recommendations(),
+        }
+    )
 
 
 @app.route("/api/mindmap/feedback", methods=["POST"])
 def post_feedback():
     feedback = request.get_json(silent=True)
     return jsonify({"status": "received", "feedback": feedback})
+
+
+@app.route("/api/freshness", methods=["GET"])
+def get_freshness():
+    """Expose freshness state for all dashboard data sources."""
+    return jsonify({"status": "success", "data": freshness.get_sync_state()})
+
+
+@app.route("/api/sync", methods=["POST", "GET"])
+def trigger_sync():
+    """Trigger an on-demand refresh of remote data sources."""
+    report = freshness.refresh_all()
+    return jsonify({"status": "success", "data": report})
 
 
 @app.route("/health", methods=["GET"])
@@ -411,4 +490,7 @@ def health():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 50745))
+    # Background sync is disabled in testing to avoid thread interference.
+    if app.config["ENABLE_BACKGROUND_SYNC"] and not app.config.get("TESTING"):
+        freshness.start_background_sync(immediate=False)
     app.run(host="0.0.0.0", port=port, debug=True)

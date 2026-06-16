@@ -254,6 +254,30 @@
     .health-badge.warn { color: var(--status-at-risk); border-color: rgba(251, 191, 36, 0.25); background: rgba(251, 191, 36, 0.08); }
     .health-badge.error { color: var(--status-deprecated); border-color: rgba(251, 113, 133, 0.25); background: rgba(251, 113, 133, 0.08); }
 
+    .freshness-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: var(--border-radius-pill);
+      background: rgba(100, 116, 139, 0.1);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+
+    .freshness-badge::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .freshness-badge.fresh { color: var(--status-active); border-color: rgba(52, 211, 153, 0.25); background: rgba(52, 211, 153, 0.08); }
+    .freshness-badge.stale { color: var(--status-at-risk); border-color: rgba(251, 191, 36, 0.25); background: rgba(251, 191, 36, 0.08); }
+
     .hero {
       margin-bottom: var(--space-7);
       position: relative;
@@ -1320,6 +1344,9 @@
       </div>
       <div class="nav-meta">
         <span class="live-pill"><span class="live-dot"></span>Live</span>
+        <span class="freshness-badge {{ 'stale' if freshness.overall.any_stale else 'fresh' }}" id="freshness-badge" title="Registry updated {{ freshness.registry.last_updated|default('unknown', true) }}">
+          {{ 'Stale' if freshness.overall.any_stale else 'Fresh' }}
+        </span>
         <span class="health-badge {{ 'ok' if health_status == 'ok' else 'warn' }}" id="health-badge">{{ 'Healthy' if health_status == 'ok' else 'Degraded' }}</span>
       </div>
     </nav>
@@ -1548,6 +1575,7 @@
 
       const els = {
         health: document.getElementById('health-badge'),
+        freshness: document.getElementById('freshness-badge'),
         tickerTrack: document.getElementById('ticker-track'),
         summaryHealth: document.getElementById('summary-health'),
         summaryActive: document.getElementById('summary-active'),
@@ -2069,21 +2097,47 @@
         els.toast._t = setTimeout(() => els.toast.classList.remove('show'), 2600);
       }
 
+      function formatAge(seconds) {
+        if (seconds == null || seconds < 0) return 'unknown';
+        if (seconds < 60) return `${seconds}s`;
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+        return `${Math.floor(seconds / 3600)}h`;
+      }
+
+      function setFreshness(freshness) {
+        if (!els.freshness || !freshness) return;
+        const anyStale = freshness.overall && freshness.overall.any_stale;
+        const registry = freshness.registry || {};
+        const age = registry.age_seconds;
+        const label = anyStale ? 'Stale' : 'Fresh';
+        els.freshness.textContent = age != null ? `${label} · ${formatAge(age)}` : label;
+        els.freshness.classList.toggle('fresh', !anyStale);
+        els.freshness.classList.toggle('stale', !!anyStale);
+        if (registry.last_updated) {
+          els.freshness.title = `Registry updated ${registry.last_updated}`;
+        }
+      }
+
       function loadData() {
         Promise.all([
           fetchJSON('/api/summary'),
           fetchJSON('/api/registry'),
+          fetchJSON('/api/freshness'),
           fetchText('/health'),
-        ]).then(([summaryData, registryData, healthText]) => {
+        ]).then(([summaryData, registryData, freshnessData, healthText]) => {
           state.summary = summaryData.summary || summaryData;
-          state.subnets = Object.entries(registryData).map(([key, value]) => {
-            const item = { ...value };
-            item.id = item.id ?? Number(key);
-            return item;
-          });
+          const meta = (freshnessData && freshnessData.data) || registryData.freshness || {};
+          state.subnets = Object.entries(registryData)
+            .filter(([key]) => key !== 'freshness')
+            .map(([key, value]) => {
+              const item = { ...value };
+              item.id = item.id ?? Number(key);
+              return item;
+            });
           state.maxValues = computeMaxValues(state.subnets);
           const ok = healthText.trim() === 'OK';
           setHealth(ok ? 'ok' : 'warn', ok ? 'Healthy' : 'Degraded');
+          setFreshness(meta);
           renderSummary();
           renderSpotlight();
           renderTicker();
@@ -2093,6 +2147,7 @@
         }).catch(err => {
           console.error(err);
           setHealth('error', 'Unreachable');
+          setFreshness({ overall: { any_stale: true }, registry: {} });
           els.resultsMeta.textContent = 'Failed to load registry data.';
           showToast('Error loading data');
         });
@@ -2166,6 +2221,11 @@
 
       loadData();
       setInterval(loadData, 60000);
+      setInterval(() => {
+        fetchJSON('/api/freshness')
+          .then(data => setFreshness(data && data.data))
+          .catch(() => setFreshness({ overall: { any_stale: true }, registry: {} }));
+      }, 30000);
     })();
   </script>
 </body>
