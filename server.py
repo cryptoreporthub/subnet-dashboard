@@ -23,49 +23,10 @@ def _consensus_map():
     return {d["subnet_id"]: d for d in decisions if "subnet_id" in d}
 
 
-@app.after_request
-def add_cors_headers(response):
-    """Allow dashboard embedding and cross-origin API access."""
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    response.headers["X-Frame-Options"] = "ALLOWALL"
-    # Short cache for registry/summary to keep the dashboard snappy on Fly.io.
-    if request.path in ("/api/registry", "/api/summary", "/api/stats"):
-        response.headers["Cache-Control"] = "public, max-age=30"
-    return response
-
-
-@app.route("/")
-def index():
-    return render_template("index.html")
-
-
-@app.route("/api/daily-rotation", methods=["GET"])
-def daily_rotation():
-    """Return the latest daily rotation decisions plus live recommendations."""
-    soul_map = load_data("data/soul_map.json")
-    last_output = soul_map.get("soul_map_state", {}).get("last_selector_output", {})
-    recommendations = MindmapBridge().get_brain_recommendations()
-    return jsonify(
-        {
-            "status": "success",
-            "data": {
-                "date": last_output.get("date"),
-                "decisions": last_output.get("decisions", []),
-                "recommendations": recommendations.get("recommendations", {}),
-                "updated_at": soul_map.get("soul_map_state", {}).get("updated_at"),
-            },
-        }
-    )
-
-
-@app.route("/api/registry", methods=["GET"])
-def get_registry():
-    data = load_data("config/registry.json")
+def _enrich_registry(data):
+    """Return registry items enriched with consensus decisions."""
     consensus = _consensus_map()
-    # Enrich each entry with consensus data (additive, backward-compatible).
-    enriched = {}
+    enriched = []
     for key, value in data.items():
         item = dict(value)
         subnet_id = item.get("id", int(key))
@@ -77,72 +38,12 @@ def get_registry():
                 "recommended_action": decision.get("recommended_action"),
                 "expert_breakdown": decision.get("expert_breakdown"),
             }
-        enriched[key] = item
-    return jsonify(enriched)
+        enriched.append(item)
+    return enriched
 
 
-@app.route("/api/subnets", methods=["GET"])
-def list_subnets():
-    """List subnets with optional filtering, sorting, and pagination."""
-    data = load_data("config/registry.json")
-    items = []
-    for key, value in data.items():
-        item = dict(value)
-        item.setdefault("id", int(key))
-        items.append(item)
-
-    status_filter = request.args.get("status")
-    if status_filter:
-        statuses = {s.strip().lower() for s in status_filter.split(",")}
-        items = [i for i in items if str(i.get("status", "")).lower() in statuses]
-
-    sort_field = request.args.get("sort", "id")
-    order = request.args.get("order", "asc").lower()
-    reverse = order == "desc"
-
-    def sort_key(item):
-        value = item.get(sort_field)
-        if value is None and sort_field == "total_stake":
-            value = item.get("staking_data", {}).get("total_stake")
-        elif value is None and sort_field == "apy":
-            value = item.get("staking_data", {}).get("apy")
-        if isinstance(value, (int, float)):
-            return (0, value)
-        if isinstance(value, str):
-            return (1, value.lower())
-        return (2, "")
-
-    items = sorted(items, key=sort_key, reverse=reverse)
-
-    try:
-        limit = int(request.args.get("limit", 0))
-        offset = int(request.args.get("offset", 0))
-    except ValueError:
-        limit = 0
-        offset = 0
-
-    total = len(items)
-    if offset:
-        items = items[offset:]
-    if limit > 0:
-        items = items[:limit]
-
-    return jsonify({"status": "success", "meta": {"total": total, "limit": limit, "offset": offset}, "subnets": items})
-
-
-@app.route("/api/subnet/<int:subnet_id>", methods=["GET"])
-def get_subnet(subnet_id):
-    data = load_data("config/registry.json")
-    subnet_data = data.get(str(subnet_id))
-    if subnet_data is None:
-        return jsonify({"error": "Subnet not found"}), 404
-    return jsonify({"subnet_id": subnet_id, "data": subnet_data})
-
-
-@app.route("/api/summary", methods=["GET"])
-def get_summary():
-    """Lightweight aggregated hero-card data for the dashboard."""
-    data = load_data("config/registry.json")
+def _summarize_registry(data):
+    """Build the dashboard summary/highlights payload from registry data."""
     subnets = list(data.values())
 
     status_counts = {}
@@ -168,7 +69,6 @@ def get_summary():
         if updated and (last_updated is None or updated > last_updated):
             last_updated = updated
 
-    # Featured highlights: top emitter, top staked, top APY, most mentioned.
     def top_by(field, n=1):
         def key(s):
             if field in ("total_stake", "apy"):
@@ -239,36 +139,169 @@ def get_summary():
         + overvalued
     )
 
+    return {
+        "status": "success",
+        "summary": {
+            "total_subnets": len(subnets),
+            "status_counts": status_counts,
+            "status_distribution": status_distribution,
+            "active_count": status_counts.get("active", 0),
+            "at_risk_count": status_counts.get("at-risk", 0),
+            "deprecated_count": status_counts.get("deprecated", 0),
+            "unknown_count": status_counts.get("unknown", 0),
+            "total_stake": round(total_stake, 4),
+            "total_emission": round(total_emission, 4),
+            "total_social_mentions": total_mentions,
+            "overvalued_count": overvalued,
+            "flagged_count": flagged_count,
+            "avg_apy": round(sum(apys) / len(apys), 6) if apys else 0.0,
+            "network_health": network_health,
+            "last_updated": last_updated,
+        },
+        "highlights": {
+            "top_emitter": top_by("emission", 1),
+            "top_staked": top_by("total_stake", 1),
+            "top_apy": top_by("apy", 1),
+            "most_mentioned": top_by("social_mentions", 1),
+            "top_consensus": top_by_consensus(1),
+            "riskiest": riskiest_by_consensus(1),
+        },
+    }
+
+
+@app.after_request
+def add_cors_headers(response):
+    """Allow dashboard embedding and cross-origin API access."""
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    response.headers["X-Frame-Options"] = "ALLOWALL"
+    # Short cache for registry/summary to keep the dashboard snappy on Fly.io.
+    if request.path in ("/api/registry", "/api/summary", "/api/stats"):
+        response.headers["Cache-Control"] = "public, max-age=30"
+    return response
+
+
+@app.route("/")
+def index():
+    """Server-render the dashboard hero content for a premium first paint."""
+    data = load_data("config/registry.json")
+    enriched = _enrich_registry(data)
+    summary_payload = _summarize_registry(data)
+    recommendations = MindmapBridge().get_brain_recommendations()
+
+    # Health status derived from required data files.
+    health_status = "ok" if data and os.path.exists("data/soul_map.json") else "warn"
+
+    # Top subnets for the scrolling ticker (duplicated client-side, but pre-filled here).
+    ticker_items = sorted(
+        enriched,
+        key=lambda s: s.get("emission", 0.0) or 0.0,
+        reverse=True,
+    )[:12]
+
+    return render_template(
+        "index.html",
+        summary=summary_payload,
+        registry=enriched,
+        recommendations=recommendations,
+        health_status=health_status,
+        ticker_items=ticker_items,
+    )
+
+
+@app.route("/api/daily-rotation", methods=["GET"])
+def daily_rotation():
+    """Return the latest daily rotation decisions plus live recommendations."""
+    soul_map = load_data("data/soul_map.json")
+    last_output = soul_map.get("soul_map_state", {}).get("last_selector_output", {})
+    recommendations = MindmapBridge().get_brain_recommendations()
     return jsonify(
         {
             "status": "success",
-            "summary": {
-                "total_subnets": len(subnets),
-                "status_counts": status_counts,
-                "status_distribution": status_distribution,
-                "active_count": status_counts.get("active", 0),
-                "at_risk_count": status_counts.get("at-risk", 0),
-                "deprecated_count": status_counts.get("deprecated", 0),
-                "unknown_count": status_counts.get("unknown", 0),
-                "total_stake": round(total_stake, 4),
-                "total_emission": round(total_emission, 4),
-                "total_social_mentions": total_mentions,
-                "overvalued_count": overvalued,
-                "flagged_count": flagged_count,
-                "avg_apy": round(sum(apys) / len(apys), 6) if apys else 0.0,
-                "network_health": network_health,
-                "last_updated": last_updated,
-            },
-            "highlights": {
-                "top_emitter": top_by("emission", 1),
-                "top_staked": top_by("total_stake", 1),
-                "top_apy": top_by("apy", 1),
-                "most_mentioned": top_by("social_mentions", 1),
-                "top_consensus": top_by_consensus(1),
-                "riskiest": riskiest_by_consensus(1),
+            "data": {
+                "date": last_output.get("date"),
+                "decisions": last_output.get("decisions", []),
+                "recommendations": recommendations.get("recommendations", {}),
+                "updated_at": soul_map.get("soul_map_state", {}).get("updated_at"),
             },
         }
     )
+
+
+@app.route("/api/registry", methods=["GET"])
+def get_registry():
+    data = load_data("config/registry.json")
+    # Preserve the original string-keyed shape for API consumers.
+    enriched = {}
+    for item in _enrich_registry(data):
+        enriched[str(item["id"])] = item
+    return jsonify(enriched)
+
+
+@app.route("/api/subnets", methods=["GET"])
+def list_subnets():
+    """List subnets with optional filtering, sorting, and pagination."""
+    data = load_data("config/registry.json")
+    items = []
+    for key, value in data.items():
+        item = dict(value)
+        item.setdefault("id", int(key))
+        items.append(item)
+
+    status_filter = request.args.get("status")
+    if status_filter:
+        statuses = {s.strip().lower() for s in status_filter.split(",")}
+        items = [i for i in items if str(i.get("status", "")).lower() in statuses]
+
+    sort_field = request.args.get("sort", "id")
+    order = request.args.get("order", "asc").lower()
+    reverse = order == "desc"
+
+    def sort_key(item):
+        value = item.get(sort_field)
+        if value is None and sort_field == "total_stake":
+            value = item.get("staking_data", {}).get("total_stake")
+        elif value is None and sort_field == "apy":
+            value = item.get("staking_data", {}).get("apy")
+        if isinstance(value, (int, float)):
+            return (0, value)
+        if isinstance(value, str):
+            return (1, value.lower())
+        return (2, "")
+
+    items = sorted(items, key=sort_key, reverse=reverse)
+
+    try:
+        limit = int(request.args.get("limit", 0))
+        offset = int(request.args.get("offset", 0))
+    except ValueError:
+        limit = 0
+        offset = 0
+
+    total = len(items)
+    if offset:
+        items = items[offset:]
+    if limit > 0:
+        items = items[:limit]
+
+    return jsonify({"status": "success", "meta": {"total": total, "limit": limit, "offset": offset}, "subnets": items})
+
+
+@app.route("/api/subnet/<int:subnet_id>", methods=["GET"])
+def get_subnet(subnet_id):
+    data = load_data("config/registry.json")
+    subnet_data = data.get(str(subnet_id))
+    if subnet_data is None:
+        return jsonify({"error": "Subnet not found"}), 404
+    return jsonify({"subnet_id": subnet_id, "data": subnet_data})
+
+
+@app.route("/api/summary", methods=["GET"])
+def get_summary():
+    """Lightweight aggregated hero-card data for the dashboard."""
+    data = load_data("config/registry.json")
+    return jsonify(_summarize_registry(data))
 
 
 @app.route("/api/stats", methods=["GET"])

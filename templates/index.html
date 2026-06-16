@@ -867,6 +867,13 @@
     .status-bootstrap { color: var(--status-bootstrap); background: rgba(96, 165, 250, 0.1); border-color: rgba(96, 165, 250, 0.25); }
     .status-unknown { color: var(--status-unknown); background: rgba(148, 163, 184, 0.1); border-color: rgba(148, 163, 184, 0.25); }
 
+    /* Server-rendered distribution segments use status class for colour. */
+    .distribution-segment.status-active { background: var(--status-active); }
+    .distribution-segment.status-at-risk { background: var(--status-at-risk); }
+    .distribution-segment.status-deprecated { background: var(--status-deprecated); }
+    .distribution-segment.status-bootstrap { background: var(--status-bootstrap); }
+    .distribution-segment.status-unknown { background: var(--status-unknown); }
+
     .status-active::before { animation: pulse 2s infinite; }
 
     .action-badge {
@@ -920,6 +927,56 @@
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
       gap: var(--space-4);
+    }
+
+    .noscript-fallback {
+      margin-top: var(--space-5);
+      padding: var(--space-4);
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-card);
+    }
+
+    .noscript-fallback p {
+      color: var(--text-secondary);
+      margin: 0 0 var(--space-4);
+    }
+
+    .fallback-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .fallback-table th,
+    .fallback-table td {
+      padding: var(--space-3) var(--space-4);
+      text-align: left;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .fallback-table th {
+      color: var(--text-primary);
+      font-weight: 600;
+      background: var(--bg-elevated);
+      position: sticky;
+      top: 0;
+    }
+
+    .fallback-table td.num,
+    .fallback-table th.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .fallback-table a {
+      color: var(--accent-cyan);
+      text-decoration: none;
+    }
+
+    .fallback-table a:hover {
+      text-decoration: underline;
     }
 
     .subnet-card {
@@ -1263,7 +1320,7 @@
       </div>
       <div class="nav-meta">
         <span class="live-pill"><span class="live-dot"></span>Live</span>
-        <span class="health-badge" id="health-badge">Checking…</span>
+        <span class="health-badge {{ 'ok' if health_status == 'ok' else 'warn' }}" id="health-badge">{{ 'Healthy' if health_status == 'ok' else 'Degraded' }}</span>
       </div>
     </nav>
 
@@ -1276,7 +1333,15 @@
         <a class="btn btn-ghost" href="/api/registry" target="_blank" rel="noopener">View raw data</a>
       </div>
       <div class="ticker">
-        <div class="ticker-track" id="ticker-track"></div>
+        <div class="ticker-track" id="ticker-track">
+          {% for item in ticker_items %}
+          <div class="ticker-card">
+            <strong>#{{ item.id }} {{ item.name }}</strong>
+            <span class="delta">{{ "%.2f"|format(item.emission|default(0, true)) }} TAO</span>
+            <span>APY {{ "%.2f"|format((item.staking_data.apy|default(0, true)) * 100) }}%</span>
+          </div>
+          {% endfor %}
+        </div>
       </div>
     </header>
 
@@ -1284,39 +1349,56 @@
       <div class="section-header">
         <div>
           <h3 class="section-title">Network health</h3>
-          <p class="section-subtitle" id="last-updated">Loading…</p>
+          <p class="section-subtitle" id="last-updated">Updated {{ summary.summary.last_updated|default('recently', true) }}</p>
         </div>
       </div>
       <div class="bento" id="summary-grid">
         <div class="card card-green">
           <p class="card-label">Network health</p>
-          <p class="card-value" id="summary-health">—</p>
-          <div class="distribution-bar" id="health-bar"></div>
-          <div class="distribution-legend" id="health-legend"></div>
+          <p class="card-value" id="summary-health">{{ "%.1f"|format((summary.summary.network_health|default(0, true)) * 100) }}%</p>
+          <div class="distribution-bar" id="health-bar">
+            {% set counts = summary.summary.status_counts %}
+            {% set dist = summary.summary.status_distribution %}
+            {% set total = summary.summary.total_subnets or 1 %}
+            {% for status in ['active','at-risk','deprecated','bootstrap','unknown'] %}
+              {% set pct = (dist.get(status, 0) * 100)|round(2) %}
+              {% if pct > 0 %}
+              <div class="distribution-segment status-{{ status }}" style="width:{{ pct }}%;" title="{{ status }}: {{ counts.get(status, 0) }}"></div>
+              {% endif %}
+            {% endfor %}
+          </div>
+          <div class="distribution-legend" id="health-legend">
+            {% for status in ['active','at-risk','deprecated','bootstrap','unknown'] %}
+              {% set count = counts.get(status, 0) %}
+              {% if count %}
+              <span><i class="status-dot status-{{ status }}"></i>{{ status }} {{ count }}</span>
+              {% endif %}
+            {% endfor %}
+          </div>
         </div>
         <div class="card card-cyan">
           <p class="card-label">Active subnets</p>
-          <p class="card-value" id="summary-active">—</p>
-          <p class="card-meta" id="summary-active-meta">—</p>
+          <p class="card-value" id="summary-active">{{ summary.summary.active_count|default(0) }}</p>
+          <p class="card-meta" id="summary-active-meta">{{ "%.0f"|format((summary.summary.active_count|default(0) / (summary.summary.total_subnets or 1)) * 100) }}% of {{ summary.summary.total_subnets|default(0) }} subnets</p>
         </div>
         <div class="card card-rose">
           <p class="card-label">Flagged</p>
-          <p class="card-value" id="summary-flagged">—</p>
-          <p class="card-meta" id="summary-flagged-meta">—</p>
+          <p class="card-value" id="summary-flagged">{{ summary.summary.flagged_count|default(0) }}</p>
+          <p class="card-meta" id="summary-flagged-meta">{{ summary.summary.at_risk_count|default(0) }} at-risk · {{ summary.summary.deprecated_count|default(0) }} deprecated · {{ summary.summary.overvalued_count|default(0) }} overvalued</p>
         </div>
         <div class="card card-violet">
           <p class="card-label">Total emission</p>
-          <p class="card-value" id="summary-emission">—</p>
+          <p class="card-value" id="summary-emission">{{ "%.3f"|format(summary.summary.total_emission|default(0, true)) }}</p>
           <p class="card-meta">TAO emitted across network</p>
         </div>
         <div class="card card-cyan">
           <p class="card-label">Total stake</p>
-          <p class="card-value" id="summary-stake">—</p>
+          <p class="card-value" id="summary-stake">{{ "%.0f"|format(summary.summary.total_stake|default(0, true)) }}</p>
           <p class="card-meta">TAO staked in registry</p>
         </div>
         <div class="card card-amber">
           <p class="card-label">Average APY</p>
-          <p class="card-value" id="summary-apy">—</p>
+          <p class="card-value" id="summary-apy">{{ "%.2f"|format((summary.summary.avg_apy|default(0, true)) * 100) }}%</p>
           <p class="card-meta">Weighted by subnet count</p>
         </div>
       </div>
@@ -1329,7 +1411,43 @@
           <p class="section-subtitle">Notable subnets right now</p>
         </div>
       </div>
-      <div class="spotlight-grid" id="spotlight-grid"></div>
+      <div class="spotlight-grid" id="spotlight-grid">
+        {% set h = summary.highlights %}
+        {% set top_emitter = h.top_emitter[0] if h.top_emitter else None %}
+        {% set top_apy = h.top_apy[0] if h.top_apy else None %}
+        {% set most_mentioned = h.most_mentioned[0] if h.most_mentioned else None %}
+        {% set top_consensus = h.top_consensus[0] if h.top_consensus else None %}
+        {% set riskiest = h.riskiest[0] if h.riskiest else None %}
+
+        {% macro spotlight_card(title, name, metric, status, action, id, accent, icon) %}
+        <article class="spotlight-card" data-id="{{ id }}" tabindex="0" role="button" aria-label="Open {{ title }}: {{ name }}">
+          <div class="spotlight-icon" style="color:var({{ accent }})">{{ icon|safe }}</div>
+          <p class="spotlight-title">{{ title }}</p>
+          <h4 class="spotlight-name">{{ name|default('—', true) }}</h4>
+          <p class="spotlight-metric">{{ metric }}</p>
+          <div class="spotlight-footer">
+            {% if status %}<span class="status-badge status-{{ status }}">{{ status }}</span>{% endif %}
+            {% if action %}<span class="action-badge action-{{ action }}">{{ action }}</span>{% endif %}
+          </div>
+        </article>
+        {% endmacro %}
+
+        {% if top_emitter %}
+          {{ spotlight_card('Top emitter', top_emitter.name, "%.3f"|format(top_emitter.emission|default(0, true)) ~ ' TAO', top_emitter.status, None, top_emitter.id, '--accent-cyan', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>') }}
+        {% endif %}
+        {% if top_apy %}
+          {{ spotlight_card('Highest APY', top_apy.name, "%.2f"|format((top_apy.apy|default(0, true)) * 100) ~ '%', top_apy.status, None, top_apy.id, '--accent-violet', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>') }}
+        {% endif %}
+        {% if most_mentioned %}
+          {{ spotlight_card('Most mentioned', most_mentioned.name, "%.0f"|format(most_mentioned.social_mentions|default(0, true)) ~ ' mentions', most_mentioned.status, None, most_mentioned.id, '--accent-blue', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19c0-1.7-3.5-3-8-3s-8 1.3-8 3"/><circle cx="9.5" cy="9" r="4"/></svg>') }}
+        {% endif %}
+        {% if top_consensus and top_consensus.consensus_score is not none %}
+          {{ spotlight_card('Strongest consensus', top_consensus.name, "%.0f"|format((top_consensus.consensus_score|default(0, true)) * 100) ~ '%', top_consensus.status, top_consensus.recommended_action, top_consensus.id, '--status-active', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="m5 5 2.8 2.8"/><path d="m19 5-2.8 2.8"/><circle cx="12" cy="13" r="7"/></svg>') }}
+        {% endif %}
+        {% if riskiest and riskiest.consensus_score is not none %}
+          {{ spotlight_card('Risk alert', riskiest.name, "%.0f"|format((riskiest.consensus_score|default(0, true)) * 100) ~ '%', riskiest.status, riskiest.recommended_action, riskiest.id, '--status-deprecated', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>') }}
+        {% endif %}
+      </div>
     </section>
 
     <section class="section reveal" id="registry-explorer">
@@ -1371,6 +1489,36 @@
 
       <p class="results-meta" id="results-meta">Loading registry…</p>
       <div id="main-stage"></div>
+
+      <noscript>
+        <div class="noscript-fallback">
+          <p>JavaScript is disabled, so the live explorer is unavailable. Here is the current registry snapshot:</p>
+          <table class="fallback-table">
+            <thead>
+              <tr>
+                <th scope="col">ID</th>
+                <th scope="col">Name</th>
+                <th scope="col">Status</th>
+                <th scope="col" class="num">Emission</th>
+                <th scope="col" class="num">Stake</th>
+                <th scope="col" class="num">APY</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in registry|sort(attribute='id') %}
+              <tr>
+                <td><a href="/api/subnet/{{ item.id }}" target="_blank" rel="noopener">#{{ item.id }}</a></td>
+                <td>{{ item.name|default('—', true) }}</td>
+                <td><span class="status-badge status-{{ item.status|default('unknown') }}">{{ item.status|default('unknown') }}</span></td>
+                <td class="num">{{ "%.3f"|format(item.emission|default(0, true)) }}</td>
+                <td class="num">{{ "%.0f"|format(item.staking_data.total_stake|default(0, true)) }}</td>
+                <td class="num">{{ "%.2f"|format((item.staking_data.apy|default(0, true)) * 100) }}%</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </noscript>
     </section>
 
     <footer class="footer reveal">
