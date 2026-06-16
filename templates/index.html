@@ -8,12 +8,14 @@
       :root {
         color-scheme: dark;
         --bg: #0b1220;
-        --panel: rgba(16, 24, 40, 0.9);
-        --panel-2: rgba(26, 36, 58, 0.9);
+        --panel: rgba(16, 24, 40, 0.92);
+        --panel-2: rgba(26, 36, 58, 0.92);
         --text: #e5eefc;
         --muted: #9fb0d0;
         --accent: #6ea8fe;
         --good: #4ade80;
+        --warn: #fbbf24;
+        --bad: #fb7185;
         --border: rgba(148, 163, 184, 0.18);
         --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
       }
@@ -31,7 +33,7 @@
       }
 
       .wrap {
-        width: min(1100px, calc(100% - 32px));
+        width: min(1180px, calc(100% - 32px));
         margin: 0 auto;
         padding: 32px 0 48px;
       }
@@ -75,7 +77,7 @@
       }
 
       .lead {
-        max-width: 62ch;
+        max-width: 64ch;
         color: var(--muted);
         font-size: 1.05rem;
         line-height: 1.7;
@@ -141,6 +143,8 @@
       }
 
       .metric-value.ok { color: var(--good); }
+      .metric-value.warn { color: var(--warn); }
+      .metric-value.bad { color: var(--bad); }
 
       .grid {
         margin-top: 16px;
@@ -158,7 +162,7 @@
         font-size: 1.15rem;
       }
 
-      .section p, .section li {
+      .section p, .section li, .table-note {
         color: var(--muted);
         line-height: 1.65;
       }
@@ -167,6 +171,95 @@
         margin: 0;
         padding-left: 18px;
       }
+
+      .table-card {
+        margin-top: 16px;
+        padding: 22px;
+      }
+
+      .table-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      .table-head h2 {
+        margin: 0;
+        font-size: 1.25rem;
+      }
+
+      .table-note {
+        margin: 0;
+        font-size: 0.95rem;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 860px;
+      }
+
+      th, td {
+        text-align: left;
+        padding: 14px 12px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+        vertical-align: top;
+      }
+
+      th {
+        color: #cfe0ff;
+        font-size: 0.86rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      td {
+        color: var(--text);
+      }
+
+      .subtle {
+        color: var(--muted);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        background: rgba(255, 255, 255, 0.04);
+        font-size: 0.84rem;
+        white-space: nowrap;
+      }
+
+      .pill.active { color: var(--good); }
+      .pill.at-risk { color: var(--warn); }
+      .pill.deprecated { color: var(--bad); }
+      .pill.unknown { color: #cbd5e1; }
+
+      .loading {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border-radius: 999px;
+        border: 2px solid rgba(255, 255, 255, 0.2);
+        border-top-color: white;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes spin { to { transform: rotate(360deg); } }
 
       .footer {
         margin-top: 18px;
@@ -182,6 +275,10 @@
         color: #dbeafe;
       }
 
+      .error {
+        color: #fecaca;
+      }
+
       @media (max-width: 900px) {
         .hero, .grid { grid-template-columns: 1fr; }
       }
@@ -194,8 +291,8 @@
           <div class="eyebrow">● Live on Fly.io</div>
           <h1>Subnet Dashboard</h1>
           <p class="lead">
-            The placeholder page is gone. This is the working landing page for the dashboard,
-            ready to grow into subnet monitoring, registry views, and future reporting features.
+            Live registry data is loaded directly from <code>/api/registry</code>. This page
+            gives you a quick snapshot of subnet status, risk flags, and a browsable table of entries.
           </p>
           <div class="actions">
             <a class="btn primary" href="/health">Check health</a>
@@ -206,16 +303,16 @@
 
         <aside class="card hero-side">
           <div class="metric">
-            <div class="metric-label">Service status</div>
-            <div class="metric-value ok">Operational</div>
+            <div class="metric-label">Registry entries</div>
+            <div class="metric-value" id="metric-total"><span class="loading"><span class="spinner"></span>Loading</span></div>
           </div>
           <div class="metric">
-            <div class="metric-label">Primary endpoint</div>
-            <div class="metric-value">/health</div>
+            <div class="metric-label">Active subnets</div>
+            <div class="metric-value ok" id="metric-active">—</div>
           </div>
           <div class="metric">
-            <div class="metric-label">UI mode</div>
-            <div class="metric-value">Dashboard shell</div>
+            <div class="metric-label">At-risk / deprecated</div>
+            <div class="metric-value warn" id="metric-risk">—</div>
           </div>
         </aside>
       </section>
@@ -226,27 +323,171 @@
           <ul>
             <li>Flask app with a live homepage</li>
             <li>Health endpoint for deployment checks</li>
-            <li>Registry and API routes for future data</li>
+            <li>Registry and API routes for current data</li>
           </ul>
         </div>
         <div class="card section">
           <h2>What’s next</h2>
           <ul>
-            <li>Connect real subnet data</li>
-            <li>Replace the shell with actual metrics</li>
-            <li>Add filters, tables, and detail views</li>
+            <li>Sort and filter the registry table</li>
+            <li>Surface more metrics from the data source</li>
+            <li>Add drill-down views for each subnet</li>
           </ul>
         </div>
         <div class="card section">
-          <h2>Notes</h2>
+          <h2>Live data source</h2>
           <p>
-            If you want the old placeholder gone immediately, this page is now the new default.
-            Edit <code>templates/index.html</code> to add more sections whenever you’re ready.
+            The registry is fetched from <code>/api/registry</code> and rendered in the browser.
+            If the data source changes, refresh the page to see updates.
           </p>
+        </div>
+      </section>
+
+      <section class="card table-card">
+        <div class="table-head">
+          <div>
+            <h2>Registry snapshot</h2>
+            <p class="table-note" id="table-note">Loading latest registry data…</p>
+          </div>
+          <p class="table-note" id="last-updated"></p>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Risk</th>
+                <th>Emission rank</th>
+                <th>Stake</th>
+                <th>APY</th>
+                <th>Social mentions</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody id="registry-body">
+              <tr>
+                <td colspan="9" class="subtle">Loading registry…</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
       <div class="footer">Subnet Dashboard • deployed and ready</div>
     </main>
+
+    <script>
+      const registryBody = document.getElementById("registry-body");
+      const metricTotal = document.getElementById("metric-total");
+      const metricActive = document.getElementById("metric-active");
+      const metricRisk = document.getElementById("metric-risk");
+      const tableNote = document.getElementById("table-note");
+      const lastUpdated = document.getElementById("last-updated");
+
+      function fmtNumber(value) {
+        const num = Number(value);
+        if (Number.isNaN(num)) return "—";
+        return new Intl.NumberFormat().format(num);
+      }
+
+      function fmtPercent(value) {
+        const num = Number(value);
+        if (Number.isNaN(num)) return "—";
+        return `${(num * 100).toFixed(2)}%`;
+      }
+
+      function fmtStake(value) {
+        const num = Number(value);
+        if (Number.isNaN(num)) return "—";
+        return new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(num);
+      }
+
+      function pillClass(status) {
+        const normalized = String(status || "unknown").toLowerCase();
+        if (normalized.includes("active")) return "pill active";
+        if (normalized.includes("risk")) return "pill at-risk";
+        if (normalized.includes("deprecated")) return "pill deprecated";
+        return "pill unknown";
+      }
+
+      function riskLabel(entry) {
+        const flags = Array.isArray(entry.risk_flags) ? entry.risk_flags : [];
+        if (!flags.length) return "—";
+        return flags.join(", ");
+      }
+
+      function statusClass(entry) {
+        const status = String(entry.status || "unknown").toLowerCase();
+        if (status === "active") return "active";
+        if (status === "at-risk") return "at-risk";
+        if (status === "deprecated") return "deprecated";
+        return "unknown";
+      }
+
+      async function loadRegistry() {
+        try {
+          const response = await fetch("/api/registry", { cache: "no-store" });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const registry = await response.json();
+          const entries = Object.values(registry)
+            .filter((entry) => entry && typeof entry === "object")
+            .sort((a, b) => Number(a.id) - Number(b.id));
+
+          const active = entries.filter((e) => String(e.status).toLowerCase() === "active").length;
+          const risky = entries.filter((e) => {
+            const status = String(e.status || "").toLowerCase();
+            const flags = Array.isArray(e.risk_flags) ? e.risk_flags : [];
+            return status === "at-risk" || status === "deprecated" || flags.length > 0;
+          }).length;
+
+          metricTotal.textContent = fmtNumber(entries.length);
+          metricActive.textContent = fmtNumber(active);
+          metricRisk.textContent = fmtNumber(risky);
+
+          const sample = entries.slice(0, 18);
+          registryBody.innerHTML = sample.map((entry) => {
+            const status = String(entry.status || "unknown");
+            const updated = entry.last_updated ? new Date(entry.last_updated).toLocaleString() : "—";
+            return `
+              <tr>
+                <td>${entry.id ?? "—"}</td>
+                <td>
+                  <strong>${entry.name ?? "—"}</strong><br />
+                  <span class="subtle">${entry.sources?.[0] ?? ""}</span>
+                </td>
+                <td><span class="${pillClass(status)}">${status}</span></td>
+                <td class="subtle">${riskLabel(entry)}</td>
+                <td>${entry.emission_rank ?? "—"}</td>
+                <td>${fmtStake(entry.staking_data?.total_stake)}</td>
+                <td>${fmtPercent(entry.staking_data?.apy)}</td>
+                <td>${fmtNumber(entry.social_mentions)}</td>
+                <td class="subtle">${updated}</td>
+              </tr>
+            `;
+          }).join("");
+
+          const updatedEntries = entries.filter((e) => e.last_updated).map((e) => new Date(e.last_updated).getTime());
+          if (updatedEntries.length) {
+            lastUpdated.textContent = `Latest update: ${new Date(Math.max(...updatedEntries)).toLocaleString()}`;
+          }
+          tableNote.textContent = `Showing ${sample.length} of ${entries.length} registry entries.`;
+        } catch (error) {
+          metricTotal.innerHTML = '<span class="error">Unavailable</span>';
+          metricActive.textContent = "—";
+          metricRisk.textContent = "—";
+          registryBody.innerHTML = `
+            <tr>
+              <td colspan="9" class="error">Unable to load registry data: ${error.message}</td>
+            </tr>
+          `;
+          tableNote.textContent = "Registry could not be loaded.";
+        }
+      }
+
+      loadRegistry();
+    </script>
   </body>
 </html>
