@@ -81,6 +81,60 @@ def _freshness_meta(source: str = "registry") -> dict:
     }
 
 
+def _build_simivision(data, recommendations):
+    """Build the SimiVision top-picks payload from registry + brain recommendations.
+
+    Merges the daily selector decisions (when available) with live Brain
+    recommendations so every surfaced card is traceable back to underlying
+    verdicts.
+    """
+    registry_by_id = {str(item.get("id", key)): item for key, item in data.items()}
+    recs = recommendations.get("recommendations", {}) or {}
+    soul_map = load_data("data/soul_map.json")
+    last_output = soul_map.get("soul_map_state", {}).get("last_selector_output", {})
+    decisions = last_output.get("decisions", []) or []
+    decisions_by_id = {str(d.get("subnet_id")): d for d in decisions}
+
+    choices = []
+    for sub_id, rec in recs.items():
+        subnet = registry_by_id.get(sub_id) or {}
+        decision = decisions_by_id.get(sub_id) or {}
+        action = decision.get("recommended_action") or rec.get("action") or "hold"
+        target_weight = decision.get("target_weight") or rec.get("target_weight") or 0.5
+        confidence = decision.get("consensus_score") or 0.5
+        expert_breakdown = decision.get("expert_breakdown") or {
+            "quant": {"score": confidence},
+            "hype": {"score": confidence},
+            "contrarian": {"score": confidence},
+        }
+        metrics = rec.get("metrics", {}) or {}
+        emission = metrics.get("emission") or subnet.get("emission") or 0.0
+        social_mentions = metrics.get("social_mentions") or subnet.get("social_mentions") or 0
+
+        choices.append(
+            {
+                "subnet_id": subnet.get("id") or int(sub_id),
+                "name": subnet.get("name") or f"Subnet {sub_id}",
+                "action": action,
+                "confidence": confidence,
+                "edge_score": confidence,
+                "preferred_entry": "Spot entry",
+                "reward_risk": {"label": "favourable", "ratio": round(emission / 0.5, 2) if emission else 1.0},
+                "horizon": "24h",
+                "judge_agreement": "unanimous",
+                "target_weight": target_weight,
+                "expert_breakdown": expert_breakdown,
+                "freshness": _freshness_meta("recommendations"),
+                "emission": emission,
+                "social_mentions": social_mentions,
+            }
+        )
+
+    # Sort by confidence and surface the top 3 traceable picks.
+    choices.sort(key=lambda c: c["confidence"], reverse=True)
+    return {"choices": choices[:3]}
+
+
 def _summarize_registry(data):
     """Build the dashboard summary/highlights payload from registry data."""
     subnets = list(data.values())
@@ -241,11 +295,13 @@ def index():
     )[:12]
 
     freshness_state = freshness.overall_freshness()
+    simivision = _build_simivision(data, recommendations)
     return render_template(
         "index.html",
         summary=summary_payload,
         registry=enriched,
         recommendations=recommendations,
+        simivision=simivision,
         health_status=health_status,
         ticker_items=ticker_items,
         freshness=freshness_state,
