@@ -1,320 +1,358 @@
-# Subnet Pulse — Live Bittensor Intelligence
-      
-
-     
-
- 
-
-  
-
- 
-
-P
-
- 
-
- 
-# Subnet Pulse
-
- 
-Live Bittensor Intelligence
-
- 
-
- 
-
- 
-
- Live {{ freshness.age_label }} {{ 'Healthy' if health_status == 'ok' else 'Degraded' }} 
-
-   
-
-Bittensor network command center
-
- 
-## See the subnet economy in high definition.
-
- 
-Real-time registry intelligence, consensus signals, and economic health for every subnet. Surface opportunities, spot risk, and move with the network.
-
- 
-
- Explore registry [View raw data](https://raw.githubusercontent.com/api/registry) 
-
- 
-
- 
-
- {% for item in ticker_items %} 
-
- **#{{ item.id }} {{ item.name }}** {{ "%.2f"|format(item.emission|default(0, true)) }} TAO APY {{ "%.2f"|format((item.staking_data.apy|default(0, true)) * 100) }}% 
-
- {% endfor %} 
-
- 
-
-   
-
- 
-
- 
-### SimiVision
-
- 
-Top 3 subnet choices for today — click a card for the deep-dive.
-
- 
-
- 
-
- {{ freshness.age_label }} 
-
- 
-
- 
-
- 
-#### Traceability manifesto
-
- 
-SimiVision must not be a standalone presentation layer; it must consume and expose the Mindmap/Judge/self-learning loop so every surfaced pick can be traced, evaluated, and fed back into future rankings.
-
- 
-SimiVision sits on top of the Mindmap and self-learning loop, and every card should be traceable back to the verdicts that formed it.
-
- 
-
- 
-
- {% for choice in simivision.choices %}  
-
- 
-
- 
-#{{ choice.subnet_id }}
-
- 
-#### {{ choice.name }}
-
- 
-
- {{ choice.action }} 
-
- 
-
- {{ "%.0f"|format((choice.confidence|default(0, true)) * 100) }}% confidence 
-
- 
-
- 
-
-Edge score{{ "%.0f"|format((choice.edge_score|default(0, true)) * 100) }}%
-
- 
-
-Preferred entry{{ choice.preferred_entry }}
-
- 
-
-Reward / risk{{ choice.reward_risk.label }} ({{ choice.reward_risk.ratio }})
-
- 
-
-Horizon{{ choice.horizon }}
-
- 
-
-Judge agreement{{ choice.judge_agreement }}
-
- 
-
-Brain target{{ "%.0f"|format((choice.target_weight|default(0, true)) * 100) }}%
-
- 
-
-Verdicts  {% set b = choice.expert_breakdown %} Q {{ "%.0f"|format((b.quant.score|default(0, true)) * 100) }}% H {{ "%.0f"|format((b.hype.score|default(0, true)) * 100) }}% C {{ "%.0f"|format((b.contrarian.score|default(0, true)) * 100) }}%  
-
- 
-
- 
-
- {{ choice.freshness.age_label|default('unknown') }} Trace pick  
-
-  {% endfor %} 
-
-   
-
- 
-
- 
-### Network health
-
- 
-Updated {{ summary.summary.last_updated|default('recently', true) }} · {{ freshness.age_label }}
-
- 
-
- 
-
- 
-
- 
-
- 
-Network health
-
- 
-{{ "%.1f"|format((summary.summary.network_health|default(0, true)) * 100) }}%
-
- 
-
- {% set counts = summary.summary.status_counts %} {% set dist = summary.summary.status_distribution %} {% set total = summary.summary.total_subnets or 1 %} {% for status in ['active','at-risk','deprecated','bootstrap','unknown'] %} {% set pct = (dist.get(status, 0) * 100)|round(2) %} {% if pct > 0 %}  {% endif %} {% endfor %} 
-
- 
-
- {% for status in ['active','at-risk','deprecated','bootstrap','unknown'] %} {% set count = counts.get(status, 0) %} {% if count %} {{ status }} {{ count }} {% endif %} {% endfor %} 
-
- 
-
- 
-
- 
-Active subnets
-
- 
-{{ summary.summary.active_count|default(0) }}
-
- 
-{{ "%.0f"|format((summary.summary.active_count|default(0) / (summary.summary.total_subnets or 1)) * 100) }}% of {{ summary.summary.total_subnets|default(0) }} subnets
-
- 
-
- 
-
- 
-Flagged
-
- 
-{{ summary.summary.flagged_count|default(0) }}
-
- 
-{{ summary.summary.at_risk_count|default(0) }} at-risk · {{ summary.summary.deprecated_count|default(0) }} deprecated · {{ summary.summary.overvalued_count|default(0) }} overvalued
-
- 
-
- 
-
- 
-Total emission
-
- 
-{{ "%.3f"|format(summary.summary.total_emission|default(0, true)) }}
-
- 
-TAO emitted across network
-
- 
-
- 
-
- 
-Total stake
-
- 
-{{ "%.0f"|format(summary.summary.total_stake|default(0, true)) }}
-
- 
-TAO staked in registry
-
- 
-
- 
-
- 
-Average APY
-
- 
-{{ "%.2f"|format((summary.summary.avg_apy|default(0, true)) * 100) }}%
-
- 
-Weighted by subnet count
-
- 
-
- 
-
-   
-
- 
-
- 
-### Spotlight
-
- 
-Notable subnets right now
-
- 
-
- 
-
- 
-
- {% set h = summary.highlights %} {% set top_emitter = h.top_emitter[0] if h.top_emitter else None %} {% set top_apy = h.top_apy[0] if h.top_apy else None %} {% set most_mentioned = h.most_mentioned[0] if h.most_mentioned else None %} {% set top_consensus = h.top_consensus[0] if h.top_consensus else None %} {% set riskiest = h.riskiest[0] if h.riskiest else None %} {% macro spotlight_card(title, name, metric, status, action, id, accent, icon) %}  
-
-{{ icon|safe }}
-
- 
-{{ title }}
-
- 
-#### {{ name|default('—', true) }}
-
- 
-{{ metric }}
-
- 
-
- {% if status %}{{ status }}{% endif %} {% if action %}{{ action }}{% endif %} 
-
-  {% endmacro %} {% if top_emitter %} {{ spotlight_card('Top emitter', top_emitter.name, "%.3f"|format(top_emitter.emission|default(0, true)) ~ ' TAO', top_emitter.status, None, top_emitter.id, '--accent-cyan', '') }} {% endif %} {% if top_apy %} {{ spotlight_card('Highest APY', top_apy.name, "%.2f"|format((top_apy.apy|default(0, true)) * 100) ~ '%', top_apy.status, None, top_apy.id, '--accent-violet', '') }} {% endif %} {% if most_mentioned %} {{ spotlight_card('Most mentioned', most_mentioned.name, "%.0f"|format(most_mentioned.social_mentions|default(0, true)) ~ ' mentions', most_mentioned.status, None, most_mentioned.id, '--accent-blue', '') }} {% endif %} {% if top_consensus and top_consensus.consensus_score is not none %} {{ spotlight_card('Strongest consensus', top_consensus.name, "%.0f"|format((top_consensus.consensus_score|default(0, true)) * 100) ~ '%', top_consensus.status, top_consensus.recommended_action, top_consensus.id, '--status-active', '') }} {% endif %} {% if riskiest and riskiest.consensus_score is not none %} {{ spotlight_card('Risk alert', riskiest.name, "%.0f"|format((riskiest.consensus_score|default(0, true)) * 100) ~ '%', riskiest.status, riskiest.recommended_action, riskiest.id, '--status-deprecated', '') }} {% endif %} 
-
-   
-
- 
-
- 
-### Registry explorer
-
- 
-Search, filter, and inspect every subnet
-
- 
-
- 
-
- 
-
- 
-
-     / 
-
- 
-
- All Active At-risk Deprecated Risky 
-
-  
-
- Table Cards 
-
- 
-
- 
-Loading registry…
-
-     
-
-Subnet Pulse · Built for the Bittensor ecosystem.
-
- 
-
- [Registry API](https://raw.githubusercontent.com/api/registry) · [Summary API](https://raw.githubusercontent.com/api/summary) · [Health](https://raw.githubusercontent.com/health)
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Subnet Pulse — Live Bittensor Intelligence</title>
+  <style>
+    :root {
+      --bg: #0b0c10;
+      --panel: #15171c;
+      --text: #e6e8ef;
+      --muted: #9aa3b2;
+      --accent-cyan: #00d4ff;
+      --accent-violet: #a78bfa;
+      --accent-blue: #60a5fa;
+      --status-active: #22c55e;
+      --status-at-risk: #f59e0b;
+      --status-deprecated: #ef4444;
+      --status-bootstrap: #3b82f6;
+      --status-unknown: #6b7280;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    a { color: var(--accent-cyan); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; }
+    header {
+      padding: 3rem 0 1.5rem;
+      border-bottom: 1px solid #22262d;
+    }
+    header h1 { margin: 0 0 0.5rem; font-size: 2.5rem; }
+    header p { margin: 0; color: var(--muted); font-size: 1.125rem; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 1rem;
+      padding: 0.375rem 0.75rem;
+      border-radius: 9999px;
+      background: #1f2937;
+      font-size: 0.875rem;
+    }
+    .badge.ok { color: var(--status-active); }
+    .badge.warn { color: var(--status-at-risk); }
+    .badge.degraded { color: var(--status-deprecated); }
+    section { padding: 2.5rem 0; border-bottom: 1px solid #22262d; }
+    section h2 { margin: 0 0 0.75rem; font-size: 1.5rem; }
+    section h3 { margin: 0 0 0.5rem; font-size: 1.125rem; color: var(--muted); }
+    .lead { color: var(--muted); max-width: 720px; margin-bottom: 1.5rem; }
+    .ticker {
+      display: flex;
+      gap: 1rem;
+      overflow-x: auto;
+      padding-bottom: 0.5rem;
+    }
+    .ticker-item {
+      flex: 0 0 auto;
+      background: var(--panel);
+      border: 1px solid #22262d;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      min-width: 220px;
+    }
+    .ticker-item strong { display: block; margin-bottom: 0.25rem; }
+    .ticker-item span { color: var(--muted); font-size: 0.875rem; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid #22262d;
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+    }
+    .card h4 { margin: 0 0 0.5rem; font-size: 1rem; color: var(--muted); }
+    .card .value { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .card .meta { color: var(--muted); font-size: 0.875rem; }
+    .choice {
+      background: var(--panel);
+      border: 1px solid #22262d;
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+    }
+    .choice-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    .choice-id { font-size: 0.875rem; color: var(--muted); }
+    .choice-action {
+      padding: 0.25rem 0.625rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      background: #1f2937;
+    }
+    .choice-action.accumulate { color: var(--status-active); }
+    .choice-action.reduce { color: var(--status-deprecated); }
+    .choice-action.hold { color: var(--accent-cyan); }
+    .choice-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .metric { font-size: 0.875rem; }
+    .metric span { display: block; color: var(--muted); font-size: 0.75rem; }
+    .status-pill {
+      display: inline-block;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      background: #1f2937;
+    }
+    .status-pill.active { color: var(--status-active); }
+    .status-pill.at-risk { color: var(--status-at-risk); }
+    .status-pill.deprecated { color: var(--status-deprecated); }
+    .status-pill.bootstrap { color: var(--status-bootstrap); }
+    .status-pill.unknown { color: var(--status-unknown); }
+    .spotlight-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+    .spotlight-card {
+      background: var(--panel);
+      border: 1px solid #22262d;
+      border-radius: 0.75rem;
+      padding: 1rem;
+    }
+    .spotlight-card h4 { margin: 0 0 0.25rem; font-size: 0.875rem; color: var(--muted); }
+    .spotlight-card .name { font-size: 1.125rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .spotlight-card .metric { font-size: 1rem; }
+    footer {
+      padding: 2rem 0;
+      color: var(--muted);
+      font-size: 0.875rem;
+      text-align: center;
+    }
+    .empty { color: var(--muted); font-style: italic; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>Subnet Pulse</h1>
+      <p>Live Bittensor Intelligence</p>
+      <div class="badge {{ 'ok' if health_status == 'ok' else 'warn' }}">
+        Live {{ freshness.age_label|default('now') }} · {{ 'Healthy' if health_status == 'ok' else 'Degraded' }}
+      </div>
+      <p class="lead">Bittensor network command center. See the subnet economy in high definition with real-time registry intelligence, consensus signals, and economic health for every subnet.</p>
+      <a href="https://raw.githubusercontent.com/api/registry" target="_blank" rel="noopener">Explore registry</a>
+      ·
+      <a href="/api/summary" target="_blank">View summary API</a>
+    </div>
+  </header>
+
+  <section>
+    <div class="container">
+      <h2>Trending subnets</h2>
+      <div class="ticker">
+        {% for item in ticker_items %}
+        <div class="ticker-item">
+          <strong>#{{ item.id }} {{ item.name }}</strong>
+          <span>{{ "%.2f"|format(item.emission|default(0, true)) }} TAO emission · {{ "%.2f"|format((item.staking_data.apy|default(0, true)) * 100) }}% APY</span>
+        </div>
+        {% else %}
+        <p class="empty">No ticker data available.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <h2>SimiVision</h2>
+      <p class="lead">Top subnet choices for today — every card is traceable back to the Mindmap/Judge/self-learning loop.</p>
+      <p class="meta">Freshness: {{ freshness.age_label|default('unknown') }}</p>
+
+      <h3>Traceability manifesto</h3>
+      <p class="lead">SimiVision must not be a standalone presentation layer; it must consume and expose the Mindmap/Judge/self-learning loop so every surfaced pick can be traced, evaluated, and fed back into future rankings.</p>
+
+      <div class="cards" style="margin-top: 1.5rem;">
+        {% for choice in simivision.choices|default([], true) %}
+        <article class="choice">
+          <div class="choice-header">
+            <span class="choice-id">#{{ choice.subnet_id }}</span>
+            <span class="choice-action {{ choice.action|default('hold') }}">{{ choice.action|default('hold') }}</span>
+          </div>
+          <h3 style="margin: 0 0 0.5rem;">{{ choice.name|default('—', true) }}</h3>
+          {% set b = choice.expert_breakdown|default({}, true) %}
+          <div class="choice-metrics">
+            <div class="metric"><span>Confidence</span>{{ "%.0f"|format((choice.confidence|default(0, true)) * 100) }}%</div>
+            <div class="metric"><span>Edge score</span>{{ "%.0f"|format((choice.edge_score|default(0, true)) * 100) }}%</div>
+            <div class="metric"><span>Preferred entry</span>{{ choice.preferred_entry|default('—') }}</div>
+            <div class="metric"><span>Reward / risk</span>{{ choice.reward_risk.label|default('—') }} ({{ choice.reward_risk.ratio|default('—') }})</div>
+            <div class="metric"><span>Horizon</span>{{ choice.horizon|default('—') }}</div>
+            <div class="metric"><span>Judge agreement</span>{{ choice.judge_agreement|default('—') }}</div>
+            <div class="metric"><span>Brain target</span>{{ "%.0f"|format((choice.target_weight|default(0, true)) * 100) }}%</div>
+            <div class="metric"><span>Verdicts</span>Q {{ "%.0f"|format((b.quant.score|default(0, true)) * 100) }}% · H {{ "%.0f"|format((b.hype.score|default(0, true)) * 100) }}% · C {{ "%.0f"|format((b.contrarian.score|default(0, true)) * 100) }}%</div>
+          </div>
+          <p class="meta" style="margin-top: 1rem;">{{ choice.freshness.age_label|default('unknown') }} · Trace pick</p>
+        </article>
+        {% else %}
+        <p class="empty">No SimiVision picks available.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <h2>Network health</h2>
+      <p class="meta">Updated {{ summary.summary.last_updated|default('recently', true) }} · {{ freshness.age_label|default('unknown') }}</p>
+
+      <div class="cards">
+        <div class="card">
+          <h4>Network health</h4>
+          <div class="value">{{ "%.1f"|format((summary.summary.network_health|default(0, true)) * 100) }}%</div>
+          <div class="meta">Active share of network</div>
+        </div>
+        <div class="card">
+          <h4>Active subnets</h4>
+          <div class="value">{{ summary.summary.active_count|default(0) }}</div>
+          <div class="meta">{{ "%.0f"|format((summary.summary.active_count|default(0) / (summary.summary.total_subnets or 1)) * 100) }}% of {{ summary.summary.total_subnets|default(0) }} subnets</div>
+        </div>
+        <div class="card">
+          <h4>Flagged</h4>
+          <div class="value">{{ summary.summary.flagged_count|default(0) }}</div>
+          <div class="meta">{{ summary.summary.at_risk_count|default(0) }} at-risk · {{ summary.summary.deprecated_count|default(0) }} deprecated · {{ summary.summary.overvalued_count|default(0) }} overvalued</div>
+        </div>
+        <div class="card">
+          <h4>Total emission</h4>
+          <div class="value">{{ "%.3f"|format(summary.summary.total_emission|default(0, true)) }}</div>
+          <div class="meta">TAO emitted across network</div>
+        </div>
+        <div class="card">
+          <h4>Total stake</h4>
+          <div class="value">{{ "%.0f"|format(summary.summary.total_stake|default(0, true)) }}</div>
+          <div class="meta">TAO staked in registry</div>
+        </div>
+        <div class="card">
+          <h4>Average APY</h4>
+          <div class="value">{{ "%.2f"|format((summary.summary.avg_apy|default(0, true)) * 100) }}%</div>
+          <div class="meta">Weighted by subnet count</div>
+        </div>
+      </div>
+
+      {% set counts = summary.summary.status_counts|default({}, true) %}
+      {% set dist = summary.summary.status_distribution|default({}, true) %}
+      {% set total = summary.summary.total_subnets or 1 %}
+      <div style="margin-top: 1.5rem;">
+        {% for status in ['active','at-risk','deprecated','bootstrap','unknown'] %}
+        {% set pct = (dist.get(status, 0) * 100)|round(2) %}
+        {% if pct > 0 %}
+        <span class="status-pill {{ status }}">{{ status }} {{ pct }}%</span>
+        {% endif %}
+        {% endfor %}
+      </div>
+      <div style="margin-top: 0.75rem;">
+        {% for status in ['active','at-risk','deprecated','bootstrap','unknown'] %}
+        {% set count = counts.get(status, 0) %}
+        {% if count %}
+        <span class="status-pill {{ status }}">{{ status }} {{ count }}</span>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <h2>Spotlight</h2>
+      <p class="lead">Notable subnets right now.</p>
+      {% set h = summary.highlights|default({}, true) %}
+      {% set top_emitter = h.top_emitter[0] if h.top_emitter else None %}
+      {% set top_apy = h.top_apy[0] if h.top_apy else None %}
+      {% set most_mentioned = h.most_mentioned[0] if h.most_mentioned else None %}
+      {% set top_consensus = h.top_consensus[0] if h.top_consensus else None %}
+      {% set riskiest = h.riskiest[0] if h.riskiest else None %}
+      <div class="spotlight-grid">
+        {% if top_emitter %}
+        <div class="spotlight-card">
+          <h4>Top emitter</h4>
+          <div class="name">{{ top_emitter.name|default('—', true) }}</div>
+          <div class="metric">{{ "%.3f"|format(top_emitter.emission|default(0, true)) }} TAO</div>
+          {% if top_emitter.status %}<span class="status-pill {{ top_emitter.status }}">{{ top_emitter.status }}</span>{% endif %}
+        </div>
+        {% endif %}
+        {% if top_apy %}
+        <div class="spotlight-card">
+          <h4>Highest APY</h4>
+          <div class="name">{{ top_apy.name|default('—', true) }}</div>
+          <div class="metric">{{ "%.2f"|format((top_apy.apy|default(0, true)) * 100) }}%</div>
+          {% if top_apy.status %}<span class="status-pill {{ top_apy.status }}">{{ top_apy.status }}</span>{% endif %}
+        </div>
+        {% endif %}
+        {% if most_mentioned %}
+        <div class="spotlight-card">
+          <h4>Most mentioned</h4>
+          <div class="name">{{ most_mentioned.name|default('—', true) }}</div>
+          <div class="metric">{{ "%.0f"|format(most_mentioned.social_mentions|default(0, true)) }} mentions</div>
+          {% if most_mentioned.status %}<span class="status-pill {{ most_mentioned.status }}">{{ most_mentioned.status }}</span>{% endif %}
+        </div>
+        {% endif %}
+        {% if top_consensus and top_consensus.consensus_score is not none %}
+        <div class="spotlight-card">
+          <h4>Strongest consensus</h4>
+          <div class="name">{{ top_consensus.name|default('—', true) }}</div>
+          <div class="metric">{{ "%.0f"|format((top_consensus.consensus_score|default(0, true)) * 100) }}%</div>
+          {% if top_consensus.status %}<span class="status-pill {{ top_consensus.status }}">{{ top_consensus.status }}</span>{% endif %}
+          {% if top_consensus.recommended_action %}<span class="choice-action {{ top_consensus.recommended_action }}">{{ top_consensus.recommended_action }}</span>{% endif %}
+        </div>
+        {% endif %}
+        {% if riskiest and riskiest.consensus_score is not none %}
+        <div class="spotlight-card">
+          <h4>Risk alert</h4>
+          <div class="name">{{ riskiest.name|default('—', true) }}</div>
+          <div class="metric">{{ "%.0f"|format((riskiest.consensus_score|default(0, true)) * 100) }}%</div>
+          {% if riskiest.status %}<span class="status-pill {{ riskiest.status }}">{{ riskiest.status }}</span>{% endif %}
+          {% if riskiest.recommended_action %}<span class="choice-action {{ riskiest.recommended_action }}">{{ riskiest.recommended_action }}</span>{% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <h2>Registry explorer</h2>
+      <p class="lead">Search, filter, and inspect every subnet. The full registry is available via the API.</p>
+      <p><a href="/api/registry" target="_blank">Browse registry API</a> · <a href="/api/subnets" target="_blank">List subnets</a></p>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <p>Subnet Pulse · Built for the Bittensor ecosystem.</p>
+      <p>
+        <a href="/api/registry">Registry API</a> ·
+        <a href="/api/summary">Summary API</a> ·
+        <a href="/health">Health</a>
+      </p>
+    </div>
+  </footer>
+</body>
+</html>
