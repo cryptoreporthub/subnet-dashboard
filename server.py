@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 def load_data(filename):
     if os.path.exists(filename):
-        with open(filename, "r") as f:
+        with open(filename, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
@@ -29,7 +29,7 @@ def get_registry():
     return jsonify(data)
 
 
-@app.route("/api/subnet/<int:subnet_id>", methods=["GET"])
+@app.route("/api/subnet/<subnet_id>", methods=["GET"])
 def get_subnet(subnet_id):
     data = load_data("config/registry.json")
     subnet_data = data.get(str(subnet_id))
