@@ -1,0 +1,2684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Subnet Pulse — Live Bittensor Intelligence</title>
+  <meta name="description" content="Live intelligence for the Bittensor subnet economy.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #060914;
+      --bg-surface: #0B1021;
+      --bg-elevated: #111A2E;
+      --bg-overlay: rgba(6, 9, 20, 0.78);
+      --border-subtle: rgba(148, 163, 184, 0.14);
+      --border-accent: rgba(34, 211, 238, 0.28);
+      --border-radius-card: 20px;
+      --border-radius-input: 14px;
+      --border-radius-pill: 9999px;
+      --text-primary: #F8FAFC;
+      --text-secondary: #94A3B8;
+      --text-muted: #64748B;
+      --accent-cyan: #22D3EE;
+      --accent-violet: #A78BFA;
+      --accent-blue: #60A5FA;
+      --accent-gradient: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
+      --status-active: #34D399;
+      --status-at-risk: #FBBF24;
+      --status-deprecated: #FB7185;
+      --status-bootstrap: #60A5FA;
+      --status-unknown: #94A3B8;
+      --action-accumulate: #34D399;
+      --action-hold: #FBBF24;
+      --action-reduce: #FB7185;
+      --overvalued: #F87171;
+      --simi-green: #34D399;
+      --simi-green-dim: rgba(52, 211, 153, 0.12);
+      --simi-green-mid: rgba(52, 211, 153, 0.25);
+      --simi-green-glow: rgba(52, 211, 153, 0.18);
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+      --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.45);
+      --shadow-glow: 0 0 40px rgba(34, 211, 238, 0.12);
+      --font-ui: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 24px;
+      --space-6: 32px;
+      --space-7: 48px;
+      --space-8: 64px;
+      --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-base: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @property --gradient-angle {
+      syntax: '<angle>';
+      initial-value: 0deg;
+      inherits: false;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+    }
+
+    body {
+      font-family: var(--font-ui);
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    .ambient {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(34, 211, 238, 0.06) 0%, transparent 50%),
+        radial-gradient(circle at 80% 90%, rgba(139, 92, 246, 0.05) 0%, transparent 45%),
+        var(--bg-base);
+    }
+
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(90px);
+      opacity: 0.55;
+      animation: drift 24s ease-in-out infinite alternate;
+    }
+
+    .orb-1 {
+      width: 560px;
+      height: 560px;
+      background: radial-gradient(circle, rgba(34, 211, 238, 0.28), transparent 70%);
+      top: -180px;
+      left: -120px;
+      animation-duration: 28s;
+    }
+
+    .orb-2 {
+      width: 720px;
+      height: 720px;
+      background: radial-gradient(circle, rgba(139, 92, 246, 0.24), transparent 70%);
+      top: 10%;
+      right: -240px;
+      animation-duration: 34s;
+      animation-delay: -8s;
+    }
+
+    .orb-3 {
+      width: 480px;
+      height: 480px;
+      background: radial-gradient(circle, rgba(96, 165, 250, 0.22), transparent 70%);
+      bottom: -160px;
+      left: 30%;
+      animation-duration: 30s;
+      animation-delay: -14s;
+    }
+
+    @keyframes drift {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(40px, 60px) scale(1.08); }
+    }
+
+    .grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(34, 211, 238, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34, 211, 238, 0.03) 1px, transparent 1px);
+      background-size: 44px 44px;
+      mask-image: radial-gradient(circle at 50% 0%, black 0%, transparent 75%);
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: var(--space-5);
+    }
+
+    .nav {
+      position: sticky;
+      top: var(--space-4);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+      padding: var(--space-3) var(--space-4);
+      margin-bottom: var(--space-7);
+      background: var(--bg-overlay);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-card);
+      box-shadow: var(--shadow-card);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: var(--accent-gradient);
+      box-shadow: var(--shadow-glow);
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      font-size: 1.1rem;
+      color: var(--bg-base);
+    }
+
+    .brand-text { display: flex; flex-direction: column; }
+
+    .brand-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+      margin: 0;
+    }
+
+    .brand-subtitle {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      margin: 0;
+    }
+
+    .nav-meta {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: var(--border-radius-pill);
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.22);
+      color: var(--status-active);
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--status-active);
+      box-shadow: 0 0 10px var(--status-active);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    .health-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: var(--border-radius-pill);
+      background: rgba(100, 116, 139, 0.1);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+
+    .health-badge.ok { color: var(--status-active); border-color: rgba(52, 211, 153, 0.25); background: rgba(52, 211, 153, 0.08); }
+    .health-badge.warn { color: var(--status-at-risk); border-color: rgba(251, 191, 36, 0.25); background: rgba(251, 191, 36, 0.08); }
+    .health-badge.error { color: var(--status-deprecated); border-color: rgba(251, 113, 133, 0.25); background: rgba(251, 113, 133, 0.08); }
+
+    .hero {
+      margin-bottom: var(--space-7);
+      position: relative;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: 6px 12px;
+      border-radius: var(--border-radius-pill);
+      background: rgba(34, 211, 238, 0.08);
+      border: 1px solid rgba(34, 211, 238, 0.18);
+      color: var(--accent-cyan);
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: var(--space-4);
+    }
+
+    .hero-headline {
+      font-size: clamp(2.6rem, 6.5vw, 4.6rem);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+      margin: 0 0 var(--space-4);
+      max-width: 900px;
+    }
+
+    .hero-headline .gradient {
+      background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-cyan) 55%, var(--accent-violet) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-lead {
+      color: var(--text-secondary);
+      font-size: 1.15rem;
+      max-width: 620px;
+      margin: 0 0 var(--space-5);
+      line-height: 1.6;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+      margin-bottom: var(--space-6);
+    }
+
+    .btn {
+      appearance: none;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: 12px 20px;
+      border-radius: var(--border-radius-input);
+      font-family: var(--font-ui);
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
+      text-decoration: none;
+    }
+
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+
+    .btn-primary {
+      background: var(--accent-gradient);
+      color: var(--bg-base);
+      box-shadow: 0 4px 24px rgba(34, 211, 238, 0.25);
+    }
+
+    .btn-primary:hover { box-shadow: 0 6px 32px rgba(34, 211, 238, 0.35); }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .btn-ghost:hover { border-color: var(--border-accent); color: var(--text-primary); }
+
+    .ticker {
+      overflow: hidden;
+      mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+    }
+
+    .ticker-track {
+      display: flex;
+      gap: var(--space-4);
+      animation: ticker 40s linear infinite;
+      width: max-content;
+    }
+
+    .ticker:hover .ticker-track { animation-play-state: paused; }
+
+    @keyframes ticker {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    .ticker-card {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: 10px 16px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-input);
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .ticker-card strong { color: var(--text-primary); font-weight: 600; }
+    .ticker-card .delta { color: var(--accent-cyan); font-family: var(--font-mono); }
+
+    .section { margin-bottom: var(--space-7); }
+
+    .section-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: var(--space-4);
+      margin-bottom: var(--space-5);
+      flex-wrap: wrap;
+    }
+
+    .section-title {
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .section-title::before {
+      content: "";
+      width: 6px;
+      height: 26px;
+      border-radius: 3px;
+      background: var(--accent-gradient);
+    }
+
+    .section-subtitle {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin: var(--space-1) 0 0;
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 600ms ease, transform 600ms ease;
+    }
+
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .card {
+      position: relative;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-card);
+      padding: var(--space-5);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+      transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 1px;
+      background: linear-gradient(var(--gradient-angle), rgba(34, 211, 238, 0.35), transparent 55%, rgba(139, 92, 246, 0.25));
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+      animation: rotate-gradient 8s linear infinite;
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-card), var(--shadow-glow);
+      border-color: rgba(34, 211, 238, 0.22);
+    }
+
+    @keyframes rotate-gradient {
+      0% { --gradient-angle: 0deg; }
+      100% { --gradient-angle: 360deg; }
+    }
+
+    .card-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-secondary);
+      margin: 0 0 var(--space-3);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .card-value {
+      font-family: var(--font-mono);
+      font-size: 2.4rem;
+      font-weight: 600;
+      line-height: 1.1;
+      margin: 0 0 var(--space-2);
+      letter-spacing: -0.02em;
+    }
+
+    .card-meta {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin: 0;
+    }
+
+    .card-cyan .card-value { color: var(--accent-cyan); }
+    .card-violet .card-value { color: var(--accent-violet); }
+    .card-green .card-value { color: var(--status-active); }
+    .card-amber .card-value { color: var(--status-at-risk); }
+    .card-rose .card-value { color: var(--status-deprecated); }
+
+    .bento {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--space-4);
+    }
+
+    .bento .card:first-child { grid-column: span 2; }
+
+    @media (max-width: 1023px) {
+      .bento { grid-template-columns: repeat(2, 1fr); }
+      .bento .card:first-child { grid-column: span 2; }
+    }
+
+    @media (max-width: 639px) {
+      .app { padding: var(--space-4); }
+      .bento { grid-template-columns: 1fr; }
+      .bento .card:first-child { grid-column: span 1; }
+      .nav { top: var(--space-2); }
+      .nav-meta { display: none; }
+    }
+
+    .distribution-bar {
+      display: flex;
+      height: 8px;
+      border-radius: 4px;
+      overflow: hidden;
+      margin: var(--space-4) 0 var(--space-3);
+      background: var(--bg-elevated);
+    }
+
+    .distribution-segment { transition: width 800ms ease; }
+
+    .distribution-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .distribution-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .distribution-legend i {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .spotlight-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: var(--space-4);
+    }
+
+    @media (max-width: 1199px) {
+      .spotlight-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    @media (max-width: 767px) {
+      .spotlight-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 479px) {
+      .spotlight-grid { grid-template-columns: 1fr; }
+    }
+
+    .spotlight-card {
+      position: relative;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-card);
+      padding: var(--space-4);
+      box-shadow: var(--shadow-card);
+      cursor: pointer;
+      transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
+      overflow: hidden;
+    }
+
+    .spotlight-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(34, 211, 238, 0.25), transparent 60%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+
+    .spotlight-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-card), var(--shadow-glow);
+      border-color: rgba(34, 211, 238, 0.25);
+    }
+
+    .spotlight-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: rgba(34, 211, 238, 0.08);
+      border: 1px solid rgba(34, 211, 238, 0.14);
+      display: grid;
+      place-items: center;
+      margin-bottom: var(--space-3);
+    }
+
+    .spotlight-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-secondary);
+      margin: 0 0 var(--space-1);
+    }
+
+    .spotlight-name {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin: 0 0 var(--space-1);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .spotlight-metric {
+      font-family: var(--font-mono);
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: var(--accent-cyan);
+      margin: 0 0 var(--space-3);
+    }
+
+    .spotlight-footer {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      margin-bottom: var(--space-4);
+      flex-wrap: wrap;
+    }
+
+    .search-wrap {
+      position: relative;
+      flex: 1 1 260px;
+      min-width: 220px;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .search-input {
+      width: 100%;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-input);
+      padding: 11px 44px 11px 40px;
+      color: var(--text-primary);
+      font-family: var(--font-ui);
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+
+    .search-input::placeholder { color: var(--text-muted); }
+    .search-input:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12);
+    }
+
+    .kbd {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      font-size: 0.65rem;
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+
+    .filter-pills {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      appearance: none;
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      border-radius: var(--border-radius-pill);
+      padding: 8px 14px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .pill:hover { border-color: var(--border-accent); color: var(--text-primary); }
+    .pill.active {
+      background: rgba(34, 211, 238, 0.12);
+      border-color: rgba(34, 211, 238, 0.4);
+      color: var(--accent-cyan);
+    }
+
+    .sort-select {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      border-radius: var(--border-radius-input);
+      padding: 9px 12px;
+      font-size: 0.85rem;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .sort-select:focus { border-color: var(--accent-cyan); }
+
+    .view-toggle {
+      display: flex;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-input);
+      overflow: hidden;
+      background: var(--bg-surface);
+    }
+
+    .view-btn {
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      padding: 9px 14px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .view-btn.active {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+    }
+
+    .results-meta {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      margin-bottom: var(--space-4);
+    }
+
+    .table-wrap {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-card);
+      overflow: hidden;
+      box-shadow: var(--shadow-card);
+      overflow-x: auto;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+      min-width: 980px;
+    }
+
+    .data-table th {
+      text-align: left;
+      padding: 16px 18px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-secondary);
+      background: rgba(11, 16, 33, 0.85);
+      border-bottom: 1px solid var(--border-subtle);
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+
+    .data-table th:hover { color: var(--text-primary); }
+    .data-table th .sort-icon { margin-left: 5px; opacity: 0.4; font-size: 0.75rem; }
+    .data-table th.sorted { color: var(--accent-cyan); }
+    .data-table th.sorted .sort-icon { opacity: 1; }
+
+    .data-table td {
+      padding: 16px 18px;
+      border-bottom: 1px solid rgba(55, 65, 81, 0.4);
+      color: var(--text-primary);
+      vertical-align: middle;
+    }
+
+    .data-table tbody tr {
+      transition: background var(--transition-fast), transform var(--transition-fast);
+      cursor: pointer;
+    }
+
+    .data-table tbody tr:hover {
+      background: rgba(17, 26, 46, 0.7);
+    }
+
+    .data-table tbody tr:last-child td { border-bottom: none; }
+
+    .col-id { width: 60px; }
+    .col-name { min-width: 170px; }
+    .col-status { width: 140px; }
+    .col-num { text-align: right; }
+    .data-table th.col-num { text-align: right; }
+
+    .subnet-name {
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .subnet-id {
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      font-size: 0.78rem;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: var(--border-radius-pill);
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: capitalize;
+      border: 1px solid transparent;
+    }
+
+    .status-badge::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .status-active { color: var(--status-active); background: rgba(52, 211, 153, 0.1); border-color: rgba(52, 211, 153, 0.25); }
+    .status-at-risk { color: var(--status-at-risk); background: rgba(251, 191, 36, 0.1); border-color: rgba(251, 191, 36, 0.25); }
+    .status-deprecated { color: var(--status-deprecated); background: rgba(251, 113, 133, 0.1); border-color: rgba(251, 113, 133, 0.25); }
+    .status-bootstrap { color: var(--status-bootstrap); background: rgba(96, 165, 250, 0.1); border-color: rgba(96, 165, 250, 0.25); }
+    .status-unknown { color: var(--status-unknown); background: rgba(148, 163, 184, 0.1); border-color: rgba(148, 163, 184, 0.25); }
+
+    /* Server-rendered distribution segments use status class for colour. */
+    .distribution-segment.status-active { background: var(--status-active); }
+    .distribution-segment.status-at-risk { background: var(--status-at-risk); }
+    .distribution-segment.status-deprecated { background: var(--status-deprecated); }
+    .distribution-segment.status-bootstrap { background: var(--status-bootstrap); }
+    .distribution-segment.status-unknown { background: var(--status-unknown); }
+
+    .status-active::before { animation: pulse 2s infinite; }
+
+    .action-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: var(--border-radius-pill);
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: capitalize;
+    }
+
+    .action-accumulate { color: var(--action-accumulate); background: rgba(52, 211, 153, 0.1); }
+    .action-hold { color: var(--action-hold); background: rgba(251, 191, 36, 0.1); }
+    .action-reduce { color: var(--action-reduce); background: rgba(251, 113, 133, 0.1); }
+    .action-none { color: var(--text-muted); background: rgba(100, 116, 139, 0.1); }
+
+    .risk-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: var(--border-radius-pill);
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: var(--overvalued);
+      border: 1px solid rgba(248, 113, 113, 0.35);
+      background: rgba(248, 113, 113, 0.08);
+      margin-left: 6px;
+    }
+
+    .bar-bg {
+      display: inline-block;
+      width: 56px;
+      height: 5px;
+      background: var(--bg-elevated);
+      border-radius: 3px;
+      overflow: hidden;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: var(--accent-gradient);
+      border-radius: 3px;
+      min-width: 2px;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: var(--space-4);
+    }
+
+    .noscript-fallback {
+      margin-top: var(--space-5);
+      padding: var(--space-4);
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-card);
+    }
+
+    .noscript-fallback p {
+      color: var(--text-secondary);
+      margin: 0 0 var(--space-4);
+    }
+
+    .fallback-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .fallback-table th,
+    .fallback-table td {
+      padding: var(--space-3) var(--space-4);
+      text-align: left;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .fallback-table th {
+      color: var(--text-primary);
+      font-weight: 600;
+      background: var(--bg-elevated);
+      position: sticky;
+      top: 0;
+    }
+
+    .fallback-table td.num,
+    .fallback-table th.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .fallback-table a {
+      color: var(--accent-cyan);
+      text-decoration: none;
+    }
+
+    .fallback-table a:hover {
+      text-decoration: underline;
+    }
+
+    .subnet-card {
+      position: relative;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-card);
+      padding: var(--space-4);
+      box-shadow: var(--shadow-card);
+      cursor: pointer;
+      transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
+      overflow: hidden;
+    }
+
+    .subnet-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-card), var(--shadow-glow);
+      border-color: rgba(34, 211, 238, 0.22);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-3);
+      margin-bottom: var(--space-3);
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .card-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-3);
+      margin-top: var(--space-4);
+    }
+
+    .card-stat-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin: 0 0 var(--space-1);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .card-stat-value {
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0;
+      color: var(--text-primary);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: var(--space-7) var(--space-4);
+      color: var(--text-secondary);
+    }
+
+    .empty-state h3 {
+      color: var(--text-primary);
+      margin: 0 0 var(--space-2);
+    }
+
+    .empty-state p { margin: 0; color: var(--text-muted); }
+
+    .skeleton {
+      background: linear-gradient(90deg, var(--bg-elevated) 25%, rgba(34, 211, 238, 0.06) 50%, var(--bg-elevated) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.4s infinite;
+      border-radius: 8px;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: min(520px, 92vw);
+      z-index: 100;
+      background: var(--bg-overlay);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-left: 1px solid var(--border-subtle);
+      box-shadow: -8px 0 48px rgba(0, 0, 0, 0.55);
+      transform: translateX(110%);
+      transition: transform var(--transition-base);
+      overflow-y: auto;
+      outline: none;
+    }
+
+    .drawer.open {
+      transform: translateX(0);
+    }
+
+    .drawer-close {
+      position: absolute;
+      top: var(--space-4);
+      right: var(--space-4);
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      z-index: 5;
+    }
+
+    .drawer-close:hover { color: var(--text-primary); border-color: var(--border-accent); }
+
+    .drawer-content { padding: var(--space-6); }
+
+    .panel-header {
+      margin-bottom: var(--space-5);
+      padding-right: var(--space-6);
+    }
+
+    .panel-name {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin: var(--space-2) 0 var(--space-3);
+    }
+
+    .panel-meta {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+    }
+
+    .panel-section {
+      margin-bottom: var(--space-5);
+      padding-bottom: var(--space-5);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .panel-section:last-child { border-bottom: none; }
+
+    .panel-section-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-secondary);
+      margin: 0 0 var(--space-3);
+    }
+
+    .consensus-gauge {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+    }
+
+    .gauge-ring {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      border-radius: 50%;
+      background: conic-gradient(var(--accent-cyan) var(--score-deg, 0deg), var(--bg-elevated) 0);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .gauge-ring::before {
+      content: "";
+      position: absolute;
+      inset: 8px;
+      border-radius: 50%;
+      background: var(--bg-surface);
+    }
+
+    .gauge-value {
+      position: relative;
+      font-family: var(--font-mono);
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .expert-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-3);
+    }
+
+    .expert-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: var(--space-3);
+    }
+
+    .expert-name {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-secondary);
+      margin: 0 0 var(--space-2);
+    }
+
+    .expert-score {
+      font-family: var(--font-mono);
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin: 0 0 var(--space-1);
+    }
+
+    .expert-note {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .metric-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(55, 65, 81, 0.35);
+    }
+
+    .metric-row:last-child { border-bottom: none; }
+
+    .metric-label {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .source-link {
+      display: inline-block;
+      color: var(--accent-cyan);
+      font-size: 0.8rem;
+      word-break: break-all;
+      text-decoration: none;
+    }
+
+    .source-link:hover { text-decoration: underline; }
+
+    .backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+      background: rgba(6, 9, 20, 0.6);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--transition-base);
+    }
+
+    .backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: var(--space-5);
+      right: var(--space-5);
+      z-index: 110;
+      padding: 12px 18px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-input);
+      box-shadow: var(--shadow-card);
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      font-weight: 600;
+      transform: translateY(120%);
+      opacity: 0;
+      transition: transform var(--transition-base), opacity var(--transition-base);
+      pointer-events: none;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+      padding: var(--space-5) 0;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      border-top: 1px solid var(--border-subtle);
+      flex-wrap: wrap;
+    }
+
+    .footer a {
+      color: var(--text-secondary);
+      text-decoration: none;
+    }
+
+    .footer a:hover { color: var(--accent-cyan); }
+
+    /* SimiVision landing section */
+    .simivision-section {
+      position: relative;
+      background: linear-gradient(180deg, rgba(52, 211, 153, 0.08) 0%, var(--bg-base) 100%);
+      border: 1px solid var(--simi-green-mid);
+      border-radius: var(--border-radius-card);
+      padding: var(--space-5);
+      box-shadow: var(--shadow-card), 0 0 60px var(--simi-green-glow);
+      overflow: hidden;
+    }
+
+    .simivision-section::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 1px;
+      background: linear-gradient(135deg, var(--simi-green-mid), transparent 55%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+
+    .simivision-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-4);
+      margin-bottom: var(--space-5);
+      position: relative;
+      z-index: 1;
+    }
+
+    .simivision-title {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+      margin: 0;
+    }
+
+    .simivision-title .simi-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: var(--simi-green-dim);
+      border: 1px solid var(--simi-green-mid);
+      color: var(--simi-green);
+      display: grid;
+      place-items: center;
+    }
+
+    .simivision-subtitle {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      margin: var(--space-1) 0 0;
+    }
+
+    .simivision-manifesto {
+      position: relative;
+      z-index: 1;
+      margin-bottom: var(--space-5);
+      padding: var(--space-4);
+      background: var(--bg-elevated);
+      border: 1px solid var(--simi-green-mid);
+      border-left: 4px solid var(--simi-green);
+      border-radius: var(--border-radius-card);
+    }
+
+    .simivision-manifesto h4 {
+      margin: 0 0 var(--space-3);
+      font-size: 0.8rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--simi-green);
+    }
+
+    .simivision-manifesto p {
+      margin: 0 0 var(--space-3);
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+      line-height: 1.6;
+    }
+
+    .simivision-manifesto p:last-child { margin-bottom: 0; }
+
+    .simi-verdicts-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .simi-trace-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: var(--border-radius-pill);
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+    }
+
+    .simivision-meta {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+    }
+
+    .simivision-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-4);
+      position: relative;
+      z-index: 1;
+    }
+
+    @media (max-width: 900px) {
+      .simivision-grid { grid-template-columns: 1fr; }
+    }
+
+    .simi-card {
+      position: relative;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-card);
+      padding: var(--space-4);
+      cursor: pointer;
+      transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
+      overflow: hidden;
+    }
+
+    .simi-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 1px;
+      background: linear-gradient(135deg, var(--simi-green-mid), transparent 60%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+
+    .simi-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-card), 0 0 40px var(--simi-green-glow);
+      border-color: var(--simi-green-mid);
+    }
+
+    .simi-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-2);
+      margin-bottom: var(--space-3);
+    }
+
+    .simi-card-name {
+      font-size: 1.1rem;
+      font-weight: 800;
+      margin: 0;
+      color: var(--text-primary);
+    }
+
+    .simi-card-id {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .simi-card-score {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-2);
+      margin-bottom: var(--space-3);
+    }
+
+    .simi-card-score .score-value {
+      font-family: var(--font-mono);
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--simi-green);
+    }
+
+    .simi-card-score .score-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 700;
+    }
+
+    .simi-card-fields {
+      display: grid;
+      gap: var(--space-2);
+    }
+
+    .simi-field {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+    }
+
+    .simi-field .simi-value {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .simi-card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: var(--space-3);
+      padding-top: var(--space-3);
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .simi-read-more {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--simi-green);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .freshness-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: var(--border-radius-pill);
+      font-size: 0.72rem;
+      font-weight: 700;
+      border: 1px solid transparent;
+    }
+
+    .freshness-pill.fresh { color: var(--status-active); background: rgba(52, 211, 153, 0.1); border-color: rgba(52, 211, 153, 0.25); }
+    .freshness-pill.stale { color: var(--status-at-risk); background: rgba(251, 191, 36, 0.1); border-color: rgba(251, 191, 36, 0.25); }
+    .freshness-pill.unknown { color: var(--text-muted); background: rgba(100, 116, 139, 0.1); border-color: rgba(100, 116, 139, 0.25); }
+
+    .freshness-pill::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .freshness-pill.fresh::before { animation: pulse 2s infinite; }
+
+    .simi-mini-analysis {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      line-height: 1.55;
+      margin: 0 0 var(--space-4);
+    }
+
+    .simi-verdicts {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-3);
+      margin-bottom: var(--space-4);
+    }
+
+    @media (max-width: 520px) {
+      .simi-verdicts { grid-template-columns: 1fr; }
+    }
+
+    .simi-verdict {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: var(--space-3);
+    }
+
+    .simi-verdict-name {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-secondary);
+      margin: 0 0 var(--space-2);
+    }
+
+    .simi-verdict-score {
+      font-family: var(--font-mono);
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin: 0 0 var(--space-1);
+    }
+
+    .simi-verdict-note {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="ambient">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <div class="grid"></div>
+  </div>
+
+  <div class="app">
+    <nav class="nav reveal">
+      <div class="brand">
+        <div class="brand-mark">P</div>
+        <div class="brand-text">
+          <h1 class="brand-title">Subnet Pulse</h1>
+          <p class="brand-subtitle">Live Bittensor Intelligence</p>
+        </div>
+      </div>
+      <div class="nav-meta">
+        <span class="live-pill"><span class="live-dot"></span>Live</span>
+        <span class="freshness-pill {{ freshness.status }}" id="freshness-pill" title="{{ freshness.newest_updated_at }}">{{ freshness.age_label }}</span>
+        <span class="health-badge {{ 'ok' if health_status == 'ok' else 'warn' }}" id="health-badge">{{ 'Healthy' if health_status == 'ok' else 'Degraded' }}</span>
+      </div>
+    </nav>
+
+    <header class="hero reveal">
+      <div class="hero-eyebrow">Bittensor network command center</div>
+      <h2 class="hero-headline">See the subnet economy in <span class="gradient">high definition</span>.</h2>
+      <p class="hero-lead">Real-time registry intelligence, consensus signals, and economic health for every subnet. Surface opportunities, spot risk, and move with the network.</p>
+      <div class="hero-actions">
+        <button class="btn btn-primary" id="explore-btn">Explore registry</button>
+        <a class="btn btn-ghost" href="/api/registry" target="_blank" rel="noopener">View raw data</a>
+      </div>
+      <div class="ticker">
+        <div class="ticker-track" id="ticker-track">
+          {% for item in ticker_items %}
+          <div class="ticker-card">
+            <strong>#{{ item.id }} {{ item.name }}</strong>
+            <span class="delta">{{ "%.2f"|format(item.emission|default(0, true)) }} TAO</span>
+            <span>APY {{ "%.2f"|format((item.staking_data.apy|default(0, true)) * 100) }}%</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </header>
+
+    <section class="section reveal simivision-section" id="simivision" aria-labelledby="simivision-title">
+      <div class="simivision-header">
+        <div>
+          <h3 class="simivision-title" id="simivision-title">
+            <span class="simi-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            </span>
+            SimiVision
+          </h3>
+          <p class="simivision-subtitle">Top 3 subnet choices for today — click a card for the deep-dive.</p>
+        </div>
+        <div class="simivision-meta">
+          <span class="freshness-pill {{ freshness.status }}" id="simi-freshness-pill" title="{{ freshness.newest_updated_at }}">{{ freshness.age_label }}</span>
+        </div>
+      </div>
+      <div class="simivision-manifesto">
+        <h4>Traceability manifesto</h4>
+        <p>SimiVision must not be a standalone presentation layer; it must consume and expose the Mindmap/Judge/self-learning loop so every surfaced pick can be traced, evaluated, and fed back into future rankings.</p>
+        <p>SimiVision sits on top of the Mindmap and self-learning loop, and every card should be traceable back to the verdicts that formed it.</p>
+      </div>
+      <div class="simivision-grid" id="simivision-grid">
+        {% for choice in simivision.choices %}
+        <article class="simi-card" data-simi-idx="{{ loop.index0 }}" tabindex="0" role="button" aria-label="Open SimiVision details for {{ choice.name }}">
+          <div class="simi-card-header">
+            <div>
+              <p class="simi-card-id">#{{ choice.subnet_id }}</p>
+              <h4 class="simi-card-name">{{ choice.name }}</h4>
+            </div>
+            <span class="action-badge action-{{ choice.action }}">{{ choice.action }}</span>
+          </div>
+          <div class="simi-card-score">
+            <span class="score-value">{{ "%.0f"|format((choice.confidence|default(0, true)) * 100) }}%</span>
+            <span class="score-label">confidence</span>
+          </div>
+          <div class="simi-card-fields">
+            <div class="simi-field"><span>Edge score</span><span class="simi-value">{{ "%.0f"|format((choice.edge_score|default(0, true)) * 100) }}%</span></div>
+            <div class="simi-field"><span>Preferred entry</span><span class="simi-value">{{ choice.preferred_entry }}</span></div>
+            <div class="simi-field"><span>Reward / risk</span><span class="simi-value">{{ choice.reward_risk.label }} ({{ choice.reward_risk.ratio }})</span></div>
+            <div class="simi-field"><span>Horizon</span><span class="simi-value">{{ choice.horizon }}</span></div>
+            <div class="simi-field"><span>Judge agreement</span><span class="simi-value">{{ choice.judge_agreement }}</span></div>
+            <div class="simi-field"><span>Brain target</span><span class="simi-value">{{ "%.0f"|format((choice.target_weight|default(0, true)) * 100) }}%</span></div>
+            <div class="simi-field"><span>Verdicts</span>
+              <span class="simi-value simi-verdicts-inline">
+                {% set b = choice.expert_breakdown %}
+                <span class="simi-trace-badge">Q {{ "%.0f"|format((b.quant.score|default(0, true)) * 100) }}%</span>
+                <span class="simi-trace-badge">H {{ "%.0f"|format((b.hype.score|default(0, true)) * 100) }}%</span>
+                <span class="simi-trace-badge">C {{ "%.0f"|format((b.contrarian.score|default(0, true)) * 100) }}%</span>
+              </span>
+            </div>
+          </div>
+          <div class="simi-card-footer">
+            <span class="freshness-pill {{ choice.freshness.status|default('unknown') }}" title="{{ choice.freshness.updated_at|default('') }}">{{ choice.freshness.age_label|default('unknown') }}</span>
+            <span class="simi-read-more">Trace pick <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="section-header">
+        <div>
+          <h3 class="section-title">Network health</h3>
+          <p class="section-subtitle" id="last-updated">Updated {{ summary.summary.last_updated|default('recently', true) }} · <span id="freshness-age">{{ freshness.age_label }}</span></p>
+        </div>
+      </div>
+      <div class="bento" id="summary-grid">
+        <div class="card card-green">
+          <p class="card-label">Network health</p>
+          <p class="card-value" id="summary-health">{{ "%.1f"|format((summary.summary.network_health|default(0, true)) * 100) }}%</p>
+          <div class="distribution-bar" id="health-bar">
+            {% set counts = summary.summary.status_counts %}
+            {% set dist = summary.summary.status_distribution %}
+            {% set total = summary.summary.total_subnets or 1 %}
+            {% for status in ['active','at-risk','deprecated','bootstrap','unknown'] %}
+              {% set pct = (dist.get(status, 0) * 100)|round(2) %}
+              {% if pct > 0 %}
+              <div class="distribution-segment status-{{ status }}" style="width:{{ pct }}%;" title="{{ status }}: {{ counts.get(status, 0) }}"></div>
+              {% endif %}
+            {% endfor %}
+          </div>
+          <div class="distribution-legend" id="health-legend">
+            {% for status in ['active','at-risk','deprecated','bootstrap','unknown'] %}
+              {% set count = counts.get(status, 0) %}
+              {% if count %}
+              <span><i class="status-dot status-{{ status }}"></i>{{ status }} {{ count }}</span>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+        <div class="card card-cyan">
+          <p class="card-label">Active subnets</p>
+          <p class="card-value" id="summary-active">{{ summary.summary.active_count|default(0) }}</p>
+          <p class="card-meta" id="summary-active-meta">{{ "%.0f"|format((summary.summary.active_count|default(0) / (summary.summary.total_subnets or 1)) * 100) }}% of {{ summary.summary.total_subnets|default(0) }} subnets</p>
+        </div>
+        <div class="card card-rose">
+          <p class="card-label">Flagged</p>
+          <p class="card-value" id="summary-flagged">{{ summary.summary.flagged_count|default(0) }}</p>
+          <p class="card-meta" id="summary-flagged-meta">{{ summary.summary.at_risk_count|default(0) }} at-risk · {{ summary.summary.deprecated_count|default(0) }} deprecated · {{ summary.summary.overvalued_count|default(0) }} overvalued</p>
+        </div>
+        <div class="card card-violet">
+          <p class="card-label">Total emission</p>
+          <p class="card-value" id="summary-emission">{{ "%.3f"|format(summary.summary.total_emission|default(0, true)) }}</p>
+          <p class="card-meta">TAO emitted across network</p>
+        </div>
+        <div class="card card-cyan">
+          <p class="card-label">Total stake</p>
+          <p class="card-value" id="summary-stake">{{ "%.0f"|format(summary.summary.total_stake|default(0, true)) }}</p>
+          <p class="card-meta">TAO staked in registry</p>
+        </div>
+        <div class="card card-amber">
+          <p class="card-label">Average APY</p>
+          <p class="card-value" id="summary-apy">{{ "%.2f"|format((summary.summary.avg_apy|default(0, true)) * 100) }}%</p>
+          <p class="card-meta">Weighted by subnet count</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="section-header">
+        <div>
+          <h3 class="section-title">Spotlight</h3>
+          <p class="section-subtitle">Notable subnets right now</p>
+        </div>
+      </div>
+      <div class="spotlight-grid" id="spotlight-grid">
+        {% set h = summary.highlights %}
+        {% set top_emitter = h.top_emitter[0] if h.top_emitter else None %}
+        {% set top_apy = h.top_apy[0] if h.top_apy else None %}
+        {% set most_mentioned = h.most_mentioned[0] if h.most_mentioned else None %}
+        {% set top_consensus = h.top_consensus[0] if h.top_consensus else None %}
+        {% set riskiest = h.riskiest[0] if h.riskiest else None %}
+
+        {% macro spotlight_card(title, name, metric, status, action, id, accent, icon) %}
+        <article class="spotlight-card" data-id="{{ id }}" tabindex="0" role="button" aria-label="Open {{ title }}: {{ name }}">
+          <div class="spotlight-icon" style="color:var({{ accent }})">{{ icon|safe }}</div>
+          <p class="spotlight-title">{{ title }}</p>
+          <h4 class="spotlight-name">{{ name|default('—', true) }}</h4>
+          <p class="spotlight-metric">{{ metric }}</p>
+          <div class="spotlight-footer">
+            {% if status %}<span class="status-badge status-{{ status }}">{{ status }}</span>{% endif %}
+            {% if action %}<span class="action-badge action-{{ action }}">{{ action }}</span>{% endif %}
+          </div>
+        </article>
+        {% endmacro %}
+
+        {% if top_emitter %}
+          {{ spotlight_card('Top emitter', top_emitter.name, "%.3f"|format(top_emitter.emission|default(0, true)) ~ ' TAO', top_emitter.status, None, top_emitter.id, '--accent-cyan', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>') }}
+        {% endif %}
+        {% if top_apy %}
+          {{ spotlight_card('Highest APY', top_apy.name, "%.2f"|format((top_apy.apy|default(0, true)) * 100) ~ '%', top_apy.status, None, top_apy.id, '--accent-violet', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>') }}
+        {% endif %}
+        {% if most_mentioned %}
+          {{ spotlight_card('Most mentioned', most_mentioned.name, "%.0f"|format(most_mentioned.social_mentions|default(0, true)) ~ ' mentions', most_mentioned.status, None, most_mentioned.id, '--accent-blue', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19c0-1.7-3.5-3-8-3s-8 1.3-8 3"/><circle cx="9.5" cy="9" r="4"/></svg>') }}
+        {% endif %}
+        {% if top_consensus and top_consensus.consensus_score is not none %}
+          {{ spotlight_card('Strongest consensus', top_consensus.name, "%.0f"|format((top_consensus.consensus_score|default(0, true)) * 100) ~ '%', top_consensus.status, top_consensus.recommended_action, top_consensus.id, '--status-active', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="m5 5 2.8 2.8"/><path d="m19 5-2.8 2.8"/><circle cx="12" cy="13" r="7"/></svg>') }}
+        {% endif %}
+        {% if riskiest and riskiest.consensus_score is not none %}
+          {{ spotlight_card('Risk alert', riskiest.name, "%.0f"|format((riskiest.consensus_score|default(0, true)) * 100) ~ '%', riskiest.status, riskiest.recommended_action, riskiest.id, '--status-deprecated', '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>') }}
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="section reveal" id="registry-explorer">
+      <div class="section-header">
+        <div>
+          <h3 class="section-title">Registry explorer</h3>
+          <p class="section-subtitle">Search, filter, and inspect every subnet</p>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <div class="search-wrap">
+          <span class="search-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.35-4.35"></path></svg>
+          </span>
+          <input type="search" class="search-input" id="search" placeholder="Search by name or ID…" autocomplete="off" aria-label="Search subnets">
+          <span class="kbd">/</span>
+        </div>
+        <div class="filter-pills" role="group" aria-label="Filter by status">
+          <button class="pill active" data-filter="all" aria-pressed="true">All</button>
+          <button class="pill" data-filter="active" aria-pressed="false">Active</button>
+          <button class="pill" data-filter="at-risk" aria-pressed="false">At-risk</button>
+          <button class="pill" data-filter="deprecated" aria-pressed="false">Deprecated</button>
+          <button class="pill" data-filter="risky" aria-pressed="false">Risky</button>
+        </div>
+        <select class="sort-select" id="sort" aria-label="Sort by">
+          <option value="id">Sort by ID</option>
+          <option value="emission">Sort by emission</option>
+          <option value="total_stake">Sort by stake</option>
+          <option value="apy">Sort by APY</option>
+          <option value="social_mentions">Sort by social</option>
+          <option value="consensus_score">Sort by consensus</option>
+        </select>
+        <div class="view-toggle" role="group" aria-label="View mode">
+          <button class="view-btn active" data-view="table" aria-pressed="true">Table</button>
+          <button class="view-btn" data-view="cards" aria-pressed="false">Cards</button>
+        </div>
+      </div>
+
+      <p class="results-meta" id="results-meta">Loading registry…</p>
+      <div id="main-stage"></div>
+
+      <noscript>
+        <div class="noscript-fallback">
+          <p>JavaScript is disabled, so the live explorer is unavailable. Here is the current registry snapshot:</p>
+          <table class="fallback-table">
+            <thead>
+              <tr>
+                <th scope="col">ID</th>
+                <th scope="col">Name</th>
+                <th scope="col">Status</th>
+                <th scope="col" class="num">Emission</th>
+                <th scope="col" class="num">Stake</th>
+                <th scope="col" class="num">APY</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in registry|sort(attribute='id') %}
+              <tr>
+                <td><a href="/api/subnet/{{ item.id }}" target="_blank" rel="noopener">#{{ item.id }}</a></td>
+                <td>{{ item.name|default('—', true) }}</td>
+                <td><span class="status-badge status-{{ item.status|default('unknown') }}">{{ item.status|default('unknown') }}</span></td>
+                <td class="num">{{ "%.3f"|format(item.emission|default(0, true)) }}</td>
+                <td class="num">{{ "%.0f"|format(item.staking_data.total_stake|default(0, true)) }}</td>
+                <td class="num">{{ "%.2f"|format((item.staking_data.apy|default(0, true)) * 100) }}%</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </noscript>
+    </section>
+
+    <footer class="footer reveal">
+      <div>Subnet Pulse · Built for the Bittensor ecosystem.</div>
+      <div>
+        <a href="/api/registry" target="_blank" rel="noopener">Registry API</a> ·
+        <a href="/api/summary" target="_blank" rel="noopener">Summary API</a> ·
+        <a href="/health" target="_blank" rel="noopener">Health</a>
+      </div>
+    </footer>
+  </div>
+
+  <div class="backdrop" id="backdrop" aria-hidden="true"></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="panel-title" tabindex="-1">
+    <button class="drawer-close" id="drawer-close" aria-label="Close details">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+    </button>
+    <div class="drawer-content" id="drawer-content"></div>
+  </aside>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+
+    (function() {
+      'use strict';
+
+      const els = {
+        health: document.getElementById('health-badge'),
+        tickerTrack: document.getElementById('ticker-track'),
+        summaryHealth: document.getElementById('summary-health'),
+        summaryActive: document.getElementById('summary-active'),
+        summaryActiveMeta: document.getElementById('summary-active-meta'),
+        summaryFlagged: document.getElementById('summary-flagged'),
+        summaryFlaggedMeta: document.getElementById('summary-flagged-meta'),
+        summaryEmission: document.getElementById('summary-emission'),
+        summaryStake: document.getElementById('summary-stake'),
+        summaryApy: document.getElementById('summary-apy'),
+        healthBar: document.getElementById('health-bar'),
+        healthLegend: document.getElementById('health-legend'),
+        lastUpdated: document.getElementById('last-updated'),
+        spotlightGrid: document.getElementById('spotlight-grid'),
+        search: document.getElementById('search'),
+        sort: document.getElementById('sort'),
+        resultsMeta: document.getElementById('results-meta'),
+        mainStage: document.getElementById('main-stage'),
+        drawer: document.getElementById('drawer'),
+        drawerContent: document.getElementById('drawer-content'),
+        drawerClose: document.getElementById('drawer-close'),
+        backdrop: document.getElementById('backdrop'),
+        toast: document.getElementById('toast'),
+        exploreBtn: document.getElementById('explore-btn'),
+        simivisionGrid: document.getElementById('simivision-grid'),
+        freshnessPill: document.getElementById('freshness-pill'),
+        simiFreshnessPill: document.getElementById('simi-freshness-pill'),
+        freshnessAge: document.getElementById('freshness-age'),
+      };
+
+      const state = {
+        subnets: [],
+        summary: {},
+        simivision: {{ simivision | tojson }},
+        freshness: {{ freshness | tojson }},
+        filter: 'all',
+        search: '',
+        sort: 'id',
+        sortDesc: false,
+        view: 'table',
+        maxValues: {},
+        health: 'unknown',
+      };
+
+      const statusColors = {
+        active: '#34D399',
+        'at-risk': '#FBBF24',
+        deprecated: '#FB7185',
+        bootstrap: '#60A5FA',
+        unknown: '#94A3B8',
+      };
+
+      function fetchJSON(url) {
+        return fetch(url, { headers: { Accept: 'application/json' } }).then(r => {
+          if (!r.ok) throw new Error(`${url} ${r.status}`);
+          return r.json();
+        });
+      }
+
+      function fetchText(url) {
+        return fetch(url).then(r => {
+          if (!r.ok) throw new Error(`${url} ${r.status}`);
+          return r.text();
+        });
+      }
+
+      function formatNumber(n, digits = 2) {
+        if (n === undefined || n === null || Number.isNaN(n)) return '—';
+        const abs = Math.abs(n);
+        if (abs >= 1e9) return (n / 1e9).toFixed(digits) + 'B';
+        if (abs >= 1e6) return (n / 1e6).toFixed(digits) + 'M';
+        if (abs >= 1e3) return (n / 1e3).toFixed(digits) + 'k';
+        return Number(n).toLocaleString(undefined, { maximumFractionDigits: digits });
+      }
+
+      function formatPercent(n, digits = 2) {
+        if (n === undefined || n === null || Number.isNaN(n)) return '—';
+        return (Number(n) * 100).toFixed(digits) + '%';
+      }
+
+      function formatDate(iso) {
+        if (!iso) return 'never';
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return iso;
+        return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      }
+
+      function statusClass(status) {
+        return 'status-' + (status || 'unknown');
+      }
+
+      function actionClass(action) {
+        return 'action-' + (action || 'none');
+      }
+
+      function escapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      }
+
+      function countUp(el, target, formatter, duration = 900) {
+        const start = performance.now();
+        function step(now) {
+          const p = Math.min(1, (now - start) / duration);
+          const eased = 1 - Math.pow(1 - p, 3);
+          const current = target * eased;
+          el.textContent = formatter(current);
+          if (p < 1) requestAnimationFrame(step);
+          else el.textContent = formatter(target);
+        }
+        requestAnimationFrame(step);
+      }
+
+      function setHealth(status, text) {
+        state.health = status;
+        els.health.className = 'health-badge ' + (status === 'ok' ? 'ok' : status === 'warn' ? 'warn' : 'error');
+        els.health.textContent = text;
+      }
+
+      function computeMaxValues(items) {
+        const fields = ['emission', 'total_stake', 'social_mentions'];
+        const out = {};
+        fields.forEach(f => {
+          out[f] = Math.max(...items.map(i => Math.abs(f === 'total_stake' ? i.staking_data?.total_stake ?? 0 : i[f] ?? 0)), 1);
+        });
+        return out;
+      }
+
+      function renderDistributionBar() {
+        const dist = state.summary.status_distribution || {};
+        const counts = state.summary.status_counts || {};
+        const order = ['active', 'at-risk', 'deprecated', 'bootstrap', 'unknown'];
+        els.healthBar.innerHTML = order.map(status => {
+          const pct = (dist[status] || 0) * 100;
+          if (pct <= 0) return '';
+          return `<div class="distribution-segment" style="width:${pct}%;background:${statusColors[status] || '#94A3B8'}" title="${status}: ${counts[status] || 0}"></div>`;
+        }).join('');
+        els.healthLegend.innerHTML = order.map(status => {
+          const count = counts[status] || 0;
+          if (!count) return '';
+          return `<span><i style="background:${statusColors[status] || '#94A3B8'}"></i>${status} ${count}</span>`;
+        }).join('');
+      }
+
+      function renderFreshness() {
+        const f = state.freshness;
+        const cls = f.status || 'unknown';
+        const label = f.age_label || 'unknown';
+        [els.freshnessPill, els.simiFreshnessPill].forEach(el => {
+          if (!el) return;
+          el.className = 'freshness-pill ' + cls;
+          el.textContent = label;
+          if (f.newest_updated_at) el.title = f.newest_updated_at;
+        });
+        if (els.freshnessAge) els.freshnessAge.textContent = label;
+      }
+
+      function renderSummary() {
+        const s = state.summary;
+        const total = s.total_subnets || 0;
+        const active = s.active_count || 0;
+        const flagged = s.flagged_count || 0;
+
+        countUp(els.summaryHealth, s.network_health || 0, v => formatPercent(v, 1));
+        countUp(els.summaryActive, active, v => Math.round(v).toLocaleString());
+        els.summaryActiveMeta.textContent = `${total ? Math.round((active / total) * 100) : 0}% of ${total} subnets`;
+        countUp(els.summaryFlagged, flagged, v => Math.round(v).toLocaleString());
+        els.summaryFlaggedMeta.textContent = `${s.at_risk_count || 0} at-risk · ${s.deprecated_count || 0} deprecated · ${s.overvalued_count || 0} overvalued`;
+        countUp(els.summaryEmission, s.total_emission || 0, v => formatNumber(v, 3));
+        countUp(els.summaryStake, s.total_stake || 0, v => formatNumber(v, 0));
+        countUp(els.summaryApy, s.avg_apy || 0, v => formatPercent(v, 2));
+        els.lastUpdated.textContent = 'Updated ' + formatDate(s.last_updated) + ' · ' + (state.freshness.age_label || 'unknown');
+        renderDistributionBar();
+      }
+
+      function spotlightCard({ icon, title, name, metric, status, action, id, accent }) {
+        const statusHtml = status ? `<span class="status-badge ${statusClass(status)}">${status}</span>` : '';
+        const actionHtml = action ? `<span class="action-badge ${actionClass(action)}">${action}</span>` : '';
+        return `
+          <article class="spotlight-card" data-id="${id}" tabindex="0" role="button" aria-label="Open ${title}: ${name}">
+            <div class="spotlight-icon" style="color:var(${accent})">${icon}</div>
+            <p class="spotlight-title">${title}</p>
+            <h4 class="spotlight-name">${escapeHtml(name || '—')}</h4>
+            <p class="spotlight-metric">${metric}</p>
+            <div class="spotlight-footer">${statusHtml}${actionHtml}</div>
+          </article>
+        `;
+      }
+
+      function renderSpotlight() {
+        const h = state.summary.highlights || {};
+        const topEmitter = h.top_emitter?.[0];
+        const topApy = h.top_apy?.[0];
+        const mostMentioned = h.most_mentioned?.[0];
+        const topConsensus = h.top_consensus?.[0];
+        const riskiest = h.riskiest?.[0];
+
+        const cards = [];
+        if (topEmitter) {
+          cards.push(spotlightCard({
+            icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>',
+            title: 'Top emitter',
+            name: topEmitter.name,
+            metric: formatNumber(topEmitter.emission, 3) + ' TAO',
+            status: topEmitter.status,
+            id: topEmitter.id,
+            accent: '--accent-cyan'
+          }));
+        }
+        if (topApy) {
+          cards.push(spotlightCard({
+            icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>',
+            title: 'Highest APY',
+            name: topApy.name,
+            metric: formatPercent(topApy.apy, 2),
+            status: topApy.status,
+            id: topApy.id,
+            accent: '--accent-violet'
+          }));
+        }
+        if (mostMentioned) {
+          cards.push(spotlightCard({
+            icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19c0-1.7-3.5-3-8-3s-8 1.3-8 3"/><circle cx="9.5" cy="9" r="4"/></svg>',
+            title: 'Most mentioned',
+            name: mostMentioned.name,
+            metric: formatNumber(mostMentioned.social_mentions, 0) + ' mentions',
+            status: mostMentioned.status,
+            id: mostMentioned.id,
+            accent: '--accent-blue'
+          }));
+        }
+        if (topConsensus && topConsensus.consensus_score !== undefined) {
+          cards.push(spotlightCard({
+            icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="m5 5 2.8 2.8"/><path d="m19 5-2.8 2.8"/><circle cx="12" cy="13" r="7"/></svg>',
+            title: 'Strongest consensus',
+            name: topConsensus.name,
+            metric: formatPercent(topConsensus.consensus_score, 0),
+            status: topConsensus.status,
+            action: topConsensus.recommended_action,
+            id: topConsensus.id,
+            accent: '--status-active'
+          }));
+        }
+        if (riskiest && riskiest.consensus_score !== undefined) {
+          cards.push(spotlightCard({
+            icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+            title: 'Risk alert',
+            name: riskiest.name,
+            metric: formatPercent(riskiest.consensus_score, 0),
+            status: riskiest.status,
+            action: riskiest.recommended_action,
+            id: riskiest.id,
+            accent: '--status-deprecated'
+          }));
+        }
+        els.spotlightGrid.innerHTML = cards.join('') || '<p class="empty-state">No spotlight data available.</p>';
+        els.spotlightGrid.querySelectorAll('.spotlight-card').forEach(card => {
+          const open = () => openDrawer(Number(card.dataset.id));
+          card.addEventListener('click', open);
+          card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+        });
+      }
+
+      function renderTicker() {
+        const items = state.subnets.slice(0, 12);
+        if (!items.length) return;
+        const cards = items.map(item => {
+          const emission = item.emission ?? 0;
+          const apy = item.staking_data?.apy ?? 0;
+          return `
+            <div class="ticker-card">
+              <strong>#${item.id} ${escapeHtml(item.name || 'Unnamed')}</strong>
+              <span class="delta">${formatNumber(emission, 2)} TAO</span>
+              <span>APY ${formatPercent(apy, 2)}</span>
+            </div>
+          `;
+        });
+        els.tickerTrack.innerHTML = cards.concat(cards).join('');
+      }
+
+      function filteredSortedItems() {
+        let items = state.subnets.slice();
+        const q = state.search.trim().toLowerCase();
+        if (q) {
+          items = items.filter(i =>
+            String(i.id).includes(q) ||
+            String(i.name || '').toLowerCase().includes(q)
+          );
+        }
+        if (state.filter === 'risky') {
+          items = items.filter(i => i.status === 'at-risk' || i.status === 'deprecated' || i.is_overvalued || (i.risk_flags || []).length);
+        } else if (state.filter !== 'all') {
+          items = items.filter(i => (i.status || 'unknown') === state.filter);
+        }
+
+        const field = state.sort;
+        items.sort((a, b) => {
+          let av, bv;
+          switch (field) {
+            case 'total_stake': av = a.staking_data?.total_stake ?? 0; bv = b.staking_data?.total_stake ?? 0; break;
+            case 'apy': av = a.staking_data?.apy ?? 0; bv = b.staking_data?.apy ?? 0; break;
+            case 'consensus_score': av = a.consensus?.score ?? -1; bv = b.consensus?.score ?? -1; break;
+            case 'name': av = (a.name || '').toLowerCase(); bv = (b.name || '').toLowerCase(); break;
+            case 'status': av = a.status || 'unknown'; bv = b.status || 'unknown'; break;
+            default: av = a[field] ?? 0; bv = b[field] ?? 0;
+          }
+          if (typeof av === 'string') av = av.localeCompare(bv) < 0 ? -1 : 1;
+          else av = av - bv;
+          return state.sortDesc ? -av : av;
+        });
+        return items;
+      }
+
+      function renderBar(value, field) {
+        const max = state.maxValues[field] || 1;
+        const pct = Math.min(100, Math.max(0, (Math.abs(value || 0) / max) * 100));
+        return `<span class="bar-bg" aria-hidden="true"><span class="bar-fill" style="width:${pct.toFixed(1)}%"></span></span>`;
+      }
+
+      function renderStatusBadge(item) {
+        const status = item.status || 'unknown';
+        const flags = (item.risk_flags || []).map(f => `<span class="risk-chip">${escapeHtml(f)}</span>`).join('');
+        const overvalued = item.is_overvalued ? `<span class="risk-chip">overvalued</span>` : '';
+        return `<span class="status-badge ${statusClass(status)}">${status}</span>${flags}${overvalued}`;
+      }
+
+      function renderActionBadge(item) {
+        const action = item.consensus?.recommended_action;
+        if (!action) return `<span class="action-badge action-none">—</span>`;
+        return `<span class="action-badge ${actionClass(action)}">${action}</span>`;
+      }
+
+      function renderTable(items) {
+        if (!items.length) return renderEmpty();
+        const rows = items.map(item => {
+          const emission = item.emission ?? 0;
+          const stake = item.staking_data?.total_stake ?? 0;
+          const apy = item.staking_data?.apy ?? 0;
+          const social = item.social_mentions ?? 0;
+          const score = item.consensus?.score;
+          return `
+            <tr data-id="${item.id}" tabindex="0" role="button" aria-label="Open details for ${escapeHtml(item.name || 'Subnet ' + item.id)}">
+              <td class="col-id"><span class="subnet-id">#${item.id}</span></td>
+              <td class="col-name"><span class="subnet-name">${escapeHtml(item.name || 'Unnamed')}</span></td>
+              <td class="col-status">${renderStatusBadge(item)}</td>
+              <td class="col-num">${formatNumber(emission, 3)}${renderBar(emission, 'emission')}</td>
+              <td class="col-num">${formatNumber(stake, 0)}${renderBar(stake, 'total_stake')}</td>
+              <td class="col-num">${formatPercent(apy, 2)}</td>
+              <td class="col-num">${item.emission_rank ?? '—'}</td>
+              <td class="col-num">${formatNumber(social, 0)}${renderBar(social, 'social_mentions')}</td>
+              <td class="col-num">${score !== undefined ? formatPercent(score, 0) : '—'}</td>
+              <td class="col-status">${renderActionBadge(item)}</td>
+            </tr>
+          `;
+        }).join('');
+
+        const sortIcon = field => field === state.sort ? (state.sortDesc ? ' ▼' : ' ▲') : ' ↕';
+        return `
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="col-id ${state.sort === 'id' ? 'sorted' : ''}" data-sort="id" scope="col">ID <span class="sort-icon">${sortIcon('id')}</span></th>
+                  <th class="col-name ${state.sort === 'name' ? 'sorted' : ''}" data-sort="name" scope="col">Name <span class="sort-icon">${sortIcon('name')}</span></th>
+                  <th class="col-status ${state.sort === 'status' ? 'sorted' : ''}" data-sort="status" scope="col">Status <span class="sort-icon">${sortIcon('status')}</span></th>
+                  <th class="col-num ${state.sort === 'emission' ? 'sorted' : ''}" data-sort="emission" scope="col">Emission <span class="sort-icon">${sortIcon('emission')}</span></th>
+                  <th class="col-num ${state.sort === 'total_stake' ? 'sorted' : ''}" data-sort="total_stake" scope="col">Stake <span class="sort-icon">${sortIcon('total_stake')}</span></th>
+                  <th class="col-num ${state.sort === 'apy' ? 'sorted' : ''}" data-sort="apy" scope="col">APY <span class="sort-icon">${sortIcon('apy')}</span></th>
+                  <th class="col-num ${state.sort === 'emission_rank' ? 'sorted' : ''}" data-sort="emission_rank" scope="col">Rank <span class="sort-icon">${sortIcon('emission_rank')}</span></th>
+                  <th class="col-num ${state.sort === 'social_mentions' ? 'sorted' : ''}" data-sort="social_mentions" scope="col">Social <span class="sort-icon">${sortIcon('social_mentions')}</span></th>
+                  <th class="col-num ${state.sort === 'consensus_score' ? 'sorted' : ''}" data-sort="consensus_score" scope="col">Consensus <span class="sort-icon">${sortIcon('consensus_score')}</span></th>
+                  <th class="col-status ${state.sort === 'recommended_action' ? 'sorted' : ''}" data-sort="recommended_action" scope="col">Action <span class="sort-icon">${sortIcon('recommended_action')}</span></th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      function renderCards(items) {
+        if (!items.length) return renderEmpty();
+        return `<div class="cards-grid">${items.map(item => {
+          const emission = item.emission ?? 0;
+          const stake = item.staking_data?.total_stake ?? 0;
+          const apy = item.staking_data?.apy ?? 0;
+          const social = item.social_mentions ?? 0;
+          const score = item.consensus?.score;
+          return `
+            <article class="subnet-card" data-id="${item.id}" tabindex="0" role="button" aria-label="Open details for ${escapeHtml(item.name || 'Subnet ' + item.id)}">
+              <div class="card-header">
+                <div>
+                  <span class="subnet-id">#${item.id}</span>
+                  <h3 class="card-title">${escapeHtml(item.name || 'Unnamed')}</h3>
+                </div>
+                ${renderActionBadge(item)}
+              </div>
+              <div>${renderStatusBadge(item)}</div>
+              <div class="card-stats">
+                <div><p class="card-stat-label">Emission</p><p class="card-stat-value">${formatNumber(emission, 3)}</p></div>
+                <div><p class="card-stat-label">Stake</p><p class="card-stat-value">${formatNumber(stake, 0)}</p></div>
+                <div><p class="card-stat-label">APY</p><p class="card-stat-value">${formatPercent(apy, 2)}</p></div>
+                <div><p class="card-stat-label">Social</p><p class="card-stat-value">${formatNumber(social, 0)}</p></div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:var(--space-3);">
+                <span class="card-stat-label">Consensus ${score !== undefined ? formatPercent(score, 0) : '—'}</span>
+                <span class="card-stat-label">Rank ${item.emission_rank ?? '—'}</span>
+              </div>
+            </article>
+          `;
+        }).join('')}</div>`;
+      }
+
+      function renderEmpty() {
+        return `
+          <div class="empty-state">
+            <h3>No subnets match your filters</h3>
+            <p>Try clearing the search or selecting a different status.</p>
+          </div>
+        `;
+      }
+
+      function renderMain() {
+        const items = filteredSortedItems();
+        els.resultsMeta.textContent = `${items.length} subnet${items.length === 1 ? '' : 's'} · sorted by ${state.sort}${state.sortDesc ? ' desc' : ' asc'}`;
+        els.mainStage.innerHTML = state.view === 'table' ? renderTable(items) : renderCards(items);
+        attachRowHandlers();
+        attachHeaderSort();
+      }
+
+      function attachRowHandlers() {
+        const rows = els.mainStage.querySelectorAll('[data-id]');
+        rows.forEach(row => {
+          const open = () => openDrawer(Number(row.dataset.id));
+          row.addEventListener('click', open);
+          row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+        });
+      }
+
+      function attachHeaderSort() {
+        if (state.view !== 'table') return;
+        const headers = els.mainStage.querySelectorAll('th[data-sort]');
+        headers.forEach(th => {
+          th.addEventListener('click', () => {
+            const field = th.dataset.sort;
+            if (state.sort === field) {
+              state.sortDesc = !state.sortDesc;
+            } else {
+              state.sort = field;
+              state.sortDesc = ['emission', 'total_stake', 'apy', 'social_mentions', 'consensus_score'].includes(field);
+            }
+            els.sort.value = state.sort;
+            renderMain();
+          });
+        });
+      }
+
+      function openDrawer(id) {
+        const item = state.subnets.find(s => s.id === id);
+        if (!item) return;
+        const score = item.consensus?.score;
+        const action = item.consensus?.recommended_action;
+        const breakdown = item.consensus?.expert_breakdown || {};
+        const experts = ['quant', 'hype', 'contrarian'].map(k => {
+          const e = breakdown[k] || {};
+          const s = e.score;
+          const note = e.sentiment || e.signal || (e.metrics ? Object.values(e.metrics)[0] : null);
+          return `
+            <div class="expert-card">
+              <p class="expert-name">${k}</p>
+              <p class="expert-score" style="color:${s >= 0.7 ? 'var(--status-active)' : s >= 0.4 ? 'var(--status-at-risk)' : 'var(--status-deprecated)'}">${s !== undefined ? formatPercent(s, 0) : '—'}</p>
+              <p class="expert-note" title="${escapeHtml(note !== undefined ? note : '—')}">${note !== undefined ? escapeHtml(note) : '—'}</p>
+            </div>
+          `;
+        }).join('');
+
+        const scoreDeg = score !== undefined ? Math.round(score * 360) + 'deg' : '0deg';
+        const sources = (item.sources || []).map(s => `<a class="source-link" href="${escapeHtml(s)}" target="_blank" rel="noopener">${escapeHtml(s)} ↗</a>`).join('<br>');
+
+        els.drawerContent.innerHTML = `
+          <div class="panel-header">
+            <span class="subnet-id">Subnet #${item.id}</span>
+            <h2 class="panel-name" id="panel-title">${escapeHtml(item.name || 'Unnamed')}</h2>
+            <div class="panel-meta">${renderStatusBadge(item)} ${renderActionBadge(item)}</div>
+          </div>
+
+          <div class="panel-section">
+            <h3 class="panel-section-title">Consensus Signal</h3>
+            <div class="consensus-gauge">
+              <div class="gauge-ring" style="--score-deg: ${scoreDeg}" aria-hidden="true">
+                <span class="gauge-value">${score !== undefined ? (score * 100).toFixed(0) : '—'}</span>
+              </div>
+              <div>
+                <p style="margin:0 0 4px;font-weight:700;font-size:1.1rem;">${action ? action.charAt(0).toUpperCase() + action.slice(1) : 'No signal'}</p>
+                <p style="margin:0;color:var(--text-muted);font-size:0.85rem;">Blended quant, hype, and contrarian expert scores.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <h3 class="panel-section-title">Expert Breakdown</h3>
+            <div class="expert-grid">${experts}</div>
+          </div>
+
+          <div class="panel-section">
+            <h3 class="panel-section-title">Economics</h3>
+            <div class="metric-row"><span class="metric-label">Emission rank</span><span class="metric-value">${item.emission_rank ?? '—'}</span></div>
+            <div class="metric-row"><span class="metric-label">Total stake</span><span class="metric-value">${formatNumber(item.staking_data?.total_stake, 0)}</span></div>
+            <div class="metric-row"><span class="metric-label">APY</span><span class="metric-value">${formatPercent(item.staking_data?.apy, 4)}</span></div>
+            <div class="metric-row"><span class="metric-label">Emission</span><span class="metric-value">${formatNumber(item.emission, 4)}</span></div>
+            <div class="metric-row"><span class="metric-label">Social mentions</span><span class="metric-value">${formatNumber(item.social_mentions, 0)}</span></div>
+          </div>
+
+          <div class="panel-section">
+            <h3 class="panel-section-title">Provenance</h3>
+            <p style="margin:0 0 var(--space-3);color:var(--text-secondary);font-size:0.85rem;">Sources</p>
+            <p style="margin:0 0 var(--space-4);">${sources || '<span style="color:var(--text-muted)">No sources listed</span>'}</p>
+            <p style="margin:0;color:var(--text-muted);font-size:0.8rem;">Last updated ${formatDate(item.last_updated)}</p>
+          </div>
+        `;
+
+        els.drawer.classList.add('open');
+        els.backdrop.classList.add('open');
+        els.backdrop.setAttribute('aria-hidden', 'false');
+        els.drawer.focus();
+        document.body.style.overflow = 'hidden';
+      }
+
+      function openSimiDrawer(idx) {
+        const choice = state.simivision.choices[idx];
+        if (!choice) return;
+        const breakdown = choice.expert_breakdown || {};
+        const experts = ['quant', 'hype', 'contrarian'].map(k => {
+          const e = breakdown[k] || {};
+          const s = e.score;
+          const note = e.sentiment || e.signal || (e.metrics ? Object.values(e.metrics)[0] : null);
+          return `
+            <div class="expert-card">
+              <p class="expert-name">${k}</p>
+              <p class="expert-score" style="color:${s >= 0.7 ? 'var(--status-active)' : s >= 0.4 ? 'var(--status-at-risk)' : 'var(--status-deprecated)'}">${s !== undefined ? formatPercent(s, 0) : '—'}</p>
+              <p class="expert-note" title="${escapeHtml(note !== undefined ? note : '—')}">${note !== undefined ? escapeHtml(note) : '—'}</p>
+            </div>
+          `;
+        }).join('');
+
+        const scoreDeg = choice.confidence !== undefined ? Math.round(choice.confidence * 360) + 'deg' : '0deg';
+        const metrics = choice.metrics || {};
+        const freshness = choice.freshness || {};
+        const sources = freshness.source
+          ? `<a class="source-link" href="${escapeHtml(freshness.source)}" target="_blank" rel="noopener">${escapeHtml(freshness.source)} ↗</a>`
+          : '<span style="color:var(--text-muted)">No source listed</span>';
+        const alignment = state.simivision.alignment_status || '—';
+        const alignmentScore = state.simivision.alignment_score !== undefined ? ` (${state.simivision.alignment_score.toFixed(2)})` : '';
+
+        els.drawerContent.innerHTML = `
+          <div class="panel-header">
+            <span class="subnet-id">Subnet #${choice.subnet_id}</span>
+            <h2 class="panel-name" id="panel-title">${escapeHtml(choice.name || 'Unnamed')}</h2>
+            <div class="panel-meta">
+              <span class="action-badge action-${actionClass(choice.action)}">${choice.action ? choice.action.charAt(0).toUpperCase() + choice.action.slice(1) : '—'}</span>
+              <span class="status-badge ${statusClass(choice.status)}">${choice.status || 'unknown'}</span>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <h3 class="panel-section-title">Consensus Signal</h3>
+            <div class="consensus-gauge">
+              <div class="gauge-ring" style="--score-deg: ${scoreDeg}" aria-hidden="true">
+                <span class="gauge-value">${choice.confidence !== undefined ? (choice.confidence * 100).toFixed(0) : '—'}</span>
+              </div>
+              <div>
+                <p style="margin:0 0 4px;font-weight:700;font-size:1.1rem;">${choice.action ? choice.action.charAt(0).toUpperCase() + choice.action.slice(1) : 'No signal'}</p>
+                <p style="margin:0;color:var(--text-muted);font-size:0.85rem;">Blended quant, hype, and contrarian expert scores.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <h3 class="panel-section-title">Expert Breakdown</h3>
+            <div class="expert-grid">${experts}</div>
+          </div>
+
+          <div class="panel-section">
+            <h3 class="panel-section-title">Mindmap / Brain Recommendation</h3>
+            <div class="metric-row"><span class="metric-label">Brain action</span><span class="metric-value">${choice.brain_action || '—'}</span></div>
+            <div class="metric-row"><span class="metric-label">Target weight</span><span class="metric-value">${choice.target_weight !== undefined ? formatPercent(choice.target_weight, 0) : '—'}</span></div>
+            <div class="metric-row"><span class="metric-label">Judge agreement</span><span class="metric-value">${escapeHtml(choice.judge_agreement || '—')}</span></div>
+            <div class="metric-row"><span class="metric-label">Loop alignment</span><span class="metric-value">${alignment}${alignmentScore}</span></div>
+          </div>
+
+          <div class="panel-section">
+            <h3 class="panel-section-title">Economics</h3>
+            <div class="metric-row"><span class="metric-label">Emission</span><span class="metric-value">${formatNumber(metrics.emission, 4)}</span></div>
+            <div class="metric-row"><span class="metric-label">Social mentions</span><span class="metric-value">${formatNumber(metrics.social_mentions, 0)}</span></div>
+            <div class="metric-row"><span class="metric-label">APY</span><span class="metric-value">${formatPercent(metrics.apy, 4)}</span></div>
+            <div class="metric-row"><span class="metric-label">Total stake</span><span class="metric-value">${formatNumber(metrics.total_stake, 0)}</span></div>
+          </div>
+
+          <div class="panel-section">
+            <h3 class="panel-section-title">Rationale &amp; Invalidation</h3>
+            <p style="margin:0 0 var(--space-3);color:var(--text-secondary);font-size:0.85rem;line-height:1.5;">${escapeHtml(choice.why_now || '')}</p>
+            <div class="metric-row"><span class="metric-label">Invalidation</span><span class="metric-value" style="text-align:right;max-width:60%;">${escapeHtml(choice.invalidation || '—')}</span></div>
+            <div class="metric-row"><span class="metric-label">Horizon</span><span class="metric-value">${escapeHtml(choice.horizon || '—')}</span></div>
+          </div>
+
+          <div class="panel-section">
+            <h3 class="panel-section-title">Traceability</h3>
+            <p style="margin:0 0 var(--space-3);color:var(--text-secondary);font-size:0.85rem;line-height:1.5;">SimiVision must not be a standalone presentation layer; it must consume and expose the Mindmap/Judge/self-learning loop so every surfaced pick can be traced, evaluated, and fed back into future rankings.</p>
+            <p style="margin:0;color:var(--text-secondary);font-size:0.85rem;line-height:1.5;">SimiVision sits on top of the Mindmap and self-learning loop, and every card should be traceable back to the verdicts that formed it.</p>
+          </div>
+
+          <div class="panel-section">
+            <h3 class="panel-section-title">Provenance</h3>
+            <p style="margin:0 0 var(--space-3);color:var(--text-secondary);font-size:0.85rem;">Source</p>
+            <p style="margin:0 0 var(--space-4);">${sources}</p>
+            <p style="margin:0;color:var(--text-muted);font-size:0.8rem;">Last updated ${formatDate(freshness.updated_at)}</p>
+          </div>
+        `;
+
+        els.drawer.classList.add('open');
+        els.backdrop.classList.add('open');
+        els.backdrop.setAttribute('aria-hidden', 'false');
+        els.drawer.focus();
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeDrawer() {
+        els.drawer.classList.remove('open');
+        els.backdrop.classList.remove('open');
+        els.backdrop.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+      }
+
+      function showToast(message) {
+        els.toast.textContent = message;
+        els.toast.classList.add('show');
+        clearTimeout(els.toast._t);
+        els.toast._t = setTimeout(() => els.toast.classList.remove('show'), 2600);
+      }
+
+      function loadData() {
+        Promise.all([
+          fetchJSON('/api/summary'),
+          fetchJSON('/api/registry'),
+          fetchText('/health'),
+        ]).then(([summaryData, registryData, healthText]) => {
+          state.summary = summaryData.summary || summaryData;
+          state.subnets = Object.entries(registryData).map(([key, value]) => {
+            const item = { ...value };
+            item.id = item.id ?? Number(key);
+            return item;
+          });
+          state.maxValues = computeMaxValues(state.subnets);
+          const ok = healthText.trim() === 'OK';
+          setHealth(ok ? 'ok' : 'warn', ok ? 'Healthy' : 'Degraded');
+          renderSummary();
+          renderSpotlight();
+          renderTicker();
+          renderMain();
+          showToast('Registry refreshed');
+          revealElements();
+        }).catch(err => {
+          console.error(err);
+          setHealth('error', 'Unreachable');
+          els.resultsMeta.textContent = 'Failed to load registry data.';
+          showToast('Error loading data');
+        });
+      }
+
+      function revealElements() {
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('visible');
+              observer.unobserve(entry.target);
+            }
+          });
+        }, { threshold: 0.1 });
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+      }
+
+      document.querySelectorAll('.pill[data-filter]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.pill[data-filter]').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
+          btn.classList.add('active');
+          btn.setAttribute('aria-pressed', 'true');
+          state.filter = btn.dataset.filter;
+          renderMain();
+        });
+      });
+
+      let searchDebounce;
+      els.search.addEventListener('input', () => {
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(() => {
+          state.search = els.search.value;
+          renderMain();
+        }, 150);
+      });
+
+      els.sort.addEventListener('change', () => {
+        state.sort = els.sort.value;
+        state.sortDesc = ['emission', 'total_stake', 'apy', 'social_mentions', 'consensus_score'].includes(state.sort);
+        renderMain();
+      });
+
+      document.querySelectorAll('.view-btn[data-view]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.view-btn[data-view]').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
+          btn.classList.add('active');
+          btn.setAttribute('aria-pressed', 'true');
+          state.view = btn.dataset.view;
+          renderMain();
+        });
+      });
+
+      els.drawerClose.addEventListener('click', closeDrawer);
+      els.backdrop.addEventListener('click', closeDrawer);
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+      els.simivisionGrid.addEventListener('click', e => {
+        const card = e.target.closest('.simi-card');
+        if (!card) return;
+        openSimiDrawer(Number(card.dataset.simiIdx));
+      });
+      els.simivisionGrid.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          const card = e.target.closest('.simi-card');
+          if (!card) return;
+          e.preventDefault();
+          openSimiDrawer(Number(card.dataset.simiIdx));
+        }
+      });
+
+      document.addEventListener('keydown', e => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+          e.preventDefault();
+          els.search.focus();
+        }
+        if (e.key === '/' && document.activeElement !== els.search) {
+          e.preventDefault();
+          els.search.focus();
+        }
+      });
+
+      els.exploreBtn.addEventListener('click', () => {
+        document.getElementById('registry-explorer').scrollIntoView({ behavior: 'smooth' });
+      });
+
+      loadData();
+      setInterval(loadData, 60000);
+    })();
+  </script>
+</body>
+</html>
