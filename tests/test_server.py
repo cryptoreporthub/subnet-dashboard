@@ -37,3 +37,54 @@ def test_health_route(client):
     response = client.get('/health')
     assert response.status_code == 200
     assert response.data == b"OK"
+
+def test_cors_headers(client):
+    response = client.get('/api/registry')
+    assert response.headers.get('Access-Control-Allow-Origin') == '*'
+    assert response.headers.get('X-Frame-Options') == 'ALLOWALL'
+
+
+def test_stats_route(client):
+    response = client.get('/api/stats')
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data['status'] == 'success'
+    assert 'summary' in data
+    assert 'top_emitters' in data
+    assert 'flagged_subnets' in data
+
+
+def test_subnets_list_route(client):
+    response = client.get('/api/subnets?status=active&sort=emission&order=desc&limit=2')
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data['status'] == 'success'
+    assert 'meta' in data
+    assert 'subnets' in data
+    assert len(data['subnets']) <= 2
+
+
+def test_recommendations_route(client):
+    response = client.get('/api/recommendations')
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data['status'] == 'success'
+    assert 'recommendations' in data['data']
+
+
+def test_soul_map_route(client):
+    response = client.get('/api/soul-map')
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data['status'] == 'success'
+    assert 'data' in data
+
+
+def test_daily_rotation_route(client):
+    response = client.get('/api/daily-rotation')
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data['status'] == 'success'
+    assert 'data' in data
+    assert 'decisions' in data['data']
+    assert 'recommendations' in data['data']
