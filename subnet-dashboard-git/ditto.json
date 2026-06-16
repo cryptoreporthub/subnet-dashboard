@@ -1,0 +1,10 @@
+{
+  "name": "Subnet Dashboard",
+  "description": "",
+  "type": "code",
+  "repos": [
+    "cryptoreporthub/knowledge-base",
+    "cryptoreporthub/subnet-dashboard"
+  ],
+  "created": "2026-06-12"
+}
