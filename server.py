@@ -1,48 +1,54 @@
-from flask import Flask, render_template, jsonify, request
 import json
 import os
 
+from flask import Flask, jsonify, render_template, request
+
 app = Flask(__name__)
 
-# Helper
+
 def load_data(filename):
     if os.path.exists(filename):
-        with open(filename, 'r') as f:
+        with open(filename, "r") as f:
             return json.load(f)
     return {}
 
-# Frontend
-@app.route('/')
-def index():
-    return render_template('index.html')
 
-# API endpoints
-@app.route('/api/daily-rotation', methods=['GET'])
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+
+@app.route("/api/daily-rotation", methods=["GET"])
 def daily_rotation():
     return jsonify({"status": "success", "data": "daily_rotation_data_here"})
 
-@app.route('/api/registry', methods=['GET'])
+
+@app.route("/api/registry", methods=["GET"])
 def get_registry():
-    data = load_data('config/registry.json')
+    data = load_data("config/registry.json")
     return jsonify(data)
 
-@app.route('/api/subnet/<int:subnet_id>', methods=['GET'])
-def get_subnet(subnet_id):
-    data = load_data('config/registry.json')
-    subnet_data = data.get(str(subnet_id))
-    if subnet_data:
-        return jsonify({"subnet_id": subnet_id, "data": subnet_data})
-    return jsonify({"error": "Subnet not found"}), 404
 
-@app.route('/api/mindmap/feedback', methods=['POST'])
+@app.route("/api/subnet/<int:subnet_id>", methods=["GET"])
+def get_subnet(subnet_id):
+    data = load_data("config/registry.json")
+    subnet_data = data.get(str(subnet_id))
+    if subnet_data is None:
+        return jsonify({"error": "Subnet not found"}), 404
+    return jsonify({"subnet_id": subnet_id, "data": subnet_data})
+
+
+@app.route("/api/mindmap/feedback", methods=["POST"])
 def post_feedback():
-    feedback = request.json
+    feedback = request.get_json(silent=True)
     return jsonify({"status": "received", "feedback": feedback})
 
-@app.route('/health', methods=['GET'])
+
+@app.route("/health", methods=["GET"])
 def health():
     return "OK"
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 50745))
-    app.run(host='0.0.0.0', port=port, debug=True)
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 50745))
+    app.run(host="0.0.0.0", port=port, debug=True)
