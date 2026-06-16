@@ -118,7 +118,7 @@ class MindmapBridge:
             bool: True if the update was successful, False otherwise.
         """
         self.soul_map_state["last_selector_output"] = selector_output
-        self.soul_map_state["updated_at"] = datetime.now(timezone.utc).isoformat()
+        self.soul_map_state["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         self._save_to_disk()
         return True
 
@@ -171,3 +171,53 @@ class MindmapBridge:
         self.feedback_logs.append(feedback)
         self._save_to_disk()
         return feedback
+
+    def log_simivision_picks(self, picks: list) -> Dict[str, Any]:
+        """
+        Persist the latest SimiVision top picks so the self-learning loop
+        can compare them against future outcomes.
+        """
+        entry = {
+            "picks": picks,
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        self.soul_map_state["last_simivision_picks"] = entry
+        self._save_to_disk()
+        return entry
+
+    def log_simivision_feedback(
+        self, subnet_id: int, outcome: int, note: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Record user/outcome feedback for a surfaced SimiVision pick.
+
+        Args:
+            subnet_id: The subnet the feedback refers to.
+            outcome: +1 for positive, -1 for negative, 0 for neutral.
+            note: Optional human note.
+
+        Returns:
+            dict: The feedback entry that was stored.
+        """
+        feedback = self.soul_map_state.setdefault("simivision_feedback", [])
+        entry = {
+            "subnet_id": subnet_id,
+            "outcome": outcome,
+            "note": note,
+            "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        feedback.append(entry)
+        self._save_to_disk()
+        return entry
+
+    def get_simivision_feedback_boost(self, subnet_id: int, window: int = 10) -> float:
+        """
+        Compute a small ranking boost/penalty from recent SimiVision feedback.
+
+        Each feedback entry contributes outcome * 0.02, capped at the most
+        recent ``window`` entries for the given subnet.
+        """
+        feedback = self.soul_map_state.get("simivision_feedback", [])
+        relevant = [f for f in feedback if f.get("subnet_id") == subnet_id]
+        recent = relevant[-window:]
+        return round(sum(f.get("outcome", 0) * 0.02 for f in recent), 4)
