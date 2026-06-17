@@ -1819,6 +1819,50 @@
     <section class="section reveal">
       <div class="section-header">
         <div>
+          <h3 class="section-title">Signal pump-cycle timing</h3>
+          <p class="section-subtitle">Tracks latency from first signal to pump, pump duration, and asset resurges across news, X, Discord, and Telegram.</p>
+        </div>
+        <a class="section-action" href="/api/signals" target="_blank">View API</a>
+      </div>
+      <p class="section-subtitle" style="margin-bottom: var(--space-5);">Updated {{ signal_timeline.updated_at|default('unknown', true) }} · {{ freshness.signal_timeline.age_label|default('unknown') }}</p>
+      <div class="spotlight-grid" id="signal-timeline-grid">
+        {% for asset, record in (signal_timeline.assets|default({}, true)).items() %}
+        <article class="watchlist-card">
+          <div class="symbol">{{ asset }} <span class="status-badge {{ record.state }}">{{ record.state }}</span></div>
+          <div class="name">Signals: {{ record.metrics.signal_count }} · Sources: {{ record.metrics.distinct_sources }}</div>
+          <div class="category">First signal: {{ record.first_signal_source }} @ {{ record.first_signal_at|default('—', true) }}</div>
+          <div class="price">
+            {% if record.metrics.time_to_pump_seconds is not none %}
+              {{ "%.0f"|format(record.metrics.time_to_pump_seconds / 60) }}m to pump
+            {% else %}
+              — to pump
+            {% endif %}
+          </div>
+          <div class="change {{ 'up' if record.metrics.pump_duration_seconds else 'down' }}">
+            {% if record.metrics.pump_duration_seconds is not none %}
+              {{ "%.0f"|format(record.metrics.pump_duration_seconds / 60) }}m pump
+            {% else %}
+              — pump
+            {% endif %}
+          </div>
+          <div class="tags">
+            {% if record.metrics.time_to_resurgence_seconds is not none %}
+            <span class="tag">resurge {{ "%.0f"|format(record.metrics.time_to_resurgence_seconds / 60) }}m</span>
+            {% endif %}
+            {% for source in record.sources|default([], true) %}
+            <span class="tag">{{ source }}</span>
+            {% endfor %}
+          </div>
+        </article>
+        {% else %}
+        <p class="empty">No signal timeline data yet. Ingest signals via <code>/api/signals</code> or the signal workers.</p>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="section reveal">
+      <div class="section-header">
+        <div>
           <h3 class="section-title">Network health</h3>
           <p class="section-subtitle" id="last-updated">Updated {{ summary.summary.last_updated|default('recently', true) }}</p>
         </div>
