@@ -27,6 +27,7 @@ def test_freshness_endpoint(client):
     assert "registry" in data["data"]["freshness"]
     assert "soul_map" in data["data"]["freshness"]
     assert "recommendations" in data["data"]["freshness"]
+    assert "watchlist" in data["data"]["freshness"]
     assert "overall" in data["data"]["freshness"]
 
 
@@ -57,6 +58,7 @@ def test_stats_endpoint_includes_freshness(client):
     data = json.loads(response.data)
     assert data["status"] == "success"
     assert "freshness" in data
+    assert "watchlist" in data["freshness"]
 
 
 def test_source_freshness_detects_staleness():
@@ -116,3 +118,47 @@ def test_merge_remote_registry_preserves_local_fields(tmp_path):
     assert merged["0"]["owner"] == "owner-key"
     assert merged["0"]["emission"] == 3.0
     assert merged["0"]["social_mentions"] == 2000
+
+
+def test_watchlist_freshness_detects_staleness():
+    info = freshness.watchlist_freshness("/tmp/does-not-exist-watchlist.json")
+    assert info["is_stale"] is True
+    assert info["age_seconds"] is None
+    assert info["last_updated"] is None
+
+
+def test_watchlist_refresh_updates_timestamps(tmp_path):
+    watchlist = {
+        "protocols": {
+            "HYPE": {
+                "symbol": "HYPE",
+                "name": "Hyperliquid",
+                "category": "DeFi / Perpetuals",
+                "price": 18.75,
+                "change_24h": 0.089,
+                "mentions": 2100,
+                "tags": ["defi", "perps", "l1"],
+                "url": "https://hyperliquid.xyz",
+                "description": "High-performance L1 for perpetuals.",
+            }
+        }
+    }
+    local_path = tmp_path / "watchlist.json"
+    local_path.write_text(json.dumps(watchlist))
+
+    result = freshness.refresh_watchlist(str(local_path))
+    assert result["ok"] is True
+    assert result["protocol_count"] == 1
+
+    merged = json.loads(local_path.read_text())
+    assert "last_updated" in merged
+    assert "last_updated" in merged["protocols"]["HYPE"]
+
+
+def test_sync_endpoint_includes_watchlist(client):
+    response = client.post("/api/sync")
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data["status"] == "success"
+    assert "watchlist" in data["data"]
+    assert data["data"]["watchlist"]["ok"] is True

@@ -11,6 +11,10 @@ def client():
 def test_index_route(client):
     response = client.get('/')
     assert response.status_code == 200
+    html = response.data.decode()
+    assert 'Protocol watchlist' in html
+    assert 'HYPE' in html
+    assert 'Hyperliquid' in html
 
 def test_registry_route(client):
     response = client.get('/api/registry')
@@ -88,3 +92,16 @@ def test_daily_rotation_route(client):
     assert 'data' in data
     assert 'decisions' in data['data']
     assert 'recommendations' in data['data']
+
+
+def test_watchlist_route(client):
+    response = client.get('/api/watchlist')
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data['status'] == 'success'
+    assert 'data' in data
+    protocols = data['data']['protocols']
+    symbols = {p['symbol'] for p in protocols}
+    assert symbols >= {'VVV', 'FET', 'RENDER', 'TAO', 'HYPE'}
+    assert any(p['symbol'] == 'HYPE' and p['name'] == 'Hyperliquid' for p in protocols)
+    assert data['freshness']['threshold_seconds'] == 300

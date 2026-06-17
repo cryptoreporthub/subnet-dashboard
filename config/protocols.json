@@ -1,0 +1,33 @@
+{
+  "watchlist": {
+    "VVV": {
+      "label": "VVV",
+      "patterns": ["vvv"],
+      "accent": "#A78BFA"
+    },
+    "Fetch": {
+      "label": "Fetch",
+      "patterns": ["fetch"],
+      "accent": "#22D3EE"
+    },
+    "Render": {
+      "label": "Render",
+      "patterns": ["render"],
+      "accent": "#F472B6"
+    },
+    "Tao": {
+      "label": "Tao",
+      "patterns": ["tao"],
+      "accent": "#34D399"
+    },
+    "Hyperliquid": {
+      "label": "Hyperliquid",
+      "patterns": ["hyperliquid", "hype"],
+      "accent": "#00FFA3"
+    }
+  },
+  "meta": {
+    "description": "First-class protocol watchlist for the 5-minute scan pipeline. Entries are matched by subnet name and surfaced with a premium protocol badge in the UI.",
+    "version": "1.1.0"
+  }
+}
