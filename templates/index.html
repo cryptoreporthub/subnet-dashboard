@@ -142,6 +142,38 @@
     .spotlight-card h4 { margin: 0 0 0.25rem; font-size: 0.875rem; color: var(--muted); }
     .spotlight-card .name { font-size: 1.125rem; font-weight: 600; margin-bottom: 0.25rem; }
     .spotlight-card .metric { font-size: 1rem; }
+    .watchlist-card {
+      background: var(--panel);
+      border: 1px solid #22262d;
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .watchlist-card:hover { border-color: var(--accent-cyan); }
+    .watchlist-card .symbol {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .watchlist-card .name { font-size: 1rem; font-weight: 600; }
+    .watchlist-card .category { color: var(--muted); font-size: 0.875rem; }
+    .watchlist-card .price { font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0; }
+    .watchlist-card .change { font-size: 0.875rem; font-weight: 600; }
+    .watchlist-card .change.up { color: var(--status-active); }
+    .watchlist-card .change.down { color: var(--status-deprecated); }
+    .watchlist-card .tags { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.25rem; }
+    .watchlist-card .tag {
+      font-size: 0.75rem;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      background: #1f2937;
+      color: var(--muted);
+    }
     footer {
       padding: 2rem 0;
       color: var(--muted);
@@ -214,6 +246,39 @@
         </article>
         {% else %}
         <p class="empty">No SimiVision picks available.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <h2>Protocol watchlist</h2>
+      <p class="lead">First-class protocols tracked by the 5-minute scan pipeline alongside the 128-subnet sweep.</p>
+      <p class="meta">Updated {{ watchlist.last_updated|default('unknown', true) }} · <a href="/api/watchlist" target="_blank">View watchlist API</a></p>
+      <div class="cards">
+        {% for protocol in watchlist.protocols|default([], true) %}
+        <article class="watchlist-card">
+          <div class="symbol">
+            {{ protocol.symbol }}
+            <span class="status-pill {{ protocol.status|default('unknown') }}">{{ protocol.status|default('unknown') }}</span>
+          </div>
+          <div class="name">{{ protocol.name|default('—', true) }}</div>
+          <div class="category">{{ protocol.category|default('—', true) }}</div>
+          <div class="price">${{ "%.2f"|format(protocol.price|default(0, true)) }}</div>
+          {% set change = protocol.change_24h|default(0, true) %}
+          <div class="change {{ 'up' if change >= 0 else 'down' }}">{{ "+" if change >= 0 else "" }}{{ "%.2f"|format(change * 100) }}% (24h)</div>
+          <div class="tags">
+            {% for tag in protocol.tags|default([], true) %}
+            <span class="tag">{{ tag }}</span>
+            {% endfor %}
+          </div>
+          {% if protocol.description %}
+          <p class="meta" style="margin-top: 0.5rem;">{{ protocol.description }}</p>
+          {% endif %}
+        </article>
+        {% else %}
+        <p class="empty">No watchlist protocols configured.</p>
         {% endfor %}
       </div>
     </div>

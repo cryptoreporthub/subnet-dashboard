@@ -71,6 +71,8 @@ def _freshness_meta(source: str = "registry") -> dict:
         info = freshness.soul_map_freshness()
     elif source == "recommendations":
         info = freshness.recommendations_freshness()
+    elif source == "watchlist":
+        info = freshness.watchlist_freshness()
     else:
         info = freshness.source_freshness(source, 300)
     return {
@@ -78,6 +80,19 @@ def _freshness_meta(source: str = "registry") -> dict:
         "age_seconds": info.get("age_seconds"),
         "is_stale": info.get("is_stale"),
         "threshold_seconds": info.get("threshold_seconds"),
+    }
+
+
+def _load_watchlist() -> dict:
+    """Load the protocol watchlist config."""
+    data = load_data(freshness.WATCHLIST_PATH)
+    protocols = data.get("protocols", {})
+    return {
+        "last_updated": data.get("last_updated"),
+        "protocols": [
+            {"symbol": symbol, **info}
+            for symbol, info in protocols.items()
+        ],
     }
 
 
@@ -234,7 +249,7 @@ def _summarize_registry(data):
 
     return {
         "status": "success",
-        "freshness": _freshness_meta("registry"),
+        "freshness": freshness.overall_freshness(),
         "summary": {
             "total_subnets": len(subnets),
             "status_counts": status_counts,
@@ -296,6 +311,7 @@ def index():
 
     freshness_state = freshness.overall_freshness()
     simivision = _build_simivision(data, recommendations)
+    watchlist = _load_watchlist()
     return render_template(
         "index.html",
         summary=summary_payload,
@@ -305,6 +321,7 @@ def index():
         health_status=health_status,
         ticker_items=ticker_items,
         freshness=freshness_state,
+        watchlist=watchlist,
     )
 
 
@@ -476,7 +493,7 @@ def get_stats():
     return jsonify(
         {
             "status": "success",
-            "freshness": _freshness_meta("registry"),
+            "freshness": freshness.overall_freshness(),
             "summary": {
                 "total_subnets": len(subnets),
                 "status_counts": status_counts,
@@ -524,6 +541,19 @@ def get_recommendations():
 def post_feedback():
     feedback = request.get_json(silent=True)
     return jsonify({"status": "received", "feedback": feedback})
+
+
+@app.route("/api/watchlist", methods=["GET"])
+def get_watchlist():
+    """Return the first-class protocol watchlist."""
+    data = _load_watchlist()
+    return jsonify(
+        {
+            "status": "success",
+            "freshness": _freshness_meta("watchlist"),
+            "data": data,
+        }
+    )
 
 
 @app.route("/api/freshness", methods=["GET"])
