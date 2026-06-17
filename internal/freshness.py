@@ -19,6 +19,7 @@ import requests
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 WATCHLIST_PATH = os.environ.get("WATCHLIST_PATH", "config/watchlist.json")
+SIGNAL_TIMELINE_PATH = os.environ.get("SIGNAL_TIMELINE_PATH", "data/signal_timeline.json")
 REMOTE_REGISTRY_URL = os.environ.get(
     "REMOTE_REGISTRY_URL",
     "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json",
@@ -30,6 +31,7 @@ THRESHOLDS: Dict[str, int] = {
     "soul_map": int(os.environ.get("SOUL_MAP_STALE_SECONDS", "3600")),
     "recommendations": int(os.environ.get("RECOMMENDATIONS_STALE_SECONDS", "600")),
     "watchlist": int(os.environ.get("WATCHLIST_STALE_SECONDS", "300")),
+    "signal_timeline": int(os.environ.get("SIGNAL_TIMELINE_STALE_SECONDS", "300")),
 }
 
 BACKGROUND_INTERVAL_SECONDS = int(
@@ -162,21 +164,37 @@ def watchlist_freshness(watchlist_path: str = WATCHLIST_PATH) -> Dict[str, Any]:
     return source_freshness(watchlist_path, THRESHOLDS["watchlist"], newest)
 
 
+def signal_timeline_freshness(signal_timeline_path: str = SIGNAL_TIMELINE_PATH) -> Dict[str, Any]:
+    """Freshness for the signal/pump-cycle timeline file."""
+    newest: Optional[str] = None
+    if os.path.exists(signal_timeline_path):
+        try:
+            with open(signal_timeline_path, "r") as f:
+                data = json.load(f)
+            newest = data.get("updated_at")
+        except Exception:
+            pass
+    return source_freshness(signal_timeline_path, THRESHOLDS["signal_timeline"], newest)
+
+
 def overall_freshness(
     registry_path: str = REGISTRY_PATH,
     soul_map_path: str = SOUL_MAP_PATH,
     watchlist_path: str = WATCHLIST_PATH,
+    signal_timeline_path: str = SIGNAL_TIMELINE_PATH,
 ) -> Dict[str, Any]:
     """Freshness snapshot for all tracked sources."""
     registry = registry_freshness(registry_path)
     soul_map = soul_map_freshness(soul_map_path)
     recommendations = recommendations_freshness(registry_path)
     watchlist = watchlist_freshness(watchlist_path)
+    signal_timeline = signal_timeline_freshness(signal_timeline_path)
     any_stale = (
         registry["is_stale"]
         or soul_map["is_stale"]
         or recommendations["is_stale"]
         or watchlist["is_stale"]
+        or signal_timeline["is_stale"]
     )
     return {
         "overall": {
@@ -187,6 +205,7 @@ def overall_freshness(
         "soul_map": soul_map,
         "recommendations": recommendations,
         "watchlist": watchlist,
+        "signal_timeline": signal_timeline,
     }
 
 
@@ -422,10 +441,11 @@ def get_sync_state(
     registry_path: str = REGISTRY_PATH,
     soul_map_path: str = SOUL_MAP_PATH,
     watchlist_path: str = WATCHLIST_PATH,
+    signal_timeline_path: str = SIGNAL_TIMELINE_PATH,
 ) -> Dict[str, Any]:
     """Combined freshness + background sync state for the API."""
     with _lock:
         state = dict(_sync_state)
-    freshness = overall_freshness(registry_path, soul_map_path, watchlist_path)
+    freshness = overall_freshness(registry_path, soul_map_path, watchlist_path, signal_timeline_path)
     state["freshness"] = freshness
     return state

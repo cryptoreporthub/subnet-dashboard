@@ -7,6 +7,7 @@ from flask import Flask, jsonify, render_template, request
 from internal.council.mindmap_bridge import MindmapBridge
 from internal.council.judge.adversarial import AdversarialJudge
 from internal import freshness
+from internal.signals.signal_tracker import SignalTracker
 
 app = Flask(__name__)
 
@@ -110,6 +111,8 @@ def _freshness_meta(source: str = "registry") -> dict:
         info = freshness.recommendations_freshness()
     elif source == "watchlist":
         info = freshness.watchlist_freshness()
+    elif source == "signal_timeline":
+        info = freshness.signal_timeline_freshness()
     else:
         info = freshness.source_freshness(source, 300)
     return {
@@ -563,6 +566,7 @@ def index():
         bridge=bridge,
     )
     watchlist = _load_watchlist()
+    signal_timeline = _signal_tracker.get_timeline()
     return render_template(
         "index.html",
         summary=summary_payload,
@@ -573,6 +577,7 @@ def index():
         freshness=freshness_state,
         simivision=simivision,
         watchlist=watchlist,
+        signal_timeline=signal_timeline,
     )
 
 
@@ -858,6 +863,48 @@ def trigger_sync():
 @app.route("/health", methods=["GET"])
 def health():
     return "OK"
+
+
+# Shared signal/pump-cycle tracker instance. Tests can override by patching
+# this module-level reference or by setting SIGNAL_TIMELINE_PATH.
+_signal_tracker = SignalTracker()
+
+
+@app.route("/api/signals", methods=["GET"])
+def get_signals():
+    """Return the full signal/pump-cycle timeline."""
+    return jsonify(
+        {
+            "status": "success",
+            "freshness": _freshness_meta("signal_timeline"),
+            "data": _signal_tracker.get_timeline(),
+        }
+    )
+
+
+@app.route("/api/signals/<asset>", methods=["GET"])
+def get_asset_signals(asset):
+    """Return the signal/pump-cycle timeline for a specific asset."""
+    return jsonify(
+        {
+            "status": "success",
+            "freshness": _freshness_meta("signal_timeline"),
+            "data": _signal_tracker.get_timeline(asset),
+        }
+    )
+
+
+@app.route("/api/signals", methods=["POST"])
+def post_signals():
+    """Ingest one or more signals and update pump-cycle state."""
+    payload = request.get_json(silent=True) or {}
+    results = _signal_tracker.ingest_intelligence(payload)
+    return jsonify(
+        {
+            "status": "success",
+            "data": {"recorded": len(results), "results": results},
+        }
+    )
 
 
 if __name__ == "__main__":
