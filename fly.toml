@@ -1,5 +1,5 @@
 # fly.toml app configuration file generated for subnet-dashboard
-# Triggering redeployment - 2026-06-14
+# Triggering redeployment - 2026-06-16
 
 app = "subnet-dashboard"
 primary_region = "sea"
