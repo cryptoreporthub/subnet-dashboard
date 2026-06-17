@@ -1055,6 +1055,63 @@
     .data-table {
       width: 100%;
       border-collapse: collapse;
+    }
+
+    .spotlight-card h4 { margin: 0 0 0.25rem; font-size: 0.875rem; color: var(--muted); }
+    .spotlight-card .name { font-size: 1.125rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .spotlight-card .metric { font-size: 1rem; }
+    .watchlist-card {
+      position: relative;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-card);
+      padding: var(--space-4);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      box-shadow: var(--shadow-card);
+      transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
+      overflow: hidden;
+    }
+    .watchlist-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(34, 211, 238, 0.25), transparent 60%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+    .watchlist-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-card), var(--shadow-glow); border-color: rgba(34, 211, 238, 0.25); }
+    .watchlist-card .symbol {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .watchlist-card .name { font-size: 1rem; font-weight: 600; }
+    .watchlist-card .category { color: var(--muted); font-size: 0.875rem; }
+    .watchlist-card .price { font-size: 1.75rem; font-weight: 700; margin: 0.25rem 0; }
+    .watchlist-card .change { font-size: 0.875rem; font-weight: 600; }
+    .watchlist-card .change.up { color: var(--status-active); }
+    .watchlist-card .change.down { color: var(--status-deprecated); }
+    .watchlist-card .tags { display: flex; flex-wrap: wrap; gap: 0.375rem; margin-top: 0.25rem; }
+    .watchlist-card .tag {
+      font-size: 0.75rem;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      background: rgba(34, 211, 238, 0.12);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(34, 211, 238, 0.2);
+    }
+    footer {
+      padding: 2rem 0;
+      color: var(--muted);
       font-size: 0.875rem;
       min-width: 980px;
     }
@@ -1209,6 +1266,15 @@
     .protocol-render { color: var(--protocol-render); border-color: rgba(249, 115, 22, 0.35); background: rgba(249, 115, 22, 0.08); }
     .protocol-tao { color: var(--protocol-tao); border-color: rgba(34, 211, 238, 0.35); background: rgba(34, 211, 238, 0.08); }
     .protocol-hyperliquid { color: var(--protocol-hyperliquid); border-color: rgba(0, 255, 163, 0.35); background: rgba(0, 255, 163, 0.08); box-shadow: inset 0 0 14px rgba(0, 255, 163, 0.12); }
+
+    /* Watchlist cards inherit their protocol accent when tagged. */
+    .watchlist-card.protocol-vvv::before { background: linear-gradient(135deg, rgba(124, 58, 237, 0.35), transparent 60%); }
+    .watchlist-card.protocol-fetch::before { background: linear-gradient(135deg, rgba(14, 165, 233, 0.35), transparent 60%); }
+    .watchlist-card.protocol-render::before { background: linear-gradient(135deg, rgba(249, 115, 22, 0.35), transparent 60%); }
+    .watchlist-card.protocol-tao::before { background: linear-gradient(135deg, rgba(34, 211, 238, 0.35), transparent 60%); }
+    .watchlist-card.protocol-hyperliquid::before { background: linear-gradient(135deg, rgba(0, 255, 163, 0.45), transparent 60%); }
+    .watchlist-card.protocol-hyperliquid { border-color: rgba(0, 255, 163, 0.25); box-shadow: var(--shadow-card), 0 0 20px rgba(0, 255, 163, 0.08); }
+    .watchlist-card.protocol-hyperliquid .symbol { color: var(--protocol-hyperliquid); text-shadow: 0 0 10px rgba(0, 255, 163, 0.35); }
 
     .bar-bg {
       display: inline-block;
@@ -1711,6 +1777,43 @@
       <p class="simivision-empty" id="simivision-empty" style="display: none;">
         No SimiVision picks available right now. The panel will refresh automatically when the Selector or Brain produces new recommendations.
       </p>
+    </section>
+
+    <section class="section reveal">
+      <div class="section-header">
+        <div>
+          <h3 class="section-title">Protocol watchlist</h3>
+          <p class="section-subtitle">First-class protocols tracked by the 5-minute scan pipeline alongside the 128-subnet sweep.</p>
+        </div>
+        <a class="section-action" href="/api/watchlist" target="_blank">View API</a>
+      </div>
+      <p class="section-subtitle" style="margin-bottom: var(--space-5);">Updated {{ watchlist.last_updated|default('unknown', true) }} · {{ freshness.age_label|default('unknown') }}</p>
+      <div class="spotlight-grid" id="watchlist-grid">
+        {% for protocol in watchlist.protocols|default([], true) %}
+        <article class="watchlist-card{% if protocol.protocol_tag %} protocol-{{ protocol.protocol_tag|lower }}{% endif %}">
+          <div class="symbol">
+            {{ protocol.symbol }}
+            <span class="status-badge {{ protocol.status|default('unknown') }}">{{ protocol.status|default('unknown') }}</span>
+            {% if protocol.protocol_tag %}<span class="protocol-badge protocol-{{ protocol.protocol_tag|lower }}">{{ protocol.protocol_tag }}</span>{% endif %}
+          </div>
+          <div class="name">{{ protocol.name|default('—', true) }}</div>
+          <div class="category">{{ protocol.category|default('—', true) }}</div>
+          <div class="price">${{ "%.2f"|format(protocol.price|default(0, true)) }}</div>
+          {% set change = protocol.change_24h|default(0, true) %}
+          <div class="change {{ 'up' if change >= 0 else 'down' }}">{{ "+" if change >= 0 else "" }}{{ "%.2f"|format(change * 100) }}% (24h)</div>
+          <div class="tags">
+            {% for tag in protocol.tags|default([], true) %}
+            <span class="tag">{{ tag }}</span>
+            {% endfor %}
+          </div>
+          {% if protocol.description %}
+          <p class="meta" style="margin-top: 0.5rem;">{{ protocol.description }}</p>
+          {% endif %}
+        </article>
+        {% else %}
+        <p class="empty">No watchlist protocols configured.</p>
+        {% endfor %}
+      </div>
     </section>
 
     <section class="section reveal">

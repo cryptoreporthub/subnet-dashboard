@@ -18,6 +18,7 @@ import requests
 
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
+WATCHLIST_PATH = os.environ.get("WATCHLIST_PATH", "config/watchlist.json")
 REMOTE_REGISTRY_URL = os.environ.get(
     "REMOTE_REGISTRY_URL",
     "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json",
@@ -28,6 +29,7 @@ THRESHOLDS: Dict[str, int] = {
     "registry": int(os.environ.get("REGISTRY_STALE_SECONDS", "300")),
     "soul_map": int(os.environ.get("SOUL_MAP_STALE_SECONDS", "3600")),
     "recommendations": int(os.environ.get("RECOMMENDATIONS_STALE_SECONDS", "600")),
+    "watchlist": int(os.environ.get("WATCHLIST_STALE_SECONDS", "300")),
 }
 
 BACKGROUND_INTERVAL_SECONDS = int(
@@ -95,6 +97,10 @@ def source_freshness(
         if parsed:
             age_seconds = int((datetime.now(timezone.utc) - parsed).total_seconds())
             is_stale = age_seconds > threshold_seconds
+    elif not os.path.exists(path):
+        # A missing data source is treated as stale so dashboards can
+        # surface the degradation rather than silently showing nothing.
+        is_stale = True
 
     return {
         "last_updated": last_updated,
@@ -143,14 +149,35 @@ def recommendations_freshness(registry_path: str = REGISTRY_PATH) -> Dict[str, A
     )
 
 
+def watchlist_freshness(watchlist_path: str = WATCHLIST_PATH) -> Dict[str, Any]:
+    """Freshness for the protocol watchlist file."""
+    newest: Optional[str] = None
+    if os.path.exists(watchlist_path):
+        try:
+            with open(watchlist_path, "r") as f:
+                data = json.load(f)
+            newest = data.get("last_updated")
+        except Exception:
+            pass
+    return source_freshness(watchlist_path, THRESHOLDS["watchlist"], newest)
+
+
 def overall_freshness(
-    registry_path: str = REGISTRY_PATH, soul_map_path: str = SOUL_MAP_PATH
+    registry_path: str = REGISTRY_PATH,
+    soul_map_path: str = SOUL_MAP_PATH,
+    watchlist_path: str = WATCHLIST_PATH,
 ) -> Dict[str, Any]:
     """Freshness snapshot for all tracked sources."""
     registry = registry_freshness(registry_path)
     soul_map = soul_map_freshness(soul_map_path)
     recommendations = recommendations_freshness(registry_path)
-    any_stale = registry["is_stale"] or soul_map["is_stale"] or recommendations["is_stale"]
+    watchlist = watchlist_freshness(watchlist_path)
+    any_stale = (
+        registry["is_stale"]
+        or soul_map["is_stale"]
+        or recommendations["is_stale"]
+        or watchlist["is_stale"]
+    )
     return {
         "overall": {
             "any_stale": any_stale,
@@ -159,6 +186,7 @@ def overall_freshness(
         "registry": registry,
         "soul_map": soul_map,
         "recommendations": recommendations,
+        "watchlist": watchlist,
     }
 
 
@@ -277,15 +305,65 @@ def merge_remote_registry(
     return result
 
 
+def refresh_watchlist(
+    watchlist_path: str = WATCHLIST_PATH,
+) -> Dict[str, Any]:
+    """
+    Refresh the protocol watchlist by bumping timestamps and ensuring the
+    file is valid JSON. This keeps first-class protocols (VVV, FET, RENDER,
+    TAO, HYPE) on the same 5-minute cadence as the subnet registry without
+    interfering with the 128-subnet sweep.
+    """
+    result = {
+        "ok": False,
+        "watchlist_path": watchlist_path,
+        "error": None,
+        "updated_at": _now_iso(),
+    }
+
+    data: Dict[str, Any] = {}
+    if os.path.exists(watchlist_path):
+        try:
+            with open(watchlist_path, "r") as f:
+                data = json.load(f)
+        except Exception as e:
+            result["error"] = f"failed to read watchlist: {e}"
+            return result
+
+    now = _now_iso()
+    data["last_updated"] = now
+    protocols = data.get("protocols") or {}
+    for protocol in protocols.values():
+        protocol["last_updated"] = now
+
+    try:
+        dir_name = os.path.dirname(watchlist_path)
+        if dir_name and not os.path.exists(dir_name):
+            os.makedirs(dir_name, exist_ok=True)
+        temp_path = watchlist_path + ".tmp"
+        with open(temp_path, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(temp_path, watchlist_path)
+    except Exception as e:
+        result["error"] = f"failed to write watchlist: {e}"
+        return result
+
+    result["ok"] = True
+    result["protocol_count"] = len(protocols)
+    return result
+
+
 def refresh_all(
     registry_path: str = REGISTRY_PATH,
     soul_map_path: str = SOUL_MAP_PATH,
+    watchlist_path: str = WATCHLIST_PATH,
 ) -> Dict[str, Any]:
     """Run all available refresh steps and return a combined report."""
     result = {
         "synced_at": _now_iso(),
         "registry": merge_remote_registry(registry_path),
-        "freshness": overall_freshness(registry_path, soul_map_path),
+        "watchlist": refresh_watchlist(watchlist_path),
+        "freshness": overall_freshness(registry_path, soul_map_path, watchlist_path),
     }
     return result
 
@@ -343,10 +421,11 @@ def stop_background_sync() -> Dict[str, Any]:
 def get_sync_state(
     registry_path: str = REGISTRY_PATH,
     soul_map_path: str = SOUL_MAP_PATH,
+    watchlist_path: str = WATCHLIST_PATH,
 ) -> Dict[str, Any]:
     """Combined freshness + background sync state for the API."""
     with _lock:
         state = dict(_sync_state)
-    freshness = overall_freshness(registry_path, soul_map_path)
+    freshness = overall_freshness(registry_path, soul_map_path, watchlist_path)
     state["freshness"] = freshness
     return state

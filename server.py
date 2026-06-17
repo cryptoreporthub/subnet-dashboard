@@ -108,6 +108,8 @@ def _freshness_meta(source: str = "registry") -> dict:
         info = freshness.soul_map_freshness()
     elif source == "recommendations":
         info = freshness.recommendations_freshness()
+    elif source == "watchlist":
+        info = freshness.watchlist_freshness()
     else:
         info = freshness.source_freshness(source, 300)
     return {
@@ -118,9 +120,34 @@ def _freshness_meta(source: str = "registry") -> dict:
     }
 
 
+def _load_watchlist() -> dict:
+    """Load the protocol watchlist config and attach a UI protocol tag."""
+    data = load_data(freshness.WATCHLIST_PATH)
+    protocols = data.get("protocols", {})
+    # Map watchlist symbols to the canonical protocol labels used by the
+    # scan pipeline and the futuristic badge styling.
+    symbol_to_label = {
+        "VVV": "VVV",
+        "FET": "Fetch",
+        "RENDER": "Render",
+        "TAO": "Tao",
+        "HYPE": "Hyperliquid",
+    }
+    return {
+        "last_updated": data.get("last_updated"),
+        "protocols": [
+            {
+                "symbol": symbol,
+                "protocol_tag": symbol_to_label.get(symbol),
+                **info,
+            }
+            for symbol, info in protocols.items()
+        ],
+    }
+
+
 def _synthesize_decisions(registry, recommendations):
-    """
-    Generate traceable fallback decisions when the Selector has not yet run.
+    """Generate traceable fallback decisions when the Selector has not yet run.
     Scores are derived from registry metrics and Brain recommendations so the
     SimiVision panel never surfaces placeholder picks.
     """
@@ -463,7 +490,7 @@ def _summarize_registry(data):
 
     return {
         "status": "success",
-        "freshness": _freshness_meta("registry"),
+        "freshness": freshness.overall_freshness(),
         "summary": {
             "total_subnets": len(subnets),
             "status_counts": status_counts,
@@ -535,6 +562,7 @@ def index():
         feedback,
         bridge=bridge,
     )
+    watchlist = _load_watchlist()
     return render_template(
         "index.html",
         summary=summary_payload,
@@ -544,6 +572,7 @@ def index():
         ticker_items=ticker_items,
         freshness=freshness_state,
         simivision=simivision,
+        watchlist=watchlist,
     )
 
 
@@ -725,7 +754,7 @@ def get_stats():
     return jsonify(
         {
             "status": "success",
-            "freshness": _freshness_meta("registry"),
+            "freshness": freshness.overall_freshness(),
             "summary": {
                 "total_subnets": len(subnets),
                 "status_counts": status_counts,
@@ -798,6 +827,19 @@ def get_simivision():
 def post_feedback():
     feedback = request.get_json(silent=True)
     return jsonify({"status": "received", "feedback": feedback})
+
+
+@app.route("/api/watchlist", methods=["GET"])
+def get_watchlist():
+    """Return the first-class protocol watchlist."""
+    data = _load_watchlist()
+    return jsonify(
+        {
+            "status": "success",
+            "freshness": _freshness_meta("watchlist"),
+            "data": data,
+        }
+    )
 
 
 @app.route("/api/freshness", methods=["GET"])

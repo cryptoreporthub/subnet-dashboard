@@ -1,0 +1,90 @@
+{
+  "last_updated": "2026-06-17T05:36:42.359240+00:00",
+  "protocols": {
+    "VVV": {
+      "symbol": "VVV",
+      "name": "Venice Token",
+      "category": "AI Infrastructure",
+      "status": "active",
+      "price": 0.85,
+      "change_24h": 0.032,
+      "mentions": 1240,
+      "tags": [
+        "ai",
+        "privacy",
+        "inference"
+      ],
+      "url": "https://venice.ai",
+      "description": "Private, uncensored AI inference and agent economy.",
+      "last_updated": "2026-06-17T05:36:42.359240+00:00"
+    },
+    "FET": {
+      "symbol": "FET",
+      "name": "Fetch.ai",
+      "category": "AI Agents",
+      "status": "active",
+      "price": 1.12,
+      "change_24h": -0.018,
+      "mentions": 980,
+      "tags": [
+        "ai",
+        "agents",
+        "autonomy"
+      ],
+      "url": "https://fetch.ai",
+      "description": "Decentralized network for autonomous AI agents.",
+      "last_updated": "2026-06-17T05:36:42.359240+00:00"
+    },
+    "RENDER": {
+      "symbol": "RENDER",
+      "name": "Render",
+      "category": "GPU Compute",
+      "status": "active",
+      "price": 6.45,
+      "change_24h": 0.055,
+      "mentions": 1560,
+      "tags": [
+        "gpu",
+        "rendering",
+        "compute"
+      ],
+      "url": "https://rendernetwork.com",
+      "description": "Distributed GPU rendering and compute marketplace.",
+      "last_updated": "2026-06-17T05:36:42.359240+00:00"
+    },
+    "TAO": {
+      "symbol": "TAO",
+      "name": "Bittensor",
+      "category": "Decentralized AI",
+      "status": "active",
+      "price": 245.0,
+      "change_24h": 0.012,
+      "mentions": 3200,
+      "tags": [
+        "ai",
+        "subnets",
+        "incentives"
+      ],
+      "url": "https://bittensor.com",
+      "description": "Incentivized intelligence market running 128 subnets.",
+      "last_updated": "2026-06-17T05:36:42.359240+00:00"
+    },
+    "HYPE": {
+      "symbol": "HYPE",
+      "name": "Hyperliquid",
+      "category": "DeFi / Perpetuals",
+      "status": "active",
+      "price": 18.75,
+      "change_24h": 0.089,
+      "mentions": 2100,
+      "tags": [
+        "defi",
+        "perps",
+        "l1"
+      ],
+      "url": "https://hyperliquid.xyz",
+      "description": "High-performance L1 for perpetuals and on-chain finance.",
+      "last_updated": "2026-06-17T05:36:42.359240+00:00"
+    }
+  }
+}
