@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-06-17T05:36:42.359240+00:00",
+  "last_updated": "2026-06-20T04:59:05.573558+00:00",
   "protocols": {
     "VVV": {
       "symbol": "VVV",
@@ -16,7 +16,7 @@
       ],
       "url": "https://venice.ai",
       "description": "Private, uncensored AI inference and agent economy.",
-      "last_updated": "2026-06-17T05:36:42.359240+00:00"
+      "last_updated": "2026-06-20T04:59:05.573558+00:00"
     },
     "FET": {
       "symbol": "FET",
@@ -33,7 +33,7 @@
       ],
       "url": "https://fetch.ai",
       "description": "Decentralized network for autonomous AI agents.",
-      "last_updated": "2026-06-17T05:36:42.359240+00:00"
+      "last_updated": "2026-06-20T04:59:05.573558+00:00"
     },
     "RENDER": {
       "symbol": "RENDER",
@@ -50,7 +50,7 @@
       ],
       "url": "https://rendernetwork.com",
       "description": "Distributed GPU rendering and compute marketplace.",
-      "last_updated": "2026-06-17T05:36:42.359240+00:00"
+      "last_updated": "2026-06-20T04:59:05.573558+00:00"
     },
     "TAO": {
       "symbol": "TAO",
@@ -67,7 +67,7 @@
       ],
       "url": "https://bittensor.com",
       "description": "Incentivized intelligence market running 128 subnets.",
-      "last_updated": "2026-06-17T05:36:42.359240+00:00"
+      "last_updated": "2026-06-20T04:59:05.573558+00:00"
     },
     "HYPE": {
       "symbol": "HYPE",
@@ -84,7 +84,7 @@
       ],
       "url": "https://hyperliquid.xyz",
       "description": "High-performance L1 for perpetuals and on-chain finance.",
-      "last_updated": "2026-06-17T05:36:42.359240+00:00"
+      "last_updated": "2026-06-20T04:59:05.573558+00:00"
     }
   }
 }

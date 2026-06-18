@@ -9,13 +9,13 @@ from internal.council.judge.adversarial import AdversarialJudge
 from internal import freshness
 from internal import scheduler as adversarial_scheduler
 from internal.signals.signal_tracker import SignalTracker
+from internal.indicators import indicator_scheduler
+from internal.indicators.indicator_engine import IndicatorEngine
 from internal.simivision.engine import (
     SimiVisionEngine,
     _load_selector_decisions,
     _synthesize_decision,
 )
-from internal.indicators.indicator_engine import IndicatorEngine
-from internal.indicators import indicator_scheduler
 
 app = Flask(__name__)
 
@@ -167,82 +167,374 @@ def _load_watchlist() -> dict:
     }
 
 
-def _synthesize_decisions(registry, recommendations):
-    """Generate traceable fallback decisions when the Selector has not yet run.
-    Scores are derived from registry metrics and Brain recommendations so the
-    SimiVision panel never surfaces placeholder picks.
+def _nested_get(obj, path, default=None):
+    """Safely fetch a dotted path from a dict (e.g. 'staking_data.apy')."""
+    value = obj
+    for part in path.split("."):
+        if not isinstance(value, dict):
+            return default
+        value = value.get(part, default)
+    return value
+
+
+def _synthetic_breakdown(item):
+    """Build a minimal traceable expert breakdown from registry metadata."""
+    emission = item.get("emission", 0.0) or 0.0
+    mentions = item.get("social_mentions", 0) or 0
+    is_overvalued = item.get("is_overvalued", False)
+
+    quant_score = 0.85 if emission > 1.0 else 0.4 if emission < 0.2 else 0.75
+    hype_score = 0.9 if mentions > 1000 else 0.3 if mentions < 100 else 0.65
+    contrarian_score = 0.2 if is_overvalued else 0.8
+
+    return {
+        "quant": {
+            "score": quant_score,
+            "metrics": {
+                "emission_stability": "high" if quant_score >= 0.7 else "low",
+                "performance_index": quant_score * 100,
+            },
+        },
+        "hype": {
+            "score": hype_score,
+            "sentiment": "bullish" if hype_score >= 0.7 else "bearish" if hype_score <= 0.4 else "neutral",
+            "metrics": {
+                "social_volume": mentions,
+                "hype_index": hype_score * 100,
+            },
+        },
+        "contrarian": {
+            "score": contrarian_score,
+            "signal": "sell" if is_overvalued else "buy",
+            "metrics": {"contrarian_index": contrarian_score * 100},
+        },
+    }
+
+
+def _simivision_rationale(action, breakdown, source_note=None):
+    """Build a human-readable rationale string for a SimiVision card."""
+    quant_note = (breakdown.get("quant", {}).get("metrics") or {}).get("emission_stability", "")
+    hype_sentiment = breakdown.get("hype", {}).get("sentiment", "")
+    contrarian_signal = breakdown.get("contrarian", {}).get("signal", "")
+    rationale_parts = []
+    if source_note:
+        rationale_parts.append(source_note)
+    elif action == "accumulate":
+        rationale_parts.append("Consensus aligns on accumulation")
+    elif action == "reduce":
+        rationale_parts.append("Consensus signals reduction")
+    else:
+        rationale_parts.append("Consensus is neutral")
+    if quant_note:
+        rationale_parts.append(f"quant emission stability {quant_note}")
+    if hype_sentiment:
+        rationale_parts.append(f"hype sentiment {hype_sentiment}")
+    if contrarian_signal:
+        rationale_parts.append(f"contrarian signal {contrarian_signal}")
+    return "; ".join(rationale_parts) + "."
+
+
+def _build_choice(registry, recs, decision, judge):
+    """Build a single SimiVision choice from a decision-like object."""
+    subnet_id = decision.get("subnet_id")
+    item = registry.get(str(subnet_id), {}) if registry else {}
+    name = item.get("name") or f"Subnet {subnet_id}"
+    status = item.get("status", "unknown")
+    action = decision.get("recommended_action", "hold")
+    confidence = decision.get("consensus_score", 0.0) or 0.0
+    breakdown = decision.get("expert_breakdown", {})
+    brain_rec = recs.get(str(subnet_id), {}) if recs else {}
+    brain_action = brain_rec.get("action")
+    target_weight = brain_rec.get("target_weight", 0.5)
+
+    direction = 1.0 if action == "accumulate" else -1.0 if action == "reduce" else 0.0
+    edge_score = round(
+        (confidence + (decision.get("feedback_boost") or 0.0))
+        * target_weight
+        * (1.0 if direction != 0 else 0.7),
+        4,
+    )
+    edge_score = max(0.0, min(1.0, edge_score))
+
+    apy = item.get("staking_data", {}).get("apy")
+    if apy:
+        preferred_entry = f"Stake pool (~{apy * 100:.2f}% APY)"
+    else:
+        preferred_entry = "Spot accumulation" if action == "accumulate" else "Hold position"
+
+    protocol_tag = _protocol_tag_for(name)
+
+    risk_flags = item.get("risk_flags", []) or []
+    risk_penalty = len(risk_flags) + (1 if item.get("is_overvalued") else 0)
+    reward = (apy or 0.0) * 100
+    risk_score = max(1, risk_penalty)
+    reward_risk_ratio = round(reward / risk_score, 2)
+    if reward_risk_ratio >= 15:
+        reward_risk_label = "High"
+    elif reward_risk_ratio >= 5:
+        reward_risk_label = "Medium"
+    else:
+        reward_risk_label = "Low"
+
+    source_note = None
+    if decision.get("from_brain"):
+        source_note = f"Brain recommendation ({brain_action or 'hold'})"
+    elif decision.get("from_registry"):
+        source_note = f"Registry highlight: {decision.get('registry_highlight', 'metric')}"
+
+    why_now = _simivision_rationale(action, breakdown, source_note)
+
+    if action == "accumulate":
+        invalidation = "Consensus score falls below 0.50 or status shifts to at-risk/deprecated."
+    elif action == "reduce":
+        invalidation = "Consensus score rises above 0.70 with improving risk flags."
+    else:
+        invalidation = "Consensus moves above 0.75 or below 0.40."
+
+    horizon = "Exit within 24h" if action == "reduce" else "1–3 days"
+
+    if brain_action:
+        judge_agreement = "Agreed" if action == brain_action else "Divergent"
+    else:
+        judge_agreement = "No brain signal"
+
+    verdict = judge.judge_decision(
+        {"recommended_action": action},
+        {
+            "emission": item.get("emission", 0.0),
+            "social_mentions": item.get("social_mentions", 0),
+            "status": status,
+            "is_overvalued": item.get("is_overvalued", False),
+        },
+    )
+
+    return {
+        "subnet_id": subnet_id,
+        "name": name,
+        "status": status,
+        "action": action,
+        "confidence": confidence,
+        "edge_score": edge_score,
+        "preferred_entry": preferred_entry,
+        "reward_risk": {
+            "ratio": reward_risk_ratio,
+            "label": reward_risk_label,
+            "reward": round(reward, 2),
+            "risk_penalty": risk_penalty,
+        },
+        "why_now": why_now,
+        "invalidation": invalidation,
+        "horizon": horizon,
+        "judge_agreement": judge_agreement,
+        "brain_action": brain_action,
+        "target_weight": target_weight,
+        "expert_breakdown": breakdown,
+        "judge_verdict": verdict,
+        "metrics": {
+            "emission": item.get("emission"),
+            "social_mentions": item.get("social_mentions"),
+            "apy": apy,
+            "total_stake": item.get("staking_data", {}).get("total_stake"),
+            "is_overvalued": item.get("is_overvalued"),
+            "risk_flags": risk_flags,
+        },
+        "protocol_tag": protocol_tag,
+    }
+
+
+def _build_trace_invalidation(decision, registry_item):
+    """Surface the conditions that would invalidate the current signal."""
+    action = decision.get("recommended_action", "hold") if decision else "hold"
+    is_overvalued = registry_item.get("is_overvalued", False)
+    risk_flags = registry_item.get("risk_flags", []) or []
+
+    if action == "accumulate":
+        base = "Accumulate thesis invalidates if emission drops below 1.0 or social mentions fall under 100."
+    elif action == "reduce":
+        base = "Reduce thesis invalidates if overvaluation flag clears and social mentions rebound above 1000."
+    else:
+        base = "Hold thesis invalidates if a strong directional signal emerges from experts or Brain."
+
+    parts = [base]
+    if is_overvalued:
+        parts.append("Overvaluation flag is active.")
+    if risk_flags:
+        parts.append(f"Risk flags: {', '.join(risk_flags)}.")
+    return " ".join(parts)
+
+
+def _build_trace_horizon(decision, registry_item):
+    """Return a human-readable time horizon for the signal."""
+    action = decision.get("recommended_action", "hold") if decision else "hold"
+    status = registry_item.get("status", "unknown")
+    if status == "deprecated":
+        return "Immediate exit horizon; subnet is deprecated."
+    if action == "accumulate":
+        return "Short-term entry horizon (1-2 epochs); watch for conviction confirmation."
+    if action == "reduce":
+        return "Immediate risk-management horizon; reassess each epoch."
+    return "Medium-term observation horizon (2-4 epochs); await directional clarity."
+
+
+def _build_trace_preferred_entry(decision, registry_item):
+    """Suggest a preferred entry strategy based on signal alignment."""
+    action = decision.get("recommended_action", "hold") if decision else "hold"
+    is_overvalued = registry_item.get("is_overvalued", False)
+    if is_overvalued:
+        return "Avoid fresh entry; wait for overvaluation flag to clear."
+    if action == "accumulate":
+        return "Scale in on strength; target weight aligned with Brain recommendation."
+    if action == "reduce":
+        return "Trim or hedge existing exposure; do not add at current levels."
+    return "Stay flat until consensus or Brain shifts direction."
+
+
+def _build_simivision_choices(registry, decisions, recommendations, feedback, bridge=None):
     """
-    recs = recommendations.get("recommendations", {})
-    decisions = []
-    for key, item in registry.items():
-        subnet_id = item.get("id", int(key))
-        status = item.get("status", "unknown")
-        emission = item.get("emission", 0.0) or 0.0
-        mentions = item.get("social_mentions", 0) or 0
-        is_overvalued = item.get("is_overvalued", False)
-        brain_rec = recs.get(str(subnet_id), {})
-        brain_action = brain_rec.get("action", "hold")
+    Build the top-3 SimiVision decision cards from selector output, Brain
+    recommendations, registry highlights, and the Adversarial Judge.
 
-        # Synthetic expert scores mirror the live expert heuristics.
-        quant_score = 0.85 if emission > 1.0 else 0.4 if emission < 0.2 else 0.75
-        hype_score = 0.9 if mentions > 1000 else 0.3 if mentions < 100 else 0.65
-        contrarian_score = 0.2 if is_overvalued else 0.8
-        technical_score = 0.5
+    Fallback provenance is surfaced in ``meta.source`` so callers can render
+    a transparent pending/empty state and every pick remains traceable.
+    """
+    recs = recommendations.get("recommendations", {}) if recommendations else {}
+    alignment = feedback.get("alignment_score") if feedback else None
+    alignment_status = feedback.get("status") if feedback else None
 
-        if brain_action == "accumulate":
-            consensus_score = round(min(0.95, 0.7 + emission * 0.05 + mentions * 0.00005), 4)
-        elif brain_action == "reduce":
-            consensus_score = round(max(0.15, 0.45 - emission * 0.05 - mentions * 0.00002), 4)
-        else:
-            consensus_score = round(
-                (quant_score * 0.3 + hype_score * 0.25 + contrarian_score * 0.2 + technical_score * 0.25), 4
+    meta = {
+        "source": None,
+        "fallback_used": False,
+        "selector_decisions": 0,
+        "brain_recommendations": 0,
+        "error": None,
+    }
+
+    chosen_ids = set()
+    ranked = []
+
+    # Tier 1: selector decisions sorted by consensus score.
+    selector_decisions = sorted(
+        [d for d in (decisions or []) if d.get("subnet_id") is not None],
+        key=lambda d: d.get("consensus_score", 0.0) or 0.0,
+        reverse=True,
+    )
+    for d in selector_decisions[:3]:
+        chosen_ids.add(d["subnet_id"])
+        ranked.append(d)
+    meta["selector_decisions"] = len(selector_decisions)
+
+    # Tier 2: back-fill from Brain recommendations.
+    if len(ranked) < 3 and recs:
+        brain_candidates = []
+        for sid, rec in recs.items():
+            try:
+                subnet_id = int(sid)
+            except (ValueError, TypeError):
+                continue
+            if subnet_id in chosen_ids:
+                continue
+            action = rec.get("action", "hold")
+            target_weight = rec.get("target_weight", 0.5)
+            direction = 1.0 if action == "accumulate" else -1.0 if action == "reduce" else 0.0
+            score = target_weight * (1.0 if direction != 0 else 0.5)
+            brain_candidates.append((score, subnet_id, action, target_weight))
+        brain_candidates.sort(reverse=True)
+        for _, subnet_id, action, target_weight in brain_candidates[: 3 - len(ranked)]:
+            chosen_ids.add(subnet_id)
+            item = registry.get(str(subnet_id), {}) if registry else {}
+            ranked.append(
+                {
+                    "subnet_id": subnet_id,
+                    "consensus_score": 0.0,
+                    "recommended_action": action,
+                    "expert_breakdown": _synthetic_breakdown(item),
+                    "from_brain": True,
+                    "brain_action": action,
+                    "target_weight": target_weight,
+                }
             )
+        meta["brain_recommendations"] = len(recs)
+        if len(selector_decisions) < 3:
+            meta["fallback_used"] = True
 
-        if consensus_score >= 0.75:
-            action = "accumulate"
-        elif consensus_score <= 0.4:
-            action = "reduce"
-        else:
-            action = "hold"
+    # Tier 3: back-fill from registry highlights.
+    if len(ranked) < 3 and registry:
+        highlight_fields = [
+            ("emission", True),
+            ("staking_data.apy", True),
+            ("social_mentions", True),
+        ]
+        for field, reverse in highlight_fields:
+            if len(ranked) >= 3:
+                break
+            items = sorted(
+                registry.items(),
+                key=lambda kv: _nested_get(kv[1], field) or 0.0,
+                reverse=reverse,
+            )
+            for sid, item in items:
+                subnet_id = item.get("id", int(sid))
+                if subnet_id in chosen_ids:
+                    continue
+                chosen_ids.add(subnet_id)
+                ranked.append(
+                    {
+                        "subnet_id": subnet_id,
+                        "consensus_score": 0.0,
+                        "recommended_action": "hold",
+                        "expert_breakdown": _synthetic_breakdown(item),
+                        "from_registry": True,
+                        "registry_highlight": field,
+                    }
+                )
+                if len(ranked) >= 3:
+                    break
+        # Reaching tier 3 means selector + Brain were insufficient, so registry
+        # highlights are a fallback source.
+        meta["fallback_used"] = True
 
-        decisions.append(
-            {
-                "subnet_id": subnet_id,
-                "consensus_score": consensus_score,
-                "recommended_action": action,
-                "expert_breakdown": {
-                    "quant": {
-                        "score": quant_score,
-                        "metrics": {
-                            "emission_stability": "high" if quant_score >= 0.7 else "low",
-                            "performance_index": quant_score * 100,
-                        },
-                    },
-                    "hype": {
-                        "score": hype_score,
-                        "sentiment": "bullish" if hype_score >= 0.7 else "bearish" if hype_score <= 0.4 else "neutral",
-                        "metrics": {
-                            "social_volume": mentions,
-                            "hype_index": hype_score * 100,
-                        },
-                    },
-                    "contrarian": {
-                        "score": contrarian_score,
-                        "signal": "sell" if is_overvalued else "buy",
-                        "metrics": {"contrarian_index": contrarian_score * 100},
-                    },
-                    "technical": {
-                        "score": technical_score,
-                        "signal": "hold",
-                        "metrics": {"active_signals": []},
-                    },
-                },
-                "synthesized": True,
-                "brain_action": brain_action,
-            }
-        )
-    return decisions
+    # Determine provenance label.
+    if not ranked:
+        meta["source"] = "empty"
+    elif meta["selector_decisions"] >= 3:
+        meta["source"] = "selector"
+    elif meta["selector_decisions"] > 0:
+        meta["source"] = "selector+brain" if meta["brain_recommendations"] else "selector+registry"
+    elif meta["brain_recommendations"]:
+        meta["source"] = "brain"
+    else:
+        meta["source"] = "registry"
 
+    judge = AdversarialJudge()
+    choices = []
+    for decision in ranked[:3]:
+        choice = _build_choice(registry, recs, decision, judge)
+        if bridge is not None:
+            try:
+                choice["feedback_boost"] = bridge.get_simivision_feedback_boost(choice["subnet_id"])
+            except Exception:
+                choice["feedback_boost"] = 0.0
+        choices.append(choice)
+
+    # Traceability: log the surfaced picks when they change.
+    if bridge is not None and choices:
+        pick_signature = [
+            {"subnet_id": c["subnet_id"], "action": c["action"]} for c in choices
+        ]
+        last_picks = bridge.soul_map_state.get("last_simivision_picks", {}).get("picks")
+        if pick_signature != last_picks:
+            try:
+                bridge.log_simivision_picks(pick_signature)
+            except Exception:
+                pass
+
+    return {
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "choices": choices,
+        "alignment_score": alignment,
+        "alignment_status": alignment_status,
+        "meta": meta,
+    }
 
 
 def _summarize_registry(data):
@@ -386,14 +678,29 @@ def add_cors_headers(response):
     return response
 
 
+def _empty_simivision(error=None):
+    """Return a safe, transparent SimiVision payload when live data is unavailable."""
+    return {
+        "date": datetime.now().strftime("%Y-%m-%d"),
+        "choices": [],
+        "alignment_score": None,
+        "alignment_status": None,
+        "meta": {
+            "source": "error" if error else "empty",
+            "fallback_used": False,
+            "selector_decisions": 0,
+            "brain_recommendations": 0,
+            "error": error,
+        },
+    }
+
+
 @app.route("/")
 def index():
     """Server-render the dashboard hero content for a premium first paint."""
     data = load_data("config/registry.json")
     enriched = _enrich_registry(data)
     summary_payload = _summarize_registry(data)
-    bridge = MindmapBridge()
-    recommendations = bridge.get_brain_recommendations()
 
     # Health status derived from required data files.
     health_status = "ok" if data and os.path.exists("data/soul_map.json") else "warn"
@@ -406,15 +713,29 @@ def index():
     )[:12]
 
     freshness_state = freshness.overall_freshness()
+
+    # SimiVision: isolate failures from Brain / soul-map reads so the rest of
+    # the homepage still renders.
+    recommendations = {"recommendations": {}}
+    simivision = None
+    try:
+        bridge = MindmapBridge()
+        recommendations = bridge.get_brain_recommendations()
+        soul_map = load_data("data/soul_map.json")
+        last_output = soul_map.get("soul_map_state", {}).get("last_selector_output", {})
+        feedback = soul_map.get("feedback_logs", [None])[-1]
+        simivision = _build_simivision_choices(
+            data,
+            last_output.get("decisions", []),
+            recommendations,
+            feedback,
+            bridge=bridge,
+        )
+    except Exception as exc:
+        simivision = _empty_simivision(error=str(exc))
+
     watchlist = _load_watchlist()
     signal_timeline = _signal_tracker.get_timeline()
-    # SimiVision Legendary Edition: wrapped in try/except so the homepage never 500s.
-    try:
-        simivision_engine = SimiVisionEngine()
-        simivision = simivision_engine.safe_snapshot(n=3)
-    except Exception:
-        simivision = SimiVisionEngine().safe_snapshot(n=3)
-
     return render_template(
         "index.html",
         summary=summary_payload,
@@ -652,65 +973,48 @@ def get_recommendations():
     )
 
 
-def _build_trace_invalidation(decision, registry_item):
-    """Surface the conditions that would invalidate the current signal."""
-    action = decision.get("recommended_action", "hold") if decision else "hold"
-    is_overvalued = registry_item.get("is_overvalued", False)
-    risk_flags = registry_item.get("risk_flags", []) or []
-
-    if action == "accumulate":
-        base = "Accumulate thesis invalidates if emission drops below 1.0 or social mentions fall under 100."
-    elif action == "reduce":
-        base = "Reduce thesis invalidates if overvaluation flag clears and social mentions rebound above 1000."
-    else:
-        base = "Hold thesis invalidates if a strong directional signal emerges from experts or Brain."
-
-    parts = [base]
-    if is_overvalued:
-        parts.append("Overvaluation flag is active.")
-    if risk_flags:
-        parts.append(f"Risk flags: {', '.join(risk_flags)}.")
-    return " ".join(parts)
-
-
-def _build_trace_horizon(decision, registry_item):
-    """Return a human-readable time horizon for the signal."""
-    action = decision.get("recommended_action", "hold") if decision else "hold"
-    status = registry_item.get("status", "unknown")
-    if status == "deprecated":
-        return "Immediate exit horizon; subnet is deprecated."
-    if action == "accumulate":
-        return "Short-term entry horizon (1-2 epochs); watch for conviction confirmation."
-    if action == "reduce":
-        return "Immediate risk-management horizon; reassess each epoch."
-    return "Medium-term observation horizon (2-4 epochs); await directional clarity."
-
-
-def _build_trace_preferred_entry(decision, registry_item):
-    """Suggest a preferred entry strategy based on signal alignment."""
-    action = decision.get("recommended_action", "hold") if decision else "hold"
-    is_overvalued = registry_item.get("is_overvalued", False)
-    if is_overvalued:
-        return "Avoid fresh entry; wait for overvaluation flag to clear."
-    if action == "accumulate":
-        return "Scale in on strength; target weight aligned with Brain recommendation."
-    if action == "reduce":
-        return "Trim or hedge existing exposure; do not add at current levels."
-    return "Stay flat until consensus or Brain shifts direction."
-
-
 @app.route("/api/simivision", methods=["GET"])
 def get_simivision():
-    """Top-3 SimiVision rich signal objects for the Legendary Edition spine."""
-    engine = SimiVisionEngine()
-    snapshot = engine.safe_snapshot(n=3)
-    return jsonify(
-        {
-            "status": "success",
-            "freshness": snapshot["meta"]["freshness"],
-            "data": snapshot,
-        }
-    )
+    """Top-3 SimiVision choices for today with derived actionable fields.
+
+    Failures are caught and returned as a transparent empty state so the UI
+    can render the pending/error placeholder without losing context.
+    """
+    try:
+        soul_map = load_data("data/soul_map.json")
+        last_output = soul_map.get("soul_map_state", {}).get("last_selector_output", {})
+        bridge = MindmapBridge()
+        recommendations = bridge.get_brain_recommendations()
+        feedback = soul_map.get("feedback_logs", [None])[-1]
+        registry = load_data("config/registry.json")
+        simivision = _build_simivision_choices(
+            registry,
+            last_output.get("decisions", []),
+            recommendations,
+            feedback,
+            bridge=bridge,
+        )
+        return jsonify(
+            {
+                "status": "success",
+                "freshness": _freshness_meta("soul_map"),
+                "data": simivision,
+            }
+        )
+    except Exception as exc:
+        return jsonify(
+            {
+                "status": "success",
+                "freshness": _freshness_meta("soul_map"),
+                "data": _empty_simivision(error=str(exc)),
+            }
+        )
+
+
+@app.route("/api/mindmap/feedback", methods=["POST"])
+def post_feedback():
+    feedback = request.get_json(silent=True)
+    return jsonify({"status": "received", "feedback": feedback})
 
 
 @app.route("/api/simivision/<int:netuid>/trace", methods=["GET"])
@@ -803,12 +1107,6 @@ def get_simivision_trace(netuid):
             ),
             503,
         )
-
-
-@app.route("/api/mindmap/feedback", methods=["POST"])
-def post_feedback():
-    feedback = request.get_json(silent=True)
-    return jsonify({"status": "received", "feedback": feedback})
 
 
 @app.route("/api/simivision/learning-trail", methods=["GET"])
@@ -990,6 +1288,4 @@ if __name__ == "__main__":
     # Background sync is disabled in testing to avoid thread interference.
     if app.config["ENABLE_BACKGROUND_SYNC"] and not app.config.get("TESTING"):
         freshness.start_background_sync(immediate=False)
-        adversarial_scheduler.start_adversarial_scheduler(immediate=False)
-        indicator_scheduler.start_indicator_scheduler(immediate=False)
     app.run(host="0.0.0.0", port=port, debug=True)
