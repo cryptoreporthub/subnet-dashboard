@@ -4,7 +4,7 @@
     "name": "Root",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -15,14 +15,16 @@
     },
     "emission": 3.0,
     "social_mentions": 2000,
-    "is_overvalued": true
+    "is_overvalued": true,
+    "owner": "5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM",
+    "description": "The root network is a meta subnet with id 0. This network determines the proportion of the network\u2019s block emission to be distributed to each subnet network. This is currently set to 1 TAO for every block mined.  Like other subnetworks, the root network consists of a set of validators that set weights (W). These weights are then processed by Yuma Consensus to determine an emission vector (E). The difference is that the vector E has a length equal to the number of active subnetworks currently running on the chain and each e_i in E is the emission proportion that subnet i receives every block. The root network also doubles as the network senate. This senate is the top 12 keys on this network which have been granted veto power on proposals submitted by the triumvirate."
   },
   "1": {
     "id": 1,
     "name": "Apex",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -33,14 +35,18 @@
     },
     "emission": 2.975,
     "social_mentions": 1985,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5HCFWvRqzSHWRPecN7q8J6c7aKQnrCZTMHstPv39xL1wgDHh",
+    "github": "https://github.com/macrocosm-os/prompting",
+    "hw_requirements": "https://github.com/macrocosm-os/prompting/blob/main/min_compute.yml",
+    "description": "This Subnet defines an incentive mechanism to create a distributed conversational AI."
   },
   "2": {
     "id": 2,
     "name": "Omron",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -51,14 +57,18 @@
     },
     "emission": 2.95,
     "social_mentions": 1970,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5EcYQ3W77ndrmMWdvVQusoFqY8doxfP3U2zrh7xZQiaz7avY",
+    "github": "https://github.com/inference-labs-inc/omron-subnet",
+    "hw_requirements": "https://github.com/inference-labs-inc/omron-subnet?tab=readme-ov-file#run-the-miner",
+    "description": "Omron subnet, building cryptographically verified efficient and intelligent capital networks."
   },
   "3": {
     "id": 3,
-    "name": "deprecated",
+    "name": "Templar",
     "status": "deprecated",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -69,14 +79,17 @@
     },
     "emission": 2.925,
     "social_mentions": 1955,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5G26HqQg8M6hfw9q84gM3udYHHymThmswRKgSGtwdcduBSos",
+    "github": "https://github.com/tplr-ai/templar",
+    "description": "Templar seeks to push the boundaries of the combination incentives and distributing training infrastructure."
   },
   "4": {
     "id": 4,
     "name": "Targon",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -87,14 +100,18 @@
     },
     "emission": 2.9,
     "social_mentions": 1940,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5CXGPMnq9RCCLUEvp9G2iUuabw69TSFM155UVS1S4Zmusaxv",
+    "github": "https://github.com/manifold-inc/targon",
+    "hw_requirements": "https://github.com/manifold-inc/targon#compute-requirements",
+    "description": "TARGON (Bittensor Subnet 4) is a redundant deterministic verification mechanism that can be used to interpret and analyze ground truth sources and a query."
   },
   "5": {
     "id": 5,
     "name": "Open Kaito",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -105,14 +122,18 @@
     },
     "emission": 2.875,
     "social_mentions": 1925,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5CFmgJ2SQZBjgdyDvwsWhAQatEENLt6k2gWvpkjeHeMm95yv",
+    "github": "https://github.com/OpenKaito/openkaito",
+    "hw_requirements": "https://github.com/OpenKaito/openkaito/blob/main/min_compute.yml",
+    "description": "Kaito AI is committed to democratizing access to Web3 information through its established platform. However, the in-house approach to data collection, indexing, AI training, and ranking imposes operational burdens and stifles broader public innovation."
   },
   "6": {
     "id": 6,
     "name": "Infinite Games",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -123,14 +144,19 @@
     },
     "emission": 2.85,
     "social_mentions": 1910,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5CfSg4e23Z3aTXvc2XZie8ZE1xkqRPoyVRFdWUuyyjGxJrMA",
+    "github": "https://github.com/amedeo-gigaver/infinite_games",
+    "hw_requirements": "https://github.com/amedeo-gigaver/infinite_games/blob/main/min_compute.yml",
+    "image_url": "https://github.com/amedeo-gigaver/infinite_games/raw/main/docs/infinite-games.jpeg",
+    "description": "Incentivizing the prediction of future events."
   },
   "7": {
     "id": 7,
     "name": "Subvortex",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -141,14 +167,18 @@
     },
     "emission": 2.825,
     "social_mentions": 1895,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5CiQ1cxLB1ABBJyf9FAR8CRhfcKgs4M8QaRgmHh318PKLqvb",
+    "github": "https://github.com/eclipsevortex/SubVortex",
+    "hw_requirements": "https://github.com/eclipsevortex/SubVortex/blob/main/min_compute.yml",
+    "description": "SubVortex introduces an incentivized and decentralized network of subtensor nodes that are pivotal elements within the Bittensor ecosystem. This delineates the structure, objectives, and mechanisms of SubVortex, aiming to foster decentralization, stability, and efficient resource allocation within the broader Bittensor network."
   },
   "8": {
     "id": 8,
     "name": "Proprietary Trading Network",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -159,14 +189,19 @@
     },
     "emission": 2.8,
     "social_mentions": 1880,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5F6tnxzAAxbhaWRmeUmB63JEM3VXBNSmqb3AwYJVDStQjw8y",
+    "github": "https://github.com/taoshidev/proprietary-trading-network",
+    "hw_requirements": "https://github.com/taoshidev/proprietary-trading-network/blob/main/docs/miner.md",
+    "image_url": "https://camo.githubusercontent.com/6f50fcc5d5dee8a6edfbaace39f44d187c3c3a792f62dcc7e2e4819912550e0a/68747470733a2f2f692e696d6775722e636f6d2f356854737039372e706e67",
+    "description": "PTN receives signals from quant and deep learning machine learning trading systems to deliver the world's most complete trading signals across a variety of asset classes."
   },
   "9": {
     "id": 9,
     "name": "Pretraining",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -177,14 +212,18 @@
     },
     "emission": 2.775,
     "social_mentions": 1865,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5FsbubeciqtB5Nik3umL2iD4fG8FcC9GbT9nHJfXMj4mJJZ9",
+    "github": "https://github.com/macrocosm-os/pretraining",
+    "hw_requirements": "https://github.com/macrocosm-os/pretraining/blob/main/min_compute.yml",
+    "description": "Bittensor subnet 9 rewards miners for producing pretrained Foundation-Models on the Falcon Refined Web dataset."
   },
   "10": {
     "id": 10,
     "name": "Sturdy",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -195,14 +234,18 @@
     },
     "emission": 2.75,
     "social_mentions": 1850,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5EvNESR7DfSMmdwJ3crtBW1ENAhq3f99X4FCbTi1hDUNCWAW",
+    "github": "https://github.com/Sturdy-Subnet/sturdy-subnet/",
+    "hw_requirements": "https://github.com/Sturdy-Subnet/sturdy-subnet/blob/main/min_compute.yml",
+    "description": "The Sturdy Subnet is a Bittensor subnetwork that enables the creation of decentralized, autonomous yield optimizers."
   },
   "11": {
     "id": 11,
     "name": "Dippy Roleplay",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -213,14 +256,19 @@
     },
     "emission": 2.725,
     "social_mentions": 1835,
-    "is_overvalued": true
+    "is_overvalued": true,
+    "owner": "5EtM9iXMAYRsmt6aoQAoWNDX6yaBnjhmnEQhWKv8HpwkVtML",
+    "github": "https://github.com/impel-intelligence/dippy-bittensor-subnet",
+    "hw_requirements": "https://github.com/impel-intelligence/dippy-bittensor-subnet/blob/main/min_compute.yml",
+    "image_url": "https://github.com/impel-intelligence/dippy-bittensor-subnet/raw/main/assests/banner.png",
+    "description": "The Dippy Roleplay subnet on Bittensor aims to create the world's best open-source roleplay LLM by leveraging the collective efforts of the open-source community."
   },
   "12": {
     "id": 12,
     "name": "Horde",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -231,14 +279,17 @@
     },
     "emission": 2.7,
     "social_mentions": 1820,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5ELzhHvgUqmnAYs74vFWjMMehXNeHkRtkreAa3g8QQS96PCp",
+    "github": "https://github.com/backend-developers-ltd/ComputeHorde",
+    "image_url": "https://github.com/backend-developers-ltd/ComputeHorde/raw/master/ComputeHorde.png"
   },
   "13": {
     "id": 13,
     "name": "Data Universe",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -249,14 +300,18 @@
     },
     "emission": 2.675,
     "social_mentions": 1805,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5HBswBt1A9Ahx6U76abXXGd7VmabmCNBGhSK2vrP71GSxtgZ",
+    "github": "https://github.com/macrocosm-os/data-universe/",
+    "hw_requirements": "https://github.com/macrocosm-os/data-universe/blob/main/docs/miner.md#system-requirements",
+    "description": "Data Universe is a Bittensor subnet for collecting and storing large amounts of data from across a wide-range of sources, for use by other Subnets. It was built from the ground-up with a focus on decentralization and scalability."
   },
   "14": {
     "id": 14,
     "name": "VectorStore",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -267,14 +322,17 @@
     },
     "emission": 2.65,
     "social_mentions": 1790,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5FsuF1ufC1S1rPeqYWTdmZz6KD6zchmDJraxQumHmeDxxa8T",
+    "github": "https://github.com/vector-pool/vector-store",
+    "description": "Bittensor Subnet VectorStore: A decentralized network for storing and retrieving vector data (text) to enhance AI."
   },
   "15": {
     "id": 15,
     "name": "De-Val",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -285,7 +343,10 @@
     },
     "emission": 2.625,
     "social_mentions": 1775,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5DLd6s3A9xLRapjnM54drzpn3K4qEEd73XJ2rz66L6J2xWD8",
+    "github": "https://github.com/deval-core/De-Val",
+    "description": "de_val sets the new benchmark for AI excellence, offering a decentralized evaluation platform designed to enhance LLM performance with unmatched quality. With de_val, you can rigorously test your AI models throughout the ML ops pipeline (offline testing, A/B testing, and continuous monitoring), measuring hallucinations, misattributions, relevancy, and summarization comprehensiveness, so you can understand your outputs at scale and deploy with confidence."
   },
   "16": {
     "id": 16,
@@ -294,7 +355,7 @@
     "risk_flags": [
       "pruning-risk"
     ],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -305,14 +366,19 @@
     },
     "emission": 2.6,
     "social_mentions": 1760,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5DnhT8EDV3ufCVHHfi7GFD4Z93MKNwWPwVZqh5o7UPYuwn6d",
+    "github": "https://github.com/eseckft/BitAds.ai/",
+    "hw_requirements": "https://github.com/eseckft/BitAds.ai/blob/main/min_compute.yml",
+    "image_url": "https://github.com/eseckft/BitAds.ai/raw/main/docs/bitads.png",
+    "description": "Revolutionizing Online Advertising with Decentralization. Discover how BitAds leverages the Bittensor Network to offer cost-effective, high-quality advertising through a unique incentive mechanism for miners and validators."
   },
   "17": {
     "id": 17,
     "name": "Three Gen",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -323,14 +389,18 @@
     },
     "emission": 2.575,
     "social_mentions": 1745,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5E7a4a7QETrNjoZ2SbVSJMaavrQeyTEaHgjBPDUDxBKjUaMZ",
+    "github": "https://github.com/404-Repo/three-gen-subnet",
+    "hw_requirements": "https://github.com/404-Repo/three-gen-subnet?tab=readme-ov-file#hardware-requirements",
+    "description": "This subnet aims to kickstart the next revolution in gaming around AI native games, ultimately leveraging the broader Bittensor ecosystem to facilitate experiences in which assets, voice and sound are all generated at runtime."
   },
   "18": {
     "id": 18,
     "name": "Cortex.t",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -341,14 +411,18 @@
     },
     "emission": 2.55,
     "social_mentions": 1730,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5G9FYbXLvGTvGEgYF9tm56oW7RzkSFRCduhJeQq8EML54BXs",
+    "github": "https://github.com/corcel-api/cortex.t",
+    "hw_requirements": "https://github.com/corcel-api/cortex.t/blob/main/min_compute.yml",
+    "description": "Cortex.t stands at the forefront of artificial intelligence, offering a dual-purpose solution that caters to the needs of app developers and innovators in the AI space. This platform is meticulously designed to deliver reliable, high-quality text and image responses through API usage, utilising the decentralised Bittensor network. It serves as a cornerstone for creating a fair, transparent, and manipulation-free environment for the incentivised production of intelligence (mining) and generation and fulfilment of diverse user prompts."
   },
   "19": {
     "id": 19,
     "name": "Nineteen",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -359,14 +433,18 @@
     },
     "emission": 2.525,
     "social_mentions": 1715,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5CFJNoUYbdw9NvU2MuvQuxG88BWBKYbEQPxg1sVieck16TRq",
+    "github": "https://github.com/namoray/nineteen/",
+    "hw_requirements": "https://docs.taostats.io/docs/subnet-19-vision#Requirements",
+    "description": "Subnet 19 is a Bittensor subnetwork, focused around inference at scale, with an initial focus on image generation & manipulation models."
   },
   "20": {
     "id": 20,
     "name": "BitAgent - Rizzo",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -377,14 +455,18 @@
     },
     "emission": 2.5,
     "social_mentions": 1700,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5CMEwRYLefRmtJg7zzRyJtcXrQqmspr9B1r1nKySDReA37Z1",
+    "github": "https://github.com/RogueTensor/bitagent_subnet",
+    "hw_requirements": "https://github.com/RogueTensor/bitagent_subnet/blob/main/min_compute.yml",
+    "description": "BitAgent revolutionizes how you manage tasks and workflows across platforms, merging the capabilities of large language models (LLMs) with the convenience of your favorite apps such as web browsers, Discord, and custom integrations. BitAgent empowers users to seamlessly integrate intelligent agents, providing personalized assistance and integrated task automation."
   },
   "21": {
     "id": 21,
     "name": "Omega Any-to-any",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -395,14 +477,18 @@
     },
     "emission": 2.475,
     "social_mentions": 1685,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5GsHpHeCGhxstoEEZTR64VUashnDP4n7ir7LbNdRfXpkMU7R",
+    "github": "https://github.com/omegalabsinc/omegalabs-anytoany-bittensor",
+    "image_url": "https://github.com/omegalabsinc/omegalabs-anytoany-bittensor/raw/main/galactic_a2a.png",
+    "description": "OMEGA Any-to-Any is a decentralized, open-source AI project built on the Bittensor blockchain by OMEGA Labs. "
   },
   "22": {
     "id": 22,
     "name": "Desearch",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -413,14 +499,17 @@
     },
     "emission": 2.45,
     "social_mentions": 1670,
-    "is_overvalued": true
+    "is_overvalued": true,
+    "owner": "5HZ3rviPkBERT9H5dE5km4hML1PCyjLo5yX8B3Y4fvamBwxw",
+    "github": "https://github.com/datura-ai/smart-scrape",
+    "description": "Welcome to Desearch, the AI-powered search engine built on Bittensor. Designed for the Bittensor community and general internet users, Desearch delivers an unbiased and verifiable search experience. Through our API, developers and AI builders are empowered to integrate AI search capabilities into their products, with access to metadata from platforms like X, Reddit, Arxiv and general web search."
   },
   "23": {
     "id": 23,
     "name": "SocialTensor",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -431,14 +520,18 @@
     },
     "emission": 2.425,
     "social_mentions": 1655,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5GvTa4JUKbUHqeJH8YLUDaV7jHChrfUy4n5zWrcCiU7bySoc",
+    "github": "https://github.com/NicheTensor/NicheImage",
+    "hw_requirements": "https://docs.taostats.io/docs/subnet-23-niche-image#setup-instructions-for-miners",
+    "description": "NicheImage is a decentralized network that utilizes the Bittensor protocol to enable distributed image generation."
   },
   "24": {
     "id": 24,
     "name": "Omega",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -449,14 +542,19 @@
     },
     "emission": 2.4,
     "social_mentions": 1640,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5FpX2DN3A38JzXfEDZwBsDhCM527L6BDPi6MKGeXvGxFPipx",
+    "github": "https://github.com/omegalabsinc/omegalabs-bittensor-subnet",
+    "hw_requirements": "https://github.com/omegalabsinc/omegalabs-bittensor-subnet/blob/main/min_compute.yml",
+    "image_url": "https://github.com/omegalabsinc/omegalabs-bittensor-subnet/raw/main/docs/galacticlandscape.png",
+    "description": "Welcome to the OMEGA Labs Bittensor subnet, a groundbreaking initiative that aims to create the world's largest decentralized multimodal dataset for accelerating Artificial General Intelligence (AGI) research and development. Our mission is to democratize access to a vast and diverse dataset that captures the landscape of human knowledge and creation, empowering researchers and developers to push the boundaries of AGI."
   },
   "25": {
     "id": 25,
     "name": "Protein Folding",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -467,14 +565,18 @@
     },
     "emission": 2.375,
     "social_mentions": 1625,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5F6aRdsBHajN2NhZHBTB6ibBFu7YuZZEWruWzB8x6B6GiZ4D",
+    "github": "https://github.com/macrocosm-os/folding",
+    "hw_requirements": "https://github.com/macrocosm-os/folding/blob/main/min_compute.yml",
+    "image_url": "https://github.com/macrocosm-os/folding/raw/main/assets/macrocosmos-white.png"
   },
   "26": {
     "id": 26,
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -494,7 +596,7 @@
     "risk_flags": [
       "pruning-risk"
     ],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -505,14 +607,17 @@
     },
     "emission": 2.325,
     "social_mentions": 1595,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5Cyfk5Jjee6uCafjZyUUjtKd7Q4qh1yJ48Ts7bkT9xXaDqe1",
+    "github": "https://github.com/neuralinternet/compute-subnet",
+    "description": "Transforming compute power into a digital commodity\u2014unlocking distributed, on-demand GPU cloud resources for AI acceleration."
   },
   "28": {
     "id": 28,
     "name": "LOL",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -523,14 +628,18 @@
     },
     "emission": 2.3,
     "social_mentions": 1580,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5Ca8L8PkbqXUtzohKtSM3i1naGQxANGLx51kJsEPNB14Admz",
+    "github": "https://github.com/Tao-Accumulation-Corporation/lol",
+    "image_url": "https://emojipedia.org/face-with-tears-of-joy",
+    "description": "Funny Meme"
   },
   "29": {
     "id": 29,
     "name": "Coldint",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -541,14 +650,18 @@
     },
     "emission": 2.275,
     "social_mentions": 1565,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5HHHHHzgLnYRvnKkHd45cRUDMHXTSwx7MjUzxBrKbY4JfZWn",
+    "github": "https://github.com/coldint",
+    "hw_requirements": "https://github.com/coldint/coldint_validator/blob/main/min_compute.yml",
+    "description": "Bittensor COLaborative Destributed INcentivized Training (coldint) Subnet."
   },
   "30": {
     "id": 30,
     "name": "Bettensor",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -559,14 +672,19 @@
     },
     "emission": 2.25,
     "social_mentions": 1550,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5DcErZoVeG7ZShXwKFgJURuGXmdAVwmYzyvLAgpPjrPznDMB",
+    "github": "https://github.com/Bettensor/bettensor",
+    "hw_requirements": "https://github.com/Bettensor/bettensor/blob/main/min_compute.yml",
+    "image_url": "https://github.com/Bettensor/bettensor/raw/main/docs/assets/bettensor-twitter-header.jpg",
+    "description": "Bettensor is a sports prediction subnet. The goal of Bettensor is to provide a platform for sports fans to predict the outcomes of their favorite sporting events, and ML/AI researchers to develop new models and strategies to benchmark against good, old fashioned human intelligence and intuition"
   },
   "31": {
     "id": 31,
     "name": "NAS Chain",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -577,14 +695,19 @@
     },
     "emission": 2.225,
     "social_mentions": 1535,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5CwLjwPdkwM9Rhia5VA5WSDVsL5FKWH24j5Tb96WnuUnqcst",
+    "github": "https://github.com/neuronlogic/NASChain",
+    "hw_requirements": "https://github.com/neuronlogic/NASChain/blob/main/min_compute.yml",
+    "image_url": "https://github.com/neuronlogic/NASChain/raw/main/imgs/naschain_logo.png",
+    "description": "Neural Architecture Search (NAS) is a critical field in machine learning that focuses on automating the design of artificial neural network architectures."
   },
   "32": {
     "id": 32,
     "name": "It's AI",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -595,14 +718,18 @@
     },
     "emission": 2.2,
     "social_mentions": 1520,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5DWgkCSvq4brWSNLDU9FBgTk1ZpAQ2y6t3ky97CvEVuS9Qad",
+    "github": "https://github.com/It-s-AI/llm-detection",
+    "hw_requirements": "https://github.com/It-s-AI/llm-detection/blob/main/min_compute.yml",
+    "description": "Our subnet focuses on the detection of AI-generated content. Given the rapid growth of LLM-generated text, such as ChatGPT's output of 100 billion words daily compared to humans' 100 trillion, we believe that the ability to accurately determine AI-generated text will become increasingly necessary."
   },
   "33": {
     "id": 33,
     "name": "ReadyAI",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -613,14 +740,18 @@
     },
     "emission": 2.175,
     "social_mentions": 1505,
-    "is_overvalued": true
+    "is_overvalued": true,
+    "owner": "5HinUfk5SqBUAbkMtgdNoum3VJvwrLgdvwW5sbXA1UPYZ8uB",
+    "github": "https://github.com/afterpartyai/bittensor-conversation-genome-project",
+    "hw_requirements": "https://github.com/afterpartyai/bittensor-conversation-genome-project/blob/main/min_compute.yml",
+    "description": "ReadyAI (readyai.ai) enables structured data processing at scale, democratizing access to the valuable digital commodity of structured data  \u2013 the key ingredient for high quality fine tuned models and RAG solutions."
   },
   "34": {
     "id": 34,
     "name": "BitMind",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -631,14 +762,19 @@
     },
     "emission": 2.15,
     "social_mentions": 1490,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5DthmKBR83sUdudSfgFnsxBkTYtYTFLJUgovNfb1TSKVLiTH",
+    "github": "https://github.com/BitMind-AI/bitmind-subnet",
+    "hw_requirements": "https://github.com/BitMind-AI/bitmind-subnet/blob/main/min_compute.yml",
+    "image_url": "https://github.com/BitMind-AI/bitmind-subnet/raw/main/static/Bitmind-Logo.png",
+    "description": "Identifying AI-Generated Media with a Decentralized Framework"
   },
   "35": {
     "id": 35,
     "name": "LogicNet",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -649,14 +785,18 @@
     },
     "emission": 2.125,
     "social_mentions": 1475,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5EsmkLf4VnpgNM31syMjAWsUrQdW2Yu5xzWbv6oDQydP9vVx",
+    "github": "https://github.com/LogicNet-Subnet/LogicNet",
+    "hw_requirements": "https://github.com/LogicNet-Subnet/LogicNet-prodblob/main/min_compute.yml",
+    "description": "LogicNet is a decentralized network utilizing the Bittensor protocol for advanced AI/ML model development focused on mathematics, computational thinking, and data analysis. "
   },
   "36": {
     "id": 36,
     "name": "Web Agents - Autoppia",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -667,14 +807,19 @@
     },
     "emission": 2.1,
     "social_mentions": 1460,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5DPtMdkMau8G8fGbPxdYSKCBo94oC7mDyHKMvVdNdsLVT3EF",
+    "github": "https://github.com/autoppia/autoppia_web_agents_subnet",
+    "hw_requirements": "https://github.com/autoppia/autoppia_web_agents_subnet/blob/main/min_compute.yml",
+    "image_url": "https://app.autoppia.com/assets/images/logo/icon256.png",
+    "description": "Web Agents Subnet leverages our Infinite Web Arena (IWA) benchmark to incentivize Bittensor miners to develop SOTA web agents"
   },
   "37": {
     "id": 37,
     "name": "Finetuning",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -685,14 +830,19 @@
     },
     "emission": 2.075,
     "social_mentions": 1445,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5DXqqdrvu5FK3dASRVTCdGPZKx4Q9nkAZZSmibKG6PEEeW4j",
+    "github": "https://github.com/macrocosm-os/finetuning",
+    "hw_requirements": "https://github.com/macrocosm-os/finetuning/blob/main/min_compute.yml",
+    "image_url": "https://github.com/macrocosm-os/finetuning/raw/main/assets/macrocosmos-white.png",
+    "description": "The Finetuning subnet 37 rewards miners for fine-tuning Large Language Models (LLMs)."
   },
   "38": {
     "id": 38,
-    "name": "ChronoLLM",
+    "name": "Distributed Training Subnet",
     "status": "bootstrap",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -703,14 +853,18 @@
     },
     "emission": 2.05,
     "social_mentions": 1430,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5EFJ7mEVyjxT3iXqxuHyMMuGgJKFt85tb5s4vEvnCTpSoP3w",
+    "github": "https://github.com/KMFODA/DistributedTraining",
+    "hw_requirements": "https://github.com/KMFODA/DistributedTraining/blob/main/min.compute.yml",
+    "description": "A bittensor subnetwork that incentivizes miners to provide compute, bandwidth and latency in order to train a single LLM."
   },
   "39": {
     "id": 39,
     "name": "EdgeMaxxing",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -721,7 +875,11 @@
     },
     "emission": 2.025,
     "social_mentions": 1415,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5G3qVaXzKMPDm5AJ3dpzbpUC27kpccBvDwzSWXrq8M6qMmbC",
+    "github": "https://github.com/womboai/edge-optimization-subnet",
+    "image_url": "https://camo.githubusercontent.com/8dee96c4061d56aa6940f9fa2cdb88139772459450fde3cc27876aaa0f8bbc57/68747470733a2f2f636f6e74656e742e776f6d626f2e61692f62697474656e736f722f534e33395f636f7665722e6a706567",
+    "description": "WOMBO EdgeMaxxing Subnet: Optimizing AI Models for Consumer Devices"
   },
   "40": {
     "id": 40,
@@ -730,7 +888,7 @@
     "risk_flags": [
       "pruning-risk"
     ],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -741,14 +899,19 @@
     },
     "emission": 2.0,
     "social_mentions": 1400,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5F9Qvcz22Fwq4cm58o2bShiL6n8BnJmhqXB1cispBpqRfN6w",
+    "github": "https://github.com/VectorChat/chunking_subnet",
+    "hw_requirements": "https://github.com/VectorChat/chunking_subnet/blob/main/min_compute.yml",
+    "image_url": "https://github.com/VectorChat/chunking_subnet/raw/main/assets/title.png",
+    "description": "This subnet is designed to advance the field of Retrieval-Augmented Generation (RAG) by incentivizing the development and service of sophisticated chunking solutions."
   },
   "41": {
     "id": 41,
     "name": "Sportstensor",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -759,7 +922,12 @@
     },
     "emission": 1.975,
     "social_mentions": 1385,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5FCSevLkofmKZRixMawp6jyyjBty1AeSCLa7N5Fv892DYkXX",
+    "github": "https://github.com/sportstensor/sportstensor",
+    "hw_requirements": "https://github.com/xzistance/sportstensor/blob/main/min_compute.yml",
+    "image_url": "https://github.com/xzistance/sportstensor/raw/main/docs/sportstensor_header.png",
+    "description": "Sportstensor is pioneering the world's most accurate decentralized sports prediction algorithm, built on the Bittensor network."
   },
   "42": {
     "id": 42,
@@ -768,7 +936,7 @@
     "risk_flags": [
       "pruning-risk"
     ],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -779,14 +947,17 @@
     },
     "emission": 1.95,
     "social_mentions": 1370,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5Gbdb5s2WrRaFXTgMUiVNBKACe3cgSLwZNyK2Vwvjfvf6jUJ",
+    "github": "https://github.com/masa-finance/masa-bittensor",
+    "description": "Subnet 42 by Masa provides real-time, structured, and high-quality data for AI Agents and Application builders."
   },
   "43": {
     "id": 43,
     "name": "Graphite",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -797,14 +968,19 @@
     },
     "emission": 1.925,
     "social_mentions": 1355,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5HjMs5JDrLH3Hknmfm1gDq7nFYAv6M7t9v3EWMctSRXJS9HC",
+    "github": "https://github.com/GraphiteAI/Graphite-Subnet",
+    "hw_requirements": "https://github.com/GraphiteAI/Graphite-Subnet/blob/main/min_compute.yml",
+    "image_url": "https://github.com/GraphiteAI/Graphite-Subnet/raw/main/static/banner.png",
+    "description": "A decentralized network for solving graph optimization problems, built on Bittensor, the foremost decentralised AI network."
   },
   "44": {
     "id": 44,
     "name": "Score",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -815,14 +991,18 @@
     },
     "emission": 1.9,
     "social_mentions": 1340,
-    "is_overvalued": true
+    "is_overvalued": true,
+    "owner": "5FsREvyUXSZWYRqVyQLDdpYmZZPnkhZyW6HjooozKP1nQkwu",
+    "github": "https://github.com/score-technologies/score-vision",
+    "hw_requirements": "https://github.com/score-protocol/score-predict/blob/main/min_compute.yml",
+    "description": "Building the future of sports intelligence: decentralized computer vision turning every frame into valuable insights and predictive analytics."
   },
   "45": {
     "id": 45,
     "name": "SWE - Rizzo",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -833,14 +1013,17 @@
     },
     "emission": 1.875,
     "social_mentions": 1325,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5FbcZiAHA75i2bPVrF7wa9mFaxV1eM27HR63kJtbpb8spvmf",
+    "github": "https://github.com/brokespace/code/",
+    "description": "Gen42 leverages the Bittensor network to provide decentralized code generation services. "
   },
   "46": {
     "id": 46,
     "name": "Neural3D",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -851,14 +1034,18 @@
     },
     "emission": 1.85,
     "social_mentions": 1310,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5Ek83SLwZi1P6s3E3kCfmxZJ5HHVepDsdpxJERfvpiopG5jz",
+    "github": "https://github.com/GoNeuralAI/neural-subnet",
+    "image_url": "https://camo.githubusercontent.com/76d438c5a5024517e52c52c750f92bfcf25ff88bd2b611e3280bb86c7ea02db7/68747470733a2f2f7062732e7477696d672e636f6d2f70726f66696c655f62616e6e6572732f313736333838303232383536373236393337362f313732323534313230302f3135303078353030",
+    "description": "Neural3D is Decentralized World Building on Bittensor. We are dedicated to the generation of high quality, 3D assets. Game studios, indie developers and artists integrate our subnet output into their workflows for various industries including games, VR, construction and much more."
   },
   "47": {
     "id": 47,
     "name": "Condense AI",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -869,14 +1056,18 @@
     },
     "emission": 1.825,
     "social_mentions": 1295,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5CS2niAKFcmvE3i2Lb9ukR66Enkn26ygievde3dMepJ9ha9x",
+    "github": "https://github.com/condenses/neural-condense-subnet",
+    "image_url": "https://github.com/condenses/neural-condense-subnet/raw/main/assets/images/condense-main.png",
+    "description": "Accelerating AI inference by compressing long sequences of natural language tokens into soft-tokens, reducing computational cost and inference time."
   },
   "48": {
     "id": 48,
     "name": "Nextplace AI",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -887,14 +1078,17 @@
     },
     "emission": 1.8,
     "social_mentions": 1280,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5D2Qc9ud7vTJrPzk8mT1ruY8oV8UaDP3ttepD7zVNNi943ch",
+    "github": "https://github.com/Nickel5-Inc/Nextplace",
+    "description": "Nextplace AI is decentralizing intelligence around housing markets. In a space controlled by monopolies and gatekeepers, Nexplace seeks to provide a democratized network to evaluate home prices for everybody."
   },
   "49": {
     "id": 49,
     "name": "Hivetrain AutoML",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -905,14 +1099,17 @@
     },
     "emission": 1.775,
     "social_mentions": 1265,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5C6z6jXv1iuwKMwfuWrZgPrrtxQZh7YKYThLXoMA2VgFG8w2",
+    "github": "https://github.com/Hivetrain/DistributedAutoML/",
+    "description": "A collaborative platform dedicated to revolutionizing deep learning by automating the discovery of improved and novel neural network components."
   },
   "50": {
     "id": 50,
     "name": "Synth",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -923,14 +1120,17 @@
     },
     "emission": 1.75,
     "social_mentions": 1250,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5HgrQSNzy7Jq2kjVhT9LHmtcFuQzrTTzpAYcd4uAFumuwAyj",
+    "github": "https://github.com/mode-network/synth-subnet",
+    "description": "Synth is a Bittensor Subnet, developed by Mode, leverages Bittensor\u2019s decentralized intelligence network to create the world's most powerful synthetic data for price forecasting. Such price forecasting will be used to power the agentic economy onchain. Unlike traditional price prediction systems that focus on single-point forecasts, Synth specializes in capturing the full distribution of possible price movements and their associated probabilities, to build the most accurate synthetic data in the world, starting with BTC."
   },
   "51": {
     "id": 51,
     "name": "Compute Subnet",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -941,14 +1141,17 @@
     },
     "emission": 1.725,
     "social_mentions": 1235,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5FqACMtcegZxxopgu1g7TgyrnyD8skurr9QDPLPhxNQzsThe",
+    "github": "https://github.com/Datura-ai/compute-subnet",
+    "description": "This project enables a decentralized, peer-to-peer GPU rental marketplace, connecting miners who contribute GPU resources with users who need computational power."
   },
   "52": {
     "id": 52,
     "name": "Dojo",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -959,14 +1162,18 @@
     },
     "emission": 1.7,
     "social_mentions": 1220,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5EgfUiH6A99dhihMzp7eMM8UDkvmFjCWgM5gnpBN8UgLrVuz",
+    "github": "https://github.com/tensorplex-labs/dojo",
+    "image_url": "https://github.com/tensorplex-labs/dojo/raw/main/assets/dojo.png",
+    "description": "Crowdsource high-quality human-generated datasets."
   },
   "53": {
     "id": 53,
     "name": "Efficient Frontier",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -977,14 +1184,17 @@
     },
     "emission": 1.675,
     "social_mentions": 1205,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5F2HTUqtk9VWQwXkkUX9oFSXUkAib74qw7s3W7KyZP88AmYe",
+    "github": "https://github.com/EfficientFrontier-SignalPlus/EfficientFrontier",
+    "description": "Our mission is to identify optimal, risk-weighted trading strategies by integrating decentralized machine learning networks with live trading data."
   },
   "54": {
     "id": 54,
     "name": "WebGenieAI",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -995,14 +1205,19 @@
     },
     "emission": 1.65,
     "social_mentions": 1190,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5GENieJS4p6oKVPbDoXhAo46E38hxR7MxvbgMpJE4bf6xCb3",
+    "github": "https://github.com/web-genie-ai/web-genie-ai",
+    "hw_requirements": "https://github.com/web-genie-ai/web-genie-ai/blob/main/min_compute.yml",
+    "image_url": "https://raw.githubusercontent.com/web-genie-ai/web-genie-ai/f7efa10d3eaadded7757a25510f10f628a16361c/Web-Genie-logo.png",
+    "description": "WebGenieAI Subnet is a pioneering Bittensor-based subnet designed to revolutionize project generation through advanced AI models. WebGenieAI aims to transform diverse prompts\u2014ranging from texts to concept sketches and images into fully functional, ready-to-deploy projects. This subnet is tailored for developers, designers, and innovators who seek to accelerate their project development process with high-quality, AI-generated outputs."
   },
   "55": {
     "id": 55,
     "name": "Precog",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1013,14 +1228,16 @@
     },
     "emission": 1.625,
     "social_mentions": 1175,
-    "is_overvalued": true
+    "is_overvalued": true,
+    "github": "https://github.com/coinmetrics/precog",
+    "description": "Precog is an AI-powered high-frequency $BTC price forecasting subnet underpinned by Coin Metrics\u2019 comprehensive and trusted data. Miners produce financial intelligence utilizing the same datasets which power the most prestigious institutions touching cryptoassets."
   },
   "56": {
     "id": 56,
     "name": "Gradients",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1031,14 +1248,17 @@
     },
     "emission": 1.6,
     "social_mentions": 1160,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5G77DNXrfAxbvi53p3mh88kRMySBcJsv9j9cH4KU6ALWXgQF",
+    "github": "https://github.com/rayonlabs/G.O.D",
+    "description": "Anyone Can Train on Bittensor - Gradients on Demand."
   },
   "57": {
     "id": 57,
     "name": "Gaia",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1049,7 +1269,10 @@
     },
     "emission": 1.575,
     "social_mentions": 1145,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5GmhjCqDTsRcKqPFw4FDig8tVBfFGNrwP8ywe5En5hnELwDQ",
+    "github": "https://github.com/Nickel5-Inc/Gaia",
+    "description": "Gaia is the hub of geospatial AI on Bittensor"
   },
   "58": {
     "id": 58,
@@ -1058,7 +1281,7 @@
     "risk_flags": [
       "pruning-risk"
     ],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1069,14 +1292,17 @@
     },
     "emission": 1.55,
     "social_mentions": 1130,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5DyEYZ2pB3bP6BN8Xpo5ova3TEPiT82j5oHXqgQ8csKE9stH",
+    "github": "https://github.com/impel-intelligence/dippy-speech-subnet",
+    "description": "Developing the world\u2019s most advanced open-source Speech model for immersive, lifelike interactions."
   },
   "59": {
     "id": 59,
     "name": "Agent Arena by Masa",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1087,14 +1313,17 @@
     },
     "emission": 1.525,
     "social_mentions": 1115,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5FH9AQM4kqbkdC9jyV5FrdEWVYt41nkhFstop7Vhyfb9ZsXt",
+    "github": "https://github.com/masa-finance/agent-arena-subnet",
+    "description": "Welcome to Agent Arena by Masa - the first competitive agent ecosystem where market forces and real engagement drive the evolution of sentient AI agents."
   },
   "60": {
     "id": 60,
     "name": "Bitsec",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1105,7 +1334,10 @@
     },
     "emission": 1.5,
     "social_mentions": 1100,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5CXLwkK1Scd1uiMUrXYjJUTTPxqqyH2FTJQNLp9uXQhA9rhR",
+    "github": "https://github.com/Bitsec-AI/subnet",
+    "description": "Bitsec is an ecosystem for AI-powered code vulnerability detection."
   },
   "61": {
     "id": 61,
@@ -1114,7 +1346,7 @@
     "risk_flags": [
       "pruning-risk"
     ],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1125,14 +1357,17 @@
     },
     "emission": 1.475,
     "social_mentions": 1085,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5ECEsYL82fbXx9KfTZy7G2KXSurnScciJyAVMHZjekc8jUbn",
+    "github": "https://github.com/RedTeamSubnet/RedTeam",
+    "description": "The RedTeam subnet by Innerworks is a decentralized platform designed to drive innovation in cybersecurity through competitive programming challenges."
   },
   "62": {
     "id": 62,
     "name": "AgenTao",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1143,14 +1378,17 @@
     },
     "emission": 1.45,
     "social_mentions": 1070,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5EsNzkZ3DwDqCsYmSJDeGXX51dQJd5broUCH6dbDjvkTcicD",
+    "github": "https://github.com/taoagents/agentao",
+    "description": "AgenTao is an initiative to create a decentralized, self-sustaining marketplace of autonomous software engineering agents. Our mission is to incentivize autonomous SWE agents to tackle real-world software problems, solving increasingly complex and general tasks."
   },
   "63": {
     "id": 63,
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1168,7 +1406,7 @@
     "name": "Chutes",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1179,16 +1417,19 @@
     },
     "emission": 1.4,
     "social_mentions": 1040,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5DyV8a62E2t2C4FoSqjihdV5USVXPEZYvZtUjXxZq1Mnvwwg",
+    "github": "https://github.com/rayonlabs/chutes",
+    "description": "Serverless AI compute. Run any AI model"
   },
   "65": {
     "id": 65,
-    "name": "TAO Private Network",
+    "name": "TAO Private Network\u202f",
     "status": "at-risk",
     "risk_flags": [
       "pruning-risk"
     ],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1199,14 +1440,17 @@
     },
     "emission": 1.375,
     "social_mentions": 1025,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5C8UAnEkWyuDTMysj3Hg3n2q787R6xvvcqvV5x4bujEWGRgE",
+    "github": "https://github.com/beyond-stake/tpn-subnet",
+    "description": "TPN is a decentralized subnet designed to empower secure, private, and geographically diverse internet access through a global network of VPN providers."
   },
   "66": {
     "id": 66,
     "name": "FakeNews",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1217,14 +1461,17 @@
     },
     "emission": 1.35,
     "social_mentions": 1010,
-    "is_overvalued": true
+    "is_overvalued": true,
+    "owner": "5Grk5jAYsWSUMkAqKX5fmLyEKG8StdjbNPBXTPvz413MWik5",
+    "github": "https://github.com/gutenberg-team/fakenews-subnet",
+    "description": "FakeNews is subnet, dedicated to combating misinformation by providing real-time fake news detection and advanced fact-checking capabilities. This subnet aims to deliver the highest possible accuracy, surpassing traditional solutions\u2014even for real-time verifications. Our vision is to create the world\u2019s most trusted source for news and fact verification, ensuring every user can rely on timely and accurate insights with help and power of decentralized AI community."
   },
   "67": {
     "id": 67,
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1235,14 +1482,15 @@
     },
     "emission": 1.325,
     "social_mentions": 995,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5H9djFYLbh72qDkXq3283FfnhzL5np4TmQgir9kBQmg99GkG"
   },
   "68": {
     "id": 68,
     "name": "Nova",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1253,14 +1501,17 @@
     },
     "emission": 1.3,
     "social_mentions": 980,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5EcdJLAeYoxM3Tsf5VZ3NQPenPku218gqnjSoo3iJNy4V12V",
+    "github": "https://github.com/metanova-labs/nova/",
+    "description": "Decentralized ml-powered drug discovery platform incentivizing ai and heuristic innovation to uncover novel therapeutics from massive chemical databases. Transforming pharma r&d into a high\u2011speed, merit\u2011based competition that accelerates breakthroughs and unlocks licensing opportunities."
   },
   "69": {
     "id": 69,
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1271,14 +1522,15 @@
     },
     "emission": 1.275,
     "social_mentions": 965,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5EsorPyFCP7TaNz3QrNvDvr8ZDVtG9hfzNEfGeAVG9wbFi2B"
   },
   "70": {
     "id": 70,
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1289,14 +1541,15 @@
     },
     "emission": 1.25,
     "social_mentions": 950,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5GayCfNEMcf3jLsVbXK9wMNsWpXg6axNSooPAeKuJfjJfkSz"
   },
   "71": {
     "id": 71,
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1307,7 +1560,8 @@
     },
     "emission": 1.225,
     "social_mentions": 935,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5G9yDFTi5DMYdbCz15H4m7r54b8gC8BGDmpqmsYxUbGKKwf6"
   },
   "72": {
     "id": 72,
@@ -1316,7 +1570,7 @@
     "risk_flags": [
       "pruning-risk"
     ],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1327,14 +1581,15 @@
     },
     "emission": 1.2,
     "social_mentions": 920,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5HTYVBxrF2WbVN8RBtFxAkBGuHJxjgLd9Sze5gxH4KC6GLCv"
   },
   "73": {
     "id": 73,
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1345,14 +1600,15 @@
     },
     "emission": 1.175,
     "social_mentions": 905,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5FJ2nf4JecSFHpd9tCcN34NzJVX9VFdiUrkQGd9gLPqM8ohM"
   },
   "74": {
     "id": 74,
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1363,14 +1619,15 @@
     },
     "emission": 1.15,
     "social_mentions": 890,
-    "is_overvalued": false
+    "is_overvalued": false,
+    "owner": "5HdKJJHNG2Zh2rkSrHjPoRa8xQ9Mq8NgQwfREDCpTawLa1aQ"
   },
   "75": {
     "id": 75,
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1388,7 +1645,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1406,7 +1663,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1424,7 +1681,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1442,7 +1699,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1460,7 +1717,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1478,7 +1735,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1496,7 +1753,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1514,7 +1771,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1532,7 +1789,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1550,7 +1807,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1570,7 +1827,7 @@
     "risk_flags": [
       "pruning-risk"
     ],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1588,7 +1845,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1606,7 +1863,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1624,7 +1881,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1642,7 +1899,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1660,7 +1917,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1678,7 +1935,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1696,7 +1953,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1716,7 +1973,7 @@
     "risk_flags": [
       "pruning-risk"
     ],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1734,7 +1991,7 @@
     "name": "Actual",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1752,7 +2009,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1770,7 +2027,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1788,7 +2045,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1806,7 +2063,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1824,7 +2081,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1842,7 +2099,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1860,7 +2117,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1878,7 +2135,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1896,7 +2153,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1914,7 +2171,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1932,7 +2189,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1950,7 +2207,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1968,7 +2225,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -1986,7 +2243,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2004,7 +2261,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2022,7 +2279,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2040,7 +2297,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2058,7 +2315,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2076,7 +2333,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2094,7 +2351,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2112,7 +2369,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2130,7 +2387,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2148,7 +2405,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2166,7 +2423,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2184,7 +2441,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2202,7 +2459,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2220,7 +2477,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2238,7 +2495,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2256,7 +2513,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2274,7 +2531,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2292,7 +2549,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
@@ -2310,7 +2567,7 @@
     "name": "Unknown",
     "status": "unknown",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-06-17T18:25:50.135350+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],
