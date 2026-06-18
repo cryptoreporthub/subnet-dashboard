@@ -31,6 +31,11 @@ def _load_protocols_config():
     return _protocols_config
 
 
+def _app_version():
+    """Return the dashboard version declared in the protocols config."""
+    return load_data(_PROTOCOLS_PATH).get("meta", {}).get("version", "unknown")
+
+
 def _protocol_tag_for(name):
     """Return the first matching protocol label for a subnet name, or None."""
     if not name:
@@ -578,6 +583,7 @@ def index():
         simivision=simivision,
         watchlist=watchlist,
         signal_timeline=signal_timeline,
+        app_version=_app_version(),
     )
 
 

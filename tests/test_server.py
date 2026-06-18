@@ -1,6 +1,6 @@
 import pytest
 import json
-from server import app
+from server import app, _app_version
 
 @pytest.fixture
 def client():
@@ -140,3 +140,22 @@ def test_version_route_headers(client):
     assert response.status_code == 200
     assert response.headers.get('Access-Control-Allow-Origin') == '*'
     assert response.headers.get('X-Frame-Options') == 'ALLOWALL'
+
+
+def test_homepage_renders_status_badge(client):
+    """The footer status strip shows the app version and current state."""
+    response = client.get('/')
+    assert response.status_code == 200
+    html = response.data.decode('utf-8')
+    assert 'status-strip' in html
+    assert f"v{_app_version()}" in html
+    assert any(label in html for label in ('Fresh', 'Stale'))
+    assert any(label in html for label in ('Healthy', 'Degraded'))
+
+
+def test_api_version_matches_homepage_version(client):
+    """The version surfaced in the UI matches the public /api/version payload."""
+    response = client.get('/api/version')
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data['data']['version'] == _app_version()

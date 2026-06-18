@@ -1670,6 +1670,27 @@
     }
 
     .footer a:hover { color: var(--accent-cyan); }
+
+    .status-strip {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: 0.25rem 0.75rem;
+      border-radius: var(--border-radius-pill);
+      background: rgba(11, 16, 33, 0.7);
+      border: 1px solid var(--border-subtle);
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .status-strip .pill { display: inline-flex; align-items: center; gap: 0.375rem; }
+    .status-strip .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+    .status-strip .version { font-family: var(--font-mono); color: var(--text-muted); }
+    .status-strip .fresh { color: var(--status-active); }
+    .status-strip .stale { color: var(--status-at-risk); }
+    .status-strip .ok { color: var(--status-active); }
+    .status-strip .warn { color: var(--status-at-risk); }
   </style>
 </head>
 <body>
@@ -2047,9 +2068,25 @@
 
     <footer class="footer reveal">
       <div>Subnet Pulse · Built for the Bittensor ecosystem.</div>
+      <div class="status-strip" aria-label="App status">
+        <span class="pill version">v{{ app_version | default('unknown') }}</span>
+        {% if freshness and freshness.overall %}
+        <span class="pill {{ 'stale' if freshness.overall.any_stale else 'fresh' }}">
+          <span class="dot {{ 'stale' if freshness.overall.any_stale else 'fresh' }}"></span>
+          {{ 'Stale' if freshness.overall.any_stale else 'Fresh' }}
+        </span>
+        {% endif %}
+        {% if health_status %}
+        <span class="pill {{ 'warn' if health_status != 'ok' else 'ok' }}">
+          <span class="dot {{ 'warn' if health_status != 'ok' else 'ok' }}"></span>
+          {{ 'Degraded' if health_status != 'ok' else 'Healthy' }}
+        </span>
+        {% endif %}
+      </div>
       <div>
         <a href="/api/registry" target="_blank" rel="noopener">Registry API</a> ·
         <a href="/api/summary" target="_blank" rel="noopener">Summary API</a> ·
+        <a href="/api/version" target="_blank" rel="noopener">Version</a> ·
         <a href="/health" target="_blank" rel="noopener">Health</a>
       </div>
     </footer>
