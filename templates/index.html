@@ -53,6 +53,8 @@
       --space-6: 32px;
       --space-7: 48px;
       --space-8: 64px;
+      --border: var(--border-subtle);
+      --accent-primary: var(--status-active);
       --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
       --transition-base: 300ms cubic-bezier(0.4, 0, 0.2, 1);
     }
@@ -1860,8 +1862,8 @@
           <p class="simivision-subtitle">Top 3 subnet choices for today — click a card for the deep-dive.</p>
           <div class="simivision-meta-bar" id="simivision-meta-bar">
             <span class="simivision-source-badge" id="simivision-source" title="Provenance of today's picks">Source: {{ simivision.meta.source or 'empty' }}</span>
-            {% if simivision.meta.fallback_used %}<span class="simivision-fallback-badge" id="simivision-fallback" title="Back-filled from Brain or registry highlights">fallback</span>{% endif %}
-            {% if simivision.meta.error %}<span class="simivision-error-badge" id="simivision-error" title="{{ simivision.meta.error }}">error</span>{% endif %}
+            <span class="simivision-fallback-badge" id="simivision-fallback" title="Back-filled from Brain or registry highlights" style="{% if not simivision.meta.fallback_used %}display: none;{% endif %}">fallback</span>
+            <span class="simivision-error-badge" id="simivision-error" title="{{ simivision.meta.error or '' }}" style="{% if not simivision.meta.error %}display: none;{% endif %}">error</span>
           </div>
         </div>
       </div>

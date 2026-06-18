@@ -15,12 +15,13 @@
 
 /** Provenance of the picks surfaced in the SimiVision panel. */
 export type SimiVisionSource =
-  | "selector"      // All picks came from selector decisions.
-  | "selector+brain" // Selector produced <3 decisions; back-filled from brain.
-  | "brain"         // No selector decisions; all picks came from brain recommendations.
-  | "registry"      // No selector or brain signals; picks derived from registry highlights.
-  | "empty"         // No data available; empty-state card rendered.
-  | "error";        // A data-loading error occurred; see meta.error.
+  | "selector"         // All picks came from selector decisions.
+  | "selector+brain"   // Selector produced <3 decisions; back-filled from brain.
+  | "selector+registry" // Selector produced <3 decisions; back-filled from registry highlights.
+  | "brain"            // No selector decisions; all picks came from brain recommendations.
+  | "registry"         // No selector or brain signals; picks derived from registry highlights.
+  | "empty"            // No data available; empty-state card rendered.
+  | "error";           // A data-loading error occurred; see meta.error.
 
 /** Recommended action for a subnet pick. */
 export type SimiAction = "accumulate" | "hold" | "reduce" | "unknown";
