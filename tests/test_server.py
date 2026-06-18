@@ -54,8 +54,26 @@ def test_stats_route(client):
     data = json.loads(response.data)
     assert data['status'] == 'success'
     assert 'summary' in data
+    summary = data['summary']
+    assert 'total_subnets' in summary
+    assert 'status_counts' in summary
+    assert 'total_stake' in summary
+    assert 'total_emission' in summary
+    assert 'total_social_mentions' in summary
+    assert 'overvalued_count' in summary
+    assert 'avg_apy' in summary
     assert 'top_emitters' in data
+    assert 'top_staked' in data
+    assert 'top_mentioned' in data
     assert 'flagged_subnets' in data
+
+
+def test_stats_route_headers(client):
+    response = client.get('/api/stats')
+    assert response.status_code == 200
+    assert response.headers.get('Access-Control-Allow-Origin') == '*'
+    assert response.headers.get('X-Frame-Options') == 'ALLOWALL'
+    assert response.headers.get('Cache-Control') == 'public, max-age=30'
 
 
 def test_subnets_list_route(client):
