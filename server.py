@@ -234,7 +234,7 @@ def _simivision_rationale(action, breakdown, source_note=None):
     return "; ".join(rationale_parts) + "."
 
 
-def _build_choice(registry, recs, decision, judge):
+def _build_choice(registry, recs, decision, judge, feedback_boost=0.0):
     """Build a single SimiVision choice from a decision-like object."""
     subnet_id = decision.get("subnet_id")
     item = registry.get(str(subnet_id), {}) if registry else {}
@@ -249,7 +249,7 @@ def _build_choice(registry, recs, decision, judge):
 
     direction = 1.0 if action == "accumulate" else -1.0 if action == "reduce" else 0.0
     edge_score = round(
-        (confidence + (decision.get("feedback_boost") or 0.0))
+        (confidence + feedback_boost)
         * target_weight
         * (1.0 if direction != 0 else 0.7),
         4,
@@ -508,12 +508,14 @@ def _build_simivision_choices(registry, decisions, recommendations, feedback, br
     judge = AdversarialJudge()
     choices = []
     for decision in ranked[:3]:
-        choice = _build_choice(registry, recs, decision, judge)
+        feedback_boost = 0.0
         if bridge is not None:
             try:
-                choice["feedback_boost"] = bridge.get_simivision_feedback_boost(choice["subnet_id"])
+                feedback_boost = bridge.get_simivision_feedback_boost(decision["subnet_id"])
             except Exception:
-                choice["feedback_boost"] = 0.0
+                feedback_boost = 0.0
+        choice = _build_choice(registry, recs, decision, judge, feedback_boost=feedback_boost)
+        choice["feedback_boost"] = feedback_boost
         choices.append(choice)
 
     # Traceability: log the surfaced picks when they change.
