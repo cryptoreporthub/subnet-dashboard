@@ -853,6 +853,23 @@ def get_freshness():
     return jsonify({"status": "success", "data": freshness.get_sync_state()})
 
 
+@app.route("/api/version", methods=["GET"])
+def get_version():
+    """Return the dashboard API version and protocol watchlist metadata."""
+    protocols = _load_protocols_config()
+    meta = load_data(_PROTOCOLS_PATH).get("meta", {})
+    return jsonify(
+        {
+            "status": "success",
+            "data": {
+                "name": "subnet-dashboard",
+                "version": meta.get("version", "unknown"),
+                "protocol_count": len(protocols),
+            },
+        }
+    )
+
+
 @app.route("/api/sync", methods=["POST", "GET"])
 def trigger_sync():
     """Trigger an on-demand refresh of remote data sources."""

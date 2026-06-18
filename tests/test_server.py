@@ -123,3 +123,20 @@ def test_watchlist_route(client):
     assert symbols >= {'VVV', 'FET', 'RENDER', 'TAO', 'HYPE'}
     assert any(p['symbol'] == 'HYPE' and p['name'] == 'Hyperliquid' for p in protocols)
     assert data['freshness']['threshold_seconds'] == 300
+
+
+def test_version_route(client):
+    response = client.get('/api/version')
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data['status'] == 'success'
+    assert data['data']['name'] == 'subnet-dashboard'
+    assert data['data']['version'] == '1.1.0'
+    assert data['data']['protocol_count'] == 5
+
+
+def test_version_route_headers(client):
+    response = client.get('/api/version')
+    assert response.status_code == 200
+    assert response.headers.get('Access-Control-Allow-Origin') == '*'
+    assert response.headers.get('X-Frame-Options') == 'ALLOWALL'
