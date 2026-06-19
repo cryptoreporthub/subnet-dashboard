@@ -2,7 +2,7 @@
 Daily Rotation Engine (The Selector)
 
 Acts as the "Daily Rotation Engine" that interfaces between the Experts
-(quant.py, hype.py, contrarian.py) and the Orchestrator (orchestrator.py).
+(quant.py, hype.py, contrarian.py, technical.py) and the Orchestrator (orchestrator.py).
 Integrates the Mindmap feedback loop interface to track daily output
 against the Brain's recommendations.
 """
@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from internal.council.experts.quant import QuantExpert
 from internal.council.experts.hype import HypeExpert
 from internal.council.experts.contrarian import ContrarianExpert
+from internal.council.experts.technical import TechnicalExpert
 from internal.council.mindmap_bridge import MindmapBridge
 
 class Selector:
@@ -24,28 +25,36 @@ class Selector:
         self.quant_expert = QuantExpert()
         self.hype_expert = HypeExpert()
         self.contrarian_expert = ContrarianExpert()
+        self.technical_expert = TechnicalExpert()
         self.mindmap_bridge = mindmap_bridge or MindmapBridge()
         self.daily_output_history: List[Dict[str, Any]] = []
 
     def get_expert_opinions(self, subnet_id: int, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Queries Quant, Hype, and Contrarian experts for their analysis on a given subnet.
+        Queries Quant, Hype, Contrarian, and Technical experts for their analysis on a given subnet.
         
         Args:
             subnet_id (int): The ID of the subnet to analyze.
             context (dict, optional): Additional context for analysis.
             
         Returns:
-            dict: A dictionary containing opinions from all three experts.
+            dict: A dictionary containing opinions from all four experts.
         """
+        # Enrich context with subnet name for symbol/pair matching in TechnicalExpert.
+        if context is None:
+            context = {}
+        context.setdefault("subnet_id", subnet_id)
+        
         quant_opinion = self.quant_expert.analyze(subnet_id, context)
         hype_opinion = self.hype_expert.analyze(subnet_id, context)
         contrarian_opinion = self.contrarian_expert.analyze(subnet_id, context)
+        technical_opinion = self.technical_expert.analyze(subnet_id, context)
         
         return {
             "quant": quant_opinion,
             "hype": hype_opinion,
-            "contrarian": contrarian_opinion
+            "contrarian": contrarian_opinion,
+            "technical": technical_opinion,
         }
 
     def structure_decision_payload(self, subnet_id: int, expert_opinions: Dict[str, Any]) -> Dict[str, Any]:
@@ -62,10 +71,16 @@ class Selector:
         quant_score = expert_opinions["quant"].get("score", 0.5)
         hype_score = expert_opinions["hype"].get("score", 0.5)
         contrarian_score = expert_opinions["contrarian"].get("score", 0.5)
+        technical_score = expert_opinions["technical"].get("score", 0.5)
         
         # Calculate a weighted consensus score
-        # Quant: 40%, Hype: 30%, Contrarian: 30%
-        consensus_score = (quant_score * 0.4) + (hype_score * 0.3) + (contrarian_score * 0.3)
+        # Quant: 35%, Hype: 25%, Contrarian: 25%, Technical: 15%
+        consensus_score = (
+            quant_score * 0.35
+            + hype_score * 0.25
+            + contrarian_score * 0.25
+            + technical_score * 0.15
+        )
         
         # Determine recommended action based on consensus score
         if consensus_score >= 0.75:
@@ -93,6 +108,12 @@ class Selector:
                     "score": contrarian_score,
                     "signal": expert_opinions["contrarian"].get("signal", "hold"),
                     "metrics": expert_opinions["contrarian"].get("metrics", {})
+                },
+                "technical": {
+                    "score": technical_score,
+                    "signal": expert_opinions["technical"].get("signal", "hold"),
+                    "signal_type": expert_opinionssiS["technical"].get("signal_type", "neutral"),
+                    "metrics": expert_opinions["technical"].get("metrics", {})
                 }
             }
         }
@@ -154,6 +175,9 @@ class Selector:
                 info = registry.get(str(sub_id))
                 if info:
                     context_map[sub_id] = {
+                        "name": info.get("name", ""),
+                        "symbol": info.get("symbol", ""),
+                        "subnet_id": sub_id,
                         "emission": info.get("emission", 0.0),
                         "social_mentions": info.get("social_mentions", 0),
                         "is_overvalued": info.get("is_overvalued", False)
