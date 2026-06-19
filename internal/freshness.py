@@ -20,6 +20,7 @@ REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 WATCHLIST_PATH = os.environ.get("WATCHLIST_PATH", "config/watchlist.json")
 SIGNAL_TIMELINE_PATH = os.environ.get("SIGNAL_TIMELINE_PATH", "data/signal_timeline.json")
+PRICE_CACHE_PATH = os.environ.get("PRICE_CACHE_PATH", "data/price_cache.json")
 REMOTE_REGISTRY_URL = os.environ.get(
     "REMOTE_REGISTRY_URL",
     "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json",
@@ -32,6 +33,7 @@ THRESHOLDS: Dict[str, int] = {
     "recommendations": int(os.environ.get("RECOMMENDATIONS_STALE_SECONDS", "600")),
     "watchlist": int(os.environ.get("WATCHLIST_STALE_SECONDS", "300")),
     "signal_timeline": int(os.environ.get("SIGNAL_TIMELINE_STALE_SECONDS", "300")),
+    "price_cache": int(os.environ.get("PRICE_CACHE_STALE_SECONDS", "900")),
 }
 
 BACKGROUND_INTERVAL_SECONDS = int(
@@ -177,11 +179,29 @@ def signal_timeline_freshness(signal_timeline_path: str = SIGNAL_TIMELINE_PATH) 
     return source_freshness(signal_timeline_path, THRESHOLDS["signal_timeline"], newest)
 
 
+def price_data_freshness(price_cache_path: str = PRICE_CACHE_PATH) -> Dict[str, Any]:
+    """Freshness for the technical indicator price cache."""
+    newest: Optional[str] = None
+    if os.path.exists(price_cache_path):
+        try:
+            with open(price_cache_path, "r") as f:
+                data = json.load(f)
+            # Use the most recent fetched_at timestamp across cached subnets.
+            for item in data.values():
+                fetched = item.get("fetched_at")
+                if fetched and (newest is None or fetched > newest):
+                    newest = fetched
+        except Exception:
+            pass
+    return source_freshness(price_cache_path, THRESHOLDS["price_cache"], newest)
+
+
 def overall_freshness(
     registry_path: str = REGISTRY_PATH,
     soul_map_path: str = SOUL_MAP_PATH,
     watchlist_path: str = WATCHLIST_PATH,
     signal_timeline_path: str = SIGNAL_TIMELINE_PATH,
+    price_cache_path: str = PRICE_CACHE_PATH,
 ) -> Dict[str, Any]:
     """Freshness snapshot for all tracked sources."""
     registry = registry_freshness(registry_path)
@@ -189,12 +209,14 @@ def overall_freshness(
     recommendations = recommendations_freshness(registry_path)
     watchlist = watchlist_freshness(watchlist_path)
     signal_timeline = signal_timeline_freshness(signal_timeline_path)
+    price_cache = price_data_freshness(price_cache_path)
     any_stale = (
         registry["is_stale"]
         or soul_map["is_stale"]
         or recommendations["is_stale"]
         or watchlist["is_stale"]
         or signal_timeline["is_stale"]
+        or price_cache["is_stale"]
     )
     return {
         "overall": {
@@ -206,6 +228,7 @@ def overall_freshness(
         "recommendations": recommendations,
         "watchlist": watchlist,
         "signal_timeline": signal_timeline,
+        "price_cache": price_cache,
     }
 
 
@@ -376,13 +399,14 @@ def refresh_all(
     registry_path: str = REGISTRY_PATH,
     soul_map_path: str = SOUL_MAP_PATH,
     watchlist_path: str = WATCHLIST_PATH,
+    price_cache_path: str = PRICE_CACHE_PATH,
 ) -> Dict[str, Any]:
     """Run all available refresh steps and return a combined report."""
     result = {
         "synced_at": _now_iso(),
         "registry": merge_remote_registry(registry_path),
         "watchlist": refresh_watchlist(watchlist_path),
-        "freshness": overall_freshness(registry_path, soul_map_path, watchlist_path),
+        "freshness": overall_freshness(registry_path, soul_map_path, watchlist_path, price_cache_path=price_cache_path),
     }
     return result
 
@@ -442,10 +466,11 @@ def get_sync_state(
     soul_map_path: str = SOUL_MAP_PATH,
     watchlist_path: str = WATCHLIST_PATH,
     signal_timeline_path: str = SIGNAL_TIMELINE_PATH,
+    price_cache_path: str = PRICE_CACHE_PATH,
 ) -> Dict[str, Any]:
     """Combined freshness + background sync state for the API."""
     with _lock:
         state = dict(_sync_state)
-    freshness = overall_freshness(registry_path, soul_map_path, watchlist_path, signal_timeline_path)
+    freshness = overall_freshness(registry_path, soul_map_path, watchlist_path, signal_timeline_path, price_cache_path)
     state["freshness"] = freshness
     return state

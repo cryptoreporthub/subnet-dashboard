@@ -7,24 +7,37 @@ Integrates the Mindmap feedback loop interface to track daily output
 against the Brain's recommendations.
 """
 
+import os
 from typing import Any, Dict, List, Optional
 from internal.council.experts.quant import QuantExpert
 from internal.council.experts.hype import HypeExpert
 from internal.council.experts.contrarian import ContrarianExpert
+from internal.council.experts.technical import TechnicalExpert
 from internal.council.mindmap_bridge import MindmapBridge
+
+# Default weights: quant 0.3, hype 0.25, contrarian 0.2, technical 0.25
+DEFAULT_WEIGHTS = {
+    "quant": float(os.environ.get("SELECTOR_WEIGHT_QUANT", "0.3")),
+    "hype": float(os.environ.get("SELECTOR_WEIGHT_HYPE", "0.25")),
+    "contrarian": float(os.environ.get("SELECTOR_WEIGHT_CONTRARIAN", "0.2")),
+    "technical": float(os.environ.get("SELECTOR_WEIGHT_TECHNICAL", "0.25")),
+}
+
 
 class Selector:
     """
     Daily Rotation Engine (The Selector)
-    
+
     Coordinates expert opinions, structures decision payloads for the Orchestrator,
     and tracks daily output against the Brain's recommendations via the Mindmap feedback loop.
     """
-    def __init__(self, mindmap_bridge: Optional[MindmapBridge] = None):
+    def __init__(self, mindmap_bridge: Optional[MindmapBridge] = None, weights: Optional[Dict[str, float]] = None):
         self.quant_expert = QuantExpert()
         self.hype_expert = HypeExpert()
         self.contrarian_expert = ContrarianExpert()
+        self.technical_expert = TechnicalExpert()
         self.mindmap_bridge = mindmap_bridge or MindmapBridge()
+        self.weights = weights or DEFAULT_WEIGHTS.copy()
         self.daily_output_history: List[Dict[str, Any]] = []
 
     def get_expert_opinions(self, subnet_id: int, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -41,11 +54,13 @@ class Selector:
         quant_opinion = self.quant_expert.analyze(subnet_id, context)
         hype_opinion = self.hype_expert.analyze(subnet_id, context)
         contrarian_opinion = self.contrarian_expert.analyze(subnet_id, context)
-        
+        technical_opinion = self.technical_expert.analyze(subnet_id, context)
+
         return {
             "quant": quant_opinion,
             "hype": hype_opinion,
-            "contrarian": contrarian_opinion
+            "contrarian": contrarian_opinion,
+            "technical": technical_opinion,
         }
 
     def structure_decision_payload(self, subnet_id: int, expert_opinions: Dict[str, Any]) -> Dict[str, Any]:
@@ -59,14 +74,20 @@ class Selector:
         Returns:
             dict: Structured decision payload.
         """
-        quant_score = expert_opinions["quant"].get("score", 0.5)
-        hype_score = expert_opinions["hype"].get("score", 0.5)
-        contrarian_score = expert_opinions["contrarian"].get("score", 0.5)
-        
-        # Calculate a weighted consensus score
-        # Quant: 40%, Hype: 30%, Contrarian: 30%
-        consensus_score = (quant_score * 0.4) + (hype_score * 0.3) + (contrarian_score * 0.3)
-        
+        quant_score = expert_opinions.get("quant", {}).get("score", 0.5)
+        hype_score = expert_opinions.get("hype", {}).get("score", 0.5)
+        contrarian_score = expert_opinions.get("contrarian", {}).get("score", 0.5)
+        technical_score = expert_opinions.get("technical", {}).get("score", 0.5)
+
+        # Calculate a weighted consensus score using configurable weights.
+        w = self.weights
+        consensus_score = (
+            quant_score * w.get("quant", 0.3)
+            + hype_score * w.get("hype", 0.25)
+            + contrarian_score * w.get("contrarian", 0.2)
+            + technical_score * w.get("technical", 0.25)
+        )
+
         # Determine recommended action based on consensus score
         if consensus_score >= 0.75:
             action = "accumulate"
@@ -74,7 +95,7 @@ class Selector:
             action = "reduce"
         else:
             action = "hold"
-            
+
         return {
             "subnet_id": subnet_id,
             "consensus_score": round(consensus_score, 4),
@@ -93,6 +114,11 @@ class Selector:
                     "score": contrarian_score,
                     "signal": expert_opinions["contrarian"].get("signal", "hold"),
                     "metrics": expert_opinions["contrarian"].get("metrics", {})
+                },
+                "technical": {
+                    "score": technical_score,
+                    "signal": expert_opinions.get("technical", {}).get("signal", "hold"),
+                    "metrics": expert_opinions.get("technical", {}).get("metrics", {})
                 }
             }
         }

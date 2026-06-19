@@ -232,8 +232,8 @@ def test_judge_persists_and_reloads_state(tmp_soul_map):
 
     reloaded = AdversarialJudge(persistence_path=tmp_soul_map, persist=False)
     assert len(reloaded.get_verdicts()) == 1
-    assert set(reloaded.get_council_weights().keys()) == {"quant", "hype", "contrarian"}
-    assert set(reloaded.get_expert_track_records().keys()) == {"quant", "hype", "contrarian"}
+    assert set(reloaded.get_council_weights().keys()) == {"quant", "hype", "contrarian", "technical"}
+    assert set(reloaded.get_expert_track_records().keys()) == {"quant", "hype", "contrarian", "technical"}
     assert len(reloaded.get_learning_trail()) == 1
 
 
@@ -346,7 +346,7 @@ def test_scheduler_persists_cycle_summary(tmp_soul_map, tmp_registry):
     assert summary["verdict_count"] == 3
     assert 0.0 <= summary["mean_score"] <= 1.0
     assert 0.0 <= summary["mean_confidence"] <= 1.0
-    assert set(summary["council_weights"].keys()) == {"quant", "hype", "contrarian"}
+    assert set(summary["council_weights"].keys()) == {"quant", "hype", "contrarian", "technical"}
 
 
 @freeze_time("2026-06-19T12:00:00+00:00")
@@ -454,7 +454,8 @@ def test_closed_loop_learning_with_mocked_time(tmp_soul_map, tmp_registry):
             registry = json.load(f)
         registry["1"]["is_overvalued"] = True
         registry["1"]["status"] = "at-risk"
-        registry["1"]["emission"] = 0.2
+        registry["1"]["emission"] = 0.1
+        registry["1"]["social_mentions"] = 50
         with open(tmp_registry, "w") as f:
             json.dump(registry, f)
 

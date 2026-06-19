@@ -14,6 +14,8 @@ from internal.simivision.engine import (
     _load_selector_decisions,
     _synthesize_decision,
 )
+from internal.indicators.indicator_engine import IndicatorEngine
+from internal.indicators import indicator_scheduler
 
 app = Flask(__name__)
 
@@ -80,6 +82,7 @@ def _ensure_background_sync():
     if app.config["ENABLE_BACKGROUND_SYNC"] and not app.config.get("TESTING"):
         freshness.start_background_sync(immediate=False)
         adversarial_scheduler.start_adversarial_scheduler(immediate=False)
+        indicator_scheduler.start_indicator_scheduler(immediate=False)
 
 
 def _consensus_map():
@@ -125,6 +128,8 @@ def _freshness_meta(source: str = "registry") -> dict:
         info = freshness.watchlist_freshness()
     elif source == "signal_timeline":
         info = freshness.signal_timeline_freshness()
+    elif source == "price_cache":
+        info = freshness.price_data_freshness()
     else:
         info = freshness.source_freshness(source, 300)
     return {
@@ -181,6 +186,7 @@ def _synthesize_decisions(registry, recommendations):
         quant_score = 0.85 if emission > 1.0 else 0.4 if emission < 0.2 else 0.75
         hype_score = 0.9 if mentions > 1000 else 0.3 if mentions < 100 else 0.65
         contrarian_score = 0.2 if is_overvalued else 0.8
+        technical_score = 0.5
 
         if brain_action == "accumulate":
             consensus_score = round(min(0.95, 0.7 + emission * 0.05 + mentions * 0.00005), 4)
@@ -188,7 +194,7 @@ def _synthesize_decisions(registry, recommendations):
             consensus_score = round(max(0.15, 0.45 - emission * 0.05 - mentions * 0.00002), 4)
         else:
             consensus_score = round(
-                (quant_score * 0.4 + hype_score * 0.3 + contrarian_score * 0.3), 4
+                (quant_score * 0.3 + hype_score * 0.25 + contrarian_score * 0.2 + technical_score * 0.25), 4
             )
 
         if consensus_score >= 0.75:
@@ -223,6 +229,11 @@ def _synthesize_decisions(registry, recommendations):
                         "score": contrarian_score,
                         "signal": "sell" if is_overvalued else "buy",
                         "metrics": {"contrarian_index": contrarian_score * 100},
+                    },
+                    "technical": {
+                        "score": technical_score,
+                        "signal": "hold",
+                        "metrics": {"active_signals": []},
                     },
                 },
                 "synthesized": True,
@@ -826,6 +837,63 @@ def get_adversarial_scheduler():
     )
 
 
+@app.route("/api/indicators", methods=["GET"])
+def get_indicators():
+    """Return current indicator state for all subnets."""
+    engine = IndicatorEngine()
+    state = engine.get_indicator_state()
+    return jsonify(
+        {
+            "status": "success",
+            "freshness": _freshness_meta("price_cache"),
+            "data": state,
+        }
+    )
+
+
+@app.route("/api/indicators/<int:subnet_id>", methods=["GET"])
+def get_indicators_for_subnet(subnet_id):
+    """Return current indicator state for a specific subnet."""
+    engine = IndicatorEngine()
+    state = engine.get_indicator_state()
+    per_subnet = state.get("per_subnet", {})
+    if str(subnet_id) not in per_subnet:
+        return jsonify({"error": "Subnet not found in indicator state"}), 404
+    return jsonify(
+        {
+            "status": "success",
+            "subnet_id": subnet_id,
+            "freshness": _freshness_meta("price_cache"),
+            "data": per_subnet[str(subnet_id)],
+        }
+    )
+
+
+@app.route("/api/indicators/alerts", methods=["GET"])
+def get_indicator_alerts():
+    """Return active crossover alerts across all subnets."""
+    engine = IndicatorEngine()
+    alerts = engine.get_active_alerts()
+    return jsonify(
+        {
+            "status": "success",
+            "freshness": _freshness_meta("price_cache"),
+            "data": alerts,
+        }
+    )
+
+
+@app.route("/api/indicators/scheduler", methods=["GET"])
+def get_indicator_scheduler_state():
+    """Return the indicator background scheduler state."""
+    return jsonify(
+        {
+            "status": "success",
+            "data": indicator_scheduler.get_indicator_scheduler_state(),
+        }
+    )
+
+
 @app.route("/api/watchlist", methods=["GET"])
 def get_watchlist():
     """Return the first-class protocol watchlist."""
@@ -922,4 +990,5 @@ if __name__ == "__main__":
     if app.config["ENABLE_BACKGROUND_SYNC"] and not app.config.get("TESTING"):
         freshness.start_background_sync(immediate=False)
         adversarial_scheduler.start_adversarial_scheduler(immediate=False)
+        indicator_scheduler.start_indicator_scheduler(immediate=False)
     app.run(host="0.0.0.0", port=port, debug=True)
