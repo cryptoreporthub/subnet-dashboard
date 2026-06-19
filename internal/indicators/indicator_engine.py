@@ -161,7 +161,7 @@ class IndicatorEngine:
 
     def _process_subnet(self, subnet_id: int, registry_item: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch candles and compute indicators for a single subnet."""
-        candles = fetch_ohlcv(str(subnet_id))
+        candles = fetch_ohlcv(str(subnet_id), pairs_path=self.price_pairs_path)
         if len(candles) < 30:
             raise RuntimeError(f"Insufficient candle data for subnet {subnet_id}")
 
@@ -338,6 +338,27 @@ class IndicatorEngine:
             note = f"Indicator prediction ({predicted_direction}) judged {verdict.get('outcome_label')} for signals: {', '.join(active)}"
             self.mindmap_bridge.log_simivision_feedback(int(sid), outcome_val, note)
             self._persist_indicator_verdict(int(sid), decision, verdict)
+
+    def get_indicator_state(self) -> Dict[str, Any]:
+        """Return the most recently persisted indicator state."""
+        state = _load_json(self.indicator_state_path)
+        if state:
+            return state
+        # Fallback to the copy stored inside the soul map by older runs.
+        try:
+            soul_map = _load_json(self.soul_map_path)
+            return soul_map.get("soul_map_state", {}).get("indicator_last_state", {})
+        except Exception:
+            return {}
+
+    def get_active_alerts(self) -> List[Dict[str, Any]]:
+        """Return active crossover alerts from the persisted indicator state."""
+        state = self.get_indicator_state()
+        alerts: List[Dict[str, Any]] = []
+        for sid, data in state.get("per_subnet", {}).items():
+            for event_type in data.get("active_signals", []):
+                alerts.append({"subnet_id": int(sid), "event_type": event_type})
+        return alerts
 
     def _persist_indicator_state(self, indicator_state: Dict[str, Any]) -> None:
         """Persist indicator state to a dedicated file and inside the soul map."""
