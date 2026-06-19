@@ -5,12 +5,15 @@ Pipeline:
 1. Fetch price candles for subnet tokens.
 2. Compute RSI, MACD, and momentum indicators.
 3. Detect crossovers and significant events.
-4. Emit signals into SignalTracker.
-5. Feed indicator scores into the Selector as a 4th expert (TechnicalExpert).
-6. Log indicator signals to MindmapBridge (soul_map state).
-7. AdversarialJudge judges indicator predictions against price outcomes.
-8. SimiVision picks include indicator conviction in scoring.
-9. Learning loop: judge verdicts update indicator signal weight over time.
+4. (Optional) Emit signals into SignalTracker.
+5. (Optional) Feed indicator scores into the Selector as a 4th expert.
+6. (Optional) Build SimiVision picks and log to Mindmap.
+7. (Optional) AdversarialJudge judges indicator predictions.
+8. Persist indicator state to disk so /api/indicators can serve it quickly.
+
+The heavy council/selector/simivision/judge phases are disabled by default so
+single-worker production deploys don't hang on the first tick. Set
+INDICATOR_RUN_COUNCIL_PHASE=true to enable the full feedback loop.
 """
 
 import json
@@ -18,25 +21,20 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from internal.council.judge.adversarial import AdversarialJudge
-from internal.council.mindmap_bridge import MindmapBridge
-from internal.council.selector import Selector
 from internal.indicators.crossover_detector import detect_crossovers
 from internal.indicators.macd import compute_macd
 from internal.indicators.momentum import compute_momentum
 from internal.indicators.price_fetcher import fetch_ohlcv
 from internal.indicators.rsi import compute_rsi
-from internal.signals.signal_tracker import SignalTracker
-from internal.simivision.engine import SimiVisionEngine
 
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 PRICE_PAIRS_PATH = os.environ.get("PRICE_PAIRS_PATH", "config/price_pairs.json")
-
+INDICATOR_STATE_PATH = os.environ.get("INDICATOR_STATE_PATH", "data/indicator_state.json")
+RUN_COUNCIL_PHASE = os.environ.get("INDICATOR_RUN_COUNCIL_PHASE", "false").lower() == "true"
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
 
 def _load_json(path: str) -> Dict[str, Any]:
     if os.path.exists(path):
@@ -47,7 +45,6 @@ def _load_json(path: str) -> Dict[str, Any]:
             return {}
     return {}
 
-
 def _save_json(path: str, data: Dict[str, Any]) -> None:
     dir_name = os.path.dirname(path)
     if dir_name and not os.path.exists(dir_name):
@@ -57,41 +54,34 @@ def _save_json(path: str, data: Dict[str, Any]) -> None:
         json.dump(data, f, indent=2)
     os.replace(temp_path, path)
 
-
 class IndicatorEngine:
-    """Orchestrates technical indicator computation and Mindmap integration."""
+    """Orchestrates technical indicator computation and optional Mindmap integration."""
 
     def __init__(
         self,
         registry_path: str = REGISTRY_PATH,
         soul_map_path: str = SOUL_MAP_PATH,
         price_pairs_path: str = PRICE_PAIRS_PATH,
-        signal_tracker: Optional[SignalTracker] = None,
-        mindmap_bridge: Optional[MindmapBridge] = None,
-        selector: Optional[Selector] = None,
-        judge: Optional[AdversarialJudge] = None,
-        simivision: Optional[SimiVisionEngine] = None,
+        indicator_state_path: str = INDICATOR_STATE_PATH,
+        signal_tracker=None,
+        mindmap_bridge=None,
+        selector=None,
+        judge=None,
+        simivision=None,
     ):
         self.registry_path = registry_path
         self.soul_map_path = soul_map_path
         self.price_pairs_path = price_pairs_path
-        self.signal_tracker = signal_tracker or SignalTracker()
-        self.mindmap_bridge = mindmap_bridge or MindmapBridge(
-            persistence_path=soul_map_path, registry_path=registry_path
-        )
-        self.selector = selector or Selector(mindmap_bridge=self.mindmap_bridge)
-        self.judge = judge or AdversarialJudge(
-            persistence_path=soul_map_path,
-            registry_path=registry_path,
-            persist=True,
-        )
-        self.simivision = simivision or SimiVisionEngine(
-            registry_path=registry_path, soul_map_path=soul_map_path, judge=self.judge
-        )
+        self.indicator_state_path = indicator_state_path
+        self.signal_tracker = signal_tracker
+        self.mindmap_bridge = mindmap_bridge
+        self.selector = selector
+        self.judge = judge
+        self.simivision = simivision
         self._last_per_subnet: Dict[str, Dict[str, Any]] = {}
 
     def run_cycle(self, subnet_ids: Optional[List[int]] = None) -> Dict[str, Any]:
-        """Run the full indicator pipeline for the given subnets."""
+        """Run the indicator pipeline for the given subnets."""
         run_at = _now_iso()
         registry = _load_json(self.registry_path)
         if subnet_ids is None:
@@ -100,6 +90,7 @@ class IndicatorEngine:
         per_subnet: Dict[str, Dict[str, Any]] = {}
         all_events: List[Dict[str, Any]] = []
         errors: List[Dict[str, Any]] = []
+        phase_errors: List[Dict[str, Any]] = []
 
         for sid in subnet_ids:
             try:
@@ -109,23 +100,39 @@ class IndicatorEngine:
             except Exception as exc:
                 errors.append({"subnet_id": sid, "error": str(exc)})
 
-        # Emit all detected crossover events as structured signals.
-        for event in all_events:
-            self._emit_signal(event)
+        # Optional downstream phases. These can be heavy, so we wrap each in
+        # its own try/except and let the cycle continue if one fails.
+        picks: List[Dict[str, Any]] = []
+        if RUN_COUNCIL_PHASE:
+            try:
+                for event in all_events:
+                    self._emit_signal(event)
+            except Exception as exc:
+                phase_errors.append({"phase": "emit_signals", "error": str(exc)})
 
-        # Run selector with enriched context so TechnicalExpert can contribute.
-        self._run_selector_with_indicators(per_subnet, registry)
+            try:
+                self._run_selector_with_indicators(per_subnet, registry)
+            except Exception as exc:
+                phase_errors.append({"phase": "selector", "error": str(exc)})
 
-        # Build SimiVision picks with indicator conviction and log to Mindmap.
-        picks = self._build_and_log_picks(per_subnet)
+            try:
+                picks = self._build_and_log_picks(per_subnet)
+            except Exception as exc:
+                phase_errors.append({"phase": "simivision", "error": str(exc)})
 
-        # Judge indicator predictions and log feedback to the learning loop.
-        self._judge_indicator_predictions(per_subnet, registry, all_events)
+            try:
+                self._judge_indicator_predictions(per_subnet, registry, all_events)
+            except Exception as exc:
+                phase_errors.append({"phase": "judge", "error": str(exc)})
 
-        # Persist indicator state to soul_map.
+        # Always persist indicator state so /api/indicators can serve data.
         indicator_state = {
+            "run_at": run_at,
             "last_run_at": run_at,
             "signals_emitted": len(all_events),
+            "subnets_processed": len(per_subnet),
+            "errors": errors,
+            "phase_errors": phase_errors,
             "per_subnet": {
                 sid: {
                     "rsi": data.get("rsi", {}).get("rsi"),
@@ -138,7 +145,6 @@ class IndicatorEngine:
             },
         }
         self._persist_indicator_state(indicator_state)
-
         self._last_per_subnet = per_subnet
 
         return {
@@ -147,6 +153,7 @@ class IndicatorEngine:
             "subnets_processed": len(per_subnet),
             "signals_emitted": len(all_events),
             "errors": errors,
+            "phase_errors": phase_errors,
             "per_subnet": per_subnet,
             "events": all_events,
             "picks": picks,
@@ -187,6 +194,9 @@ class IndicatorEngine:
 
     def _emit_signal(self, event: Dict[str, Any]) -> None:
         """Record a crossover event as a SignalTracker signal."""
+        if self.signal_tracker is None:
+            from internal.signals.signal_tracker import SignalTracker
+            self.signal_tracker = SignalTracker()
         metadata = {
             "signal_type": event.get("signal_type"),
             "direction": event.get("direction"),
@@ -195,7 +205,6 @@ class IndicatorEngine:
             "threshold": event.get("threshold"),
             "description": event.get("description"),
         }
-        # Asset is generic; we use the indicator taxonomy asset tag.
         self.signal_tracker.record_signal(
             asset="INDICATOR",
             source="indicator",
@@ -207,6 +216,14 @@ class IndicatorEngine:
         self, per_subnet: Dict[str, Dict[str, Any]], registry: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Run the Selector with indicator-enriched context."""
+        if self.selector is None:
+            from internal.council.selector import Selector
+            from internal.council.mindmap_bridge import MindmapBridge
+            self.selector = Selector(
+                mindmap_bridge=self.mindmap_bridge or MindmapBridge(
+                    persistence_path=self.soul_map_path, registry_path=self.registry_path
+                )
+            )
         context_map: Dict[int, Dict[str, Any]] = {}
         for sid, data in per_subnet.items():
             info = registry.get(sid, {})
@@ -225,6 +242,11 @@ class IndicatorEngine:
 
         subnet_ids = list(context_map.keys())
         rotation = self.selector.process_daily_rotation(subnet_ids, context_map)
+        if self.mindmap_bridge is None:
+            from internal.council.mindmap_bridge import MindmapBridge
+            self.mindmap_bridge = MindmapBridge(
+                persistence_path=self.soul_map_path, registry_path=self.registry_path
+            )
         self.mindmap_bridge.update_soul_map(rotation.get("daily_output", {}))
         return rotation
 
@@ -232,7 +254,25 @@ class IndicatorEngine:
         self, per_subnet: Dict[str, Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Build SimiVision picks and log them to the Mindmap."""
+        if self.simivision is None:
+            from internal.council.judge.adversarial import AdversarialJudge
+            from internal.simivision.engine import SimiVisionEngine
+            judge = self.judge or AdversarialJudge(
+                persistence_path=self.soul_map_path,
+                registry_path=self.registry_path,
+                persist=True,
+            )
+            self.simivision = SimiVisionEngine(
+                registry_path=self.registry_path,
+                soul_map_path=self.soul_map_path,
+                judge=judge,
+            )
         picks = self.simivision.top_signals(n=10)
+        if self.mindmap_bridge is None:
+            from internal.council.mindmap_bridge import MindmapBridge
+            self.mindmap_bridge = MindmapBridge(
+                persistence_path=self.soul_map_path, registry_path=self.registry_path
+            )
         self.mindmap_bridge.log_simivision_picks(picks)
         return picks
 
@@ -243,6 +283,17 @@ class IndicatorEngine:
         events: List[Dict[str, Any]],
     ) -> None:
         """Judge indicator-based predictions and feed back into the learning loop."""
+        if self.judge is None or self.mindmap_bridge is None:
+            from internal.council.judge.adversarial import AdversarialJudge
+            from internal.council.mindmap_bridge import MindmapBridge
+            self.judge = self.judge or AdversarialJudge(
+                persistence_path=self.soul_map_path,
+                registry_path=self.registry_path,
+                persist=True,
+            )
+            self.mindmap_bridge = self.mindmap_bridge or MindmapBridge(
+                persistence_path=self.soul_map_path, registry_path=self.registry_path
+            )
         for sid, data in per_subnet.items():
             info = registry.get(sid, {})
             active = [e["event_type"] for e in data.get("events", [])]
@@ -283,56 +334,32 @@ class IndicatorEngine:
 
             verdict = self.judge.judge_outcome_only(int(sid), decision, outcome)
 
-            # Log feedback to the Mindmap self-learning loop.
             outcome_val = 1 if verdict.get("outcome_label") == "validated" else -1 if verdict.get("outcome_label") == "contradicted" else 0
             note = f"Indicator prediction ({predicted_direction}) judged {verdict.get('outcome_label')} for signals: {', '.join(active)}"
             self.mindmap_bridge.log_simivision_feedback(int(sid), outcome_val, note)
-
-            # Persist the indicator-context linkage in the soul_map.
             self._persist_indicator_verdict(int(sid), decision, verdict)
 
     def _persist_indicator_state(self, indicator_state: Dict[str, Any]) -> None:
-        soul_map = _load_json(self.soul_map_path)
-        soul_map.setdefault("soul_map_state", {})["indicator_state"] = indicator_state
-        soul_map["soul_map_state"]["updated_at"] = _now_iso()
-        _save_json(self.soul_map_path, soul_map)
+        """Persist indicator state to a dedicated file and inside the soul map."""
+        _save_json(self.indicator_state_path, indicator_state)
+        try:
+            soul_map = _load_json(self.soul_map_path)
+            soul_map.setdefault("soul_map_state", {})["indicator_last_state"] = indicator_state
+            _save_json(self.soul_map_path, soul_map)
+        except Exception:
+            pass
 
     def _persist_indicator_verdict(
         self, subnet_id: int, decision: Dict[str, Any], verdict: Dict[str, Any]
     ) -> None:
-        soul_map = _load_json(self.soul_map_path)
-        trail = soul_map.setdefault("indicator_learning_trail", [])
-        trail.append(
-            {
-                "subnet_id": subnet_id,
-                "timestamp": _now_iso(),
-                "indicator_context": decision.get("indicator_context"),
-                "verdict": {
-                    "score": verdict.get("score"),
-                    "confidence": verdict.get("confidence"),
-                    "outcome_label": verdict.get("outcome_label"),
-                    "note": verdict.get("note"),
-                },
+        """Persist a per-subnet indicator-context verdict inside the soul map."""
+        try:
+            soul_map = _load_json(self.soul_map_path)
+            soul_map.setdefault("soul_map_state", {}).setdefault("indicator_verdicts", {})[str(subnet_id)] = {
+                "decision": decision,
+                "verdict": verdict,
+                "persisted_at": _now_iso(),
             }
-        )
-        trail = trail[-200:]
-        soul_map["indicator_learning_trail"] = trail
-        _save_json(self.soul_map_path, soul_map)
-
-    def get_indicator_state(self) -> Dict[str, Any]:
-        """Return the latest persisted indicator state from the soul map."""
-        soul_map = _load_json(self.soul_map_path)
-        return soul_map.get("soul_map_state", {}).get("indicator_state", {})
-
-    def get_alerts(self) -> List[Dict[str, Any]]:
-        """Return active crossover alerts from the last cycle."""
-        alerts = []
-        state = self.get_indicator_state()
-        for sid, data in state.get("per_subnet", {}).items():
-            for signal in data.get("active_signals", []):
-                alerts.append({"subnet_id": sid, "event_type": signal, "last_updated": data.get("last_updated")})
-        return alerts
-
-    def get_active_alerts(self) -> List[Dict[str, Any]]:
-        """Alias for get_alerts used by the API."""
-        return self.get_alerts()
+            _save_json(self.soul_map_path, soul_map)
+        except Exception:
+            pass
