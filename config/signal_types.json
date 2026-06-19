@@ -1,0 +1,25 @@
+{
+  "version": "1.0.0",
+  "signal_types": {
+    "momentum": {
+      "description": "Price is moving with sustained directional strength.",
+      "actions": ["accumulate", "reduce"]
+    },
+    "mean_reversion": {
+      "description": "Price has overextended and is expected to revert toward a mean.",
+      "actions": ["accumulate", "reduce"]
+    },
+    "breakout": {
+      "description": "Price crossed a key moving-average boundary or MACD signal line.",
+      "actions": ["accumulate", "reduce"]
+    },
+    "trend": {
+      "description": "Price aligned with a medium-term trend regime.",
+      "actions": ["hold", "accumulate", "reduce"]
+    },
+    "neutral": {
+      "description": "No clear directional signal.",
+      "actions": ["hold"]
+    }
+  }
+}

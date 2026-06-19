@@ -1,0 +1,9 @@
+[
+  {
+    "pair": "TAO-USD",
+    "symbol": "TAO",
+    "cg_id": "bittensor",
+    "vs_currency": "usd",
+    "exchange": "coingecko"
+  }
+]
