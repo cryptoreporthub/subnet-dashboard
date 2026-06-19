@@ -8,7 +8,11 @@ from internal.council.mindmap_bridge import MindmapBridge
 from internal.council.judge.adversarial import AdversarialJudge
 from internal import freshness
 from internal.signals.signal_tracker import SignalTracker
-from internal.simivision.engine import SimiVisionEngine
+from internal.simivision.engine import (
+    SimiVisionEngine,
+    _load_selector_decisions,
+    _synthesize_decision,
+)
 
 app = Flask(__name__)
 
@@ -634,6 +638,53 @@ def get_recommendations():
     )
 
 
+def _build_trace_invalidation(decision, registry_item):
+    """Surface the conditions that would invalidate the current signal."""
+    action = decision.get("recommended_action", "hold") if decision else "hold"
+    is_overvalued = registry_item.get("is_overvalued", False)
+    risk_flags = registry_item.get("risk_flags", []) or []
+
+    if action == "accumulate":
+        base = "Accumulate thesis invalidates if emission drops below 1.0 or social mentions fall under 100."
+    elif action == "reduce":
+        base = "Reduce thesis invalidates if overvaluation flag clears and social mentions rebound above 1000."
+    else:
+        base = "Hold thesis invalidates if a strong directional signal emerges from experts or Brain."
+
+    parts = [base]
+    if is_overvalued:
+        parts.append("Overvaluation flag is active.")
+    if risk_flags:
+        parts.append(f"Risk flags: {', '.join(risk_flags)}.")
+    return " ".join(parts)
+
+
+def _build_trace_horizon(decision, registry_item):
+    """Return a human-readable time horizon for the signal."""
+    action = decision.get("recommended_action", "hold") if decision else "hold"
+    status = registry_item.get("status", "unknown")
+    if status == "deprecated":
+        return "Immediate exit horizon; subnet is deprecated."
+    if action == "accumulate":
+        return "Short-term entry horizon (1-2 epochs); watch for conviction confirmation."
+    if action == "reduce":
+        return "Immediate risk-management horizon; reassess each epoch."
+    return "Medium-term observation horizon (2-4 epochs); await directional clarity."
+
+
+def _build_trace_preferred_entry(decision, registry_item):
+    """Suggest a preferred entry strategy based on signal alignment."""
+    action = decision.get("recommended_action", "hold") if decision else "hold"
+    is_overvalued = registry_item.get("is_overvalued", False)
+    if is_overvalued:
+        return "Avoid fresh entry; wait for overvaluation flag to clear."
+    if action == "accumulate":
+        return "Scale in on strength; target weight aligned with Brain recommendation."
+    if action == "reduce":
+        return "Trim or hedge existing exposure; do not add at current levels."
+    return "Stay flat until consensus or Brain shifts direction."
+
+
 @app.route("/api/simivision", methods=["GET"])
 def get_simivision():
     """Top-3 SimiVision rich signal objects for the Legendary Edition spine."""
@@ -646,6 +697,94 @@ def get_simivision():
             "data": snapshot,
         }
     )
+
+
+@app.route("/api/simivision/<int:netuid>/trace", methods=["GET"])
+def get_simivision_trace(netuid):
+    """Deep trace for a single SimiVision signal: evidence, brain, judge, and economics."""
+    try:
+        engine = SimiVisionEngine()
+        signals = engine.build_signals()
+        signal = next((s for s in signals if s["netuid"] == netuid), None)
+        if signal is None:
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "netuid": netuid,
+                        "message": f"Subnet {netuid} not found in SimiVision registry.",
+                    }
+                ),
+                404,
+            )
+
+        registry = load_data("config/registry.json")
+        registry_item = registry.get(str(netuid), {})
+
+        decision = next(
+            (d for d in _load_selector_decisions() if d.get("subnet_id") == netuid),
+            None,
+        )
+        if decision is None:
+            decision = _synthesize_decision(netuid, registry_item)
+
+        expert_breakdown = decision.get("expert_breakdown", {})
+
+        recommendations = MindmapBridge().get_brain_recommendations()
+        brain_rec = recommendations.get("recommendations", {}).get(str(netuid), {})
+        brain_action = brain_rec.get("action", "hold")
+        selector_action = decision.get("recommended_action", "hold")
+        brain = {
+            "action": brain_action,
+            "target_weight": brain_rec.get("target_weight", 0.0),
+            "agreement": (
+                "aligned" if brain_action == selector_action else "divergent"
+            ),
+        }
+
+        judge_verdict = AdversarialJudge().judge_decision(decision, registry_item)
+
+        economics = {
+            "emission": registry_item.get("emission"),
+            "social_mentions": registry_item.get("social_mentions"),
+            "apy": registry_item.get("staking_data", {}).get("apy"),
+            "total_stake": registry_item.get("staking_data", {}).get("total_stake"),
+            "is_overvalued": registry_item.get("is_overvalued", False),
+            "risk_flags": registry_item.get("risk_flags", []) or [],
+        }
+
+        trace = {
+            "expert_breakdown": expert_breakdown,
+            "brain": brain,
+            "judge_verdict": judge_verdict,
+            "economics": economics,
+            "rationale": signal.get("rationale", ""),
+            "invalidation": _build_trace_invalidation(decision, registry_item),
+            "horizon": _build_trace_horizon(decision, registry_item),
+            "preferred_entry": _build_trace_preferred_entry(decision, registry_item),
+        }
+
+        return jsonify(
+            {
+                "status": "success",
+                "netuid": netuid,
+                "name": signal.get("name", registry_item.get("name", "Unknown")),
+                "signal": signal,
+                "trace": trace,
+            }
+        )
+    except Exception as e:
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "netuid": netuid,
+                    "message": f"Trace unavailable for subnet {netuid}.",
+                    "detail": str(e),
+                }
+            ),
+            503,
+        )
 
 
 @app.route("/api/mindmap/feedback", methods=["POST"])

@@ -114,3 +114,84 @@ def test_api_simivision_does_not_break_existing_signals(client):
     data = json.loads(response.data)
     assert data["status"] == "success"
     assert "summary" in data
+
+
+REQUIRED_TRACE_FIELDS = {
+    "expert_breakdown",
+    "brain",
+    "judge_verdict",
+    "economics",
+    "rationale",
+    "invalidation",
+    "horizon",
+    "preferred_entry",
+}
+
+
+def test_api_simivision_trace_shape(client):
+    """The trace endpoint returns the expected envelope and nested fields."""
+    response = client.get("/api/simivision/1/trace")
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data["status"] == "success"
+    assert data["netuid"] == 1
+    assert isinstance(data["name"], str)
+    assert data["name"] != "Unknown"
+    assert "signal" in data
+    assert "trace" in data
+
+    signal = data["signal"]
+    assert signal["netuid"] == 1
+    assert isinstance(signal["name"], str)
+
+    trace = data["trace"]
+    assert REQUIRED_TRACE_FIELDS.issubset(trace.keys())
+
+    assert set(trace["expert_breakdown"].keys()) >= {"quant", "hype", "contrarian"}
+    for expert in trace["expert_breakdown"].values():
+        assert "score" in expert
+
+    assert "action" in trace["brain"]
+    assert "target_weight" in trace["brain"]
+    assert "agreement" in trace["brain"]
+
+    assert "score" in trace["judge_verdict"]
+    assert "action" in trace["judge_verdict"]
+    assert "note" in trace["judge_verdict"]
+
+    econ = trace["economics"]
+    for key in ("emission", "social_mentions", "apy", "total_stake", "is_overvalued", "risk_flags"):
+        assert key in econ
+    assert isinstance(econ["risk_flags"], list)
+
+    assert isinstance(trace["rationale"], str)
+    assert isinstance(trace["invalidation"], str)
+    assert isinstance(trace["horizon"], str)
+    assert isinstance(trace["preferred_entry"], str)
+
+
+def test_api_simivision_trace_for_known_subnet(client):
+    """A subnet returned from /api/simivision should have a working trace endpoint."""
+    response = client.get("/api/simivision")
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    top = data["data"]["top"]
+    assert top, "No SimiVision signals returned to test trace endpoint"
+
+    for signal in top:
+        netuid = signal["netuid"]
+        trace_response = client.get(f"/api/simivision/{netuid}/trace")
+        assert trace_response.status_code == 200, f"Trace failed for netuid {netuid}"
+        trace_data = json.loads(trace_response.data)
+        assert trace_data["status"] == "success"
+        assert trace_data["netuid"] == netuid
+        assert trace_data["name"] == signal["name"]
+
+
+def test_api_simivision_trace_missing_subnet(client):
+    """Unknown netuids should return a graceful error without a 500."""
+    response = client.get("/api/simivision/99999/trace")
+    assert response.status_code in (404, 503)
+    data = json.loads(response.data)
+    assert data["status"] == "error"
+    assert "netuid" in data
