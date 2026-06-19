@@ -13,7 +13,9 @@ from internal.indicators.indicator_scheduler import IndicatorScheduler
 from internal.indicators.macd import compute_macd
 from internal.indicators.momentum import compute_momentum
 from internal.indicators.price_fetcher import (
-    _coingecko_id_for_subnet,
+    _fetch_geckoterminal_ohlcv,
+    _fetch_tmc_subnet_candles,
+    _price_sources_for_subnet,
     _synthetic_candles,
     fetch_ohlcv,
 )
@@ -42,14 +44,25 @@ def _make_candles(closes, highs=None, lows=None, volumes=None):
     return candles
 
 
-def test_coingecko_id_lookup_uses_mapping():
-    pairs = {"1": {"coingecko_id": "bittensor", "symbol": "TAO"}}
-    assert _coingecko_id_for_subnet("1", pairs) == "bittensor"
+def test_price_sources_default_to_taomarketcap():
+    pairs = {"5": {"symbol": "KAON"}}
+    sources = _price_sources_for_subnet("5", pairs)
+    assert sources[0]["source"] == "taomarketcap"
+    assert sources[0]["netuid"] == "5"
 
 
-def test_coingecko_id_unknown_falls_back():
-    pairs = {"1": {"coingecko_id": "unknown", "symbol": "SN99"}}
-    assert _coingecko_id_for_subnet("99", pairs) == "subnet-99"
+def test_price_sources_include_geckoterminal_fallback():
+    pairs = {
+        "5": {
+            "symbol": "KAON",
+            "geckoterminal": {"network": "bittensor", "pool": "0-5"},
+        }
+    }
+    sources = _price_sources_for_subnet("5", pairs)
+    assert sources[0]["source"] == "taomarketcap"
+    assert sources[1]["source"] == "geckoterminal"
+    assert sources[1]["network"] == "bittensor"
+    assert sources[-1]["source"] == "synthetic"
 
 
 def test_synthetic_candles_are_deterministic():
@@ -60,17 +73,140 @@ def test_synthetic_candles_are_deterministic():
     assert a[-1] == b[-1]
 
 
+def test_fetch_tmc_subnet_candles_scales_by_alpha_price(monkeypatch):
+    def fake_subnets():
+        return {"5": {"latest_snapshot": {"price": 0.5}}}
+
+    def fake_candles(days=1):
+        return [
+            {
+                "timestamp": "2024-01-01T00:00:00+00:00",
+                "open": 100,
+                "high": 110,
+                "low": 90,
+                "close": 105,
+                "volume": 1000,
+            },
+            {
+                "timestamp": "2024-01-01T01:00:00+00:00",
+                "open": 105,
+                "high": 115,
+                "low": 95,
+                "close": 110,
+                "volume": 2000,
+            },
+        ]
+
+    monkeypatch.setattr(
+        "internal.indicators.price_fetcher._fetch_tmc_subnets", fake_subnets
+    )
+    monkeypatch.setattr(
+        "internal.indicators.price_fetcher._fetch_tmc_candles", fake_candles
+    )
+
+    candles = _fetch_tmc_subnet_candles("5", days=1)
+    assert len(candles) == 2
+    assert candles[0]["close"] == 52.5
+    assert candles[0]["volume"] == 1000
+
+
+def test_fetch_geckoterminal_ohlcv_parses_response(monkeypatch):
+    import requests
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "data": {
+                    "attributes": {
+                        "ohlcv_list": [
+                            [1704067200, 1.0, 2.0, 0.5, 1.5, 100.0],
+                            [1704070800, 1.5, 2.5, 1.0, 2.0, 200.0],
+                        ]
+                    }
+                }
+            }
+
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: FakeResp())
+    candles = _fetch_geckoterminal_ohlcv("bittensor", "0-5", days=1)
+    assert len(candles) == 2
+    assert candles[0]["open"] == 1.0
+    assert candles[0]["close"] == 1.5
+
+
 def test_fetch_ohlcv_uses_cache(tmp_path):
     cache_path = tmp_path / "price_cache.json"
     pairs_path = tmp_path / "price_pairs.json"
-    json.dump({"1": {"coingecko_id": "unknown", "symbol": "SN1"}}, open(pairs_path, "w"))
+    json.dump({"1": {"symbol": "SN1"}}, open(pairs_path, "w"))
 
-    candles = fetch_ohlcv("1", days=2, use_cache=True, cache_path=str(cache_path))
+    candles = fetch_ohlcv(
+        "1", days=2, use_cache=True, cache_path=str(cache_path), pairs_path=str(pairs_path)
+    )
     assert len(candles) == 48
     assert cache_path.exists()
 
-    cached = fetch_ohlcv("1", days=2, use_cache=True, cache_path=str(cache_path))
+    cached = fetch_ohlcv(
+        "1", days=2, use_cache=True, cache_path=str(cache_path), pairs_path=str(pairs_path)
+    )
     assert cached == candles
+
+
+def test_fetch_ohlcv_tiered_fallback_to_geckoterminal(monkeypatch, tmp_path):
+    import requests
+
+    cache_path = tmp_path / "price_cache.json"
+    pairs_path = tmp_path / "price_pairs.json"
+    json.dump(
+        {
+            "1": {
+                "symbol": "SN1",
+                "geckoterminal": {"network": "bittensor", "pool": "0-1"},
+            }
+        },
+        open(pairs_path, "w"),
+    )
+
+    def fake_get(url, **kwargs):
+        if "taomarketcap" in url:
+
+            class Bad:
+                def raise_for_status(self):
+                    raise RuntimeError("TMC down")
+
+                def json(self):
+                    return {}
+
+            return Bad()
+
+        class Good:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {
+                    "data": {
+                        "attributes": {
+                            "ohlcv_list": [
+                            [1704067200, 1.0, 2.0, 0.5, 1.5, 100.0],
+                            [1704070800, 1.5, 2.5, 1.0, 2.0, 200.0],
+                        ]
+                        }
+                    }
+                }
+
+        return Good()
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    monkeypatch.setattr("internal.indicators.price_fetcher.USE_LIVE_PRICES", True)
+
+    candles = fetch_ohlcv(
+        "1", days=1, use_cache=True, cache_path=str(cache_path), pairs_path=str(pairs_path)
+    )
+    assert len(candles) == 2
+    cache = json.load(open(cache_path))
+    assert cache["1"]["source"] == "geckoterminal"
 
 
 def test_rsi_returns_neutral_for_balanced_prices():
@@ -152,7 +288,7 @@ def test_indicator_engine_run_cycle(tmp_path):
         {"1": {"emission": 2.0, "social_mentions": 2000, "is_overvalued": False, "status": "active"}},
         open(reg, "w"),
     )
-    json.dump({"1": {"coingecko_id": "unknown", "symbol": "SN1"}}, open(pairs, "w"))
+    json.dump({"1": {"symbol": "SN1"}}, open(pairs, "w"))
 
     engine = IndicatorEngine(
         registry_path=str(reg),
@@ -178,7 +314,7 @@ def test_indicator_scheduler_run_once(tmp_path):
         {"1": {"emission": 2.0, "social_mentions": 2000, "is_overvalued": False, "status": "active"}},
         open(reg, "w"),
     )
-    json.dump({"1": {"coingecko_id": "unknown", "symbol": "SN1"}}, open(pairs, "w"))
+    json.dump({"1": {"symbol": "SN1"}}, open(pairs, "w"))
 
     scheduler = IndicatorScheduler(
         refresh_minutes=15,
