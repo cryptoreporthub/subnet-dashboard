@@ -161,7 +161,13 @@ class IndicatorEngine:
 
     def _process_subnet(self, subnet_id: int, registry_item: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch candles and compute indicators for a single subnet."""
-        candles = fetch_ohlcv(str(subnet_id), pairs_path=self.price_pairs_path)
+        # Skip per-subnet price-cache writes during the bulk cycle; the cache
+        # is only used for freshness and is not read back by the engine, so
+        # rewriting the whole file 128 times is O(n^2) and can exceed Fly.io
+        # idle-stop windows before indicator_state.json is ever persisted.
+        candles = fetch_ohlcv(
+            str(subnet_id), pairs_path=self.price_pairs_path, use_cache=False
+        )
         if len(candles) < 30:
             raise RuntimeError(f"Insufficient candle data for subnet {subnet_id}")
 

@@ -82,7 +82,11 @@ def _ensure_background_sync():
     if app.config["ENABLE_BACKGROUND_SYNC"] and not app.config.get("TESTING"):
         freshness.start_background_sync(immediate=False)
         adversarial_scheduler.start_adversarial_scheduler(immediate=False)
-        indicator_scheduler.start_indicator_scheduler(immediate=False)
+        # Run the first indicator refresh immediately in a background thread.
+        # The full subnet sweep is now fast enough (<1s) that it can complete
+        # during the first request instead of waiting for a 1-minute timer that
+        # may be missed when Fly.io auto-stops an idle machine.
+        indicator_scheduler.start_indicator_scheduler(immediate=True)
 
 
 def _consensus_map():
@@ -130,6 +134,8 @@ def _freshness_meta(source: str = "registry") -> dict:
         info = freshness.signal_timeline_freshness()
     elif source == "price_cache":
         info = freshness.price_data_freshness()
+    elif source == "indicator_state":
+        info = freshness.indicator_state_freshness()
     else:
         info = freshness.source_freshness(source, 300)
     return {
@@ -845,7 +851,7 @@ def get_indicators():
     return jsonify(
         {
             "status": "success",
-            "freshness": _freshness_meta("price_cache"),
+            "freshness": _freshness_meta("indicator_state"),
             "data": state,
         }
     )
@@ -863,7 +869,7 @@ def get_indicators_for_subnet(subnet_id):
         {
             "status": "success",
             "subnet_id": subnet_id,
-            "freshness": _freshness_meta("price_cache"),
+            "freshness": _freshness_meta("indicator_state"),
             "data": per_subnet[str(subnet_id)],
         }
     )
@@ -877,7 +883,7 @@ def get_indicator_alerts():
     return jsonify(
         {
             "status": "success",
-            "freshness": _freshness_meta("price_cache"),
+            "freshness": _freshness_meta("indicator_state"),
             "data": alerts,
         }
     )
@@ -990,5 +996,5 @@ if __name__ == "__main__":
     if app.config["ENABLE_BACKGROUND_SYNC"] and not app.config.get("TESTING"):
         freshness.start_background_sync(immediate=False)
         adversarial_scheduler.start_adversarial_scheduler(immediate=False)
-        indicator_scheduler.start_indicator_scheduler(immediate=False)
+        indicator_scheduler.start_indicator_scheduler(immediate=True)
     app.run(host="0.0.0.0", port=port, debug=True)

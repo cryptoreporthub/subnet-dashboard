@@ -21,6 +21,7 @@ SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 WATCHLIST_PATH = os.environ.get("WATCHLIST_PATH", "config/watchlist.json")
 SIGNAL_TIMELINE_PATH = os.environ.get("SIGNAL_TIMELINE_PATH", "data/signal_timeline.json")
 PRICE_CACHE_PATH = os.environ.get("PRICE_CACHE_PATH", "data/price_cache.json")
+INDICATOR_STATE_PATH = os.environ.get("INDICATOR_STATE_PATH", "data/indicator_state.json")
 REMOTE_REGISTRY_URL = os.environ.get(
     "REMOTE_REGISTRY_URL",
     "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json",
@@ -196,12 +197,26 @@ def price_data_freshness(price_cache_path: str = PRICE_CACHE_PATH) -> Dict[str, 
     return source_freshness(price_cache_path, THRESHOLDS["price_cache"], newest)
 
 
+def indicator_state_freshness(indicator_state_path: str = INDICATOR_STATE_PATH) -> Dict[str, Any]:
+    """Freshness for the persisted technical indicator state."""
+    newest: Optional[str] = None
+    if os.path.exists(indicator_state_path):
+        try:
+            with open(indicator_state_path, "r") as f:
+                data = json.load(f)
+            newest = data.get("run_at")
+        except Exception:
+            pass
+    return source_freshness(indicator_state_path, THRESHOLDS["price_cache"], newest)
+
+
 def overall_freshness(
     registry_path: str = REGISTRY_PATH,
     soul_map_path: str = SOUL_MAP_PATH,
     watchlist_path: str = WATCHLIST_PATH,
     signal_timeline_path: str = SIGNAL_TIMELINE_PATH,
     price_cache_path: str = PRICE_CACHE_PATH,
+    indicator_state_path: str = INDICATOR_STATE_PATH,
 ) -> Dict[str, Any]:
     """Freshness snapshot for all tracked sources."""
     registry = registry_freshness(registry_path)
@@ -210,6 +225,7 @@ def overall_freshness(
     watchlist = watchlist_freshness(watchlist_path)
     signal_timeline = signal_timeline_freshness(signal_timeline_path)
     price_cache = price_data_freshness(price_cache_path)
+    indicator_state = indicator_state_freshness(indicator_state_path)
     any_stale = (
         registry["is_stale"]
         or soul_map["is_stale"]
@@ -217,6 +233,7 @@ def overall_freshness(
         or watchlist["is_stale"]
         or signal_timeline["is_stale"]
         or price_cache["is_stale"]
+        or indicator_state["is_stale"]
     )
     return {
         "overall": {
@@ -229,6 +246,7 @@ def overall_freshness(
         "watchlist": watchlist,
         "signal_timeline": signal_timeline,
         "price_cache": price_cache,
+        "indicator_state": indicator_state,
     }
 
 
