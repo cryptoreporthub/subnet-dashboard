@@ -21,6 +21,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from internal.council.judge.adversarial import AdversarialJudge
 from internal.council.mindmap_bridge import MindmapBridge
 from internal.freshness import registry_freshness, soul_map_freshness
 
@@ -164,7 +165,9 @@ def _synthesize_decision(netuid: int, registry_item: Dict[str, Any]) -> Dict[str
 
 
 def _compute_conviction(
-    decision: Dict[str, Any], registry_item: Dict[str, Any]
+    decision: Dict[str, Any],
+    registry_item: Dict[str, Any],
+    judge: Optional[AdversarialJudge] = None,
 ) -> float:
     """
     Compute a 0-100 conviction score from selector consensus and registry metrics.
@@ -175,6 +178,7 @@ def _compute_conviction(
     - social mention bonus: >1500 = 10, >1000 = 5
     - overvaluation penalty: -10 if overvalued
     - fractional tiebreaker: inverse emission_rank so lower ranks edge ahead
+    - adversarial boost/penalty when a judge verdict is available
     """
     consensus = decision.get("consensus_score", 0.5)
     base = min(100.0, max(0.0, consensus * 70.0))
@@ -205,6 +209,27 @@ def _compute_conviction(
         tiebreaker = min(0.99, 1.0 / rank)
 
     conviction = base + rank_bonus + social_bonus - penalty + tiebreaker
+
+    # Adversarial layer: validated decisions get a small boost, contradicted
+    # decisions get a penalty. This integrates learned outcomes into ranking.
+    if judge is not None:
+        verdict = judge.judge_decision(
+            decision,
+            {
+                "status": registry_item.get("status", "unknown"),
+                "emission": registry_item.get("emission", 0.0),
+                "social_mentions": social,
+                "is_overvalued": overvalued,
+            },
+            subnet_id=decision.get("subnet_id"),
+        )
+        label = verdict.get("outcome_label")
+        confidence = verdict.get("confidence", 0.5)
+        if label == "validated":
+            conviction += 3.0 * confidence
+        elif label == "contradicted":
+            conviction -= 5.0 * confidence
+
     return round(min(100.0, max(0.0, conviction)), 2)
 
 
@@ -306,6 +331,7 @@ def build_simivision_signal(
     registry_fresh: Dict[str, Any],
     soul_map_fresh: Dict[str, Any],
     source: str = "selector+council",
+    judge: Optional[AdversarialJudge] = None,
 ) -> Dict[str, Any]:
     """
     Build a single rich SimiVision signal object.
@@ -313,13 +339,13 @@ def build_simivision_signal(
     The subnet name is taken directly from registry_item["name"] with no
     runtime transformation, satisfying the canonical-name requirement.
     """
-    conviction = _compute_conviction(decision, registry_item)
+    conviction = _compute_conviction(decision, registry_item, judge=judge)
     status = _determine_status(conviction, registry_fresh, soul_map_fresh)
     delta, delta_value = _compute_delta(netuid, conviction, last_convictions)
     rationale = _build_rationale(decision, registry_item, conviction, status)
     freshness_ts = registry_fresh.get("last_updated") or soul_map_fresh.get("last_updated") or _now_iso()
 
-    return {
+    signal: Dict[str, Any] = {
         "netuid": netuid,
         "name": registry_item.get("name", "Unknown"),
         "rank": registry_item.get("emission_rank"),
@@ -333,6 +359,29 @@ def build_simivision_signal(
         "source": source,
         "status": status,
     }
+
+    # Attach adversarial intelligence when available.
+    if judge is not None:
+        verdict = judge.judge_decision(
+            decision,
+            {
+                "status": registry_item.get("status", "unknown"),
+                "emission": registry_item.get("emission", 0.0),
+                "social_mentions": registry_item.get("social_mentions", 0) or 0,
+                "is_overvalued": registry_item.get("is_overvalued", False),
+            },
+            subnet_id=netuid,
+        )
+        signal["judge_verdict"] = {
+            "score": verdict.get("score"),
+            "confidence": verdict.get("confidence"),
+            "outcome_label": verdict.get("outcome_label"),
+            "note": verdict.get("note"),
+        }
+        signal["expert_track_records"] = judge.get_expert_track_records()
+        signal["council_weights"] = judge.get_council_weights()
+
+    return signal
 
 
 class SimiVisionEngine:
@@ -352,9 +401,15 @@ class SimiVisionEngine:
         self,
         registry_path: str = REGISTRY_PATH,
         soul_map_path: str = SOUL_MAP_PATH,
+        judge: Optional[AdversarialJudge] = None,
     ):
         self.registry_path = registry_path
         self.soul_map_path = soul_map_path
+        self.judge = judge or AdversarialJudge(
+            persistence_path=soul_map_path,
+            registry_path=registry_path,
+            persist=False,
+        )
 
     def build_signals(self) -> List[Dict[str, Any]]:
         """Build a rich signal object for every subnet in the registry."""
@@ -387,6 +442,7 @@ class SimiVisionEngine:
                 registry_fresh=registry_fresh,
                 soul_map_fresh=soul_map_fresh,
                 source="selector+council" if netuid in decision_map else "registry",
+                judge=self.judge,
             )
             signals.append(signal)
 
@@ -449,8 +505,12 @@ class SimiVisionEngine:
                 "provenance_log": [
                     "Council selector aggregated quant, hype, and contrarian experts.",
                     "Conviction scored from consensus, emission rank, social volume, and overvaluation.",
+                    "Adversarial judge scored decisions against observed outcomes.",
+                    "Adaptive council weights updated from expert track records.",
                     "Canonical subnet names read directly from registry.json.",
                 ],
+                "council_weights": self.judge.get_council_weights(),
+                "expert_track_records": self.judge.get_expert_track_records(),
                 "error": None,
             },
         }

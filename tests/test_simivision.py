@@ -35,6 +35,8 @@ REQUIRED_META_FIELDS = {
     "selector_decisions",
     "fallback_used",
     "error",
+    "council_weights",
+    "expert_track_records",
 }
 
 
@@ -55,6 +57,10 @@ def test_api_simivision_shape(client):
     assert REQUIRED_META_FIELDS.issubset(meta.keys())
     assert isinstance(meta["provenance_log"], list)
     assert meta["system_status"] in {"Operative", "Dimmed", "Hibernating", "Error"}
+
+    assert set(meta["council_weights"].keys()) >= {"quant", "hype", "contrarian"}
+    assert all(0.0 <= w <= 1.0 for w in meta["council_weights"].values())
+    assert isinstance(meta["expert_track_records"], dict)
 
     top = snapshot["top"]
     assert isinstance(top, list)

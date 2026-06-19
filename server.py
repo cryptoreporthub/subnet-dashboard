@@ -7,6 +7,7 @@ from flask import Flask, jsonify, render_template, request
 from internal.council.mindmap_bridge import MindmapBridge
 from internal.council.judge.adversarial import AdversarialJudge
 from internal import freshness
+from internal import scheduler as adversarial_scheduler
 from internal.signals.signal_tracker import SignalTracker
 from internal.simivision.engine import (
     SimiVisionEngine,
@@ -78,6 +79,7 @@ def _ensure_background_sync():
     _background_sync_started = True
     if app.config["ENABLE_BACKGROUND_SYNC"] and not app.config.get("TESTING"):
         freshness.start_background_sync(immediate=False)
+        adversarial_scheduler.start_adversarial_scheduler(immediate=False)
 
 
 def _consensus_map():
@@ -742,7 +744,8 @@ def get_simivision_trace(netuid):
             ),
         }
 
-        judge_verdict = AdversarialJudge().judge_decision(decision, registry_item)
+        judge = AdversarialJudge()
+        judge_verdict = judge.judge_decision(decision, registry_item)
 
         economics = {
             "emission": registry_item.get("emission"),
@@ -762,6 +765,9 @@ def get_simivision_trace(netuid):
             "invalidation": _build_trace_invalidation(decision, registry_item),
             "horizon": _build_trace_horizon(decision, registry_item),
             "preferred_entry": _build_trace_preferred_entry(decision, registry_item),
+            "council_weights": judge.get_council_weights(),
+            "expert_track_records": judge.get_expert_track_records(),
+            "learning_trail": judge.get_learning_trail(limit=20),
         }
 
         return jsonify(
@@ -791,6 +797,33 @@ def get_simivision_trace(netuid):
 def post_feedback():
     feedback = request.get_json(silent=True)
     return jsonify({"status": "received", "feedback": feedback})
+
+
+@app.route("/api/simivision/learning-trail", methods=["GET"])
+def get_learning_trail():
+    """Return the adversarial learning trail and current council weights."""
+    judge = AdversarialJudge()
+    return jsonify(
+        {
+            "status": "success",
+            "data": {
+                "learning_trail": judge.get_learning_trail(limit=100),
+                "council_weights": judge.get_council_weights(),
+                "expert_track_records": judge.get_expert_track_records(),
+            },
+        }
+    )
+
+
+@app.route("/api/simivision/scheduler", methods=["GET"])
+def get_adversarial_scheduler():
+    """Return the adversarial background scheduler state."""
+    return jsonify(
+        {
+            "status": "success",
+            "data": adversarial_scheduler.get_adversarial_scheduler_state(),
+        }
+    )
 
 
 @app.route("/api/watchlist", methods=["GET"])
@@ -888,4 +921,5 @@ if __name__ == "__main__":
     # Background sync is disabled in testing to avoid thread interference.
     if app.config["ENABLE_BACKGROUND_SYNC"] and not app.config.get("TESTING"):
         freshness.start_background_sync(immediate=False)
+        adversarial_scheduler.start_adversarial_scheduler(immediate=False)
     app.run(host="0.0.0.0", port=port, debug=True)
