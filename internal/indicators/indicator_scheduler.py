@@ -14,10 +14,8 @@ MAX_BACKOFF_MINUTES = int(os.environ.get("INDICATOR_MAX_BACKOFF_MINUTES", "240")
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
 
-
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
 
 def _load_json(path: str) -> Dict[str, Any]:
     if os.path.exists(path):
@@ -28,7 +26,6 @@ def _load_json(path: str) -> Dict[str, Any]:
             return {}
     return {}
 
-
 def _save_json(path: str, data: Dict[str, Any]) -> None:
     dir_name = os.path.dirname(path)
     if dir_name and not os.path.exists(dir_name):
@@ -37,7 +34,6 @@ def _save_json(path: str, data: Dict[str, Any]) -> None:
     with open(temp_path, "w") as f:
         json.dump(data, f, indent=2)
     os.replace(temp_path, path)
-
 
 class IndicatorScheduler:
     """Background scheduler that periodically runs the IndicatorEngine."""
@@ -81,9 +77,13 @@ class IndicatorScheduler:
             self._consecutive_failures = 0
 
         if immediate:
-            self._tick()
+            # Run the first tick in a background thread so callers are not
+            # blocked while prices are fetched.
+            threading.Thread(target=self._tick, daemon=True).start()
         else:
-            self._schedule_next(self.refresh_minutes)
+            # First tick happens soon after deploy so the dashboard isn't empty
+            # for a full refresh interval; normal cadence resumes afterwards.
+            self._schedule_next(1)
 
         return {
             "started": True,
@@ -190,14 +190,12 @@ class IndicatorScheduler:
         data.setdefault("indicator_scheduler", {})["last_cycle"] = summary
         _save_json(self.soul_map_path, data)
 
-
 # ------------------------------------------------------------------------------
 # Module-level singleton for server.py
 # ------------------------------------------------------------------------------
 
 _scheduler: Optional[IndicatorScheduler] = None
 _scheduler_lock = threading.Lock()
-
 
 def start_indicator_scheduler(
     refresh_minutes: int = INDICATOR_REFRESH_MINUTES,
@@ -213,7 +211,6 @@ def start_indicator_scheduler(
             )
         return _scheduler.start(immediate=immediate)
 
-
 def stop_indicator_scheduler() -> Dict[str, Any]:
     """Stop the module-level indicator scheduler singleton."""
     global _scheduler
@@ -223,7 +220,6 @@ def stop_indicator_scheduler() -> Dict[str, Any]:
         result = _scheduler.stop()
         _scheduler = None
         return result
-
 
 def get_indicator_scheduler_state() -> Dict[str, Any]:
     """Return the state of the module-level indicator scheduler singleton."""
