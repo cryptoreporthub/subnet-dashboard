@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional
 
 from internal.council.judge.adversarial import AdversarialJudge
 from internal.council.mindmap_bridge import MindmapBridge
+from internal.council.signals.pathfinder import PathfinderWorker
 from internal.freshness import registry_freshness, soul_map_freshness
 
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
@@ -410,6 +411,7 @@ class SimiVisionEngine:
             registry_path=registry_path,
             persist=False,
         )
+        self.pathfinder = PathfinderWorker(soul_map_path=soul_map_path)
 
     def build_signals(self) -> List[Dict[str, Any]]:
         """Build a rich signal object for every subnet in the registry."""
@@ -433,6 +435,10 @@ class SimiVisionEngine:
             decision = decision_map.get(netuid)
             if decision is None:
                 decision = _synthesize_decision(netuid, item)
+
+            # Apply learned council weights so final signals reflect the
+            # adversarial intelligence layer rather than fixed selector weights.
+            decision = self.pathfinder.apply_weights(decision)
 
             signal = build_simivision_signal(
                 netuid=netuid,

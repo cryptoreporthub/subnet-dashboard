@@ -800,7 +800,7 @@ def post_feedback():
 
 
 @app.route("/api/simivision/learning-trail", methods=["GET"])
-def get_learning_trail():
+def get_simivision_learning_trail():
     """Return the adversarial learning trail and current council weights."""
     judge = AdversarialJudge()
     return jsonify(
@@ -811,6 +811,23 @@ def get_learning_trail():
                 "council_weights": judge.get_council_weights(),
                 "expert_track_records": judge.get_expert_track_records(),
             },
+        }
+    )
+
+
+@app.route("/api/learning-trail", methods=["GET"])
+def get_learning_trail():
+    """Return the SimiVision Learning Trail panel payload."""
+    from internal.council.signals.poller import build_learning_trail
+
+    return jsonify(
+        {
+            "status": "success",
+            "data": build_learning_trail(
+                refresh_minutes=adversarial_scheduler.get_adversarial_scheduler_state().get(
+                    "refresh_minutes"
+                )
+            ),
         }
     )
 
