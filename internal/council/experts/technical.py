@@ -1,80 +1,74 @@
-"""
-Technical Expert — brings indicator-layer signals into the Selector council.
+"""Technical Expert — 4th council expert driven by indicator signals."""
 
-Registers as the fourth expert alongside Quant, Hype, and Contrarian.
-"""
-
-import json
-import os
-from typing import Any, Dict, Optional
-
-INDICATOR_STATE_PATH = os.environ.get("INDICATOR_STATE_PATH", "data/indicator_state.json")
-PRICE_PAIRS_PATH = os.environ.get("PRICE_PAIRS_PATH", "config/price_pairs.json")
+from typing import Any, Dict, List, Optional
 
 
 class TechnicalExpert:
-    """Score subnets using technical indicator signals when a tracked pair matches."""
-
-    def __init__(self, state_path: str = INDICATOR_STATE_PATH):
-        self.state_path = state_path
-        self._pair_map = self._build_pair_map()
-
-    def _load_json(self, path: str) -> Any:
-        if os.path.exists(path):
-            try:
-                with open(path, "r") as f:
-                    return json.load(f)
-            except Exception:
-                return {}
-        return {}
-
-    def _build_pair_map(self) -> Dict[str, str]:
-        data = self._load_json(PRICE_PAIRS_PATH)
-        pairs = data if isinstance(data, list) else data.get("pairs", [])
-        mapping = {}
-        for item in pairs:
-            symbol = item.get("symbol", "").upper()
-            if symbol:
-                mapping[symbol] = item.get("pair", "")
-        return mapping
-
-    def _latest_indicator(self, pair: str) -> Optional[Dict[str, Any]]:
-        state = self._load_json(self.state_path)
-        return state.get("pairs", {}).get(pair)
+    """Reads indicator state from context and returns a 0-1 score."""
 
     def analyze(self, subnet_id: int, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Return a technical opinion for the subnet.
-
-        If the subnet name/symbol maps to a tracked indicator pair, the latest
-        signal drives the score. Otherwise returns a neutral hold signal.
-        """
         context = context or {}
-        name = context.get("name", "").upper()
-        symbol = context.get("symbol", "").upper()
+        indicator_state = context.get("indicator_state", {})
+        active_signals = indicator_state.get("active_signals", [])
 
-        pair = self._pair_map.get(symbol) or self._pair_map.get(name)
-        if pair:
-            indicator = self._latest_indicator(pair)
-            if indicator:
-                action = indicator.get("action", "hold")
-                conviction = indicator.get("conviction", 50.0)
-                return {
-                    "score": round(conviction / 100.0, 4),
-                    "signal": action,
-                    "pair": pair,
-                    "signal_type": indicator.get("signal_type", "neutral"),
-                    "metrics": {
-                        "rsi": indicator.get("indicators", {}).get("rsi"),
-                        "macd": indicator.get("indicators", {}).get("macd"),
-                        "momentum": indicator.get("indicators", {}).get("momentum"),
-                        "conviction": conviction,
-                    },
-                }
+        score = 0.5
+        signal = "hold"
+        reasons: List[str] = []
+
+        bullish_signals = {
+            "rsi_oversold_reversal",
+            "macd_bullish_cross",
+            "stochastic_oversold_reversal",
+            "williams_oversold_exit",
+            "momentum_shift",
+        }
+        bearish_signals = {
+            "rsi_overbought_reversal",
+            "macd_bearish_cross",
+        }
+
+        bullish_count = sum(1 for s in active_signals if s in bullish_signals)
+        bearish_count = sum(1 for s in active_signals if s in bearish_signals)
+
+        macd_hist = indicator_state.get("macd_histogram", 0) or 0
+        stochastic_k = indicator_state.get("stochastic_k", 50) or 50
+
+        if bullish_count > 0:
+            score = 0.7 + min(0.2, bullish_count * 0.05)
+            signal = "buy"
+            reasons.append(f"{bullish_count} bullish indicator signal(s)")
+        if bearish_count > 0:
+            score = 0.3 - min(0.2, bearish_count * 0.05)
+            signal = "sell"
+            reasons.append(f"{bearish_count} bearish indicator signal(s)")
+
+        if macd_hist > 0:
+            score += 0.05
+            reasons.append("positive MACD histogram")
+        elif macd_hist < 0:
+            score -= 0.05
+            reasons.append("negative MACD histogram")
+
+        if stochastic_k < 20:
+            score += 0.05
+            reasons.append("stochastic oversold")
+        elif stochastic_k > 80:
+            score -= 0.05
+            reasons.append("stochastic overbought")
+
+        score = round(min(1.0, max(0.0, score)), 4)
 
         return {
-            "score": 0.5,
-            "signal": "hold",
-            "pair": pair,
-            "signal_type": "neutral",
-            "metrics": {"note": "no tracked indicator pair for this subnet"},
+            "expert": "technical",
+            "subnet_id": subnet_id,
+            "score": score,
+            "signal": signal,
+            "metrics": {
+                "active_signals": active_signals,
+                "bullish_count": bullish_count,
+                "bearish_count": bearish_count,
+                "macd_histogram": macd_hist,
+                "stochastic_k": stochastic_k,
+                "reasons": reasons,
+            },
         }

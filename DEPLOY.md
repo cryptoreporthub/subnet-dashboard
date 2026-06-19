@@ -21,9 +21,15 @@ The dashboard will be available at `http://127.0.0.1:5000`.
 | `ENABLE_BACKGROUND_SYNC` | `true` | Start the freshness and adversarial background loops. Set to `false` for tests or one-off CLI usage. |
 | `REFRESH_MINUTES` | `15` | How often the adversarial scheduler evaluates new outcomes. |
 | `MAX_BACKOFF_MINUTES` | `240` | Maximum scheduler backoff after repeated failures. |
+| `INDICATOR_REFRESH_MINUTES` | `15` | How often the indicator scheduler fetches prices and recomputes signals. |
+| `INDICATOR_MAX_BACKOFF_MINUTES` | `240` | Maximum indicator scheduler backoff after repeated failures. |
+| `PRICE_PAIRS_PATH` | `config/price_pairs.json` | CoinGecko id mapping for subnet tokens. |
+| `PRICE_CACHE_PATH` | `data/price_cache.json` | Cached OHLCV candles to avoid rate limits. |
+| `PRICE_CACHE_TTL_SECONDS` | `300` | TTL for cached price data. |
 | `PROTOCOLS_PATH` | `config/protocols.json` | Protocol watchlist configuration. |
 | `REGISTRY_PATH` | `config/registry.json` | Subnet registry data source. |
 | `SOUL_MAP_PATH` | `data/soul_map.json` | Persistence file for verdicts, weights, and scheduler state. |
+| `SIGNAL_TYPES_PATH` | `config/signal_types.json` | Signal taxonomy and freshness half-lives. |
 
 ## Production deployment
 
@@ -51,6 +57,28 @@ The scheduler runs in a background thread and repeatedly:
 
 On failure the scheduler uses exponential backoff (starting at `REFRESH_MINUTES` and capped at `MAX_BACKOFF_MINUTES`).
 
+## Technical indicator scheduler
+
+The indicator scheduler (`internal/indicators/indicator_scheduler.py`) runs the `IndicatorEngine` on a background thread:
+
+1. Fetches OHLCV candles from CoinGecko for mapped subnet tokens.
+2. Falls back to deterministic synthetic candles for unmapped subnets.
+3. Computes RSI, MACD, momentum, stochastic, and Williams %R.
+4. Detects crossover events and emits structured signals into `SignalTracker`.
+5. Feeds indicator conviction to the 4th council expert (`TechnicalExpert`).
+6. Logs indicator state and judge feedback to the Soul-Map learning loop.
+
+API endpoints expose the current state:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/indicators` | Latest indicator state for all subnets. |
+| `GET /api/indicators/<netuid>` | Indicator state for a single subnet. |
+| `GET /api/indicators/alerts` | Active crossover alerts. |
+| `GET /api/indicators/scheduler` | Indicator scheduler health and backoff state. |
+
+On failure the scheduler backs off using `INDICATOR_REFRESH_MINUTES` and `INDICATOR_MAX_BACKOFF_MINUTES`.
+
 ### Disable in tests
 
 Set `ENABLE_BACKGROUND_SYNC=false` or `app.config["TESTING"] = True` to prevent the scheduler from starting automatically.
@@ -62,7 +90,11 @@ Set `ENABLE_BACKGROUND_SYNC=false` or `app.config["TESTING"] = True` to prevent 
 | `GET /api/simivision` | Top SimiVision signals enriched with council weights and expert track records. |
 | `GET /api/simivision/<netuid>/trace` | Deep trace for a single signal including judge verdict and learning trail. |
 | `GET /api/simivision/learning-trail` | Global learning trail, council weights, and expert track records. |
-| `GET /api/simivision/scheduler` | Current scheduler state, refresh interval, and backoff status. |
+| `GET /api/simivision/scheduler` | Adversarial scheduler state, refresh interval, and backoff status. |
+| `GET /api/indicators` | Latest indicator state for all subnets. |
+| `GET /api/indicators/<netuid>` | Indicator state for a single subnet. |
+| `GET /api/indicators/alerts` | Active crossover alerts. |
+| `GET /api/indicators/scheduler` | Indicator scheduler health and backoff state. |
 
 ## Testing
 
@@ -83,6 +115,7 @@ Run a specific module:
 ```bash
 pytest tests/test_adversarial_layer.py -q
 pytest tests/test_simivision.py -q
+pytest tests/test_indicators.py -q
 ```
 
 ## Data persistence

@@ -1,25 +1,55 @@
 {
-  "version": "1.0.0",
   "signal_types": {
-    "momentum": {
-      "description": "Price is moving with sustained directional strength.",
-      "actions": ["accumulate", "reduce"]
+    "rsi_crossover": {
+      "half_life_hours": 24,
+      "description": "RSI threshold crossover (oversold/overbought reversal)",
+      "default_direction": "bullish"
     },
-    "mean_reversion": {
-      "description": "Price has overextended and is expected to revert toward a mean.",
-      "actions": ["accumulate", "reduce"]
+    "macd_cross": {
+      "half_life_hours": 48,
+      "description": "MACD bullish/bearish cross",
+      "default_direction": "neutral"
     },
-    "breakout": {
-      "description": "Price crossed a key moving-average boundary or MACD signal line.",
-      "actions": ["accumulate", "reduce"]
+    "momentum_shift": {
+      "half_life_hours": 12,
+      "description": "Rate of change zero-cross",
+      "default_direction": "neutral"
     },
-    "trend": {
-      "description": "Price aligned with a medium-term trend regime.",
-      "actions": ["hold", "accumulate", "reduce"]
+    "stochastic_reversal": {
+      "half_life_hours": 8,
+      "description": "Stochastic oversold/overbought reversal",
+      "default_direction": "bullish"
     },
-    "neutral": {
-      "description": "No clear directional signal.",
-      "actions": ["hold"]
+    "whale_accumulation": {
+      "half_life_hours": 72,
+      "description": "Whale wallet accumulation detected",
+      "default_direction": "bullish"
+    },
+    "social_sentiment": {
+      "half_life_hours": 6,
+      "description": "Social media sentiment shift",
+      "default_direction": "neutral"
+    },
+    "emission_change": {
+      "half_life_hours": 168,
+      "description": "Emission curve change",
+      "default_direction": "neutral"
+    },
+    "funding_divergence": {
+      "half_life_hours": 24,
+      "description": "Funding rate divergence",
+      "default_direction": "neutral"
+    },
+    "onchain_flow": {
+      "half_life_hours": 48,
+      "description": "On-chain flow anomaly",
+      "default_direction": "neutral"
     }
+  },
+  "freshness_categories": {
+    "fresh": {"min_freshness": 0.7},
+    "fading": {"min_freshness": 0.3},
+    "stale": {"min_freshness": 0.1},
+    "dead": {"min_freshness": 0.0}
   }
 }

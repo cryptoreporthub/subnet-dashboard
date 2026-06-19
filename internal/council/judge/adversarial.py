@@ -22,8 +22,8 @@ class AdversarialJudge:
     with verdicts, expert track records, and adaptive council weights.
     """
 
-    DEFAULT_WEIGHTS = {"quant": 0.4, "hype": 0.3, "contrarian": 0.3}
-    EXPERT_NAMES = ("quant", "hype", "contrarian")
+    DEFAULT_WEIGHTS = {"quant": 0.3, "hype": 0.25, "contrarian": 0.2, "technical": 0.25}
+    EXPERT_NAMES = ("quant", "hype", "contrarian", "technical")
 
     def __init__(
         self,
@@ -180,6 +180,7 @@ class AdversarialJudge:
             "note": note,
             "outcome_label": outcome_label,
             "expert_contributions": expert_contributions,
+            "indicator_context": decision.get("indicator_context"),
             "timestamp": self._now_iso(),
         }
 

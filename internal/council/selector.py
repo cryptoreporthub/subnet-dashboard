@@ -2,11 +2,12 @@
 Daily Rotation Engine (The Selector)
 
 Acts as the "Daily Rotation Engine" that interfaces between the Experts
-(quant.py, hype.py, contrarian.py, technical.py) and the Orchestrator (orchestrator.py).
+(quant.py, hype.py, contrarian.py) and the Orchestrator (orchestrator.py).
 Integrates the Mindmap feedback loop interface to track daily output
 against the Brain's recommendations.
 """
 
+import os
 from typing import Any, Dict, List, Optional
 from internal.council.experts.quant import QuantExpert
 from internal.council.experts.hype import HypeExpert
@@ -14,42 +15,47 @@ from internal.council.experts.contrarian import ContrarianExpert
 from internal.council.experts.technical import TechnicalExpert
 from internal.council.mindmap_bridge import MindmapBridge
 
+# Default weights: quant 0.3, hype 0.25, contrarian 0.2, technical 0.25
+DEFAULT_WEIGHTS = {
+    "quant": float(os.environ.get("SELECTOR_WEIGHT_QUANT", "0.3")),
+    "hype": float(os.environ.get("SELECTOR_WEIGHT_HYPE", "0.25")),
+    "contrarian": float(os.environ.get("SELECTOR_WEIGHT_CONTRARIAN", "0.2")),
+    "technical": float(os.environ.get("SELECTOR_WEIGHT_TECHNICAL", "0.25")),
+}
+
+
 class Selector:
     """
     Daily Rotation Engine (The Selector)
-    
+
     Coordinates expert opinions, structures decision payloads for the Orchestrator,
     and tracks daily output against the Brain's recommendations via the Mindmap feedback loop.
     """
-    def __init__(self, mindmap_bridge: Optional[MindmapBridge] = None):
+    def __init__(self, mindmap_bridge: Optional[MindmapBridge] = None, weights: Optional[Dict[str, float]] = None):
         self.quant_expert = QuantExpert()
         self.hype_expert = HypeExpert()
         self.contrarian_expert = ContrarianExpert()
         self.technical_expert = TechnicalExpert()
         self.mindmap_bridge = mindmap_bridge or MindmapBridge()
+        self.weights = weights or DEFAULT_WEIGHTS.copy()
         self.daily_output_history: List[Dict[str, Any]] = []
 
     def get_expert_opinions(self, subnet_id: int, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Queries Quant, Hype, Contrarian, and Technical experts for their analysis on a given subnet.
+        Queries Quant, Hype, and Contrarian experts for their analysis on a given subnet.
         
         Args:
             subnet_id (int): The ID of the subnet to analyze.
             context (dict, optional): Additional context for analysis.
             
         Returns:
-            dict: A dictionary containing opinions from all four experts.
+            dict: A dictionary containing opinions from all three experts.
         """
-        # Enrich context with subnet name for symbol/pair matching in TechnicalExpert.
-        if context is None:
-            context = {}
-        context.setdefault("subnet_id", subnet_id)
-        
         quant_opinion = self.quant_expert.analyze(subnet_id, context)
         hype_opinion = self.hype_expert.analyze(subnet_id, context)
         contrarian_opinion = self.contrarian_expert.analyze(subnet_id, context)
         technical_opinion = self.technical_expert.analyze(subnet_id, context)
-        
+
         return {
             "quant": quant_opinion,
             "hype": hype_opinion,
@@ -68,20 +74,20 @@ class Selector:
         Returns:
             dict: Structured decision payload.
         """
-        quant_score = expert_opinions["quant"].get("score", 0.5)
-        hype_score = expert_opinions["hype"].get("score", 0.5)
-        contrarian_score = expert_opinions["contrarian"].get("score", 0.5)
-        technical_score = expert_opinions["technical"].get("score", 0.5)
-        
-        # Calculate a weighted consensus score
-        # Quant: 35%, Hype: 25%, Contrarian: 25%, Technical: 15%
+        quant_score = expert_opinions.get("quant", {}).get("score", 0.5)
+        hype_score = expert_opinions.get("hype", {}).get("score", 0.5)
+        contrarian_score = expert_opinions.get("contrarian", {}).get("score", 0.5)
+        technical_score = expert_opinions.get("technical", {}).get("score", 0.5)
+
+        # Calculate a weighted consensus score using configurable weights.
+        w = self.weights
         consensus_score = (
-            quant_score * 0.35
-            + hype_score * 0.25
-            + contrarian_score * 0.25
-            + technical_score * 0.15
+            quant_score * w.get("quant", 0.3)
+            + hype_score * w.get("hype", 0.25)
+            + contrarian_score * w.get("contrarian", 0.2)
+            + technical_score * w.get("technical", 0.25)
         )
-        
+
         # Determine recommended action based on consensus score
         if consensus_score >= 0.75:
             action = "accumulate"
@@ -89,7 +95,7 @@ class Selector:
             action = "reduce"
         else:
             action = "hold"
-            
+
         return {
             "subnet_id": subnet_id,
             "consensus_score": round(consensus_score, 4),
@@ -111,9 +117,8 @@ class Selector:
                 },
                 "technical": {
                     "score": technical_score,
-                    "signal": expert_opinions["technical"].get("signal", "hold"),
-                    "signal_type": expert_opinionssiS["technical"].get("signal_type", "neutral"),
-                    "metrics": expert_opinions["technical"].get("metrics", {})
+                    "signal": expert_opinions.get("technical", {}).get("signal", "hold"),
+                    "metrics": expert_opinions.get("technical", {}).get("metrics", {})
                 }
             }
         }
@@ -175,9 +180,6 @@ class Selector:
                 info = registry.get(str(sub_id))
                 if info:
                     context_map[sub_id] = {
-                        "name": info.get("name", ""),
-                        "symbol": info.get("symbol", ""),
-                        "subnet_id": sub_id,
                         "emission": info.get("emission", 0.0),
                         "social_mentions": info.get("social_mentions", 0),
                         "is_overvalued": info.get("is_overvalued", False)
