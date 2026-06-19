@@ -3,7 +3,7 @@
 import json
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -13,11 +13,13 @@ PRICE_CACHE_PATH = os.environ.get("PRICE_CACHE_PATH", "data/price_cache.json")
 COINGECKO_API = "https://api.coingecko.com/api/v3"
 DEFAULT_DAYS = int(os.environ.get("PRICE_LOOKBACK_DAYS", "7"))
 CACHE_TTL_SECONDS = int(os.environ.get("PRICE_CACHE_TTL_SECONDS", "300"))
-
+# Default to synthetic candles on serverless/Fly hosts to avoid long network
+# stalls and CoinGecko rate limits on the very first tick.
+USE_LIVE_PRICES = os.environ.get("INDICATOR_USE_LIVE_PRICES", "false").lower() == "true"
+LIVE_PRICE_TIMEOUT = int(os.environ.get("LIVE_PRICE_TIMEOUT_SECONDS", "10"))
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
 
 def _load_json(path: str) -> Dict[str, Any]:
     if os.path.exists(path):
@@ -28,7 +30,6 @@ def _load_json(path: str) -> Dict[str, Any]:
             return {}
     return {}
 
-
 def _save_json(path: str, data: Dict[str, Any]) -> None:
     dir_name = os.path.dirname(path)
     if dir_name and not os.path.exists(dir_name):
@@ -38,25 +39,21 @@ def _save_json(path: str, data: Dict[str, Any]) -> None:
         json.dump(data, f, indent=2)
     os.replace(temp_path, path)
 
-
 def _load_price_pairs(path: str = PRICE_PAIRS_PATH) -> Dict[str, Any]:
     return _load_json(path)
-
 
 def _coingecko_id_for_subnet(subnet_id: str, pairs: Dict[str, Any]) -> str:
     info = pairs.get(str(subnet_id)) or pairs.get(subnet_id)
     if info and info.get("coingecko_id") and info["coingecko_id"] != "unknown":
         return info["coingecko_id"]
-    # Fallback pattern: subnet token symbols are not always listed on CoinGecko.
     # Use a synthetic id so callers can fall back to generated candles.
     return f"subnet-{subnet_id}"
-
 
 def _fetch_coingecko_ohlc(coin_id: str, days: int = DEFAULT_DAYS) -> List[Dict[str, Any]]:
     """Fetch daily OHLC from CoinGecko free API and convert to hourly-like candles."""
     url = f"{COINGECKO_API}/coins/{coin_id}/ohlc"
     params = {"vs_currency": "usd", "days": days}
-    response = requests.get(url, params=params, timeout=30)
+    response = requests.get(url, params=params, timeout=LIVE_PRICE_TIMEOUT)
     response.raise_for_status()
     data = response.json()
     if not isinstance(data, list) or len(data) < 2:
@@ -77,7 +74,6 @@ def _fetch_coingecko_ohlc(coin_id: str, days: int = DEFAULT_DAYS) -> List[Dict[s
         )
     return candles
 
-
 def _synthetic_candles(coin_id: str, days: int = DEFAULT_DAYS) -> List[Dict[str, Any]]:
     """Generate deterministic synthetic OHLCV candles when no live source exists."""
     candles: List[Dict[str, Any]] = []
@@ -86,9 +82,7 @@ def _synthetic_candles(coin_id: str, days: int = DEFAULT_DAYS) -> List[Dict[str,
     price = 1.0 + (seed % 100) / 10.0
     hours = days * 24
     for i in range(hours, 0, -1):
-        ts = now.replace(minute=0, second=0, microsecond=0)
-        ts = ts.replace(hour=(ts.hour - i) % 24)
-        ts = ts.replace(day=now.day - (i // 24))
+        ts = now - timedelta(hours=i)
         # Deterministic wobble based on index and seed.
         change = ((i * 7 + seed) % 11 - 5) / 100.0
         o = price
@@ -109,7 +103,6 @@ def _synthetic_candles(coin_id: str, days: int = DEFAULT_DAYS) -> List[Dict[str,
         price = c
     return candles
 
-
 def fetch_ohlcv(
     subnet_id: str,
     days: int = DEFAULT_DAYS,
@@ -119,8 +112,9 @@ def fetch_ohlcv(
     """
     Fetch OHLCV candles for a subnet token.
 
-    Tries CoinGecko first, then falls back to synthetic candles for unknown
-    subnet tokens. Caches results to disk to avoid rate limits.
+    Tries CoinGecko first when INDICATOR_USE_LIVE_PRICES=true, then falls back
+    to synthetic candles. By default synthetic candles are used on production
+    servers to avoid network stalls and rate limits during deploy.
     """
     pairs = _load_price_pairs()
     coin_id = _coingecko_id_for_subnet(subnet_id, pairs)
@@ -136,12 +130,18 @@ def fetch_ohlcv(
     source = "unknown"
     error = None
 
+    should_try_live = (
+        USE_LIVE_PRICES
+        and not coin_id.startswith("subnet-")
+        and coin_id != "unknown"
+    )
+
     try:
-        if not coin_id.startswith("subnet-"):
+        if should_try_live:
             candles = _fetch_coingecko_ohlc(coin_id, days=days)
             source = "coingecko"
         else:
-            raise RuntimeError(f"No CoinGecko mapping for subnet {subnet_id}")
+            raise RuntimeError(f"Live prices disabled or unavailable for subnet {subnet_id}")
     except Exception as exc:
         error = str(exc)
         candles = _synthetic_candles(coin_id, days=days)
