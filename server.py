@@ -532,6 +532,12 @@ def _build_simivision_choices(registry, decisions, recommendations, feedback, br
             except Exception:
                 pass
 
+    if bridge is not None:
+        try:
+            bridge.log_simivision_picks(choices)
+        except Exception:
+            pass
+
     return {
         "date": datetime.now().strftime("%Y-%m-%d"),
         "choices": choices,
