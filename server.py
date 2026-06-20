@@ -80,9 +80,10 @@ def _ensure_background_sync():
         return
     _background_sync_started = True
     if app.config["ENABLE_BACKGROUND_SYNC"] and not app.config.get("TESTING"):
-        freshness.start_background_sync(immediate=False)
-        adversarial_scheduler.start_adversarial_scheduler(immediate=False)
-        indicator_scheduler.start_indicator_scheduler(immediate=False)
+        freshness.merge_remote_registry()
+        freshness.start_background_sync(immediate=True)
+        indicator_scheduler.start_indicator_scheduler(immediate=True)
+        adversarial_scheduler.start_adversarial_scheduler(immediate=True)
 
 
 def _consensus_map():
