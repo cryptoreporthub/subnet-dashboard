@@ -516,8 +516,7 @@ def _build_simivision_choices(registry, decisions, recommendations, feedback, br
                 feedback_boost = bridge.get_simivision_feedback_boost(decision["subnet_id"])
             except Exception:
                 feedback_boost = 0.0
-        boost = bridge.get_simivision_feedback_boost() if bridge is not None else 0.0
-        choice = _build_choice(registry, recs, decision, judge, feedback_boost=boost)
+        choice = _build_choice(registry, recs, decision, judge, feedback_boost=feedback_boost)
         choice["feedback_boost"] = feedback_boost
         choices.append(choice)
 
