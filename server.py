@@ -541,6 +541,7 @@ def _build_simivision_choices(registry, decisions, recommendations, feedback, br
     }
 
 
+
 def _summarize_registry(data):
     """Build the dashboard summary/highlights payload from registry data."""
     subnets = list(data.values())
@@ -718,27 +719,22 @@ def index():
 
     freshness_state = freshness.overall_freshness()
 
-    # SimiVision: isolate failures from Brain / soul-map reads so the rest of
-    # the homepage still renders.
+    # Load Brain recommendations for the template.
     recommendations = {"recommendations": {}}
-    simivision = None
     try:
         recommendations = bridge.get_brain_recommendations()
-        soul_map = load_data("data/soul_map.json")
-        last_output = soul_map.get("soul_map_state", {}).get("last_selector_output", {})
-        feedback = soul_map.get("feedback_logs", [None])[-1]
-        simivision = _build_simivision_choices(
-            data,
-            last_output.get("decisions", []),
-            recommendations,
-            feedback,
-            bridge=bridge,
-        )
-    except Exception as exc:
-        simivision = _empty_simivision(error=str(exc))
+    except Exception:
+        pass
 
     watchlist = _load_watchlist()
     signal_timeline = _signal_tracker.get_timeline()
+    # SimiVision Legendary Edition: wrapped in try/except so the homepage never 500s.
+    try:
+        simivision_engine = SimiVisionEngine()
+        simivision = simivision_engine.safe_snapshot(n=3)
+    except Exception:
+        simivision = SimiVisionEngine().safe_snapshot(n=3)
+
     return render_template(
         "index.html",
         summary=summary_payload,
@@ -975,41 +971,65 @@ def get_recommendations():
     )
 
 
+def _build_trace_invalidation(decision, registry_item):
+    """Surface the conditions that would invalidate the current signal."""
+    action = decision.get("recommended_action", "hold") if decision else "hold"
+    is_overvalued = registry_item.get("is_overvalued", False)
+    risk_flags = registry_item.get("risk_flags", []) or []
+
+    if action == "accumulate":
+        base = "Accumulate thesis invalidates if emission drops below 1.0 or social mentions fall under 100."
+    elif action == "reduce":
+        base = "Reduce thesis invalidates if overvaluation flag clears and social mentions rebound above 1000."
+    else:
+        base = "Hold thesis invalidates if a strong directional signal emerges from experts or Brain."
+
+    parts = [base]
+    if is_overvalued:
+        parts.append("Overvaluation flag is active.")
+    if risk_flags:
+        parts.append(f"Risk flags: {', '.join(risk_flags)}.")
+    return " ".join(parts)
+
+
+def _build_trace_horizon(decision, registry_item):
+    """Return a human-readable time horizon for the signal."""
+    action = decision.get("recommended_action", "hold") if decision else "hold"
+    status = registry_item.get("status", "unknown")
+    if status == "deprecated":
+        return "Immediate exit horizon; subnet is deprecated."
+    if action == "accumulate":
+        return "Short-term entry horizon (1-2 epochs); watch for conviction confirmation."
+    if action == "reduce":
+        return "Immediate risk-management horizon; reassess each epoch."
+    return "Medium-term observation horizon (2-4 epochs); await directional clarity."
+
+
+def _build_trace_preferred_entry(decision, registry_item):
+    """Suggest a preferred entry strategy based on signal alignment."""
+    action = decision.get("recommended_action", "hold") if decision else "hold"
+    is_overvalued = registry_item.get("is_overvalued", False)
+    if is_overvalued:
+        return "Avoid fresh entry; wait for overvaluation flag to clear."
+    if action == "accumulate":
+        return "Scale in on strength; target weight aligned with Brain recommendation."
+    if action == "reduce":
+        return "Trim or hedge existing exposure; do not add at current levels."
+    return "Stay flat until consensus or Brain shifts direction."
+
+
 @app.route("/api/simivision", methods=["GET"])
 def get_simivision():
-    """Top-3 SimiVision choices for today with derived actionable fields.
-
-    Failures are caught and returned as a transparent empty state so the UI
-    can render the pending/error placeholder without losing context.
-    """
-    try:
-        soul_map = load_data("data/soul_map.json")
-        last_output = soul_map.get("soul_map_state", {}).get("last_selector_output", {})
-        recommendations = bridge.get_brain_recommendations()
-        feedback = soul_map.get("feedback_logs", [None])[-1]
-        registry = load_data("config/registry.json")
-        simivision = _build_simivision_choices(
-            registry,
-            last_output.get("decisions", []),
-            recommendations,
-            feedback,
-            bridge=bridge,
-        )
-        return jsonify(
-            {
-                "status": "success",
-                "freshness": _freshness_meta("soul_map"),
-                "data": simivision,
-            }
-        )
-    except Exception as exc:
-        return jsonify(
-            {
-                "status": "success",
-                "freshness": _freshness_meta("soul_map"),
-                "data": _empty_simivision(error=str(exc)),
-            }
-        )
+    """Top-3 SimiVision rich signal objects for the Legendary Edition spine."""
+    engine = SimiVisionEngine()
+    snapshot = engine.safe_snapshot(n=3)
+    return jsonify(
+        {
+            "status": "success",
+            "freshness": snapshot["meta"]["freshness"],
+            "data": snapshot,
+        }
+    )
 
 
 @app.route("/api/mindmap/feedback", methods=["POST"])
@@ -1132,8 +1152,14 @@ def get_simivision_trace(netuid):
         )
 
 
+@app.route("/api/mindmap/feedback", methods=["POST"])
+def post_feedback():
+    feedback = request.get_json(silent=True)
+    return jsonify({"status": "received", "feedback": feedback})
+
+
 @app.route("/api/simivision/learning-trail", methods=["GET"])
-def get_learning_trail():
+def get_simivision_learning_trail():
     """Return the adversarial learning trail and current council weights."""
     judge = AdversarialJudge()
     return jsonify(
@@ -1144,6 +1170,23 @@ def get_learning_trail():
                 "council_weights": judge.get_council_weights(),
                 "expert_track_records": judge.get_expert_track_records(),
             },
+        }
+    )
+
+
+@app.route("/api/learning-trail", methods=["GET"])
+def get_learning_trail():
+    """Return the SimiVision Learning Trail panel payload."""
+    from internal.council.signals.poller import build_learning_trail
+
+    return jsonify(
+        {
+            "status": "success",
+            "data": build_learning_trail(
+                refresh_minutes=adversarial_scheduler.get_adversarial_scheduler_state().get(
+                    "refresh_minutes"
+                )
+            ),
         }
     )
 
@@ -1311,4 +1354,5 @@ if __name__ == "__main__":
     # Background sync is disabled in testing to avoid thread interference.
     if app.config["ENABLE_BACKGROUND_SYNC"] and not app.config.get("TESTING"):
         freshness.start_background_sync(immediate=False)
+        adversarial_scheduler.start_adversarial_scheduler(immediate=False)
     app.run(host="0.0.0.0", port=port, debug=True)

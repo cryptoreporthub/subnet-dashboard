@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/simivision.css') }}">
   <style>
     :root {
       --bg-base: #060914;
@@ -290,34 +291,59 @@
       position: relative;
     }
 
-    /* SimiVision landing section */
-    .simivision-section {
-      position: relative;
-      background: linear-gradient(180deg, rgba(52, 211, 153, 0.08) 0%, var(--bg-base) 100%);
-      border: 1px solid rgba(52, 211, 153, 0.25);
-      border-radius: var(--border-radius-card);
-      padding: var(--space-5);
-      box-shadow: var(--shadow-card), 0 0 60px rgba(52, 211, 153, 0.18);
-      overflow: hidden;
-      margin-bottom: var(--space-7);
+    /* SimiVision Legendary Edition — neural command spine */
+    :root {
+      --simi-emerald: #00ff88;
+      --simi-bloodline: #0a2e1d;
+      --simi-surface: #0f1512;
+      --simi-mint: #e6ffef;
+      --simi-sage: #9db3a8;
+      --simi-amber: #ffb347;
+      --simi-crimson: #ff4d4d;
     }
 
-    .simivision-section::before {
-      content: "";
+    .simivision-section {
+      position: relative;
+      background:
+        radial-gradient(1200px 400px at 20% -10%, rgba(0, 255, 136, 0.12), transparent 60%),
+        linear-gradient(180deg, rgba(10, 46, 29, 0.95) 0%, var(--simi-surface) 100%);
+      border: 1px solid rgba(0, 255, 136, 0.18);
+      border-radius: var(--border-radius-card);
+      padding: var(--space-5);
+      overflow: hidden;
+      margin-bottom: var(--space-7);
+      color: var(--simi-mint);
+    }
+
+    .simivision-noise {
       position: absolute;
       inset: 0;
-      border-radius: inherit;
-      padding: 1px;
-      background: linear-gradient(135deg, rgba(52, 211, 153, 0.25), transparent 55%);
-      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-      -webkit-mask-composite: xor;
-      mask-composite: exclude;
+      opacity: 0.06;
       pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      mix-blend-mode: overlay;
+    }
+
+    .simivision-signature-rail {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--simi-emerald), transparent);
+      opacity: 0.8;
+      animation: simiRailDrift 6s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes simiRailDrift {
+      0%, 100% { opacity: 0.5; transform: translateX(-5%); }
+      50% { opacity: 1; transform: translateX(5%); }
     }
 
     .simivision-header {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       justify-content: space-between;
       gap: var(--space-4);
       margin-bottom: var(--space-5);
@@ -332,7 +358,7 @@
       font-size: 1.25rem;
       font-weight: 800;
       letter-spacing: -0.02em;
-      color: var(--text-primary);
+      color: var(--simi-mint);
       margin: 0;
     }
 
@@ -342,11 +368,24 @@
       display: grid;
       place-items: center;
       border-radius: 10px;
-      background: rgba(52, 211, 153, 0.12);
-      color: var(--status-active);
-      border: 1px solid rgba(52, 211, 153, 0.25);
+      background: rgba(0, 255, 136, 0.12);
+      color: var(--simi-emerald);
+      border: 1px solid rgba(0, 255, 136, 0.35);
+      box-shadow: 0 0 18px rgba(0, 255, 136, 0.25);
     }
 
+    .simivision-system-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: var(--border-radius-pill);
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border: 1px solid currentColor;
+    }
     .simivision-subtitle {
       color: var(--text-secondary);
       font-size: 0.9rem;
@@ -598,53 +637,422 @@
 
     .simi-verdicts-inline {
       display: inline-flex;
+      align-items: center;
       gap: 6px;
-    }
-
-    .simi-trace-badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 3px 8px;
-      border-radius: 6px;
-      background: rgba(52, 211, 153, 0.1);
-      border: 1px solid rgba(52, 211, 153, 0.2);
-      color: var(--status-active);
-      font-size: 0.7rem;
-      font-weight: 700;
-    }
-
-    .simi-card-footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--space-3);
-      margin-top: auto;
-    }
-
-    .simi-read-more {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      color: var(--status-active);
-      font-size: 0.8rem;
-      font-weight: 700;
-    }
-
-    .action-badge {
-      display: inline-flex;
-      align-items: center;
       padding: 5px 10px;
       border-radius: var(--border-radius-pill);
       font-size: 0.7rem;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.06em;
+      border: 1px solid currentColor;
     }
 
-    .action-badge.action-accumulate { background: rgba(52, 211, 153, 0.12); color: var(--status-active); border: 1px solid rgba(52, 211, 153, 0.25); }
-    .action-badge.action-hold { background: rgba(251, 191, 36, 0.12); color: var(--action-hold); border: 1px solid rgba(251, 191, 36, 0.25); }
-    .action-badge.action-reduce { background: rgba(251, 113, 133, 0.12); color: var(--action-reduce); border: 1px solid rgba(251, 113, 133, 0.25); }
+    .simivision-system-status.status-operative { color: var(--simi-emerald); background: rgba(0, 255, 136, 0.1); }
+    .simivision-system-status.status-dimmed { color: var(--simi-sage); background: rgba(157, 179, 168, 0.1); }
+    .simivision-system-status.status-hibernating { color: var(--simi-amber); background: rgba(255, 179, 71, 0.1); }
+    .simivision-system-status.status-error { color: var(--simi-crimson); background: rgba(255, 77, 77, 0.1); }
 
+    .simivision-state-banner {
+      position: relative;
+      z-index: 1;
+      padding: var(--space-3) var(--space-4);
+      border-radius: 12px;
+      margin-bottom: var(--space-4);
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+
+    .simivision-state-banner.hibernating {
+      background: rgba(255, 179, 71, 0.08);
+      border: 1px solid rgba(255, 179, 71, 0.25);
+      color: var(--simi-amber);
+    }
+
+    .simivision-state-banner.error {
+      background: rgba(255, 77, 77, 0.08);
+      border: 1px solid rgba(255, 77, 77, 0.25);
+      color: var(--simi-crimson);
+    }
+
+    .simivision-spine {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 2.5fr 1fr 1fr 2fr;
+      gap: var(--space-4);
+      align-items: stretch;
+    }
+
+    @media (max-width: 900px) {
+      .simivision-spine {
+        grid-template-columns: 1fr 1fr;
+      }
+      .simivision-hero-card { grid-column: 1 / -1; }
+      .simivision-provenance { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 768px) {
+      .simivision-spine {
+        grid-template-columns: 1fr;
+      }
+      .simivision-hero-card,
+      .simivision-provenance { grid-column: auto; }
+    }
+
+    .simivision-hero-card,
+    .simivision-support-card,
+    .simivision-provenance {
+      background: rgba(15, 21, 18, 0.72);
+      border: 1px solid rgba(0, 255, 136, 0.15);
+      border-radius: 18px;
+      padding: var(--space-5);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .simivision-hero-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(0, 255, 136, 0.35), transparent 55%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+
+    .simivision-hero-card::after {
+      content: "";
+      position: absolute;
+      width: 320px;
+      height: 320px;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(0, 255, 136, 0.18), transparent 65%);
+      pointer-events: none;
+      z-index: 0;
+      animation: simiHeroGlow 8s ease-in-out infinite;
+    }
+
+    @keyframes simiHeroGlow {
+      0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+      50% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+    }
+
+    .simivision-hero-card:hover,
+    .simivision-support-card:hover,
+    .simivision-provenance:hover {
+      transform: translateY(-4px);
+      border-color: rgba(0, 255, 136, 0.35);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), 0 0 40px rgba(0, 255, 136, 0.12);
+    }
+
+    .simivision-hero-card[tabindex],
+    .simivision-support-card[tabindex] {
+      cursor: pointer;
+    }
+
+    .simivision-hero-card[tabindex]:focus-visible,
+    .simivision-support-card[tabindex]:focus-visible {
+      outline: 2px solid var(--simi-emerald);
+      outline-offset: 3px;
+    }
+
+    .simivision-hero-card.status-operative { border-color: rgba(0, 255, 136, 0.35); box-shadow: 0 0 50px rgba(0, 255, 136, 0.12); }
+    .simivision-hero-card.status-dimmed { border-color: rgba(157, 179, 168, 0.25); box-shadow: 0 0 30px rgba(157, 179, 168, 0.06); }
+    .simivision-hero-card.status-hibernating { border-color: rgba(255, 179, 71, 0.3); box-shadow: 0 0 40px rgba(255, 179, 71, 0.1); }
+    .simivision-hero-card.status-error { border-color: rgba(255, 77, 77, 0.3); box-shadow: 0 0 40px rgba(255, 77, 77, 0.1); }
+
+    .hero-rank-badge {
+      position: absolute;
+      top: var(--space-4);
+      right: var(--space-4);
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      font-weight: 800;
+      color: var(--simi-emerald);
+      background: rgba(0, 255, 136, 0.1);
+      border: 1px solid rgba(0, 255, 136, 0.35);
+      box-shadow: 0 0 20px rgba(0, 255, 136, 0.25);
+      z-index: 1;
+    }
+
+    .hero-conviction-ring {
+      position: relative;
+      width: 140px;
+      height: 140px;
+      margin: 0 auto var(--space-4);
+      z-index: 1;
+    }
+
+    .hero-conviction-ring svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+
+    .hero-conviction-ring .ring-track { fill: none; stroke: rgba(0, 255, 136, 0.12); stroke-width: 8; }
+    .hero-conviction-ring .ring-fill { fill: none; stroke: var(--simi-emerald); stroke-width: 8; stroke-linecap: round; }
+
+    .hero-conviction-value {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font-family: var(--font-mono);
+      font-size: 3rem;
+      font-weight: 800;
+      color: var(--simi-mint);
+      text-shadow: 0 0 20px rgba(0, 255, 136, 0.35);
+    }
+
+    .hero-subnet-name {
+      font-size: 1.6rem;
+      font-weight: 800;
+      margin: 0 0 var(--space-2);
+      color: var(--simi-mint);
+      z-index: 1;
+    }
+
+    .hero-rationale {
+      font-size: 0.9rem;
+      line-height: 1.5;
+      color: var(--simi-sage);
+      margin: 0 0 var(--space-4);
+      z-index: 1;
+    }
+
+    .hero-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      margin-top: auto;
+      z-index: 1;
+    }
+
+    .hero-delta {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      font-weight: 700;
+    }
+
+    .hero-delta.delta-plus { color: var(--simi-emerald); }
+    .hero-delta.delta-minus { color: var(--simi-crimson); }
+    .hero-delta.delta-stable { color: var(--simi-sage); }
+
+    .hero-freshness {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: var(--simi-sage);
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--simi-emerald);
+      box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.5);
+      animation: simiPulse 2s ease-out infinite;
+    }
+
+    @keyframes simiPulse {
+      0% { box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.5); }
+      70% { box-shadow: 0 0 0 8px rgba(0, 255, 136, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(0, 255, 136, 0); }
+    }
+
+    .simivision-support-card {
+      padding: var(--space-4);
+      justify-content: space-between;
+    }
+
+    .support-rank {
+      position: absolute;
+      top: var(--space-3);
+      right: var(--space-3);
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 800;
+      color: var(--simi-emerald);
+      background: rgba(0, 255, 136, 0.1);
+      border: 1px solid rgba(0, 255, 136, 0.25);
+    }
+
+    .support-name {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin: 0 0 var(--space-2);
+      color: var(--simi-mint);
+    }
+
+    .support-conviction {
+      font-family: var(--font-mono);
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: var(--simi-emerald);
+      margin-bottom: var(--space-2);
+    }
+
+    .support-delta {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 700;
+      margin-bottom: var(--space-3);
+    }
+
+    .support-delta.delta-plus { color: var(--simi-emerald); }
+    .support-delta.delta-minus { color: var(--simi-crimson); }
+    .support-delta.delta-stable { color: var(--simi-sage); }
+
+    .support-reason {
+      display: inline-flex;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: rgba(0, 255, 136, 0.08);
+      border: 1px solid rgba(0, 255, 136, 0.18);
+      color: var(--simi-sage);
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .simivision-provenance {
+      gap: var(--space-3);
+    }
+
+    .provenance-source {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--simi-sage);
+    }
+
+    .provenance-freshness {
+      font-size: 0.85rem;
+      color: var(--simi-mint);
+    }
+
+    .provenance-log {
+      display: grid;
+      gap: 8px;
+      margin: var(--space-2) 0;
+    }
+
+    .provenance-log p {
+      margin: 0;
+      font-size: 0.78rem;
+      line-height: 1.45;
+      color: var(--simi-sage);
+      padding-left: 12px;
+      border-left: 2px solid rgba(0, 255, 136, 0.25);
+    }
+
+    .provenance-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    .provenance-status.status-operative { color: var(--simi-emerald); }
+    .provenance-status.status-dimmed { color: var(--simi-sage); }
+    .provenance-status.status-hibernating { color: var(--simi-amber); }
+    .provenance-status.status-error { color: var(--simi-crimson); }
+
+    .provenance-sparkline {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
+      height: 32px;
+      margin-top: auto;
+    }
+
+    .provenance-sparkline span {
+      flex: 1;
+      min-width: 6px;
+      height: var(--h, 50%);
+      background: linear-gradient(180deg, var(--simi-emerald), rgba(0, 255, 136, 0.25));
+      border-radius: 2px;
+      opacity: 0.85;
+    }
+
+    .simivision-skeleton {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 2.5fr 1fr 1fr 2fr;
+      gap: var(--space-4);
+    }
+
+    @media (max-width: 900px) {
+      .simivision-skeleton { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 768px) {
+      .simivision-skeleton { grid-template-columns: 1fr; }
+    }
+
+    .simi-skeleton-card {
+      background: rgba(15, 21, 18, 0.5);
+      border: 1px solid rgba(0, 255, 136, 0.1);
+      border-radius: 18px;
+      padding: var(--space-5);
+      min-height: 220px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .simi-skeleton-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.06), transparent);
+      transform: translateX(-100%);
+      animation: simiShimmer 1.6s infinite;
+    }
+
+    @keyframes simiShimmer {
+      100% { transform: translateX(100%); }
+    }
+
+    .simivision-empty {
+      grid-column: 1 / -1;
+      text-align: center;
+      color: var(--simi-sage);
+      padding: var(--space-8) var(--space-4);
+      border: 1px dashed rgba(0, 255, 136, 0.25);
+      border-radius: var(--border-radius-card);
+      background: rgba(15, 21, 18, 0.5);
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
     .hero-eyebrow {
       display: inline-flex;
       align-items: center;
@@ -1850,7 +2258,9 @@
       </div>
     </header>
 
-    <section class="section reveal simivision-section" id="simivision" aria-labelledby="simivision-title">
+        <section class="section reveal simivision-section" id="simivision" aria-labelledby="simivision-title">
+      <div class="simivision-signature-rail" aria-hidden="true"></div>
+      <div class="simivision-noise" aria-hidden="true"></div>
       <div class="simivision-header">
         <div>
           <h3 class="simivision-title" id="simivision-title">
@@ -1859,6 +2269,7 @@
             </span>
             SimiVision
           </h3>
+          <span class="simivision-system-status status-{{ (simivision.meta.system_status or 'operative')|lower }}">{{ simivision.meta.system_status or 'Operative' }}</span>
           <p class="simivision-subtitle">Top 3 subnet choices for today — click a card for the deep-dive.</p>
           <div class="simivision-meta-bar" id="simivision-meta-bar">
             <span class="simivision-source-badge" id="simivision-source" title="Provenance of today's picks">Source: {{ simivision.meta.source or 'empty' }}</span>
@@ -1867,48 +2278,71 @@
           </div>
         </div>
       </div>
-      <div class="simivision-manifesto">
-        <h4>Traceability manifesto</h4>
-        <p>SimiVision must not be a standalone presentation layer; it must consume and expose the Mindmap/Judge/self-learning loop so every surfaced pick can be traced, evaluated, and fed back into future rankings.</p>
-        <p>SimiVision sits on top of the Mindmap and self-learning loop, and every card should be traceable back to the verdicts that formed it.</p>
-      </div>
-      <div class="simivision-grid" id="simivision-grid">
-        {% for choice in simivision.choices %}
-        <article class="simi-card" data-simi-idx="{{ loop.index0 }}" tabindex="0" role="button" aria-label="Open SimiVision details for {{ choice.name }}">
-          <div class="simi-card-header">
-            <div>
-              <p class="simi-card-id">#{{ choice.subnet_id }}</p>
-              <h4 class="simi-card-name">{{ choice.name }}</h4>
-              {% if choice.protocol_tag %}<span class="protocol-badge protocol-{{ choice.protocol_tag|lower }}">{{ choice.protocol_tag }}</span>{% endif %}
+
+      {% if simivision.meta.system_status == 'Hibernating' %}
+      <div class="simivision-state-banner hibernating">Signals are resting. Last known top pick shown.</div>
+      {% elif simivision.meta.system_status == 'Error' %}
+      <div class="simivision-state-banner error">Cached data shown. The signal pipeline will retry automatically.</div>
+      {% endif %}
+
+      <div class="simivision-spine" id="simivision-spine">
+        {% if simivision.top and simivision.top|length > 0 %}
+          {% set hero = simivision.top[0] %}
+          <article class="simivision-hero-card status-{{ hero.status|lower }}" aria-label="Top SimiVision signal: {{ hero.name }}" data-simi-idx="0" data-netuid="{{ hero.netuid }}" tabindex="0" role="button">
+            <div class="hero-rank-badge" aria-label="Rank {{ hero.rank }}">#{{ hero.rank }}</div>
+            <div class="hero-conviction-ring" aria-label="Conviction {{ hero.conviction|int }}%">
+              <svg viewBox="0 0 140 140" aria-hidden="true">
+                <circle class="ring-track" cx="70" cy="70" r="62"></circle>
+                <circle class="ring-fill" cx="70" cy="70" r="62" stroke-dasharray="{{ (hero.conviction / 100 * 389.56)|round(2) }} 389.56"></circle>
+              </svg>
+              <span class="hero-conviction-value">{{ hero.conviction|int }}%</span>
             </div>
-            <span class="action-badge action-{{ choice.action }}">{{ choice.action }}</span>
-          </div>
-          <div class="simi-card-score">
-            <span class="score-value">{{ "%.0f"|format((choice.confidence|default(0, true)) * 100) }}%</span>
-            <span class="score-label">confidence</span>
-          </div>
-          <div class="simi-card-fields">
-            <div class="simi-field"><span>Edge score</span><span class="simi-value">{{ "%.0f"|format((choice.edge_score|default(0, true)) * 100) }}%</span></div>
-            <div class="simi-field"><span>Preferred entry</span><span class="simi-value">{{ choice.preferred_entry }}</span></div>
-            <div class="simi-field"><span>Reward / risk</span><span class="simi-value">{{ choice.reward_risk.label }} ({{ choice.reward_risk.ratio }})</span></div>
-            <div class="simi-field"><span>Horizon</span><span class="simi-value">{{ choice.horizon }}</span></div>
-            <div class="simi-field"><span>Judge agreement</span><span class="simi-value">{{ choice.judge_agreement }}</span></div>
-            <div class="simi-field"><span>Brain target</span><span class="simi-value">{{ "%.0f"|format((choice.target_weight|default(0, true)) * 100) }}%</span></div>
-            <div class="simi-field"><span>Verdicts</span>
-              <span class="simi-value simi-verdicts-inline">
-                {% set b = choice.expert_breakdown %}
-                <span class="simi-trace-badge">Q {{ "%.0f"|format((b.quant.score|default(0, true)) * 100) }}%</span>
-                <span class="simi-trace-badge">H {{ "%.0f"|format((b.hype.score|default(0, true)) * 100) }}%</span>
-                <span class="simi-trace-badge">C {{ "%.0f"|format((b.contrarian.score|default(0, true)) * 100) }}%</span>
+            <h4 class="hero-subnet-name">{{ hero.name }}</h4>
+            <p class="hero-rationale">{{ hero.rationale }}</p>
+            <div class="hero-meta">
+              <span class="hero-delta delta-{{ 'plus' if hero.delta == '+' else 'minus' if hero.delta == '-' else 'stable' }}">
+                {% if hero.delta == '+' %}↑ {{ hero.delta_value|int }}%{% elif hero.delta == '-' %}↓ {{ hero.delta_value|int }}%{% else %}— stable{% endif %}
               </span>
+              <span class="hero-freshness"><span class="pulse-dot"></span>{{ hero.freshness_human }}</span>
             </div>
+          </article>
+
+          {% for signal in simivision.top[1:3] %}
+          <article class="simivision-support-card status-{{ signal.status|lower }}" aria-label="SimiVision signal {{ loop.index }}: {{ signal.name }}" data-simi-idx="{{ loop.index }}" data-netuid="{{ signal.netuid }}" tabindex="0" role="button">
+            <div class="support-rank" aria-label="Rank {{ signal.rank }}">#{{ signal.rank }}</div>
+            <h5 class="support-name">{{ signal.name }}</h5>
+            <div class="support-conviction">{{ signal.conviction|int }}%</div>
+            <div class="support-delta delta-{{ 'plus' if signal.delta == '+' else 'minus' if signal.delta == '-' else 'stable' }}">
+              {% if signal.delta == '+' %}↑ {{ signal.delta_value|int }}%{% elif signal.delta == '-' %}↓ {{ signal.delta_value|int }}%{% else %}—{% endif %}
+            </div>
+            <div class="support-reason">{{ signal.reason_tag }}</div>
+          </article>
+          {% endfor %}
+
+          <aside class="simivision-provenance" aria-label="Provenance and status">
+            <div class="provenance-source">{{ simivision.meta.source }}</div>
+            <div class="provenance-freshness">{{ simivision.meta.freshness_human }}</div>
+            <div class="provenance-log">
+              {% for line in simivision.meta.provenance_log %}
+              <p>{{ line }}</p>
+              {% endfor %}
+            </div>
+            <div class="provenance-status status-{{ (simivision.meta.system_status or 'operative')|lower }}">{{ simivision.meta.system_status or 'Operative' }}</div>
+            <div class="provenance-sparkline" aria-hidden="true">
+              {% for signal in simivision.top %}
+              <span style="--h: {{ signal.conviction|int }}%"></span>
+              {% endfor %}
+            </div>
+          </aside>
+        {% else %}
+          <div class="simivision-skeleton" aria-hidden="true">
+            <div class="simi-skeleton-card"></div>
+            <div class="simi-skeleton-card"></div>
+            <div class="simi-skeleton-card"></div>
+            <div class="simi-skeleton-card"></div>
           </div>
-          <div class="simi-card-footer">
-            <span class="status-badge {{ choice.status }}">{{ choice.status }}</span>
-            <span class="simi-read-more">Trace pick <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
-          </div>
-        </article>
-        {% endfor %}
+          <p class="simivision-empty">No SimiVision picks available right now. The panel will refresh automatically when the signal pipeline produces new recommendations.</p>
+        {% endif %}
       </div>
       <div class="simi-card simivision-empty-card" id="simivision-empty" style="{% if simivision.choices %}display: none;{% endif %}">
         <svg class="simivision-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><line x1="2" y1="2" x2="22" y2="22"/><path d="M8.5 8.5A5 5 0 0 0 12 17a4.97 4.97 0 0 0 3.5-2.5"/></svg>
@@ -1921,7 +2355,30 @@
       </div>
     </section>
 
-    <section class="section reveal">
+    <section class="section reveal simivision-section learning-trail-section" id="learning-trail" aria-labelledby="learning-trail-title">
+      <div class="simivision-header">
+        <h3 class="simivision-title" id="learning-trail-title">
+          <span class="simi-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          </span>
+          Learning Trail
+        </h3>
+        <span class="simivision-system-status" id="learning-trail-refresh">—</span>
+      </div>
+      <p class="section-subtitle" style="margin-bottom: var(--space-4);">Adversarial council ledger: expert accuracy, learned weights, and recent verdicts.</p>
+
+      <div class="learning-trail-grid" id="learning-trail-grid">
+        <div class="learning-trail-experts" id="learning-trail-experts" aria-live="polite">
+          <p class="simivision-empty">Loading expert council…</p>
+        </div>
+        <div class="learning-trail-verdicts" id="learning-trail-verdicts" aria-live="polite">
+          <p class="simivision-empty">Loading verdict stream…</p>
+        </div>
+      </div>
+    </section>
+
+
+<section class="section reveal">
       <div class="section-header">
         <div>
           <h3 class="section-title">Protocol watchlist</h3>
@@ -2264,7 +2721,7 @@
       const state = {
         subnets: [],
         summary: {},
-        simivision: {{ simivision | tojson }},
+
         filter: 'all',
         protocolFilter: 'all',
         search: '',
@@ -2832,106 +3289,173 @@
         document.body.style.overflow = 'hidden';
       }
 
-      function openSimiDrawer(idx) {
-        const choice = state.simivision.choices[idx];
-        if (!choice) return;
-        const breakdown = choice.expert_breakdown || {};
-        const experts = ['quant', 'hype', 'contrarian'].map(k => {
-          const e = breakdown[k] || {};
-          const s = e.score;
-          const note = e.sentiment || e.signal || (e.metrics ? Object.values(e.metrics)[0] : null);
-          return `
-            <div class="expert-card">
-              <p class="expert-name">${k}</p>
-              <p class="expert-score" style="color:${s >= 0.7 ? 'var(--status-active)' : s >= 0.4 ? 'var(--status-at-risk)' : 'var(--status-deprecated)'}">${s !== undefined ? formatPercent(s, 0) : '—'}</p>
-              <p class="expert-note" title="${escapeHtml(note !== undefined ? note : '—')}">${note !== undefined ? escapeHtml(note) : '—'}</p>
-            </div>
-          `;
-        }).join('');
-
-        const scoreDeg = choice.confidence !== undefined ? Math.round(choice.confidence * 360) + 'deg' : '0deg';
-        const metrics = choice.metrics || {};
-        const alignment = state.simivision.alignment_status || '—';
-        const alignmentScore = state.simivision.alignment_score !== undefined ? ` (${state.simivision.alignment_score.toFixed(2)})` : '';
-
-        els.drawerContent.innerHTML = `
-          <div class="panel-header">
-            <span class="subnet-id">Subnet #${choice.subnet_id}</span>
-            <h2 class="panel-name" id="panel-title">${escapeHtml(choice.name || 'Unnamed')}</h2>
-            <div class="panel-meta">
-              ${renderProtocolBadge(choice)}
-              <span class="action-badge action-${choice.action}">${choice.action ? choice.action.charAt(0).toUpperCase() + choice.action.slice(1) : '—'}</span>
-              <span class="status-badge ${choice.status}">${choice.status || 'unknown'}</span>
-            </div>
-          </div>
-
-          <div class="panel-section">
-            <h3 class="panel-section-title">Consensus Signal</h3>
-            <div class="consensus-gauge">
-              <div class="gauge-ring" style="--score-deg: ${scoreDeg}" aria-hidden="true">
-                <span class="gauge-value">${choice.confidence !== undefined ? (choice.confidence * 100).toFixed(0) : '—'}</span>
-              </div>
-              <div>
-                <p style="margin:0 0 4px;font-weight:700;font-size:1.1rem;">${choice.action ? choice.action.charAt(0).toUpperCase() + choice.action.slice(1) : 'No signal'}</p>
-                <p style="margin:0;color:var(--text-muted);font-size:0.85rem;">Blended quant, hype, and contrarian expert scores.</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel-section">
-            <h3 class="panel-section-title">Expert Breakdown</h3>
-            <div class="expert-grid">${experts}</div>
-          </div>
-
-          <div class="panel-section">
-            <h3 class="panel-section-title">Mindmap / Brain Recommendation</h3>
-            <div class="metric-row"><span class="metric-label">Brain action</span><span class="metric-value">${choice.brain_action || '—'}</span></div>
-            <div class="metric-row"><span class="metric-label">Target weight</span><span class="metric-value">${choice.target_weight !== undefined ? formatPercent(choice.target_weight, 0) : '—'}</span></div>
-            <div class="metric-row"><span class="metric-label">Judge agreement</span><span class="metric-value">${escapeHtml(choice.judge_agreement || '—')}</span></div>
-            <div class="metric-row"><span class="metric-label">Loop alignment</span><span class="metric-value">${alignment}${alignmentScore}</span></div>
-          </div>
-
-          <div class="panel-section">
-            <h3 class="panel-section-title">Adversarial Judge Verdict</h3>
-            <div class="metric-row"><span class="metric-label">Verdict score</span><span class="metric-value">${choice.judge_verdict && choice.judge_verdict.score !== undefined ? choice.judge_verdict.score.toFixed(2) : '—'}</span></div>
-            <div class="metric-row"><span class="metric-label">Verdict action</span><span class="metric-value">${choice.judge_verdict && choice.judge_verdict.action ? choice.judge_verdict.action : '—'}</span></div>
-            <p style="margin:var(--space-3) 0 0;color:var(--text-secondary);font-size:0.85rem;line-height:1.5;">${choice.judge_verdict && choice.judge_verdict.note ? escapeHtml(choice.judge_verdict.note) : 'No verdict available.'}</p>
-          </div>
-
-          <div class="panel-section">
-            <h3 class="panel-section-title">Economics</h3>
-            <div class="metric-row"><span class="metric-label">Emission</span><span class="metric-value">${formatNumber(metrics.emission, 4)}</span></div>
-            <div class="metric-row"><span class="metric-label">Social mentions</span><span class="metric-value">${formatNumber(metrics.social_mentions, 0)}</span></div>
-            <div class="metric-row"><span class="metric-label">APY</span><span class="metric-value">${formatPercent(metrics.apy, 4)}</span></div>
-            <div class="metric-row"><span class="metric-label">Total stake</span><span class="metric-value">${formatNumber(metrics.total_stake, 0)}</span></div>
-          </div>
-
-          <div class="panel-section">
-            <h3 class="panel-section-title">Rationale &amp; Invalidation</h3>
-            <p style="margin:0 0 var(--space-3);color:var(--text-secondary);font-size:0.85rem;line-height:1.5;">${escapeHtml(choice.why_now || '')}</p>
-            <div class="metric-row"><span class="metric-label">Invalidation</span><span class="metric-value" style="text-align:right;max-width:60%;">${escapeHtml(choice.invalidation || '—')}</span></div>
-            <div class="metric-row"><span class="metric-label">Horizon</span><span class="metric-value">${escapeHtml(choice.horizon || '—')}</span></div>
-          </div>
-
-          <div class="panel-section">
-            <h3 class="panel-section-title">Traceability</h3>
-            <p style="margin:0 0 var(--space-3);color:var(--text-secondary);font-size:0.85rem;line-height:1.5;">SimiVision must not be a standalone presentation layer; it must consume and expose the Mindmap/Judge/self-learning loop so every surfaced pick can be traced, evaluated, and fed back into future rankings.</p>
-            <p style="margin:0;color:var(--text-secondary);font-size:0.85rem;line-height:1.5;">SimiVision sits on top of the Mindmap and self-learning loop, and every card should be traceable back to the verdicts that formed it.</p>
-          </div>
-        `;
-
-        els.drawer.classList.add('open');
-        els.backdrop.classList.add('open');
-        els.backdrop.setAttribute('aria-hidden', 'false');
-        els.drawer.focus();
-        document.body.style.overflow = 'hidden';
-      }
-
       function closeDrawer() {
         els.drawer.classList.remove('open');
         els.backdrop.classList.remove('open');
         els.backdrop.setAttribute('aria-hidden', 'true');
         document.body.style.overflow = '';
+      }
+
+      function renderActionBadge(action) {
+        const a = (action || 'hold').toLowerCase();
+        const cls = a === 'accumulate' ? 'action-accumulate' : a === 'reduce' ? 'action-reduce' : 'action-hold';
+        const label = a.charAt(0).toUpperCase() + a.slice(1);
+        return `<span class="action-badge ${cls}">${label}</span>`;
+      }
+
+      function renderStatusBadge(status) {
+        const s = (status || 'Operative').toLowerCase();
+        const cls = s === 'operative' ? 'status-active' : s === 'dimmed' ? 'status-at-risk' : s === 'hibernating' ? 'status-deprecated' : 'status-deprecated';
+        const label = s.charAt(0).toUpperCase() + s.slice(1);
+        return `<span class="status-badge ${cls}">${label}</span>`;
+      }
+
+      function openSimiDrawer(netuid) {
+        els.drawerContent.innerHTML = `
+          <div class="panel-header">
+            <span class="subnet-id">Subnet #${netuid}</span>
+            <h2 class="panel-name" id="panel-title">Loading SimiVision trace…</h2>
+            <div class="panel-meta"></div>
+          </div>
+          <div class="panel-section" style="text-align:center;padding:var(--space-6);">
+            <div class="gauge-ring" style="--score-deg: 0deg;margin:0 auto;">
+              <span class="gauge-value">—</span>
+            </div>
+          </div>
+        `;
+        els.drawer.classList.add('open');
+        els.backdrop.classList.add('open');
+        els.backdrop.setAttribute('aria-hidden', 'false');
+        els.drawer.focus();
+        document.body.style.overflow = 'hidden';
+
+        fetchJSON(`/api/simivision/${netuid}/trace`)
+          .then(data => {
+            if (!data || data.status !== 'success' || !data.trace) {
+              throw new Error(data && data.message ? data.message : 'Trace unavailable');
+            }
+            const signal = data.signal || {};
+            const trace = data.trace;
+            const name = data.name || signal.name || 'Unnamed';
+            const action = signal.reason_tag || trace.brain && trace.brain.action || 'Hold';
+            const status = signal.status || 'Operative';
+            const conviction = signal.conviction;
+            const scoreDeg = conviction !== undefined ? Math.round((conviction / 100) * 360) + 'deg' : '0deg';
+
+            const experts = ['quant', 'hype', 'contrarian'].map(k => {
+              const e = trace.expert_breakdown && trace.expert_breakdown[k] || {};
+              const s = e.score;
+              const note = e.sentiment || e.signal || (e.metrics ? Object.values(e.metrics)[0] : null);
+              return `
+                <div class="expert-card">
+                  <p class="expert-name">${k}</p>
+                  <p class="expert-score" style="color:${s >= 0.7 ? 'var(--status-active)' : s >= 0.4 ? 'var(--status-at-risk)' : 'var(--status-deprecated)'}">${s !== undefined ? formatPercent(s, 0) : '—'}</p>
+                  <p class="expert-note" title="${escapeHtml(note !== undefined ? note : '—')}">${note !== undefined ? escapeHtml(note) : '—'}</p>
+                </div>
+              `;
+            }).join('');
+
+            const brain = trace.brain || {};
+            const judge = trace.judge_verdict || {};
+            const econ = trace.economics || {};
+
+            els.drawerContent.innerHTML = `
+              <div class="panel-header">
+                <span class="subnet-id">Subnet #${netuid}</span>
+                <h2 class="panel-name" id="panel-title">${escapeHtml(name)}</h2>
+                <div class="panel-meta">${renderActionBadge(action)} ${renderStatusBadge(status)}</div>
+              </div>
+
+              <div class="panel-section">
+                <h3 class="panel-section-title">Consensus Signal</h3>
+                <div class="consensus-gauge">
+                  <div class="gauge-ring" style="--score-deg: ${scoreDeg}" aria-hidden="true">
+                    <span class="gauge-value">${conviction !== undefined ? conviction.toFixed(0) : '—'}</span>
+                  </div>
+                  <div>
+                    <p style="margin:0 0 4px;font-weight:700;font-size:1.1rem;">${action}</p>
+                    <p style="margin:0;color:var(--text-muted);font-size:0.85rem;">Blended quant, hype, and contrarian expert scores.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="panel-section">
+                <h3 class="panel-section-title">Expert Breakdown</h3>
+                <div class="expert-grid">${experts}</div>
+              </div>
+
+              <div class="panel-section">
+                <h3 class="panel-section-title">Brain Recommendation</h3>
+                <div class="metric-row"><span class="metric-label">Action</span><span class="metric-value">${escapeHtml(brain.action || '—')}</span></div>
+                <div class="metric-row"><span class="metric-label">Target weight</span><span class="metric-value">${brain.target_weight !== undefined ? (brain.target_weight * 100).toFixed(0) + '%' : '—'}</span></div>
+                <div class="metric-row"><span class="metric-label">Agreement</span><span class="metric-value">${escapeHtml(brain.agreement || '—')}</span></div>
+              </div>
+
+              <div class="panel-section">
+                <h3 class="panel-section-title">Adversarial Judge Verdict</h3>
+                <div class="metric-row"><span class="metric-label">Score</span><span class="metric-value">${judge.score !== undefined ? (judge.score * 100).toFixed(0) + '%' : '—'}</span></div>
+                <div class="metric-row"><span class="metric-label">Action</span><span class="metric-value">${escapeHtml(judge.action || '—')}</span></div>
+                <div class="metric-row"><span class="metric-label">Note</span><span class="metric-value">${escapeHtml(judge.note || '—')}</span></div>
+              </div>
+
+              <div class="panel-section">
+                <h3 class="panel-section-title">Economics</h3>
+                <div class="metric-row"><span class="metric-label">Emission</span><span class="metric-value">${formatNumber(econ.emission, 4)}</span></div>
+                <div class="metric-row"><span class="metric-label">Social mentions</span><span class="metric-value">${formatNumber(econ.social_mentions, 0)}</span></div>
+                <div class="metric-row"><span class="metric-label">APY</span><span class="metric-value">${formatPercent(econ.apy, 4)}</span></div>
+                <div class="metric-row"><span class="metric-label">Total stake</span><span class="metric-value">${formatNumber(econ.total_stake, 0)}</span></div>
+                <div class="metric-row"><span class="metric-label">Overvalued</span><span class="metric-value">${econ.is_overvalued ? 'Yes' : 'No'}</span></div>
+                <div class="metric-row"><span class="metric-label">Risk flags</span><span class="metric-value">${econ.risk_flags && econ.risk_flags.length ? escapeHtml(econ.risk_flags.join(', ')) : 'None'}</span></div>
+              </div>
+
+              <div class="panel-section">
+                <h3 class="panel-section-title">Rationale</h3>
+                <p style="margin:0;color:var(--text-secondary);font-size:0.9rem;line-height:1.5;">${escapeHtml(trace.rationale || '—')}</p>
+              </div>
+
+              <div class="panel-section">
+                <h3 class="panel-section-title">Invalidation</h3>
+                <p style="margin:0;color:var(--text-secondary);font-size:0.9rem;line-height:1.5;">${escapeHtml(trace.invalidation || '—')}</p>
+              </div>
+
+              <div class="panel-section">
+                <h3 class="panel-section-title">Horizon</h3>
+                <p style="margin:0;color:var(--text-secondary);font-size:0.9rem;line-height:1.5;">${escapeHtml(trace.horizon || '—')}</p>
+              </div>
+
+              <div class="panel-section">
+                <h3 class="panel-section-title">Preferred Entry</h3>
+                <p style="margin:0;color:var(--text-secondary);font-size:0.9rem;line-height:1.5;">${escapeHtml(trace.preferred_entry || '—')}</p>
+              </div>
+
+              <div class="panel-section">
+                <h3 class="panel-section-title">Provenance / Traceability</h3>
+                <p style="margin:0 0 var(--space-3);color:var(--text-secondary);font-size:0.85rem;">Signal source</p>
+                <p style="margin:0 0 var(--space-4);color:var(--text-muted);font-size:0.85rem;">${escapeHtml(signal.source || 'selector+council')}</p>
+                <p style="margin:0;color:var(--text-muted);font-size:0.8rem;">Last updated ${formatDate(signal.freshness)}</p>
+              </div>
+            `;
+          })
+          .catch(err => {
+            els.drawerContent.innerHTML = `
+              <div class="panel-header">
+                <span class="subnet-id">Subnet #${netuid}</span>
+                <h2 class="panel-name" id="panel-title">Trace unavailable</h2>
+              </div>
+              <div class="panel-section">
+                <p style="color:var(--status-deprecated)">${escapeHtml(err.message || 'Could not load SimiVision trace.')}</p>
+              </div>
+            `;
+          });
+      }
+
+      function attachSimiCardHandlers() {
+        const cards = document.querySelectorAll('#simivision-spine [data-netuid]');
+        cards.forEach(card => {
+          const open = () => openSimiDrawer(Number(card.dataset.netuid));
+          card.addEventListener('click', open);
+          card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+        });
       }
 
       function showToast(message) {
@@ -2963,18 +3487,6 @@
       }
 
       function loadData() {
-        const simivisionPromise = fetchJSON('/api/simivision')
-          .then(data => {
-            if (data && data.data) {
-              state.simivision = data.data;
-              renderSimiVision();
-            }
-          })
-          .catch(err => {
-            console.error('SimiVision refresh failed:', err);
-            renderSimiVision();
-          });
-
         Promise.all([
           fetchJSON('/api/summary'),
           fetchJSON('/api/registry'),
@@ -3007,6 +3519,93 @@
           els.resultsMeta.textContent = 'Failed to load registry data.';
           showToast('Error loading data');
         });
+      }
+
+      function renderLearningTrail(payload) {
+        const data = payload && payload.data ? payload.data : payload;
+        const experts = (data && data.experts) || [];
+        const verdicts = (data && data.verdicts) || [];
+        const refreshMinutes = (data && data.refresh_minutes) || 5;
+
+        const expertsEl = document.getElementById('learning-trail-experts');
+        const verdictsEl = document.getElementById('learning-trail-verdicts');
+        const refreshEl = document.getElementById('learning-trail-refresh');
+        if (refreshEl) refreshEl.textContent = `Refresh ${refreshMinutes}m`;
+
+        if (!experts.length) {
+          expertsEl.innerHTML = '<p class="simivision-empty">No expert council data available.</p>';
+        } else {
+          const maxAccuracy = Math.max(...experts.map(e => (e.track_record && e.track_record.accuracy) || 0));
+          expertsEl.innerHTML = experts.map(expert => {
+            const tr = expert.track_record || { correct: 0, total: 0, accuracy: 0 };
+            const accuracy = Math.round((tr.accuracy || 0) * 100);
+            const weight = Math.round((expert.weight || 0) * 100);
+            const confidence = Math.round((expert.confidence || 0) * 100);
+            const trend = (expert.last_verdict || {}).trend || [];
+            const spark = trend.length
+              ? `<span class="lt-sparkline" aria-hidden="true">${trend.map(v => `<i style="--h:${Math.max(5, Math.min(100, Math.round(v * 100)))}%"></i>`).join('')}</span>`
+              : '';
+            return `
+              <article class="lt-expert-card ${(tr.accuracy || 0) >= maxAccuracy ? 'lt-top' : ''}">
+                <div class="lt-expert-header">
+                  <span class="lt-expert-name">${escapeHtml(expert.name || 'Expert')}</span>
+                  <span class="lt-expert-weight">${weight}%</span>
+                </div>
+                <div class="lt-expert-stats">
+                  <div class="lt-stat">
+                    <span class="lt-stat-value">${accuracy}%</span>
+                    <span class="lt-stat-label">Accuracy</span>
+                  </div>
+                  <div class="lt-stat">
+                    <span class="lt-stat-value">${tr.correct || 0}/${tr.total || 0}</span>
+                    <span class="lt-stat-label">Correct</span>
+                  </div>
+                  <div class="lt-stat">
+                    <span class="lt-stat-value">${confidence}%</span>
+                    <span class="lt-stat-label">Confidence</span>
+                  </div>
+                </div>
+                ${spark}
+              </article>
+            `;
+          }).join('');
+        }
+
+        if (!verdicts.length) {
+          verdictsEl.innerHTML = '<p class="simivision-empty">No verdicts recorded yet.</p>';
+        } else {
+          verdictsEl.innerHTML = verdicts.slice(0, 20).map(v => {
+            const predicted = v.prediction || '—';
+            const actual = v.actual_outcome || '—';
+            const correct = v.actual_outcome && v.prediction && v.actual_outcome === v.prediction;
+            const confident = v.confident ? '<span class="lt-badge lt-confident">confident</span>' : '';
+            const expertTags = (v.expert_verdicts || []).map(ev => `<span class="lt-badge">${escapeHtml(ev.expert || ev.name || 'expert')}</span>`).join('');
+            return `
+              <article class="lt-verdict-row ${correct ? 'lt-correct' : actual !== '—' ? 'lt-wrong' : ''}">
+                <div class="lt-verdict-meta">
+                  <span class="lt-verdict-time">${escapeHtml(v.time || '')}</span>
+                  <span class="lt-verdict-subnet">Subnet ${v.subnet_uid != null ? v.subnet_uid : '—'}</span>
+                  ${confident}
+                </div>
+                <div class="lt-verdict-outcome">
+                  <span class="lt-prediction">${escapeHtml(predicted)}</span>
+                  <span class="lt-arrow">→</span>
+                  <span class="lt-actual">${escapeHtml(actual)}</span>
+                </div>
+                <div class="lt-verdict-experts">${expertTags}</div>
+              </article>
+            `;
+          }).join('');
+        }
+      }
+
+      function loadLearningTrail() {
+        fetchJSON('/api/learning-trail')
+          .then(renderLearningTrail)
+          .catch(err => {
+            console.error('Learning trail failed', err);
+            renderLearningTrail({ experts: [], verdicts: [], refresh_minutes: 5 });
+          });
       }
 
       function revealElements() {
@@ -3070,22 +3669,6 @@
       els.backdrop.addEventListener('click', closeDrawer);
       document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
 
-      if (els.simivisionGrid) {
-        els.simivisionGrid.addEventListener('click', e => {
-          const card = e.target.closest('.simi-card');
-          if (!card) return;
-          openSimiDrawer(Number(card.dataset.simiIdx));
-        });
-        els.simivisionGrid.addEventListener('keydown', e => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            const card = e.target.closest('.simi-card');
-            if (!card) return;
-            e.preventDefault();
-            openSimiDrawer(Number(card.dataset.simiIdx));
-          }
-        });
-      }
-
       document.addEventListener('keydown', e => {
         if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
           e.preventDefault();
@@ -3102,7 +3685,10 @@
       });
 
       loadData();
+      loadLearningTrail();
+      attachSimiCardHandlers();
       setInterval(loadData, 60000);
+      setInterval(loadLearningTrail, 300000);
       setInterval(() => {
         fetchJSON('/api/freshness')
           .then(data => setFreshness(data && data.data))
