@@ -18,6 +18,7 @@ from internal.simivision.engine import (
 )
 
 app = Flask(__name__)
+bridge = MindmapBridge()
 
 # Protocol watchlist configuration: first-class scan targets surfaced in the UI.
 _PROTOCOLS_PATH = os.environ.get("PROTOCOLS_PATH", "config/protocols.json")
@@ -339,6 +340,7 @@ def _build_choice(registry, recs, decision, judge, feedback_boost=0.0):
             "risk_flags": risk_flags,
         },
         "protocol_tag": protocol_tag,
+        "feedback_boost": feedback_boost,
     }
 
 
@@ -721,7 +723,6 @@ def index():
     recommendations = {"recommendations": {}}
     simivision = None
     try:
-        bridge = MindmapBridge()
         recommendations = bridge.get_brain_recommendations()
         soul_map = load_data("data/soul_map.json")
         last_output = soul_map.get("soul_map_state", {}).get("last_selector_output", {})
@@ -758,7 +759,7 @@ def daily_rotation():
     """Return the latest daily rotation decisions plus live recommendations."""
     soul_map = load_data("data/soul_map.json")
     last_output = soul_map.get("soul_map_state", {}).get("last_selector_output", {})
-    recommendations = MindmapBridge().get_brain_recommendations()
+    recommendations = bridge.get_brain_recommendations()
     return jsonify(
         {
             "status": "success",
@@ -965,7 +966,6 @@ def get_soul_map():
 @app.route("/api/recommendations", methods=["GET"])
 def get_recommendations():
     """Live Brain recommendations derived from the current registry."""
-    bridge = MindmapBridge()
     return jsonify(
         {
             "status": "success",
@@ -985,7 +985,6 @@ def get_simivision():
     try:
         soul_map = load_data("data/soul_map.json")
         last_output = soul_map.get("soul_map_state", {}).get("last_selector_output", {})
-        bridge = MindmapBridge()
         recommendations = bridge.get_brain_recommendations()
         feedback = soul_map.get("feedback_logs", [None])[-1]
         registry = load_data("config/registry.json")
@@ -1014,9 +1013,31 @@ def get_simivision():
 
 
 @app.route("/api/mindmap/feedback", methods=["POST"])
-def post_feedback():
-    feedback = request.get_json(silent=True)
-    return jsonify({"status": "received", "feedback": feedback})
+def post_simivision_feedback():
+    """Record user feedback on a SimiVision pick to close the learning loop."""
+    try:
+        body = request.get_json(force=True) or {}
+    except Exception:
+        return jsonify({"status": "error", "error": "invalid JSON"}), 400
+
+    subnet_id = body.get("subnet_id")
+    outcome = body.get("outcome")
+    note = body.get("note", "")
+
+    if subnet_id is None or outcome is None:
+        return jsonify({"status": "error", "error": "subnet_id and outcome are required"}), 400
+
+    try:
+        subnet_id = int(subnet_id)
+        outcome = int(outcome)
+    except (TypeError, ValueError):
+        return jsonify({"status": "error", "error": "subnet_id must be int, outcome must be int"}), 400
+
+    if outcome not in (-1, 0, 1):
+        return jsonify({"status": "error", "error": "outcome must be -1, 0, or 1"}), 400
+
+    entry = bridge.log_simivision_feedback(subnet_id, outcome, note)
+    return jsonify({"status": "success", "feedback": entry}), 201
 
 
 @app.route("/api/simivision/<int:netuid>/trace", methods=["GET"])
@@ -1050,7 +1071,7 @@ def get_simivision_trace(netuid):
 
         expert_breakdown = decision.get("expert_breakdown", {})
 
-        recommendations = MindmapBridge().get_brain_recommendations()
+        recommendations = bridge.get_brain_recommendations()
         brain_rec = recommendations.get("recommendations", {}).get(str(netuid), {})
         brain_action = brain_rec.get("action", "hold")
         selector_action = decision.get("recommended_action", "hold")

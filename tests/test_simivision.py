@@ -72,9 +72,9 @@ def test_api_simivision_includes_meta(client):
 def test_api_simivision_empty_state(client):
     """When no live picks exist, /api/simivision returns a transparent empty payload."""
     with patch('server.load_data') as mock_load, \
-         patch('server.MindmapBridge') as mock_bridge_cls:
+         patch('server.bridge') as mock_bridge:
         mock_load.return_value = {}
-        mock_bridge_cls.return_value.get_brain_recommendations.return_value = {'recommendations': {}}
+        mock_bridge.get_brain_recommendations.return_value = {'recommendations': {}}
         response = client.get('/api/simivision')
     assert response.status_code == 200
     data = json.loads(response.data)
