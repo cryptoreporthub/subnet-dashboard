@@ -10,11 +10,12 @@ Supported sources: news, x, discord, telegram.
 """
 
 import json
+import math
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-SIGNAL_SOURCES = {"news", "x", "discord", "telegram"}
+SIGNAL_SOURCES = {"news", "x", "discord", "telegram", "indicator"}
 
 # Pump detection parameters (tunable via environment variables).
 PUMP_START_MIN_SOURCES = int(os.environ.get("PUMP_START_MIN_SOURCES", "2"))
@@ -23,6 +24,7 @@ PUMP_END_IDLE_SECONDS = int(os.environ.get("PUMP_END_IDLE_SECONDS", "7200"))  # 
 RESURGENCE_IDLE_SECONDS = int(os.environ.get("RESURGENCE_IDLE_SECONDS", "21600"))  # 6h
 
 DEFAULT_PERSISTENCE_PATH = os.environ.get("SIGNAL_TIMELINE_PATH", "data/signal_timeline.json")
+SIGNAL_TYPES_PATH = os.environ.get("SIGNAL_TYPES_PATH", "config/signal_types.json")
 
 
 def _now_iso() -> str:
@@ -80,15 +82,17 @@ class SignalTracker:
         source: str,
         timestamp: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        signal_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Record a new signal for an asset and update its pump-cycle state.
 
         Args:
             asset: Asset symbol/name (e.g. "TAO").
-            source: One of news, x, discord, telegram.
+            source: One of news, x, discord, telegram, indicator.
             timestamp: ISO-8601 timestamp; defaults to now.
             metadata: Optional signal metadata (e.g. mention count, url).
+            signal_type: Optional signal taxonomy label (e.g. rsi_crossover).
 
         Returns:
             The enriched asset timeline record.
@@ -97,6 +101,10 @@ class SignalTracker:
         source = source.lower().strip()
         if source not in SIGNAL_SOURCES:
             raise ValueError(f"Unsupported source: {source}. Use one of {SIGNAL_SOURCES}")
+
+        metadata = metadata or {}
+        if signal_type is not None:
+            metadata["signal_type"] = signal_type
 
         now = _parse_iso(timestamp) or datetime.now(timezone.utc)
         now_iso = now.isoformat()
@@ -232,6 +240,57 @@ class SignalTracker:
             del self._state["assets"][asset]
             self._save()
         return {"asset": asset, "reset": True}
+
+    def compute_freshness(self, signal_type: str, created_at: str) -> Dict[str, Any]:
+        """
+        Compute signal freshness based on configured half-life.
+
+        freshness = e^(-lambda * age_hours) where lambda = ln(2) / half_life_hours
+        """
+        config: Dict[str, Any] = {}
+        if os.path.exists(SIGNAL_TYPES_PATH):
+            try:
+                with open(SIGNAL_TYPES_PATH, "r") as f:
+                    config = json.load(f)
+            except Exception:
+                config = {}
+
+        types = config.get("signal_types", {})
+        type_config = types.get(signal_type, {})
+        half_life = type_config.get("half_life_hours", 24)
+
+        created = _parse_iso(created_at)
+        if created is None:
+            return {
+                "signal_type": signal_type,
+                "freshness": 0.0,
+                "category": "dead",
+                "age_hours": None,
+                "half_life_hours": half_life,
+            }
+
+        age = (datetime.now(timezone.utc) - created).total_seconds() / 3600.0
+        if half_life <= 0:
+            freshness = 0.0
+        else:
+            freshness = math.exp(-math.log(2) * age / half_life)
+
+        categories = config.get("freshness_categories", {})
+        category = "dead"
+        for name, bounds in sorted(
+            categories.items(), key=lambda x: x[1].get("min_freshness", 0.0), reverse=True
+        ):
+            if freshness >= bounds.get("min_freshness", 0.0):
+                category = name
+                break
+
+        return {
+            "signal_type": signal_type,
+            "freshness": round(freshness, 4),
+            "category": category,
+            "age_hours": round(age, 4),
+            "half_life_hours": half_life,
+        }
 
     def ingest_intelligence(self, payload: Dict[str, Any]) -> List[Dict[str, Any]]:
         """

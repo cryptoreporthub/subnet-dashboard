@@ -117,9 +117,10 @@ def _synthesize_decision(netuid: int, registry_item: Dict[str, Any]) -> Dict[str
     quant_score = 0.85 if emission > 1.0 else 0.4 if emission < 0.2 else 0.75
     hype_score = 0.9 if mentions > 1000 else 0.3 if mentions < 100 else 0.65
     contrarian_score = 0.2 if is_overvalued else 0.8
+    technical_score = 0.5
 
     consensus_score = round(
-        quant_score * 0.4 + hype_score * 0.3 + contrarian_score * 0.3, 4
+        quant_score * 0.3 + hype_score * 0.25 + contrarian_score * 0.2 + technical_score * 0.25, 4
     )
 
     if consensus_score >= 0.75:
@@ -159,6 +160,11 @@ def _synthesize_decision(netuid: int, registry_item: Dict[str, Any]) -> Dict[str
                 "score": contrarian_score,
                 "signal": "sell" if is_overvalued else "buy",
                 "metrics": {"contrarian_index": contrarian_score * 100},
+            },
+            "technical": {
+                "score": technical_score,
+                "signal": "hold",
+                "metrics": {"active_signals": []},
             },
         },
         "synthesized": True,
@@ -211,6 +217,27 @@ def _compute_conviction(
 
     conviction = base + rank_bonus + social_bonus - penalty + tiebreaker
 
+    # Indicator layer: adjust conviction based on active technical signals.
+    indicator_bonus = 0.0
+    indicator_phrases: List[str] = []
+    breakdown = decision.get("expert_breakdown", {})
+    technical = breakdown.get("technical", {})
+    active_signals = technical.get("metrics", {}).get("active_signals", [])
+    bullish_signals = {"rsi_oversold_reversal", "macd_bullish_cross", "stochastic_oversold_reversal", "williams_oversold_exit"}
+    bearish_signals = {"rsi_overbought_reversal", "macd_bearish_cross"}
+    bullish_count = sum(1 for s in active_signals if s in bullish_signals)
+    bearish_count = sum(1 for s in active_signals if s in bearish_signals)
+    if bullish_count > 0:
+        indicator_bonus += 5.0
+        indicator_phrases.extend([s.replace("_", " ") for s in active_signals if s in bullish_signals])
+    if bearish_count > 0:
+        indicator_bonus -= 5.0
+        indicator_phrases.extend([s.replace("_", " ") for s in active_signals if s in bearish_signals])
+    if bullish_count >= 2:
+        indicator_bonus += 3.0
+        indicator_phrases.append("bullish confluence")
+    conviction += indicator_bonus
+
     # Adversarial layer: validated decisions get a small boost, contradicted
     # decisions get a penalty. This integrates learned outcomes into ranking.
     if judge is not None:
@@ -231,7 +258,7 @@ def _compute_conviction(
         elif label == "contradicted":
             conviction -= 5.0 * confidence
 
-    return round(min(100.0, max(0.0, conviction)), 2)
+    return round(min(100.0, max(0.0, conviction)), 2), indicator_phrases
 
 
 def _compute_delta(
@@ -260,6 +287,7 @@ def _build_rationale(
     quant = breakdown.get("quant", {})
     hype = breakdown.get("hype", {})
     contrarian = breakdown.get("contrarian", {})
+    technical = breakdown.get("technical", {})
 
     quant_label = (quant.get("metrics") or {}).get("emission_stability", "neutral")
     hype_label = hype.get("sentiment", "neutral")
@@ -294,6 +322,11 @@ def _build_rationale(
         opener = "Consensus is neutral"
 
     parts = [opener, quant_phrase, hype_phrase, contrarian_phrase]
+
+    # Mention active indicator signals in the rationale.
+    active_signals = technical.get("metrics", {}).get("active_signals", [])
+    if active_signals:
+        parts.append("; ".join(s.replace("_", " ") for s in active_signals))
 
     if overvalued:
         parts.append("overvaluation flag")
@@ -340,7 +373,7 @@ def build_simivision_signal(
     The subnet name is taken directly from registry_item["name"] with no
     runtime transformation, satisfying the canonical-name requirement.
     """
-    conviction = _compute_conviction(decision, registry_item, judge=judge)
+    conviction, indicator_phrases = _compute_conviction(decision, registry_item, judge=judge)
     status = _determine_status(conviction, registry_fresh, soul_map_fresh)
     delta, delta_value = _compute_delta(netuid, conviction, last_convictions)
     rationale = _build_rationale(decision, registry_item, conviction, status)
@@ -359,6 +392,7 @@ def build_simivision_signal(
         "freshness_human": _human_freshness(freshness_ts),
         "source": source,
         "status": status,
+        "indicator_phrases": indicator_phrases,
     }
 
     # Attach adversarial intelligence when available.
@@ -439,6 +473,7 @@ class SimiVisionEngine:
             # Apply learned council weights so final signals reflect the
             # adversarial intelligence layer rather than fixed selector weights.
             decision = self.pathfinder.apply_weights(decision)
+
 
             signal = build_simivision_signal(
                 netuid=netuid,

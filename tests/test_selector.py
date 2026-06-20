@@ -27,11 +27,12 @@ def test_structure_decision_payload():
         "contrarian": {"score": 0.8, "signal": "buy", "metrics": {}}
     }
     payload = selector.structure_decision_payload(1, opinions)
-    
+
     assert payload["subnet_id"] == 1
-    # Consensus score: (0.85 * 0.4) + (0.9 * 0.3) + (0.8 * 0.3) = 0.34 + 0.27 + 0.24 = 0.85
-    assert payload["consensus_score"] == 0.85
+    # Consensus score with four experts: (0.85 * 0.3) + (0.9 * 0.25) + (0.8 * 0.2) + (0.5 * 0.25) = 0.765
+    assert payload["consensus_score"] == 0.765
     assert payload["recommended_action"] == "accumulate"
+    assert "technical" in payload["expert_breakdown"]
 
 def test_process_daily_rotation():
     orchestrator = Orchestrator()
