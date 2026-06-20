@@ -264,9 +264,9 @@ def test_api_simivision_includes_meta(client):
 def test_api_simivision_empty_state(client):
     """When no live picks exist, /api/simivision returns a transparent empty payload."""
     with patch('server.load_data') as mock_load, \
-         patch('server.MindmapBridge') as mock_bridge_cls:
+         patch('server.bridge') as mock_bridge:
         mock_load.return_value = {}
-        mock_bridge_cls.return_value.get_brain_recommendations.return_value = {'recommendations': {}}
+        mock_bridge.get_brain_recommendations.return_value = {'recommendations': {}}
         response = client.get('/api/simivision')
     assert response.status_code == 200
     data = json.loads(response.data)
@@ -367,3 +367,54 @@ def test_index_renders_simivision_meta(client):
     assert 'simivision-source' in html
     assert 'simivision-empty' in html
     assert 'No live signals today' in html
+
+
+def test_feedback_boost_flows_into_edge_score(sample_registry):
+    """Full loop: POST feedback → _build_simivision_choices → edge_score reflects boost."""
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    bridge = MindmapBridge()
+    bridge._save_to_disk = MagicMock()  # prevent disk writes
+
+    # Log positive feedback for subnet 1
+    bridge.log_simivision_feedback(1, outcome=1, note="good pick")
+
+    decisions = [
+        {
+            "subnet_id": 1,
+            "recommended_action": "accumulate",
+            "consensus_score": 0.7,
+            "expert_breakdown": {
+                "quant": {"score": 0.7, "summary": "q"},
+                "hype": {"score": 0.6, "summary": "h"},
+                "contrarian": {"score": 0.5, "summary": "c"},
+            },
+        }
+    ]
+
+    # With bridge (boost active)
+    payload_with = _build_simivision_choices(
+        sample_registry,
+        decisions,
+        {"recommendations": {}},
+        feedback=None,
+        bridge=bridge,
+    )
+    # Without bridge (no boost)
+    payload_without = _build_simivision_choices(
+        sample_registry,
+        decisions,
+        {"recommendations": {}},
+        feedback=None,
+        bridge=None,
+    )
+
+    edge_with = payload_with["choices"][0]["edge_score"]
+    edge_without = payload_without["choices"][0]["edge_score"]
+    boost = payload_with["choices"][0]["feedback_boost"]
+
+    # boost = 1 * 0.02 = 0.02
+    assert boost == 0.02
+    # edge_score = (0.7 + boost) * 0.5 * 1.0 = 0.36 vs (0.7) * 0.5 * 1.0 = 0.35
+    assert edge_with > edge_without
+    assert edge_with == round((0.7 + 0.02) * 0.5 * 1.0, 4)
