@@ -1,0 +1,42 @@
+{
+  "bittensor:usd": {
+    "token": "TAO",
+    "coin_id": "bittensor",
+    "price_usd": 237.4,
+    "fetched_at": 1782020236.5581958,
+    "fetched_iso": "2026-06-21T05:37:16.558198+00:00",
+    "source": "api"
+  },
+  "fetch-ai:usd": {
+    "token": "FET",
+    "coin_id": "fetch-ai",
+    "price_usd": 0.185864,
+    "fetched_at": 1782020236.5581958,
+    "fetched_iso": "2026-06-21T05:37:16.558198+00:00",
+    "source": "api"
+  },
+  "render-token:usd": {
+    "token": "RENDER",
+    "coin_id": "render-token",
+    "price_usd": 1.7,
+    "fetched_at": 1782020236.5581958,
+    "fetched_iso": "2026-06-21T05:37:16.558198+00:00",
+    "source": "api"
+  },
+  "hyperliquid:usd": {
+    "token": "HYPE",
+    "coin_id": "hyperliquid",
+    "price_usd": 69.29,
+    "fetched_at": 1782020236.5581958,
+    "fetched_iso": "2026-06-21T05:37:16.558198+00:00",
+    "source": "api"
+  },
+  "valinity:usd": {
+    "token": "VVV",
+    "coin_id": "valinity",
+    "price_usd": 0.349044,
+    "fetched_at": 1782020236.5581958,
+    "fetched_iso": "2026-06-21T05:37:16.558198+00:00",
+    "source": "api"
+  }
+}

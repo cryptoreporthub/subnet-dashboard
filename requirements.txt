@@ -1,0 +1,7 @@
+flask
+pandas
+requests
+gunicorn>=21.2.0
+pytest
+freezegun
+jsonschema
