@@ -720,6 +720,11 @@ def _empty_simivision(error=None):
 @app.route("/")
 def index():
     """Server-render the dashboard hero content for a premium first paint."""
+    # Cold-start guard: if registry data hasn't been written yet, show a
+    # loading page that auto-refreshes until the background init finishes.
+    if not os.path.exists("config/registry.json") or not os.path.getsize("config/registry.json") > 0:
+        return render_template("loading.html")
+
     data = load_data("config/registry.json")
     enriched = _enrich_registry(data)
     summary_payload = _summarize_registry(data)
