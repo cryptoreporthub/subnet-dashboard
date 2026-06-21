@@ -1,11 +1,13 @@
 import json
 import os
+import time
 from datetime import datetime
 
 from flask import Flask, jsonify, render_template, request
 
 from internal.council.mindmap_bridge import MindmapBridge
 from internal.council.judge.adversarial import AdversarialJudge
+from internal.council.learner import LearningLoop
 from internal import freshness
 from internal import scheduler as adversarial_scheduler
 from internal.signals.signal_tracker import SignalTracker
@@ -85,6 +87,16 @@ def _ensure_background_sync():
         freshness.start_background_sync(immediate=True)
         indicator_scheduler.start_indicator_scheduler(immediate=True)
         adversarial_scheduler.start_adversarial_scheduler(immediate=True)
+        import threading
+        def _learning_loop_daemon():
+            while True:
+                try:
+                    LearningLoop().run()
+                except Exception:
+                    pass
+                time.sleep(1800)
+        t = threading.Thread(target=_learning_loop_daemon, daemon=True)
+        t.start()
 
 
 def _consensus_map():
@@ -1347,6 +1359,58 @@ def post_signals():
             "data": {"recorded": len(results), "results": results},
         }
     )
+
+
+@app.route("/api/learning-loop/status", methods=["GET"])
+def get_learning_loop_status():
+    """Return the current state of the self-learning loop."""
+    loop = LearningLoop()
+    return jsonify({
+        "status": "success",
+        "data": {
+            "last_run": loop.soul_map.get("last_run"),
+            "total_verdicts": len(loop.soul_map.get("verdicts", [])),
+            "total_outcomes": len(loop.outcomes),
+            "aligned_pct": loop._compute_aligned_pct(),
+            "divergent_pct": loop._compute_divergent_pct(),
+            "expert_weights": loop.soul_map.get("expert_weights", {}),
+        },
+    })
+
+
+@app.route("/api/learning-loop/outcomes", methods=["GET"])
+def get_learning_loop_outcomes():
+    """Return the last N entries from the outcomes log."""
+    try:
+        limit = int(request.args.get("limit", 50))
+    except (ValueError, TypeError):
+        limit = 50
+    outcomes = []
+    outcomes_path = os.path.join("data", "outcomes.jsonl")
+    if os.path.exists(outcomes_path):
+        with open(outcomes_path) as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        outcomes.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        pass
+    return jsonify({
+        "status": "success",
+        "data": outcomes[-limit:],
+    })
+
+
+@app.route("/api/learning-loop/run", methods=["POST"])
+def post_learning_loop_run():
+    """Trigger a manual run of the self-learning loop."""
+    loop = LearningLoop()
+    summary = loop.run()
+    return jsonify({
+        "status": "success",
+        "data": summary,
+    })
 
 
 if __name__ == "__main__":
