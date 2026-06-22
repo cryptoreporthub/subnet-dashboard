@@ -1,13 +1,11 @@
 import json
 import os
-import time
 from datetime import datetime
 
 from flask import Flask, jsonify, render_template, request
 
 from internal.council.mindmap_bridge import MindmapBridge
 from internal.council.judge.adversarial import AdversarialJudge
-from internal.council.learner import LearningLoop
 from internal import freshness
 from internal import scheduler as adversarial_scheduler
 from internal.signals.signal_tracker import SignalTracker
@@ -74,55 +72,13 @@ _background_sync_started = False
 def _ensure_background_sync():
     global _background_sync_started
     if _background_sync_started:
-        # Run request-triggered scheduler checks on each request
-        _check_schedulers()
         return
     _background_sync_started = True
     if app.config["ENABLE_BACKGROUND_SYNC"] and not app.config.get("TESTING"):
-        # Launch init in a background thread so we don't block the request
-        import threading
-        def _init():
-            freshness.merge_remote_registry()
-            freshness.start_background_sync(immediate=True)
-            indicator_scheduler.start_indicator_scheduler(immediate=True)
-            adversarial_scheduler.start_adversarial_scheduler(immediate=True)
-            def _learning_loop_daemon():
-                while True:
-                    try:
-                        LearningLoop().run()
-                    except Exception:
-                        pass
-                    time.sleep(1800)
-            lt = threading.Thread(target=_learning_loop_daemon, daemon=True)
-            lt.start()
-        t = threading.Thread(target=_init, daemon=True)
-        t.start()
-        return
-
-def _check_schedulers():
-    """Check and run schedulers on each request (request-triggered model)."""
-    try:
-        # Check adversarial scheduler (1 hour threshold)
-        adv_scheduler = adversarial_scheduler.get_adversarial_scheduler()
-        if adv_scheduler:
-            adv_scheduler.check_and_run()
-    except Exception:
-        pass
-    
-    try:
-        # Check indicator scheduler (5 minute threshold)
-        ind_scheduler = indicator_scheduler.get_indicator_scheduler()
-        if ind_scheduler:
-            ind_scheduler.check_and_run()
-    except Exception:
-        pass
-    
-    try:
-        # Check freshness (registry refresh)
-        freshness.check_and_refresh_registry()
-    except Exception:
-        pass
-
+        freshness.merge_remote_registry()
+        freshness.start_background_sync(immediate=True)
+        indicator_scheduler.start_indicator_scheduler(immediate=True)
+        adversarial_scheduler.start_adversarial_scheduler(immediate=True)
 
 def _consensus_map():
     """Build a subnet_id -> consensus decision lookup from the latest soul-map output."""
@@ -450,43 +406,6 @@ def mindmap_feedback():
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/scheduler/state")
-def scheduler_state():
-    """Return the state of all schedulers."""
-    return jsonify({
-        "adversarial": adversarial_scheduler.get_adversarial_scheduler_state(),
-        "indicators": indicator_scheduler.get_indicator_scheduler_state(),
-        "freshness": freshness._sync_state,
-    })
-
-
-@app.route("/api/scheduler/adversarial/check", methods=["POST"])
-def check_adversarial():
-    """Trigger a check on the adversarial scheduler."""
-    scheduler = adversarial_scheduler.get_adversarial_scheduler()
-    if scheduler:
-        result = scheduler.check_and_run()
-        return jsonify(result)
-    return jsonify({"error": "scheduler not running"}), 400
-
-
-@app.route("/api/scheduler/indicators/check", methods=["POST"])
-def check_indicators():
-    """Trigger a check on the indicator scheduler."""
-    scheduler = indicator_scheduler.get_indicator_scheduler()
-    if scheduler:
-        result = scheduler.check_and_run()
-        return jsonify(result)
-    return jsonify({"error": "scheduler not running"}), 400
-
-
-@app.route("/api/freshness/refresh", methods=["POST"])
-def refresh_freshness():
-    """Trigger a registry refresh."""
-    result = freshness.check_and_refresh_registry(immediate=True)
-    return jsonify(result)
 
 
 if __name__ == "__main__":
