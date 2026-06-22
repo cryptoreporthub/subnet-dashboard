@@ -5,8 +5,6 @@ Tracks when each data source was last updated, detects staleness, and
 runs a lightweight background refresh of registry metadata from the
 public taostat source. Safe for Fly.io single-worker deployment; no
 extra infrastructure required.
-
-Converted to request-triggered model for Fly.io compatibility.
 """
 
 import json
@@ -236,7 +234,7 @@ def overall_freshness(
 
 
 # ------------------------------------------------------------------
-# Request-triggered refresh API
+# Request-triggered refresh API (backward compatible)
 # ------------------------------------------------------------------
 def should_refresh_freshness(interval_seconds: int = BACKGROUND_INTERVAL_SECONDS) -> bool:
     """Check if enough time has passed since last registry refresh."""
