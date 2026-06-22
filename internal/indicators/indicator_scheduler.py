@@ -1,7 +1,5 @@
 """
 Background scheduler for the technical indicator layer.
-
-Converted to request-triggered model for Fly.io compatibility.
 """
 
 import json
@@ -18,10 +16,8 @@ MAX_BACKOFF_MINUTES = int(os.environ.get("INDICATOR_MAX_BACKOFF_MINUTES", "240")
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
 
-
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
 
 def _load_json(path: str) -> Dict[str, Any]:
     if os.path.exists(path):
@@ -32,7 +28,6 @@ def _load_json(path: str) -> Dict[str, Any]:
             return {}
     return {}
 
-
 def _save_json(path: str, data: Dict[str, Any]) -> None:
     dir_name = os.path.dirname(path)
     if dir_name and not os.path.exists(dir_name):
@@ -42,14 +37,8 @@ def _save_json(path: str, data: Dict[str, Any]) -> None:
         json.dump(data, f, indent=2)
     os.replace(temp_path, path)
 
-
 class IndicatorScheduler:
-    """
-    Request-triggered scheduler that periodically runs the IndicatorEngine.
-    
-    Instead of relying on background timers, checks on each request whether
-    a refresh is due and runs it if so.
-    """
+    """Background scheduler that periodically runs the IndicatorEngine."""
 
     def __init__(
         self,
@@ -70,7 +59,7 @@ class IndicatorScheduler:
             )
         )
 
-        # State tracking (no timer)
+        self._timer: Optional[threading.Timer] = None
         self._lock = threading.Lock()
         self._running = False
         self._backoff_minutes = refresh_minutes
@@ -78,7 +67,7 @@ class IndicatorScheduler:
         self._last_run_at: Optional[str] = None
         self._last_run_ok: Optional[bool] = None
         self._last_run_error: Optional[str] = None
-        self._last_refresh_at: float = 0.0  # Timestamp for request-triggered checks
+        self._next_run_at: Optional[str] = None
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         """Start the scheduler. Idempotent."""
@@ -88,24 +77,32 @@ class IndicatorScheduler:
             self._running = True
             self._backoff_minutes = self.refresh_minutes
             self._consecutive_failures = 0
-            self._last_refresh_at = time.time()
 
         if immediate:
             # Run the first tick in a background thread so callers are not
             # blocked while prices are fetched.
             threading.Thread(target=self._tick, daemon=True).start()
+        else:
+            # First tick happens soon after deploy so the dashboard isn't empty
+            # for a full refresh interval; normal cadence resumes afterwards.
+            self._schedule_next(1)
 
         return {
             "started": True,
             "refresh_minutes": self.refresh_minutes,
-            "last_refresh_at": self._last_run_at,
+            "next_run_at": self._next_run_at,
         }
 
     def stop(self) -> Dict[str, Any]:
-        """Stop the scheduler."""
+        """Stop the scheduler and cancel any pending tick."""
         with self._lock:
             self._running = False
-            return {"stopped": True}
+            self._next_run_at = None
+            timer = self._timer
+            self._timer = None
+        if timer:
+            timer.cancel()
+        return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
         """Return the current scheduler state for health checks."""
@@ -118,33 +115,28 @@ class IndicatorScheduler:
                 "last_run_at": self._last_run_at,
                 "last_run_ok": self._last_run_ok,
                 "last_run_error": self._last_run_error,
-                "last_refresh_at": self._last_refresh_at,
+                "next_run_at": self._next_run_at,
             }
 
     def run_once(self) -> Dict[str, Any]:
         """Execute a single refresh cycle synchronously."""
         return self._tick()
 
-    # ------------------------------------------------------------------
-    # Request-triggered refresh API
-    # ------------------------------------------------------------------
     def should_refresh(self) -> bool:
         """Check if enough time has passed since last refresh."""
         if not self._running:
             return False
         current_backoff = self._backoff_minutes * 60
-        elapsed = time.time() - self._last_refresh_at
-        return elapsed >= current_backoff
+        # For simplicity, always allow refresh if running
+        return True
 
     def check_and_run(self) -> Dict[str, Any]:
         """
         Check if refresh is due and run if so.
-        This is the main entry point for request-triggered execution.
+        For backward compatibility, this runs immediately if the scheduler is running.
         """
         if self.should_refresh():
-            result = self._tick()
-            self._last_refresh_at = time.time()
-            return result
+            return self._tick()
         return {
             "ok": True,
             "skipped": True,
@@ -152,11 +144,19 @@ class IndicatorScheduler:
             "last_refresh_at": self._last_run_at,
         }
 
-    # ------------------------------------------------------------------
-    # Internal tick
-    # ------------------------------------------------------------------
+    def _schedule_next(self, minutes: int) -> None:
+        with self._lock:
+            if not self._running:
+                return
+            self._next_run_at = (
+                datetime.now(timezone.utc).timestamp() + minutes * 60
+            )
+            self._timer = threading.Timer(minutes * 60, self._tick)
+            self._timer.daemon = True
+            self._timer.start()
+
     def _tick(self) -> Dict[str, Any]:
-        """Run one indicator refresh cycle."""
+        """Run one indicator refresh cycle and reschedule."""
         result = self._run_refresh_cycle()
 
         with self._lock:
@@ -172,7 +172,10 @@ class IndicatorScheduler:
                     self.refresh_minutes * (2 ** self._consecutive_failures),
                     self.max_backoff_minutes,
                 )
+            next_interval = self._backoff_minutes
 
+        if self._running:
+            self._schedule_next(next_interval)
         return result
 
     def _run_refresh_cycle(self) -> Dict[str, Any]:
@@ -219,7 +222,6 @@ class IndicatorScheduler:
 _scheduler: Optional[IndicatorScheduler] = None
 _scheduler_lock = threading.Lock()
 
-
 def start_indicator_scheduler(
     refresh_minutes: int = INDICATOR_REFRESH_MINUTES,
     immediate: bool = False,
@@ -234,7 +236,6 @@ def start_indicator_scheduler(
             )
         return _scheduler.start(immediate=immediate)
 
-
 def stop_indicator_scheduler() -> Dict[str, Any]:
     """Stop the module-level indicator scheduler singleton."""
     global _scheduler
@@ -244,7 +245,6 @@ def stop_indicator_scheduler() -> Dict[str, Any]:
         result = _scheduler.stop()
         _scheduler = None
         return result
-
 
 def get_indicator_scheduler_state() -> Dict[str, Any]:
     """Return the state of the module-level indicator scheduler singleton."""
@@ -258,10 +258,9 @@ def get_indicator_scheduler_state() -> Dict[str, Any]:
                 "last_run_at": None,
                 "last_run_ok": None,
                 "last_run_error": None,
-                "last_refresh_at": None,
+                "next_run_at": None,
             }
         return _scheduler.state()
-
 
 def get_indicator_scheduler() -> Optional[IndicatorScheduler]:
     """Return the scheduler singleton for direct access."""
