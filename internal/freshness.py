@@ -5,6 +5,8 @@ Tracks when each data source was last updated, detects staleness, and
 runs a lightweight background refresh of registry metadata from the
 public taostat source. Safe for Fly.io single-worker deployment; no
 extra infrastructure required.
+
+Converted to request-triggered model for Fly.io compatibility.
 """
 
 import json
@@ -46,6 +48,7 @@ _sync_state: Dict[str, Any] = {
     "last_sync_error": None,
     "next_sync_at": None,
     "background_running": False,
+    "last_refresh_at": 0.0,  # Timestamp for request-triggered checks
 }
 
 _timer: Optional[threading.Timer] = None
@@ -232,6 +235,71 @@ def overall_freshness(
     }
 
 
+# ------------------------------------------------------------------
+# Request-triggered refresh API
+# ------------------------------------------------------------------
+def should_refresh_freshness(interval_seconds: int = BACKGROUND_INTERVAL_SECONDS) -> bool:
+    """Check if enough time has passed since last registry refresh."""
+    elapsed = time.time() - _sync_state["last_refresh_at"]
+    return elapsed >= interval_seconds
+
+
+def check_and_refresh_registry(immediate: bool = False) -> Dict[str, Any]:
+    """
+    Check if refresh is due and run if so.
+    This is the main entry point for request-triggered execution.
+    """
+    if not immediate and not should_refresh_freshness():
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "not due yet",
+            "last_sync_at": _sync_state["last_sync_at"],
+        }
+    
+    result = merge_remote_registry()
+    with _lock:
+        _sync_state["last_refresh_at"] = time.time()
+    return result
+
+
+def start_background_sync(immediate: bool = False) -> Dict[str, Any]:
+    """Start background sync. For Fly.io compatibility, prefer request-triggered."""
+    global _timer
+    with _lock:
+        _sync_state["background_running"] = True
+        _sync_state["last_refresh_at"] = time.time()
+    
+    if immediate:
+        # Run immediately in background thread
+        threading.Thread(target=merge_remote_registry, daemon=True).start()
+        return {"started": True, "mode": "immediate"}
+    else:
+        # Schedule first tick in 1 minute, then every BACKGROUND_INTERVAL_SECONDS
+        def _schedule_and_run():
+            time.sleep(60)  # Wait 1 minute before first run
+            while _sync_state["background_running"]:
+                merge_remote_registry()
+                with _lock:
+                    _sync_state["last_refresh_at"] = time.time()
+                time.sleep(BACKGROUND_INTERVAL_SECONDS)
+        
+        t = threading.Thread(target=_schedule_and_run, daemon=True)
+        t.start()
+        return {"started": True, "mode": "background_timer"}
+
+
+def stop_background_sync() -> Dict[str, Any]:
+    """Stop background sync."""
+    global _timer
+    with _lock:
+        _sync_state["background_running"] = False
+        if _timer:
+            _timer.cancel()
+            _timer = None
+    return {"stopped": True}
+
+
 def merge_remote_registry(
     registry_path: str = REGISTRY_PATH,
     remote_url: str = REMOTE_REGISTRY_URL,
@@ -342,135 +410,12 @@ def merge_remote_registry(
         result["error"] = f"failed to write registry: {e}"
         return result
 
+    # Update sync state
+    with _lock:
+        _sync_state["last_sync_at"] = result["updated_at"]
+        _sync_state["last_sync_ok"] = True
+        _sync_state["last_sync_error"] = None
+
     result["ok"] = True
     result["updated_count"] = updated_count
     return result
-
-
-def refresh_watchlist(
-    watchlist_path: str = WATCHLIST_PATH,
-) -> Dict[str, Any]:
-    """
-    Refresh the protocol watchlist by bumping timestamps and ensuring the
-    file is valid JSON. This keeps first-class protocols (VVV, FET, RENDER,
-    TAO, HYPE) on the same 5-minute cadence as the subnet registry without
-    interfering with the 128-subnet sweep.
-    """
-    result = {
-        "ok": False,
-        "watchlist_path": watchlist_path,
-        "error": None,
-        "updated_at": _now_iso(),
-    }
-
-    data: Dict[str, Any] = {}
-    if os.path.exists(watchlist_path):
-        try:
-            with open(watchlist_path, "r") as f:
-                data = json.load(f)
-        except Exception as e:
-            result["error"] = f"failed to read watchlist: {e}"
-            return result
-
-    now = _now_iso()
-    data["last_updated"] = now
-    protocols = data.get("protocols") or {}
-    for protocol in protocols.values():
-        protocol["last_updated"] = now
-
-    try:
-        dir_name = os.path.dirname(watchlist_path)
-        if dir_name and not os.path.exists(dir_name):
-            os.makedirs(dir_name, exist_ok=True)
-        temp_path = watchlist_path + ".tmp"
-        with open(temp_path, "w") as f:
-            json.dump(data, f, indent=2)
-        os.replace(temp_path, watchlist_path)
-    except Exception as e:
-        result["error"] = f"failed to write watchlist: {e}"
-        return result
-
-    result["ok"] = True
-    result["protocol_count"] = len(protocols)
-    return result
-
-
-def refresh_all(
-    registry_path: str = REGISTRY_PATH,
-    soul_map_path: str = SOUL_MAP_PATH,
-    watchlist_path: str = WATCHLIST_PATH,
-    price_cache_path: str = PRICE_CACHE_PATH,
-) -> Dict[str, Any]:
-    """Run all available refresh steps and return a combined report."""
-    result = {
-        "synced_at": _now_iso(),
-        "registry": merge_remote_registry(registry_path),
-        "watchlist": refresh_watchlist(watchlist_path),
-        "freshness": overall_freshness(registry_path, soul_map_path, watchlist_path, price_cache_path=price_cache_path),
-    }
-    return result
-
-
-def _schedule_next(interval: int) -> None:
-    global _timer
-    _timer = threading.Timer(interval, _background_tick, args=(interval,))
-    _timer.daemon = True
-    _timer.start()
-    with _lock:
-        _sync_state["next_sync_at"] = (
-            datetime.now(timezone.utc).timestamp() + interval
-        )
-
-
-def _background_tick(interval: int) -> None:
-    report = refresh_all()
-    with _lock:
-        _sync_state["last_sync_at"] = report["synced_at"]
-        _sync_state["last_sync_ok"] = report["registry"]["ok"]
-        _sync_state["last_sync_error"] = report["registry"].get("error")
-    _schedule_next(interval)
-
-
-def start_background_sync(
-    interval: int = BACKGROUND_INTERVAL_SECONDS,
-    immediate: bool = False,
-) -> Dict[str, Any]:
-    """Start the background sync timer. Idempotent."""
-    global _timer
-    with _lock:
-        if _sync_state["background_running"]:
-            return {"started": False, "reason": "already running"}
-        _sync_state["background_running"] = True
-
-    if immediate:
-        refresh_all()
-
-    _schedule_next(interval)
-    return {"started": True, "interval_seconds": interval}
-
-
-def stop_background_sync() -> Dict[str, Any]:
-    """Stop the background sync timer."""
-    global _timer
-    with _lock:
-        _sync_state["background_running"] = False
-        _sync_state["next_sync_at"] = None
-    if _timer:
-        _timer.cancel()
-        _timer = None
-    return {"stopped": True}
-
-
-def get_sync_state(
-    registry_path: str = REGISTRY_PATH,
-    soul_map_path: str = SOUL_MAP_PATH,
-    watchlist_path: str = WATCHLIST_PATH,
-    signal_timeline_path: str = SIGNAL_TIMELINE_PATH,
-    price_cache_path: str = PRICE_CACHE_PATH,
-) -> Dict[str, Any]:
-    """Combined freshness + background sync state for the API."""
-    with _lock:
-        state = dict(_sync_state)
-    freshness = overall_freshness(registry_path, soul_map_path, watchlist_path, signal_timeline_path, price_cache_path)
-    state["freshness"] = freshness
-    return state
