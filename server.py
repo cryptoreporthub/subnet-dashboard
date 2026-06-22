@@ -7,7 +7,6 @@ from flask import Flask, jsonify, render_template, request
 
 from internal.council.mindmap_bridge import MindmapBridge
 from internal.council.judge.adversarial import AdversarialJudge
-from internal.council.learner import LearningLoop
 from internal import freshness
 from internal import scheduler as adversarial_scheduler
 from internal.signals.signal_tracker import SignalTracker
@@ -79,25 +78,10 @@ def _ensure_background_sync():
         return
     _background_sync_started = True
     if app.config["ENABLE_BACKGROUND_SYNC"] and not app.config.get("TESTING"):
-        # Launch init in a background thread so we don't block the request
-        import threading
-        def _init():
-            freshness.merge_remote_registry()
-            freshness.start_background_sync(immediate=True)
-            indicator_scheduler.start_indicator_scheduler(immediate=True)
-            adversarial_scheduler.start_adversarial_scheduler(immediate=True)
-            def _learning_loop_daemon():
-                while True:
-                    try:
-                        LearningLoop().run()
-                    except Exception:
-                        pass
-                    time.sleep(1800)
-            lt = threading.Thread(target=_learning_loop_daemon, daemon=True)
-            lt.start()
-        t = threading.Thread(target=_init, daemon=True)
-        t.start()
-        return
+        freshness.merge_remote_registry()
+        freshness.start_background_sync(immediate=True)
+        indicator_scheduler.start_indicator_scheduler(immediate=True)
+        adversarial_scheduler.start_adversarial_scheduler(immediate=True)
 
 def _check_schedulers():
     """Check and run schedulers on each request (request-triggered model)."""
@@ -353,60 +337,103 @@ def _build_choice(registry, recs, decision, judge, feedback_boost=0.0):
         "action": action,
         "confidence": confidence,
         "edge_score": edge_score,
-        "horizon": horizon,
+        "preferred_entry": preferred_entry,
+        "reward_risk": {
+            "ratio": reward_risk_ratio,
+            "label": reward_risk_label,
+            "reward": round(reward, 2),
+            "risk_penalty": risk_penalty,
+        },
         "why_now": why_now,
         "invalidation": invalidation,
-        "breakdown": breakdown,
-        "protocol_tag": protocol_tag,
-        "apy": apy,
-        "preferred_entry": preferred_entry,
-        "risk_score": risk_score,
-        "reward_risk_label": reward_risk_label,
+        "horizon": horizon,
         "judge_agreement": judge_agreement,
-        "verdict": verdict,
+        "brain_action": brain_action,
+        "target_weight": target_weight,
         "feedback_boost": feedback_boost,
     }
 
 
 @app.route("/")
 def index():
-    """Homepage route with loading page guard for cold-start."""
-    # Check if data is ready
-    registry_path = "config/registry.json"
-    if not os.path.exists(registry_path) or os.path.getsize(registry_path) == 0:
-        return render_template("loading.html")
-    
-    # Load and display data
-    registry = load_data(registry_path)
+    registry = load_data("config/registry.json")
+    watchlist = _load_watchlist()
     if not registry:
         return render_template("loading.html")
-    
-    # Check if registry has actual subnet data
-    has_subnets = any(
-        item.get("emission", 0) > 0 or item.get("staking_data", {}).get("total_stake", 0) > 0
-        for item in registry.values()
-        if isinstance(item, dict)
-    )
-    
-    if not has_subnets:
-        return render_template("loading.html")
-    
-    # Build the page with data
+    enriched = _enrich_registry(registry)
+    # Use SimiVision engine for the homepage
     engine = SimiVisionEngine(registry_path="config/registry.json")
     simi_data = engine.safe_snapshot()
-    
     return render_template(
         "index.html",
-        simivision_data=simi_data,
+        data=enriched,
+        watchlist=watchlist,
         version=_app_version(),
         freshness=_freshness_meta("registry"),
+        simivision_data=simi_data,
     )
 
 
 @app.route("/health")
 def health():
-    """Health check endpoint."""
     return "OK"
+
+
+@app.route("/api/registry")
+def registry():
+    return jsonify(load_data("config/registry.json"))
+
+
+@app.route("/api/watchlist")
+def watchlist():
+    return jsonify(_load_watchlist())
+
+
+@app.route("/api/freshness")
+def freshness_api():
+    return jsonify(_freshness_meta("registry"))
+
+
+@app.route("/api/simivision")
+def simivision():
+    """Return the SimiVision snapshot for the homepage."""
+    engine = SimiVisionEngine(registry_path="config/registry.json")
+    return jsonify(engine.safe_snapshot())
+
+
+@app.route("/api/simivision/<int:netuid>/trace")
+def simivision_trace(netuid):
+    """Return deep trace for a specific subnet."""
+    try:
+        engine = SimiVisionEngine(registry_path="config/registry.json")
+        registry = load_data("config/registry.json")
+        decisions = _load_selector_decisions()
+        trace = _synthesize_decision(engine, registry, decisions, netuid)
+        if trace is None:
+            return jsonify({"error": "subnet not found"}), 404
+        return jsonify(trace)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/mindmap/feedback", methods=["POST"])
+def mindmap_feedback():
+    """Record user feedback on a SimiVision pick."""
+    data = request.get_json() or {}
+    subnet_id = data.get("subnet_id")
+    outcome = data.get("outcome")
+    note = data.get("note", "")
+    if subnet_id is None or outcome is None:
+        return jsonify({"error": "subnet_id and outcome required"}), 400
+    try:
+        bridge.log_simivision_picks([{
+            "subnet_id": subnet_id,
+            "outcome": outcome,
+            "note": note,
+        }])
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/scheduler/state")
