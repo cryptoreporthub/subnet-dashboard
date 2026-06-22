@@ -7,6 +7,7 @@ from flask import Flask, jsonify, render_template, request
 
 from internal.council.mindmap_bridge import MindmapBridge
 from internal.council.judge.adversarial import AdversarialJudge
+from internal.council.learner import LearningLoop
 from internal import freshness
 from internal import scheduler as adversarial_scheduler
 from internal.signals.signal_tracker import SignalTracker
@@ -78,10 +79,25 @@ def _ensure_background_sync():
         return
     _background_sync_started = True
     if app.config["ENABLE_BACKGROUND_SYNC"] and not app.config.get("TESTING"):
-        freshness.merge_remote_registry()
-        freshness.start_background_sync(immediate=True)
-        indicator_scheduler.start_indicator_scheduler(immediate=True)
-        adversarial_scheduler.start_adversarial_scheduler(immediate=True)
+        # Launch init in a background thread so we don't block the request
+        import threading
+        def _init():
+            freshness.merge_remote_registry()
+            freshness.start_background_sync(immediate=True)
+            indicator_scheduler.start_indicator_scheduler(immediate=True)
+            adversarial_scheduler.start_adversarial_scheduler(immediate=True)
+            def _learning_loop_daemon():
+                while True:
+                    try:
+                        LearningLoop().run()
+                    except Exception:
+                        pass
+                    time.sleep(1800)
+            lt = threading.Thread(target=_learning_loop_daemon, daemon=True)
+            lt.start()
+        t = threading.Thread(target=_init, daemon=True)
+        t.start()
+        return
 
 def _check_schedulers():
     """Check and run schedulers on each request (request-triggered model)."""
@@ -380,7 +396,7 @@ def health():
 
 
 @app.route("/api/registry")
-def registry():
+def registry_api():
     return jsonify(load_data("config/registry.json"))
 
 
