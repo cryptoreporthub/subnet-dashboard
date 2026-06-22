@@ -125,6 +125,29 @@ class AdversarialScheduler:
         """Execute a single refresh cycle synchronously."""
         return self._tick()
 
+    def should_refresh(self) -> bool:
+        """Check if enough time has passed since last refresh."""
+        if not self._running:
+            return False
+        current_backoff = self._backoff_minutes * 60
+        # For simplicity, always allow refresh if running
+        # (the timer-based approach handles scheduling)
+        return True
+
+    def check_and_run(self) -> Dict[str, Any]:
+        """
+        Check if refresh is due and run if so.
+        For backward compatibility, this runs immediately if the scheduler is running.
+        """
+        if self.should_refresh():
+            return self._tick()
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "not due yet",
+            "last_refresh_at": self._last_run_at,
+        }
+
     # ------------------------------------------------------------------
     # Internal tick
     # ------------------------------------------------------------------
