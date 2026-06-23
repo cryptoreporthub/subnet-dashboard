@@ -352,3 +352,9 @@ def get_adversarial_scheduler_state() -> Dict[str, Any]:
                 "next_run_at": None,
             }
         return _scheduler.state()
+
+
+def get_adversarial_scheduler() -> Optional[AdversarialScheduler]:
+    """Return the scheduler singleton for direct access."""
+    with _scheduler_lock:
+        return _scheduler
