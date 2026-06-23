@@ -24,6 +24,17 @@ app = Flask(__name__)
 _PROTOCOLS_PATH = os.environ.get("PROTOCOLS_PATH", "config/protocols.json")
 _protocols_config = {}
 
+# Freshness configuration
+app.config["ENABLE_BACKGROUND_SYNC"] = (
+    os.environ.get("ENABLE_BACKGROUND_SYNC", "true").lower() != "false"
+)
+
+def load_data(filename):
+    if os.path.exists(filename):
+        with open(filename, "r") as f:
+            return json.load(f)
+    return {}
+
 def _load_protocols_config():
     """Load the protocol watchlist mapping once at startup."""
     global _protocols_config
@@ -53,17 +64,6 @@ def _protocol_tag_for(name):
                 return cfg.get("label", key)
     return None
 
-# Freshness configuration
-app.config["ENABLE_BACKGROUND_SYNC"] = (
-    os.environ.get("ENABLE_BACKGROUND_SYNC", "true").lower() != "false"
-)
-
-def load_data(filename):
-    if os.path.exists(filename):
-        with open(filename, "r") as f:
-            return json.load(f)
-    return {}
-
 # Lazily start the background sync once on the first request so it works
 # under both `python server.py` and gunicorn without import-time side effects.
 _background_sync_started = False
@@ -78,11 +78,9 @@ def _ensure_background_sync():
         if app.config.get("ENABLE_BACKGROUND_SYNC") and not app.config.get("TESTING"):
             # Run scheduler refresh in background to avoid blocking response
             try:
-                adversarial_scheduler.get_adversarial_scheduler_state()
-                threading.Thread(
-                    target=lambda: adversarial_scheduler.get_adversarial_scheduler().check_and_run() if adversarial_scheduler.get_adversarial_scheduler() else None,
-                    daemon=True
-                ).start()
+                scheduler = adversarial_scheduler.get_adversarial_scheduler()
+                if scheduler:
+                    threading.Thread(target=scheduler.check_and_run, daemon=True).start()
             except Exception:
                 pass
         return
@@ -93,7 +91,158 @@ def _ensure_background_sync():
         indicator_scheduler.start_indicator_scheduler(immediate=True)
         adversarial_scheduler.start_adversarial_scheduler(immediate=True)
 
+@app.route('/health')
+def health():
+    return "OK"
+
 @app.route('/api/scheduler/state')
 def scheduler_state():
     """Return the current state of the adversarial scheduler."""
     return jsonify(adversarial_scheduler.get_adversarial_scheduler_state())
+
+@app.route('/')
+def index():
+    return render_template('index.html', **{})
+
+@app.route('/registry')
+def registry():
+    data = load_data('config/registry.json')
+    return jsonify(data)
+
+@app.route('/registry/<int:subnet_id>')
+def subnet_detail(subnet_id):
+    data = load_data('config/registry.json')
+    item = data.get(str(subnet_id), {})
+    return jsonify(item)
+
+@app.route('/api/mindmap/nodes')
+def mindmap_nodes():
+    """Return active and pruned mindmap nodes with decay values."""
+    from internal.conviction_decay import get_decay_state
+    return jsonify(get_decay_state())
+
+@app.route('/api/mindmap/hypotheses')
+def mindmap_hypotheses():
+    """Return pending hypotheses."""
+    from internal.conviction_decay import get_hypotheses
+    include_resolved = request.args.get('include_resolved', 'false').lower() == 'true'
+    return jsonify(get_hypotheses(include_resolved=include_resolved))
+
+@app.route('/api/mindmap/hypotheses', methods=['POST'])
+def create_hypothesis():
+    """Record a new testable hypothesis."""
+    from internal.conviction_decay import create_hypothesis
+    body = request.get_json() or {}
+    result = create_hypothesis(
+        prediction=body.get('prediction'),
+        horizon=body.get('horizon'),
+        sources=body.get('sources', []),
+        subnet_id=body.get('subnet_id'),
+    )
+    return jsonify(result)
+
+@app.route('/api/mindmap/hypotheses/<int:hypothesis_id>/resolve', methods=['POST'])
+def resolve_hypothesis(hypothesis_id):
+    """Resolve a hypothesis against current price data."""
+    from internal.conviction_decay import resolve_hypothesis
+    result = resolve_hypothesis(hypothesis_id)
+    return jsonify(result)
+
+@app.route('/api/price-oracle/')
+def price_oracle_single():
+    """Return price for a single token."""
+    from internal.price_oracle import get_token_price
+    token = request.args.get('token', 'TAO')
+    price = get_token_price(token)
+    return jsonify({"token": token, "price": price})
+
+@app.route('/api/price-oracle')
+def price_oracle_all():
+    """Return all tracked token prices."""
+    from internal.price_oracle import get_all_prices
+    prices = get_all_prices()
+    return jsonify(prices)
+
+@app.route('/simivision')
+def simivision():
+    """Render the SimiVision dashboard."""
+    registry = load_data('config/registry.json')
+    soul_map = load_data('data/soul_map.json')
+    last_output = soul_map.get('soul_map_state', {}).get('last_selector_output', {})
+    decisions = last_output.get('decisions', [])
+    consensus = {d['subnet_id']: d for d in decisions if 'subnet_id' in d}
+    
+    items = []
+    for key, value in registry.items():
+        item = dict(value)
+        subnet_id = item.get('id', int(key))
+        item.setdefault('id', subnet_id)
+        decision = consensus.get(subnet_id)
+        if decision:
+            item['consensus'] = {
+                'score': decision.get('consensus_score'),
+                'recommended_action': decision.get('recommended_action'),
+                'expert_breakdown': decision.get('expert_breakdown'),
+            }
+        items.append(item)
+    
+    return render_template('simivision.html', items=items)
+
+@app.route('/api/simivision')
+def api_simivision():
+    """Return SimiVision data for the current cycle."""
+    registry = load_data('config/registry.json')
+    soul_map = load_data('data/soul_map.json')
+    last_output = soul_map.get('soul_map_state', {}).get('last_selector_output', {})
+    decisions = last_output.get('decisions', [])
+    consensus = {d['subnet_id']: d for d in decisions if 'subnet_id' in d}
+    
+    items = []
+    for key, value in registry.items():
+        item = dict(value)
+        subnet_id = item.get('id', int(key))
+        item.setdefault('id', subnet_id)
+        decision = consensus.get(subnet_id)
+        if decision:
+            item['consensus'] = {
+                'score': decision.get('consensus_score'),
+                'recommended_action': decision.get('recommended_action'),
+            }
+        items.append(item)
+    
+    return jsonify(items)
+
+@app.route('/api/signal/<int:subnet_id>/timeline')
+def signal_timeline(subnet_id):
+    """Return signal timeline for a subnet."""
+    from internal.signals.signal_tracker import get_signal_timeline
+    timeline = get_signal_timeline(subnet_id)
+    return jsonify(timeline)
+
+@app.route('/api/indicators')
+def indicators():
+    """Return current indicator values for all subnets."""
+    from internal.indicators.indicator_engine import get_all_indicators
+    indicators = get_all_indicators()
+    return jsonify(indicators)
+
+@app.route('/api/scheduler/run', methods=['POST'])
+def run_scheduler():
+    """Trigger a manual scheduler run."""
+    scheduler = adversarial_scheduler.get_adversarial_scheduler()
+    if scheduler:
+        result = scheduler.run_once()
+        return jsonify(result)
+    return jsonify({"error": "scheduler not running"}), 500
+
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({"error": "not found"}), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    return jsonify({"error": "internal server error"}), 500
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
