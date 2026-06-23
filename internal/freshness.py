@@ -9,6 +9,7 @@ extra infrastructure required.
 
 import json
 import os
+import tempfile
 import threading
 import time
 from datetime import datetime, timezone
@@ -320,12 +321,16 @@ def merge_remote_registry(
 
     try:
         dir_name = os.path.dirname(registry_path)
-        if dir_name and not os.path.exists(dir_name):
+        if dir_name:
             os.makedirs(dir_name, exist_ok=True)
-        temp_path = registry_path + ".tmp"
-        with open(temp_path, "w") as f:
-            json.dump(local, f, indent=2)
-        os.replace(temp_path, registry_path)
+        fd, temp_path = tempfile.mkstemp(dir=dir_name or ".", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(local, f, indent=2)
+            os.replace(temp_path, registry_path)
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
     except Exception as e:
         result["error"] = f"failed to write registry: {e}"
         return result
@@ -368,12 +373,16 @@ def refresh_watchlist(
 
     try:
         dir_name = os.path.dirname(watchlist_path)
-        if dir_name and not os.path.exists(dir_name):
+        if dir_name:
             os.makedirs(dir_name, exist_ok=True)
-        temp_path = watchlist_path + ".tmp"
-        with open(temp_path, "w") as f:
-            json.dump(data, f, indent=2)
-        os.replace(temp_path, watchlist_path)
+        fd, temp_path = tempfile.mkstemp(dir=dir_name or ".", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_path, watchlist_path)
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
     except Exception as e:
         result["error"] = f"failed to write watchlist: {e}"
         return result

@@ -14,6 +14,7 @@ Features:
 
 import json
 import os
+import tempfile
 import threading
 import time
 from datetime import datetime, timezone
@@ -301,13 +302,18 @@ class AdversarialScheduler:
 
             data.setdefault("adversarial_scheduler", {})["last_cycle"] = summary
 
-            os.makedirs(os.path.dirname(self.soul_map_path), exist_ok=True)
+            dir_name = os.path.dirname(self.soul_map_path)
+            os.makedirs(dir_name, exist_ok=True)
 
-            # Write to temp file first, then rename for atomicity
-            temp_path = self.soul_map_path + ".tmp"
-            with open(temp_path, "w") as f:
-                json.dump(data, f, indent=2)
-            os.replace(temp_path, self.soul_map_path)
+            # Write to unique temp file first, then rename for atomicity
+            fd, temp_path = tempfile.mkstemp(dir=dir_name or ".", suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w") as f:
+                    json.dump(data, f, indent=2)
+                os.replace(temp_path, self.soul_map_path)
+            finally:
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
         except Exception:
             # Silently continue with in-memory state
             pass

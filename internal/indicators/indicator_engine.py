@@ -18,6 +18,7 @@ INDICATOR_RUN_COUNCIL_PHASE=true to enable the full feedback loop.
 
 import json
 import os
+import tempfile
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -50,10 +51,14 @@ def _load_json(path: str) -> Dict[str, Any]:
 
 def _save_json(path: str, data: Dict[str, Any]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    temp_path = path + ".tmp"
-    with open(temp_path, "w") as f:
-        json.dump(data, f, indent=2)
-    os.replace(temp_path, path)
+    fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(path) or ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(temp_path, path)
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
 
 class IndicatorEngine:
     """Orchestrates technical indicator computation and optional Mindmap integration."""

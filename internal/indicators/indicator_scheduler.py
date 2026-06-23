@@ -4,6 +4,7 @@ Background scheduler for the technical indicator layer.
 
 import json
 import os
+import tempfile
 import threading
 import time
 from datetime import datetime, timezone
@@ -30,10 +31,14 @@ def _load_json(path: str) -> Dict[str, Any]:
 
 def _save_json(path: str, data: Dict[str, Any]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    temp_path = path + ".tmp"
-    with open(temp_path, "w") as f:
-        json.dump(data, f, indent=2)
-    os.replace(temp_path, path)
+    fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(path) or ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(temp_path, path)
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
 
 class IndicatorScheduler:
     """Background scheduler that periodically runs the IndicatorEngine."""

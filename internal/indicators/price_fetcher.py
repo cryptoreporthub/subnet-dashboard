@@ -13,6 +13,7 @@ Tiered strategy:
 
 import json
 import os
+import tempfile
 import time
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
@@ -66,10 +67,14 @@ def _load_json(path: str) -> Dict[str, Any]:
 
 def _save_json(path: str, data: Dict[str, Any]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    temp_path = path + ".tmp"
-    with open(temp_path, "w") as f:
-        json.dump(data, f, indent=2)
-    os.replace(temp_path, path)
+    fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(path) or ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(temp_path, path)
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
 
 
 def _load_price_pairs(path: str = PRICE_PAIRS_PATH) -> Dict[str, Any]:

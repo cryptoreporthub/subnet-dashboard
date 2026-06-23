@@ -7,6 +7,7 @@ Mindmap-integrated Engine.
 
 import json
 import os
+import tempfile
 from typing import Any, Dict, List, Optional
 
 from internal.signals.signal_tracker import SignalTracker
@@ -85,14 +86,18 @@ def _mirror_verdicts_to_jsonl(
     verdicts = soul_map.get("adversarial_state", {}).get("verdicts", [])
 
     dir_name = os.path.dirname(verdicts_path)
-    if dir_name and not os.path.exists(dir_name):
+    if dir_name:
         os.makedirs(dir_name, exist_ok=True)
 
-    temp_path = verdicts_path + ".tmp"
-    with open(temp_path, "w") as f:
-        for verdict in verdicts:
-            f.write(json.dumps(verdict) + "\n")
-    os.replace(temp_path, verdicts_path)
+    fd, temp_path = tempfile.mkstemp(dir=dir_name or ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            for verdict in verdicts:
+                f.write(json.dumps(verdict) + "\n")
+        os.replace(temp_path, verdicts_path)
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
     return verdicts_path
 
 

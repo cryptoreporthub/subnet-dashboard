@@ -12,6 +12,7 @@ Responsibilities:
 
 import json
 import os
+import tempfile
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -55,7 +56,7 @@ class AdversarialJudge:
 
     def _save_state(self) -> None:
         dir_name = os.path.dirname(self.persistence_path)
-        if dir_name and not os.path.exists(dir_name):
+        if dir_name:
             os.makedirs(dir_name, exist_ok=True)
 
         data: Dict[str, Any] = {}
@@ -67,10 +68,14 @@ class AdversarialJudge:
                 data = {}
 
         data["adversarial_state"] = self._state
-        temp_path = self.persistence_path + ".tmp"
-        with open(temp_path, "w") as f:
-            json.dump(data, f, indent=2)
-        os.replace(temp_path, self.persistence_path)
+        fd, temp_path = tempfile.mkstemp(dir=dir_name or ".", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_path, self.persistence_path)
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
 
     # ------------------------------------------------------------------
     # Public accessors used by SimiVision and the API
