@@ -91,6 +91,7 @@ class AdversarialScheduler:
         self._last_run_ok: Optional[bool] = None
         self._last_run_error: Optional[str] = None
         self._next_run_at: Optional[float] = None  # Epoch time
+        self._state_cache: Dict[str, Any] = {}  # In-memory fallback
 
     # ------------------------------------------------------------------
     # Public control API
@@ -269,14 +270,7 @@ class AdversarialScheduler:
     def _persist_cycle_summary(
         self, run_at: str, verdicts: List[Dict[str, Any]], weights: Dict[str, float]
     ) -> None:
-        data: Dict[str, Any] = {}
-        if os.path.exists(self.soul_map_path):
-            try:
-                with open(self.soul_map_path, "r") as f:
-                    data = json.load(f)
-            except Exception:
-                data = {}
-
+        """Persist cycle summary to file with in-memory fallback."""
         summary = {
             "run_at": run_at,
             "verdict_count": len(verdicts),
@@ -292,15 +286,30 @@ class AdversarialScheduler:
             else 0.0,
             "council_weights": weights,
         }
-        data.setdefault("adversarial_scheduler", {})["last_cycle"] = summary
+        
+        # Always update in-memory cache
+        self._state_cache = summary
+        
+        # Try to persist to file, but don't fail if we can't
+        try:
+            data: Dict[str, Any] = {}
+            if os.path.exists(self.soul_map_path):
+                data = _load_json(self.soul_map_path) or {}
 
-        dir_name = os.path.dirname(self.soul_map_path)
-        if dir_name and not os.path.exists(dir_name):
-            os.makedirs(dir_name, exist_ok=True)
-        temp_path = self.soul_map_path + ".tmp"
-        with open(temp_path, "w") as f:
-            json.dump(data, f, indent=2)
-        os.replace(temp_path, self.soul_map_path)
+            data.setdefault("adversarial_scheduler", {})["last_cycle"] = summary
+
+            dir_name = os.path.dirname(self.soul_map_path)
+            if dir_name and not os.path.exists(dir_name):
+                os.makedirs(dir_name, exist_ok=True)
+            
+            # Write to temp file first, then rename for atomicity
+            temp_path = self.soul_map_path + ".tmp"
+            with open(temp_path, "w") as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_path, self.soul_map_path)
+        except Exception:
+            # Silently continue with in-memory state
+            pass
 
 
 # ------------------------------------------------------------------------------
