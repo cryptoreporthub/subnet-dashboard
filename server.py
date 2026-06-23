@@ -90,10 +90,16 @@ def _ensure_background_sync():
         return
     _background_sync_started = True
     if app.config["ENABLE_BACKGROUND_SYNC"] and not app.config.get("TESTING"):
-        freshness.merge_remote_registry()
-        freshness.start_background_sync(immediate=True)
-        indicator_scheduler.start_indicator_scheduler(immediate=True)
-        adversarial_scheduler.start_adversarial_scheduler(immediate=True)
+        # Run initial sync in a background thread to avoid blocking the first
+        # request — merge_remote_registry performs a synchronous HTTP fetch with
+        # a 30-second timeout that would exceed gunicorn's default 30-second
+        # worker timeout, causing an HTTP 500 on cold start.
+        def _initial_sync():
+            freshness.merge_remote_registry()
+            freshness.start_background_sync(immediate=True)
+            indicator_scheduler.start_indicator_scheduler(immediate=True)
+            adversarial_scheduler.start_adversarial_scheduler(immediate=True)
+        threading.Thread(target=_initial_sync, daemon=True).start()
 
 @app.route('/health')
 def health():
