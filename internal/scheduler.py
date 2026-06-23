@@ -301,9 +301,7 @@ class AdversarialScheduler:
 
             data.setdefault("adversarial_scheduler", {})["last_cycle"] = summary
 
-            dir_name = os.path.dirname(self.soul_map_path)
-            if dir_name and not os.path.exists(dir_name):
-                os.makedirs(dir_name, exist_ok=True)
+            os.makedirs(os.path.dirname(self.soul_map_path), exist_ok=True)
             
             # Write to temp file first, then rename for atomicity
             temp_path = self.soul_map_path + ".tmp"

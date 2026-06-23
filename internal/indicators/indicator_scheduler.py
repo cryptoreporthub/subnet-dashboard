@@ -29,9 +29,7 @@ def _load_json(path: str) -> Dict[str, Any]:
     return {}
 
 def _save_json(path: str, data: Dict[str, Any]) -> None:
-    dir_name = os.path.dirname(path)
-    if dir_name and not os.path.exists(dir_name):
-        os.makedirs(dir_name, exist_ok=True)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     temp_path = path + ".tmp"
     with open(temp_path, "w") as f:
         json.dump(data, f, indent=2)
