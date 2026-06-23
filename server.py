@@ -222,8 +222,8 @@ def signal_timeline(subnet_id):
 @app.route('/api/indicators')
 def indicators():
     """Return current indicator values for all subnets."""
-    from internal.indicators.indicator_engine import get_all_indicators
-    indicators = get_all_indicators()
+    from internal.indicators.indicator_engine import IndicatorEngine
+    indicators = IndicatorEngine().get_indicator_state()
     return jsonify(indicators)
 
 @app.route('/api/scheduler/run', methods=['POST'])
