@@ -5,6 +5,9 @@ from datetime import datetime
 
 from flask import Flask, jsonify, render_template, request
 
+# Ensure the data directory exists at module load time (critical for Fly.io).
+os.makedirs('data', exist_ok=True)
+
 from internal.council.mindmap_bridge import MindmapBridge
 from internal.council.judge.adversarial import AdversarialJudge
 from internal import freshness

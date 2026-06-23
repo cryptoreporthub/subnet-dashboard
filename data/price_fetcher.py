@@ -11,6 +11,9 @@ from typing import Any, Dict, Optional
 import pandas as pd
 import requests
 
+# Ensure the data directory exists at module load time.
+os.makedirs('data', exist_ok=True)
+
 COINGECKO_BASE = "https://api.coingecko.com/api/v3"
 DEFAULT_CACHE_SECONDS = int(os.environ.get("PRICE_CACHE_SECONDS", "60"))
 REQUEST_TIMEOUT = int(os.environ.get("PRICE_REQUEST_TIMEOUT", "20"))

@@ -20,6 +20,9 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
 from internal.council.judge.adversarial import AdversarialJudge
+
+# Ensure the data directory exists at module load time.
+os.makedirs('data', exist_ok=True)
 from internal.council.mindmap_bridge import MindmapBridge
 from internal.council.selector import Selector
 
