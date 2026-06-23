@@ -9,6 +9,7 @@ Features:
 - Exponential backoff on repeated failures (capped at max_backoff_minutes).
 - Persists learned state to the Soul-Map (data/soul_map.json).
 - Idempotent start/stop semantics safe for Fly.io single-worker deployments.
+- Request-triggered refresh for Fly.io auto-stop compatibility.
 """
 
 import json
@@ -27,11 +28,28 @@ MAX_BACKOFF_MINUTES = int(os.environ.get("MAX_BACKOFF_MINUTES", "240"))
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
 
+
+def _now_iso() -> str:
+    """Return current UTC time as ISO format string."""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _load_json(path: str) -> Optional[Dict[str, Any]]:
+    """Load JSON file, return None if missing or invalid."""
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
 class AdversarialScheduler:
     """
     Background scheduler that periodically runs the Selector, judges the
     resulting decisions against the current registry outcomes, and persists
     the learned weights/verdicts back to the Soul-Map.
+    
+    Supports both timer-based (legacy) and request-triggered refresh modes.
     """
 
     def __init__(
@@ -69,9 +87,10 @@ class AdversarialScheduler:
         self._backoff_minutes = refresh_minutes
         self._consecutive_failures = 0
         self._last_run_at: Optional[str] = None
+        self._last_run_timestamp: float = 0.0  # Epoch time for time-based checks
         self._last_run_ok: Optional[bool] = None
         self._last_run_error: Optional[str] = None
-        self._next_run_at: Optional[str] = None
+        self._next_run_at: Optional[float] = None  # Epoch time
 
     # ------------------------------------------------------------------
     # Public control API
@@ -84,6 +103,7 @@ class AdversarialScheduler:
             self._running = True
             self._backoff_minutes = self.refresh_minutes
             self._consecutive_failures = 0
+            self._last_run_timestamp = time.time()
 
         if immediate:
             self._tick()
@@ -129,15 +149,18 @@ class AdversarialScheduler:
         """Check if enough time has passed since last refresh."""
         if not self._running:
             return False
-        current_backoff = self._backoff_minutes * 60
-        # For simplicity, always allow refresh if running
-        # (the timer-based approach handles scheduling)
-        return True
+        
+        current_time = time.time()
+        elapsed = current_time - self._last_run_timestamp
+        required_seconds = self._backoff_minutes * 60
+        
+        # Allow refresh if enough time has elapsed (or never run)
+        return elapsed >= required_seconds
 
     def check_and_run(self) -> Dict[str, Any]:
         """
         Check if refresh is due and run if so.
-        For backward compatibility, this runs immediately if the scheduler is running.
+        This is the primary entry point for request-triggered refreshes.
         """
         if self.should_refresh():
             return self._tick()
@@ -152,12 +175,11 @@ class AdversarialScheduler:
     # Internal tick
     # ------------------------------------------------------------------
     def _schedule_next(self, minutes: int) -> None:
+        """Schedule the next timer-based tick. May be called even if running=False."""
         with self._lock:
             if not self._running:
                 return
-            self._next_run_at = (
-                datetime.now(timezone.utc).timestamp() + minutes * 60
-            )
+            self._next_run_at = time.time() + minutes * 60
             self._timer = threading.Timer(minutes * 60, self._tick)
             self._timer.daemon = True
             self._timer.start()
@@ -168,6 +190,7 @@ class AdversarialScheduler:
 
         with self._lock:
             self._last_run_at = result["run_at"]
+            self._last_run_timestamp = time.time()
             self._last_run_ok = result["ok"]
             self._last_run_error = result.get("error")
             if result["ok"]:
@@ -279,12 +302,14 @@ class AdversarialScheduler:
             json.dump(data, f, indent=2)
         os.replace(temp_path, self.soul_map_path)
 
+
 # ------------------------------------------------------------------------------
 # Module-level singleton for server.py
 # ------------------------------------------------------------------------------
 
 _scheduler: Optional[AdversarialScheduler] = None
 _scheduler_lock = threading.Lock()
+
 
 def start_adversarial_scheduler(
     refresh_minutes: int = REFRESH_MINUTES,
@@ -300,6 +325,7 @@ def start_adversarial_scheduler(
             )
         return _scheduler.start(immediate=immediate)
 
+
 def stop_adversarial_scheduler() -> Dict[str, Any]:
     """Stop the module-level scheduler singleton."""
     global _scheduler
@@ -309,6 +335,7 @@ def stop_adversarial_scheduler() -> Dict[str, Any]:
         result = _scheduler.stop()
         _scheduler = None
         return result
+
 
 def get_adversarial_scheduler_state() -> Dict[str, Any]:
     """Return the state of the module-level scheduler singleton."""
@@ -326,19 +353,8 @@ def get_adversarial_scheduler_state() -> Dict[str, Any]:
             }
         return _scheduler.state()
 
+
 def get_adversarial_scheduler() -> Optional[AdversarialScheduler]:
     """Return the scheduler singleton for direct access."""
     with _scheduler_lock:
         return _scheduler
-
-def _load_json(path: str) -> Dict[str, Any]:
-    if os.path.exists(path):
-        try:
-            with open(path, "r") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
