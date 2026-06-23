@@ -27,6 +27,9 @@ from internal.indicators.momentum import compute_momentum
 from internal.indicators.price_fetcher import fetch_ohlcv
 from internal.indicators.rsi import compute_rsi
 
+# Ensure the data directory exists at module load time.
+os.makedirs('data', exist_ok=True)
+
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 PRICE_PAIRS_PATH = os.environ.get("PRICE_PAIRS_PATH", "config/price_pairs.json")

@@ -19,6 +19,9 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+# Ensure the data directory exists at module load time.
+os.makedirs('data', exist_ok=True)
+
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 PRICE_PAIRS_PATH = os.environ.get(
     "PRICE_PAIRS_PATH", os.path.join(_PROJECT_ROOT, "config", "price_pairs.json")
