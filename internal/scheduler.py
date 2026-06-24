@@ -349,9 +349,17 @@ class AdversarialScheduler:
 
 _scheduler: Optional[AdversarialScheduler] = None
 
-def get_scheduler() -> AdversarialScheduler:
+def get_adversarial_scheduler() -> AdversarialScheduler:
     """Get or create the module-level scheduler singleton."""
     global _scheduler
     if _scheduler is None:
         _scheduler = AdversarialScheduler()
     return _scheduler
+
+def start_adversarial_scheduler(immediate: bool = False) -> Dict[str, Any]:
+    """Start the adversarial scheduler (module-level helper)."""
+    return get_adversarial_scheduler().start(immediate=immediate)
+
+def get_adversarial_scheduler_state() -> Dict[str, Any]:
+    """Get the scheduler state (module-level helper)."""
+    return get_adversarial_scheduler().state()
