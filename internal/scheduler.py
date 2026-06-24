@@ -10,6 +10,7 @@ Features:
 - Persists learned state to the Soul-Map (data/soul_map.json).
 - Idempotent start/stop semantics safe for Fly.io single-worker deployments.
 - Request-triggered refresh for Fly.io auto-stop compatibility.
+- Filters subnets by total_stake to focus on low-mid cap subnets.
 """
 
 import json
@@ -31,12 +32,12 @@ REFRESH_MINUTES = int(os.environ.get("REFRESH_MINUTES", "60"))
 MAX_BACKOFF_MINUTES = int(os.environ.get("MAX_BACKOFF_MINUTES", "240"))
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
-
+# Exclude subnets with total_stake >= 450,000 TAO (top ~40 by market cap)
+STAKE_THRESHOLD_TAO = float(os.environ.get("STAKE_THRESHOLD_TAO", "450000"))
 
 def _now_iso() -> str:
     """Return current UTC time as ISO format string."""
     return datetime.now(timezone.utc).isoformat()
-
 
 def _load_json(path: str) -> Optional[Dict[str, Any]]:
     """Load JSON file, return None if missing or invalid."""
@@ -45,7 +46,6 @@ def _load_json(path: str) -> Optional[Dict[str, Any]]:
             return json.load(f)
     except Exception:
         return None
-
 
 class AdversarialScheduler:
     """
@@ -62,6 +62,7 @@ class AdversarialScheduler:
         max_backoff_minutes: int = MAX_BACKOFF_MINUTES,
         soul_map_path: str = SOUL_MAP_PATH,
         registry_path: str = REGISTRY_PATH,
+        stake_threshold_tao: float = STAKE_THRESHOLD_TAO,
         judge_factory: Optional[Callable[[], AdversarialJudge]] = None,
         selector_factory: Optional[Callable[[], Selector]] = None,
     ):
@@ -69,6 +70,7 @@ class AdversarialScheduler:
         self.max_backoff_minutes = max_backoff_minutes
         self.soul_map_path = soul_map_path
         self.registry_path = registry_path
+        self.stake_threshold_tao = stake_threshold_tao
         self.judge_factory = judge_factory or (
             lambda: AdversarialJudge(
                 persistence_path=soul_map_path,
@@ -96,6 +98,7 @@ class AdversarialScheduler:
         self._last_run_error: Optional[str] = None
         self._next_run_at: Optional[float] = None  # Epoch time
         self._state_cache: Dict[str, Any] = {}  # In-memory fallback
+        self._last_subnet_count: int = 0
 
     # ------------------------------------------------------------------
     # Public control API
@@ -144,6 +147,7 @@ class AdversarialScheduler:
                 "last_run_ok": self._last_run_ok,
                 "last_run_error": self._last_run_error,
                 "next_run_at": self._next_run_at,
+                "last_subnet_count": self._last_subnet_count,
             }
 
     def run_once(self) -> Dict[str, Any]:
@@ -213,6 +217,24 @@ class AdversarialScheduler:
             self._schedule_next(next_interval)
         return result
 
+    def _filter_low_mid_cap_subnets(
+        self, registry: Dict[str, Any]
+    ) -> List[int]:
+        """
+        Filter registry to only include low-mid cap subnets.
+        Excludes subnets with total_stake >= threshold (default: 450,000 TAO).
+        """
+        subnet_ids = []
+        for sid_str, data in registry.items():
+            try:
+                stake = data.get("staking_data", {}).get("total_stake", 0)
+                if stake < self.stake_threshold_tao:
+                    subnet_ids.append(int(sid_str))
+            except (ValueError, TypeError):
+                # Include subnets with missing/invalid stake data
+                subnet_ids.append(int(sid_str))
+        return subnet_ids
+
     def _run_refresh_cycle(self) -> Dict[str, Any]:
         """
         Run the Selector across the registry, judge each decision against the
@@ -235,7 +257,10 @@ class AdversarialScheduler:
             selector = self.selector_factory()
             judge = self.judge_factory()
 
-            subnet_ids = [int(k) for k in registry.keys()]
+            # Filter to low-mid cap subnets only
+            subnet_ids = self._filter_low_mid_cap_subnets(registry)
+            self._last_subnet_count = len(subnet_ids)
+            
             context_map = {
                 sid: {
                     "emission": registry.get(str(sid), {}).get("emission", 0.0),
@@ -318,59 +343,15 @@ class AdversarialScheduler:
             # Silently continue with in-memory state
             pass
 
-
 # ------------------------------------------------------------------------------
 # Module-level singleton for server.py
 # ------------------------------------------------------------------------------
 
 _scheduler: Optional[AdversarialScheduler] = None
-_scheduler_lock = threading.Lock()
 
-
-def start_adversarial_scheduler(
-    refresh_minutes: int = REFRESH_MINUTES,
-    immediate: bool = False,
-    **kwargs: Any,
-) -> Dict[str, Any]:
-    """Start the module-level scheduler singleton."""
+def get_scheduler() -> AdversarialScheduler:
+    """Get or create the module-level scheduler singleton."""
     global _scheduler
-    with _scheduler_lock:
-        if _scheduler is None:
-            _scheduler = AdversarialScheduler(
-                refresh_minutes=refresh_minutes, **kwargs
-            )
-        return _scheduler.start(immediate=immediate)
-
-
-def stop_adversarial_scheduler() -> Dict[str, Any]:
-    """Stop the module-level scheduler singleton."""
-    global _scheduler
-    with _scheduler_lock:
-        if _scheduler is None:
-            return {"stopped": False, "reason": "not running"}
-        result = _scheduler.stop()
-        _scheduler = None
-        return result
-
-
-def get_adversarial_scheduler_state() -> Dict[str, Any]:
-    """Return the state of the module-level scheduler singleton."""
-    with _scheduler_lock:
-        if _scheduler is None:
-            return {
-                "running": False,
-                "refresh_minutes": REFRESH_MINUTES,
-                "backoff_minutes": REFRESH_MINUTES,
-                "consecutive_failures": 0,
-                "last_run_at": None,
-                "last_run_ok": None,
-                "last_run_error": None,
-                "next_run_at": None,
-            }
-        return _scheduler.state()
-
-
-def get_adversarial_scheduler() -> Optional[AdversarialScheduler]:
-    """Return the scheduler singleton for direct access."""
-    with _scheduler_lock:
-        return _scheduler
+    if _scheduler is None:
+        _scheduler = AdversarialScheduler()
+    return _scheduler
