@@ -471,28 +471,13 @@ def simivision():
 
 @app.route('/api/simivision')
 def api_simivision():
-    """Return SimiVision data for the current cycle."""
-    registry = load_data('config/registry.json')
-    soul_map = load_data('data/soul_map.json')
-    last_output = soul_map.get('soul_map_state', {}).get('last_selector_output', {})
-    decisions = last_output.get('decisions', [])
-    consensus = {d['subnet_id']: d for d in decisions if 'subnet_id' in d}
-    
-    items = []
-    for key, value in registry.items():
-        item = dict(value)
-        subnet_id = item.get('id', int(key))
-        item.setdefault('id', subnet_id)
-        decision = consensus.get(subnet_id)
-        if decision:
-            item['consensus'] = {
-                'score': decision.get('consensus_score'),
-                'recommended_action': decision.get('recommended_action'),
-            }
-        items.append(item)
-    
-    return jsonify(items)
-
+    """Return SimiVision signals with conviction/rationale/delta fields."""
+    try:
+        engine = SimiVisionEngine()
+        signals = engine.get_signals()
+        return jsonify({"signals": signals})
+    except Exception as e:
+        return jsonify({"signals": [], "error": str(e)}), 500
 @app.route('/api/signal/<int:subnet_id>/timeline')
 def signal_timeline(subnet_id):
     """Return signal timeline for a subnet."""

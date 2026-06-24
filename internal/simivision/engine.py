@@ -423,3 +423,33 @@ class SimiVisionEngine:
             return None
         signals = self.get_signals()
         return next((s for s in signals if s["netuid"] == netuid), None)
+
+    def safe_snapshot(self, n: int = 5) -> Dict[str, Any]:
+        """Return a safe snapshot of top-N signals with metadata, falling back gracefully."""
+        try:
+            signals = self.get_signals()
+            top = signals[:n]
+            return {
+                "top": top,
+                "choices": top,
+                "meta": {
+                    "system_status": "Operative",
+                    "source": "engine",
+                    "fallback_used": False,
+                    "freshness_human": "Just now",
+                    "provenance_log": [],
+                },
+            }
+        except Exception:
+            return {
+                "top": [],
+                "choices": [],
+                "meta": {
+                    "system_status": "Operative",
+                    "source": "offline",
+                    "fallback_used": True,
+                    "error": "SimiVision unavailable",
+                    "freshness_human": "Unknown",
+                    "provenance_log": [],
+                },
+            }
