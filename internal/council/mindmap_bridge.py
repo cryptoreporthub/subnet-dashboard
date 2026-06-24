@@ -42,6 +42,49 @@ class MindmapBridge:
         except Exception:
             pass
 
+    def get_expert_weights(self) -> Dict[str, float]:
+        """
+        Reads expert weights from soul_map.json, checking all possible
+        storage locations in priority order:
+
+          1. adversarial_state.council_weights (written by AdversarialJudge)
+          2. soul_map_state.expert_weights      (legacy Mindmap path)
+          3. top-level expert_weights           (written by LearningLoop)
+
+        Returns a dict mapping expert name → weight, or an empty dict if
+        no weights are found.
+        """
+        if not os.path.exists(self.persistence_path):
+            return {}
+
+        try:
+            with open(self.persistence_path, "r") as f:
+                data = json.load(f)
+        except Exception:
+            return {}
+
+        # Priority 1: AdversarialJudge writes council_weights inside
+        # adversarial_state.
+        adv = data.get("adversarial_state")
+        if isinstance(adv, dict):
+            cw = adv.get("council_weights")
+            if isinstance(cw, dict):
+                return {k: float(v) for k, v in cw.items()}
+
+        # Priority 2: Legacy Mindmap path under soul_map_state.
+        sms = data.get("soul_map_state")
+        if isinstance(sms, dict):
+            ew = sms.get("expert_weights")
+            if isinstance(ew, dict):
+                return {k: float(v) for k, v in ew.items()}
+
+        # Priority 3: Top-level expert_weights written by LearningLoop.
+        ew = data.get("expert_weights")
+        if isinstance(ew, dict):
+            return {k: float(v) for k, v in ew.items()}
+
+        return {}
+
     def get_brain_recommendations(self, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Retrieves the Brain's recommendations from the Mindmap.

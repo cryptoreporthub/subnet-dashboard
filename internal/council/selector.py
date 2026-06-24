@@ -37,7 +37,11 @@ class Selector:
         self.contrarian_expert = ContrarianExpert()
         self.technical_expert = TechnicalExpert()
         self.mindmap_bridge = mindmap_bridge or MindmapBridge()
-        self.weights = weights or DEFAULT_WEIGHTS.copy()
+        if weights is not None:
+            self.weights = weights
+        else:
+            # Load adaptive weights from soul_map.json or fall back to defaults
+            self.weights = self.mindmap_bridge.get_expert_weights() or DEFAULT_WEIGHTS.copy()
         self.daily_output_history: List[Dict[str, Any]] = []
 
     def get_expert_opinions(self, subnet_id: int, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
