@@ -9,6 +9,7 @@ from flask import Flask, jsonify, make_response, request
 
 sys.path.insert(0, os.path.dirname(__file__))
 from fetchers.taomarketcap import get_all_subnets, get_subnet_data
+from data.learning_engine import LearningEngine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -265,6 +266,28 @@ def api_mindmap_feedback():
 def api_rotation_tokens():
     """Return the specific subnet tokens in rotation."""
     return jsonify({"rotation_tokens": _ROTATION_TOKENS, "count": len(_ROTATION_TOKENS)})
+
+@app.route("/api/feedback", methods=["POST"])
+def record_feedback():
+    """Record feedback for learning loop."""
+    data = request.get_json() or {}
+    subnet_id = data.get("subnet_id")
+    recommendation = data.get("recommendation")
+    actual_performance = data.get("actual_performance", {})
+    
+    if not subnet_id or not recommendation:
+        return jsonify({"error": "Missing subnet_id or recommendation"}), 400
+    
+    engine = LearningEngine()
+    engine.record_feedback(subnet_id, recommendation, actual_performance)
+    
+    return jsonify({"status": "feedback recorded", "success": True})
+
+@app.route("/api/learning/stats")
+def learning_stats():
+    """Return learning loop statistics."""
+    engine = LearningEngine()
+    return jsonify(engine.get_stats())
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
