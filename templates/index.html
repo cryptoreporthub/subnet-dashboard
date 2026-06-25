@@ -1,162 +1,806 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Subnet Dashboard</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-            background: #060a14; 
-            color: #e0e0e0; 
-            line-height: 1.6;
-        }
-        .container { max-width: 1200px; margin: 0 auto; padding: 16px; }
-        header { 
-            display: flex; 
-            align-items: center; 
-            justify-content: space-between; 
-            padding: 12px 16px; 
-            border-bottom: 1px solid #1a1a2e; 
-            margin-bottom: 20px;
-        }
-        .logo { 
-            font-size: 20px; 
-            font-weight: 700; 
-            background: linear-gradient(90deg, #006600, #003300, #000000);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .status { font-size: 12px; color: #00ff88; }
-        .card { 
-            background: #111111; 
-            border-radius: 12px; 
-            padding: 16px; 
-            margin-bottom: 16px; 
-            border: 1px solid #1a1a1a;
-        }
-        .card h2 { 
-            font-size: 16px; 
-            color: #00d4ff; 
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .pick { 
-            background: #1a1a1a; 
-            border-radius: 8px; 
-            padding: 12px; 
-            margin-bottom: 12px;
-            border-left: 3px solid #00d4ff;
-        }
-        .pick:nth-child(1) { border-left-color: #00ff88; }
-        .pick:nth-child(2) { border-left-color: #ffaa00; }
-        .pick:nth-child(3) { border-left-color: #ff6600; }
-        .pick-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .pick-title { font-weight: 600; }
-        .conviction { font-size: 12px; background: #333; padding: 2px 8px; border-radius: 4px; }
-        .pick ul { font-size: 13px; color: #aaa; margin-left: 16px; margin-bottom: 8px; }
-        .pick ul li { margin: 4px 0; }
-        .metrics { font-size: 12px; color: #666; margin-top: 8px; }
-        .council-member { 
-            display: inline-block; 
-            background: #1a1a1a; 
-            padding: 10px; 
-            border-radius: 8px; 
-            margin: 8px; 
-            min-width: 120px;
-        }
-        .council-member h3 { font-size: 14px; margin-bottom: 4px; }
-        .council-member p { font-size: 12px; color: #888; }
-        .spotlight { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .spotlight-item { text-align: center; padding: 8px; background: #1a1a1a; border-radius: 8px; }
-        .spotlight-item strong { color: #00d4ff; display: block; margin-bottom: 4px; }
-        .footer { text-align: center; padding: 20px; color: #444; font-size: 12px; margin-top: 20px; }
-        @media (min-width: 768px) {
-            .container { padding: 24px; }
-            .dashboard-grid { display: grid; grid-template-columns: 1fr 300px; gap: 24px; }
-            .main-content { display: grid; gap: 16px; }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Subnet Dashboard</title>
+  <style>
+    :root {
+      --bg: #060a14;
+      --bg-2: #0b1020;
+      --panel: rgba(12, 18, 34, 0.92);
+      --panel-2: rgba(16, 24, 44, 0.92);
+      --line: rgba(129, 140, 248, 0.12);
+      --text: #d6ddf4;
+      --muted: #8b93b8;
+      --green: #23d18b;
+      --green-2: #0f5f34;
+      --green-3: #000000;
+      --purple: #8b5cf6;
+      --cyan: #43d5ff;
+      --amber: #fbbf24;
+      --red: #ef4444;
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(131, 92, 255, 0.12), transparent 28%),
+        radial-gradient(circle at top right, rgba(67, 213, 255, 0.08), transparent 26%),
+        linear-gradient(180deg, #070b16 0%, #04070d 100%);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+
+    .backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(1, 4, 12, 0.65);
+      backdrop-filter: blur(6px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease;
+      z-index: 30;
+    }
+
+    .sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      width: 280px;
+      max-width: 86vw;
+      transform: translateX(-100%);
+      transition: transform .22s ease;
+      z-index: 40;
+      background: linear-gradient(180deg, rgba(8,12,24,.98), rgba(4,7,14,.98));
+      border-right: 1px solid rgba(148, 163, 184, 0.14);
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      padding: 18px 14px;
+      overflow: auto;
+    }
+
+    .sidebar.open { transform: translateX(0); }
+    .backdrop.show { opacity: 1; pointer-events: auto; }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 10px 18px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      margin-bottom: 14px;
+    }
+
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      background: radial-gradient(circle at 30% 30%, rgba(35, 209, 139, .95), rgba(15, 95, 52, .9) 45%, #06110a 100%);
+      box-shadow: 0 0 30px rgba(35, 209, 139, 0.14);
+      position: relative;
+      flex: 0 0 auto;
+    }
+    .brand-mark::after {
+      content: '';
+      position: absolute;
+      inset: 8px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, .16);
+    }
+
+    .brand-text {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .brand-title {
+      font-weight: 900;
+      letter-spacing: .02em;
+      font-size: 18px;
+      line-height: 1;
+      background: linear-gradient(90deg, #0e7b2f 0%, #053014 55%, #000 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .brand-sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .sidebar-section { padding: 8px 4px 0; }
+    .sidebar-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .16em;
+      color: #5d678d;
+      margin: 8px 10px 10px;
+    }
+
+    .sidebar-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 12px;
+      margin: 4px 0;
+      border-radius: 14px;
+      color: #ced6f4;
+      background: transparent;
+    }
+    .sidebar-link.active,
+    .sidebar-link:hover { background: rgba(139, 92, 246, .14); }
+
+    .sidebar-link .left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .icon-pill {
+      width: 28px;
+      height: 28px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      background: linear-gradient(180deg, rgba(139,92,246,.95), rgba(67,213,255,.4));
+      box-shadow: 0 10px 20px rgba(139,92,246,.15);
+      flex: 0 0 auto;
+    }
+
+    .sidebar-mini {
+      margin-top: 14px;
+      border-top: 1px solid rgba(148, 163, 184, 0.12);
+      padding-top: 14px;
+    }
+
+    .mini-stat {
+      background: linear-gradient(180deg, rgba(16,24,44,.96), rgba(10,16,31,.96));
+      border: 1px solid rgba(148, 163, 184, 0.10);
+      border-radius: 16px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .mini-stat .k { font-size: 12px; color: var(--muted); }
+    .mini-stat .v { margin-top: 4px; font-weight: 800; font-size: 18px; }
+    .mini-stat .s { font-size: 12px; color: #8cf6b6; }
+
+    .shell {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 14px 12px;
+      background: rgba(4, 7, 14, 0.78);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.10);
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .menu-btn {
+      width: 42px;
+      height: 42px;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      background: rgba(16, 24, 44, 0.95);
+      color: var(--text);
+      border-radius: 14px;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+    }
+
+    .top-title {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .top-title h1 {
+      font-size: 15px;
+      line-height: 1.1;
+      margin: 0;
+      font-weight: 700;
+    }
+    .top-title .crumbs {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(148,163,184,.12);
+      background: rgba(16,24,44,.88);
+      padding: 8px 10px;
+      font-size: 12px;
+      color: #dce3f6;
+      white-space: nowrap;
+    }
+    .chip.live { color: #b8ffd4; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 4px rgba(34,197,94,.12); }
+    .dot.red { background: #fb7185; box-shadow: 0 0 0 4px rgba(251,113,133,.12); }
+
+    .content {
+      padding: 14px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .hero {
+      background: linear-gradient(180deg, rgba(16,24,44,.92), rgba(9,13,24,.96));
+      border: 1px solid rgba(148,163,184,.12);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+
+    .hero-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .hero h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.15;
+      letter-spacing: -.02em;
+    }
+    .hero p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+
+    .status-box {
+      min-width: 108px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: rgba(8, 12, 20, 0.72);
+      border: 1px solid rgba(35,209,139,.16);
+      text-align: right;
+    }
+    .status-box .label { font-size: 11px; color: var(--muted); }
+    .status-box .value { margin-top: 2px; font-weight: 800; color: #b8ffd4; }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .stat {
+      border-radius: 16px;
+      padding: 12px;
+      background: rgba(3, 6, 12, 0.5);
+      border: 1px solid rgba(148,163,184,.10);
+    }
+    .stat .k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .12em; }
+    .stat .v { margin-top: 6px; font-size: 20px; font-weight: 800; }
+    .stat .s { margin-top: 4px; color: #84f4ab; font-size: 12px; }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(16,24,44,.93), rgba(10,16,31,.96));
+      border: 1px solid rgba(148,163,184,.12);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid rgba(148,163,184,.10);
+    }
+
+    .card-head h3 {
+      margin: 0;
+      font-size: 15px;
+      letter-spacing: -.01em;
+    }
+    .card-head span { color: var(--muted); font-size: 12px; }
+
+    .card-body { padding: 14px 16px 16px; }
+
+    .pick {
+      display: grid;
+      grid-template-columns: 52px 1fr;
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border-radius: 16px;
+      background: rgba(3, 6, 12, 0.42);
+      border: 1px solid rgba(148,163,184,.10);
+      margin-bottom: 12px;
+    }
+    .pick:last-child { margin-bottom: 0; }
+
+    .ring {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      font-size: 14px;
+      color: #fff;
+      background: conic-gradient(var(--green) calc(var(--pct) * 1%), rgba(255,255,255,.08) 0);
+      position: relative;
+      flex: 0 0 auto;
+    }
+    .ring::after {
+      content: '';
+      position: absolute;
+      inset: 5px;
+      border-radius: 50%;
+      background: linear-gradient(180deg, rgba(10,16,31,.98), rgba(5,8,16,.98));
+      border: 1px solid rgba(148,163,184,.12);
+      z-index: 0;
+    }
+    .ring b { position: relative; z-index: 1; }
+
+    .pick-meta {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+    .pick-title-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .pick-title-row h4 {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.2;
+    }
+    .badge {
+      flex: 0 0 auto;
+      padding: 6px 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(35, 209, 139, .14);
+      color: #9dffd0;
+      border: 1px solid rgba(35, 209, 139, .18);
+    }
+    .badge.watch { background: rgba(251, 191, 36, .12); color: #ffe08a; border-color: rgba(251,191,36,.15); }
+    .badge.hold { background: rgba(67, 213, 255, .10); color: #b9f0ff; border-color: rgba(67,213,255,.14); }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .metric {
+      border-radius: 12px;
+      padding: 10px 8px;
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.04);
+    }
+    .metric .k { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .12em; }
+    .metric .v { margin-top: 5px; font-size: 14px; font-weight: 700; }
+
+    .breakdown {
+      margin: 0;
+      padding-left: 16px;
+      color: #b9c2e3;
+      font-size: 12px;
+    }
+    .breakdown li { margin-bottom: 6px; }
+
+    .section-note { margin-top: 10px; font-size: 12px; color: var(--muted); }
+
+    .council-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .council {
+      display: grid;
+      grid-template-columns: 42px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      border-radius: 16px;
+      background: rgba(3, 6, 12, 0.42);
+      border: 1px solid rgba(148,163,184,.10);
+    }
+    .avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      color: #fff;
+      background: linear-gradient(180deg, rgba(139,92,246,.96), rgba(67,213,255,.35));
+    }
+    .council .name { font-weight: 800; font-size: 14px; }
+    .council .rationale { color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .vote { 
+      padding: 7px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; 
+      background: rgba(35,209,139,.14); color: #9dffd0; border: 1px solid rgba(35,209,139,.18);
+    }
+    .vote.sell { background: rgba(239,68,68,.12); color: #ffb4b4; border-color: rgba(239,68,68,.16); }
+
+    .spot-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .spot {
+      border-radius: 16px;
+      padding: 14px;
+      background: rgba(3, 6, 12, 0.42);
+      border: 1px solid rgba(148,163,184,.10);
+      border-left: 4px solid var(--purple);
+    }
+    .spot h4 { margin: 0; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .14em; }
+    .spot .big { margin-top: 6px; font-size: 16px; font-weight: 800; }
+    .spot .small { margin-top: 4px; font-size: 12px; color: var(--muted); }
+
+    .radar-list { display: grid; gap: 10px; }
+    .radar-row {
+      display: grid;
+      grid-template-columns: 36px 1fr 82px;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      border-radius: 14px;
+      background: rgba(3, 6, 12, 0.42);
+      border: 1px solid rgba(148,163,184,.10);
+    }
+    .radar-row .num {
+      width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; font-weight: 800;
+      background: rgba(139,92,246,.18); color: #e9ddff;
+    }
+    .radar-row .nm { font-weight: 700; }
+    .radar-row .sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .spark {
+      width: 82px; height: 30px; border-radius: 8px;
+      background: linear-gradient(90deg, rgba(35,209,139,.1), rgba(67,213,255,.18));
+      border: 1px solid rgba(148,163,184,.08);
+      position: relative; overflow: hidden;
+    }
+    .spark::after {
+      content: '';
+      position: absolute; inset: 0;
+      background:
+        linear-gradient(135deg, transparent 0 32%, rgba(35,209,139,.75) 32% 35%, transparent 35% 50%, rgba(67,213,255,.8) 50% 54%, transparent 54% 100%);
+      opacity: .75;
+    }
+
+    .footer {
+      padding: 16px 14px 24px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    @media (min-width: 900px) {
+      .app {
+        grid-template-columns: 280px 1fr;
+      }
+      .backdrop { display: none; }
+      .sidebar {
+        position: sticky;
+        top: 0;
+        transform: none !important;
+        max-width: none;
+        width: 280px;
+        height: 100vh;
+        box-shadow: none;
+      }
+      .shell { min-width: 0; }
+      .menu-btn { display: none; }
+      .content {
+        padding: 18px 18px 24px;
+        grid-template-columns: 1.15fr .85fr;
+        align-items: start;
+      }
+      .hero { grid-column: 1 / -1; }
+      .grid { grid-template-columns: 1fr 1fr; }
+      .spot-grid { grid-template-columns: repeat(3, 1fr); }
+      .council-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .radar-list { grid-template-columns: 1fr; }
+      .section-span-2 { grid-column: 1 / -1; }
+      .metric-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .pick { margin-bottom: 14px; }
+    }
+
+    @media (min-width: 1200px) {
+      .content { grid-template-columns: 1.2fr .8fr; }
+      .hero { display: grid; grid-template-columns: 1.4fr .8fr; gap: 18px; align-items: center; }
+      .stats-grid { margin-top: 0; }
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <div class="logo"># Subnet Pulse</div>
-            <div class="status">● Operational</div>
-        </header>
-        
-        <div class="main-content">
-            <div class="card">
-                <h2>## SimiVision</h2>
-                <p><strong>System Status:</strong> {{ simivision.meta.system_status or 'Operative' }}</p>
+  <div class="backdrop" id="backdrop"></div>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <div class="brand-text">
+          <div class="brand-title">SimiVision</div>
+          <div class="brand-sub">Subnet intelligence console</div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">Navigation</div>
+        <a class="sidebar-link active" href="#overview"><span class="left"><span class="icon-pill">⌂</span><span>Overview</span></span><span>Live</span></a>
+        <a class="sidebar-link" href="#picks"><span class="left"><span class="icon-pill">↗</span><span>Picks</span></span><span>3</span></a>
+        <a class="sidebar-link" href="#council"><span class="left"><span class="icon-pill">◫</span><span>Council</span></span><span>{{ learning_trail.council|length if learning_trail.council else 0 }}</span></a>
+        <a class="sidebar-link" href="#spotlight"><span class="left"><span class="icon-pill">✦</span><span>Spotlight</span></span><span>Now</span></a>
+      </div>
+
+      <div class="sidebar-section sidebar-mini">
+        <div class="sidebar-label">Live Status</div>
+        <div class="mini-stat">
+          <div class="k">System status</div>
+          <div class="v">{{ simivision.meta.system_status or 'Operative' }}</div>
+          <div class="s">Data source: taomarketcap</div>
+        </div>
+        <div class="mini-stat">
+          <div class="k">Top emitter</div>
+          <div class="v">{% if summary.highlights.top_emitter and summary.highlights.top_emitter[0] %}{{ summary.highlights.top_emitter[0].name }}{% else %}N/A{% endif %}</div>
+          <div class="s">{% if summary.highlights.top_emitter and summary.highlights.top_emitter[0] %}{{ "%.2f"|format(summary.highlights.top_emitter[0].emission|default(0, true)) }} TAO{% endif %}</div>
+        </div>
+        <div class="mini-stat">
+          <div class="k">Highest APY</div>
+          <div class="v">{% if summary.highlights.top_apy and summary.highlights.top_apy[0] %}{{ summary.highlights.top_apy[0].name }}{% else %}N/A{% endif %}</div>
+          <div class="s">{% if summary.highlights.top_apy and summary.highlights.top_apy[0] %}{{ "%.2f"|format(summary.highlights.top_apy[0].apy|default(0, true)) }}%{% endif %}</div>
+        </div>
+      </div>
+    </aside>
+
+    <div class="shell">
+      <header class="topbar" id="overview">
+        <div class="topbar-left">
+          <button class="menu-btn" id="menuBtn" aria-label="Open navigation">☰</button>
+          <div class="top-title">
+            <h1>Subnet Dashboard</h1>
+            <div class="crumbs">Mobile-first live view</div>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <div class="chip live"><span class="dot"></span> Live</div>
+          <div class="chip">TAO · {{ summary.highlights.top_emitter[0].emission|round(2) if summary.highlights.top_emitter and summary.highlights.top_emitter[0] else '—' }}</div>
+          <div class="chip">APY · {{ summary.highlights.top_apy[0].apy|round(2) if summary.highlights.top_apy and summary.highlights.top_apy[0] else '—' }}%</div>
+        </div>
+      </header>
+
+      <main class="content">
+        <section class="hero">
+          <div class="hero-top">
+            <div>
+              <h2>SimiVision intelligence, optimized for mobile.</h2>
+              <p>Live subnet ranking, council votes, and spotlight metrics from taomarketcap.</p>
             </div>
-            
+            <div class="status-box">
+              <div class="label">System</div>
+              <div class="value">{{ simivision.meta.system_status or 'Operative' }}</div>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat">
+              <div class="k">Picks</div>
+              <div class="v">{{ simivision.top|length if simivision.top else 0 }}</div>
+              <div class="s">Live ranked subnets</div>
+            </div>
+            <div class="stat">
+              <div class="k">Council</div>
+              <div class="v">{{ learning_trail.council|length if learning_trail.council else 0 }}</div>
+              <div class="s">Current vote panel</div>
+            </div>
+            <div class="stat">
+              <div class="k">Top emitter</div>
+              <div class="v">{% if summary.highlights.top_emitter and summary.highlights.top_emitter[0] %}{{ summary.highlights.top_emitter[0].name }}{% else %}N/A{% endif %}</div>
+              <div class="s">{% if summary.highlights.top_emitter and summary.highlights.top_emitter[0] %}{{ "%.2f"|format(summary.highlights.top_emitter[0].emission|default(0, true)) }} TAO{% endif %}</div>
+            </div>
+            <div class="stat">
+              <div class="k">Highest APY</div>
+              <div class="v">{% if summary.highlights.top_apy and summary.highlights.top_apy[0] %}{{ summary.highlights.top_apy[0].name }}{% else %}N/A{% endif %}</div>
+              <div class="s">{% if summary.highlights.top_apy and summary.highlights.top_apy[0] %}{{ "%.2f"|format(summary.highlights.top_apy[0].apy|default(0, true)) }}%{% endif %}</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card section-span-2" id="picks">
+          <div class="card-head">
+            <h3>SimiVision Picks</h3>
+            <span>Live • ranked by conviction</span>
+          </div>
+          <div class="card-body">
             {% if simivision.top and simivision.top|length > 0 %}
-                {% for pick in simivision.top %}
-                <div class="pick">
-                    <div class="pick-header">
-                        <span class="pick-title">#{{ pick.rank }} {{ pick.name }}</span>
-                        <span class="conviction">{{ pick.conviction }}% {{ pick.recommendation }}</span>
+              {% for pick in simivision.top %}
+                <article class="pick">
+                  <div class="ring" style="--pct: {{ pick.conviction }}"><b>{{ pick.rank }}</b></div>
+                  <div class="pick-meta">
+                    <div class="pick-title-row">
+                      <h4>{{ pick.name }}</h4>
+                      <span class="badge {% if pick.recommendation == 'WATCH' %}watch{% elif pick.recommendation == 'HOLD' %}hold{% endif %}">{{ pick.conviction }}% {{ pick.recommendation }}</span>
                     </div>
-                    <p style="font-size: 13px; margin-bottom: 8px;"><strong>Why {{ pick.name }}?</strong></p>
-                    <ul>
-                        {% for point in pick.breakdown[:3] %}
+                    <div class="metric-row">
+                      <div class="metric"><div class="k">Emission</div><div class="v">{{ "%.2f"|format(pick.emission|default(0, true)) }} TAO</div></div>
+                      <div class="metric"><div class="k">24h</div><div class="v">{{ "%.1f"|format(pick.price_change_24h|default(0, true)) }}%</div></div>
+                      <div class="metric"><div class="k">APY</div><div class="v">{{ "%.2f"|format(pick.apy|default(0, true)) }}%</div></div>
+                    </div>
+                    <ul class="breakdown">
+                      {% for point in pick.breakdown[:3] %}
                         <li>{{ point }}</li>
-                        {% endfor %}
+                      {% endfor %}
                     </ul>
-                    <div class="metrics">
-                        Emission {{ "%.2f"|format(pick.emission|default(0, true)) }} TAO | 
-                        24h {{ "%.1f"|format(pick.price_change_24h|default(0, true)) }}% | 
-                        APY {{ "%.2f"|format(pick.apy|default(0, true)) }}%
-                    </div>
-                </div>
-                {% endfor %}
+                  </div>
+                </article>
+              {% endfor %}
             {% else %}
-                <p>No SimiVision picks available. The council is convening…</p>
+              <p>No SimiVision picks available. The council is convening…</p>
             {% endif %}
-            
-            <div class="card">
-                <h2>## Learning Trail</h2>
-                {% if learning_trail.council and learning_trail.council|length > 0 %}
-                    {% for member in learning_trail.council %}
-                    <div class="council-member">
-                        <h3>{{ member.name }}</h3>
-                        <p>{{ member.vote }} {{ member.confidence|int }}%</p>
-                        <small>{{ member.rationale[:40] }}...</small>
+            <div class="section-note">Live data source: taomarketcap.com</div>
+          </div>
+        </section>
+
+        <section class="card" id="council">
+          <div class="card-head">
+            <h3>Learning Trail Council Votes</h3>
+            <span>Decentralized governance in action</span>
+          </div>
+          <div class="card-body">
+            <div class="council-grid">
+              {% if learning_trail.council and learning_trail.council|length > 0 %}
+                {% for member in learning_trail.council %}
+                  <div class="council">
+                    <div class="avatar">{{ member.name[0] }}</div>
+                    <div>
+                      <div class="name">{{ member.name }}</div>
+                      <div class="rationale">{{ member.rationale }}</div>
                     </div>
-                    {% endfor %}
-                {% else %}
-                    <p>Council deliberation in progress.</p>
-                {% endif %}
+                    <div class="vote {% if member.vote == 'SELL' %}sell{% endif %}">{{ member.vote }} · {{ member.confidence|int }}%</div>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <p>Council deliberation in progress.</p>
+              {% endif %}
             </div>
-            
-            <div class="card">
-                <h2>## Spotlight</h2>
-                {% set h = summary.highlights %}
-                {% if h.top_emitter and h.top_emitter[0] %}
-                <div class="spotlight">
-                    <div class="spotlight-item">
-                        <strong>Top Emitter</strong>
-                        <span>{{ h.top_emitter[0].name }} {{ "%.3f"|format(h.top_emitter[0].emission|default(0, true)) }} TAO</span>
-                    </div>
-                    {% if h.top_apy and h.top_apy[0] %}
-                    <div class="spotlight-item">
-                        <strong>Highest APY</strong>
-                        <span>{{ h.top_apy[0].name }} {{ "%.2f"|format((h.top_apy[0].apy|default(0, true)) * 100) }}%</span>
-                    </div>
-                    {% endif %}
-                </div>
-                {% endif %}
+          </div>
+        </section>
+
+        <section class="card" id="spotlight">
+          <div class="card-head">
+            <h3>Spotlight</h3>
+            <span>Featured subnet stats</span>
+          </div>
+          <div class="card-body">
+            <div class="spot-grid">
+              <div class="spot">
+                <h4>Top emitter</h4>
+                <div class="big">{% if summary.highlights.top_emitter and summary.highlights.top_emitter[0] %}{{ summary.highlights.top_emitter[0].name }}{% else %}N/A{% endif %}</div>
+                <div class="small">{% if summary.highlights.top_emitter and summary.highlights.top_emitter[0] %}{{ "%.3f"|format(summary.highlights.top_emitter[0].emission|default(0, true)) }} TAO/day{% endif %}</div>
+              </div>
+              <div class="spot">
+                <h4>Highest APY</h4>
+                <div class="big">{% if summary.highlights.top_apy and summary.highlights.top_apy[0] %}{{ summary.highlights.top_apy[0].name }}{% else %}N/A{% endif %}</div>
+                <div class="small">{% if summary.highlights.top_apy and summary.highlights.top_apy[0] %}{{ "%.2f"|format(summary.highlights.top_apy[0].apy|default(0, true)) }}% APY{% endif %}</div>
+              </div>
+              <div class="spot">
+                <h4>System status</h4>
+                <div class="big">{{ simivision.meta.system_status or 'Operative' }}</div>
+                <div class="small">Mobile-optimized dashboard</div>
+              </div>
             </div>
-        </div>
-        
-        <div class="footer">
-            SimiVision · Powered by <strong>taomarketcap.com</strong> · Built for the Bittensor ecosystem.
-        </div>
+          </div>
+        </section>
+
+        <section class="card section-span-2">
+          <div class="card-head">
+            <h3>Undervalued Radar</h3>
+            <span>Subnet activity snapshot</span>
+          </div>
+          <div class="card-body">
+            <div class="radar-list">
+              {% set top_list = summary.highlights.top_emitter[:3] if summary.highlights.top_emitter else [] %}
+              {% if top_list %}
+                {% for sn in top_list %}
+                  <div class="radar-row">
+                    <div class="num">{{ sn.netuid }}</div>
+                    <div>
+                      <div class="nm">{{ sn.name }}</div>
+                      <div class="sub">{{ "%.2f"|format(sn.emission|default(0, true)) }} TAO • {{ "%.1f"|format(sn.price_change_24h|default(0, true)) }}% 24h • {{ "%.2f"|format(sn.apy|default(0, true)) }}% APY</div>
+                    </div>
+                    <div class="spark" aria-hidden="true"></div>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <p>No radar data available.</p>
+              {% endif %}
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <div class="footer">SimiVision · Powered by <strong>taomarketcap.com</strong> · Built for the Bittensor ecosystem.</div>
     </div>
+  </div>
+
+  <script>
+    (function () {
+      const btn = document.getElementById('menuBtn');
+      const sidebar = document.getElementById('sidebar');
+      const backdrop = document.getElementById('backdrop');
+      function closeNav() {
+        sidebar.classList.remove('open');
+        backdrop.classList.remove('show');
+      }
+      function openNav() {
+        sidebar.classList.add('open');
+        backdrop.classList.add('show');
+      }
+      btn && btn.addEventListener('click', () => {
+        sidebar.classList.contains('open') ? closeNav() : openNav();
+      });
+      backdrop && backdrop.addEventListener('click', closeNav);
+      window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeNav(); });
+      document.querySelectorAll('.sidebar-link').forEach(link => {
+        link.addEventListener('click', () => { if (window.innerWidth < 900) closeNav(); });
+      });
+    })();
+  </script>
 </body>
 </html>
