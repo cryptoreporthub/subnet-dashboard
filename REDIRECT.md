@@ -1,0 +1,2 @@
+# SimiVision Dashboard - Force redeploy
+# Deploy timestamp: 2026-06-25T15:27:00Z
