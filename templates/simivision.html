@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SimiVision — Subnet Dashboard</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/simivision.css">
+</head>
+<body>
+  <div class="dashboard">
+    <aside class="sidebar">
+      <nav class="ticker-list">
+        {% for item in items %}
+        <a href="#" class="ticker-item">
+          <span>#{{ item.id }} {{ item.name }}</span>
+          <span class="emission">{{ "%.2f"|format(item.emission|default(0, true)) }} TAO</span>
+        </a>
+        {% endfor %}
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <header>
+        <h1>SimiVision</h1>
+        <p>Legendary Edition — Low-Mid Cap Signal Engine</p>
+      </header>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2>Consensus Signals</h2>
+          <span class="badge active">Operative</span>
+        </div>
+
+        {% if items and items|length > 0 %}
+        <div class="simivision-grid">
+          {% for item in items %}
+          <div class="simivision-card {{ 'overvalued' if item.is_overvalued else '' }} {{ 'at-risk' if item.status in ('at-risk', 'bootstrap') else '' }}">
+            <div class="simivision-card-header">
+              <h3>#{{ item.id }} {{ item.name }}</h3>
+              <span class="badge {{ 'active' if item.status == 'active' else 'at-risk' }}">{{ item.status }}</span>
+            </div>
+            <div class="simivision-card-body">
+              <div class="metric">
+                <label>Emission</label>
+                <span>{{ "%.3f"|format(item.emission|default(0, true)) }} TAO</span>
+              </div>
+              {% if item.consensus %}
+              <div class="metric">
+                <label>Consensus Score</label>
+                <span>{{ "%.2f"|format(item.consensus.score|default(0, true)) }}</span>
+              </div>
+              <div class="metric">
+                <label>Action</label>
+                <span class="action-{{ item.consensus.recommended_action }}">{{ item.consensus.recommended_action }}</span>
+              </div>
+              {% endif %}
+              {% if item.staking_data %}
+              <div class="metric">
+                <label>Stake</label>
+                <span>{{ "%.0f"|format(item.staking_data.total_stake|default(0, true)) }} TAO</span>
+              </div>
+              <div class="metric">
+                <label>APY</label>
+                <span>{{ "%.2f"|format((item.staking_data.apy|default(0, true)) * 100) }}%</span>
+              </div>
+              {% endif %}
+              {% if item.is_overvalued %}
+              <div class="flag overvalued">Overvalued</div>
+              {% endif %}
+              {% if item.risk_flags %}
+              {% for flag in item.risk_flags %}
+              <div class="flag risk">{{ flag }}</div>
+              {% endfor %}
+              {% endif %}
+            </div>
+            {% if item.description %}
+            <div class="simivision-card-footer">
+              <p>{{ item.description[:200] }}{% if item.description|length > 200 %}…{% endif %}</p>
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+          <p>No SimiVision signals available. The council is convening…</p>
+        </div>
+        {% endif %}
+      </section>
+
+      <footer>
+        <p>SimiVision · Subnet Dashboard · Built for the Bittensor ecosystem.</p>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>
