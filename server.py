@@ -7,8 +7,17 @@ from datetime import datetime
 from typing import Any, Dict, List
 from flask import Flask, jsonify, make_response, request
 
-sys.path.insert(0, os.path.dirname(__file__))
+# Add the current directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from fetchers.taomarketcap import get_all_subnets, get_subnet_data
+try:
+    from data.learning_engine import LearningEngine
+except ImportError:
+    # Fallback if learning engine not available
+    class LearningEngine:
+        def get_stats(self):
+            return {"expert_weights": {}, "total_records": 0}
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -49,43 +58,6 @@ def load_soul_map():
 def _app_version():
     return _APP_VERSION
 
-# ── Subnet Radar ──────────────────────────────────────────────────────────
-def _compute_dev_score(sn: dict) -> int:
-    base = sn.get("emission", 0) * 10 + abs(sn.get("price_change_24h", 0)) * 2
-    return min(100, int(base + 15))
-
-def _compute_undervalued_score(sn: dict) -> float:
-    mc = sn.get("market_cap", 1)
-    if mc <= 0:
-        mc = 1
-    emission = sn.get("emission", 0)
-    dev = _compute_dev_score(sn)
-    return round((emission * 3 + dev * 0.5) / (mc / 1_000_000), 4)
-
-def _build_radar_picks(subnets: list) -> list:
-    scored = []
-    for sn in subnets:
-        try:
-            score = _compute_undervalued_score(sn)
-            dev = _compute_dev_score(sn)
-            mc = sn.get("market_cap", 0)
-            emission = sn.get("emission", 0)
-            scored.append({
-                "netuid": sn["netuid"],
-                "name": sn["name"],
-                "emission": emission,
-                "market_cap": mc,
-                "price_change_24h": sn.get("price_change_24h", 0),
-                "dev_score": dev,
-                "undervalued_score": score,
-                "commit_activity": ["high" if dev > 60 else "medium" if dev > 30 else "low"],
-                "github_commits_7d": max(0, int(dev * 0.7 + 2)),
-            })
-        except Exception:
-            continue
-    scored.sort(key=lambda x: x["undervalued_score"], reverse=True)
-    return scored[:4]
-
 # ── Technical indicator helpers ───────────────────────────────────────────
 def _compute_rsi(price_changes: List[float], period: int = 14) -> float:
     """Compute approximate RSI from a list of price changes."""
@@ -111,7 +83,7 @@ def _compute_macd(prices: List[float]) -> Dict:
     ema12 = sum(prices[-12:]) / 12
     ema26 = sum(prices[-26:]) / 26
     macd_line = ema12 - ema26
-    signal = macd_line * 0.8  # simplified EMA of MACD
+    signal = macd_line * 0.8
     histogram = macd_line - signal
     crossover = "bullish" if histogram > 0 else "bearish" if histogram < 0 else "neutral"
     return {"macd": round(macd_line, 4), "signal": round(signal, 4), "histogram": round(histogram, 4), "crossover": crossover}
@@ -125,7 +97,7 @@ def _compute_ma_cross(prices: List[float]) -> Dict:
     signal = "bullish" if ma7 > ma25_val else "bearish" if ma7 < ma25_val else "neutral"
     return {"ma7": round(ma7, 4), "ma25": round(ma25_val, 4), "signal": signal}
 
-def _build_tech_indicators(sn: Dict) -> Dict:
+def build_technical_indicators(sn: Dict) -> Dict:
     """Build technical indicators for a single subnet."""
     chg_24h = sn.get("price_change_24h", 0)
     chg_7d = sn.get("price_change_7d", 0)
@@ -170,54 +142,6 @@ def _build_tech_indicators(sn: Dict) -> Dict:
         "ma_cross": ma_cross,
         "signals": signals if signals else ["No strong technical signals"]
     }
-
-def _build_tech_indicators_for_picks(picks: List[Dict], subnets: List[Dict]) -> List[Dict]:
-    """Add technical indicators to each pick."""
-    for pick in picks:
-        netuid = pick.get("netuid")
-        sn = next((s for s in subnets if s.get("netuid") == netuid), None)
-        if sn:
-            pick["technical_indicators"] = _build_tech_indicators(sn)
-        else:
-            pick["technical_indicators"] = {"signals": ["Insufficient data"]}
-    return picks
-
-def _build_tech_indicators(subnets: list) -> list:
-    """Build technical indicator data for the top 4 subnets by emission."""
-    top = get_top_performers(subnets, "emission", 8)
-    results = []
-    for sn in top[:4]:
-        chg_24h = sn.get("price_change_24h", 0)
-        chg_7d = sn.get("price_change_7d", 0)
-        chg_30d = sn.get("price_change_30d", 0)
-        price = sn.get("price", 1)
-        if price <= 0:
-            price = 1
-
-        # Generate synthetic price history from available changes
-        base_price = price
-        changes = [chg_30d / 30] * 5 + [chg_7d / 7] * 7 + [chg_24h] * 2
-        changes = [c if abs(c) < 50 else (50 if c > 0 else -50) for c in changes]
-        prices = []
-        p = base_price
-        for c in changes:
-            p = p * (1 + c / 100)
-            prices.append(p)
-
-        rsi = _compute_rsi(changes, 14)
-        macd = _compute_macd(prices)
-        ma_cross = _compute_ma_cross(prices)
-
-        results.append({
-            "netuid": sn["netuid"],
-            "name": sn["name"],
-            "price": base_price,
-            "rsi": rsi,
-            "rsi_signal": "overbought" if rsi > 70 else "oversold" if rsi < 30 else "neutral",
-            "macd": macd,
-            "ma_cross": ma_cross,
-        })
-    return results
 
 # ── SimiVision helpers ────────────────────────────────────────────────────
 def build_signal_breakdown(sn: Dict[str, Any], rank: int) -> List[str]:
@@ -284,6 +208,9 @@ def _build_council_votes(top_sn: Dict) -> List[Dict]:
 
 def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[Dict], expert_weights: Dict, tech_indicators: Dict) -> Dict:
     """Build a comprehensive mindmap summary for card-style display."""
+    engine = LearningEngine()
+    stats = engine.get_stats()
+    
     # Acknowledge current state
     acknowledgment = f"Analyzing subnet {top_sn.get('netuid', 'N/A')} - {top_sn.get('name', 'Unknown')}"
     
@@ -308,7 +235,7 @@ def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[D
     
     # Opinion changes based on learning
     opinion_changes = []
-    weights = expert_weights or {}
+    weights = stats.get("expert_weights", {})
     for expert, weight in weights.items():
         if weight > 1.2:
             opinion_changes.append(f"{expert.title()} confidence INCREASED (weight: {weight:.2f})")
@@ -318,11 +245,7 @@ def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[D
         opinion_changes.append("No significant opinion changes")
     
     # Technical indicators section
-    tech_indicators_display = []
-    if tech_indicators:
-        tech_indicators_display = tech_indicators.get("signals", [])
-        if not tech_indicators_display:
-            tech_indicators_display = ["No strong technical signals"]
+    tech_indicators_display = tech_indicators.get("signals", []) if tech_indicators else ["Insufficient data"]
     
     # Calculate overall conviction
     total_conviction = sum(p.get("conviction", 50) for p in picks[:3])
@@ -336,7 +259,7 @@ def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[D
         "conviction": {
             "current": round(avg_conviction, 1),
             "trend": "stable",
-            "explanation": "Based on prediction history"
+            "explanation": f"Based on {stats.get('total_records', 0)} historical predictions"
         },
         "expert_insights": [
             {
@@ -347,8 +270,8 @@ def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[D
         ],
         "learning_status": {
             "enabled": True,
-            "records": 0,
-            "last_updated": "N/A"
+            "records": stats.get("total_records", 0),
+            "last_updated": stats.get("last_updated", "N/A")
         },
         "timestamp": datetime.now().isoformat()
     }
@@ -367,7 +290,14 @@ def api_simivision():
     subnets = get_dynamic_subnets()
     top_emission = get_top_performers(subnets, "emission")
     picks = build_simivision_picks_with_breakdown(top_emission)
-    picks = _build_tech_indicators_for_picks(picks, subnets)
+    # Add technical indicators to each pick
+    for pick in picks:
+        netuid = pick.get("netuid")
+        sn = next((s for s in subnets if s.get("netuid") == netuid), None)
+        if sn:
+            pick["technical_indicators"] = build_technical_indicators(sn)
+        else:
+            pick["technical_indicators"] = {"signals": ["Insufficient data"]}
     return jsonify({"status": "operational", "data_source": "taomarketcap.com", "picks": picks, "generated_at": datetime.now().isoformat()})
 
 @app.route("/api/summary")
@@ -385,13 +315,12 @@ def api_mindmap_feedback():
     subnets = get_dynamic_subnets()
     top_emission = get_top_performers(subnets, "emission")
     picks = build_simivision_picks_with_breakdown(top_emission)
-    picks = _build_tech_indicators_for_picks(picks, subnets)
     top_sn = top_emission[0] if top_emission else None
     council_votes = _build_council_votes(top_sn)
     soul_map = load_soul_map()
     
     # Get technical indicators for summary
-    tech_indicators = _build_tech_indicators(top_sn) if top_sn else {}
+    tech_indicators = build_technical_indicators(top_sn) if top_sn else {}
     summary = build_mindmap_summary(top_sn, picks, council_votes, soul_map.get("expert_weights", {}), tech_indicators)
     
     return jsonify({
@@ -410,11 +339,10 @@ def api_mindmap_summary():
     subnets = get_dynamic_subnets()
     top_emission = get_top_performers(subnets, "emission")
     picks = build_simivision_picks_with_breakdown(top_emission)
-    picks = _build_tech_indicators_for_picks(picks, subnets)
     top_sn = top_emission[0] if top_emission else None
     council_votes = _build_council_votes(top_sn)
     soul_map = load_soul_map()
-    tech_indicators = _build_tech_indicators(top_sn) if top_sn else {}
+    tech_indicators = build_technical_indicators(top_sn) if top_sn else {}
     summary = build_mindmap_summary(top_sn, picks, council_votes, soul_map.get("expert_weights", {}), tech_indicators)
     return jsonify(summary)
 
@@ -434,13 +362,16 @@ def record_feedback():
     if not subnet_id or not recommendation:
         return jsonify({"error": "Missing subnet_id or recommendation"}), 400
     
-    # TODO: Integrate with learning engine when available
+    engine = LearningEngine()
+    engine.record_feedback(subnet_id, recommendation, actual_performance)
+    
     return jsonify({"status": "feedback recorded", "success": True})
 
 @app.route("/api/learning/stats")
 def learning_stats():
     """Return learning loop statistics."""
-    return jsonify({"expert_weights": {}, "config": {}, "last_updated": None, "total_records": 0})
+    engine = LearningEngine()
+    return jsonify(engine.get_stats())
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
