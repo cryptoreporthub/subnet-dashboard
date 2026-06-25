@@ -5,7 +5,7 @@ import os
 import sys
 from datetime import datetime
 from typing import Any, Dict, List
-from flask import Flask, jsonify, make_response, request, render_template
+from flask import Flask, jsonify, make_response, request
 
 # Add the current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -27,7 +27,7 @@ os.makedirs("data", exist_ok=True)
 app = Flask(__name__)
 
 _DEPLOY_TIMESTAMP = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
-_APP_VERSION = "3.4.2"
+_APP_VERSION = "3.4.3"
 
 _COOUNCIL_MEMBERS = [
     {"name": "Alpha", "bias": "momentum"},
@@ -276,7 +276,7 @@ def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[D
         "timestamp": datetime.now().isoformat()
     }
 
-# Root route - render the template with all widgets
+# Root route - return inline HTML with all widgets
 @app.route("/")
 def index():
     subnets = get_dynamic_subnets()
@@ -285,29 +285,84 @@ def index():
     top_sn = top_emission[0] if top_emission else {}
     council_votes = _build_council_votes(top_sn)
     
-    # Build template data matching the template structure
-    simivision_data = {
-        "meta": {"system_status": "Operative"},
-        "top": picks
-    }
+    # Build HTML inline
+    html_parts = [
+        "<!DOCTYPE html>",
+        "<html>",
+        "<head>",
+        "  <title>Subnet Dashboard</title>",
+        "  <meta charset='utf-8'>",
+        "  <meta name='viewport' content='width=device-width, initial-scale=1'>",
+        "  <style>",
+        "    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; background: #0a0a0a; color: #fff; }",
+        "    h1, h2, h3 { color: #00d4ff; }",
+        "    .card { background: #1a1a1a; border-radius: 8px; padding: 20px; margin: 20px 0; border: 1px solid #333; }",
+        "    .pick { border-left: 4px solid #00d4ff; margin: 10px 0; padding: 15px; background: #222; }",
+        "    .council-member { display: inline-block; margin: 10px; padding: 15px; background: #333; border-radius: 8px; }",
+        "    a { color: #00d4ff; }",
+        "  </style>",
+        "</head>",
+        "<body>",
+        "  <h1># Subnet Pulse</h1>",
+        "  <p><em>Live Bittensor Intelligence · live from taomarketcap.com</em></p>",
+        "",
+        "  <div class='card'>",
+        "    <h2>## SimiVision</h2>",
+        f"    <p><strong>System Status:</strong> Operative</p>",
+    ]
     
-    learning_trail_data = {
-        "council": council_votes
-    }
+    if picks:
+        for pick in picks:
+            html_parts.extend([
+                f"    <div class='pick'>",
+                f"      <h3>#{pick['rank']} {pick['name']} - {pick['conviction']}% conviction {pick['recommendation']}</h3>",
+                f"      <p><strong>Why {pick['name']}?</strong></p>",
+                f"      <ul>",
+                f"        <li>{pick['breakdown'][0]}</li>",
+                f"        <li>{pick['breakdown'][1]}</li>",
+                f"        <li>{pick['breakdown'][2]}</li>",
+                f"      </ul>",
+                f"      <p>Emission: {pick['emission']:.2f} TAO/day | 24h Change: {pick['price_change_24h']:.1f}% | APY: {pick['apy']:.2f}%</p>",
+                f"    </div>",
+            ])
+    else:
+        html_parts.append("    <p>No SimiVision picks available.</p>")
     
-    highlights_data = {
-        "top_emission": top_emission[:3],
-        "top_apy": sorted(top_emission, key=lambda x: x.get("apy", 0), reverse=True)[:1]
-    }
+    html_parts.extend([
+        "  </div>",
+        "",
+        "  <div class='card'>",
+        "    <h2>## Learning Trail</h2>",
+    ])
     
-    summary_data = {
-        "highlights": highlights_data
-    }
+    if council_votes:
+        for member in council_votes:
+            html_parts.extend([
+                f"    <div class='council-member'>",
+                f"      <h3>{member['name']}</h3>",
+                f"      <p>{member['vote']} {member['confidence']}% confidence</p>",
+                f"      <p><small>{member['rationale']}</small></p>",
+                f"    </div>",
+            ])
+    else:
+        html_parts.append("    <p>Council deliberation in progress.</p>")
     
-    return render_template("index.html", 
-                          simivision=simivision_data, 
-                          learning_trail=learning_trail_data,
-                          summary=summary_data)
+    html_parts.extend([
+        "  </div>",
+        "",
+        "  <div class='card'>",
+        "    <h2>## Spotlight</h2>",
+        f"    <p><strong>Top Emitter:</strong> {picks[0]['name'] if picks else 'N/A'} ({picks[0]['emission']:.2f} TAO)</p>",
+        f"    <p><strong>Highest APY:</strong> {picks[0]['name'] if picks else 'N/A'} ({picks[0]['apy']:.1f}%)</p>",
+        "  </div>",
+        "",
+        "  <hr>",
+        "  <p>Subnet Pulse · Powered by <strong>taomarketcap.com</strong> · Built for the Bittensor ecosystem.</p>",
+        "</body>",
+        "</html>",
+    ])
+    
+    return "\n".join(html_parts)
 
 @app.route("/health")
 def health():
