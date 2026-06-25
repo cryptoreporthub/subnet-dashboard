@@ -179,6 +179,39 @@ def _build_council_votes(top_sn: Dict) -> List[Dict]:
     vol = top_sn.get("volume", 0)
     return [{"name": "Alpha", "vote": "BUY" if chg >= 0 else "SELL", "confidence": min(95, 70 + int(abs(chg))), "rationale": f"Momentum analysis: 24h change is {chg}%"}, {"name": "Beta", "vote": "BUY" if apy > 20 else "HOLD", "confidence": min(95, 65 + int(abs(apy) * 1.5)), "rationale": f"Value assessment: APY at {apy}"}, {"name": "Gamma", "vote": "BUY" if vol > 50000 else "HOLD", "confidence": min(95, 60 + int(vol / 50000)), "rationale": f"Sentiment signal: volume ${vol:,.0f}"}]
 
+def build_undervalued_ranking(subnets: List[Dict]) -> List[Dict]:
+    """Compute an undervalued ranking based on emission vs price change and other metrics."""
+    if not subnets:
+        return []
+    ranked = []
+    for sn in subnets:
+        emission = sn.get("emission", 0)
+        chg = sn.get("price_change_24h", 0)
+        apy = sn.get("apy", 0)
+        vol = sn.get("volume", 0)
+        mc = sn.get("market_cap", 0)
+        # Score: higher is better for undervalued
+        # Prefer: low market cap, high emission, positive or low negative change, decent APY
+        score = 0
+        if emission > 0:
+            score += emission * 10
+        if chg > 0:
+            score += chg * 3
+        elif chg > -10:
+            score += chg  # small penalty for negative
+        if apy > 0:
+            score += apy * 0.5
+        if vol > 0:
+            score += math.log(vol + 1)
+        if mc > 0:
+            score -= math.log(mc + 1) * 0.3  # penalize high market cap
+        ranked.append({**sn, "score": round(score, 2)})
+    # Sort by score descending and take top 10
+    ranked.sort(key=lambda x: x.get("score", 0), reverse=True)
+    for i, sn in enumerate(ranked[:10]):
+        sn["rank"] = i + 1
+    return ranked[:10]
+
 def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[Dict], expert_weights: Dict, tech_indicators: Dict) -> Dict:
     """Build a comprehensive mindmap summary for card-style display."""
     engine = LearningEngine()
@@ -257,6 +290,7 @@ def index():
     picks = build_simivision_picks_with_breakdown(top_emission)
     top_sn = top_emission[0] if top_emission else {}
     council_votes = _build_council_votes(top_sn)
+    undervalued = build_undervalued_ranking(subnets)
     
     simivision_data = {
         "meta": {"system_status": "Operative"},
@@ -279,7 +313,8 @@ def index():
     return render_template("index.html",
                           simivision=simivision_data,
                           learning_trail=learning_trail_data,
-                          summary=summary_data)
+                          summary=summary_data,
+                          undervalued={"subnets": undervalued})
 
 @app.route("/health")
 def health():
@@ -298,90 +333,4 @@ def api_simivision():
     for pick in picks:
         netuid = pick.get("netuid")
         if netuid:
-            sn_data = next((s for s in subnets if s.get("netuid") == netuid), {})
-            pick["technical_indicators"] = build_technical_indicators(sn_data)
-    
-    engine = LearningEngine()
-    stats = engine.get_stats()
-    
-    return jsonify({
-        "data_source": "taomarketcap.com",
-        "generated_at": datetime.now().isoformat(),
-        "status": "operational",
-        "picks": picks,
-        "council": _build_council_votes(top_emission[0] if top_emission else {}),
-        "learning_status": stats
-    })
-
-@app.route("/api/mindmap/summary")
-def api_mindmap_summary():
-    subnets = get_dynamic_subnets()
-    top_emission = get_top_performers(subnets, "emission")
-    picks = build_simivision_picks_with_breakdown(top_emission)
-    top_sn = top_emission[0] if top_emission else {}
-    council_votes = _build_council_votes(top_sn)
-    tech_indicators = build_technical_indicators(top_sn) if top_sn else {}
-    
-    return jsonify({
-        "acknowledgment": f"Analyzing subnet {top_sn.get('netuid', 'N/A')} - {top_sn.get('name', 'Unknown')}",
-        "noticed": [f"High emission rate ({top_sn.get('emission', 0):.2f} TAO/day)"] if top_sn else ["No significant signals detected"],
-        "opinion_changes": ["No significant opinion changes"],
-        "technical_indicators": tech_indicators.get("signals", ["Insufficient data"]),
-        "conviction": {"current": 95.0, "trend": "stable", "explanation": "Based on live data"},
-        "expert_insights": [{"expert": v.get("name", "Unknown"), "bias": v.get("rationale", "")[:50] + "...", "confidence": v.get("confidence", 50)} for v in council_votes],
-        "learning_status": {"enabled": True, "records": 0, "last_updated": None},
-        "timestamp": datetime.now().isoformat()
-    })
-
-@app.route("/api/mindmap/feedback")
-def api_mindmap_feedback():
-    subnets = get_dynamic_subnets()
-    top_emission = get_top_performers(subnets, "emission")
-    picks = build_simivision_picks_with_breakdown(top_emission)
-    top_sn = top_emission[0] if top_emission else {}
-    council_votes = _build_council_votes(top_sn)
-    tech_indicators = build_technical_indicators(top_sn) if top_sn else {}
-    
-    return jsonify({
-        "acknowledgment": f"Analyzing subnet {top_sn.get('netuid', 'N/A')} - {top_sn.get('name', 'Unknown')}",
-        "noticed": [f"High emission rate ({top_sn.get('emission', 0):.2f} TAO/day)"] if top_sn else ["No significant signals detected"],
-        "opinion_changes": ["No significant opinion changes"],
-        "technical_indicators": tech_indicators.get("signals", ["Insufficient data"]),
-        "conviction": {"current": 95.0, "trend": "stable", "explanation": "Based on live data"},
-        "expert_insights": [{"expert": v.get("name", "Unknown"), "bias": v.get("rationale", "")[:50] + "...", "confidence": v.get("confidence", 50)} for v in council_votes],
-        "learning_status": {"enabled": True, "records": 0, "last_updated": None},
-        "rotation_tokens": _ROTATION_TOKENS,
-        "timestamp": datetime.now().isoformat()
-    })
-
-@app.route("/api/rotation-tokens")
-def api_rotation_tokens():
-    return jsonify({"count": len(_ROTATION_TOKENS), "rotation_tokens": _ROTATION_TOKENS})
-
-@app.route("/api/learning/stats")
-def api_learning_stats():
-    engine = LearningEngine()
-    stats = engine.get_stats()
-    return jsonify({
-        "config": {"learning_rate": 0.1, "decay_factor": 0.99, "max_weight": 2.0, "min_weight": 0.1, "performance_window_days": 30},
-        "expert_weights": stats.get("expert_weights", {}),
-        "total_records": stats.get("total_records", 0),
-        "last_updated": stats.get("last_updated")
-    })
-
-@app.route("/api/feedback", methods=["POST"])
-def api_feedback():
-    data = request.get_json() or {}
-    expert = data.get("expert")
-    vote = data.get("vote")
-    confidence = data.get("confidence", 50)
-    rationale = data.get("rationale", "")
-    
-    engine = LearningEngine()
-    engine.record_feedback(expert, vote, confidence, rationale)
-    
-    return jsonify({"status": "recorded", "expert": expert})
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
+            pick["technical_indicators"] = build_technical_indicators(get_subnet_data(netuid))
