@@ -1,955 +1,832 @@
-<!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="scroll-smooth">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>SimiVision Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        obsidian: {
+                            50: '#f8fafc',
+                            100: '#f1f5f9',
+                            200: '#e2e8f0',
+                            300: '#cbd5e1',
+                            400: '#94a3b8',
+                            500: '#64748b',
+                            600: '#475569',
+                            700: '#334155',
+                            800: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        },
+                        green: {
+                            DEFAULT: '#00ff88',
+                            dark: '#00cc6a',
+                            glow: '#00ff88aa',
+                            faint: '#00ff8822',
+                        },
+                        purple: {
+                            DEFAULT: '#8b5cf6',
+                            dark: '#7c3aed',
+                            glow: '#8b5cf6aa',
+                        },
+                        red: {
+                            DEFAULT: '#ef4444',
+                            dark: '#dc2626',
+                        },
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        'glow': 'glow 2s ease-in-out infinite alternate',
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        glow: {
+                            '0%': { boxShadow: '0 0 5px rgba(0, 255, 136, 0.2)' },
+                            '100%': { boxShadow: '0 0 20px rgba(0, 255, 136, 0.5)' },
+                        },
+                    },
+                },
+            },
+        }
+    </script>
+    
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            --bg-primary: #0b0f1e;
-            --bg-card: #13182d;
-            --bg-card-hover: #1a2139;
-            --accent-green: #00ff88;
-            --accent-green-dark: #00cc6a;
-            --accent-red: #ff4444;
-            --accent-gray: #666666;
-            --accent-purple: #8b5cf6;
-            --text-primary: #ffffff;
-            --text-secondary: #9ca3af;
-            --text-muted: #6b7280;
-            --border-color: #2d3748;
-            --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.15);
-        }
-
+        /* Reset & Base */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+        
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            line-height: 1.6;
+            background: linear-gradient(180deg, #020617 0%, #0f172a 50%, #1e293b 100%);
             min-height: 100vh;
-        }
-
-        /* Header */
-        .header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.75rem 1.5rem;
-            background: var(--bg-primary);
-            border-bottom: 1px solid var(--border-color);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        .logo {
-            font-size: 1.5rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, var(--accent-green), #ffffff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .nav-pills {
-            display: none;
-        }
-
-        .header-info {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .price-display {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.5rem 1rem;
-            background: var(--bg-card);
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-        }
-
-        .price-value {
-            font-size: 1.1rem;
-            font-weight: 600;
-        }
-
-        .price-change {
-            color: var(--accent-green);
-            font-weight: 500;
-            font-size: 0.9rem;
-        }
-
-        .price-change.negative {
-            color: var(--accent-red);
-        }
-
-        .user-avatar {
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            background: var(--accent-purple);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.875rem;
-            font-weight: 600;
-        }
-
-        /* Main Layout */
-        .main-container {
-            display: grid;
-            grid-template-columns: 60px 1fr;
-            min-height: calc(100vh - 65px);
-        }
-
-        /* Sidebar */
-        .sidebar {
-            width: 60px;
-            background: var(--bg-primary);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 1rem 0;
-            gap: 1.5rem;
-        }
-
-        .sidebar-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-secondary);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .sidebar-icon:hover, .sidebar-icon.active {
-            background: var(--bg-card);
-            color: var(--accent-green);
-        }
-
-        .sidebar-icon svg {
-            width: 20px;
-            height: 20px;
-        }
-
-        /* Content Area */
-        .content {
-            padding: 1.5rem;
-            overflow-x: hidden;
-        }
-
-        /* Cards Grid */
-        .cards-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 1.5rem;
-        }
-
-        @media (min-width: 1024px) {
-            .cards-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-
-        /* Card Styles */
-        .card {
-            background: var(--bg-card);
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            box-shadow: var(--shadow-card);
-            overflow: hidden;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 12px -1px rgba(0, 0, 0, 0.4), 0 4px 6px -1px rgba(0, 0, 0, 0.2);
-        }
-
-        .card-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 1rem 1.25rem;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .card-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-        }
-
-        .card-link {
-            color: var(--accent-green);
-            font-size: 0.875rem;
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        .card-link:hover {
-            text-decoration: underline;
-        }
-
-        .card-body {
-            padding: 1.25rem;
-        }
-
-        /* Cards Specific */
-        .picks-card {
-            grid-column: 1 / -1;
-        }
-
-        .picks-list {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-
-        .pick-item {
-            display: grid;
-            grid-template-columns: 80px 1fr 120px auto;
-            gap: 1rem;
-            align-items: center;
-            padding: 1rem;
-            background: var(--bg-primary);
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-        }
-
-        .pick-number {
-            font-size: 1.1rem;
-            font-weight: 700;
-            color: var(--accent-green);
-        }
-
-        .pick-name {
-            font-weight: 600;
-            font-size: 1rem;
-        }
-
-        .pick-subtitle {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            margin-top: 0.25rem;
-        }
-
-        .pick-info {
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-        }
-
-        .pick-cap {
-            font-weight: 600;
-        }
-
-        .pick-change {
-            font-size: 0.85rem;
-            color: var(--accent-green);
-        }
-
-        .pick-change.negative {
-            color: var(--accent-red);
-        }
-
-        .pick-chart {
-            height: 40px;
-            width: 100px;
-        }
-
-        .pick-metrics {
-            display: flex;
-            gap: 1rem;
-            font-size: 0.75rem;
-        }
-
-        .metric-pill {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .metric-label {
-            color: var(--text-secondary);
-        }
-
-        .metric-value {
-            font-weight: 600;
-            color: var(--accent-purple);
-        }
-
-        .recommendation {
-            color: var(--accent-green);
-            font-weight: 600;
-        }
-
-        .recommendation.neutral {
-            color: var(--text-secondary);
-        }
-
-        .recommendation.bearish {
-            color: var(--accent-red);
-        }
-
-        /* Council Votes Card */
-        .council-card {
-            grid-column: 1 / -1;
-        }
-
-        .proposal-section {
-            background: var(--bg-primary);
-            border-radius: 8px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }
-
-        .proposal-title {
-            font-weight: 600;
-            font-size: 0.95rem;
-            margin-bottom: 0.25rem;
-        }
-
-        .proposal-subtitle {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-        }
-
-        .proposal-timer {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            margin-top: 0.5rem;
-        }
-
-        .vote-distribution {
-            margin-top: 1rem;
-        }
-
-        .vote-section {
-            margin-bottom: 0.75rem;
-        }
-
-        .vote-row {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .vote-percentage {
-            font-weight: 700;
-            font-size: 0.9rem;
-            min-width: 70px;
-        }
-
-        .vote-bar {
-            flex: 1;
-            height: 8px;
-            border-radius: 4px;
-            overflow: hidden;
-            background: var(--bg-primary);
-        }
-
-        .vote-fill {
-            height: 100%;
-            border-radius: 4px;
-        }
-
-        .vote-fill.favor {
-            background: var(--accent-green);
-        }
-
-        .vote-fill.against {
-            background: var(--accent-red);
-        }
-
-        .vote-fill.absent {
-            background: var(--text-muted);
-        }
-
-        .vote-votes {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-        }
-
-        .voters-list {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-        }
-
-        .voter-item {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-
-        .voter-name {
-            font-size: 0.9rem;
-            flex: 1;
-        }
-
-        .voter-percentage {
-            font-weight: 600;
-            color: var(--accent-green);
-        }
-
-        /* Spotlight Card */
-        .spotlight-card {
-            grid-column: 1 / -1;
-        }
-
-        .spotlight-main {
-            text-align: center;
-            padding: 2rem 1rem;
-            background: var(--bg-primary);
-            border-radius: 8px;
-            margin-bottom: 1rem;
-        }
-
-        .spotlight-rank {
-            font-size: 3rem;
-            font-weight: 700;
-            color: var(--accent-green);
-            line-height: 1;
-        }
-
-        .spotlight-name {
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin: 1rem 0 0.5rem;
-        }
-
-        .spotlight-subtitle {
-            color: var(--text-secondary);
-            margin-bottom: 1rem;
-        }
-
-        .spotlight-metrics {
-            display: flex;
-            gap: 2rem;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .spotlight-metric {
-            text-align: center;
-        }
-
-        .spotlight-metric-value {
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: var(--accent-green);
-        }
-
-        .spotlight-metric-label {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-        }
-
-        .spotlight-reasons {
-            background: var(--bg-primary);
-            border-radius: 8px;
-            padding: 1rem;
-        }
-
-        .reason-list {
-            list-style: none;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.75rem;
-            margin-top: 0.75rem;
-        }
-
-        .reason-item {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .reason-icon {
-            color: var(--accent-green);
-        }
-
-        /* Undervalued Radar */
-        .radar-container {
-            overflow-x: auto;
-        }
-
-        .radar-table {
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+        }
+        
+        /* Glassmorphism Effects */
+        .glass-panel {
+            position: relative;
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            background: linear-gradient(
+                135deg,
+                rgba(30, 41, 59, 0.7) 0%,
+                rgba(45, 55, 72, 0.5) 50%,
+                rgba(30, 41, 59, 0.7) 100%
+            );
+        }
+        
+        .glass-border {
+            position: relative;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+            outline: 1px solid rgba(0, 255, 136, 0.15);
+            outline-offset: -1px;
+        }
+        
+        .glass-border::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(
+                45deg,
+                rgba(0, 255, 136, 0.1),
+                rgba(0, 255, 136, 0.2),
+                rgba(139, 92, 246, 0.1),
+                rgba(0, 255, 136, 0.1)
+            );
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+        
+        /* Neon Glow Borders */
+        .neon-border {
+            position: relative;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.1), 0 0 40px rgba(139, 92, 246, 0.05);
+        }
+        
+        .neon-border::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            padding: 1px;
+            background: linear-gradient(45deg, #00ff88, #8b5cf6, #00ff88);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+        
+        /* Chart Canvas Container */
+        .chart-container {
+            position: relative;
             width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9rem;
+            height: 100%;
+            min-height: 120px;
         }
-
-        .radar-table th {
-            text-align: left;
-            padding: 0.75rem;
-            font-weight: 600;
-            color: var(--text-secondary);
-            font-size: 0.8rem;
-            border-bottom: 1px solid var(--border-color);
+        
+        /* Sparkline Container */
+        .sparkline-container {
+            height: 32px;
+            width: 100%;
+            position: relative;
         }
-
-        .radar-table td {
-            padding: 0.75rem;
-            border-bottom: 1px solid var(--bg-primary);
+        
+        /* Scroll Styling */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        
+        /* Touch Optimization */
+        @media (hover: hover) {
+            .mobile-card:hover { transform: translateY(-2px); }
         }
-
-        .radar-table tr:last-child td {
-            border-bottom: none;
-        }
-
-        .radar-rank {
-            font-weight: 700;
-            color: var(--accent-green);
-        }
-
-        .radar-name {
-            font-weight: 600;
-        }
-
-        .radar-subtitle {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-        }
-
-        .radar-value {
-            font-weight: 600;
-        }
-
-        .radar-value.positive {
-            color: var(--accent-green);
-        }
-
-        .radar-value.negative {
-            color: var(--accent-red);
-        }
-
-        .dev-stars {
-            color: #fbbf24;
-        }
-
-        .trend-arrow {
-            font-size: 1.25rem;
-        }
-
-        .trend-arrow.up {
-            color: var(--accent-green);
-        }
-
-        .trend-arrow.neutral {
-            color: #fbbf24;
-        }
-
-        .trend-arrow.down {
-            color: var(--accent-red);
-        }
-
-        .gh-commits {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .gh-commits-icon {
-            color: var(--text-secondary);
-        }
-
-        .gh-change.positive {
-            color: var(--accent-green);
-        }
-
-        .gh-change.negative {
-            color: var(--accent-red);
-        }
-
-        .mc-dev {
-            font-weight: 600;
-        }
-
-        /* Mindmap Feed */
-        .mindmap-section {
-            background: var(--bg-card);
-            border-radius: 12px;
-            border: 1px solid var(--border-color);
-            padding: 1.25rem;
-            margin-top: 1.5rem;
-        }
-
-        .section-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-        }
-
-        .feed-item {
-            display: flex;
-            gap: 1rem;
-            padding: 0.75rem;
-            border-bottom: 1px solid var(--bg-primary);
-        }
-
-        .feed-item:last-child {
-            border-bottom: none;
-        }
-
-        .feed-time {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            min-width: 80px;
-        }
-
-        .feed-message {
-            font-size: 0.9rem;
-        }
-
-        /* Footer */
-        .footer {
-            text-align: center;
-            padding: 2rem;
-            color: var(--text-muted);
-            font-size: 0.85rem;
-            border-top: 1px solid var(--border-color);
-            margin-top: 2rem;
-        }
-
-        .footer a {
-            color: var(--accent-green);
-            text-decoration: none;
-        }
-
-        .footer a:hover {
-            text-decoration: underline;
-        }
-
-        /* Loading State */
-        .loading-state {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 4rem;
-            color: var(--text-secondary);
-        }
-
-        /* Status Badge */
-        .status-badge {
+        
+        /* Status Pill */
+        .status-pill {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.375rem;
             padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.7rem;
             font-weight: 600;
+            letter-spacing: 0.025em;
         }
-
-        .status-badge.live {
-            background: rgba(0, 255, 136, 0.1);
-            color: var(--accent-green);
+        
+        .status-pill.live {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.15), rgba(0, 204, 106, 0.15));
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            color: #00ff88;
         }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
+        
+        .status-pill.live::before {
+            content: '';
+            width: 6px;
+            height: 6px;
             border-radius: 50%;
-            background: var(--accent-green);
+            background: #00ff88;
             animation: pulse 2s infinite;
         }
-
+        
         @keyframes pulse {
-            0%, 100% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.5;
-            }
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        
+        /* Progress Bar */
+        .progress-bar {
+            height: 4px;
+            border-radius: 2px;
+            overflow: hidden;
+            background: rgba(30, 41, 59, 0.5);
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.6s ease-out;
         }
     </style>
 </head>
 <body>
-    {% if loading %}
-    {% include 'loading.html' %}
-    {% else %}
-    <div class="header">
-        <div class="logo">SimiVision</div>
-        <div class="header-info">
-            <div class="price-display">
-                <span class="price-value">$456.21</span>
-                <span class="price-change">+3.24%</span>
-            </div>
-            <div class="user-avatar">U</div>
-        </div>
-    </div>
+    <div id="root"></div>
 
-    <div class="main-container">
-        <nav class="sidebar">
-            <div class="sidebar-icon active">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        
+        // Simulated Data
+        const simivisionTop = [
+            { rank: 18, name: 'Interlink', breakdown: ['Data Interoperability', 'AI Governance'], market_cap: 126400000, price_change_24h: 18.7, technical_score: 82, confidence: 92, recommendation: 'Strong Buy', sparkline: [100, 105, 102, 108, 115, 112, 118, 122, 118, 125, 120, 126] },
+            { rank: 11, name: 'Compute', breakdown: ['Web3', 'Infrastructure'], market_cap: 205200000, price_change_24h: 12.1, technical_score: 74, confidence: 86, recommendation: 'Buy', sparkline: [200, 198, 205, 210, 208, 215, 220, 218, 225, 222, 230, 205] },
+            { rank: 7, name: 'Omega', breakdown: ['DeFi', 'Yield'], market_cap: 96700000, price_change_24h: -4.1, technical_score: 68, confidence: 78, recommendation: 'Hold', sparkline: [96, 98, 95, 92, 89, 91, 88, 87, 85, 88, 91, 96] },
+            { rank: 3, name: 'Vision', breakdown: ['AI', 'Computer Vision'], market_cap: 258900000, price_change_24h: 42.7, technical_score: 95, confidence: 72, recommendation: 'Strong Buy', sparkline: [258, 265, 272, 280, 290, 285, 295, 302, 298, 290, 275, 258] },
+        ];
+        
+        const councilVotes = {
+            proposal: 'Increase emission allocation for Subnet 18',
+            subtitle: 'Incentive growth for data interoperability',
+            endsIn: '2d 14h',
+            votes: {
+                favor: { percentage: 71.3, votes: '1.2M STAA' },
+                against: { percentage: 18.7, votes: '342K STAA' },
+                absent: { percentage: 10.0, votes: '104K STAA' },
+            },
+            topVoters: [
+                { name: 'Openverse Foundation', confidence: 18.2 },
+                { name: 'Textile', confidence: 8.7 },
+                { name: 'Elastic Vision', confidence: 6.1 },
+                { name: 'Block Analytics', confidence: 5.4 },
+                { name: 'Wabi Labs', confidence: 4.8 },
+            ],
+            totalVotes: '1.69M',
+        };
+        
+        const spotlight = {
+            rank: 18,
+            name: 'Interlink',
+            sector: 'Data Interoperability',
+            marketCap: 126.4,
+            trend30d: 48.7,
+            trend7d: 18.7,
+            reasons: [
+                'Partnership with Chainbase',
+                'New API integrations live',
+                'Rising developer activity',
+                'Strong TAI trader growth',
+            ],
+            sparkline: [80, 82, 85, 88, 90, 92, 95, 98, 100, 102, 105, 108, 110, 112, 115, 118, 120, 122, 125, 127, 128, 130, 132, 135, 138, 140, 142, 145, 148, 150, 152, 155, 158, 160, 162, 165, 168, 170, 172],
+            technical: {
+                rsi: { value: 64.2, status: 'Neutral' },
+                macd: { signal: 'Bullish', histogram: 'Positive' },
+                maCross: 'Bullish'
+            }
+        };
+        
+        const undervalued = [
+            { rank: 24, name: 'Nexus', sector: 'Cross-Chain Infra', devActivity: 'High', commits: 312, mcap: 28.7, mcapDevRatio: 0.092, trend: '+22%', trendPercent: 22 },
+            { rank: 32, name: 'DataVerse', sector: 'Decentralized Storage', devActivity: 'High', commits: 278, mcap: 22.1, mcapDevRatio: 0.079, trend: '-5%', trendPercent: -5 },
+            { rank: 9, name: 'TensorAI', sector: 'AI Infrastructure', devActivity: 'Medium', commits: 184, mcap: 19.3, mcapDevRatio: 0.105, trend: '+32%', trendPercent: 32 },
+            { rank: 27, name: 'Signal', sector: 'On-Chain Oracles', devActivity: 'Medium', commits: 156, mcap: 15.6, mcapDevRatio: 0.113, trend: '+10%', trendPercent: 10 },
+            { rank: 13, name: 'Streamnet', sector: 'Real-Time Data', devActivity: 'High', commits: 201, mcap: 17.8, mcapDevRatio: 0.118, trend: '+25%', trendPercent: 25 },
+        ];
+        
+        const LearningLoopFeed = [
+            { time: 'Now', message: 'Analyzing subnet performance patterns and updating stances...' },
+            { time: '2m', message: 'Adjusting expert weights based on recent vote outcomes.' },
+            { time: '5m', message: 'Recording learning loop updates to persistent memory.' },
+            { time: '12m', message: 'Cross-referencing on-chain metrics with technical indicators.' },
+            { time: '18m', message: 'Calibrating AI confidence scores based on model performance.' },
+        ];
+        
+        // Simple SVG Line Chart Component
+        const SimpleLineChart = ({ data, color = '#00ff88', height = 60 }) => {
+            if (!data || data.length === 0) return null;
+            
+            const min = Math.min(...data);
+            const max = Math.max(...data);
+            const range = max - min || 1;
+            
+            const points = data.map((value, index) => {
+                const x = (index / (data.length - 1)) * 100;
+                const y = 100 - ((value - min) / range) * 100;
+                return `${x},${y}`;
+            }).join(' ');
+            
+            return (
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full" style={{ height }} overflow="visible">
+                    <defs>
+                        <linearGradient id={`gradient-${color}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+                            <stop offset="100%" stopColor={color} stopOpacity="0" />
+                        </linearGradient>
+                    </defs>
+                    <path
+                        d={`M0,100 L0,${100 - ((data[0] - min) / range) * 100} ${points.split(' ').map((p, i) => `L${p}`).join(' ')} L100,100 Z`}
+                        fill={`url(#gradient-${color})`}
+                        stroke="none"
+                    />
+                    <polyline
+                        points={points}
+                        fill="none"
+                        stroke={color}
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="drop-shadow-sm"
+                    />
                 </svg>
-            </div>
-            <div class="sidebar-icon">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm-1 13h2v2h-2v-2zm4 0h2v2h-2v-2zm-9 0h2v2H6v-2zm5-8c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5z"/>
-                </svg>
-            </div>
-            <div class="sidebar-icon">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/>
-                </svg>
-            </div>
-            <div class="sidebar-icon">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
-                </svg>
-            </div>
-            <div class="sidebar-icon">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/>
-                </svg>
-            </div>
-            <div class="sidebar-icon">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
-                </svg>
-            </div>
-            <div class="sidebar-icon">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-                </svg>
-            </div>
-            <div class="sidebar-icon">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
-                </svg>
-            </div>
-        </nav>
-
-        <main class="content">
-            <div class="status-badge live">
-                <span class="status-dot"></span>
-                LIVE
-            </div>
-
-            <div class="cards-grid">
-                <div class="card picks-card">
-                    <div class="card-header">
-                        <span class="card-title">SimiVision Picks</span>
-                        <a href="#" class="card-link">View All →</a>
+            );
+        };
+        
+        // Component: SimiVision Picks Card
+        const SimiVisionPicksCard = ({ picks }) => (
+            <section className="w-full glass-panel glass-border rounded-3xl p-4 sm:p-6 mb-4 sm:mb-6 shadow-2xl">
+                <div className="flex items-center justify-between mb-4 sm:mb-6">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-400 to-purple-500 flex items-center justify-center shrink-0 shadow-lg">
+                            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 className="text-lg sm:text-xl font-bold">SimiVision Picks</h2>
+                            <p className="text-xs sm:text-sm text-slate-400">Top picks by SimiVision AI</p>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <div class="picks-list">
-                            {% if simivision.top and simivision.top|length > 0 %}
-                                {% for pick in simivision.top %}
-                                <div class="pick-item">
-                                    <div class="pick-number">#{{ pick.rank if pick.rank else loop.index }}</div>
-                                    <div>
-                                        <div class="pick-name">{{ pick.name }}</div>
-                                        <div class="pick-subtitle">{{ pick.breakdown[:2]|join(', ') if pick.breakdown else 'Strong fundamentals' }}</div>
-                                    </div>
-                                    <div class="pick-info">
-                                        <span class="pick-cap">${{ "%.2f"|format(pick.market_cap|default(0, true)) if pick.market_cap else '$N/A' }}</span>
-                                        <span class="pick-change {% if pick.price_change_24h|default(0, true)|float < 0 %}negative{% endif %}">
-                                            {{ "%+.1f"|format(pick.price_change_24h|default(0, true)) }}% 24h
+                    <a href="#" className="text-xs sm:text-sm text-green-400 hover:text-green-300 font-semibold flex items-center gap-1">
+                        View All
+                        <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                    </a>
+                </div>
+                
+                <div className="space-y-3 sm:space-y-4">
+                    {picks.map((pick, idx) => (
+                        <article key={idx} className="glass-panel glass-border rounded-xl sm:rounded-2xl p-3 sm:p-4 mobile-card transition-transform duration-200 shadow-lg">
+                            <div className="grid sm:grid-cols-[60px_1fr_1fr_auto] gap-3 sm:gap-4 items-start">
+                                <div className="flex flex-col items-center gap-1 sm:gap-2">
+                                    <span className="text-xl sm:text-2xl font-black" style={{ color: '#00ff88' }}>#{pick.rank}</span>
+                                    <span className="text-xs sm:text-sm font-semibold text-white text-center leading-tight">{pick.name}</span>
+                                    <span className="text-[10px] xs:text-xs text-slate-400 text-center leading-tight sm:hidden">{pick.breakdown[0]}</span>
+                                </div>
+                                
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs sm:text-sm text-slate-300">${(pick.market_cap / 1e6).toFixed(1)}M</span>
+                                        <span className={`text-xs sm:text-sm font-semibold px-2 py-1 rounded-lg ${pick.price_change_24h >= 0 ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                                            {pick.price_change_24h >= 0 ? '+' : ''}{pick.price_change_24h}% 24h
                                         </span>
                                     </div>
-                                    <div class="pick-metrics">
-                                        <div class="metric-pill">
-                                            <span class="metric-label">Tech</span>
-                                            <span class="metric-value">{{ pick.technical_score|default(0)|int }}</span>
-                                        </div>
-                                        <div class="metric-pill">
-                                            <span class="metric-label">AI</span>
-                                            <span class="metric-value{% if pick.confidence|default(0,true)|float >= 85 %} positive{% endif %}">{{ pick.confidence|default(0,true)|int }}%</span>
-                                        </div>
-                                        <div class="recommendation {% if pick.recommendation %} {{ pick.recommendation|lower }} {% else %} neutral {% endif %}">
-                                            {{ pick.recommendation or 'Strong Conviction' }}
-                                        </div>
+                                    <SimpleLineChart data={pick.sparkline} color={pick.price_change_24h >= 0 ? '#00ff88' : '#ef4444'} height={32} />
+                                </div>
+                                
+                                <div className="flex items-center justify-between gap-2 sm:gap-3">
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-lg sm:text-xl font-bold text-purple-400">{pick.technical_score}</span>
+                                        <span className="text-[10px] xs:text-xs text-slate-400">Tech</span>
+                                    </div>
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-lg sm:text-xl font-bold" style={{ color: '#00ff88' }}>{pick.confidence}%</span>
+                                        <span className="text-[10px] xs:text-xs text-slate-400">AI</span>
                                     </div>
                                 </div>
-                                {% endfor %}
-                            {% else %}
-                                <div style="text-align:center;color:var(--text-muted);padding:2rem;">Loading picks...</div>
-                            {% endif %}
+                                
+                                <div className="flex flex-col items-end gap-1 sm:gap-2">
+                                    <span className={`text-xs sm:text-sm font-semibold px-2 py-1.5 rounded-lg whitespace-nowrap ${
+                                        pick.recommendation.includes('Strong Buy') ? 'bg-green-500/20 text-green-400' :
+                                        pick.recommendation.includes('Buy') ? 'bg-green-500/10 text-green-300' :
+                                        pick.recommendation.includes('Hold') ? 'bg-yellow-500/20 text-yellow-400' :
+                                        'bg-red-500/10 text-red-400'
+                                    }`}>
+                                        {pick.recommendation}
+                                    </span>
+                                    <span className="text-[10px] xs:text-xs text-slate-500 text-center sm:text-left sm:hidden">{pick.breakdown[1] || ''}</span>
+                                </div>
+                            </div>
+                        </article>
+                    ))}
+                </div>
+            </section>
+        );
+        
+        // Component: Learning Trail Council Votes
+        const CouncilVotesCard = ({ votes }) => (
+            <section className="w-full glass-panel glass-border rounded-3xl p-4 sm:p-6 mb-4 sm:mb-6 shadow-2xl">
+                <div className="flex items-center justify-between mb-4 sm:mb-6">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shrink-0 shadow-lg">
+                            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 className="text-lg sm:text-xl font-bold">Learning Trail Council</h2>
+                            <p className="text-xs sm:text-sm text-slate-400">Decentralized governance in action</p>
                         </div>
                     </div>
+                    <a href="#" className="text-xs sm:text-sm text-purple-400 hover:text-purple-300 font-semibold flex items-center gap-1">
+                        View All
+                        <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                    </a>
                 </div>
-
-                <div class="card council-card">
-                    <div class="card-header">
-                        <span class="card-title">Council Votes</span>
-                        <a href="#" class="card-link">View Proposals →</a>
+                
+                <article className="glass-panel glass-border rounded-xl sm:rounded-2xl p-3 sm:p-4 mobile-card shadow-lg mb-4 sm:mb-6">
+                    <div className="text-center mb-4">
+                        <h3 className="text-sm sm:text-base font-semibold mb-1">{votes.proposal}</h3>
+                        <p className="text-xs text-slate-400 mb-1">{votes.subtitle}</p>
+                        <span className="text-xs text-slate-500">Ends in: {votes.endsIn}</span>
                     </div>
-                    <div class="card-body">
-                        <div class="proposal-section">
-                            <div class="proposal-title">Increase emission allocation for Subnet 1B</div>
-                            <div class="proposal-subtitle">Incentive growth for data interoperability</div>
-                            <div class="proposal-timer">Ends in: 2d 14h</div>
-                            <div class="vote-distribution">
-                                <div class="vote-row">
-                                    <div class="vote-percentage favor">71.3%</div>
-                                    <div class="vote-bar"><div class="vote-fill favor" style="width: 71.3%"></div></div>
-                                    <div class="vote-votes">1.2M STAA</div>
+                    
+                    <div className="space-y-3 sm:space-y-4">
+                        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                            <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-green-500/5">
+                                <span className="text-lg sm:text-xl font-black text-green-400">{votes.votes.favor.percentage}%</span>
+                                <span className="text-[10px] xs:text-xs text-slate-400">Favor</span>
+                                <span className="text-[10px] xs:text-xs text-slate-500">{votes.votes.favor.votes}</span>
+                            </div>
+                            <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-red-500/5">
+                                <span className="text-lg sm:text-xl font-black text-red-400">{votes.votes.against.percentage}%</span>
+                                <span className="text-[10px] xs:text-xs text-slate-400">Against</span>
+                                <span className="text-[10px] xs:text-xs text-slate-500">{votes.votes.against.votes}</span>
+                            </div>
+                            <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-slate-500/5">
+                                <span className="text-lg sm:text-xl font-black text-slate-400">{votes.votes.absent.percentage}%</span>
+                                <span className="text-[10px] xs:text-xs text-slate-400">Absent</span>
+                                <span className="text-[10px] xs:text-xs text-slate-500">{votes.votes.absent.votes}</span>
+                            </div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                            <div className="progress-bar">
+                                <div className="progress-fill" style={{ width: `${votes.votes.favor.percentage}%`, background: '#00ff88' }} />
+                            </div>
+                            <div className="progress-bar">
+                                <div className="progress-fill" style={{ width: `${votes.votes.against.percentage}%`, background: '#ef4444' }} />
+                            </div>
+                            <div className="progress-bar">
+                                <div className="progress-fill" style={{ width: `${votes.votes.absent.percentage}%`, background: '#94a3b8' }} />
+                            </div>
+                        </div>
+                        
+                        <div className="flex -space-x-2 sm:-space-x-3 justify-center pt-3 px-4">
+                            {[...Array(5)].map((_, i) => (
+                                <div key={i} className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-xs font-bold ring-2 ring-obsidian-900 shrink-0">
+                                    {String.fromCharCode(65 + i)}
                                 </div>
-                                <div class="vote-row">
-                                    <div class="vote-percentage against">18.7%</div>
-                                    <div class="vote-bar"><div class="vote-fill against" style="width: 18.7%"></div></div>
-                                    <div class="vote-votes">342K STAA</div>
+                            ))}
+                        </div>
+                        
+                        <div className="text-center text-xs sm:text-sm text-slate-400">
+                            <strong className="text-green-400">{votes.totalVotes}</strong> Total Votes
+                        </div>
+                    </div>
+                </article>
+                
+                <div className="pl-4 sm:pl-6 border-l-2 border-slate-700">
+                    <h4 className="text-xs sm:text-sm font-semibold mb-2 text-slate-300">Top Council Voters</h4>
+                    <div className="space-y-2 sm:space-y-3">
+                        {votes.topVoters.map((voter, idx) => (
+                            <div key={idx} className="flex items-center gap-2 sm:gap-3">
+                                <span className="text-xs text-slate-400 min-w-[80px]">{String.fromCharCode(65 + idx)}. {voter.name}</span>
+                                <span className="text-xs font-semibold text-green-400 sm:hidden">{voter.confidence}%</span>
+                                <div className="progress-bar" style={{ flex: 1, height: '3px' }}>
+                                    <div className="progress-fill" style={{ width: `${voter.confidence}%`, background: '#00ff88' }} />
                                 </div>
-                                <div class="vote-row">
-                                    <div class="vote-percentage absent">10.0%</div>
-                                    <div class="vote-bar"><div class="vote-fill absent" style="width: 10.0%"></div></div>
-                                    <div class="vote-votes">104K STAA</div>
+                                <span className="text-xs font-semibold text-green-400 hidden sm:inline-block">{voter.confidence}%</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+        );
+        
+        // Component: Spotlight
+        const SpotlightCard = ({ spot }) => (
+            <section className="w-full glass-panel glass-border rounded-3xl p-4 sm:p-6 mb-4 sm:mb-6 shadow-2xl">
+                <div className="flex items-center justify-between mb-4 sm:mb-6">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shrink-0 shadow-lg">
+                            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 className="text-lg sm:text-xl font-bold">Spotlight</h2>
+                            <p className="text-xs sm:text-sm text-slate-400">Featured subnet in focus</p>
+                        </div>
+                    </div>
+                    <a href="#" className="text-xs sm:text-sm text-orange-400 hover:text-orange-300 font-semibold flex items-center gap-1">
+                        View Details
+                        <svg className="w-3 h-3 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                    </a>
+                </div>
+                
+                <div className="grid sm:grid-cols-2 gap-4 sm:gap-6">
+                    {/* Left Side: Rank & Name */}
+                    <div className="glass-panel rounded-xl p-4 sm:p-5 mobile-card shadow-lg">
+                        <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-5">
+                            <span className="text-4xl sm:text-5xl font-black" style={{ color: '#00ff88' }}>#{spot.rank}</span>
+                            <div className="flex-1">
+                                <h3 className="text-lg sm:text-xl font-bold">{spot.name}</h3>
+                                <p className="text-xs text-slate-400">{spot.sector}</p>
+                            </div>
+                        </div>
+                        
+                        <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-5">
+                            <SimpleLineChart data={spot.sparkline} color="#8b5cf6" height={60} />
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="glass-panel rounded-lg p-3">
+                                    <span className="text-2xl sm:text-3xl font-bold flex items-center gap-1" style={{ color: '#00ff88' }}>
+                                        ${spot.marketCap}<span className="text-base">M</span>
+                                    </span>
+                                    <span className="text-[10px] xs:text-xs text-slate-400 block">Market Cap</span>
+                                </div>
+                                <div className="glass-panel rounded-lg p-3">
+                                    <span className={`text-2xl sm:text-3xl font-bold flex items-center gap-1 ${spot.trend7d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                        {spot.trend7d >= 0 ? '+' : ''}{spot.trend7d}%
+                                    </span>
+                                    <span className="text-[10px] xs:text-xs text-slate-400 block">7D Trend</span>
                                 </div>
                             </div>
                         </div>
-                        <div class="voters-list">
-                            {% if learning_trail.council and learning_trail.council|length > 0 %}
-                                {% for member in learning_trail.council[:5] %}
-                                <div class="voter-item">
-                                    <span class="voter-name">{{ member.name }}</span>
-                                    <span class="voter-percentage">{{ member.confidence|int }}%</span>
-                                    <div class="vote-bar" style="width:120px"><div class="vote-fill favor" style="width: {{ member.confidence }}%"></div></div>
+                        
+                        <div className="space-y-2">
+                            <h4 className="text-xs sm:text-sm font-semibold text-slate-300 mb-2">Why trending:</h4>
+                            {spot.reasons.map((reason, idx) => (
+                                <div key={idx} className="flex items-center gap-2 text-xs sm:text-sm text-slate-400">
+                                    <svg className="w-4 h-4" style={{ color: '#00ff88' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    <span>{reason}</span>
                                 </div>
-                                {% endfor %}
-                            {% endif %}
+                            ))}
                         </div>
+                        
+                        <button className="mt-4 sm:mt-6 w-full py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-obsidian-950 font-bold text-sm hover:opacity-90 transition-opacity shadow-lg">
+                            View Subnet Info
+                        </button>
                     </div>
-                </div>
-
-                <div class="card spotlight-card">
-                    <div class="card-header">
-                        <span class="card-title">Spotlight</span>
-                        <a href="#" class="card-link">View Details →</a>
-                    </div>
-                    <div class="card-body">
-                        <div class="spotlight-main">
-                            <div class="spotlight-rank">#18</div>
-                            <div class="spotlight-name">Interlink</div>
-                            <div class="spotlight-subtitle">Data Interoperability</div>
-                            <div class="spotlight-metrics">
-                                <div class="spotlight-metric">
-                                    <div class="spotlight-metric-value">$126.4M</div>
-                                    <div class="spotlight-metric-label">Market Cap</div>
+                    
+                    {/* Right Side: Technical Analysis */}
+                    <div className="glass-panel rounded-xl p-4 sm:p-5 mobile-card shadow-lg">
+                        <h4 className="text-sm sm:text-base font-semibold mb-4 text-slate-300">Technical Analysis</h4>
+                        
+                        <div className="space-y-4 sm:space-y-5">
+                            <div className="flex justify-between items-center p-3 rounded-lg bg-obsidian-900/50">
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] xs:text-xs text-slate-400">RSI (14)</span>
+                                    <span className="text-lg sm:text-xl font-bold text-slate-300">{spot.technical.rsi.value}</span>
                                 </div>
-                                <div class="spotlight-metric">
-                                    <div class="spotlight-metric-value positive">+48.7%</div>
-                                    <div class="spotlight-metric-label">30D Change</div>
+                                <span className={`text-xs sm:text-sm font-semibold px-2 py-1 rounded-lg ${
+                                    spot.technical.rsi.status === 'Neutral' ? 'bg-yellow-500/20 text-yellow-400' :
+                                    spot.technical.rsi.status === 'Bullish' ? 'bg-green-500/20 text-green-400' :
+                                    'bg-red-500/10 text-red-400'
+                                }`}>{spot.technical.rsi.status}</span>
+                            </div>
+                            
+                            <div className="flex justify-between items-center p-3 rounded-lg bg-obsidian-900/50">
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] xs:text-xs text-slate-400">MACD</span>
+                                    <span className="text-sm sm:text-base text-slate-300">{spot.technical.macd.signal}</span>
                                 </div>
-                                <div class="spotlight-metric">
-                                    <div class="spotlight-metric-value positive">+18.7%</div>
-                                    <div class="spotlight-metric-label">7D Trend</div>
+                                <span className="text-xs sm:text-sm text-green-400 font-semibold">{spot.technical.macd.histogram}</span>
+                            </div>
+                            
+                            <div className="flex justify-between items-center p-3 rounded-lg bg-obsidian-900/50">
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] xs:text-xs text-slate-400">MA Cross</span>
+                                    <span className="text-sm sm:text-base font-bold text-green-400">{spot.technical.maCross}</span>
+                                </div>
+                            </div>
+                            
+                            <div className="mt-4">
+                                <h5 className="text-xs sm:text-sm font-semibold mb-2 text-slate-300">Signal Chart</h5>
+                                <div className="chart-container" style={{ width: '100%', height: '80px' }}>
+                                    <canvas id={`spotlight-chart-${spot.rank}`}></canvas>
                                 </div>
                             </div>
                         </div>
-                        <div class="spotlight-reasons">
-                            <div class="reason-list">
-                                <div class="reason-item">
-                                    <span class="reason-icon">✓</span>
-                                    Partnership with Chainbase
+                    </div>
+                </div>
+            </section>
+        );
+        
+        // Component: Undervalued Radar
+        const UndervaluedRadarCard = ({ subnets }) => (
+            <section className="w-full glass-panel glass-border rounded-3xl p-4 sm:p-6 mb-4 sm:mb-6 shadow-2xl">
+                <div className="flex items-center justify-between mb-4 sm:mb-6">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center shrink-0 shadow-lg">
+                            <svg className="w-5 h-5 sm:w-6 sm:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 className="text-lg sm:text-xl font-bold">Undervalued Radar</h2>
+                            <p className="text-xs sm:text-sm text-slate-400">High developer activity subnet discoveries</p>
+                        </div>
+                    </div>
+                    <span className="px-2 sm:px-3 py-1 rounded-lg bg-green-500/20 text-green-400 text-xs sm:text-sm font-semibold">NEW</span>
+                </div>
+                
+                <div className="space-y-3 sm:space-y-4">
+                    {subnets.map((sn, idx) => (
+                        <article key={idx} className="glass-panel glass-border rounded-xl sm:rounded-2xl p-3 sm:p-4 mobile-card shadow-lg">
+                            <div className="grid sm:grid-cols-[60px_1fr_1fr_120px] gap-3 sm:gap-4">
+                                {/* Rank & Name */}
+                                <div className="flex items-center gap-2 sm:gap-3 sm:col-span-2">
+                                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center shrink-0">
+                                        <span className="text-xs sm:text-sm font-bold text-obsidian-900">{sn.rank}</span>
+                                    </div>
+                                    <div>
+                                        <div className="text-sm sm:text-base font-semibold">{sn.name}</div>
+                                        <div className="text-[10px] xs:text-xs text-slate-400">{sn.sector}</div>
+                                    </div>
                                 </div>
-                                <div class="reason-item">
-                                    <span class="reason-icon">✓</span>
-                                    New API integrations
+                                
+                                {/* Dev Activity */}
+                                <div className="flex flex-col items-center sm:items-start gap-1">
+                                    <span className="text-base sm:text-lg font-bold">
+                                        {'★'.repeat(4) + (sn.devActivity === 'High' ? '★' : '☆')}
+                                    </span>
+                                    <span className="text-xs sm:text-sm text-slate-400">{sn.devActivity}</span>
                                 </div>
-                                <div class="reason-item">
-                                    <span class="reason-icon">✓</span>
-                                    Rising developer activity
+                                
+                                {/* GitHub Commits */}
+                                <div className="flex flex-col items-center sm:items-start">
+                                    <div className="flex items-center gap-1 sm:gap-2">
+                                        <span className="text-xs sm:text-sm text-slate-400">🔄</span>
+                                        <span className="text-sm font-bold text-slate-300">{sn.commits}</span>
+                                    </div>
+                                    <span className="text-[10px] xs:text-xs text-green-400 font-semibold">+2%</span>
                                 </div>
-                                <div class="reason-item">
-                                    <span class="reason-icon">✓</span>
-                                    Strong TAI trader growth
+                                
+                                {/* Market Cap */}
+                                <div className="flex flex-col items-center sm:items-start">
+                                    <span className="text-sm sm:text-base font-bold text-slate-300">${sn.mcap.toFixed(1)}M</span>
                                 </div>
+                                
+                                {/* MC/Dev Score */}
+                                <div className="flex flex-col items-center sm:items-start">
+                                    <span className={`text-sm sm:text-base font-bold ${sn.mcapDevRatio > 0.1 ? 'text-green-400' : 'text-slate-300'}`}>
+                                        {sn.mcapDevRatio.toFixed(3)}
+                                    </span>
+                                    <span className="text-xs text-slate-400 hidden sm:inline-block">MC/Dev</span>
+                                </div>
+                                
+                                {/* Trend */}
+                                <div className="sm:col-span-6 flex flex-col gap-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-xs sm:text-sm font-semibold ${sn.trendPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                            {sn.trend}
+                                        </span>
+                                    </div>
+                                    <SimpleLineChart data={[80, sn.trendPercent >= 0 ? 80 + (sn.trendPercent / 2) : 80 - (Math.abs(sn.trendPercent) / 2), 85, sn.trendPercent >= 0 ? 75 + (sn.trendPercent / 2) : 75 - (Math.abs(sn.trendPercent) / 2), 82, 88, sn.trendPercent >= 0 ? 70 + (sn.trendPercent / 2) : 70 - (Math.abs(sn.trendPercent) / 2), 85, sn.trendPercent >= 0 ? 88 + (sn.trendPercent / 2) : 88 - (Math.abs(sn.trendPercent) / 2), sn.trendPercent >= 0 ? 78 + (sn.trendPercent / 2) : 78 - (Math.abs(sn.trendPercent) / 2), 85, sn.trendPercent >= 0 ? 80 + (sn.trendPercent / 2) : 80 - (Math.abs(sn.trendPercent) / 2)] color={sn.trendPercent >= 0 ? '#00ff88' : '#ef4444'} height={32} />
+                                </div>
+                            </div>
+                        </article>
+                    ))}
+                </div>
+                
+                <div className="mt-4 sm:mt-6 glass-panel rounded-xl p-3 sm:p-4">
+                    <div className="grid sm:grid-cols-3 gap-3 sm:gap-4">
+                        <div className="text-center">
+                            <span className="text-xs sm:text-sm text-slate-400">GitHub events</span>
+                            <span className="block text-sm sm:text-base font-semibold text-green-400">IPFS</span>
+                        </div>
+                        <div className="text-center">
+                            <span className="text-xs sm:text-sm text-slate-400">GTHub commits (30d)</span>
+                            <span className="block text-sm sm:text-base font-semibold text-green-400">+18%</span>
+                        </div>
+                        <div className="text-center">
+                            <span className="text-xs sm:text-sm text-slate-400">MC / Dev Score</span>
+                            <span className="block text-sm sm:text-base font-semibold text-green-400">Divided by Dev</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        );
+        
+        // Component: Learning Loop Feed
+        const LearningLoopFeedCard = () => (
+            <section className="w-full glass-panel glass-border rounded-3xl p-4 sm:p-6 mb-4 sm:mb-6 shadow-2xl">
+                <h2 className="text-lg sm:text-xl font-bold mb-6">Learning Loop Feed</h2>
+                
+                <div className="relative pl-4 sm:pl-6 border-l-2 border-slate-700">
+                    {LearningLoopFeed.map((item, idx) => (
+                        <div key={idx} className="relative pl-4 sm:pl-6 mb-4 sm:mb-6 last:mb-0">
+                            <div className="absolute left-[-5px] sm:left-[-9px] top-0 w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full" style={{ background: '#00ff88' }} />
+                            <div className="glass-panel rounded-lg p-3 sm:p-4 mobile-card">
+                                <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
+                                    <span className="text-xs sm:text-sm font-semibold text-slate-400">{item.time}</span>
+                                    <span className={`text-[10px] xs:text-xs px-2 py-0.5 rounded-full ${idx === 0 ? 'bg-green-500/20 text-green-400' : 'bg-slate-500/20 text-slate-400'}`}>
+                                        {idx === 0 ? 'Now' : idx < 2 ? 'Update' : 'History'}
+                                    </span>
+                                </div>
+                                <p className="text-sm text-slate-300">{item.message}</p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </section>
+        );
+        
+        // Component: Header
+        const Header = () => (
+            <header className="fixed top-0 left-0 right-0 z-50 glass-panel border-b border-slate-800 px-4 sm:px-6 py-3 sm:py-4">
+                <div className="flex items-center justify-between max-w-7xl mx-auto">
+                    <div className="flex items-center gap-3 sm:gap-4">
+                        <div className="w-9 sm:w-11 h-9 sm:h-11 rounded-xl bg-gradient-to-br from-green-400 to-purple-500 flex items-center justify-center shadow-lg shrink-0">
+                            <span className="text-base sm:text-lg font-black">SV</span>
+                        </div>
+                        <div>
+                            <h1 className="text-lg sm:text-xl font-bold">SimiVision</h1>
+                            <div className="flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full" style={{ background: '#00ff88', animation: 'pulse 2s infinite' }} />
+                                <span className="text-[10px] xs:text-xs text-slate-400">LIVE</span>
                             </div>
                         </div>
                     </div>
-                </div>
-
-                <div class="card">
-                    <div class="card-header">
-                        <span class="card-title">Undervalued Radar</span>
-                        <a href="#" class="card-link">View All →</a>
-                    </div>
-                    <div class="card-body">
-                        <div class="radar-container">
-                            <table class="radar-table">
-                                <thead>
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Name</th>
-                                        <th>Dev Activity</th>
-                                        <th>Commits</th>
-                                        <th>Mkt Cap</th>
-                                        <th>MC/Dev</th>
-                                        <th>Trend</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% set radar_list = undervalued.subnets if undervalued and undervalued.subnets else simivision.top[:5] if simivision.top else [] %}
-                                    {% for sn in radar_list %}
-                                    <tr>
-                                        <td class="radar-rank">#{{ sn.rank if sn.rank else loop.index }}</td>
-                                        <td>
-                                            <div class="radar-name">{{ sn.name }}</div>
-                                            <div class="radar-subtitle">{{ sn.breakdown[:2]|join(', ') if sn.breakdown else '' }}</div>
-                                        </td>
-                                        <td>
-                                            <span class="dev-stars">★★★★★</span>
-                                            <div class="radar-subtitle">High</div>
-                                        </td>
-                                        <td class="gh-commits">
-                                            <span class="gh-commits-icon">🔄</span>
-                                            <span class="radar-value positive">▲22%</span>
-                                        </td>
-                                        <td class="radar-value">${{ "%.2f"|format(sn.market_cap|default(0, true)) if sn.market_cap else '$N/A' }}</td>
-                                        <td class="mc-dev">{{ "%.3f"|format(sn.score|default(0, true)) }}</td>
-                                        <td class="trend-arrow up">📈</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+                    
+                    <div className="flex items-center gap-2 sm:gap-4">
+                        <div className="flex flex-col items-end sm:items-center">
+                            <span className="text-xs sm:text-sm text-slate-400">TAO</span>
+                            <span className="text-sm sm:text-base font-bold flex items-center gap-1">
+                                $456.21
+                                <span className="text-[10px] xs:text-xs text-green-400">+3.24%</span>
+                            </span>
+                        </div>
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-xs sm:text-sm font-bold shrink-0">
+                            U
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <div class="mindmap-section">
-                <div class="section-title">Learning Loop Feed</div>
-                <div class="feed-item">
-                    <div class="feed-time">Now</div>
-                    <div class="feed-message">Analyzing subnet performance patterns and updating stances...</div>
+            </header>
+        );
+        
+        // Component: Footer
+        const Footer = () => (
+            <footer className="glass-panel border-t border-slate-800 px-4 sm:px-6 py-6 sm:py-8 mt-6 sm:mt-8">
+                <div className="text-center">
+                    <p className="text-xs sm:text-sm text-slate-400 mb-2 sm:mb-4">
+                        SimiVision · Powered by <a href="https://taomarketcap.com" target="_blank" className="text-green-400 hover:text-green-300 transition-colors">taomarketcap.com</a>
+                    </p>
+                    <p className="text-[10px] xs:text-xs text-slate-500">
+                        Built for the Bittensor ecosystem · All data real-time · AI-driven insights
+                    </p>
                 </div>
-                <div class="feed-item">
-                    <div class="feed-time">2m</div>
-                    <div class="feed-message">Adjusting expert weights based on recent vote outcomes.</div>
+            </footer>
+        );
+        
+        // Main App Component
+        const App = () => {
+            useEffect(() => {
+                // Initialize Chart.js instances for complex charts
+                setTimeout(() => {
+                    const canvas = document.getElementById(`spotlight-chart-${spotlight.rank}`);
+                    if (canvas) {
+                        new Chart(canvas.getContext('2d'), {
+                            type: 'line',
+                            data: {
+                                labels: Array.from({ length: 20 }, (_, i) => i),
+                                datasets: [{
+                                    data: [20, 25, 22, 28, 30, 27, 32, 35, 33, 38, 40, 37, 42, 45, 43, 48, 50, 47, 52, 55],
+                                    borderColor: '#8b5cf6',
+                                    borderWidth: 2,
+                                    fill: false,
+                                    tension: 0.4,
+                                    pointRadius: 0,
+                                }],
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { display: false } },
+                                scales: {
+                                    x: { display: false },
+                                    y: { display: true, grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 } } }
+                                }
+                            }
+                        });
+                    }
+                }, 100);
+            }, []);
+            
+            return (
+                <div className="min-h-screen bg-gradient-to-b from-obsidian-950 via-obsidian-900 to-obsidian-800">
+                    <Header />
+                    
+                    <main className="pt-28 sm:pt-[10rem] pb-20 sm:pb-24 px-4 sm:px-6 max-w-4xl mx-auto">
+                        <SimiVisionPicksCard picks={simivisionTop} />
+                        <CouncilVotesCard votes={councilVotes} />
+                        <SpotlightCard spot={spotlight} />
+                        <UndervaluedRadarCard subnets={undervalued} />
+                        <LearningLoopFeedCard />
+                    </main>
+                    
+                    <Footer />
                 </div>
-                <div class="feed-item">
-                    <div class="feed-time">5m</div>
-                    <div class="feed-message">Recording learning loop updates to persistent memory.</div>
-                </div>
-            </div>
-        </main>
-    </div>
-
-    <div class="footer">
-        SimiVision · Powered by <a href="https://taomarketcap.com" target="_blank">taomarketcap.com</a> · Built for the Bittensor ecosystem
-    </div>
-    {% endif %}
+            );
+        };
+        
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
 </body>
 </html>
