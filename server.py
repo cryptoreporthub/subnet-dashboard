@@ -9,7 +9,12 @@ from flask import Flask, jsonify, make_response, request
 
 sys.path.insert(0, os.path.dirname(__file__))
 from fetchers.taomarketcap import get_all_subnets, get_subnet_data
-from data.learning_engine import LearningEngine
+
+# Handle learning engine import gracefully
+try:
+    from data.learning_engine import LearningEngine
+except ImportError:
+    LearningEngine = None
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -285,8 +290,10 @@ def _build_council_votes(top_sn: Dict) -> List[Dict]:
 
 def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[Dict], expert_weights: Dict, tech_indicators: Dict) -> Dict:
     """Build a comprehensive mindmap summary for card-style display."""
-    engine = LearningEngine()
-    stats = engine.get_stats()
+    stats = {}
+    if LearningEngine:
+        engine = LearningEngine()
+        stats = engine.get_stats()
     
     # Acknowledge current state
     acknowledgment = f"Analyzing subnet {top_sn.get('netuid', 'N/A')} - {top_sn.get('name', 'Unknown')}"
@@ -350,7 +357,7 @@ def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[D
             } for v in council_votes
         ],
         "learning_status": {
-            "enabled": True,
+            "enabled": LearningEngine is not None,
             "records": stats.get("total_records", 0),
             "last_updated": stats.get("last_updated", "N/A")
         },
@@ -403,7 +410,7 @@ def api_mindmap_feedback():
         "council_votes": council_votes, 
         "expert_weights": soul_map.get("expert_weights", {}), 
         "feedback_logs": soul_map.get("feedback_logs", []), 
-        "learning_enabled": True, 
+        "learning_enabled": LearningEngine is not None, 
         "summary": summary,
         "generated_at": datetime.now().isoformat()
     })
@@ -438,16 +445,19 @@ def record_feedback():
     if not subnet_id or not recommendation:
         return jsonify({"error": "Missing subnet_id or recommendation"}), 400
     
-    engine = LearningEngine()
-    engine.record_feedback(subnet_id, recommendation, actual_performance)
+    if LearningEngine:
+        engine = LearningEngine()
+        engine.record_feedback(subnet_id, recommendation, actual_performance)
     
     return jsonify({"status": "feedback recorded", "success": True})
 
 @app.route("/api/learning/stats")
 def learning_stats():
     """Return learning loop statistics."""
-    engine = LearningEngine()
-    return jsonify(engine.get_stats())
+    if LearningEngine:
+        engine = LearningEngine()
+        return jsonify(engine.get_stats())
+    return jsonify({"expert_weights": {}, "config": {}, "last_updated": None, "total_records": 0})
 
 @app.route("/api/chat", methods=["POST"])
 def chat():
