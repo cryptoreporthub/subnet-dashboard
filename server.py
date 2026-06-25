@@ -27,7 +27,7 @@ os.makedirs("data", exist_ok=True)
 app = Flask(__name__)
 
 _DEPLOY_TIMESTAMP = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
-_APP_VERSION = "3.3.1"
+_APP_VERSION = "3.3.2"
 
 _COOUNCIL_MEMBERS = [
     {"name": "Alpha", "bias": "momentum"},
