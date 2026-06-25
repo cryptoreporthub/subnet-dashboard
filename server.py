@@ -19,7 +19,7 @@ os.makedirs("data", exist_ok=True)
 app = Flask(__name__)
 
 _DEPLOY_TIMESTAMP = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
-_APP_VERSION = "3.1.0"
+_APP_VERSION = "3.2.0"
 
 _COUNCIL_MEMBERS = [
     {"name": "Alpha", "bias": "momentum"},
@@ -226,6 +226,72 @@ def _build_council_votes(top_sn: Dict) -> List[Dict]:
     vol = top_sn.get("volume", 0)
     return [{"name": "Alpha", "vote": "BUY" if chg >= 0 else "SELL", "confidence": min(95, 70 + int(abs(chg))), "rationale": f"Momentum analysis: 24h change is {chg}%"}, {"name": "Beta", "vote": "BUY" if apy > 20 else "HOLD", "confidence": min(95, 65 + int(abs(apy) * 1.5)), "rationale": f"Value assessment: APY at {apy}"}, {"name": "Gamma", "vote": "BUY" if vol > 50000 else "HOLD", "confidence": min(95, 60 + int(vol / 50000)), "rationale": f"Sentiment signal: volume ${vol:,.0f}"}]
 
+def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[Dict], expert_weights: Dict) -> Dict:
+    """Build a comprehensive mindmap summary for card-style display."""
+    engine = LearningEngine()
+    stats = engine.get_stats()
+    
+    # Acknowledge current state
+    acknowledgment = f"Analyzing subnet {top_sn.get('netuid', 'N/A')} - {top_sn.get('name', 'Unknown')}"
+    
+    # What was noticed
+    noticed = []
+    if top_sn:
+        emission = top_sn.get("emission", 0)
+        chg = top_sn.get("price_change_24h", 0)
+        apy = top_sn.get("apy", 0)
+        vol = top_sn.get("volume", 0)
+        
+        if emission >= 3:
+            noticed.append(f"High emission rate ({emission:.2f} TAO/day)")
+        if abs(chg) >= 5:
+            noticed.append(f"Significant price movement ({chg:+.1f}% in 24h)")
+        if apy >= 20:
+            noticed.append(f"Strong APY ({apy:.1f}%)")
+        if vol >= 100000:
+            noticed.append(f"High trading volume (${vol:,.0f})")
+    if not noticed:
+        noticed.append("No significant signals detected")
+    
+    # Opinion changes based on learning
+    opinion_changes = []
+    weights = stats.get("expert_weights", {})
+    for expert, weight in weights.items():
+        if weight > 1.2:
+            opinion_changes.append(f"{expert.title()} confidence INCREASED (weight: {weight:.2f})")
+        elif weight < 0.8:
+            opinion_changes.append(f"{expert.title()} confidence DECREASED (weight: {weight:.2f})")
+    if not opinion_changes:
+        opinion_changes.append("No significant opinion changes")
+    
+    # Calculate overall conviction
+    total_conviction = sum(p.get("conviction", 50) for p in picks[:3])
+    avg_conviction = total_conviction / min(len(picks), 3) if picks else 50
+    
+    return {
+        "acknowledgment": acknowledgment,
+        "noticed": noticed,
+        "opinion_changes": opinion_changes,
+        "conviction": {
+            "current": round(avg_conviction, 1),
+            "trend": "stable",
+            "explanation": f"Based on {stats.get('total_records', 0)} historical predictions"
+        },
+        "expert_insights": [
+            {
+                "expert": v.get("name", "Unknown"),
+                "bias": v.get("rationale", "")[:50] + "...",
+                "confidence": v.get("confidence", 50)
+            } for v in council_votes
+        ],
+        "learning_status": {
+            "enabled": True,
+            "records": stats.get("total_records", 0),
+            "last_updated": stats.get("last_updated", "N/A")
+        },
+        "timestamp": datetime.now().isoformat()
+    }
+
 @app.route("/health")
 def health():
     return "OK", 200, {"Content-Type": "text/plain"}
@@ -260,7 +326,28 @@ def api_mindmap_feedback():
     top_sn = top_emission[0] if top_emission else None
     council_votes = _build_council_votes(top_sn)
     soul_map = load_soul_map()
-    return jsonify({"simivision_picks": picks, "council_votes": council_votes, "expert_weights": soul_map.get("expert_weights", {}), "feedback_logs": soul_map.get("feedback_logs", []), "learning_enabled": True, "generated_at": datetime.now().isoformat()})
+    summary = build_mindmap_summary(top_sn, picks, council_votes, soul_map.get("expert_weights", {}))
+    return jsonify({
+        "simivision_picks": picks, 
+        "council_votes": council_votes, 
+        "expert_weights": soul_map.get("expert_weights", {}), 
+        "feedback_logs": soul_map.get("feedback_logs", []), 
+        "learning_enabled": True, 
+        "summary": summary,
+        "generated_at": datetime.now().isoformat()
+    })
+
+@app.route("/api/mindmap/summary")
+def api_mindmap_summary():
+    """Dedicated endpoint for mindmap summary card."""
+    subnets = get_dynamic_subnets()
+    top_emission = get_top_performers(subnets, "emission")
+    picks = build_simivision_picks_with_breakdown(top_emission)
+    top_sn = top_emission[0] if top_emission else None
+    council_votes = _build_council_votes(top_sn)
+    soul_map = load_soul_map()
+    summary = build_mindmap_summary(top_sn, picks, council_votes, soul_map.get("expert_weights", {}))
+    return jsonify(summary)
 
 @app.route("/api/rotation-tokens")
 def api_rotation_tokens():
