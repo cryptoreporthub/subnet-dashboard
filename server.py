@@ -27,7 +27,7 @@ os.makedirs("data", exist_ok=True)
 app = Flask(__name__)
 
 _DEPLOY_TIMESTAMP = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
-_APP_VERSION = "3.4.3"
+_APP_VERSION = "3.4.4"
 
 _COOUNCIL_MEMBERS = [
     {"name": "Alpha", "bias": "momentum"},
@@ -362,7 +362,9 @@ def index():
         "</html>",
     ])
     
-    return "\n".join(html_parts)
+    response = make_response("\n".join(html_parts))
+    response.headers['Content-Type'] = 'text/html; charset=utf-8'
+    return response
 
 @app.route("/health")
 def health():
