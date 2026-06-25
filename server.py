@@ -5,7 +5,7 @@ import os
 import sys
 from datetime import datetime
 from typing import Any, Dict, List
-from flask import Flask, jsonify, make_response, request
+from flask import Flask, jsonify, make_response, request, render_template
 
 # Add the current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -27,7 +27,7 @@ os.makedirs("data", exist_ok=True)
 app = Flask(__name__)
 
 _DEPLOY_TIMESTAMP = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
-_APP_VERSION = "3.3.4"
+_APP_VERSION = "3.4.0"
 
 _COOUNCIL_MEMBERS = [
     {"name": "Alpha", "bias": "momentum"},
@@ -276,51 +276,38 @@ def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[D
         "timestamp": datetime.now().isoformat()
     }
 
-# Root route - return basic HTML dashboard
+# Root route - render the template with all widgets
 @app.route("/")
 def index():
-    return """<!DOCTYPE html>
-<html>
-<head>
-    <title>Subnet Dashboard</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-               margin: 0; padding: 20px; background: #1a1a1a; color: #fff; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        h1 { color: #00d4ff; }
-        .status { background: #222; padding: 20px; border-radius: 8px; margin: 20px 0; }
-        .status.ok { border-left: 4px solid #00ff88; }
-        a { color: #00d4ff; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        .api-link { display: block; margin: 10px 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Subnet Dashboard</h1>
-        <div class="status ok">
-            <strong>✓ System Operational</strong>
-        </div>
-        <div class="status">
-            <h3>Available Endpoints</h3>
-            <a class="api-link" href="/health">/health</a>
-            <a class="api-link" href="/api/subnets">/api/subnets</a>
-            <a class="api-link" href="/api/simivision">/api/simivision</a>
-            <a class="api-link" href="/api/mindmap/summary">/api/mindmap/summary</a>
-            <a class="api-link" href="/api/rotation-tokens">/api/rotation-tokens</a>
-            <a class="api-link" href="/api/learning/stats">/api/learning/stats</a>
-        </div>
-        <div class="status">
-            <h3>Quick Links</h3>
-            <a href="/api/simivision">View SimiVision Picks</a> | 
-            <a href="/api/mindmap/summary">View Mindmap Summary</a> |
-            <a href="/api/rotation-tokens">View Rotation Tokens</a>
-        </div>
-    </div>
-</body>
-</html>"""
+    subnets = get_dynamic_subnets()
+    top_emission = get_top_performers(subnets, "emission")
+    picks = build_simivision_picks_with_breakdown(top_emission)
+    top_sn = top_emission[0] if top_emission else {}
+    council_votes = _build_council_votes(top_sn)
+    
+    # Build template data
+    simivision_data = {
+        "meta": {"system_status": "Operative"},
+        "top": picks
+    }
+    
+    learning_trail_data = {
+        "council": council_votes
+    }
+    
+    highlights_data = {
+        "top_emission": top_emission[:3],
+        "top_apy": sorted(top_emission, key=lambda x: x.get("apy", 0), reverse=True)[:1]
+    }
+    
+    summary_data = {
+        "highlights": highlights_data
+    }
+    
+    return render_template("index.html", 
+                          simivision=simivision_data, 
+                          learning_trail=learning_trail_data,
+                          summary=summary_data)
 
 @app.route("/health")
 def health():
