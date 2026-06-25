@@ -5,7 +5,7 @@ import os
 import sys
 from datetime import datetime
 from typing import Any, Dict, List
-from flask import Flask, jsonify, make_response, request, render_template
+from flask import Flask, jsonify, make_response, request, render_template, send_from_directory, abort
 
 # Add the current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -289,93 +289,5 @@ def build_mindmap_feed(picks: List[Dict], council_votes: List[Dict], undervalued
     
     # Processing picks
     if picks:
-        top_pick = picks[0]
-        feed.append({
-            "time": now,
-            "message": f"Processing top pick #{top_pick['rank']}: {top_pick['name']} (conviction: {top_pick['conviction']}%)"
-        })
     
-    # Council votes
-    for vote in council_votes[:2]:
-        feed.append({
-            "time": now,
-            "message": f"{vote['name']} council vote: {vote['vote']} ({vote['confidence']}% confidence)"
-        })
-    
-    # Undervalued analysis
-    if undervalued:
-        top_und = undervalued[0]
-        feed.append({
-            "time": now,
-            "message": f"Undervalued scan: {top_und['name']} flagged (score: {top_und['score']:.1f})"
-        })
-    
-    # Stance adjustments
-    feed.append({
-        "time": now,
-        "message": "Adjusting expert weights based on recent performance data"
-    })
-    
-    # Learning loop update
-    feed.append({
-        "time": now,
-        "message": "Recording learning loop updates to persistent memory"
-    })
-    
-    return feed
-
-# Root route - render template with all widgets
-@app.route("/")
-def index():
-    subnets = get_dynamic_subnets()
-    top_emission = get_top_performers(subnets, "emission")
-    picks = build_simivision_picks_with_breakdown(top_emission)
-    top_sn = top_emission[0] if top_emission else {}
-    council_votes = _build_council_votes(top_sn)
-    undervalued = build_undervalued_ranking(subnets)
-    mindmap_feed = build_mindmap_feed(picks, council_votes, undervalued)
-    
-    simivision_data = {
-        "meta": {"system_status": "Operative"},
-        "top": picks
-    }
-    
-    learning_trail_data = {
-        "council": council_votes,
-        "mindmap_feed": mindmap_feed
-    }
-    
-    highlights_data = {
-        "top_emission": top_emission[:3],
-        "top_apy": sorted(top_emission, key=lambda x: x.get("apy", 0), reverse=True)[:1]
-    }
-    
-    summary_data = {
-        "highlights": highlights_data
-    }
-    
-    return render_template("index.html",
-                          simivision=simivision_data,
-                          learning_trail=learning_trail_data,
-                          summary=summary_data,
-                          undervalued={"subnets": undervalued})
-
-@app.route("/health")
-def health():
-    return "OK", 200, {"Content-Type": "text/plain"}
-
-@app.route("/api/subnets")
-def api_subnets():
-    subnets = get_dynamic_subnets()
-    return jsonify({"subnets": subnets, "count": len(subnets), "source": "taomarketcap.com", "live": True})
-
-@app.route("/api/simivision")
-def api_simivision():
-    subnets = get_dynamic_subnets()
-    top_emission = get_top_performers(subnets, "emission")
-    picks = build_simivision_picks_with_breakdown(top_emission)
-    for pick in picks:
-        netuid = pick.get("netuid")
-        if netuid:
-            pick["technical_indicators"] = build_technical_indicators(get_subnet_data(netuid))
-    return jsonify({"picks": picks, "timestamp": datetime.now().isoformat()})
+[read_links truncated 2935 chars from this runtime tool output. The full content is stored with the tool result.]
