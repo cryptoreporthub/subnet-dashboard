@@ -5,7 +5,7 @@ import os
 import sys
 from datetime import datetime
 from typing import Any, Dict, List
-from flask import Flask, jsonify, make_response, request
+from flask import Flask, jsonify, make_response, request, render_template
 
 # Add the current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -27,9 +27,9 @@ os.makedirs("data", exist_ok=True)
 app = Flask(__name__)
 
 _DEPLOY_TIMESTAMP = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
-_APP_VERSION = "3.3.0"
+_APP_VERSION = "3.3.1"
 
-_COUNCIL_MEMBERS = [
+_COOUNCIL_MEMBERS = [
     {"name": "Alpha", "bias": "momentum"},
     {"name": "Beta", "bias": "value"},
     {"name": "Gamma", "bias": "sentiment"},
@@ -276,6 +276,11 @@ def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[D
         "timestamp": datetime.now().isoformat()
     }
 
+# Root route - serve the main dashboard
+@app.route("/")
+def index():
+    return render_template("index.html")
+
 @app.route("/health")
 def health():
     return "OK", 200, {"Content-Type": "text/plain"}
@@ -293,98 +298,86 @@ def api_simivision():
     # Add technical indicators to each pick
     for pick in picks:
         netuid = pick.get("netuid")
-        sn = next((s for s in subnets if s.get("netuid") == netuid), None)
-        if sn:
-            pick["technical_indicators"] = build_technical_indicators(sn)
-        else:
-            pick["technical_indicators"] = {"signals": ["Insufficient data"]}
-    return jsonify({"status": "operational", "data_source": "taomarketcap.com", "picks": picks, "generated_at": datetime.now().isoformat()})
+        if netuid:
+            sn_data = next((s for s in subnets if s.get("netuid") == netuid), {})
+            pick["technical_indicators"] = build_technical_indicators(sn_data)
+    
+    engine = LearningEngine()
+    stats = engine.get_stats()
+    
+    return jsonify({
+        "data_source": "taomarketcap.com",
+        "generated_at": datetime.now().isoformat(),
+        "status": "operational",
+        "picks": picks,
+        "council": _build_council_votes(top_emission[0] if top_emission else {}),
+        "learning_status": stats
+    })
 
-@app.route("/api/summary")
-def api_summary():
+@app.route("/api/mindmap/summary")
+def api_mindmap_summary():
     subnets = get_dynamic_subnets()
     top_emission = get_top_performers(subnets, "emission")
-    top_apy = get_top_performers(subnets, "apy")
-    top_volume = get_top_performers(subnets, "volume")
-    trending = get_top_performers(subnets, "price_change_24h")
-    active = [s for s in subnets if s.get("status") == "active"]
-    return jsonify({"total_subnets": len(subnets), "active_subnets": len(active), "total_tvl": sum(s.get("market_cap", 0) for s in subnets) / 1e6, "highlights": {"top_emission": top_emission[:3], "top_apy": top_apy[:3], "top_volume": top_volume[:3]}, "trending": trending[:5], "data_source": "taomarketcap.com", "generated_at": datetime.now().isoformat()})
+    picks = build_simivision_picks_with_breakdown(top_emission)
+    top_sn = top_emission[0] if top_emission else {}
+    council_votes = _build_council_votes(top_sn)
+    
+    tech_indicators = build_technical_indicators(top_sn) if top_sn else {}
+    
+    summary = build_mindmap_summary(top_sn, picks, council_votes, {}, tech_indicators)
+    
+    return jsonify(summary)
 
 @app.route("/api/mindmap/feedback")
 def api_mindmap_feedback():
     subnets = get_dynamic_subnets()
     top_emission = get_top_performers(subnets, "emission")
     picks = build_simivision_picks_with_breakdown(top_emission)
-    top_sn = top_emission[0] if top_emission else None
+    top_sn = top_emission[0] if top_emission else {}
     council_votes = _build_council_votes(top_sn)
-    soul_map = load_soul_map()
-    
-    # Get technical indicators for summary
     tech_indicators = build_technical_indicators(top_sn) if top_sn else {}
-    summary = build_mindmap_summary(top_sn, picks, council_votes, soul_map.get("expert_weights", {}), tech_indicators)
     
-    return jsonify({
-        "simivision_picks": picks, 
-        "council_votes": council_votes, 
-        "expert_weights": soul_map.get("expert_weights", {}), 
-        "feedback_logs": soul_map.get("feedback_logs", []), 
-        "learning_enabled": True, 
-        "summary": summary,
-        "generated_at": datetime.now().isoformat()
-    })
-
-@app.route("/api/mindmap/summary")
-def api_mindmap_summary():
-    """Dedicated endpoint for mindmap summary card."""
-    subnets = get_dynamic_subnets()
-    top_emission = get_top_performers(subnets, "emission")
-    picks = build_simivision_picks_with_breakdown(top_emission)
-    top_sn = top_emission[0] if top_emission else None
-    council_votes = _build_council_votes(top_sn)
-    soul_map = load_soul_map()
-    tech_indicators = build_technical_indicators(top_sn) if top_sn else {}
-    summary = build_mindmap_summary(top_sn, picks, council_votes, soul_map.get("expert_weights", {}), tech_indicators)
+    summary = build_mindmap_summary(top_sn, picks, council_votes, {}, tech_indicators)
+    
+    # Add rotation tokens info
+    summary["rotation_tokens"] = _ROTATION_TOKENS
+    
     return jsonify(summary)
 
 @app.route("/api/rotation-tokens")
 def api_rotation_tokens():
-    """Return the specific subnet tokens in rotation."""
-    return jsonify({"rotation_tokens": _ROTATION_TOKENS, "count": len(_ROTATION_TOKENS)})
-
-@app.route("/api/feedback", methods=["POST"])
-def record_feedback():
-    """Record feedback for learning loop."""
-    data = request.get_json() or {}
-    subnet_id = data.get("subnet_id")
-    recommendation = data.get("recommendation")
-    actual_performance = data.get("actual_performance", {})
-    
-    if not subnet_id or not recommendation:
-        return jsonify({"error": "Missing subnet_id or recommendation"}), 400
-    
-    engine = LearningEngine()
-    engine.record_feedback(subnet_id, recommendation, actual_performance)
-    
-    return jsonify({"status": "feedback recorded", "success": True})
+    return jsonify({"count": len(_ROTATION_TOKENS), "rotation_tokens": _ROTATION_TOKENS})
 
 @app.route("/api/learning/stats")
-def learning_stats():
-    """Return learning loop statistics."""
+def api_learning_stats():
     engine = LearningEngine()
-    return jsonify(engine.get_stats())
+    stats = engine.get_stats()
+    return jsonify({
+        "config": {
+            "learning_rate": 0.1,
+            "decay_factor": 0.99,
+            "max_weight": 2.0,
+            "min_weight": 0.1,
+            "performance_window_days": 30
+        },
+        "expert_weights": stats.get("expert_weights", {}),
+        "total_records": stats.get("total_records", 0),
+        "last_updated": stats.get("last_updated")
+    })
 
-@app.route("/api/chat", methods=["POST"])
-def chat():
+@app.route("/api/feedback", methods=["POST"])
+def api_feedback():
     data = request.get_json() or {}
-    message = data.get("message", "")
-    subnets = get_dynamic_subnets()
-    context = {"simivision_picks": get_top_performers(subnets, "emission")[:3], "market_overview": {"total_subnets": len(subnets), "active_count": len([s for s in subnets if s.get("status") == "active"]), "total_tvl": sum(s.get("market_cap", 0) for s in subnets) / 1e6}, "trending": get_top_performers(subnets, "price_change_24h")[:3], "highest_apy": get_top_performers(subnets, "apy")[0] if subnets else None, "source": "taomarketcap.com"}
-    response = generate_ai_response(message, context)
-    return jsonify({"response": response})
-
-def generate_ai_response(message: str, context: Dict) -> str:
-    """Generate a simple AI response based on context."""
-    return f"Based on current market data, I recommend reviewing the top subnet picks. {message}"
+    expert = data.get("expert")
+    vote = data.get("vote")
+    confidence = data.get("confidence", 50)
+    rationale = data.get("rationale", "")
+    
+    engine = LearningEngine()
+    engine.record_feedback(expert, vote, confidence, rationale)
+    
+    return jsonify({"status": "recorded", "expert": expert})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
