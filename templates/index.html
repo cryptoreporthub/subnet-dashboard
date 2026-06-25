@@ -1,27 +1,23 @@
-{# SimiVision v2.0 - Enhanced breakdown deployment #}
-{% for item in ticker_items %} [#{{ item.netuid }} {{ item.name }} {{ "%.2f"|format(item.emission|default(0, true)) }} TAO](https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/templates/index.html#) {% endfor %}    
+<!-- SimiVision v2.0 - Enhanced breakdown deployment -->
+
 # Subnet Pulse
 
- 
 Live Bittensor Intelligence · live from taomarketcap.com
 
-  
 ## SimiVision
 
- {{ simivision.meta.system_status or 'Operative' }}
+{{ simivision.meta.system_status or 'Operative' }}
 
- {% if simivision.top and simivision.top|length > 0 %} 
+{% if simivision.top and simivision.top|length > 0 %}
 
- {% for pick in simivision.top %} 
+{% for pick in simivision.top %}
 
-  
 ### #{{ pick.rank }}
 
 {{ pick.name }} {{ pick.conviction|int }}% conviction {{ pick.recommendation }}
 
-  
 **Why {{ pick.name }}?**
-  
+
 * {{ pick.breakdown[0] }}
 * {{ pick.breakdown[1] }}
 * {{ pick.breakdown[2] }}
@@ -29,89 +25,70 @@ Live Bittensor Intelligence · live from taomarketcap.com
 * {{ pick.breakdown[3] }}
 {% endif %}
 
-  
 **Signals:**
- • Emission: {{ "%.2f"|format(pick.emission|default(0, true)) }} TAO/day
- • 24h Change: {{ "%.1f"|format(pick.price_change_24h|default(0, true)) }}%
- • APY: {{ "%.2f"|format(pick.apy|default(0, true)) }}%
+• Emission: {{ "%.2f"|format(pick.emission|default(0, true)) }} TAO/day
+• 24h Change: {{ "%.1f"|format(pick.price_change_24h|default(0, true)) }}%
+• APY: {{ "%.2f"|format(pick.apy|default(0, true)) }}%
 {% if pick.metrics.social_mentions and pick.metrics.social_mentions > 0 %}
- • Social: {{ "%d"|format(pick.metrics.social_mentions) }} mentions
+• Social: {{ "%d"|format(pick.metrics.social_mentions) }} mentions
 {% endif %}
 {% if pick.risk_flags and pick.risk_flags|length > 0 %}
-  
+
 ⚠️ Risk: {{ pick.risk_flags|join(", ") }}
 {% endif %}
 
-  
-  
- {% endfor %} 
 
- {% else %} 
+{% endfor %}
 
-  
+{% else %}
+
 No SimiVision picks available. The panel will refresh automatically.
 
-  
- {% endif %}   
- 
-  
+{% endif %}
+
+
 ## Learning Trail
 
-  
+{% if learning_trail.council and learning_trail.council|length > 0 %}
 
-  
+{% for member in learning_trail.council %}
 
- {% if learning_trail.council and learning_trail.council|length > 0 %} 
-
- {% for member in learning_trail.council %} 
-
-  
 #### {{ member.name }}
 
- {{ member.vote }} {{ member.confidence|int }}% confidence {% if member.rationale %} 
+{{ member.vote }} {{ member.confidence|int }}% confidence {% if member.rationale %}
 {{ member.rationale }}
 
- {% endif %} 
+{% endif %}
 
- {% endfor %} 
+{% endfor %}
 
- {% else %} 
- 
+{% else %}
 Council deliberation in progress. Check back shortly.
 
-  
- {% endif %} 
-  
-  
+{% endif %}
+
 ## Spotlight
 
-  
+{% set h = summary.highlights %}
+{% if h.top_emission and h.top_emission[0] %}
 
-  
-
- {% set h = summary.highlights %} {% if h.top_emitter and h.top_emitter[0] %} 
-
-  
 ### Top Emitter
 
-  
-#### {{ h.top_emitter[0].name }}
+#### {{ h.top_emission[0].name }}
 
-{{ "%.3f"|format(h.top_emitter[0].emission|default(0, true)) }} TAO
+{{ "%.3f"|format(h.top_emission[0].emission|default(0, true)) }} TAO
 
-  
- {% endif %} {% if h.top_apy and h.top_apy[0] %} 
+{% endif %}
+{% if h.top_apy and h.top_apy[0] %}
 
-  
 ### Highest APY
 
-  
 #### {{ h.top_apy[0].name }}
 
 {{ "%.2f"|format((h.top_apy[0].apy|default(0, true)) * 100) }}%
 
-  
- {% endif %} 
+{% endif %}
 
-  
+---
+
 Subnet Pulse · Powered by **taomarketcap.com** · Built for the Bittensor ecosystem.
