@@ -19,42 +19,33 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: linear-gradient(180deg, #06000f 0%, #000000 100%); color: var(--text); }
     body { margin: 0; }
-    .app { min-height: 100vh; display: grid; grid-template-columns: 260px 1fr; }
-    @media (max-width: 900px) { .app { grid-template-columns: 1fr; } }
 
-    .sidebar {
-      background: linear-gradient(180deg, rgba(10,0,20,0.95), rgba(0,0,0,0.95));
-      border-right: 1px solid var(--border);
-      padding: 18px 12px;
-      overflow-y: auto;
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 16px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
     }
-    .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 18px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
-    .brand-logo { width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #00ff7a, #006633, #000 80%); box-shadow: 0 0 20px rgba(0,255,122,0.25); }
-    .brand h1 { font-size: 16px; font-weight: 800; letter-spacing: .5px; color: var(--green); }
-
-    .nav-link { display: block; padding: 10px 14px; margin: 4px 0; border-radius: 8px; color: var(--dim); text-decoration: none; font-size: 13px; transition: all .15s ease; }
-    .nav-link:hover, .nav-link.active { background: rgba(0,255,122,0.12); color: var(--green); }
-    .nav-section { font-size: 11px; text-transform: uppercase; letter-spacing: 2px; color: #555; margin: 12px 10px 6px; }
-
-    .main { padding: 20px 24px; overflow-y: auto; }
-    @media (max-width: 900px) { .main { padding: 16px; } }
-
-    .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
-    .topbar h2 { font-size: 20px; font-weight: 700; color: var(--green); }
-    .status { font-size: 12px; padding: 6px 12px; border-radius: 6px; background: rgba(0,255,122,0.12); color: var(--green); }
+    header h1 { font-size: 24px; font-weight: 800; color: var(--green); }
+    header .status { font-size: 12px; padding: 6px 12px; border-radius: 6px; background: rgba(0,255,122,0.12); color: var(--green); }
 
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 20px; }
+
     .card {
       background: linear-gradient(145deg, rgba(15,8,25,0.9), rgba(10,0,15,0.9));
       border: 1px solid var(--border);
-      border-radius: 14px;
+      border-radius: 12px;
       padding: 16px;
     }
     .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-    .card-header h3 { font-size: 15px; font-weight: 700; color: var(--green); }
+    .card-header h2 { font-size: 16px; font-weight: 700; color: var(--green); }
     .card-header .badge { font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(0,255,122,0.15); color: var(--green); }
 
-    .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+    .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
     .stat-box { text-align: center; padding: 10px; background: rgba(0,0,0,0.25); border-radius: 8px; }
     .stat-box .k { font-size: 10px; color: #88ff88; text-transform: uppercase; letter-spacing: 1px; }
     .stat-box .v { font-size: 18px; font-weight: 700; color: var(--green); margin-top: 4px; }
@@ -67,14 +58,14 @@
       margin-bottom: 12px;
     }
     .pick-card:last-child { margin-bottom: 0; }
-    .pick-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .pick-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
     .pick-title { font-weight: 700; color: var(--green); }
     .pick-sub { font-size: 12px; color: #a0ffa0; margin-top: 4px; }
     .pick-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; font-size: 12px; }
     .pick-metrics > div > span { display: block; color: #88ff88; font-size: 11px; }
 
-    .council-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
-    .council-card { background: rgba(0,20,10,0.4); border-radius: 8px; padding: 10px; text-align: center; }
+    .council-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+    .council-card { background: rgba(0,20,10,0.4); border-radius: 8px; padding: 12px; text-align: center; }
     .council-card .name { font-weight: 700; color: var(--green); margin-bottom: 4px; }
     .council-card .vote { font-size: 12px; color: #ffa0a0; }
 
@@ -89,157 +80,169 @@
     .radar-table tr:hover { background: rgba(0,255,122,0.06); }
     .rank-badge { display: inline-block; width: 24px; height: 24px; line-height: 24px; text-align: center; border-radius: 6px; background: rgba(0,255,122,0.18); color: var(--green); font-weight: 700; font-size: 12px; }
 
+    .mindmap-feed { font-family: monospace; font-size: 12px; }
+    .mindmap-entry { padding: 8px; margin-bottom: 8px; background: rgba(0,0,0,0.25); border-radius: 6px; border-left: 2px solid var(--green); }
+    .mindmap-entry .time { color: #88ff88; margin-right: 8px; }
+    .mindmap-entry .msg { color: var(--text); }
+
     .footer { text-align: center; padding: 20px; font-size: 11px; color: #555; margin-top: 10px; }
   </style>
 </head>
 <body>
-  <div class="app">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-logo"></div>
-        <h1>SimiVision</h1>
+  <div class="container">
+    <header>
+      <h1>SimiVision Dashboard</h1>
+      <span class="status">● LIVE</span>
+    </header>
+
+    <section class="card" style="margin-bottom: 20px;">
+      <div class="card-header">
+        <h2>System Overview</h2>
+        <span class="badge">{{ simivision.meta.system_status or 'Operative' }}</span>
       </div>
-      <div class="nav-section">Navigation</div>
-      <a class="nav-link active" href="#overview">Overview</a>
-      <a class="nav-link" href="#picks">SimiVision Picks</a>
-      <a class="nav-link" href="#council">Learning Trail</a>
-      <a class="nav-link" href="#spotlight">Spotlight</a>
-      <a class="nav-link" href="#radar">Undervalued Radar</a>
-      <div class="nav-section">Status</div>
-      <a class="nav-link" href="#system">System: {{ simivision.meta.system_status or 'Operative' }}</a>
-    </aside>
+      <div class="stat-row">
+        <div class="stat-box"><div class="k">Picks</div><div class="v">{{ simivision.top|length if simivision.top else 0 }}</div></div>
+        <div class="stat-box"><div class="k">Council</div><div class="v">{{ learning_trail.council|length if learning_trail.council else 0 }}</div></div>
+        <div class="stat-box"><div class="k">Top Emitter</div><div class="v">{% if summary.highlights.top_emitter and summary.highlights.top_emitter[0] %}{{ summary.highlights.top_emitter[0].name }}{% else %}N/A{% endif %}</div></div>
+      </div>
+    </section>
 
-    <main class="main">
-      <header class="topbar">
-        <h2>Subnet Dashboard</h2>
-        <span class="status">● LIVE</span>
-      </header>
-
-      <section id="overview" class="card" style="margin-bottom: 16px;">
+    <div class="grid">
+      <section class="card">
         <div class="card-header">
-          <h3>System Overview</h3>
-          <span class="badge">{{ simivision.meta.system_status or 'Operative' }}</span>
+          <h2>SimiVision Picks</h2>
+          <span class="badge">Live • ranked by conviction</span>
         </div>
-        <div class="stat-row">
-          <div class="stat-box"><div class="k">Picks</div><div class="v">{{ simivision.top|length if simivision.top else 0 }}</div></div>
-          <div class="stat-box"><div class="k">Council</div><div class="v">{{ learning_trail.council|length if learning_trail.council else 0 }}</div></div>
-          <div class="stat-box"><div class="k">Top Emitter</div><div class="v">{% if summary.highlights.top_emitter and summary.highlights.top_emitter[0] %}{{ summary.highlights.top_emitter[0].name }}{% else %}N/A{% endif %}</div></div>
-        </div>
+        {% if simivision.top and simivision.top|length > 0 %}
+          {% for pick in simivision.top %}
+            <div class="pick-card">
+              <div class="pick-header">
+                <span class="pick-title">#{{ pick.rank }} {{ pick.name }}</span>
+                <span style="font-size: 12px; color: #a0ffa0;">{{ pick.conviction }}% {{ pick.recommendation }}</span>
+              </div>
+              <div class="pick-sub">{{ pick.breakdown[:2]|join(', ') if pick.breakdown else 'Strong fundamentals' }}</div>
+              <div class="pick-metrics">
+                <div><span>{{ "%.2f"|format(pick.emission|default(0, true)) }} TAO</span><span>Emission</span></div>
+                <div><span>{{ "%.1f"|format(pick.price_change_24h|default(0, true)) }}%</span><span>24h Change</span></div>
+                <div><span>{{ "%.2f"|format(pick.apy|default(0, true)) }}%</span><span>APY</span></div>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <p style="color: #88ff88;">No picks available. The council is convening…</p>
+        {% endif %}
       </section>
 
-      <section id="picks">
-        <div class="card">
-          <div class="card-header">
-            <h3>SimiVision Picks</h3>
-            <span class="badge">Live • ranked by conviction</span>
-          </div>
-          {% if simivision.top and simivision.top|length > 0 %}
-            {% for pick in simivision.top %}
-              <div class="pick-card">
-                <div class="pick-header">
-                  <span class="pick-title">#{{ pick.rank }} {{ pick.name }}</span>
-                  <span style="font-size: 12px; color: #a0ffa0;">{{ pick.conviction }}% {{ pick.recommendation }}</span>
-                </div>
-                <div class="pick-sub">{{ pick.breakdown[:2]|join(', ') if pick.breakdown else 'Strong fundamentals' }}</div>
-                <div class="pick-metrics">
-                  <div><span>{{ "%.2f"|format(pick.emission|default(0, true)) }} TAO</span><span>Emission</span></div>
-                  <div><span>{{ "%.1f"|format(pick.price_change_24h|default(0, true)) }}%</span><span>24h Change</span></div>
-                  <div><span>{{ "%.2f"|format(pick.apy|default(0, true)) }}%</span><span>APY</span></div>
-                </div>
+      <section class="card">
+        <div class="card-header">
+          <h2>Learning Trail Council Votes</h2>
+          <span class="badge">{{ learning_trail.council|length if learning_trail.council else 0 }} members</span>
+        </div>
+        <div class="council-grid">
+          {% if learning_trail.council and learning_trail.council|length > 0 %}
+            {% for member in learning_trail.council %}
+              <div class="council-card">
+                <div class="name">{{ member.name }}</div>
+                <div class="vote">{{ member.vote }} {{ member.confidence|int }}%</div>
               </div>
             {% endfor %}
           {% else %}
-            <p style="color: #88ff88;">No picks available. The council is convening…</p>
+            <p style="color: #88ff88;">Council deliberation in progress.</p>
           {% endif %}
         </div>
       </section>
 
-      <section id="council" style="margin-top: 16px;">
-        <div class="card">
-          <div class="card-header">
-            <h3>Learning Trail Council</h3>
-            <span class="badge">{{ learning_trail.council|length if learning_trail.council else 0 }} members</span>
+      <section class="card">
+        <div class="card-header">
+          <h2>Spotlight</h2>
+          <span class="badge">Featured Metrics</span>
+        </div>
+        <div class="spot-grid">
+          <div class="spot-card">
+            <div class="v">{% if summary.highlights.top_emitter and summary.highlights.top_emitter[0] %}{{ summary.highlights.top_emitter[0].name }}{% else %}N/A{% endif %}</div>
+            <div class="l">Top Emitter</div>
           </div>
-          <div class="council-grid">
-            {% if learning_trail.council and learning_trail.council|length > 0 %}
-              {% for member in learning_trail.council %}
-                <div class="council-card">
-                  <div class="name">{{ member.name }}</div>
-                  <div class="vote">{{ member.vote }} {{ member.confidence|int }}%</div>
-                </div>
+          <div class="spot-card">
+            <div class="v">{% if summary.highlights.top_apy and summary.highlights.top_apy[0] %}{{ "%.2f"|format(summary.highlights.top_apy[0].apy|default(0, true)) }}%{% else %}N/A{% endif %}</div>
+            <div class="l">Highest APY</div>
+          </div>
+          <div class="spot-card">
+            <div class="v">{{ simivision.meta.system_status or 'Operative' }}</div>
+            <div class="l">Status</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <h2>Undervalued Radar</h2>
+          <span class="badge">Subnet Activity Snapshot</span>
+        </div>
+        {% set radar_list = undervalued.subnets if undervalued and undervalued.subnets else (simivision.top[:5] if simivision.top else []) %}
+        {% if radar_list and radar_list|length > 0 %}
+          <table class="radar-table">
+            <thead>
+              <tr>
+                <th style="width: 40px;">#</th>
+                <th>Name</th>
+                <th>Emission</th>
+                <th>24h</th>
+                <th>APY</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for sn in radar_list %}
+              <tr>
+                <td><span class="rank-badge">{{ sn.rank if sn.rank else loop.index }}</span></td>
+                <td>{{ sn.name }}</td>
+                <td>{{ "%.2f"|format(sn.emission|default(0, true)) }} TAO</td>
+                <td>{{ "%.1f"|format(sn.price_change_24h|default(0, true)) }}%</td>
+                <td>{{ "%.2f"|format(sn.apy|default(0, true)) }}%</td>
+                <td>{{ "%.0f"|format(sn.score|default(sn.apy|default(0, true) * 100, true)) }}</td>
+              </tr>
               {% endfor %}
-            {% else %}
-              <p style="color: #88ff88;">Council deliberation in progress.</p>
-            {% endif %}
-          </div>
-        </div>
+            </tbody>
+          </table>
+        {% else %}
+          <p style="color: #88ff88;">No undervalued subnets detected at this time.</p>
+        {% endif %}
       </section>
 
-      <section id="spotlight" style="margin-top: 16px;">
-        <div class="card">
-          <div class="card-header">
-            <h3>Spotlight</h3>
-            <span class="badge">Featured Metrics</span>
-          </div>
-          <div class="spot-grid">
-            <div class="spot-card">
-              <div class="v">{% if summary.highlights.top_emitter and summary.highlights.top_emitter[0] %}{{ summary.highlights.top_emitter[0].name }}{% else %}N/A{% endif %}</div>
-              <div class="l">Top Emitter</div>
-            </div>
-            <div class="spot-card">
-              <div class="v">{% if summary.highlights.top_apy and summary.highlights.top_apy[0] %}{{ "%.2f"|format(summary.highlights.top_apy[0].apy|default(0, true)) }}%{% else %}N/A{% endif %}</div>
-              <div class="l">Highest APY</div>
-            </div>
-            <div class="spot-card">
-              <div class="v">{{ simivision.meta.system_status or 'Operative' }}</div>
-              <div class="l">Status</div>
-            </div>
-          </div>
+      <section class="card" style="grid-column: 1 / -1;">
+        <div class="card-header">
+          <h2>Mindmap + Learning Loop Play-by-Play</h2>
+          <span class="badge">Live System Feed</span>
         </div>
-      </section>
-
-      <section id="radar" style="margin-top: 16px;">
-        <div class="card">
-          <div class="card-header">
-            <h3>Undervalued Radar</h3>
-            <span class="badge">Subnet Activity Snapshot</span>
-          </div>
-          {% set radar_list = undervalued.subnets if undervalued and undervalued.subnets else (simivision.top[:5] if simivision.top else []) %}
-          {% if radar_list and radar_list|length > 0 %}
-            <table class="radar-table">
-              <thead>
-                <tr>
-                  <th style="width: 40px;">#</th>
-                  <th>Name</th>
-                  <th>Emission</th>
-                  <th>24h</th>
-                  <th>APY</th>
-                  <th>Score</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for sn in radar_list %}
-                <tr>
-                  <td><span class="rank-badge">{{ sn.rank if sn.rank else loop.index }}</span></td>
-                  <td>{{ sn.name }}</td>
-                  <td>{{ "%.2f"|format(sn.emission|default(0, true)) }} TAO</td>
-                  <td>{{ "%.1f"|format(sn.price_change_24h|default(0, true)) }}%</td>
-                  <td>{{ "%.2f"|format(sn.apy|default(0, true)) }}%</td>
-                  <td>{{ "%.0f"|format(sn.score|default(sn.apy|default(0, true) * 100, true)) }}</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+        <div class="mindmap-feed">
+          {% if learning_trail.mindmap_feed and learning_trail.mindmap_feed|length > 0 %}
+            {% for entry in learning_trail.mindmap_feed %}
+              <div class="mindmap-entry">
+                <span class="time">{{ entry.time if entry.time else 'Now' }}</span>
+                <span class="msg">{{ entry.message if entry.message else entry }}</span>
+              </div>
+            {% endfor %}
           {% else %}
-            <p style="color: #88ff88;">No undervalued subnets detected at this time.</p>
+            <div class="mindmap-entry">
+              <span class="time">Now</span>
+              <span class="msg">Analyzing subnet performance patterns and updating stances...</span>
+            </div>
+            <div class="mindmap-entry">
+              <span class="time">Now</span>
+              <span class="msg">Adjusting expert weights based on recent vote outcomes.</span>
+            </div>
+            <div class="mindmap-entry">
+              <span class="time">Now</span>
+              <span class="msg">Recording learning loop updates to persistent memory.</span>
+            </div>
           {% endif %}
         </div>
       </section>
+    </div>
 
-      <footer class="card" style="margin-top: 16px; text-align: center; border: none; background: transparent;">
-        <p style="color: #555; font-size: 11px;">SimiVision · Powered by <strong style="color: var(--green);">taomarketcap.com</strong> · Built for the Bittensor ecosystem.</p>
-      </footer>
-    </main>
+    <footer class="card" style="margin-top: 20px; text-align: center; border: none; background: transparent;">
+      <p style="color: #555; font-size: 11px;">SimiVision · Powered by <strong style="color: var(--green);">taomarketcap.com</strong> · Built for the Bittensor ecosystem.</p>
+    </footer>
   </div>
 </body>
 </html>
