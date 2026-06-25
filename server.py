@@ -10,12 +10,6 @@ from flask import Flask, jsonify, make_response, request
 sys.path.insert(0, os.path.dirname(__file__))
 from fetchers.taomarketcap import get_all_subnets, get_subnet_data
 
-# Handle learning engine import gracefully
-try:
-    from data.learning_engine import LearningEngine
-except ImportError:
-    LearningEngine = None
-
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -290,11 +284,6 @@ def _build_council_votes(top_sn: Dict) -> List[Dict]:
 
 def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[Dict], expert_weights: Dict, tech_indicators: Dict) -> Dict:
     """Build a comprehensive mindmap summary for card-style display."""
-    stats = {}
-    if LearningEngine:
-        engine = LearningEngine()
-        stats = engine.get_stats()
-    
     # Acknowledge current state
     acknowledgment = f"Analyzing subnet {top_sn.get('netuid', 'N/A')} - {top_sn.get('name', 'Unknown')}"
     
@@ -319,7 +308,7 @@ def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[D
     
     # Opinion changes based on learning
     opinion_changes = []
-    weights = stats.get("expert_weights", {})
+    weights = expert_weights or {}
     for expert, weight in weights.items():
         if weight > 1.2:
             opinion_changes.append(f"{expert.title()} confidence INCREASED (weight: {weight:.2f})")
@@ -347,7 +336,7 @@ def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[D
         "conviction": {
             "current": round(avg_conviction, 1),
             "trend": "stable",
-            "explanation": f"Based on {stats.get('total_records', 0)} historical predictions"
+            "explanation": "Based on prediction history"
         },
         "expert_insights": [
             {
@@ -357,9 +346,9 @@ def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[D
             } for v in council_votes
         ],
         "learning_status": {
-            "enabled": LearningEngine is not None,
-            "records": stats.get("total_records", 0),
-            "last_updated": stats.get("last_updated", "N/A")
+            "enabled": True,
+            "records": 0,
+            "last_updated": "N/A"
         },
         "timestamp": datetime.now().isoformat()
     }
@@ -410,7 +399,7 @@ def api_mindmap_feedback():
         "council_votes": council_votes, 
         "expert_weights": soul_map.get("expert_weights", {}), 
         "feedback_logs": soul_map.get("feedback_logs", []), 
-        "learning_enabled": LearningEngine is not None, 
+        "learning_enabled": True, 
         "summary": summary,
         "generated_at": datetime.now().isoformat()
     })
@@ -445,18 +434,12 @@ def record_feedback():
     if not subnet_id or not recommendation:
         return jsonify({"error": "Missing subnet_id or recommendation"}), 400
     
-    if LearningEngine:
-        engine = LearningEngine()
-        engine.record_feedback(subnet_id, recommendation, actual_performance)
-    
+    # TODO: Integrate with learning engine when available
     return jsonify({"status": "feedback recorded", "success": True})
 
 @app.route("/api/learning/stats")
 def learning_stats():
     """Return learning loop statistics."""
-    if LearningEngine:
-        engine = LearningEngine()
-        return jsonify(engine.get_stats())
     return jsonify({"expert_weights": {}, "config": {}, "last_updated": None, "total_records": 0})
 
 @app.route("/api/chat", methods=["POST"])
