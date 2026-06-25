@@ -1,248 +1,955 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>SimiVision Dashboard</title>
-  <style>
-    :root {
-      --bg: #0a0012;
-      --panel: rgba(15, 8, 25, 0.85);
-      --border: rgba(100, 255, 180, 0.12);
-      --text: #e6ffe6;
-      --dim: #a0ffa0;
-      --green: #00ff7a;
-      --green-2: #00cc66;
-      --green-3: #006633;
-      --black: #000000;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: linear-gradient(180deg, #06000f 0%, #000000 100%); color: var(--text); }
-    body { margin: 0; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SimiVision Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        :root {
+            --bg-primary: #0b0f1e;
+            --bg-card: #13182d;
+            --bg-card-hover: #1a2139;
+            --accent-green: #00ff88;
+            --accent-green-dark: #00cc6a;
+            --accent-red: #ff4444;
+            --accent-gray: #666666;
+            --accent-purple: #8b5cf6;
+            --text-primary: #ffffff;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --border-color: #2d3748;
+            --shadow-card: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.15);
+        }
 
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-bottom: 16px;
-      margin-bottom: 20px;
-      border-bottom: 1px solid var(--border);
-    }
-    header h1 { font-size: 24px; font-weight: 800; color: var(--green); }
-    header .status { font-size: 12px; padding: 6px 12px; border-radius: 6px; background: rgba(0,255,122,0.12); color: var(--green); }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
 
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 20px; }
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
 
-    .card {
-      background: linear-gradient(145deg, rgba(15,8,25,0.9), rgba(10,0,15,0.9));
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px;
-    }
-    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-    .card-header h2 { font-size: 16px; font-weight: 700; color: var(--green); }
-    .card-header .badge { font-size: 11px; padding: 3px 8px; border-radius: 4px; background: rgba(0,255,122,0.15); color: var(--green); }
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-green), #ffffff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
 
-    .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
-    .stat-box { text-align: center; padding: 10px; background: rgba(0,0,0,0.25); border-radius: 8px; }
-    .stat-box .k { font-size: 10px; color: #88ff88; text-transform: uppercase; letter-spacing: 1px; }
-    .stat-box .v { font-size: 18px; font-weight: 700; color: var(--green); margin-top: 4px; }
+        .nav-pills {
+            display: none;
+        }
 
-    .pick-card {
-      background: rgba(0,20,10,0.4);
-      border-left: 3px solid var(--green);
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 12px;
-    }
-    .pick-card:last-child { margin-bottom: 0; }
-    .pick-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .pick-title { font-weight: 700; color: var(--green); }
-    .pick-sub { font-size: 12px; color: #a0ffa0; margin-top: 4px; }
-    .pick-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; font-size: 12px; }
-    .pick-metrics > div > span { display: block; color: #88ff88; font-size: 11px; }
+        .header-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
 
-    .council-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
-    .council-card { background: rgba(0,20,10,0.4); border-radius: 8px; padding: 12px; text-align: center; }
-    .council-card .name { font-weight: 700; color: var(--green); margin-bottom: 4px; }
-    .council-card .vote { font-size: 12px; color: #ffa0a0; }
+        .price-display {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-card);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
 
-    .spot-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
-    .spot-card { background: rgba(0,0,0,0.25); border-radius: 8px; padding: 12px; text-align: center; }
-    .spot-card .v { font-size: 18px; font-weight: 800; color: var(--green); }
-    .spot-card .l { font-size: 11px; color: #88ff88; text-transform: uppercase; letter-spacing: 1px; }
+        .price-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
 
-    .radar-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .radar-table th, .radar-table td { padding: 10px; text-align: left; border-bottom: 1px solid rgba(100,255,180,0.12); }
-    .radar-table th { color: var(--green); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
-    .radar-table tr:hover { background: rgba(0,255,122,0.06); }
-    .rank-badge { display: inline-block; width: 24px; height: 24px; line-height: 24px; text-align: center; border-radius: 6px; background: rgba(0,255,122,0.18); color: var(--green); font-weight: 700; font-size: 12px; }
+        .price-change {
+            color: var(--accent-green);
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
 
-    .mindmap-feed { font-family: monospace; font-size: 12px; }
-    .mindmap-entry { padding: 8px; margin-bottom: 8px; background: rgba(0,0,0,0.25); border-radius: 6px; border-left: 2px solid var(--green); }
-    .mindmap-entry .time { color: #88ff88; margin-right: 8px; }
-    .mindmap-entry .msg { color: var(--text); }
+        .price-change.negative {
+            color: var(--accent-red);
+        }
 
-    .footer { text-align: center; padding: 20px; font-size: 11px; color: #555; margin-top: 10px; }
-  </style>
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--accent-purple);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        /* Main Layout */
+        .main-container {
+            display: grid;
+            grid-template-columns: 60px 1fr;
+            min-height: calc(100vh - 65px);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 60px;
+            background: var(--bg-primary);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 1rem 0;
+            gap: 1.5rem;
+        }
+
+        .sidebar-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .sidebar-icon:hover, .sidebar-icon.active {
+            background: var(--bg-card);
+            color: var(--accent-green);
+        }
+
+        .sidebar-icon svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* Content Area */
+        .content {
+            padding: 1.5rem;
+            overflow-x: hidden;
+        }
+
+        /* Cards Grid */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (min-width: 1024px) {
+            .cards-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* Card Styles */
+        .card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow-card);
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 12px -1px rgba(0, 0, 0, 0.4), 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .card-link {
+            color: var(--accent-green);
+            font-size: 0.875rem;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .card-link:hover {
+            text-decoration: underline;
+        }
+
+        .card-body {
+            padding: 1.25rem;
+        }
+
+        /* Cards Specific */
+        .picks-card {
+            grid-column: 1 / -1;
+        }
+
+        .picks-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .pick-item {
+            display: grid;
+            grid-template-columns: 80px 1fr 120px auto;
+            gap: 1rem;
+            align-items: center;
+            padding: 1rem;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .pick-number {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--accent-green);
+        }
+
+        .pick-name {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .pick-subtitle {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        .pick-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .pick-cap {
+            font-weight: 600;
+        }
+
+        .pick-change {
+            font-size: 0.85rem;
+            color: var(--accent-green);
+        }
+
+        .pick-change.negative {
+            color: var(--accent-red);
+        }
+
+        .pick-chart {
+            height: 40px;
+            width: 100px;
+        }
+
+        .pick-metrics {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.75rem;
+        }
+
+        .metric-pill {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .metric-label {
+            color: var(--text-secondary);
+        }
+
+        .metric-value {
+            font-weight: 600;
+            color: var(--accent-purple);
+        }
+
+        .recommendation {
+            color: var(--accent-green);
+            font-weight: 600;
+        }
+
+        .recommendation.neutral {
+            color: var(--text-secondary);
+        }
+
+        .recommendation.bearish {
+            color: var(--accent-red);
+        }
+
+        /* Council Votes Card */
+        .council-card {
+            grid-column: 1 / -1;
+        }
+
+        .proposal-section {
+            background: var(--bg-primary);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .proposal-title {
+            font-weight: 600;
+            font-size: 0.95rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .proposal-subtitle {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .proposal-timer {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+        }
+
+        .vote-distribution {
+            margin-top: 1rem;
+        }
+
+        .vote-section {
+            margin-bottom: 0.75rem;
+        }
+
+        .vote-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .vote-percentage {
+            font-weight: 700;
+            font-size: 0.9rem;
+            min-width: 70px;
+        }
+
+        .vote-bar {
+            flex: 1;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            background: var(--bg-primary);
+        }
+
+        .vote-fill {
+            height: 100%;
+            border-radius: 4px;
+        }
+
+        .vote-fill.favor {
+            background: var(--accent-green);
+        }
+
+        .vote-fill.against {
+            background: var(--accent-red);
+        }
+
+        .vote-fill.absent {
+            background: var(--text-muted);
+        }
+
+        .vote-votes {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .voters-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .voter-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .voter-name {
+            font-size: 0.9rem;
+            flex: 1;
+        }
+
+        .voter-percentage {
+            font-weight: 600;
+            color: var(--accent-green);
+        }
+
+        /* Spotlight Card */
+        .spotlight-card {
+            grid-column: 1 / -1;
+        }
+
+        .spotlight-main {
+            text-align: center;
+            padding: 2rem 1rem;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .spotlight-rank {
+            font-size: 3rem;
+            font-weight: 700;
+            color: var(--accent-green);
+            line-height: 1;
+        }
+
+        .spotlight-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 1rem 0 0.5rem;
+        }
+
+        .spotlight-subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .spotlight-metrics {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .spotlight-metric {
+            text-align: center;
+        }
+
+        .spotlight-metric-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--accent-green);
+        }
+
+        .spotlight-metric-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .spotlight-reasons {
+            background: var(--bg-primary);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .reason-list {
+            list-style: none;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-top: 0.75rem;
+        }
+
+        .reason-item {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .reason-icon {
+            color: var(--accent-green);
+        }
+
+        /* Undervalued Radar */
+        .radar-container {
+            overflow-x: auto;
+        }
+
+        .radar-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .radar-table th {
+            text-align: left;
+            padding: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .radar-table td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--bg-primary);
+        }
+
+        .radar-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .radar-rank {
+            font-weight: 700;
+            color: var(--accent-green);
+        }
+
+        .radar-name {
+            font-weight: 600;
+        }
+
+        .radar-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .radar-value {
+            font-weight: 600;
+        }
+
+        .radar-value.positive {
+            color: var(--accent-green);
+        }
+
+        .radar-value.negative {
+            color: var(--accent-red);
+        }
+
+        .dev-stars {
+            color: #fbbf24;
+        }
+
+        .trend-arrow {
+            font-size: 1.25rem;
+        }
+
+        .trend-arrow.up {
+            color: var(--accent-green);
+        }
+
+        .trend-arrow.neutral {
+            color: #fbbf24;
+        }
+
+        .trend-arrow.down {
+            color: var(--accent-red);
+        }
+
+        .gh-commits {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .gh-commits-icon {
+            color: var(--text-secondary);
+        }
+
+        .gh-change.positive {
+            color: var(--accent-green);
+        }
+
+        .gh-change.negative {
+            color: var(--accent-red);
+        }
+
+        .mc-dev {
+            font-weight: 600;
+        }
+
+        /* Mindmap Feed */
+        .mindmap-section {
+            background: var(--bg-card);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            padding: 1.25rem;
+            margin-top: 1.5rem;
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .feed-item {
+            display: flex;
+            gap: 1rem;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--bg-primary);
+        }
+
+        .feed-item:last-child {
+            border-bottom: none;
+        }
+
+        .feed-time {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            min-width: 80px;
+        }
+
+        .feed-message {
+            font-size: 0.9rem;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border-color);
+            margin-top: 2rem;
+        }
+
+        .footer a {
+            color: var(--accent-green);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Loading State */
+        .loading-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4rem;
+            color: var(--text-secondary);
+        }
+
+        /* Status Badge */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .status-badge.live {
+            background: rgba(0, 255, 136, 0.1);
+            color: var(--accent-green);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>SimiVision Dashboard</h1>
-      <span class="status">● LIVE</span>
-    </header>
-
-    <section class="card" style="margin-bottom: 20px;">
-      <div class="card-header">
-        <h2>System Overview</h2>
-        <span class="badge">{{ simivision.meta.system_status or 'Operative' }}</span>
-      </div>
-      <div class="stat-row">
-        <div class="stat-box"><div class="k">Picks</div><div class="v">{{ simivision.top|length if simivision.top else 0 }}</div></div>
-        <div class="stat-box"><div class="k">Council</div><div class="v">{{ learning_trail.council|length if learning_trail.council else 0 }}</div></div>
-        <div class="stat-box"><div class="k">Top Emitter</div><div class="v">{% if summary.highlights.top_emitter and summary.highlights.top_emitter[0] %}{{ summary.highlights.top_emitter[0].name }}{% else %}N/A{% endif %}</div></div>
-      </div>
-    </section>
-
-    <div class="grid">
-      <section class="card">
-        <div class="card-header">
-          <h2>SimiVision Picks</h2>
-          <span class="badge">Live • ranked by conviction</span>
-        </div>
-        {% if simivision.top and simivision.top|length > 0 %}
-          {% for pick in simivision.top %}
-            <div class="pick-card">
-              <div class="pick-header">
-                <span class="pick-title">#{{ pick.rank }} {{ pick.name }}</span>
-                <span style="font-size: 12px; color: #a0ffa0;">{{ pick.conviction }}% {{ pick.recommendation }}</span>
-              </div>
-              <div class="pick-sub">{{ pick.breakdown[:2]|join(', ') if pick.breakdown else 'Strong fundamentals' }}</div>
-              <div class="pick-metrics">
-                <div><span>{{ "%.2f"|format(pick.emission|default(0, true)) }} TAO</span><span>Emission</span></div>
-                <div><span>{{ "%.1f"|format(pick.price_change_24h|default(0, true)) }}%</span><span>24h Change</span></div>
-                <div><span>{{ "%.2f"|format(pick.apy|default(0, true)) }}%</span><span>APY</span></div>
-              </div>
+    {% if loading %}
+    {% include 'loading.html' %}
+    {% else %}
+    <div class="header">
+        <div class="logo">SimiVision</div>
+        <div class="header-info">
+            <div class="price-display">
+                <span class="price-value">$456.21</span>
+                <span class="price-change">+3.24%</span>
             </div>
-          {% endfor %}
-        {% else %}
-          <p style="color: #88ff88;">No picks available. The council is convening…</p>
-        {% endif %}
-      </section>
-
-      <section class="card">
-        <div class="card-header">
-          <h2>Learning Trail Council Votes</h2>
-          <span class="badge">{{ learning_trail.council|length if learning_trail.council else 0 }} members</span>
+            <div class="user-avatar">U</div>
         </div>
-        <div class="council-grid">
-          {% if learning_trail.council and learning_trail.council|length > 0 %}
-            {% for member in learning_trail.council %}
-              <div class="council-card">
-                <div class="name">{{ member.name }}</div>
-                <div class="vote">{{ member.vote }} {{ member.confidence|int }}%</div>
-              </div>
-            {% endfor %}
-          {% else %}
-            <p style="color: #88ff88;">Council deliberation in progress.</p>
-          {% endif %}
-        </div>
-      </section>
-
-      <section class="card">
-        <div class="card-header">
-          <h2>Spotlight</h2>
-          <span class="badge">Featured Metrics</span>
-        </div>
-        <div class="spot-grid">
-          <div class="spot-card">
-            <div class="v">{% if summary.highlights.top_emitter and summary.highlights.top_emitter[0] %}{{ summary.highlights.top_emitter[0].name }}{% else %}N/A{% endif %}</div>
-            <div class="l">Top Emitter</div>
-          </div>
-          <div class="spot-card">
-            <div class="v">{% if summary.highlights.top_apy and summary.highlights.top_apy[0] %}{{ "%.2f"|format(summary.highlights.top_apy[0].apy|default(0, true)) }}%{% else %}N/A{% endif %}</div>
-            <div class="l">Highest APY</div>
-          </div>
-          <div class="spot-card">
-            <div class="v">{{ simivision.meta.system_status or 'Operative' }}</div>
-            <div class="l">Status</div>
-          </div>
-        </div>
-      </section>
-
-      <section class="card">
-        <div class="card-header">
-          <h2>Undervalued Radar</h2>
-          <span class="badge">Subnet Activity Snapshot</span>
-        </div>
-        {% set radar_list = undervalued.subnets if undervalued and undervalued.subnets else (simivision.top[:5] if simivision.top else []) %}
-        {% if radar_list and radar_list|length > 0 %}
-          <table class="radar-table">
-            <thead>
-              <tr>
-                <th style="width: 40px;">#</th>
-                <th>Name</th>
-                <th>Emission</th>
-                <th>24h</th>
-                <th>APY</th>
-                <th>Score</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for sn in radar_list %}
-              <tr>
-                <td><span class="rank-badge">{{ sn.rank if sn.rank else loop.index }}</span></td>
-                <td>{{ sn.name }}</td>
-                <td>{{ "%.2f"|format(sn.emission|default(0, true)) }} TAO</td>
-                <td>{{ "%.1f"|format(sn.price_change_24h|default(0, true)) }}%</td>
-                <td>{{ "%.2f"|format(sn.apy|default(0, true)) }}%</td>
-                <td>{{ "%.0f"|format(sn.score|default(sn.apy|default(0, true) * 100, true)) }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        {% else %}
-          <p style="color: #88ff88;">No undervalued subnets detected at this time.</p>
-        {% endif %}
-      </section>
-
-      <section class="card" style="grid-column: 1 / -1;">
-        <div class="card-header">
-          <h2>Mindmap + Learning Loop Play-by-Play</h2>
-          <span class="badge">Live System Feed</span>
-        </div>
-        <div class="mindmap-feed">
-          {% if learning_trail.mindmap_feed and learning_trail.mindmap_feed|length > 0 %}
-            {% for entry in learning_trail.mindmap_feed %}
-              <div class="mindmap-entry">
-                <span class="time">{{ entry.time if entry.time else 'Now' }}</span>
-                <span class="msg">{{ entry.message if entry.message else entry }}</span>
-              </div>
-            {% endfor %}
-          {% else %}
-            <div class="mindmap-entry">
-              <span class="time">Now</span>
-              <span class="msg">Analyzing subnet performance patterns and updating stances...</span>
-            </div>
-            <div class="mindmap-entry">
-              <span class="time">Now</span>
-              <span class="msg">Adjusting expert weights based on recent vote outcomes.</span>
-            </div>
-            <div class="mindmap-entry">
-              <span class="time">Now</span>
-              <span class="msg">Recording learning loop updates to persistent memory.</span>
-            </div>
-          {% endif %}
-        </div>
-      </section>
     </div>
 
-    <footer class="card" style="margin-top: 20px; text-align: center; border: none; background: transparent;">
-      <p style="color: #555; font-size: 11px;">SimiVision · Powered by <strong style="color: var(--green);">taomarketcap.com</strong> · Built for the Bittensor ecosystem.</p>
-    </footer>
-  </div>
+    <div class="main-container">
+        <nav class="sidebar">
+            <div class="sidebar-icon active">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+                </svg>
+            </div>
+            <div class="sidebar-icon">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm-1 13h2v2h-2v-2zm4 0h2v2h-2v-2zm-9 0h2v2H6v-2zm5-8c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5z"/>
+                </svg>
+            </div>
+            <div class="sidebar-icon">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/>
+                </svg>
+            </div>
+            <div class="sidebar-icon">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                </svg>
+            </div>
+            <div class="sidebar-icon">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/>
+                </svg>
+            </div>
+            <div class="sidebar-icon">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+                </svg>
+            </div>
+            <div class="sidebar-icon">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+                </svg>
+            </div>
+            <div class="sidebar-icon">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
+                </svg>
+            </div>
+        </nav>
+
+        <main class="content">
+            <div class="status-badge live">
+                <span class="status-dot"></span>
+                LIVE
+            </div>
+
+            <div class="cards-grid">
+                <div class="card picks-card">
+                    <div class="card-header">
+                        <span class="card-title">SimiVision Picks</span>
+                        <a href="#" class="card-link">View All →</a>
+                    </div>
+                    <div class="card-body">
+                        <div class="picks-list">
+                            {% if simivision.top and simivision.top|length > 0 %}
+                                {% for pick in simivision.top %}
+                                <div class="pick-item">
+                                    <div class="pick-number">#{{ pick.rank if pick.rank else loop.index }}</div>
+                                    <div>
+                                        <div class="pick-name">{{ pick.name }}</div>
+                                        <div class="pick-subtitle">{{ pick.breakdown[:2]|join(', ') if pick.breakdown else 'Strong fundamentals' }}</div>
+                                    </div>
+                                    <div class="pick-info">
+                                        <span class="pick-cap">${{ "%.2f"|format(pick.market_cap|default(0, true)) if pick.market_cap else '$N/A' }}</span>
+                                        <span class="pick-change {% if pick.price_change_24h|default(0, true)|float < 0 %}negative{% endif %}">
+                                            {{ "%+.1f"|format(pick.price_change_24h|default(0, true)) }}% 24h
+                                        </span>
+                                    </div>
+                                    <div class="pick-metrics">
+                                        <div class="metric-pill">
+                                            <span class="metric-label">Tech</span>
+                                            <span class="metric-value">{{ pick.technical_score|default(0)|int }}</span>
+                                        </div>
+                                        <div class="metric-pill">
+                                            <span class="metric-label">AI</span>
+                                            <span class="metric-value{% if pick.confidence|default(0,true)|float >= 85 %} positive{% endif %}">{{ pick.confidence|default(0,true)|int }}%</span>
+                                        </div>
+                                        <div class="recommendation {% if pick.recommendation %} {{ pick.recommendation|lower }} {% else %} neutral {% endif %}">
+                                            {{ pick.recommendation or 'Strong Conviction' }}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            {% else %}
+                                <div style="text-align:center;color:var(--text-muted);padding:2rem;">Loading picks...</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card council-card">
+                    <div class="card-header">
+                        <span class="card-title">Council Votes</span>
+                        <a href="#" class="card-link">View Proposals →</a>
+                    </div>
+                    <div class="card-body">
+                        <div class="proposal-section">
+                            <div class="proposal-title">Increase emission allocation for Subnet 1B</div>
+                            <div class="proposal-subtitle">Incentive growth for data interoperability</div>
+                            <div class="proposal-timer">Ends in: 2d 14h</div>
+                            <div class="vote-distribution">
+                                <div class="vote-row">
+                                    <div class="vote-percentage favor">71.3%</div>
+                                    <div class="vote-bar"><div class="vote-fill favor" style="width: 71.3%"></div></div>
+                                    <div class="vote-votes">1.2M STAA</div>
+                                </div>
+                                <div class="vote-row">
+                                    <div class="vote-percentage against">18.7%</div>
+                                    <div class="vote-bar"><div class="vote-fill against" style="width: 18.7%"></div></div>
+                                    <div class="vote-votes">342K STAA</div>
+                                </div>
+                                <div class="vote-row">
+                                    <div class="vote-percentage absent">10.0%</div>
+                                    <div class="vote-bar"><div class="vote-fill absent" style="width: 10.0%"></div></div>
+                                    <div class="vote-votes">104K STAA</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="voters-list">
+                            {% if learning_trail.council and learning_trail.council|length > 0 %}
+                                {% for member in learning_trail.council[:5] %}
+                                <div class="voter-item">
+                                    <span class="voter-name">{{ member.name }}</span>
+                                    <span class="voter-percentage">{{ member.confidence|int }}%</span>
+                                    <div class="vote-bar" style="width:120px"><div class="vote-fill favor" style="width: {{ member.confidence }}%"></div></div>
+                                </div>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card spotlight-card">
+                    <div class="card-header">
+                        <span class="card-title">Spotlight</span>
+                        <a href="#" class="card-link">View Details →</a>
+                    </div>
+                    <div class="card-body">
+                        <div class="spotlight-main">
+                            <div class="spotlight-rank">#18</div>
+                            <div class="spotlight-name">Interlink</div>
+                            <div class="spotlight-subtitle">Data Interoperability</div>
+                            <div class="spotlight-metrics">
+                                <div class="spotlight-metric">
+                                    <div class="spotlight-metric-value">$126.4M</div>
+                                    <div class="spotlight-metric-label">Market Cap</div>
+                                </div>
+                                <div class="spotlight-metric">
+                                    <div class="spotlight-metric-value positive">+48.7%</div>
+                                    <div class="spotlight-metric-label">30D Change</div>
+                                </div>
+                                <div class="spotlight-metric">
+                                    <div class="spotlight-metric-value positive">+18.7%</div>
+                                    <div class="spotlight-metric-label">7D Trend</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="spotlight-reasons">
+                            <div class="reason-list">
+                                <div class="reason-item">
+                                    <span class="reason-icon">✓</span>
+                                    Partnership with Chainbase
+                                </div>
+                                <div class="reason-item">
+                                    <span class="reason-icon">✓</span>
+                                    New API integrations
+                                </div>
+                                <div class="reason-item">
+                                    <span class="reason-icon">✓</span>
+                                    Rising developer activity
+                                </div>
+                                <div class="reason-item">
+                                    <span class="reason-icon">✓</span>
+                                    Strong TAI trader growth
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Undervalued Radar</span>
+                        <a href="#" class="card-link">View All →</a>
+                    </div>
+                    <div class="card-body">
+                        <div class="radar-container">
+                            <table class="radar-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Name</th>
+                                        <th>Dev Activity</th>
+                                        <th>Commits</th>
+                                        <th>Mkt Cap</th>
+                                        <th>MC/Dev</th>
+                                        <th>Trend</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% set radar_list = undervalued.subnets if undervalued and undervalued.subnets else simivision.top[:5] if simivision.top else [] %}
+                                    {% for sn in radar_list %}
+                                    <tr>
+                                        <td class="radar-rank">#{{ sn.rank if sn.rank else loop.index }}</td>
+                                        <td>
+                                            <div class="radar-name">{{ sn.name }}</div>
+                                            <div class="radar-subtitle">{{ sn.breakdown[:2]|join(', ') if sn.breakdown else '' }}</div>
+                                        </td>
+                                        <td>
+                                            <span class="dev-stars">★★★★★</span>
+                                            <div class="radar-subtitle">High</div>
+                                        </td>
+                                        <td class="gh-commits">
+                                            <span class="gh-commits-icon">🔄</span>
+                                            <span class="radar-value positive">▲22%</span>
+                                        </td>
+                                        <td class="radar-value">${{ "%.2f"|format(sn.market_cap|default(0, true)) if sn.market_cap else '$N/A' }}</td>
+                                        <td class="mc-dev">{{ "%.3f"|format(sn.score|default(0, true)) }}</td>
+                                        <td class="trend-arrow up">📈</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mindmap-section">
+                <div class="section-title">Learning Loop Feed</div>
+                <div class="feed-item">
+                    <div class="feed-time">Now</div>
+                    <div class="feed-message">Analyzing subnet performance patterns and updating stances...</div>
+                </div>
+                <div class="feed-item">
+                    <div class="feed-time">2m</div>
+                    <div class="feed-message">Adjusting expert weights based on recent vote outcomes.</div>
+                </div>
+                <div class="feed-item">
+                    <div class="feed-time">5m</div>
+                    <div class="feed-message">Recording learning loop updates to persistent memory.</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div class="footer">
+        SimiVision · Powered by <a href="https://taomarketcap.com" target="_blank">taomarketcap.com</a> · Built for the Bittensor ecosystem
+    </div>
+    {% endif %}
 </body>
 </html>
