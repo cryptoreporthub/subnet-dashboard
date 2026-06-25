@@ -27,7 +27,7 @@ os.makedirs("data", exist_ok=True)
 app = Flask(__name__)
 
 _DEPLOY_TIMESTAMP = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
-_APP_VERSION = "3.4.0"
+_APP_VERSION = "3.4.1"
 
 _COOUNCIL_MEMBERS = [
     {"name": "Alpha", "bias": "momentum"},
@@ -206,76 +206,6 @@ def _build_council_votes(top_sn: Dict) -> List[Dict]:
     vol = top_sn.get("volume", 0)
     return [{"name": "Alpha", "vote": "BUY" if chg >= 0 else "SELL", "confidence": min(95, 70 + int(abs(chg))), "rationale": f"Momentum analysis: 24h change is {chg}%"}, {"name": "Beta", "vote": "BUY" if apy > 20 else "HOLD", "confidence": min(95, 65 + int(abs(apy) * 1.5)), "rationale": f"Value assessment: APY at {apy}"}, {"name": "Gamma", "vote": "BUY" if vol > 50000 else "HOLD", "confidence": min(95, 60 + int(vol / 50000)), "rationale": f"Sentiment signal: volume ${vol:,.0f}"}]
 
-def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[Dict], expert_weights: Dict, tech_indicators: Dict) -> Dict:
-    """Build a comprehensive mindmap summary for card-style display."""
-    engine = LearningEngine()
-    stats = engine.get_stats()
-    
-    # Acknowledge current state
-    acknowledgment = f"Analyzing subnet {top_sn.get('netuid', 'N/A')} - {top_sn.get('name', 'Unknown')}"
-    
-    # What was noticed
-    noticed = []
-    if top_sn:
-        emission = top_sn.get("emission", 0)
-        chg = top_sn.get("price_change_24h", 0)
-        apy = top_sn.get("apy", 0)
-        vol = top_sn.get("volume", 0)
-        
-        if emission >= 3:
-            noticed.append(f"High emission rate ({emission:.2f} TAO/day)")
-        if abs(chg) >= 5:
-            noticed.append(f"Significant price movement ({chg:+.1f}% in 24h)")
-        if apy >= 20:
-            noticed.append(f"Strong APY ({apy:.1f}%)")
-        if vol >= 100000:
-            noticed.append(f"High trading volume (${vol:,.0f})")
-    if not noticed:
-        noticed.append("No significant signals detected")
-    
-    # Opinion changes based on learning
-    opinion_changes = []
-    weights = stats.get("expert_weights", {})
-    for expert, weight in weights.items():
-        if weight > 1.2:
-            opinion_changes.append(f"{expert.title()} confidence INCREASED (weight: {weight:.2f})")
-        elif weight < 0.8:
-            opinion_changes.append(f"{expert.title()} confidence DECREASED (weight: {weight:.2f})")
-    if not opinion_changes:
-        opinion_changes.append("No significant opinion changes")
-    
-    # Technical indicators section
-    tech_indicators_display = tech_indicators.get("signals", []) if tech_indicators else ["Insufficient data"]
-    
-    # Calculate overall conviction
-    total_conviction = sum(p.get("conviction", 50) for p in picks[:3])
-    avg_conviction = total_conviction / min(len(picks), 3) if picks else 50
-    
-    return {
-        "acknowledgment": acknowledgment,
-        "noticed": noticed,
-        "opinion_changes": opinion_changes,
-        "technical_indicators": tech_indicators_display,
-        "conviction": {
-            "current": round(avg_conviction, 1),
-            "trend": "stable",
-            "explanation": f"Based on {stats.get('total_records', 0)} historical predictions"
-        },
-        "expert_insights": [
-            {
-                "expert": v.get("name", "Unknown"),
-                "bias": v.get("rationale", "")[:50] + "...",
-                "confidence": v.get("confidence", 50)
-            } for v in council_votes
-        ],
-        "learning_status": {
-            "enabled": True,
-            "records": stats.get("total_records", 0),
-            "last_updated": stats.get("last_updated", "N/A")
-        },
-        "timestamp": datetime.now().isoformat()
-    }
-
 # Root route - render the template with all widgets
 @app.route("/")
 def index():
@@ -285,7 +215,7 @@ def index():
     top_sn = top_emission[0] if top_emission else {}
     council_votes = _build_council_votes(top_sn)
     
-    # Build template data
+    # Build template data matching the template structure
     simivision_data = {
         "meta": {"system_status": "Operative"},
         "top": picks
@@ -405,6 +335,76 @@ def api_feedback():
     engine.record_feedback(expert, vote, confidence, rationale)
     
     return jsonify({"status": "recorded", "expert": expert})
+
+def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[Dict], expert_weights: Dict, tech_indicators: Dict) -> Dict:
+    """Build a comprehensive mindmap summary for card-style display."""
+    engine = LearningEngine()
+    stats = engine.get_stats()
+    
+    # Acknowledge current state
+    acknowledgment = f"Analyzing subnet {top_sn.get('netuid', 'N/A')} - {top_sn.get('name', 'Unknown')}"
+    
+    # What was noticed
+    noticed = []
+    if top_sn:
+        emission = top_sn.get("emission", 0)
+        chg = top_sn.get("price_change_24h", 0)
+        apy = top_sn.get("apy", 0)
+        vol = top_sn.get("volume", 0)
+        
+        if emission >= 3:
+            noticed.append(f"High emission rate ({emission:.2f} TAO/day)")
+        if abs(chg) >= 5:
+            noticed.append(f"Significant price movement ({chg:+.1f}% in 24h)")
+        if apy >= 20:
+            noticed.append(f"Strong APY ({apy:.1f}%)")
+        if vol >= 100000:
+            noticed.append(f"High trading volume (${vol:,.0f})")
+    if not noticed:
+        noticed.append("No significant signals detected")
+    
+    # Opinion changes based on learning
+    opinion_changes = []
+    weights = stats.get("expert_weights", {})
+    for expert, weight in weights.items():
+        if weight > 1.2:
+            opinion_changes.append(f"{expert.title()} confidence INCREASED (weight: {weight:.2f})")
+        elif weight < 0.8:
+            opinion_changes.append(f"{expert.title()} confidence DECREASED (weight: {weight:.2f})")
+    if not opinion_changes:
+        opinion_changes.append("No significant opinion changes")
+    
+    # Technical indicators section
+    tech_indicators_display = tech_indicators.get("signals", []) if tech_indicators else ["Insufficient data"]
+    
+    # Calculate overall conviction
+    total_conviction = sum(p.get("conviction", 50) for p in picks[:3])
+    avg_conviction = total_conviction / min(len(picks), 3) if picks else 50
+    
+    return {
+        "acknowledgment": acknowledgment,
+        "noticed": noticed,
+        "opinion_changes": opinion_changes,
+        "technical_indicators": tech_indicators_display,
+        "conviction": {
+            "current": round(avg_conviction, 1),
+            "trend": "stable",
+            "explanation": f"Based on {stats.get('total_records', 0)} historical predictions"
+        },
+        "expert_insights": [
+            {
+                "expert": v.get("name", "Unknown"),
+                "bias": v.get("rationale", "")[:50] + "...",
+                "confidence": v.get("confidence", 50)
+            } for v in council_votes
+        ],
+        "learning_status": {
+            "enabled": True,
+            "records": stats.get("total_records", 0),
+            "last_updated": stats.get("last_updated", "N/A")
+        },
+        "timestamp": datetime.now().isoformat()
+    }
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
