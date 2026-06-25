@@ -1,94 +1,213 @@
-<!-- SimiVision v2.0 - Enhanced breakdown deployment -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SimiVision — Subnet Dashboard</title>
+  <meta name="description" content="Live intelligence for the Bittensor subnet economy.">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/simivision.css">
+</head>
+<body>
+  <!-- Top Navigation Bar -->
+  <nav class="top-nav">
+    <button class="hamburger" id="sidebarToggle" aria-label="Toggle sidebar">
+      <span></span><span></span><span></span>
+    </button>
+    <a href="/" class="nav-logo">SimiVision</a>
+    <span class="nav-status">
+      <span class="live-dot"></span>
+      {{ simivision.meta.system_status or 'Operative' }}
+    </span>
+  </nav>
 
-# Subnet Pulse
+  <div class="dashboard">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <h2>Subnets</h2>
+        <span class="live-badge">Live</span>
+      </div>
+      <nav class="ticker-list">
+        {% for pick in simivision.top %}
+        <a href="#" class="ticker-item">
+          <span>#{{ pick.rank }} {{ pick.name }}</span>
+          <span class="emission">{{ "%.2f"|format(pick.emission|default(0, true)) }} TAO</span>
+        </a>
+        {% endfor %}
+        {% set h = summary.highlights %}
+        {% if h.top_emitter %}
+        {% for sn in h.top_emitter %}
+        <a href="#" class="ticker-item">
+          <span>#{{ sn.netuid }} {{ sn.name }}</span>
+          <span class="emission">{{ "%.2f"|format(sn.emission|default(0, true)) }} TAO</span>
+        </a>
+        {% endfor %}
+        {% endif %}
+      </nav>
+    </aside>
 
-Live Bittensor Intelligence · live from taomarketcap.com
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- SimiVision Picks Section -->
+      <section class="section">
+        <div class="section-header">
+          <h2>SimiVision Picks</h2>
+          <span class="live-badge">Live</span>
+        </div>
 
-## SimiVision
+        {% if simivision.top and simivision.top|length > 0 %}
+        <div class="picks-grid">
+          {% for pick in simivision.top %}
+          <div class="pick-card {% if pick.rank == 1 %}pick-hero{% endif %}">
+            <div class="pick-card-header">
+              <span class="pick-rank">#{{ pick.rank }}</span>
+              <span class="badge {{ 'badge-buy' if pick.recommendation == 'BUY' else 'badge-hold' }}">{{ pick.recommendation }}</span>
+            </div>
+            <h3 class="pick-name">{{ pick.name }}</h3>
+            <div class="pick-conviction-ring">
+              <svg viewBox="0 0 36 36" class="conviction-svg">
+                <path class="conviction-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <path class="conviction-fill" stroke-dasharray="{{ pick.conviction }}, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                <text x="18" y="20.5" class="conviction-text">{{ pick.conviction|int }}%</text>
+              </svg>
+            </div>
+            <div class="pick-metrics">
+              <div class="metric">
+                <span class="metric-label">Emission</span>
+                <span class="metric-value">{{ "%.2f"|format(pick.emission|default(0, true)) }} TAO</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">24h</span>
+                <span class="metric-value {{ 'up' if pick.price_change_24h|default(0) >= 0 else 'down' }}">{{ "%.1f"|format(pick.price_change_24h|default(0, true)) }}%</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">APY</span>
+                <span class="metric-value">{{ "%.2f"|format(pick.apy|default(0, true)) }}%</span>
+              </div>
+            </div>
+            {% if pick.breakdown and pick.breakdown|length > 0 %}
+            <ul class="pick-breakdown">
+              {% for point in pick.breakdown[:3] %}
+              <li>{{ point }}</li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+            {% if pick.risk_flags and pick.risk_flags|length > 0 %}
+            <div class="risk-tags">
+              {% for flag in pick.risk_flags %}
+              <span class="risk-tag">{{ flag }}</span>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+          <p>No SimiVision picks available. The council is convening…</p>
+        </div>
+        {% endif %}
+      </section>
 
-{{ simivision.meta.system_status or 'Operative' }}
+      <!-- Spotlight Section -->
+      <section class="section">
+        <div class="section-header">
+          <h2>Spotlight</h2>
+        </div>
+        {% set h = summary.highlights %}
+        <div class="spotlight-grid">
+          {% if h.top_emitter and h.top_emitter[0] %}
+          <div class="spotlight-card accent-cyan">
+            <span class="spotlight-label">Top Emitter</span>
+            <span class="spotlight-value">{{ h.top_emitter[0].name }}</span>
+            <span class="spotlight-sub">{{ "%.3f"|format(h.top_emitter[0].emission|default(0, true)) }} TAO</span>
+          </div>
+          {% endif %}
+          {% if h.top_apy and h.top_apy[0] %}
+          <div class="spotlight-card accent-violet">
+            <span class="spotlight-label">Highest APY</span>
+            <span class="spotlight-value">{{ h.top_apy[0].name }}</span>
+            <span class="spotlight-sub">{{ "%.2f"|format((h.top_apy[0].apy|default(0, true)) * 100) }}%</span>
+          </div>
+          {% endif %}
+          {% if h.top_emitter and h.top_emitter[0] %}
+          <div class="spotlight-card status-active">
+            <span class="spotlight-label">Status</span>
+            <span class="spotlight-value">Operational</span>
+            <span class="spotlight-sub">{{ simivision.meta.system_status or 'Active' }}</span>
+          </div>
+          {% endif %}
+        </div>
+      </section>
 
-{% if simivision.top and simivision.top|length > 0 %}
+      <!-- Council Section -->
+      <section class="section">
+        <div class="section-header">
+          <h2>Council</h2>
+          <span class="live-badge">Live</span>
+        </div>
+        {% if learning_trail.council and learning_trail.council|length > 0 %}
+        <div class="council-grid">
+          {% for member in learning_trail.council %}
+          <div class="council-card">
+            <div class="council-avatar">{{ member.name[0] }}</div>
+            <div class="council-body">
+              <div class="council-top">
+                <h4>{{ member.name }}</h4>
+                <span class="council-vote {{ 'vote-buy' if member.vote == 'BUY' else 'vote-sell' if member.vote == 'SELL' else 'vote-hold' }}">{{ member.vote }}</span>
+                <span class="council-confidence">{{ member.confidence|int }}%</span>
+              </div>
+              {% if member.rationale %}
+              <p class="council-rationale">{{ member.rationale[:120] }}{% if member.rationale|length > 120 %}...{% endif %}</p>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+          <p>Council deliberation in progress. Check back shortly.</p>
+        </div>
+        {% endif %}
+      </section>
 
-{% for pick in simivision.top %}
+      <footer class="footer">
+        <p>SimiVision &middot; Powered by <strong>taomarketcap.com</strong> &middot; Built for the Bittensor ecosystem.</p>
+      </footer>
+    </main>
+  </div>
 
-### #{{ pick.rank }}
+  <!-- Overlay for mobile sidebar -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-{{ pick.name }} {{ pick.conviction|int }}% conviction {{ pick.recommendation }}
-
-**Why {{ pick.name }}?**
-
-* {{ pick.breakdown[0] }}
-* {{ pick.breakdown[1] }}
-* {{ pick.breakdown[2] }}
-{% if pick.breakdown|length > 3 %}
-* {{ pick.breakdown[3] }}
-{% endif %}
-
-**Signals:**
-• Emission: {{ "%.2f"|format(pick.emission|default(0, true)) }} TAO/day
-• 24h Change: {{ "%.1f"|format(pick.price_change_24h|default(0, true)) }}%
-• APY: {{ "%.2f"|format(pick.apy|default(0, true)) }}%
-{% if pick.metrics.social_mentions and pick.metrics.social_mentions > 0 %}
-• Social: {{ "%d"|format(pick.metrics.social_mentions) }} mentions
-{% endif %}
-{% if pick.risk_flags and pick.risk_flags|length > 0 %}
-
-⚠️ Risk: {{ pick.risk_flags|join(", ") }}
-{% endif %}
-
-
-{% endfor %}
-
-{% else %}
-
-No SimiVision picks available. The panel will refresh automatically.
-
-{% endif %}
-
-
-## Learning Trail
-
-{% if learning_trail.council and learning_trail.council|length > 0 %}
-
-{% for member in learning_trail.council %}
-
-#### {{ member.name }}
-
-{{ member.vote }} {{ member.confidence|int }}% confidence {% if member.rationale %}
-{{ member.rationale }}
-
-{% endif %}
-
-{% endfor %}
-
-{% else %}
-Council deliberation in progress. Check back shortly.
-
-{% endif %}
-
-## Spotlight
-
-{% set h = summary.highlights %}
-{% if h.top_emission and h.top_emission[0] %}
-
-### Top Emitter
-
-#### {{ h.top_emission[0].name }}
-
-{{ "%.3f"|format(h.top_emission[0].emission|default(0, true)) }} TAO
-
-{% endif %}
-{% if h.top_apy and h.top_apy[0] %}
-
-### Highest APY
-
-#### {{ h.top_apy[0].name }}
-
-{{ "%.2f"|format((h.top_apy[0].apy|default(0, true)) * 100) }}%
-
-{% endif %}
-
----
-
-Subnet Pulse · Powered by **taomarketcap.com** · Built for the Bittensor ecosystem.
+  <script>
+    (function() {
+      var toggle = document.getElementById('sidebarToggle');
+      var sidebar = document.getElementById('sidebar');
+      var overlay = document.getElementById('sidebarOverlay');
+      if (toggle && sidebar && overlay) {
+        function openSidebar() {
+          sidebar.classList.add('active');
+          overlay.classList.add('active');
+          document.body.style.overflow = 'hidden';
+        }
+        function closeSidebar() {
+          sidebar.classList.remove('active');
+          overlay.classList.remove('active');
+          document.body.style.overflow = '';
+        }
+        toggle.addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (sidebar.classList.contains('active')) {
+            closeSidebar();
+          } else {
+            openSidebar();
+          }
+        });
+        overlay.addEventListener('click', closeSidebar);
+      }
+    })();
+  </script>
+</body>
+</html>

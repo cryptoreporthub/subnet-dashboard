@@ -5,7 +5,7 @@ import os
 import sys
 from datetime import datetime
 from typing import Any, Dict, List
-from flask import Flask, jsonify, make_response, request
+from flask import Flask, jsonify, make_response, request, render_template
 
 # Add the current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -179,6 +179,77 @@ def _build_council_votes(top_sn: Dict) -> List[Dict]:
     vol = top_sn.get("volume", 0)
     return [{"name": "Alpha", "vote": "BUY" if chg >= 0 else "SELL", "confidence": min(95, 70 + int(abs(chg))), "rationale": f"Momentum analysis: 24h change is {chg}%"}, {"name": "Beta", "vote": "BUY" if apy > 20 else "HOLD", "confidence": min(95, 65 + int(abs(apy) * 1.5)), "rationale": f"Value assessment: APY at {apy}"}, {"name": "Gamma", "vote": "BUY" if vol > 50000 else "HOLD", "confidence": min(95, 60 + int(vol / 50000)), "rationale": f"Sentiment signal: volume ${vol:,.0f}"}]
 
+def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[Dict], expert_weights: Dict, tech_indicators: Dict) -> Dict:
+    """Build a comprehensive mindmap summary for card-style display."""
+    engine = LearningEngine()
+    stats = engine.get_stats()
+    
+    # Acknowledge current state
+    acknowledgment = f"Analyzing subnet {top_sn.get('netuid', 'N/A')} - {top_sn.get('name', 'Unknown')}"
+    
+    # What was noticed
+    noticed = []
+    if top_sn:
+        emission = top_sn.get("emission", 0)
+        chg = top_sn.get("price_change_24h", 0)
+        apy = top_sn.get("apy", 0)
+        vol = top_sn.get("volume", 0)
+        
+        if emission >= 3:
+            noticed.append(f"High emission rate ({emission:.2f} TAO/day)")
+        if abs(chg) >= 5:
+            noticed.append(f"Significant price movement ({chg:+.1f}% in 24h)")
+        if apy >= 20:
+            noticed.append(f"Strong APY ({apy:.1f}%)")
+        if vol >= 100000:
+            noticed.append(f"High trading volume (${vol:,.0f})")
+    if not noticed:
+        noticed.append("No significant signals detected")
+    
+    # Opinion changes based on learning
+    opinion_changes = []
+    weights = stats.get("expert_weights", {})
+    for expert, weight in weights.items():
+        if weight > 1.2:
+            opinion_changes.append(f"{expert.title()} confidence INCREASED (weight: {weight:.2f})")
+        elif weight < 0.8:
+            opinion_changes.append(f"{expert.title()} confidence DECREASED (weight: {weight:.2f})")
+    if not opinion_changes:
+        opinion_changes.append("No significant opinion changes")
+    
+    # Technical indicators section
+    tech_indicators_display = tech_indicators.get("signals", []) if tech_indicators else ["Insufficient data"]
+    
+    # Calculate overall conviction
+    total_conviction = sum(p.get("conviction", 50) for p in picks[:3])
+    avg_conviction = total_conviction / min(len(picks), 3) if picks else 50
+    
+    return {
+        "acknowledgment": acknowledgment,
+        "noticed": noticed,
+        "opinion_changes": opinion_changes,
+        "technical_indicators": tech_indicators_display,
+        "conviction": {
+            "current": round(avg_conviction, 1),
+            "trend": "stable",
+            "explanation": f"Based on {stats.get('total_records', 0)} historical predictions"
+        },
+        "expert_insights": [
+            {
+                "expert": v.get("name", "Unknown"),
+                "bias": v.get("rationale", "")[:50] + "...",
+                "confidence": v.get("confidence", 50)
+            } for v in council_votes
+        ],
+        "learning_status": {
+            "enabled": True,
+            "records": stats.get("total_records", 0),
+            "last_updated": stats.get("last_updated", "N/A")
+        },
+        "timestamp": datetime.now().isoformat()
+    }
+
+# Root route - render template with all widgets
 @app.route("/")
 def index():
     subnets = get_dynamic_subnets()
@@ -187,173 +258,28 @@ def index():
     top_sn = top_emission[0] if top_emission else {}
     council_votes = _build_council_votes(top_sn)
     
-    # Mobile-first dark dashboard HTML
-    html = '''<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Subnet Dashboard</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-            background: #0a0a0a; 
-            color: #e0e0e0; 
-            line-height: 1.6;
-        }
-        .container { max-width: 1200px; margin: 0 auto; padding: 16px; }
-        header { 
-            display: flex; 
-            align-items: center; 
-            justify-content: space-between; 
-            padding: 12px 16px; 
-            border-bottom: 1px solid #1a1a1a; 
-            margin-bottom: 20px;
-        }
-        .logo { 
-            font-size: 20px; 
-            font-weight: 700; 
-            background: linear-gradient(90deg, #006600, #003300, #000000);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .status { font-size: 12px; color: #00ff88; }
-        .card { 
-            background: #111111; 
-            border-radius: 12px; 
-            padding: 16px; 
-            margin-bottom: 16px; 
-            border: 1px solid #1a1a1a;
-        }
-        .card h2 { 
-            font-size: 16px; 
-            color: #00d4ff; 
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .pick { 
-            background: #1a1a1a; 
-            border-radius: 8px; 
-            padding: 12px; 
-            margin-bottom: 12px;
-            border-left: 3px solid #00d4ff;
-        }
-        .pick:nth-child(1) { border-left-color: #00ff88; }
-        .pick:nth-child(2) { border-left-color: #ffaa00; }
-        .pick:nth-child(3) { border-left-color: #ff6600; }
-        .pick-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .pick-title { font-weight: 600; }
-        .conviction { font-size: 12px; background: #333; padding: 2px 8px; border-radius: 4px; }
-        .pick ul { font-size: 13px; color: #aaa; margin-left: 16px; margin-bottom: 8px; }
-        .pick ul li { margin: 4px 0; }
-        .metrics { font-size: 12px; color: #666; margin-top: 8px; }
-        .council-member { 
-            display: inline-block; 
-            background: #1a1a1a; 
-            padding: 10px; 
-            border-radius: 8px; 
-            margin: 8px; 
-            min-width: 120px;
-        }
-        .council-member h3 { font-size: 14px; margin-bottom: 4px; }
-        .council-member p { font-size: 12px; color: #888; }
-        .spotlight { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .spotlight-item { text-align: center; padding: 8px; background: #1a1a1a; border-radius: 8px; }
-        .spotlight-item strong { color: #00d4ff; display: block; margin-bottom: 4px; }
-        .footer { text-align: center; padding: 20px; color: #444; font-size: 12px; margin-top: 20px; }
-        @media (min-width: 768px) {
-            .container { padding: 24px; }
-            .dashboard-grid { display: grid; grid-template-columns: 1fr 300px; gap: 24px; }
-            .main-content { display: grid; gap: 16px; }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <header>
-            <div class="logo"># Subnet Pulse</div>
-            <div class="status">● Operational</div>
-        </header>
-        
-        <div class="main-content">
-            <div class="card">
-                <h2>## SimiVision</h2>
-'''
+    simivision_data = {
+        "meta": {"system_status": "Operative"},
+        "top": picks
+    }
     
-    if picks:
-        for pick in picks:
-            html += f'''
-                <div class="pick">
-                    <div class="pick-header">
-                        <span class="pick-title">#{pick['rank']} {pick['name']}</span>
-                        <span class="conviction">{pick['conviction']}% {pick['recommendation']}</span>
-                    </div>
-                    <p style="font-size: 13px; margin-bottom: 8px;"><strong>Why {pick['name']}?</strong></p>
-                    <ul>
-'''
-            for item in pick['breakdown']:
-                html += f"                        <li>{item}</li>\n"
-            html += f'''                    </ul>
-                    <div class="metrics">
-                        Emission: {pick['emission']:.2f} TAO | 24h: {pick['price_change_24h']:+.1f}% | APY: {pick['apy']:.2f}%
-                    </div>
-                </div>
-'''
-    else:
-        html += "                <p>No SimiVision picks available.</p>\n"
+    learning_trail_data = {
+        "council": council_votes
+    }
     
-    html += '''            </div>
-            
-            <div class="card">
-                <h2>## Learning Trail</h2>
-'''
+    highlights_data = {
+        "top_emission": top_emission[:3],
+        "top_apy": sorted(top_emission, key=lambda x: x.get("apy", 0), reverse=True)[:1]
+    }
     
-    if council_votes:
-        for member in council_votes:
-            html += f'''
-                <div class="council-member">
-                    <h3>{member['name']}</h3>
-                    <p>{member['vote']} {member['confidence']}%</p>
-                    <small>{member['rationale'][:40]}...</small>
-                </div>
-'''
-    else:
-        html += "                <p>Council deliberation in progress.</p>\n"
+    summary_data = {
+        "highlights": highlights_data
+    }
     
-    html += f'''
-            </div>
-            
-            <div class="card">
-                <h2>## Spotlight</h2>
-                <div class="spotlight">
-                    <div class="spotlight-item">
-                        <strong>Top Emitter</strong>
-                        <span>{picks[0]['name'] if picks else 'N/A'}</span>
-                        <span>({picks[0]['emission']:.2f} TAO)</span>
-                    </div>
-                    <div class="spotlight-item">
-                        <strong>Highest APY</strong>
-                        <span>{picks[0]['name'] if picks else 'N/A'}</span>
-                        <span>({picks[0]['apy']:.1f}%)</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="footer">
-            Subnet Pulse · Powered by <strong>taomarketcap.com</strong> · Built for the Bittensor ecosystem.
-        </div>
-    </div>
-</body>
-</html>'''
-    
-    response = make_response(html)
-    response.headers['Content-Type'] = 'text/html; charset=utf-8'
-    return response
+    return render_template("index.html",
+                          simivision=simivision_data,
+                          learning_trail=learning_trail_data,
+                          summary=summary_data)
 
 @app.route("/health")
 def health():
