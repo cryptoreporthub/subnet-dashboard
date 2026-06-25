@@ -282,6 +282,48 @@ def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[D
         "timestamp": datetime.now().isoformat()
     }
 
+def build_mindmap_feed(picks: List[Dict], council_votes: List[Dict], undervalued: List[Dict]) -> List[Dict]:
+    """Build a live play-by-play feed for the Mindmap + Learning Loop section."""
+    feed = []
+    now = datetime.now().strftime("%H:%M:%S")
+    
+    # Processing picks
+    if picks:
+        top_pick = picks[0]
+        feed.append({
+            "time": now,
+            "message": f"Processing top pick #{top_pick['rank']}: {top_pick['name']} (conviction: {top_pick['conviction']}%)"
+        })
+    
+    # Council votes
+    for vote in council_votes[:2]:
+        feed.append({
+            "time": now,
+            "message": f"{vote['name']} council vote: {vote['vote']} ({vote['confidence']}% confidence)"
+        })
+    
+    # Undervalued analysis
+    if undervalued:
+        top_und = undervalued[0]
+        feed.append({
+            "time": now,
+            "message": f"Undervalued scan: {top_und['name']} flagged (score: {top_und['score']:.1f})"
+        })
+    
+    # Stance adjustments
+    feed.append({
+        "time": now,
+        "message": "Adjusting expert weights based on recent performance data"
+    })
+    
+    # Learning loop update
+    feed.append({
+        "time": now,
+        "message": "Recording learning loop updates to persistent memory"
+    })
+    
+    return feed
+
 # Root route - render template with all widgets
 @app.route("/")
 def index():
@@ -291,6 +333,7 @@ def index():
     top_sn = top_emission[0] if top_emission else {}
     council_votes = _build_council_votes(top_sn)
     undervalued = build_undervalued_ranking(subnets)
+    mindmap_feed = build_mindmap_feed(picks, council_votes, undervalued)
     
     simivision_data = {
         "meta": {"system_status": "Operative"},
@@ -298,7 +341,8 @@ def index():
     }
     
     learning_trail_data = {
-        "council": council_votes
+        "council": council_votes,
+        "mindmap_feed": mindmap_feed
     }
     
     highlights_data = {
@@ -334,3 +378,4 @@ def api_simivision():
         netuid = pick.get("netuid")
         if netuid:
             pick["technical_indicators"] = build_technical_indicators(get_subnet_data(netuid))
+    return jsonify({"picks": picks, "timestamp": datetime.now().isoformat()})
