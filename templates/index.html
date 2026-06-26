@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SimiVision — Subnet Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #060914; --bg-surface: #0B1021; --bg-elevated: #111733;
+      --text-primary: #F8FAFC; --text-secondary: #94A3B8; --text-muted: #64748B;
+      --accent-green: #00ff88; --accent-green-dark: #00cc6a; --accent-cyan: #22D3EE;
+      --accent-violet: #A78BFA; --accent-purple: #8b5cf6; --accent-red: #ff4d6d;
+      --accent-amber: #fbbf24; --border-subtle: rgba(148, 163, 184, 0.14);
+      --border-glow: rgba(0, 255, 136, 0.35);
+      --font-ui: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; min-height: 100%; }
+    body {
+      font-family: var(--font-ui);
+      background:
+        radial-gradient(circle at 50% 0%, rgba(0, 255, 136, 0.06) 0%, transparent 50%),
+        radial-gradient(circle at 85% 90%, rgba(139, 92, 246, 0.06) 0%, transparent 45%),
+        linear-gradient(180deg, #020617 0%, #0B1021 60%, #111733 100%);
+      background-attachment: fixed; color: var(--text-primary); line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
+    header.top { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand .logo { width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg, var(--accent-green), var(--accent-violet)); box-shadow: 0 0 24px rgba(0, 255, 136, 0.35); display: grid; place-items: center; font-weight: 800; color: #020617; }
+    .brand h1 { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; background: linear-gradient(135deg, var(--accent-green), var(--accent-cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .brand p { margin: 0; color: var(--text-muted); font-size: 0.8rem; }
+    .status-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-secondary); }
+    .pill { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border-subtle); background: rgba(17, 23, 51, 0.6); backdrop-filter: blur(6px); }
+    .pill .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); margin-right: 6px; box-shadow: 0 0 8px var(--accent-green); }
+    .pill .dot.stale { background: var(--accent-amber); box-shadow: 0 0 8px var(--accent-amber); }
+    .grid { display: grid; gap: 18px; }
+    .grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+    @media (max-width: 980px) { .grid.cols-3, .grid.cols-2 { grid-template-columns: 1fr; } }
+    .panel { background: linear-gradient(180deg, rgba(17,23,51,0.7), rgba(11,16,33,0.7)); border: 1px solid var(--border-subtle); border-radius: 16px; padding: 20px; backdrop-filter: blur(8px); }
+    .panel h2 { margin: 0 0 14px; font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; }
+    .panel h2 .tag { font-size: 0.65rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-green); border: 1px solid var(--border-glow); padding: 2px 8px; border-radius: 999px; background: rgba(0,255,136,0.06); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    thead th { text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 8px 10px; border-bottom: 1px solid var(--border-subtle); }
+    tbody td { padding: 10px; border-bottom: 1px solid rgba(148,163,184,0.07); }
+    tbody tr:hover { background: rgba(0,255,136,0.04); }
+    .sn-name { font-weight: 600; color: var(--text-primary); }
+    .sn-uid { font-family: var(--font-mono); color: var(--text-muted); font-size: 0.75rem; }
+    .num { font-family: var(--font-mono); text-align: right; }
+    .pos { color: var(--accent-green); } .neg { color: var(--accent-red); }
+    .badge-rec { font-size: 0.68rem; font-weight: 700; padding: 2px 8px; border-radius: 6px; letter-spacing: 0.04em; }
+    .rec-buy { color: var(--accent-green); background: rgba(0,255,136,0.1); border: 1px solid var(--border-glow); }
+    .rec-hold { color: var(--accent-amber); background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3); }
+    .rec-watch { color: var(--accent-cyan); background: rgba(34,211,238,0.1); border: 1px solid rgba(34,211,238,0.3); }
+    .pick { border: 1px solid var(--border-subtle); border-radius: 12px; padding: 16px; background: rgba(11,16,33,0.6); position: relative; overflow: hidden; }
+    .pick.top { border-color: var(--border-glow); box-shadow: 0 0 24px rgba(0,255,136,0.1); }
+    .pick .rank { position: absolute; top: 12px; right: 12px; font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-muted); }
+    .pick h3 { margin: 0 0 4px; font-size: 1rem; }
+    .pick .meta { color: var(--text-muted); font-size: 0.75rem; margin-bottom: 10px; }
+    .pick .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .metric { background: rgba(17,23,51,0.5); border-radius: 8px; padding: 8px 10px; }
+    .metric label { display: block; font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .metric span { font-family: var(--font-mono); font-weight: 600; }
+    .conviction-bar { height: 6px; border-radius: 3px; background: rgba(148,163,184,0.15); margin-top: 10px; overflow: hidden; }
+    .conviction-bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-green), var(--accent-cyan)); }
+    .kv { display: grid; gap: 6px; }
+    .kv-row { display: flex; justify-content: space-between; gap: 12px; font-size: 0.85rem; }
+    .kv-row .k { color: var(--text-muted); } .kv-row .v { font-family: var(--font-mono); color: var(--text-primary); }
+    .list { margin: 8px 0 0; padding-left: 18px; }
+    .list li { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 4px; }
+    .expert-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .expert-row .name { width: 90px; font-size: 0.8rem; color: var(--text-secondary); text-transform: capitalize; }
+    .expert-row .bar { flex: 1; height: 8px; border-radius: 4px; background: rgba(148,163,184,0.12); overflow: hidden; }
+    .expert-row .bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-violet), var(--accent-cyan)); }
+    .expert-row .w { width: 48px; text-align: right; font-family: var(--font-mono); font-size: 0.78rem; }
+    .tokens { display: flex; flex-wrap: wrap; gap: 8px; }
+    .token { font-family: var(--font-mono); font-size: 0.78rem; padding: 6px 12px; border-radius: 8px; background: rgba(0,255,136,0.06); border: 1px solid var(--border-glow); color: var(--accent-green); text-transform: uppercase; letter-spacing: 0.04em; }
+    .chat-box { display: flex; flex-direction: column; gap: 10px; height: 320px; border: 1px solid var(--border-subtle); border-radius: 12px; padding: 14px; background: rgba(6,9,20,0.6); overflow-y: auto; }
+    .msg { max-width: 85%; padding: 10px 12px; border-radius: 12px; font-size: 0.85rem; line-height: 1.45; }
+    .msg.user { align-self: flex-end; background: linear-gradient(135deg, var(--accent-green-dark), var(--accent-green)); color: #020617; }
+    .msg.bot { align-self: flex-start; background: rgba(17,23,51,0.9); border: 1px solid var(--border-subtle); color: var(--text-primary); }
+    .msg.bot .ctx { display: block; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-subtle); font-size: 0.72rem; color: var(--text-muted); }
+    .chat-input { display: flex; gap: 10px; margin-top: 12px; }
+    .chat-input input { flex: 1; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border-subtle); background: rgba(11,16,33,0.8); color: var(--text-primary); font-family: var(--font-ui); font-size: 0.9rem; outline: none; }
+    .chat-input input:focus { border-color: var(--border-glow); box-shadow: 0 0 0 3px rgba(0,255,136,0.1); }
+    .chat-input button { padding: 12px 20px; border-radius: 10px; border: none; cursor: pointer; font-weight: 700; background: linear-gradient(135deg, var(--accent-green-dark), var(--accent-green)); color: #020617; }
+    .chat-input button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .section-title { font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin: 28px 0 12px; }
+    footer { margin-top: 40px; text-align: center; color: var(--text-muted); font-size: 0.75rem; }
+    .empty { color: var(--text-muted); font-size: 0.85rem; padding: 12px 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">
+        <div class="logo">S</div>
+        <div>
+          <h1>SimiVision Dashboard</h1>
+          <p>Bittensor subnet intelligence · Council + Mindmap + Self-Learning Loop</p>
+        </div>
+      </div>
+      <div class="status-bar">
+        <span class="pill"><span class="dot" id="live-dot"></span><span id="status-source">{{ simivision.meta.source | default('unknown') }}</span></span>
+        <span class="pill" id="status-updated">{{ simivision.meta.updated_at | default('—') }}</span>
+        <span class="pill" id="status-count">{{ simivision.meta.count | default(0) }} subnets</span>
+      </div>
+    </header>
+
+    <div class="section-title">SimiVision Top Picks</div>
+    <div class="grid cols-3" id="picks-grid">
+      {% for pick in simivision.top %}
+      <div class="pick {{ 'top' if pick.rank == 1 else '' }}">
+        <span class="rank">#{{ pick.rank }}</span>
+        <h3>{{ pick.name }} <span class="sn-uid">SN{{ pick.netuid }}</span></h3>
+        <div class="meta">{{ pick.recommendation }} · conviction {{ pick.conviction }}%</div>
+        <div class="metrics">
+          <div class="metric"><label>Emission</label><span>{{ '%.2f'|format(pick.emission|default(0, true)) }} TAO</span></div>
+          <div class="metric"><label>APY</label><span>{{ '%.2f'|format(pick.apy|default(0, true)) }}%</span></div>
+          <div class="metric"><label>24h</label><span class="{{ 'pos' if (pick.price_change_24h|default(0)) >= 0 else 'neg' }}">{{ '%+.2f'|format(pick.price_change_24h|default(0, true)) }}%</span></div>
+          <div class="metric"><label>Rec</label><span class="badge-rec rec-{{ pick.recommendation|lower }}">{{ pick.recommendation }}</span></div>
+        </div>
+        <div class="conviction-bar"><i style="width: {{ pick.conviction }}%"></i></div>
+      </div>
+      {% else %}
+      <div class="empty">No SimiVision picks available. The council is convening…</div>
+      {% endfor %}
+    </div>
+
+    <div class="section-title">Subnet Registry</div>
+    <div class="panel">
+      <h2>Live Subnets <span class="tag">taomarketcap</span></h2>
+      <div style="overflow-x: auto;">
+        <table id="subnet-table">
+          <thead>
+            <tr>
+              <th>Subnet</th><th class="num">Price</th><th class="num">APY</th>
+              <th class="num">24h</th><th class="num">7d</th><th class="num">Emission</th><th class="num">Volume</th>
+            </tr>
+          </thead>
+          <tbody id="subnet-body">
+            {% for sn in subnets %}
+            <tr>
+              <td><div class="sn-name">{{ sn.name }}</div><div class="sn-uid">SN{{ sn.netuid }}</div></td>
+              <td class="num">${{ '%.4f'|format(sn.price|default(0, true)) }}</td>
+              <td class="num">{{ '%.2f'|format(sn.apy|default(0, true)) }}%</td>
+              <td class="num {{ 'pos' if (sn.price_change_24h|default(0)) >= 0 else 'neg' }}">{{ '%+.2f'|format(sn.price_change_24h|default(0, true)) }}%</td>
+              <td class="num {{ 'pos' if (sn.price_change_7d|default(0)) >= 0 else 'neg' }}">{{ '%+.2f'|format(sn.price_change_7d|default(0, true)) }}%</td>
+              <td class="num">{{ '%.2f'|format(sn.emission|default(0, true)) }}</td>
+              <td class="num">${{ '{:,.0f}'.format(sn.volume|default(0, true)) }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="empty">No subnet data available.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section-title">Mindmap &amp; Self-Learning Loop</div>
+    <div class="grid cols-2">
+      <div class="panel">
+        <h2>Mindmap Summary <span class="tag">soul_map</span></h2>
+        <div class="kv">
+          <div class="kv-row"><span class="k">Acknowledgment</span><span class="v" style="text-align:right; max-width:60%;">{{ mindmap.acknowledgment | default('—') }}</span></div>
+          <div class="kv-row"><span class="k">Conviction</span><span class="v">{{ mindmap.conviction.current | default(0) }}% ({{ mindmap.conviction.trend | default('stable') }})</span></div>
+          <div class="kv-row"><span class="k">Learning records</span><span class="v">{{ mindmap.learning_status.records | default(0) }}</span></div>
+        </div>
+        <p style="margin: 12px 0 4px; font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em;">Noticed</p>
+        <ul class="list">
+          {% for n in (mindmap.noticed or []) %}<li>{{ n }}</li>{% else %}<li>No significant signals detected</li>{% endfor %}
+        </ul>
+        <p style="margin: 12px 0 4px; font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em;">Opinion Changes</p>
+        <ul class="list">
+          {% for o in (mindmap.opinion_changes or []) %}<li>{{ o }}</li>{% else %}<li>No significant opinion changes</li>{% endfor %}
+        </ul>
+        <p style="margin: 12px 0 4px; font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em;">Technical Indicators</p>
+        <ul class="list">
+          {% for t in (mindmap.technical_indicators or []) %}<li>{{ t }}</li>{% else %}<li>Insufficient data</li>{% endfor %}
+        </ul>
+      </div>
+
+      <div class="panel">
+        <h2>Learning Stats <span class="tag">self-learning</span></h2>
+        <div class="kv">
+          <div class="kv-row"><span class="k">Total records</span><span class="v">{{ learning_stats.total_records | default(0) }}</span></div>
+          <div class="kv-row"><span class="k">Last updated</span><span class="v">{{ learning_stats.last_updated | default('—') }}</span></div>
+        </div>
+        <p style="margin: 14px 0 8px; font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em;">Council Expert Weights</p>
+        {% for name, weight in (learning_stats.expert_weights or {}).items() %}
+        <div class="expert-row">
+          <span class="name">{{ name }}</span>
+          <span class="bar"><i style="width: {{ (weight * 50)|int }}%"></i></span>
+          <span class="w">{{ '%.2f'|format(weight|default(1.0, true)) }}</span>
+        </div>
+        {% else %}
+        <div class="empty">No expert weights recorded yet. Weights initialize at 1.0 after the first feedback cycle.</div>
+        {% endfor %}
+
+        <p style="margin: 18px 0 8px; font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em;">Rotation Tokens</p>
+        <div class="tokens">
+          {% for tok in rotation_tokens %}<span class="token">{{ tok }}</span>{% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">SimiVision Chat</div>
+    <div class="panel">
+      <h2>Ask SimiVision <span class="tag">LLM · /api/simivision/chat</span></h2>
+      <div class="chat-box" id="chat-box">
+        <div class="msg bot">SimiVision online. I reason over live subnet picks and the Council's learned expert weights. Ask me about top picks, APY, or market trends.</div>
+      </div>
+      <div class="chat-input">
+        <input id="chat-input" type="text" placeholder="e.g. Why is the top pick ranked #1?" autocomplete="off">
+        <button id="chat-send">Send</button>
+      </div>
+    </div>
+
+    <footer>SimiVision · Subnet Dashboard · FastAPI + Jinja2 + vanilla JS · Built for the Bittensor ecosystem.</footer>
+  </div>
+
+  <script>
+    // Vanilla JS auto-refresh: poll /api/subnets every 5 min and update the table + status.
+    const REFRESH_MS = 5 * 60 * 1000;
+
+    function fmt(n, d) { d = d || 2; return (n === null || n === undefined || isNaN(n)) ? '0.00' : Number(n).toFixed(d); }
+    function fmtSigned(n, d) { d = d || 2; const v = Number(n || 0); return (v >= 0 ? '+' : '') + v.toFixed(d) + '%'; }
+    function fmtVol(n) { return Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 }); }
+    function cls(n) { return Number(n || 0) >= 0 ? 'pos' : 'neg'; }
+
+    function renderSubnets(subnets) {
+      const body = document.getElementById('subnet-body');
+      if (!subnets || !subnets.length) {
+        body.innerHTML = '<tr><td colspan="7" class="empty">No subnet data available.</td></tr>';
+        return;
+      }
+      body.innerHTML = subnets.map(function (sn) {
+        return '<tr>' +
+          '<td><div class="sn-name">' + sn.name + '</div><div class="sn-uid">SN' + sn.netuid + '</div></td>' +
+          '<td class="num">$' + fmt(sn.price, 4) + '</td>' +
+          '<td class="num">' + fmt(sn.apy) + '%</td>' +
+          '<td class="num ' + cls(sn.price_change_24h) + '">' + fmtSigned(sn.price_change_24h) + '</td>' +
+          '<td class="num ' + cls(sn.price_change_7d) + '">' + fmtSigned(sn.price_change_7d) + '</td>' +
+          '<td class="num">' + fmt(sn.emission) + '</td>' +
+          '<td class="num">$' + fmtVol(sn.volume) + '</td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    function updateStatus(meta) {
+      if (!meta) return;
+      const src = document.getElementById('status-source');
+      const upd = document.getElementById('status-updated');
+      const cnt = document.getElementById('status-count');
+      const dot = document.getElementById('live-dot');
+      if (src) src.textContent = meta.source || 'unknown';
+      if (upd) upd.textContent = meta.updated_at || '—';
+      if (cnt) cnt.textContent = (meta.count || 0) + ' subnets';
+      if (dot) {
+        const s = String(meta.source || '');
+        dot.classList.toggle('stale', s.indexOf('fallback') !== -1 || s.indexOf('cache') !== -1);
+      }
+    }
+
+    async function refresh() {
+      try {
+        const res = await fetch('/api/subnets', { headers: { 'Accept': 'application/json' } });
+        const data = await res.json();
+        if (data && data.status === 'success') {
+          renderSubnets(data.subnets);
+          updateStatus(data.meta);
+        }
+      } catch (err) {
+        console.warn('Auto-refresh failed:', err);
+      }
+    }
+
+    setInterval(refresh, REFRESH_MS);
+
+    // SimiVision chat — POSTs to /api/simivision/chat
+    const chatBox = document.getElementById('chat-box');
+    const chatInput = document.getElementById('chat-input');
+    const chatSend = document.getElementById('chat-send');
+
+    function addMsg(text, who, ctxHtml) {
+      const el = document.createElement('div');
+      el.className = 'msg ' + who;
+      el.innerHTML = text + (ctxHtml ? '<span class="ctx">' + ctxHtml + '</span>' : '');
+      chatBox.appendChild(el);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    async function sendChat() {
+      const message = chatInput.value.trim();
+      if (!message) return;
+      addMsg(message, 'user');
+      chatInput.value = '';
+      chatSend.disabled = true;
+      addMsg('Thinking…', 'bot');
+      try {
+        const res = await fetch('/api/simivision/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: message })
+        });
+        const data = await res.json();
+        chatBox.lastChild.remove();
+        if (data && data.data) {
+          const ctx = data.data.mindmap_context || {};
+          const ctxHtml = 'LLM: ' + (data.data.llm_used ? 'live' : 'local') +
+            ' · picks: ' + (ctx.top_picks || []).length +
+            ' · records: ' + (ctx.learning_records || 0);
+          addMsg(data.data.reply || '(no reply)', 'bot', ctxHtml);
+        } else {
+          addMsg('SimiVision returned an unexpected response.', 'bot');
+        }
+      } catch (err) {
+        chatBox.lastChild.remove();
+        addMsg('Error contacting SimiVision: ' + err.message, 'bot');
+      } finally {
+        chatSend.disabled = false;
+        chatInput.focus();
+      }
+    }
+
+    chatSend.addEventListener('click', sendChat);
+    chatInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') sendChat(); });
+  </script>
+</body>
+</html>

@@ -8,8 +8,9 @@ from typing import Any, Dict, List
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 # Add the current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -48,6 +49,10 @@ app.add_middleware(
 _static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 if os.path.isdir(_static_dir):
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
+# Jinja2 templates for server-side rendered dashboard
+_templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+templates = Jinja2Templates(directory=_templates_dir)
 
 _APP_VERSION = "3.5.0"
 
@@ -379,19 +384,50 @@ async def api_simivision_chat(request: Request):
 
 
 # ============================================================================
-# FIX: Serve static React dashboard without Jinja2 rendering
+# Root route: server-side rendered Jinja2 dashboard
 # ============================================================================
-@app.get("/")
-def index():
-    """Serve the static React dashboard HTML file directly.
+def get_simivision_data() -> Dict[str, Any]:
+    """Return the SimiVision payload (top picks + meta) for template rendering."""
+    return _safe_simivision_payload()["data"]
 
-    This bypasses Jinja2 template rendering which would cause 500 errors
-    because the React HTML has no {{ template }} variable tags.
+
+def get_mindmap_summary() -> Dict[str, Any]:
+    """Return the mindmap summary (soul_map expert weights + top subnet picks).
+
+    Wired into the evidence -> signal -> decision -> judge -> learning loop via
+    the LearningEngine, which reads data/soul_map.json.
+    """
+    return api_mindmap_summary_safe()["data"]
+
+
+def get_learning_stats() -> Dict[str, Any]:
+    """Return self-learning loop stats (expert weights + record count)."""
+    return api_learning_stats_safe()["data"]
+
+
+@app.get("/")
+async def dashboard(request: Request):
+    """Render the SimiVision dashboard server-side via Jinja2.
+
+    Context flows: server fetches subnets + SimiVision picks + mindmap summary
+    + learning stats -> renders into templates/index.html -> user sees the
+    complete dashboard. Vanilla JS polls /api/subnets every 5 min for refresh.
     """
     try:
-        return FileResponse(os.path.join("templates", "index-react.html"))
+        subnets, _ = _get_subnets_with_source()
+        return templates.TemplateResponse(
+            "index.html",
+            {
+                "request": request,
+                "subnets": subnets,
+                "mindmap": get_mindmap_summary(),
+                "learning_stats": get_learning_stats(),
+                "simivision": get_simivision_data(),
+                "rotation_tokens": _ROTATION_TOKENS,
+            },
+        )
     except Exception as e:
-        logger.error("Error serving React dashboard: %s", e)
+        logger.error("Error rendering dashboard: %s", e)
         return PlainTextResponse(
             f"Internal Server Error: {str(e)}\nSystem status: Not operative",
             status_code=500,
