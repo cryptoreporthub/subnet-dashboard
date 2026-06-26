@@ -25,6 +25,10 @@ os.makedirs("data", exist_ok=True)
 
 app = Flask(__name__)
 
+_APP_VERSION = "3.5.0"
+
+_ROTATION_TOKENS = ["hyperliquid", "vvv", "near", "render", "fetch"]
+
 # ---------------------------------------------------------------------------
 # Fast, fail-safe endpoints
 # These are registered first so they win even if older route definitions below
@@ -197,17 +201,13 @@ def api_learning_stats_safe():
         },
     })
 
-_APP_VERSION = "3.5.0"
-
-_ROTATION_TOKENS = ["hyperliquid", "vvv", "near", "render", "fetch"]
-
 # ============================================================================
 # FIX: Serve static React dashboard without Jinja2 rendering
 # ============================================================================
 @app.route("/")
 def index():
     """Serve the static React dashboard HTML file directly.
-    
+
     This bypasses Jinja2 template rendering which would cause 500 errors
     because the React HTML has no {{ template }} variable tags.
     """
@@ -216,16 +216,14 @@ def index():
     except Exception as e:
         logger.error("Error serving React dashboard: %s", e)
         return f"""
-           
-# Internal Server Error
-
- 
-The dashboard encountered an error: {str(e)}
-
- 
-System status: Not operative
-
-  
+        <html>
+        <head><title>Error</title></head>
+        <body style="background: #020617; color: #fff; padding: 40px; font-family: sans-serif;">
+            <h1 style="color: #ef4444;">Internal Server Error</h1>
+            <p>The dashboard encountered an error: {str(e)}</p>
+            <p>System status: Not operative</p>
+        </body>
+        </html>
         """, 500
 
 def get_dynamic_subnets():
@@ -389,35 +387,44 @@ def build_undervalued_ranking(subnets: List[Dict]) -> List[Dict]:
         apy = sn.get("apy", 0)
         vol = sn.get("volume", 0)
         mc = sn.get("market_cap", 0)
+        # Score: higher is better for undervalued
+        # Prefer: low market cap, high emission, positive or low negative change, decent APY
         score = 0
         if emission > 0:
             score += emission * 10
         if chg > 0:
             score += chg * 3
         elif chg > -10:
-            score += chg
+            score += chg  # small penalty for negative
         if apy > 0:
             score += apy * 0.5
         if vol > 0:
             score += math.log(vol + 1)
         if mc > 0:
-            score -= math.log(mc + 1) * 0.3
+            score -= math.log(mc + 1) * 0.3  # penalize high market cap
         ranked.append({**sn, "score": round(score, 2)})
+    # Sort by score descending and take top 10
     ranked.sort(key=lambda x: x.get("score", 0), reverse=True)
     for i, sn in enumerate(ranked[:10]):
         sn["rank"] = i + 1
     return ranked[:10]
 
 def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[Dict], expert_weights: Dict, tech_indicators: Dict) -> Dict:
+    """Build a comprehensive mindmap summary for card-style display."""
     engine = LearningEngine()
     stats = engine.get_stats()
+    
+    # Acknowledge current state
     acknowledgment = f"Analyzing subnet {top_sn.get('netuid', 'N/A')} - {top_sn.get('name', 'Unknown')}"
+    
+    # What was noticed
     noticed = []
     if top_sn:
         emission = top_sn.get("emission", 0)
         chg = top_sn.get("price_change_24h", 0)
         apy = top_sn.get("apy", 0)
         vol = top_sn.get("volume", 0)
+        
         if emission >= 3:
             noticed.append(f"High emission rate ({emission:.2f} TAO/day)")
         if abs(chg) >= 5:
@@ -428,6 +435,8 @@ def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[D
             noticed.append(f"High trading volume (${vol:,.0f})")
     if not noticed:
         noticed.append("No significant signals detected")
+    
+    # Opinion changes based on learning
     opinion_changes = []
     weights = stats.get("expert_weights", {})
     for expert, weight in weights.items():
@@ -437,9 +446,14 @@ def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[D
             opinion_changes.append(f"{expert.title()} confidence DECREASED (weight: {weight:.2f})")
     if not opinion_changes:
         opinion_changes.append("No significant opinion changes")
+    
+    # Technical indicators section
     tech_indicators_display = tech_indicators.get("signals", []) if tech_indicators else ["Insufficient data"]
+    
+    # Calculate overall conviction
     total_conviction = sum(p.get("conviction", 50) for p in picks[:3])
     avg_conviction = total_conviction / min(len(picks), 3) if picks else 50
+    
     return {
         "acknowledgment": acknowledgment,
         "noticed": noticed,
@@ -465,4 +479,44 @@ def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[D
         "timestamp": datetime.now().isoformat()
     }
 
-def build_mind
+def build_mindmap_feed(picks: List[Dict], council_votes: List[Dict], undervalued: List[Dict]) -> List[Dict]:
+    """Build a live play-by-play feed for the Mindmap + Learning Loop section."""
+    feed = []
+    now = datetime.now().strftime("%H:%M:%S")
+    
+    # Processing picks
+    if picks:
+        top_pick = picks[0]
+        feed.append({
+            "time": now,
+            "message": f"Processing top pick #{top_pick['rank']}: {top_pick['name']} (conviction: {top_pick['conviction']}%)"
+        })
+    
+    # Council votes
+    for vote in council_votes[:2]:
+        feed.append({
+            "time": now,
+            "message": f"{vote['name']} council vote: {vote['vote']} ({vote['confidence']}% confidence)"
+        })
+    
+    # Undervalued analysis
+    if undervalued:
+        top_und = undervalued[0]
+        feed.append({
+            "time": now,
+            "message": f"Undervalued scan: {top_und['name']} flagged (score: {top_und['score']:.1f})"
+        })
+    
+    # Stance adjustments
+    feed.append({
+        "time": now,
+        "message": "Adjusting expert weights based on recent performance data"
+    })
+    
+    # Learning loop update
+    feed.append({
+        "time": now,
+        "message": "Recording learning loop updates to persistent memory"
+    })
+    
+    return feed
