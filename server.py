@@ -416,9 +416,9 @@ async def dashboard(request: Request):
     try:
         subnets, _ = _get_subnets_with_source()
         return templates.TemplateResponse(
+            request,
             "index.html",
             {
-                "request": request,
                 "subnets": subnets,
                 "mindmap": get_mindmap_summary(),
                 "learning_stats": get_learning_stats(),
