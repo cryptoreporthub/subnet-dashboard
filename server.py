@@ -1312,6 +1312,98 @@ def _compute_staking_analytics(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Momentum charts: treemap (volume/magnitude x gain/loss) + radar (top 3 subnets)
+# ---------------------------------------------------------------------------
+def _build_momentum_charts(
+    subnets: List[Dict[str, Any]], picks: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """Build the dual-chart momentum section data.
+
+    Treemap: tile size = magnitude proxy (abs(change)*10 + 5), color = green
+    (gainers) / red (losers), label = subnet name + change%.
+    Radar: top 3 subnets across 5 dimensions (Emission, APY, Conviction,
+    24h Move, Volume) normalized to 0-100.
+    """
+    safe_subnets = subnets or []
+
+    # --- Treemap: top subnets by absolute 24h move (most visually meaningful) ---
+    by_move = sorted(
+        safe_subnets,
+        key=lambda s: abs(float(s.get("price_change_24h", 0) or 0)),
+        reverse=True,
+    )[:18]
+    treemap_data = []
+    for sn in by_move:
+        chg = float(sn.get("price_change_24h", 0) or 0)
+        treemap_data.append({
+            "name": sn.get("name") or f"SN{sn.get('netuid')}",
+            "netuid": sn.get("netuid"),
+            "change": round(chg, 2),
+            "value": round(abs(chg) * 10 + 5, 2),  # magnitude proxy for tile size
+        })
+
+    # --- Radar: top 3 picks across 5 normalized dimensions ---
+    top3 = picks[:3] if picks else []
+    radar_labels = ["Emission", "APY", "Conviction", "24h Move", "Volume"]
+    radar_colors = ["#00ff88", "#22d3ee", "#fbbf24"]
+
+    raw_rows = []
+    for p in top3:
+        chg = float(p.get("price_change_24h", 0) or 0)
+        raw_rows.append({
+            "name": p.get("name"),
+            "emission": float(p.get("emission", 0) or 0),
+            "apy": float(p.get("apy", 0) or 0),
+            "conviction": float(p.get("conviction", 0) or 0),
+            "move": abs(chg),
+            "volume": float(p.get("signal_impact", {}).get("volume", 0) or 0)
+            or _subnet_volume(safe_subnets, p.get("netuid")),
+        })
+
+    max_emission = max([r["emission"] for r in raw_rows], default=1) or 1
+    max_apy = max([r["apy"] for r in raw_rows], default=1) or 1
+    max_move = max([r["move"] for r in raw_rows], default=1) or 1
+    max_volume = max([r["volume"] for r in raw_rows], default=1) or 1
+
+    radar_datasets = []
+    for i, r in enumerate(raw_rows):
+        radar_datasets.append({
+            "label": r["name"],
+            "color": radar_colors[i % len(radar_colors)],
+            "data": [
+                round(min(100, (r["emission"] / max_emission) * 100), 1),
+                round(min(100, (r["apy"] / max_apy) * 100), 1),
+                round(min(100, r["conviction"]), 1),
+                round(min(100, (r["move"] / max_move) * 100), 1),
+                round(min(100, (r["volume"] / max_volume) * 100), 1),
+            ],
+        })
+
+    # Expose raw arrays the template/JS may want for direct access.
+    volumes = [round(r["volume"], 2) for r in raw_rows]
+    apy_values = [round(r["apy"], 2) for r in raw_rows]
+    convictions = [round(r["conviction"], 1) for r in raw_rows]
+
+    return {
+        "treemap": treemap_data,
+        "radar": {
+            "labels": radar_labels,
+            "datasets": radar_datasets,
+        },
+        "volumes": volumes,
+        "apy_values": apy_values,
+        "convictions": convictions,
+    }
+
+
+def _subnet_volume(subnets: List[Dict[str, Any]], netuid: Any) -> float:
+    for s in subnets or []:
+        if s.get("netuid") == netuid:
+            return float(s.get("volume", 0) or 0)
+    return 0.0
+
+
+# ---------------------------------------------------------------------------
 # Build the full premium dashboard context (wired into the / route)
 # ---------------------------------------------------------------------------
 def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -1399,6 +1491,7 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     market_intel = _compute_market_intelligence(subnets)
     staking = _compute_staking_analytics(subnets)
     learning_metrics = _compute_learning_metrics()
+    momentum_charts = _build_momentum_charts(subnets, simivision_picks)
 
     engine = LearningEngine()
     soul_map = engine.load_soul_map()
@@ -1451,6 +1544,7 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
             "oversold": _detect_oversold_convergence(_compute_technical_indicators(top_subnets[0])) if top_subnets else {},
             "overbought": _detect_overbought_convergence(_compute_technical_indicators(top_subnets[0])) if top_subnets else {},
         },
+        "momentum_charts": momentum_charts,
     }
 
 
@@ -1490,6 +1584,7 @@ async def dashboard(request: Request):
                 "learning_metrics": premium["learning_metrics"],
                 "social_sentiment": premium["social_sentiment"],
                 "indicators_convergence": premium["indicators_convergence"],
+                "momentum_charts": premium["momentum_charts"],
             },
         )
     except Exception as e:

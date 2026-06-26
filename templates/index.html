@@ -7,182 +7,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <style>
-    :root {
-      --bg: #0a0b14; --card: #111320; --card-2: #161827;
-      --accent: #00ff6a; --accent-dim: rgba(0,255,106,0.14);
-      --neg: #ff4444; --neg-dim: rgba(255,68,68,0.14);
-      --neu: #ffaa00; --neu-dim: rgba(255,170,0,0.14);
-      --txt: #e7e9f3; --txt-2: #9aa0b8; --txt-3: #5e6480;
-      --border: rgba(0,255,106,0.22); --border-soft: rgba(255,255,255,0.06);
-      --font-display: 'Space Grotesk', system-ui, sans-serif;
-      --font-body: 'Inter', system-ui, sans-serif;
-      --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-      --radius: 16px;
-    }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; }
-    body {
-      font-family: var(--font-body);
-      background: radial-gradient(circle at 50% -10%, rgba(0,255,106,0.07) 0%, transparent 45%), radial-gradient(circle at 90% 100%, rgba(0,255,106,0.04) 0%, transparent 40%), var(--bg);
-      background-attachment: fixed; color: var(--txt); line-height: 1.5; -webkit-font-smoothing: antialiased;
-    }
-    a { color: var(--accent); text-decoration: none; }
-    .mono { font-family: var(--font-mono); }
-    .display { font-family: var(--font-display); }
-    .wrap { max-width: 1480px; margin: 0 auto; padding: 0 22px 80px; }
-    header.top { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(14px); background: rgba(10,11,20,0.78); border-bottom: 1px solid var(--border-soft); }
-    .top-inner { max-width: 1480px; margin: 0 auto; padding: 14px 22px; display: flex; align-items: center; gap: 18px; }
-    .logo { display: flex; align-items: center; gap: 12px; }
-    .logo-mark { width: 38px; height: 38px; border-radius: 11px; background: linear-gradient(135deg, #00ff6a 0%, #00b85a 100%); display: grid; place-items: center; color: #04130a; font-weight: 700; font-family: var(--font-display); font-size: 20px; box-shadow: 0 0 22px rgba(0,255,106,0.45); }
-    .logo-text { font-family: var(--font-display); font-weight: 700; font-size: 21px; letter-spacing: -0.5px; }
-    .logo-text span { color: var(--accent); }
-    .logo-sub { font-size: 10.5px; color: var(--txt-3); letter-spacing: 2px; text-transform: uppercase; font-family: var(--font-mono); }
-    .top-spacer { flex: 1; }
-    .live-pill { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; background: var(--neg-dim); border: 1px solid rgba(255,68,68,0.4); font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: #ff7a7a; letter-spacing: 1px; }
-    .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--neg); box-shadow: 0 0 10px var(--neg); animation: pulse 1.4s infinite; }
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
-    .src-tag { font-family: var(--font-mono); font-size: 11px; color: var(--txt-3); }
-    .src-tag b { color: var(--accent); }
-    .section-title { font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: 0.3px; margin: 0 0 2px; display: flex; align-items: center; gap: 10px; }
-    .section-title .idx { font-family: var(--font-mono); font-size: 11px; color: var(--accent); opacity: 0.7; }
-    .section-sub { font-size: 12px; color: var(--txt-3); margin: 0 0 14px; }
-    .block { margin-top: 34px; }
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease; }
-    .card:hover { box-shadow: 0 0 0 1px rgba(0,255,106,0.25), 0 10px 40px rgba(0,255,106,0.10); transform: translateY(-2px); }
-    .card-soft { background: var(--card); border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 18px; }
-    .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-    .card-head h3 { margin: 0; font-family: var(--font-display); font-size: 14px; font-weight: 600; }
-    .hero { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; }
-    @media (max-width: 980px) { .hero { grid-template-columns: 1fr; } }
-    .hero-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-    .metric { background: var(--card-2); border: 1px solid var(--border-soft); border-radius: 12px; padding: 14px 16px; }
-    .metric .lbl { font-size: 11px; color: var(--txt-3); text-transform: uppercase; letter-spacing: 1px; font-family: var(--font-mono); }
-    .metric .val { font-family: var(--font-display); font-size: 26px; font-weight: 700; margin-top: 4px; }
-    .metric .sub { font-size: 12px; color: var(--txt-2); margin-top: 2px; font-family: var(--font-mono); }
-    .pos { color: var(--accent); } .neg { color: var(--neg); } .neu { color: var(--neu); }
-    .chips { display: flex; gap: 8px; }
-    .chip { font-family: var(--font-mono); font-size: 11px; padding: 6px 12px; border-radius: 999px; background: transparent; border: 1px solid var(--border-soft); color: var(--txt-2); cursor: pointer; transition: all .2s; }
-    .chip:hover { border-color: var(--border); color: var(--txt); }
-    .chip.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
-    .chart-box { position: relative; height: 230px; margin-top: 12px; }
-    .picks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-    @media (max-width: 1100px) { .picks { grid-template-columns: repeat(2, 1fr); } }
-    @media (max-width: 720px) { .picks { grid-template-columns: 1fr; } }
-    .pick { position: relative; overflow: hidden; }
-    .pick-rank { position: absolute; top: 14px; right: 16px; font-family: var(--font-display); font-weight: 700; font-size: 30px; color: rgba(255,255,255,0.06); line-height: 1; }
-    .pick-name { font-family: var(--font-display); font-size: 17px; font-weight: 600; }
-    .pick-meta { font-family: var(--font-mono); font-size: 11px; color: var(--txt-3); margin-top: 2px; }
-    .pick-row { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; }
-    .conviction-wrap { flex: 1; margin-right: 14px; }
-    .conviction-bar { height: 6px; border-radius: 4px; background: rgba(255,255,255,0.07); overflow: hidden; margin-top: 5px; }
-    .conviction-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #00b85a); border-radius: 4px; }
-    .spark { width: 92px; height: 34px; }
-    .reasons { list-style: none; padding: 0; margin: 14px 0 0; }
-    .reasons li { font-size: 12.5px; color: var(--txt-2); padding: 5px 0 5px 18px; position: relative; border-top: 1px solid var(--border-soft); }
-    .reasons li::before { content: "▸"; position: absolute; left: 0; color: var(--accent); }
-    .tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
-    .tag { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; padding: 5px 11px; border-radius: 7px; letter-spacing: 0.5px; border: 1px solid var(--border-soft); }
-    .tag-buy { color: var(--accent); border-color: rgba(0,255,106,0.4); background: var(--accent-dim); }
-    .tag-hold { color: var(--neu); border-color: rgba(255,170,0,0.4); background: var(--neu-dim); }
-    .tag-watch { color: var(--txt-2); border-color: var(--border-soft); }
-    .tag-sell { color: var(--neg); border-color: rgba(255,68,68,0.4); background: var(--neg-dim); }
-    .pill-hot, .pill-sell { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; padding: 5px 11px; border-radius: 999px; letter-spacing: 1px; }
-    .pill-hot { color: var(--neu); background: rgba(255,170,0,0.16); border: 1px solid rgba(255,170,0,0.55); animation: glow-hot 1.6s infinite alternate; }
-    .pill-sell { color: var(--neg); background: rgba(255,68,68,0.16); border: 1px solid rgba(255,68,68,0.6); animation: glow-sell 1.4s infinite alternate; }
-    @keyframes glow-hot { from { box-shadow: 0 0 4px rgba(255,170,0,0.3); } to { box-shadow: 0 0 16px rgba(255,170,0,0.7); } }
-    @keyframes glow-sell { from { box-shadow: 0 0 4px rgba(255,68,68,0.3); } to { box-shadow: 0 0 18px rgba(255,68,68,0.8); } }
-    .pred-line { font-family: var(--font-mono); font-size: 11.5px; color: var(--txt-2); margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-soft); }
-    table.tbl { width: 100%; border-collapse: collapse; }
-    table.tbl th { text-align: left; font-family: var(--font-mono); font-size: 10.5px; color: var(--txt-3); text-transform: uppercase; letter-spacing: 1px; padding: 8px 10px; border-bottom: 1px solid var(--border-soft); }
-    table.tbl td { padding: 10px; font-size: 13px; border-bottom: 1px solid var(--border-soft); }
-    table.tbl tr:last-child td { border-bottom: none; }
-    table.tbl tr:hover td { background: rgba(0,255,106,0.03); }
-    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-    @media (max-width: 980px) { .two-col { grid-template-columns: 1fr; } }
-    .ti-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-    @media (max-width: 980px) { .ti-grid { grid-template-columns: 1fr; } }
-    .ti-head { display: flex; align-items: center; justify-content: space-between; }
-    .donut-wrap { display: flex; align-items: center; gap: 16px; }
-    .donut { width: 86px; height: 86px; position: relative; }
-    .donut svg { transform: rotate(-90deg); }
-    .donut-val { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-display); font-weight: 700; font-size: 18px; }
-    .ind-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 8px; margin-top: 12px; }
-    .ind-cell { background: var(--card-2); border: 1px solid var(--border-soft); border-radius: 10px; padding: 9px 11px; }
-    .ind-cell .k { font-family: var(--font-mono); font-size: 10px; color: var(--txt-3); text-transform: uppercase; letter-spacing: 0.5px; }
-    .ind-cell .v { font-family: var(--font-mono); font-size: 13px; font-weight: 600; margin-top: 2px; }
-    .sig-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
-    .sig-bullish, .sig-oversold { background: var(--accent); } .sig-bearish, .sig-overbought { background: var(--neg); } .sig-neutral { background: var(--neu); }
-    .hot-sub { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: rgba(255,170,0,0.07); border: 1px solid rgba(255,170,0,0.25); }
-    .hot-sub.sell { background: rgba(255,68,68,0.07); border-color: rgba(255,68,68,0.3); }
-    .hot-sub .r { font-size: 11.5px; color: var(--txt-2); margin-top: 4px; }
-    .mi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
-    @media (max-width: 720px) { .mi-grid { grid-template-columns: repeat(2,1fr); } }
-    .breadth { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 7px; }
-    .yield-bar { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.07); overflow: hidden; margin-top: 4px; }
-    .yield-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #00b85a); }
-    .council-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
-    @media (max-width: 720px) { .council-grid { grid-template-columns: 1fr; } }
-    .expert { text-align: center; }
-    .expert .name { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
-    .expert .w { font-family: var(--font-mono); font-size: 22px; font-weight: 700; color: var(--accent); margin: 4px 0; }
-    .expert .bias { font-family: var(--font-mono); font-size: 11px; color: var(--txt-3); }
-    .wbar { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.07); overflow: hidden; margin: 8px 0; }
-    .wfill { height: 100%; background: var(--accent); }
-    .trail { position: relative; padding-left: 22px; }
-    .trail::before { content: ""; position: absolute; left: 7px; top: 6px; bottom: 6px; width: 2px; background: linear-gradient(180deg, var(--accent), transparent); }
-    .trail-item { position: relative; padding: 10px 0 10px 6px; border-bottom: 1px solid var(--border-soft); }
-    .trail-item:last-child { border-bottom: none; }
-    .trail-item::before { content: ""; position: absolute; left: -19px; top: 16px; width: 10px; height: 10px; border-radius: 50%; background: var(--card); border: 2px solid var(--accent); }
-    .trail-time { font-family: var(--font-mono); font-size: 10.5px; color: var(--txt-3); }
-    .trail-net { font-family: var(--font-display); font-weight: 600; font-size: 13.5px; }
-    .trail-flow { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 5px; font-size: 11.5px; color: var(--txt-2); }
-    .flow-arrow { color: var(--accent); }
-    .flow-chip { font-family: var(--font-mono); font-size: 10.5px; padding: 2px 7px; border-radius: 5px; background: var(--card-2); border: 1px solid var(--border-soft); }
-    .impact-row { padding: 10px 0; border-bottom: 1px solid var(--border-soft); }
-    .impact-row:last-child { border-bottom: none; }
-    .impact-net { font-family: var(--font-display); font-size: 18px; font-weight: 700; }
-    .impact-line { font-family: var(--font-mono); font-size: 11.5px; color: var(--txt-2); margin-top: 3px; }
-    .pat-chip { font-family: var(--font-mono); font-size: 10.5px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border-soft); margin: 2px 4px 2px 0; display: inline-block; }
-    .pat-bullish { color: var(--accent); border-color: rgba(0,255,106,0.35); }
-    .pat-bearish { color: var(--neg); border-color: rgba(255,68,68,0.35); }
-    .pat-neutral { color: var(--txt-2); }
-    .learn-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
-    @media (max-width: 720px) { .learn-stats { grid-template-columns: repeat(2,1fr); } }
-    .acc-ring { width: 92px; height: 92px; position: relative; }
-    .acc-ring svg { transform: rotate(-90deg); }
-    .acc-val { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-display); font-weight: 700; font-size: 20px; }
-    .soc-card { margin-bottom: 14px; }
-    .soc-head { display: flex; align-items: center; justify-content: space-between; }
-    .soc-score { font-family: var(--font-display); font-weight: 700; font-size: 20px; }
-    .feed-item { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border-soft); font-size: 12px; }
-    .feed-src { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; padding: 2px 7px; border-radius: 5px; height: fit-content; }
-    .src-twitter { color: #4aa8ff; background: rgba(74,168,255,0.1); }
-    .src-discord { color: #9b8bff; background: rgba(155,139,255,0.1); }
-    .src-reddit { color: #ff6a4a; background: rgba(255,106,74,0.1); }
-    .feed-text { color: var(--txt-2); flex: 1; }
-    .chat-box { display: flex; flex-direction: column; height: 420px; }
-    .chat-log { flex: 1; overflow-y: auto; padding: 6px 2px; }
-    .chat-msg { padding: 10px 13px; border-radius: 12px; margin-bottom: 10px; max-width: 88%; font-size: 13px; line-height: 1.55; }
-    .chat-msg.user { background: var(--accent-dim); border: 1px solid rgba(0,255,106,0.3); margin-left: auto; }
-    .chat-msg.bot { background: var(--card-2); border: 1px solid var(--border-soft); }
-    .chat-msg .who { font-family: var(--font-mono); font-size: 10px; color: var(--txt-3); margin-bottom: 3px; }
-    .chat-input { display: flex; gap: 10px; margin-top: 10px; }
-    .chat-input input { flex: 1; background: var(--card-2); border: 1px solid var(--border-soft); border-radius: 11px; padding: 12px 14px; color: var(--txt); font-family: var(--font-body); font-size: 13px; outline: none; }
-    .chat-input input:focus { border-color: var(--accent); }
-    .chat-input button { background: var(--accent); color: #04130a; border: none; border-radius: 11px; padding: 0 20px; font-weight: 700; font-family: var(--font-display); cursor: pointer; }
-    .chat-input button:disabled { opacity: 0.5; cursor: wait; }
-    .chat-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--txt-3); margin-top: 8px; }
-    footer.status { position: fixed; bottom: 0; left: 0; right: 0; z-index: 40; background: rgba(10,11,20,0.92); backdrop-filter: blur(12px); border-top: 1px solid var(--border-soft); }
-    .status-inner { max-width: 1480px; margin: 0 auto; padding: 9px 22px; display: flex; align-items: center; gap: 22px; font-family: var(--font-mono); font-size: 11px; color: var(--txt-3); flex-wrap: wrap; }
-    .status-inner b { color: var(--txt-2); }
-    .st-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); display: inline-block; margin-right: 6px; }
-    body { padding-bottom: 52px; }
-    .empty { color: var(--txt-3); font-size: 12.5px; font-style: italic; padding: 8px 0; }
-    .scroll-y { max-height: 360px; overflow-y: auto; }
-    .scroll-y::-webkit-scrollbar { width: 6px; } .scroll-y::-webkit-scrollbar-thumb { background: rgba(0,255,106,0.2); border-radius: 3px; }
-  </style>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- Treemap plugin MUST come after Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-treemap@2.3.0/dist/chartjs-chart-treemap.min.js"></script>
 </head>
 <body>
 
@@ -204,71 +32,77 @@
 
 <div class="wrap">
 
-  <!-- ============ 2. HERO METRIC + CHART ============ -->
+  <!-- ============ 2. KPI STRIP ============ -->
   <div class="block">
-    <div class="hero">
-      <div class="card">
-        <div class="card-head">
-          <div>
-            <div class="section-title"><span class="idx">02</span>Market Pulse</div>
-            <div class="section-sub">Aggregate subnet intelligence snapshot</div>
-          </div>
-          <div class="chips" id="rangeChips">
-            <button class="chip" data-range="1H">1H</button>
-            <button class="chip active" data-range="24H">24H</button>
-            <button class="chip" data-range="7D">7D</button>
-            <button class="chip" data-range="30D">30D</button>
-          </div>
-        </div>
-        <div class="hero-metrics">
-          <div class="metric">
-            <div class="lbl">Avg 24h Change</div>
-            <div class="val {{ 'pos' if market_intelligence.avg_change_24h >= 0 else 'neg' }}">{{ '%+.2f'|format(market_intelligence.avg_change_24h) }}%</div>
-            <div class="sub">{{ market_intelligence.gainers }} gainers / {{ market_intelligence.losers }} losers</div>
-          </div>
-          <div class="metric">
-            <div class="lbl">Total Volume</div>
-            <div class="val">{{ '%.2f'|format(market_intelligence.total_volume) }}</div>
-            <div class="sub">TAO · breadth: <span class="{{ 'pos' if market_intelligence.breadth=='bullish' else 'neg' if market_intelligence.breadth=='bearish' else 'neu' }}">{{ market_intelligence.breadth }}</span></div>
-          </div>
-          <div class="metric">
-            <div class="lbl">Avg APY</div>
-            <div class="val pos">{{ '%.2f'|format(market_intelligence.avg_apy) }}%</div>
-            <div class="sub">{{ market_intelligence.total }} subnets</div>
-          </div>
-          <div class="metric">
-            <div class="lbl">Total Market Cap</div>
-            <div class="val">{{ '%.0f'|format(market_intelligence.total_market_cap) }}</div>
-            <div class="sub">TAO capitalized</div>
-          </div>
-        </div>
+    <div class="section-title"><span class="idx">01</span>Market Snapshot</div>
+    <div class="section-sub">Aggregate subnet intelligence · KPI strip</div>
+    <div class="kpi-strip">
+      <div class="kpi">
+        <div class="lbl">Avg 24h Change</div>
+        <div class="val {{ 'pos' if market_intelligence.avg_change_24h >= 0 else 'neg' }}">{{ '%+.2f'|format(market_intelligence.avg_change_24h) }}%</div>
+        <div class="sub">{{ market_intelligence.gainers }} gainers / {{ market_intelligence.losers }} losers</div>
       </div>
-      <div class="card">
-        <div class="card-head">
-          <h3>Top Subnet Momentum</h3>
-          <span class="mono" style="font-size:11px;color:var(--txt-3)">predicted trajectory</span>
-        </div>
-        <div class="chart-box"><canvas id="heroChart"></canvas></div>
+      <div class="kpi">
+        <div class="lbl">Total Volume</div>
+        <div class="val pos">{{ '%.2f'|format(market_intelligence.total_volume) }}</div>
+        <div class="sub">TAO · breadth: <span class="{{ 'pos' if market_intelligence.breadth=='bullish' else 'neg' if market_intelligence.breadth=='bearish' else 'neu' }}">{{ market_intelligence.breadth }}</span></div>
+      </div>
+      <div class="kpi">
+        <div class="lbl">Avg APY</div>
+        <div class="val pos">{{ '%.2f'|format(market_intelligence.avg_apy) }}%</div>
+        <div class="sub">{{ market_intelligence.total }} subnets</div>
+      </div>
+      <div class="kpi">
+        <div class="lbl">Total Market Cap</div>
+        <div class="val">{{ '%.0f'|format(market_intelligence.total_market_cap) }}</div>
+        <div class="sub">TAO capitalized</div>
       </div>
     </div>
   </div>
 
-  <!-- ============ 3. SIMIVISION TOP PICKS ============ -->
+  <!-- ============ 3. MARKET PULSE — DUAL CHART (TREEMAP + RADAR) ============ -->
+  <div class="block">
+    <div class="section-title"><span class="idx">02</span>Market Pulse</div>
+    <div class="section-sub">Momentum treemap (tile = magnitude, green/red = gain/loss) · radar compares top 3 subnets across 5 dimensions</div>
+    <div class="card">
+      <div class="card-head">
+        <h3>Subnet Momentum</h3>
+        <div class="chips" id="rangeChips">
+          <button class="chip" data-range="1H">1H</button>
+          <button class="chip active" data-range="24H">24H</button>
+          <button class="chip" data-range="7D">7D</button>
+          <button class="chip" data-range="30D">30D</button>
+        </div>
+      </div>
+      <div class="momentum-grid">
+        <div>
+          <div class="mono" style="font-size:11px;color:var(--txt-3);margin-bottom:2px">TREEMAP · 24h move magnitude</div>
+          <div class="chart-box"><canvas id="treemapChart"></canvas></div>
+        </div>
+        <div>
+          <div class="mono" style="font-size:11px;color:var(--txt-3);margin-bottom:2px">RADAR · top 3 subnets (normalized 0–100)</div>
+          <div class="chart-box"><canvas id="radarChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 4. SIMIVISION TOP PICKS ============ -->
   <div class="block">
     <div class="section-title"><span class="idx">03</span>SimiVision Top Picks</div>
-    <div class="section-sub">Ranked by emission, yield &amp; conviction — every forecast is predictive</div>
+    <div class="section-sub">Ranked by emission, yield &amp; conviction — sparklines show price trend, every forecast is predictive</div>
     <div class="picks">
       {% for p in simivision_picks %}
-      <div class="card pick">
+      <div class="card pick {{ 'sell-accent' if p.sell and p.sell.active else '' }}">
         <div class="pick-rank">#{{ p.rank }}</div>
         <div class="pick-name">{{ p.name }}</div>
         <div class="pick-meta">SN{{ p.netuid }} · {{ '%.2f'|format(p.emission) }} TAO/day · {{ '%.1f'|format(p.apy) }}% APY</div>
         <div class="pick-row">
           <div class="conviction-wrap">
-            <div class="mono" style="font-size:10.5px;color:var(--txt-3)">CONVICTION {{ p.conviction }}%</div>
+            <div class="conviction-lbl">CONVICTION {{ p.conviction }}%</div>
             <div class="conviction-bar"><div class="conviction-fill" style="width:{{ p.conviction }}%"></div></div>
           </div>
-          <svg class="spark" viewBox="0 0 92 34" preserveAspectRatio="none" data-spark="{{ p.sparkline|join(',') }}"></svg>
+          <div class="spark-wrap"><canvas class="spark" data-spark="{{ p.sparkline|join(',') }}"></canvas></div>
         </div>
         <ul class="reasons">
           {% for r in p.reasons %}<li>{{ r }}</li>{% endfor %}
@@ -289,10 +123,10 @@
     </div>
   </div>
 
-  <!-- ============ 4. UNDERVALUED RADAR ============ -->
+  <!-- ============ 5. UNDERVALUED RADAR ============ -->
   <div class="block">
     <div class="section-title"><span class="idx">04</span>Undervalued Radar</div>
-    <div class="section-sub">High emission &amp; yield vs muted market cap</div>
+    <div class="section-sub">High emission &amp; yield vs muted market cap · color-coded values</div>
     <div class="card">
       <table class="tbl">
         <thead><tr><th>#</th><th>Subnet</th><th>Emission</th><th>APY</th><th>24h</th><th>Market Cap</th><th>Score</th></tr></thead>
@@ -302,10 +136,10 @@
             <td class="mono">{{ u.rank }}</td>
             <td>{{ u.name }} <span class="mono" style="color:var(--txt-3)">SN{{ u.netuid }}</span></td>
             <td class="mono pos">{{ '%.2f'|format(u.emission or 0) }}</td>
-            <td class="mono">{{ '%.1f'|format(u.apy or 0) }}%</td>
+            <td class="mono pos">{{ '%.1f'|format(u.apy or 0) }}%</td>
             <td class="mono {{ 'pos' if (u.price_change_24h or 0) >= 0 else 'neg' }}">{{ '%+.1f'|format(u.price_change_24h or 0) }}%</td>
             <td class="mono">{{ '%.0f'|format(u.market_cap or 0) }}</td>
-            <td class="mono" style="color:var(--accent);font-weight:700">{{ '%.2f'|format(u.undervalued_score) }}</td>
+            <td class="mono" style="color:var(--emerald-bright);font-weight:700">{{ '%.2f'|format(u.undervalued_score) }}</td>
           </tr>
         {% endfor %}
         </tbody>
@@ -313,10 +147,10 @@
     </div>
   </div>
 
-  <!-- ============ 5. TECHNICAL INDICATORS ============ -->
+  <!-- ============ 6. TECHNICAL INDICATORS ============ -->
   <div class="block">
     <div class="section-title"><span class="idx">05</span>Technical Indicators</div>
-    <div class="section-sub">RSI · Stochastic · Bollinger · MFI · CCI · Williams %R · Keltner · MACD</div>
+    <div class="section-sub">RSI · Stochastic · Bollinger · MFI · CCI · Williams %R · MACD</div>
     <div class="ti-grid">
       {% for t in technical_indicators %}
       {% set ind = t.indicators %}
@@ -332,23 +166,24 @@
         </div>
         <div class="donut-wrap" style="margin-top:12px">
           <div class="donut">
-            <svg width="86" height="86" viewBox="0 0 86 86">
-              <circle cx="43" cy="43" r="36" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="8"/>
-              <circle cx="43" cy="43" r="36" fill="none"
-                stroke="{{ '#ff4444' if rsi.value > 70 else '#00ff6a' if rsi.value < 30 else '#ffaa00' }}"
+            <svg width="92" height="92" viewBox="0 0 92 92">
+              <circle cx="46" cy="46" r="40" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="8"/>
+              <circle cx="46" cy="46" r="40" fill="none"
+                stroke="{{ '#ff4d5e' if rsi.value > 70 else '#00ff88' if rsi.value < 30 else '#fbbf24' }}"
                 stroke-width="8" stroke-linecap="round"
-                stroke-dasharray="{{ (rsi.value/100)*226.2 }} 226.2"/>
+                stroke-dasharray="{{ (rsi.value/100)*251.3 }} 251.3"/>
             </svg>
             <div class="donut-val">{{ '%.0f'|format(rsi.value) }}</div>
           </div>
           <div>
             <div class="mono" style="font-size:10.5px;color:var(--txt-3)">RSI (14)</div>
-            <div class="mono" style="font-size:13px;font-weight:600">
+            <div class="rsi-big {{ 'neg' if rsi.value > 70 else 'pos' if rsi.value < 30 else 'neu' }}">{{ '%.0f'|format(rsi.value) }}</div>
+            <div class="mono" style="font-size:12px;font-weight:600;margin-top:2px">
               <span class="sig-dot sig-{{ rsi.signal }}"></span>{{ rsi.signal|upper }}
             </div>
             <div class="mono" style="font-size:11px;color:var(--txt-2);margin-top:4px">
               conv: {{ t.convergence.type }} {{ t.convergence.count }}/{{ t.convergence.total }}
-              {% if t.convergence.convergent %}<span style="color:var(--accent)">✓</span>{% endif %}
+              {% if t.convergence.convergent %}<span style="color:var(--emerald-bright)">✓</span>{% endif %}
             </div>
           </div>
         </div>
@@ -376,7 +211,7 @@
     </div>
   </div>
 
-  <!-- ============ 6. MARKET INTELLIGENCE SCANNER ============ -->
+  <!-- ============ 7. MARKET INTELLIGENCE SCANNER ============ -->
   <div class="block">
     <div class="section-title"><span class="idx">06</span>Market Intelligence Scanner</div>
     <div class="section-sub">Cross-subnet breadth &amp; leadership</div>
@@ -387,14 +222,14 @@
         <div class="metric"><div class="lbl">Gainers / Losers</div><div class="val">{{ market_intelligence.gainers }} / {{ market_intelligence.losers }}</div><div class="sub">of {{ market_intelligence.total }}</div></div>
         <div class="metric"><div class="lbl">Market Breadth</div>
           <div class="val"><span class="breadth {{ 'pos' if market_intelligence.breadth=='bullish' else 'neg' if market_intelligence.breadth=='bearish' else 'neu' }}"
-            style="background:{{ 'var(--accent-dim)' if market_intelligence.breadth=='bullish' else 'var(--neg-dim)' if market_intelligence.breadth=='bearish' else 'var(--neu-dim)' }};
-            border:1px solid {{ 'rgba(0,255,106,0.4)' if market_intelligence.breadth=='bullish' else 'rgba(255,68,68,0.4)' if market_intelligence.breadth=='bearish' else 'rgba(255,170,0,0.4)' }}">{{ market_intelligence.breadth|upper }}</span></div>
+            style="background:{{ 'var(--emerald-dim)' if market_intelligence.breadth=='bullish' else 'var(--neg-dim)' if market_intelligence.breadth=='bearish' else 'var(--neu-dim)' }};
+            border:1px solid {{ 'rgba(0,255,136,0.4)' if market_intelligence.breadth=='bullish' else 'rgba(244,63,94,0.4)' if market_intelligence.breadth=='bearish' else 'rgba(251,191,36,0.4)' }}">{{ market_intelligence.breadth|upper }}</span></div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ============ 7. STAKING & YIELD ============ -->
+  <!-- ============ 8. STAKING & YIELD ============ -->
   <div class="block">
     <div class="section-title"><span class="idx">07</span>Staking &amp; Yield Analytics</div>
     <div class="section-sub">Total stake {{ '%.2f'|format(staking_analytics.total_stake) }} TAO · avg APY {{ '%.2f'|format(staking_analytics.avg_apy) }}% · {{ staking_analytics.subnet_count }} subnets</div>
@@ -411,7 +246,7 @@
             <td class="mono">{{ '%.0f'|format(s.tao_liquidity) }}</td>
             <td class="mono">{{ '%.0f'|format(s.alpha_liquidity) }}</td>
             <td style="width:160px">
-              <div class="mono" style="color:var(--accent);font-weight:700">{{ '%.2f'|format(s.yield_score) }}</div>
+              <div class="mono" style="color:var(--emerald-bright);font-weight:700">{{ '%.2f'|format(s.yield_score) }}</div>
               <div class="yield-bar"><div class="yield-fill" style="width:{{ (s.yield_score / (staking_analytics.top_yield[0].yield_score or 1) * 100)|round }}%"></div></div>
             </td>
           </tr>
@@ -421,7 +256,7 @@
     </div>
   </div>
 
-  <!-- ============ 8. COUNCIL / SOUL MAP ============ -->
+  <!-- ============ 9. COUNCIL / SOUL MAP ============ -->
   <div class="block">
     <div class="section-title"><span class="idx">08</span>Council / Soul Map Weights</div>
     <div class="section-sub">Expert weights tuned by the learning loop (correct +{{ learning_metrics.deltas.correct }} / wrong {{ learning_metrics.deltas.wrong }})</div>
@@ -429,6 +264,7 @@
       <div class="council-grid">
         {% for c in council_weights %}
         <div class="expert card-soft" style="border-radius:12px">
+          <div class="avatar">{{ c.expert[0] }}</div>
           <div class="name">{{ c.expert }}</div>
           <div class="w">{{ '%.3f'|format(c.weight) }}</div>
           <div class="wbar"><div class="wfill" style="width:{{ (c.weight / 1.2 * 100)|round }}%"></div></div>
@@ -439,7 +275,7 @@
     </div>
   </div>
 
-  <!-- ============ 9. MIND MAP LEARNING TRAIL ============ -->
+  <!-- ============ 10. MIND MAP LEARNING TRAIL ============ -->
   <div class="block">
     <div class="section-title"><span class="idx">09</span>Mind Map Learning Trail</div>
     <div class="section-sub">evidence → signal → decision → judge → learning loop</div>
@@ -465,7 +301,7 @@
     </div>
   </div>
 
-  <!-- ============ 10. SIGNAL IMPACT + PATTERNS + PREDICTIVE + LEARNING ============ -->
+  <!-- ============ 11. SIGNAL IMPACT + PATTERNS + PREDICTIVE + LEARNING ============ -->
   <div class="block">
     <div class="section-title"><span class="idx">10</span>Signal Impact · Patterns · Predictive Engine · Learning Loop</div>
     <div class="section-sub">All outputs framed as "predicted to move +X% within N hours"</div>
@@ -531,7 +367,7 @@
           <div class="acc-ring">
             <svg width="92" height="92" viewBox="0 0 92 92">
               <circle cx="46" cy="46" r="40" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="8"/>
-              <circle cx="46" cy="46" r="40" fill="none" stroke="#00ff6a" stroke-width="8" stroke-linecap="round"
+              <circle cx="46" cy="46" r="40" fill="none" stroke="#00ff88" stroke-width="8" stroke-linecap="round"
                 stroke-dasharray="{{ (learning_metrics.accuracy/100)*251.3 }} 251.3"/>
             </svg>
             <div class="acc-val">{{ '%.0f'|format(learning_metrics.accuracy) }}%</div>
@@ -560,7 +396,7 @@
     </div>
   </div>
 
-  <!-- ============ 11. SOCIAL SENTIMENT ============ -->
+  <!-- ============ 12. SOCIAL SENTIMENT ============ -->
   <div class="block">
     <div class="section-title"><span class="idx">11</span>Social Sentiment Feed</div>
     <div class="section-sub">Twitter · Discord · Reddit — classified per subnet</div>
@@ -585,7 +421,7 @@
     </div>
   </div>
 
-  <!-- ============ 12. SIMIVISION CHAT ============ -->
+  <!-- ============ 13. SIMIVISION CHAT ============ -->
   <div class="block">
     <div class="section-title"><span class="idx">12</span>SimiVision Chat</div>
     <div class="section-sub">Ask the intelligence layer — grounded in live picks &amp; council weights</div>
@@ -605,7 +441,7 @@
 
 </div>
 
-<!-- ============ 13. FOOTER STATUS STRIP ============ -->
+<!-- ============ FOOTER STATUS STRIP ============ -->
 <footer class="status">
   <div class="status-inner">
     <span><span class="st-dot"></span>SYSTEM <b>OPERATIVE</b></span>
@@ -613,68 +449,155 @@
     <span>SUBNETS: <b>{{ subnets|length }}</b></span>
     <span>PICKS: <b>{{ simivision_picks|length }}</b></span>
     <span>PREDICTIONS: <b>{{ predictions|length }}</b></span>
-    <span>ACCURACY: <b style="color:var(--accent)">{{ '%.0f'|format(learning_metrics.accuracy) }}%</b></span>
+    <span>ACCURACY: <b style="color:var(--emerald-bright)">{{ '%.0f'|format(learning_metrics.accuracy) }}%</b></span>
     <span style="margin-left:auto">SimiVision Intelligence Cockpit · predictive framing enforced</span>
   </div>
 </footer>
 
 <script>
-// ---------- Sparklines ----------
-function drawSpark(el){
-  var raw = el.getAttribute('data-spark');
+// ---------- Helpers ----------
+function hexToRgba(hex, a){
+  var h = (hex||'').replace('#','');
+  if(h.length === 3){ h = h.split('').map(function(c){return c+c;}).join(''); }
+  var n = parseInt(h, 16);
+  if(isNaN(n)) return 'rgba(0,255,136,'+a+')';
+  var r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return 'rgba('+r+','+g+','+b+','+a+')';
+}
+
+// ---------- Sparklines (Chart.js mini line, no axes/legend/tooltip) ----------
+function drawSpark(canvas){
+  var raw = canvas.getAttribute('data-spark');
   if(!raw) return;
   var pts = raw.split(',').map(Number).filter(function(n){return !isNaN(n);});
   if(pts.length < 2) return;
-  var w=92,h=34, min=Math.min.apply(null,pts), max=Math.max.apply(null,pts);
-  var span = (max-min)||1;
-  var step = w/(pts.length-1);
-  var d = pts.map(function(p,i){return (i?'L':'M')+(i*step).toFixed(1)+' '+((h-2)-((p-min)/span)*(h-4)).toFixed(1);}).join(' ');
   var up = pts[pts.length-1] >= pts[0];
-  var col = up ? '#00ff6a' : '#ff4444';
-  var area = d + ' L'+w+' '+h+' L0 '+h+' Z';
-  el.innerHTML =
-    '<path d="'+area+'" fill="'+col+'" fill-opacity="0.12"/>'+
-    '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>';
-}
-document.querySelectorAll('[data-spark]').forEach(drawSpark);
-
-// ---------- Hero Chart ----------
-(function(){
-  var picks = {{ simivision_picks|tojson }};
-  var labels = picks.map(function(p){return p.name;});
-  var baseData = picks.map(function(p){return Number(p.price_change_24h||0);});
-  function series(range){
-    var f = {'1H':0.25,'24H':1,'7D':2.4,'30D':4}[range]||1;
-    return baseData.map(function(v){return +(v*f + (Math.random()-0.5)*Math.abs(v||2)*0.3).toFixed(2);});
-  }
-  var ctx = document.getElementById('heroChart').getContext('2d');
-  var grad = ctx.createLinearGradient(0,0,0,230);
-  grad.addColorStop(0,'rgba(0,255,106,0.35)');
-  grad.addColorStop(1,'rgba(0,255,106,0.0)');
-  var chart = new Chart(ctx,{
+  var col = up ? '#00ff88' : '#ff4d5e';
+  var ctx = canvas.getContext('2d');
+  var grad = ctx.createLinearGradient(0,0,0,36);
+  grad.addColorStop(0, up ? 'rgba(0,255,136,0.35)' : 'rgba(255,77,94,0.35)');
+  grad.addColorStop(1, up ? 'rgba(0,255,136,0.0)' : 'rgba(255,77,94,0.0)');
+  new Chart(ctx, {
     type:'line',
-    data:{labels:labels, datasets:[{
-      label:'24h %', data:series('24H'),
-      borderColor:'#00ff6a', backgroundColor:grad, fill:true, tension:0.4,
-      pointRadius:3, pointBackgroundColor:'#00ff6a', pointBorderColor:'#0a0b14', borderWidth:2
+    data:{labels: pts.map(function(_,i){return i;}), datasets:[{
+      data: pts, borderColor: col, backgroundColor: grad, fill: true,
+      tension: 0.4, pointRadius: 0, borderWidth: 1.6
     }]},
     options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false},
-        tooltip:{callbacks:{label:function(c){return c.parsed.y+'%';}}}},
-      scales:{
-        x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#5e6480',font:{family:'JetBrains Mono',size:10}}},
-        y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#5e6480',font:{family:'JetBrains Mono',size:10},callback:function(v){return v+'%';}}}
-      }
+      responsive:false, maintainAspectRatio:false, animation:false,
+      plugins:{legend:{display:false}, tooltip:{enabled:false}},
+      scales:{x:{display:false}, y:{display:false}},
+      elements:{line:{borderCapStyle:'round', borderJoinStyle:'round'}}
     }
   });
-  document.getElementById('rangeChips').addEventListener('click',function(e){
+}
+document.querySelectorAll('canvas.spark').forEach(drawSpark);
+
+// ---------- Momentum charts data (server-injected) ----------
+var MOMENTUM = {{ momentum_charts|tojson }};
+var TREEMAP_DATA = (MOMENTUM && MOMENTUM.treemap) || [];
+var RADAR = (MOMENTUM && MOMENTUM.radar) || {labels:[], datasets:[]};
+
+// ---------- Treemap ----------
+(function(){
+  if(!TREEMAP_DATA.length) return;
+  var el = document.getElementById('treemapChart');
+  if(!el) return;
+  new Chart(el.getContext('2d'), {
+    type:'treemap',
+    data:{
+      datasets:[{
+        label:'Subnet momentum',
+        tree:TREEMAP_DATA,
+        key:'value',
+        groups:['name'],
+        spacing:2,
+        borderWidth:1,
+        borderColor:'rgba(4,7,13,0.9)',
+        backgroundColor:function(ctx){
+          var d = ctx.raw && ctx.raw._data;
+          if(!d) return 'rgba(94,106,133,0.4)';
+          return d.change >= 0 ? 'rgba(0,255,136,0.78)' : 'rgba(244,63,94,0.78)';
+        },
+        labels:{
+          display:true,
+          align:'center',
+          color:'#04070d',
+          font:{family:'JetBrains Mono', size:11, weight:'700'},
+          formatter:function(ctx){
+            var d = ctx.raw && ctx.raw._data;
+            if(!d) return '';
+            var nm = (d.name||'').toString();
+            if(nm.length > 10) nm = nm.slice(0,9)+'…';
+            return [nm, (d.change>=0?'+':'')+d.change+'%'];
+          }
+        }
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}, tooltip:{
+        callbacks:{label:function(c){var d=c.raw&&c.raw._data;return d?(d.name+': '+(d.change>=0?'+':'')+d.change+'%'):'';}}
+      }}
+    }
+  });
+})();
+
+// ---------- Radar ----------
+(function(){
+  if(!RADAR.datasets || !RADAR.datasets.length) return;
+  var el = document.getElementById('radarChart');
+  if(!el) return;
+  new Chart(el.getContext('2d'), {
+    type:'radar',
+    data:{
+      labels: RADAR.labels,
+      datasets: RADAR.datasets.map(function(ds){
+        var hex = ds.color || '#00ff88';
+        var rgba = hexToRgba(hex, 0.16);
+        return {
+          label: ds.label,
+          data: ds.data,
+          fill: true,
+          backgroundColor: rgba,
+          borderColor: hex,
+          pointBackgroundColor: hex,
+          pointBorderColor: '#04070d',
+          pointRadius: 3,
+          borderWidth: 2
+        };
+      })
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom', labels:{color:'#9aa6bd', font:{family:'JetBrains Mono', size:11}, boxWidth:12, padding:10}}},
+      scales:{r:{
+        min:0, max:100,
+        angleLines:{color:'rgba(255,255,255,0.06)'},
+        grid:{color:'rgba(255,255,255,0.06)'},
+        pointLabels:{color:'#9aa6bd', font:{family:'JetBrains Mono', size:11}},
+        ticks:{display:false, stepSize:25, backdropColor:'transparent'}
+      }}
+    }
+  });
+})();
+
+// ---------- Time toggle (re-scales treemap magnitude by range factor) ----------
+(function(){
+  var wrap = document.getElementById('rangeChips');
+  if(!wrap) return;
+  wrap.addEventListener('click', function(e){
     var b = e.target.closest('.chip'); if(!b) return;
-    this.querySelectorAll('.chip').forEach(function(c){c.classList.remove('active');});
+    wrap.querySelectorAll('.chip').forEach(function(c){c.classList.remove('active');});
     b.classList.add('active');
-    chart.data.datasets[0].data = series(b.getAttribute('data-range'));
-    chart.data.datasets[0].label = b.getAttribute('data-range')+' %';
-    chart.update();
+    var f = {'1H':0.25,'24H':1,'7D':2.4,'30D':4}[b.getAttribute('data-range')] || 1;
+    var tc = Chart.getChart('treemapChart');
+    if(tc){
+      tc.data.datasets[0].tree = TREEMAP_DATA.map(function(d){
+        return {name:d.name, change: +(d.change*f).toFixed(2), value: +(Math.abs(d.change*f)*10+5).toFixed(2)};
+      });
+      tc.update();
+    }
   });
 })();
 
