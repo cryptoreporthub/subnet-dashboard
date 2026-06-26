@@ -127,26 +127,47 @@ class LearningEngine:
         }
 
 
-def create_feedback_endpoint(server_module):
-    """Add feedback endpoint to Flask app."""
-    from flask import request, jsonify
-    
-    @server_module.route("/api/feedback", methods=["POST"])
-    def record_feedback():
-        data = request.get_json() or {}
+def create_feedback_router():
+    """Build a FastAPI APIRouter exposing the self-learning feedback loop.
+
+    The router is mounted in server.py via ``app.include_router(router)``.
+    Keeping the feedback endpoint on its own router preserves the
+    evidence -> signal -> decision -> judge -> learning loop as an
+    independently testable module.
+    """
+    from fastapi import APIRouter, Request, HTTPException
+
+    router = APIRouter()
+
+    @router.post("/api/feedback")
+    async def record_feedback(request: Request):
+        try:
+            data = await request.json()
+        except Exception:
+            data = {}
+        data = data or {}
         subnet_id = data.get("subnet_id")
         recommendation = data.get("recommendation")
         actual_performance = data.get("actual_performance", {})
-        
+
         if not subnet_id or not recommendation:
-            return jsonify({"error": "Missing subnet_id or recommendation"}), 400
-        
+            raise HTTPException(status_code=400, detail="Missing subnet_id or recommendation")
+
         engine = LearningEngine()
         engine.record_feedback(subnet_id, recommendation, actual_performance)
-        
-        return jsonify({"status": "feedback recorded", "success": True})
-    
-    @server_module.route("/api/learning/stats")
-    def learning_stats():
-        engine = LearningEngine()
-        return jsonify(engine.get_stats())
+
+        return {"status": "feedback recorded", "success": True}
+
+    return router
+
+
+def create_feedback_endpoint(server_module):
+    """Legacy registration hook (kept for backward compatibility).
+
+    New FastAPI deployments should use :func:`create_feedback_router` and
+    mount it via ``app.include_router(router)`` instead.
+    """
+    router = create_feedback_router()
+    if hasattr(server_module, "include_router"):
+        server_module.include_router(router)
+    return router

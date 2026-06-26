@@ -5,29 +5,128 @@ import os
 import sys
 from datetime import datetime
 from typing import Any, Dict, List
-from flask import Flask, jsonify, make_response, request, render_template, send_from_directory, abort
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 
 # Add the current directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fetchers.taomarketcap import get_all_subnets, get_subnet_data
 try:
-    from data.learning_engine import LearningEngine
+    from data.learning_engine import LearningEngine, create_feedback_router
 except ImportError:
     class LearningEngine:
         def get_stats(self):
             return {"expert_weights": {}, "total_records": 0}
+
+        def load_soul_map(self):
+            return {"expert_weights": {}, "performance_history": {}}
+
+    def create_feedback_router():
+        return None
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
 
 os.makedirs("data", exist_ok=True)
 
-app = Flask(__name__)
+app = FastAPI(title="SimiVision Subnet Dashboard", version="3.5.0")
+
+# CORS middleware (replaces Flask's per-response CORS headers)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount static files at /static
+_static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+if os.path.isdir(_static_dir):
+    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
 _APP_VERSION = "3.5.0"
 
 _ROTATION_TOKENS = ["hyperliquid", "vvv", "near", "render", "fetch"]
+
+# ---------------------------------------------------------------------------
+# SimiVision chat helpers (Phase 4: LLM interaction with mindmap context)
+# ---------------------------------------------------------------------------
+
+def _build_simivision_prompt(message: str, context: Dict[str, Any]) -> str:
+    """Build a prompt that fuses the user message with live SimiVision + soul_map context."""
+    top = context.get("simivision_picks", [])
+    picks_str = "; ".join(
+        f"#{p.get('rank')} {p.get('name')} (SN{p.get('netuid')}) "
+        f"emission={p.get('emission')} apy={p.get('apy')} "
+        f"chg24h={p.get('price_change_24h')}% conviction={p.get('conviction')} "
+        f"rec={p.get('recommendation')}"
+        for p in top
+    ) or "No picks available"
+    weights = context.get("expert_weights", {})
+    weights_str = ", ".join(f"{k}={v}" for k, v in weights.items()) or "none"
+    return (
+        "You are SimiVision, an AI analyst for Bittensor subnets. "
+        "Use the live subnet snapshot and the Council's learned expert weights below.\n\n"
+        f"User question: {message}\n\n"
+        f"Top SimiVision picks: {picks_str}\n"
+        f"Source: {context.get('source', 'unknown')}\n"
+        f"Council expert weights (self-learning loop): {weights_str}\n"
+        "Answer concisely and tie the reasoning back to the picks and expert weights."
+    )
+
+
+def _call_llm(prompt: str, message: str, context: Dict[str, Any]) -> tuple[str, bool]:
+    """Call an LLM API when configured, otherwise fall back to the local explainer.
+
+    Returns (reply, llm_used). The local fallback keeps the endpoint fully
+    functional in environments without an LLM API key while still integrating
+    the mindmap / self-learning context.
+    """
+    api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("LLM_API_KEY")
+    base_url = os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1")
+    model = os.environ.get("LLM_MODEL", "gpt-4o-mini")
+
+    if api_key:
+        try:
+            import requests
+            resp = requests.post(
+                f"{base_url.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": "You are SimiVision, a Bittensor subnet analyst."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "max_tokens": 400,
+                },
+                timeout=20,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                reply = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                if reply:
+                    return reply.strip(), True
+            logger.warning("LLM API call failed (%s); falling back to local explainer", resp.status_code)
+        except Exception as exc:
+            logger.warning("LLM API call errored (%s); falling back to local explainer", exc)
+
+    # Local fallback: reuse the existing SimiVision explainer so the loop stays intact.
+    try:
+        from internal.llm.explainer import generate_ai_response
+        return generate_ai_response(message, context), False
+    except Exception as exc:
+        logger.warning("Local explainer failed (%s); returning canned reply", exc)
+        return (
+            "SimiVision is online. I can explain top subnet picks, compare APY, "
+            "or analyze market trends. What would you like to know?",
+            False,
+        )
 
 # ---------------------------------------------------------------------------
 # Fast, fail-safe endpoints
@@ -136,15 +235,15 @@ def _safe_simivision_payload() -> Dict[str, Any]:
     }
 
 
-@app.route("/health")
+@app.get("/health")
 def health_check():
-    return "OK", 200
+    return PlainTextResponse("OK")
 
 
-@app.route("/api/subnets")
+@app.get("/api/subnets")
 def api_subnets_safe():
     subnets, source = _get_subnets_with_source()
-    return jsonify({
+    return {
         "status": "success",
         "meta": {
             "count": len(subnets),
@@ -152,26 +251,32 @@ def api_subnets_safe():
             "updated_at": datetime.utcnow().isoformat() + "Z",
         },
         "subnets": subnets,
-    })
+    }
 
 
-@app.route("/api/simivision")
+@app.get("/api/simivision")
 def api_simivision_safe():
-    return jsonify(_safe_simivision_payload())
+    return _safe_simivision_payload()
 
 
-@app.route("/api/rotation-tokens")
+@app.get("/api/rotation-tokens")
 def api_rotation_tokens_safe():
-    return jsonify({
+    return {
         "status": "success",
         "tokens": _ROTATION_TOKENS,
-    })
+    }
 
 
-@app.route("/api/mindmap/summary")
+@app.get("/api/mindmap/summary")
 def api_mindmap_summary_safe():
     simivision = _safe_simivision_payload()["data"]
-    return jsonify({
+    # Pull live soul_map expert weights from the self-learning loop so the
+    # mindmap stays wired into the evidence -> signal -> decision -> judge
+    # -> learning cycle.
+    engine = LearningEngine()
+    stats = engine.get_stats()
+    expert_weights = stats.get("expert_weights", {})
+    return {
         "status": "success",
         "data": {
             "acknowledgment": "Dashboard data ready",
@@ -183,31 +288,100 @@ def api_mindmap_summary_safe():
                 "trend": "stable",
                 "explanation": f"Derived from {simivision['meta']['count']} subnets",
             },
-            "expert_insights": [],
+            "expert_insights": [
+                {"expert": name.title(), "weight": weight}
+                for name, weight in expert_weights.items()
+            ],
+            "expert_weights": expert_weights,
             "learning_status": {
                 "enabled": True,
-                "records": 0,
-                "last_updated": simivision["meta"]["updated_at"],
+                "records": stats.get("total_records", 0),
+                "last_updated": stats.get("last_updated") or simivision["meta"]["updated_at"],
             },
         },
-    })
+    }
 
 
-@app.route("/api/learning/stats")
+@app.get("/api/learning/stats")
 def api_learning_stats_safe():
-    return jsonify({
+    engine = LearningEngine()
+    stats = engine.get_stats()
+    return {
         "status": "success",
         "data": {
-            "expert_weights": {},
-            "total_records": 0,
-            "last_updated": datetime.utcnow().isoformat() + "Z",
+            "expert_weights": stats.get("expert_weights", {}),
+            "total_records": stats.get("total_records", 0),
+            "last_updated": stats.get("last_updated") or datetime.utcnow().isoformat() + "Z",
         },
-    })
+    }
+
+
+@app.post("/api/simivision/chat")
+async def api_simivision_chat(request: Request):
+    """LLM interaction endpoint for SimiVision data.
+
+    Pipeline (Phase 4):
+      1. Fetch subnet data
+      2. Load soul_map.json for learning context
+      3. Build prompt with context
+      4. Call LLM API (falls back to local explainer when no key is set)
+      5. Return response with mindmap context
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    message = (payload or {}).get("message", "") or ""
+
+    # 1. Fetch subnet data
+    subnets, source = _get_subnets_with_source()
+    simivision = _safe_simivision_payload()["data"]
+
+    # 2. Load soul_map.json for learning context
+    engine = LearningEngine()
+    soul_map = engine.load_soul_map()
+    stats = engine.get_stats()
+    expert_weights = stats.get("expert_weights", {})
+
+    # 3. Build prompt with context
+    top = simivision.get("top", [])
+    context = {
+        "source": source,
+        "simivision_picks": top,
+        "market_overview": {
+            "count": simivision.get("meta", {}).get("count", len(subnets)),
+            "updated_at": simivision.get("meta", {}).get("updated_at"),
+        },
+        "expert_weights": expert_weights,
+        "soul_map": soul_map,
+    }
+    prompt = _build_simivision_prompt(message, context)
+
+    # 4. Call LLM API (with graceful local fallback)
+    reply, llm_used = _call_llm(prompt, message, context)
+
+    # 5. Return response with mindmap context
+    return {
+        "status": "success",
+        "data": {
+            "reply": reply,
+            "message": message,
+            "llm_used": llm_used,
+            "mindmap_context": {
+                "source": source,
+                "top_picks": top,
+                "expert_weights": expert_weights,
+                "learning_records": stats.get("total_records", 0),
+                "updated_at": simivision.get("meta", {}).get("updated_at"),
+            },
+        },
+    }
+
 
 # ============================================================================
 # FIX: Serve static React dashboard without Jinja2 rendering
 # ============================================================================
-@app.route("/")
+@app.get("/")
 def index():
     """Serve the static React dashboard HTML file directly.
 
@@ -215,19 +389,13 @@ def index():
     because the React HTML has no {{ template }} variable tags.
     """
     try:
-        return send_from_directory('templates', 'index-react.html')
+        return FileResponse(os.path.join("templates", "index-react.html"))
     except Exception as e:
         logger.error("Error serving React dashboard: %s", e)
-        return f"""
-        <html>
-        <head><title>Error</title></head>
-        <body style="background: #020617; color: #fff; padding: 40px; font-family: sans-serif;">
-            <h1 style="color: #ef4444;">Internal Server Error</h1>
-            <p>The dashboard encountered an error: {str(e)}</p>
-            <p>System status: Not operative</p>
-        </body>
-        </html>
-        """, 500
+        return PlainTextResponse(
+            f"Internal Server Error: {str(e)}\nSystem status: Not operative",
+            status_code=500,
+        )
 
 def get_dynamic_subnets():
     try:
@@ -523,3 +691,11 @@ def build_mindmap_feed(picks: List[Dict], council_votes: List[Dict], undervalued
     })
     
     return feed
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Mount the self-learning loop's feedback router (APIRouter)
+# ---------------------------------------------------------------------------
+_feedback_router = create_feedback_router()
+if _feedback_router is not None:
+    app.include_router(_feedback_router)
