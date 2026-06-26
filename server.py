@@ -35,29 +35,32 @@ _ROTATION_TOKENS = ["hyperliquid", "vvv", "near", "render", "fetch"]
 # still exist in the file or in a stale deployment.
 # ---------------------------------------------------------------------------
 
-def _safe_local_subnets() -> List[Dict[str, Any]]:
-    """Return a quick local subnet snapshot without depending on the live API.
-
-    This keeps the dashboard responsive on Fly even if taomarketcap is slow or
-    temporarily unavailable.
+def _get_subnets_with_source() -> tuple[List[Dict[str, Any]], str]:
+    """Return subnets with source tracking.
+    
+    Uses taomarketcap API with caching (5 min TTL).
+    Returns (subnets, source) where source is one of:
+    - "taomarketcap" (live data)
+    - "taomarketcap-cache" (stale cache)
+    - "static-fallback" (no cache available)
     """
     cache_path = os.path.join("data", "subnets.db")
+    db_exists = os.path.exists(cache_path)
+    
     try:
-        if os.path.exists(cache_path):
-            import sqlite3
-            with sqlite3.connect(cache_path) as conn:
-                row = conn.execute(
-                    "SELECT data FROM subnets_cache WHERE key = ?",
-                    ("all_subnets",),
-                ).fetchone()
-                if row and row[0]:
-                    payload = json.loads(row[0])
-                    subnets = payload.get("subnets", [])
-                    if isinstance(subnets, list) and subnets:
-                        return subnets
+        subnets = get_all_subnets()
+        if subnets:
+            # Determine source based on cache status
+            if db_exists:
+                source = "taomarketcap"
+            else:
+                source = "taomarketcap-cache"
+            return subnets, source
     except Exception as exc:
-        logger.warning("Falling back to static subnet snapshot: %s", exc)
-
+        logger.warning("Error fetching from taomarketcap: %s", exc)
+    
+    # Static fallback
+    logger.warning("Using static fallback data")
     return [
         {
             "netuid": 29,
@@ -101,11 +104,11 @@ def _safe_local_subnets() -> List[Dict[str, Any]]:
             "status": "active",
             "sector": "Compute",
         },
-    ]
+    ], "static-fallback"
 
 
 def _safe_simivision_payload() -> Dict[str, Any]:
-    subnets = _safe_local_subnets()
+    subnets, source = _get_subnets_with_source()
     ranked = sorted(subnets, key=lambda s: (s.get("emission", 0), s.get("apy", 0), s.get("volume", 0)), reverse=True)
     top = []
     for idx, sn in enumerate(ranked[:3], start=1):
@@ -126,7 +129,7 @@ def _safe_simivision_payload() -> Dict[str, Any]:
             "top": top,
             "meta": {
                 "count": len(subnets),
-                "source": "local-cache" if os.path.exists(os.path.join("data", "subnets.db")) else "static-fallback",
+                "source": source,
                 "updated_at": datetime.utcnow().isoformat() + "Z",
             },
         },
@@ -140,12 +143,12 @@ def health_check():
 
 @app.route("/api/subnets")
 def api_subnets_safe():
-    subnets = _safe_local_subnets()
+    subnets, source = _get_subnets_with_source()
     return jsonify({
         "status": "success",
         "meta": {
             "count": len(subnets),
-            "source": "local-cache" if os.path.exists(os.path.join("data", "subnets.db")) else "static-fallback",
+            "source": source,
             "updated_at": datetime.utcnow().isoformat() + "Z",
         },
         "subnets": subnets,
