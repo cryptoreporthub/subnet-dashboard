@@ -1,158 +1,75 @@
 <!DOCTYPE html>
-<html lang="en" class="scroll-smooth">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SimiVision Dashboard</title>
-    
-    <!-- React & ReactDOM -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
-    <!-- Babel for JSX -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
-    
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
-                        obsidian: {
-                            50: '#f8fafc',
-                            100: '#f1f5f9',
-                            200: '#e2e8f0',
-                            300: '#cbd5e1',
-                            400: '#94a3b8',
-                            500: '#64748b',
-                            600: '#475569',
-                            700: '#334155',
-                            800: '#1e293b',
-                            900: '#0f172a',
-                            950: '#020617',
-                        },
-                        green: {
-                            DEFAULT: '#00ff88',
-                            dark: '#00cc6a',
-                            glow: '#00ff88aa',
-                            faint: '#00ff8822',
-                        },
-                        purple: {
-                            DEFAULT: '#8b5cf6',
-                            dark: '#7c3aed',
-                            glow: '#8b5cf6aa',
-                        },
-                        red: {
-                            DEFAULT: '#ef4444',
-                            dark: '#dc2626',
-                        },
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif'],
-                    },
-                },
-            },
+                        green: { DEFAULT: '#00ff88', dark: '#00cc6a' },
+                        purple: { DEFAULT: '#8b5cf6', dark: '#7c3aed' },
+                        obsidian: { 900: '#0f172a', 950: '#020617' }
+                    }
+                }
+            }
         }
     </script>
-    
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        html { scroll-behavior: smooth; }
-        body {
+        body { 
             background: linear-gradient(180deg, #020617 0%, #0f172a 50%, #1e293b 100%);
-            min-height: 100vh;
-            color: #ffffff;
+            min-height: 100vh; 
+            color: #ffffff; 
             font-family: 'Inter', sans-serif;
         }
     </style>
 </head>
 <body>
-    <div id="root"></div>
-
-    <script type="text/babel">
-        const { useState, useEffect } = React;
-        
-        // Simple App Component
-        function App() {
-            const [data, setData] = useState(null);
-            const [loading, setLoading] = useState(true);
-            const [error, setError] = useState(null);
-            
-            useEffect(() => {
-                const fetchData = async () => {
-                    try {
-                        const response = await fetch('/api/subnets');
-                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                        const result = await response.json();
-                        setData(result);
-                    } catch (err) {
-                        setError(err.message);
-                    } finally {
-                        setLoading(false);
-                    }
-                };
-                fetchData();
-            }, []);
-            
-            if (loading) {
-                return React.createElement('div', {
-                    className: 'flex items-center justify-center min-h-screen'
-                },
-                    React.createElement('div', { className: 'text-center' },
-                        React.createElement('div', { className: 'text-2xl text-green-400 mb-4' }, 'Loading...'),
-                        React.createElement('div', { className: 'text-gray-400' }, 'Fetching live subnet data')
-                    )
-                );
+    <div id="app" class="p-6">
+        <div class="max-w-7xl mx-auto">
+            <h1 class="text-3xl font-bold text-green-400 mb-6">SimiVision Dashboard</h1>
+            <div id="status" class="mb-4 text-gray-400">Loading data...</div>
+            <div id="subnets" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+    </div>
+    
+    <script>
+        // Fetch and display subnets
+        async function loadData() {
+            try {
+                const response = await fetch('/api/subnets');
+                const data = await response.json();
+                document.getElementById('status').textContent = `Source: ${data.meta.source} | Updated: ${data.meta.updated_at}`;
+                
+                const container = document.getElementById('subnets');
+                container.innerHTML = '';
+                
+                data.subnets.slice(0, 6).forEach(sn => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-gray-800/50 p-4 rounded-lg border border-gray-700';
+                    card.innerHTML = `
+                        <h3 class="text-lg font-semibold text-white">${sn.name}</h3>
+                        <div class="text-sm text-gray-400">
+                            <p>NetUID: ${sn.netuid}</p>
+                            <p>Price: $${sn.price?.toFixed(4) || 'N/A'}</p>
+                            <p>APY: ${(sn.apy || 0).toFixed(2)}%</p>
+                            <p>24h: ${(sn.price_change_24h || 0).toFixed(2)}%</p>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            } catch (err) {
+                document.getElementById('status').textContent = 'Error loading data: ' + err.message;
             }
-            
-            if (error) {
-                return React.createElement('div', {
-                    className: 'flex items-center justify-center min-h-screen'
-                },
-                    React.createElement('div', { className: 'text-red-400' }, 'Error: ' + error)
-                );
-            }
-            
-            const subnets = data?.subnets || [];
-            const topSubnet = subnets[0];
-            
-            return React.createElement('div', { className: 'p-6' },
-                React.createElement('h1', { className: 'text-3xl font-bold text-green-400 mb-6' }, 'SimiVision Dashboard'),
-                React.createElement('div', { className: 'mb-4 text-gray-400' }, 
-                    `Source: ${data?.meta?.source} | Updated: ${data?.meta?.updated_at}`
-                ),
-                React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' },
-                    subnets.slice(0, 6).map((sn, idx) =>
-                        React.createElement('div', { 
-                            key: sn.netuid,
-                            className: 'bg-gray-800/50 p-4 rounded-lg border border-gray-700'
-                        },
-                            React.createElement('h3', { className: 'text-lg font-semibold text-white' }, sn.name),
-                            React.createElement('div', { className: 'text-sm text-gray-400' },
-                                React.createElement('p', null, `NetUID: ${sn.netuid}`),
-                                React.createElement('p', null, `Price: $${sn.price?.toFixed(4) || 'N/A'}`),
-                                React.createElement('p', null, `APY: ${(sn.apy || 0).toFixed(2)}%`),
-                                React.createElement('p', null, `24h: ${(sn.price_change_24h || 0).toFixed(2)}%`)
-                            )
-                        )
-                    )
-                )
-            );
         }
         
-        // Render the app
-        ReactDOM.createRoot(document.getElementById('root')).render(
-            React.createElement(App)
-        );
+        loadData();
+        setInterval(loadData, 30000);
     </script>
 </body>
 </html>
