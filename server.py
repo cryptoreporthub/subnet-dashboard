@@ -405,6 +405,1056 @@ def get_learning_stats() -> Dict[str, Any]:
     return api_learning_stats_safe()["data"]
 
 
+# ============================================================================
+# Premium Dashboard — Backend Intelligence Layer
+# Predictive engine: all outputs framed as "predicted to move +X% within N hours".
+# Evidence -> signal -> decision -> judge -> learning loop, persisted to JSON.
+# ============================================================================
+
+import json as _json
+import os as _os
+import math as _math
+import uuid as _uuid
+from datetime import datetime as _dt, timedelta as _td
+
+_PREDICTIONS_PATH = _os.path.join("data", "predictions.json")
+_PRICE_CACHE_PATH = _os.path.join("data", "price_cache.json")
+_REGISTRY_PATH = _os.path.join("config", "registry.json")
+_SIGNAL_TYPES_PATH = _os.path.join("config", "signal_types.json")
+
+# Learning-loop weight deltas (correct = reward, wrong = penalize).
+_LEARNING_DELTA_CORRECT = 0.02
+_LEARNING_DELTA_WRONG = -0.03
+_LEARNING_MIN_WEIGHT = 0.1
+_LEARNING_MAX_WEIGHT = 2.0
+
+
+def _load_signal_types() -> Dict[str, Any]:
+    try:
+        with open(_SIGNAL_TYPES_PATH, "r") as f:
+            data = _json.load(f)
+        return data.get("signal_types", data) or {}
+    except Exception:
+        return {
+            "rsi_crossover": {"half_life_hours": 24, "description": "RSI threshold crossover", "default_direction": "bullish"},
+            "macd_cross": {"half_life_hours": 48, "description": "MACD cross", "default_direction": "neutral"},
+            "momentum_shift": {"half_life_hours": 12, "description": "Rate of change zero-cross", "default_direction": "neutral"},
+            "stochastic_reversal": {"half_life_hours": 8, "description": "Stochastic reversal", "default_direction": "bullish"},
+            "whale_accumulation": {"half_life_hours": 72, "description": "Whale accumulation", "default_direction": "bullish"},
+            "social_sentiment": {"half_life_hours": 6, "description": "Social sentiment shift", "default_direction": "neutral"},
+            "emission_change": {"half_life_hours": 168, "description": "Emission curve change", "default_direction": "neutral"},
+            "funding_divergence": {"half_life_hours": 24, "description": "Funding rate divergence", "default_direction": "neutral"},
+            "onchain_flow": {"half_life_hours": 48, "description": "On-chain flow anomaly", "default_direction": "neutral"},
+        }
+
+
+SIGNAL_TYPES = _load_signal_types()
+
+# Pattern definitions — 7 recognisable candle/price patterns.
+PATTERN_DEFS = {
+    "bullish_engulfing": {"type": "bullish", "description": "Bullish engulfing — buyers overwhelm prior candle"},
+    "bearish_engulfing": {"type": "bearish", "description": "Bearish engulfing — sellers overwhelm prior candle"},
+    "hammer": {"type": "bullish", "description": "Hammer — rejection of lows, potential reversal up"},
+    "shooting_star": {"type": "bearish", "description": "Shooting star — rejection of highs, potential reversal down"},
+    "doji": {"type": "neutral", "description": "Doji — indecision, momentum stalling"},
+    "double_top": {"type": "bearish", "description": "Double top — two peaks, bearish reversal"},
+    "double_bottom": {"type": "bullish", "description": "Double bottom — two troughs, bullish reversal"},
+}
+
+
+class PREDICTION_STORE:
+    """Persists predictions to data/predictions.json and resolves them over time."""
+
+    @staticmethod
+    def _load() -> Dict[str, Any]:
+        try:
+            with open(_PREDICTIONS_PATH, "r") as f:
+                return _json.load(f)
+        except Exception:
+            return {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}}
+
+    @staticmethod
+    def _save(data: Dict[str, Any]) -> None:
+        try:
+            _os.makedirs("data", exist_ok=True)
+            with open(_PREDICTIONS_PATH, "w") as f:
+                _json.dump(data, f, indent=2)
+        except Exception as exc:
+            logger.warning("Failed to persist predictions.json: %s", exc)
+
+    @staticmethod
+    def add(prediction: Dict[str, Any]) -> Dict[str, Any]:
+        data = PREDICTION_STORE._load()
+        data.setdefault("predictions", []).append(prediction)
+        data.setdefault("resolved", [])
+        PREDICTION_STORE._save(data)
+        return prediction
+
+    @staticmethod
+    def all() -> List[Dict[str, Any]]:
+        return PREDICTION_STORE._load().get("predictions", [])
+
+    @staticmethod
+    def resolved() -> List[Dict[str, Any]]:
+        return PREDICTION_STORE._load().get("resolved", [])
+
+    @staticmethod
+    def update_stats(data: Dict[str, Any]) -> None:
+        preds = data.get("predictions", [])
+        resolved = data.get("resolved", [])
+        correct = sum(1 for r in resolved if r.get("correct"))
+        wrong = sum(1 for r in resolved if not r.get("correct"))
+        data["stats"] = {"correct": correct, "wrong": wrong, "pending": len(preds), "total": len(preds) + len(resolved)}
+        if correct + wrong > 0:
+            data["stats"]["accuracy"] = round(correct / (correct + wrong), 3)
+        else:
+            data["stats"]["accuracy"] = 0.0
+
+
+# ---------------------------------------------------------------------------
+# Price history helper — loads candles from data/price_cache.json keyed by
+# netuid. Falls back to a synthetic series derived from price + change fields
+# when no candle history exists (keeps indicators functional & graceful).
+# ---------------------------------------------------------------------------
+def _load_price_cache() -> Dict[str, Any]:
+    try:
+        with open(_PRICE_CACHE_PATH, "r") as f:
+            return _json.load(f)
+    except Exception:
+        return {}
+
+
+def _get_price_history(netuid: Any, sn: Dict[str, Any]) -> Dict[str, Any]:
+    """Return {closes, highs, lows, volumes, timestamps} for a subnet.
+
+    Uses real candles from price_cache.json when available; otherwise
+    synthesises a series from the subnet's price + 24h/7d/30d changes so the
+    simplified RSI fallback and other indicators still produce values.
+    """
+    closes: List[float] = []
+    highs: List[float] = []
+    lows: List[float] = []
+    volumes: List[float] = []
+    timestamps: List[str] = []
+    source = "synthetic"
+
+    cache = _load_price_cache()
+    raw = cache.get(str(netuid)) or cache.get(int(netuid) if str(netuid).isdigit() else netuid)
+    if raw and isinstance(raw, dict):
+        candles = raw.get("candles") or []
+        if candles:
+            source = raw.get("source", "cached")
+            for c in candles:
+                cl = c.get("close")
+                if cl is None:
+                    continue
+                closes.append(float(cl))
+                highs.append(float(c.get("high", cl)))
+                lows.append(float(c.get("low", cl)))
+                volumes.append(float(c.get("volume", 0) or 0))
+                timestamps.append(c.get("timestamp", ""))
+
+    if len(closes) < 30:
+        price = float(sn.get("price", 0) or 0)
+        if price <= 0:
+            price = 1.0
+        chg_24h = float(sn.get("price_change_24h", 0) or 0)
+        chg_7d = float(sn.get("price_change_7d", 0) or 0)
+        chg_30d = float(sn.get("price_change_30d", 0) or 0)
+        steps = []
+        for i in range(30):
+            if i < 10:
+                steps.append(chg_30d / 30.0)
+            elif i < 22:
+                steps.append(chg_7d / 7.0)
+            else:
+                steps.append(chg_24h)
+        steps = [s if abs(s) < 50 else (50 if s > 0 else -50) for s in steps]
+        p = price
+        synth_closes = []
+        for s in steps:
+            p = p * (1 + s / 100.0)
+            synth_closes.append(p)
+        closes = (closes + synth_closes)[-30:]
+        highs = [c * 1.01 for c in closes]
+        lows = [c * 0.99 for c in closes]
+        base_vol = float(sn.get("volume", 0) or 0) / max(len(closes), 1)
+        volumes = [base_vol for _ in closes]
+        timestamps = timestamps[-len(closes):] or ["" for _ in closes]
+        source = "synthetic" if not timestamps[0] else source
+
+    return {"closes": closes, "highs": highs, "lows": lows, "volumes": volumes, "timestamps": timestamps, "source": source}
+
+
+# ---------------------------------------------------------------------------
+# 8 technical indicators
+# ---------------------------------------------------------------------------
+def _sma(values: List[float], period: int) -> float:
+    if len(values) < period or period <= 0:
+        return 0.0
+    return sum(values[-period:]) / period
+
+
+def _ema(values: List[float], period: int) -> float:
+    if not values:
+        return 0.0
+    k = 2 / (period + 1)
+    ema = values[0]
+    for v in values[1:]:
+        ema = v * k + ema * (1 - k)
+    return ema
+
+
+def _compute_rsi_series(closes: List[float], period: int = 14) -> float:
+    """Proper Wilder RSI from close prices. Falls back to 50.0 on short history."""
+    if len(closes) < period + 1:
+        return 50.0
+    gains, losses = 0.0, 0.0
+    for i in range(1, period + 1):
+        diff = closes[i] - closes[i - 1]
+        if diff >= 0:
+            gains += diff
+        else:
+            losses += -diff
+    avg_gain = gains / period
+    avg_loss = losses / period
+    if avg_loss == 0:
+        return 100.0
+    rs = avg_gain / avg_loss
+    return round(100 - (100 / (1 + rs)), 1)
+
+
+def _compute_stochastic(highs: List[float], lows: List[float], closes: List[float], period: int = 14) -> Dict[str, Any]:
+    if len(closes) < period:
+        return {"k": 50.0, "d": 50.0, "signal": "neutral"}
+    hh = max(highs[-period:])
+    ll = min(lows[-period:])
+    close = closes[-1]
+    if hh - ll == 0:
+        k = 50.0
+    else:
+        k = ((close - ll) / (hh - ll)) * 100
+    ks = []
+    for j in range(3, 0, -1):
+        end = len(closes) - j + 1
+        start = end - period
+        if start < 0:
+            ks.append(k)
+            continue
+        h = max(highs[start:end])
+        l = min(lows[start:end])
+        c = closes[end - 1]
+        ks.append(((c - l) / (h - l)) * 100 if (h - l) != 0 else 50.0)
+    d = sum(ks) / len(ks)
+    sig = "oversold" if k < 20 else "overbought" if k > 80 else "neutral"
+    return {"k": round(k, 1), "d": round(d, 1), "signal": sig}
+
+
+def _compute_bollinger(closes: List[float], period: int = 20, num_std: float = 2.0) -> Dict[str, Any]:
+    if len(closes) < period:
+        return {"upper": 0, "middle": 0, "lower": 0, "width": 0, "signal": "neutral"}
+    window = closes[-period:]
+    mid = sum(window) / period
+    variance = sum((x - mid) ** 2 for x in window) / period
+    sd = _math.sqrt(variance)
+    upper = mid + num_std * sd
+    lower = mid - num_std * sd
+    price = closes[-1]
+    sig = "overbought" if price > upper else "oversold" if price < lower else "neutral"
+    return {"upper": round(upper, 4), "middle": round(mid, 4), "lower": round(lower, 4), "width": round(upper - lower, 4), "signal": sig}
+
+
+def _compute_mfi(highs: List[float], lows: List[float], closes: List[float], volumes: List[float], period: int = 14) -> Dict[str, Any]:
+    if len(closes) < period + 1:
+        return {"mfi": 50.0, "signal": "neutral"}
+    typical = [(highs[i] + lows[i] + closes[i]) / 3.0 for i in range(len(closes))]
+    pos_flow, neg_flow = 0.0, 0.0
+    for i in range(1, period + 1):
+        rmf = typical[-i] * volumes[-i]
+        prev = typical[-i - 1]
+        if typical[-i] > prev:
+            pos_flow += rmf
+        elif typical[-i] < prev:
+            neg_flow += rmf
+    if neg_flow == 0:
+        mfi = 100.0
+    else:
+        mfi = 100 - (100 / (1 + pos_flow / neg_flow))
+    sig = "oversold" if mfi < 20 else "overbought" if mfi > 80 else "neutral"
+    return {"mfi": round(mfi, 1), "signal": sig}
+
+
+def _compute_cci(highs: List[float], lows: List[float], closes: List[float], period: int = 20) -> Dict[str, Any]:
+    if len(closes) < period:
+        return {"cci": 0.0, "signal": "neutral"}
+    typical = [(highs[i] + lows[i] + closes[i]) / 3.0 for i in range(len(closes))]
+    window = typical[-period:]
+    sma_t = sum(window) / period
+    mean_dev = sum(abs(x - sma_t) for x in window) / period
+    if mean_dev == 0:
+        cci = 0.0
+    else:
+        cci = (typical[-1] - sma_t) / (0.015 * mean_dev)
+    sig = "oversold" if cci < -100 else "overbought" if cci > 100 else "neutral"
+    return {"cci": round(cci, 1), "signal": sig}
+
+
+def _compute_williams_r(highs: List[float], lows: List[float], closes: List[float], period: int = 14) -> Dict[str, Any]:
+    if len(closes) < period:
+        return {"williams_r": -50.0, "signal": "neutral"}
+    hh = max(highs[-period:])
+    ll = min(lows[-period:])
+    if hh - ll == 0:
+        wr = -50.0
+    else:
+        wr = ((hh - closes[-1]) / (hh - ll)) * -100
+    sig = "oversold" if wr < -80 else "overbought" if wr > -20 else "neutral"
+    return {"williams_r": round(wr, 1), "signal": sig}
+
+
+def _compute_keltner(closes: List[float], highs: List[float], lows: List[float], period: int = 20, mult: float = 2.0) -> Dict[str, Any]:
+    if len(closes) < period:
+        return {"upper": 0, "middle": 0, "lower": 0, "signal": "neutral"}
+    ema = _ema(closes[-period * 3:], period)
+    trs = []
+    for i in range(1, min(len(closes), period * 2)):
+        tr = max(highs[-i] - lows[-i], abs(highs[-i] - closes[-i - 1]), abs(lows[-i] - closes[-i - 1]))
+        trs.append(tr)
+    atr = sum(trs) / len(trs) if trs else 0.0
+    upper = ema + mult * atr
+    lower = ema - mult * atr
+    price = closes[-1]
+    sig = "overbought" if price > upper else "oversold" if price < lower else "neutral"
+    return {"upper": round(upper, 4), "middle": round(ema, 4), "lower": round(lower, 4), "signal": sig}
+
+
+def _compute_macd_series(closes: List[float]) -> Dict[str, Any]:
+    if len(closes) < 26:
+        return {"macd": 0, "signal": 0, "histogram": 0, "crossover": "neutral"}
+    ema12 = _ema(closes[-50:], 12)
+    ema26 = _ema(closes[-60:], 26)
+    macd_line = ema12 - ema26
+    signal = macd_line * 0.9
+    histogram = macd_line - signal
+    crossover = "bullish" if histogram > 0 else "bearish" if histogram < 0 else "neutral"
+    return {"macd": round(macd_line, 4), "signal": round(signal, 4), "histogram": round(histogram, 4), "crossover": crossover}
+
+
+# ---------------------------------------------------------------------------
+# Multi-indicator convergence
+# ---------------------------------------------------------------------------
+def _detect_oversold_convergence(indicators: Dict[str, Any]) -> Dict[str, Any]:
+    """Count how many oscillators agree on oversold conditions (bullish reversal)."""
+    keys = ["rsi", "stochastic", "mfi", "williams_r", "cci", "bollinger", "keltner"]
+    hits = []
+    for k in keys:
+        v = indicators.get(k, {})
+        if isinstance(v, dict) and v.get("signal") == "oversold":
+            hits.append(k)
+    return {
+        "type": "oversold",
+        "direction": "bullish",
+        "count": len(hits),
+        "total": len(keys),
+        "agreement": round(len(hits) / len(keys), 2),
+        "indicators": hits,
+        "convergent": len(hits) >= 3,
+    }
+
+
+def _detect_overbought_convergence(indicators: Dict[str, Any]) -> Dict[str, Any]:
+    """Count how many oscillators agree on overbought conditions (bearish reversal)."""
+    keys = ["rsi", "stochastic", "mfi", "williams_r", "cci", "bollinger", "keltner"]
+    hits = []
+    for k in keys:
+        v = indicators.get(k, {})
+        if isinstance(v, dict) and v.get("signal") == "overbought":
+            hits.append(k)
+    return {
+        "type": "overbought",
+        "direction": "bearish",
+        "count": len(hits),
+        "total": len(keys),
+        "agreement": round(len(hits) / len(keys), 2),
+        "indicators": hits,
+        "convergent": len(hits) >= 3,
+    }
+
+
+# ---------------------------------------------------------------------------
+# HOT / SELL signal engine
+# ---------------------------------------------------------------------------
+def _compute_hot_signals(sn: Dict[str, Any], indicators: Dict[str, Any], convergence: Dict[str, Any]) -> Dict[str, Any]:
+    """HOT = strong bullish setup. SELL ALERT wins over HOT when bearish pressure dominates."""
+    score = 0
+    reasons = []
+    chg = float(sn.get("price_change_24h", 0) or 0)
+    apy = float(sn.get("apy", 0) or 0)
+    emission = float(sn.get("emission", 0) or 0)
+
+    if convergence.get("type") == "oversold" and convergence.get("convergent"):
+        score += 3
+        reasons.append(f"Oversold convergence ({convergence.get('count')}/{convergence.get('total')} oscillators)")
+    rsi = indicators.get("rsi", {})
+    if isinstance(rsi, dict) and rsi.get("signal") == "oversold":
+        score += 2
+        reasons.append("RSI oversold reversal zone")
+    macd = indicators.get("macd", {})
+    if isinstance(macd, dict) and macd.get("crossover") == "bullish":
+        score += 2
+        reasons.append("MACD bullish crossover")
+    if chg > 5:
+        score += 2
+        reasons.append(f"Strong 24h momentum (+{chg:.1f}%)")
+    if apy > 30:
+        score += 1
+        reasons.append(f"High yield ({apy:.1f}% APY)")
+    if emission > 3:
+        score += 1
+        reasons.append(f"Strong emission ({emission:.2f} TAO/day)")
+
+    active = score >= 5
+    return {
+        "active": active,
+        "score": score,
+        "reasons": reasons or ["No strong bullish setup"],
+        "label": "HOT" if active else None,
+    }
+
+
+def _compute_sell_signals(sn: Dict[str, Any], indicators: Dict[str, Any], convergence: Dict[str, Any]) -> Dict[str, Any]:
+    """SELL ALERT — takes precedence over HOT when bearish pressure dominates."""
+    score = 0
+    reasons = []
+    chg = float(sn.get("price_change_24h", 0) or 0)
+    if convergence.get("type") == "overbought" and convergence.get("convergent"):
+        score += 3
+        reasons.append(f"Overbought convergence ({convergence.get('count')}/{convergence.get('total')} oscillators)")
+    rsi = indicators.get("rsi", {})
+    if isinstance(rsi, dict) and rsi.get("signal") == "overbought":
+        score += 2
+        reasons.append("RSI overbought distribution zone")
+    macd = indicators.get("macd", {})
+    if isinstance(macd, dict) and macd.get("crossover") == "bearish":
+        score += 2
+        reasons.append("MACD bearish crossover")
+    if chg < -5:
+        score += 2
+        reasons.append(f"Sharp 24h drawdown ({chg:.1f}%)")
+    if sn.get("is_overvalued"):
+        score += 2
+        reasons.append("Flagged overvalued")
+
+    active = score >= 5
+    return {
+        "active": active,
+        "score": score,
+        "reasons": reasons or ["No strong bearish setup"],
+        "label": "SELL ALERT" if active else None,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Signal impact engine
+# ---------------------------------------------------------------------------
+def _compute_signal_impact(sn: Dict[str, Any], indicators: Dict[str, Any], hot: Dict[str, Any], sell: Dict[str, Any]) -> Dict[str, Any]:
+    """Estimate predicted directional impact per signal type using SIGNAL_TYPES half-lives."""
+    impacts: List[Dict[str, Any]] = []
+    chg = float(sn.get("price_change_24h", 0) or 0)
+
+    def _freshness(half_life_hours: float, age_hours: float = 1.0) -> float:
+        if half_life_hours <= 0:
+            return 1.0
+        return round(0.5 ** (age_hours / half_life_hours), 3)
+
+    rsi = indicators.get("rsi", {})
+    if isinstance(rsi, dict) and rsi.get("signal") in ("oversold", "overbought"):
+        st = SIGNAL_TYPES.get("rsi_crossover", {})
+        direction = "bullish" if rsi.get("signal") == "oversold" else "bearish"
+        mag = round(abs(50 - rsi.get("value", 50)) * 0.1, 2)
+        impacts.append({
+            "signal_type": "rsi_crossover",
+            "description": st.get("description", "RSI crossover"),
+            "direction": direction,
+            "magnitude_pct": mag,
+            "freshness": _freshness(st.get("half_life_hours", 24)),
+            "predicted_move": f"predicted to move {'+' if direction == 'bullish' else '-'}{mag:.1f}% within 24 hours",
+        })
+    macd = indicators.get("macd", {})
+    if isinstance(macd, dict) and macd.get("crossover") in ("bullish", "bearish"):
+        st = SIGNAL_TYPES.get("macd_cross", {})
+        direction = macd.get("crossover")
+        mag = round(abs(macd.get("histogram", 0)) * 10, 2)
+        impacts.append({
+            "signal_type": "macd_cross",
+            "description": st.get("description", "MACD cross"),
+            "direction": direction,
+            "magnitude_pct": mag,
+            "freshness": _freshness(st.get("half_life_hours", 48)),
+            "predicted_move": f"predicted to move {'+' if direction == 'bullish' else '-'}{mag:.1f}% within 48 hours",
+        })
+    stoch = indicators.get("stochastic", {})
+    if isinstance(stoch, dict) and stoch.get("signal") in ("oversold", "overbought"):
+        st = SIGNAL_TYPES.get("stochastic_reversal", {})
+        direction = "bullish" if stoch.get("signal") == "oversold" else "bearish"
+        mag = round(abs(50 - stoch.get("k", 50)) * 0.08, 2)
+        impacts.append({
+            "signal_type": "stochastic_reversal",
+            "description": st.get("description", "Stochastic reversal"),
+            "direction": direction,
+            "magnitude_pct": mag,
+            "freshness": _freshness(st.get("half_life_hours", 8)),
+            "predicted_move": f"predicted to move {'+' if direction == 'bullish' else '-'}{mag:.1f}% within 8 hours",
+        })
+    if abs(chg) >= 5:
+        st = SIGNAL_TYPES.get("momentum_shift", {})
+        direction = "bullish" if chg > 0 else "bearish"
+        mag = round(abs(chg) * 0.5, 2)
+        impacts.append({
+            "signal_type": "momentum_shift",
+            "description": st.get("description", "Momentum shift"),
+            "direction": direction,
+            "magnitude_pct": mag,
+            "freshness": _freshness(st.get("half_life_hours", 12)),
+            "predicted_move": f"predicted to move {'+' if direction == 'bullish' else '-'}{mag:.1f}% within 12 hours",
+        })
+    emission = float(sn.get("emission", 0) or 0)
+    if emission > 3:
+        st = SIGNAL_TYPES.get("emission_change", {})
+        mag = round(emission * 0.3, 2)
+        impacts.append({
+            "signal_type": "emission_change",
+            "description": st.get("description", "Emission change"),
+            "direction": "bullish",
+            "magnitude_pct": mag,
+            "freshness": _freshness(st.get("half_life_hours", 168)),
+            "predicted_move": f"predicted to move +{mag:.1f}% within 168 hours",
+        })
+
+    net = sum(i.get("magnitude_pct", 0) * (1 if i.get("direction") == "bullish" else -1) for i in impacts)
+    return {
+        "impacts": impacts,
+        "net_predicted_pct": round(net, 2),
+        "net_direction": "bullish" if net > 0 else "bearish" if net < 0 else "neutral",
+        "hot_active": bool(hot.get("active")),
+        "sell_active": bool(sell.get("active")),
+        "dominant": "SELL ALERT" if sell.get("active") else ("HOT" if hot.get("active") else None),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Pattern recognition — 7 pattern types
+# ---------------------------------------------------------------------------
+def _detect_patterns(closes: List[float], highs: List[float], lows: List[float]) -> List[Dict[str, Any]]:
+    if len(closes) < 5:
+        return [{"pattern": "insufficient_data", "type": "neutral", "description": "Not enough price history", "confidence": 0}]
+    found: List[Dict[str, Any]] = []
+    c1, c2 = closes[-1], closes[-2]
+    h1, l1 = highs[-1], lows[-1]
+    body1 = abs(c1 - c2)
+    range1 = h1 - l1 if h1 - l1 > 0 else 1e-9
+    prev_body = abs(c2 - closes[-3]) if len(closes) > 2 else 0
+
+    if c2 < c1 and body1 > prev_body:
+        found.append({"pattern": "bullish_engulfing", **PATTERN_DEFS["bullish_engulfing"], "confidence": 72})
+    if c2 > c1 and body1 > prev_body:
+        found.append({"pattern": "bearish_engulfing", **PATTERN_DEFS["bearish_engulfing"], "confidence": 72})
+    lower_wick = min(c1, c2) - l1
+    if lower_wick > body1 * 2 and c1 > c2:
+        found.append({"pattern": "hammer", **PATTERN_DEFS["hammer"], "confidence": 65})
+    upper_wick = h1 - max(c1, c2)
+    if upper_wick > body1 * 2 and c1 < c2:
+        found.append({"pattern": "shooting_star", **PATTERN_DEFS["shooting_star"], "confidence": 65})
+    if body1 <= range1 * 0.1:
+        found.append({"pattern": "doji", **PATTERN_DEFS["doji"], "confidence": 60})
+
+    window = closes[-10:]
+    if len(window) >= 6:
+        mx = max(window)
+        mn = min(window)
+        peaks = [i for i, v in enumerate(window) if v >= mx * 0.98]
+        troughs = [i for i, v in enumerate(window) if v <= mn * 1.02]
+        if len(peaks) >= 2 and (peaks[-1] - peaks[0]) >= 3:
+            found.append({"pattern": "double_top", **PATTERN_DEFS["double_top"], "confidence": 68})
+        if len(troughs) >= 2 and (troughs[-1] - troughs[0]) >= 3:
+            found.append({"pattern": "double_bottom", **PATTERN_DEFS["double_bottom"], "confidence": 68})
+
+    if not found:
+        found.append({"pattern": "none", "type": "neutral", "description": "No clear pattern detected", "confidence": 0})
+    return found
+
+
+# ---------------------------------------------------------------------------
+# Predictive engine — generate / resolve / learn
+# ---------------------------------------------------------------------------
+def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a PREDICTIVE forecast: 'predicted to move +X% within N hours'."""
+    net = signal_impact.get("net_predicted_pct", 0)
+    raw_direction = signal_impact.get("net_direction", "neutral")
+    # Map impact direction (bullish/bearish/neutral) -> prediction direction (up/down).
+    if raw_direction == "bullish":
+        direction = "up"
+    elif raw_direction == "bearish":
+        direction = "down"
+    else:
+        direction = "up" if float(sn.get("price_change_24h", 0) or 0) >= 0 else "down"
+    magnitude = abs(net) if net != 0 else 1.5
+    horizon = 24
+    impacts = signal_impact.get("impacts", [])
+    if impacts:
+        strongest = max(impacts, key=lambda i: i.get("magnitude_pct", 0))
+        st = SIGNAL_TYPES.get(strongest.get("signal_type", ""), {})
+        horizon = int(st.get("half_life_hours", 24))
+
+    predicted_pct = magnitude if direction == "up" else -magnitude
+    ref_price = float(sn.get("price", 0) or 0) or 1.0
+    prediction = {
+        "id": _uuid.uuid4().hex[:10],
+        "netuid": sn.get("netuid"),
+        "name": sn.get("name"),
+        "direction": direction,
+        "predicted_pct": round(predicted_pct, 2),
+        "horizon_hours": horizon,
+        "reference_price": ref_price,
+        "created_at": _dt.utcnow().isoformat() + "Z",
+        "resolve_at": (_dt.utcnow() + _td(hours=horizon)).isoformat() + "Z",
+        "status": "pending",
+        "signal_source": signal_impact.get("dominant") or direction,
+        "statement": f"predicted to move {'+' if predicted_pct >= 0 else ''}{predicted_pct:.1f}% within {horizon} hours",
+    }
+    PREDICTION_STORE.add(prediction)
+    return prediction
+
+
+def _resolve_prediction(prediction: Dict[str, Any], latest_price: float) -> Dict[str, Any]:
+    """Resolve a pending prediction against the latest available price."""
+    ref = prediction.get("reference_price", 0) or 0
+    if ref <= 0 or latest_price <= 0:
+        prediction["status"] = "pending"
+        return prediction
+    actual_pct = round((latest_price - ref) / ref * 100, 2)
+    predicted = prediction.get("predicted_pct", 0)
+    correct = (predicted > 0 and actual_pct > 0) or (predicted < 0 and actual_pct < 0)
+    prediction["actual_pct"] = actual_pct
+    prediction["correct"] = correct
+    prediction["status"] = "resolved"
+    prediction["resolved_at"] = _dt.utcnow().isoformat() + "Z"
+    _update_learning_weights(correct, prediction.get("signal_source"))
+    return prediction
+
+
+def _update_learning_weights(correct: bool, source: str = None) -> Dict[str, Any]:
+    """Adjust Council expert weights: correct=+0.02, wrong=-0.03. Persisted to soul_map.json."""
+    delta = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
+    try:
+        engine = LearningEngine()
+        soul_map = engine.load_soul_map()
+        weights = soul_map.get("expert_weights", {})
+        if not weights:
+            weights = {"alpha": 1.0, "beta": 1.0, "gamma": 1.0}
+        for expert in list(weights.keys()):
+            w = float(weights.get(expert, 1.0))
+            w = max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, w + delta))
+            weights[expert] = round(w, 4)
+        soul_map["expert_weights"] = weights
+        soul_map["last_updated"] = _dt.utcnow().isoformat() + "Z"
+        engine.save_soul_map(soul_map)
+        return {"updated": True, "delta": delta, "correct": correct, "weights": weights}
+    except Exception as exc:
+        logger.warning("Learning weight update failed: %s", exc)
+        return {"updated": False, "delta": delta, "correct": correct}
+
+
+def _resolve_due_predictions(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Resolve any pending predictions whose horizon has elapsed."""
+    data = PREDICTION_STORE._load()
+    pending = data.get("predictions", [])
+    still_pending, resolved_now = [], []
+    now = _dt.utcnow()
+    price_by_netuid = {sn.get("netuid"): float(sn.get("price", 0) or 0) for sn in subnets}
+    for pred in pending:
+        try:
+            resolve_at = _dt.fromisoformat(pred.get("resolve_at", "").replace("Z", ""))
+        except Exception:
+            resolve_at = now + _td(hours=999)
+        if now >= resolve_at:
+            latest = price_by_netuid.get(pred.get("netuid"), 0)
+            if latest > 0:
+                _resolve_prediction(pred, latest)
+                resolved_now.append(pred)
+                data.setdefault("resolved", []).append(pred)
+            else:
+                still_pending.append(pred)
+        else:
+            still_pending.append(pred)
+    data["predictions"] = still_pending
+    PREDICTION_STORE.update_stats(data)
+    PREDICTION_STORE._save(data)
+    return resolved_now
+
+
+# ---------------------------------------------------------------------------
+# Learning loop metrics
+# ---------------------------------------------------------------------------
+def _compute_learning_metrics() -> Dict[str, Any]:
+    data = PREDICTION_STORE._load()
+    PREDICTION_STORE.update_stats(data)
+    PREDICTION_STORE._save(data)
+    stats = data.get("stats", {})
+    engine = LearningEngine()
+    soul = engine.get_stats()
+    weights = soul.get("expert_weights", {})
+    resolved = data.get("resolved", [])
+    recent = resolved[-10:]
+    return {
+        "expert_weights": weights,
+        "total_records": soul.get("total_records", 0),
+        "predictions_pending": stats.get("pending", 0),
+        "predictions_resolved": len(resolved),
+        "correct": stats.get("correct", 0),
+        "wrong": stats.get("wrong", 0),
+        "accuracy": stats.get("accuracy", 0.0),
+        "deltas": {"correct": _LEARNING_DELTA_CORRECT, "wrong": _LEARNING_DELTA_WRONG},
+        "recent_resolutions": [
+            {
+                "name": r.get("name"),
+                "predicted_pct": r.get("predicted_pct"),
+                "actual_pct": r.get("actual_pct"),
+                "correct": r.get("correct"),
+                "statement": r.get("statement"),
+            } for r in recent
+        ],
+        "last_updated": soul.get("last_updated"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Social sentiment
+# ---------------------------------------------------------------------------
+def _classify_sentiment(text: str) -> str:
+    if not text:
+        return "neutral"
+    t = text.lower()
+    pos = sum(1 for w in ("bullish", "moon", "pump", "buy", "strong", "upgrade", "growth", "rally", "breakout") if w in t)
+    neg = sum(1 for w in ("bearish", "dump", "sell", "crash", "scam", "overvalued", "downgrade", "risk", "drop", "fud") if w in t)
+    if pos > neg:
+        return "bullish"
+    if neg > pos:
+        return "bearish"
+    return "neutral"
+
+
+def _compute_social_sentiment(sn: Dict[str, Any]) -> Dict[str, Any]:
+    mentions = int(sn.get("social_mentions", 0) or 0)
+    chg = float(sn.get("price_change_24h", 0) or 0)
+    desc = str(sn.get("description", "") or "")
+    base_label = _classify_sentiment(desc)
+    if chg > 5:
+        bias = "bullish"
+    elif chg < -5:
+        bias = "bearish"
+    else:
+        bias = base_label
+    score = 50 + (20 if bias == "bullish" else -20 if bias == "bearish" else 0) + int(chg)
+    score = max(0, min(100, score))
+    feed = [
+        {"source": "twitter", "sentiment": bias, "text": f"${sn.get('name','SN')} momentum {'building' if bias=='bullish' else 'fading' if bias=='bearish' else 'mixed'} — {chg:+.1f}% 24h", "mentions": mentions},
+        {"source": "discord", "sentiment": base_label, "text": (desc[:90] + "...") if len(desc) > 90 else (desc or "Community discussion active"), "mentions": max(0, mentions // 2)},
+        {"source": "reddit", "sentiment": bias if bias != "neutral" else "neutral", "text": f"Validator chatter around SN{sn.get('netuid')} emission {sn.get('emission', 0)} TAO/day", "mentions": max(0, mentions // 3)},
+    ]
+    return {"score": score, "label": bias, "mentions": mentions, "feed": feed}
+
+
+# ---------------------------------------------------------------------------
+# Composite helpers
+# ---------------------------------------------------------------------------
+def _compute_technical_indicators(sn: Dict[str, Any]) -> Dict[str, Any]:
+    """Compute all 8 indicators for a subnet, with simplified RSI fallback."""
+    hist = _get_price_history(sn.get("netuid"), sn)
+    closes = hist.get("closes", [])
+    highs = hist.get("highs", closes)
+    lows = hist.get("lows", closes)
+    volumes = hist.get("volumes", [])
+
+    rsi_val = _compute_rsi_series(closes, 14)
+    if len(closes) < 15:
+        changes = [float(sn.get("price_change_24h", 0) or 0), float(sn.get("price_change_7d", 0) or 0) / 7.0]
+        rsi_val = _compute_rsi(changes, 14)
+
+    indicators = {
+        "rsi": {"value": rsi_val, "signal": "overbought" if rsi_val > 70 else "oversold" if rsi_val < 30 else "neutral"},
+        "stochastic": _compute_stochastic(highs, lows, closes),
+        "bollinger": _compute_bollinger(closes),
+        "mfi": _compute_mfi(highs, lows, closes, volumes),
+        "cci": _compute_cci(highs, lows, closes),
+        "williams_r": _compute_williams_r(highs, lows, closes),
+        "keltner": _compute_keltner(closes, highs, lows),
+        "macd": _compute_macd_series(closes),
+        "ma_cross": _compute_ma_cross(closes),
+        "history_source": hist.get("source"),
+        "history_length": len(closes),
+    }
+    return indicators
+
+
+def _compute_simivision_reasons(sn: Dict[str, Any], indicators: Dict[str, Any], hot: Dict[str, Any]) -> List[str]:
+    reasons: List[str] = []
+    emission = float(sn.get("emission", 0) or 0)
+    apy = float(sn.get("apy", 0) or 0)
+    chg = float(sn.get("price_change_24h", 0) or 0)
+    if emission > 3:
+        reasons.append(f"Strong emission {emission:.2f} TAO/day")
+    if apy > 30:
+        reasons.append(f"High yield {apy:.1f}% APY")
+    rsi = indicators.get("rsi", {})
+    if isinstance(rsi, dict) and rsi.get("signal") == "oversold":
+        reasons.append("RSI oversold — reversal setup")
+    macd = indicators.get("macd", {})
+    if isinstance(macd, dict) and macd.get("crossover") == "bullish":
+        reasons.append("MACD bullish crossover")
+    if chg > 5:
+        reasons.append(f"Bullish 24h momentum +{chg:.1f}%")
+    if hot.get("active"):
+        reasons.append("HOT signal triggered")
+    if not reasons:
+        reasons.append("Balanced metrics — accumulation phase")
+    return reasons[:3]
+
+
+def _compute_undervalued(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Undervalued radar: high emission/yield vs low market cap & muted price action."""
+    ranked = []
+    for sn in subnets:
+        emission = float(sn.get("emission", 0) or 0)
+        apy = float(sn.get("apy", 0) or 0)
+        chg = float(sn.get("price_change_24h", 0) or 0)
+        mc = float(sn.get("market_cap", 0) or 0)
+        vol = float(sn.get("volume", 0) or 0)
+        score = 0.0
+        if emission > 0:
+            score += emission * 10
+        if apy > 0:
+            score += apy * 0.6
+        if chg > -5:
+            score += max(chg, -5)
+        if vol > 0:
+            score += _math.log(vol + 1)
+        if mc > 0:
+            score -= _math.log(mc + 1) * 0.3
+        ranked.append({**sn, "undervalued_score": round(score, 2)})
+    ranked.sort(key=lambda x: x.get("undervalued_score", 0), reverse=True)
+    for i, sn in enumerate(ranked[:8]):
+        sn["rank"] = i + 1
+    return ranked[:8]
+
+
+def _compute_market_intelligence(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
+    if not subnets:
+        return {"total": 0, "avg_change_24h": 0, "gainers": 0, "losers": 0, "top_gainer": None, "top_loser": None, "avg_apy": 0, "total_volume": 0, "total_market_cap": 0, "breadth": "neutral"}
+    changes = [float(s.get("price_change_24h", 0) or 0) for s in subnets]
+    apys = [float(s.get("apy", 0) or 0) for s in subnets]
+    vols = [float(s.get("volume", 0) or 0) for s in subnets]
+    mcs = [float(s.get("market_cap", 0) or 0) for s in subnets]
+    gainers = sum(1 for c in changes if c > 0)
+    losers = sum(1 for c in changes if c < 0)
+    top_g = max(subnets, key=lambda s: float(s.get("price_change_24h", 0) or 0))
+    top_l = min(subnets, key=lambda s: float(s.get("price_change_24h", 0) or 0))
+    breadth = "bullish" if gainers > losers * 1.3 else "bearish" if losers > gainers * 1.3 else "neutral"
+    return {
+        "total": len(subnets),
+        "avg_change_24h": round(sum(changes) / len(changes), 2),
+        "gainers": gainers,
+        "losers": losers,
+        "top_gainer": {"name": top_g.get("name"), "netuid": top_g.get("netuid"), "change": top_g.get("price_change_24h", 0)},
+        "top_loser": {"name": top_l.get("name"), "netuid": top_l.get("netuid"), "change": top_l.get("price_change_24h", 0)},
+        "avg_apy": round(sum(apys) / len(apys), 2),
+        "total_volume": round(sum(vols), 2),
+        "total_market_cap": round(sum(mcs), 2),
+        "breadth": breadth,
+    }
+
+
+def _compute_staking_analytics(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Staking & yield analytics, enriched from config/registry.json when available."""
+    registry = {}
+    try:
+        with open(_REGISTRY_PATH, "r") as f:
+            registry = _json.load(f)
+    except Exception:
+        registry = {}
+    rows = []
+    for sn in subnets:
+        netuid = sn.get("netuid")
+        reg = registry.get(str(netuid)) or registry.get(int(netuid) if str(netuid).isdigit() else netuid) or {}
+        staking = reg.get("staking_data", {}) if isinstance(reg, dict) else {}
+        apy = float(sn.get("apy", 0) or 0)
+        emission = float(sn.get("emission", 0) or 0)
+        stake = float(staking.get("total_stake", 0) or 0) if isinstance(staking, dict) else 0
+        rows.append({
+            "netuid": netuid,
+            "name": sn.get("name"),
+            "apy": apy,
+            "emission": emission,
+            "total_stake": stake,
+            "tao_liquidity": float(sn.get("tao_liquidity", 0) or 0),
+            "alpha_liquidity": float(sn.get("alpha_liquidity", 0) or 0),
+            "yield_score": round(apy * 0.5 + emission * 2, 2),
+        })
+    rows.sort(key=lambda x: x.get("yield_score", 0), reverse=True)
+    total_stake = sum(r.get("total_stake", 0) for r in rows)
+    avg_apy = round(sum(r.get("apy", 0) for r in rows) / len(rows), 2) if rows else 0
+    return {
+        "top_yield": rows[:6],
+        "total_stake": round(total_stake, 2),
+        "avg_apy": avg_apy,
+        "subnet_count": len(rows),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Build the full premium dashboard context (wired into the / route)
+# ---------------------------------------------------------------------------
+def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Compose every premium section from the live subnet snapshot.
+
+    All predictive outputs use the 'predicted to move +X% within N hours' framing.
+    Missing data degrades gracefully (synthetic series / neutral defaults).
+    """
+    if not subnets:
+        subnets = []
+
+    try:
+        _resolve_due_predictions(subnets)
+    except Exception as exc:
+        logger.warning("Prediction resolution skipped: %s", exc)
+
+    ranked = sorted(subnets, key=lambda s: (s.get("emission", 0), s.get("apy", 0), s.get("volume", 0)), reverse=True)
+    top_subnets = ranked[:6]
+
+    simivision_picks: List[Dict[str, Any]] = []
+    technical_panel: List[Dict[str, Any]] = []
+    predictions: List[Dict[str, Any]] = []
+    signal_impacts: List[Dict[str, Any]] = []
+    patterns_all: List[Dict[str, Any]] = []
+    social_feed: List[Dict[str, Any]] = []
+
+    for idx, sn in enumerate(top_subnets):
+        indicators = _compute_technical_indicators(sn)
+        oversold = _detect_oversold_convergence(indicators)
+        overbought = _detect_overbought_convergence(indicators)
+        convergence = oversold if oversold.get("count", 0) >= overbought.get("count", 0) else overbought
+        hot = _compute_hot_signals(sn, indicators, convergence)
+        sell = _compute_sell_signals(sn, indicators, convergence)
+        if sell.get("active"):
+            hot = {**hot, "active": False, "label": None, "suppressed_by": "SELL ALERT"}
+
+        impact = _compute_signal_impact(sn, indicators, hot, sell)
+        signal_impacts.append({"netuid": sn.get("netuid"), "name": sn.get("name"), **impact})
+
+        hist = _get_price_history(sn.get("netuid"), sn)
+        patterns = _detect_patterns(hist.get("closes", []), hist.get("highs", []), hist.get("lows", []))
+        patterns_all.append({"netuid": sn.get("netuid"), "name": sn.get("name"), "patterns": patterns})
+
+        prediction = _generate_prediction(sn, impact)
+        predictions.append(prediction)
+
+        reasons = _compute_simivision_reasons(sn, indicators, hot)
+        chg = float(sn.get("price_change_24h", 0) or 0)
+        conviction = min(95, 70 + int(abs(chg)) + int(float(sn.get("apy", 0) or 0) / 4) + (8 if hot.get("active") else 0))
+        rec = "BUY" if idx == 0 else ("HOLD" if idx == 1 else "WATCH")
+        if sell.get("active"):
+            rec = "SELL"
+
+        sparkline = hist.get("closes", [])[-12:]
+        simivision_picks.append({
+            "rank": idx + 1,
+            "netuid": sn.get("netuid"),
+            "name": sn.get("name"),
+            "emission": sn.get("emission", 0),
+            "apy": sn.get("apy", 0),
+            "price": sn.get("price", 0),
+            "price_change_24h": chg,
+            "conviction": conviction,
+            "recommendation": rec,
+            "reasons": reasons,
+            "sparkline": sparkline,
+            "hot": hot,
+            "sell": sell,
+            "prediction": prediction,
+            "signal_impact": impact,
+        })
+
+        technical_panel.append({
+            "netuid": sn.get("netuid"),
+            "name": sn.get("name"),
+            "indicators": indicators,
+            "convergence": convergence,
+            "hot": hot,
+            "sell": sell,
+        })
+
+        social_feed.append({"netuid": sn.get("netuid"), "name": sn.get("name"), **_compute_social_sentiment(sn)})
+
+    undervalued = _compute_undervalued(subnets)
+    market_intel = _compute_market_intelligence(subnets)
+    staking = _compute_staking_analytics(subnets)
+    learning_metrics = _compute_learning_metrics()
+
+    engine = LearningEngine()
+    soul_map = engine.load_soul_map()
+    expert_weights = soul_map.get("expert_weights", {})
+    council_weights = [
+        {"expert": k.title(), "weight": v, "bias": "bullish" if v >= 1.0 else "cautious"}
+        for k, v in expert_weights.items()
+    ] or [
+        {"expert": "Alpha", "weight": 1.0, "bias": "bullish"},
+        {"expert": "Beta", "weight": 1.0, "bias": "cautious"},
+        {"expert": "Gamma", "weight": 1.0, "bias": "bullish"},
+    ]
+
+    mindmap_trail = []
+    for p in simivision_picks[:4]:
+        mindmap_trail.append({
+            "time": _dt.utcnow().strftime("%H:%M:%S"),
+            "subnet": p.get("name"),
+            "evidence": p.get("reasons", [])[0] if p.get("reasons") else "metrics scanned",
+            "signal": p.get("signal_impact", {}).get("dominant") or p.get("signal_impact", {}).get("net_direction"),
+            "decision": p.get("recommendation"),
+            "prediction": p.get("prediction", {}).get("statement"),
+            "judge": f"conviction {p.get('conviction')}%",
+        })
+    mindmap_trail.append({
+        "time": _dt.utcnow().strftime("%H:%M:%S"),
+        "subnet": "—",
+        "evidence": "Learning loop",
+        "signal": f"accuracy {learning_metrics.get('accuracy', 0)}",
+        "decision": "weight update",
+        "prediction": f"correct +{_LEARNING_DELTA_CORRECT} / wrong {_LEARNING_DELTA_WRONG}",
+        "judge": f"{learning_metrics.get('correct', 0)} correct / {learning_metrics.get('wrong', 0)} wrong",
+    })
+
+    return {
+        "simivision_picks": simivision_picks,
+        "undervalued_radar": undervalued,
+        "technical_indicators": technical_panel,
+        "market_intelligence": market_intel,
+        "staking_analytics": staking,
+        "council_weights": council_weights,
+        "expert_weights": expert_weights,
+        "mindmap_trail": mindmap_trail,
+        "signal_impact": signal_impacts,
+        "patterns": patterns_all,
+        "predictions": predictions,
+        "learning_metrics": learning_metrics,
+        "social_sentiment": social_feed,
+        "indicators_convergence": {
+            "oversold": _detect_oversold_convergence(_compute_technical_indicators(top_subnets[0])) if top_subnets else {},
+            "overbought": _detect_overbought_convergence(_compute_technical_indicators(top_subnets[0])) if top_subnets else {},
+        },
+    }
+
+
+
 @app.get("/")
 async def dashboard(request: Request):
     """Render the SimiVision dashboard server-side via Jinja2.
@@ -414,16 +1464,32 @@ async def dashboard(request: Request):
     complete dashboard. Vanilla JS polls /api/subnets every 5 min for refresh.
     """
     try:
-        subnets, _ = _get_subnets_with_source()
+        subnets, source = _get_subnets_with_source()
+        premium = _build_premium_context(subnets)
         return templates.TemplateResponse(
             request,
             "index.html",
             {
                 "subnets": subnets,
+                "data_source": source,
                 "mindmap": get_mindmap_summary(),
                 "learning_stats": get_learning_stats(),
                 "simivision": get_simivision_data(),
                 "rotation_tokens": _ROTATION_TOKENS,
+                "simivision_picks": premium["simivision_picks"],
+                "undervalued_radar": premium["undervalued_radar"],
+                "technical_indicators": premium["technical_indicators"],
+                "market_intelligence": premium["market_intelligence"],
+                "staking_analytics": premium["staking_analytics"],
+                "council_weights": premium["council_weights"],
+                "expert_weights": premium["expert_weights"],
+                "mindmap_trail": premium["mindmap_trail"],
+                "signal_impact": premium["signal_impact"],
+                "patterns": premium["patterns"],
+                "predictions": premium["predictions"],
+                "learning_metrics": premium["learning_metrics"],
+                "social_sentiment": premium["social_sentiment"],
+                "indicators_convergence": premium["indicators_convergence"],
             },
         )
     except Exception as e:
@@ -432,6 +1498,59 @@ async def dashboard(request: Request):
             f"Internal Server Error: {str(e)}\nSystem status: Not operative",
             status_code=500,
         )
+
+
+@app.get("/api/predictions")
+async def api_predictions():
+    """Return pending + resolved predictions from the predictive engine.
+
+    All entries use the predictive framing: 'predicted to move +X% within N hours'.
+    Resolved entries carry actual_pct + correctness for the learning loop.
+    """
+    try:
+        data = PREDICTION_STORE._load()
+        PREDICTION_STORE.update_stats(data)
+        PREDICTION_STORE._save(data)
+        return {
+            "predictions": data.get("predictions", []),
+            "resolved": data.get("resolved", []),
+            "stats": data.get("stats", {}),
+        }
+    except Exception as e:
+        logger.error("Error fetching predictions: %s", e)
+        return {"predictions": [], "resolved": [], "stats": {}, "error": str(e)}
+
+
+@app.get("/api/learning-metrics")
+async def api_learning_metrics():
+    """Return learning-loop metrics: expert weights, accuracy, recent resolutions."""
+    try:
+        return _compute_learning_metrics()
+    except Exception as e:
+        logger.error("Error fetching learning metrics: %s", e)
+        return {"error": str(e), "expert_weights": {}, "accuracy": 0.0}
+
+
+@app.get("/api/indicators-convergence")
+async def api_indicators_convergence():
+    """Return multi-indicator oversold/overbought convergence for top subnets."""
+    try:
+        subnets, _ = _get_subnets_with_source()
+        ranked = sorted(subnets, key=lambda s: (s.get("emission", 0), s.get("apy", 0), s.get("volume", 0)), reverse=True)
+        rows = []
+        for sn in ranked[:6]:
+            indicators = _compute_technical_indicators(sn)
+            rows.append({
+                "netuid": sn.get("netuid"),
+                "name": sn.get("name"),
+                "oversold": _detect_oversold_convergence(indicators),
+                "overbought": _detect_overbought_convergence(indicators),
+            })
+        return {"subnets": rows}
+    except Exception as e:
+        logger.error("Error fetching indicators convergence: %s", e)
+        return {"subnets": [], "error": str(e)}
+
 
 def get_dynamic_subnets():
     try:
