@@ -1,10 +1,16 @@
-# Deployment Notes
-
-## Version 3.4.1
-- Restored template rendering with all widgets
-- SimiVision picks, Learning Trail, Spotlight sections
-- Technical indicators on all endpoints
+# Deploy Notes
 
 ## Deployment Status
-- Triggered: 2026-06-25
-- Goal: Full template rendering with widgets
+
+- **Last Updated**: 2026-06-26
+- **Frontend Fix**: API fetching enabled
+- **Status**: Deployed
+
+## API Endpoints
+
+All endpoints are live and returning data from `taomarketcap`:
+- `/api/subnets` - 129 subnets
+- `/api/simivision` - Top performers
+- `/api/rotation-tokens` - Rotation tokens
+- `/api/mindmap/summary` - Mindmap data
+- `/api/learning/stats` - Learning stats
