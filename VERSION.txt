@@ -1,4 +1,4 @@
 # Dashboard version - updating this triggers Fly.io rebuild
 VERSION = "3.5.2"
 APP_NAME = "SimiVision Dashboard"
-REACT_ENABLED = true
+REACT_ENABLED = true# Deploy trigger 1782441332
