@@ -1,3 +1,0 @@
-# Redeploy trigger
-
-This file is used to trigger Fly.io deployments via the GitHub Actions workflow.
