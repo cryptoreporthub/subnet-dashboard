@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fetchers.taomarketcap import get_all_subnets, get_subnet_data
 from internal.council.state_vector import score_subnet_for_hour, score_subnet_for_day
 from internal.council.daily_pick import select_daily_pick
+from internal.council import resolver, scenario_memory, rotation_tracker
 try:
     from data.learning_engine import LearningEngine, create_feedback_router
 except ImportError:
@@ -2143,6 +2144,74 @@ async def api_predictions():
     except Exception as e:
         logger.error("Error fetching predictions: %s", e)
         return {"predictions": [], "resolved": [], "stats": {}, "error": str(e)}
+
+
+@app.get("/api/predictions/resolved")
+async def api_predictions_resolved(resolve: bool = False):
+    """Return resolved predictions. Trigger a 24h resolution pass when ``resolve=1``."""
+    try:
+        if resolve:
+            subnets, _ = _get_subnets_with_source()
+            result = resolver.resolve_due_predictions(subnets)
+        else:
+            result = resolver.get_resolved_predictions()
+        return {
+            "status": "ok",
+            "resolved": result.get("resolved", []),
+            "stats": result.get("stats", {}),
+            "triggered_resolution": resolve,
+        }
+    except Exception as e:
+        logger.error("Error resolving predictions: %s", e)
+        return {"status": "error", "resolved": [], "stats": {}, "error": str(e)}
+
+
+@app.get("/api/scenario-memory")
+async def api_scenario_memory():
+    """Return the full regime-aware scenario memory snapshot."""
+    try:
+        return {"status": "ok", **scenario_memory.get_memory_snapshot()}
+    except Exception as e:
+        logger.error("Error fetching scenario memory: %s", e)
+        return {"status": "error", "scenarios": [], "regimes": {}, "stats": {}, "meta": {}, "error": str(e)}
+
+
+@app.post("/api/scenario-memory")
+async def api_scenario_memory_add(request: Request):
+    """Record a new regime-aware scenario into persistent memory."""
+    try:
+        payload = await request.json()
+    except Exception as e:
+        return {"status": "error", "error": f"Invalid JSON body: {e}"}
+
+    name = payload.get("name")
+    features = payload.get("features", {})
+    if not name or not isinstance(features, dict):
+        return {"status": "error", "error": "Missing 'name' or 'features'"}
+
+    try:
+        scenario = scenario_memory.add_scenario(
+            name=name,
+            features=features,
+            outcome=payload.get("outcome"),
+            regime=payload.get("regime"),
+            metadata=payload.get("metadata"),
+        )
+        return {"status": "ok", "scenario": scenario}
+    except Exception as e:
+        logger.error("Error adding scenario: %s", e)
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/api/rotation-tracker")
+async def api_rotation_tracker():
+    """Return subnet rotation patterns and volatility clusters."""
+    try:
+        subnets, _ = _get_subnets_with_source()
+        return {"status": "ok", **rotation_tracker.get_rotation_summary(subnets)}
+    except Exception as e:
+        logger.error("Error fetching rotation tracker: %s", e)
+        return {"status": "error", "patterns": [], "volatility_clusters": {}, "error": str(e)}
 
 
 @app.get("/api/learning-metrics")
