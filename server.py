@@ -19,6 +19,10 @@ from fetchers.taomarketcap import get_all_subnets, get_subnet_data
 from internal.council.state_vector import score_subnet_for_hour, score_subnet_for_day
 from internal.council.daily_pick import select_daily_pick
 from internal.council import resolver, scenario_memory, rotation_tracker
+from internal.council.calibration import recalibrate as compute_calibration_curve
+from internal.council.retrain_scheduler import RetrainScheduler
+from internal.council.judge_portfolio import JudgePortfolioManager
+
 try:
     from data.learning_engine import LearningEngine, create_feedback_router
 except ImportError:
@@ -38,6 +42,27 @@ logger = logging.getLogger(__name__)
 os.makedirs("data", exist_ok=True)
 
 app = FastAPI(title="SimiVision Subnet Dashboard", version="3.5.0")
+
+# Phase 3: shared manager instances (paths are configurable in tests via monkeypatch).
+_judge_portfolio_manager: JudgePortfolioManager = JudgePortfolioManager()
+_retrain_scheduler: RetrainScheduler = RetrainScheduler()
+
+
+def _is_test_environment() -> bool:
+    """Detect whether the server is being imported by pytest."""
+    return "pytest" in sys.modules or os.environ.get("DISABLE_RETRAIN_SCHEDULER") == "1"
+
+
+@app.on_event("startup")
+def _start_retrain_scheduler() -> None:
+    """Start the daily retrain scheduler unless tests have disabled it."""
+    if _is_test_environment():
+        return
+    try:
+        _retrain_scheduler.start()
+        logger.info("Retrain scheduler started (next run %s)", _retrain_scheduler.get_status()["next_retrain"])
+    except Exception as e:
+        logger.error("Failed to start retrain scheduler: %s", e)
 
 # CORS middleware (replaces Flask's per-response CORS headers)
 app.add_middleware(
@@ -2212,6 +2237,90 @@ async def api_rotation_tracker():
     except Exception as e:
         logger.error("Error fetching rotation tracker: %s", e)
         return {"status": "error", "patterns": [], "volatility_clusters": {}, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Calibration, retrain scheduler, and 3-judge paper portfolios
+# ---------------------------------------------------------------------------
+
+@app.get("/api/calibration/curve")
+async def api_calibration_curve():
+    """Return the TaoDX-style calibration / precision curve."""
+    try:
+        snapshot = compute_calibration_curve()
+        return {"status": "ok", **snapshot}
+    except Exception as e:
+        logger.error("Error computing calibration curve: %s", e)
+        return {"status": "error", "curve": [], "monotonic": True, "mean_precision": 0.0, "error": str(e)}
+
+
+@app.get("/api/retrain/status")
+async def api_retrain_status():
+    """Return the retrain scheduler status."""
+    try:
+        return {"status": "ok", **_retrain_scheduler.get_status()}
+    except Exception as e:
+        logger.error("Error fetching retrain status: %s", e)
+        return {"status": "error", "last_retrain": None, "next_retrain": None, "last_report": None, "error": str(e)}
+
+
+@app.post("/api/retrain/trigger")
+async def api_retrain_trigger():
+    """Manually trigger a retrain cycle now."""
+    try:
+        subnets, _ = _get_subnets_with_source()
+        report = _retrain_scheduler.trigger_now(subnets)
+        return {"status": "ok", "report": report}
+    except Exception as e:
+        logger.error("Error triggering retrain: %s", e)
+        return {"status": "error", "report": None, "error": str(e)}
+
+
+@app.get("/api/judge-portfolios")
+async def api_judge_portfolios():
+    """Return full status of all 3 judge portfolios plus leaderboard."""
+    try:
+        return {"status": "ok", **_judge_portfolio_manager.get_all_portfolios()}
+    except Exception as e:
+        logger.error("Error fetching judge portfolios: %s", e)
+        return {"status": "error", "portfolios": {}, "leaderboard": [], "error": str(e)}
+
+
+@app.get("/api/judge-portfolios/leaderboard")
+async def api_judge_portfolios_leaderboard():
+    """Return the judge portfolio leaderboard only."""
+    try:
+        return {"status": "ok", "leaderboard": _judge_portfolio_manager.get_leaderboard()}
+    except Exception as e:
+        logger.error("Error fetching judge leaderboard: %s", e)
+        return {"status": "error", "leaderboard": [], "error": str(e)}
+
+
+@app.get("/api/judge-portfolios/{judge_id}")
+async def api_judge_portfolio_detail(judge_id: str):
+    """Return a single judge portfolio."""
+    try:
+        portfolio = _judge_portfolio_manager.get_portfolio(judge_id)
+        if portfolio is None:
+            return {"status": "error", "error": f"Unknown judge_id: {judge_id}"}
+        return {"status": "ok", "portfolio": portfolio}
+    except Exception as e:
+        logger.error("Error fetching judge portfolio detail: %s", e)
+        return {"status": "error", "portfolio": None, "error": str(e)}
+
+
+@app.post("/api/judge-portfolios/action")
+async def api_judge_portfolios_action():
+    """Trigger a daily judge action cycle for all three judges."""
+    try:
+        subnets, _ = _get_subnets_with_source()
+        prices = resolver.fetch_prices(subnets)
+        predictions = resolver.get_resolved_predictions().get("resolved", [])
+        result = _judge_portfolio_manager.run_all_daily_actions(subnets, predictions, prices)
+        return {"status": "ok", **result}
+    except Exception as e:
+        logger.error("Error triggering judge action cycle: %s", e)
+        return {"status": "error", "actions": {}, "leaderboard": [], "error": str(e)}
 
 
 @app.get("/api/learning-metrics")
