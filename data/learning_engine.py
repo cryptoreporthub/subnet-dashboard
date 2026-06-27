@@ -19,19 +19,39 @@ LEARNING_CONFIG = {
 
 class LearningEngine:
     """Manages the learning loop for expert council weights."""
-    
+
+    # Named council experts seeded at weight 1.0 when no weights exist yet.
+    DEFAULT_EXPERT_WEIGHTS = {"alpha": 1.0, "beta": 1.0, "gamma": 1.0}
+
     def __init__(self, soul_map_path: str = "data/soul_map.json"):
         self.soul_map_path = soul_map_path
         self.config = LEARNING_CONFIG.copy()
-    
+
     def load_soul_map(self) -> Dict:
-        """Load the current soul map state."""
+        """Load the current soul map state.
+
+        Ensures the council's expert weights are always present: if the soul
+        map has no ``expert_weights`` (or an empty one), the named experts
+        (alpha, beta, gamma) are seeded at 1.0 and persisted so downstream
+        stats endpoints never return an empty dict.
+        """
         try:
             with open(self.soul_map_path, "r") as f:
-                return json.load(f)
+                data = json.load(f)
         except Exception as e:
             logger.error(f"Error loading soul map: {e}")
-            return {"expert_weights": {}, "performance_history": {}}
+            data = {}
+
+        if not isinstance(data, dict):
+            data = {}
+        if "performance_history" not in data:
+            data["performance_history"] = {}
+
+        weights = data.get("expert_weights")
+        if not weights or not isinstance(weights, dict):
+            data["expert_weights"] = dict(self.DEFAULT_EXPERT_WEIGHTS)
+            self.save_soul_map(data)
+        return data
     
     def save_soul_map(self, data: Dict) -> None:
         """Save the updated soul map state."""

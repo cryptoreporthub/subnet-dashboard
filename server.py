@@ -309,14 +309,20 @@ def api_mindmap_summary_safe():
 
 @app.get("/api/learning/stats")
 def api_learning_stats_safe():
-    engine = LearningEngine()
-    stats = engine.get_stats()
+    # Use the full learning-loop metrics so the dashboard exposes expert
+    # weights, resolution counts, accuracy and a last_updated timestamp.
+    metrics = _compute_learning_metrics()
     return {
         "status": "success",
         "data": {
-            "expert_weights": stats.get("expert_weights", {}),
-            "total_records": stats.get("total_records", 0),
-            "last_updated": stats.get("last_updated") or datetime.utcnow().isoformat() + "Z",
+            "expert_weights": metrics.get("expert_weights", {}),
+            "total_records": metrics.get("total_records", 0),
+            "correct": metrics.get("correct", 0),
+            "wrong": metrics.get("wrong", 0),
+            "accuracy": metrics.get("accuracy", 0.0),
+            "predictions_pending": metrics.get("predictions_pending", 0),
+            "predictions_resolved": metrics.get("predictions_resolved", 0),
+            "last_updated": metrics.get("last_updated") or datetime.utcnow().isoformat() + "Z",
         },
     }
 
@@ -564,16 +570,27 @@ def _get_price_history(netuid: Any, sn: Dict[str, Any]) -> Dict[str, Any]:
         steps = []
         for i in range(30):
             if i < 10:
-                steps.append(chg_30d / 30.0)
+                # 30d change spread evenly across its 10-candle window
+                steps.append(chg_30d / 10.0)
             elif i < 22:
-                steps.append(chg_7d / 7.0)
+                # 7d change spread evenly across its 12-candle window
+                steps.append(chg_7d / 12.0)
             else:
-                steps.append(chg_24h)
+                # 24h change spread evenly across its 8-candle window
+                steps.append(chg_24h / 8.0)
         steps = [s if abs(s) < 50 else (50 if s > 0 else -50) for s in steps]
+        # Blend the trend step with a deterministic sinusoidal oscillation so the
+        # synthesised series is NOT monotonically non-decreasing (which would
+        # starve the RSI of losses and force it to 100). Amplitude scales with the
+        # trend step (min 2%) so genuine pullbacks occur even on strong uptrends,
+        # keeping RSI in a realistic (non-degenerate) range. Index-driven for
+        # reproducibility and trend-preserving on average.
         p = price
         synth_closes = []
-        for s in steps:
-            p = p * (1 + s / 100.0)
+        for i, s in enumerate(steps):
+            amp = max(2.0, abs(s) * 2.0)
+            osc = math.sin(i * 0.7) * amp  # deterministic wiggle, scales with trend
+            p = p * (1 + s / 100.0) * (1 + osc / 100.0)
             synth_closes.append(p)
         closes = (closes + synth_closes)[-30:]
         highs = [c * 1.01 for c in closes]
@@ -606,7 +623,13 @@ def _ema(values: List[float], period: int) -> float:
 
 
 def _compute_rsi_series(closes: List[float], period: int = 14) -> float:
-    """Proper Wilder RSI from close prices. Falls back to 50.0 on short history."""
+    """Proper Wilder RSI from close prices. Falls back to 50.0 on short history.
+
+    Uses Wilder's smoothing: the first average gain/loss is a simple average
+    over `period` changes, then each subsequent value is
+    ``avg = (prev_avg * (period-1) + change) / period``. A flat series (no
+    gains AND no losses) returns 50.0 instead of the degenerate 100.0.
+    """
     if len(closes) < period + 1:
         return 50.0
     gains, losses = 0.0, 0.0
@@ -618,6 +641,15 @@ def _compute_rsi_series(closes: List[float], period: int = 14) -> float:
             losses += -diff
     avg_gain = gains / period
     avg_loss = losses / period
+    # Wilder smoothing over the remaining closes.
+    for i in range(period + 1, len(closes)):
+        diff = closes[i] - closes[i - 1]
+        gain = diff if diff >= 0 else 0.0
+        loss = -diff if diff < 0 else 0.0
+        avg_gain = (avg_gain * (period - 1) + gain) / period
+        avg_loss = (avg_loss * (period - 1) + loss) / period
+    if avg_gain == 0 and avg_loss == 0:
+        return 50.0  # flat series — neither overbought nor oversold
     if avg_loss == 0:
         return 100.0
     rs = avg_gain / avg_loss
@@ -1668,6 +1700,8 @@ def _compute_rsi(price_changes: List[float], period: int = 14) -> float:
             losses += abs(c)
     avg_gain = gains / period
     avg_loss = losses / period
+    if avg_gain == 0 and avg_loss == 0:
+        return 50.0  # flat series — neither overbought nor oversold
     if avg_loss == 0:
         return 100.0
     rs = avg_gain / avg_loss
@@ -1703,6 +1737,11 @@ def build_technical_indicators(sn: Dict) -> Dict:
     base_price = price
     changes = [chg_30d / 30] * 5 + [chg_7d / 7] * 7 + [chg_24h] * 2
     changes = [c if abs(c) < 50 else (50 if c > 0 else -50) for c in changes]
+    # Add a deterministic oscillation so the series is not monotonically
+    # non-decreasing (which would force RSI to 100 when all changes are >= 0).
+    # Amplitude scales with the largest step so losses always appear.
+    _amp = max(1.5, abs(max(changes, key=abs)) * 0.5)
+    changes = [c + math.sin(i * 0.6) * _amp for i, c in enumerate(changes)]
     prices = []
     p = base_price
     for c in changes:

@@ -10110,5 +10110,11 @@
       "alignment_score": 0.75,
       "status": "aligned"
     }
-  ]
+  ],
+  "performance_history": {},
+  "expert_weights": {
+    "alpha": 1.0,
+    "beta": 1.0,
+    "gamma": 1.0
+  }
 }
