@@ -267,6 +267,8 @@
           </div>
           {% if tr.prediction %}<div class="mono" style="font-size:11px;color:var(--txt-2);margin-top:4px">→ {{ tr.prediction }}</div>{% endif %}
         </div>
+        {% else %}
+          <div class="impact-line empty">Learning trail is empty — picks and resolutions will populate on the next refresh.</div>
         {% endfor %}
       </div>
     </div>
@@ -294,6 +296,8 @@
             {% endfor %}
             {% if not si.impacts %}<div class="impact-line">No active directional signals</div>{% endif %}
           </div>
+        {% else %}
+          <div class="impact-line empty">Awaiting subnet signal data — refresh once the market feed is live.</div>
         {% endfor %}
         </div>
       </div>
@@ -308,8 +312,11 @@
             {% for pat in pt.patterns %}
               <span class="pat-chip pat-{{ pat.type }}">{{ pat.pattern }} · {{ pat.confidence }}%</span>
             {% endfor %}
+            {% if not pt.patterns %}<div class="impact-line empty">No clear pattern detected in the current window.</div>{% endif %}
             </div>
           </div>
+        {% else %}
+          <div class="impact-line empty">No pattern data available — refresh once the market feed is live.</div>
         {% endfor %}
         </div>
       </div>
@@ -328,6 +335,8 @@
             <div class="impact-line" style="color:var(--txt)">→ {{ pr.statement }}</div>
             <div class="impact-line">ref {{ '%.4f'|format(pr.reference_price) }} · horizon {{ pr.horizon_hours }}h · source {{ pr.signal_source }} · {{ pr.status }}</div>
           </div>
+        {% else %}
+          <div class="impact-line empty">No active predictions — the predictive engine will mint forecasts on the next refresh.</div>
         {% endfor %}
         </div>
       </div>

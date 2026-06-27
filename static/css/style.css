@@ -254,7 +254,9 @@ table.tbl tr:hover td { background: rgba(45, 212, 191,0.04); }
 .wfill { height: 100%; background: linear-gradient(90deg, var(--emerald), var(--emerald-bright)); box-shadow: 0 0 8px var(--emerald-glow); }
 
 /* ---------- Mind map trail ---------- */
-.trail { position: relative; padding-left: 22px; }
+.trail { position: relative; padding-left: 22px; max-height: 420px; overflow-y: auto; }
+.trail::-webkit-scrollbar { width: 6px; }
+.trail::-webkit-scrollbar-thumb { background: rgba(45, 212, 191,0.2); border-radius: 3px; }
 .trail::before { content: ""; position: absolute; left: 7px; top: 6px; bottom: 6px; width: 2px; background: linear-gradient(180deg, var(--emerald-bright), transparent); }
 .trail-item { position: relative; padding: 10px 0 10px 6px; border-bottom: 1px solid var(--border-soft); }
 .trail-item:last-child { border-bottom: none; }

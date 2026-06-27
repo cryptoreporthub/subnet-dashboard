@@ -4,7 +4,7 @@ import math
 import os
 import sys
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -434,6 +434,17 @@ _LEARNING_DELTA_WRONG = -0.03
 _LEARNING_MIN_WEIGHT = 0.1
 _LEARNING_MAX_WEIGHT = 2.0
 
+# Price-history source flag.
+# The taomarketcap API exposes only the current price + 24h/7d/30d percentage
+# changes (no OHLC candle history), and Bittensor alpha tokens are not
+# reliably listed on CoinGecko. We therefore default to the synthetic series
+# derived from those change fields (see _get_price_history). Flip this to True
+# only when a real candle endpoint is wired into _get_price_history.
+USE_REAL_PRICE_HISTORY = _os.environ.get("USE_REAL_PRICE_HISTORY", "0") == "1"
+
+# How long to suppress duplicate predictions for the same netuid+direction.
+_PREDICTION_DEDUP_WINDOW_HOURS = 1
+
 
 def _load_signal_types() -> Dict[str, Any]:
     try:
@@ -517,6 +528,52 @@ class PREDICTION_STORE:
             data["stats"]["accuracy"] = 0.0
 
 
+def _dedupe_predictions(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Collapse duplicate pending predictions.
+
+    Keeps only the most recent pending prediction per (netuid, direction) pair;
+    older duplicates for the same pair are dropped so the predictive engine
+    does not accumulate one entry per refresh cycle. Resolved predictions are
+    left untouched. Stats are recomputed afterwards by the caller.
+    """
+    pending = data.get("predictions", [])
+    if not isinstance(pending, list):
+        pending = []
+    newest_by_key: Dict[tuple, Dict[str, Any]] = {}
+    for pred in pending:
+        key = (pred.get("netuid"), pred.get("direction"))
+        prev = newest_by_key.get(key)
+        if prev is None:
+            newest_by_key[key] = pred
+            continue
+        try:
+            prev_ts = prev.get("created_at", "") or ""
+            cur_ts = pred.get("created_at", "") or ""
+            if cur_ts > prev_ts:
+                newest_by_key[key] = pred
+        except Exception:
+            # keep the first seen on any comparison error
+            pass
+    data["predictions"] = list(newest_by_key.values())
+    return data
+
+
+def resolve_predictions(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Run the prediction resolver on every dashboard render.
+
+    Loads data/predictions.json, deduplicates pending predictions, resolves
+    any whose ``resolve_at`` has elapsed against the latest subnet price,
+    updates expert weights via the learning loop, recomputes stats and
+    persists the result. Returns the list of predictions resolved this run.
+    """
+    data = PREDICTION_STORE._load()
+    data = _dedupe_predictions(data)
+    resolved_now = _resolve_due_predictions(subnets, data=data)
+    PREDICTION_STORE.update_stats(data)
+    PREDICTION_STORE._save(data)
+    return resolved_now
+
+
 # ---------------------------------------------------------------------------
 # Price history helper — loads candles from data/price_cache.json keyed by
 # netuid. Falls back to a synthetic series derived from price + change fields
@@ -533,9 +590,13 @@ def _load_price_cache() -> Dict[str, Any]:
 def _get_price_history(netuid: Any, sn: Dict[str, Any]) -> Dict[str, Any]:
     """Return {closes, highs, lows, volumes, timestamps} for a subnet.
 
-    Uses real candles from price_cache.json when available; otherwise
-    synthesises a series from the subnet's price + 24h/7d/30d changes so the
-    simplified RSI fallback and other indicators still produce values.
+    Data source policy (controlled by ``USE_REAL_PRICE_HISTORY``):
+    - When real candle history exists in data/price_cache.json it is used as-is.
+    - Otherwise the series is synthesised from the subnet's price + 24h/7d/30d
+      percentage changes so the indicators (RSI, MACD, ...) still produce
+      realistic, non-degenerate values. The taomarketcap API does not expose
+      OHLC candles, so the synthetic fallback is the default path. Set
+      ``USE_REAL_PRICE_HISTORY=1`` once a real candle endpoint is wired in here.
     """
     closes: List[float] = []
     highs: List[float] = []
@@ -1020,7 +1081,14 @@ def _detect_patterns(closes: List[float], highs: List[float], lows: List[float])
 # Predictive engine — generate / resolve / learn
 # ---------------------------------------------------------------------------
 def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> Dict[str, Any]:
-    """Create a PREDICTIVE forecast: 'predicted to move +X% within N hours'."""
+    """Create a PREDICTIVE forecast: 'predicted to move +X% within N hours'.
+
+    Duplicate suppression: if a pending prediction for the same netuid +
+    direction already exists and was created within the dedup window, the
+    existing prediction is returned instead of minting a new one. This stops
+    every dashboard refresh from appending a fresh (always 24h-ahead) entry
+    that would never reach its resolve_at.
+    """
     net = signal_impact.get("net_predicted_pct", 0)
     raw_direction = signal_impact.get("net_direction", "neutral")
     # Map impact direction (bullish/bearish/neutral) -> prediction direction (up/down).
@@ -1030,6 +1098,21 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
         direction = "down"
     else:
         direction = "up" if float(sn.get("price_change_24h", 0) or 0) >= 0 else "down"
+
+    # --- duplicate suppression -------------------------------------------------
+    netuid = sn.get("netuid")
+    now = _dt.utcnow()
+    cutoff = now - _td(hours=_PREDICTION_DEDUP_WINDOW_HOURS)
+    for existing in PREDICTION_STORE.all():
+        if existing.get("netuid") != netuid or existing.get("direction") != direction:
+            continue
+        try:
+            created = _dt.fromisoformat(existing.get("created_at", "").replace("Z", ""))
+        except Exception:
+            continue
+        if created >= cutoff:
+            return existing  # recent pending prediction already covers this pair
+
     magnitude = abs(net) if net != 0 else 1.5
     horizon = 24
     impacts = signal_impact.get("impacts", [])
@@ -1048,8 +1131,8 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
         "predicted_pct": round(predicted_pct, 2),
         "horizon_hours": horizon,
         "reference_price": ref_price,
-        "created_at": _dt.utcnow().isoformat() + "Z",
-        "resolve_at": (_dt.utcnow() + _td(hours=horizon)).isoformat() + "Z",
+        "created_at": now.isoformat() + "Z",
+        "resolve_at": (now + _td(hours=horizon)).isoformat() + "Z",
         "status": "pending",
         "signal_source": signal_impact.get("dominant") or direction,
         "statement": f"predicted to move {'+' if predicted_pct >= 0 else ''}{predicted_pct:.1f}% within {horizon} hours",
@@ -1097,9 +1180,19 @@ def _update_learning_weights(correct: bool, source: str = None) -> Dict[str, Any
         return {"updated": False, "delta": delta, "correct": correct}
 
 
-def _resolve_due_predictions(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Resolve any pending predictions whose horizon has elapsed."""
-    data = PREDICTION_STORE._load()
+def _resolve_due_predictions(
+    subnets: List[Dict[str, Any]], data: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
+    """Resolve any pending predictions whose horizon has elapsed.
+
+    When ``data`` is supplied it is mutated in place (and the caller is
+    responsible for persisting it); otherwise the store is loaded and saved
+    here. Resolved predictions are moved to the ``resolved`` array and expert
+    weights are nudged via the learning loop.
+    """
+    owns_data = data is None
+    if data is None:
+        data = PREDICTION_STORE._load()
     pending = data.get("predictions", [])
     still_pending, resolved_now = [], []
     now = _dt.utcnow()
@@ -1120,8 +1213,9 @@ def _resolve_due_predictions(subnets: List[Dict[str, Any]]) -> List[Dict[str, An
         else:
             still_pending.append(pred)
     data["predictions"] = still_pending
-    PREDICTION_STORE.update_stats(data)
-    PREDICTION_STORE._save(data)
+    if owns_data:
+        PREDICTION_STORE.update_stats(data)
+        PREDICTION_STORE._save(data)
     return resolved_now
 
 
@@ -1138,6 +1232,22 @@ def _compute_learning_metrics() -> Dict[str, Any]:
     weights = soul.get("expert_weights", {})
     resolved = data.get("resolved", [])
     recent = resolved[-10:]
+    # last_updated: prefer the soul-map weight-update timestamp, then the most
+    # recent resolution timestamp, then the predictions.json file mtime so the
+    # dashboard never shows a bare "—" once the loop has run at least once.
+    last_updated = soul.get("last_updated")
+    if not last_updated:
+        for r in reversed(resolved):
+            ts = r.get("resolved_at") or r.get("created_at")
+            if ts:
+                last_updated = ts
+                break
+    if not last_updated:
+        try:
+            mtime = _os.path.getmtime(_PREDICTIONS_PATH)
+            last_updated = _dt.utcfromtimestamp(mtime).isoformat() + "Z"
+        except Exception:
+            last_updated = None
     return {
         "expert_weights": weights,
         "total_records": soul.get("total_records", 0),
@@ -1156,7 +1266,7 @@ def _compute_learning_metrics() -> Dict[str, Any]:
                 "statement": r.get("statement"),
             } for r in recent
         ],
-        "last_updated": soul.get("last_updated"),
+        "last_updated": last_updated,
     }
 
 
@@ -1179,20 +1289,64 @@ def _classify_sentiment(text: str) -> str:
 def _compute_social_sentiment(sn: Dict[str, Any]) -> Dict[str, Any]:
     mentions = int(sn.get("social_mentions", 0) or 0)
     chg = float(sn.get("price_change_24h", 0) or 0)
-    desc = str(sn.get("description", "") or "")
-    base_label = _classify_sentiment(desc)
-    if chg > 5:
+    chg7 = float(sn.get("price_change_7d", 0) or 0)
+    chg30 = float(sn.get("price_change_30d", 0) or 0)
+    apy = float(sn.get("apy", 0) or 0)
+    emission = float(sn.get("emission", 0) or 0)
+    volume = float(sn.get("volume", 0) or 0)
+    name = str(sn.get("name", "SN"))
+    netuid = sn.get("netuid")
+
+    # Derive a real RSI from the available change fields so the chatter
+    # references actual momentum rather than a templated phrase.
+    rsi_val = _compute_rsi([chg, chg7 / 7.0, chg30 / 30.0], 14)
+    rsi_state = "overbought" if rsi_val > 70 else "oversold" if rsi_val < 30 else "neutral"
+
+    if chg > 5 or rsi_val > 65:
         bias = "bullish"
-    elif chg < -5:
+    elif chg < -5 or rsi_val < 35:
         bias = "bearish"
     else:
-        bias = base_label
+        bias = "neutral"
     score = 50 + (20 if bias == "bullish" else -20 if bias == "bearish" else 0) + int(chg)
     score = max(0, min(100, score))
+
+    # --- data-driven, subnet-specific chatter (no generic placeholders) -----
+    momentum_word = "accelerating" if chg7 > chg else "cooling" if chg7 < chg else "flat"
+    if rsi_state == "overbought":
+        rsi_note = f"RSI {rsi_val:.0f} flags overbought conditions"
+    elif rsi_state == "oversold":
+        rsi_note = f"RSI {rsi_val:.0f} sits in oversold territory"
+    else:
+        rsi_note = f"RSI {rsi_val:.0f} holds in neutral range"
+
+    if apy > 0:
+        yield_note = f"{apy:.1f}% APY rewards stakers"
+    else:
+        yield_note = "yield compression noted"
+
+    if emission > 0:
+        emit_note = f"emission {emission:.0f} TAO/day"
+    else:
+        emit_note = "no fresh emission"
+
+    tw_text = (
+        f"${name} {momentum_word} — {chg:+.1f}% 24h / {chg7:+.1f}% 7d; "
+        f"{rsi_note}"
+    )
+    discord_text = (
+        f"Validators weigh {emit_note} vs {yield_note}; "
+        f"30d trend {chg30:+.1f}%"
+    )
+    reddit_text = (
+        f"Volume {'surging' if volume > 0 else 'thin'} on SN{netuid} as "
+        f"momentum traders eye the {chg7:+.1f}% weekly move"
+    )
+
     feed = [
-        {"source": "twitter", "sentiment": bias, "text": f"${sn.get('name','SN')} momentum {'building' if bias=='bullish' else 'fading' if bias=='bearish' else 'mixed'} — {chg:+.1f}% 24h", "mentions": mentions},
-        {"source": "discord", "sentiment": base_label, "text": (desc[:90] + "...") if len(desc) > 90 else (desc or "Community discussion active"), "mentions": max(0, mentions // 2)},
-        {"source": "reddit", "sentiment": bias if bias != "neutral" else "neutral", "text": f"Validator chatter around SN{sn.get('netuid')} emission {sn.get('emission', 0)} TAO/day", "mentions": max(0, mentions // 3)},
+        {"source": "twitter", "sentiment": bias, "text": tw_text, "mentions": mentions},
+        {"source": "discord", "sentiment": bias, "text": discord_text, "mentions": max(0, mentions // 2)},
+        {"source": "reddit", "sentiment": bias if bias != "neutral" else "neutral", "text": reddit_text, "mentions": max(0, mentions // 3)},
     ]
     return {"score": score, "label": bias, "mentions": mentions, "feed": feed}
 
@@ -1447,8 +1601,11 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     if not subnets:
         subnets = []
 
+    # Run the learning-loop resolver on every render: dedupe pending
+    # predictions, resolve any whose horizon has elapsed, and nudge expert
+    # weights. This is the single entry point for the prediction resolver.
     try:
-        _resolve_due_predictions(subnets)
+        resolve_predictions(subnets)
     except Exception as exc:
         logger.warning("Prediction resolution skipped: %s", exc)
 
@@ -1528,19 +1685,62 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     engine = LearningEngine()
     soul_map = engine.load_soul_map()
     expert_weights = soul_map.get("expert_weights", {})
+    if not expert_weights:
+        expert_weights = {"alpha": 1.0, "beta": 1.0, "gamma": 1.0}
+
+    # Wire Council dispositions to live market conditions rather than a static
+    # weight threshold. Each expert plays a distinct role:
+    #   alpha  -> momentum/technical  (bullish when breadth is up)
+    #   beta   -> value/yield          (bullish when average APY is attractive)
+    #   gamma  -> contrarian           (bearish when the tape is overbought)
+    avg_chg = float(market_intel.get("avg_change_24h", 0) or 0)
+    avg_apy = float(market_intel.get("avg_apy", 0) or 0)
+    breadth = market_intel.get("breadth", "neutral")
+    # Average RSI across the top subnets drives the contrarian call.
+    top_rsis = []
+    for sn in top_subnets:
+        ind = _compute_technical_indicators(sn)
+        try:
+            top_rsis.append(float(ind.get("rsi", {}).get("value", 50) or 50))
+        except Exception:
+            top_rsis.append(50.0)
+    avg_rsi = (sum(top_rsis) / len(top_rsis)) if top_rsis else 50.0
+
+    def _disposition(expert: str) -> str:
+        e = expert.lower()
+        if e == "alpha":  # momentum / technical
+            if avg_chg > 2 or breadth == "bullish":
+                return "bullish"
+            if avg_chg < -2 or breadth == "bearish":
+                return "bearish"
+            return "neutral"
+        if e == "beta":  # value / yield
+            if avg_apy >= 8:
+                return "bullish"
+            if avg_apy <= 2:
+                return "bearish"
+            return "neutral"
+        if e == "gamma":  # contrarian
+            if avg_rsi > 68:
+                return "bearish"
+            if avg_rsi < 32:
+                return "bullish"
+            return "neutral"
+        # generic fallback tied to weight
+        return "bullish" if expert_weights.get(e, 1.0) >= 1.0 else "cautious"
+
     council_weights = [
-        {"expert": k.title(), "weight": v, "bias": "bullish" if v >= 1.0 else "cautious"}
+        {"expert": k.title(), "weight": v, "bias": _disposition(k)}
         for k, v in expert_weights.items()
-    ] or [
-        {"expert": "Alpha", "weight": 1.0, "bias": "bullish"},
-        {"expert": "Beta", "weight": 1.0, "bias": "cautious"},
-        {"expert": "Gamma", "weight": 1.0, "bias": "bullish"},
     ]
 
     mindmap_trail = []
-    for p in simivision_picks[:4]:
+    now_ts = _dt.utcnow().strftime("%H:%M:%S")
+    # One trail entry per pick (up to 6) so the learning trail reflects the
+    # full top-of-book rather than only the first few picks.
+    for p in simivision_picks[:6]:
         mindmap_trail.append({
-            "time": _dt.utcnow().strftime("%H:%M:%S"),
+            "time": now_ts,
             "subnet": p.get("name"),
             "evidence": p.get("reasons", [])[0] if p.get("reasons") else "metrics scanned",
             "signal": p.get("signal_impact", {}).get("dominant") or p.get("signal_impact", {}).get("net_direction"),
@@ -1548,8 +1748,25 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
             "prediction": p.get("prediction", {}).get("statement"),
             "judge": f"conviction {p.get('conviction')}%",
         })
+    # Signal-impact trail entries: surface the strongest directional signal per
+    # top subnet so the trail captures the technical read, not just the picks.
+    for si in signal_impacts[:6]:
+        impacts = si.get("impacts", [])
+        if not impacts:
+            continue
+        strongest = max(impacts, key=lambda i: abs(i.get("magnitude_pct", 0)))
+        mindmap_trail.append({
+            "time": now_ts,
+            "subnet": si.get("name"),
+            "evidence": strongest.get("description") or strongest.get("signal_type"),
+            "signal": strongest.get("direction"),
+            "decision": "signal logged",
+            "prediction": strongest.get("predicted_move"),
+            "judge": f"magnitude {strongest.get('magnitude_pct', 0):.1f}%",
+        })
+    # Learning-loop trail entry: weight update + accuracy snapshot.
     mindmap_trail.append({
-        "time": _dt.utcnow().strftime("%H:%M:%S"),
+        "time": now_ts,
         "subnet": "—",
         "evidence": "Learning loop",
         "signal": f"accuracy {learning_metrics.get('accuracy', 0)}",
@@ -1557,6 +1774,18 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         "prediction": f"correct +{_LEARNING_DELTA_CORRECT} / wrong {_LEARNING_DELTA_WRONG}",
         "judge": f"{learning_metrics.get('correct', 0)} correct / {learning_metrics.get('wrong', 0)} wrong",
     })
+    # Most recent resolution (if any) so the trail shows the loop closing.
+    for r in reversed(learning_metrics.get("recent_resolutions", [])):
+        mindmap_trail.append({
+            "time": now_ts,
+            "subnet": r.get("name"),
+            "evidence": "prediction resolved",
+            "signal": "correct" if r.get("correct") else "wrong",
+            "decision": "outcome recorded",
+            "prediction": r.get("statement"),
+            "judge": f"actual {r.get('actual_pct')}%",
+        })
+        break
 
     return {
         "simivision_picks": simivision_picks,
