@@ -16,6 +16,8 @@ from fastapi.templating import Jinja2Templates
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fetchers.taomarketcap import get_all_subnets, get_subnet_data
+from internal.council.state_vector import score_subnet_for_hour, score_subnet_for_day
+from internal.council.daily_pick import select_daily_pick
 try:
     from data.learning_engine import LearningEngine, create_feedback_router
 except ImportError:
@@ -2172,6 +2174,75 @@ async def api_indicators_convergence():
     except Exception as e:
         logger.error("Error fetching indicators convergence: %s", e)
         return {"subnets": [], "error": str(e)}
+
+
+@app.get("/api/top-picks")
+async def api_top_picks():
+    """Return top 3 subnets by short-horizon and 24h Council state-vector scores."""
+    try:
+        subnets, _ = _get_subnets_with_source()
+        market_context = {"tao_change_24h": 0.0}
+
+        hour_scored = []
+        day_scored = []
+        for sn in subnets:
+            hour = score_subnet_for_hour(sn, market_context)
+            day = score_subnet_for_day(sn, market_context)
+            hour_scored.append({"subnet": sn, "score": hour})
+            day_scored.append({"subnet": sn, "score": day})
+
+        hour_scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
+        day_scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
+
+        def _format(item):
+            sn = item["subnet"]
+            sc = item["score"]
+            return {
+                "netuid": sn.get("netuid"),
+                "name": sn.get("name"),
+                "symbol": sn.get("symbol"),
+                "score": sc["total_score"],
+                "confidence": sc["confidence"],
+                "expert_contributions": sc["expert_contributions"],
+                "signals": {
+                    "price_change_24h": sn.get("price_change_24h"),
+                    "price_change_7d": sn.get("price_change_7d"),
+                    "emission": sn.get("emission"),
+                    "apy": sn.get("apy"),
+                    "volume": sn.get("volume"),
+                },
+                "scenario_tags": sc["scenario_tags"],
+            }
+
+        return {
+            "hour_picks": [_format(i) for i in hour_scored[:3]],
+            "day_picks": [_format(i) for i in day_scored[:3]],
+        }
+    except Exception as e:
+        logger.error("Error fetching top picks: %s", e)
+        return {"hour_picks": [], "day_picks": [], "error": str(e)}
+
+
+@app.get("/api/daily-pick")
+async def api_daily_pick():
+    """Return the single audited daily pick from the Council engine."""
+    try:
+        subnets, _ = _get_subnets_with_source()
+        market_context = {"tao_change_24h": 0.0}
+        return select_daily_pick(subnets, market_context)
+    except Exception as e:
+        logger.error("Error fetching daily pick: %s", e)
+        return {
+            "subnet": None,
+            "score": 0.0,
+            "confidence": 0.0,
+            "expert_contributions": {},
+            "scenario_tags": {},
+            "audit": {"approved": False, "concerns": [str(e)], "adjusted_confidence": 0.0},
+            "final_confidence": 0.0,
+            "action": "long",
+            "error": str(e),
+        }
 
 
 def get_dynamic_subnets():
