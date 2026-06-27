@@ -4,7 +4,7 @@ import math
 import os
 import sys
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -309,16 +309,40 @@ def api_mindmap_summary_safe():
 
 @app.get("/api/learning/stats")
 def api_learning_stats_safe():
-    engine = LearningEngine()
-    stats = engine.get_stats()
-    return {
-        "status": "success",
-        "data": {
-            "expert_weights": stats.get("expert_weights", {}),
-            "total_records": stats.get("total_records", 0),
-            "last_updated": stats.get("last_updated") or datetime.utcnow().isoformat() + "Z",
-        },
-    }
+    """Real learning-loop stats from the closed loop (resolve -> judge -> weights)."""
+    try:
+        subnets, _ = _get_subnets_with_source()
+        metrics = _compute_learning_metrics(subnets)
+        return {
+            "status": "success",
+            "data": {
+                "expert_weights": metrics.get("expert_weights", {}),
+                "council_weights": metrics.get("council_weights", []),
+                "regime": metrics.get("regime", "chop"),
+                "total_records": metrics.get("total_records", 0),
+                "predictions_pending": metrics.get("predictions_pending", 0),
+                "predictions_resolved": metrics.get("predictions_resolved", 0),
+                "correct": metrics.get("correct", 0),
+                "wrong": metrics.get("wrong", 0),
+                "accuracy": metrics.get("accuracy", 0.0),
+                "calibration": metrics.get("calibration", []),
+                "signal_attribution": metrics.get("signal_attribution", []),
+                "streaks": metrics.get("streaks", []),
+                "last_updated": metrics.get("last_updated") or datetime.utcnow().isoformat() + "Z",
+            },
+        }
+    except Exception as exc:
+        logger.warning("learning stats fallback: %s", exc)
+        engine = LearningEngine()
+        stats = engine.get_stats()
+        return {
+            "status": "success",
+            "data": {
+                "expert_weights": stats.get("expert_weights", {}),
+                "total_records": stats.get("total_records", 0),
+                "last_updated": stats.get("last_updated") or datetime.utcnow().isoformat() + "Z",
+            },
+        }
 
 
 @app.post("/api/simivision/chat")
@@ -463,52 +487,50 @@ PATTERN_DEFS = {
 
 
 class PREDICTION_STORE:
-    """Persists predictions to data/predictions.json and resolves them over time."""
+    """Adapter over the canonical PredictionStore (data/prediction_store.py).
+
+    Delegates to the new persistent store so the closed learning loop
+    (resolve -> judge -> weights) operates on the same data the dashboard
+    renders. Keeps the legacy {predictions, resolved, stats} shape so the
+    existing template + /api/predictions contract is preserved.
+    """
+
+    _store = None
+
+    @classmethod
+    def _store_obj(cls):
+        if cls._store is None:
+            from data.prediction_store import PredictionStore as _PS
+            cls._store = _PS(_PREDICTIONS_PATH)
+        return cls._store
 
     @staticmethod
     def _load() -> Dict[str, Any]:
-        try:
-            with open(_PREDICTIONS_PATH, "r") as f:
-                return _json.load(f)
-        except Exception:
-            return {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}}
+        return PREDICTION_STORE._store_obj().all()
 
     @staticmethod
     def _save(data: Dict[str, Any]) -> None:
-        try:
-            _os.makedirs("data", exist_ok=True)
-            with open(_PREDICTIONS_PATH, "w") as f:
-                _json.dump(data, f, indent=2)
-        except Exception as exc:
-            logger.warning("Failed to persist predictions.json: %s", exc)
+        # The canonical store is the source of truth; this is a no-op kept
+        # for legacy callers that round-trip _load() -> mutate -> _save().
+        pass
 
     @staticmethod
     def add(prediction: Dict[str, Any]) -> Dict[str, Any]:
-        data = PREDICTION_STORE._load()
-        data.setdefault("predictions", []).append(prediction)
-        data.setdefault("resolved", [])
-        PREDICTION_STORE._save(data)
-        return prediction
+        return PREDICTION_STORE._store_obj().add_prediction(prediction)
 
     @staticmethod
     def all() -> List[Dict[str, Any]]:
-        return PREDICTION_STORE._load().get("predictions", [])
+        return PREDICTION_STORE._store_obj().get_pending()
 
     @staticmethod
     def resolved() -> List[Dict[str, Any]]:
-        return PREDICTION_STORE._load().get("resolved", [])
+        return PREDICTION_STORE._store_obj().get_resolved()
 
     @staticmethod
     def update_stats(data: Dict[str, Any]) -> None:
-        preds = data.get("predictions", [])
-        resolved = data.get("resolved", [])
-        correct = sum(1 for r in resolved if r.get("correct"))
-        wrong = sum(1 for r in resolved if not r.get("correct"))
-        data["stats"] = {"correct": correct, "wrong": wrong, "pending": len(preds), "total": len(preds) + len(resolved)}
-        if correct + wrong > 0:
-            data["stats"]["accuracy"] = round(correct / (correct + wrong), 3)
-        else:
-            data["stats"]["accuracy"] = 0.0
+        # Stats are recomputed by the canonical store on every read.
+        stats = PREDICTION_STORE._store_obj().get_stats()
+        data["stats"] = stats
 
 
 # ---------------------------------------------------------------------------
@@ -1008,17 +1030,60 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
 
     predicted_pct = magnitude if direction == "up" else -magnitude
     ref_price = float(sn.get("price", 0) or 0) or 1.0
+    now_dt = _dt.utcnow()
+    due_dt = now_dt + _td(hours=horizon)
+
+    # Rich schema for the closed learning loop: conviction, contributing
+    # experts, signal tags and human-readable reasons flow into judging,
+    # calibration buckets and signal attribution.
+    chg = float(sn.get("price_change_24h", 0) or 0)
+    conviction = min(95, 70 + int(abs(chg)) + int(float(sn.get("apy", 0) or 0) / 4) + (8 if signal_impact.get("dominant") else 0))
+    experts_involved = []
+    if signal_impact.get("dominant"):
+        experts_involved.append("technical")
+    if abs(chg) >= 5 or float(sn.get("apy", 0) or 0) >= 20:
+        experts_involved.append("quant")
+    if float(sn.get("volume", 0) or 0) > 0:
+        experts_involved.append("hype")
+    if direction == "down":
+        experts_involved.append("contrarian")
+    experts_involved = list(dict.fromkeys(experts_involved)) or ["technical"]
+
+    signal_tags = []
+    for imp in impacts:
+        stype = imp.get("signal_type")
+        if stype:
+            signal_tags.append(stype)
+    if not signal_tags and signal_impact.get("dominant"):
+        signal_tags = [signal_impact["dominant"]]
+
+    reasons = []
+    if impacts:
+        for imp in impacts[:3]:
+            stype = imp.get("signal_type", "")
+            mag = imp.get("magnitude_pct", 0)
+            reasons.append(f"{stype} {mag:+.1f}%")
+    if not reasons:
+        reasons = [f"{direction} bias from {chg:+.1f}% 24h move"]
+
     prediction = {
         "id": _uuid.uuid4().hex[:10],
         "netuid": sn.get("netuid"),
         "name": sn.get("name"),
+        "subnet": sn.get("name"),
         "direction": direction,
         "predicted_pct": round(predicted_pct, 2),
         "horizon_hours": horizon,
         "reference_price": ref_price,
-        "created_at": _dt.utcnow().isoformat() + "Z",
-        "resolve_at": (_dt.utcnow() + _td(hours=horizon)).isoformat() + "Z",
+        "reference_time": now_dt.isoformat() + "Z",
+        "due_time": due_dt.isoformat() + "Z",
+        "created_at": now_dt.isoformat() + "Z",
+        "resolve_at": due_dt.isoformat() + "Z",
         "status": "pending",
+        "conviction": conviction,
+        "experts_involved": experts_involved,
+        "signal_tags": signal_tags,
+        "reasons": reasons,
         "signal_source": signal_impact.get("dominant") or direction,
         "statement": f"predicted to move {'+' if predicted_pct >= 0 else ''}{predicted_pct:.1f}% within {horizon} hours",
     }
@@ -1027,104 +1092,187 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
 
 
 def _resolve_prediction(prediction: Dict[str, Any], latest_price: float) -> Dict[str, Any]:
-    """Resolve a pending prediction against the latest available price."""
-    ref = prediction.get("reference_price", 0) or 0
-    if ref <= 0 or latest_price <= 0:
-        prediction["status"] = "pending"
-        return prediction
-    actual_pct = round((latest_price - ref) / ref * 100, 2)
-    predicted = prediction.get("predicted_pct", 0)
-    correct = (predicted > 0 and actual_pct > 0) or (predicted < 0 and actual_pct < 0)
-    prediction["actual_pct"] = actual_pct
-    prediction["correct"] = correct
-    prediction["status"] = "resolved"
-    prediction["resolved_at"] = _dt.utcnow().isoformat() + "Z"
-    _update_learning_weights(correct, prediction.get("signal_source"))
-    return prediction
+    """Resolve a pending prediction against the latest available price.
+
+    Delegates classification to OutcomeResolver so the outcome label
+    (correct/partial/wrong/expired) is consistent with the closed loop.
+    """
+    from data.outcome_resolver import OutcomeResolver
+    classification = OutcomeResolver.classify(prediction, latest_price or 0)
+    resolution = {
+        **classification,
+        "resolved_at": _dt.utcnow().isoformat() + "Z",
+        "reference_price": float(prediction.get("reference_price", 0) or 0),
+        "predicted_pct": float(prediction.get("predicted_pct", 0) or 0),
+        "direction": prediction.get("direction"),
+        "netuid": prediction.get("netuid"),
+        "subnet": prediction.get("subnet") or prediction.get("name"),
+    }
+    store = PREDICTION_STORE._store_obj()
+    resolved = store.resolve(prediction.get("id"), resolution) or prediction
+    # Judge immediately so weights reflect the freshest outcome.
+    try:
+        from internal.council.learner import get_scheduler
+        sched = get_scheduler()
+        verdict = sched.judge.judge_prediction(resolved, resolution)
+        sched.judge.update_council_weights(verdict)
+        sched.judge.persist()
+    except Exception as exc:
+        logger.warning("Immediate judging failed: %s", exc)
+    return resolved
 
 
 def _update_learning_weights(correct: bool, source: str = None) -> Dict[str, Any]:
-    """Adjust Council expert weights: correct=+0.02, wrong=-0.03. Persisted to soul_map.json."""
-    delta = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
+    """Adjust Council expert weights via the adversarial judge.
+
+    Kept for legacy callers; the canonical path is the scheduler's
+    update_council_weights() which applies +0.02/-0.03/+0.005 with
+    normalization, dampening and recency weighting.
+    """
     try:
-        engine = LearningEngine()
-        soul_map = engine.load_soul_map()
-        weights = soul_map.get("expert_weights", {})
-        if not weights:
-            weights = {"alpha": 1.0, "beta": 1.0, "gamma": 1.0}
-        for expert in list(weights.keys()):
-            w = float(weights.get(expert, 1.0))
-            w = max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, w + delta))
-            weights[expert] = round(w, 4)
-        soul_map["expert_weights"] = weights
-        soul_map["last_updated"] = _dt.utcnow().isoformat() + "Z"
-        engine.save_soul_map(soul_map)
+        from internal.council.learner import get_scheduler
+        sched = get_scheduler()
+        outcome = "correct" if correct else "wrong"
+        verdict = {
+            "outcome": outcome,
+            "experts_involved": ["quant", "hype", "contrarian", "technical"],
+            "signal_tags": [source] if source else [],
+        }
+        weights = sched.judge.update_council_weights(verdict)
+        sched.judge.persist()
+        delta = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
         return {"updated": True, "delta": delta, "correct": correct, "weights": weights}
     except Exception as exc:
         logger.warning("Learning weight update failed: %s", exc)
+        delta = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
         return {"updated": False, "delta": delta, "correct": correct}
 
 
 def _resolve_due_predictions(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Resolve any pending predictions whose horizon has elapsed."""
-    data = PREDICTION_STORE._load()
-    pending = data.get("predictions", [])
-    still_pending, resolved_now = [], []
-    now = _dt.utcnow()
+    """Resolve pending predictions whose horizon has elapsed.
+
+    Runs the closed learning loop: resolve -> judge -> update weights ->
+    persist. Falls back to the live subnet snapshot for prices when the
+    taomarketcap fetcher is unavailable.
+    """
+    from internal.council.learner import get_scheduler
+    sched = get_scheduler()
+    # Prefer live snapshot prices (already fetched) over re-fetching per netuid.
     price_by_netuid = {sn.get("netuid"): float(sn.get("price", 0) or 0) for sn in subnets}
-    for pred in pending:
+
+    def _provider(netuid):
+        return price_by_netuid.get(netuid) or None
+
+    # Temporarily swap the resolver's price provider to use the live snapshot.
+    original_provider = sched.resolver.price_provider
+    sched.resolver.price_provider = _provider
+    try:
+        resolved = sched.resolver.resolve_due_predictions()
+        for entry in resolved:
+            try:
+                resolution = entry.get("resolution") or {}
+                verdict = sched.judge.judge_prediction(entry, resolution)
+                sched.judge.update_council_weights(verdict)
+            except Exception as exc:
+                logger.warning("judge failed for %s: %s", entry.get("id"), exc)
         try:
-            resolve_at = _dt.fromisoformat(pred.get("resolve_at", "").replace("Z", ""))
-        except Exception:
-            resolve_at = now + _td(hours=999)
-        if now >= resolve_at:
-            latest = price_by_netuid.get(pred.get("netuid"), 0)
-            if latest > 0:
-                _resolve_prediction(pred, latest)
-                resolved_now.append(pred)
-                data.setdefault("resolved", []).append(pred)
-            else:
-                still_pending.append(pred)
-        else:
-            still_pending.append(pred)
-    data["predictions"] = still_pending
-    PREDICTION_STORE.update_stats(data)
-    PREDICTION_STORE._save(data)
-    return resolved_now
+            sched.judge.persist()
+        except Exception as exc:
+            logger.warning("judge persist failed: %s", exc)
+    finally:
+        sched.resolver.price_provider = original_provider
+    return resolved
 
 
 # ---------------------------------------------------------------------------
 # Learning loop metrics
 # ---------------------------------------------------------------------------
-def _compute_learning_metrics() -> Dict[str, Any]:
-    data = PREDICTION_STORE._load()
-    PREDICTION_STORE.update_stats(data)
-    PREDICTION_STORE._save(data)
-    stats = data.get("stats", {})
-    engine = LearningEngine()
-    soul = engine.get_stats()
-    weights = soul.get("expert_weights", {})
-    resolved = data.get("resolved", [])
+def _market_data_for_regime(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Aggregate market intelligence for regime detection."""
+    if not subnets:
+        return {}
+    changes = [float(s.get("price_change_24h", 0) or 0) for s in subnets]
+    gainers = sum(1 for c in changes if c > 0)
+    losers = sum(1 for c in changes if c < 0)
+    avg = sum(changes) / len(changes) if changes else 0
+    breadth = "bullish" if gainers > losers * 1.5 and avg > 2 else (
+        "bearish" if losers > gainers * 1.5 and avg < -2 else "neutral"
+    )
+    volatility = (sum((c - avg) ** 2 for c in changes) / len(changes)) ** 0.5 if changes else 0
+    return {
+        "avg_change_24h": round(avg, 2),
+        "breadth": breadth,
+        "gainers": gainers,
+        "losers": losers,
+        "volatility": round(volatility, 2),
+    }
+
+
+def _compute_learning_metrics(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """Real learning-loop metrics from the closed loop.
+
+    Pulls expert weights, accuracy, calibration buckets, signal attribution,
+    regime and streaks from the LearningLoopScheduler so the dashboard
+    reflects the actual self-learning state (not empty placeholders).
+    """
+    from internal.council.learner import get_scheduler
+    market_data = _market_data_for_regime(subnets or [])
+    try:
+        status = get_scheduler().status(market_data=market_data)
+    except Exception as exc:
+        logger.warning("learning status failed: %s", exc)
+        status = {}
+
+    store = PREDICTION_STORE._store_obj()
+    resolved = store.get_resolved()
     recent = resolved[-10:]
+    weights = status.get("expert_weights", {}) or {}
+
+    # Build the council_weights panel from learned weights + regime adjustment.
+    from internal.council.weights import apply_regime_adjustment
+    regime = status.get("regime", "chop")
+    adjusted = apply_regime_adjustment(weights, regime) if weights else {}
+    council_weights = [
+        {
+            "expert": k.title(),
+            "weight": round(v, 3),
+            "adjusted": round(adjusted.get(k, v), 3),
+            "bias": "bullish" if v >= 1.0 else "cautious",
+        }
+        for k, v in weights.items()
+    ]
+
+    accuracy = status.get("accuracy_pct", 0.0)
     return {
         "expert_weights": weights,
-        "total_records": soul.get("total_records", 0),
-        "predictions_pending": stats.get("pending", 0),
-        "predictions_resolved": len(resolved),
-        "correct": stats.get("correct", 0),
-        "wrong": stats.get("wrong", 0),
-        "accuracy": stats.get("accuracy", 0.0),
-        "deltas": {"correct": _LEARNING_DELTA_CORRECT, "wrong": _LEARNING_DELTA_WRONG},
+        "council_weights": council_weights,
+        "regime": regime,
+        "total_records": status.get("resolved", 0),
+        "predictions_pending": status.get("pending", 0),
+        "predictions_resolved": status.get("resolved", 0),
+        "correct": status.get("correct", 0),
+        "partial": status.get("partial", 0),
+        "wrong": status.get("wrong", 0),
+        "expired": status.get("expired", 0),
+        "accuracy": accuracy,
+        "accuracy_pct": accuracy,
+        "calibrating": status.get("resolved", 0) == 0,
+        "deltas": {"correct": _LEARNING_DELTA_CORRECT, "wrong": _LEARNING_DELTA_WRONG, "partial": 0.005},
+        "calibration": status.get("calibration", []),
+        "signal_attribution": status.get("signal_attribution", []),
+        "streaks": status.get("expert_accuracy", []),
         "recent_resolutions": [
             {
-                "name": r.get("name"),
+                "name": r.get("subnet") or r.get("name"),
                 "predicted_pct": r.get("predicted_pct"),
-                "actual_pct": r.get("actual_pct"),
-                "correct": r.get("correct"),
+                "actual_pct": (r.get("resolution") or {}).get("actual_pct"),
+                "outcome": r.get("outcome"),
+                "correct": r.get("outcome") == "correct",
                 "statement": r.get("statement"),
+                "failure_tags": (r.get("resolution") or {}).get("note"),
             } for r in recent
         ],
-        "last_updated": soul.get("last_updated"),
+        "last_updated": status.get("last_run"),
     }
 
 
@@ -1490,20 +1638,19 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     undervalued = _compute_undervalued(subnets)
     market_intel = _compute_market_intelligence(subnets)
     staking = _compute_staking_analytics(subnets)
-    learning_metrics = _compute_learning_metrics()
+    learning_metrics = _compute_learning_metrics(subnets)
     momentum_charts = _build_momentum_charts(subnets, simivision_picks)
 
-    engine = LearningEngine()
-    soul_map = engine.load_soul_map()
-    expert_weights = soul_map.get("expert_weights", {})
-    council_weights = [
-        {"expert": k.title(), "weight": v, "bias": "bullish" if v >= 1.0 else "cautious"}
-        for k, v in expert_weights.items()
-    ] or [
-        {"expert": "Alpha", "weight": 1.0, "bias": "bullish"},
-        {"expert": "Beta", "weight": 1.0, "bias": "cautious"},
-        {"expert": "Gamma", "weight": 1.0, "bias": "bullish"},
+    # Learned weights are the canonical source of truth (soul_map.json via
+    # the adversarial judge). The selector reads these on the next pick.
+    expert_weights = learning_metrics.get("expert_weights", {}) or {}
+    council_weights = learning_metrics.get("council_weights", []) or [
+        {"expert": "Quant", "weight": 1.0, "bias": "bullish"},
+        {"expert": "Hype", "weight": 1.0, "bias": "cautious"},
+        {"expert": "Contrarian", "weight": 1.0, "bias": "bullish"},
+        {"expert": "Technical", "weight": 1.0, "bias": "bullish"},
     ]
+    regime = learning_metrics.get("regime", "chop")
 
     mindmap_trail = []
     for p in simivision_picks[:4]:
@@ -1526,6 +1673,12 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         "judge": f"{learning_metrics.get('correct', 0)} correct / {learning_metrics.get('wrong', 0)} wrong",
     })
 
+    # Cemetery = wrong (false-positive) predictions, surfaced for transparency.
+    try:
+        cemetery = PREDICTION_STORE._store_obj().get_cemetery(limit=20)
+    except Exception:
+        cemetery = []
+
     return {
         "simivision_picks": simivision_picks,
         "undervalued_radar": undervalued,
@@ -1534,11 +1687,16 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         "staking_analytics": staking,
         "council_weights": council_weights,
         "expert_weights": expert_weights,
+        "regime": regime,
         "mindmap_trail": mindmap_trail,
         "signal_impact": signal_impacts,
         "patterns": patterns_all,
         "predictions": predictions,
         "learning_metrics": learning_metrics,
+        "cemetery": cemetery,
+        "calibration": learning_metrics.get("calibration", []),
+        "signal_attribution": learning_metrics.get("signal_attribution", []),
+        "streaks": learning_metrics.get("streaks", []),
         "social_sentiment": social_feed,
         "indicators_convergence": {
             "oversold": _detect_oversold_convergence(_compute_technical_indicators(top_subnets[0])) if top_subnets else {},
@@ -1577,11 +1735,16 @@ async def dashboard(request: Request):
                 "staking_analytics": premium["staking_analytics"],
                 "council_weights": premium["council_weights"],
                 "expert_weights": premium["expert_weights"],
+                "regime": premium["regime"],
                 "mindmap_trail": premium["mindmap_trail"],
                 "signal_impact": premium["signal_impact"],
                 "patterns": premium["patterns"],
                 "predictions": premium["predictions"],
                 "learning_metrics": premium["learning_metrics"],
+                "cemetery": premium["cemetery"],
+                "calibration": premium["calibration"],
+                "signal_attribution": premium["signal_attribution"],
+                "streaks": premium["streaks"],
                 "social_sentiment": premium["social_sentiment"],
                 "indicators_convergence": premium["indicators_convergence"],
                 "momentum_charts": premium["momentum_charts"],
@@ -1949,3 +2112,173 @@ def build_mindmap_feed(picks: List[Dict], council_votes: List[Dict], undervalued
 _feedback_router = create_feedback_router()
 if _feedback_router is not None:
     app.include_router(_feedback_router)
+
+
+# ---------------------------------------------------------------------------
+# Learning Loop — background scheduler + closed-loop API endpoints
+# ---------------------------------------------------------------------------
+
+import threading as _threading
+
+_LEARNING_INTERVAL_SECONDS = 30 * 60  # every 30 minutes
+_LEARNER_THREAD = None
+_LEARNER_STOP = _threading.Event()
+
+
+def _run_learning_loop_once() -> Dict[str, Any]:
+    """Run one pass of the closed learning loop (resolve -> judge -> weights).
+
+    Uses the live subnet snapshot for prices so we don't re-fetch per netuid.
+    """
+    try:
+        from internal.council.learner import get_scheduler
+        subnets, _ = _get_subnets_with_source()
+        market_data = _market_data_for_regime(subnets)
+        price_by_netuid = {sn.get("netuid"): float(sn.get("price", 0) or 0) for sn in subnets}
+
+        sched = get_scheduler()
+        original_provider = sched.resolver.price_provider
+        sched.resolver.price_provider = lambda netuid: price_by_netuid.get(netuid) or None
+        try:
+            summary = sched.run(market_data=market_data)
+        finally:
+            sched.resolver.price_provider = original_provider
+        logger.info("learning loop ran: %s", summary)
+        return summary
+    except Exception as exc:
+        logger.warning("learning loop run failed: %s", exc)
+        return {"error": str(exc)}
+
+
+def _learning_loop_worker() -> None:
+    """Background worker: run the learning loop every 30 minutes."""
+    while not _LEARNER_STOP.is_set():
+        try:
+            _run_learning_loop_once()
+        except Exception as exc:
+            logger.warning("learning loop worker error: %s", exc)
+        _LEARNER_STOP.wait(_LEARNING_INTERVAL_SECONDS)
+
+
+def _start_learning_loop() -> None:
+    """Start the background learning loop (idempotent, daemon thread)."""
+    global _LEARNER_THREAD
+    if _LEARNER_THREAD is not None and _LEARNER_THREAD.is_alive():
+        return
+    _LEARNER_STOP.clear()
+    _LEARNER_THREAD = _threading.Thread(target=_learning_loop_worker, name="learning-loop", daemon=True)
+    _LEARNER_THREAD.start()
+    logger.info("learning loop scheduler started (interval=%ss)", _LEARNING_INTERVAL_SECONDS)
+
+
+@app.on_event("startup")
+async def _startup_learning_loop() -> None:
+    """Boot the self-learning loop on app start so predictions resolve + judge."""
+    try:
+        _start_learning_loop()
+    except Exception as exc:
+        logger.warning("Failed to start learning loop: %s", exc)
+
+
+@app.get("/api/learning/stats")
+async def api_learning_stats():
+    """Real learning-loop stats: weights, accuracy, calibration, regime, streaks."""
+    try:
+        subnets, _ = _get_subnets_with_source()
+        return _compute_learning_metrics(subnets)
+    except Exception as e:
+        logger.error("Error fetching learning stats: %s", e)
+        return {"error": str(e), "expert_weights": {}, "accuracy": 0.0}
+
+
+@app.get("/api/predictions/pending")
+async def api_predictions_pending():
+    """Return all pending (unresolved) predictions."""
+    try:
+        return {"predictions": PREDICTION_STORE.all(), "count": len(PREDICTION_STORE.all())}
+    except Exception as e:
+        logger.error("Error fetching pending predictions: %s", e)
+        return {"predictions": [], "count": 0, "error": str(e)}
+
+
+@app.get("/api/predictions/resolved")
+async def api_predictions_resolved():
+    """Return all resolved predictions (correct/partial/wrong/expired)."""
+    try:
+        resolved = PREDICTION_STORE.resolved()
+        return {"resolved": resolved, "count": len(resolved)}
+    except Exception as e:
+        logger.error("Error fetching resolved predictions: %s", e)
+        return {"resolved": [], "count": 0, "error": str(e)}
+
+
+@app.get("/api/learning/cemetery")
+async def api_learning_cemetery():
+    """Wrong (false-positive) predictions — the learning cemetery."""
+    try:
+        cemetery = PREDICTION_STORE._store_obj().get_cemetery(limit=100)
+        return {"cemetery": cemetery, "count": len(cemetery)}
+    except Exception as e:
+        logger.error("Error fetching cemetery: %s", e)
+        return {"cemetery": [], "count": 0, "error": str(e)}
+
+
+@app.get("/api/learning/calibration")
+async def api_learning_calibration():
+    """Conviction-vs-accuracy calibration buckets."""
+    try:
+        from internal.council.learner import get_scheduler
+        buckets = get_scheduler().judge.get_calibration_buckets()
+        return {"calibration": buckets}
+    except Exception as e:
+        logger.error("Error fetching calibration: %s", e)
+        return {"calibration": [], "error": str(e)}
+
+
+@app.get("/api/learning/signals")
+async def api_learning_signals():
+    """Per-signal-tag accuracy attribution."""
+    try:
+        from internal.council.learner import get_scheduler
+        attribution = get_scheduler().judge.get_signal_attribution()
+        return {"signal_attribution": attribution}
+    except Exception as e:
+        logger.error("Error fetching signal attribution: %s", e)
+        return {"signal_attribution": [], "error": str(e)}
+
+
+@app.get("/api/learning/regime")
+async def api_learning_regime():
+    """Current market regime classification."""
+    try:
+        from internal.council.weights import detect_regime
+        subnets, _ = _get_subnets_with_source()
+        market_data = _market_data_for_regime(subnets)
+        regime = detect_regime(market_data)
+        return {"regime": regime, "market_data": market_data}
+    except Exception as e:
+        logger.error("Error fetching regime: %s", e)
+        return {"regime": "chop", "error": str(e)}
+
+
+@app.get("/api/learning/streaks")
+async def api_learning_streaks():
+    """Expert leaderboard: accuracy, current/best streaks."""
+    try:
+        from internal.council.learner import get_scheduler
+        streaks = get_scheduler().judge.get_streaks()
+        return {"streaks": streaks}
+    except Exception as e:
+        logger.error("Error fetching streaks: %s", e)
+        return {"streaks": [], "error": str(e)}
+
+
+@app.post("/api/learning/run")
+async def api_learning_run():
+    """Manually trigger one learning-loop pass (resolve -> judge -> weights)."""
+    try:
+        summary = _run_learning_loop_once()
+        return {"status": "success", "summary": summary}
+    except Exception as e:
+        logger.error("Error running learning loop: %s", e)
+        return {"status": "error", "error": str(e)}

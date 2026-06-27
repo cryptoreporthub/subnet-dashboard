@@ -30,11 +30,11 @@ class AdversarialJudge:
         self,
         persistence_path: str = "data/soul_map.json",
         registry_path: str = "config/registry.json",
-        persist: bool = False,
+        auto_persist: bool = False,
     ):
         self.persistence_path = persistence_path
         self.registry_path = registry_path
-        self.persist = persist
+        self.auto_persist = auto_persist
         self._state: Dict[str, Any] = {}
         self._load_state()
 
@@ -76,6 +76,10 @@ class AdversarialJudge:
         finally:
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
+
+    def persist(self) -> None:
+        """Public persistence hook used by the learning-loop scheduler."""
+        self._save_state()
 
     # ------------------------------------------------------------------
     # Public accessors used by SimiVision and the API
@@ -193,7 +197,7 @@ class AdversarialJudge:
         self._update_track_records(decision, outcome, score)
         self._update_council_weights()
         self._append_learning_trail(verdict)
-        if self.persist:
+        if self.auto_persist:
             self._save_state()
         return verdict
 
@@ -331,6 +335,246 @@ class AdversarialJudge:
         trail = self._state.setdefault("learning_trail", [])
         trail.append(trail_entry)
         self._state["learning_trail"] = trail[-200:]
+
+
+    # ==================================================================
+    # PREDICTION-LEVEL JUDGING (learning loop closure)
+    # ==================================================================
+    # These methods judge stored predictions against their resolutions and
+    # drive per-expert accuracy, calibration buckets, signal attribution,
+    # streaks and council-weight updates. They complement the existing
+    # judge_decision(decision, outcome, subnet_id) path used by the
+    # orchestrator; both write into the same adversarial_state.
+
+    CALIBRATION_BUCKETS = [(50, 60), (60, 70), (70, 80), (80, 90), (90, 101)]
+
+    def judge_prediction(self, prediction: Dict[str, Any], resolution: Dict[str, Any]) -> Dict[str, Any]:
+        """Judge a resolved prediction: which experts were right/wrong, failure tags, learning note."""
+        outcome = (resolution or {}).get("outcome") or prediction.get("outcome")
+        experts = list(prediction.get("experts_involved", []) or [])
+        signal_tags = list(prediction.get("signal_tags", []) or [])
+        predicted_pct = float(prediction.get("predicted_pct", 0) or 0)
+        actual_pct = (resolution or {}).get("actual_pct")
+        if actual_pct is None:
+            actual_pct = prediction.get("actual_pct")
+        actual_pct = float(actual_pct) if actual_pct is not None else None
+
+        correct = outcome == "correct"
+        partial = outcome == "partial"
+        wrong = outcome == "wrong"
+
+        # Per-expert credit/blame.
+        expert_results = {}
+        for name in experts:
+            expert_results[name] = "correct" if correct else ("partial" if partial else "wrong")
+            self.update_expert_accuracy(name, correct=correct, partial=partial)
+
+        # Failure tags for wrong/partial outcomes.
+        failure_tags = self._failure_tags(prediction, resolution, outcome)
+
+        # Magnitude error (signed).
+        magnitude_error = None
+        if actual_pct is not None:
+            magnitude_error = round(actual_pct - predicted_pct, 2)
+
+        note = self._learning_note(outcome, failure_tags, magnitude_error)
+
+        verdict = {
+            "timestamp": self._now_iso(),
+            "prediction_id": prediction.get("id"),
+            "subnet": prediction.get("subnet") or prediction.get("name"),
+            "netuid": prediction.get("netuid"),
+            "outcome": outcome,
+            "experts_involved": experts,
+            "expert_results": expert_results,
+            "signal_tags": signal_tags,
+            "failure_tags": failure_tags,
+            "magnitude_error": magnitude_error,
+            "predicted_pct": predicted_pct,
+            "actual_pct": actual_pct,
+            "conviction": prediction.get("conviction"),
+            "note": note,
+        }
+        self._record_prediction_verdict(verdict)
+        return verdict
+
+    def _failure_tags(self, prediction: Dict[str, Any], resolution: Dict[str, Any], outcome: str) -> List[str]:
+        """Generate failure tags explaining why a prediction missed."""
+        if outcome in ("correct", "expired"):
+            return []
+        tags = []
+        signal_tags = set(prediction.get("signal_tags", []) or [])
+        conviction = int(prediction.get("conviction", 50) or 50)
+        reasons = " ".join(str(r) for r in (prediction.get("reasons", []) or [])).lower()
+
+        if conviction >= 80 and outcome != "correct":
+            tags.append("conviction_overconfidence")
+        if "rsi_overbought" in signal_tags or "overbought" in reasons:
+            tags.append("overbought_false_positive")
+        if "macd_crossover" in signal_tags or "macd" in reasons:
+            tags.append("macd_false_signal")
+        if "high_emission" in signal_tags or "emission" in reasons:
+            tags.append("emission_trap")
+        if not tags:
+            tags.append("signal_misread")
+        return tags
+
+    def _learning_note(self, outcome: str, failure_tags: List[str], magnitude_error) -> str:
+        if outcome == "correct":
+            return "Prediction confirmed — reinforce contributing signals."
+        if outcome == "partial":
+            return f"Direction right, magnitude short (err {magnitude_error}). Dampen conviction on {', '.join(failure_tags) or 'weak signals'}."
+        if outcome == "wrong":
+            return f"Direction wrong (err {magnitude_error}). Penalize {', '.join(failure_tags) or 'misread signals'}."
+        return "Prediction expired without resolution."
+
+    def update_expert_accuracy(self, expert_name: str, correct: bool, partial: bool = False) -> Dict[str, Any]:
+        """Track total / correct / accuracy / streaks for a single expert."""
+        records = self._state.setdefault("expert_track_records", {})
+        rec = records.setdefault(expert_name, {
+            "total": 0, "correct_count": 0, "partial_count": 0,
+            "accuracy_pct": 0.0, "current_streak": 0, "best_streak": 0,
+        })
+        rec["total"] = int(rec.get("total", 0)) + 1
+        if correct:
+            rec["correct_count"] = int(rec.get("correct_count", 0)) + 1
+            rec["current_streak"] = int(rec.get("current_streak", 0)) + 1
+        elif partial:
+            rec["partial_count"] = int(rec.get("partial_count", 0)) + 1
+            # Partial breaks a winning streak but does not flip to losing.
+            rec["current_streak"] = 0
+        else:
+            rec["current_streak"] = 0
+        if rec["current_streak"] > int(rec.get("best_streak", 0)):
+            rec["best_streak"] = rec["current_streak"]
+        judged = rec["correct_count"] + rec["partial_count"]
+        rec["accuracy_pct"] = round(rec["correct_count"] / judged, 4) if judged else 0.0
+        return rec
+
+    def update_council_weights(self, verdict: Optional[Dict[str, Any]] = None) -> Dict[str, float]:
+        """Adjust council weights from a prediction verdict and persist.
+
+        +0.02 correct, -0.03 wrong, +0.005 partial, normalized to 1.0,
+        dampened by min(1.0, resolved/10), with recency boost (last 30
+        verdicts count 2x).
+        """
+        weights = dict(self._state.get("council_weights") or {})
+        for name in ("quant", "hype", "contrarian", "technical"):
+            weights.setdefault(name, 1.0)
+
+        trail = self._state.get("learning_trail", []) or []
+        resolved = len(trail)
+        dampen = min(1.0, resolved / 10.0) if resolved else 0.0
+
+        if verdict:
+            delta_map = {"correct": 0.02, "partial": 0.005, "wrong": -0.03}
+            delta = delta_map.get(verdict.get("outcome"), 0.0) * dampen
+            for name in (verdict.get("experts_involved") or []):
+                if name in weights:
+                    weights[name] = round(float(weights[name]) + delta, 4)
+
+        # Recency weighting: last 30 verdicts count double.
+        recent = trail[-30:]
+        for v in recent:
+            outcome = v.get("outcome_label") or v.get("outcome")
+            delta_map = {"correct": 0.02, "partial": 0.005, "wrong": -0.03}
+            delta = delta_map.get(outcome, 0.0) * dampen * 0.5  # half-weight for recency pass
+            for name in (v.get("experts_involved") or []):
+                if name in weights:
+                    weights[name] = round(float(weights[name]) + delta, 4)
+
+        # Normalize to a mean of 1.0 so weights stay comparable over time.
+        vals = [max(0.05, float(w)) for w in weights.values()]
+        mean = sum(vals) / len(vals) if vals else 1.0
+        weights = {k: round(max(0.05, float(v) / mean), 4) for k, v in weights.items()}
+
+        self._state["council_weights"] = weights
+        self._state["last_weight_update"] = self._now_iso()
+        return weights
+
+    def get_calibration_buckets(self) -> List[Dict[str, Any]]:
+        """Accuracy per conviction bucket (50-60, 60-70, 70-80, 80-90, 90-100)."""
+        verdicts = self._state.get("prediction_verdicts", []) or []
+        buckets = []
+        for lo, hi in self.CALIBRATION_BUCKETS:
+            in_bucket = [
+                v for v in verdicts
+                if lo <= int(v.get("conviction") or 0) < hi
+            ]
+            judged = [v for v in in_bucket if v.get("outcome") in ("correct", "partial", "wrong")]
+            correct = sum(1 for v in judged if v.get("outcome") == "correct")
+            acc = round(correct / len(judged), 4) if judged else None
+            buckets.append({
+                "bucket": f"{lo}-{hi if hi <= 100 else 100}",
+                "total": len(judged),
+                "correct": correct,
+                "accuracy": acc,
+            })
+        return buckets
+
+    def get_signal_attribution(self) -> List[Dict[str, Any]]:
+        """Accuracy per signal_tag across all judged predictions."""
+        verdicts = self._state.get("prediction_verdicts", []) or []
+        agg: Dict[str, Dict[str, int]] = {}
+        for v in verdicts:
+            outcome = v.get("outcome")
+            if outcome not in ("correct", "partial", "wrong"):
+                continue
+            for tag in (v.get("signal_tags") or []):
+                slot = agg.setdefault(tag, {"total": 0, "correct": 0, "partial": 0, "wrong": 0})
+                slot["total"] += 1
+                if outcome in slot:
+                    slot[outcome] += 1
+        rows = []
+        for tag, s in agg.items():
+            rows.append({
+                "signal": tag,
+                "total": s["total"],
+                "correct": s["correct"],
+                "partial": s["partial"],
+                "wrong": s["wrong"],
+                "accuracy": round(s["correct"] / s["total"], 4) if s["total"] else None,
+            })
+        rows.sort(key=lambda r: r["total"], reverse=True)
+        return rows
+
+    def get_streaks(self) -> List[Dict[str, Any]]:
+        """Expert leaderboard by accuracy and best streak."""
+        records = self._state.get("expert_track_records", {}) or {}
+        rows = []
+        for name, rec in records.items():
+            judged = rec.get("correct_count", 0) + rec.get("partial_count", 0)
+            rows.append({
+                "expert": name,
+                "total": rec.get("total", 0),
+                "correct": rec.get("correct_count", 0),
+                "partial": rec.get("partial_count", 0),
+                "accuracy": rec.get("accuracy_pct", 0.0),
+                "current_streak": rec.get("current_streak", 0),
+                "best_streak": rec.get("best_streak", 0),
+            })
+        rows.sort(key=lambda r: r["accuracy"], reverse=True)
+        return rows
+
+    def _record_prediction_verdict(self, verdict: Dict[str, Any]) -> None:
+        pv = self._state.setdefault("prediction_verdicts", [])
+        pv.append(verdict)
+        self._state["prediction_verdicts"] = pv[-500:]
+        # Mirror into learning_trail so update_council_weights recency pass sees it.
+        trail_entry = {
+            "timestamp": verdict["timestamp"],
+            "subnet_id": verdict.get("netuid"),
+            "action": "predict",
+            "outcome_label": verdict.get("outcome"),
+            "score": verdict.get("conviction"),
+            "confidence": verdict.get("conviction"),
+            "note": verdict.get("note"),
+            "experts_involved": verdict.get("experts_involved"),
+        }
+        trail = self._state.setdefault("learning_trail", [])
+        trail.append(trail_entry)
+        self._state["learning_trail"] = trail[-200:]
+
 
     @staticmethod
     def _now_iso() -> str:
