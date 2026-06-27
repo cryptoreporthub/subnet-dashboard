@@ -1,3 +1,2 @@
-# Redeploy trigger
-
-This file is used to trigger Fly.io deployments via the GitHub Actions workflow.
+redeploy: 2026-06-27T06:00:00Z
+trigger: design-polish-and-learning-loop-and-rsi-fix
