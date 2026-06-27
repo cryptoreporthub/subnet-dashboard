@@ -951,82 +951,140 @@ def _compute_sell_signals(sn: Dict[str, Any], indicators: Dict[str, Any], conver
 # Signal impact engine
 # ---------------------------------------------------------------------------
 def _compute_signal_impact(sn: Dict[str, Any], indicators: Dict[str, Any], hot: Dict[str, Any], sell: Dict[str, Any]) -> Dict[str, Any]:
-    """Estimate predicted directional impact per signal type using SIGNAL_TYPES half-lives."""
+    """Estimate predicted directional impact per signal type using SIGNAL_TYPES half-lives.
+
+    Always returns 6-12 impact entries so the Signal Impact Engine never renders
+    an empty list, even when live indicator readings are not at extreme thresholds.
+    """
     impacts: List[Dict[str, Any]] = []
     chg = float(sn.get("price_change_24h", 0) or 0)
+    apy = float(sn.get("apy", 0) or 0)
+    emission = float(sn.get("emission", 0) or 0)
 
     def _freshness(half_life_hours: float, age_hours: float = 1.0) -> float:
         if half_life_hours <= 0:
             return 1.0
         return round(0.5 ** (age_hours / half_life_hours), 3)
 
+    def _add(signal_type: str, direction: str, magnitude_pct: float, horizon_hours: int, confidence: int, description: str) -> None:
+        mag = round(abs(magnitude_pct), 2)
+        impacts.append({
+            "signal_type": signal_type,
+            "description": description,
+            "direction": direction,
+            "magnitude_pct": mag,
+            "confidence": confidence,
+            "freshness": _freshness(horizon_hours),
+            "predicted_move": f"predicted to move {'+' if direction == 'bullish' else '-' if direction == 'bearish' else ''}{mag:.1f}% within {horizon_hours} hours",
+        })
+
+    # 1. RSI signal — always emitted, stronger when near extremes.
     rsi = indicators.get("rsi", {})
-    if isinstance(rsi, dict) and rsi.get("signal") in ("oversold", "overbought"):
-        st = SIGNAL_TYPES.get("rsi_crossover", {})
-        direction = "bullish" if rsi.get("signal") == "oversold" else "bearish"
-        mag = round(abs(50 - rsi.get("value", 50)) * 0.1, 2)
-        impacts.append({
-            "signal_type": "rsi_crossover",
-            "description": st.get("description", "RSI crossover"),
-            "direction": direction,
-            "magnitude_pct": mag,
-            "freshness": _freshness(st.get("half_life_hours", 24)),
-            "predicted_move": f"predicted to move {'+' if direction == 'bullish' else '-'}{mag:.1f}% within 24 hours",
-        })
+    rsi_val = float(rsi.get("value", 50) if isinstance(rsi, dict) else rsi)
+    if rsi_val < 30:
+        _add("rsi_crossover", "bullish", (30 - rsi_val) * 0.12, 24, 75, f"RSI {rsi_val:.1f} oversold — mean-reversion bounce")
+    elif rsi_val > 70:
+        _add("rsi_crossover", "bearish", (rsi_val - 70) * 0.12, 24, 75, f"RSI {rsi_val:.1f} overbought — pullback risk")
+    else:
+        _add("rsi_crossover", "neutral", 0.8, 24, 50, f"RSI {rsi_val:.1f} neutral — no edge")
+
+    # 2. MACD signal — always emitted from histogram direction.
     macd = indicators.get("macd", {})
-    if isinstance(macd, dict) and macd.get("crossover") in ("bullish", "bearish"):
-        st = SIGNAL_TYPES.get("macd_cross", {})
-        direction = macd.get("crossover")
-        mag = round(abs(macd.get("histogram", 0)) * 10, 2)
-        impacts.append({
-            "signal_type": "macd_cross",
-            "description": st.get("description", "MACD cross"),
-            "direction": direction,
-            "magnitude_pct": mag,
-            "freshness": _freshness(st.get("half_life_hours", 48)),
-            "predicted_move": f"predicted to move {'+' if direction == 'bullish' else '-'}{mag:.1f}% within 48 hours",
-        })
+    if isinstance(macd, dict):
+        hist = float(macd.get("histogram", 0))
+        crossover = macd.get("crossover", "neutral")
+        direction = crossover if crossover in ("bullish", "bearish") else ("bullish" if hist > 0 else "bearish" if hist < 0 else "neutral")
+        _add("macd_cross", direction, abs(hist) * 8 + 0.5, 48, 70, f"MACD histogram {hist:+.2f} ({crossover})")
+    else:
+        _add("macd_cross", "neutral", 0.5, 48, 50, "MACD unavailable")
+
+    # 3. Stochastic signal.
     stoch = indicators.get("stochastic", {})
-    if isinstance(stoch, dict) and stoch.get("signal") in ("oversold", "overbought"):
-        st = SIGNAL_TYPES.get("stochastic_reversal", {})
-        direction = "bullish" if stoch.get("signal") == "oversold" else "bearish"
-        mag = round(abs(50 - stoch.get("k", 50)) * 0.08, 2)
-        impacts.append({
-            "signal_type": "stochastic_reversal",
-            "description": st.get("description", "Stochastic reversal"),
-            "direction": direction,
-            "magnitude_pct": mag,
-            "freshness": _freshness(st.get("half_life_hours", 8)),
-            "predicted_move": f"predicted to move {'+' if direction == 'bullish' else '-'}{mag:.1f}% within 8 hours",
-        })
+    if isinstance(stoch, dict):
+        k = float(stoch.get("k", 50))
+        signal = stoch.get("signal", "neutral")
+        direction = "bullish" if signal == "oversold" else "bearish" if signal == "overbought" else "neutral"
+        _add("stochastic_reversal", direction, abs(50 - k) * 0.08, 8, 65, f"Stochastic %K {k:.1f} ({signal})")
+    else:
+        _add("stochastic_reversal", "neutral", 0.5, 8, 50, "Stochastic unavailable")
+
+    # 4. Bollinger signal — price vs bands.
+    boll = indicators.get("bollinger", {})
+    if isinstance(boll, dict):
+        boll_signal = boll.get("signal", "neutral")
+        direction = "bullish" if boll_signal == "oversold" else "bearish" if boll_signal == "overbought" else "neutral"
+        _add("bollinger_squeeze", direction, 1.2 if direction != "neutral" else 0.4, 24, 60, f"Bollinger {boll_signal} (width {boll.get('bandwidth', 0):.2f})")
+    else:
+        _add("bollinger_squeeze", "neutral", 0.4, 24, 50, "Bollinger unavailable")
+
+    # 5. MFI signal.
+    mfi = indicators.get("mfi", {})
+    if isinstance(mfi, dict):
+        mfi_val = float(mfi.get("value", 50))
+        if mfi_val < 30:
+            _add("mfi_divergence", "bullish", (30 - mfi_val) * 0.1, 16, 62, f"MFI {mfi_val:.1f} oversold")
+        elif mfi_val > 70:
+            _add("mfi_divergence", "bearish", (mfi_val - 70) * 0.1, 16, 62, f"MFI {mfi_val:.1f} overbought")
+        else:
+            _add("mfi_divergence", "neutral", 0.5, 16, 50, f"MFI {mfi_val:.1f} neutral")
+    else:
+        _add("mfi_divergence", "neutral", 0.5, 16, 50, "MFI unavailable")
+
+    # 6. CCI signal.
+    cci = indicators.get("cci", {})
+    if isinstance(cci, dict):
+        cci_val = float(cci.get("value", 0))
+        if cci_val < -100:
+            _add("cci_extreme", "bullish", abs(cci_val + 100) * 0.02, 12, 60, f"CCI {cci_val:.1f} deeply oversold")
+        elif cci_val > 100:
+            _add("cci_extreme", "bearish", (cci_val - 100) * 0.02, 12, 60, f"CCI {cci_val:.1f} deeply overbought")
+        else:
+            _add("cci_extreme", "neutral", 0.5, 12, 50, f"CCI {cci_val:.1f} neutral")
+    else:
+        _add("cci_extreme", "neutral", 0.5, 12, 50, "CCI unavailable")
+
+    # 7. Williams %R signal.
+    wr = indicators.get("williams_r", {})
+    if isinstance(wr, dict):
+        wr_val = float(wr.get("value", -50))
+        if wr_val < -80:
+            _add("williams_r_reversal", "bullish", abs(wr_val + 80) * 0.06, 10, 63, f"Williams %R {wr_val:.1f} oversold")
+        elif wr_val > -20:
+            _add("williams_r_reversal", "bearish", (wr_val + 20) * 0.06, 10, 63, f"Williams %R {wr_val:.1f} overbought")
+        else:
+            _add("williams_r_reversal", "neutral", 0.5, 10, 50, f"Williams %R {wr_val:.1f} neutral")
+    else:
+        _add("williams_r_reversal", "neutral", 0.5, 10, 50, "Williams %R unavailable")
+
+    # 8. Momentum shift from 24h change.
     if abs(chg) >= 5:
-        st = SIGNAL_TYPES.get("momentum_shift", {})
         direction = "bullish" if chg > 0 else "bearish"
-        mag = round(abs(chg) * 0.5, 2)
-        impacts.append({
-            "signal_type": "momentum_shift",
-            "description": st.get("description", "Momentum shift"),
-            "direction": direction,
-            "magnitude_pct": mag,
-            "freshness": _freshness(st.get("half_life_hours", 12)),
-            "predicted_move": f"predicted to move {'+' if direction == 'bullish' else '-'}{mag:.1f}% within 12 hours",
-        })
-    emission = float(sn.get("emission", 0) or 0)
-    if emission > 3:
-        st = SIGNAL_TYPES.get("emission_change", {})
-        mag = round(emission * 0.3, 2)
-        impacts.append({
-            "signal_type": "emission_change",
-            "description": st.get("description", "Emission change"),
-            "direction": "bullish",
-            "magnitude_pct": mag,
-            "freshness": _freshness(st.get("half_life_hours", 168)),
-            "predicted_move": f"predicted to move +{mag:.1f}% within 168 hours",
-        })
+        _add("momentum_shift", direction, abs(chg) * 0.5, 12, 72, f"24h change {chg:+.1f}% momentum")
+    else:
+        _add("momentum_shift", "neutral", 0.5, 12, 50, f"24h change {chg:+.1f}% muted")
+
+    # 9. Emission/yield signal (Gamma's domain).
+    if emission > 1 and apy > 20:
+        _add("emission_change", "bullish", emission * 0.3 + apy * 0.02, 168, 68, f"Emission {emission:.2f} TAO/day + {apy:.1f}% APY")
+    elif emission < 0.05 or apy < 0:
+        _add("emission_change", "bearish", 1.0, 168, 55, f"Weak emission {emission:.2f} / APY {apy:.1f}%")
+    else:
+        _add("emission_change", "neutral", 0.5, 168, 50, f"Emission {emission:.2f} TAO/day / APY {apy:.1f}%")
+
+    # 10. Social/sentiment fallback if mentions exist.
+    mentions = int(sn.get("social_mentions", 0) or 0)
+    if mentions > 1000:
+        _add("social_sentiment", "bullish" if chg >= 0 else "bearish", 1.0, 6, 55, f"Social volume {mentions} mentions")
+    elif mentions > 0:
+        _add("social_sentiment", "neutral", 0.4, 6, 50, f"Social volume {mentions} mentions")
+
+    # Cap to a reasonable max while guaranteeing at least 6.
+    if len(impacts) < 6:
+        _add("market_breadth", "bullish" if chg >= 0 else "bearish", 0.6, 24, 50, "Market breadth filler")
 
     net = sum(i.get("magnitude_pct", 0) * (1 if i.get("direction") == "bullish" else -1) for i in impacts)
     return {
-        "impacts": impacts,
+        "impacts": impacts[:12],
         "net_predicted_pct": round(net, 2),
         "net_direction": "bullish" if net > 0 else "bearish" if net < 0 else "neutral",
         "hot_active": bool(hot.get("active")),
@@ -1036,50 +1094,194 @@ def _compute_signal_impact(sn: Dict[str, Any], indicators: Dict[str, Any], hot: 
 
 
 # ---------------------------------------------------------------------------
-# Pattern recognition — 7 pattern types
+# Pattern recognition — TA-indicator + candlestick patterns
 # ---------------------------------------------------------------------------
-def _detect_patterns(closes: List[float], highs: List[float], lows: List[float]) -> List[Dict[str, Any]]:
-    if len(closes) < 5:
-        return [{"pattern": "insufficient_data", "type": "neutral", "description": "Not enough price history", "confidence": 0}]
+def _detect_patterns(
+    closes: List[float],
+    highs: List[float],
+    lows: List[float],
+    indicators: Optional[Dict[str, Any]] = None,
+    sn: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """Return 6-12 pattern entries grounded in actual indicator values.
+
+    Combines classic candlestick patterns with oscillator-driven setups so the
+    Pattern Recognition panel never falls back to generic "none" entries.
+    """
+    indicators = indicators or {}
+    sn = sn or {}
     found: List[Dict[str, Any]] = []
-    c1, c2 = closes[-1], closes[-2]
-    h1, l1 = highs[-1], lows[-1]
-    body1 = abs(c1 - c2)
-    range1 = h1 - l1 if h1 - l1 > 0 else 1e-9
-    prev_body = abs(c2 - closes[-3]) if len(closes) > 2 else 0
 
-    if c2 < c1 and body1 > prev_body:
-        found.append({"pattern": "bullish_engulfing", **PATTERN_DEFS["bullish_engulfing"], "confidence": 72})
-    if c2 > c1 and body1 > prev_body:
-        found.append({"pattern": "bearish_engulfing", **PATTERN_DEFS["bearish_engulfing"], "confidence": 72})
-    lower_wick = min(c1, c2) - l1
-    if lower_wick > body1 * 2 and c1 > c2:
-        found.append({"pattern": "hammer", **PATTERN_DEFS["hammer"], "confidence": 65})
-    upper_wick = h1 - max(c1, c2)
-    if upper_wick > body1 * 2 and c1 < c2:
-        found.append({"pattern": "shooting_star", **PATTERN_DEFS["shooting_star"], "confidence": 65})
-    if body1 <= range1 * 0.1:
-        found.append({"pattern": "doji", **PATTERN_DEFS["doji"], "confidence": 60})
+    def _add(pattern: str, ptype: str, confidence: int, description: str, predicted_move: str) -> None:
+        found.append({
+            "pattern": pattern,
+            "type": ptype,
+            "description": description,
+            "confidence": confidence,
+            "predicted_move": predicted_move,
+        })
 
-    window = closes[-10:]
-    if len(window) >= 6:
-        mx = max(window)
-        mn = min(window)
-        peaks = [i for i, v in enumerate(window) if v >= mx * 0.98]
-        troughs = [i for i, v in enumerate(window) if v <= mn * 1.02]
-        if len(peaks) >= 2 and (peaks[-1] - peaks[0]) >= 3:
-            found.append({"pattern": "double_top", **PATTERN_DEFS["double_top"], "confidence": 68})
-        if len(troughs) >= 2 and (troughs[-1] - troughs[0]) >= 3:
-            found.append({"pattern": "double_bottom", **PATTERN_DEFS["double_bottom"], "confidence": 68})
+    # Candlestick patterns (when enough price history exists).
+    if len(closes) >= 5:
+        c1, c2 = closes[-1], closes[-2]
+        h1, l1 = highs[-1] if highs else c1, lows[-1] if lows else c1
+        body1 = abs(c1 - c2)
+        range1 = h1 - l1 if h1 - l1 > 0 else 1e-9
+        prev_body = abs(c2 - closes[-3]) if len(closes) > 2 else 0
 
-    if not found:
-        found.append({"pattern": "none", "type": "neutral", "description": "No clear pattern detected", "confidence": 0})
-    return found
+        if c2 < c1 and body1 > prev_body:
+            _add("bullish_engulfing", "bullish", 72, "Bullish engulfing — buyers overwhelm prior candle", "predicted to move +2.5% within 24 hours")
+        if c2 > c1 and body1 > prev_body:
+            _add("bearish_engulfing", "bearish", 72, "Bearish engulfing — sellers overwhelm prior candle", "predicted to move -2.5% within 24 hours")
+        lower_wick = min(c1, c2) - l1
+        if lower_wick > body1 * 2 and c1 > c2:
+            _add("hammer", "bullish", 65, "Hammer — rejection of lows, potential reversal up", "predicted to move +1.8% within 12 hours")
+        upper_wick = h1 - max(c1, c2)
+        if upper_wick > body1 * 2 and c1 < c2:
+            _add("shooting_star", "bearish", 65, "Shooting star — rejection of highs, potential reversal down", "predicted to move -1.8% within 12 hours")
+        if body1 <= range1 * 0.1:
+            _add("doji", "neutral", 60, "Doji — indecision, momentum stalling", "predicted to move ±0.5% within 8 hours")
+
+        window = closes[-10:]
+        if len(window) >= 6:
+            mx = max(window)
+            mn = min(window)
+            peaks = [i for i, v in enumerate(window) if v >= mx * 0.98]
+            troughs = [i for i, v in enumerate(window) if v <= mn * 1.02]
+            if len(peaks) >= 2 and (peaks[-1] - peaks[0]) >= 3:
+                _add("double_top", "bearish", 68, "Double top — two peaks, bearish reversal", "predicted to move -3.0% within 48 hours")
+            if len(troughs) >= 2 and (troughs[-1] - troughs[0]) >= 3:
+                _add("double_bottom", "bullish", 68, "Double bottom — two troughs, bullish reversal", "predicted to move +3.0% within 48 hours")
+
+    # RSI pattern.
+    rsi = indicators.get("rsi", {})
+    rsi_val = float(rsi.get("value", 50) if isinstance(rsi, dict) else rsi)
+    if rsi_val < 30:
+        _add("rsi_oversold_bounce", "bullish", 78, f"RSI {rsi_val:.1f} oversold — mean-reversion bounce expected", "predicted to move +2.8% within 24 hours")
+    elif rsi_val > 70:
+        _add("rsi_overbought_pullback", "bearish", 78, f"RSI {rsi_val:.1f} overbought — pullback expected", "predicted to move -2.8% within 24 hours")
+    else:
+        _add("rsi_neutral_drift", "neutral", 50, f"RSI {rsi_val:.1f} neutral — no reversal edge", "predicted to move ±0.8% within 24 hours")
+
+    # MACD pattern.
+    macd = indicators.get("macd", {})
+    if isinstance(macd, dict):
+        hist = float(macd.get("histogram", 0))
+        crossover = macd.get("crossover", "neutral")
+        if crossover == "bullish" or hist > 0:
+            _add("macd_bullish_cross", "bullish", 74, f"MACD histogram {hist:+.2f} bullish", "predicted to move +2.2% within 48 hours")
+        elif crossover == "bearish" or hist < 0:
+            _add("macd_bearish_cross", "bearish", 74, f"MACD histogram {hist:+.2f} bearish", "predicted to move -2.2% within 48 hours")
+        else:
+            _add("macd_flat", "neutral", 50, f"MACD histogram {hist:+.2f} flat", "predicted to move ±0.6% within 48 hours")
+    else:
+        _add("macd_unavailable", "neutral", 50, "MACD data unavailable", "predicted to move ±0.5% within 48 hours")
+
+    # Bollinger pattern.
+    boll = indicators.get("bollinger", {})
+    if isinstance(boll, dict):
+        boll_signal = boll.get("signal", "neutral")
+        bandwidth = float(boll.get("bandwidth", 0))
+        if boll_signal == "oversold":
+            _add("bollinger_lower_bounce", "bullish", 70, f"Price at lower Bollinger band (width {bandwidth:.2f})", "predicted to move +2.0% within 24 hours")
+        elif boll_signal == "overbought":
+            _add("bollinger_upper_reject", "bearish", 70, f"Price at upper Bollinger band (width {bandwidth:.2f})", "predicted to move -2.0% within 24 hours")
+        elif bandwidth < 0.05:
+            _add("bollinger_squeeze", "neutral", 66, f"Bollinger squeeze (width {bandwidth:.2f}) — volatility expansion ahead", "predicted to move ±2.5% within 24 hours")
+        else:
+            _add("bollinger_midrange", "neutral", 50, f"Bollinger mid-range (width {bandwidth:.2f})", "predicted to move ±0.8% within 24 hours")
+    else:
+        _add("bollinger_unavailable", "neutral", 50, "Bollinger data unavailable", "predicted to move ±0.5% within 24 hours")
+
+    # Stochastic pattern.
+    stoch = indicators.get("stochastic", {})
+    if isinstance(stoch, dict):
+        k = float(stoch.get("k", 50))
+        d = float(stoch.get("d", 50))
+        signal = stoch.get("signal", "neutral")
+        if signal == "oversold" or k < 20:
+            _add("stochastic_oversold", "bullish", 68, f"Stochastic %K {k:.1f} / %D {d:.1f} oversold", "predicted to move +2.0% within 16 hours")
+        elif signal == "overbought" or k > 80:
+            _add("stochastic_overbought", "bearish", 68, f"Stochastic %K {k:.1f} / %D {d:.1f} overbought", "predicted to move -2.0% within 16 hours")
+        else:
+            _add("stochastic_neutral", "neutral", 50, f"Stochastic %K {k:.1f} / %D {d:.1f} neutral", "predicted to move ±0.8% within 16 hours")
+    else:
+        _add("stochastic_unavailable", "neutral", 50, "Stochastic data unavailable", "predicted to move ±0.5% within 16 hours")
+
+    # MFI pattern.
+    mfi = indicators.get("mfi", {})
+    if isinstance(mfi, dict):
+        mfi_val = float(mfi.get("value", 50))
+        if mfi_val < 30:
+            _add("mfi_oversold", "bullish", 65, f"MFI {mfi_val:.1f} oversold — buying pressure building", "predicted to move +1.8% within 20 hours")
+        elif mfi_val > 70:
+            _add("mfi_overbought", "bearish", 65, f"MFI {mfi_val:.1f} overbought — distribution likely", "predicted to move -1.8% within 20 hours")
+        else:
+            _add("mfi_neutral", "neutral", 50, f"MFI {mfi_val:.1f} neutral", "predicted to move ±0.6% within 20 hours")
+    else:
+        _add("mfi_unavailable", "neutral", 50, "MFI data unavailable", "predicted to move ±0.5% within 20 hours")
+
+    # CCI pattern.
+    cci = indicators.get("cci", {})
+    if isinstance(cci, dict):
+        cci_val = float(cci.get("value", 0))
+        if cci_val < -100:
+            _add("cci_oversold", "bullish", 64, f"CCI {cci_val:.1f} below -100 — cyclical bounce", "predicted to move +1.8% within 14 hours")
+        elif cci_val > 100:
+            _add("cci_overbought", "bearish", 64, f"CCI {cci_val:.1f} above +100 — cyclical peak", "predicted to move -1.8% within 14 hours")
+        else:
+            _add("cci_neutral", "neutral", 50, f"CCI {cci_val:.1f} neutral", "predicted to move ±0.6% within 14 hours")
+    else:
+        _add("cci_unavailable", "neutral", 50, "CCI data unavailable", "predicted to move ±0.5% within 14 hours")
+
+    # Williams %R pattern.
+    wr = indicators.get("williams_r", {})
+    if isinstance(wr, dict):
+        wr_val = float(wr.get("value", -50))
+        if wr_val < -80:
+            _add("williams_r_oversold", "bullish", 65, f"Williams %R {wr_val:.1f} deeply oversold", "predicted to move +1.8% within 12 hours")
+        elif wr_val > -20:
+            _add("williams_r_overbought", "bearish", 65, f"Williams %R {wr_val:.1f} deeply overbought", "predicted to move -1.8% within 12 hours")
+        else:
+            _add("williams_r_neutral", "neutral", 50, f"Williams %R {wr_val:.1f} neutral", "predicted to move ±0.6% within 12 hours")
+    else:
+        _add("williams_r_unavailable", "neutral", 50, "Williams %R data unavailable", "predicted to move ±0.5% within 12 hours")
+
+    # Fundamental/yield pattern (Gamma's domain).
+    apy = float(sn.get("apy", 0) or 0)
+    emission = float(sn.get("emission", 0) or 0)
+    if apy > 20 and emission > 1:
+        _add("high_yield_emission", "bullish", 70, f"APY {apy:.1f}% + emission {emission:.2f} TAO/day", "predicted to move +2.5% within 72 hours")
+    elif apy < 0 or emission < 0.05:
+        _add("yield_compression", "bearish", 60, f"APY {apy:.1f}% / emission {emission:.2f} TAO/day", "predicted to move -1.5% within 72 hours")
+    else:
+        _add("yield_stable", "neutral", 50, f"APY {apy:.1f}% / emission {emission:.2f} TAO/day", "predicted to move ±0.8% within 72 hours")
+
+    # Guarantee a minimum of 6 patterns.
+    if len(found) < 6:
+        chg = float(sn.get("price_change_24h", 0) or 0)
+        _add("market_drift", "bullish" if chg >= 0 else "bearish", 50, f"24h change {chg:+.1f}% drift", "predicted to move ±0.5% within 24 hours")
+
+    return found[:12]
 
 
 # ---------------------------------------------------------------------------
 # Predictive engine — generate / resolve / learn
 # ---------------------------------------------------------------------------
+def _expert_from_signal_source(source: Optional[str]) -> str:
+    """Map a prediction's signal source to the council expert responsible."""
+    if not source:
+        return "alpha"
+    s = str(source).lower()
+    if any(k in s for k in ("momentum", "macd", "trend", "ma_cross", "market_breadth")):
+        return "alpha"
+    if any(k in s for k in ("rsi", "stochastic", "williams", "cci", "contrarian", "oversold", "overbought")):
+        return "beta"
+    if any(k in s for k in ("emission", "apy", "yield", "fundamental")):
+        return "gamma"
+    return "alpha"
+
+
 def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> Dict[str, Any]:
     """Create a PREDICTIVE forecast: 'predicted to move +X% within N hours'.
 
@@ -1088,6 +1290,9 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
     existing prediction is returned instead of minting a new one. This stops
     every dashboard refresh from appending a fresh (always 24h-ahead) entry
     that would never reach its resolve_at.
+
+    Each prediction is tagged with the council expert whose signal triggered
+    it so weight updates can be applied per-expert on resolution.
     """
     net = signal_impact.get("net_predicted_pct", 0)
     raw_direction = signal_impact.get("net_direction", "neutral")
@@ -1123,6 +1328,8 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
 
     predicted_pct = magnitude if direction == "up" else -magnitude
     ref_price = float(sn.get("price", 0) or 0) or 1.0
+    signal_source = signal_impact.get("dominant") or direction
+    expert = _expert_from_signal_source(signal_source)
     prediction = {
         "id": _uuid.uuid4().hex[:10],
         "netuid": sn.get("netuid"),
@@ -1134,7 +1341,8 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
         "created_at": now.isoformat() + "Z",
         "resolve_at": (now + _td(hours=horizon)).isoformat() + "Z",
         "status": "pending",
-        "signal_source": signal_impact.get("dominant") or direction,
+        "signal_source": signal_source,
+        "expert": expert,
         "statement": f"predicted to move {'+' if predicted_pct >= 0 else ''}{predicted_pct:.1f}% within {horizon} hours",
     }
     PREDICTION_STORE.add(prediction)
@@ -1154,12 +1362,20 @@ def _resolve_prediction(prediction: Dict[str, Any], latest_price: float) -> Dict
     prediction["correct"] = correct
     prediction["status"] = "resolved"
     prediction["resolved_at"] = _dt.utcnow().isoformat() + "Z"
-    _update_learning_weights(correct, prediction.get("signal_source"))
+    # Resolve the expert from the stored tag, falling back to signal_source.
+    expert = prediction.get("expert") or _expert_from_signal_source(prediction.get("signal_source"))
+    prediction["expert"] = expert
+    _update_learning_weights(correct, expert)
     return prediction
 
 
-def _update_learning_weights(correct: bool, source: str = None) -> Dict[str, Any]:
-    """Adjust Council expert weights: correct=+0.02, wrong=-0.03. Persisted to soul_map.json."""
+def _update_learning_weights(correct: bool, expert: Optional[str] = None) -> Dict[str, Any]:
+    """Adjust a single Council expert's weight: correct=+0.02, wrong=-0.03.
+
+    Only the expert whose prediction resolved is updated. If no expert is
+    supplied or the expert is unknown, no weights are changed. Weights are
+    read from and persisted to soul_map.json.
+    """
     delta = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
     try:
         engine = LearningEngine()
@@ -1167,17 +1383,21 @@ def _update_learning_weights(correct: bool, source: str = None) -> Dict[str, Any
         weights = soul_map.get("expert_weights", {})
         if not weights:
             weights = {"alpha": 1.0, "beta": 1.0, "gamma": 1.0}
-        for expert in list(weights.keys()):
-            w = float(weights.get(expert, 1.0))
+        e = str(expert).lower() if expert else None
+        if e and e in weights:
+            w = float(weights.get(e, 1.0))
             w = max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, w + delta))
-            weights[expert] = round(w, 4)
+            weights[e] = round(w, 4)
+            logger.info("Learning weight update: expert=%s correct=%s delta=%s weight=%s", e, correct, delta, weights[e])
+        else:
+            logger.info("Learning weight update skipped: no resolved expert (expert=%s)", expert)
         soul_map["expert_weights"] = weights
         soul_map["last_updated"] = _dt.utcnow().isoformat() + "Z"
         engine.save_soul_map(soul_map)
-        return {"updated": True, "delta": delta, "correct": correct, "weights": weights}
+        return {"updated": True, "delta": delta, "correct": correct, "expert": expert, "weights": weights}
     except Exception as exc:
         logger.warning("Learning weight update failed: %s", exc)
-        return {"updated": False, "delta": delta, "correct": correct}
+        return {"updated": False, "delta": delta, "correct": correct, "expert": expert}
 
 
 def _resolve_due_predictions(
@@ -1633,7 +1853,7 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         signal_impacts.append({"netuid": sn.get("netuid"), "name": sn.get("name"), **impact})
 
         hist = _get_price_history(sn.get("netuid"), sn)
-        patterns = _detect_patterns(hist.get("closes", []), hist.get("highs", []), hist.get("lows", []))
+        patterns = _detect_patterns(hist.get("closes", []), hist.get("highs", []), hist.get("lows", []), indicators, sn)
         patterns_all.append({"netuid": sn.get("netuid"), "name": sn.get("name"), "patterns": patterns})
 
         prediction = _generate_prediction(sn, impact)
@@ -1688,49 +1908,65 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     if not expert_weights:
         expert_weights = {"alpha": 1.0, "beta": 1.0, "gamma": 1.0}
 
-    # Wire Council dispositions to live market conditions rather than a static
-    # weight threshold. Each expert plays a distinct role:
-    #   alpha  -> momentum/technical  (bullish when breadth is up)
-    #   beta   -> value/yield          (bullish when average APY is attractive)
-    #   gamma  -> contrarian           (bearish when the tape is overbought)
-    avg_chg = float(market_intel.get("avg_change_24h", 0) or 0)
-    avg_apy = float(market_intel.get("avg_apy", 0) or 0)
-    breadth = market_intel.get("breadth", "neutral")
-    # Average RSI across the top subnets drives the contrarian call.
-    top_rsis = []
-    for sn in top_subnets:
-        ind = _compute_technical_indicators(sn)
-        try:
-            top_rsis.append(float(ind.get("rsi", {}).get("value", 50) or 50))
-        except Exception:
-            top_rsis.append(50.0)
-    avg_rsi = (sum(top_rsis) / len(top_rsis)) if top_rsis else 50.0
+    # Wire Council dispositions to live market conditions per expert role.
+    # Each expert evaluates the top-pick subnet through its own lens:
+    #   alpha  -> momentum / trend      (24h change + MACD)
+    #   beta   -> contrarian / RSI      (oversold < 30, overbought > 70)
+    #   gamma  -> fundamental / yield   (APY + emission)
+    alpha_pick = top_subnets[0] if top_subnets else {}
+    alpha_ind = _compute_technical_indicators(alpha_pick) if alpha_pick else {}
+    alpha_macd = alpha_ind.get("macd", {}) if isinstance(alpha_ind, dict) else {}
+    alpha_chg = float(alpha_pick.get("price_change_24h", 0) or 0)
+    alpha_macd_bullish = isinstance(alpha_macd, dict) and alpha_macd.get("crossover") == "bullish"
+    alpha_macd_bearish = isinstance(alpha_macd, dict) and alpha_macd.get("crossover") == "bearish"
+
+    beta_pick = top_subnets[0] if top_subnets else {}
+    beta_ind = _compute_technical_indicators(beta_pick) if beta_pick else {}
+    beta_rsi = float(beta_ind.get("rsi", {}).get("value", 50) or 50) if isinstance(beta_ind, dict) else 50.0
+
+    gamma_pick = top_subnets[0] if top_subnets else {}
+    gamma_apy = float(gamma_pick.get("apy", 0) or 0)
+    gamma_emission = float(gamma_pick.get("emission", 0) or 0)
 
     def _disposition(expert: str) -> str:
         e = expert.lower()
-        if e == "alpha":  # momentum / technical
-            if avg_chg > 2 or breadth == "bullish":
+        if e == "alpha":  # momentum / trend
+            if alpha_chg > 5 or alpha_macd_bullish:
                 return "bullish"
-            if avg_chg < -2 or breadth == "bearish":
+            if alpha_chg < -5 or alpha_macd_bearish:
                 return "bearish"
             return "neutral"
-        if e == "beta":  # value / yield
-            if avg_apy >= 8:
+        if e == "beta":  # contrarian / mean-reversion
+            if beta_rsi < 30:
                 return "bullish"
-            if avg_apy <= 2:
+            if beta_rsi > 70:
                 return "bearish"
             return "neutral"
-        if e == "gamma":  # contrarian
-            if avg_rsi > 68:
-                return "bearish"
-            if avg_rsi < 32:
+        if e == "gamma":  # fundamental / yield
+            if gamma_apy > 20 and gamma_emission > 1:
                 return "bullish"
+            if gamma_apy < 0 or gamma_emission < 0.05:
+                return "bearish"
             return "neutral"
         # generic fallback tied to weight
         return "bullish" if expert_weights.get(e, 1.0) >= 1.0 else "cautious"
 
+    dispositions = {k: _disposition(k) for k in expert_weights.keys()}
+    # Persist dispositions to soul_map.json so they survive restarts.
+    try:
+        soul_map["council_dispositions"] = dispositions
+        soul_map["council"] = {
+            "alpha": {"disposition": dispositions.get("alpha", "neutral"), "lens": "momentum/trend", "pick": alpha_pick.get("name")},
+            "beta": {"disposition": dispositions.get("beta", "neutral"), "lens": "contrarian/RSI", "pick": beta_pick.get("name")},
+            "gamma": {"disposition": dispositions.get("gamma", "neutral"), "lens": "fundamental/yield", "pick": gamma_pick.get("name")},
+        }
+        soul_map["last_updated"] = _dt.utcnow().isoformat() + "Z"
+        engine.save_soul_map(soul_map)
+    except Exception as exc:
+        logger.warning("Failed to persist council dispositions: %s", exc)
+
     council_weights = [
-        {"expert": k.title(), "weight": v, "bias": _disposition(k)}
+        {"expert": k.title(), "weight": v, "bias": dispositions.get(k, "neutral")}
         for k, v in expert_weights.items()
     ]
 
@@ -1787,6 +2023,36 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         })
         break
 
+    # Enrich active predictions with current estimate, expert tag, and
+    # human-readable time remaining so the Predictive Engine cards render
+    # complete information even when reusing older predictions from the store.
+    price_by_netuid = {sn.get("netuid"): float(sn.get("price", 0) or 0) for sn in subnets}
+    now = _dt.utcnow()
+    enriched_predictions: List[Dict[str, Any]] = []
+    for pr in predictions:
+        netuid = pr.get("netuid")
+        ref = float(pr.get("reference_price", 0) or 0)
+        current = price_by_netuid.get(netuid, ref) or ref
+        try:
+            resolve_at = _dt.fromisoformat(pr.get("resolve_at", "").replace("Z", ""))
+            remaining = resolve_at - now
+            if remaining.total_seconds() > 0:
+                hours, rem = divmod(int(remaining.total_seconds()), 3600)
+                minutes = rem // 60
+                time_remaining = f"{hours}h {minutes}m"
+            else:
+                time_remaining = "resolving"
+        except Exception:
+            time_remaining = "—"
+        expert = pr.get("expert") or _expert_from_signal_source(pr.get("signal_source"))
+        enriched = {
+            **pr,
+            "expert": expert,
+            "current_estimate": round(current, 6),
+            "time_remaining": time_remaining,
+        }
+        enriched_predictions.append(enriched)
+
     return {
         "simivision_picks": simivision_picks,
         "undervalued_radar": undervalued,
@@ -1798,7 +2064,7 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         "mindmap_trail": mindmap_trail,
         "signal_impact": signal_impacts,
         "patterns": patterns_all,
-        "predictions": predictions,
+        "predictions": enriched_predictions,
         "learning_metrics": learning_metrics,
         "social_sentiment": social_feed,
         "indicators_convergence": {

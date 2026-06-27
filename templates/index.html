@@ -333,7 +333,7 @@
               <span class="tag {{ 'tag-buy' if pr.direction=='up' else 'tag-sell' }}">{{ pr.direction|upper }}</span>
             </div>
             <div class="impact-line" style="color:var(--txt)">→ {{ pr.statement }}</div>
-            <div class="impact-line">ref {{ '%.4f'|format(pr.reference_price) }} · horizon {{ pr.horizon_hours }}h · source {{ pr.signal_source }} · {{ pr.status }}</div>
+            <div class="impact-line">ref {{ '%.4f'|format(pr.reference_price) }} · now {{ '%.4f'|format(pr.current_estimate) }} · {{ pr.time_remaining }} left · source {{ pr.signal_source }} · expert {{ pr.expert|title }} · {{ pr.status }}</div>
           </div>
         {% else %}
           <div class="impact-line empty">No active predictions — the predictive engine will mint forecasts on the next refresh.</div>
