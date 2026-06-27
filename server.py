@@ -16,6 +16,20 @@ from fastapi.templating import Jinja2Templates
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fetchers.taomarketcap import get_all_subnets, get_subnet_data
+from internal.council.state_vector import (
+    build_prediction_statement,
+    build_subnet_state_vector,
+    _compute_hot_signals,
+    _compute_sell_signals,
+    _compute_signal_impact,
+    _compute_social_sentiment,
+    _compute_technical_indicators,
+    _detect_oversold_convergence,
+    _detect_overbought_convergence,
+    _expert_from_signal_source,
+    _get_price_history,
+    _compute_simivision_reasons,
+)
 try:
     from data.learning_engine import LearningEngine, create_feedback_router
 except ImportError:
@@ -579,518 +593,46 @@ def resolve_predictions(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 # netuid. Falls back to a synthetic series derived from price + change fields
 # when no candle history exists (keeps indicators functional & graceful).
 # ---------------------------------------------------------------------------
-def _load_price_cache() -> Dict[str, Any]:
-    try:
-        with open(_PRICE_CACHE_PATH, "r") as f:
-            return _json.load(f)
-    except Exception:
-        return {}
-
-
-def _get_price_history(netuid: Any, sn: Dict[str, Any]) -> Dict[str, Any]:
-    """Return {closes, highs, lows, volumes, timestamps} for a subnet.
-
-    Data source policy (controlled by ``USE_REAL_PRICE_HISTORY``):
-    - When real candle history exists in data/price_cache.json it is used as-is.
-    - Otherwise the series is synthesised from the subnet's price + 24h/7d/30d
-      percentage changes so the indicators (RSI, MACD, ...) still produce
-      realistic, non-degenerate values. The taomarketcap API does not expose
-      OHLC candles, so the synthetic fallback is the default path. Set
-      ``USE_REAL_PRICE_HISTORY=1`` once a real candle endpoint is wired in here.
-    """
-    closes: List[float] = []
-    highs: List[float] = []
-    lows: List[float] = []
-    volumes: List[float] = []
-    timestamps: List[str] = []
-    source = "synthetic"
-
-    cache = _load_price_cache()
-    raw = cache.get(str(netuid)) or cache.get(int(netuid) if str(netuid).isdigit() else netuid)
-    if raw and isinstance(raw, dict):
-        candles = raw.get("candles") or []
-        if candles:
-            source = raw.get("source", "cached")
-            for c in candles:
-                cl = c.get("close")
-                if cl is None:
-                    continue
-                closes.append(float(cl))
-                highs.append(float(c.get("high", cl)))
-                lows.append(float(c.get("low", cl)))
-                volumes.append(float(c.get("volume", 0) or 0))
-                timestamps.append(c.get("timestamp", ""))
-
-    if len(closes) < 30:
-        price = float(sn.get("price", 0) or 0)
-        if price <= 0:
-            price = 1.0
-        chg_24h = float(sn.get("price_change_24h", 0) or 0)
-        chg_7d = float(sn.get("price_change_7d", 0) or 0)
-        chg_30d = float(sn.get("price_change_30d", 0) or 0)
-        steps = []
-        for i in range(30):
-            if i < 10:
-                # 30d change spread evenly across its 10-candle window
-                steps.append(chg_30d / 10.0)
-            elif i < 22:
-                # 7d change spread evenly across its 12-candle window
-                steps.append(chg_7d / 12.0)
-            else:
-                # 24h change spread evenly across its 8-candle window
-                steps.append(chg_24h / 8.0)
-        steps = [s if abs(s) < 50 else (50 if s > 0 else -50) for s in steps]
-        # Blend the trend step with a deterministic sinusoidal oscillation so the
-        # synthesised series is NOT monotonically non-decreasing (which would
-        # starve the RSI of losses and force it to 100). Amplitude scales with the
-        # trend step (min 2%) so genuine pullbacks occur even on strong uptrends,
-        # keeping RSI in a realistic (non-degenerate) range. Index-driven for
-        # reproducibility and trend-preserving on average.
-        p = price
-        synth_closes = []
-        for i, s in enumerate(steps):
-            amp = max(2.0, abs(s) * 2.0)
-            osc = math.sin(i * 0.7) * amp  # deterministic wiggle, scales with trend
-            p = p * (1 + s / 100.0) * (1 + osc / 100.0)
-            synth_closes.append(p)
-        closes = (closes + synth_closes)[-30:]
-        highs = [c * 1.01 for c in closes]
-        lows = [c * 0.99 for c in closes]
-        base_vol = float(sn.get("volume", 0) or 0) / max(len(closes), 1)
-        volumes = [base_vol for _ in closes]
-        timestamps = timestamps[-len(closes):] or ["" for _ in closes]
-        source = "synthetic" if not timestamps[0] else source
-
-    return {"closes": closes, "highs": highs, "lows": lows, "volumes": volumes, "timestamps": timestamps, "source": source}
 
 
 # ---------------------------------------------------------------------------
 # 8 technical indicators
 # ---------------------------------------------------------------------------
-def _sma(values: List[float], period: int) -> float:
-    if len(values) < period or period <= 0:
-        return 0.0
-    return sum(values[-period:]) / period
 
 
-def _ema(values: List[float], period: int) -> float:
-    if not values:
-        return 0.0
-    k = 2 / (period + 1)
-    ema = values[0]
-    for v in values[1:]:
-        ema = v * k + ema * (1 - k)
-    return ema
 
 
-def _compute_rsi_series(closes: List[float], period: int = 14) -> float:
-    """Proper Wilder RSI from close prices. Falls back to 50.0 on short history.
-
-    Uses Wilder's smoothing: the first average gain/loss is a simple average
-    over `period` changes, then each subsequent value is
-    ``avg = (prev_avg * (period-1) + change) / period``. A flat series (no
-    gains AND no losses) returns 50.0 instead of the degenerate 100.0.
-    """
-    if len(closes) < period + 1:
-        return 50.0
-    gains, losses = 0.0, 0.0
-    for i in range(1, period + 1):
-        diff = closes[i] - closes[i - 1]
-        if diff >= 0:
-            gains += diff
-        else:
-            losses += -diff
-    avg_gain = gains / period
-    avg_loss = losses / period
-    # Wilder smoothing over the remaining closes.
-    for i in range(period + 1, len(closes)):
-        diff = closes[i] - closes[i - 1]
-        gain = diff if diff >= 0 else 0.0
-        loss = -diff if diff < 0 else 0.0
-        avg_gain = (avg_gain * (period - 1) + gain) / period
-        avg_loss = (avg_loss * (period - 1) + loss) / period
-    if avg_gain == 0 and avg_loss == 0:
-        return 50.0  # flat series — neither overbought nor oversold
-    if avg_loss == 0:
-        return 100.0
-    rs = avg_gain / avg_loss
-    return round(100 - (100 / (1 + rs)), 1)
 
 
-def _compute_stochastic(highs: List[float], lows: List[float], closes: List[float], period: int = 14) -> Dict[str, Any]:
-    if len(closes) < period:
-        return {"k": 50.0, "d": 50.0, "signal": "neutral"}
-    hh = max(highs[-period:])
-    ll = min(lows[-period:])
-    close = closes[-1]
-    if hh - ll == 0:
-        k = 50.0
-    else:
-        k = ((close - ll) / (hh - ll)) * 100
-    ks = []
-    for j in range(3, 0, -1):
-        end = len(closes) - j + 1
-        start = end - period
-        if start < 0:
-            ks.append(k)
-            continue
-        h = max(highs[start:end])
-        l = min(lows[start:end])
-        c = closes[end - 1]
-        ks.append(((c - l) / (h - l)) * 100 if (h - l) != 0 else 50.0)
-    d = sum(ks) / len(ks)
-    sig = "oversold" if k < 20 else "overbought" if k > 80 else "neutral"
-    return {"k": round(k, 1), "d": round(d, 1), "signal": sig}
 
 
-def _compute_bollinger(closes: List[float], period: int = 20, num_std: float = 2.0) -> Dict[str, Any]:
-    if len(closes) < period:
-        return {"upper": 0, "middle": 0, "lower": 0, "width": 0, "signal": "neutral"}
-    window = closes[-period:]
-    mid = sum(window) / period
-    variance = sum((x - mid) ** 2 for x in window) / period
-    sd = _math.sqrt(variance)
-    upper = mid + num_std * sd
-    lower = mid - num_std * sd
-    price = closes[-1]
-    sig = "overbought" if price > upper else "oversold" if price < lower else "neutral"
-    return {"upper": round(upper, 4), "middle": round(mid, 4), "lower": round(lower, 4), "width": round(upper - lower, 4), "signal": sig}
 
 
-def _compute_mfi(highs: List[float], lows: List[float], closes: List[float], volumes: List[float], period: int = 14) -> Dict[str, Any]:
-    if len(closes) < period + 1:
-        return {"mfi": 50.0, "signal": "neutral"}
-    typical = [(highs[i] + lows[i] + closes[i]) / 3.0 for i in range(len(closes))]
-    pos_flow, neg_flow = 0.0, 0.0
-    for i in range(1, period + 1):
-        rmf = typical[-i] * volumes[-i]
-        prev = typical[-i - 1]
-        if typical[-i] > prev:
-            pos_flow += rmf
-        elif typical[-i] < prev:
-            neg_flow += rmf
-    if neg_flow == 0:
-        mfi = 100.0
-    else:
-        mfi = 100 - (100 / (1 + pos_flow / neg_flow))
-    sig = "oversold" if mfi < 20 else "overbought" if mfi > 80 else "neutral"
-    return {"mfi": round(mfi, 1), "signal": sig}
 
 
-def _compute_cci(highs: List[float], lows: List[float], closes: List[float], period: int = 20) -> Dict[str, Any]:
-    if len(closes) < period:
-        return {"cci": 0.0, "signal": "neutral"}
-    typical = [(highs[i] + lows[i] + closes[i]) / 3.0 for i in range(len(closes))]
-    window = typical[-period:]
-    sma_t = sum(window) / period
-    mean_dev = sum(abs(x - sma_t) for x in window) / period
-    if mean_dev == 0:
-        cci = 0.0
-    else:
-        cci = (typical[-1] - sma_t) / (0.015 * mean_dev)
-    sig = "oversold" if cci < -100 else "overbought" if cci > 100 else "neutral"
-    return {"cci": round(cci, 1), "signal": sig}
 
 
-def _compute_williams_r(highs: List[float], lows: List[float], closes: List[float], period: int = 14) -> Dict[str, Any]:
-    if len(closes) < period:
-        return {"williams_r": -50.0, "signal": "neutral"}
-    hh = max(highs[-period:])
-    ll = min(lows[-period:])
-    if hh - ll == 0:
-        wr = -50.0
-    else:
-        wr = ((hh - closes[-1]) / (hh - ll)) * -100
-    sig = "oversold" if wr < -80 else "overbought" if wr > -20 else "neutral"
-    return {"williams_r": round(wr, 1), "signal": sig}
 
 
-def _compute_keltner(closes: List[float], highs: List[float], lows: List[float], period: int = 20, mult: float = 2.0) -> Dict[str, Any]:
-    if len(closes) < period:
-        return {"upper": 0, "middle": 0, "lower": 0, "signal": "neutral"}
-    ema = _ema(closes[-period * 3:], period)
-    trs = []
-    for i in range(1, min(len(closes), period * 2)):
-        tr = max(highs[-i] - lows[-i], abs(highs[-i] - closes[-i - 1]), abs(lows[-i] - closes[-i - 1]))
-        trs.append(tr)
-    atr = sum(trs) / len(trs) if trs else 0.0
-    upper = ema + mult * atr
-    lower = ema - mult * atr
-    price = closes[-1]
-    sig = "overbought" if price > upper else "oversold" if price < lower else "neutral"
-    return {"upper": round(upper, 4), "middle": round(ema, 4), "lower": round(lower, 4), "signal": sig}
-
-
-def _compute_macd_series(closes: List[float]) -> Dict[str, Any]:
-    if len(closes) < 26:
-        return {"macd": 0, "signal": 0, "histogram": 0, "crossover": "neutral"}
-    ema12 = _ema(closes[-50:], 12)
-    ema26 = _ema(closes[-60:], 26)
-    macd_line = ema12 - ema26
-    signal = macd_line * 0.9
-    histogram = macd_line - signal
-    crossover = "bullish" if histogram > 0 else "bearish" if histogram < 0 else "neutral"
-    return {"macd": round(macd_line, 4), "signal": round(signal, 4), "histogram": round(histogram, 4), "crossover": crossover}
 
 
 # ---------------------------------------------------------------------------
 # Multi-indicator convergence
 # ---------------------------------------------------------------------------
-def _detect_oversold_convergence(indicators: Dict[str, Any]) -> Dict[str, Any]:
-    """Count how many oscillators agree on oversold conditions (bullish reversal)."""
-    keys = ["rsi", "stochastic", "mfi", "williams_r", "cci", "bollinger", "keltner"]
-    hits = []
-    for k in keys:
-        v = indicators.get(k, {})
-        if isinstance(v, dict) and v.get("signal") == "oversold":
-            hits.append(k)
-    return {
-        "type": "oversold",
-        "direction": "bullish",
-        "count": len(hits),
-        "total": len(keys),
-        "agreement": round(len(hits) / len(keys), 2),
-        "indicators": hits,
-        "convergent": len(hits) >= 3,
-    }
 
 
-def _detect_overbought_convergence(indicators: Dict[str, Any]) -> Dict[str, Any]:
-    """Count how many oscillators agree on overbought conditions (bearish reversal)."""
-    keys = ["rsi", "stochastic", "mfi", "williams_r", "cci", "bollinger", "keltner"]
-    hits = []
-    for k in keys:
-        v = indicators.get(k, {})
-        if isinstance(v, dict) and v.get("signal") == "overbought":
-            hits.append(k)
-    return {
-        "type": "overbought",
-        "direction": "bearish",
-        "count": len(hits),
-        "total": len(keys),
-        "agreement": round(len(hits) / len(keys), 2),
-        "indicators": hits,
-        "convergent": len(hits) >= 3,
-    }
 
 
 # ---------------------------------------------------------------------------
 # HOT / SELL signal engine
 # ---------------------------------------------------------------------------
-def _compute_hot_signals(sn: Dict[str, Any], indicators: Dict[str, Any], convergence: Dict[str, Any]) -> Dict[str, Any]:
-    """HOT = strong bullish setup. SELL ALERT wins over HOT when bearish pressure dominates."""
-    score = 0
-    reasons = []
-    chg = float(sn.get("price_change_24h", 0) or 0)
-    apy = float(sn.get("apy", 0) or 0)
-    emission = float(sn.get("emission", 0) or 0)
-
-    if convergence.get("type") == "oversold" and convergence.get("convergent"):
-        score += 3
-        reasons.append(f"Oversold convergence ({convergence.get('count')}/{convergence.get('total')} oscillators)")
-    rsi = indicators.get("rsi", {})
-    if isinstance(rsi, dict) and rsi.get("signal") == "oversold":
-        score += 2
-        reasons.append("RSI oversold reversal zone")
-    macd = indicators.get("macd", {})
-    if isinstance(macd, dict) and macd.get("crossover") == "bullish":
-        score += 2
-        reasons.append("MACD bullish crossover")
-    if chg > 5:
-        score += 2
-        reasons.append(f"Strong 24h momentum (+{chg:.1f}%)")
-    if apy > 30:
-        score += 1
-        reasons.append(f"High yield ({apy:.1f}% APY)")
-    if emission > 3:
-        score += 1
-        reasons.append(f"Strong emission ({emission:.2f} TAO/day)")
-
-    active = score >= 5
-    return {
-        "active": active,
-        "score": score,
-        "reasons": reasons or ["No strong bullish setup"],
-        "label": "HOT" if active else None,
-    }
 
 
-def _compute_sell_signals(sn: Dict[str, Any], indicators: Dict[str, Any], convergence: Dict[str, Any]) -> Dict[str, Any]:
-    """SELL ALERT — takes precedence over HOT when bearish pressure dominates."""
-    score = 0
-    reasons = []
-    chg = float(sn.get("price_change_24h", 0) or 0)
-    if convergence.get("type") == "overbought" and convergence.get("convergent"):
-        score += 3
-        reasons.append(f"Overbought convergence ({convergence.get('count')}/{convergence.get('total')} oscillators)")
-    rsi = indicators.get("rsi", {})
-    if isinstance(rsi, dict) and rsi.get("signal") == "overbought":
-        score += 2
-        reasons.append("RSI overbought distribution zone")
-    macd = indicators.get("macd", {})
-    if isinstance(macd, dict) and macd.get("crossover") == "bearish":
-        score += 2
-        reasons.append("MACD bearish crossover")
-    if chg < -5:
-        score += 2
-        reasons.append(f"Sharp 24h drawdown ({chg:.1f}%)")
-    if sn.get("is_overvalued"):
-        score += 2
-        reasons.append("Flagged overvalued")
-
-    active = score >= 5
-    return {
-        "active": active,
-        "score": score,
-        "reasons": reasons or ["No strong bearish setup"],
-        "label": "SELL ALERT" if active else None,
-    }
 
 
 # ---------------------------------------------------------------------------
 # Signal impact engine
 # ---------------------------------------------------------------------------
-def _compute_signal_impact(sn: Dict[str, Any], indicators: Dict[str, Any], hot: Dict[str, Any], sell: Dict[str, Any]) -> Dict[str, Any]:
-    """Estimate predicted directional impact per signal type using SIGNAL_TYPES half-lives.
-
-    Always returns 6-12 impact entries so the Signal Impact Engine never renders
-    an empty list, even when live indicator readings are not at extreme thresholds.
-    """
-    impacts: List[Dict[str, Any]] = []
-    chg = float(sn.get("price_change_24h", 0) or 0)
-    apy = float(sn.get("apy", 0) or 0)
-    emission = float(sn.get("emission", 0) or 0)
-
-    def _freshness(half_life_hours: float, age_hours: float = 1.0) -> float:
-        if half_life_hours <= 0:
-            return 1.0
-        return round(0.5 ** (age_hours / half_life_hours), 3)
-
-    def _add(signal_type: str, direction: str, magnitude_pct: float, horizon_hours: int, confidence: int, description: str) -> None:
-        mag = round(abs(magnitude_pct), 2)
-        impacts.append({
-            "signal_type": signal_type,
-            "description": description,
-            "direction": direction,
-            "magnitude_pct": mag,
-            "confidence": confidence,
-            "freshness": _freshness(horizon_hours),
-            "predicted_move": f"predicted to move {'+' if direction == 'bullish' else '-' if direction == 'bearish' else ''}{mag:.1f}% within {horizon_hours} hours",
-        })
-
-    # 1. RSI signal — always emitted, stronger when near extremes.
-    rsi = indicators.get("rsi", {})
-    rsi_val = float(rsi.get("value", 50) if isinstance(rsi, dict) else rsi)
-    if rsi_val < 30:
-        _add("rsi_crossover", "bullish", (30 - rsi_val) * 0.12, 24, 75, f"RSI {rsi_val:.1f} oversold — mean-reversion bounce")
-    elif rsi_val > 70:
-        _add("rsi_crossover", "bearish", (rsi_val - 70) * 0.12, 24, 75, f"RSI {rsi_val:.1f} overbought — pullback risk")
-    else:
-        _add("rsi_crossover", "neutral", 0.8, 24, 50, f"RSI {rsi_val:.1f} neutral — no edge")
-
-    # 2. MACD signal — always emitted from histogram direction.
-    macd = indicators.get("macd", {})
-    if isinstance(macd, dict):
-        hist = float(macd.get("histogram", 0))
-        crossover = macd.get("crossover", "neutral")
-        direction = crossover if crossover in ("bullish", "bearish") else ("bullish" if hist > 0 else "bearish" if hist < 0 else "neutral")
-        _add("macd_cross", direction, abs(hist) * 8 + 0.5, 48, 70, f"MACD histogram {hist:+.2f} ({crossover})")
-    else:
-        _add("macd_cross", "neutral", 0.5, 48, 50, "MACD unavailable")
-
-    # 3. Stochastic signal.
-    stoch = indicators.get("stochastic", {})
-    if isinstance(stoch, dict):
-        k = float(stoch.get("k", 50))
-        signal = stoch.get("signal", "neutral")
-        direction = "bullish" if signal == "oversold" else "bearish" if signal == "overbought" else "neutral"
-        _add("stochastic_reversal", direction, abs(50 - k) * 0.08, 8, 65, f"Stochastic %K {k:.1f} ({signal})")
-    else:
-        _add("stochastic_reversal", "neutral", 0.5, 8, 50, "Stochastic unavailable")
-
-    # 4. Bollinger signal — price vs bands.
-    boll = indicators.get("bollinger", {})
-    if isinstance(boll, dict):
-        boll_signal = boll.get("signal", "neutral")
-        direction = "bullish" if boll_signal == "oversold" else "bearish" if boll_signal == "overbought" else "neutral"
-        _add("bollinger_squeeze", direction, 1.2 if direction != "neutral" else 0.4, 24, 60, f"Bollinger {boll_signal} (width {boll.get('bandwidth', 0):.2f})")
-    else:
-        _add("bollinger_squeeze", "neutral", 0.4, 24, 50, "Bollinger unavailable")
-
-    # 5. MFI signal.
-    mfi = indicators.get("mfi", {})
-    if isinstance(mfi, dict):
-        mfi_val = float(mfi.get("value", 50))
-        if mfi_val < 30:
-            _add("mfi_divergence", "bullish", (30 - mfi_val) * 0.1, 16, 62, f"MFI {mfi_val:.1f} oversold")
-        elif mfi_val > 70:
-            _add("mfi_divergence", "bearish", (mfi_val - 70) * 0.1, 16, 62, f"MFI {mfi_val:.1f} overbought")
-        else:
-            _add("mfi_divergence", "neutral", 0.5, 16, 50, f"MFI {mfi_val:.1f} neutral")
-    else:
-        _add("mfi_divergence", "neutral", 0.5, 16, 50, "MFI unavailable")
-
-    # 6. CCI signal.
-    cci = indicators.get("cci", {})
-    if isinstance(cci, dict):
-        cci_val = float(cci.get("value", 0))
-        if cci_val < -100:
-            _add("cci_extreme", "bullish", abs(cci_val + 100) * 0.02, 12, 60, f"CCI {cci_val:.1f} deeply oversold")
-        elif cci_val > 100:
-            _add("cci_extreme", "bearish", (cci_val - 100) * 0.02, 12, 60, f"CCI {cci_val:.1f} deeply overbought")
-        else:
-            _add("cci_extreme", "neutral", 0.5, 12, 50, f"CCI {cci_val:.1f} neutral")
-    else:
-        _add("cci_extreme", "neutral", 0.5, 12, 50, "CCI unavailable")
-
-    # 7. Williams %R signal.
-    wr = indicators.get("williams_r", {})
-    if isinstance(wr, dict):
-        wr_val = float(wr.get("value", -50))
-        if wr_val < -80:
-            _add("williams_r_reversal", "bullish", abs(wr_val + 80) * 0.06, 10, 63, f"Williams %R {wr_val:.1f} oversold")
-        elif wr_val > -20:
-            _add("williams_r_reversal", "bearish", (wr_val + 20) * 0.06, 10, 63, f"Williams %R {wr_val:.1f} overbought")
-        else:
-            _add("williams_r_reversal", "neutral", 0.5, 10, 50, f"Williams %R {wr_val:.1f} neutral")
-    else:
-        _add("williams_r_reversal", "neutral", 0.5, 10, 50, "Williams %R unavailable")
-
-    # 8. Momentum shift from 24h change.
-    if abs(chg) >= 5:
-        direction = "bullish" if chg > 0 else "bearish"
-        _add("momentum_shift", direction, abs(chg) * 0.5, 12, 72, f"24h change {chg:+.1f}% momentum")
-    else:
-        _add("momentum_shift", "neutral", 0.5, 12, 50, f"24h change {chg:+.1f}% muted")
-
-    # 9. Emission/yield signal (Gamma's domain).
-    if emission > 1 and apy > 20:
-        _add("emission_change", "bullish", emission * 0.3 + apy * 0.02, 168, 68, f"Emission {emission:.2f} TAO/day + {apy:.1f}% APY")
-    elif emission < 0.05 or apy < 0:
-        _add("emission_change", "bearish", 1.0, 168, 55, f"Weak emission {emission:.2f} / APY {apy:.1f}%")
-    else:
-        _add("emission_change", "neutral", 0.5, 168, 50, f"Emission {emission:.2f} TAO/day / APY {apy:.1f}%")
-
-    # 10. Social/sentiment fallback if mentions exist.
-    mentions = int(sn.get("social_mentions", 0) or 0)
-    if mentions > 1000:
-        _add("social_sentiment", "bullish" if chg >= 0 else "bearish", 1.0, 6, 55, f"Social volume {mentions} mentions")
-    elif mentions > 0:
-        _add("social_sentiment", "neutral", 0.4, 6, 50, f"Social volume {mentions} mentions")
-
-    # Cap to a reasonable max while guaranteeing at least 6.
-    if len(impacts) < 6:
-        _add("market_breadth", "bullish" if chg >= 0 else "bearish", 0.6, 24, 50, "Market breadth filler")
-
-    net = sum(i.get("magnitude_pct", 0) * (1 if i.get("direction") == "bullish" else -1) for i in impacts)
-    return {
-        "impacts": impacts[:12],
-        "net_predicted_pct": round(net, 2),
-        "net_direction": "bullish" if net > 0 else "bearish" if net < 0 else "neutral",
-        "hot_active": bool(hot.get("active")),
-        "sell_active": bool(sell.get("active")),
-        "dominant": "SELL ALERT" if sell.get("active") else ("HOT" if hot.get("active") else None),
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -1268,18 +810,6 @@ def _detect_patterns(
 # ---------------------------------------------------------------------------
 # Predictive engine — generate / resolve / learn
 # ---------------------------------------------------------------------------
-def _expert_from_signal_source(source: Optional[str]) -> str:
-    """Map a prediction's signal source to the council expert responsible."""
-    if not source:
-        return "alpha"
-    s = str(source).lower()
-    if any(k in s for k in ("momentum", "macd", "trend", "ma_cross", "market_breadth")):
-        return "alpha"
-    if any(k in s for k in ("rsi", "stochastic", "williams", "cci", "contrarian", "oversold", "overbought")):
-        return "beta"
-    if any(k in s for k in ("emission", "apy", "yield", "fundamental")):
-        return "gamma"
-    return "alpha"
 
 
 def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> Dict[str, Any]:
@@ -1330,21 +860,15 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
     ref_price = float(sn.get("price", 0) or 0) or 1.0
     signal_source = signal_impact.get("dominant") or direction
     expert = _expert_from_signal_source(signal_source)
-    prediction = {
-        "id": _uuid.uuid4().hex[:10],
-        "netuid": sn.get("netuid"),
-        "name": sn.get("name"),
-        "direction": direction,
-        "predicted_pct": round(predicted_pct, 2),
-        "horizon_hours": horizon,
-        "reference_price": ref_price,
-        "created_at": now.isoformat() + "Z",
-        "resolve_at": (now + _td(hours=horizon)).isoformat() + "Z",
-        "status": "pending",
-        "signal_source": signal_source,
-        "expert": expert,
-        "statement": f"predicted to move {'+' if predicted_pct >= 0 else ''}{predicted_pct:.1f}% within {horizon} hours",
-    }
+    prediction = build_prediction_statement(
+        sn=sn,
+        predicted_pct=predicted_pct,
+        horizon=horizon,
+        ref_price=ref_price,
+        signal_source=signal_source,
+        expert=expert,
+        now=now,
+    )
     PREDICTION_STORE.add(prediction)
     return prediction
 
@@ -1493,138 +1017,15 @@ def _compute_learning_metrics() -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Social sentiment
 # ---------------------------------------------------------------------------
-def _classify_sentiment(text: str) -> str:
-    if not text:
-        return "neutral"
-    t = text.lower()
-    pos = sum(1 for w in ("bullish", "moon", "pump", "buy", "strong", "upgrade", "growth", "rally", "breakout") if w in t)
-    neg = sum(1 for w in ("bearish", "dump", "sell", "crash", "scam", "overvalued", "downgrade", "risk", "drop", "fud") if w in t)
-    if pos > neg:
-        return "bullish"
-    if neg > pos:
-        return "bearish"
-    return "neutral"
 
 
-def _compute_social_sentiment(sn: Dict[str, Any]) -> Dict[str, Any]:
-    mentions = int(sn.get("social_mentions", 0) or 0)
-    chg = float(sn.get("price_change_24h", 0) or 0)
-    chg7 = float(sn.get("price_change_7d", 0) or 0)
-    chg30 = float(sn.get("price_change_30d", 0) or 0)
-    apy = float(sn.get("apy", 0) or 0)
-    emission = float(sn.get("emission", 0) or 0)
-    volume = float(sn.get("volume", 0) or 0)
-    name = str(sn.get("name", "SN"))
-    netuid = sn.get("netuid")
-
-    # Derive a real RSI from the available change fields so the chatter
-    # references actual momentum rather than a templated phrase.
-    rsi_val = _compute_rsi([chg, chg7 / 7.0, chg30 / 30.0], 14)
-    rsi_state = "overbought" if rsi_val > 70 else "oversold" if rsi_val < 30 else "neutral"
-
-    if chg > 5 or rsi_val > 65:
-        bias = "bullish"
-    elif chg < -5 or rsi_val < 35:
-        bias = "bearish"
-    else:
-        bias = "neutral"
-    score = 50 + (20 if bias == "bullish" else -20 if bias == "bearish" else 0) + int(chg)
-    score = max(0, min(100, score))
-
-    # --- data-driven, subnet-specific chatter (no generic placeholders) -----
-    momentum_word = "accelerating" if chg7 > chg else "cooling" if chg7 < chg else "flat"
-    if rsi_state == "overbought":
-        rsi_note = f"RSI {rsi_val:.0f} flags overbought conditions"
-    elif rsi_state == "oversold":
-        rsi_note = f"RSI {rsi_val:.0f} sits in oversold territory"
-    else:
-        rsi_note = f"RSI {rsi_val:.0f} holds in neutral range"
-
-    if apy > 0:
-        yield_note = f"{apy:.1f}% APY rewards stakers"
-    else:
-        yield_note = "yield compression noted"
-
-    if emission > 0:
-        emit_note = f"emission {emission:.0f} TAO/day"
-    else:
-        emit_note = "no fresh emission"
-
-    tw_text = (
-        f"${name} {momentum_word} — {chg:+.1f}% 24h / {chg7:+.1f}% 7d; "
-        f"{rsi_note}"
-    )
-    discord_text = (
-        f"Validators weigh {emit_note} vs {yield_note}; "
-        f"30d trend {chg30:+.1f}%"
-    )
-    reddit_text = (
-        f"Volume {'surging' if volume > 0 else 'thin'} on SN{netuid} as "
-        f"momentum traders eye the {chg7:+.1f}% weekly move"
-    )
-
-    feed = [
-        {"source": "twitter", "sentiment": bias, "text": tw_text, "mentions": mentions},
-        {"source": "discord", "sentiment": bias, "text": discord_text, "mentions": max(0, mentions // 2)},
-        {"source": "reddit", "sentiment": bias if bias != "neutral" else "neutral", "text": reddit_text, "mentions": max(0, mentions // 3)},
-    ]
-    return {"score": score, "label": bias, "mentions": mentions, "feed": feed}
 
 
 # ---------------------------------------------------------------------------
 # Composite helpers
 # ---------------------------------------------------------------------------
-def _compute_technical_indicators(sn: Dict[str, Any]) -> Dict[str, Any]:
-    """Compute all 8 indicators for a subnet, with simplified RSI fallback."""
-    hist = _get_price_history(sn.get("netuid"), sn)
-    closes = hist.get("closes", [])
-    highs = hist.get("highs", closes)
-    lows = hist.get("lows", closes)
-    volumes = hist.get("volumes", [])
-
-    rsi_val = _compute_rsi_series(closes, 14)
-    if len(closes) < 15:
-        changes = [float(sn.get("price_change_24h", 0) or 0), float(sn.get("price_change_7d", 0) or 0) / 7.0]
-        rsi_val = _compute_rsi(changes, 14)
-
-    indicators = {
-        "rsi": {"value": rsi_val, "signal": "overbought" if rsi_val > 70 else "oversold" if rsi_val < 30 else "neutral"},
-        "stochastic": _compute_stochastic(highs, lows, closes),
-        "bollinger": _compute_bollinger(closes),
-        "mfi": _compute_mfi(highs, lows, closes, volumes),
-        "cci": _compute_cci(highs, lows, closes),
-        "williams_r": _compute_williams_r(highs, lows, closes),
-        "keltner": _compute_keltner(closes, highs, lows),
-        "macd": _compute_macd_series(closes),
-        "ma_cross": _compute_ma_cross(closes),
-        "history_source": hist.get("source"),
-        "history_length": len(closes),
-    }
-    return indicators
 
 
-def _compute_simivision_reasons(sn: Dict[str, Any], indicators: Dict[str, Any], hot: Dict[str, Any]) -> List[str]:
-    reasons: List[str] = []
-    emission = float(sn.get("emission", 0) or 0)
-    apy = float(sn.get("apy", 0) or 0)
-    chg = float(sn.get("price_change_24h", 0) or 0)
-    if emission > 3:
-        reasons.append(f"Strong emission {emission:.2f} TAO/day")
-    if apy > 30:
-        reasons.append(f"High yield {apy:.1f}% APY")
-    rsi = indicators.get("rsi", {})
-    if isinstance(rsi, dict) and rsi.get("signal") == "oversold":
-        reasons.append("RSI oversold — reversal setup")
-    macd = indicators.get("macd", {})
-    if isinstance(macd, dict) and macd.get("crossover") == "bullish":
-        reasons.append("MACD bullish crossover")
-    if chg > 5:
-        reasons.append(f"Bullish 24h momentum +{chg:.1f}%")
-    if hot.get("active"):
-        reasons.append("HOT signal triggered")
-    if not reasons:
-        reasons.append("Balanced metrics — accumulation phase")
-    return reasons[:3]
 
 
 def _compute_undervalued(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -2174,6 +1575,46 @@ async def api_indicators_convergence():
         return {"subnets": [], "error": str(e)}
 
 
+@app.get("/api/top-picks")
+async def api_top_picks():
+    """Return the top subnet picks for the hour and day timeframes."""
+    try:
+        subnets, source = _get_subnets_with_source()
+        from internal.council.selector import Selector
+        selector = Selector()
+        picks = selector.get_top_picks(subnets)
+        return {
+            "status": "success",
+            "data_source": source,
+            "data": picks,
+        }
+    except Exception as e:
+        logger.error("Error fetching top picks: %s", e)
+        return {"status": "error", "data_source": "error", "data": {"hour": None, "day": None}, "error": str(e)}
+
+
+@app.get("/api/subnets/{netuid}/state")
+async def api_subnet_state(netuid: int):
+    """Return the reusable state vector for a single subnet."""
+    try:
+        subnets, source = _get_subnets_with_source()
+        vector = build_subnet_state_vector(netuid, subnets)
+        if vector is None:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=404,
+                content={"status": "error", "data_source": source, "error": f"Subnet {netuid} not found"},
+            )
+        return {
+            "status": "success",
+            "data_source": source,
+            "data": vector,
+        }
+    except Exception as e:
+        logger.error("Error fetching subnet state for %s: %s", netuid, e)
+        return {"status": "error", "data_source": "error", "error": str(e)}
+
+
 def get_dynamic_subnets():
     try:
         return get_all_subnets()
@@ -2184,144 +1625,7 @@ def get_dynamic_subnets():
 def get_top_performers(subnets: List[Dict], key: str, limit: int = 5) -> List[Dict]:
     return sorted(subnets, key=lambda x: x.get(key, 0), reverse=True)[:limit]
 
-def _compute_rsi(price_changes: List[float], period: int = 14) -> float:
-    if len(price_changes) < period:
-        return 50.0
-    gains, losses = 0, 0
-    for c in price_changes[-period:]:
-        if c >= 0:
-            gains += c
-        else:
-            losses += abs(c)
-    avg_gain = gains / period
-    avg_loss = losses / period
-    if avg_gain == 0 and avg_loss == 0:
-        return 50.0  # flat series — neither overbought nor oversold
-    if avg_loss == 0:
-        return 100.0
-    rs = avg_gain / avg_loss
-    return round(100 - (100 / (1 + rs)), 1)
 
-def _compute_macd(prices: List[float]) -> Dict:
-    if len(prices) < 26:
-        return {"macd": 0, "signal": 0, "histogram": 0, "crossover": "neutral"}
-    ema12 = sum(prices[-12:]) / 12
-    ema26 = sum(prices[-26:]) / 26
-    macd_line = ema12 - ema26
-    signal = macd_line * 0.8
-    histogram = macd_line - signal
-    crossover = "bullish" if histogram > 0 else "bearish" if histogram < 0 else "neutral"
-    return {"macd": round(macd_line, 4), "signal": round(signal, 4), "histogram": round(histogram, 4), "crossover": crossover}
-
-def _compute_ma_cross(prices: List[float]) -> Dict:
-    if len(prices) < 25:
-        return {"ma7": 0, "ma25": 0, "signal": "neutral"}
-    ma7 = sum(prices[-7:]) / 7
-    ma25_val = sum(prices[-25:]) / 25
-    signal = "bullish" if ma7 > ma25_val else "bearish" if ma7 < ma25_val else "neutral"
-    return {"ma7": round(ma7, 4), "ma25": round(ma25_val, 4), "signal": signal}
-
-def build_technical_indicators(sn: Dict) -> Dict:
-    chg_24h = sn.get("price_change_24h", 0)
-    chg_7d = sn.get("price_change_7d", 0)
-    chg_30d = sn.get("price_change_30d", 0)
-    price = sn.get("price", 1)
-    if price <= 0:
-        price = 1
-
-    base_price = price
-    changes = [chg_30d / 30] * 5 + [chg_7d / 7] * 7 + [chg_24h] * 2
-    changes = [c if abs(c) < 50 else (50 if c > 0 else -50) for c in changes]
-    # Add a deterministic oscillation so the series is not monotonically
-    # non-decreasing (which would force RSI to 100 when all changes are >= 0).
-    # Amplitude scales with the largest step so losses always appear.
-    _amp = max(1.5, abs(max(changes, key=abs)) * 0.5)
-    changes = [c + math.sin(i * 0.6) * _amp for i, c in enumerate(changes)]
-    prices = []
-    p = base_price
-    for c in changes:
-        p = p * (1 + c / 100)
-        prices.append(p)
-
-    rsi = _compute_rsi(changes, 14)
-    macd = _compute_macd(prices)
-    ma_cross = _compute_ma_cross(prices)
-
-    signals = []
-    if rsi > 70:
-        signals.append("RSI overbought")
-    elif rsi < 30:
-        signals.append("RSI oversold")
-    if macd["crossover"] == "bullish":
-        signals.append("MACD bullish crossover")
-    elif macd["crossover"] == "bearish":
-        signals.append("MACD bearish crossover")
-    if ma_cross["signal"] == "bullish":
-        signals.append("MA bullish cross")
-    elif ma_cross["signal"] == "bearish":
-        signals.append("MA bearish cross")
-
-    return {
-        "rsi": rsi,
-        "rsi_signal": "overbought" if rsi > 70 else "oversold" if rsi < 30 else "neutral",
-        "macd": macd,
-        "ma_cross": ma_cross,
-        "signals": signals if signals else ["No strong technical signals"]
-    }
-
-def build_signal_breakdown(sn: Dict[str, Any], rank: int) -> List[str]:
-    breakdown = []
-    emission = sn.get("emission", 0)
-    if emission >= 5:
-        breakdown.append(f"Strong emission ({emission:.2f} TAO/day) - high priority for miners")
-    elif emission >= 1:
-        breakdown.append(f"Solid emission ({emission:.2f} TAO/day) - consistent rewards")
-    else:
-        breakdown.append(f"Emission at {emission:.2f} TAO/day - emerging subnet")
-    chg = sn.get("price_change_24h", 0)
-    if chg >= 5:
-        breakdown.append(f"Bullish 24h momentum (+{chg:.1f}%) - strong buying pressure")
-    elif chg <= -5:
-        breakdown.append(f"Bearish 24h momentum ({chg:.1f}%) - watch for entry timing")
-    else:
-        breakdown.append(f"Stable 24h movement ({chg:+.1f}%) - accumulation phase")
-    mentions = sn.get("social_mentions", 0)
-    if mentions >= 1000:
-        breakdown.append(f"High social volume ({mentions:,} mentions) - community interest")
-    elif mentions >= 100:
-        breakdown.append(f"Moderate community buzz ({mentions} mentions)")
-    else:
-        breakdown.append(f"Early stage awareness ({mentions} mentions) - potential upside")
-    is_overvalued = sn.get("is_overvalued", False)
-    if is_overvalued:
-        breakdown.append("⚠️ Flagged as potentially overvalued - position sizing recommended")
-    elif rank == 0:
-        breakdown.append("✅ Top pick - momentum alignment across metrics")
-    return breakdown
-
-def build_simivision_picks_with_breakdown(top_emission: List[Dict]) -> List[Dict]:
-    picks = []
-    for i, sn in enumerate(top_emission[:3]):
-        apy = sn.get("apy", 0)
-        chg = sn.get("price_change_24h", 0)
-        emission = sn.get("emission", 0)
-        breakdown = build_signal_breakdown(sn, i)
-        conviction = min(95, 70 + int(abs(apy) * 2) + int(abs(chg)) + (10 if emission > 5 else 0))
-        picks.append({
-            "rank": i + 1,
-            "netuid": sn["netuid"],
-            "name": sn["name"],
-            "emission": emission,
-            "apy": apy,
-            "price_change_24h": chg,
-            "conviction": conviction,
-            "rationale": f"Top emission ({emission:.2f} TAO) with {'bullish' if chg >= 0 else 'bearish'} 24h momentum ({chg}%)",
-            "recommendation": "BUY" if i == 0 else ("HOLD" if i == 1 else "WATCH"),
-            "breakdown": breakdown,
-            "metrics": {"market_cap": sn.get("market_cap", 0), "volume": sn.get("volume", 0), "social_mentions": sn.get("social_mentions", 0)},
-            "risk_flags": ["overvalued"] if sn.get("is_overvalued") else [],
-        })
-    return picks
 
 def _build_council_votes(top_sn: Dict) -> List[Dict]:
     if not top_sn:

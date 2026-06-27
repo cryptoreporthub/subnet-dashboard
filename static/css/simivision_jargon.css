@@ -1,0 +1,65 @@
+/* SimiVision jargon tooltip styles */
+
+.jargon-term {
+  position: relative;
+  display: inline;
+  color: var(--accent-cyan, #22d3ee);
+  border-bottom: 1px dashed rgba(34, 211, 238, 0.45);
+  cursor: help;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.jargon-term:hover {
+  color: #67e8f9;
+  border-bottom-style: solid;
+}
+
+.simi-tooltip {
+  position: absolute;
+  z-index: 1000;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(4px);
+  width: max-content;
+  max-width: 280px;
+  padding: 10px 12px;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(34, 211, 238, 0.25);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  color: #e2e8f0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+}
+
+.simi-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: rgba(34, 211, 238, 0.25) transparent transparent transparent;
+}
+
+.jargon-term:hover .simi-tooltip,
+.jargon-term:focus .simi-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+.simi-tooltip strong {
+  display: block;
+  color: #22d3ee;
+  font-weight: 600;
+  margin-bottom: 4px;
+  font-size: 0.875rem;
+}

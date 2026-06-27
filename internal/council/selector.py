@@ -14,6 +14,12 @@ from internal.council.experts.hype import HypeExpert
 from internal.council.experts.contrarian import ContrarianExpert
 from internal.council.experts.technical import TechnicalExpert
 from internal.council.mindmap_bridge import MindmapBridge
+from internal.council.state_vector import (
+    build_subnet_state_vector,
+    format_top_pick,
+    score_subnet_for_day,
+    score_subnet_for_hour,
+)
 
 # Default weights: quant 0.3, hype 0.25, contrarian 0.2, technical 0.25
 DEFAULT_WEIGHTS = {
@@ -43,6 +49,42 @@ class Selector:
             # Load adaptive weights from soul_map.json or fall back to defaults
             self.weights = self.mindmap_bridge.get_expert_weights() or DEFAULT_WEIGHTS.copy()
         self.daily_output_history: List[Dict[str, Any]] = []
+
+    def get_top_picks(self, subnets: List[dict]) -> Dict[str, Optional[dict]]:
+        """
+        Return the top subnet pick for the hour and day horizons.
+
+        Uses the modular state vector builder and scoring helpers so the
+        selection logic is reusable outside of the HTTP layer.
+        """
+        if not subnets:
+            return {"hour": None, "day": None}
+
+        scored = []
+        for sn in subnets:
+            netuid = sn.get("netuid")
+            if netuid is None:
+                continue
+            sv = build_subnet_state_vector(netuid, subnets)
+            if sv is None:
+                continue
+            sv["_score_hour"] = score_subnet_for_hour(sv)
+            sv["_score_day"] = score_subnet_for_day(sv)
+            scored.append(sv)
+
+        if not scored:
+            return {"hour": None, "day": None}
+
+        hour_pick = max(scored, key=lambda x: x["_score_hour"])
+        day_pick = max(scored, key=lambda x: x["_score_day"])
+
+        hour_pick["_score"] = hour_pick["_score_hour"]
+        day_pick["_score"] = day_pick["_score_day"]
+
+        return {
+            "hour": format_top_pick(hour_pick, rank=1),
+            "day": format_top_pick(day_pick, rank=1),
+        }
 
     def get_expert_opinions(self, subnet_id: int, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
