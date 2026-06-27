@@ -58,33 +58,51 @@
     </div>
   </div>
 
+  <!-- ============ 3. TOP PICKS (HOUR / DAY) ============ -->
+  <div class="block">
+    <div class="section-title">Top Picks</div>
+    <div class="section-sub">Hourly momentum leader and daily opportunity leader — computed from live subnet signals</div>
+    <div class="kpi-strip" id="top-picks-strip">
+      <div class="kpi">
+        <div class="lbl"><span class="jargon-term" data-jargon="top-pick-hour">Top Pick of the Hour</span></div>
+        <div class="val" id="topPickHourName">—</div>
+        <div class="sub" id="topPickHourMeta">Loading…</div>
+      </div>
+      <div class="kpi">
+        <div class="lbl"><span class="jargon-term" data-jargon="top-pick-day">Top Pick of the Day</span></div>
+        <div class="val" id="topPickDayName">—</div>
+        <div class="sub" id="topPickDayMeta">Loading…</div>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ 4. SIMIVISION TOP PICKS ============ -->
   <div class="block">
     <div class="section-title">SimiVision Top Picks</div>
-    <div class="section-sub">Ranked by emission, yield &amp; conviction — sparklines show price trend, every forecast is predictive</div>
+    <div class="section-sub">Ranked by <span class="jargon-term" data-jargon="emission">emission</span>, <span class="jargon-term" data-jargon="apy">yield</span> &amp; <span class="jargon-term" data-jargon="conviction">conviction</span> — sparklines show price trend, every forecast is predictive</div>
     <div class="picks">
       {% for p in simivision_picks[:3] %}
       <div class="card pick {{ 'sell-accent' if p.sell and p.sell.active else '' }}">
         <div class="pick-rank">#{{ p.rank }}</div>
         <div class="pick-name">{{ p.name }}</div>
-        <div class="pick-meta">SN{{ p.netuid }} · {{ '%.2f'|format(p.emission) }} TAO/day · {{ '%.1f'|format(p.apy) }}% APY</div>
+        <div class="pick-meta">SN{{ p.netuid }} · <span class="jargon-term" data-jargon="emission">{{ '%.2f'|format(p.emission) }} TAO/day</span> · <span class="jargon-term" data-jargon="apy">{{ '%.1f'|format(p.apy) }}% APY</span></div>
         <div class="pick-row">
           <div class="conviction-wrap">
-            <div class="conviction-lbl">CONVICTION {{ p.conviction }}%</div>
+            <div class="conviction-lbl"><span class="jargon-term" data-jargon="conviction">CONVICTION</span> {{ p.conviction }}%</div>
             <div class="conviction-bar"><div class="conviction-fill" style="width:{{ p.conviction }}%"></div></div>
           </div>
           <div class="spark-wrap"><canvas class="spark" data-spark="{{ p.sparkline|join(',') }}"></canvas></div>
         </div>
-        <ul class="reasons">
+        <ul class="reasons jargon-reasons">
           {% for r in p.reasons %}<li>{{ r }}</li>{% endfor %}
         </ul>
         <div class="tags">
-          {% if p.recommendation == 'BUY' %}<span class="tag tag-buy">BUY</span>
-          {% elif p.recommendation == 'HOLD' %}<span class="tag tag-hold">HOLD</span>
-          {% elif p.recommendation == 'SELL' %}<span class="tag tag-sell">SELL</span>
-          {% else %}<span class="tag tag-watch">WATCH</span>{% endif %}
-          {% if p.sell and p.sell.active %}<span class="pill-sell">• SELL ALERT</span>
-          {% elif p.hot and p.hot.active %}<span class="pill-hot">• HOT</span>{% endif %}
+          {% if p.recommendation == 'BUY' %}<span class="tag tag-buy jargon-term" data-jargon="recommendation">BUY</span>
+          {% elif p.recommendation == 'HOLD' %}<span class="tag tag-hold jargon-term" data-jargon="recommendation">HOLD</span>
+          {% elif p.recommendation == 'SELL' %}<span class="tag tag-sell jargon-term" data-jargon="recommendation">SELL</span>
+          {% else %}<span class="tag tag-watch jargon-term" data-jargon="recommendation">WATCH</span>{% endif %}
+          {% if p.sell and p.sell.active %}<span class="pill-sell jargon-term" data-jargon="sell-alert">• SELL ALERT</span>
+          {% elif p.hot and p.hot.active %}<span class="pill-hot jargon-term" data-jargon="hot">• HOT</span>{% endif %}
         </div>
         {% if p.prediction and p.prediction.statement %}
         <div class="pred-line">→ {{ p.prediction.statement }}</div>
@@ -502,6 +520,173 @@ document.querySelectorAll('canvas.spark').forEach(drawSpark);
   }
   btn.addEventListener('click',send);
   input.addEventListener('keydown',function(e){if(e.key==='Enter')send();});
+})();
+
+// ---------- SimiVision clickable jargon tooltips ----------
+(function(){
+  var glossary = {
+    "conviction": {
+      title: "Conviction",
+      body: "A composite confidence score (0–95%) combining 24h price momentum, APY, and active HOT signals. Higher conviction means stronger agreement across the council."
+    },
+    "emission": {
+      title: "Emission",
+      body: "The amount of TAO rewarded to a subnet per day. Higher emission generally indicates greater network allocation and validator attention."
+    },
+    "apy": {
+      title: "APY",
+      body: "Annual Percentage Yield from staking in the subnet's pool. It reflects the current reward rate for stakers."
+    },
+    "yield": {
+      title: "Yield",
+      body: "Income generated from staking, expressed here as APY. Yield is a key fundamental input for the gamma expert."
+    },
+    "recommendation": {
+      title: "Recommendation",
+      body: "The council's actionable verdict: BUY (strongest bullish), HOLD (neutral/balanced), SELL (bearish risk), or WATCH (waiting for confirmation)."
+    },
+    "hot": {
+      title: "HOT",
+      body: "A short-term bullish alert triggered when momentum, volume, and technical convergence align. Suppressed automatically if a SELL ALERT is active."
+    },
+    "sell-alert": {
+      title: "SELL ALERT",
+      body: "A risk flag triggered by bearish convergence, overbought oscillators, or negative predicted move. SELL ALERT always wins over HOT."
+    },
+    "top-pick-hour": {
+      title: "Top Pick of the Hour",
+      body: "The subnet with the strongest short-term momentum over the current hour, scored from 24h change, RSI health, and active HOT signals."
+    },
+    "top-pick-day": {
+      title: "Top Pick of the Day",
+      body: "The best daily opportunity, scored from emission, APY, predicted move, and 24h price change."
+    },
+    "sparkline": {
+      title: "Sparkline",
+      body: "A mini price trend chart showing the last 12 closes. Green = upward, red = downward."
+    },
+    "rsi": {
+      title: "RSI",
+      body: "Relative Strength Index. Below 30 suggests oversold (potential bounce); above 70 suggests overbought (potential pullback)."
+    },
+    "macd": {
+      title: "MACD",
+      body: "Moving Average Convergence Divergence. A bullish crossover can signal upward momentum; a bearish crossover the opposite."
+    },
+    "bollinger": {
+      title: "Bollinger Bands",
+      body: "Volatility bands around price. Touching the upper band may indicate overbought conditions; the lower band, oversold."
+    }
+  };
+
+  var tooltip = document.createElement('div');
+  tooltip.className = 'simi-tooltip';
+  document.body.appendChild(tooltip);
+
+  function show(el){
+    var key = el.getAttribute('data-jargon');
+    var entry = glossary[key];
+    if(!entry) return;
+    tooltip.innerHTML = '<div class="tt-title">'+entry.title+'</div><div class="tt-body">'+entry.body+'</div>';
+    tooltip.classList.add('visible');
+    position(el);
+  }
+
+  function position(el){
+    var rect = el.getBoundingClientRect();
+    var ttRect = tooltip.getBoundingClientRect();
+    var top = rect.top + window.scrollY - ttRect.height - 10;
+    var left = rect.left + window.scrollX + (rect.width - ttRect.width) / 2;
+    // Keep inside viewport
+    left = Math.max(10, Math.min(left, window.innerWidth - ttRect.width - 10));
+    tooltip.style.top = top + 'px';
+    tooltip.style.left = left + 'px';
+  }
+
+  function hide(){
+    tooltip.classList.remove('visible');
+    document.querySelectorAll('.jargon-term.active').forEach(function(el){ el.classList.remove('active'); });
+  }
+
+  document.querySelectorAll('.jargon-term').forEach(function(el){
+    el.addEventListener('click', function(e){
+      e.stopPropagation();
+      document.querySelectorAll('.jargon-term.active').forEach(function(a){ if(a!==el) a.classList.remove('active'); });
+      var isActive = el.classList.contains('active');
+      hide();
+      if(!isActive){
+        el.classList.add('active');
+        show(el);
+      }
+    });
+    el.addEventListener('mouseenter', function(){ show(el); });
+    el.addEventListener('mouseleave', function(){ hide(); });
+  });
+
+  document.addEventListener('click', function(e){
+    if(!e.target.closest('.jargon-term') && !e.target.closest('.simi-tooltip')) hide();
+  });
+  window.addEventListener('scroll', hide, true);
+  window.addEventListener('resize', hide);
+
+  // Auto-wrap known jargon words inside reason lists
+  var reasonTerms = {
+    "RSI": "rsi",
+    "MACD": "macd",
+    "Bollinger": "bollinger",
+    "oversold": "rsi",
+    "overbought": "rsi",
+    "momentum": "hot",
+    "volume": "hot",
+    "emission": "emission",
+    "APY": "apy"
+  };
+  document.querySelectorAll('.jargon-reasons li').forEach(function(li){
+    var html = li.innerHTML;
+    Object.keys(reasonTerms).forEach(function(term){
+      var key = reasonTerms[term];
+      var re = new RegExp('\\b('+term+')\\b', 'g');
+      html = html.replace(re, '<span class="jargon-term" data-jargon="'+key+'">$1</span>');
+    });
+    li.innerHTML = html;
+  });
+  // Re-bind events for dynamically wrapped terms
+  document.querySelectorAll('.jargon-reasons .jargon-term').forEach(function(el){
+    el.addEventListener('click', function(e){
+      e.stopPropagation();
+      document.querySelectorAll('.jargon-term.active').forEach(function(a){ if(a!==el) a.classList.remove('active'); });
+      var isActive = el.classList.contains('active');
+      hide();
+      if(!isActive){ el.classList.add('active'); show(el); }
+    });
+    el.addEventListener('mouseenter', function(){ show(el); });
+    el.addEventListener('mouseleave', function(){ hide(); });
+  });
+})();
+
+// ---------- Top Pick of the Hour / Day ----------
+(function(){
+  function fmt(n){ return (n>=0?'+':'')+n.toFixed(2)+'%'; }
+  function load(){
+    fetch('/api/top-pick/hour').then(function(r){return r.json();}).then(function(j){
+      var d=(j&&j.data)||{};
+      document.getElementById('topPickHourName').textContent = d.name || '—';
+      document.getElementById('topPickHourMeta').textContent = d.name ? ('SN'+d.netuid+' · '+fmt(d.price_change_24h)+' · score '+d.score) : 'Unavailable';
+    }).catch(function(){
+      document.getElementById('topPickHourName').textContent = '—';
+      document.getElementById('topPickHourMeta').textContent = 'Unavailable';
+    });
+    fetch('/api/top-pick/day').then(function(r){return r.json();}).then(function(j){
+      var d=(j&&j.data)||{};
+      document.getElementById('topPickDayName').textContent = d.name || '—';
+      document.getElementById('topPickDayMeta').textContent = d.name ? ('SN'+d.netuid+' · '+fmt(d.price_change_24h)+' · score '+d.score) : 'Unavailable';
+    }).catch(function(){
+      document.getElementById('topPickDayName').textContent = '—';
+      document.getElementById('topPickDayMeta').textContent = 'Unavailable';
+    });
+  }
+  load();
+  setInterval(load, 60000);
 })();
 </script>
 </body>

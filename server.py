@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -324,6 +324,204 @@ def api_learning_stats_safe():
             "predictions_resolved": metrics.get("predictions_resolved", 0),
             "last_updated": metrics.get("last_updated") or datetime.utcnow().isoformat() + "Z",
         },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Subnet state vector & top-pick endpoints
+# ---------------------------------------------------------------------------
+
+def _load_registry() -> Dict[str, Any]:
+    """Load config/registry.json for canonical subnet metadata."""
+    try:
+        with open(_REGISTRY_PATH, "r") as f:
+            return json.load(f)
+    except Exception as exc:
+        logger.warning("Failed to load registry: %s", exc)
+        return {}
+
+
+def _subnet_state_vector(netuid: int, subnets: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Build a comprehensive state vector for a single subnet.
+
+    Combines live taomarketcap data, registry metadata, technical indicators,
+    signal impact, prediction, and social sentiment into one inspectable object.
+    """
+    sn = next((s for s in subnets if s.get("netuid") == netuid), None)
+    if sn is None:
+        return None
+
+    registry = _load_registry()
+    registry_item = registry.get(str(netuid), {})
+
+    indicators = _compute_technical_indicators(sn)
+    oversold = _detect_oversold_convergence(indicators)
+    overbought = _detect_overbought_convergence(indicators)
+    convergence = oversold if oversold.get("count", 0) >= overbought.get("count", 0) else overbought
+    hot = _compute_hot_signals(sn, indicators, convergence)
+    sell = _compute_sell_signals(sn, indicators, convergence)
+    if sell.get("active"):
+        hot = {**hot, "active": False, "label": None, "suppressed_by": "SELL ALERT"}
+
+    impact = _compute_signal_impact(sn, indicators, hot, sell)
+    prediction = _generate_prediction(sn, impact)
+    social = _compute_social_sentiment(sn)
+
+    staking = registry_item.get("staking_data") or sn.get("staking_data") or {}
+    return {
+        "netuid": netuid,
+        "name": sn.get("name") or registry_item.get("name", f"Subnet {netuid}"),
+        "status": sn.get("status") or registry_item.get("status", "unknown"),
+        "sector": sn.get("sector") or registry_item.get("sector"),
+        "metrics": {
+            "emission": float(sn.get("emission", 0) or 0),
+            "apy": float(sn.get("apy", 0) or 0),
+            "price": float(sn.get("price", 0) or 0),
+            "price_change_24h": float(sn.get("price_change_24h", 0) or 0),
+            "price_change_7d": float(sn.get("price_change_7d", 0) or 0),
+            "price_change_30d": float(sn.get("price_change_30d", 0) or 0),
+            "volume": float(sn.get("volume", 0) or 0),
+            "market_cap": float(sn.get("market_cap", 0) or 0),
+            "total_stake": float(staking.get("total_stake", 0) or 0),
+            "social_mentions": int(sn.get("social_mentions", 0) or registry_item.get("social_mentions", 0) or 0),
+            "is_overvalued": bool(sn.get("is_overvalued", False) or registry_item.get("is_overvalued", False)),
+            "risk_flags": list(sn.get("risk_flags", []) or registry_item.get("risk_flags", [])),
+        },
+        "technical_indicators": indicators,
+        "convergence": convergence,
+        "hot": hot,
+        "sell": sell,
+        "signal_impact": impact,
+        "prediction": prediction,
+        "social_sentiment": social,
+        "consensus": {
+            "action": "accumulate" if impact.get("net_direction") == "bullish"
+            else "reduce" if impact.get("net_direction") == "bearish" else "hold",
+            "score": round(min(1.0, max(0.0, 0.5 + impact.get("net_predicted_pct", 0) / 100)), 4),
+        },
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+def _score_for_hour(sn: Dict[str, Any], indicators: Dict[str, Any], hot: Dict[str, Any], sell: Dict[str, Any]) -> float:
+    """Short-term momentum score for Top Pick of the Hour."""
+    chg = float(sn.get("price_change_24h", 0) or 0)
+    rsi = float(indicators.get("rsi", {}).get("value", 50) or 50)
+    hot_score = float(hot.get("score", 0) or 0) if hot.get("active") else 0.0
+    sell_penalty = float(sell.get("score", 0) or 0) if sell.get("active") else 0.0
+    # Favor positive momentum, mild RSI boost when not overbought, hot signals.
+    score = chg + (hot_score * 0.5) - (sell_penalty * 0.8)
+    if 30 <= rsi <= 70:
+        score += 1.0
+    return score
+
+
+def _score_for_day(sn: Dict[str, Any], indicators: Dict[str, Any], impact: Dict[str, Any]) -> float:
+    """Daily opportunity score for Top Pick of the Day."""
+    chg = float(sn.get("price_change_24h", 0) or 0)
+    emission = float(sn.get("emission", 0) or 0)
+    apy = float(sn.get("apy", 0) or 0)
+    net = float(impact.get("net_predicted_pct", 0) or 0)
+    # Reward emission + yield + positive predicted move; dampen extreme 24h spikes.
+    score = (emission * 2.0) + (apy * 0.1) + net + (chg * 0.3)
+    return score
+
+
+def _pick_top_subnet(subnets: List[Dict[str, Any]], scorer) -> Optional[Dict[str, Any]]:
+    """Return the highest-scoring subnet using the provided scorer function."""
+    if not subnets:
+        return None
+    candidates = []
+    for sn in subnets:
+        indicators = _compute_technical_indicators(sn)
+        oversold = _detect_oversold_convergence(indicators)
+        overbought = _detect_overbought_convergence(indicators)
+        convergence = oversold if oversold.get("count", 0) >= overbought.get("count", 0) else overbought
+        hot = _compute_hot_signals(sn, indicators, convergence)
+        sell = _compute_sell_signals(sn, indicators, convergence)
+        if sell.get("active"):
+            hot = {**hot, "active": False, "label": None, "suppressed_by": "SELL ALERT"}
+        impact = _compute_signal_impact(sn, indicators, hot, sell)
+        score = scorer(sn, indicators, hot, sell, impact)
+        candidates.append((score, sn, indicators, hot, sell, impact))
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    score, sn, indicators, hot, sell, impact = candidates[0]
+    return {
+        "rank": 1,
+        "netuid": sn.get("netuid"),
+        "name": sn.get("name"),
+        "score": round(score, 4),
+        "emission": float(sn.get("emission", 0) or 0),
+        "apy": float(sn.get("apy", 0) or 0),
+        "price_change_24h": float(sn.get("price_change_24h", 0) or 0),
+        "signal_impact": impact,
+        "hot": hot,
+        "sell": sell,
+        "technical_indicators": indicators,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@app.get("/api/subnets/{netuid}/state")
+def api_subnet_state(netuid: int):
+    """Return a comprehensive state vector for a single subnet."""
+    subnets, source = _get_subnets_with_source()
+    vector = _subnet_state_vector(netuid, subnets)
+    if vector is None:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "status": "error",
+                "netuid": netuid,
+                "error": f"Subnet {netuid} not found in current data source ({source}).",
+            },
+        )
+    return {
+        "status": "success",
+        "data_source": source,
+        "data": vector,
+    }
+
+
+@app.get("/api/top-pick/hour")
+def api_top_pick_hour():
+    """Top Pick of the Hour — highest short-term momentum subnet."""
+    subnets, source = _get_subnets_with_source()
+    pick = _pick_top_subnet(subnets, lambda sn, ind, hot, sell, impact: _score_for_hour(sn, ind, hot, sell))
+    if pick is None:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "error",
+                "error": "No subnet data available for top-pick selection.",
+            },
+        )
+    return {
+        "status": "success",
+        "data_source": source,
+        "window": "hour",
+        "data": pick,
+    }
+
+
+@app.get("/api/top-pick/day")
+def api_top_pick_day():
+    """Top Pick of the Day — best daily opportunity by emission, yield & predicted move."""
+    subnets, source = _get_subnets_with_source()
+    pick = _pick_top_subnet(subnets, lambda sn, ind, hot, sell, impact: _score_for_day(sn, ind, impact))
+    if pick is None:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "error",
+                "error": "No subnet data available for top-pick selection.",
+            },
+        )
+    return {
+        "status": "success",
+        "data_source": source,
+        "window": "day",
+        "data": pick,
     }
 
 

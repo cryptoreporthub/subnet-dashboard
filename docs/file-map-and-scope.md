@@ -177,3 +177,6 @@ User feedback         →   /api/mindmap/feedback (stored, not yet applied)
 | Background sync / freshness | `internal/freshness.py::start_background_sync()` / `refresh_all()` |
 | Apply judge verdicts to decisions | `internal/council/judge/adversarial.py` → `internal/council/selector.py` |
 | Surface user feedback | `server.py::post_feedback()` → `MindmapBridge.log_simivision_feedback()` |
+| Subnet state vector | `server.py::get_subnet_state()` → `GET /api/subnets/{netuid}/state` |
+| Top Pick of the Hour / Day | `server.py::get_top_pick_hour()` / `get_top_pick_day()` → `GET /api/top-pick/hour` / `GET /api/top-pick/day` |
+| SimiVision jargon tooltips | `templates/index.html` (`.jargon-term`, `.simi-tooltip`, glossary JS) + `static/css/style.css` |

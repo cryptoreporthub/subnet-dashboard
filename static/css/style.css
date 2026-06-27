@@ -315,6 +315,60 @@ footer.status { position: fixed; bottom: 0; left: 0; right: 0; z-index: 40; back
 .status-inner b { color: var(--txt-2); }
 .st-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--emerald-bright); box-shadow: 0 0 8px var(--emerald-glow); display: inline-block; margin-right: 6px; }
 
+/* ---------- SimiVision clickable jargon tooltips ---------- */
+.jargon-term {
+  border-bottom: 1px dashed rgba(45, 212, 191, 0.45);
+  cursor: help;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.jargon-term:hover,
+.jargon-term.active {
+  color: var(--emerald-bright);
+  border-bottom-style: solid;
+  border-bottom-color: var(--emerald-bright);
+}
+.simi-tooltip {
+  position: absolute;
+  z-index: 100;
+  max-width: 280px;
+  padding: 12px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 20px var(--emerald-glow);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--txt);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.simi-tooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.simi-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -6px;
+  border-width: 6px;
+  border-style: solid;
+  border-color: var(--border) transparent transparent transparent;
+}
+.simi-tooltip .tt-title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--emerald-bright);
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+.simi-tooltip .tt-body {
+  color: var(--txt-2);
+}
+
 /* ---------- Misc ---------- */
 .empty { color: var(--txt-3); font-size: 12.5px; font-style: italic; padding: 8px 0; }
 .scroll-y { max-height: 360px; overflow-y: auto; }
