@@ -864,17 +864,998 @@
       "name": "Compute",
       "created_at": "2026-06-27T00:00:48.665838Z",
       "resolve_at": "2026-06-28T00:00:48.665838Z"
+    },
+    {
+      "id": "9110a958de",
+      "subnet": "Coldint",
+      "netuid": 29,
+      "direction": "up",
+      "predicted_pct": 12.75,
+      "horizon_hours": 48,
+      "reference_price": 28.5,
+      "reference_time": "2026-06-27T00:06:25.098520Z",
+      "due_time": "2026-06-29T00:06:25.098520Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +15.5%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +12.8% within 48 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Coldint",
+      "created_at": "2026-06-27T00:06:25.098520Z",
+      "resolve_at": "2026-06-29T00:06:25.098520Z"
+    },
+    {
+      "id": "16c5fd0d2a",
+      "subnet": "Inference",
+      "netuid": 19,
+      "direction": "up",
+      "predicted_pct": 0.2,
+      "horizon_hours": 24,
+      "reference_price": 15.2,
+      "reference_time": "2026-06-27T00:06:25.101335Z",
+      "due_time": "2026-06-28T00:06:25.101335Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +4.7%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +0.2% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Inference",
+      "created_at": "2026-06-27T00:06:25.101335Z",
+      "resolve_at": "2026-06-28T00:06:25.101335Z"
+    },
+    {
+      "id": "8457992a6f",
+      "subnet": "Compute",
+      "netuid": 12,
+      "direction": "down",
+      "predicted_pct": -4.05,
+      "horizon_hours": 24,
+      "reference_price": 12.4,
+      "reference_time": "2026-06-27T00:06:25.104084Z",
+      "due_time": "2026-06-28T00:06:25.104084Z",
+      "status": "pending",
+      "conviction": 91,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype",
+        "contrarian"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +2.1%",
+        "stochastic_reversal +3.8%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move -4.0% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Compute",
+      "created_at": "2026-06-27T00:06:25.104084Z",
+      "resolve_at": "2026-06-28T00:06:25.104084Z"
+    },
+    {
+      "id": "ef10ff7efd",
+      "subnet": "Coldint",
+      "netuid": 29,
+      "direction": "up",
+      "predicted_pct": 12.75,
+      "horizon_hours": 48,
+      "reference_price": 28.5,
+      "reference_time": "2026-06-27T00:06:44.394079Z",
+      "due_time": "2026-06-29T00:06:44.394079Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +15.5%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +12.8% within 48 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Coldint",
+      "created_at": "2026-06-27T00:06:44.394079Z",
+      "resolve_at": "2026-06-29T00:06:44.394079Z"
+    },
+    {
+      "id": "c9cc8c69a7",
+      "subnet": "Inference",
+      "netuid": 19,
+      "direction": "up",
+      "predicted_pct": 0.2,
+      "horizon_hours": 24,
+      "reference_price": 15.2,
+      "reference_time": "2026-06-27T00:06:44.397023Z",
+      "due_time": "2026-06-28T00:06:44.397023Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +4.7%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +0.2% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Inference",
+      "created_at": "2026-06-27T00:06:44.397023Z",
+      "resolve_at": "2026-06-28T00:06:44.397023Z"
+    },
+    {
+      "id": "2de1077253",
+      "subnet": "Compute",
+      "netuid": 12,
+      "direction": "down",
+      "predicted_pct": -4.05,
+      "horizon_hours": 24,
+      "reference_price": 12.4,
+      "reference_time": "2026-06-27T00:06:44.399927Z",
+      "due_time": "2026-06-28T00:06:44.399927Z",
+      "status": "pending",
+      "conviction": 91,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype",
+        "contrarian"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +2.1%",
+        "stochastic_reversal +3.8%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move -4.0% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Compute",
+      "created_at": "2026-06-27T00:06:44.399927Z",
+      "resolve_at": "2026-06-28T00:06:44.399927Z"
+    },
+    {
+      "id": "0db361ee24",
+      "subnet": "Coldint",
+      "netuid": 29,
+      "direction": "up",
+      "predicted_pct": 12.75,
+      "horizon_hours": 48,
+      "reference_price": 28.5,
+      "reference_time": "2026-06-27T00:07:38.964635Z",
+      "due_time": "2026-06-29T00:07:38.964635Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +15.5%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +12.8% within 48 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Coldint",
+      "created_at": "2026-06-27T00:07:38.964635Z",
+      "resolve_at": "2026-06-29T00:07:38.964635Z"
+    },
+    {
+      "id": "572eb5e5c5",
+      "subnet": "Inference",
+      "netuid": 19,
+      "direction": "up",
+      "predicted_pct": 0.2,
+      "horizon_hours": 24,
+      "reference_price": 15.2,
+      "reference_time": "2026-06-27T00:07:38.967774Z",
+      "due_time": "2026-06-28T00:07:38.967774Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +4.7%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +0.2% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Inference",
+      "created_at": "2026-06-27T00:07:38.967774Z",
+      "resolve_at": "2026-06-28T00:07:38.967774Z"
+    },
+    {
+      "id": "601ec745ac",
+      "subnet": "Compute",
+      "netuid": 12,
+      "direction": "down",
+      "predicted_pct": -4.05,
+      "horizon_hours": 24,
+      "reference_price": 12.4,
+      "reference_time": "2026-06-27T00:07:38.970861Z",
+      "due_time": "2026-06-28T00:07:38.970861Z",
+      "status": "pending",
+      "conviction": 91,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype",
+        "contrarian"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +2.1%",
+        "stochastic_reversal +3.8%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move -4.0% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Compute",
+      "created_at": "2026-06-27T00:07:38.970861Z",
+      "resolve_at": "2026-06-28T00:07:38.970861Z"
+    },
+    {
+      "id": "c5fc77aa5f",
+      "subnet": "Coldint",
+      "netuid": 29,
+      "direction": "up",
+      "predicted_pct": 12.75,
+      "horizon_hours": 48,
+      "reference_price": 28.5,
+      "reference_time": "2026-06-27T00:12:20.840038Z",
+      "due_time": "2026-06-29T00:12:20.840038Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +15.5%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +12.8% within 48 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Coldint",
+      "created_at": "2026-06-27T00:12:20.840038Z",
+      "resolve_at": "2026-06-29T00:12:20.840038Z"
+    },
+    {
+      "id": "e5e58fa9fc",
+      "subnet": "Inference",
+      "netuid": 19,
+      "direction": "up",
+      "predicted_pct": 0.2,
+      "horizon_hours": 24,
+      "reference_price": 15.2,
+      "reference_time": "2026-06-27T00:12:20.843285Z",
+      "due_time": "2026-06-28T00:12:20.843285Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +4.7%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +0.2% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Inference",
+      "created_at": "2026-06-27T00:12:20.843285Z",
+      "resolve_at": "2026-06-28T00:12:20.843285Z"
+    },
+    {
+      "id": "36bc760fea",
+      "subnet": "Compute",
+      "netuid": 12,
+      "direction": "down",
+      "predicted_pct": -4.05,
+      "horizon_hours": 24,
+      "reference_price": 12.4,
+      "reference_time": "2026-06-27T00:12:20.846592Z",
+      "due_time": "2026-06-28T00:12:20.846592Z",
+      "status": "pending",
+      "conviction": 91,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype",
+        "contrarian"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +2.1%",
+        "stochastic_reversal +3.8%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move -4.0% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Compute",
+      "created_at": "2026-06-27T00:12:20.846592Z",
+      "resolve_at": "2026-06-28T00:12:20.846592Z"
+    },
+    {
+      "id": "be35cae51c",
+      "subnet": "Coldint",
+      "netuid": 29,
+      "direction": "up",
+      "predicted_pct": 12.75,
+      "horizon_hours": 48,
+      "reference_price": 28.5,
+      "reference_time": "2026-06-27T00:12:46.101308Z",
+      "due_time": "2026-06-29T00:12:46.101308Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +15.5%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +12.8% within 48 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Coldint",
+      "created_at": "2026-06-27T00:12:46.101308Z",
+      "resolve_at": "2026-06-29T00:12:46.101308Z"
+    },
+    {
+      "id": "986c660416",
+      "subnet": "Inference",
+      "netuid": 19,
+      "direction": "up",
+      "predicted_pct": 0.2,
+      "horizon_hours": 24,
+      "reference_price": 15.2,
+      "reference_time": "2026-06-27T00:12:46.104714Z",
+      "due_time": "2026-06-28T00:12:46.104714Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +4.7%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +0.2% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Inference",
+      "created_at": "2026-06-27T00:12:46.104714Z",
+      "resolve_at": "2026-06-28T00:12:46.104714Z"
+    },
+    {
+      "id": "fb5f445471",
+      "subnet": "Compute",
+      "netuid": 12,
+      "direction": "down",
+      "predicted_pct": -4.05,
+      "horizon_hours": 24,
+      "reference_price": 12.4,
+      "reference_time": "2026-06-27T00:12:46.108211Z",
+      "due_time": "2026-06-28T00:12:46.108211Z",
+      "status": "pending",
+      "conviction": 91,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype",
+        "contrarian"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +2.1%",
+        "stochastic_reversal +3.8%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move -4.0% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Compute",
+      "created_at": "2026-06-27T00:12:46.108211Z",
+      "resolve_at": "2026-06-28T00:12:46.108211Z"
+    },
+    {
+      "id": "223b73b61a",
+      "subnet": "Coldint",
+      "netuid": 29,
+      "direction": "up",
+      "predicted_pct": 12.75,
+      "horizon_hours": 48,
+      "reference_price": 28.5,
+      "reference_time": "2026-06-27T00:12:46.288433Z",
+      "due_time": "2026-06-29T00:12:46.288433Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +15.5%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +12.8% within 48 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Coldint",
+      "created_at": "2026-06-27T00:12:46.288433Z",
+      "resolve_at": "2026-06-29T00:12:46.288433Z"
+    },
+    {
+      "id": "5392d77d02",
+      "subnet": "Inference",
+      "netuid": 19,
+      "direction": "up",
+      "predicted_pct": 0.2,
+      "horizon_hours": 24,
+      "reference_price": 15.2,
+      "reference_time": "2026-06-27T00:12:46.292001Z",
+      "due_time": "2026-06-28T00:12:46.292001Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +4.7%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +0.2% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Inference",
+      "created_at": "2026-06-27T00:12:46.292001Z",
+      "resolve_at": "2026-06-28T00:12:46.292001Z"
+    },
+    {
+      "id": "ec4599697b",
+      "subnet": "Compute",
+      "netuid": 12,
+      "direction": "down",
+      "predicted_pct": -4.05,
+      "horizon_hours": 24,
+      "reference_price": 12.4,
+      "reference_time": "2026-06-27T00:12:46.295544Z",
+      "due_time": "2026-06-28T00:12:46.295544Z",
+      "status": "pending",
+      "conviction": 91,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype",
+        "contrarian"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +2.1%",
+        "stochastic_reversal +3.8%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move -4.0% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Compute",
+      "created_at": "2026-06-27T00:12:46.295544Z",
+      "resolve_at": "2026-06-28T00:12:46.295544Z"
+    },
+    {
+      "id": "aacb19d1af",
+      "subnet": "Coldint",
+      "netuid": 29,
+      "direction": "up",
+      "predicted_pct": 12.75,
+      "horizon_hours": 48,
+      "reference_price": 28.5,
+      "reference_time": "2026-06-27T00:13:15.229476Z",
+      "due_time": "2026-06-29T00:13:15.229476Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +15.5%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +12.8% within 48 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Coldint",
+      "created_at": "2026-06-27T00:13:15.229476Z",
+      "resolve_at": "2026-06-29T00:13:15.229476Z"
+    },
+    {
+      "id": "d1f17f393c",
+      "subnet": "Inference",
+      "netuid": 19,
+      "direction": "up",
+      "predicted_pct": 0.2,
+      "horizon_hours": 24,
+      "reference_price": 15.2,
+      "reference_time": "2026-06-27T00:13:15.233242Z",
+      "due_time": "2026-06-28T00:13:15.233242Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +4.7%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +0.2% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Inference",
+      "created_at": "2026-06-27T00:13:15.233242Z",
+      "resolve_at": "2026-06-28T00:13:15.233242Z"
+    },
+    {
+      "id": "9f35f7f47a",
+      "subnet": "Compute",
+      "netuid": 12,
+      "direction": "down",
+      "predicted_pct": -4.05,
+      "horizon_hours": 24,
+      "reference_price": 12.4,
+      "reference_time": "2026-06-27T00:13:15.236855Z",
+      "due_time": "2026-06-28T00:13:15.236855Z",
+      "status": "pending",
+      "conviction": 91,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype",
+        "contrarian"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +2.1%",
+        "stochastic_reversal +3.8%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move -4.0% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Compute",
+      "created_at": "2026-06-27T00:13:15.236855Z",
+      "resolve_at": "2026-06-28T00:13:15.236855Z"
+    },
+    {
+      "id": "98ad431f1c",
+      "subnet": "Coldint",
+      "netuid": 29,
+      "direction": "up",
+      "predicted_pct": 12.75,
+      "horizon_hours": 48,
+      "reference_price": 28.5,
+      "reference_time": "2026-06-27T00:13:37.752131Z",
+      "due_time": "2026-06-29T00:13:37.752131Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +15.5%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +12.8% within 48 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Coldint",
+      "created_at": "2026-06-27T00:13:37.752131Z",
+      "resolve_at": "2026-06-29T00:13:37.752131Z"
+    },
+    {
+      "id": "ac49b5fc9e",
+      "subnet": "Inference",
+      "netuid": 19,
+      "direction": "up",
+      "predicted_pct": 0.2,
+      "horizon_hours": 24,
+      "reference_price": 15.2,
+      "reference_time": "2026-06-27T00:13:37.755954Z",
+      "due_time": "2026-06-28T00:13:37.755954Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +4.7%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +0.2% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Inference",
+      "created_at": "2026-06-27T00:13:37.755954Z",
+      "resolve_at": "2026-06-28T00:13:37.755954Z"
+    },
+    {
+      "id": "ba25d570b8",
+      "subnet": "Compute",
+      "netuid": 12,
+      "direction": "down",
+      "predicted_pct": -4.05,
+      "horizon_hours": 24,
+      "reference_price": 12.4,
+      "reference_time": "2026-06-27T00:13:37.759720Z",
+      "due_time": "2026-06-28T00:13:37.759720Z",
+      "status": "pending",
+      "conviction": 91,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype",
+        "contrarian"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +2.1%",
+        "stochastic_reversal +3.8%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move -4.0% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Compute",
+      "created_at": "2026-06-27T00:13:37.759720Z",
+      "resolve_at": "2026-06-28T00:13:37.759720Z"
+    },
+    {
+      "id": "6a14c1264a",
+      "subnet": "Coldint",
+      "netuid": 29,
+      "direction": "up",
+      "predicted_pct": 12.75,
+      "horizon_hours": 48,
+      "reference_price": 28.5,
+      "reference_time": "2026-06-27T00:15:38.763413Z",
+      "due_time": "2026-06-29T00:15:38.763413Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +15.5%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +12.8% within 48 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Coldint",
+      "created_at": "2026-06-27T00:15:38.763413Z",
+      "resolve_at": "2026-06-29T00:15:38.763413Z"
+    },
+    {
+      "id": "55a9320e2a",
+      "subnet": "Inference",
+      "netuid": 19,
+      "direction": "up",
+      "predicted_pct": 0.2,
+      "horizon_hours": 24,
+      "reference_price": 15.2,
+      "reference_time": "2026-06-27T00:15:38.767430Z",
+      "due_time": "2026-06-28T00:15:38.767430Z",
+      "status": "pending",
+      "conviction": 95,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +4.7%",
+        "stochastic_reversal +3.9%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move +0.2% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Inference",
+      "created_at": "2026-06-27T00:15:38.767430Z",
+      "resolve_at": "2026-06-28T00:15:38.767430Z"
+    },
+    {
+      "id": "c7ce969413",
+      "subnet": "Compute",
+      "netuid": 12,
+      "direction": "down",
+      "predicted_pct": -4.05,
+      "horizon_hours": 24,
+      "reference_price": 12.4,
+      "reference_time": "2026-06-27T00:15:38.771413Z",
+      "due_time": "2026-06-28T00:15:38.771413Z",
+      "status": "pending",
+      "conviction": 91,
+      "experts_involved": [
+        "technical",
+        "quant",
+        "hype",
+        "contrarian"
+      ],
+      "reasons": [
+        "rsi_crossover +5.0%",
+        "macd_cross +2.1%",
+        "stochastic_reversal +3.8%"
+      ],
+      "signal_tags": [
+        "rsi_crossover",
+        "macd_cross",
+        "stochastic_reversal",
+        "momentum_shift"
+      ],
+      "signal_source": "SELL ALERT",
+      "statement": "predicted to move -4.0% within 24 hours",
+      "resolution": null,
+      "outcome": null,
+      "name": "Compute",
+      "created_at": "2026-06-27T00:15:38.771413Z",
+      "resolve_at": "2026-06-28T00:15:38.771413Z"
     }
   ],
   "resolved": [],
   "stats": {
-    "pending": 57,
+    "pending": 84,
     "resolved": 0,
     "correct": 0,
     "partial": 0,
     "wrong": 0,
     "expired": 0,
-    "total": 57,
+    "total": 84,
     "accuracy": 0.0
   }
 }
