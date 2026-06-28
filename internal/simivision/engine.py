@@ -111,14 +111,14 @@ def _persist_convictions(
     soul_map["simivision_convictions_updated_at"] = _now_iso()
     _save_json(soul_map_path, soul_map)
 
-def _load_selector_decisions(soul_map_path: str = SOUL_MAP_PATH) -> List[Dict[str, Any]]:
-    """Read the latest selector decisions persisted in the soul map."""
+def _load_council_decisions(soul_map_path: str = SOUL_MAP_PATH) -> List[Dict[str, Any]]:
+    """Read any Council decisions persisted in the soul map (legacy field)."""
     soul_map = _load_json(soul_map_path)
     last_output = soul_map.get("soul_map_state", {}).get("last_selector_output", {})
     return last_output.get("decisions", [])
 
 def _synthesize_decision(netuid: int, registry_item: Dict[str, Any]) -> Dict[str, Any]:
-    """Generate a neutral decision when the Selector has not yet run for a subnet."""
+    """Generate a neutral decision when no Council decision exists for a subnet."""
     emission = registry_item.get("emission", 0.0) or 0.0
     mentions = registry_item.get("social_mentions", 0) or 0
     is_overvalued = registry_item.get("is_overvalued", False)
@@ -184,7 +184,7 @@ def _compute_conviction(
     registry_item: Dict[str, Any],
 ) -> tuple:
     """
-    Compute a 0-100 conviction score from selector consensus and registry metrics.
+    Compute a 0-100 conviction score from Council consensus and registry metrics.
 
     Breakdown:
     - consensus_score * 70
@@ -328,11 +328,19 @@ def _build_signal(
     delta, delta_value = _compute_delta(netuid, conviction, last_convictions)
     status = "Operative" if registry_item.get("status") == "active" else "Dimmed"
 
+    action = decision.get("recommended_action", "hold")
+    recommendation = {
+        "accumulate": "buy",
+        "reduce": "sell",
+        "neutral": "hold",
+    }.get(action, action)
+
     return {
         "netuid": netuid,
         "name": registry_item.get("name", f"Subnet {netuid}"),
         "rank": netuid,
         "conviction": conviction,
+        "recommendation": recommendation,
         "rationale": _build_rationale(decision, registry_item, conviction, status),
         "delta": delta,
         "delta_value": delta_value,
@@ -348,8 +356,8 @@ def _get_simivision_signals(
 ) -> List[Dict[str, Any]]:
     """Generate SimiVision signals for all subnets in the registry."""
     last_convictions = _load_last_convictions(soul_map_path)
-    selector_decisions = _load_selector_decisions(soul_map_path)
-    decisions_by_subnet = {d["subnet_id"]: d for d in selector_decisions}
+    council_decisions = _load_council_decisions(soul_map_path)
+    decisions_by_subnet = {d["subnet_id"]: d for d in council_decisions}
 
     signals = []
     for netuid_str, registry_item in registry.items():

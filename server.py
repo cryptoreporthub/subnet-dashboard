@@ -21,13 +21,14 @@ from internal.council.state_vector import score_subnet_for_hour, score_subnet_fo
 from internal.council.daily_pick import select_daily_pick
 from internal.council.daily_pick_engine import get_or_create_today_pick
 from internal.council import resolver, scenario_memory, rotation_tracker
+from internal.council.weights import load_weights, save_weights
 from internal.indicators import (
     IndicatorEngine,
     get_indicator_scheduler_state,
     start_indicator_scheduler,
     stop_indicator_scheduler,
 )
-from data.learning_engine import LearningEngine, create_feedback_router
+from data.learning_engine import LearningEngine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -1367,17 +1368,19 @@ def _detect_patterns(
 # Predictive engine — generate / resolve / learn
 # ---------------------------------------------------------------------------
 def _expert_from_signal_source(source: Optional[str]) -> str:
-    """Map a prediction's signal source to the council expert responsible."""
+    """Map a prediction's signal source to a canonical Council expert."""
     if not source:
-        return "alpha"
+        return "quant"
     s = str(source).lower()
-    if any(k in s for k in ("momentum", "macd", "trend", "ma_cross", "market_breadth")):
-        return "alpha"
     if any(k in s for k in ("rsi", "stochastic", "williams", "cci", "contrarian", "oversold", "overbought")):
-        return "beta"
-    if any(k in s for k in ("emission", "apy", "yield", "fundamental")):
-        return "gamma"
-    return "alpha"
+        return "contrarian"
+    if any(k in s for k in ("social", "hype", "whale", "momentum", "sentiment")):
+        return "hype"
+    if any(k in s for k in ("macd", "ma_cross", "technical", "indicator", "trend")):
+        return "technical"
+    if any(k in s for k in ("emission", "apy", "yield", "fundamental", "market_breadth")):
+        return "quant"
+    return "quant"
 
 
 def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> Dict[str, Any]:
@@ -1470,20 +1473,19 @@ def _resolve_prediction(prediction: Dict[str, Any], latest_price: float) -> Dict
 
 
 def _update_learning_weights(correct: bool, expert: Optional[str] = None) -> Dict[str, Any]:
-    """Adjust a single Council expert's weight: correct=+0.02, wrong=-0.03.
+    """Adjust a single canonical Council expert's weight: correct=+0.02, wrong=-0.03.
 
-    Only the expert whose prediction resolved is updated. If no expert is
-    supplied or the expert is unknown, no weights are changed. Weights are
-    read from and persisted to soul_map.json.
+    Only the expert whose prediction resolved is updated. Unknown experts are
+    mapped to the closest canonical lens when possible. Weights are read from
+    and persisted via the live Council weight system.
     """
     delta = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
     try:
         engine = LearningEngine()
-        soul_map = engine.load_soul_map()
-        weights = soul_map.get("expert_weights", {})
-        if not weights:
-            weights = {"alpha": 1.0, "beta": 1.0, "gamma": 1.0}
+        weights = load_weights()
         e = str(expert).lower() if expert else None
+        if e and e not in weights:
+            e = _expert_from_signal_source(e)
         if e and e in weights:
             w = float(weights.get(e, 1.0))
             w = max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, w + delta))
@@ -1491,9 +1493,7 @@ def _update_learning_weights(correct: bool, expert: Optional[str] = None) -> Dic
             logger.info("Learning weight update: expert=%s correct=%s delta=%s weight=%s", e, correct, delta, weights[e])
         else:
             logger.info("Learning weight update skipped: no resolved expert (expert=%s)", expert)
-        soul_map["expert_weights"] = weights
-        soul_map["last_updated"] = _dt.utcnow().isoformat() + "Z"
-        engine.save_soul_map(soul_map)
+        save_weights(weights)
         return {"updated": True, "delta": delta, "correct": correct, "expert": expert, "weights": weights}
     except Exception as exc:
         logger.warning("Learning weight update failed: %s", exc)
@@ -1540,41 +1540,26 @@ def _resolve_due_predictions(
 
 
 # ---------------------------------------------------------------------------
-# Learning loop metrics
+# Learning loop metrics (delegated to the live LearningEngine / resolver)
 # ---------------------------------------------------------------------------
 def _compute_learning_metrics() -> Dict[str, Any]:
-    data = PREDICTION_STORE._load()
-    PREDICTION_STORE.update_stats(data)
-    PREDICTION_STORE._save(data)
-    stats = data.get("stats", {})
+    """Return learning-loop metrics from the live resolver and weight system.
+
+    The returned shape is backward-compatible with the dashboard template, which
+    expects ``predictions_resolved``, ``predictions_pending``, ``correct``,
+    ``wrong``, ``deltas``, and ``recent_resolutions``.
+    """
     engine = LearningEngine()
-    soul = engine.get_stats()
-    weights = soul.get("expert_weights", {})
-    resolved = data.get("resolved", [])
-    recent = resolved[-10:]
-    # last_updated: prefer the soul-map weight-update timestamp, then the most
-    # recent resolution timestamp, then the predictions.json file mtime so the
-    # dashboard never shows a bare "—" once the loop has run at least once.
-    last_updated = soul.get("last_updated")
-    if not last_updated:
-        for r in reversed(resolved):
-            ts = r.get("resolved_at") or r.get("created_at")
-            if ts:
-                last_updated = ts
-                break
-    if not last_updated:
-        try:
-            mtime = _os.path.getmtime(_PREDICTIONS_PATH)
-            last_updated = _dt.utcfromtimestamp(mtime).isoformat() + "Z"
-        except Exception:
-            last_updated = None
+    stats = engine.get_stats()
+    resolved = resolver.get_resolved_predictions()
+    recent = resolved.get("resolved", [])[-10:]
     return {
-        "expert_weights": weights,
-        "total_records": soul.get("total_records", 0),
+        "expert_weights": stats.get("expert_weights", {}),
+        "total_records": stats.get("total_records", 0),
         "predictions_pending": stats.get("pending", 0),
-        "predictions_resolved": len(resolved),
-        "correct": stats.get("correct", 0),
-        "wrong": stats.get("wrong", 0),
+        "predictions_resolved": stats.get("resolved", 0),
+        "correct": resolved.get("stats", {}).get("correct", 0),
+        "wrong": resolved.get("stats", {}).get("wrong", 0),
         "accuracy": stats.get("accuracy", 0.0),
         "deltas": {"correct": _LEARNING_DELTA_CORRECT, "wrong": _LEARNING_DELTA_WRONG},
         "recent_resolutions": [
@@ -1584,9 +1569,10 @@ def _compute_learning_metrics() -> Dict[str, Any]:
                 "actual_pct": r.get("actual_pct"),
                 "correct": r.get("correct"),
                 "statement": r.get("statement"),
-            } for r in recent
+            }
+            for r in recent
         ],
-        "last_updated": last_updated,
+        "last_updated": stats.get("last_updated"),
     }
 
 
@@ -2003,49 +1989,49 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     momentum_charts = _build_momentum_charts(subnets, simivision_picks)
 
     engine = LearningEngine()
-    soul_map = engine.load_soul_map()
-    expert_weights = soul_map.get("expert_weights", {})
-    if not expert_weights:
-        expert_weights = {"alpha": 1.0, "beta": 1.0, "gamma": 1.0}
+    expert_weights = load_weights()
 
-    # Wire Council dispositions to live market conditions per expert role.
+    # Wire Council dispositions to live market conditions per canonical expert role.
     # Each expert evaluates the top-pick subnet through its own lens:
-    #   alpha  -> momentum / trend      (24h change + MACD)
-    #   beta   -> contrarian / RSI      (oversold < 30, overbought > 70)
-    #   gamma  -> fundamental / yield   (APY + emission)
-    alpha_pick = top_subnets[0] if top_subnets else {}
-    alpha_ind = _compute_technical_indicators(alpha_pick) if alpha_pick else {}
-    alpha_macd = alpha_ind.get("macd", {}) if isinstance(alpha_ind, dict) else {}
-    alpha_chg = float(alpha_pick.get("price_change_24h", 0) or 0)
-    alpha_macd_bullish = isinstance(alpha_macd, dict) and alpha_macd.get("crossover") == "bullish"
-    alpha_macd_bearish = isinstance(alpha_macd, dict) and alpha_macd.get("crossover") == "bearish"
-
-    beta_pick = top_subnets[0] if top_subnets else {}
-    beta_ind = _compute_technical_indicators(beta_pick) if beta_pick else {}
-    beta_rsi = float(beta_ind.get("rsi", {}).get("value", 50) or 50) if isinstance(beta_ind, dict) else 50.0
-
-    gamma_pick = top_subnets[0] if top_subnets else {}
-    gamma_apy = float(gamma_pick.get("apy", 0) or 0)
-    gamma_emission = float(gamma_pick.get("emission", 0) or 0)
+    #   quant       -> fundamental / yield   (APY + emission)
+    #   hype        -> momentum / social     (24h change + social buzz)
+    #   contrarian  -> contrarian / RSI      (oversold < 30, overbought > 70)
+    #   technical   -> technical / trend     (MACD + active indicator signals)
+    top_pick = top_subnets[0] if top_subnets else {}
+    top_ind = _compute_technical_indicators(top_pick) if top_pick else {}
+    top_macd = top_ind.get("macd", {}) if isinstance(top_ind, dict) else {}
+    top_rsi = float(top_ind.get("rsi", {}).get("value", 50) or 50) if isinstance(top_ind, dict) else 50.0
+    top_chg = float(top_pick.get("price_change_24h", 0) or 0)
+    top_macd_bullish = isinstance(top_macd, dict) and top_macd.get("crossover") == "bullish"
+    top_macd_bearish = isinstance(top_macd, dict) and top_macd.get("crossover") == "bearish"
+    top_apy = float(top_pick.get("apy", 0) or 0)
+    top_emission = float(top_pick.get("emission", 0) or 0)
+    top_mentions = int(top_pick.get("social_mentions", 0) or 0)
 
     def _disposition(expert: str) -> str:
         e = expert.lower()
-        if e == "alpha":  # momentum / trend
-            if alpha_chg > 5 or alpha_macd_bullish:
+        if e == "quant":  # fundamental / yield
+            if top_apy > 20 and top_emission > 1:
                 return "bullish"
-            if alpha_chg < -5 or alpha_macd_bearish:
+            if top_apy < 0 or top_emission < 0.05:
                 return "bearish"
             return "neutral"
-        if e == "beta":  # contrarian / mean-reversion
-            if beta_rsi < 30:
+        if e == "hype":  # momentum / social
+            if top_chg > 5 or top_mentions > 1000:
                 return "bullish"
-            if beta_rsi > 70:
+            if top_chg < -5 or top_mentions < 100:
                 return "bearish"
             return "neutral"
-        if e == "gamma":  # fundamental / yield
-            if gamma_apy > 20 and gamma_emission > 1:
+        if e == "contrarian":  # mean-reversion / RSI
+            if top_rsi < 30:
                 return "bullish"
-            if gamma_apy < 0 or gamma_emission < 0.05:
+            if top_rsi > 70:
+                return "bearish"
+            return "neutral"
+        if e == "technical":  # technical / trend
+            if top_macd_bullish:
+                return "bullish"
+            if top_macd_bearish:
                 return "bearish"
             return "neutral"
         # generic fallback tied to weight
@@ -2054,11 +2040,13 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     dispositions = {k: _disposition(k) for k in expert_weights.keys()}
     # Persist dispositions to soul_map.json so they survive restarts.
     try:
+        soul_map = engine.load_soul_map()
         soul_map["council_dispositions"] = dispositions
         soul_map["council"] = {
-            "alpha": {"disposition": dispositions.get("alpha", "neutral"), "lens": "momentum/trend", "pick": alpha_pick.get("name")},
-            "beta": {"disposition": dispositions.get("beta", "neutral"), "lens": "contrarian/RSI", "pick": beta_pick.get("name")},
-            "gamma": {"disposition": dispositions.get("gamma", "neutral"), "lens": "fundamental/yield", "pick": gamma_pick.get("name")},
+            "quant": {"disposition": dispositions.get("quant", "neutral"), "lens": "fundamental/yield", "pick": top_pick.get("name")},
+            "hype": {"disposition": dispositions.get("hype", "neutral"), "lens": "momentum/social", "pick": top_pick.get("name")},
+            "contrarian": {"disposition": dispositions.get("contrarian", "neutral"), "lens": "contrarian/RSI", "pick": top_pick.get("name")},
+            "technical": {"disposition": dispositions.get("technical", "neutral"), "lens": "technical/trend", "pick": top_pick.get("name")},
         }
         soul_map["last_updated"] = _dt.utcnow().isoformat() + "Z"
         engine.save_soul_map(soul_map)
@@ -2957,6 +2945,8 @@ def build_mindmap_feed(picks: List[Dict], council_votes: List[Dict], undervalued
 # ---------------------------------------------------------------------------
 # Phase 2: Mount the self-learning loop's feedback router (APIRouter)
 # ---------------------------------------------------------------------------
+from data.learning_engine import create_feedback_router
+
 _feedback_router = create_feedback_router()
 if _feedback_router is not None:
     app.include_router(_feedback_router)
