@@ -1,16 +1,17 @@
 """
 Adversarial Scheduler (The Learning Loop)
 
-REFRESH_MINUTES-configurable background scheduler that drives the
-outcome-driven adversarial intelligence layer.
+REFRESH_MINUTES-configurable background scheduler. The legacy Selector /
+AdversarialJudge cycle was removed during the council hygiene pass; the
+scheduler now persists a lightweight heartbeat and registry snapshot to the
+Soul-Map on each tick.
 
 Features:
 - Configurable refresh interval via REFRESH_MINUTES environment variable.
 - Exponential backoff on repeated failures (capped at max_backoff_minutes).
-- Persists learned state to the Soul-Map (data/soul_map.json).
+- Persists heartbeat to the Soul-Map (data/soul_map.json).
 - Idempotent start/stop semantics safe for Fly.io single-worker deployments.
 - Request-triggered refresh for Fly.io auto-stop compatibility.
-- Filters subnets by total_stake to focus on low-mid cap subnets.
 """
 
 import json
@@ -19,21 +20,15 @@ import tempfile
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
-
-from internal.council.judge.adversarial import AdversarialJudge
+from typing import Any, Dict, List, Optional
 
 # Ensure the data directory exists at module load time.
 os.makedirs('data', exist_ok=True)
-from internal.council.mindmap_bridge import MindmapBridge
-from internal.council.selector import Selector
 
 REFRESH_MINUTES = int(os.environ.get("REFRESH_MINUTES", "60"))
 MAX_BACKOFF_MINUTES = int(os.environ.get("MAX_BACKOFF_MINUTES", "240"))
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
-# Exclude top ~40 subnets by total_stake (threshold: 400,000 TAO)
-STAKE_THRESHOLD_TAO = float(os.environ.get("STAKE_THRESHOLD_TAO", "400000"))
 
 def _now_iso() -> str:
     """Return current UTC time as ISO format string."""
@@ -49,10 +44,10 @@ def _load_json(path: str) -> Optional[Dict[str, Any]]:
 
 class AdversarialScheduler:
     """
-    Background scheduler that periodically runs the Selector, judges the
-    resulting decisions against the current registry outcomes, and persists
-    the learned weights/verdicts back to the Soul-Map.
-    
+    Background scheduler that periodically records a lightweight heartbeat and
+    registry snapshot. The legacy Selector/AdversarialJudge cycle was removed
+    during the council hygiene pass.
+
     Supports both timer-based (legacy) and request-triggered refresh modes.
     """
 
@@ -62,30 +57,14 @@ class AdversarialScheduler:
         max_backoff_minutes: int = MAX_BACKOFF_MINUTES,
         soul_map_path: str = SOUL_MAP_PATH,
         registry_path: str = REGISTRY_PATH,
-        stake_threshold_tao: float = STAKE_THRESHOLD_TAO,
-        judge_factory: Optional[Callable[[], AdversarialJudge]] = None,
-        selector_factory: Optional[Callable[[], Selector]] = None,
+        stake_threshold_tao: float = 400000.0,
     ):
         self.refresh_minutes = refresh_minutes
         self.max_backoff_minutes = max_backoff_minutes
         self.soul_map_path = soul_map_path
         self.registry_path = registry_path
+        # stake_threshold_tao kept for API compatibility but no longer used.
         self.stake_threshold_tao = stake_threshold_tao
-        self.judge_factory = judge_factory or (
-            lambda: AdversarialJudge(
-                persistence_path=soul_map_path,
-                registry_path=registry_path,
-                persist=True,
-            )
-        )
-        self.selector_factory = selector_factory or (
-            lambda: Selector(
-                mindmap_bridge=MindmapBridge(
-                    persistence_path=soul_map_path,
-                    registry_path=registry_path
-                )
-            )
-        )
 
         self._timer: Optional[threading.Timer] = None
         self._lock = threading.Lock()
@@ -203,25 +182,8 @@ class AdversarialScheduler:
             self._schedule_next(self._backoff_minutes)
         return result
 
-    def _filter_low_mid_cap_subnets(
-        self, registry: Dict[str, Any]
-    ) -> List[int]:
-        """
-        Filter registry to only include low-mid cap subnets.
-        Excludes subnets with total_stake >= threshold (default: 400,000 TAO).
-        """
-        subnet_ids = []
-        for sid_str, data in registry.items():
-            try:
-                stake = data.get("staking_data", {}).get("total_stake", 0)
-                if stake < self.stake_threshold_tao:
-                    subnet_ids.append(int(sid_str))
-            except (ValueError, TypeError):
-                subnet_ids.append(int(sid_str))
-        return subnet_ids
-
     def _run_refresh_cycle(self) -> Dict[str, Any]:
-        """Run the Selector across the registry, judge decisions, and persist state."""
+        """Record a lightweight heartbeat and registry snapshot."""
         run_at = _now_iso()
         result = {
             "ok": False,
@@ -236,52 +198,23 @@ class AdversarialScheduler:
             if not registry:
                 raise RuntimeError("registry is empty or missing")
 
-            selector = self.selector_factory()
-            judge = self.judge_factory()
-
-            subnet_ids = self._filter_low_mid_cap_subnets(registry)
-            self._last_subnet_count = len(subnet_ids)
-            
-            context_map = {
-                sid: {
-                    "emission": registry.get(str(sid), {}).get("emission", 0.0),
-                    "social_mentions": registry.get(str(sid), {}).get("social_mentions", 0),
-                    "is_overvalued": registry.get(str(sid), {}).get("is_overvalued", False),
-                }
-                for sid in subnet_ids
-            }
-
-            rotation = selector.process_daily_rotation(subnet_ids, context_map)
-            decisions = rotation.get("daily_output", {}).get("decisions", [])
-
-            verdicts: List[Dict[str, Any]] = []
-            for decision in decisions:
-                sid = decision.get("subnet_id")
-                outcome = context_map.get(sid, {})
-                outcome["status"] = registry.get(str(sid), {}).get("status", "unknown")
-                verdict = judge.judge_outcome_only(sid, decision, outcome)
-                verdicts.append(verdict)
-
-            self._persist_cycle_summary(run_at, verdicts, judge.get_council_weights())
+            self._last_subnet_count = len(registry)
+            self._persist_cycle_summary(run_at, registry)
 
             result["ok"] = True
-            result["decisions_judged"] = len(verdicts)
-            result["verdicts"] = verdicts
+            result["decisions_judged"] = 0
         except Exception as exc:
             result["error"] = str(exc)
 
         return result
 
     def _persist_cycle_summary(
-        self, run_at: str, verdicts: List[Dict[str, Any]], weights: Dict[str, float]
+        self, run_at: str, registry: Dict[str, Any]
     ) -> None:
-        """Persist cycle summary to file with in-memory fallback."""
+        """Persist a lightweight heartbeat to the Soul-Map."""
         summary = {
             "run_at": run_at,
-            "verdict_count": len(verdicts),
-            "mean_score": round(sum(v.get("score", 0.0) for v in verdicts) / len(verdicts), 4) if verdicts else 0.0,
-            "mean_confidence": round(sum(v.get("confidence", 0.0) for v in verdicts) / len(verdicts), 4) if verdicts else 0.0,
-            "council_weights": weights,
+            "registry_subnet_count": len(registry),
         }
         self._state_cache = summary
         try:

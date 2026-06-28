@@ -1,160 +1,146 @@
 """
 Learning Engine for Subnet Dashboard
-Tracks expert accuracy and updates weights based on prediction performance.
+
+Thin wrapper around the live Council weight system (quant/hype/contrarian/technical)
+and the prediction resolver. Keeps the ``LearningEngine`` class name and the
+feedback router API so server.py stays compatible.
 """
-import json
+
 import logging
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
+
+from internal.council import resolver, scenario_memory, rotation_tracker
+from internal.council.weights import load_weights, save_weights
 
 logger = logging.getLogger(__name__)
 
-LEARNING_CONFIG = {
-    "learning_rate": 0.1,
-    "decay_factor": 0.99,
-    "min_weight": 0.1,
-    "max_weight": 2.0,
-    "performance_window_days": 30
-}
+# Canonical experts used by the live Council.
+CANONICAL_EXPERTS = {"quant", "hype", "contrarian", "technical"}
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
 
 class LearningEngine:
     """Manages the learning loop for expert council weights."""
 
-    # Named council experts seeded at weight 1.0 when no weights exist yet.
-    DEFAULT_EXPERT_WEIGHTS = {"alpha": 1.0, "beta": 1.0, "gamma": 1.0}
-
     def __init__(self, soul_map_path: str = "data/soul_map.json"):
         self.soul_map_path = soul_map_path
-        self.config = LEARNING_CONFIG.copy()
 
-    def load_soul_map(self) -> Dict:
-        """Load the current soul map state.
+    def save_soul_map(self, soul_map: Dict[str, Any]) -> None:
+        """Persist a soul-map payload for backward compatibility.
 
-        Ensures the council's expert weights are always present: if the soul
-        map has no ``expert_weights`` (or an empty one), the named experts
-        (alpha, beta, gamma) are seeded at 1.0 and persisted so downstream
-        stats endpoints never return an empty dict.
+        The live source of truth for expert weights is ``weights.save_weights``;
+        this method only writes the supplied dict back to disk so legacy callers
+        that build a soul-map blob can still persist it.
         """
-        try:
-            with open(self.soul_map_path, "r") as f:
-                data = json.load(f)
-        except Exception as e:
-            logger.error(f"Error loading soul map: {e}")
-            data = {}
+        import json
+        import os
 
-        if not isinstance(data, dict):
-            data = {}
-        if "performance_history" not in data:
-            data["performance_history"] = {}
+        os.makedirs(os.path.dirname(self.soul_map_path) or ".", exist_ok=True)
+        with open(self.soul_map_path, "w", encoding="utf-8") as fh:
+            json.dump(soul_map, fh, indent=2)
 
-        weights = data.get("expert_weights")
-        if not weights or not isinstance(weights, dict):
-            data["expert_weights"] = dict(self.DEFAULT_EXPERT_WEIGHTS)
-            self.save_soul_map(data)
-        return data
-    
-    def save_soul_map(self, data: Dict) -> None:
-        """Save the updated soul map state."""
-        try:
-            with open(self.soul_map_path, "w") as f:
-                json.dump(data, f, indent=2)
-        except Exception as e:
-            logger.error(f"Error saving soul map: {e}")
-    
-    def record_feedback(self, subnet_id: int, recommendation: str, actual_performance: Dict) -> None:
-        """Record the outcome of a prediction for learning."""
-        soul_map = self.load_soul_map()
-        
-        if "performance_history" not in soul_map:
-            soul_map["performance_history"] = {}
-        
-        key = str(subnet_id)
-        if key not in soul_map["performance_history"]:
-            soul_map["performance_history"][key] = []
-        
-        # Determine if prediction was correct
-        correct = actual_performance.get("correct_prediction", False)
-        actual_change = actual_performance.get("price_change_7d", 0)
-        
-        record = {
-            "subnet_id": subnet_id,
-            "recommendation": recommendation,
-            "actual_change": actual_change,
-            "correct": correct,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        soul_map["performance_history"][key].append(record)
-        
-        # Keep only recent history (last 30 days)
-        cutoff = datetime.now() - timedelta(days=self.config["performance_window_days"])
-        soul_map["performance_history"][key] = [
-            r for r in soul_map["performance_history"][key]
-            if datetime.fromisoformat(r["timestamp"]) > cutoff
-        ]
-        
-        self.save_soul_map(soul_map)
-        self.update_weights()
-    
-    def update_weights(self) -> Dict:
-        """Update expert weights based on recent performance."""
-        soul_map = self.load_soul_map()
-        
-        if "performance_history" not in soul_map:
-            return {}
-        
-        # Calculate accuracy for each expert
-        expert_names = ["alpha", "beta", "gamma"]
-        new_weights = {}
-        
-        for expert in expert_names:
-            accuracy = self._calculate_expert_accuracy(expert, soul_map["performance_history"])
-            current_weight = soul_map.get("expert_weights", {}).get(expert, 1.0)
-            
-            # Apply learning rate and decay
-            new_weight = current_weight + (accuracy - 0.5) * self.config["learning_rate"]
-            new_weight = max(self.config["min_weight"], min(self.config["max_weight"], new_weight))
-            
-            new_weights[expert] = round(new_weight, 4)
-        
-        soul_map["expert_weights"] = new_weights
-        soul_map["last_updated"] = datetime.now().isoformat()
-        
-        self.save_soul_map(soul_map)
-        return new_weights
-    
-    def _calculate_expert_accuracy(self, expert: str, history: Dict) -> float:
-        """Calculate accuracy for a specific expert."""
-        total = 0
-        correct = 0
-        
-        for subnet_key, records in history.items():
-            for record in records:
-                total += 1
-                if record.get("correct", False):
-                    correct += 1
-        
-        return correct / total if total > 0 else 0.5
-    
-    def get_stats(self) -> Dict:
-        """Return current learning stats."""
-        soul_map = self.load_soul_map()
+    def load_soul_map(self) -> Dict[str, Any]:
+        """Return a dict with live expert weights and resolver performance history."""
+        weights = load_weights(self.soul_map_path)
+        resolved = resolver.get_resolved_predictions()
         return {
-            "expert_weights": soul_map.get("expert_weights", {}),
-            "config": self.config,
-            "last_updated": soul_map.get("last_updated"),
-            "total_records": sum(len(v) for v in soul_map.get("performance_history", {}).values())
+            "expert_weights": weights,
+            "performance_history": {
+                "accuracy": resolved.get("stats", {}).get("accuracy", 0.0),
+                "total_records": resolved.get("stats", {}).get("total", 0),
+                "correct": resolved.get("stats", {}).get("correct", 0),
+                "wrong": resolved.get("stats", {}).get("wrong", 0),
+                "pending": resolved.get("stats", {}).get("pending", 0),
+            },
         }
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Return current learning stats (weights + resolver state)."""
+        weights = load_weights(self.soul_map_path)
+        resolved = resolver.get_resolved_predictions()
+        stats = resolved.get("stats", {})
+        return {
+            "expert_weights": weights,
+            "accuracy": stats.get("accuracy", 0.0),
+            "total_records": stats.get("total", 0),
+            "last_updated": _now_iso(),
+            "pending": stats.get("pending", 0),
+            "resolved": stats.get("correct", 0) + stats.get("wrong", 0),
+        }
+
+    def record_feedback(
+        self,
+        subnet_id: int,
+        recommendation: str,
+        actual_performance: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Record the outcome of a prediction and nudge the relevant expert weight."""
+        actual_performance = actual_performance or {}
+        correct = bool(actual_performance.get("correct_prediction", False))
+
+        expert = self._normalize_recommendation(recommendation)
+        if expert:
+            weights = load_weights(self.soul_map_path)
+            delta = 0.02 if correct else -0.03
+            weights[expert] = max(
+                0.1,
+                min(2.0, weights.get(expert, 1.0) + delta),
+            )
+            weights[expert] = round(weights[expert], 4)
+            save_weights(weights, self.soul_map_path)
+
+        # Log a lightweight record in scenario memory for observability.
+        try:
+            scenario_memory.add_scenario(
+                name=f"feedback_subnet_{subnet_id}",
+                features={
+                    "subnet_id": subnet_id,
+                    "recommendation": recommendation,
+                    "correct": correct,
+                    **{
+                        k: v
+                        for k, v in actual_performance.items()
+                        if k not in {"correct_prediction"}
+                    },
+                },
+                outcome="correct" if correct else "wrong",
+            )
+        except Exception as exc:
+            logger.warning(f"Could not log feedback scenario: {exc}")
+
+        return {
+            "status": "feedback recorded",
+            "success": True,
+            "expert": expert,
+            "correct": correct,
+            "timestamp": _now_iso(),
+        }
+
+    @staticmethod
+    def _normalize_recommendation(recommendation: Optional[str]) -> Optional[str]:
+        """Map a recommendation/action/signal to a canonical Council expert."""
+        if not isinstance(recommendation, str):
+            return None
+        rec = recommendation.lower().strip()
+        if rec in CANONICAL_EXPERTS:
+            return rec
+        if any(k in rec for k in ("sell", "bear", "contrarian")):
+            return "contrarian"
+        if any(k in rec for k in ("whale", "momentum", "hype", "social")):
+            return "hype"
+        if any(k in rec for k in ("rsi", "macd", "technical", "indicator")):
+            return "technical"
+        if any(k in rec for k in ("quant", "fundamental", "yield", "emission")):
+            return "quant"
+        return None
 
 
 def create_feedback_router():
-    """Build a FastAPI APIRouter exposing the self-learning feedback loop.
-
-    The router is mounted in server.py via ``app.include_router(router)``.
-    Keeping the feedback endpoint on its own router preserves the
-    evidence -> signal -> decision -> judge -> learning loop as an
-    independently testable module.
-    """
+    """Build a FastAPI APIRouter exposing the self-learning feedback loop."""
     from fastapi import APIRouter, Request, HTTPException
 
     router = APIRouter()
@@ -171,22 +157,18 @@ def create_feedback_router():
         actual_performance = data.get("actual_performance", {})
 
         if not subnet_id or not recommendation:
-            raise HTTPException(status_code=400, detail="Missing subnet_id or recommendation")
+            raise HTTPException(
+                status_code=400, detail="Missing subnet_id or recommendation"
+            )
 
         engine = LearningEngine()
-        engine.record_feedback(subnet_id, recommendation, actual_performance)
-
-        return {"status": "feedback recorded", "success": True}
+        return engine.record_feedback(subnet_id, recommendation, actual_performance)
 
     return router
 
 
 def create_feedback_endpoint(server_module):
-    """Legacy registration hook (kept for backward compatibility).
-
-    New FastAPI deployments should use :func:`create_feedback_router` and
-    mount it via ``app.include_router(router)`` instead.
-    """
+    """Legacy registration hook (kept for backward compatibility)."""
     router = create_feedback_router()
     if hasattr(server_module, "include_router"):
         server_module.include_router(router)

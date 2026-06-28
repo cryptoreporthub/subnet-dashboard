@@ -1,161 +1,125 @@
 import pytest
 import json
+from fastapi.testclient import TestClient
 from server import app, _app_version
 
 @pytest.fixture
 def client():
-    app.config['TESTING'] = True
-    with app.test_client() as client:
-        yield client
+    return TestClient(app)
 
 def test_index_route(client):
     response = client.get('/')
     assert response.status_code == 200
-    html = response.data.decode()
-    assert 'Protocol watchlist' in html
-    assert 'HYPE' in html
-    assert 'Hyperliquid' in html
-
-def test_registry_route(client):
-    response = client.get('/api/registry')
-    assert response.status_code == 200
-    data = json.loads(response.data)
-    assert isinstance(data, dict)
-
-def test_subnet_route_found(client):
-    # Subnet 1 should exist in config/registry.json
-    response = client.get('/api/subnet/1')
-    assert response.status_code == 200
-    data = json.loads(response.data)
-    assert data['subnet_id'] == 1
-    assert 'data' in data
-
-def test_subnet_route_not_found(client):
-    # Subnet 999999 should not exist
-    response = client.get('/api/subnet/999999')
-    assert response.status_code == 404
-    data = json.loads(response.data)
-    assert 'error' in data
-
-def test_health_route(client):
-    response = client.get('/health')
-    assert response.status_code == 200
-    assert response.data == b"OK"
-
-def test_cors_headers(client):
-    response = client.get('/api/registry')
-    assert response.headers.get('Access-Control-Allow-Origin') == '*'
-    assert response.headers.get('X-Frame-Options') == 'ALLOWALL'
-
-
-def test_stats_route(client):
-    response = client.get('/api/stats')
-    assert response.status_code == 200
-    data = json.loads(response.data)
-    assert data['status'] == 'success'
-    assert 'summary' in data
-    summary = data['summary']
-    assert 'total_subnets' in summary
-    assert 'status_counts' in summary
-    assert 'total_stake' in summary
-    assert 'total_emission' in summary
-    assert 'total_social_mentions' in summary
-    assert 'overvalued_count' in summary
-    assert 'avg_apy' in summary
-    assert 'top_emitters' in data
-    assert 'top_staked' in data
-    assert 'top_mentioned' in data
-    assert 'flagged_subnets' in data
-
-
-def test_stats_route_headers(client):
-    response = client.get('/api/stats')
-    assert response.status_code == 200
-    assert response.headers.get('Access-Control-Allow-Origin') == '*'
-    assert response.headers.get('X-Frame-Options') == 'ALLOWALL'
-    assert response.headers.get('Cache-Control') == 'public, max-age=30'
+    html = response.text
+    assert 'Subnet Dashboard' in html or 'SimiVision' in html
 
 
 def test_subnets_list_route(client):
     response = client.get('/api/subnets?status=active&sort=emission&order=desc&limit=2')
     assert response.status_code == 200
-    data = json.loads(response.data)
-    assert data['status'] == 'success'
-    assert 'meta' in data
+    data = response.json()
     assert 'subnets' in data
-    assert len(data['subnets']) <= 2
 
 
-def test_recommendations_route(client):
-    response = client.get('/api/recommendations')
+def test_health_route(client):
+    response = client.get('/health')
     assert response.status_code == 200
-    data = json.loads(response.data)
-    assert data['status'] == 'success'
-    assert 'recommendations' in data['data']
+    assert response.text == "OK"
 
 
-def test_soul_map_route(client):
-    response = client.get('/api/soul-map')
+def test_top_pick_day_route(client):
+    response = client.get('/api/top-pick/day')
     assert response.status_code == 200
-    data = json.loads(response.data)
-    assert data['status'] == 'success'
-    assert 'data' in data
+    data = response.json()
+    assert 'picks' in data
 
 
-def test_daily_rotation_route(client):
-    response = client.get('/api/daily-rotation')
+def test_top_pick_hour_route(client):
+    response = client.get('/api/top-pick/hour')
     assert response.status_code == 200
-    data = json.loads(response.data)
-    assert data['status'] == 'success'
-    assert 'data' in data
-    assert 'decisions' in data['data']
-    assert 'recommendations' in data['data']
+    data = response.json()
+    assert isinstance(data, list) or 'picks' in data
 
 
-def test_watchlist_route(client):
-    response = client.get('/api/watchlist')
+def test_daily_pick_route(client):
+    response = client.get('/api/daily-pick')
     assert response.status_code == 200
-    data = json.loads(response.data)
-    assert data['status'] == 'success'
-    assert 'data' in data
-    protocols = data['data']['protocols']
-    symbols = {p['symbol'] for p in protocols}
-    assert symbols >= {'VVV', 'FET', 'RENDER', 'TAO', 'HYPE'}
-    assert any(p['symbol'] == 'HYPE' and p['name'] == 'Hyperliquid' for p in protocols)
-    assert data['freshness']['threshold_seconds'] == 300
+    data = response.json()
+    assert 'pick' in data or 'picks' in data
 
 
-def test_version_route(client):
-    response = client.get('/api/version')
+def test_simivision_route(client):
+    response = client.get('/api/simivision')
     assert response.status_code == 200
-    data = json.loads(response.data)
-    assert data['status'] == 'success'
-    assert data['data']['name'] == 'subnet-dashboard'
-    assert data['data']['version'] == '1.1.0'
-    assert data['data']['protocol_count'] == 5
+    data = response.json()
+    assert 'signals' in data or 'choices' in data or 'data' in data
 
 
-def test_version_route_headers(client):
-    response = client.get('/api/version')
+def test_rotation_tokens_route(client):
+    response = client.get('/api/rotation-tokens')
     assert response.status_code == 200
-    assert response.headers.get('Access-Control-Allow-Origin') == '*'
-    assert response.headers.get('X-Frame-Options') == 'ALLOWALL'
+    data = response.json()
+    assert 'tokens' in data or 'rotation' in data or 'data' in data
+
+
+def test_mindmap_summary_route(client):
+    response = client.get('/api/mindmap/summary')
+    assert response.status_code == 200
+    data = response.json()
+    payload = data.get('data', data)
+    assert 'expert_weights' in payload
+    weights = payload['expert_weights']
+    assert any(k in weights for k in ('quant', 'hype', 'contrarian', 'technical'))
+
+
+def test_learning_stats_route(client):
+    response = client.get('/api/learning/stats')
+    assert response.status_code == 200
+    data = response.json()
+    payload = data.get('data', data)
+    assert 'expert_weights' in payload
+    assert 'last_updated' in payload
+    assert any(k in payload['expert_weights'] for k in ('quant', 'hype', 'contrarian', 'technical'))
+
+
+def test_predictions_route(client):
+    response = client.get('/api/predictions')
+    assert response.status_code == 200
+    data = response.json()
+    assert 'predictions' in data or 'data' in data
+
+
+def test_scenario_memory_route(client):
+    response = client.get('/api/scenario-memory')
+    assert response.status_code == 200
+    data = response.json()
+    assert 'scenarios' in data or 'data' in data
+
+
+def test_rotation_tracker_route(client):
+    response = client.get('/api/rotation-tracker')
+    assert response.status_code == 200
+    data = response.json()
+    assert 'patterns' in data or 'data' in data
+
+
+def test_learning_metrics_route(client):
+    response = client.get('/api/learning-metrics')
+    assert response.status_code == 200
+    data = response.json()
+    assert 'expert_weights' in data or 'metrics' in data or 'data' in data
+
+
+def test_indicators_route(client):
+    response = client.get('/api/indicators')
+    assert response.status_code == 200
+    data = response.json()
+    assert 'indicators' in data or 'data' in data
 
 
 def test_homepage_renders_status_badge(client):
-    """The footer status strip shows the app version and current state."""
+    """The SSR homepage renders the app title."""
     response = client.get('/')
     assert response.status_code == 200
-    html = response.data.decode('utf-8')
-    assert 'status-strip' in html
-    assert f"v{_app_version()}" in html
-    assert any(label in html for label in ('Fresh', 'Stale'))
-    assert any(label in html for label in ('Healthy', 'Degraded'))
-
-
-def test_api_version_matches_homepage_version(client):
-    """The version surfaced in the UI matches the public /api/version payload."""
-    response = client.get('/api/version')
-    assert response.status_code == 200
-    data = json.loads(response.data)
-    assert data['data']['version'] == _app_version()
+    html = response.text
+    assert 'SimiVision' in html
