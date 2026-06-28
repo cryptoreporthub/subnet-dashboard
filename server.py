@@ -27,18 +27,7 @@ from internal.indicators import (
     start_indicator_scheduler,
     stop_indicator_scheduler,
 )
-try:
-    from data.learning_engine import LearningEngine, create_feedback_router
-except ImportError:
-    class LearningEngine:
-        def get_stats(self):
-            return {"expert_weights": {}, "total_records": 0}
-
-        def load_soul_map(self):
-            return {"expert_weights": {}, "performance_history": {}}
-
-    def create_feedback_router():
-        return None
+from data.learning_engine import LearningEngine, create_feedback_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -86,7 +75,11 @@ if os.path.isdir(_static_dir):
 _templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 templates = Jinja2Templates(directory=_templates_dir)
 
-_APP_VERSION = "3.5.0"
+def _app_version() -> str:
+    return "3.5.0"
+
+
+_APP_VERSION = _app_version()
 
 _ROTATION_TOKENS = ["hyperliquid", "vvv", "near", "render", "fetch"]
 
@@ -272,6 +265,35 @@ def _safe_simivision_payload() -> Dict[str, Any]:
     }
 
 
+def _safe_scenario_memory_summary() -> Dict[str, Any]:
+    """Return a lightweight scenario-memory summary without heavy computation."""
+    try:
+        data = scenario_memory._load()
+        scenarios = data.get("scenarios", [])
+        return {
+            "scenario_count": len(scenarios),
+            "last_scenario": scenarios[-1].get("name") if scenarios else None,
+            "last_updated": data.get("meta", {}).get("last_updated"),
+        }
+    except Exception as exc:
+        logger.warning("Could not load scenario memory summary: %s", exc)
+        return {"scenario_count": 0, "last_scenario": None, "last_updated": None}
+
+
+def _safe_rotation_summary() -> Dict[str, Any]:
+    """Return a lightweight rotation-tracker summary using cached subnet data."""
+    try:
+        subnets, _ = _get_subnets_with_source()
+        return rotation_tracker.get_rotation_summary(subnets)
+    except Exception as exc:
+        logger.warning("Could not load rotation tracker summary: %s", exc)
+        return {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "patterns": [],
+            "volatility_clusters": {},
+        }
+
+
 @app.get("/health")
 def health_check():
     return PlainTextResponse("OK")
@@ -332,12 +354,14 @@ def api_rotation_tokens_safe():
 @app.get("/api/mindmap/summary")
 def api_mindmap_summary_safe():
     simivision = _safe_simivision_payload()["data"]
-    # Pull live soul_map expert weights from the self-learning loop so the
-    # mindmap stays wired into the evidence -> signal -> decision -> judge
-    # -> learning cycle.
+    # Pull live Council expert weights and resolver stats so the mindmap stays
+    # wired into the evidence -> signal -> decision -> learning cycle.
     engine = LearningEngine()
     stats = engine.get_stats()
     expert_weights = stats.get("expert_weights", {})
+    resolved = resolver.get_resolved_predictions()
+    scenario_summary = _safe_scenario_memory_summary()
+    rotation_summary = _safe_rotation_summary()
     return {
         "status": "success",
         "data": {
@@ -355,6 +379,15 @@ def api_mindmap_summary_safe():
                 for name, weight in expert_weights.items()
             ],
             "expert_weights": expert_weights,
+            "resolved_predictions": {
+                "total": resolved.get("stats", {}).get("total", 0),
+                "correct": resolved.get("stats", {}).get("correct", 0),
+                "wrong": resolved.get("stats", {}).get("wrong", 0),
+                "pending": resolved.get("stats", {}).get("pending", 0),
+                "accuracy": resolved.get("stats", {}).get("accuracy", 0.0),
+            },
+            "scenario_memory": scenario_summary,
+            "rotation_tracker": rotation_summary,
             "learning_status": {
                 "enabled": True,
                 "records": stats.get("total_records", 0),
@@ -366,20 +399,19 @@ def api_mindmap_summary_safe():
 
 @app.get("/api/learning/stats")
 def api_learning_stats_safe():
-    # Use the full learning-loop metrics so the dashboard exposes expert
-    # weights, resolution counts, accuracy and a last_updated timestamp.
-    metrics = _compute_learning_metrics()
+    # Use the live learning engine so the dashboard exposes expert weights,
+    # resolver stats, accuracy and a valid timestamp.
+    engine = LearningEngine()
+    stats = engine.get_stats()
     return {
         "status": "success",
         "data": {
-            "expert_weights": metrics.get("expert_weights", {}),
-            "total_records": metrics.get("total_records", 0),
-            "correct": metrics.get("correct", 0),
-            "wrong": metrics.get("wrong", 0),
-            "accuracy": metrics.get("accuracy", 0.0),
-            "predictions_pending": metrics.get("predictions_pending", 0),
-            "predictions_resolved": metrics.get("predictions_resolved", 0),
-            "last_updated": metrics.get("last_updated") or datetime.utcnow().isoformat() + "Z",
+            "expert_weights": stats.get("expert_weights", {}),
+            "total_records": stats.get("total_records", 0),
+            "accuracy": stats.get("accuracy", 0.0),
+            "pending": stats.get("pending", 0),
+            "resolved": stats.get("resolved", 0),
+            "last_updated": stats.get("last_updated") or datetime.utcnow().isoformat() + "Z",
         },
     }
 

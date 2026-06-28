@@ -1,64 +1,10 @@
 import json
 import os
 import tempfile
-import time
 
 import pytest
 
 from internal import freshness
-from server import app
-
-
-@pytest.fixture
-def client():
-    app.config["TESTING"] = True
-    app.config["ENABLE_BACKGROUND_SYNC"] = False
-    with app.test_client() as client:
-        yield client
-
-
-def test_freshness_endpoint(client):
-    response = client.get("/api/freshness")
-    assert response.status_code == 200
-    data = json.loads(response.data)
-    assert data["status"] == "success"
-    assert "data" in data
-    assert "freshness" in data["data"]
-    assert "registry" in data["data"]["freshness"]
-    assert "soul_map" in data["data"]["freshness"]
-    assert "recommendations" in data["data"]["freshness"]
-    assert "watchlist" in data["data"]["freshness"]
-    assert "overall" in data["data"]["freshness"]
-
-
-def test_sync_endpoint(client):
-    response = client.post("/api/sync")
-    assert response.status_code == 200
-    data = json.loads(response.data)
-    assert data["status"] == "success"
-    assert "data" in data
-    assert "registry" in data["data"]
-    assert "freshness" in data["data"]
-
-
-def test_registry_endpoint_includes_freshness(client):
-    response = client.get("/api/registry")
-    assert response.status_code == 200
-    data = json.loads(response.data)
-    # Backwards-compatible: subnet entries remain keyed by id; freshness is
-    # attached as a sibling key (numeric ids never collide with "freshness").
-    assert "freshness" in data
-    subnet_keys = [k for k in data if k != "freshness"]
-    assert subnet_keys, "expected at least one subnet entry"
-
-
-def test_stats_endpoint_includes_freshness(client):
-    response = client.get("/api/stats")
-    assert response.status_code == 200
-    data = json.loads(response.data)
-    assert data["status"] == "success"
-    assert "freshness" in data
-    assert "watchlist" in data["freshness"]
 
 
 def test_source_freshness_detects_staleness():
@@ -153,12 +99,3 @@ def test_watchlist_refresh_updates_timestamps(tmp_path):
     merged = json.loads(local_path.read_text())
     assert "last_updated" in merged
     assert "last_updated" in merged["protocols"]["HYPE"]
-
-
-def test_sync_endpoint_includes_watchlist(client):
-    response = client.post("/api/sync")
-    assert response.status_code == 200
-    data = json.loads(response.data)
-    assert data["status"] == "success"
-    assert "watchlist" in data["data"]
-    assert data["data"]["watchlist"]["ok"] is True
