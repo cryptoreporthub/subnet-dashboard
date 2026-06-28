@@ -2126,6 +2126,11 @@ async def dashboard(request: Request):
     try:
         subnets, source = _get_subnets_with_source()
         premium = _build_premium_context(subnets)
+        top_picks = await api_top_picks()
+        daily_pick = await api_daily_pick()
+        rotation_tracker = await api_rotation_tracker()
+        scenario_memory_snapshot = await api_scenario_memory()
+        indicators_convergence = await api_indicators_convergence()
         return templates.TemplateResponse(
             request,
             "index.html",
@@ -2151,6 +2156,12 @@ async def dashboard(request: Request):
                 "social_sentiment": premium["social_sentiment"],
                 "indicators_convergence": premium["indicators_convergence"],
                 "momentum_charts": premium["momentum_charts"],
+                "hour_picks": top_picks.get("hour_picks", []),
+                "day_picks": top_picks.get("day_picks", []),
+                "daily_pick": daily_pick,
+                "rotation_tracker": rotation_tracker,
+                "scenario_memory": scenario_memory_snapshot,
+                "api_indicators_convergence": indicators_convergence,
             },
         )
     except Exception as e:
@@ -2326,6 +2337,26 @@ async def api_top_picks():
     except Exception as e:
         logger.error("Error fetching top picks: %s", e)
         return {"hour_picks": [], "day_picks": [], "error": str(e)}
+
+
+@app.get("/api/top-pick/hour")
+async def api_top_pick_hour():
+    """Return the single top short-horizon pick."""
+    picks = await api_top_picks()
+    hour = picks.get("hour_picks", [])
+    if hour:
+        return {"status": "ok", "pick": hour[0]}
+    return {"status": "empty", "pick": None}
+
+
+@app.get("/api/top-pick/day")
+async def api_top_pick_day():
+    """Return the single top 24h horizon pick."""
+    picks = await api_top_picks()
+    day = picks.get("day_picks", [])
+    if day:
+        return {"status": "ok", "pick": day[0]}
+    return {"status": "empty", "pick": None}
 
 
 @app.get("/api/daily-pick")

@@ -159,6 +159,14 @@ header.top {
 .chart-box { position: relative; height: 320px; margin-top: 12px; }
 .chart-box.tall { height: 340px; }
 
+/* ---------- Treemap tiles ---------- */
+.treemap { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; min-height: 220px; align-content: flex-start; }
+.tmap-tile { display: flex; flex-direction: column; justify-content: center; align-items: center; min-width: 70px; min-height: 50px; padding: 8px 10px; border-radius: var(--radius-sm); background: rgba(45,212,191,0.12); border: 1px solid rgba(45,212,191,0.45); color: var(--emerald-bright); font-family: var(--font-mono); font-size: 11px; text-align: center; transition: transform .15s; }
+.tmap-tile:hover { transform: translateY(-2px); }
+.tmap-tile.neg { background: rgba(244,63,94,0.12); border-color: rgba(244,63,94,0.5); color: var(--neg); }
+.tmap-tile .tmap-name { font-weight: 700; font-size: 11px; line-height: 1.2; word-break: break-word; }
+.tmap-tile .tmap-chg { font-size: 10px; opacity: 0.85; margin-top: 2px; }
+
 /* ---------- Metrics (small) ---------- */
 .metric { background: var(--bg-surface); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); padding: 14px 16px; }
 .metric .lbl { font-size: 11px; color: var(--txt-3); text-transform: uppercase; letter-spacing: 1px; font-family: var(--font-mono); }

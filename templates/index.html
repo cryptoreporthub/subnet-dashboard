@@ -94,6 +94,105 @@
     </div>
   </div>
 
+  <!-- ============ 4b. TOP PICK OF THE HOUR / DAY ============ -->
+  <div class="block">
+    <div class="section-title">Top Pick of the Hour &amp; Day</div>
+    <div class="section-sub">Council state-vector winners by horizon · live from /api/top-picks</div>
+    <div class="two-col">
+      {% set hour = hour_picks[0] if hour_picks else None %}
+      <div class="card pick {{ 'sell-accent' if hour and hour.signals and hour.signals.price_change_24h < -10 else '' }}">
+        <div class="pick-rank">H</div>
+        <div class="pick-name">Top Pick of the Hour</div>
+        {% if hour %}
+        <div style="margin-top:10px">
+          <div class="pick-name" style="font-size:22px">{{ hour.name }}</div>
+          <div class="pick-meta">SN{{ hour.netuid }} · score {{ '%.2f'|format(hour.score) }} · confidence {{ '%.0f'|format(hour.confidence*100) }}%</div>
+        </div>
+        <div class="pick-row" style="margin-top:14px">
+          <div class="conviction-wrap">
+            <div class="conviction-lbl">CONFIDENCE {{ '%.0f'|format(hour.confidence*100) }}%</div>
+            <div class="conviction-bar"><div class="conviction-fill" style="width:{{ (hour.confidence*100)|round }}%"></div></div>
+          </div>
+        </div>
+        <div class="ind-grid" style="margin-top:14px;grid-template-columns:repeat(2,1fr)">
+          <div class="ind-cell"><div class="k">24h</div><div class="v {{ 'pos' if (hour.signals.price_change_24h or 0) >= 0 else 'neg' }}">{{ '%+.2f'|format(hour.signals.price_change_24h or 0) }}%</div></div>
+          <div class="ind-cell"><div class="k">7d</div><div class="v {{ 'pos' if (hour.signals.price_change_7d or 0) >= 0 else 'neg' }}">{{ '%+.2f'|format(hour.signals.price_change_7d or 0) }}%</div></div>
+          <div class="ind-cell"><div class="k">APY</div><div class="v">{{ '%.1f'|format(hour.signals.apy or 0) }}%</div></div>
+          <div class="ind-cell"><div class="k">Volume</div><div class="v">{{ '%.0f'|format(hour.signals.volume or 0) }}</div></div>
+        </div>
+        <div class="tags" style="margin-top:14px">
+          {% for k,v in (hour.scenario_tags or {}).items() %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
+        </div>
+        {% else %}
+        <div class="impact-line empty" style="margin-top:14px">No hour pick available.</div>
+        {% endif %}
+      </div>
+
+      {% set day = day_picks[0] if day_picks else None %}
+      <div class="card pick {{ 'sell-accent' if day and day.signals and day.signals.price_change_24h < -10 else '' }}">
+        <div class="pick-rank">D</div>
+        <div class="pick-name">Top Pick of the Day</div>
+        {% if day %}
+        <div style="margin-top:10px">
+          <div class="pick-name" style="font-size:22px">{{ day.name }}</div>
+          <div class="pick-meta">SN{{ day.netuid }} · score {{ '%.2f'|format(day.score) }} · confidence {{ '%.0f'|format(day.confidence*100) }}%</div>
+        </div>
+        <div class="pick-row" style="margin-top:14px">
+          <div class="conviction-wrap">
+            <div class="conviction-lbl">CONFIDENCE {{ '%.0f'|format(day.confidence*100) }}%</div>
+            <div class="conviction-bar"><div class="conviction-fill" style="width:{{ (day.confidence*100)|round }}%"></div></div>
+          </div>
+        </div>
+        <div class="ind-grid" style="margin-top:14px;grid-template-columns:repeat(2,1fr)">
+          <div class="ind-cell"><div class="k">24h</div><div class="v {{ 'pos' if (day.signals.price_change_24h or 0) >= 0 else 'neg' }}">{{ '%+.2f'|format(day.signals.price_change_24h or 0) }}%</div></div>
+          <div class="ind-cell"><div class="k">7d</div><div class="v {{ 'pos' if (day.signals.price_change_7d or 0) >= 0 else 'neg' }}">{{ '%+.2f'|format(day.signals.price_change_7d or 0) }}%</div></div>
+          <div class="ind-cell"><div class="k">APY</div><div class="v">{{ '%.1f'|format(day.signals.apy or 0) }}%</div></div>
+          <div class="ind-cell"><div class="k">Emission</div><div class="v">{{ '%.2f'|format(day.signals.emission or 0) }}</div></div>
+        </div>
+        <div class="tags" style="margin-top:14px">
+          {% for k,v in (day.scenario_tags or {}).items() %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
+        </div>
+        {% else %}
+        <div class="impact-line empty" style="margin-top:14px">No day pick available.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 4c. DAILY PICK (COUNCIL AUDITED) ============ -->
+  <div class="block">
+    <div class="section-title">Daily Pick — Council Audited</div>
+    <div class="section-sub">Single 24h candidate vetted by the RedTeam audit layer</div>
+    <div class="card pick {{ 'sell-accent' if daily_pick and daily_pick.audit and not daily_pick.audit.approved else '' }}">
+      {% if daily_pick and daily_pick.subnet %}
+      <div class="pick-rank">#1</div>
+      <div class="pick-name" style="font-size:22px">{{ daily_pick.subnet.name }}</div>
+      <div class="pick-meta">SN{{ daily_pick.subnet.netuid }} · action {{ daily_pick.action }} · final confidence {{ '%.0f'|format(daily_pick.final_confidence*100) }}%</div>
+      <div class="pick-row" style="margin-top:14px">
+        <div class="conviction-wrap">
+          <div class="conviction-lbl">FINAL CONFIDENCE {{ '%.0f'|format(daily_pick.final_confidence*100) }}%</div>
+          <div class="conviction-bar"><div class="conviction-fill" style="width:{{ (daily_pick.final_confidence*100)|round }}%"></div></div>
+        </div>
+      </div>
+      <div class="ind-grid" style="margin-top:14px;grid-template-columns:repeat(3,1fr)">
+        <div class="ind-cell"><div class="k">Score</div><div class="v">{{ '%.2f'|format(daily_pick.score) }}</div></div>
+        <div class="ind-cell"><div class="k">Raw Confidence</div><div class="v">{{ '%.0f'|format(daily_pick.confidence*100) }}%</div></div>
+        <div class="ind-cell"><div class="k">Audit</div><div class="v {{ 'pos' if daily_pick.audit.approved else 'neg' }}">{{ 'APPROVED' if daily_pick.audit.approved else 'FLAGGED' }}</div></div>
+      </div>
+      {% if daily_pick.audit.concerns %}
+      <ul class="reasons">
+        {% for c in daily_pick.audit.concerns %}<li>{{ c }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      <div class="tags" style="margin-top:14px">
+        {% for k,v in (daily_pick.scenario_tags or {}).items() %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
+      </div>
+      {% else %}
+      <div class="impact-line empty">No daily pick available.</div>
+      {% endif %}
+    </div>
+  </div>
+
   <!-- ============ 5. UNDERVALUED RADAR ============ -->
   <div class="block">
     <div class="section-title">Undervalued Radar</div>
@@ -179,6 +278,137 @@
         {% endif %}
       </div>
       {% endfor %}
+    </div>
+  </div>
+
+  <!-- ============ 6b. ROTATION TRACKER ============ -->
+  <div class="block">
+    <div class="section-title">Rotation Tracker</div>
+    <div class="section-sub">Subnet rotation patterns &amp; volatility clusters · live from /api/rotation-tracker</div>
+    <div class="two-col" style="margin-bottom:18px">
+      <div class="card">
+        <div class="card-head"><h3>Rotation Patterns</h3></div>
+        <div class="scroll-y">
+        {% for pat in (rotation_tracker.patterns or []) %}
+          <div class="impact-row">
+            <div class="pick-name" style="font-size:14px">{{ pat.pattern|replace('_',' ')|title }}</div>
+            <div class="impact-line">{{ pat.description }}</div>
+            <div class="impact-line" style="color:var(--txt-3)">confidence {{ '%.0f'|format((pat.confidence or 0)*100) }}% · {{ pat.count }} subnets</div>
+            <div class="tags" style="margin-top:8px">
+              {% for uid in pat.netuids[:8] %}<span class="tag tag-watch">SN{{ uid }}</span>{% endfor %}
+              {% if (pat.netuids|length) > 8 %}<span class="tag tag-watch">+{{ (pat.netuids|length) - 8 }} more</span>{% endif %}
+            </div>
+          </div>
+        {% else %}
+          <div class="impact-line empty">No rotation patterns detected.</div>
+        {% endfor %}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Volatility Clusters</h3><span class="mono" style="font-size:11px;color:var(--txt-3)">mean {{ '%.2f'|format(rotation_tracker.volatility_clusters.summary.mean_volatility or 0) }}</span></div>
+        <div class="scroll-y">
+        {% for cluster, items in (rotation_tracker.volatility_clusters or {}).items() if cluster != 'summary' %}
+          {% if items %}
+          <div class="impact-row">
+            <div class="pick-name" style="font-size:14px;text-transform:capitalize">{{ cluster }} Volatility</div>
+            {% for item in items[:5] %}
+            <div class="impact-line">
+              <span style="font-weight:600">{{ item.name }}</span>
+              <span class="mono" style="color:var(--txt-3)">SN{{ item.netuid }} · vol {{ '%.2f'|format(item.volatility) }} · 24h {{ '%+.2f'|format(item.price_change_24h or 0) }}%</span>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        {% else %}
+          <div class="impact-line empty">No volatility clusters available.</div>
+        {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 6c. SCENARIO MEMORY ============ -->
+  <div class="block">
+    <div class="section-title">Scenario Memory</div>
+    <div class="section-sub">Regime-aware memory · live from /api/scenario-memory</div>
+    <div class="card">
+      <div class="mi-grid">
+        <div class="metric"><div class="lbl">Total Scenarios</div><div class="val">{{ scenario_memory.stats.total or 0 }}</div><div class="sub">recorded memories</div></div>
+        {% for regime, count in (scenario_memory.stats.by_regime or {}).items() %}
+        <div class="metric"><div class="lbl">{{ regime|title }} Regime</div><div class="val">{{ count }}</div><div class="sub">scenarios</div></div>
+        {% endfor %}
+      </div>
+      {% if scenario_memory.scenarios %}
+      <div class="scroll-y" style="margin-top:14px;max-height:200px">
+        {% for sc in scenario_memory.scenarios[-5:]|reverse %}
+        <div class="impact-row">
+          <div class="pick-name" style="font-size:14px">{{ sc.name }}</div>
+          <div class="impact-line">regime <b>{{ sc.regime or '—' }}</b> · outcome <b>{{ sc.outcome or '—' }}</b></div>
+          {% if sc.features %}
+          <div class="tags" style="margin-top:6px">
+            {% for k,v in sc.features.items() %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="impact-line empty" style="margin-top:14px">Scenario memory is empty — the engine will record regime snapshots as it learns.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ============ 6d. INDICATORS CONVERGENCE ============ -->
+  <div class="block">
+    <div class="section-title">Indicators Convergence</div>
+    <div class="section-sub">Oversold / overbought multi-indicator agreement · live from /api/indicators-convergence</div>
+    <div class="card">
+      <table class="tbl">
+        <thead><tr><th>Subnet</th><th>Oversold</th><th>Overbought</th><th>Signal</th></tr></thead>
+        <tbody>
+        {% for row in (api_indicators_convergence.subnets or []) %}
+          <tr>
+            <td>{{ row.name }} <span class="mono" style="color:var(--txt-3)">SN{{ row.netuid }}</span></td>
+            <td class="mono {{ 'pos' if row.oversold.convergent else '' }}">{{ row.oversold.count }}/{{ row.oversold.total }} {{ '✓' if row.oversold.convergent else '' }}</td>
+            <td class="mono {{ 'neg' if row.overbought.convergent else '' }}">{{ row.overbought.count }}/{{ row.overbought.total }} {{ '✓' if row.overbought.convergent else '' }}</td>
+            <td class="mono">
+              {% if row.oversold.convergent %}<span class="tag tag-buy">BULLISH REVERSAL</span>
+              {% elif row.overbought.convergent %}<span class="tag tag-sell">BEARISH REVERSAL</span>
+              {% else %}<span class="tag tag-hold">NEUTRAL</span>{% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="impact-line empty">No convergence data available.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============ 6e. MOMENTUM CHARTS ============ -->
+  <div class="block">
+    <div class="section-title">Momentum Charts</div>
+    <div class="section-sub">Treemap of top movers &amp; radar of top 3 picks · computed by _build_momentum_charts</div>
+    <div class="momentum-grid">
+      <div class="card">
+        <div class="card-head"><h3>Top Movers Treemap</h3><span class="mono" style="font-size:11px;color:var(--txt-3)">tile size ∝ |24h change|</span></div>
+        <div class="treemap" id="treemap">
+          {% for t in (momentum_charts.treemap or []) %}
+          <div class="tmap-tile {{ 'pos' if t.change >= 0 else 'neg' }}" style="flex-grow:{{ t.value|round|int }};" title="{{ t.name }} SN{{ t.netuid }} · {{ '%+.2f'|format(t.change) }}%">
+            <span class="tmap-name">{{ t.name }}</span>
+            <span class="tmap-chg">{{ '%+.2f'|format(t.change) }}%</span>
+          </div>
+          {% else %}
+          <div class="impact-line empty">No treemap data available.</div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>Top 3 Radar</h3><span class="mono" style="font-size:11px;color:var(--txt-3)">Emission · APY · Conviction · 24h Move · Volume</span></div>
+        <div class="chart-box">
+          <canvas id="radarChart" data-radar='{{ momentum_charts.radar | tojson | safe }}'></canvas>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -471,6 +701,50 @@ function drawSpark(canvas){
   });
 }
 document.querySelectorAll('canvas.spark').forEach(drawSpark);
+
+// ---------- Radar chart (momentum charts) ----------
+(function(){
+  var radarCanvas = document.getElementById('radarChart');
+  if(!radarCanvas) return;
+  var raw = radarCanvas.getAttribute('data-radar');
+  if(!raw) return;
+  try {
+    var radarData = JSON.parse(raw);
+    if(!radarData.labels || !radarData.datasets) return;
+    new Chart(radarCanvas.getContext('2d'), {
+      type: 'radar',
+      data: {
+        labels: radarData.labels,
+        datasets: radarData.datasets.map(function(ds){
+          return {
+            label: ds.label,
+            data: ds.data,
+            borderColor: ds.color,
+            backgroundColor: hexToRgba(ds.color, 0.18),
+            borderWidth: 2,
+            pointRadius: 2,
+            pointBackgroundColor: ds.color
+          };
+        })
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: 'rgba(255,255,255,0.7)', font: { family: 'JetBrains Mono', size: 11 } } } },
+        scales: {
+          r: {
+            angleLines: { color: 'rgba(255,255,255,0.08)' },
+            grid: { color: 'rgba(255,255,255,0.08)' },
+            pointLabels: { color: 'rgba(255,255,255,0.7)', font: { family: 'JetBrains Mono', size: 11 } },
+            ticks: { display: false, backdropColor: 'transparent' },
+            suggestedMin: 0,
+            suggestedMax: 100
+          }
+        }
+      }
+    });
+  } catch(e) { console.error('Radar chart error', e); }
+})();
 
 // ---------- Chat ----------
 (function(){
