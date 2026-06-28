@@ -275,6 +275,42 @@ def health_check():
     return PlainTextResponse("OK")
 
 
+@app.get("/api/top-pick/hour")
+def api_top_pick_hour():
+    """Return the top pick for the current hour."""
+    subnets, _ = _get_subnets_with_source()
+    market_context = {"tao_change_24h": 0.0}
+    hour_picks = []
+    for sn in subnets:
+        score = score_subnet_for_hour(sn, market_context)
+        hour_picks.append({
+            "netuid": sn.get("netuid"),
+            "name": sn.get("name"),
+            "symbol": sn.get("symbol"),
+            "score": score["total_score"],
+            "confidence": score["confidence"],
+            "signals": {
+                "price_change_24h": sn.get("price_change_24h"),
+                "price_change_7d": sn.get("price_change_7d"),
+                "emission": sn.get("emission"),
+                "apy": sn.get("apy"),
+                "volume": sn.get("volume"),
+            },
+            "scenario_tags": score["scenario_tags"],
+        })
+    hour_picks.sort(key=lambda x: x["score"], reverse=True)
+    return {"picks": hour_picks[:3]}
+
+
+@app.get("/api/top-pick/day")
+def api_top_pick_day():
+    """Return the top pick for the current day."""
+    subnets, _ = _get_subnets_with_source()
+    market_context = {"tao_change_24h": 0.0}
+    day_picks = [select_daily_pick(subnets, market_context)]
+    return {"picks": day_picks}
+
+
 @app.get("/api/subnets")
 def api_subnets_safe():
     subnets, source = _get_subnets_with_source()
@@ -2126,7 +2162,53 @@ async def dashboard(request: Request):
     try:
         subnets, source = _get_subnets_with_source()
         premium = _build_premium_context(subnets)
-        top_picks = await api_top_picks()
+        market_context = {"tao_change_24h": 0.0}
+
+        hour_picks = []
+        for sn in subnets:
+            score = score_subnet_for_hour(sn, market_context)
+            hour_picks.append({
+                "netuid": sn.get("netuid"),
+                "name": sn.get("name"),
+                "symbol": sn.get("symbol"),
+                "score": score["total_score"],
+                "confidence": score["confidence"],
+                "signals": {
+                    "price_change_24h": sn.get("price_change_24h"),
+                    "price_change_7d": sn.get("price_change_7d"),
+                    "emission": sn.get("emission"),
+                    "apy": sn.get("apy"),
+                    "volume": sn.get("volume"),
+                },
+                "scenario_tags": score["scenario_tags"],
+            })
+        hour_picks.sort(key=lambda x: x["score"], reverse=True)
+        hour_picks = hour_picks[:3]
+
+        daily_pick_result = select_daily_pick(subnets, market_context)
+        day_picks = []
+        if daily_pick_result and daily_pick_result.get("subnet"):
+            candidate = daily_pick_result["subnet"]
+            sn = next(
+                (s for s in subnets if s.get("netuid") == candidate.get("netuid")),
+                {},
+            )
+            day_picks.append({
+                "netuid": candidate.get("netuid"),
+                "name": candidate.get("name"),
+                "symbol": candidate.get("symbol"),
+                "score": daily_pick_result.get("score", 0.0),
+                "confidence": daily_pick_result.get("confidence", 0.0),
+                "signals": {
+                    "price_change_24h": sn.get("price_change_24h"),
+                    "price_change_7d": sn.get("price_change_7d"),
+                    "emission": sn.get("emission"),
+                    "apy": sn.get("apy"),
+                    "volume": sn.get("volume"),
+                },
+                "scenario_tags": daily_pick_result.get("scenario_tags", {}),
+            })
+
         daily_pick = await api_daily_pick()
         rotation_tracker = await api_rotation_tracker()
         scenario_memory_snapshot = await api_scenario_memory()
@@ -2156,8 +2238,8 @@ async def dashboard(request: Request):
                 "social_sentiment": premium["social_sentiment"],
                 "indicators_convergence": premium["indicators_convergence"],
                 "momentum_charts": premium["momentum_charts"],
-                "hour_picks": top_picks.get("hour_picks", []),
-                "day_picks": top_picks.get("day_picks", []),
+                "hour_picks": hour_picks,
+                "day_picks": day_picks,
                 "daily_pick": daily_pick,
                 "rotation_tracker": rotation_tracker,
                 "scenario_memory": scenario_memory_snapshot,

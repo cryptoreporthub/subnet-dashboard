@@ -115,10 +115,10 @@
           </div>
         </div>
         <div class="ind-grid" style="margin-top:14px;grid-template-columns:repeat(2,1fr)">
-          <div class="ind-cell"><div class="k">24h</div><div class="v {{ 'pos' if (hour.signals.price_change_24h or 0) >= 0 else 'neg' }}">{{ '%+.2f'|format(hour.signals.price_change_24h or 0) }}%</div></div>
-          <div class="ind-cell"><div class="k">7d</div><div class="v {{ 'pos' if (hour.signals.price_change_7d or 0) >= 0 else 'neg' }}">{{ '%+.2f'|format(hour.signals.price_change_7d or 0) }}%</div></div>
+          <div class="ind-cell"><div class="k">Name</div><div class="v">{{ hour.name }}</div></div>
+          <div class="ind-cell"><div class="k">NetUID</div><div class="v">{{ hour.netuid }}</div></div>
+          <div class="ind-cell"><div class="k">Emission</div><div class="v">{{ '%.2f'|format(hour.signals.emission or 0) }} TAO/day</div></div>
           <div class="ind-cell"><div class="k">APY</div><div class="v">{{ '%.1f'|format(hour.signals.apy or 0) }}%</div></div>
-          <div class="ind-cell"><div class="k">Volume</div><div class="v">{{ '%.0f'|format(hour.signals.volume or 0) }}</div></div>
         </div>
         <div class="tags" style="margin-top:14px">
           {% for k,v in (hour.scenario_tags or {}).items() %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
@@ -144,10 +144,10 @@
           </div>
         </div>
         <div class="ind-grid" style="margin-top:14px;grid-template-columns:repeat(2,1fr)">
-          <div class="ind-cell"><div class="k">24h</div><div class="v {{ 'pos' if (day.signals.price_change_24h or 0) >= 0 else 'neg' }}">{{ '%+.2f'|format(day.signals.price_change_24h or 0) }}%</div></div>
-          <div class="ind-cell"><div class="k">7d</div><div class="v {{ 'pos' if (day.signals.price_change_7d or 0) >= 0 else 'neg' }}">{{ '%+.2f'|format(day.signals.price_change_7d or 0) }}%</div></div>
+          <div class="ind-cell"><div class="k">Name</div><div class="v">{{ day.name }}</div></div>
+          <div class="ind-cell"><div class="k">NetUID</div><div class="v">{{ day.netuid }}</div></div>
+          <div class="ind-cell"><div class="k">Emission</div><div class="v">{{ '%.2f'|format(day.signals.emission or 0) }} TAO/day</div></div>
           <div class="ind-cell"><div class="k">APY</div><div class="v">{{ '%.1f'|format(day.signals.apy or 0) }}%</div></div>
-          <div class="ind-cell"><div class="k">Emission</div><div class="v">{{ '%.2f'|format(day.signals.emission or 0) }}</div></div>
         </div>
         <div class="tags" style="margin-top:14px">
           {% for k,v in (day.scenario_tags or {}).items() %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
