@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fetchers.taomarketcap import get_all_subnets, get_subnet_data
 from internal.council.state_vector import score_subnet_for_hour, score_subnet_for_day
 from internal.council.daily_pick import select_daily_pick
+from internal.council.daily_pick_engine import get_or_create_today_pick
 from internal.council import resolver, scenario_memory, rotation_tracker
 from internal.indicators import (
     IndicatorEngine,
@@ -2560,45 +2561,61 @@ async def api_top_picks():
         return {"hour_picks": [], "day_picks": [], "error": str(e)}
 
 
+def _build_hour_pick_payload(sn: Dict[str, Any], score: Dict[str, Any]) -> Dict[str, Any]:
+    """Format a subnet + hour state-vector into the public hour-pick shape."""
+    return {
+        "subnet": {
+            "netuid": sn.get("netuid"),
+            "name": sn.get("name"),
+            "symbol": sn.get("symbol"),
+        },
+        "score": score["total_score"],
+        "confidence": score["confidence"],
+        "expert_contributions": score["expert_contributions"],
+        "scenario_tags": score["scenario_tags"],
+        "signals": {
+            "price_change_24h": sn.get("price_change_24h"),
+            "price_change_7d": sn.get("price_change_7d"),
+            "emission": sn.get("emission"),
+            "apy": sn.get("apy"),
+            "volume": sn.get("volume"),
+        },
+        "action": "long",
+    }
+
+
 @app.get("/api/top-pick/hour")
 async def api_top_pick_hour():
-    """Return the single top short-horizon pick."""
-    picks = await api_top_picks()
-    hour = picks.get("hour_picks", [])
-    if hour:
-        return {"status": "ok", "pick": hour[0]}
-    return {"status": "empty", "pick": None}
-
-
-@app.get("/api/top-pick/day")
-async def api_top_pick_day():
-    """Return the single top 24h horizon pick."""
-    picks = await api_top_picks()
-    day = picks.get("day_picks", [])
-    if day:
-        return {"status": "ok", "pick": day[0]}
-    return {"status": "empty", "pick": None}
+    """Return the top 3 short-horizon picks."""
+    try:
+        subnets, _ = _get_subnets_with_source()
+        market_context = {"tao_change_24h": 0.0}
+        scored = []
+        for sn in subnets:
+            score = score_subnet_for_hour(sn, market_context)
+            scored.append({"subnet": sn, "score": score})
+        scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
+        return {"picks": [_build_hour_pick_payload(i["subnet"], i["score"]) for i in scored[:3]]}
+    except Exception as e:
+        logger.error("Error fetching hour pick: %s", e)
+        return {"picks": [], "error": str(e)}
 
 
 @app.get("/api/daily-pick")
 async def api_daily_pick():
-    """Return the single audited daily pick from the Council engine."""
+    """Return today's audited daily pick from the Council engine."""
     try:
         subnets, _ = _get_subnets_with_source()
         market_context = {"tao_change_24h": 0.0}
-        return select_daily_pick(subnets, market_context)
+        return get_or_create_today_pick(subnets, market_context)
     except Exception as e:
         logger.error("Error fetching daily pick: %s", e)
         return {
-            "subnet": None,
-            "score": 0.0,
-            "confidence": 0.0,
-            "expert_contributions": {},
-            "scenario_tags": {},
-            "audit": {"approved": False, "concerns": [str(e)], "adjusted_confidence": 0.0},
-            "final_confidence": 0.0,
-            "action": "long",
-            "error": str(e),
+            "status": "error",
+            "date": datetime.utcnow().date().isoformat(),
+            "action": "HOLD",
+            "reason": str(e),
+            "pick": None,
         }
 
 
