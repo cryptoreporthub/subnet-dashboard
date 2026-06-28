@@ -276,33 +276,6 @@ def health_check():
     return PlainTextResponse("OK")
 
 
-@app.get("/api/top-pick/hour")
-def api_top_pick_hour():
-    """Return the top pick for the current hour."""
-    subnets, _ = _get_subnets_with_source()
-    market_context = {"tao_change_24h": 0.0}
-    hour_picks = []
-    for sn in subnets:
-        score = score_subnet_for_hour(sn, market_context)
-        hour_picks.append({
-            "netuid": sn.get("netuid"),
-            "name": sn.get("name"),
-            "symbol": sn.get("symbol"),
-            "score": score["total_score"],
-            "confidence": score["confidence"],
-            "signals": {
-                "price_change_24h": sn.get("price_change_24h"),
-                "price_change_7d": sn.get("price_change_7d"),
-                "emission": sn.get("emission"),
-                "apy": sn.get("apy"),
-                "volume": sn.get("volume"),
-            },
-            "scenario_tags": score["scenario_tags"],
-        })
-    hour_picks.sort(key=lambda x: x["score"], reverse=True)
-    return {"picks": hour_picks[:3]}
-
-
 @app.get("/api/top-pick/day")
 def api_top_pick_day():
     """Return the top pick for the current day."""
