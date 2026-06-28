@@ -21,6 +21,7 @@ from internal.council.state_vector import score_subnet_for_hour, score_subnet_fo
 from internal.council.daily_pick import select_daily_pick
 from internal.council import resolver, scenario_memory, rotation_tracker
 from internal.indicators import (
+    IndicatorEngine,
     get_indicator_scheduler_state,
     start_indicator_scheduler,
     stop_indicator_scheduler,
@@ -332,9 +333,25 @@ def api_simivision_safe():
 
 @app.get("/api/rotation-tokens")
 def api_rotation_tokens_safe():
+    """Return the rotation-token watchlist with safe price placeholders.
+
+    Each token includes its symbol, a display label, and any available price
+    data we can derive without requiring external services to be up.  This
+    keeps the watchlist endpoint useful even when live price feeds are
+    unavailable.
+    """
+    tokens = []
+    for symbol in _ROTATION_TOKENS:
+        tokens.append({
+            "symbol": symbol.upper(),
+            "name": symbol.title(),
+            "price": None,
+            "price_change_24h": None,
+            "source": "watchlist",
+        })
     return {
         "status": "success",
-        "tokens": _ROTATION_TOKENS,
+        "tokens": tokens,
     }
 
 
@@ -1400,6 +1417,8 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
         strongest = max(impacts, key=lambda i: i.get("magnitude_pct", 0))
         st = SIGNAL_TYPES.get(strongest.get("signal_type", ""), {})
         horizon = int(st.get("half_life_hours", 24))
+    # Global prediction horizon clamp: 1 hour <= horizon <= 168 hours (1 week).
+    horizon = max(1, min(horizon, 168))
 
     predicted_pct = magnitude if direction == "up" else -magnitude
     ref_price = float(sn.get("price", 0) or 0) or 1.0
@@ -2151,6 +2170,79 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 
+def _default_market_intelligence() -> Dict[str, Any]:
+    return {
+        "avg_change_24h": 0.0,
+        "gainers": 0,
+        "losers": 0,
+        "total_volume": 0.0,
+        "breadth": "neutral",
+        "avg_apy": 0.0,
+        "total_market_cap": 0.0,
+        "total": 0,
+        "top_gainer": None,
+        "top_loser": None,
+    }
+
+
+def _default_rotation_tracker() -> Dict[str, Any]:
+    return {
+        "patterns": [],
+        "volatility_clusters": {"summary": {"mean_volatility": 0.0}},
+    }
+
+
+def _default_scenario_memory() -> Dict[str, Any]:
+    return {
+        "status": "ok",
+        "scenarios": [],
+        "regimes": {},
+        "stats": {"total": 0, "by_regime": {}},
+        "meta": {},
+    }
+
+
+def _default_learning_metrics() -> Dict[str, Any]:
+    return {
+        "expert_weights": {},
+        "total_records": 0,
+        "predictions_pending": 0,
+        "predictions_resolved": 0,
+        "correct": 0,
+        "wrong": 0,
+        "accuracy": 0.0,
+        "deltas": {"correct": 0.02, "wrong": -0.03},
+        "recent_resolutions": [],
+        "last_updated": None,
+    }
+
+
+def _default_premium_context() -> Dict[str, Any]:
+    """Return a fully populated premium context with safe defaults."""
+    return {
+        "simivision_picks": [],
+        "undervalued_radar": [],
+        "technical_indicators": [],
+        "market_intelligence": _default_market_intelligence(),
+        "staking_analytics": {
+            "total_stake": 0.0,
+            "avg_apy": 0.0,
+            "subnet_count": 0,
+            "top_yield": [],
+        },
+        "council_weights": [],
+        "expert_weights": {},
+        "mindmap_trail": [],
+        "signal_impact": [],
+        "patterns": [],
+        "predictions": [],
+        "learning_metrics": _default_learning_metrics(),
+        "social_sentiment": [],
+        "indicators_convergence": {"oversold": {}, "overbought": {}},
+        "momentum_charts": {"treemap": [], "radar": {"labels": [], "datasets": []}},
+    }
+
+
 @app.get("/")
 async def dashboard(request: Request):
     """Render the SimiVision dashboard server-side via Jinja2.
@@ -2158,13 +2250,36 @@ async def dashboard(request: Request):
     Context flows: server fetches subnets + SimiVision picks + mindmap summary
     + learning stats -> renders into templates/index.html -> user sees the
     complete dashboard. Vanilla JS polls /api/subnets every 5 min for refresh.
+
+    The route is hardened so that any partial failure still yields a renderable
+    context: every template key is guaranteed, and per-section helpers fall back
+    to safe defaults rather than aborting the whole page.
     """
+    subnets: List[Dict[str, Any]] = []
+    source = "unknown"
+    premium = _default_premium_context()
+    market_context = {"tao_change_24h": 0.0}
+    hour_picks: List[Dict[str, Any]] = []
+    day_picks: List[Dict[str, Any]] = []
+    daily_pick: Dict[str, Any] = {}
+    rotation_tracker: Dict[str, Any] = _default_rotation_tracker()
+    scenario_memory_snapshot: Dict[str, Any] = _default_scenario_memory()
+    indicators_convergence: Dict[str, Any] = {"subnets": []}
+    render_error: Optional[str] = None
+
     try:
         subnets, source = _get_subnets_with_source()
-        premium = _build_premium_context(subnets)
-        market_context = {"tao_change_24h": 0.0}
+    except Exception as e:
+        logger.error("Error fetching subnets for dashboard: %s", e)
+        subnets, source = [], "error"
 
-        hour_picks = []
+    try:
+        premium = _build_premium_context(subnets)
+    except Exception as e:
+        logger.error("Error building premium context: %s", e)
+        premium = _default_premium_context()
+
+    try:
         for sn in subnets:
             score = score_subnet_for_hour(sn, market_context)
             hour_picks.append({
@@ -2184,9 +2299,12 @@ async def dashboard(request: Request):
             })
         hour_picks.sort(key=lambda x: x["score"], reverse=True)
         hour_picks = hour_picks[:3]
+    except Exception as e:
+        logger.error("Error computing hour picks: %s", e)
+        hour_picks = []
 
+    try:
         daily_pick_result = select_daily_pick(subnets, market_context)
-        day_picks = []
         if daily_pick_result and daily_pick_result.get("subnet"):
             candidate = daily_pick_result["subnet"]
             sn = next(
@@ -2208,50 +2326,85 @@ async def dashboard(request: Request):
                 },
                 "scenario_tags": daily_pick_result.get("scenario_tags", {}),
             })
-
-        daily_pick = await api_daily_pick()
-        rotation_tracker = await api_rotation_tracker()
-        scenario_memory_snapshot = await api_scenario_memory()
-        indicators_convergence = await api_indicators_convergence()
-        return templates.TemplateResponse(
-            request,
-            "index.html",
-            {
-                "subnets": subnets,
-                "data_source": source,
-                "mindmap": get_mindmap_summary(),
-                "learning_stats": get_learning_stats(),
-                "simivision": get_simivision_data(),
-                "rotation_tokens": _ROTATION_TOKENS,
-                "simivision_picks": premium["simivision_picks"],
-                "undervalued_radar": premium["undervalued_radar"],
-                "technical_indicators": premium["technical_indicators"],
-                "market_intelligence": premium["market_intelligence"],
-                "staking_analytics": premium["staking_analytics"],
-                "council_weights": premium["council_weights"],
-                "expert_weights": premium["expert_weights"],
-                "mindmap_trail": premium["mindmap_trail"],
-                "signal_impact": premium["signal_impact"],
-                "patterns": premium["patterns"],
-                "predictions": premium["predictions"],
-                "learning_metrics": premium["learning_metrics"],
-                "social_sentiment": premium["social_sentiment"],
-                "indicators_convergence": premium["indicators_convergence"],
-                "momentum_charts": premium["momentum_charts"],
-                "hour_picks": hour_picks,
-                "day_picks": day_picks,
-                "daily_pick": daily_pick,
-                "rotation_tracker": rotation_tracker,
-                "scenario_memory": scenario_memory_snapshot,
-                "api_indicators_convergence": indicators_convergence,
-            },
-        )
     except Exception as e:
-        logger.error("Error rendering dashboard: %s", e)
-        return PlainTextResponse(
-            f"Internal Server Error: {str(e)}\nSystem status: Not operative",
-            status_code=500,
-        )
+        logger.error("Error computing day picks: %s", e)
+        day_picks = []
+
+    try:
+        daily_pick = await api_daily_pick()
+    except Exception as e:
+        logger.error("Error fetching daily pick: %s", e)
+        daily_pick = {}
+
+    try:
+        rotation_tracker = await api_rotation_tracker()
+    except Exception as e:
+        logger.error("Error fetching rotation tracker: %s", e)
+        rotation_tracker = _default_rotation_tracker()
+
+    try:
+        scenario_memory_snapshot = await api_scenario_memory()
+    except Exception as e:
+        logger.error("Error fetching scenario memory: %s", e)
+        scenario_memory_snapshot = _default_scenario_memory()
+
+    try:
+        indicators_convergence = await api_indicators_convergence()
+    except Exception as e:
+        logger.error("Error fetching indicators convergence: %s", e)
+        indicators_convergence = {"subnets": []}
+
+    context = {
+        "subnets": subnets,
+        "data_source": source,
+        "mindmap": get_mindmap_summary(),
+        "learning_stats": get_learning_stats(),
+        "simivision": get_simivision_data(),
+        "rotation_tokens": _ROTATION_TOKENS,
+        "simivision_picks": premium.get("simivision_picks", []),
+        "undervalued_radar": premium.get("undervalued_radar", []),
+        "technical_indicators": premium.get("technical_indicators", []),
+        "market_intelligence": premium.get("market_intelligence", _default_market_intelligence()),
+        "staking_analytics": premium.get("staking_analytics", {
+            "total_stake": 0.0,
+            "avg_apy": 0.0,
+            "subnet_count": 0,
+            "top_yield": [],
+        }),
+        "council_weights": premium.get("council_weights", []),
+        "expert_weights": premium.get("expert_weights", {}),
+        "mindmap_trail": premium.get("mindmap_trail", []),
+        "signal_impact": premium.get("signal_impact", []),
+        "patterns": premium.get("patterns", []),
+        "predictions": premium.get("predictions", []),
+        "learning_metrics": premium.get("learning_metrics", _default_learning_metrics()),
+        "social_sentiment": premium.get("social_sentiment", []),
+        "indicators_convergence": premium.get("indicators_convergence", {"oversold": {}, "overbought": {}}),
+        "momentum_charts": premium.get("momentum_charts", {"treemap": [], "radar": {"labels": [], "datasets": []}}),
+        "hour_picks": hour_picks,
+        "day_picks": day_picks,
+        "daily_pick": daily_pick,
+        "rotation_tracker": rotation_tracker,
+        "scenario_memory": scenario_memory_snapshot,
+        "api_indicators_convergence": indicators_convergence,
+    }
+
+    try:
+        return templates.TemplateResponse(request, "index.html", context)
+    except Exception as e:
+        logger.error("Error rendering dashboard template: %s", e)
+        render_error = str(e)
+        # Minimal fallback response so the page still loads with defaults.
+        fallback_context = {**_default_premium_context(), **context}
+        fallback_context["render_error"] = render_error
+        try:
+            return templates.TemplateResponse(request, "index.html", fallback_context)
+        except Exception as e2:
+            logger.error("Fallback dashboard render also failed: %s", e2)
+            return PlainTextResponse(
+                f"Internal Server Error: {render_error}\nFallback error: {e2}\nSystem status: Degraded",
+                status_code=500,
+            )
 
 
 @app.get("/api/predictions")
@@ -2372,6 +2525,19 @@ async def api_indicators_convergence():
     except Exception as e:
         logger.error("Error fetching indicators convergence: %s", e)
         return {"subnets": [], "error": str(e)}
+
+
+@app.get("/api/indicators")
+async def api_indicators():
+    """Return the latest technical-indicator state from the indicator engine."""
+    try:
+        return {
+            "status": "success",
+            "data": IndicatorEngine().get_indicator_state(),
+        }
+    except Exception as e:
+        logger.error("Error fetching indicator state: %s", e)
+        return {"status": "error", "data": {}, "error": str(e)}
 
 
 @app.get("/api/top-picks")
