@@ -3,8 +3,9 @@ import logging
 import math
 import os
 import sys
+from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +20,11 @@ from fetchers.taomarketcap import get_all_subnets, get_subnet_data
 from internal.council.state_vector import score_subnet_for_hour, score_subnet_for_day
 from internal.council.daily_pick import select_daily_pick
 from internal.council import resolver, scenario_memory, rotation_tracker
+from internal.indicators import (
+    get_indicator_scheduler_state,
+    start_indicator_scheduler,
+    stop_indicator_scheduler,
+)
 try:
     from data.learning_engine import LearningEngine, create_feedback_router
 except ImportError:
@@ -37,7 +43,28 @@ logger = logging.getLogger(__name__)
 
 os.makedirs("data", exist_ok=True)
 
-app = FastAPI(title="SimiVision Subnet Dashboard", version="3.5.0")
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Start the indicator scheduler on startup and stop it on shutdown."""
+    try:
+        start_indicator_scheduler()
+        logger.info("Indicator scheduler started")
+    except Exception as exc:
+        logger.warning("Failed to start indicator scheduler: %s", exc)
+    yield
+    try:
+        stop_indicator_scheduler()
+        logger.info("Indicator scheduler stopped")
+    except Exception as exc:
+        logger.warning("Failed to stop indicator scheduler: %s", exc)
+
+
+app = FastAPI(
+    title="SimiVision Subnet Dashboard",
+    version="3.5.0",
+    lifespan=_lifespan,
+)
 
 # CORS middleware (replaces Flask's per-response CORS headers)
 app.add_middleware(
@@ -327,6 +354,15 @@ def api_learning_stats_safe():
             "predictions_resolved": metrics.get("predictions_resolved", 0),
             "last_updated": metrics.get("last_updated") or datetime.utcnow().isoformat() + "Z",
         },
+    }
+
+
+@app.get("/api/indicators/scheduler")
+def api_indicators_scheduler():
+    """Return the current state of the background indicator scheduler."""
+    return {
+        "status": "success",
+        "data": get_indicator_scheduler_state(),
     }
 
 
