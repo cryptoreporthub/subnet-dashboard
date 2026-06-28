@@ -32,10 +32,69 @@ except ImportError:
     def create_feedback_router():
         return None
 
+try:
+    from message_intel import Database as _MessageIntelDatabase
+    from message_intel import NLPAnalyzer as _MessageIntelNLPAnalyzer
+    from message_intel import JuryBridge as _MessageIntelJuryBridge
+    from message_intel import PriceTracker as _MessageIntelPriceTracker
+    from message_intel import SelfLearning as _MessageIntelSelfLearning
+    _MESSAGE_INTEL_AVAILABLE = True
+except Exception as _message_intel_import_exc:
+    _MESSAGE_INTEL_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("Message intelligence package unavailable: %s", _message_intel_import_exc)
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
 
 os.makedirs("data", exist_ok=True)
+
+# ---------------------------------------------------------------------------
+# Message Intelligence pipeline singletons (Telegram → NLP → Jury → Learning)
+# ---------------------------------------------------------------------------
+_message_intel_db = None
+_message_intel_nlp = None
+_message_intel_jury = None
+_message_intel_price_tracker = None
+_message_intel_self_learning = None
+
+
+def _get_message_intel_db():
+    global _message_intel_db
+    if _message_intel_db is None and _MESSAGE_INTEL_AVAILABLE:
+        _message_intel_db = _MessageIntelDatabase()
+    return _message_intel_db
+
+
+def _get_message_intel_nlp():
+    global _message_intel_nlp
+    if _message_intel_nlp is None and _MESSAGE_INTEL_AVAILABLE:
+        _message_intel_nlp = _MessageIntelNLPAnalyzer()
+    return _message_intel_nlp
+
+
+def _get_message_intel_jury():
+    global _message_intel_jury
+    if _message_intel_jury is None and _MESSAGE_INTEL_AVAILABLE:
+        _message_intel_jury = _MessageIntelJuryBridge()
+    return _message_intel_jury
+
+
+def _get_message_intel_price_tracker():
+    global _message_intel_price_tracker
+    if _message_intel_price_tracker is None and _MESSAGE_INTEL_AVAILABLE:
+        _message_intel_price_tracker = _MessageIntelPriceTracker()
+        _message_intel_price_tracker.set_db(_get_message_intel_db())
+    return _message_intel_price_tracker
+
+
+def _get_message_intel_self_learning():
+    global _message_intel_self_learning
+    if _message_intel_self_learning is None and _MESSAGE_INTEL_AVAILABLE:
+        _message_intel_self_learning = _MessageIntelSelfLearning()
+        _message_intel_self_learning.set_db(_get_message_intel_db())
+    return _message_intel_self_learning
+
 
 app = FastAPI(title="SimiVision Subnet Dashboard", version="3.5.0")
 
@@ -328,6 +387,121 @@ def api_learning_stats_safe():
             "last_updated": metrics.get("last_updated") or datetime.utcnow().isoformat() + "Z",
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Message Intelligence API (Telegram → NLP → Jury → Price → Learning)
+# ---------------------------------------------------------------------------
+@app.post("/api/message-intel/ingest")
+async def api_message_intel_ingest(request: Request):
+    """Ingest a Telegram message, run NLP + jury, and persist the verdict."""
+    if not _MESSAGE_INTEL_AVAILABLE:
+        return {"status": "error", "error": "Message intelligence package unavailable"}
+
+    try:
+        payload = await request.json()
+    except Exception as e:
+        return {"status": "error", "error": f"Invalid JSON body: {e}"}
+
+    if not isinstance(payload, dict) or not payload.get("content"):
+        return {"status": "error", "error": "Missing required field: content"}
+
+    try:
+        db = _get_message_intel_db()
+        nlp = _get_message_intel_nlp()
+        jury = _get_message_intel_jury()
+        price_tracker = _get_message_intel_price_tracker()
+
+        message_id = db.save_message(payload)
+        analysis = nlp.analyze(payload.get("content", ""))
+        db.save_analysis(message_id, analysis)
+        verdict = jury.evaluate(message_id, payload.get("content", ""), analysis)
+        db.save_verdict(message_id, verdict)
+        price_tracker.snapshot(message_id)
+
+        return {
+            "status": "success",
+            "message_id": message_id,
+            "analysis": analysis,
+            "verdict": verdict,
+        }
+    except Exception as e:
+        logger.error("Error ingesting message intel: %s", e)
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/api/message-intel/list")
+async def api_message_intel_list(limit: int = 50, offset: int = 0):
+    """List ingested messages with verdicts and analysis."""
+    if not _MESSAGE_INTEL_AVAILABLE:
+        return {"status": "error", "messages": [], "error": "Message intelligence package unavailable"}
+
+    try:
+        db = _get_message_intel_db()
+        messages = db.list_messages(limit=limit, offset=offset)
+        return {
+            "status": "success",
+            "count": len(messages),
+            "messages": messages,
+        }
+    except Exception as e:
+        logger.error("Error listing message intel: %s", e)
+        return {"status": "error", "messages": [], "error": str(e)}
+
+
+@app.get("/api/message-intel/detail/{msg_id}")
+async def api_message_intel_detail(msg_id: int):
+    """Return full details for a single message including metrics and verdict."""
+    if not _MESSAGE_INTEL_AVAILABLE:
+        return {"status": "error", "error": "Message intelligence package unavailable"}
+
+    try:
+        db = _get_message_intel_db()
+        message = db.get_message(msg_id)
+        if message is None:
+            return {"status": "error", "error": "Message not found"}
+        return {"status": "success", "message": message}
+    except Exception as e:
+        logger.error("Error fetching message intel detail: %s", e)
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/api/message-intel/chatter")
+async def api_message_intel_chatter(min_conviction: float = 0.6, limit: int = 50):
+    """Return high-conviction messages (the 'chatter' feed)."""
+    if not _MESSAGE_INTEL_AVAILABLE:
+        return {"status": "error", "messages": [], "error": "Message intelligence package unavailable"}
+
+    try:
+        db = _get_message_intel_db()
+        messages = db.list_high_conviction_messages(min_conviction=min_conviction)
+        return {
+            "status": "success",
+            "count": len(messages[:limit]),
+            "messages": messages[:limit],
+        }
+    except Exception as e:
+        logger.error("Error fetching message intel chatter: %s", e)
+        return {"status": "error", "messages": [], "error": str(e)}
+
+
+@app.get("/api/message-intel/patterns")
+async def api_message_intel_patterns(limit: int = 20):
+    """Return discovered pattern correlations from the learning loop."""
+    if not _MESSAGE_INTEL_AVAILABLE:
+        return {"status": "error", "patterns": [], "error": "Message intelligence package unavailable"}
+
+    try:
+        db = _get_message_intel_db()
+        patterns = db.list_patterns(limit=limit)
+        return {
+            "status": "success",
+            "count": len(patterns),
+            "patterns": patterns,
+        }
+    except Exception as e:
+        logger.error("Error fetching message intel patterns: %s", e)
+        return {"status": "error", "patterns": [], "error": str(e)}
 
 
 @app.post("/api/simivision/chat")
