@@ -137,7 +137,11 @@ def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _nudge_weights(correct: bool, expert: Optional[str]) -> None:
+def _nudge_weights(
+    prediction: Dict[str, Any],
+    correct: bool,
+    expert: Optional[str],
+) -> None:
     """Update Council expert weights through the learning loop."""
     if not expert:
         return
@@ -180,7 +184,7 @@ def resolve_prediction(
     expert = _normalize_expert(prediction)
     if expert:
         prediction["expert"] = expert
-        _nudge_weights(correct, expert)
+        _nudge_weights(prediction, correct, expert)
 
     return prediction
 
