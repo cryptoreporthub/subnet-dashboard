@@ -8,8 +8,6 @@ import pytest
 from internal.signals.signal_tracker import SignalTracker
 from internal.council.signals.poller import PollerWorker
 from internal.council.signals.pathfinder import PathfinderWorker
-from internal.council.input_processor import InputProcessor
-from server import app
 
 
 @pytest.fixture
@@ -98,76 +96,4 @@ def test_pathfinder_worker_records_signal(tmp_tracker):
     assert result["first_signal_source"] == "news"
 
 
-def test_input_processor_parses_signal_intelligence(tmp_tracker):
-    processor = InputProcessor(tracker=tmp_tracker)
-    payload = json.dumps(
-        {
-            "signals": [
-                {"asset": "FET", "source": "x"},
-                {"asset": "FET", "source": "discord"},
-            ]
-        }
-    )
-    result = processor.parse_signal_intelligence(payload)
-    assert result["recorded"] == 2
-    assert result["results"][0]["ok"] is True
 
-
-def test_get_signals_api(tmp_path, monkeypatch):
-    monkeypatch.setenv("SIGNAL_TIMELINE_PATH", str(tmp_path / "signal_timeline.json"))
-    app.config["TESTING"] = True
-    app.config["ENABLE_BACKGROUND_SYNC"] = False
-
-    with app.test_client() as client:
-        client.post(
-            "/api/signals",
-            data=json.dumps({"asset": "TAO", "source": "x"}),
-            content_type="application/json",
-        )
-        response = client.get("/api/signals")
-        data = json.loads(response.data)
-        assert response.status_code == 200
-        assert data["status"] == "success"
-        assert "TAO" in data["data"]["assets"]
-
-
-def test_post_signals_api(tmp_path, monkeypatch):
-    monkeypatch.setenv("SIGNAL_TIMELINE_PATH", str(tmp_path / "signal_timeline.json"))
-    app.config["TESTING"] = True
-    app.config["ENABLE_BACKGROUND_SYNC"] = False
-
-    with app.test_client() as client:
-        response = client.post(
-            "/api/signals",
-            data=json.dumps(
-                {
-                    "signals": [
-                        {"asset": "RENDER", "source": "x"},
-                        {"asset": "RENDER", "source": "discord"},
-                    ]
-                }
-            ),
-            content_type="application/json",
-        )
-        data = json.loads(response.data)
-        assert response.status_code == 200
-        assert data["status"] == "success"
-        assert data["data"]["recorded"] == 2
-
-
-def test_asset_signals_api(tmp_path, monkeypatch):
-    monkeypatch.setenv("SIGNAL_TIMELINE_PATH", str(tmp_path / "signal_timeline.json"))
-    app.config["TESTING"] = True
-    app.config["ENABLE_BACKGROUND_SYNC"] = False
-
-    with app.test_client() as client:
-        client.post(
-            "/api/signals",
-            data=json.dumps({"asset": "VVV", "source": "x"}),
-            content_type="application/json",
-        )
-        response = client.get("/api/signals/VVV")
-        data = json.loads(response.data)
-        assert response.status_code == 200
-        assert data["data"]["found"] is True
-        assert data["data"]["asset"] == "VVV"

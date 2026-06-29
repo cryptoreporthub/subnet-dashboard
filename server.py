@@ -3,8 +3,9 @@ import logging
 import math
 import os
 import sys
+from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,19 +19,16 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fetchers.taomarketcap import get_all_subnets, get_subnet_data
 from internal.council.state_vector import score_subnet_for_hour, score_subnet_for_day
 from internal.council.daily_pick import select_daily_pick
+from internal.council.daily_pick_engine import get_or_create_today_pick
 from internal.council import resolver, scenario_memory, rotation_tracker
-try:
-    from data.learning_engine import LearningEngine, create_feedback_router
-except ImportError:
-    class LearningEngine:
-        def get_stats(self):
-            return {"expert_weights": {}, "total_records": 0}
-
-        def load_soul_map(self):
-            return {"expert_weights": {}, "performance_history": {}}
-
-    def create_feedback_router():
-        return None
+from internal.council.weights import load_weights, save_weights
+from internal.indicators import (
+    IndicatorEngine,
+    get_indicator_scheduler_state,
+    start_indicator_scheduler,
+    stop_indicator_scheduler,
+)
+from data.learning_engine import LearningEngine
 
 try:
     from message_intel import Database as _MessageIntelDatabase
@@ -96,7 +94,27 @@ def _get_message_intel_self_learning():
     return _message_intel_self_learning
 
 
-app = FastAPI(title="SimiVision Subnet Dashboard", version="3.5.0")
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Start the indicator scheduler on startup and stop it on shutdown."""
+    try:
+        start_indicator_scheduler()
+        logger.info("Indicator scheduler started")
+    except Exception as exc:
+        logger.warning("Failed to start indicator scheduler: %s", exc)
+    yield
+    try:
+        stop_indicator_scheduler()
+        logger.info("Indicator scheduler stopped")
+    except Exception as exc:
+        logger.warning("Failed to stop indicator scheduler: %s", exc)
+
+
+app = FastAPI(
+    title="SimiVision Subnet Dashboard",
+    version="3.5.0",
+    lifespan=_lifespan,
+)
 
 # CORS middleware (replaces Flask's per-response CORS headers)
 app.add_middleware(
@@ -116,7 +134,11 @@ if os.path.isdir(_static_dir):
 _templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 templates = Jinja2Templates(directory=_templates_dir)
 
-_APP_VERSION = "3.5.0"
+def _app_version() -> str:
+    return "3.5.0"
+
+
+_APP_VERSION = _app_version()
 
 _ROTATION_TOKENS = ["hyperliquid", "vvv", "near", "render", "fetch"]
 
@@ -302,9 +324,77 @@ def _safe_simivision_payload() -> Dict[str, Any]:
     }
 
 
+def _safe_scenario_memory_summary() -> Dict[str, Any]:
+    """Return a lightweight scenario-memory summary without heavy computation."""
+    try:
+        data = scenario_memory._load()
+        scenarios = data.get("scenarios", [])
+        return {
+            "scenario_count": len(scenarios),
+            "last_scenario": scenarios[-1].get("name") if scenarios else None,
+            "last_updated": data.get("meta", {}).get("last_updated"),
+        }
+    except Exception as exc:
+        logger.warning("Could not load scenario memory summary: %s", exc)
+        return {"scenario_count": 0, "last_scenario": None, "last_updated": None}
+
+
+def _safe_rotation_summary() -> Dict[str, Any]:
+    """Return a lightweight rotation-tracker summary using cached subnet data."""
+    try:
+        subnets, _ = _get_subnets_with_source()
+        return rotation_tracker.get_rotation_summary(subnets)
+    except Exception as exc:
+        logger.warning("Could not load rotation tracker summary: %s", exc)
+        return {
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "patterns": [],
+            "volatility_clusters": {},
+        }
+
+
 @app.get("/health")
 def health_check():
     return PlainTextResponse("OK")
+
+
+def _highest_emission_pick(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Return a pick-shaped fallback using the highest-emission subnet."""
+    best = max(subnets, key=lambda s: s.get("emission", 0) or 0) if subnets else {}
+    return {
+        "subnet": {
+            "netuid": best.get("netuid"),
+            "name": best.get("name"),
+            "symbol": best.get("symbol"),
+        },
+        "score": 0.0,
+        "confidence": 0.0,
+        "expert_contributions": {},
+        "scenario_tags": {"fallback": "highest-emission"},
+        "signals": {
+            "price_change_24h": best.get("price_change_24h"),
+            "price_change_7d": best.get("price_change_7d"),
+            "emission": best.get("emission"),
+            "apy": best.get("apy"),
+            "volume": best.get("volume"),
+        },
+        "action": "long",
+    }
+
+
+@app.get("/api/top-pick/day")
+def api_top_pick_day():
+    """Return the top pick for the current day with a safe fallback."""
+    subnets, _ = _get_subnets_with_source()
+    market_context = {"tao_change_24h": 0.0}
+    try:
+        day_pick = select_daily_pick(subnets, market_context)
+    except Exception as exc:
+        logger.error("Error selecting daily pick: %s", exc)
+        day_pick = None
+    if not day_pick:
+        return {"picks": [_highest_emission_pick(subnets)]}
+    return {"picks": [day_pick]}
 
 
 @app.get("/api/subnets")
@@ -328,21 +418,39 @@ def api_simivision_safe():
 
 @app.get("/api/rotation-tokens")
 def api_rotation_tokens_safe():
+    """Return the rotation-token watchlist with safe price placeholders.
+
+    Each token includes its symbol, a display label, and any available price
+    data we can derive without requiring external services to be up.  This
+    keeps the watchlist endpoint useful even when live price feeds are
+    unavailable.
+    """
+    tokens = []
+    for symbol in _ROTATION_TOKENS:
+        tokens.append({
+            "symbol": symbol.upper(),
+            "name": symbol.title(),
+            "price": None,
+            "price_change_24h": None,
+            "source": "watchlist",
+        })
     return {
         "status": "success",
-        "tokens": _ROTATION_TOKENS,
+        "tokens": tokens,
     }
 
 
 @app.get("/api/mindmap/summary")
 def api_mindmap_summary_safe():
     simivision = _safe_simivision_payload()["data"]
-    # Pull live soul_map expert weights from the self-learning loop so the
-    # mindmap stays wired into the evidence -> signal -> decision -> judge
-    # -> learning cycle.
+    # Pull live Council expert weights and resolver stats so the mindmap stays
+    # wired into the evidence -> signal -> decision -> learning cycle.
     engine = LearningEngine()
     stats = engine.get_stats()
     expert_weights = stats.get("expert_weights", {})
+    resolved = resolver.get_resolved_predictions()
+    scenario_summary = _safe_scenario_memory_summary()
+    rotation_summary = _safe_rotation_summary()
     return {
         "status": "success",
         "data": {
@@ -360,6 +468,15 @@ def api_mindmap_summary_safe():
                 for name, weight in expert_weights.items()
             ],
             "expert_weights": expert_weights,
+            "resolved_predictions": {
+                "total": resolved.get("stats", {}).get("total", 0),
+                "correct": resolved.get("stats", {}).get("correct", 0),
+                "wrong": resolved.get("stats", {}).get("wrong", 0),
+                "pending": resolved.get("stats", {}).get("pending", 0),
+                "accuracy": resolved.get("stats", {}).get("accuracy", 0.0),
+            },
+            "scenario_memory": scenario_summary,
+            "rotation_tracker": rotation_summary,
             "learning_status": {
                 "enabled": True,
                 "records": stats.get("total_records", 0),
@@ -371,20 +488,19 @@ def api_mindmap_summary_safe():
 
 @app.get("/api/learning/stats")
 def api_learning_stats_safe():
-    # Use the full learning-loop metrics so the dashboard exposes expert
-    # weights, resolution counts, accuracy and a last_updated timestamp.
-    metrics = _compute_learning_metrics()
+    # Use the live learning engine so the dashboard exposes expert weights,
+    # resolver stats, accuracy and a valid timestamp.
+    engine = LearningEngine()
+    stats = engine.get_stats()
     return {
         "status": "success",
         "data": {
-            "expert_weights": metrics.get("expert_weights", {}),
-            "total_records": metrics.get("total_records", 0),
-            "correct": metrics.get("correct", 0),
-            "wrong": metrics.get("wrong", 0),
-            "accuracy": metrics.get("accuracy", 0.0),
-            "predictions_pending": metrics.get("predictions_pending", 0),
-            "predictions_resolved": metrics.get("predictions_resolved", 0),
-            "last_updated": metrics.get("last_updated") or datetime.utcnow().isoformat() + "Z",
+            "expert_weights": stats.get("expert_weights", {}),
+            "total_records": stats.get("total_records", 0),
+            "accuracy": stats.get("accuracy", 0.0),
+            "pending": stats.get("pending", 0),
+            "resolved": stats.get("resolved", 0),
+            "last_updated": stats.get("last_updated") or datetime.utcnow().isoformat() + "Z",
         },
     }
 
@@ -502,6 +618,15 @@ async def api_message_intel_patterns(limit: int = 20):
     except Exception as e:
         logger.error("Error fetching message intel patterns: %s", e)
         return {"status": "error", "patterns": [], "error": str(e)}
+
+
+@app.get("/api/indicators/scheduler")
+def api_indicators_scheduler():
+    """Return the current state of the background indicator scheduler."""
+    return {
+        "status": "success",
+        "data": get_indicator_scheduler_state(),
+    }
 
 
 @app.post("/api/simivision/chat")
@@ -783,6 +908,13 @@ def _get_price_history(netuid: Any, sn: Dict[str, Any]) -> Dict[str, Any]:
     source = "synthetic"
 
     cache = _load_price_cache()
+    # Guard against malformed API rows where netuid may be a dict wrapper.
+    if isinstance(netuid, dict):
+        netuid = netuid.get("id") or netuid.get("netuid") or netuid.get("subnet") or 0
+    try:
+        netuid = int(netuid)
+    except (TypeError, ValueError):
+        netuid = str(netuid)
     raw = cache.get(str(netuid)) or cache.get(int(netuid) if str(netuid).isdigit() else netuid)
     if raw and isinstance(raw, dict):
         candles = raw.get("candles") or []
@@ -1446,17 +1578,19 @@ def _detect_patterns(
 # Predictive engine — generate / resolve / learn
 # ---------------------------------------------------------------------------
 def _expert_from_signal_source(source: Optional[str]) -> str:
-    """Map a prediction's signal source to the council expert responsible."""
+    """Map a prediction's signal source to a canonical Council expert."""
     if not source:
-        return "alpha"
+        return "quant"
     s = str(source).lower()
-    if any(k in s for k in ("momentum", "macd", "trend", "ma_cross", "market_breadth")):
-        return "alpha"
     if any(k in s for k in ("rsi", "stochastic", "williams", "cci", "contrarian", "oversold", "overbought")):
-        return "beta"
-    if any(k in s for k in ("emission", "apy", "yield", "fundamental")):
-        return "gamma"
-    return "alpha"
+        return "contrarian"
+    if any(k in s for k in ("social", "hype", "whale", "momentum", "sentiment")):
+        return "hype"
+    if any(k in s for k in ("macd", "ma_cross", "technical", "indicator", "trend")):
+        return "technical"
+    if any(k in s for k in ("emission", "apy", "yield", "fundamental", "market_breadth")):
+        return "quant"
+    return "quant"
 
 
 def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> Dict[str, Any]:
@@ -1502,6 +1636,8 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
         strongest = max(impacts, key=lambda i: i.get("magnitude_pct", 0))
         st = SIGNAL_TYPES.get(strongest.get("signal_type", ""), {})
         horizon = int(st.get("half_life_hours", 24))
+    # Global prediction horizon clamp: 1 hour <= horizon <= 168 hours (1 week).
+    horizon = max(1, min(horizon, 168))
 
     predicted_pct = magnitude if direction == "up" else -magnitude
     ref_price = float(sn.get("price", 0) or 0) or 1.0
@@ -1547,20 +1683,19 @@ def _resolve_prediction(prediction: Dict[str, Any], latest_price: float) -> Dict
 
 
 def _update_learning_weights(correct: bool, expert: Optional[str] = None) -> Dict[str, Any]:
-    """Adjust a single Council expert's weight: correct=+0.02, wrong=-0.03.
+    """Adjust a single canonical Council expert's weight: correct=+0.02, wrong=-0.03.
 
-    Only the expert whose prediction resolved is updated. If no expert is
-    supplied or the expert is unknown, no weights are changed. Weights are
-    read from and persisted to soul_map.json.
+    Only the expert whose prediction resolved is updated. Unknown experts are
+    mapped to the closest canonical lens when possible. Weights are read from
+    and persisted via the live Council weight system.
     """
     delta = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
     try:
         engine = LearningEngine()
-        soul_map = engine.load_soul_map()
-        weights = soul_map.get("expert_weights", {})
-        if not weights:
-            weights = {"alpha": 1.0, "beta": 1.0, "gamma": 1.0}
+        weights = load_weights()
         e = str(expert).lower() if expert else None
+        if e and e not in weights:
+            e = _expert_from_signal_source(e)
         if e and e in weights:
             w = float(weights.get(e, 1.0))
             w = max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, w + delta))
@@ -1568,9 +1703,7 @@ def _update_learning_weights(correct: bool, expert: Optional[str] = None) -> Dic
             logger.info("Learning weight update: expert=%s correct=%s delta=%s weight=%s", e, correct, delta, weights[e])
         else:
             logger.info("Learning weight update skipped: no resolved expert (expert=%s)", expert)
-        soul_map["expert_weights"] = weights
-        soul_map["last_updated"] = _dt.utcnow().isoformat() + "Z"
-        engine.save_soul_map(soul_map)
+        save_weights(weights)
         return {"updated": True, "delta": delta, "correct": correct, "expert": expert, "weights": weights}
     except Exception as exc:
         logger.warning("Learning weight update failed: %s", exc)
@@ -1617,41 +1750,26 @@ def _resolve_due_predictions(
 
 
 # ---------------------------------------------------------------------------
-# Learning loop metrics
+# Learning loop metrics (delegated to the live LearningEngine / resolver)
 # ---------------------------------------------------------------------------
 def _compute_learning_metrics() -> Dict[str, Any]:
-    data = PREDICTION_STORE._load()
-    PREDICTION_STORE.update_stats(data)
-    PREDICTION_STORE._save(data)
-    stats = data.get("stats", {})
+    """Return learning-loop metrics from the live resolver and weight system.
+
+    The returned shape is backward-compatible with the dashboard template, which
+    expects ``predictions_resolved``, ``predictions_pending``, ``correct``,
+    ``wrong``, ``deltas``, and ``recent_resolutions``.
+    """
     engine = LearningEngine()
-    soul = engine.get_stats()
-    weights = soul.get("expert_weights", {})
-    resolved = data.get("resolved", [])
-    recent = resolved[-10:]
-    # last_updated: prefer the soul-map weight-update timestamp, then the most
-    # recent resolution timestamp, then the predictions.json file mtime so the
-    # dashboard never shows a bare "—" once the loop has run at least once.
-    last_updated = soul.get("last_updated")
-    if not last_updated:
-        for r in reversed(resolved):
-            ts = r.get("resolved_at") or r.get("created_at")
-            if ts:
-                last_updated = ts
-                break
-    if not last_updated:
-        try:
-            mtime = _os.path.getmtime(_PREDICTIONS_PATH)
-            last_updated = _dt.utcfromtimestamp(mtime).isoformat() + "Z"
-        except Exception:
-            last_updated = None
+    stats = engine.get_stats()
+    resolved = resolver.get_resolved_predictions()
+    recent = resolved.get("resolved", [])[-10:]
     return {
-        "expert_weights": weights,
-        "total_records": soul.get("total_records", 0),
+        "expert_weights": stats.get("expert_weights", {}),
+        "total_records": stats.get("total_records", 0),
         "predictions_pending": stats.get("pending", 0),
-        "predictions_resolved": len(resolved),
-        "correct": stats.get("correct", 0),
-        "wrong": stats.get("wrong", 0),
+        "predictions_resolved": stats.get("resolved", 0),
+        "correct": resolved.get("stats", {}).get("correct", 0),
+        "wrong": resolved.get("stats", {}).get("wrong", 0),
         "accuracy": stats.get("accuracy", 0.0),
         "deltas": {"correct": _LEARNING_DELTA_CORRECT, "wrong": _LEARNING_DELTA_WRONG},
         "recent_resolutions": [
@@ -1661,9 +1779,10 @@ def _compute_learning_metrics() -> Dict[str, Any]:
                 "actual_pct": r.get("actual_pct"),
                 "correct": r.get("correct"),
                 "statement": r.get("statement"),
-            } for r in recent
+            }
+            for r in recent
         ],
-        "last_updated": last_updated,
+        "last_updated": stats.get("last_updated"),
     }
 
 
@@ -1868,6 +1987,13 @@ def _compute_staking_analytics(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     rows = []
     for sn in subnets:
         netuid = sn.get("netuid")
+        # Guard against malformed API rows where netuid may be a dict wrapper.
+        if isinstance(netuid, dict):
+            netuid = netuid.get("id") or netuid.get("netuid") or netuid.get("subnet") or 0
+        try:
+            netuid = int(netuid)
+        except (TypeError, ValueError):
+            netuid = str(netuid)
         reg = registry.get(str(netuid)) or registry.get(int(netuid) if str(netuid).isdigit() else netuid) or {}
         staking = reg.get("staking_data", {}) if isinstance(reg, dict) else {}
         apy = float(sn.get("apy", 0) or 0)
@@ -2080,49 +2206,49 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     momentum_charts = _build_momentum_charts(subnets, simivision_picks)
 
     engine = LearningEngine()
-    soul_map = engine.load_soul_map()
-    expert_weights = soul_map.get("expert_weights", {})
-    if not expert_weights:
-        expert_weights = {"alpha": 1.0, "beta": 1.0, "gamma": 1.0}
+    expert_weights = load_weights()
 
-    # Wire Council dispositions to live market conditions per expert role.
+    # Wire Council dispositions to live market conditions per canonical expert role.
     # Each expert evaluates the top-pick subnet through its own lens:
-    #   alpha  -> momentum / trend      (24h change + MACD)
-    #   beta   -> contrarian / RSI      (oversold < 30, overbought > 70)
-    #   gamma  -> fundamental / yield   (APY + emission)
-    alpha_pick = top_subnets[0] if top_subnets else {}
-    alpha_ind = _compute_technical_indicators(alpha_pick) if alpha_pick else {}
-    alpha_macd = alpha_ind.get("macd", {}) if isinstance(alpha_ind, dict) else {}
-    alpha_chg = float(alpha_pick.get("price_change_24h", 0) or 0)
-    alpha_macd_bullish = isinstance(alpha_macd, dict) and alpha_macd.get("crossover") == "bullish"
-    alpha_macd_bearish = isinstance(alpha_macd, dict) and alpha_macd.get("crossover") == "bearish"
-
-    beta_pick = top_subnets[0] if top_subnets else {}
-    beta_ind = _compute_technical_indicators(beta_pick) if beta_pick else {}
-    beta_rsi = float(beta_ind.get("rsi", {}).get("value", 50) or 50) if isinstance(beta_ind, dict) else 50.0
-
-    gamma_pick = top_subnets[0] if top_subnets else {}
-    gamma_apy = float(gamma_pick.get("apy", 0) or 0)
-    gamma_emission = float(gamma_pick.get("emission", 0) or 0)
+    #   quant       -> fundamental / yield   (APY + emission)
+    #   hype        -> momentum / social     (24h change + social buzz)
+    #   contrarian  -> contrarian / RSI      (oversold < 30, overbought > 70)
+    #   technical   -> technical / trend     (MACD + active indicator signals)
+    top_pick = top_subnets[0] if top_subnets else {}
+    top_ind = _compute_technical_indicators(top_pick) if top_pick else {}
+    top_macd = top_ind.get("macd", {}) if isinstance(top_ind, dict) else {}
+    top_rsi = float(top_ind.get("rsi", {}).get("value", 50) or 50) if isinstance(top_ind, dict) else 50.0
+    top_chg = float(top_pick.get("price_change_24h", 0) or 0)
+    top_macd_bullish = isinstance(top_macd, dict) and top_macd.get("crossover") == "bullish"
+    top_macd_bearish = isinstance(top_macd, dict) and top_macd.get("crossover") == "bearish"
+    top_apy = float(top_pick.get("apy", 0) or 0)
+    top_emission = float(top_pick.get("emission", 0) or 0)
+    top_mentions = int(top_pick.get("social_mentions", 0) or 0)
 
     def _disposition(expert: str) -> str:
         e = expert.lower()
-        if e == "alpha":  # momentum / trend
-            if alpha_chg > 5 or alpha_macd_bullish:
+        if e == "quant":  # fundamental / yield
+            if top_apy > 20 and top_emission > 1:
                 return "bullish"
-            if alpha_chg < -5 or alpha_macd_bearish:
+            if top_apy < 0 or top_emission < 0.05:
                 return "bearish"
             return "neutral"
-        if e == "beta":  # contrarian / mean-reversion
-            if beta_rsi < 30:
+        if e == "hype":  # momentum / social
+            if top_chg > 5 or top_mentions > 1000:
                 return "bullish"
-            if beta_rsi > 70:
+            if top_chg < -5 or top_mentions < 100:
                 return "bearish"
             return "neutral"
-        if e == "gamma":  # fundamental / yield
-            if gamma_apy > 20 and gamma_emission > 1:
+        if e == "contrarian":  # mean-reversion / RSI
+            if top_rsi < 30:
                 return "bullish"
-            if gamma_apy < 0 or gamma_emission < 0.05:
+            if top_rsi > 70:
+                return "bearish"
+            return "neutral"
+        if e == "technical":  # technical / trend
+            if top_macd_bullish:
+                return "bullish"
+            if top_macd_bearish:
                 return "bearish"
             return "neutral"
         # generic fallback tied to weight
@@ -2131,11 +2257,13 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     dispositions = {k: _disposition(k) for k in expert_weights.keys()}
     # Persist dispositions to soul_map.json so they survive restarts.
     try:
+        soul_map = engine.load_soul_map()
         soul_map["council_dispositions"] = dispositions
         soul_map["council"] = {
-            "alpha": {"disposition": dispositions.get("alpha", "neutral"), "lens": "momentum/trend", "pick": alpha_pick.get("name")},
-            "beta": {"disposition": dispositions.get("beta", "neutral"), "lens": "contrarian/RSI", "pick": beta_pick.get("name")},
-            "gamma": {"disposition": dispositions.get("gamma", "neutral"), "lens": "fundamental/yield", "pick": gamma_pick.get("name")},
+            "quant": {"disposition": dispositions.get("quant", "neutral"), "lens": "fundamental/yield", "pick": top_pick.get("name")},
+            "hype": {"disposition": dispositions.get("hype", "neutral"), "lens": "momentum/social", "pick": top_pick.get("name")},
+            "contrarian": {"disposition": dispositions.get("contrarian", "neutral"), "lens": "contrarian/RSI", "pick": top_pick.get("name")},
+            "technical": {"disposition": dispositions.get("technical", "neutral"), "lens": "technical/trend", "pick": top_pick.get("name")},
         }
         soul_map["last_updated"] = _dt.utcnow().isoformat() + "Z"
         engine.save_soul_map(soul_map)
@@ -2203,11 +2331,19 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     # Enrich active predictions with current estimate, expert tag, and
     # human-readable time remaining so the Predictive Engine cards render
     # complete information even when reusing older predictions from the store.
-    price_by_netuid = {sn.get("netuid"): float(sn.get("price", 0) or 0) for sn in subnets}
+    def _coerce_netuid(value: Any) -> Any:
+        if isinstance(value, dict):
+            value = value.get("id") or value.get("netuid") or value.get("subnet") or 0
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return str(value)
+
+    price_by_netuid = {_coerce_netuid(sn.get("netuid")): float(sn.get("price", 0) or 0) for sn in subnets}
     now = _dt.utcnow()
     enriched_predictions: List[Dict[str, Any]] = []
     for pr in predictions:
-        netuid = pr.get("netuid")
+        netuid = _coerce_netuid(pr.get("netuid"))
         ref = float(pr.get("reference_price", 0) or 0)
         current = price_by_netuid.get(netuid, ref) or ref
         try:
@@ -2253,6 +2389,79 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 
+def _default_market_intelligence() -> Dict[str, Any]:
+    return {
+        "avg_change_24h": 0.0,
+        "gainers": 0,
+        "losers": 0,
+        "total_volume": 0.0,
+        "breadth": "neutral",
+        "avg_apy": 0.0,
+        "total_market_cap": 0.0,
+        "total": 0,
+        "top_gainer": None,
+        "top_loser": None,
+    }
+
+
+def _default_rotation_tracker() -> Dict[str, Any]:
+    return {
+        "patterns": [],
+        "volatility_clusters": {"summary": {"mean_volatility": 0.0}},
+    }
+
+
+def _default_scenario_memory() -> Dict[str, Any]:
+    return {
+        "status": "ok",
+        "scenarios": [],
+        "regimes": {},
+        "stats": {"total": 0, "by_regime": {}},
+        "meta": {},
+    }
+
+
+def _default_learning_metrics() -> Dict[str, Any]:
+    return {
+        "expert_weights": {},
+        "total_records": 0,
+        "predictions_pending": 0,
+        "predictions_resolved": 0,
+        "correct": 0,
+        "wrong": 0,
+        "accuracy": 0.0,
+        "deltas": {"correct": 0.02, "wrong": -0.03},
+        "recent_resolutions": [],
+        "last_updated": None,
+    }
+
+
+def _default_premium_context() -> Dict[str, Any]:
+    """Return a fully populated premium context with safe defaults."""
+    return {
+        "simivision_picks": [],
+        "undervalued_radar": [],
+        "technical_indicators": [],
+        "market_intelligence": _default_market_intelligence(),
+        "staking_analytics": {
+            "total_stake": 0.0,
+            "avg_apy": 0.0,
+            "subnet_count": 0,
+            "top_yield": [],
+        },
+        "council_weights": [],
+        "expert_weights": {},
+        "mindmap_trail": [],
+        "signal_impact": [],
+        "patterns": [],
+        "predictions": [],
+        "learning_metrics": _default_learning_metrics(),
+        "social_sentiment": [],
+        "indicators_convergence": {"oversold": {}, "overbought": {}},
+        "momentum_charts": {"treemap": [], "radar": {"labels": [], "datasets": []}},
+    }
+
+
 @app.get("/")
 async def dashboard(request: Request):
     """Render the SimiVision dashboard server-side via Jinja2.
@@ -2260,43 +2469,163 @@ async def dashboard(request: Request):
     Context flows: server fetches subnets + SimiVision picks + mindmap summary
     + learning stats -> renders into templates/index.html -> user sees the
     complete dashboard. Vanilla JS polls /api/subnets every 5 min for refresh.
+
+    The route is hardened so that any partial failure still yields a renderable
+    context: every template key is guaranteed, and per-section helpers fall back
+    to safe defaults rather than aborting the whole page.
     """
+    subnets: List[Dict[str, Any]] = []
+    source = "unknown"
+    premium = _default_premium_context()
+    market_context = {"tao_change_24h": 0.0}
+    hour_picks: List[Dict[str, Any]] = []
+    day_picks: List[Dict[str, Any]] = []
+    daily_pick: Dict[str, Any] = {}
+    rotation_tracker: Dict[str, Any] = _default_rotation_tracker()
+    scenario_memory_snapshot: Dict[str, Any] = _default_scenario_memory()
+    indicators_convergence: Dict[str, Any] = {"subnets": []}
+    render_error: Optional[str] = None
+
     try:
         subnets, source = _get_subnets_with_source()
-        premium = _build_premium_context(subnets)
-        return templates.TemplateResponse(
-            request,
-            "index.html",
-            {
-                "subnets": subnets,
-                "data_source": source,
-                "mindmap": get_mindmap_summary(),
-                "learning_stats": get_learning_stats(),
-                "simivision": get_simivision_data(),
-                "rotation_tokens": _ROTATION_TOKENS,
-                "simivision_picks": premium["simivision_picks"],
-                "undervalued_radar": premium["undervalued_radar"],
-                "technical_indicators": premium["technical_indicators"],
-                "market_intelligence": premium["market_intelligence"],
-                "staking_analytics": premium["staking_analytics"],
-                "council_weights": premium["council_weights"],
-                "expert_weights": premium["expert_weights"],
-                "mindmap_trail": premium["mindmap_trail"],
-                "signal_impact": premium["signal_impact"],
-                "patterns": premium["patterns"],
-                "predictions": premium["predictions"],
-                "learning_metrics": premium["learning_metrics"],
-                "social_sentiment": premium["social_sentiment"],
-                "indicators_convergence": premium["indicators_convergence"],
-                "momentum_charts": premium["momentum_charts"],
-            },
-        )
     except Exception as e:
-        logger.error("Error rendering dashboard: %s", e)
-        return PlainTextResponse(
-            f"Internal Server Error: {str(e)}\nSystem status: Not operative",
-            status_code=500,
-        )
+        logger.error("Error fetching subnets for dashboard: %s", e)
+        subnets, source = [], "error"
+
+    try:
+        premium = _build_premium_context(subnets)
+    except Exception as e:
+        logger.error("Error building premium context: %s", e)
+        premium = _default_premium_context()
+
+    try:
+        for sn in subnets:
+            score = score_subnet_for_hour(sn, market_context)
+            hour_picks.append({
+                "netuid": sn.get("netuid"),
+                "name": sn.get("name"),
+                "symbol": sn.get("symbol"),
+                "score": score["total_score"],
+                "confidence": score["confidence"],
+                "signals": {
+                    "price_change_24h": sn.get("price_change_24h"),
+                    "price_change_7d": sn.get("price_change_7d"),
+                    "emission": sn.get("emission"),
+                    "apy": sn.get("apy"),
+                    "volume": sn.get("volume"),
+                },
+                "scenario_tags": score["scenario_tags"],
+            })
+        hour_picks.sort(key=lambda x: x["score"], reverse=True)
+        hour_picks = hour_picks[:3]
+    except Exception as e:
+        logger.error("Error computing hour picks: %s", e)
+        hour_picks = []
+
+    try:
+        daily_pick_result = select_daily_pick(subnets, market_context)
+        if daily_pick_result and daily_pick_result.get("subnet"):
+            candidate = daily_pick_result["subnet"]
+            sn = next(
+                (s for s in subnets if s.get("netuid") == candidate.get("netuid")),
+                {},
+            )
+            day_picks.append({
+                "netuid": candidate.get("netuid"),
+                "name": candidate.get("name"),
+                "symbol": candidate.get("symbol"),
+                "score": daily_pick_result.get("score", 0.0),
+                "confidence": daily_pick_result.get("confidence", 0.0),
+                "signals": {
+                    "price_change_24h": sn.get("price_change_24h"),
+                    "price_change_7d": sn.get("price_change_7d"),
+                    "emission": sn.get("emission"),
+                    "apy": sn.get("apy"),
+                    "volume": sn.get("volume"),
+                },
+                "scenario_tags": daily_pick_result.get("scenario_tags", {}),
+            })
+    except Exception as e:
+        logger.error("Error computing day picks: %s", e)
+        day_picks = []
+
+    try:
+        daily_pick = await api_daily_pick()
+    except Exception as e:
+        logger.error("Error fetching daily pick: %s", e)
+        daily_pick = {}
+
+    try:
+        rotation_tracker = await api_rotation_tracker()
+    except Exception as e:
+        logger.error("Error fetching rotation tracker: %s", e)
+        rotation_tracker = _default_rotation_tracker()
+
+    try:
+        scenario_memory_snapshot = await api_scenario_memory()
+    except Exception as e:
+        logger.error("Error fetching scenario memory: %s", e)
+        scenario_memory_snapshot = _default_scenario_memory()
+
+    try:
+        indicators_convergence = await api_indicators_convergence()
+    except Exception as e:
+        logger.error("Error fetching indicators convergence: %s", e)
+        indicators_convergence = {"subnets": []}
+
+    context = {
+        "subnets": subnets,
+        "data_source": source,
+        "mindmap": get_mindmap_summary(),
+        "learning_stats": get_learning_stats(),
+        "simivision": get_simivision_data(),
+        "rotation_tokens": _ROTATION_TOKENS,
+        "simivision_picks": premium.get("simivision_picks", []),
+        "undervalued_radar": premium.get("undervalued_radar", []),
+        "technical_indicators": premium.get("technical_indicators", []),
+        "market_intelligence": premium.get("market_intelligence", _default_market_intelligence()),
+        "staking_analytics": premium.get("staking_analytics", {
+            "total_stake": 0.0,
+            "avg_apy": 0.0,
+            "subnet_count": 0,
+            "top_yield": [],
+        }),
+        "council_weights": premium.get("council_weights", []),
+        "expert_weights": premium.get("expert_weights", {}),
+        "mindmap_trail": premium.get("mindmap_trail", []),
+        "signal_impact": premium.get("signal_impact", []),
+        "patterns": premium.get("patterns", []),
+        "predictions": premium.get("predictions", []),
+        "learning_metrics": premium.get("learning_metrics", _default_learning_metrics()),
+        "social_sentiment": premium.get("social_sentiment", []),
+        "indicators_convergence": premium.get("indicators_convergence", {"oversold": {}, "overbought": {}}),
+        "momentum_charts": premium.get("momentum_charts", {"treemap": [], "radar": {"labels": [], "datasets": []}}),
+        "hour_picks": hour_picks,
+        "day_picks": day_picks,
+        "daily_pick": daily_pick,
+        "rotation_tracker": rotation_tracker,
+        "scenario_memory": scenario_memory_snapshot,
+        "api_indicators_convergence": indicators_convergence,
+    }
+
+    try:
+        context["request"] = request
+        return templates.TemplateResponse("index.html", context)
+    except Exception as e:
+        logger.error("Error rendering dashboard template: %s", e)
+        render_error = str(e)
+        # Minimal fallback response so the page still loads with defaults.
+        fallback_context = {**_default_premium_context(), **context}
+        fallback_context["render_error"] = render_error
+        try:
+            fallback_context["request"] = request
+            return templates.TemplateResponse("index.html", fallback_context)
+        except Exception as e2:
+            logger.error("Fallback dashboard render also failed: %s", e2)
+            return PlainTextResponse(
+                f"Internal Server Error: {render_error}\nFallback error: {e2}\nSystem status: Degraded",
+                status_code=500,
+            )
 
 
 @app.get("/api/predictions")
@@ -2419,6 +2748,19 @@ async def api_indicators_convergence():
         return {"subnets": [], "error": str(e)}
 
 
+@app.get("/api/indicators")
+async def api_indicators():
+    """Return the latest technical-indicator state from the indicator engine."""
+    try:
+        return {
+            "status": "success",
+            "data": IndicatorEngine().get_indicator_state(),
+        }
+    except Exception as e:
+        logger.error("Error fetching indicator state: %s", e)
+        return {"status": "error", "data": {}, "error": str(e)}
+
+
 @app.get("/api/top-picks")
 async def api_top_picks():
     """Return top 3 subnets by short-horizon and 24h Council state-vector scores."""
@@ -2466,25 +2808,66 @@ async def api_top_picks():
         return {"hour_picks": [], "day_picks": [], "error": str(e)}
 
 
-@app.get("/api/daily-pick")
-async def api_daily_pick():
-    """Return the single audited daily pick from the Council engine."""
+def _build_hour_pick_payload(sn: Dict[str, Any], score: Dict[str, Any]) -> Dict[str, Any]:
+    """Format a subnet + hour state-vector into the public hour-pick shape."""
+    return {
+        "subnet": {
+            "netuid": sn.get("netuid"),
+            "name": sn.get("name"),
+            "symbol": sn.get("symbol"),
+        },
+        "score": score["total_score"],
+        "confidence": score["confidence"],
+        "expert_contributions": score["expert_contributions"],
+        "scenario_tags": score["scenario_tags"],
+        "signals": {
+            "price_change_24h": sn.get("price_change_24h"),
+            "price_change_7d": sn.get("price_change_7d"),
+            "emission": sn.get("emission"),
+            "apy": sn.get("apy"),
+            "volume": sn.get("volume"),
+        },
+        "action": "long",
+    }
+
+
+@app.get("/api/top-pick/hour")
+async def api_top_pick_hour():
+    """Return the top 3 short-horizon picks with a safe fallback."""
     try:
         subnets, _ = _get_subnets_with_source()
         market_context = {"tao_change_24h": 0.0}
-        return select_daily_pick(subnets, market_context)
+        scored = []
+        for sn in subnets:
+            try:
+                score = score_subnet_for_hour(sn, market_context)
+            except Exception as exc:  # per-subnet scoring failure -> skip
+                logger.warning("score_subnet_for_hour failed for SN%s: %s", sn.get("netuid"), exc)
+                continue
+            scored.append({"subnet": sn, "score": score})
+        scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
+        return {"picks": [_build_hour_pick_payload(i["subnet"], i["score"]) for i in scored[:3]]}
+    except Exception as e:
+        logger.error("Error fetching hour pick: %s", e)
+        subnets, _ = _get_subnets_with_source()
+        return {"picks": [_highest_emission_pick(subnets)]}
+
+
+@app.get("/api/daily-pick")
+async def api_daily_pick():
+    """Return today's audited daily pick from the Council engine."""
+    try:
+        subnets, _ = _get_subnets_with_source()
+        market_context = {"tao_change_24h": 0.0}
+        return get_or_create_today_pick(subnets, market_context)
     except Exception as e:
         logger.error("Error fetching daily pick: %s", e)
         return {
-            "subnet": None,
-            "score": 0.0,
-            "confidence": 0.0,
-            "expert_contributions": {},
-            "scenario_tags": {},
-            "audit": {"approved": False, "concerns": [str(e)], "adjusted_confidence": 0.0},
-            "final_confidence": 0.0,
-            "action": "long",
-            "error": str(e),
+            "status": "error",
+            "date": datetime.utcnow().date().isoformat(),
+            "action": "HOLD",
+            "reason": str(e),
+            "pick": None,
         }
 
 
@@ -2794,6 +3177,8 @@ def build_mindmap_feed(picks: List[Dict], council_votes: List[Dict], undervalued
 # ---------------------------------------------------------------------------
 # Phase 2: Mount the self-learning loop's feedback router (APIRouter)
 # ---------------------------------------------------------------------------
+from data.learning_engine import create_feedback_router
+
 _feedback_router = create_feedback_router()
 if _feedback_router is not None:
     app.include_router(_feedback_router)

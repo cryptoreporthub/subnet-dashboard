@@ -22,9 +22,6 @@ import tempfile
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from internal.council.judge.adversarial import AdversarialJudge
-from internal.council.mindmap_bridge import MindmapBridge
-from internal.council.signals.pathfinder import PathfinderWorker
 from internal.freshness import registry_freshness, soul_map_freshness
 
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
@@ -114,14 +111,14 @@ def _persist_convictions(
     soul_map["simivision_convictions_updated_at"] = _now_iso()
     _save_json(soul_map_path, soul_map)
 
-def _load_selector_decisions(soul_map_path: str = SOUL_MAP_PATH) -> List[Dict[str, Any]]:
-    """Read the latest selector decisions persisted in the soul map."""
+def _load_council_decisions(soul_map_path: str = SOUL_MAP_PATH) -> List[Dict[str, Any]]:
+    """Read any Council decisions persisted in the soul map (legacy field)."""
     soul_map = _load_json(soul_map_path)
     last_output = soul_map.get("soul_map_state", {}).get("last_selector_output", {})
     return last_output.get("decisions", [])
 
 def _synthesize_decision(netuid: int, registry_item: Dict[str, Any]) -> Dict[str, Any]:
-    """Generate a neutral decision when the Selector has not yet run for a subnet."""
+    """Generate a neutral decision when no Council decision exists for a subnet."""
     emission = registry_item.get("emission", 0.0) or 0.0
     mentions = registry_item.get("social_mentions", 0) or 0
     is_overvalued = registry_item.get("is_overvalued", False)
@@ -185,10 +182,9 @@ def _synthesize_decision(netuid: int, registry_item: Dict[str, Any]) -> Dict[str
 def _compute_conviction(
     decision: Dict[str, Any],
     registry_item: Dict[str, Any],
-    judge: Optional[AdversarialJudge] = None,
-) -> float:
+) -> tuple:
     """
-    Compute a 0-100 conviction score from selector consensus and registry metrics.
+    Compute a 0-100 conviction score from Council consensus and registry metrics.
 
     Breakdown:
     - consensus_score * 70
@@ -196,7 +192,6 @@ def _compute_conviction(
     - social mention bonus: >1500 = 10, >1000 = 5
     - overvaluation penalty: -10 if overvalued
     - fractional tiebreaker: inverse emission_rank so lower ranks edge ahead
-    - adversarial boost/penalty when a judge verdict is available
     """
     consensus = decision.get("consensus_score", 0.5)
     base = min(100.0, max(0.0, consensus * 70.0))
@@ -248,26 +243,6 @@ def _compute_conviction(
         indicator_bonus += 3.0
         indicator_phrases.append("bullish confluence")
     conviction += indicator_bonus
-
-    # Adversarial layer: validated decisions get a small boost, contradicted
-    # decisions get a penalty. This integrates learned outcomes into ranking.
-    if judge is not None:
-        verdict = judge.judge_decision(
-            decision,
-            {
-                "status": registry_item.get("status", "unknown"),
-                "emission": registry_item.get("emission", 0.0),
-                "social_mentions": social,
-                "is_overvalued": overvalued,
-            },
-            subnet_id=decision.get("subnet_id"),
-        )
-        label = verdict.get("outcome_label")
-        confidence = verdict.get("confidence", 0.5)
-        if label == "validated":
-            conviction += 3.0 * confidence
-        elif label == "contradicted":
-            conviction -= 5.0 * confidence
 
     return round(min(100.0, max(0.0, conviction)), 2), indicator_phrases
 
@@ -347,18 +322,25 @@ def _build_signal(
     decision: Dict[str, Any],
     registry_item: Dict[str, Any],
     last_convictions: Dict[str, float],
-    judge: Optional[AdversarialJudge] = None,
 ) -> Dict[str, Any]:
     """Build a single SimiVision signal object for a subnet."""
-    conviction, indicator_phrases = _compute_conviction(decision, registry_item, judge)
+    conviction, indicator_phrases = _compute_conviction(decision, registry_item)
     delta, delta_value = _compute_delta(netuid, conviction, last_convictions)
     status = "Operative" if registry_item.get("status") == "active" else "Dimmed"
+
+    action = decision.get("recommended_action", "hold")
+    recommendation = {
+        "accumulate": "buy",
+        "reduce": "sell",
+        "neutral": "hold",
+    }.get(action, action)
 
     return {
         "netuid": netuid,
         "name": registry_item.get("name", f"Subnet {netuid}"),
         "rank": netuid,
         "conviction": conviction,
+        "recommendation": recommendation,
         "rationale": _build_rationale(decision, registry_item, conviction, status),
         "delta": delta,
         "delta_value": delta_value,
@@ -371,12 +353,11 @@ def _build_signal(
 def _get_simivision_signals(
     registry: Dict[str, Any],
     soul_map_path: str = SOUL_MAP_PATH,
-    judge: Optional[AdversarialJudge] = None,
 ) -> List[Dict[str, Any]]:
     """Generate SimiVision signals for all subnets in the registry."""
     last_convictions = _load_last_convictions(soul_map_path)
-    selector_decisions = _load_selector_decisions(soul_map_path)
-    decisions_by_subnet = {d["subnet_id"]: d for d in selector_decisions}
+    council_decisions = _load_council_decisions(soul_map_path)
+    decisions_by_subnet = {d["subnet_id"]: d for d in council_decisions}
 
     signals = []
     for netuid_str, registry_item in registry.items():
@@ -389,7 +370,7 @@ def _get_simivision_signals(
         if decision is None:
             decision = _synthesize_decision(netuid, registry_item)
 
-        signal = _build_signal(netuid, decision, registry_item, last_convictions, judge)
+        signal = _build_signal(netuid, decision, registry_item, last_convictions)
         signals.append(signal)
 
     # Sort by conviction descending
@@ -414,6 +395,10 @@ class SimiVisionEngine:
         registry = _load_registry(self.registry_path)
         filtered_registry = _filter_low_mid_cap_subnets(registry, self.stake_threshold_tao)
         return _get_simivision_signals(filtered_registry, self.soul_map_path)
+
+    def top_signals(self, n: int = 10) -> List[Dict[str, Any]]:
+        """Return the top-N SimiVision signals."""
+        return self.get_signals()[:n]
 
     def get_signal(self, netuid: int) -> Optional[Dict[str, Any]]:
         """Get a single SimiVision signal for a specific subnet."""
