@@ -485,16 +485,16 @@
     <div class="section-sub">Oracle · Echo · Pulse — live scores, paper portfolios & postmortems {% if usd_rate %}| TAO ${{ '%.2f'|format(usd_rate) }}{% endif %}</div>
     <div class="card">
       <div class="council-grid">
-        {% for j in judge_cards %}
+        {% for j in (judge_cards | safe_list) %}
         <div class="expert card-soft" style="border-radius:12px">
-          <div class="avatar">{{ j.name[0] }}</div>
+          <div class="avatar">{{ (j.name | string)[0] }}</div>
           <div class="name">{{ j.name }}</div>
-          <div style="font-size:11px;color:var(--txt-2);margin-bottom:6px">{{ j.role }}</div>
-          <div class="w">{{ '%.3f'|format(j.score) }}</div>
-          <div style="font-size:11px;color:var(--txt-2)">conf {{ '%.2f'|format(j.confidence) }}</div>
-          <div class="wbar"><div class="wfill" style="width:{{ (j.score * 100)|round }}%"></div></div>
-          <div class="bias {{ 'pos' if j.win_pct >= 50 else 'neu' }}">{{ j.win_pct }}% win</div>
-          <div style="font-size:11px;color:var(--txt-2);margin-top:4px">P&L {{ '%.4f'|format(j.pnl) }} · {{ j.open_positions }} open · {{ j.postmortems }} postmortems</div>
+          <div style="font-size:11px;color:var(--txt-2);margin-bottom:6px">{{ j.role | default(j.name, true) }}</div>
+          <div class="w">{{ '%.3f'|format(j.score | float) }}</div>
+          <div style="font-size:11px;color:var(--txt-2)">conf {{ '%.2f'|format(j.confidence | float) }}</div>
+          <div class="wbar"><div class="wfill" style="width:{{ ((j.score | float) * 100)|round }}%"></div></div>
+          <div class="bias {{ 'pos' if (j.win_pct | float) >= 50 else 'neu' }}">{{ j.win_pct | float }}% win</div>
+          <div style="font-size:11px;color:var(--txt-2);margin-top:4px">P&L {{ '%.4f'|format(j.pnl | float) }} · {{ j.open_positions | int }} open · {{ j.postmortems | int }} postmortems</div>
         </div>
         {% endfor %}
       </div>

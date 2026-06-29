@@ -281,6 +281,34 @@ if os.path.isdir(_static_dir):
 _templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 templates = Jinja2Templates(directory=_templates_dir)
 
+
+def _jinja_safe_list(value: Any) -> List[Any]:
+    """Return a safe list for Jinja iteration.
+
+    Strings and bytes are returned as single-item lists so they are not
+    iterated character-by-character. Dicts with unhashable keys are converted
+    to a list of their values to avoid Jinja's "unhashable type" errors.
+    """
+    if value is None:
+        return []
+    if isinstance(value, (str, bytes)):
+        return [value]
+    if isinstance(value, dict):
+        # If any key is unhashable, iterating the dict raises. Fall back to
+        # values() so the page still renders.
+        try:
+            list(value.keys())
+        except TypeError:
+            return list(value.values())
+        return list(value.values())
+    try:
+        return list(value)
+    except Exception:
+        return [value] if value else []
+
+
+templates.env.filters["safe_list"] = _jinja_safe_list
+
 def _app_version() -> str:
     return "3.5.0"
 
@@ -2283,22 +2311,40 @@ def _build_judge_cards(tao_usd: Optional[float] = None) -> List[Dict[str, Any]]:
     if not _JUDGES_AVAILABLE:
         return cards
 
-    portfolios = all_portfolios()
-    postmortems = all_postmortems()
+    try:
+        portfolios = all_portfolios()
+        postmortems = all_postmortems()
+    except Exception as exc:
+        logger.warning("Judge data unavailable, returning empty cards: %s", exc)
+        return cards
+
+    if not isinstance(portfolios, dict):
+        portfolios = {}
+    if not isinstance(postmortems, dict):
+        postmortems = {}
 
     for judge in all_judges():
         name = judge.name
-        pf = portfolios.get(name, {})
+        pf = portfolios.get(name, {}) if isinstance(portfolios, dict) else {}
+        if not isinstance(pf, dict):
+            pf = {}
         summary = pf.get("summary", {}) if isinstance(pf, dict) else {}
-        stats = summary.get("stats", {}) if isinstance(summary, dict) else {}
-        pnl = summary.get("total_pnl", 0.0) if isinstance(summary, dict) else 0.0
-        wins = int(stats.get("wins", 0))
-        losses = int(stats.get("losses", 0))
+        if not isinstance(summary, dict):
+            summary = {}
+
+        # Portfolio summary uses win_count/loss_count/total_pnl_pct.
+        wins = int(summary.get("win_count", 0) or 0)
+        losses = int(summary.get("loss_count", 0) or 0)
         total = wins + losses
         win_pct = round(wins / total * 100, 1) if total else 0.0
-        open_positions = len(pf.get("open", [])) if isinstance(pf, dict) else 0
-        closed_positions = len(pf.get("closed", [])) if isinstance(pf, dict) else 0
+        pnl = float(summary.get("total_pnl_pct", 0.0) or 0.0)
+
+        # Position lists use open_positions/closed_positions.
+        open_positions = len(pf.get("open_positions", [])) if isinstance(pf, dict) else 0
+        closed_positions = len(pf.get("closed_positions", [])) if isinstance(pf, dict) else 0
         judge_postmortems = postmortems.get(name, []) if isinstance(postmortems, dict) else []
+        if not isinstance(judge_postmortems, list):
+            judge_postmortems = []
 
         # Evaluate the judge against a neutral placeholder so we always have a score.
         try:
@@ -2510,8 +2556,9 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     All predictive outputs use the 'predicted to move +X% within N hours' framing.
     Missing data degrades gracefully (synthetic series / neutral defaults).
     """
-    if not subnets:
+    if not isinstance(subnets, list):
         subnets = []
+    subnets = [s for s in subnets if isinstance(s, dict)]
 
     # Run the learning-loop resolver on every render: dedupe pending
     # predictions, resolve any whose horizon has elapsed, and nudge expert
@@ -3015,10 +3062,15 @@ async def dashboard(request: Request):
         logger.error("Error rendering dashboard template: %s", e)
         render_error = str(e)
         # Minimal fallback response so the page still loads with defaults.
-        fallback_context = {**_default_premium_context(), **context}
+        # Do NOT reuse the original context values that may have caused the
+        # render failure; start from safe defaults and only keep known-safe
+        # scalar metadata.
+        fallback_context = _default_premium_context()
+        fallback_context["request"] = request
         fallback_context["render_error"] = render_error
+        fallback_context["data_source"] = source
+        fallback_context["subnets"] = subnets if isinstance(subnets, list) else []
         try:
-            fallback_context["request"] = request
             return templates.TemplateResponse("index.html", fallback_context)
         except Exception as e2:
             logger.error("Fallback dashboard render also failed: %s", e2)

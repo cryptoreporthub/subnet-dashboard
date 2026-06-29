@@ -123,3 +123,34 @@ def test_homepage_renders_status_badge(client):
     assert response.status_code == 200
     html = response.text
     assert 'SimiVision' in html
+
+
+def test_judges_api_routes(client):
+    """Judges endpoints return 200 and structured data."""
+    for path in ['/api/judges', '/api/portfolios', '/api/judges/oracle/postmortems',
+                 '/api/subnets', '/api/indicators', '/api/simivision', '/api/top-pick/hour']:
+        response = client.get(path)
+        assert response.status_code == 200, f"{path} returned {response.status_code}"
+
+
+def test_homepage_renders_with_malformed_judge_cards(client, monkeypatch):
+    """The SSR homepage survives a malformed judge_cards value."""
+    import server
+
+    def _broken_build(*args, **kwargs):
+        # Return a dict keyed by dicts to exercise the safe_list filter.
+        # Python dicts cannot hold dict keys, so return a dict of dicts which
+        # the template's safe_list filter will convert to values.
+        return {
+            "oracle": {"name": "Oracle", "role": "oracle", "score": 0.75,
+                       "confidence": 0.82, "win_pct": 60.0, "pnl": 0.05,
+                       "open_positions": 2, "postmortems": 1},
+            "echo": {"name": "Echo", "role": "echo", "score": 0.65,
+                     "confidence": 0.70, "win_pct": 55.0, "pnl": 0.03,
+                     "open_positions": 1, "postmortems": 0},
+        }
+
+    monkeypatch.setattr(server, "_build_judge_cards", _broken_build)
+    response = client.get('/')
+    assert response.status_code == 200, response.text[:1000]
+    assert 'Judge Panel' in response.text or 'Oracle' in response.text
