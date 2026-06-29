@@ -67,6 +67,13 @@ def _get_price_history(netuid: Any, sn: Dict[str, Any]) -> Dict[str, Any]:
     source = "synthetic"
 
     cache = _load_price_cache()
+    # Guard against malformed API rows where netuid may be a dict wrapper.
+    if isinstance(netuid, dict):
+        netuid = netuid.get("id") or netuid.get("netuid") or netuid.get("subnet") or 0
+    try:
+        netuid = int(netuid)
+    except (TypeError, ValueError):
+        netuid = str(netuid)
     raw = cache.get(str(netuid)) or cache.get(int(netuid) if str(netuid).isdigit() else netuid)
     if raw and isinstance(raw, dict):
         candles = raw.get("candles") or []

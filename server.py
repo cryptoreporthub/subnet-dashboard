@@ -735,6 +735,13 @@ def _get_price_history(netuid: Any, sn: Dict[str, Any]) -> Dict[str, Any]:
     source = "synthetic"
 
     cache = _load_price_cache()
+    # Guard against malformed API rows where netuid may be a dict wrapper.
+    if isinstance(netuid, dict):
+        netuid = netuid.get("id") or netuid.get("netuid") or netuid.get("subnet") or 0
+    try:
+        netuid = int(netuid)
+    except (TypeError, ValueError):
+        netuid = str(netuid)
     raw = cache.get(str(netuid)) or cache.get(int(netuid) if str(netuid).isdigit() else netuid)
     if raw and isinstance(raw, dict):
         candles = raw.get("candles") or []
@@ -1807,6 +1814,13 @@ def _compute_staking_analytics(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     rows = []
     for sn in subnets:
         netuid = sn.get("netuid")
+        # Guard against malformed API rows where netuid may be a dict wrapper.
+        if isinstance(netuid, dict):
+            netuid = netuid.get("id") or netuid.get("netuid") or netuid.get("subnet") or 0
+        try:
+            netuid = int(netuid)
+        except (TypeError, ValueError):
+            netuid = str(netuid)
         reg = registry.get(str(netuid)) or registry.get(int(netuid) if str(netuid).isdigit() else netuid) or {}
         staking = reg.get("staking_data", {}) if isinstance(reg, dict) else {}
         apy = float(sn.get("apy", 0) or 0)
@@ -2144,11 +2158,19 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     # Enrich active predictions with current estimate, expert tag, and
     # human-readable time remaining so the Predictive Engine cards render
     # complete information even when reusing older predictions from the store.
-    price_by_netuid = {sn.get("netuid"): float(sn.get("price", 0) or 0) for sn in subnets}
+    def _coerce_netuid(value: Any) -> Any:
+        if isinstance(value, dict):
+            value = value.get("id") or value.get("netuid") or value.get("subnet") or 0
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return str(value)
+
+    price_by_netuid = {_coerce_netuid(sn.get("netuid")): float(sn.get("price", 0) or 0) for sn in subnets}
     now = _dt.utcnow()
     enriched_predictions: List[Dict[str, Any]] = []
     for pr in predictions:
-        netuid = pr.get("netuid")
+        netuid = _coerce_netuid(pr.get("netuid"))
         ref = float(pr.get("reference_price", 0) or 0)
         current = price_by_netuid.get(netuid, ref) or ref
         try:
