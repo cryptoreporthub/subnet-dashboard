@@ -300,13 +300,43 @@ def health_check():
     return PlainTextResponse("OK")
 
 
+def _highest_emission_pick(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Return a pick-shaped fallback using the highest-emission subnet."""
+    best = max(subnets, key=lambda s: s.get("emission", 0) or 0) if subnets else {}
+    return {
+        "subnet": {
+            "netuid": best.get("netuid"),
+            "name": best.get("name"),
+            "symbol": best.get("symbol"),
+        },
+        "score": 0.0,
+        "confidence": 0.0,
+        "expert_contributions": {},
+        "scenario_tags": {"fallback": "highest-emission"},
+        "signals": {
+            "price_change_24h": best.get("price_change_24h"),
+            "price_change_7d": best.get("price_change_7d"),
+            "emission": best.get("emission"),
+            "apy": best.get("apy"),
+            "volume": best.get("volume"),
+        },
+        "action": "long",
+    }
+
+
 @app.get("/api/top-pick/day")
 def api_top_pick_day():
-    """Return the top pick for the current day."""
+    """Return the top pick for the current day with a safe fallback."""
     subnets, _ = _get_subnets_with_source()
     market_context = {"tao_change_24h": 0.0}
-    day_picks = [select_daily_pick(subnets, market_context)]
-    return {"picks": day_picks}
+    try:
+        day_pick = select_daily_pick(subnets, market_context)
+    except Exception as exc:
+        logger.error("Error selecting daily pick: %s", exc)
+        day_pick = None
+    if not day_pick:
+        return {"picks": [_highest_emission_pick(subnets)]}
+    return {"picks": [day_pick]}
 
 
 @app.get("/api/subnets")
@@ -2384,7 +2414,8 @@ async def dashboard(request: Request):
     }
 
     try:
-        return templates.TemplateResponse(request, "index.html", context)
+        context["request"] = request
+        return templates.TemplateResponse("index.html", context)
     except Exception as e:
         logger.error("Error rendering dashboard template: %s", e)
         render_error = str(e)
@@ -2392,7 +2423,8 @@ async def dashboard(request: Request):
         fallback_context = {**_default_premium_context(), **context}
         fallback_context["render_error"] = render_error
         try:
-            return templates.TemplateResponse(request, "index.html", fallback_context)
+            fallback_context["request"] = request
+            return templates.TemplateResponse("index.html", fallback_context)
         except Exception as e2:
             logger.error("Fallback dashboard render also failed: %s", e2)
             return PlainTextResponse(
@@ -2606,19 +2638,24 @@ def _build_hour_pick_payload(sn: Dict[str, Any], score: Dict[str, Any]) -> Dict[
 
 @app.get("/api/top-pick/hour")
 async def api_top_pick_hour():
-    """Return the top 3 short-horizon picks."""
+    """Return the top 3 short-horizon picks with a safe fallback."""
     try:
         subnets, _ = _get_subnets_with_source()
         market_context = {"tao_change_24h": 0.0}
         scored = []
         for sn in subnets:
-            score = score_subnet_for_hour(sn, market_context)
+            try:
+                score = score_subnet_for_hour(sn, market_context)
+            except Exception as exc:  # per-subnet scoring failure -> skip
+                logger.warning("score_subnet_for_hour failed for SN%s: %s", sn.get("netuid"), exc)
+                continue
             scored.append({"subnet": sn, "score": score})
         scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
         return {"picks": [_build_hour_pick_payload(i["subnet"], i["score"]) for i in scored[:3]]}
     except Exception as e:
         logger.error("Error fetching hour pick: %s", e)
-        return {"picks": [], "error": str(e)}
+        subnets, _ = _get_subnets_with_source()
+        return {"picks": [_highest_emission_pick(subnets)]}
 
 
 @app.get("/api/daily-pick")
