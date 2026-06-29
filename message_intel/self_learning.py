@@ -17,7 +17,23 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from internal.council.judge.adversarial import AdversarialJudge
+try:
+    from internal.council.judge.adversarial import AdversarialJudge
+except ModuleNotFoundError as _e:  # pragma: no cover - internal module absent in main
+    logger = logging.getLogger(__name__)
+    logger.warning(
+        "Internal council judge not available (%s). Using fallback AdversarialJudge.",
+        _e,
+    )
+
+    class AdversarialJudge:
+        """Minimal fallback judge with the council weights API."""
+
+        def __init__(self, *args, **kwargs):
+            self.weights = {"quant": 0.3, "hype": 0.25, "contrarian": 0.2, "technical": 0.25}
+
+        def get_council_weights(self) -> Dict[str, float]:
+            return dict(self.weights)
 
 logger = logging.getLogger(__name__)
 

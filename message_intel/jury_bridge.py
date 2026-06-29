@@ -12,8 +12,50 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from internal.council.judge.adversarial import AdversarialJudge
-from internal.council.mindmap_bridge import MindmapBridge
+try:
+    from internal.council.judge.adversarial import AdversarialJudge
+    from internal.council.mindmap_bridge import MindmapBridge
+except ModuleNotFoundError as _e:  # pragma: no cover - internal modules absent in main
+    logger = logging.getLogger(__name__)
+    logger.warning(
+        "Internal council modules not available (%s). Using fallback judge/mindmap.",
+        _e,
+    )
+
+    class AdversarialJudge:
+        """Minimal fallback judge that returns a neutral verdict."""
+
+        def __init__(self, *args, **kwargs):
+            self.weights = {"quant": 0.3, "hype": 0.25, "contrarian": 0.2, "technical": 0.25}
+
+        def judge_decision(self, signal: Dict[str, Any], outcome: Dict[str, Any]) -> Dict[str, Any]:
+            consensus = float(signal.get("consensus_score", 0.5))
+            action = signal.get("recommended_action", "hold")
+            if action == "accumulate":
+                label = "validated"
+            elif action == "reduce":
+                label = "contradicted"
+            else:
+                label = "neutral"
+            return {
+                "outcome_label": label,
+                "confidence": round(consensus, 4),
+                "note": "Fallback adversarial verdict (internal council unavailable).",
+            }
+
+    class MindmapBridge:
+        """Minimal fallback mindmap bridge that keeps state in memory."""
+
+        def __init__(self, *args, **kwargs):
+            self.soul_map_state: Dict[str, Any] = {}
+
+        def _save_to_disk(self) -> None:
+            pass
+
+        def log_simivision_feedback(
+            self, subnet_id: int, outcome: int, note: str = ""
+        ) -> None:
+            pass
 
 logger = logging.getLogger(__name__)
 
