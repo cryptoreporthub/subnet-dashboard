@@ -1,641 +1,1064 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SimiVision — Intelligence Cockpit</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
+Title: 
 
-<!-- ============ 1. STICKY HEADER ============ -->
-<header class="top">
-  <div class="top-inner">
-    <div class="logo">
-      <div class="logo-mark">S</div>
-      <div>
-        <div class="logo-text">Simi<span>Vision</span></div>
-        <div class="logo-sub">Intelligence Cockpit</div>
-      </div>
-    </div>
-    <div class="src-tag">DATA: <b>{{ data_source|upper }}</b> · {{ subnets|length }} subnets tracked</div>
-    <div class="header-actions">
-      <div class="live-pill"><span class="live-dot"></span>LIVE</div>
-      <div class="utc-clock" id="utcClock">--:--:--</div>
-    </div>
-  </div>
-</header>
+URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/feat/ui-cockpit-redesign/templates/index.html
 
-<div class="wrap">
+Markdown Content:
+S
 
-  <!-- ============ 2. HERO DAILY PICK ============ -->
-  <section class="row layout-grid">
-    <div class="span-12">
-      <div class="section-label">Daily Pick — Council Audited</div>
-      <div class="hero-card">
-        {% set dp = daily_pick or {} %}
-        {% set dp_subnet = dp.subnet or {} %}
-        {% if dp_subnet.name %}
-        <div class="hero-top">
-          <div>
-            <div class="hero-name">{{ dp_subnet.name }}</div>
-            <div class="hero-meta">SN{{ dp_subnet.netuid }} · Council audited daily candidate</div>
-          </div>
-          <div class="tags">
-            {% if dp.action == 'BUY' %}<span class="badge badge-buy">BUY</span>
-            {% elif dp.action == 'SELL' %}<span class="badge badge-sell">SELL</span>
-            {% elif dp.action == 'HOLD' %}<span class="badge badge-hold">HOLD</span>
-            {% else %}<span class="badge badge-watch">WATCH</span>{% endif %}
-          </div>
-        </div>
+ 
 
-        <div class="hero-stats">
-          <div class="hero-stat">
-            <div class="k">Score</div>
-            <div class="v">{{ '%.2f'|format(dp.score or 0) }}</div>
-          </div>
-          <div class="hero-stat">
-            <div class="k">Final Confidence</div>
-            <div class="v">{{ '%.0f'|format((dp.final_confidence or 0)*100) }}%</div>
-          </div>
-          <div class="hero-stat">
-            <div class="k">Audit</div>
-            <div class="v small">
-              {% if dp.audit and dp.audit.approved %}
-                <span class="buy">APPROVED</span>
-              {% else %}
-                <span class="sell">FLAGGED</span>
-              {% endif %}
-            </div>
-          </div>
-        </div>
+ 
 
-        {% if dp.reason %}
-        <div class="hero-reason">{{ dp.reason }}</div>
-        {% elif dp.reasons %}
-        <div class="hero-reason">{{ dp.reasons[0] }}</div>
-        {% endif %}
+Simi Vision
 
-        {% if dp.audit and not dp.audit.approved and dp.audit.concerns %}
-        <div class="hero-audit flagged">
-          <span>{{ dp.audit.concerns|length }} concern(s):</span>
-          <span>{{ dp.audit.concerns|join(' · ') }}</span>
-        </div>
-        {% else %}
-        <div class="hero-audit">No audit concerns flagged</div>
-        {% endif %}
+ 
 
-        {% if dp.sparkline %}
-        <div class="hero-spark"><canvas class="spark" data-spark="{{ dp.sparkline|join(',') }}"></canvas></div>
-        {% elif dp_subnet.netuid %}
-        {% set hist = dp_subnet.price_history or [] %}
-        {% if hist %}
-        <div class="hero-spark"><canvas class="spark" data-spark="{{ hist[-12:]|join(',') }}"></canvas></div>
-        {% endif %}
-        {% endif %}
-        {% else %}
-        <div class="hero-name">—</div>
-        <div class="hero-reason empty">No daily pick available. The Council audit layer will populate a candidate on the next refresh.</div>
-        {% endif %}
-      </div>
-    </div>
-  </section>
+Intelligence Cockpit
 
-  <!-- ============ 3. SUPPORTING PICKS + KPI ROW ============ -->
-  <section class="row layout-grid">
-    <div class="span-7">
-      <div class="section-title">Supporting Picks</div>
-      <div class="two-col">
-        {% set hour = (hour_picks or [])[0] %}
-        <div class="pick-card {{ 'sell-accent' if hour and hour.signals and (hour.signals.price_change_24h or 0) < -10 else '' }}">
-          <div class="pick-rank">H</div>
-          <div class="pick-name">Top Pick of the Hour</div>
-          {% if hour %}
-          <div class="mt-2">
-            <div class="pick-name pick-name-lg">{{ hour.name }}</div>
-            <div class="pick-meta">SN{{ hour.netuid }} · score {{ '%.2f'|format(hour.score or 0) }} · confidence {{ '%.0f'|format((hour.confidence or 0)*100) }}%</div>
-          </div>
-          <div class="pick-row">
-            <div class="conviction-wrap">
-              <div class="conviction-lbl">Confidence {{ '%.0f'|format((hour.confidence or 0)*100) }}%</div>
-              <div class="conviction-bar"><div class="conviction-fill" style="width:{{ ((hour.confidence or 0)*100)|round }}%"></div></div>
-            </div>
-          </div>
-          <div class="ind-grid ind-grid-2 mt-3">
-            <div class="ind-cell"><div class="k">Emission</div><div class="v">{{ '%.2f'|format((hour.signals or {}).emission or 0) }} TAO/day</div></div>
-            <div class="ind-cell"><div class="k">APY</div><div class="v">{{ '%.1f'|format((hour.signals or {}).apy or 0) }}%</div></div>
-          </div>
-          <div class="tags mt-3">
-            {% for k,v in (hour.scenario_tags or {}).items() %}<span class="badge badge-watch">{{ k }}: {{ v }}</span>{% endfor %}
-          </div>
-          {% else %}
-          <div class="impact-line empty mt-3">No hour pick available.</div>
-          {% endif %}
-        </div>
+ 
 
-        {% set day = (day_picks or [])[0] %}
-        <div class="pick-card {{ 'sell-accent' if day and day.signals and (day.signals.price_change_24h or 0) < -10 else '' }}">
-          <div class="pick-rank">D</div>
-          <div class="pick-name">Top Pick of the Day</div>
-          {% if day %}
-          <div class="mt-2">
-            <div class="pick-name pick-name-lg">{{ day.name }}</div>
-            <div class="pick-meta">SN{{ day.netuid }} · score {{ '%.2f'|format(day.score or 0) }} · confidence {{ '%.0f'|format((day.confidence or 0)*100) }}%</div>
-          </div>
-          <div class="pick-row">
-            <div class="conviction-wrap">
-              <div class="conviction-lbl">Confidence {{ '%.0f'|format((day.confidence or 0)*100) }}%</div>
-              <div class="conviction-bar"><div class="conviction-fill" style="width:{{ ((day.confidence or 0)*100)|round }}%"></div></div>
-            </div>
-          </div>
-          <div class="ind-grid ind-grid-2 mt-3">
-            <div class="ind-cell"><div class="k">Emission</div><div class="v">{{ '%.2f'|format((day.signals or {}).emission or 0) }} TAO/day</div></div>
-            <div class="ind-cell"><div class="k">APY</div><div class="v">{{ '%.1f'|format((day.signals or {}).apy or 0) }}%</div></div>
-          </div>
-          <div class="tags mt-3">
-            {% for k,v in (day.scenario_tags or {}).items() %}<span class="badge badge-watch">{{ k }}: {{ v }}</span>{% endfor %}
-          </div>
-          {% else %}
-          <div class="impact-line empty mt-3">No day pick available.</div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
+ 
 
-    <div class="span-5">
-      <div class="section-title">Market Intelligence</div>
-      {% set mi = market_intelligence or {} %}
-      <div class="kpi-grid">
-        <div class="kpi-cell">
-          <div class="k">Avg 24h Change</div>
-          <div class="v {{ 'pos' if (mi.avg_change_24h or 0) >= 0 else 'neg' }}">{{ '%+.2f'|format(mi.avg_change_24h or 0) }}%</div>
-        </div>
-        <div class="kpi-cell">
-          <div class="k">Gainers / Losers</div>
-          <div class="v"><span class="pos">{{ mi.gainers or 0 }}</span> / <span class="neg">{{ mi.losers or 0 }}</span></div>
-        </div>
-        <div class="kpi-cell">
-          <div class="k">Top Gainer</div>
-          <div class="v small">{{ (mi.top_gainer or {}).name or '—' }}</div>
-          <div class="sub {{ 'pos' if ((mi.top_gainer or {}).change or 0) >= 0 else 'neg' }}">{{ '%+.2f'|format((mi.top_gainer or {}).change or 0) }}%</div>
-        </div>
-        <div class="kpi-cell">
-          <div class="k">Market Breadth</div>
-          <div class="v small {{ 'text-buy' if mi.breadth=='bullish' else 'text-sell' if mi.breadth=='bearish' else '' }}">{{ mi.breadth or 'neutral'|upper }}</div>
-        </div>
-      </div>
-    </div>
-  </section>
+ 
 
-  <!-- ============ 4. SIMIVISION TOP 3 + COUNCIL WEIGHTS ============ -->
-  <section class="row layout-grid">
-    <div class="span-8">
-      <div class="section-title">SimiVision Top 3</div>
-      <div class="picks">
-        {% for p in (simivision_picks or [])[:3] %}
-        <div class="pick-card {{ 'sell-accent' if p.sell and p.sell.active else '' }}">
-          <div class="pick-rank">#{{ p.rank }}</div>
-          <div class="pick-name">{{ p.name }}</div>
-          <div class="pick-meta">SN{{ p.netuid }} · {{ '%.2f'|format(p.emission or 0) }} TAO/day · {{ '%.1f'|format(p.apy or 0) }}% APY</div>
-          <div class="pick-row">
-            <div class="conviction-wrap">
-              <div class="conviction-lbl">Conviction {{ p.conviction or 0 }}%</div>
-              <div class="conviction-bar"><div class="conviction-fill" style="width:{{ p.conviction or 0 }}%"></div></div>
-            </div>
-            <div class="spark-wrap"><canvas class="spark" data-spark="{{ (p.sparkline or [])|join(',') }}"></canvas></div>
-          </div>
-          <ul class="reasons">
-            {% for r in p.reasons or [] %}<li>{{ r }}</li>{% endfor %}
-          </ul>
-          <div class="tags">
-            {% if p.recommendation == 'BUY' %}<span class="badge badge-buy">BUY</span>
-            {% elif p.recommendation == 'HOLD' %}<span class="badge badge-hold">HOLD</span>
-            {% elif p.recommendation == 'SELL' %}<span class="badge badge-sell">SELL</span>
-            {% else %}<span class="badge badge-watch">WATCH</span>{% endif %}
-            {% if p.sell and p.sell.active %}<span class="badge badge-sell">SELL ALERT</span>
-            {% elif p.hot and p.hot.active %}<span class="badge badge-hot">HOT</span>{% endif %}
-          </div>
-          {% if p.prediction and p.prediction.statement %}
-          <div class="pred-line">→ {{ p.prediction.statement }}</div>
-          {% endif %}
-        </div>
-        {% else %}
-        <div class="pick-card"><div class="impact-line empty">No SimiVision picks available.</div></div>
-        {% endfor %}
-      </div>
-    </div>
+DATA: **{{ data_source|upper }}** · {{ subnets|length }} subnets tracked
 
-    <div class="span-4">
-      <div class="section-title">Council / Oracle Weights</div>
-      <div class="card card-elevated">
-        {% set cw_list = council_weights or [] %}
-        {% set lm = learning_metrics or {} %}
-        {% for w in cw_list %}
-        {% set key = (w.expert or '')|lower %}
-        {% if key in ['quant','hype','contrarian','technical'] %}
-        <div class="weight-row">
-          <div class="weight-head">
-            <span>{{ w.expert|title }}</span>
-            <span class="mono">{{ '%.2f'|format(w.weight or 0) }}</span>
-          </div>
-          <div class="weight-bar">
-            <div class="weight-fill" style="width:{{ ((w.weight or 0)*100)|round }}%"></div>
-          </div>
-          <div class="pick-meta weight-meta">Bias: {{ w.bias or 'neutral' }}</div>
-        </div>
-        {% endif %}
-        {% else %}
-        <div class="empty">Council weights not yet initialized.</div>
-        {% endfor %}
-        <div class="weight-note">
-          Weights tuned by the learning loop
-          {% if lm.deltas %}
-          (correct +{{ lm.deltas.correct or 0 }} / wrong {{ lm.deltas.wrong or 0 }}).
-          {% else %}
-          (deltas pending).
-          {% endif %}
-        </div>
-      </div>
-    </div>
-  </section>
+ 
 
-  <!-- ============ 5. DEEP-DIVE TABS ============ -->
-  <section class="row layout-grid">
-    <div class="span-12">
-      <div class="section-title">Deep Dive</div>
-      <div class="tab-bar" role="tablist" aria-label="Deep dive sections">
-        <button class="tab-btn active" data-tab="technical" role="tab" aria-selected="true" aria-controls="panel-technical">Technical</button>
-        <button class="tab-btn" data-tab="radar" role="tab" aria-selected="false" aria-controls="panel-radar">Radar</button>
-        <button class="tab-btn" data-tab="predictions" role="tab" aria-selected="false" aria-controls="panel-predictions">Predictions</button>
-        <button class="tab-btn" data-tab="learning" role="tab" aria-selected="false" aria-controls="panel-learning">Learning</button>
-      </div>
+ 
 
-      <!-- Technical -->
-      <div id="panel-technical" class="tab-panel active" role="tabpanel">
-        <div class="layout-grid">
-          <div class="span-7">
-            <div class="card">
-              <div class="card-head"><h3>Technical Indicators</h3></div>
-              {% for ti in technical_indicators or [] %}
-              <div class="impact-row">
-                <div class="ti-head">
-                  <div class="pick-name">{{ ti.name }}</div>
-                  {% set rsi_sig = (ti.indicators or {}).rsi or {} %}
-                  <span class="badge badge-watch">RSI {{ '%.1f'|format(rsi_sig.value or 0) }}</span>
-                </div>
-                {% set inds = ti.indicators or {} %}
-                <div class="ind-grid">
-                  <div class="ind-cell"><div class="k">RSI</div><div class="v">{{ '%.1f'|format((inds.rsi or {}).value or 0) }}</div></div>
-                  <div class="ind-cell"><div class="k">MACD</div><div class="v">{{ (inds.macd or {}).crossover or 'neutral' }}</div></div>
-                  <div class="ind-cell"><div class="k">Stoch K/D</div><div class="v">{{ '%.1f'|format((inds.stochastic or {}).k or 0) }} / {{ '%.1f'|format((inds.stochastic or {}).d or 0) }}</div></div>
-                  <div class="ind-cell"><div class="k">BB Width</div><div class="v">{{ '%.2f'|format((inds.bollinger or {}).width or 0) }}</div></div>
-                  <div class="ind-cell"><div class="k">MFI</div><div class="v">{{ '%.1f'|format((inds.mfi or {}).mfi or 0) }}</div></div>
-                  <div class="ind-cell"><div class="k">CCI</div><div class="v">{{ '%.1f'|format((inds.cci or {}).cci or 0) }}</div></div>
-                </div>
-              </div>
-              {% else %}
-              <div class="empty">No technical indicator data available.</div>
-              {% endfor %}
-            </div>
-          </div>
-          <div class="span-5">
-            <div class="card">
-              <div class="card-head"><h3>Indicators Convergence</h3></div>
-              {% set conv = indicators_convergence or {} %}
-              {% set oversold = conv.oversold or {} %}
-              {% set overbought = conv.overbought or {} %}
-              {% if oversold.convergent or overbought.convergent %}
-              <div class="impact-row">
-                <div class="impact-net {{ 'pos' if oversold.convergent else 'neg' }}">{{ 'OVERSOLD' if oversold.convergent else 'OVERBOUGHT' }}</div>
-                <div class="impact-line">Agreement: {{ '%.0f'|format((oversold.agreement or overbought.agreement or 0)*100) }}% · {{ (oversold.indicators or overbought.indicators or [])|join(', ') }}</div>
-              </div>
-              {% else %}
-              <div class="empty">No oscillator convergence detected.</div>
-              {% endif %}
+LIVE
 
-              {% set api_conv = api_indicators_convergence or {} %}
-              {% set api_subnets = api_conv.subnets or [] %}
-              {% if api_subnets %}
-              <div class="scroll-y panel-scroll">
-                {% for s in api_subnets %}
-                <div class="impact-row">
-                  <div class="pick-name pick-name-sm">{{ s.name or 'Subnet ' ~ s.netuid }}</div>
-                  <div class="impact-line">
-                    Oversold: {{ 'yes' if (s.oversold or {}).convergent else 'no' }} ·
-                    Overbought: {{ 'yes' if (s.overbought or {}).convergent else 'no' }}
-                  </div>
-                </div>
-                {% endfor %}
-              </div>
-              {% else %}
-              <div class="empty panel-scroll">API convergence data unavailable.</div>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-      </div>
+ 
 
-      <!-- Radar -->
-      <div id="panel-radar" class="tab-panel" role="tabpanel">
-        <div class="layout-grid">
-          <div class="span-4">
-            <div class="card">
-              <div class="card-head"><h3>Undervalued Radar</h3></div>
-              <div class="scroll-y">
-                {% for u in (undervalued_radar or [])[:8] %}
-                <div class="impact-row">
-                  <div class="pick-name pick-name-sm">{{ u.name or 'Subnet ' ~ u.netuid }}</div>
-                  <div class="impact-line">Score {{ '%.2f'|format(u.undervalued_score or 0) }} · Rank {{ u.rank or '—' }}</div>
-                </div>
-                {% else %}
-                <div class="empty">No undervalued subnets detected.</div>
-                {% endfor %}
-              </div>
-            </div>
-          </div>
-          <div class="span-4">
-            <div class="card">
-              <div class="card-head"><h3>Rotation Tracker</h3></div>
-              {% set rt = rotation_tracker or {} %}
-              {% set rt_patterns = rt.patterns or [] %}
-              {% if rt_patterns %}
-              <div class="scroll-y">
-                {% for rp in rt_patterns %}
-                <div class="impact-row">
-                  <div class="pick-name pick-name-sm">{{ rp.name or rp.subnet or 'Rotation' }}</div>
-                  <div class="impact-line">{{ rp.description or rp.signal or 'Pattern logged' }}</div>
-                </div>
-                {% endfor %}
-              </div>
-              {% else %}
-              <div class="empty">No rotation patterns logged.</div>
-              {% endif %}
-              <div class="weight-note panel-scroll">
-                Volatility mean: {{ '%.2f'|format((rt.volatility_clusters or {}).summary.mean_volatility or 0) }}
-              </div>
-            </div>
-          </div>
-          <div class="span-4">
-            <div class="card">
-              <div class="card-head"><h3>Scenario Memory</h3></div>
-              {% set sm = scenario_memory or {} %}
-              {% if sm.scenarios %}
-              <div class="scroll-y">
-                {% for sc in sm.scenarios %}
-                <div class="impact-row">
-                  <div class="pick-name pick-name-sm">{{ sc.name or sc.id or 'Scenario' }}</div>
-                  <div class="impact-line">{{ sc.status or 'logged' }}</div>
-                </div>
-                {% endfor %}
-              </div>
-              {% else %}
-              <div class="empty">No scenario memory entries.</div>
-              {% endif %}
-              <div class="weight-note panel-scroll">Total scenarios: {{ (sm.stats or {}).total or 0 }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
+--:--:--
 
-      <!-- Predictions -->
-      <div id="panel-predictions" class="tab-panel" role="tabpanel">
-        <div class="layout-grid">
-          <div class="span-4">
-            <div class="card">
-              <div class="card-head"><h3>Predictive Engine</h3><span class="mono small text-muted">{{ (predictions or [])|length }} active</span></div>
-              <div class="scroll-y">
-                {% for pr in predictions or [] %}
-                <div class="impact-row">
-                  <div class="ti-head">
-                    <div class="pick-name pick-name-sm">{{ pr.name }}</div>
-                    <span class="badge {{ 'badge-buy' if pr.direction=='up' else 'badge-sell' }}">{{ pr.direction|upper }}</span>
-                  </div>
-                  <div class="impact-line impact-line-primary">→ {{ pr.statement }}</div>
-                  <div class="impact-line">ref {{ '%.4f'|format(pr.reference_price or 0) }} · now {{ '%.4f'|format(pr.current_estimate or 0) }} · {{ pr.time_remaining or '—' }} left · {{ pr.signal_source or '—' }} · {{ pr.expert|title or '—' }}</div>
-                </div>
-                {% else %}
-                <div class="empty">No active predictions.</div>
-                {% endfor %}
-              </div>
-            </div>
-          </div>
-          <div class="span-4">
-            <div class="card">
-              <div class="card-head"><h3>Signal Impact</h3></div>
-              <div class="scroll-y">
-                {% for si in signal_impact or [] %}
-                <div class="impact-row">
-                  <div class="ti-head">
-                    <div class="pick-name pick-name-sm">{{ si.name }}</div>
-                    {% if si.dominant == 'SELL ALERT' %}<span class="badge badge-sell">SELL ALERT</span>
-                    {% elif si.dominant == 'HOT' %}<span class="badge badge-hot">HOT</span>{% endif %}
-                  </div>
-                  <div class="impact-net {{ 'pos' if (si.net_predicted_pct or 0) > 0 else 'neg' if (si.net_predicted_pct or 0) < 0 else '' }}">{{ '%+.2f'|format(si.net_predicted_pct or 0) }}% <span class="small text-muted">net · {{ si.net_direction or 'neutral' }}</span></div>
-                  {% for im in si.impacts or [] %}
-                  <div class="impact-line">• {{ im.predicted_move or im.description }} <span class="text-muted">({{ im.signal_type }}, fresh {{ im.freshness or '—' }})</span></div>
-                  {% endfor %}
-                </div>
-                {% else %}
-                <div class="empty">No signal impact data.</div>
-                {% endfor %}
-              </div>
-            </div>
-          </div>
-          <div class="span-4">
-            <div class="card">
-              <div class="card-head"><h3>Patterns</h3></div>
-              <div class="scroll-y">
-                {% for pt in patterns or [] %}
-                <div class="impact-row">
-                  <div class="pick-name pick-name-sm">{{ pt.name }}</div>
-                  <div class="mt-1">
-                    {% for pat in pt.patterns or [] %}
-                    <span class="pat-chip pat-{{ pat.type }}">{{ pat.pattern }} · {{ pat.confidence }}%</span>
-                    {% endfor %}
-                    {% if not pt.patterns %}<div class="impact-line empty">No clear pattern.</div>{% endif %}
-                  </div>
-                </div>
-                {% else %}
-                <div class="empty">No pattern data.</div>
-                {% endfor %}
-              </div>
-            </div>
-          </div>
-        </div>
+ 
 
-        {% set mc = momentum_charts or {} %}
-        {% if mc.treemap or mc.radar %}
-        <div class="layout-grid row">
-          <div class="span-12">
-            <div class="card">
-              <div class="card-head"><h3>Momentum Context</h3><span class="mono small text-muted">Optional</span></div>
-              {% if mc.treemap %}
-              <div class="treemap">
-                {% for t in mc.treemap %}
-                <div class="tmap-tile {{ 'neg' if (t.change or 0) < 0 else '' }}" style="--tmap-flex:{{ t.value or 1 }}">
-                  <div class="tmap-name">{{ t.name }}</div>
-                  <div class="tmap-chg">{{ '%+.2f'|format(t.change or 0) }}%</div>
-                </div>
-                {% endfor %}
-              </div>
-              {% endif %}
-              {% if mc.radar and mc.radar.labels %}
-              <div class="chart-wrap mt-4">
-                <canvas id="radarChart" data-radar='{{ mc.radar|tojson }}'></canvas>
-              </div>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-        {% endif %}
-      </div>
+ 
 
-      <!-- Learning -->
-      <div id="panel-learning" class="tab-panel" role="tabpanel">
-        <div class="layout-grid">
-          <div class="span-4">
-            <div class="card">
-              <div class="card-head"><h3>Learning Loop Metrics</h3></div>
-              {% set lm = learning_metrics or {} %}
-              <div class="learning-head">
-                <div class="acc-ring">
-                  <svg width="92" height="92" viewBox="0 0 92 92">
-                    <circle cx="46" cy="46" r="40" fill="none" stroke="rgba(233,247,239,0.06)" stroke-width="8"/>
-                    <circle cx="46" cy="46" r="40" fill="none" stroke="var(--accent-primary)" stroke-width="8" stroke-linecap="round" stroke-dasharray="{{ ((lm.accuracy or 0)/100)*251.3 }} 251.3"/>
-                  </svg>
-                  <div class="acc-val">{{ '%.0f'|format(lm.accuracy or 0) }}%</div>
-                </div>
-                <div class="learn-stat-wrap">
-                  <div class="learn-stats">
-                    <div class="kpi-cell"><div class="k">Resolved</div><div class="v">{{ lm.predictions_resolved or 0 }}</div></div>
-                    <div class="kpi-cell"><div class="k">Pending</div><div class="v hold">{{ lm.predictions_pending or 0 }}</div></div>
-                    <div class="kpi-cell"><div class="k">Correct</div><div class="v pos">{{ lm.correct or 0 }}</div></div>
-                    <div class="kpi-cell"><div class="k">Wrong</div><div class="v neg">{{ lm.wrong or 0 }}</div></div>
-                  </div>
-                </div>
-              </div>
-              {% if lm.recent_resolutions %}
-              <div class="scroll-y panel-scroll-lg">
-                {% for rr in lm.recent_resolutions %}
-                <div class="impact-row">
-                  <div class="impact-line impact-line-primary">{{ rr.name }} — {{ rr.statement }}</div>
-                  <div class="impact-line">actual {{ '%+.2f'|format(rr.actual_pct or 0) }}% · <span class="{{ 'pos' if rr.correct else 'neg' }}">{{ 'CORRECT' if rr.correct else 'WRONG' }}</span></div>
-                </div>
-                {% endfor %}
-              </div>
-              {% endif %}
-              <div class="chat-meta panel-scroll">last updated: {{ lm.last_updated or '—' }}</div>
-            </div>
-          </div>
-          <div class="span-4">
-            <div class="card">
-              <div class="card-head"><h3>Council Weights</h3></div>
-              {% for w in council_weights or [] %}
-              <div class="weight-row">
-                <div class="weight-head">
-                  <span>{{ w.expert|title }}</span>
-                  <span class="mono">{{ '%.2f'|format(w.weight or 0) }}</span>
-                </div>
-                <div class="weight-bar"><div class="weight-fill" style="width:{{ ((w.weight or 0)*100)|round }}%"></div></div>
-                <div class="pick-meta weight-meta">Bias: {{ w.bias or 'neutral' }}</div>
-              </div>
-              {% else %}
-              <div class="empty">No council weights.</div>
-              {% endfor %}
-            </div>
-          </div>
-          <div class="span-4">
-            <div class="card">
-              <div class="card-head"><h3>Mindmap Trail</h3></div>
-              <div class="trail">
-                {% for tr in mindmap_trail or [] %}
-                <div class="trail-item">
-                  <div class="trail-time">{{ tr.time }}</div>
-                  <div class="trail-net">{{ tr.subnet }}</div>
-                  <div class="trail-flow">
-                    <span class="flow-chip">{{ tr.evidence }}</span>
-                    <span class="flow-arrow">→</span>
-                    <span class="flow-chip">{{ tr.signal }}</span>
-                    <span class="flow-arrow">→</span>
-                    <span class="flow-chip">{{ tr.decision }}</span>
-                    <span class="flow-arrow">→</span>
-                    <span class="flow-chip">{{ tr.judge }}</span>
-                  </div>
-                  {% if tr.prediction %}<div class="mono text-secondary mt-1 small">→ {{ tr.prediction }}</div>{% endif %}
-                </div>
-                {% else %}
-                <div class="empty">Learning trail is empty.</div>
-                {% endfor %}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
+   
 
-  <!-- ============ 6. SOCIAL SENTIMENT ============ -->
-  <section class="row layout-grid">
-    <div class="span-12">
-      <div class="section-title">Social Sentiment Feed</div>
-      <div class="soc-grid">
-        {% for soc in social_sentiment or [] %}
-        <div class="card soc-card">
-          <div class="soc-head">
-            <div class="pick-name">{{ soc.name }}</div>
-            <div>
-              <span class="soc-score {{ 'pos' if soc.label=='bullish' else 'neg' if soc.label=='bearish' else 'watch' }}">{{ soc.score or 0 }}</span>
-            </div>
-          </div>
-          {% for f in soc.feed or [] %}
-          <div class="feed-item">
-            <span class="feed-src">{{ f.source or 'analysis' }}</span>
-            <div class="feed-text"><span class="{{ 'pos' if f.sentiment=='bullish' else 'neg' if f.sentiment=='bearish' else 'watch' }} feed-sentiment">{{ f.sentiment }}</span> · {{ f.text }}</div>
-          </div>
-          {% endfor %}
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-  </section>
+ 
 
-  <!-- ============ 7. SIMIVISION CHAT ============ -->
-  <section class="row layout-grid">
-    <div class="span-12">
-      <div class="section-title">SimiVision Chat</div>
-      <div class="card">
-        <div class="chat-box">
-          <div class="chat-log" id="chatLog">
-            <div class="chat-msg bot"><div class="who">SIMIVISION</div>Intelligence cockpit online. Ask me about top picks, signals, or predictions — every forecast is framed as "predicted to move +X% within N hours".</div>
-          </div>
-          <div class="chat-input">
-            <input id="chatInput" type="text" placeholder="e.g. Which subnet is predicted to move the most?" autocomplete="off">
-            <button id="chatSend">Send</button>
-          </div>
-          <div class="chat-meta" id="chatMeta">LLM: idle · mindmap context linked</div>
-        </div>
-      </div>
-    </div>
-  </section>
+Daily Pick — Council Audited
 
-</div>
+ 
 
-<!-- ============ FOOTER STATUS STRIP ============ -->
-<footer class="status">
-  <div class="status-inner">
-    <span><span class="st-dot"></span>SYSTEM <b>OPERATIVE</b></span>
-    <span>DATA: <b>{{ data_source|upper }}</b></span>
-    <span>SUBNETS: <b>{{ subnets|length }}</b></span>
-    <span>PICKS: <b>{{ (simivision_picks or [])|length }}</b></span>
-    <span>PREDICTIONS: <b>{{ (predictions or [])|length }}</b></span>
-    <span>ACCURACY: <b class="pos">{{ '%.0f'|format((learning_metrics or {}).accuracy or 0) }}%</b></span>
-    <span class="footer-tag">SimiVision Intelligence Cockpit · predictive framing enforced</span>
-  </div>
-</footer>
+ {% set dp = daily_pick or {} %} {% set dp_subnet = dp.subnet or {} %} {% if dp_subnet.name %} 
 
+ 
+
+ 
+
+{{ dp_subnet.name }}
+
+ 
+
+SN{{ dp_subnet.netuid }} · Council audited daily candidate
+
+ 
+
+ 
+
+ {% if dp.action == 'BUY' %}BUY {% elif dp.action == 'SELL' %}SELL {% elif dp.action == 'HOLD' %}HOLD {% else %}WATCH{% endif %} 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Score
+
+ 
+
+{{ '%.2f'|format(dp.score or 0) }}
+
+ 
+
+ 
+
+ 
+
+Final Confidence
+
+ 
+
+{{ '%.0f'|format((dp.final_confidence or 0)*100) }}%
+
+ 
+
+ 
+
+ 
+
+Audit
+
+ 
+
+ {% if dp.audit and dp.audit.approved %} APPROVED {% else %} FLAGGED {% endif %} 
+
+ 
+
+ 
+
+ {% if dp.reason %} 
+
+{{ dp.reason }}
+
+ {% elif dp.reasons %} 
+
+{{ dp.reasons[0] }}
+
+ {% endif %} {% if dp.audit and not dp.audit.approved and dp.audit.concerns %} 
+
+ {{ dp.audit.concerns|length }} concern(s): {{ dp.audit.concerns|join(' · ') }} 
+
+ {% else %} 
+
+No audit concerns flagged
+
+ {% endif %} {% if dp.sparkline %}  {% elif dp_subnet.netuid %} {% set hist = dp_subnet.price_history or [] %} {% if hist %}  {% endif %} {% endif %} {% else %} 
+
+—
+
+ 
+
+No daily pick available. The Council audit layer will populate a candidate on the next refresh.
+
+ {% endif %} 
+
+ 
+
+    
+
+ 
+
+Supporting Picks
+
+ 
+
+ {% set hour = (hour_picks or [])[0] %} 
+
+ 
+
+H
+
+ 
+
+Top Pick of the Hour
+
+ {% if hour %} 
+
+ 
+
+{{ hour.name }}
+
+ 
+
+SN{{ hour.netuid }} · score {{ '%.2f'|format(hour.score or 0) }} · confidence {{ '%.0f'|format((hour.confidence or 0)*100) }}%
+
+ 
+
+ 
+
+ 
+
+ 
+
+Confidence {{ '%.0f'|format((hour.confidence or 0)*100) }}%
+
+  
+
+ 
+
+ 
+
+ 
+
+Emission
+
+{{ '%.2f'|format((hour.signals or {}).emission or 0) }} TAO/day
+
+ 
+
+APY
+
+{{ '%.1f'|format((hour.signals or {}).apy or 0) }}%
+
+ 
+
+ 
+
+ {% for k,v in (hour.scenario_tags or {}).items() %}{{ k }}: {{ v }}{% endfor %} 
+
+ {% else %} 
+
+No hour pick available.
+
+ {% endif %} 
+
+ {% set day = (day_picks or [])[0] %} 
+
+ 
+
+D
+
+ 
+
+Top Pick of the Day
+
+ {% if day %} 
+
+ 
+
+{{ day.name }}
+
+ 
+
+SN{{ day.netuid }} · score {{ '%.2f'|format(day.score or 0) }} · confidence {{ '%.0f'|format((day.confidence or 0)*100) }}%
+
+ 
+
+ 
+
+ 
+
+ 
+
+Confidence {{ '%.0f'|format((day.confidence or 0)*100) }}%
+
+  
+
+ 
+
+ 
+
+ 
+
+Emission
+
+{{ '%.2f'|format((day.signals or {}).emission or 0) }} TAO/day
+
+ 
+
+APY
+
+{{ '%.1f'|format((day.signals or {}).apy or 0) }}%
+
+ 
+
+ 
+
+ {% for k,v in (day.scenario_tags or {}).items() %}{{ k }}: {{ v }}{% endfor %} 
+
+ {% else %} 
+
+No day pick available.
+
+ {% endif %} 
+
+ 
+
+ 
+
+ 
+
+ 
+
+Market Intelligence
+
+ {% set mi = market_intelligence or {} %} 
+
+ 
+
+ 
+
+Avg 24h Change
+
+ 
+
+{{ '%+.2f'|format(mi.avg_change_24h or 0) }}%
+
+ 
+
+ 
+
+ 
+
+Gainers / Losers
+
+ 
+
+{{ mi.gainers or 0 }} / {{ mi.losers or 0 }}
+
+ 
+
+ 
+
+ 
+
+Top Gainer
+
+ 
+
+{{ (mi.top_gainer or {}).name or '—' }}
+
+ 
+
+{{ '%+.2f'|format((mi.top_gainer or {}).change or 0) }}%
+
+ 
+
+ 
+
+ 
+
+Market Breadth
+
+ 
+
+{{ mi.breadth or 'neutral'|upper }}
+
+ 
+
+ 
+
+ 
+
+    
+
+ 
+
+SimiVision Top 3
+
+ 
+
+ {% for p in (simivision_picks or [])[:3] %} 
+
+ 
+
+#{{ p.rank }}
+
+ 
+
+{{ p.name }}
+
+ 
+
+SN{{ p.netuid }} · {{ '%.2f'|format(p.emission or 0) }} TAO/day · {{ '%.1f'|format(p.apy or 0) }}% APY
+
+ 
+
+ 
+
+ 
+
+Conviction {{ p.conviction or 0 }}%
+
+  
+
+  
+
+ 
+ {% for r in p.reasons or [] %}*   {{ r }}
+{% endfor %} 
+ 
+
+ {% if p.recommendation == 'BUY' %}BUY {% elif p.recommendation == 'HOLD' %}HOLD {% elif p.recommendation == 'SELL' %}SELL {% else %}WATCH{% endif %} {% if p.sell and p.sell.active %}SELL ALERT {% elif p.hot and p.hot.active %}HOT{% endif %} 
+
+ {% if p.prediction and p.prediction.statement %} 
+
+→ {{ p.prediction.statement }}
+
+ {% endif %} 
+
+ {% else %} 
+
+No SimiVision picks available.
+
+ {% endfor %} 
+
+ 
+
+ 
+
+ 
+
+Council / Oracle Weights
+
+ 
+
+ {% set cw_list = council_weights or [] %} {% set lm = learning_metrics or {} %} {% for w in cw_list %} {% set key = (w.expert or '')|lower %} {% if key in ['quant','hype','contrarian','technical'] %} 
+
+ 
+
+ {{ w.expert|title }} {{ '%.2f'|format(w.weight or 0) }} 
+
+ 
+
+  
+
+ 
+
+Bias: {{ w.bias or 'neutral' }}
+
+ 
+
+ {% endif %} {% else %} 
+
+Council weights not yet initialized.
+
+ {% endfor %} 
+
+ Weights tuned by the learning loop {% if lm.deltas %} (correct +{{ lm.deltas.correct or 0 }} / wrong {{ lm.deltas.wrong or 0 }}). {% else %} (deltas pending). {% endif %} 
+
+ 
+
+ 
+
+    
+
+ 
+
+Deep Dive
+
+ 
+
+ Technical Radar Predictions Learning 
+
+  
+
+ 
+
+ 
+
+ 
+
+ 
+
+### Technical Indicators
+
+ {% for ti in technical_indicators or [] %} 
+
+ 
+
+ 
+
+{{ ti.name }}
+
+ {% set rsi_sig = (ti.indicators or {}).rsi or {} %} RSI {{ '%.1f'|format(rsi_sig.value or 0) }} 
+
+ {% set inds = ti.indicators or {} %} 
+
+ 
+
+RSI
+
+{{ '%.1f'|format((inds.rsi or {}).value or 0) }}
+
+ 
+
+MACD
+
+{{ (inds.macd or {}).crossover or 'neutral' }}
+
+ 
+
+Stoch K/D
+
+{{ '%.1f'|format((inds.stochastic or {}).k or 0) }} / {{ '%.1f'|format((inds.stochastic or {}).d or 0) }}
+
+ 
+
+BB Width
+
+{{ '%.2f'|format((inds.bollinger or {}).width or 0) }}
+
+ 
+
+MFI
+
+{{ '%.1f'|format((inds.mfi or {}).mfi or 0) }}
+
+ 
+
+CCI
+
+{{ '%.1f'|format((inds.cci or {}).cci or 0) }}
+
+ 
+
+ 
+
+ {% else %} 
+
+No technical indicator data available.
+
+ {% endfor %} 
+
+ 
+
+ 
+
+ 
+
+ 
+
+### Indicators Convergence
+
+ {% set conv = indicators_convergence or {} %} {% set oversold = conv.oversold or {} %} {% set overbought = conv.overbought or {} %} {% if oversold.convergent or overbought.convergent %} 
+
+ 
+
+{{ 'OVERSOLD' if oversold.convergent else 'OVERBOUGHT' }}
+
+ 
+
+Agreement: {{ '%.0f'|format((oversold.agreement or overbought.agreement or 0)*100) }}% · {{ (oversold.indicators or overbought.indicators or [])|join(', ') }}
+
+ 
+
+ {% else %} 
+
+No oscillator convergence detected.
+
+ {% endif %} {% set api_conv = api_indicators_convergence or {} %} {% set api_subnets = api_conv.subnets or [] %} {% if api_subnets %} 
+
+ {% for s in api_subnets %} 
+
+ 
+
+{{ s.name or 'Subnet ' ~ s.netuid }}
+
+ 
+
+ Oversold: {{ 'yes' if (s.oversold or {}).convergent else 'no' }} · Overbought: {{ 'yes' if (s.overbought or {}).convergent else 'no' }} 
+
+ 
+
+ {% endfor %} 
+
+ {% else %} 
+
+API convergence data unavailable.
+
+ {% endif %} 
+
+ 
+
+ 
+
+ 
+
+  
+
+ 
+
+ 
+
+ 
+
+ 
+
+### Undervalued Radar
+
+ 
+
+ {% for u in (undervalued_radar or [])[:8] %} 
+
+ 
+
+{{ u.name or 'Subnet ' ~ u.netuid }}
+
+ 
+
+Score {{ '%.2f'|format(u.undervalued_score or 0) }} · Rank {{ u.rank or '—' }}
+
+ 
+
+ {% else %} 
+
+No undervalued subnets detected.
+
+ {% endfor %} 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+### Rotation Tracker
+
+ {% set rt = rotation_tracker or {} %} {% set rt_patterns = rt.patterns or [] %} {% if rt_patterns %} 
+
+ {% for rp in rt_patterns %} 
+
+ 
+
+{{ rp.name or rp.subnet or 'Rotation' }}
+
+ 
+
+{{ rp.description or rp.signal or 'Pattern logged' }}
+
+ 
+
+ {% endfor %} 
+
+ {% else %} 
+
+No rotation patterns logged.
+
+ {% endif %} 
+
+ Volatility mean: {{ '%.2f'|format((rt.volatility_clusters or {}).summary.mean_volatility or 0) }} 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+### Scenario Memory
+
+ {% set sm = scenario_memory or {} %} {% if sm.scenarios %} 
+
+ {% for sc in sm.scenarios %} 
+
+ 
+
+{{ sc.name or sc.id or 'Scenario' }}
+
+ 
+
+{{ sc.status or 'logged' }}
+
+ 
+
+ {% endfor %} 
+
+ {% else %} 
+
+No scenario memory entries.
+
+ {% endif %} 
+
+Total scenarios: {{ (sm.stats or {}).total or 0 }}
+
+ 
+
+ 
+
+ 
+
+ 
+
+  
+
+ 
+
+ 
+
+ 
+
+ 
+
+### Predictive Engine
+
+{{ (predictions or [])|length }} active
+
+ 
+
+ {% for pr in predictions or [] %} 
+
+ 
+
+ 
+
+{{ pr.name }}
+
+ {{ pr.direction|upper }} 
+
+ 
+
+→ {{ pr.statement }}
+
+ 
+
+ref {{ '%.4f'|format(pr.reference_price or 0) }} · now {{ '%.4f'|format(pr.current_estimate or 0) }} · {{ pr.time_remaining or '—' }} left · {{ pr.signal_source or '—' }} · {{ pr.expert|title or '—' }}
+
+ 
+
+ {% else %} 
+
+No active predictions.
+
+ {% endfor %} 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+### Signal Impact
+
+ 
+
+ {% for si in signal_impact or [] %} 
+
+ 
+
+ 
+
+{{ si.name }}
+
+ {% if si.dominant == 'SELL ALERT' %}SELL ALERT {% elif si.dominant == 'HOT' %}HOT{% endif %} 
+
+ 
+
+{{ '%+.2f'|format(si.net_predicted_pct or 0) }}% net · {{ si.net_direction or 'neutral' }}
+
+ {% for im in si.impacts or [] %} 
+
+• {{ im.predicted_move or im.description }} ({{ im.signal_type }}, fresh {{ im.freshness or '—' }})
+
+ {% endfor %} 
+
+ {% else %} 
+
+No signal impact data.
+
+ {% endfor %} 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+### Patterns
+
+ 
+
+ {% for pt in patterns or [] %} 
+
+ 
+
+{{ pt.name }}
+
+ 
+
+ {% for pat in pt.patterns or [] %} {{ pat.pattern }} · {{ pat.confidence }}% {% endfor %} {% if not pt.patterns %}
+
+No clear pattern.
+
+{% endif %} 
+
+ 
+
+ {% else %} 
+
+No pattern data.
+
+ {% endfor %} 
+
+ 
+
+ 
+
+ 
+
+ {% set mc = momentum_charts or {} %} {% if mc.treemap or mc.radar %} 
+
+ 
+
+ 
+
+ 
+
+### Momentum Context
+
+Optional
+
+ {% if mc.treemap %} 
+
+ {% for t in mc.treemap %} 
+
+ 
+
+{{ t.name }}
+
+ 
+
+{{ '%+.2f'|format(t.change or 0) }}%
+
+ 
+
+ {% endfor %} 
+
+ {% endif %} {% if mc.radar and mc.radar.labels %} 
+
+  
+
+ {% endif %} 
+
+ 
+
+ 
+
+ {% endif %} 
+
+  
+
+ 
+
+ 
+
+ 
+
+ 
+
+### Learning Loop Metrics
+
+ {% set lm = learning_metrics or {} %} 
+
+ 
+
+  
+
+{{ '%.0f'|format(lm.accuracy or 0) }}%
+
+ 
+
+ 
+
+ 
+
+ 
+
+Resolved
+
+{{ lm.predictions_resolved or 0 }}
+
+ 
+
+Pending
+
+{{ lm.predictions_pending or 0 }}
+
+ 
+
+Correct
+
+{{ lm.correct or 0 }}
+
+ 
+
+Wrong
+
+{{ lm.wrong or 0 }}
+
+ 
+
+ 
+
+ 
+
+ {% if lm.recent_resolutions %} 
+
+ {% for rr in lm.recent_resolutions %} 
+
+ 
+
+{{ rr.name }} — {{ rr.statement }}
+
+ 
+
+actual {{ '%+.2f'|format(rr.actual_pct or 0) }}% · {{ 'CORRECT' if rr.correct else 'WRONG' }}
+
+ 
+
+ {% endfor %} 
+
+ {% endif %} 
+
+last updated: {{ lm.last_updated or '—' }}
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+### Council Weights
+
+ {% for w in council_weights or [] %} 
+
+ 
+
+ {{ w.expert|title }} {{ '%.2f'|format(w.weight or 0) }} 
+
+  
+
+Bias: {{ w.bias or 'neutral' }}
+
+ 
+
+ {% else %} 
+
+No council weights.
+
+ {% endfor %} 
+
+ 
+
+ 
+
+ 
+
+ 
+
+### Mindmap Trail
+
+ 
+
+ {% for tr in mindmap_trail or [] %} 
+
+ 
+
+{{ tr.time }}
+
+ 
+
+{{ tr.subnet }}
+
+ 
+
+ {{ tr.evidence }} → {{ tr.signal }} → {{ tr.decision }} → {{ tr.judge }} 
+
+ {% if tr.prediction %}
+
+→ {{ tr.prediction }}
+
+{% endif %} 
+
+ {% else %} 
+
+Learning trail is empty.
+
+ {% endfor %} 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+    
+
+ 
+
+Social Sentiment Feed
+
+ 
+
+ {% for soc in social_sentiment or [] %} 
+
+ 
+
+ 
+
+{{ soc.name }}
+
+ 
+
+ {{ soc.score or 0 }} 
+
+ 
+
+ {% for f in soc.feed or [] %} 
+
+ {{ f.source or 'analysis' }} 
+
+{{ f.sentiment }} · {{ f.text }}
+
+ 
+
+ {% endfor %} 
+
+ {% endfor %} 
+
+ 
+
+    
+
+ 
+
+SimiVision Chat
+
+ 
+
+ 
+
+ 
+
+ 
+
+SIMIVISION
+
+Intelligence cockpit online. Ask me about top picks, signals, or predictions — every forecast is framed as "predicted to move +X% within N hours".
+
+ 
+
+ 
+
+  Send 
+
+ 
+
+LLM: idle · mindmap context linked
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ SYSTEM **OPERATIVE** DATA: **{{ data_source|upper }}** SUBNETS: **{{ subnets|length }}** PICKS: **{{ (simivision_picks or [])|length }}** PREDICTIONS: **{{ (predictions or [])|length }}** ACCURACY: **{{ '%.0f'|format((learning_metrics or {}).accuracy or 0) }}%** SimiVision Intelligence Cockpit · predictive framing enforced
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="/static/js/app.js"></script>
 </body>
