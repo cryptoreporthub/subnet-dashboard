@@ -479,19 +479,22 @@
     </div>
   </div>
 
-  <!-- ============ 9. COUNCIL / SOUL MAP ============ -->
+  <!-- ============ 9. JUDGE PANEL ============ -->
   <div class="block">
-    <div class="section-title">Council / Soul Map Weights</div>
-    <div class="section-sub">Expert weights tuned by the learning loop (correct +{{ learning_metrics.deltas.correct }} / wrong {{ learning_metrics.deltas.wrong }})</div>
+    <div class="section-title">Judge Panel</div>
+    <div class="section-sub">Oracle · Echo · Pulse — live scores, paper portfolios & postmortems {% if usd_rate %}| TAO ${{ '%.2f'|format(usd_rate) }}{% endif %}</div>
     <div class="card">
       <div class="council-grid">
-        {% for c in council_weights %}
+        {% for j in judge_cards %}
         <div class="expert card-soft" style="border-radius:12px">
-          <div class="avatar">{{ c.expert[0] }}</div>
-          <div class="name">{{ c.expert }}</div>
-          <div class="w">{{ '%.3f'|format(c.weight) }}</div>
-          <div class="wbar"><div class="wfill" style="width:{{ (c.weight / 1.2 * 100)|round }}%"></div></div>
-          <div class="bias {{ 'pos' if c.bias=='bullish' else 'neu' }}">{{ c.bias }}</div>
+          <div class="avatar">{{ j.name[0] }}</div>
+          <div class="name">{{ j.name }}</div>
+          <div style="font-size:11px;color:var(--txt-2);margin-bottom:6px">{{ j.role }}</div>
+          <div class="w">{{ '%.3f'|format(j.score) }}</div>
+          <div style="font-size:11px;color:var(--txt-2)">conf {{ '%.2f'|format(j.confidence) }}</div>
+          <div class="wbar"><div class="wfill" style="width:{{ (j.score * 100)|round }}%"></div></div>
+          <div class="bias {{ 'pos' if j.win_pct >= 50 else 'neu' }}">{{ j.win_pct }}% win</div>
+          <div style="font-size:11px;color:var(--txt-2);margin-top:4px">P&L {{ '%.4f'|format(j.pnl) }} · {{ j.open_positions }} open · {{ j.postmortems }} postmortems</div>
         </div>
         {% endfor %}
       </div>

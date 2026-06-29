@@ -4,6 +4,7 @@ import math
 import os
 import sys
 import threading
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Optional
@@ -58,6 +59,37 @@ except Exception:  # pragma: no cover
     resolver = _FakeResolver()
     scenario_memory = type("_FakeModule", (), {"get_scenarios": lambda *_args, **_kwargs: []})()
     rotation_tracker = type("_FakeModule", (), {"get_rotation_summary": lambda *_args, **_kwargs: {}})()
+
+try:
+    from internal.judges import all_judges, get_judge, on_prediction_created, on_prediction_resolved
+    from internal.judges.portfolios import all_portfolios
+    from internal.judges.postmortems import all_postmortems, list_for_judge
+    _JUDGES_AVAILABLE = True
+except Exception as _judges_import_exc:  # pragma: no cover
+    _JUDGES_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("Judge layer unavailable: %s", _judges_import_exc)
+
+    def all_judges():
+        return []
+
+    def get_judge(name):
+        return None
+
+    def on_prediction_created(*_args, **_kwargs):
+        return {}
+
+    def on_prediction_resolved(*_args, **_kwargs):
+        return {}
+
+    def all_portfolios():
+        return {}
+
+    def all_postmortems():
+        return {}
+
+    def list_for_judge(name):
+        return []
 
 try:
     from internal.council.weights import load_weights, save_weights
@@ -501,6 +533,87 @@ def api_council_weights():
             "data": {"quant": 1.0, "hype": 1.0, "contrarian": 1.0, "technical": 1.0},
             "error": str(exc),
         }
+
+
+@app.get("/api/judges")
+def api_judges():
+    """Return Oracle/Echo/Pulse scores and confidence for a sample prediction.
+
+    Scores are computed against the top-ranked live subnet so the endpoint is
+    always useful even when no pending prediction exists.
+    """
+    try:
+        from internal.judges import run_judges
+
+        subnets, source = _get_subnets_with_source()
+        top = sorted(
+            subnets,
+            key=lambda s: (s.get("emission", 0), s.get("apy", 0), s.get("volume", 0)),
+            reverse=True,
+        )[:1]
+
+        if not top:
+            return {
+                "status": "success",
+                "source": source,
+                "scores": {},
+                "sample": None,
+            }
+
+        sn = top[0]
+        prediction = {
+            "predicted_pct": float(sn.get("price_change_24h", 0) or 0) * 0.5,
+            "direction": "up" if (sn.get("price_change_24h", 0) or 0) >= 0 else "down",
+        }
+        signal_impact = {
+            "impacts": [
+                {
+                    "direction": "bullish" if prediction["direction"] == "up" else "bearish",
+                    "magnitude_pct": abs(prediction["predicted_pct"]),
+                }
+            ]
+        }
+        subnet = {
+            "price_change_24h": sn.get("price_change_24h", 0),
+            "price": sn.get("price", 0),
+            "apy": sn.get("apy", 0),
+            "emission": sn.get("emission", 0),
+            "volume": sn.get("volume", 0),
+            "social_mentions": sn.get("social_mentions"),
+        }
+        scores = run_judges(prediction, signal_impact=signal_impact, subnet=subnet)
+        return {
+            "status": "success",
+            "source": source,
+            "scores": scores,
+            "sample": {"netuid": sn.get("netuid"), "name": sn.get("name")},
+        }
+    except Exception as exc:
+        logger.warning("api_judges failed: %s", exc)
+        return {"status": "stub", "scores": {}, "error": str(exc)}
+
+
+@app.get("/api/portfolios")
+def api_portfolios():
+    """Return the current paper portfolios for Oracle, Echo and Pulse."""
+    try:
+        return {"status": "success", "portfolios": all_portfolios()}
+    except Exception as exc:
+        logger.warning("api_portfolios failed: %s", exc)
+        return {"status": "stub", "portfolios": {}, "error": str(exc)}
+
+
+@app.get("/api/judges/{judge}/postmortems")
+def api_judge_postmortems(judge: str):
+    """Return scientific-method postmortems for a single judge."""
+    try:
+        name = judge.lower()
+        if get_judge(name) is None:
+            return {"status": "error", "error": f"Unknown judge: {judge}"}
+        return {"status": "success", "judge": name, "postmortems": list_for_judge(name)}
+    except Exception as exc:
+        logger.warning("api_judge_postmortems failed: %s", exc)
+        return {"status": "stub", "judge": judge, "postmortems": [], "error": str(exc)}
 
 
 @app.get("/api/oracle")
@@ -1825,6 +1938,12 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
         "statement": f"predicted to move {'+' if predicted_pct >= 0 else ''}{predicted_pct:.1f}% within {horizon} hours",
     }
     PREDICTION_STORE.add(prediction)
+
+    try:
+        on_prediction_created(prediction)
+    except Exception as exc:
+        logger.warning("Judge tracker on_prediction_created failed: %s", exc)
+
     return prediction
 
 
@@ -1845,6 +1964,13 @@ def _resolve_prediction(prediction: Dict[str, Any], latest_price: float) -> Dict
     expert = prediction.get("expert") or _expert_from_signal_source(prediction.get("signal_source"))
     prediction["expert"] = expert
     _update_learning_weights(correct, expert)
+
+    # Notify the judge layer so paper portfolios close and postmortems are recorded.
+    try:
+        on_prediction_resolved(prediction)
+    except Exception as exc:
+        logger.warning("Judge tracker on_prediction_resolved failed: %s", exc)
+
     return prediction
 
 
@@ -2116,9 +2242,100 @@ def _compute_undervalued(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return ranked[:8]
 
 
-def _compute_market_intelligence(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
+_TAO_USD_CACHE: Dict[str, Any] = {"price": None, "at": 0.0}
+_TAO_USD_CACHE_TTL = 60  # seconds
+
+
+def _get_tao_usd() -> Optional[float]:
+    """Return a live TAO/USD rate with a short in-process cache.
+
+    Falls back to the last cached value so transient CoinGecko failures do not
+    break USD conversions on the dashboard.
+    """
+    now = time.time()
+    cached = _TAO_USD_CACHE.get("price")
+    cached_at = _TAO_USD_CACHE.get("at", 0.0)
+    if cached is not None and (now - cached_at) < _TAO_USD_CACHE_TTL:
+        return float(cached)
+
+    price: Optional[float] = None
+    try:
+        from message_intel.price_tracker import fetch_tao_usd
+        price = fetch_tao_usd()
+    except Exception as exc:
+        logger.warning("fetch_tao_usd unavailable: %s", exc)
+
+    if price is not None:
+        _TAO_USD_CACHE["price"] = price
+        _TAO_USD_CACHE["at"] = now
+        return float(price)
+
+    # Fallback to stale cache if available.
+    if cached is not None:
+        return float(cached)
+
+    return None
+
+
+def _build_judge_cards(tao_usd: Optional[float] = None) -> List[Dict[str, Any]]:
+    """Build live judge cards from the judge layer, portfolios and postmortems."""
+    cards: List[Dict[str, Any]] = []
+    if not _JUDGES_AVAILABLE:
+        return cards
+
+    portfolios = all_portfolios()
+    postmortems = all_postmortems()
+
+    for judge in all_judges():
+        name = judge.name
+        pf = portfolios.get(name, {})
+        summary = pf.get("summary", {}) if isinstance(pf, dict) else {}
+        stats = summary.get("stats", {}) if isinstance(summary, dict) else {}
+        pnl = summary.get("total_pnl", 0.0) if isinstance(summary, dict) else 0.0
+        wins = int(stats.get("wins", 0))
+        losses = int(stats.get("losses", 0))
+        total = wins + losses
+        win_pct = round(wins / total * 100, 1) if total else 0.0
+        open_positions = len(pf.get("open", [])) if isinstance(pf, dict) else 0
+        closed_positions = len(pf.get("closed", [])) if isinstance(pf, dict) else 0
+        judge_postmortems = postmortems.get(name, []) if isinstance(postmortems, dict) else []
+
+        # Evaluate the judge against a neutral placeholder so we always have a score.
+        try:
+            eval_result = judge.evaluate({})
+            score = float(eval_result.get("score", 0.0))
+            confidence = float(eval_result.get("confidence", 0.0))
+        except Exception:
+            score = 0.0
+            confidence = 0.0
+
+        cards.append({
+            "name": name,
+            "role": getattr(judge, "role", name),
+            "score": round(score, 3),
+            "confidence": round(confidence, 3),
+            "win_pct": win_pct,
+            "wins": wins,
+            "losses": losses,
+            "pnl": round(pnl, 4),
+            "open_positions": open_positions,
+            "closed_positions": closed_positions,
+            "postmortems": len(judge_postmortems),
+            "tao_usd": tao_usd,
+        })
+
+    return cards
+
+
+def _compute_market_intelligence(subnets: List[Dict[str, Any]], tao_usd: Optional[float] = None) -> Dict[str, Any]:
     if not subnets:
-        return {"total": 0, "avg_change_24h": 0, "gainers": 0, "losers": 0, "top_gainer": None, "top_loser": None, "avg_apy": 0, "total_volume": 0, "total_market_cap": 0, "breadth": "neutral"}
+        return {
+            "total": 0, "avg_change_24h": 0, "gainers": 0, "losers": 0,
+            "top_gainer": None, "top_loser": None, "avg_apy": 0,
+            "total_volume": 0, "total_volume_usd": 0,
+            "total_market_cap": 0, "total_market_cap_usd": 0,
+            "breadth": "neutral", "tao_price_usd": tao_usd,
+        }
     changes = [float(s.get("price_change_24h", 0) or 0) for s in subnets]
     apys = [float(s.get("apy", 0) or 0) for s in subnets]
     vols = [float(s.get("volume", 0) or 0) for s in subnets]
@@ -2128,6 +2345,9 @@ def _compute_market_intelligence(subnets: List[Dict[str, Any]]) -> Dict[str, Any
     top_g = max(subnets, key=lambda s: float(s.get("price_change_24h", 0) or 0))
     top_l = min(subnets, key=lambda s: float(s.get("price_change_24h", 0) or 0))
     breadth = "bullish" if gainers > losers * 1.3 else "bearish" if losers > gainers * 1.3 else "neutral"
+    total_volume = round(sum(vols), 2)
+    total_market_cap = round(sum(mcs), 2)
+    rate = float(tao_usd) if tao_usd else 0.0
     return {
         "total": len(subnets),
         "avg_change_24h": round(sum(changes) / len(changes), 2),
@@ -2136,9 +2356,12 @@ def _compute_market_intelligence(subnets: List[Dict[str, Any]]) -> Dict[str, Any
         "top_gainer": {"name": top_g.get("name"), "netuid": top_g.get("netuid"), "change": top_g.get("price_change_24h", 0)},
         "top_loser": {"name": top_l.get("name"), "netuid": top_l.get("netuid"), "change": top_l.get("price_change_24h", 0)},
         "avg_apy": round(sum(apys) / len(apys), 2),
-        "total_volume": round(sum(vols), 2),
-        "total_market_cap": round(sum(mcs), 2),
+        "total_volume": total_volume,
+        "total_volume_usd": round(total_volume * rate, 2) if rate else 0.0,
+        "total_market_cap": total_market_cap,
+        "total_market_cap_usd": round(total_market_cap * rate, 2) if rate else 0.0,
         "breadth": breadth,
+        "tao_price_usd": rate if rate else None,
     }
 
 
@@ -2366,10 +2589,12 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         social_feed.append({"netuid": sn.get("netuid"), "name": sn.get("name"), **_compute_social_sentiment(sn)})
 
     undervalued = _compute_undervalued(subnets)
-    market_intel = _compute_market_intelligence(subnets)
+    tao_usd = _get_tao_usd()
+    market_intel = _compute_market_intelligence(subnets, tao_usd)
     staking = _compute_staking_analytics(subnets)
     learning_metrics = _compute_learning_metrics()
     momentum_charts = _build_momentum_charts(subnets, simivision_picks)
+    judge_cards = _build_judge_cards(tao_usd)
 
     engine = LearningEngine()
     expert_weights = load_weights()
@@ -2551,6 +2776,8 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
             "overbought": _detect_overbought_convergence(_compute_technical_indicators(top_subnets[0])) if top_subnets else {},
         },
         "momentum_charts": momentum_charts,
+        "judge_cards": judge_cards,
+        "usd_rate": tao_usd,
     }
 
 
@@ -2561,12 +2788,15 @@ def _default_market_intelligence() -> Dict[str, Any]:
         "gainers": 0,
         "losers": 0,
         "total_volume": 0.0,
+        "total_volume_usd": 0.0,
         "breadth": "neutral",
         "avg_apy": 0.0,
         "total_market_cap": 0.0,
+        "total_market_cap_usd": 0.0,
         "total": 0,
         "top_gainer": None,
         "top_loser": None,
+        "tao_price_usd": None,
     }
 
 
@@ -2625,6 +2855,8 @@ def _default_premium_context() -> Dict[str, Any]:
         "social_sentiment": [],
         "indicators_convergence": {"oversold": {}, "overbought": {}},
         "momentum_charts": {"treemap": [], "radar": {"labels": [], "datasets": []}},
+        "judge_cards": [],
+        "usd_rate": None,
     }
 
 
@@ -2766,6 +2998,8 @@ async def dashboard(request: Request):
         "social_sentiment": premium.get("social_sentiment", []),
         "indicators_convergence": premium.get("indicators_convergence", {"oversold": {}, "overbought": {}}),
         "momentum_charts": premium.get("momentum_charts", {"treemap": [], "radar": {"labels": [], "datasets": []}}),
+        "judge_cards": premium.get("judge_cards", []),
+        "usd_rate": premium.get("usd_rate"),
         "hour_picks": hour_picks,
         "day_picks": day_picks,
         "daily_pick": daily_pick,

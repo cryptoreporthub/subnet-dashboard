@@ -16,6 +16,12 @@ from typing import Any, Dict, List, Optional
 
 from internal.council.weights import load_weights, save_weights
 
+try:
+    from internal.judges.tracker import on_prediction_resolved
+except Exception:  # pragma: no cover
+    def on_prediction_resolved(*_args, **_kwargs):
+        return {}
+
 PREDICTIONS_PATH = os.path.join("data", "predictions.json")
 PRICE_CACHE_PATH = os.path.join("data", "price_cache.json")
 
@@ -181,6 +187,11 @@ def resolve_prediction(
     if expert:
         prediction["expert"] = expert
         _nudge_weights(correct, expert)
+
+    try:
+        on_prediction_resolved(prediction)
+    except Exception:
+        pass
 
     return prediction
 
