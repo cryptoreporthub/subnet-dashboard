@@ -3,6 +3,7 @@ import logging
 import math
 import os
 import sys
+import threading
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Optional
@@ -94,14 +95,66 @@ def _get_message_intel_self_learning():
     return _message_intel_self_learning
 
 
+def _start_telegram_listener_safe() -> None:
+    """Auto-start the Telegram listener if credentials are configured.
+
+    Uses lazy imports and a try/except so the app still starts if telethon
+    is missing or authentication fails. Runs in a daemon thread so startup
+    is not blocked.
+    """
+    api_id = os.environ.get("TELEGRAM_API_ID", "").strip()
+    api_hash = os.environ.get("TELEGRAM_API_HASH", "").strip()
+    phone = os.environ.get("TELEGRAM_PHONE", "").strip()
+    session_string = os.environ.get("TELEGRAM_SESSION_STRING", "").strip()
+
+    if not api_id or not api_hash or (not phone and not session_string):
+        logger.info(
+            "Telegram listener skipped: TELEGRAM_API_ID, TELEGRAM_API_HASH, and "
+            "TELEGRAM_PHONE or TELEGRAM_SESSION_STRING are required."
+        )
+        return
+
+    if not _MESSAGE_INTEL_AVAILABLE:
+        logger.warning("Telegram listener skipped: message_intel package unavailable.")
+        return
+
+    try:
+        from message_intel.telegram_listener import TelegramListener  # lazy import
+
+        listener = TelegramListener(
+            api_id=api_id,
+            api_hash=api_hash,
+            phone=phone or None,
+            session_name=os.environ.get("TELEGRAM_SESSION_NAME", "telegram_listener"),
+        )
+        # Run start() in a daemon thread so it does not block app startup.
+        def _run():
+            try:
+                started = listener.start()
+                if started:
+                    logger.info("Telegram listener auto-started in background thread.")
+                else:
+                    logger.warning("Telegram listener did not start (check credentials).")
+            except Exception as exc:
+                logger.warning("Telegram listener failed to start: %s", exc)
+
+        thread = threading.Thread(target=_run, daemon=True, name="telegram-listener-starter")
+        thread.start()
+    except Exception as exc:
+        logger.warning("Telegram listener auto-start error: %s", exc)
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Start the indicator scheduler on startup and stop it on shutdown."""
+    """Start background services on startup and stop them on shutdown."""
     try:
         start_indicator_scheduler()
         logger.info("Indicator scheduler started")
     except Exception as exc:
         logger.warning("Failed to start indicator scheduler: %s", exc)
+
+    _start_telegram_listener_safe()
+
     yield
     try:
         stop_indicator_scheduler()

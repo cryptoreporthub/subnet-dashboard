@@ -246,7 +246,11 @@ def test_price_outcome_tracking(db):
 def test_full_pipeline_integration(db, nlp):
     """Verify the complete message processing pipeline end-to-end."""
     from message_intel.jury_bridge import JuryBridge
-    from internal.council.judge.adversarial import AdversarialJudge
+
+    try:
+        from internal.council.judge.adversarial import AdversarialJudge
+    except ModuleNotFoundError:
+        from message_intel.jury_bridge import AdversarialJudge
 
     content = "Subnet 7 is massively bullish with 3.5 TAO emission and growing adoption!"
 
