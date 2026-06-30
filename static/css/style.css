@@ -2117,3 +2117,44 @@ footer.status {
 .picks { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); }
 @media (max-width: 1100px) { .picks { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 768px)  { .picks { grid-template-columns: 1fr; } }
+
+/* ---------- Pump Cycle Analytics v2 ---------- */
+.pump-candidate-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:var(--space-4); }
+.pump-card { background:var(--bg-card); border:1px solid var(--border-default); border-radius:var(--radius-md); padding:14px; border-left:3px solid var(--text-muted); }
+.pump-card.phase-accumulation { border-left-color:#4a5568; }
+.pump-card.phase-markup { border-left-color:#48bb78; }
+.pump-card.phase-parabolic { border-left-color:#f56565; }
+.pump-card.phase-distribution { border-left-color:#ed8936; }
+.pump-card.phase-decline { border-left-color:#f56565; }
+.pump-card.phase-re_accumulation { border-left-color:#38b2ac; }
+.pump-card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:8px; }
+.pump-card-header .subnet-name { font-weight:600; }
+.phase-badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-pill); font-size:11px; font-weight:700; letter-spacing:0.04em; }
+.phase-badge.phase-accumulation { background:rgba(74,85,104,0.25); color:#cbd5e0; }
+.phase-badge.phase-markup { background:rgba(72,187,120,0.22); color:#68d391; }
+.phase-badge.phase-parabolic { background:linear-gradient(90deg,rgba(245,101,101,0.25),rgba(72,187,120,0.25)); color:#fed7d7; }
+.phase-badge.phase-distribution { background:rgba(237,138,54,0.22); color:#f6ad55; }
+.phase-badge.phase-decline { background:rgba(245,101,101,0.22); color:#fc8181; }
+.phase-badge.phase-re_accumulation { background:rgba(56,178,172,0.22); color:#4fd1c5; }
+.proneness-bar { position:relative; height:18px; background:rgba(255,255,255,0.05); border-radius:var(--radius-pill); overflow:hidden; margin:8px 0; }
+.proneness-bar-sm { height:14px; min-width:90px; }
+.proneness-fill { position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg,#f43f5e 0%,#f59e0b 50%,#34d399 100%); border-radius:var(--radius-pill); }
+.proneness-score { position:absolute; right:6px; top:50%; transform:translateY(-50%); font-size:11px; font-weight:700; color:var(--text-secondary); text-shadow:0 1px 2px rgba(0,0,0,0.6); }
+.cycle-prediction { display:flex; flex-wrap:wrap; gap:10px; font-size:12px; color:var(--text-secondary); margin:6px 0; }
+.phase-duration { font-size:11px; color:var(--text-muted); }
+.pump-cycle-table { width:100%; border-collapse:collapse; font-size:13px; }
+.pump-cycle-table th { text-align:left; padding:8px 10px; color:var(--text-muted); font-weight:600; border-bottom:1px solid var(--border-default); white-space:nowrap; }
+.pump-cycle-table td { padding:8px 10px; border-bottom:1px solid var(--border-default); }
+.pump-cycle-table tbody tr:hover { background:rgba(52,211,153,0.04); }
+.pump-profile-row { border:1px solid var(--border-default); border-radius:var(--radius-md); margin-bottom:8px; overflow:hidden; }
+.pump-profile-head { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 14px; cursor:pointer; background:rgba(255,255,255,0.02); }
+.pump-profile-head:hover { background:rgba(52,211,153,0.05); }
+.pump-profile-toggle { color:var(--text-muted); transition:transform 0.2s; }
+.pump-profile-row.open .pump-profile-toggle { transform:rotate(90deg); }
+.pump-profile-body { display:none; padding:14px; border-top:1px solid var(--border-default); }
+.pump-profile-row.open .pump-profile-body { display:block; }
+.pump-profile-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; font-size:13px; }
+.mini-timeline { display:flex; gap:3px; height:26px; margin-bottom:12px; align-items:stretch; }
+.mini-timeline-seg { background:linear-gradient(180deg,rgba(72,187,120,0.5),rgba(72,187,120,0.2)); border-radius:4px; display:flex; align-items:center; justify-content:center; border:1px solid rgba(72,187,120,0.3); }
+.mini-timeline-seg:nth-child(even) { background:linear-gradient(180deg,rgba(237,138,54,0.5),rgba(237,138,54,0.2)); border-color:rgba(237,138,54,0.3); }
+.mini-timeline-label { font-size:10px; color:var(--text-secondary); font-weight:600; }

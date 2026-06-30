@@ -137,6 +137,12 @@ except Exception:  # pragma: no cover
             pass
 
 try:
+    from data.pump_tracker import get_pump_tracker
+except Exception:  # pragma: no cover
+    def get_pump_tracker(*_args, **_kwargs):
+        return None
+
+try:
     from message_intel import Database as _MessageIntelDatabase
     from message_intel import NLPAnalyzer as _MessageIntelNLPAnalyzer
     from message_intel import JuryBridge as _MessageIntelJuryBridge
@@ -539,6 +545,34 @@ def _safe_rotation_summary() -> Dict[str, Any]:
         }
 
 
+def _safe_pump_analytics() -> Dict[str, Any]:
+    """Return the Pump Cycle Analytics v2 payload for the homepage context.
+
+    Defensive: never raises — a tracker failure degrades to an empty payload so
+    the dashboard still renders.
+    """
+    try:
+        tracker = get_pump_tracker()
+        if tracker is None:
+            raise RuntimeError("pump tracker unavailable")
+        return tracker.get_all_analytics()
+    except Exception as exc:
+        logger.warning("Could not load pump analytics: %s", exc)
+        return {
+            "status": "success",
+            "data": {
+                "subnets": [],
+                "meta": {
+                    "tracked_subnets": 0,
+                    "total_cycles": 0,
+                    "avg_proneness": 0.0,
+                    "top_pump_candidates": [],
+                    "updated_at": datetime.utcnow().isoformat() + "Z",
+                },
+            },
+        }
+
+
 @app.get("/health")
 def health_check():
     return PlainTextResponse("OK")
@@ -822,6 +856,27 @@ def api_learning_stats_safe():
             "last_updated": stats.get("last_updated") or datetime.utcnow().isoformat() + "Z",
         },
     }
+
+
+@app.get("/api/pump-analytics")
+def api_pump_analytics(request: Request):
+    """Pump Cycle Analytics v2 — CUSUM detection, 6-phase model, proneness.
+
+    Optional ``?netuid=`` filter restricts the response to a single subnet.
+    """
+    tracker = get_pump_tracker()
+    if tracker is None:
+        return {"status": "error", "data": {"subnets": [], "meta": {"tracked_subnets": 0, "total_cycles": 0, "avg_proneness": 0.0, "top_pump_candidates": [], "updated_at": None}}}
+    data = tracker.get_all_analytics()
+    netuid = request.query_params.get("netuid")
+    if netuid:
+        try:
+            nid = int(netuid)
+            data["data"]["subnets"] = [s for s in data["data"]["subnets"] if s.get("netuid") == nid]
+            data["data"]["meta"]["tracked_subnets"] = len(data["data"]["subnets"])
+        except (TypeError, ValueError):
+            pass
+    return data
 
 
 # ---------------------------------------------------------------------------
@@ -1962,6 +2017,18 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
     ref_price = float(sn.get("price", 0) or 0) or 1.0
     signal_source = signal_impact.get("dominant") or direction
     expert = _expert_from_signal_source(signal_source)
+    # Record the pump-cycle phase + proneness at prediction time so the
+    # self-learning loop can later grade cycle accuracy separately from
+    # direction accuracy.
+    _phase_at_pred = "UNKNOWN"
+    _proneness_at_pred = 0
+    try:
+        _pt = get_pump_tracker()
+        if _pt is not None:
+            _phase_at_pred = _pt.get_current_phase(netuid)
+            _proneness_at_pred = _pt.get_proneness(netuid)
+    except Exception:
+        pass
     prediction = {
         "id": _uuid.uuid4().hex[:10],
         "netuid": sn.get("netuid"),
@@ -1975,6 +2042,8 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
         "status": "pending",
         "signal_source": signal_source,
         "expert": expert,
+        "phase_at_prediction": _phase_at_pred,
+        "proneness_at_prediction": _proneness_at_pred,
         "statement": f"predicted to move {'+' if predicted_pct >= 0 else ''}{predicted_pct:.1f}% within {horizon} hours",
     }
     PREDICTION_STORE.add(prediction)
@@ -2010,6 +2079,35 @@ def _resolve_prediction(prediction: Dict[str, Any], latest_price: float) -> Dict
         on_prediction_resolved(prediction)
     except Exception as exc:
         logger.warning("Judge tracker on_prediction_resolved failed: %s", exc)
+
+    # Feed the outcome back into the Pump Cycle Tracker so cycle accuracy is
+    # tracked separately from direction accuracy and feeds the proneness score.
+    try:
+        _pt = get_pump_tracker()
+        if _pt is not None:
+            _hours_elapsed = float(prediction.get("horizon_hours", 0) or 0)
+            try:
+                _created = _dt.fromisoformat(prediction.get("created_at", "").replace("Z", ""))
+                _hours_elapsed = max(0.0, (_dt.utcnow() - _created).total_seconds() / 3600.0)
+            except Exception:
+                pass
+            _pt.record_cycle_outcome(
+                netuid=prediction.get("netuid"),
+                prediction={
+                    "predicted_direction": prediction.get("direction"),
+                    "predicted_magnitude": abs(float(prediction.get("predicted_pct", 0) or 0)),
+                    "predicted_timing": _hours_elapsed,
+                    "phase_at_prediction": prediction.get("phase_at_prediction", "UNKNOWN"),
+                },
+                actual={
+                    "actual_direction": "up" if actual_pct > 0 else "down",
+                    "actual_magnitude": abs(float(actual_pct)),
+                    "actual_timing": _hours_elapsed,
+                    "phase_at_resolution": _pt.get_current_phase(prediction.get("netuid")),
+                },
+            )
+    except Exception as exc:
+        logger.warning("pump_tracker record_cycle_outcome failed: %s", exc)
 
     return prediction
 
@@ -2739,16 +2837,35 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     mindmap_trail = []
     now_ts = _dt.utcnow().strftime("%H:%M:%S")
+    # Pump Cycle Analytics context: append the current phase + proneness to
+    # each trail entry so the Mind Map stays wired into the pump cycle loop.
+    _pump_tracker = None
+    try:
+        _pump_tracker = get_pump_tracker()
+    except Exception:
+        _pump_tracker = None
+
+    def _pump_ctx_for(netuid: Any) -> str:
+        if _pump_tracker is None or netuid is None:
+            return ""
+        try:
+            return _pump_tracker.get_cycle_context(netuid)
+        except Exception:
+            return ""
+
     # One trail entry per pick (up to 6) so the learning trail reflects the
     # full top-of-book rather than only the first few picks.
     for p in simivision_picks[:6]:
+        _ctx = _pump_ctx_for(p.get("netuid"))
+        _pred = p.get("prediction", {}).get("statement")
+        _prediction_text = (_pred + (" " + _ctx if _ctx else "")) if _pred else (_ctx or None)
         mindmap_trail.append({
             "time": now_ts,
             "subnet": p.get("name"),
             "evidence": p.get("reasons", [])[0] if p.get("reasons") else "metrics scanned",
             "signal": p.get("signal_impact", {}).get("dominant") or p.get("signal_impact", {}).get("net_direction"),
             "decision": p.get("recommendation"),
-            "prediction": p.get("prediction", {}).get("statement"),
+            "prediction": _prediction_text,
             "judge": f"conviction {p.get('conviction')}%",
         })
     # Signal-impact trail entries: surface the strongest directional signal per
@@ -2758,13 +2875,16 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         if not impacts:
             continue
         strongest = max(impacts, key=lambda i: abs(i.get("magnitude_pct", 0)))
+        _ctx = _pump_ctx_for(si.get("netuid"))
+        _pred = strongest.get("predicted_move")
+        _prediction_text = (_pred + (" " + _ctx if _ctx else "")) if _pred else (_ctx or None)
         mindmap_trail.append({
             "time": now_ts,
             "subnet": si.get("name"),
             "evidence": strongest.get("description") or strongest.get("signal_type"),
             "signal": strongest.get("direction"),
             "decision": "signal logged",
-            "prediction": strongest.get("predicted_move"),
+            "prediction": _prediction_text,
             "judge": f"magnitude {strongest.get('magnitude_pct', 0):.1f}%",
         })
     # Learning-loop trail entry: weight update + accuracy snapshot.
@@ -2938,6 +3058,7 @@ def _default_premium_context() -> Dict[str, Any]:
         "rotation_tracker": _default_rotation_tracker(),
         "scenario_memory": _default_scenario_memory(),
         "api_indicators_convergence": {"subnets": []},
+        "pump_analytics": _safe_pump_analytics(),
     }
 
 
@@ -3096,6 +3217,7 @@ async def dashboard(request: Request):
         "rotation_tracker": rotation_tracker,
         "scenario_memory": scenario_memory_snapshot,
         "api_indicators_convergence": indicators_convergence,
+        "pump_analytics": _safe_pump_analytics(),
     }
 
     try:

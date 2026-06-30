@@ -335,6 +335,140 @@
       {% else %}<div class="section-sub">Learning trail is empty — picks and resolutions will populate on the next refresh.</div>{% endfor %}
     </div>
 
+    <!-- Pump Cycle Analytics v2 -->
+    {% set _pa = (pump_analytics or {}) %}
+    {% set _pa_data = (_pa.get('data') if _pa is mapping else None) or {} %}
+    {% set _pa_subnets = _pa_data.get('subnets') or [] %}
+    {% set _pa_meta = _pa_data.get('meta') or {} %}
+    <div class="section-label">Pump Cycle Analytics</div>
+    <div class="section-sub">CUSUM-based pump detection · 6-phase cycle model · per-subnet behavioral profiling</div>
+    <div class="card">
+      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:16px;">
+        <div class="mono" style="color:var(--text-secondary);">Tracked: <strong style="color:var(--accent-bright);">{{ _pa_meta.get('tracked_subnets', 0) }}</strong> subnets</div>
+        <div class="mono" style="color:var(--text-secondary);">Cycles detected: <strong style="color:var(--accent-bright);">{{ _pa_meta.get('total_cycles', 0) }}</strong></div>
+        <div class="mono" style="color:var(--text-secondary);">Avg proneness: <strong style="color:var(--accent-bright);">{{ '%.1f' % (_pa_meta.get('avg_proneness', 0) or 0) }}</strong>/100</div>
+        <div class="mono" style="color:var(--text-secondary);">Updated: {{ _pa_meta.get('updated_at') or '—' }}</div>
+      </div>
+
+      {% if _pa_subnets|length > 0 %}
+      <!-- Top pump candidates -->
+      <h3 style="margin-top:8px;">Top Pump Candidates</h3>
+      <div class="pump-candidate-cards">
+        {% for s in _pa_subnets[:5] %}
+        {% set _ph = (s.get('current_phase') or 'ACCUMULATION')|lower %}
+        <div class="pump-card phase-{{ _ph }}">
+          <div class="pump-card-header">
+            <span class="subnet-name">{{ s.get('name') or ('SN' ~ s.get('netuid')) }} <span class="mono" style="color:var(--text-muted);">SN{{ s.get('netuid') }}</span></span>
+            <span class="phase-badge phase-{{ _ph }}">{{ s.get('current_phase') or 'ACCUMULATION' }}</span>
+          </div>
+          <div class="proneness-bar">
+            <div class="proneness-fill" style="width:{{ s.get('pump_proneness', 0) or 0 }}%"></div>
+            <span class="proneness-score">{{ s.get('pump_proneness', 0) or 0 }}/100</span>
+          </div>
+          {% set _cp = s.get('cycle_prediction') or {} %}
+          <div class="cycle-prediction">
+            <span>Next pump: ~{{ '%.1f' % (_cp.get('next_pump_expected_hours', 0) or 0) }}h</span>
+            <span>Expected: {{ '%+.1f' % (_cp.get('expected_pump_magnitude_pct', 0) or 0) }}%</span>
+            <span>Confidence: {{ '%.0f' % ((_cp.get('prediction_confidence', 0) or 0) * 100) }}%</span>
+          </div>
+          <div class="phase-duration">In {{ s.get('current_phase') or 'ACCUMULATION' }} for {{ s.get('phase_duration_minutes', 0) or 0 }}min</div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Full table -->
+      <h3 style="margin-top:24px;">All Tracked Subnets</h3>
+      <div style="overflow-x:auto;">
+        <table class="pump-cycle-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Subnet</th>
+              <th>Phase</th>
+              <th>Phase Duration</th>
+              <th>Proneness</th>
+              <th>Avg Pump</th>
+              <th>Re-Pump Rate</th>
+              <th>Next Pump Expected</th>
+              <th>Cycles Observed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in _pa_subnets %}
+            {% set _ph = (s.get('current_phase') or 'ACCUMULATION')|lower %}
+            {% set _prof = s.get('profile') or {} %}
+            {% set _cp = s.get('cycle_prediction') or {} %}
+            <tr>
+              <td class="mono">{{ s.get('netuid') }}</td>
+              <td>{{ s.get('name') or ('SN' ~ s.get('netuid')) }}</td>
+              <td><span class="phase-badge phase-{{ _ph }}">{{ s.get('current_phase') or 'ACCUMULATION' }}</span></td>
+              <td class="mono">{{ s.get('phase_duration_minutes', 0) or 0 }}min</td>
+              <td>
+                <div class="proneness-bar proneness-bar-sm">
+                  <div class="proneness-fill" style="width:{{ s.get('pump_proneness', 0) or 0 }}%"></div>
+                  <span class="proneness-score">{{ s.get('pump_proneness', 0) or 0 }}</span>
+                </div>
+              </td>
+              <td class="mono">{{ '%+.1f' % (_prof.get('avg_pump_magnitude', 0) or 0) }}%</td>
+              <td class="mono">{{ '%.0f' % ((_prof.get('re_pump_rate', 0) or 0) * 100) }}%</td>
+              <td class="mono">~{{ '%.1f' % (_cp.get('next_pump_expected_hours', 0) or 0) }}h</td>
+              <td class="mono">{{ _prof.get('total_cycles_observed', 0) or 0 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Mini cycle timeline + expandable profiles -->
+      <h3 style="margin-top:24px;">Recent Cycle Timeline &amp; Behavioral Profiles</h3>
+      {% for s in _pa_subnets[:10] %}
+      {% set _prof = s.get('profile') or {} %}
+      {% set _cycles = s.get('cycles') or [] %}
+      {% set _acc = s.get('cycle_accuracy') or {} %}
+      <div class="pump-profile-row">
+        <div class="pump-profile-head" data-netuid="{{ s.get('netuid') }}">
+          <span><strong>{{ s.get('name') or ('SN' ~ s.get('netuid')) }}</strong> <span class="mono" style="color:var(--text-muted);">SN{{ s.get('netuid') }}</span></span>
+          <span class="mono" style="color:var(--text-secondary);">{{ _prof.get('total_cycles_observed', 0) or 0 }} cycles · accuracy {{ '%.0f' % ((_acc.get('accuracy_score', 0) or 0) * 100) }}% · {{ _prof.get('typical_pattern', '—') }}</span>
+          <span class="pump-profile-toggle">▸</span>
+        </div>
+        <div class="pump-profile-body">
+          <!-- Mini timeline: last 5 cycles as colored segments -->
+          {% if _cycles|length > 0 %}
+          <div class="mini-timeline">
+            {% for cyc in _cycles[:5] %}
+            {% set _dur = (cyc.get('total_cycle_duration_minutes') or 1)|int %}
+            <div class="mini-timeline-seg" style="flex:{{ _dur }};min-width:24px;" title="Cycle {{ cyc.get('cycle_id') }}: {{ _dur }}min, {{ '%+.1f' % (cyc.get('pump_magnitude_pct', 0) or 0) }}% pump{% if cyc.get('re_pump') %}, re-pump {{ '%+.1f' % (cyc.get('re_pump_magnitude_pct', 0) or 0) }}%{% endif %}">
+              <span class="mini-timeline-label">{{ _dur }}m</span>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="section-sub">No completed cycles yet — accumulating data from scheduler ticks.</div>
+          {% endif %}
+          <div class="pump-profile-grid">
+            <div><span class="mono" style="color:var(--text-muted);">Avg pump duration</span><br>{{ _prof.get('avg_pump_duration', 0) or 0 }}min</div>
+            <div><span class="mono" style="color:var(--text-muted);">Avg consolidation</span><br>{{ _prof.get('avg_consolidation_duration', 0) or 0 }}min</div>
+            <div><span class="mono" style="color:var(--text-muted);">Avg pump magnitude</span><br>{{ '%+.1f' % (_prof.get('avg_pump_magnitude', 0) or 0) }}%</div>
+            <div><span class="mono" style="color:var(--text-muted);">Re-pump rate</span><br>{{ '%.0f' % ((_prof.get('re_pump_rate', 0) or 0) * 100) }}%</div>
+            <div><span class="mono" style="color:var(--text-muted);">Avg cycle period</span><br>{{ _prof.get('avg_cycle_period', 0) or 0 }}min</div>
+            <div><span class="mono" style="color:var(--text-muted);">Proneness</span><br>{{ s.get('pump_proneness', 0) or 0 }}/100</div>
+          </div>
+          {% if _acc.get('predictions_made', 0) %}
+          <div class="pump-profile-grid" style="margin-top:8px;">
+            <div><span class="mono" style="color:var(--text-muted);">Predictions made</span><br>{{ _acc.get('predictions_made', 0) }}</div>
+            <div><span class="mono" style="color:var(--text-muted);">Timing correct</span><br>{{ _acc.get('timing_correct', 0) }}</div>
+            <div><span class="mono" style="color:var(--text-muted);">Direction correct</span><br>{{ _acc.get('direction_correct', 0) }}</div>
+            <div><span class="mono" style="color:var(--text-muted);">Avg magnitude error</span><br>{{ '%.1f' % (_acc.get('magnitude_error_avg', 0) or 0) }}%</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div class="section-sub">Pump cycle tracker is warming up — no subnets tracked yet. Data accumulates from the first scheduler tick (CUSUM evidence + 6-phase classification build over time).</div>
+      {% endif %}
+    </div>
+
     <!-- Signal Impact and Predictive Engine -->
     <div class="section-label"><span class="info-term" data-tip="Each trading signal contributes a predicted price move. Combined = overall bullish or bearish impact.">Signal Impact</span> · Predictive Engine · Learning Loop</div>
     <div class="section-sub">All outputs framed as "predicted to move +X% within N hours"</div>
@@ -386,6 +520,10 @@
   <script>
     document.querySelectorAll('.collapsible').forEach(function(el) {
       el.addEventListener('click', function() { el.classList.toggle('collapsed'); });
+    });
+    // Pump Cycle Analytics — expandable per-subnet behavioral profiles.
+    document.querySelectorAll('.pump-profile-head').forEach(function(el) {
+      el.addEventListener('click', function() { el.parentElement.classList.toggle('open'); });
     });
   </script>
 </body>
