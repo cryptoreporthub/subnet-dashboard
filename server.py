@@ -694,6 +694,41 @@ def _highest_emission_pick(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def _fallback_state_pick(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Return a flat pick-shaped fallback for the Live Council State Vector.
+
+    Mirrors the shape used by the dashboard's hour/day pick cards (flat
+    ``netuid``/``name``/``score``/``confidence``/``signals`` keys) so the
+    homepage never renders an empty council state vector. Falls back to the
+    highest-ranked subnet (by emission, then APY, then volume).
+    """
+    if not subnets:
+        return {}
+    best = max(
+        subnets,
+        key=lambda s: (s.get("emission", 0) or 0, s.get("apy", 0) or 0, s.get("volume", 0) or 0),
+    )
+    return {
+        "netuid": best.get("netuid"),
+        "name": best.get("name"),
+        "symbol": best.get("symbol"),
+        "score": 0.0,
+        "confidence": 0.0,
+        "expert_contributions": {},
+        "scenario_tags": {"fallback": "highest-ranked"},
+        "signals": {
+            "price_change_24h": best.get("price_change_24h"),
+            "price_change_7d": best.get("price_change_7d"),
+            "emission": best.get("emission"),
+            "apy": best.get("apy"),
+            "volume": best.get("volume"),
+        },
+        "action": "long",
+        "rationale": "Council convening — picks refresh every 60 minutes.",
+        "fallback": True,
+    }
+
+
 @app.get("/api/top-pick/day")
 def api_top_pick_day():
     """Return the top pick for the current day with a safe fallback."""
@@ -1035,7 +1070,7 @@ import json as _json
 import os as _os
 import math as _math
 import uuid as _uuid
-from datetime import datetime as _dt, timedelta as _td
+from datetime import datetime as _dt, timedelta as _td, timezone as _tz
 
 _PREDICTIONS_PATH = _os.path.join("data", "predictions.json")
 _PRICE_CACHE_PATH = _os.path.join("data", "price_cache.json")
@@ -2277,7 +2312,13 @@ def _compute_undervalued(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             score += _math.log(vol + 1)
         if mc > 0:
             score -= _math.log(mc + 1) * 0.3
-        ranked.append({**sn, "undervalued_score": round(score, 2)})
+        # Cap to a 0-100 scale so the radar is comparable across subnets.
+        score = max(0.0, min(100.0, score))
+        ranked.append({
+            **sn,
+            "undervalued_score": round(score, 2),
+            "significantly_undervalued": score > 85,
+        })
     ranked.sort(key=lambda x: x.get("undervalued_score", 0), reverse=True)
     for i, sn in enumerate(ranked[:8]):
         sn["rank"] = i + 1
@@ -2319,8 +2360,13 @@ def _get_tao_usd() -> Optional[float]:
     return None
 
 
-def _build_judge_cards(tao_usd: Optional[float] = None) -> List[Dict[str, Any]]:
-    """Build live judge cards from the judge layer, portfolios and postmortems."""
+def _build_judge_cards(subnets: Optional[List[Dict[str, Any]]] = None, tao_usd: Optional[float] = None) -> List[Dict[str, Any]]:
+    """Build live judge cards from the judge layer, portfolios and postmortems.
+
+    Each card carries the summary metrics plus the full portfolio (open
+    positions, last 5 closed positions with P&L) and the latest postmortem so
+    the Judge Panel can render a complete, expandable portfolio per judge.
+    """
     cards: List[Dict[str, Any]] = []
     if not _JUDGES_AVAILABLE:
         return cards
@@ -2336,6 +2382,15 @@ def _build_judge_cards(tao_usd: Optional[float] = None) -> List[Dict[str, Any]]:
         portfolios = {}
     if not isinstance(postmortems, dict):
         postmortems = {}
+
+    # Price lookup for current value of open positions.
+    price_by_netuid: Dict[Any, float] = {}
+    if subnets:
+        for sn in subnets:
+            try:
+                price_by_netuid[sn.get("netuid")] = float(sn.get("price", 0) or 0)
+            except (TypeError, ValueError):
+                continue
 
     for judge in all_judges():
         name = judge.name
@@ -2353,12 +2408,73 @@ def _build_judge_cards(tao_usd: Optional[float] = None) -> List[Dict[str, Any]]:
         win_pct = round(wins / total * 100, 1) if total else 0.0
         pnl = float(summary.get("total_pnl_pct", 0.0) or 0.0)
 
-        # Position lists use open_positions/closed_positions.
-        open_positions = len(pf.get("open_positions", [])) if isinstance(pf, dict) else 0
-        closed_positions = len(pf.get("closed_positions", [])) if isinstance(pf, dict) else 0
+        # Full position lists for the expandable portfolio view.
+        raw_open = pf.get("open_positions", []) if isinstance(pf, dict) else []
+        raw_closed = pf.get("closed_positions", []) if isinstance(pf, dict) else []
+        if not isinstance(raw_open, list):
+            raw_open = []
+        if not isinstance(raw_closed, list):
+            raw_closed = []
+
+        open_positions_list = []
+        for pos in raw_open:
+            if not isinstance(pos, dict):
+                continue
+            entry_price = float(pos.get("reference_price", 0) or 0)
+            current_price = price_by_netuid.get(pos.get("netuid"), entry_price) or entry_price
+            size = float(pos.get("size", 1.0) or 1.0)
+            open_positions_list.append({
+                "name": pos.get("name"),
+                "netuid": pos.get("netuid"),
+                "direction": pos.get("direction", "up"),
+                "entry_price": round(entry_price, 6),
+                "current_price": round(current_price, 6),
+                "current_value": round(current_price * size, 6),
+                "predicted_pct": pos.get("predicted_pct"),
+                "size": size,
+                "entered_at": pos.get("entered_at"),
+            })
+
+        # Last 5 closed positions, newest first, with per-position P&L.
+        closed_positions_list = []
+        for pos in reversed(raw_closed[-5:]):
+            if not isinstance(pos, dict):
+                continue
+            closed_positions_list.append({
+                "name": pos.get("name"),
+                "netuid": pos.get("netuid"),
+                "direction": pos.get("direction", "up"),
+                "predicted_pct": pos.get("predicted_pct"),
+                "actual_pct": pos.get("actual_pct"),
+                "pnl_pct": pos.get("pnl_pct", 0.0),
+                "outcome": pos.get("outcome", "unknown"),
+                "closed_at": pos.get("closed_at"),
+            })
+
         judge_postmortems = postmortems.get(name, []) if isinstance(postmortems, dict) else []
         if not isinstance(judge_postmortems, list):
             judge_postmortems = []
+
+        # Latest postmortem mapped to the three required scientific-method
+        # questions. ``list_for_judge`` returns newest first.
+        latest_pm = judge_postmortems[0] if judge_postmortems else None
+        latest_postmortem = None
+        if isinstance(latest_pm, dict):
+            q = latest_pm.get("questions", {}) if isinstance(latest_pm.get("questions"), dict) else {}
+            latest_postmortem = {
+                "name": latest_pm.get("name"),
+                "netuid": latest_pm.get("netuid"),
+                "direction": latest_pm.get("direction"),
+                "predicted_pct": latest_pm.get("predicted_pct"),
+                "actual_pct": latest_pm.get("actual_pct"),
+                "signal_source": latest_pm.get("signal_source"),
+                "created_at": latest_pm.get("created_at"),
+                "questions": [
+                    {"question": "What signal did I overweight?", "answer": q.get("why", "")},
+                    {"question": "What did the market/reality prove instead?", "answer": q.get("what", "")},
+                    {"question": "What one adjustment to my scoring rule should I try next?", "answer": q.get("rule", "")},
+                ],
+            }
 
         # Evaluate the judge against a neutral placeholder so we always have a score.
         try:
@@ -2378,9 +2494,12 @@ def _build_judge_cards(tao_usd: Optional[float] = None) -> List[Dict[str, Any]]:
             "wins": wins,
             "losses": losses,
             "pnl": round(pnl, 4),
-            "open_positions": open_positions,
-            "closed_positions": closed_positions,
+            "open_positions": len(open_positions_list),
+            "closed_positions": len(closed_positions_list),
             "postmortems": len(judge_postmortems),
+            "open_positions_list": open_positions_list,
+            "closed_positions_list": closed_positions_list,
+            "latest_postmortem": latest_postmortem,
             "tao_usd": tao_usd,
         })
 
@@ -2655,7 +2774,7 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     staking = _compute_staking_analytics(subnets)
     learning_metrics = _compute_learning_metrics()
     momentum_charts = _build_momentum_charts(subnets, simivision_picks)
-    judge_cards = _build_judge_cards(tao_usd)
+    judge_cards = _build_judge_cards(subnets, tao_usd)
 
     engine = LearningEngine()
     expert_weights = load_weights()
@@ -2779,6 +2898,46 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
             "judge": f"actual {r.get('actual_pct')}%",
         })
         break
+
+    # Enrich trail entries with prediction numerics + a countdown to resolution,
+    # then order newest-first and cap at 20 entries for the learning trail.
+    def _trail_countdown(resolve_at: Any) -> str:
+        if not resolve_at:
+            return ""
+        try:
+            target = _dt.fromisoformat(str(resolve_at).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return ""
+        if target.tzinfo is None:
+            target = target.replace(tzinfo=_tz.utc)
+        delta = target - _dt.now(_tz.utc)
+        if delta.total_seconds() <= 0:
+            return "resolved"
+        hours, rem = divmod(int(delta.total_seconds()), 3600)
+        minutes = rem // 60
+        return f"{hours}h {minutes}m"
+
+    _trail_now = _dt.now(_tz.utc)
+    for entry in mindmap_trail:
+        pred = entry.get("prediction") or ""
+        # Pull a signed percentage out of the prediction statement when present.
+        pct = None
+        if isinstance(pred, str):
+            import re as _re
+            m = _re.search(r"([+-]?\d+(?:\.\d+)?)\s*%", pred)
+            if m:
+                try:
+                    pct = float(m.group(1))
+                except ValueError:
+                    pct = None
+        entry["predicted_pct"] = pct
+        entry["horizon_hours"] = entry.get("horizon_hours") or 1
+        resolve_at = entry.get("resolve_at") or (_trail_now + _td(hours=entry["horizon_hours"])).isoformat()
+        entry["resolve_at"] = resolve_at
+        entry["time_remaining"] = _trail_countdown(resolve_at)
+
+    # Newest first, capped at 20 entries.
+    mindmap_trail = list(reversed(mindmap_trail))[:20]
 
     # Enrich active predictions with current estimate, expert tag, and
     # human-readable time remaining so the Predictive Engine cards render
@@ -3017,6 +3176,14 @@ async def dashboard(request: Request):
     except Exception as e:
         logger.error("Error computing day picks: %s", e)
         day_picks = []
+
+    # Live Council State Vector fallback: never render an empty council. If the
+    # backend computation returned no picks but subnets exist, fall back to the
+    # highest-ranked subnet so the homepage always shows a state vector.
+    if not hour_picks and subnets:
+        hour_picks = [_fallback_state_pick(subnets)]
+    if not day_picks and subnets:
+        day_picks = [_fallback_state_pick(subnets)]
 
     try:
         daily_pick = await api_daily_pick()
