@@ -281,6 +281,10 @@ if os.path.isdir(_static_dir):
 # Jinja2 templates for server-side rendered dashboard
 _templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
 templates = Jinja2Templates(directory=_templates_dir)
+# Disable the Jinja2 template cache to avoid unhashable-type errors
+# with Starlette 1.0.0+ (the cache_key can contain unhashable dicts).
+templates.env.cache_size = 0
+templates.env.cache = None
 
 
 def _jinja_safe_list(value: Any) -> List[Any]:
