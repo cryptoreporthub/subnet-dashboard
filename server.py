@@ -2381,6 +2381,9 @@ def _build_judge_cards(tao_usd: Optional[float] = None) -> List[Dict[str, Any]]:
             "open_positions": open_positions,
             "closed_positions": closed_positions,
             "postmortems": len(judge_postmortems),
+            # Newest-first postmortem history for the Judge Panel, sourced from
+            # the postmortem store via ``list_for_judge``.
+            "recent_postmortems": list_for_judge(name)[:5] if _JUDGES_AVAILABLE else [],
             "tao_usd": tao_usd,
         })
 
@@ -3019,7 +3022,15 @@ async def dashboard(request: Request):
         day_picks = []
 
     try:
-        daily_pick = await api_daily_pick()
+        # Use the Council engine directly so the homepage shows the audited,
+        # persisted daily pick. ``get_or_create_today_pick`` returns the engine
+        # payload whose ``pick`` key holds the actual pick data
+        # (subnet/action/final_confidence/confidence/audit/scenario_tags) that
+        # templates/index.html renders as ``daily_pick.*``.
+        daily_pick_result = get_or_create_today_pick(subnets, market_context)
+        daily_pick = daily_pick_result.get("pick") if isinstance(daily_pick_result, dict) else None
+        if not isinstance(daily_pick, dict):
+            daily_pick = {}
     except Exception as e:
         logger.error("Error fetching daily pick: %s", e)
         daily_pick = {}
