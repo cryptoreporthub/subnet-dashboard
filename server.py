@@ -46,6 +46,12 @@ except Exception:  # pragma: no cover
         return {}
 
 try:
+    from internal.council.hourly_pick import select_hourly_pick
+except Exception:  # pragma: no cover
+    def select_hourly_pick(*_args, **_kwargs):
+        return {"subnet": None, "score": 0.0, "confidence": 0.0, "expert_contributions": {}, "scenario_tags": {}, "audit": {"approved": False, "concerns": ["hourly_pick unavailable"], "adjusted_confidence": 0.0}, "final_confidence": 0.0, "action": "long"}
+
+try:
     from internal.council import resolver, scenario_memory, rotation_tracker
 except Exception:  # pragma: no cover
     class _FakeResolver:
@@ -3322,12 +3328,41 @@ def _build_hour_pick_payload(sn: Dict[str, Any], score: Dict[str, Any]) -> Dict[
 
 @app.get("/api/top-pick/hour")
 async def api_top_pick_hour():
-    """Return the top 3 short-horizon picks with a safe fallback."""
+    """Return the top short-horizon picks with a safe fallback.
+
+    The headline pick is the RedTeam-audited hourly pick from
+    ``select_hourly_pick`` (which runs ``score_subnet_for_hour`` + the audit
+    layer); additional candidates are filled in from the raw hourly scoring
+    so callers still get a top-3 list.
+    """
     try:
         subnets, _ = _get_subnets_with_source()
         market_context = {"tao_change_24h": 0.0}
+        _hour_result = select_hourly_pick(subnets, market_context)
+        day_pick = _hour_result if _hour_result else _highest_emission_pick(subnets)
+
+        top_netuid = None
+        if isinstance(day_pick, dict) and isinstance(day_pick.get("subnet"), dict):
+            top_netuid = day_pick["subnet"].get("netuid")
+
+        # The audited hourly payload carries audit/final_confidence but not the
+        # raw market signals callers expect; graft them on from the source subnet.
+        if isinstance(day_pick, dict) and top_netuid is not None and "signals" not in day_pick:
+            src = next((s for s in subnets if s.get("netuid") == top_netuid), {})
+            day_pick["signals"] = {
+                "price_change_24h": src.get("price_change_24h"),
+                "price_change_7d": src.get("price_change_7d"),
+                "emission": src.get("emission"),
+                "apy": src.get("apy"),
+                "volume": src.get("volume"),
+            }
+
+        picks: List[Dict[str, Any]] = [day_pick] if day_pick else []
+
         scored = []
         for sn in subnets:
+            if top_netuid is not None and sn.get("netuid") == top_netuid:
+                continue
             try:
                 score = score_subnet_for_hour(sn, market_context)
             except Exception as exc:  # per-subnet scoring failure -> skip
@@ -3335,7 +3370,8 @@ async def api_top_pick_hour():
                 continue
             scored.append({"subnet": sn, "score": score})
         scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
-        return {"picks": [_build_hour_pick_payload(i["subnet"], i["score"]) for i in scored[:3]]}
+        picks.extend(_build_hour_pick_payload(i["subnet"], i["score"]) for i in scored[: max(0, 3 - len(picks))])
+        return {"picks": picks}
     except Exception as e:
         logger.error("Error fetching hour pick: %s", e)
         subnets, _ = _get_subnets_with_source()

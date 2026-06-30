@@ -23,6 +23,17 @@
     .collapsible.collapsed + .collapsible-content { display: none; }
     .ticker-strip { display: flex; gap: 24px; overflow: hidden; padding: 8px 0; font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
     .ticker-item { color: var(--text-secondary); }
+.conviction-ring {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: conic-gradient(var(--ring-color, #f59e0b) calc(var(--ring-pct, 0) * 1%), rgba(255,255,255,0.06) 0);
+  display: flex; align-items: center; justify-content: center; position: relative; flex-shrink: 0;
+}
+.conviction-ring::before {
+  content: ""; position: absolute; inset: 4px; border-radius: 50%;
+  background: var(--bg-card, #0a0e0a);
+}
+.conviction-pct { position: relative; z-index: 1; font-size: 11px; font-weight: 700; }
+.conviction-ring-wrap { display: flex; align-items: center; gap: 10px; }
   </style>
 </head>
 <body>
@@ -105,7 +116,12 @@
         <div class="pick-rank">{{ p.rank }}</div>
         <div class="pick-name pick-name-lg">{{ p.name }}</div>
         <div class="pick-meta mono">SN{{ p.netuid }} · {{ '%.2f'|format(p.emission) }} TAO/day · {{ '%.1f'|format(p.apy) }}% APY</div>
-        <div style="margin-top:8px;"><span class="badge {% if p.recommendation == 'BUY' %}badge-buy{% elif p.recommendation == 'HOLD' %}badge-hold{% elif p.recommendation == 'SELL' %}badge-sell{% else %}badge-watch{% endif %}">CONVICTION {{ p.conviction }}%</span></div>
+        <div style="margin-top:8px;"><div class="conviction-ring-wrap">
+  <div class="conviction-ring" style="--ring-pct: {{ p.conviction }}; --ring-color: {% if p.conviction > 70 %}#22c55e{% elif p.conviction > 40 %}#f59e0b{% else %}#ef4444{% endif %};">
+    <span class="conviction-pct">{{ p.conviction }}%</span>
+  </div>
+  <span class="badge {% if p.recommendation == 'BUY' %}badge-buy{% elif p.recommendation == 'HOLD' %}badge-hold{% elif p.recommendation == 'SELL' %}badge-sell{% else %}badge-watch{% endif %}">{{ p.recommendation }}</span>
+</div></div>
         <div style="margin-top:12px;font-size:13px;color:var(--text-secondary);">{% for r in (p.reasons | safe_list) %}• {{ r }}<br>{% endfor %}</div>
         <div style="margin-top:12px;">
           {% if p.recommendation == 'BUY' %}<span class="badge badge-buy">BUY</span>{% elif p.recommendation == 'HOLD' %}<span class="badge badge-hold">HOLD</span>{% elif p.recommendation == 'SELL' %}<span class="badge badge-sell">SELL</span>{% else %}<span class="badge badge-watch">WATCH</span>{% endif %}
@@ -123,7 +139,7 @@
     <div class="hero-card">
       <div class="hero-top"><div><div class="hero-name">{{ daily_pick.subnet.name }}</div><div class="hero-meta mono">SN{{ daily_pick.subnet.netuid }} · action {{ daily_pick.action }} · final confidence {{ '%.0f'|format(daily_pick.final_confidence*100) }}%</div></div></div>
       <div class="hero-stats">
-        <div class="hero-stat"><div class="k">FINAL CONFIDENCE</div><div class="v mono">{{ '%.0f'|format(daily_pick.final_confidence*100) }}%</div></div>
+        <div class="hero-stat"><div class="k">FINAL CONFIDENCE</div><div class="conviction-ring" style="--ring-pct: {{ (daily_pick.final_confidence*100)|round }}; --ring-color: {% if daily_pick.final_confidence > 0.7 %}#22c55e{% elif daily_pick.final_confidence > 0.4 %}#f59e0b{% else %}#ef4444{% endif %};"><span class="conviction-pct">{{ '%.0f'|format(daily_pick.final_confidence*100) }}%</span></div></div>
         <div class="hero-stat"><div class="k">RAW CONFIDENCE</div><div class="v mono">{{ '%.0f'|format(daily_pick.confidence*100) }}%</div></div>
         <div class="hero-stat"><div class="k">AUDIT</div><div class="v">{{ 'APPROVED' if daily_pick.audit.approved else 'FLAGGED' }}</div></div>
       </div>
