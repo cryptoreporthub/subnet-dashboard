@@ -5,6 +5,11 @@ Each judge keeps a ledger of open and closed paper positions. Positions are
 sized by the judge's confidence at entry time and closed when the underlying
 prediction resolves. Performance is tracked overall and split by hourly vs
 daily horizon.
+
+Each judge has a different risk profile:
+  - Oracle: standard risk (truth-focused, 1.0x)
+  - Echo: conservative risk (consensus-focused, 0.7x)
+  - Pulse: aggressive risk (momentum-focused, 1.3x)
 """
 
 from __future__ import annotations
@@ -15,6 +20,13 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 PORTFOLIOS_PATH = os.path.join("data", "judge_portfolios.json")
+
+# Per-judge risk multipliers — each judge trades with different conviction sizing
+_JUDGE_RISK_MULTIPLIER = {
+    "oracle": 1.0,   # Standard risk — truth-focused, balanced sizing
+    "echo": 0.7,     # Conservative — consensus-focused, smaller positions
+    "pulse": 1.3,    # Aggressive — momentum-focused, larger positions
+}
 
 _DEFAULT_JUDGE = {
     "open_positions": [],
@@ -31,10 +43,8 @@ _DEFAULT_JUDGE = {
     },
 }
 
-
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
 
 def _load() -> Dict[str, Any]:
     try:
@@ -43,7 +53,6 @@ def _load() -> Dict[str, Any]:
     except Exception:
         return {}
 
-
 def _save(data: Dict[str, Any]) -> None:
     os.makedirs(os.path.dirname(PORTFOLIOS_PATH) or ".", exist_ok=True)
     tmp = PORTFOLIOS_PATH + ".tmp"
@@ -51,26 +60,28 @@ def _save(data: Dict[str, Any]) -> None:
         json.dump(data, f, indent=2)
     os.replace(tmp, PORTFOLIOS_PATH)
 
-
 def _get_judge(data: Dict[str, Any], name: str) -> Dict[str, Any]:
     name = name.lower()
     if name not in data:
         data[name] = json.loads(json.dumps(_DEFAULT_JUDGE))
     return data[name]
 
-
-def _compute_pnl(direction: str, predicted_pct: float, actual_pct: float) -> float:
-    """P&L for a paper position: aligned move positive, opposite move negative."""
+def _compute_pnl(direction: str, predicted_pct: float, actual_pct: float, judge_name: str = "oracle") -> float:
+    """P&L for a paper position: aligned move positive, opposite move negative.
+    
+    Scaled by the judge's risk multiplier so each judge has differentiated returns.
+    """
     if direction == "down":
-        return round(-actual_pct, 4)
-    return round(actual_pct, 4)
-
+        base_pnl = -actual_pct
+    else:
+        base_pnl = actual_pct
+    multiplier = _JUDGE_RISK_MULTIPLIER.get(judge_name.lower(), 1.0)
+    return round(base_pnl * multiplier, 4)
 
 def _bucket(horizon_hours: Optional[int]) -> str:
     if horizon_hours is None:
         return "daily"
     return "hourly" if horizon_hours < 24 else "daily"
-
 
 def _recompute_summary(judge_data: Dict[str, Any]) -> None:
     closed = judge_data.get("closed_positions", [])
@@ -104,7 +115,6 @@ def _recompute_summary(judge_data: Dict[str, Any]) -> None:
         "daily": _bucket_stats(daily_closed),
     }
 
-
 def open_position(
     judge_name: str,
     prediction: Dict[str, Any],
@@ -113,6 +123,11 @@ def open_position(
     """Open a paper position for a judge when a prediction is created."""
     data = _load()
     judge = _get_judge(data, judge_name)
+    name_lower = judge_name.lower()
+    
+    # Scale position size by judge's risk multiplier
+    risk_mult = _JUDGE_RISK_MULTIPLIER.get(name_lower, 1.0)
+    adjusted_size = round(float(size) * risk_mult, 4)
 
     horizon = prediction.get("horizon_hours")
     position = {
@@ -122,7 +137,8 @@ def open_position(
         "direction": prediction.get("direction", "up"),
         "predicted_pct": float(prediction.get("predicted_pct", 0) or 0),
         "reference_price": float(prediction.get("reference_price", 0) or 0),
-        "size": round(float(size), 4),
+        "size": adjusted_size,
+        "risk_multiplier": risk_mult,
         "bucket": _bucket(horizon),
         "horizon_hours": horizon,
         "entered_at": _utcnow(),
@@ -131,7 +147,6 @@ def open_position(
     _recompute_summary(judge)
     _save(data)
     return position
-
 
 def close_position(
     judge_name: str,
@@ -185,7 +200,7 @@ def close_position(
             "entered_at": prediction.get("created_at"),
         }
 
-    pnl = _compute_pnl(direction, predicted_pct, actual_pct)
+    pnl = _compute_pnl(direction, predicted_pct, actual_pct, judge_name)
     closed = {
         **position,
         "actual_pct": round(actual_pct, 4),
@@ -198,14 +213,12 @@ def close_position(
     _save(data)
     return closed
 
-
 def get_portfolio(judge_name: str) -> Dict[str, Any]:
     """Return the full portfolio state for a judge."""
     data = _load()
     judge = _get_judge(data, judge_name)
     _recompute_summary(judge)
     return judge
-
 
 def all_portfolios() -> Dict[str, Any]:
     """Return every judge portfolio keyed by judge name."""
