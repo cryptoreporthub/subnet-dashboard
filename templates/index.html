@@ -1,5 +1,10 @@
 Title: 
 
+URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/5b7ccde170ad7c79b88228fc60dd8919f1fc2e76/templates/index.html
+
+Markdown Content:
+Title: 
+
 URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/templates/index.html
 
 Markdown Content:
@@ -657,7 +662,7 @@ mean {{ '%.2f'|format(rotation_tracker.volatility_clusters.summary.mean_volatili
 
  
 
- {% for cluster, items in ((rotation_tracker.volatility_clusters or {}) | safe_list) if cluster != 'summary' %} {% if items %} 
+ {% for cluster, items in (rotation_tracker.volatility_clusters or {}).items() if cluster != 'summary' %} {% if items %} 
 
  
 
@@ -703,7 +708,7 @@ Total Scenarios
 
 recorded memories
 
- {% for regime, count in ((scenario_memory.stats.by_regime or {}) | safe_list) %} 
+ {% for regime, count in (scenario_memory.stats.by_regime or {}).items() %} 
 
 {{ regime|title }} Regime
 
@@ -1022,10 +1027,6 @@ All outputs framed as "predicted to move +X% within N hours"
 
 {{ '%+.2f'|format(si.net_predicted_pct) }}% net · {{ si.net_direction }}
 
- {% for im in (si.impacts | safe_list) %} 
+ 
 
-• {{ im.predicted_move }} ({{ im.signal_type }}, fresh {{ im.freshness }})
-
- {% endfor %} {% if not si.impacts
-
-[read_links truncated 2671 chars from this runtime tool output. The full content is stored with the tool result.]
+[read_links truncated 269 chars from this runtime tool output. The full content is stored with the tool result.]
