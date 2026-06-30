@@ -143,7 +143,7 @@
           <div class="ind-cell"><div class="k">APY</div><div class="v">{{ '%.1f'|format(hour.signals.apy or 0) }}%</div></div>
         </div>
         <div class="tags" style="margin-top:14px">
-          {% for k,v in ((hour.scenario_tags or {}).items()) %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
+          {% for k,v in ((hour.scenario_tags or {}) | safe_list) %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
         </div>
         {% else %}
         <div class="impact-line empty" style="margin-top:14px">No hour pick available.</div>
@@ -172,7 +172,7 @@
           <div class="ind-cell"><div class="k">APY</div><div class="v">{{ '%.1f'|format(day.signals.apy or 0) }}%</div></div>
         </div>
         <div class="tags" style="margin-top:14px">
-          {% for k,v in ((day.scenario_tags or {}).items()) %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
+          {% for k,v in ((day.scenario_tags or {}) | safe_list) %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
         </div>
         {% else %}
         <div class="impact-line empty" style="margin-top:14px">No day pick available.</div>
@@ -207,7 +207,7 @@
       </ul>
       {% endif %}
       <div class="tags" style="margin-top:14px">
-        {% for k,v in ((daily_pick.scenario_tags or {}).items()) %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
+        {% for k,v in ((daily_pick.scenario_tags or {}) | safe_list) %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
       </div>
       {% else %}
       <div class="impact-line empty">No daily pick available.</div>
@@ -329,7 +329,7 @@
       <div class="card">
         <div class="card-head"><h3>Volatility Clusters</h3><span class="mono" style="font-size:11px;color:var(--txt-3)">mean {{ '%.2f'|format(rotation_tracker.volatility_clusters.summary.mean_volatility or 0) }}</span></div>
         <div class="scroll-y">
-        {% for cluster, items in ((rotation_tracker.volatility_clusters or {}).items()) if cluster != 'summary' %}
+        {% for cluster, items in ((rotation_tracker.volatility_clusters or {}) | safe_list) if cluster != 'summary' %}
           {% if items %}
           <div class="impact-row">
             <div class="pick-name" style="font-size:14px;text-transform:capitalize">{{ cluster }} Volatility</div>
@@ -356,7 +356,7 @@
     <div class="card">
       <div class="mi-grid">
         <div class="metric"><div class="lbl">Total Scenarios</div><div class="val">{{ scenario_memory.stats.total or 0 }}</div><div class="sub">recorded memories</div></div>
-        {% for regime, count in ((scenario_memory.stats.by_regime or {}).items()) %}
+        {% for regime, count in ((scenario_memory.stats.by_regime or {}) | safe_list) %}
         <div class="metric"><div class="lbl">{{ regime|title }} Regime</div><div class="val">{{ count }}</div><div class="sub">scenarios</div></div>
         {% endfor %}
       </div>
@@ -368,7 +368,7 @@
           <div class="impact-line">regime <b>{{ sc.regime or '—' }}</b> · outcome <b>{{ sc.outcome or '—' }}</b></div>
           {% if sc.features %}
           <div class="tags" style="margin-top:6px">
-            {% for k,v in ((sc.features or {}).items()) %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
+            {% for k,v in (sc.features | safe_list) %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
           </div>
           {% endif %}
         </div>

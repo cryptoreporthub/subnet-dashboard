@@ -3095,7 +3095,7 @@ async def dashboard(request: Request):
         except Exception as e2:
             logger.error("Fallback dashboard render also failed: %s\n%s", e2, traceback.format_exc())
             return PlainTextResponse(
-                f"Internal Server Error: {render_error}\nFallback error: {e2}\nSystem status: Degraded",
+                f"RENDER ERROR: {render_error}\n\nFALLBACK ERROR: {e2}\n\nFULL TRACEBACK:\n{traceback.format_exc()}",
                 status_code=500,
             )
 
