@@ -81,6 +81,7 @@
         {% if hour %}
         <div class="pick-name pick-name-lg">{{ hour.name }}</div>
         <div class="pick-meta mono">SN{{ hour.netuid }} · score {{ '%.2f'|format(hour.score) }} · confidence {{ '%.0f'|format(hour.confidence*100) }}%</div>
+        <div style="margin-top:8px;"><div class="conviction-ring" style="width: 40px; height: 40px; --ring-pct: {{ (hour.confidence*100)|round }}; --ring-color: {% if hour.confidence > 0.7 %}#22c55e{% elif hour.confidence > 0.4 %}#f59e0b{% else %}#ef4444{% endif %};"><span class="conviction-pct">{{ '%.0f'|format(hour.confidence*100) }}%</span></div></div>
         <div class="layout-grid" style="grid-template-columns: repeat(2,1fr); gap:8px; margin-top:12px;">
           <div><span class="mono" style="font-size:10px;color:var(--text-muted);">EMISSION</span><br><span class="mono">{{ '%.2f'|format(hour.signals.emission or 0) }} TAO/day</span></div>
           <div><span class="mono" style="font-size:10px;color:var(--text-muted);">APY</span><br><span class="mono">{{ '%.1f'|format(hour.signals.apy or 0) }}%</span></div>
@@ -96,6 +97,7 @@
         {% if day %}
         <div class="pick-name pick-name-lg">{{ day.name }}</div>
         <div class="pick-meta mono">SN{{ day.netuid }} · score {{ '%.2f'|format(day.score) }} · confidence {{ '%.0f'|format(day.confidence*100) }}%</div>
+        <div style="margin-top:8px;"><div class="conviction-ring" style="width: 40px; height: 40px; --ring-pct: {{ (day.confidence*100)|round }}; --ring-color: {% if day.confidence > 0.7 %}#22c55e{% elif day.confidence > 0.4 %}#f59e0b{% else %}#ef4444{% endif %};"><span class="conviction-pct">{{ '%.0f'|format(day.confidence*100) }}%</span></div></div>
         <div class="layout-grid" style="grid-template-columns: repeat(2,1fr); gap:8px; margin-top:12px;">
           <div><span class="mono" style="font-size:10px;color:var(--text-muted);">EMISSION</span><br><span class="mono">{{ '%.2f'|format(day.signals.emission or 0) }} TAO/day</span></div>
           <div><span class="mono" style="font-size:10px;color:var(--text-muted);">APY</span><br><span class="mono">{{ '%.1f'|format(day.signals.apy or 0) }}%</span></div>
