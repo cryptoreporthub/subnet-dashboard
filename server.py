@@ -5,6 +5,7 @@ import os
 import sys
 import threading
 import time
+import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Optional
@@ -2046,7 +2047,16 @@ def _resolve_due_predictions(
     pending = data.get("predictions", [])
     still_pending, resolved_now = [], []
     now = _dt.utcnow()
-    price_by_netuid = {sn.get("netuid"): float(sn.get("price", 0) or 0) for sn in subnets}
+
+    def _coerce_netuid_local(value: Any) -> Any:
+        if isinstance(value, dict):
+            value = value.get("id") or value.get("netuid") or value.get("subnet") or 0
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return str(value)
+
+    price_by_netuid = {_coerce_netuid_local(sn.get("netuid")): float(sn.get("price", 0) or 0) for sn in subnets}
     for pred in pending:
         try:
             resolve_at = _dt.fromisoformat(pred.get("resolve_at", "").replace("Z", ""))
@@ -2692,7 +2702,7 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         # generic fallback tied to weight
         return "bullish" if expert_weights.get(e, 1.0) >= 1.0 else "cautious"
 
-    dispositions = {k: _disposition(k) for k in expert_weights.keys()}
+    dispositions = {str(k): _disposition(k) for k in expert_weights.keys()}
     # Persist dispositions to soul_map.json so they survive restarts.
     try:
         soul_map = engine.load_soul_map()
@@ -3059,7 +3069,7 @@ async def dashboard(request: Request):
         context["request"] = request
         return templates.TemplateResponse("index.html", context)
     except Exception as e:
-        logger.error("Error rendering dashboard template: %s", e)
+        logger.error("Error rendering dashboard template: %s\n%s", e, traceback.format_exc())
         render_error = str(e)
         # Minimal fallback response so the page still loads with defaults.
         # Do NOT reuse the original context values that may have caused the
@@ -3073,7 +3083,7 @@ async def dashboard(request: Request):
         try:
             return templates.TemplateResponse("index.html", fallback_context)
         except Exception as e2:
-            logger.error("Fallback dashboard render also failed: %s", e2)
+            logger.error("Fallback dashboard render also failed: %s\n%s", e2, traceback.format_exc())
             return PlainTextResponse(
                 f"Internal Server Error: {render_error}\nFallback error: {e2}\nSystem status: Degraded",
                 status_code=500,

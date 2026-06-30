@@ -85,7 +85,7 @@
     <div class="section-title">SimiVision Top Picks</div>
     <div class="section-sub">Ranked by emission, yield &amp; conviction — sparklines show price trend, every forecast is predictive</div>
     <div class="picks">
-      {% for p in simivision_picks[:3] %}
+      {% for p in (simivision_picks | safe_list)[:3] %}
       <div class="card pick {{ 'sell-accent' if p.sell and p.sell.active else '' }}">
         <div class="pick-rank">#{{ p.rank }}</div>
         <div class="pick-name">{{ p.name }}</div>
@@ -98,7 +98,7 @@
           <div class="spark-wrap"><canvas class="spark" data-spark="{{ p.sparkline|join(',') }}"></canvas></div>
         </div>
         <ul class="reasons">
-          {% for r in p.reasons %}<li>{{ r }}</li>{% endfor %}
+          {% for r in (p.reasons | safe_list) %}<li>{{ r }}</li>{% endfor %}
         </ul>
         <div class="tags">
           {% if p.recommendation == 'BUY' %}<span class="tag tag-buy">BUY</span>
@@ -143,7 +143,7 @@
           <div class="ind-cell"><div class="k">APY</div><div class="v">{{ '%.1f'|format(hour.signals.apy or 0) }}%</div></div>
         </div>
         <div class="tags" style="margin-top:14px">
-          {% for k,v in (hour.scenario_tags or {}).items() %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
+          {% for k,v in ((hour.scenario_tags or {}) | safe_list) %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
         </div>
         {% else %}
         <div class="impact-line empty" style="margin-top:14px">No hour pick available.</div>
@@ -172,7 +172,7 @@
           <div class="ind-cell"><div class="k">APY</div><div class="v">{{ '%.1f'|format(day.signals.apy or 0) }}%</div></div>
         </div>
         <div class="tags" style="margin-top:14px">
-          {% for k,v in (day.scenario_tags or {}).items() %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
+          {% for k,v in ((day.scenario_tags or {}) | safe_list) %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
         </div>
         {% else %}
         <div class="impact-line empty" style="margin-top:14px">No day pick available.</div>
@@ -203,11 +203,11 @@
       </div>
       {% if daily_pick.audit.concerns %}
       <ul class="reasons">
-        {% for c in daily_pick.audit.concerns %}<li>{{ c }}</li>{% endfor %}
+        {% for c in (daily_pick.audit.concerns | safe_list) %}<li>{{ c }}</li>{% endfor %}
       </ul>
       {% endif %}
       <div class="tags" style="margin-top:14px">
-        {% for k,v in (daily_pick.scenario_tags or {}).items() %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
+        {% for k,v in ((daily_pick.scenario_tags or {}) | safe_list) %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
       </div>
       {% else %}
       <div class="impact-line empty">No daily pick available.</div>
@@ -223,7 +223,7 @@
       <table class="tbl">
         <thead><tr><th>#</th><th>Subnet</th><th>Emission</th><th>APY</th><th>24h</th><th>Market Cap</th><th>Score</th></tr></thead>
         <tbody>
-        {% for u in undervalued_radar %}
+        {% for u in (undervalued_radar | safe_list) %}
           <tr>
             <td class="mono">{{ u.rank }}</td>
             <td>{{ u.name }} <span class="mono" style="color:var(--txt-3)">SN{{ u.netuid }}</span></td>
@@ -244,7 +244,7 @@
     <div class="section-title">Technical Indicators</div>
     <div class="section-sub">RSI · Stochastic · Bollinger · MFI · CCI · Williams %R · MACD</div>
     <div class="ti-grid">
-      {% for t in technical_indicators %}
+      {% for t in (technical_indicators | safe_list) %}
       {% set ind = t.indicators %}
       {% set rsi = ind.rsi %}
       <div class="card">
@@ -290,12 +290,12 @@
         {% if t.hot and t.hot.active %}
         <div class="hot-sub">
           <span class="pill-hot" style="animation:none">• HOT · score {{ t.hot.score }}</span>
-          {% for r in t.hot.reasons %}<div class="r">• {{ r }}</div>{% endfor %}
+          {% for r in (t.hot.reasons | safe_list) %}<div class="r">• {{ r }}</div>{% endfor %}
         </div>
         {% elif t.sell and t.sell.active %}
         <div class="hot-sub sell">
           <span class="pill-sell" style="animation:none">• SELL ALERT · score {{ t.sell.score }}</span>
-          {% for r in t.sell.reasons %}<div class="r">• {{ r }}</div>{% endfor %}
+          {% for r in (t.sell.reasons | safe_list) %}<div class="r">• {{ r }}</div>{% endfor %}
         </div>
         {% endif %}
       </div>
@@ -311,13 +311,13 @@
       <div class="card">
         <div class="card-head"><h3>Rotation Patterns</h3></div>
         <div class="scroll-y">
-        {% for pat in (rotation_tracker.patterns or []) %}
+        {% for pat in ((rotation_tracker.patterns or []) | safe_list) %}
           <div class="impact-row">
             <div class="pick-name" style="font-size:14px">{{ pat.pattern|replace('_',' ')|title }}</div>
             <div class="impact-line">{{ pat.description }}</div>
             <div class="impact-line" style="color:var(--txt-3)">confidence {{ '%.0f'|format((pat.confidence or 0)*100) }}% · {{ pat.count }} subnets</div>
             <div class="tags" style="margin-top:8px">
-              {% for uid in pat.netuids[:8] %}<span class="tag tag-watch">SN{{ uid }}</span>{% endfor %}
+              {% for uid in (pat.netuids | safe_list)[:8] %}<span class="tag tag-watch">SN{{ uid }}</span>{% endfor %}
               {% if (pat.netuids|length) > 8 %}<span class="tag tag-watch">+{{ (pat.netuids|length) - 8 }} more</span>{% endif %}
             </div>
           </div>
@@ -329,11 +329,11 @@
       <div class="card">
         <div class="card-head"><h3>Volatility Clusters</h3><span class="mono" style="font-size:11px;color:var(--txt-3)">mean {{ '%.2f'|format(rotation_tracker.volatility_clusters.summary.mean_volatility or 0) }}</span></div>
         <div class="scroll-y">
-        {% for cluster, items in (rotation_tracker.volatility_clusters or {}).items() if cluster != 'summary' %}
+        {% for cluster, items in ((rotation_tracker.volatility_clusters or {}) | safe_list) if cluster != 'summary' %}
           {% if items %}
           <div class="impact-row">
             <div class="pick-name" style="font-size:14px;text-transform:capitalize">{{ cluster }} Volatility</div>
-            {% for item in items[:5] %}
+            {% for item in (items | safe_list)[:5] %}
             <div class="impact-line">
               <span style="font-weight:600">{{ item.name }}</span>
               <span class="mono" style="color:var(--txt-3)">SN{{ item.netuid }} · vol {{ '%.2f'|format(item.volatility) }} · 24h {{ '%+.2f'|format(item.price_change_24h or 0) }}%</span>
@@ -356,19 +356,19 @@
     <div class="card">
       <div class="mi-grid">
         <div class="metric"><div class="lbl">Total Scenarios</div><div class="val">{{ scenario_memory.stats.total or 0 }}</div><div class="sub">recorded memories</div></div>
-        {% for regime, count in (scenario_memory.stats.by_regime or {}).items() %}
+        {% for regime, count in ((scenario_memory.stats.by_regime or {}) | safe_list) %}
         <div class="metric"><div class="lbl">{{ regime|title }} Regime</div><div class="val">{{ count }}</div><div class="sub">scenarios</div></div>
         {% endfor %}
       </div>
       {% if scenario_memory.scenarios %}
       <div class="scroll-y" style="margin-top:14px;max-height:200px">
-        {% for sc in scenario_memory.scenarios[-5:]|reverse %}
+        {% for sc in (scenario_memory.scenarios | safe_list)[-5:]|reverse %}
         <div class="impact-row">
           <div class="pick-name" style="font-size:14px">{{ sc.name }}</div>
           <div class="impact-line">regime <b>{{ sc.regime or '—' }}</b> · outcome <b>{{ sc.outcome or '—' }}</b></div>
           {% if sc.features %}
           <div class="tags" style="margin-top:6px">
-            {% for k,v in sc.features.items() %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
+            {% for k,v in (sc.features | safe_list) %}<span class="tag tag-watch">{{ k }}: {{ v }}</span>{% endfor %}
           </div>
           {% endif %}
         </div>
@@ -388,7 +388,7 @@
       <table class="tbl">
         <thead><tr><th>Subnet</th><th>Oversold</th><th>Overbought</th><th>Signal</th></tr></thead>
         <tbody>
-        {% for row in (api_indicators_convergence.subnets or []) %}
+        {% for row in ((api_indicators_convergence.subnets or []) | safe_list) %}
           <tr>
             <td>{{ row.name }} <span class="mono" style="color:var(--txt-3)">SN{{ row.netuid }}</span></td>
             <td class="mono {{ 'pos' if row.oversold.convergent else '' }}">{{ row.oversold.count }}/{{ row.oversold.total }} {{ '✓' if row.oversold.convergent else '' }}</td>
@@ -415,7 +415,7 @@
       <div class="card">
         <div class="card-head"><h3>Top Movers Treemap</h3><span class="mono" style="font-size:11px;color:var(--txt-3)">tile size ∝ |24h change|</span></div>
         <div class="treemap" id="treemap">
-          {% for t in (momentum_charts.treemap or []) %}
+          {% for t in ((momentum_charts.treemap or []) | safe_list) %}
           <div class="tmap-tile {{ 'pos' if t.change >= 0 else 'neg' }}" style="flex-grow:{{ t.value|round|int }};" title="{{ t.name }} SN{{ t.netuid }} · {{ '%+.2f'|format(t.change) }}%">
             <span class="tmap-name">{{ t.name }}</span>
             <span class="tmap-chg">{{ '%+.2f'|format(t.change) }}%</span>
@@ -460,7 +460,7 @@
       <table class="tbl">
         <thead><tr><th>Subnet</th><th>APY</th><th>Emission</th><th>Total Stake</th><th>TAO Liq.</th><th>Alpha Liq.</th><th>Yield Score</th></tr></thead>
         <tbody>
-        {% for s in staking_analytics.top_yield %}
+        {% for s in (staking_analytics.top_yield | safe_list) %}
           <tr>
             <td>{{ s.name }} <span class="mono" style="color:var(--txt-3)">SN{{ s.netuid }}</span></td>
             <td class="mono pos">{{ '%.1f'|format(s.apy) }}%</td>
@@ -507,7 +507,7 @@
     <div class="section-sub">evidence → signal → decision → judge → learning loop</div>
     <div class="card">
       <div class="trail">
-        {% for tr in mindmap_trail %}
+        {% for tr in (mindmap_trail | safe_list) %}
         <div class="trail-item">
           <div class="trail-time">{{ tr.time }}</div>
           <div class="trail-net">{{ tr.subnet }}</div>
@@ -538,7 +538,7 @@
       <div class="card">
         <div class="card-head"><h3>Signal Impact Engine</h3></div>
         <div class="scroll-y">
-        {% for si in signal_impact %}
+        {% for si in (signal_impact | safe_list) %}
           <div class="impact-row">
             <div class="ti-head">
               <div class="pick-name" style="font-size:14px">{{ si.name }}</div>
@@ -546,7 +546,7 @@
               {% elif si.dominant == 'HOT' %}<span class="pill-hot">• HOT</span>{% endif %}
             </div>
             <div class="impact-net {{ 'pos' if si.net_predicted_pct > 0 else 'neg' if si.net_predicted_pct < 0 else 'neu' }}">{{ '%+.2f'|format(si.net_predicted_pct) }}% <span style="font-size:11px;color:var(--txt-3)">net · {{ si.net_direction }}</span></div>
-            {% for im in si.impacts %}
+            {% for im in (si.impacts | safe_list) %}
               <div class="impact-line">• {{ im.predicted_move }} <span style="color:var(--txt-3)">({{ im.signal_type }}, fresh {{ im.freshness }})</span></div>
             {% endfor %}
             {% if not si.impacts %}<div class="impact-line">No active directional signals</div>{% endif %}
@@ -560,11 +560,11 @@
       <div class="card">
         <div class="card-head"><h3>Pattern Recognition</h3></div>
         <div class="scroll-y">
-        {% for pt in patterns %}
+        {% for pt in (patterns | safe_list) %}
           <div class="impact-row">
             <div class="pick-name" style="font-size:14px">{{ pt.name }}</div>
             <div style="margin-top:6px">
-            {% for pat in pt.patterns %}
+            {% for pat in (pt.patterns | safe_list) %}
               <span class="pat-chip pat-{{ pat.type }}">{{ pat.pattern }} · {{ pat.confidence }}%</span>
             {% endfor %}
             {% if not pt.patterns %}<div class="impact-line empty">No clear pattern detected in the current window.</div>{% endif %}
@@ -581,7 +581,7 @@
       <div class="card">
         <div class="card-head"><h3>Predictive Engine</h3><span class="mono" style="font-size:11px;color:var(--txt-3)">{{ predictions|length }} active</span></div>
         <div class="scroll-y">
-        {% for pr in predictions %}
+        {% for pr in (predictions | safe_list) %}
           <div class="impact-row">
             <div class="ti-head">
               <div class="pick-name" style="font-size:14px">{{ pr.name }}</div>
@@ -618,7 +618,7 @@
         </div>
         {% if learning_metrics.recent_resolutions %}
         <div class="scroll-y" style="margin-top:14px;max-height:160px">
-          {% for rr in learning_metrics.recent_resolutions %}
+          {% for rr in (learning_metrics.recent_resolutions | safe_list) %}
           <div class="impact-row">
             <div class="impact-line" style="color:var(--txt)">{{ rr.name }} — {{ rr.statement }}</div>
             <div class="impact-line">actual {{ '%+.2f'|format(rr.actual_pct or 0) }}% · <span class="{{ 'pos' if rr.correct else 'neg' }}">{{ 'CORRECT' if rr.correct else 'WRONG' }}</span></div>
@@ -636,7 +636,7 @@
     <div class="section-title">Social Sentiment Feed</div>
     <div class="section-sub">Automated analysis · classified per subnet</div>
     <div class="ti-grid">
-      {% for soc in social_sentiment %}
+      {% for soc in (social_sentiment | safe_list) %}
       <div class="card soc-card">
         <div class="soc-head">
           <div class="pick-name">{{ soc.name }}</div>
@@ -644,7 +644,7 @@
             <span class="soc-score {{ 'pos' if soc.label=='bullish' else 'neg' if soc.label=='bearish' else 'neu' }}">{{ soc.score }}</span>
           </div>
         </div>
-        {% for f in soc.feed %}
+        {% for f in (soc.feed | safe_list) %}
         <div class="feed-item">
           <span class="feed-src src-auto">Automated Analysis</span>
           <div class="feed-text"><span class="{{ 'pos' if f.sentiment=='bullish' else 'neg' if f.sentiment=='bearish' else 'neu' }}" style="font-weight:600">{{ f.sentiment }}</span> · {{ f.text }}</div>
