@@ -22,6 +22,20 @@ except Exception:  # pragma: no cover
     def on_prediction_resolved(*_args, **_kwargs):
         return {}
 
+try:
+    from internal.council import scenario_memory
+except Exception:  # pragma: no cover
+    class _FakeScenarioMemory:
+        @staticmethod
+        def add_scenario(*_args, **_kwargs):
+            return {}
+
+        @staticmethod
+        def classify_regime(*_args, **_kwargs):
+            return "neutral"
+
+    scenario_memory = _FakeScenarioMemory()
+
 PREDICTIONS_PATH = os.path.join("data", "predictions.json")
 PRICE_CACHE_PATH = os.path.join("data", "price_cache.json")
 
@@ -30,14 +44,12 @@ _LEARNING_DELTA_WRONG = -0.03
 _LEARNING_MIN_WEIGHT = 0.1
 _LEARNING_MAX_WEIGHT = 2.0
 
-
 def _load_json(path: str, default: Any) -> Any:
     try:
         with open(path, "r") as f:
             return json.load(f)
     except Exception:
         return default
-
 
 def _save_json(path: str, data: Any) -> None:
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
@@ -46,7 +58,6 @@ def _save_json(path: str, data: Any) -> None:
         json.dump(data, f, indent=2)
     os.replace(tmp, path)
 
-
 def fetch_prices(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[Any, float]:
     """Return a ``netuid -> price`` map from live subnets or the price cache."""
     prices: Dict[Any, float] = {}
@@ -54,7 +65,6 @@ def fetch_prices(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[Any, fl
     if subnets is None:
         try:
             from fetchers.taomarketcap import get_all_subnets
-
             subnets = get_all_subnets()
         except Exception:
             subnets = []
@@ -81,7 +91,6 @@ def fetch_prices(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[Any, fl
                         pass
 
     return prices
-
 
 def classify_outcome(
     prediction: Dict[str, Any],
@@ -118,7 +127,6 @@ def classify_outcome(
         return "partial"
     return "miss"
 
-
 def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
     """Map a prediction's expert/signal source to a canonical Council expert."""
     expert = prediction.get("expert") or prediction.get("signal_source")
@@ -126,11 +134,9 @@ def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
         return None
     expert = expert.lower().strip()
 
-    # Direct names used by weights.py.
     if expert in {"quant", "hype", "contrarian", "technical"}:
         return expert
 
-    # Common signal-source aliases.
     if "sell" in expert or "bear" in expert or "contrarian" in expert:
         return "contrarian"
     if "whale" in expert or "momentum" in expert or "hype" in expert:
@@ -141,7 +147,6 @@ def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
         return "quant"
 
     return None
-
 
 def _nudge_weights(correct: bool, expert: Optional[str]) -> None:
     """Update Council expert weights through the learning loop."""
@@ -159,7 +164,6 @@ def _nudge_weights(correct: bool, expert: Optional[str]) -> None:
     )
     weights[expert] = round(weights[expert], 4)
     save_weights(weights)
-
 
 def resolve_prediction(
     prediction: Dict[str, Any],
@@ -188,13 +192,33 @@ def resolve_prediction(
         prediction["expert"] = expert
         _nudge_weights(correct, expert)
 
+    # Record scenario in regime-aware memory for learning
+    try:
+        scenario_memory.add_scenario(
+            name=prediction.get("name", "unknown"),
+            features={
+                "direction": prediction.get("direction"),
+                "predicted_pct": float(prediction.get("predicted_pct", 0) or 0),
+                "actual_pct": actual_pct,
+                "outcome": outcome,
+                "expert": expert or "unknown",
+                "volatility": abs(actual_pct),
+            },
+            outcome="correct" if correct else "wrong",
+            regime=scenario_memory.classify_regime({
+                "avg_change_24h": actual_pct,
+                "volatility": abs(actual_pct),
+            }),
+        )
+    except Exception:
+        pass
+
     try:
         on_prediction_resolved(prediction)
     except Exception:
         pass
 
     return prediction
-
 
 def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
     resolved = data.get("resolved", [])
@@ -214,19 +238,13 @@ def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
         stats["accuracy"] = 0.0
     return stats
 
-
 def resolve_due_predictions(
     subnets: Optional[List[Dict[str, Any]]] = None,
     *,
     horizon_hours: float = 24.0,
     tolerance: float = 0.5,
 ) -> Dict[str, Any]:
-    """Resolve predictions whose horizon has elapsed and persist the result.
-
-    Returns a dict with ``resolved_now``, ``resolved``, ``pending`` and
-    ``stats`` so callers can surface newly resolved predictions without
-    re-reading the store.
-    """
+    """Resolve predictions whose horizon has elapsed and persist the result."""
     data = _load_json(
         PREDICTIONS_PATH,
         {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}},
@@ -269,7 +287,6 @@ def resolve_due_predictions(
         "pending": still_pending,
         "stats": data["stats"],
     }
-
 
 def get_resolved_predictions() -> Dict[str, Any]:
     """Return the current resolved prediction ledger without mutating it."""
