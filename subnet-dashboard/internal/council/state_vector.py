@@ -408,7 +408,7 @@ def _compute_hot_signals(sn: Dict[str, Any], indicators: Dict[str, Any], converg
         reasons.append(f"High yield ({apy:.1f}% APY)")
     if emission > 3:
         score += 1
-        reasons.append(f"Strong emission ({emission:.2f} TAO/day)")
+        reasons.append(f"Strong Daily Rewards ({emission:.2f} TAO/day)")
 
     active = score >= 5
     return {
@@ -554,11 +554,11 @@ def _compute_signal_impact(sn: Dict[str, Any], indicators: Dict[str, Any], hot: 
         _add("momentum_shift", "neutral", 0.5, 12, 50, f"24h change {chg:+.1f}% muted")
 
     if emission > 1 and apy > 20:
-        _add("emission_change", "bullish", emission * 0.3 + apy * 0.02, 168, 68, f"Emission {emission:.2f} TAO/day + {apy:.1f}% APY")
+        _add("emission_change", "bullish", emission * 0.3 + apy * 0.02, 168, 68, f"Daily Rewards {emission:.2f} TAO/day + {apy:.1f}% APY")
     elif emission < 0.05 or apy < 0:
-        _add("emission_change", "bearish", 1.0, 168, 55, f"Weak emission {emission:.2f} / APY {apy:.1f}%")
+        _add("emission_change", "bearish", 1.0, 168, 55, f"Weak Daily Rewards {emission:.2f} / APY {apy:.1f}%")
     else:
-        _add("emission_change", "neutral", 0.5, 168, 50, f"Emission {emission:.2f} TAO/day / APY {apy:.1f}%")
+        _add("emission_change", "neutral", 0.5, 168, 50, f"Daily Rewards {emission:.2f} TAO/day / APY {apy:.1f}%")
 
     mentions = int(sn.get("social_mentions", 0) or 0)
     if mentions > 1000:
@@ -671,7 +671,7 @@ def _compute_social_sentiment(sn: Dict[str, Any]) -> Dict[str, Any]:
         rsi_note = f"RSI {rsi_val:.0f} holds in neutral range"
 
     yield_note = f"{apy:.1f}% APY rewards stakers" if apy > 0 else "yield compression noted"
-    emit_note = f"emission {emission:.0f} TAO/day" if emission > 0 else "no fresh emission"
+    emit_note = f"Daily Rewards {emission:.0f} TAO/day" if emission > 0 else "no fresh Daily Rewards"
 
     tw_text = f"${name} {momentum_word} — {chg:+.1f}% 24h / {chg7:+.1f}% 7d; {rsi_note}"
     discord_text = f"Validators weigh {emit_note} vs {yield_note}; 30d trend {chg30:+.1f}%"
@@ -1049,7 +1049,7 @@ def _compute_simivision_reasons(sn: Dict[str, Any], indicators: Dict[str, Any], 
     apy = float(sn.get("apy", 0) or 0)
     chg = float(sn.get("price_change_24h", 0) or 0)
     if emission > 3:
-        reasons.append(f"Strong emission {emission:.2f} TAO/day")
+        reasons.append(f"Strong Daily Rewards {emission:.2f} TAO/day")
     if apy > 30:
         reasons.append(f"High yield {apy:.1f}% APY")
     rsi = indicators.get("rsi", {})

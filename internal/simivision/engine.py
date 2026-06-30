@@ -281,10 +281,10 @@ def _build_rationale(
     registry_status = registry_item.get("status", "unknown")
 
     quant_phrase = {
-        "high": "strong Daily Rewards stability",
-        "medium": "stable Daily Rewards",
-        "low": "weak Daily Rewards stability",
-    }.get(quant_label, f"Daily Rewards stability {quant_label}")
+        "high": "strong emission stability",
+        "medium": "stable emissions",
+        "low": "weak emission stability",
+    }.get(quant_label, f"emission stability {quant_label}")
 
     hype_phrase = {
         "bullish": "bullish social sentiment",
