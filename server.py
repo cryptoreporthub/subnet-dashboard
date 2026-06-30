@@ -700,7 +700,8 @@ def api_top_pick_day():
     subnets, _ = _get_subnets_with_source()
     market_context = {"tao_change_24h": 0.0}
     try:
-        day_pick = select_daily_pick(subnets, market_context)
+        _dp_raw = get_or_create_today_pick(subnets, market_context)
+        day_pick = _dp_raw.get("pick") if isinstance(_dp_raw, dict) and _dp_raw.get("pick") else _dp_raw
     except Exception as exc:
         logger.error("Error selecting daily pick: %s", exc)
         day_pick = None
@@ -2995,7 +2996,8 @@ async def dashboard(request: Request):
         hour_picks = []
 
     try:
-        daily_pick_result = select_daily_pick(subnets, market_context)
+        _dp_raw = get_or_create_today_pick(subnets, market_context)
+        daily_pick_result = _dp_raw.get("pick") if isinstance(_dp_raw, dict) and _dp_raw.get("pick") else _dp_raw
         if daily_pick_result and daily_pick_result.get("subnet"):
             candidate = daily_pick_result["subnet"]
             sn = next(
