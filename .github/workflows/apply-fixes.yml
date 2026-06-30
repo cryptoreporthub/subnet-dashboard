@@ -1,0 +1,38 @@
+name: Apply Hourly Pick + Conviction Ring Fix
+on:
+  push:
+    branches:
+      - fix/hourly-pick-and-conviction-ring
+
+jobs:
+  apply-patch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run patch script
+        run: python3 apply_fixes.py
+      - name: Commit and push to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout main
+          git merge fix/hourly-pick-and-conviction-ring --no-edit || true
+          python3 apply_fixes.py
+          git add -A
+          git diff --staged --quiet && echo "No changes to commit" && exit 0
+          git commit -m "fix: hourly pick scoring + conviction ring UI
+          - Create select_hourly_pick using score_subnet_for_hour
+          - Rewire /api/top-pick/hour to use hourly scoring
+          - Add CSS conic-gradient conviction ring (red/amber/green)
+          - Replace SimiVision conviction badge with ring chart
+          - Replace hero card confidence stat with ring chart"
+          git push origin main
+      - name: Verify syntax
+        run: |
+          python3 -c "import py_compile; py_compile.compile("server.py", doraise=True)"
+          python3 -c "import py_compile; py_compile.compile("internal/council/hourly_pick.py", doraise=True)"
