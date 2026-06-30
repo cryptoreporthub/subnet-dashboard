@@ -34,6 +34,35 @@
 }
 .conviction-pct { position: relative; z-index: 1; font-size: 11px; font-weight: 700; }
 .conviction-ring-wrap { display: flex; align-items: center; gap: 10px; }
+/* Info tooltip system */
+.info-term {
+  position: relative;
+  cursor: help;
+  border-bottom: 1px dotted rgba(255,255,255,0.3);
+  text-decoration: none;
+}
+.info-term:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 17, 21, 0.97);
+  color: #e8e8e8;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: normal;
+  width: max-content;
+  max-width: 260px;
+  z-index: 1000;
+  line-height: 1.4;
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  pointer-events: none;
+  margin-bottom: 6px;
+}
   </style>
 </head>
 <body>
@@ -66,7 +95,7 @@
         <div><div class="mono" style="font-size:10px;color:var(--text-muted);">AVG 24H CHANGE</div><div class="mono {{ 'pos' if market_intelligence.avg_change_24h >= 0 else 'neg' }}" style="font-size:24px;font-weight:700;">{{ '%+.2f'|format(market_intelligence.avg_change_24h) }}%</div><div class="mono" style="font-size:11px;color:var(--text-secondary);">{{ market_intelligence.gainers }} gainers / {{ market_intelligence.losers }} losers</div></div>
         <div><div class="mono" style="font-size:10px;color:var(--text-muted);">TOTAL VOLUME</div><div class="mono" style="font-size:24px;font-weight:700;">{{ '%.2f'|format(market_intelligence.total_volume) }}</div><div class="mono" style="font-size:11px;color:var(--text-secondary);">TAO · breadth: {{ market_intelligence.breadth }}</div></div>
         <div><div class="mono" style="font-size:10px;color:var(--text-muted);">AVG APY</div><div class="mono" style="font-size:24px;font-weight:700;">{{ '%.2f'|format(market_intelligence.avg_apy) }}%</div><div class="mono" style="font-size:11px;color:var(--text-secondary);">{{ market_intelligence.total }} subnets</div></div>
-        <div><div class="mono" style="font-size:10px;color:var(--text-muted);">TOTAL MARKET CAP</div><div class="mono" style="font-size:24px;font-weight:700;">{{ '%.0f'|format(market_intelligence.total_market_cap) }}</div><div class="mono" style="font-size:11px;color:var(--text-secondary);">TAO capitalized</div></div>
+        <div><div class="mono" style="font-size:10px;color:var(--text-muted);">TOTAL MARKET CAP</div><div class="mono" style="font-size:24px;font-weight:700;">{{ '%.0f'|format(market_intelligence.total_market_cap) }}</div><div class="mono" style="font-size:11px;color:var(--text-secondary);">Total Market Cap (TAO)</div></div>
         <div><div class="mono" style="font-size:10px;color:var(--text-muted);">TOP GAINER / LOSER</div><div style="font-size:14px;font-weight:600;">{{ market_intelligence.top_gainer.name if market_intelligence.top_gainer else '—' }} <span class="pos">{{ '%+.2f'|format(market_intelligence.top_gainer.change) if market_intelligence.top_gainer else '' }}</span></div></div>
       </div>
     </div>
@@ -83,10 +112,10 @@
         <div class="pick-meta mono">SN{{ hour.netuid }} · score {{ '%.2f'|format(hour.score) }} · confidence {{ '%.0f'|format(hour.confidence*100) }}%</div>
         <div style="margin-top:8px;"><div class="conviction-ring" style="width: 40px; height: 40px; --ring-pct: {{ (hour.confidence*100)|round }}; --ring-color: {% if hour.confidence > 0.7 %}#22c55e{% elif hour.confidence > 0.4 %}#f59e0b{% else %}#ef4444{% endif %};"><span class="conviction-pct">{{ '%.0f'|format(hour.confidence*100) }}%</span></div></div>
         <div class="layout-grid" style="grid-template-columns: repeat(2,1fr); gap:8px; margin-top:12px;">
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">EMISSION</span><br><span class="mono">{{ '%.2f'|format(hour.signals.emission or 0) }} TAO/day</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">APY</span><br><span class="mono">{{ '%.1f'|format(hour.signals.apy or 0) }}%</span></div>
+          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="TAO tokens minted to this subnet's participants per day — higher = more income for stakers">Daily Rewards</span></span><br><span class="mono">{{ '%.2f'|format(hour.signals.emission or 0) }} TAO/day</span></div>
+          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Annual Percentage Yield — yearly return from subnet emissions relative to stake size">APY</span></span><br><span class="mono">{{ '%.1f'|format(hour.signals.apy or 0) }}%</span></div>
         </div>
-        <div style="margin-top:8px;">{% for k,v in ((hour.scenario_tags or {}).items()) %}<span class="mono" style="font-size:11px;color:var(--text-secondary);">{{ k }}: {{ v }} · </span>{% endfor %}</div>
+        <div style="margin-top:8px;">{% for k,v in ((hour.scenario_tags or {}).items()) %}<span class="mono" style="font-size:11px;color:var(--text-secondary);">{{ k|replace('regime','Market Mood') }}: {{ v }} · </span>{% endfor %}</div>
         {% else %}
         <div class="section-sub">Council convening — picks refresh every 60 minutes</div>
         {% endif %}
@@ -99,10 +128,10 @@
         <div class="pick-meta mono">SN{{ day.netuid }} · score {{ '%.2f'|format(day.score) }} · confidence {{ '%.0f'|format(day.confidence*100) }}%</div>
         <div style="margin-top:8px;"><div class="conviction-ring" style="width: 40px; height: 40px; --ring-pct: {{ (day.confidence*100)|round }}; --ring-color: {% if day.confidence > 0.7 %}#22c55e{% elif day.confidence > 0.4 %}#f59e0b{% else %}#ef4444{% endif %};"><span class="conviction-pct">{{ '%.0f'|format(day.confidence*100) }}%</span></div></div>
         <div class="layout-grid" style="grid-template-columns: repeat(2,1fr); gap:8px; margin-top:12px;">
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">EMISSION</span><br><span class="mono">{{ '%.2f'|format(day.signals.emission or 0) }} TAO/day</span></div>
+          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">Daily Rewards</span><br><span class="mono">{{ '%.2f'|format(day.signals.emission or 0) }} TAO/day</span></div>
           <div><span class="mono" style="font-size:10px;color:var(--text-muted);">APY</span><br><span class="mono">{{ '%.1f'|format(day.signals.apy or 0) }}%</span></div>
         </div>
-        <div style="margin-top:8px;">{% for k,v in ((day.scenario_tags or {}).items()) %}<span class="mono" style="font-size:11px;color:var(--text-secondary);">{{ k }}: {{ v }} · </span>{% endfor %}</div>
+        <div style="margin-top:8px;">{% for k,v in ((day.scenario_tags or {}).items()) %}<span class="mono" style="font-size:11px;color:var(--text-secondary);">{{ k|replace('regime','Market Mood') }}: {{ v }} · </span>{% endfor %}</div>
         {% else %}
         <div class="section-sub">Council convening — picks refresh every 60 minutes</div>
         {% endif %}
@@ -136,17 +165,17 @@
 
     <!-- Daily Pick -->
     <div class="section-label">Daily Pick — Council Audited</div>
-    <div class="section-sub">Single 24h candidate vetted by the RedTeam audit layer</div>
+    <div class="section-sub">Single 24h candidate vetted by the Risk Check layer</div>
     {% if daily_pick and daily_pick.subnet %}
     <div class="hero-card">
-      <div class="hero-top"><div><div class="hero-name">{{ daily_pick.subnet.name }}</div><div class="hero-meta mono">SN{{ daily_pick.subnet.netuid }} · action {{ daily_pick.action }} · final confidence {{ '%.0f'|format(daily_pick.final_confidence*100) }}%</div></div></div>
+      <div class="hero-top"><div><div class="hero-name">{{ daily_pick.subnet.name }}</div><div class="hero-meta mono">SN{{ daily_pick.subnet.netuid }} · {{ daily_pick.action|replace('long','BUY (expect price to rise)')|replace('Long','BUY (expect price to rise)')|replace('short','SELL (expect price to fall)')|replace('Short','SELL (expect price to fall)') }} · risk-adjusted confidence {{ '%.0f'|format(daily_pick.final_confidence*100) }}%</div></div></div>
       <div class="hero-stats">
-        <div class="hero-stat"><div class="k">FINAL CONFIDENCE</div><div class="conviction-ring" style="--ring-pct: {{ (daily_pick.final_confidence*100)|round }}; --ring-color: {% if daily_pick.final_confidence > 0.7 %}#22c55e{% elif daily_pick.final_confidence > 0.4 %}#f59e0b{% else %}#ef4444{% endif %};"><span class="conviction-pct">{{ '%.0f'|format(daily_pick.final_confidence*100) }}%</span></div></div>
-        <div class="hero-stat"><div class="k">RAW CONFIDENCE</div><div class="v mono">{{ '%.0f'|format(daily_pick.confidence*100) }}%</div></div>
-        <div class="hero-stat"><div class="k">AUDIT</div><div class="v">{{ 'APPROVED' if daily_pick.audit.approved else 'FLAGGED' }}</div></div>
+        <div class="hero-stat"><div class="k"><span class="info-term" data-tip="Confidence level after the Risk Check adjusts for liquidity, volatility, and market conditions">Risk-Adjusted Confidence</span></div><div class="conviction-ring" style="--ring-pct: {{ (daily_pick.final_confidence*100)|round }}; --ring-color: {% if daily_pick.final_confidence > 0.7 %}#22c55e{% elif daily_pick.final_confidence > 0.4 %}#f59e0b{% else %}#ef4444{% endif %};"><span class="conviction-pct">{{ '%.0f'|format(daily_pick.final_confidence*100) }}%</span></div></div>
+        <div class="hero-stat"><div class="k"><span class="info-term" data-tip="Confidence level before the Risk Check adjustment">Initial Confidence</span></div><div class="v mono">{{ '%.0f'|format(daily_pick.confidence*100) }}%</div></div>
+        <div class="hero-stat"><div class="k"><span class="info-term" data-tip="Automated risk assessment that adjusts confidence based on liquidity, volatility, and market conditions">Risk Check</span></div><div class="v">{{ 'Passed' if daily_pick.audit.approved else 'Flagged' }}</div></div>
       </div>
       {% if daily_pick.audit.concerns %}<div class="hero-audit {{ 'flagged' if not daily_pick.audit.approved else '' }}">{% for c in (daily_pick.audit.concerns | safe_list) %}• {{ c }}<br>{% endfor %}</div>{% endif %}
-      <div class="hero-reason">{% for k,v in ((daily_pick.scenario_tags or {}).items()) %}{{ k }}: {{ v }} {% endfor %}</div>
+      <div class="hero-reason">{% for k,v in ((daily_pick.scenario_tags or {}).items()) %}{{ k|replace('regime','Market Mood') }}: {{ v }} {% endfor %}</div>
     </div>
     {% else %}
     <div class="card"><div class="section-sub">No daily pick available. The council audit layer requires sufficient subnet data and confidence thresholds. Picks regenerate every 24h.</div></div>
@@ -157,7 +186,7 @@
     <div class="section-sub">High emission &amp; yield vs muted market cap · color-coded values</div>
     <div class="card">
       <table class="tbl">
-        <thead><tr><th>#</th><th>Subnet</th><th>Emission</th><th>APY</th><th>24h</th><th>Market Cap</th><th>Score</th></tr></thead>
+        <thead><tr><th>#</th><th><span class="info-term" data-tip="Bittensor network identifier — each subnet has a unique ID (e.g. SN40 = Subnet #40)">Subnet</span></th><th>Emission</th><th>APY</th><th>24h</th><th>Market Cap</th><th>Score</th></tr></thead>
         <tbody>
           {% for u in (undervalued_radar | safe_list) %}
           <tr><td>{{ u.rank }}</td><td>{{ u.name }} SN{{ u.netuid }}</td><td>{{ '%.2f'|format(u.emission or 0) }}</td><td>{{ '%.1f'|format(u.apy or 0) }}%</td><td class="{{ 'pos' if u.price_change_24h and u.price_change_24h >= 0 else 'neg' }}">{{ '%+.1f'|format(u.price_change_24h or 0) }}%</td><td>{{ '%.0f'|format(u.market_cap or 0) }}</td><td>{{ '%.2f'|format(u.undervalued_score) }}</td></tr>
@@ -168,21 +197,21 @@
 
     <!-- Technical Indicators -->
     <div class="section-label">Technical Indicators</div>
-    <div class="section-sub">RSI · Stochastic · Bollinger · MFI · CCI · Williams %R · MACD</div>
+    <div class="section-sub">RSI · Stochastic · Bollinger · Money Flow Index · Commodity Channel Index · Williams %R · MACD</div>
     <div class="picks">
       {% for t in (technical_indicators | safe_list) %}
       {% set ind = t.indicators %}
       <div class="pick-card">
         <div class="card-head"><h3>{{ t.name }} SN{{ t.netuid }}</h3>{% if t.sell and t.sell.active %}<span class="badge badge-sell">SELL ALERT</span>{% elif t.hot and t.hot.active %}<span class="badge badge-hot">HOT</span>{% endif %}</div>
         <div class="layout-grid" style="grid-template-columns: repeat(2,1fr); gap:8px;">
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">RSI (14)</span><br><span class="mono" style="font-size:18px;font-weight:700;">{{ '%.0f'|format(ind.rsi.value) }}</span><br><span class="{{ ind.rsi.signal|lower }}">{{ ind.rsi.signal|upper }}</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">CONV</span><br><span class="mono">{{ t.convergence.type }} {{ t.convergence.count }}/{{ t.convergence.total }}{% if t.convergence.convergent %} ✓{% endif %}</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">Stoch K/D</span><br><span class="mono">{{ '%.1f'|format(ind.stochastic.k) }} / {{ '%.1f'|format(ind.stochastic.d) }}</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">MACD</span><br><span class="mono">{{ ind.macd.crossover }}</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">MFI</span><br><span class="mono">{{ '%.1f'|format(ind.mfi.mfi) }}</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">CCI</span><br><span class="mono">{{ '%.1f'|format(ind.cci.cci) }}</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">Williams %R</span><br><span class="mono">{{ '%.1f'|format(ind.williams_r.williams_r) }}</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">Boll. Width</span><br><span class="mono">{{ '%.3f'|format(ind.bollinger.width) }}</span></div>
+          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Relative Strength Index (14-period) — momentum 0-100. Above 70 = overbought, below 30 = oversold">RSI (14)</span></span><br><span class="mono" style="font-size:18px;font-weight:700;">{{ '%.0f'|format(ind.rsi.value) }}</span><br><span class="{{ ind.rsi.signal|lower }}">{{ ind.rsi.signal|upper }}</span></div>
+          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="How many of 7 technical indicators agree on overbought or oversold conditions">Convergence</span></span><br><span class="mono">{{ t.convergence.count }}/{{ t.convergence.total }} agree{% if t.convergence.convergent %} ✓{% endif %}</span></div>
+          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Momentum oscillator comparing closing price to its range. K = fast line, D = slow signal line">Stochastic K/D</span></span><br><span class="mono">{{ '%.1f'|format(ind.stochastic.k) }} / {{ '%.1f'|format(ind.stochastic.d) }}</span></div>
+          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Moving Average Convergence Divergence — compares short vs long-term momentum. Bullish = upward, Bearish = downward">MACD</span></span><br><span class="mono">{{ ind.macd.crossover }}</span></div>
+          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Volume-weighted RSI — combines price and volume. Above 80 = overbought, below 20 = oversold">Money Flow Index</span></span><br><span class="mono">{{ '%.1f'|format(ind.mfi.mfi) }}</span></div>
+          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Measures deviation from average price. Above +100 = overbought, below -100 = oversold">Commodity Channel Index</span></span><br><span class="mono">{{ '%.1f'|format(ind.cci.cci) }}</span></div>
+          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Momentum from -100 to 0. Below -80 = oversold, above -20 = overbought">Williams %R</span></span><br><span class="mono">{{ '%.1f'|format(ind.williams_r.williams_r) }}</span></div>
+          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Distance between upper and lower Bollinger Bands. Wider = more volatile, narrower = consolidation">Bollinger Band Width</span></span><br><span class="mono">{{ '%.3f'|format(ind.bollinger.width) }}</span></div>
         </div>
         {% if t.hot and t.hot.active %}<div style="margin-top:8px;font-size:12px;">{% for r in (t.hot.reasons | safe_list) %}• {{ r }} {% endfor %}</div>{% elif t.sell and t.sell.active %}<div style="margin-top:8px;font-size:12px;">{% for r in (t.sell.reasons | safe_list) %}• {{ r }} {% endfor %}</div>{% endif %}
       </div>
@@ -204,8 +233,9 @@
         <div class="span-6">
           <h3>Rotation Patterns</h3>
           {% for pat in ((rotation_tracker.patterns or []) | safe_list) %}
+          {% set _pat_tip = {'yield_rotation': 'Capital flowing toward subnets with high staking yields', 'emission_defense': 'Capital parking in high-emission subnets during market uncertainty', 'mean_reversion_rotation': 'Capital moving to subnets below their historical average — betting on a bounce', 'momentum_rotation': 'Capital flowing to subnets with strong recent price gains and healthy volume'}.get(pat.pattern, 'Capital rotating between subnets based on market conditions') %}
           <div style="margin-bottom:12px;">
-            <div class="pick-name">{{ pat.pattern|replace('_',' ')|title }}</div>
+            <div class="pick-name"><span class="info-term" data-tip="{{ _pat_tip }}">{{ pat.pattern|replace('_',' ')|title|replace('Yield Rotation','High-Yield Rotation')|replace('Emission Defense','Defensive High-Emission')|replace('Mean Reversion Rotation','Oversold Recovery Rotation')|replace('Momentum Rotation','Price Momentum Rotation') }}</span></div>
             <div style="font-size:12px;color:var(--text-secondary);">{{ pat.description }}</div>
             <div class="mono" style="font-size:11px;">confidence {{ '%.0f'|format((pat.confidence or 0)*100) }}% · {{ pat.count }} subnets</div>
             <div class="mono" style="font-size:11px;color:var(--text-muted);">{% for uid in (pat.netuids | safe_list)[:8] %}SN{{ uid }} {% endfor %}{% if (pat.netuids|length) > 8 %}+{{ (pat.netuids|length) - 8 }} more{% endif %}</div>
@@ -213,14 +243,14 @@
           {% else %}<div class="section-sub">No rotation patterns detected.</div>{% endfor %}
         </div>
         <div class="span-6">
-          <h3>Volatility Clusters</h3>
+          <h3><span class="info-term" data-tip="Subnets grouped by price volatility. High = risky/opportunity, Low = stable, Core = average">Volatility Clusters</span></h3>
           <div class="mono" style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">mean {{ '%.2f'|format(rotation_tracker.volatility_clusters.summary.mean_volatility or 0) }}</div>
           {% for cluster, items in ((rotation_tracker.volatility_clusters or {}).items()) if cluster != 'summary' %}
           {% if items %}
           <div style="margin-bottom:12px;">
             <div class="pick-name">{{ cluster }} Volatility</div>
             {% for item in (items | safe_list)[:5] %}
-            <div class="mono" style="font-size:11px;">{{ item.name }} SN{{ item.netuid }} · vol {{ '%.2f'|format(item.volatility) }} · 24h {{ '%+.2f'|format(item.price_change_24h or 0) }}%</div>
+            <div class="mono" style="font-size:11px;">{{ item.name }} SN{{ item.netuid }} · volatility {{ '%.2f'|format(item.volatility) }} · 24h {{ '%+.2f'|format(item.price_change_24h or 0) }}%</div>
             {% endfor %}
           </div>
           {% endif %}
@@ -243,7 +273,7 @@
       {% for sc in (scenario_memory.scenarios | safe_list)[-5:]|reverse %}
       <div style="margin-top:12px;padding-bottom:12px;border-bottom:1px solid var(--border-default);">
         <div class="pick-name">{{ sc.name }}</div>
-        <div class="mono" style="font-size:11px;">regime <b>{{ sc.regime or '—' }}</b> · outcome <b>{{ sc.outcome or '—' }}</b></div>
+        <div class="mono" style="font-size:11px;">Market Mood: <b>{{ sc.regime or '—' }}</b> · outcome <b>{{ sc.outcome or '—' }}</b></div>
         {% if sc.features %}<div class="mono" style="font-size:11px;color:var(--text-secondary);margin-top:4px;">{% for k,v in ((sc.features or {}).items()) %}{{ k }}: {{ v }} · {% endfor %}</div>{% endif %}
       </div>
       {% endfor %}
@@ -254,7 +284,7 @@
 
     <!-- Judge Panel with Postmortems -->
     <div class="section-label">Judge panel</div>
-    <div class="section-sub">Oracle · Echo · Pulse — live scores, paper portfolios &amp; postmortems{% if usd_rate %} | TAO ${{ '%.2f'|format(usd_rate) }}{% endif %}</div>
+    <div class="section-sub">Oracle · Echo · Pulse — live scores, paper portfolios &amp; Prediction Reviews{% if usd_rate %} | TAO ${{ '%.2f'|format(usd_rate) }}{% endif %}</div>
     <div class="picks">
       {% for j in (judge_cards | safe_list) %}
       <div class="pick-card">
@@ -265,14 +295,14 @@
           </div>
         </div>
         <div class="layout-grid" style="grid-template-columns: repeat(2,1fr); gap:8px; margin-top:12px;">
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">SCORE</span><br><span class="mono" style="font-size:20px;font-weight:700;">{{ '%.3f'|format(j.score | float) }}</span></div>
+          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="0-1 scale. Higher = more correct predictions over time">Accuracy Score</span></span><br><span class="mono" style="font-size:20px;font-weight:700;">{{ '%.3f'|format(j.score | float) }}</span></div>
           <div><span class="mono" style="font-size:10px;color:var(--text-muted);">CONFIDENCE</span><br><span class="mono" style="font-size:20px;font-weight:700;">{{ '%.2f'|format(j.confidence | float) }}</span></div>
           <div><span class="mono" style="font-size:10px;color:var(--text-muted);">WIN RATE</span><br><span class="mono" style="font-size:20px;font-weight:700;">{{ j.win_pct | float }}%</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">P&amp;L</span><br><span class="mono {{ 'pos' if j.pnl|float >= 0 else 'neg' }}" style="font-size:20px;font-weight:700;">{{ '%.4f'|format(j.pnl | float) }}</span></div>
+          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Total gains or losses from this judge's predictions. Negative = losing money">Profit / Loss</span></span><br><span class="mono {{ 'pos' if j.pnl|float >= 0 else 'neg' }}" style="font-size:20px;font-weight:700;">{{ '%.4f'|format(j.pnl | float) }}</span></div>
         </div>
-        <div class="mono" style="font-size:11px;color:var(--text-secondary);margin-top:8px;">{{ j.open_positions | int }} open · {{ j.postmortems | int }} postmortems</div>
+        <div class="mono" style="font-size:11px;color:var(--text-secondary);margin-top:8px;">{{ j.open_positions | int }} open · {{ j.postmortems | int }} <span class="info-term" data-tip="Review of why a prediction was wrong and what to adjust next time">Prediction Reviews</span></div>
         {% if j.recent_postmortems %}
-        <div class="collapsible" style="margin-top:12px;font-size:13px;font-weight:600;color:var(--accent-bright);">Recent Postmortems ({{ j.recent_postmortems|length }})</div>
+        <div class="collapsible" style="margin-top:12px;font-size:13px;font-weight:600;color:var(--accent-bright);">Recent Prediction Reviews ({{ j.recent_postmortems|length }})</div>
         <div class="collapsible-content">
           {% for pm in j.recent_postmortems[:3] %}
           <div class="pm-card">
@@ -299,14 +329,14 @@
       <div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border-default);">
         <div class="mono" style="color:var(--text-secondary);">{{ tr.time }}</div>
         <div><strong>{{ tr.subnet }}</strong></div>
-        <div style="margin:4px 0;">{{ tr.evidence }} → {{ tr.signal }} → {{ tr.decision }} → {{ tr.judge }}</div>
+        <div style="margin:4px 0;">{{ tr.evidence }} → {{ tr.signal|replace('accuracy','Accuracy:') }} → {{ tr.decision|replace('weight update','Learning Adjustment') }} → {{ tr.judge }}</div>
         {% if tr.prediction %}<div class="mono" style="color:var(--accent-bright);">→ {{ tr.prediction }}</div>{% endif %}
       </div>
       {% else %}<div class="section-sub">Learning trail is empty — picks and resolutions will populate on the next refresh.</div>{% endfor %}
     </div>
 
     <!-- Signal Impact and Predictive Engine -->
-    <div class="section-label">Signal Impact · Predictive Engine · Learning Loop</div>
+    <div class="section-label"><span class="info-term" data-tip="Each trading signal contributes a predicted price move. Combined = overall bullish or bearish impact.">Signal Impact</span> · Predictive Engine · Learning Loop</div>
     <div class="section-sub">All outputs framed as "predicted to move +X% within N hours"</div>
     <div class="layout-grid">
       <div class="card span-8">
@@ -317,7 +347,7 @@
             <span class="pick-name">{{ si.name }}</span>
             {% if si.dominant == 'SELL ALERT' %}<span class="badge badge-sell">SELL ALERT</span>{% elif si.dominant == 'HOT' %}<span class="badge badge-hot">HOT</span>{% endif %}
           </div>
-          <div class="mono {{ 'pos' if si.net_predicted_pct >= 0 else 'neg' }}" style="margin:8px 0;font-size:16px;font-weight:700;">{{ '%+.2f'|format(si.net_predicted_pct) }}% net · {{ si.net_direction }}</div>
+          <div class="mono {{ 'pos' if si.net_predicted_pct >= 0 else 'neg' }}" style="margin:8px 0;font-size:16px;font-weight:700;">{{ '%+.2f'|format(si.net_predicted_pct) }}% combined impact · {{ si.net_direction }}</div>
           <div class="heat-bar"><div class="heat-marker" style="left: 50%;"></div></div>
           {% for im in (si.impacts | safe_list) %}<div class="pick-meta" style="font-size:12px;">• {{ im.predicted_move }} ({{ im.signal_type }}, fresh {{ im.freshness }})</div>{% endfor %}
           {% if not si.impacts %}<div class="pick-meta">No active signals</div>{% endif %}
