@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 DB_PATH = "data/subnets.db"
 CACHE_DURATION = timedelta(minutes=5)
 
-
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
@@ -31,7 +30,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-
 def get_cached(key: str) -> Optional[Dict]:
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -45,7 +43,6 @@ def get_cached(key: str) -> Optional[Dict]:
             return json.loads(data_str)
     return None
 
-
 def set_cache(key: str, data: Dict):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -56,10 +53,16 @@ def set_cache(key: str, data: Dict):
     conn.commit()
     conn.close()
 
-
 def _parse_subnet_row(row: dict) -> Dict:
     """Normalise a raw API row into our standard subnet dict."""
     netuid = row.get("subnet", 0)
+    # Coerce to int — taomarketcap sometimes returns netuid as a dict
+    if isinstance(netuid, dict):
+        netuid = netuid.get("id") or netuid.get("netuid") or netuid.get("subnet") or 0
+    try:
+        netuid = int(netuid)
+    except (TypeError, ValueError):
+        netuid = 0
     name = row.get("name") or f"SN{netuid}"
     if name in ("Unknown", "None", "deprecated"):
         name = f"SN{netuid}"
@@ -88,7 +91,6 @@ def _parse_subnet_row(row: dict) -> Dict:
         "market_cap_rank": row.get("marketcap_rank"),
         "last_updated": datetime.now().isoformat(),
     }
-
 
 def fetch_all_subnets_from_api() -> Optional[List[Dict]]:
     """Fetch all subnets from taomarketcap.com public API (unauthenticated, 10 req/min).
@@ -129,7 +131,6 @@ def fetch_all_subnets_from_api() -> Optional[List[Dict]]:
     except Exception as e:
         logger.error("Error fetching subnets: %s", e)
         return None
-
 
 def get_all_subnets() -> List[Dict]:
     """Return all subnets (cached, 5 min TTL). Falls back to stale cache or static data."""
@@ -195,7 +196,6 @@ def get_all_subnets() -> List[Dict]:
             "sector": "Compute",
         },
     ]
-
 
 def get_subnet_data(netuid: int) -> Optional[Dict]:
     for sn in get_all_subnets():
