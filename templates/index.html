@@ -325,19 +325,13 @@
     <div class="section-label">Social Sentiment Feed</div>
     <div class="section-sub">Automated analysis · classified per subnet</div>
     <div class="card">
-      {% for subnet_name, sentiments in social_sentiment.items() %}
-      {% if sentiments %}
-      <div style="margin-bottom:16px;">
-        <div class="mono" style="color:var(--accent-bright);margin-bottom:8px;">{{ subnet_name }} ({{ sentiments|length }})</div>
-        {% for s in sentiments[:3] %}
-        <div style="margin-bottom:8px;padding:8px;background:var(--bg-surface);border-radius:8px;">
-          <span class="badge {% if 'bullish' in s.analysis|lower %}badge-buy{% elif 'bearish' in s.analysis|lower %}badge-sell{% else %}badge-hold{% endif %}">{{ s.analysis|upper }}</span>
-          <div style="margin-top:4px;font-size:13px;">{{ s.summary }}</div>
-        </div>
-        {% endfor %}
+      {% for s in (social_sentiment | safe_list) %}
+      <div style="margin-bottom:8px;padding:8px;background:var(--bg-surface);border-radius:8px;">
+        <div class="mono" style="color:var(--accent-bright);margin-bottom:4px;">{{ s.subnet or s.name or 'Unknown' }}</div>
+        <span class="badge {% if 'bullish' in (s.analysis or '')|lower %}badge-buy{% elif 'bearish' in (s.analysis or '')|lower %}badge-sell{% else %}badge-hold{% endif %}">{{ (s.analysis or 'NEUTRAL')|upper }}</span>
+        <div style="margin-top:4px;font-size:13px;">{{ s.summary or '' }}</div>
       </div>
-      {% endif %}
-      {% endfor %}
+      {% else %}<div class="section-sub">No social sentiment data available.</div>{% endfor %}
     </div>
   </main>
 
