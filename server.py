@@ -2914,6 +2914,16 @@ def _default_premium_context() -> Dict[str, Any]:
         "momentum_charts": {"treemap": [], "radar": {"labels": [], "datasets": []}},
         "judge_cards": [],
         "usd_rate": None,
+        # Dashboard-specific keys referenced by templates/index.html. These are
+        # included so the fallback render (which starts from this context) has
+        # every top-level variable the template expects, avoiding
+        # "UndefinedError" when the primary render fails.
+        "hour_picks": [],
+        "day_picks": [],
+        "daily_pick": {},
+        "rotation_tracker": _default_rotation_tracker(),
+        "scenario_memory": _default_scenario_memory(),
+        "api_indicators_convergence": {"subnets": []},
     }
 
 
