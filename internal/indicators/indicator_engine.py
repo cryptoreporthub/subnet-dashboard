@@ -24,6 +24,11 @@ from internal.indicators.momentum import compute_momentum
 from internal.indicators.price_fetcher import fetch_ohlcv
 from internal.indicators.rsi import compute_rsi
 
+try:
+    from data import pump_tracker
+except Exception:  # pragma: no cover - optional dependency
+    pump_tracker = None
+
 # Ensure the data directory exists at module load time.
 os.makedirs('data', exist_ok=True)
 
@@ -142,6 +147,18 @@ class IndicatorEngine:
         candles = fetch_ohlcv(str(subnet_id), pairs_path=self.price_pairs_path)
         if len(candles) < 30:
             raise RuntimeError(f"Insufficient candle data for subnet {subnet_id}")
+
+        # Feed the latest close into the pump-cycle tracker so it accumulates a
+        # price snapshot on every scheduler tick.
+        if pump_tracker is not None:
+            try:
+                last = candles[-1]
+                name = registry_item.get("name") or registry_item.get("symbol") or str(subnet_id)
+                pump_tracker.record_price_snapshot(
+                    subnet_id, name, last.get("close"), last.get("timestamp")
+                )
+            except Exception:
+                pass
 
         rsi = compute_rsi(candles)
         macd = compute_macd(candles)

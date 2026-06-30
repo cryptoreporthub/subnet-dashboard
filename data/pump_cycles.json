@@ -1,0 +1,32 @@
+{
+  "snapshots": {
+    "1": [
+      {
+        "t": "2024-01-07T23:00:00+00:00",
+        "p": 5.777647,
+        "name": "1"
+      },
+      {
+        "t": "2024-01-07T23:00:00+00:00",
+        "p": 5.777647,
+        "name": "1"
+      }
+    ]
+  },
+  "cycles": {},
+  "profiles": {},
+  "current": {
+    "1": {
+      "netuid": 1,
+      "name": "1",
+      "current_phase": "UNKNOWN",
+      "phase_started": "2024-01-07T23:00:00+00:00",
+      "phase_duration_minutes": 1303244
+    }
+  },
+  "meta": {
+    "created": "2026-06-30T22:10:00Z",
+    "last_updated": "2026-06-30T23:43:58.444365Z",
+    "total_snapshots": 2
+  }
+}

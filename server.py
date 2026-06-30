@@ -137,6 +137,11 @@ except Exception:  # pragma: no cover
             pass
 
 try:
+    from data import pump_tracker as _pump_tracker
+except Exception:  # pragma: no cover
+    _pump_tracker = None
+
+try:
     from message_intel import Database as _MessageIntelDatabase
     from message_intel import NLPAnalyzer as _MessageIntelNLPAnalyzer
     from message_intel import JuryBridge as _MessageIntelJuryBridge
@@ -733,6 +738,29 @@ def api_subnets_safe():
 @app.get("/api/simivision")
 def api_simivision_safe():
     return _safe_simivision_payload()
+
+
+@app.get("/api/pump-analytics")
+def api_pump_analytics(netuid: Optional[str] = None):
+    """Return per-subnet pump-cycle analytics.
+
+    Without a ``netuid`` query parameter this returns every tracked subnet's
+    current phase, behavioral profile, and recent cycles. Pass ``?netuid=40``
+    to scope the response to a single subnet.
+    """
+    if _pump_tracker is None:
+        return {"status": "error", "error": "pump_tracker unavailable", "data": {"subnets": [], "meta": {}}}
+    try:
+        netuid_val: Optional[int] = None
+        if netuid:
+            try:
+                netuid_val = int(netuid)
+            except (TypeError, ValueError):
+                netuid_val = None
+        data = _pump_tracker.get_analytics(netuid_val)
+        return {"status": "success", "data": data}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc), "data": {"subnets": [], "meta": {}}}
 
 
 @app.get("/api/rotation-tokens")
@@ -1977,6 +2005,15 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
         "expert": expert,
         "statement": f"predicted to move {'+' if predicted_pct >= 0 else ''}{predicted_pct:.1f}% within {horizon} hours",
     }
+    # Snapshot the pump-cycle phase at creation time so the learning loop can
+    # later correlate prediction accuracy with where in the cycle we were.
+    try:
+        if _pump_tracker is not None:
+            phase = _pump_tracker.get_current_phase(netuid)
+            prediction["cycle_phase_at_creation"] = phase.get("current_phase", "UNKNOWN")
+            prediction["cycle_duration_at_creation"] = int(phase.get("phase_duration_minutes", 0) or 0)
+    except Exception:
+        pass
     PREDICTION_STORE.add(prediction)
 
     try:
@@ -2003,6 +2040,17 @@ def _resolve_prediction(prediction: Dict[str, Any], latest_price: float) -> Dict
     # Resolve the expert from the stored tag, falling back to signal_source.
     expert = prediction.get("expert") or _expert_from_signal_source(prediction.get("signal_source"))
     prediction["expert"] = expert
+    # Attach pump-cycle context so the learning loop can learn whether cycle
+    # timing aligned with the prediction window, not just direction.
+    try:
+        if _pump_tracker is not None:
+            prediction["cycle_context"] = _pump_tracker.build_cycle_context(
+                prediction.get("netuid"),
+                phase_at_prediction=prediction.get("cycle_phase_at_creation"),
+                phase_duration_at_prediction=prediction.get("cycle_duration_at_creation"),
+            )
+    except Exception:
+        pass
     _update_learning_weights(correct, expert)
 
     # Notify the judge layer so paper portfolios close and postmortems are recorded.
@@ -2574,6 +2622,38 @@ def _subnet_volume(subnets: List[Dict[str, Any]], netuid: Any) -> float:
 # ---------------------------------------------------------------------------
 # Build the full premium dashboard context (wired into the / route)
 # ---------------------------------------------------------------------------
+def _pump_cycle_suffix(netuid: Any) -> str:
+    """Build a short pump-cycle context string for a Mind Map trail entry.
+
+    Returns an empty string when the tracker has no data for the subnet yet,
+    so existing trail entries are unchanged until real snapshots accumulate.
+    """
+    if _pump_tracker is None:
+        return ""
+    try:
+        phase = _pump_tracker.get_current_phase(netuid)
+        cur = phase.get("current_phase")
+        if not cur or cur == "UNKNOWN":
+            return ""
+        dur = int(phase.get("phase_duration_minutes", 0) or 0)
+        profile = _pump_tracker.get_profile(netuid)
+        avg_pump = int(profile.get("avg_pump_duration", 0) or 0)
+        re_rate = profile.get("re_pump_rate", 0.0) or 0.0
+        if cur in ("RISING", "RE_PUMP"):
+            return f" -> cycle: {cur} ({dur}min), avg pump {avg_pump}min, re-pump rate {int(re_rate*100)}%"
+        if cur == "CONSOLIDATING":
+            avg_cons = int(profile.get("avg_consolidation_duration", 0) or 0)
+            remaining = max(0, avg_cons - dur)
+            return f" -> cycle: CONSOLIDATING ({dur}min/avg {avg_cons}min), re-pump expected in ~{remaining}min"
+        if cur == "PEAK":
+            return f" -> cycle: PEAK ({dur}min), avg pump {avg_pump}min, consolidation likely next"
+        if cur == "DECLINING":
+            return f" -> cycle: DECLINING ({dur}min), re-pump rate {int(re_rate*100)}%"
+        return f" -> cycle: {cur} ({dur}min)"
+    except Exception:
+        return ""
+
+
 def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Compose every premium section from the live subnet snapshot.
 
@@ -2742,6 +2822,7 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     # One trail entry per pick (up to 6) so the learning trail reflects the
     # full top-of-book rather than only the first few picks.
     for p in simivision_picks[:6]:
+        cycle_suffix = _pump_cycle_suffix(p.get("netuid"))
         mindmap_trail.append({
             "time": now_ts,
             "subnet": p.get("name"),
@@ -2749,7 +2830,7 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
             "signal": p.get("signal_impact", {}).get("dominant") or p.get("signal_impact", {}).get("net_direction"),
             "decision": p.get("recommendation"),
             "prediction": p.get("prediction", {}).get("statement"),
-            "judge": f"conviction {p.get('conviction')}%",
+            "judge": f"conviction {p.get('conviction')}%{cycle_suffix}",
         })
     # Signal-impact trail entries: surface the strongest directional signal per
     # top subnet so the trail captures the technical read, not just the picks.

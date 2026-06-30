@@ -381,12 +381,95 @@
       </div>
       {% else %}<div class="section-sub">No social sentiment data available.</div>{% endfor %}
     </div>
+    <!-- Pump Cycle Analytics -->
+    <div class="section-label">Pump Cycle Analytics</div>
+    <div class="section-sub">Per-subnet pump phases · consolidation · re-pump timing · behavioral profiles</div>
+    <div class="card">
+      <div id="pump-analytics-meta" class="mono" style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Loading pump-cycle data…</div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="text-align:left;color:var(--text-muted);border-bottom:1px solid var(--border-default);">
+              <th style="padding:8px;">Subnet</th>
+              <th style="padding:8px;">Phase</th>
+              <th style="padding:8px;">Phase Dur.</th>
+              <th style="padding:8px;">Avg Pump</th>
+              <th style="padding:8px;">Avg Cons.</th>
+              <th style="padding:8px;">Re-Pump Rate</th>
+              <th style="padding:8px;">Cycles</th>
+              <th style="padding:8px;">Typical Pattern</th>
+            </tr>
+          </thead>
+          <tbody id="pump-analytics-body">
+            <tr><td colspan="8" style="padding:12px;color:var(--text-muted);">No pump-cycle data yet — snapshots accumulate from the first scheduler tick.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </main>
 
   <script>
     document.querySelectorAll('.collapsible').forEach(function(el) {
       el.addEventListener('click', function() { el.classList.toggle('collapsed'); });
     });
+
+    // Pump Cycle Analytics — live fetch from /api/pump-analytics
+    (function() {
+      var phaseColors = {
+        'RISING': 'var(--signal-buy)',
+        'RE_PUMP': '#38bdf8',
+        'CONSOLIDATING': 'var(--signal-hold)',
+        'DECLINING': 'var(--signal-sell)',
+        'PEAK': '#a78bfa',
+        'UNKNOWN': 'var(--text-muted)'
+      };
+      function fmt(n, d) {
+        if (n === null || n === undefined || isNaN(n)) return '—';
+        return Number(n).toFixed(d || 0);
+      }
+      function loadPumpAnalytics() {
+        fetch('/api/pump-analytics').then(function(r) { return r.json(); }).then(function(resp) {
+          var data = (resp && resp.data) || {};
+          var subnets = data.subnets || [];
+          var meta = data.meta || {};
+          var metaEl = document.getElementById('pump-analytics-meta');
+          if (metaEl) {
+            metaEl.textContent = 'Tracked subnets: ' + (meta.tracked_subnets || 0) +
+              ' · Total cycles: ' + (meta.total_cycles || 0) +
+              (meta.updated_at ? ' · Updated ' + meta.updated_at : '');
+          }
+          var body = document.getElementById('pump-analytics-body');
+          if (!body) return;
+          if (!subnets.length) {
+            body.innerHTML = '<tr><td colspan="8" style="padding:12px;color:var(--text-muted);">No pump-cycle data yet — snapshots accumulate from the first scheduler tick.</td></tr>';
+            return;
+          }
+          var rows = subnets.map(function(s) {
+            var prof = s.profile || {};
+            var phase = s.current_phase || 'UNKNOWN';
+            var color = phaseColors[phase] || 'var(--text-muted)';
+            var name = s.name || ('Subnet ' + s.netuid);
+            return '<tr style="border-bottom:1px solid var(--border-default);">' +
+              '<td style="padding:8px;"><strong>' + name + '</strong> <span class="mono" style="color:var(--text-muted);">#' + s.netuid + '</span></td>' +
+              '<td style="padding:8px;"><span style="color:' + color + ';font-weight:700;">' + phase + '</span></td>' +
+              '<td class="mono" style="padding:8px;">' + fmt(s.phase_duration_minutes) + 'min</td>' +
+              '<td class="mono" style="padding:8px;">' + fmt(prof.avg_pump_duration) + 'min</td>' +
+              '<td class="mono" style="padding:8px;">' + fmt(prof.avg_consolidation_duration) + 'min</td>' +
+              '<td class="mono" style="padding:8px;">' + fmt((prof.re_pump_rate || 0) * 100) + '%</td>' +
+              '<td class="mono" style="padding:8px;">' + (prof.total_cycles_observed || 0) + '</td>' +
+              '<td style="padding:8px;color:var(--text-secondary);">' + (prof.typical_pattern || '—') + '</td>' +
+              '</tr>';
+          }).join('');
+          body.innerHTML = rows;
+        }).catch(function() {
+          var body = document.getElementById('pump-analytics-body');
+          if (body) body.innerHTML = '<tr><td colspan="8" style="padding:12px;color:var(--text-muted);">Pump-cycle data unavailable.</td></tr>';
+        });
+      }
+      loadPumpAnalytics();
+      setInterval(loadPumpAnalytics, 60000);
+    })();
   </script>
 </body>
 </html>
