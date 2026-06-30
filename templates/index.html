@@ -186,7 +186,7 @@
     <div class="section-sub">High emission &amp; yield vs muted market cap · color-coded values</div>
     <div class="card">
       <table class="tbl">
-        <thead><tr><th>#</th><th><span class="info-term" data-tip="Bittensor network identifier — each subnet has a unique ID (e.g. SN40 = Subnet #40)">Subnet</span></th><th>Emission</th><th>APY</th><th>24h</th><th>Market Cap</th><th>Score</th></tr></thead>
+        <thead><tr><th>#</th><th><span class="info-term" data-tip="Bittensor network identifier — each subnet has a unique ID (e.g. SN40 = Subnet #40)">Subnet</span></th><th><span class="info-term" data-tip="TAO tokens minted to this subnet's participants per day — higher = more income for stakers">Daily Rewards</span></th><th>APY</th><th>24h</th><th>Market Cap</th><th>Score</th></tr></thead>
         <tbody>
           {% for u in (undervalued_radar | safe_list) %}
           <tr><td>{{ u.rank }}</td><td>{{ u.name }} SN{{ u.netuid }}</td><td>{{ '%.2f'|format(u.emission or 0) }}</td><td>{{ '%.1f'|format(u.apy or 0) }}%</td><td class="{{ 'pos' if u.price_change_24h and u.price_change_24h >= 0 else 'neg' }}">{{ '%+.1f'|format(u.price_change_24h or 0) }}%</td><td>{{ '%.0f'|format(u.market_cap or 0) }}</td><td>{{ '%.2f'|format(u.undervalued_score) }}</td></tr>

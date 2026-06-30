@@ -160,7 +160,7 @@ def detect_rotation_patterns(subnets: List[Dict[str, Any]]) -> List[Dict[str, An
         confidence = min(1.0, len(defense_candidates) / max(1, n * 0.4))
         patterns.append({
             "pattern": "emission_defense",
-            "description": "High-emission subnets used as defensive rotation",
+            "description": "High Daily Rewards subnets used as defensive rotation",
             "netuids": [sn.get("netuid") for sn in defense_candidates],
             "count": len(defense_candidates),
             "confidence": round(confidence, 3),

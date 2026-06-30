@@ -1532,7 +1532,7 @@ def _compute_hot_signals(sn: Dict[str, Any], indicators: Dict[str, Any], converg
         reasons.append(f"High yield ({apy:.1f}% APY)")
     if emission > 3:
         score += 1
-        reasons.append(f"Strong emission ({emission:.2f} TAO/day)")
+        reasons.append(f"Strong Daily Rewards ({emission:.2f} TAO/day)")
 
     active = score >= 5
     return {
@@ -1693,11 +1693,11 @@ def _compute_signal_impact(sn: Dict[str, Any], indicators: Dict[str, Any], hot: 
 
     # 9. Emission/yield signal (Gamma's domain).
     if emission > 1 and apy > 20:
-        _add("emission_change", "bullish", emission * 0.3 + apy * 0.02, 168, 68, f"Emission {emission:.2f} TAO/day + {apy:.1f}% APY")
+        _add("emission_change", "bullish", emission * 0.3 + apy * 0.02, 168, 68, f"Daily Rewards {emission:.2f} TAO/day + {apy:.1f}% APY")
     elif emission < 0.05 or apy < 0:
-        _add("emission_change", "bearish", 1.0, 168, 55, f"Weak emission {emission:.2f} / APY {apy:.1f}%")
+        _add("emission_change", "bearish", 1.0, 168, 55, f"Weak Daily Rewards {emission:.2f} / APY {apy:.1f}%")
     else:
-        _add("emission_change", "neutral", 0.5, 168, 50, f"Emission {emission:.2f} TAO/day / APY {apy:.1f}%")
+        _add("emission_change", "neutral", 0.5, 168, 50, f"Daily Rewards {emission:.2f} TAO/day / APY {apy:.1f}%")
 
     # 10. Social/sentiment fallback if mentions exist.
     mentions = int(sn.get("social_mentions", 0) or 0)
@@ -2183,9 +2183,9 @@ def _compute_social_sentiment(sn: Dict[str, Any]) -> Dict[str, Any]:
         yield_note = "yield compression noted"
 
     if emission > 0:
-        emit_note = f"emission {emission:.0f} TAO/day"
+        emit_note = f"Daily Rewards {emission:.0f} TAO/day"
     else:
-        emit_note = "no fresh emission"
+        emit_note = "no fresh Daily Rewards"
 
     tw_text = (
         f"${name} {momentum_word} — {chg:+.1f}% 24h / {chg7:+.1f}% 7d; "
@@ -2246,7 +2246,7 @@ def _compute_simivision_reasons(sn: Dict[str, Any], indicators: Dict[str, Any], 
     apy = float(sn.get("apy", 0) or 0)
     chg = float(sn.get("price_change_24h", 0) or 0)
     if emission > 3:
-        reasons.append(f"Strong emission {emission:.2f} TAO/day")
+        reasons.append(f"Strong Daily Rewards {emission:.2f} TAO/day")
     if apy > 30:
         reasons.append(f"High yield {apy:.1f}% APY")
     rsi = indicators.get("rsi", {})
@@ -2772,8 +2772,8 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         "time": now_ts,
         "subnet": "—",
         "evidence": "Learning loop",
-        "signal": f"accuracy {learning_metrics.get('accuracy', 0)}",
-        "decision": "weight update",
+        "signal": f"Accuracy: {learning_metrics.get('accuracy', 0)}",
+        "decision": "Learning Adjustment",
         "prediction": f"correct +{_LEARNING_DELTA_CORRECT} / wrong {_LEARNING_DELTA_WRONG}",
         "judge": f"{learning_metrics.get('correct', 0)} correct / {learning_metrics.get('wrong', 0)} wrong",
     })
@@ -3495,11 +3495,11 @@ def build_signal_breakdown(sn: Dict[str, Any], rank: int) -> List[str]:
     breakdown = []
     emission = sn.get("emission", 0)
     if emission >= 5:
-        breakdown.append(f"Strong emission ({emission:.2f} TAO/day) - high priority for miners")
+        breakdown.append(f"Strong Daily Rewards ({emission:.2f} TAO/day) - high priority for miners")
     elif emission >= 1:
-        breakdown.append(f"Solid emission ({emission:.2f} TAO/day) - consistent rewards")
+        breakdown.append(f"Solid Daily Rewards ({emission:.2f} TAO/day) - consistent rewards")
     else:
-        breakdown.append(f"Emission at {emission:.2f} TAO/day - emerging subnet")
+        breakdown.append(f"Daily Rewards at {emission:.2f} TAO/day - emerging subnet")
     chg = sn.get("price_change_24h", 0)
     if chg >= 5:
         breakdown.append(f"Bullish 24h momentum (+{chg:.1f}%) - strong buying pressure")
