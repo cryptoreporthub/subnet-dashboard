@@ -403,9 +403,11 @@
             {% set _prof = s.get('profile') or {} %}
             {% set _cp = s.get('cycle_prediction') or {} %}
             {% set _vol_spike = s.get('volume_spike', False) %}
-            {% set _vol_factor = s.get('volume_factor', 1.0) or 1.0 %}
+            {% set _vf_raw = s.get('volume_factor', 1.0) %}
+            {% set _vol_factor = _vf_raw if _vf_raw is not none else 1.0 %}
             {% set _sent_factor = s.get('sentiment_factor', 1.0) or 1.0 %}
-            {% set _convergence = (s.get('signal_convergence', 0.5) or 0.5) * 100 %}
+            {% set _conv_raw = s.get('signal_convergence', 0.5) %}
+            {% set _convergence = (_conv_raw if _conv_raw is not none else 0.5) * 100 %}
             {% set _adapted_k = s.get('adapted_k') %}
             {% set _adapt_note = s.get('adaptation_note') or '' %}
             <tr>
