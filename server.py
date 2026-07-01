@@ -6,6 +6,7 @@ import sys
 import threading
 import time
 import traceback
+import urllib.request
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Optional
@@ -460,6 +461,73 @@ def _app_version() -> str:
 _APP_VERSION = _app_version()
 
 _ROTATION_TOKENS = ["hyperliquid", "vvv", "near", "render", "fetch"]
+
+# CoinGecko coin-id mapping for the rotation watchlist. Symbols that CoinGecko
+# does not list under their ticker are mapped to their canonical coin id.
+_ROTATION_COINGECKO_IDS = {
+    "hyperliquid": "hyperliquid",
+    "vvv": "venice-token",
+    "near": "near",
+    "render": "render-token",
+    "fetch": "fetch-ai",
+}
+
+# In-process cache for rotation-token prices (shared by /api/rotation-tokens).
+_ROTATION_PRICE_CACHE: Dict[str, Any] = {"data": None, "at": 0.0}
+_ROTATION_PRICE_CACHE_TTL = 60  # seconds
+
+
+def _fetch_rotation_token_prices() -> Dict[str, Dict[str, Any]]:
+    """Fetch current USD prices + 24h change for the rotation watchlist.
+
+    Uses CoinGecko's public simple/price endpoint (no API key required) and
+    caches the result for 60 seconds. Returns a dict keyed by lower-case
+    symbol, e.g. ``{"near": {"price": 1.79, "price_change_24h": 0.67}}``.
+    On failure returns the last cached value (or an empty dict).
+    """
+    now = time.time()
+    cached = _ROTATION_PRICE_CACHE.get("data")
+    if cached is not None and (now - _ROTATION_PRICE_CACHE.get("at", 0.0)) < _ROTATION_PRICE_CACHE_TTL:
+        return cached
+
+    ids = ",".join(
+        _ROTATION_COINGECKO_IDS[sym]
+        for sym in _ROTATION_TOKENS
+        if sym in _ROTATION_COINGECKO_IDS
+    )
+    result: Dict[str, Dict[str, Any]] = {}
+    if ids:
+        try:
+            url = (
+                "https://api.coingecko.com/api/v3/simple/price"
+                f"?ids={ids}&vs_currencies=usd&include_24hr_change=true"
+            )
+            req = urllib.request.Request(url, headers={"User-Agent": "SubnetDashboard/1.0"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                payload = json.loads(resp.read().decode())
+        except Exception as exc:
+            logger.warning("CoinGecko rotation-token price fetch failed: %s", exc)
+            payload = None
+
+        if isinstance(payload, dict):
+            for sym in _ROTATION_TOKENS:
+                coin_id = _ROTATION_COINGECKO_IDS.get(sym)
+                entry = payload.get(coin_id) if coin_id else None
+                if isinstance(entry, dict):
+                    price = entry.get("usd")
+                    change = entry.get("usd_24h_change")
+                    result[sym] = {
+                        "price": float(price) if price is not None else None,
+                        "price_change_24h": round(float(change), 2) if change is not None else None,
+                    }
+
+    if result:
+        _ROTATION_PRICE_CACHE["data"] = result
+        _ROTATION_PRICE_CACHE["at"] = now
+        return result
+    # Fall back to stale cache so transient CoinGecko failures don't null out
+    # previously-known prices.
+    return cached or {}
 
 # ---------------------------------------------------------------------------
 # SimiVision chat helpers (Phase 4: LLM interaction with mindmap context)
@@ -917,7 +985,9 @@ def _highest_emission_pick(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
 def api_top_pick_day():
     """Return the top pick for the current day with a safe fallback."""
     subnets, _ = _get_subnets_with_source()
-    market_context = {"tao_change_24h": 0.0}
+    # Use the same real market-wide mood proxy as the homepage so the day
+    # pick endpoint stays in sync with the rendered dashboard.
+    market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
     try:
         _dp_raw = get_or_create_today_pick(subnets, market_context)
         day_pick = _dp_raw.get("pick") if isinstance(_dp_raw, dict) and _dp_raw.get("pick") else _dp_raw
@@ -972,21 +1042,25 @@ def api_simivision_safe():
 
 @app.get("/api/rotation-tokens")
 def api_rotation_tokens_safe():
-    """Return the rotation-token watchlist with safe price placeholders.
+    """Return the rotation-token watchlist with live CoinGecko prices.
 
-    Each token includes its symbol, a display label, and any available price
-    data we can derive without requiring external services to be up.  This
-    keeps the watchlist endpoint useful even when live price feeds are
-    unavailable.
+    Each token includes its symbol, a display label, and the current USD price
+    plus 24h change fetched from CoinGecko (cached for 60 seconds).  When the
+    live price feed is unavailable we fall back to the last cached value so the
+    watchlist endpoint stays useful.
     """
+    prices = _fetch_rotation_token_prices()
     tokens = []
     for symbol in _ROTATION_TOKENS:
+        entry = prices.get(symbol, {}) if isinstance(prices, dict) else {}
+        price = entry.get("price")
+        change = entry.get("price_change_24h")
         tokens.append({
             "symbol": symbol.upper(),
             "name": symbol.title(),
-            "price": None,
-            "price_change_24h": None,
-            "source": "watchlist",
+            "price": price,
+            "price_change_24h": change,
+            "source": "coingecko" if price is not None else "watchlist",
         })
     return {
         "status": "success",
@@ -3844,7 +3918,9 @@ async def api_top_picks():
     """Return top 3 subnets by short-horizon and 24h Council state-vector scores."""
     try:
         subnets, _ = _get_subnets_with_source()
-        market_context = {"tao_change_24h": 0.0}
+        # Use the same real market-wide mood proxy as the homepage so the
+        # short-horizon / day scores here match the audited picks everywhere.
+        market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
 
         hour_scored = []
         day_scored = []
@@ -3911,7 +3987,7 @@ def _record_pick_scenario(pick: Dict[str, Any], market_context: Optional[Dict[st
             "confidence": float(pick.get("confidence", 0) or 0),
             "rsi": tags.get("rsi"),
             "volume": signals.get("volume") or tags.get("volume"),
-            "emission": signals.get("emission"),
+            "daily_rewards": signals.get("emission"),
             "apy": signals.get("apy"),
             "market_mood": (market_context or {}).get("tao_change_24h", 0),
         }
@@ -4052,7 +4128,10 @@ async def api_top_pick_hour():
     """
     try:
         subnets, _ = _get_subnets_with_source()
-        market_context = {"tao_change_24h": 0.0}
+        # Use the SAME real market-wide mood proxy as the homepage so the
+        # audited #1 pick is byte-for-byte identical between the API and the
+        # rendered dashboard (a static 0.0 here previously let the two drift).
+        market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
         picks = _ordered_hour_picks(subnets, market_context, limit=3)
         if picks:
             return {"picks": picks}
@@ -4068,7 +4147,9 @@ async def api_daily_pick():
     """Return today's audited daily pick from the Council engine."""
     try:
         subnets, _ = _get_subnets_with_source()
-        market_context = {"tao_change_24h": 0.0}
+        # Use the same real market-wide mood proxy as the homepage so the
+        # daily pick stays in sync with the rendered dashboard.
+        market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
         return get_or_create_today_pick(subnets, market_context)
     except Exception as e:
         logger.error("Error fetching daily pick: %s", e)

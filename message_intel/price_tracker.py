@@ -29,6 +29,9 @@ _PRICE_CACHE_TTL = 60  # seconds
 _SUBNET_PRICE_CACHE: Dict[int, Dict[str, Any]] = {}
 _SUBNET_PRICE_CACHE_TTL = 60  # seconds
 _ALL_SUBNET_PRICE_CACHE: Dict[str, Any] = {"data": None, "cached_at": 0}
+# Intentionally short so the baseline tracker never serves data staler than
+# the shared taomarketcap SQLite cache the rest of the app reads from.
+_ALL_SUBNET_PRICE_CACHE_TTL = 15  # seconds
 
 BASELINE_FILE = os.environ.get("PRICE_BASELINE_FILE", "data/price_baselines.json")
 BASELINE_RETENTION_DAYS = 7
@@ -82,11 +85,19 @@ def fetch_all_subnet_prices() -> Dict[int, Dict[str, Any]]:
 
     Returns a dict keyed by netuid, each value containing at least
     ``price``, ``price_24h_change``, ``price_7d_change``, ``netuid`` and
-    ``name``. Results are cached for 60 seconds.
+    ``name``.
+
+    This reads directly from the shared taomarketcap SQLite cache
+    (``fetchers.taomarketcap.get_all_subnets``) that the dashboard's
+    ``/api/subnets``, Undervalued Radar and SimiVision sections all use, so
+    every endpoint derives 24h/7d change from the *same* snapshot. A very
+    short in-process cache (15s) only guards against redundant SQLite reads
+    within a single request batch; it is intentionally shorter than the
+    shared cache TTL so it can never serve data staler than the shared cache.
     """
     cached = _ALL_SUBNET_PRICE_CACHE.get("data")
     cached_at = _ALL_SUBNET_PRICE_CACHE.get("cached_at", 0)
-    if cached is not None and (time.time() - cached_at) < _SUBNET_PRICE_CACHE_TTL:
+    if cached is not None and (time.time() - cached_at) < _ALL_SUBNET_PRICE_CACHE_TTL:
         return cached
 
     subnets = _fetch_all_subnets_from_taomarketcap()
