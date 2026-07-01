@@ -66,6 +66,29 @@
   </style>
 </head>
 <body>
+  <nav class="top-nav">
+    <div class="nav-brand">
+      <span class="nav-logo">SV</span>
+      <span class="nav-title">SimiVision</span>
+    </div>
+    <div class="nav-links">
+      <a href="#market-snapshot">Market</a>
+      <a href="#top-picks">Picks</a>
+      <a href="#simivision-picks">SimiVision</a>
+      <a href="#daily-pick">Daily Pick</a>
+      <a href="#undervalued-radar">Radar</a>
+      <a href="#indicators">Indicators</a>
+      <a href="#rotation-tracker">Rotation</a>
+      <a href="#volatility-clusters">Volatility</a>
+      <a href="#scenario-memory">Memory</a>
+      <a href="#judge-panel">Judges</a>
+      <a href="#mindmap-learning">Mindmap</a>
+      <a href="#pump-analytics">Pump</a>
+      <a href="#signal-impact">Signals</a>
+      <a href="#social-sentiment">Sentiment</a>
+    </div>
+  </nav>
+
   <header class="top">
     <div class="top-inner">
       <div class="logo">
@@ -88,7 +111,7 @@
 
   <main class="wrap">
     <!-- Market Snapshot -->
-    <div class="section-label">Market Snapshot</div>
+    <div class="section-label" id="market-snapshot">Market Snapshot</div>
     <div class="section-sub">Aggregate subnet intelligence · KPI strip</div>
     <div class="card">
       <div class="layout-grid" style="grid-template-columns: repeat(5,1fr); gap: 16px;">
@@ -101,7 +124,7 @@
     </div>
 
     <!-- Top Picks Hour and Day (server-rendered) -->
-    <div class="section-label">Top Picks</div>
+    <div class="section-label" id="top-picks">Top Picks</div>
     <div class="section-sub">Live council state-vector picks · hour and day</div>
     <div class="layout-grid">
       {% set hour = hour_picks[0] if hour_picks else None %}
@@ -139,7 +162,7 @@
     </div>
 
     <!-- SimiVision Top Picks -->
-    <div class="section-label">SimiVision Top Picks</div>
+    <div class="section-label" id="simivision-picks">SimiVision Top Picks</div>
     <div class="section-sub">Ranked by Daily Rewards, yield &amp; conviction — every forecast is predictive</div>
     <div class="picks">
       {% for p in (simivision_picks | safe_list)[:3] %}
@@ -164,7 +187,7 @@
     </div>
 
     <!-- Daily Pick -->
-    <div class="section-label">Daily Pick — Council Audited</div>
+    <div class="section-label" id="daily-pick">Daily Pick — Council Audited</div>
     <div class="section-sub">Single 24h candidate vetted by the Risk Check layer</div>
     {% if daily_pick and daily_pick.subnet %}
     <div class="hero-card">
@@ -182,7 +205,7 @@
     {% endif %}
 
     <!-- Undervalued Radar -->
-    <div class="section-label">Undervalued Radar</div>
+    <div class="section-label" id="undervalued-radar">Undervalued Radar</div>
     <div class="section-sub">High Daily Rewards &amp; yield vs muted market cap · color-coded values</div>
     <div class="card">
       <table class="tbl">
@@ -196,7 +219,7 @@
     </div>
 
     <!-- Technical Indicators -->
-    <div class="section-label">Technical Indicators</div>
+    <div class="section-label" id="indicators">Technical Indicators</div>
     <div class="section-sub">RSI · Stochastic · Bollinger · Money Flow Index · Commodity Channel Index · Williams %R · MACD</div>
     <div class="picks">
       {% for t in (technical_indicators | safe_list) %}
@@ -219,7 +242,7 @@
     </div>
 
     <!-- Rotation Tracker with Volatility Explanation -->
-    <div class="section-label">Rotation Tracker</div>
+    <div class="section-label" id="rotation-tracker">Rotation Tracker</div>
     <div class="section-sub">Subnet rotation patterns &amp; volatility clusters</div>
     <div class="card">
       <div class="vol-explain">
@@ -242,25 +265,86 @@
           </div>
           {% else %}<div class="section-sub">No rotation patterns detected.</div>{% endfor %}
         </div>
-        <div class="span-6">
+        <div class="span-6" id="volatility-clusters">
           <h3><span class="info-term" data-tip="Subnets grouped by price volatility. High = risky/opportunity, Low = stable, Core = average">Volatility Clusters</span></h3>
-          <div class="mono" style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">mean {{ '%.2f'|format(rotation_tracker.volatility_clusters.summary.mean_volatility or 0) }}</div>
-          {% for cluster, items in ((rotation_tracker.volatility_clusters or {}).items()) if cluster != 'summary' %}
-          {% if items %}
-          <div style="margin-bottom:12px;">
-            <div class="pick-name">{{ cluster }} Volatility</div>
-            {% for item in (items | safe_list)[:5] %}
-            <div class="mono" style="font-size:11px;">{{ item.name }} SN{{ item.netuid }} · volatility {{ '%.2f'|format(item.volatility) }} · 24h {{ '%+.2f'|format(item.price_change_24h or 0) }}%</div>
+
+          <!-- Threshold transparency: show the actual cutoff values -->
+          {% set _vc = rotation_tracker.volatility_clusters or {} %}
+          {% set _vcs = _vc.get('summary', {}) or {} %}
+          {% set _vc_mean = _vcs.get('mean_volatility', 0) if _vcs.get('mean_volatility') is not none else 0 %}
+          {% set _vc_high = _vcs.get('high_threshold', 0) if _vcs.get('high_threshold') is not none else 0 %}
+          {% set _vc_low = _vcs.get('low_threshold', 0) if _vcs.get('low_threshold') is not none else 0 %}
+          <div class="mono" style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">
+            mean {{ '%.2f'|format(_vc_mean) }}
+            <span style="color:var(--text-muted);margin-left:8px;">·</span>
+            <span style="color:#ef4444;">high ≥ {{ '%.2f'|format(_vc_high) }}</span>
+            <span style="color:var(--text-muted);margin-left:4px;">·</span>
+            <span style="color:#10b981;">low &lt; {{ '%.2f'|format(_vc_low) }}</span>
+          </div>
+
+          <div class="vol-cluster-grid">
+            {% for cluster, items in _vc.items() if cluster != 'summary' %}
+            {% if items %}
+            <div class="vol-cluster-group vol-cluster-{{ cluster }}">
+              <div class="vol-cluster-header">
+                <span class="vol-cluster-dot vol-dot-{{ cluster }}"></span>
+                <span class="vol-cluster-label">{{ cluster|capitalize }} Volatility</span>
+                <span class="vol-cluster-count">{{ items|length }}</span>
+              </div>
+              <div class="vol-cluster-items">
+                {% for item in items[:12] %}
+                {% set _vol = item.volatility if item.volatility is not none else 0 %}
+                {% set _mean_div = _vc_mean if _vc_mean > 0 else 1 %}
+                {% set _bar_width = _vol / _mean_div * 50 %}
+                {% set _bar_w = _bar_width if _bar_width < 100 else 100 %}
+                <div class="vol-cluster-item">
+                  <span class="vol-cluster-name">{{ item.name }}</span>
+                  <div class="vol-cluster-bar-wrap">
+                    <!-- Mean line: a dashed vertical line at the mean volatility position -->
+                    <div class="vol-cluster-mean-line" style="left: 50%;" title="mean"></div>
+                    <div class="vol-cluster-bar vol-bar-{{ cluster }}" style="width: {{ '%.0f'|format(_bar_w) }}%"></div>
+                  </div>
+                  <span class="vol-cluster-value mono">{{ '%.2f'|format(_vol) }}</span>
+                </div>
+                {% endfor %}
+                {% if items|length > 12 %}
+                <div class="vol-cluster-more">+{{ items|length - 12 }} more</div>
+                {% endif %}
+              </div>
+            </div>
+            {% endif %}
             {% endfor %}
           </div>
-          {% endif %}
-          {% else %}<div class="section-sub">No volatility clusters available.</div>{% endfor %}
+
+          <details class="vol-explain">
+            <summary>How does this work?</summary>
+            <div class="vol-explain-body">
+              <div class="vol-explain-section">
+                <div class="vol-explain-heading"><span class="vol-dot-high"></span> <b>High Volatility</b> — Breakout/breakdown risk</div>
+                <div>These subnets see large price swings (top 25% by volatility). They may present short-term trading opportunities, but carry higher risk. Good for momentum plays if you have conviction.</div>
+              </div>
+              <div class="vol-explain-section">
+                <div class="vol-explain-heading"><span class="vol-dot-core"></span> <b>Core Volatility</b> — Trend-following zone</div>
+                <div>Moderate, average volatility (middle 50%). Steady price action — enough movement to profit from trends without getting whipped around. Healthiest zone for momentum strategies.</div>
+              </div>
+              <div class="vol-explain-section">
+                <div class="vol-explain-heading"><span class="vol-dot-low"></span> <b>Low Volatility</b> — Consolidation</div>
+                <div>Tight price range, barely moving (bottom 25%). A breakout may be imminent — these are "coiled springs." Lower risk but less immediate opportunity. Watch for volume spikes signaling an impending move.</div>
+              </div>
+              <div class="vol-explain-formula">
+                <div class="vol-explain-heading">📋 How the score is calculated</div>
+                <div>Each subnet's volatility score = <code>max(|24h price change|, |7d price change| ÷ 7)</code></div>
+                <div>Subnets are then split into quartiles: the top 25% are "High", the bottom 25% are "Low", and the middle 50% are "Core".</div>
+                <div>The dashed line on each bar shows where the <b>mean</b> volatility sits — bars extending past it are above average.</div>
+              </div>
+            </div>
+          </details>
         </div>
       </div>
     </div>
 
     <!-- Scenario Memory -->
-    <div class="section-label">Scenario Memory</div>
+    <div class="section-label" id="scenario-memory">Scenario Memory</div>
     <div class="section-sub">Regime-aware memory · live from /api/scenario-memory</div>
     <div class="card">
       <div class="layout-grid" style="grid-template-columns: repeat(4,1fr); gap:12px;">
@@ -283,7 +367,7 @@
     </div>
 
     <!-- Judge Panel with Postmortems -->
-    <div class="section-label">Judge panel</div>
+    <div class="section-label" id="judge-panel">Judge panel</div>
     <div class="section-sub">Oracle · Echo · Pulse — live scores, paper portfolios &amp; Prediction Reviews{% if usd_rate %} | TAO ${{ '%.2f'|format(usd_rate) }}{% endif %}</div>
     <div class="picks">
       {% for j in (judge_cards | safe_list) %}
@@ -322,7 +406,7 @@
     </div>
 
     <!-- Mind Map Learning Trail -->
-    <div class="section-label">Mind Map Learning Trail</div>
+    <div class="section-label" id="mindmap-learning">Mind Map Learning Trail</div>
     <div class="section-sub">evidence → signal → decision → judge → learning loop</div>
     <div class="card">
       {% for tr in (mindmap_trail | safe_list) %}
@@ -340,7 +424,7 @@
     {% set _pa_data = (_pa.get('data') if _pa is mapping else None) or {} %}
     {% set _pa_subnets = _pa_data.get('subnets') or [] %}
     {% set _pa_meta = _pa_data.get('meta') or {} %}
-    <div class="section-label">Pump Cycle Analytics</div>
+    <div class="section-label" id="pump-analytics">Pump Cycle Analytics</div>
     <div class="section-sub">CUSUM-based pump detection · 6-phase cycle model · per-subnet behavioral profiling</div>
     <div class="card">
       <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:16px;">
@@ -497,7 +581,7 @@
     </div>
 
     <!-- Signal Impact and Predictive Engine -->
-    <div class="section-label"><span class="info-term" data-tip="Each trading signal contributes a predicted price move. Combined = overall bullish or bearish impact.">Signal Impact</span> · Predictive Engine · Learning Loop</div>
+    <div class="section-label" id="signal-impact"><span class="info-term" data-tip="Each trading signal contributes a predicted price move. Combined = overall bullish or bearish impact.">Signal Impact</span> · Predictive Engine · Learning Loop</div>
     <div class="section-sub">All outputs framed as "predicted to move +X% within N hours"</div>
     <div class="layout-grid">
       <div class="card span-8">
@@ -531,7 +615,7 @@
     </div>
 
     <!-- Social Sentiment -->
-    <div class="section-label">Social Sentiment Feed</div>
+    <div class="section-label" id="social-sentiment">Social Sentiment Feed</div>
     <div class="section-sub">Automated analysis · classified per subnet</div>
     <div class="card">
       {% for s in (social_sentiment | safe_list) %}
