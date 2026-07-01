@@ -22,8 +22,14 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-# Ensure the data directory exists at module load time.
-os.makedirs('data', exist_ok=True)
+# Ensure the data directory exists at module load time. Fly.io root filesystems
+# are ephemeral; without this the heartbeat write below silently fails. Uses the
+# shared helper so the "directory missing, created" event is logged once.
+try:
+    from internal.file_utils import ensure_data_dir
+    ensure_data_dir()
+except Exception:  # pragma: no cover - keep import-safe if file_utils is unavailable
+    os.makedirs('data', exist_ok=True)
 
 REFRESH_MINUTES = int(os.environ.get("REFRESH_MINUTES", "60"))
 MAX_BACKOFF_MINUTES = int(os.environ.get("MAX_BACKOFF_MINUTES", "240"))
@@ -218,6 +224,14 @@ class AdversarialScheduler:
         }
         self._state_cache = summary
         try:
+            # Re-check the data directory before every write cycle: on Fly.io
+            # the volume can be absent on a fresh machine and the module-load
+            # makedirs may have run before the mount was ready.
+            try:
+                from internal.file_utils import ensure_data_dir
+                ensure_data_dir()
+            except Exception:
+                os.makedirs(os.path.dirname(self.soul_map_path) or "data", exist_ok=True)
             data: Dict[str, Any] = {}
             if os.path.exists(self.soul_map_path):
                 data = _load_json(self.soul_map_path) or {}

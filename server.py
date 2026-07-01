@@ -773,6 +773,17 @@ def health_check():
     return PlainTextResponse("OK")
 
 
+@app.get("/api/health")
+def api_health_check():
+    """JSON health probe for Fly.io / monitoring tooling.
+
+    Mirrors the plain-text ``/health`` route but returns a JSON body so probes
+    that expect a structured response (and the ``/api/health`` path requested
+    by external monitors) get a 200 instead of a 404.
+    """
+    return {"status": "ok"}
+
+
 @app.get("/api/price-tracking/baselines")
 def api_price_tracking_baselines():
     """Return the recorded baseline price history for all tracked subnets."""
@@ -1482,17 +1493,21 @@ class PREDICTION_STORE:
 def _dedupe_predictions(data: Dict[str, Any]) -> Dict[str, Any]:
     """Collapse duplicate pending predictions.
 
-    Keeps only the most recent pending prediction per (netuid, direction) pair;
-    older duplicates for the same pair are dropped so the predictive engine
-    does not accumulate one entry per refresh cycle. Resolved predictions are
-    left untouched. Stats are recomputed afterwards by the caller.
+    Keeps only the most recent pending prediction per (netuid, direction,
+    expert) triple; older duplicates for the same triple are dropped so the
+    predictive engine does not accumulate one entry per refresh cycle. The
+    ``expert`` dimension is included so multiple experts can independently
+    forecast the same subnet+direction without collapsing onto each other
+    (each expert must keep its own prediction so the learning loop can grade
+    it). Resolved predictions are left untouched. Stats are recomputed
+    afterwards by the caller.
     """
     pending = data.get("predictions", [])
     if not isinstance(pending, list):
         pending = []
     newest_by_key: Dict[tuple, Dict[str, Any]] = {}
     for pred in pending:
-        key = (pred.get("netuid"), pred.get("direction"))
+        key = (pred.get("netuid"), pred.get("direction"), pred.get("expert") or "quant")
         prev = newest_by_key.get(key)
         if prev is None:
             newest_by_key[key] = pred
@@ -2298,59 +2313,113 @@ def _expert_from_signal_source(source: Optional[str]) -> str:
     return "quant"
 
 
-def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> Dict[str, Any]:
-    """Create a PREDICTIVE forecast: 'predicted to move +X% within N hours'.
+# Canonical Council experts that should each be exercised by the prediction
+# engine so the learning loop can grade them independently. Keeping this list
+# in sync with ``weights.DEFAULT_WEIGHTS`` guarantees every expert receives
+# predictions and therefore diverges from the untested 1.0 baseline.
+_COUNCIL_EXPERTS = ("quant", "hype", "contrarian", "technical")
 
-    Duplicate suppression: if a pending prediction for the same netuid +
-    direction already exists and was created within the dedup window, the
-    existing prediction is returned instead of minting a new one. This stops
-    every dashboard refresh from appending a fresh (always 24h-ahead) entry
-    that would never reach its resolve_at.
+# Per-expert default prediction horizon (in hours), chosen to match each
+# expert's signal decay. All values are still passed through the hard 4-hour
+# clamp, so e.g. contrarian's 6h view resolves within 4h in practice.
+_EXPERT_BASE_HORIZON_HOURS = {
+    "quant": 4,        # data-driven fundamentals (emission/yield) — steady
+    "technical": 4,    # indicator-driven (MACD/MA) — medium cadence
+    "hype": 2,         # sentiment decays fast — short horizon
+    "contrarian": 6,   # mean-reversion reversal — longer view (clamped to 4h)
+}
 
-    Each prediction is tagged with the council expert whose signal triggered
-    it so weight updates can be applied per-expert on resolution.
+
+def _expert_prediction_view(
+    impacts: List[Dict[str, Any]], expert: str, sn: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Derive one expert's directional view from the shared signal-impact list.
+
+    Aggregates every impact whose signal type maps to ``expert`` (via
+    ``_expert_from_signal_source``) into a single net direction + magnitude.
+    When an expert has no strong signal of its own, it still produces a view
+    derived from the subnet's 24h move so the expert is *tested* by the
+    learning loop rather than sitting idle at weight 1.0 forever.
+
+    Returns ``{direction, magnitude, signal_source, base_horizon}``.
     """
-    net = signal_impact.get("net_predicted_pct", 0)
-    raw_direction = signal_impact.get("net_direction", "neutral")
-    # Map impact direction (bullish/bearish/neutral) -> prediction direction (up/down).
-    if raw_direction == "bullish":
+    signed = 0.0
+    strongest: Optional[Dict[str, Any]] = None
+    strongest_mag = -1.0
+    for imp in impacts or []:
+        if _expert_from_signal_source(imp.get("signal_type")) != expert:
+            continue
+        mag = float(imp.get("magnitude_pct", 0) or 0)
+        direction = imp.get("direction", "neutral")
+        sign = 1 if direction == "bullish" else (-1 if direction == "bearish" else 0)
+        signed += mag * sign
+        if mag > strongest_mag:
+            strongest_mag = mag
+            strongest = imp
+
+    chg = float(sn.get("price_change_24h", 0) or 0)
+    if signed > 0:
         direction = "up"
-    elif raw_direction == "bearish":
+    elif signed < 0:
         direction = "down"
     else:
-        direction = "up" if float(sn.get("price_change_24h", 0) or 0) >= 0 else "down"
+        # No directional edge for this expert: lean on the 24h move so the
+        # expert still commits to a testable direction.
+        direction = "up" if chg >= 0 else "down"
 
-    # --- duplicate suppression -------------------------------------------------
+    # Magnitude scales with the expert's conviction (|net|), floored so even a
+    # weak/neutral expert produces a non-trivial, resolvable prediction.
+    magnitude = max(abs(signed), 0.8)
+    # Cap overly large aggregate magnitudes to keep predictions realistic.
+    magnitude = min(magnitude, 8.0)
+
+    signal_source = (
+        strongest.get("signal_type") if strongest and strongest.get("signal_type") else expert
+    )
+    base_horizon = _EXPERT_BASE_HORIZON_HOURS.get(expert, 4)
+    return {
+        "direction": direction,
+        "magnitude": round(magnitude, 2),
+        "signal_source": signal_source,
+        "base_horizon": base_horizon,
+    }
+
+
+def _create_prediction_entry(
+    sn: Dict[str, Any],
+    expert: str,
+    direction: str,
+    magnitude: float,
+    signal_source: str,
+    base_horizon: int,
+) -> Dict[str, Any]:
+    """Persist a single prediction tagged with ``expert`` and return it.
+
+    Duplicate suppression is keyed on (netuid, direction, expert): each expert
+    may hold at most one recent pending prediction per subnet+direction, so
+    multiple experts can independently forecast the same subnet without
+    colliding. The horizon is clamped to the hard 4-hour maximum.
+    """
     netuid = sn.get("netuid")
     now = _dt.utcnow()
     cutoff = now - _td(hours=_PREDICTION_DEDUP_WINDOW_HOURS)
     for existing in PREDICTION_STORE.all():
-        if existing.get("netuid") != netuid or existing.get("direction") != direction:
+        if (
+            existing.get("netuid") != netuid
+            or existing.get("direction") != direction
+            or (existing.get("expert") or "quant") != expert
+        ):
             continue
         try:
             created = _dt.fromisoformat(existing.get("created_at", "").replace("Z", ""))
         except Exception:
             continue
         if created >= cutoff:
-            return existing  # recent pending prediction already covers this pair
+            return existing  # recent pending prediction already covers this (netuid, direction, expert)
 
-    magnitude = abs(net) if net != 0 else 1.5
-    horizon = 24
-    impacts = signal_impact.get("impacts", [])
-    if impacts:
-        strongest = max(impacts, key=lambda i: i.get("magnitude_pct", 0))
-        st = SIGNAL_TYPES.get(strongest.get("signal_type", ""), {})
-        horizon = int(st.get("half_life_hours", 24))
-    # Percentage-based horizon clamp: the maximum horizon a prediction may span
-    # depends on the magnitude of the predicted move (|pct| < 5% -> max 4h,
-    # |pct| < 10% -> max 24h, |pct| >= 10% -> max 168h). ``magnitude`` is the
-    # absolute predicted percentage; the clamp is direction-agnostic.
-    horizon = _clamp_prediction_horizon(horizon, magnitude)
-
+    horizon = _clamp_prediction_horizon(int(base_horizon or 4), magnitude)
     predicted_pct = magnitude if direction == "up" else -magnitude
     ref_price = float(sn.get("price", 0) or 0) or 1.0
-    signal_source = signal_impact.get("dominant") or direction
-    expert = _expert_from_signal_source(signal_source)
     # Record the pump-cycle phase + proneness at prediction time so the
     # self-learning loop can later grade cycle accuracy separately from
     # direction accuracy.
@@ -2388,6 +2457,102 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
         logger.warning("Judge tracker on_prediction_created failed: %s", exc)
 
     return prediction
+
+
+def _generate_multi_expert_predictions(
+    sn: Dict[str, Any], signal_impact: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Generate one prediction per Council expert for a subnet.
+
+    This is the core of expert diversity: instead of a single consensus
+    prediction (which historically always resolved to the "quant" expert via
+    the dominant-signal fallback), each of the 4 experts (quant, hype,
+    contrarian, technical) commits to its own directional view derived from
+    the subset of signals that belong to its lens. Every expert therefore
+    gets resolved and graded by the learning loop, so weights diverge from
+    the untested 1.0 baseline instead of staying flat.
+
+    Returns the list of created (or dedup-returned) predictions, ordered
+    ``quant, hype, contrarian, technical``.
+    """
+    impacts = signal_impact.get("impacts", []) or []
+    created: List[Dict[str, Any]] = []
+    for expert in _COUNCIL_EXPERTS:
+        try:
+            view = _expert_prediction_view(impacts, expert, sn)
+            pred = _create_prediction_entry(
+                sn=sn,
+                expert=expert,
+                direction=view["direction"],
+                magnitude=view["magnitude"],
+                signal_source=view["signal_source"],
+                base_horizon=view["base_horizon"],
+            )
+            created.append(pred)
+        except Exception as exc:
+            logger.warning("Multi-expert prediction failed for expert=%s: %s", expert, exc)
+    return created
+
+
+def _pick_primary_prediction(
+    expert_preds: List[Dict[str, Any]], signal_impact: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    """Choose the prediction to surface in the simivision pick card.
+
+    Prefers the prediction whose direction matches the consensus net
+    direction, breaking ties toward the quant expert (the data-driven
+    baseline). Falls back to the first available prediction.
+    """
+    if not expert_preds:
+        return None
+    raw_direction = signal_impact.get("net_direction", "neutral")
+    want = "up" if raw_direction == "bullish" else "down" if raw_direction == "bearish" else None
+    if want:
+        for expert in _COUNCIL_EXPERTS:
+            for pred in expert_preds:
+                if (pred.get("expert") or "quant") == expert and pred.get("direction") == want:
+                    return pred
+        for pred in expert_preds:
+            if pred.get("direction") == want:
+                return pred
+    for expert in _COUNCIL_EXPERTS:
+        for pred in expert_preds:
+            if (pred.get("expert") or "quant") == expert:
+                return pred
+    return expert_preds[0]
+
+
+def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a PREDICTIVE consensus forecast: 'predicted to move +X% within N hours'.
+
+    This is the single consensus/primary prediction used for the simivision
+    pick card display. The full per-expert prediction set (one entry per
+    Council expert, so the learning loop can grade each expert) is produced by
+    ``_generate_multi_expert_predictions``; this function delegates to it and
+    returns the primary pick.
+
+    Each prediction is tagged with the council expert whose signal triggered
+    it so weight updates can be applied per-expert on resolution.
+    """
+    expert_preds = _generate_multi_expert_predictions(sn, signal_impact)
+    primary = _pick_primary_prediction(expert_preds, signal_impact)
+    if primary is not None:
+        return primary
+    # Extremely defensive fallback (multi-expert generation produced nothing):
+    # mint a single quant-tagged consensus prediction so the render loop never
+    # receives None.
+    net = signal_impact.get("net_predicted_pct", 0)
+    raw_direction = signal_impact.get("net_direction", "neutral")
+    if raw_direction == "bullish":
+        direction = "up"
+    elif raw_direction == "bearish":
+        direction = "down"
+    else:
+        direction = "up" if float(sn.get("price_change_24h", 0) or 0) >= 0 else "down"
+    magnitude = abs(net) if net != 0 else 1.5
+    return _create_prediction_entry(
+        sn, "quant", direction, magnitude, signal_impact.get("dominant") or direction, 4
+    )
 
 
 def _resolve_prediction(prediction: Dict[str, Any], latest_price: float) -> Dict[str, Any]:
@@ -3064,8 +3229,12 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         patterns = _detect_patterns(hist.get("closes", []), hist.get("highs", []), hist.get("lows", []), indicators, sn)
         patterns_all.append({"netuid": sn.get("netuid"), "name": sn.get("name"), "patterns": patterns})
 
-        prediction = _generate_prediction(sn, impact)
-        predictions.append(prediction)
+        # Generate one prediction per Council expert (quant/hype/contrarian/
+        # technical) so the learning loop grades every expert, not just quant.
+        # The primary (consensus) prediction is surfaced on the pick card.
+        expert_preds = _generate_multi_expert_predictions(sn, impact)
+        predictions.extend(expert_preds)
+        prediction = _pick_primary_prediction(expert_preds, impact) or (expert_preds[0] if expert_preds else {})
 
         reasons = _compute_simivision_reasons(sn, indicators, hot)
         chg = float(sn.get("price_change_24h", 0) or 0)

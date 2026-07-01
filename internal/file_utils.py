@@ -6,6 +6,7 @@ Ensures data directory exists before file writes to prevent
 """
 
 import json
+import logging
 import os
 import tempfile
 from typing import Any, Dict, Optional
@@ -13,10 +14,27 @@ from typing import Any, Dict, Optional
 
 DATA_DIR = os.environ.get("DATA_DIR", "data")
 
+_logger = logging.getLogger(__name__)
+_data_dir_created_logged = False
+
 
 def ensure_data_dir() -> str:
-    """Ensure the data directory exists and return its path."""
-    os.makedirs(DATA_DIR, exist_ok=True)
+    """Ensure the data directory exists and return its path.
+
+    On Fly.io the root filesystem is ephemeral and ``data/`` is only present
+    when a persistent volume is mounted (see fly.toml ``[mounts]``). If the
+    directory is missing at write time the background schedulers silently fail,
+    so every write path calls this before touching disk. The "created" event
+    is logged once per process so a missing volume is visible in the app logs.
+    """
+    global _data_dir_created_logged
+    try:
+        if not os.path.isdir(DATA_DIR):
+            os.makedirs(DATA_DIR, exist_ok=True)
+            _logger.info("data/ directory missing, created at %s", DATA_DIR)
+            _data_dir_created_logged = True
+    except Exception as exc:
+        _logger.warning("Could not create data directory %s: %s", DATA_DIR, exc)
     return DATA_DIR
 
 
