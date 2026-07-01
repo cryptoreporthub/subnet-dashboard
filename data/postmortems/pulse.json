@@ -1,0 +1,87 @@
+[
+  {
+    "judge": "pulse",
+    "prediction_id": "790ca9dddc",
+    "netuid": 40,
+    "name": "Ralph",
+    "direction": "down",
+    "predicted_pct": -5.29,
+    "actual_pct": 22.24,
+    "signal_source": "SELL ALERT",
+    "questions": {
+      "what": "Direction was wrong: predicted down but price rose.",
+      "why": "Contrarian/sell-alert signal over-interpreted a local pullback as trend.",
+      "rule": "Require a confirming second signal before taking a down position when SELL ALERT is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that SELL ALERT was already priced in and that buyers were exhausted, favouring a up move instead."
+    },
+    "created_at": "2026-07-01T19:37:29.456732Z"
+  },
+  {
+    "judge": "pulse",
+    "prediction_id": "eb623e916f",
+    "netuid": 107,
+    "name": "Minos",
+    "direction": "down",
+    "predicted_pct": -5.75,
+    "actual_pct": 4.22,
+    "signal_source": "SELL ALERT",
+    "questions": {
+      "what": "Direction was wrong: predicted down but price rose.",
+      "why": "Contrarian/sell-alert signal over-interpreted a local pullback as trend.",
+      "rule": "Require a confirming second signal before taking a down position when SELL ALERT is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that SELL ALERT was already priced in and that buyers were exhausted, favouring a up move instead."
+    },
+    "created_at": "2026-07-01T19:37:29.460947Z"
+  },
+  {
+    "judge": "pulse",
+    "prediction_id": "d25e32613c",
+    "netuid": 15,
+    "name": "ORO",
+    "direction": "up",
+    "predicted_pct": 1.01,
+    "actual_pct": -12.82,
+    "signal_source": "up",
+    "questions": {
+      "what": "Direction was wrong: predicted up but price fell.",
+      "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+      "rule": "Require a confirming second signal before taking a up position when up is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that the dip was overdone, support was holding, and risk/reward favoured a down reversal instead."
+    },
+    "created_at": "2026-07-01T19:37:29.469721Z"
+  },
+  {
+    "judge": "pulse",
+    "prediction_id": "9ccbdc15dd",
+    "netuid": 29,
+    "name": "Coldint",
+    "direction": "up",
+    "predicted_pct": 2.71,
+    "actual_pct": -99.99,
+    "signal_source": "SELL ALERT",
+    "questions": {
+      "what": "Direction was wrong: predicted up but price fell.",
+      "why": "Contrarian/sell-alert signal over-interpreted a local pullback as trend.",
+      "rule": "Require a confirming second signal before taking a up position when SELL ALERT is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that the dip was overdone, support was holding, and risk/reward favoured a down reversal instead."
+    },
+    "created_at": "2026-07-01T19:37:29.483724Z"
+  },
+  {
+    "judge": "pulse",
+    "prediction_id": "0f5b338c85",
+    "netuid": 19,
+    "name": "Inference",
+    "direction": "up",
+    "predicted_pct": 0.47,
+    "actual_pct": -99.93,
+    "signal_source": "SELL ALERT",
+    "questions": {
+      "what": "Direction was wrong: predicted up but price fell.",
+      "why": "Contrarian/sell-alert signal over-interpreted a local pullback as trend.",
+      "rule": "Require a confirming second signal before taking a up position when SELL ALERT is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that the dip was overdone, support was holding, and risk/reward favoured a down reversal instead."
+    },
+    "created_at": "2026-07-01T19:37:29.489996Z"
+  }
+]

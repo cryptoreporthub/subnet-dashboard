@@ -3,984 +3,948 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SimiVision — Intelligence Cockpit</title>
-  <link rel="stylesheet" href="/static/css/style.css">
+  <title>SimiVision — Subnet Dashboard</title>
+
+  <!-- Premium typography: Inter (body) + JetBrains Mono (data) + Space Grotesk (display) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Existing design system (cards, KPI strips, conviction rings, tables, tabs, trail) -->
+  <link rel="stylesheet" href="/static/css/style.css">
+
+  <!-- Chart.js for sparklines + radar visualizations -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <!-- Premium styling layer: exact dark-green→black gradient + #00ff88/#00cc66 accents -->
   <style>
-    .gauge-ring { width: 80px; height: 80px; border-radius: 50%; display: grid; place-items: center; font-family: var(--font-mono); font-size: 18px; font-weight: 700; }
-    .heat-bar { height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--signal-sell) 0%, var(--signal-hold) 50%, var(--signal-buy) 100%); position: relative; margin: 8px 0; }
-    .heat-marker { position: absolute; top: -2px; width: 4px; height: 10px; background: var(--text-primary); border-radius: 2px; }
-    .pm-card { margin-top: 12px; padding: 12px; background: var(--bg-surface); border-radius: var(--radius-sm); border-left: 3px solid var(--signal-sell); }
-    .pm-q { font-size: 11px; color: var(--accent-bright); font-weight: 600; margin-top: 8px; }
-    .pm-a { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
-    .vol-explain { padding: 12px; background: var(--bg-surface); border-radius: var(--radius-sm); margin-bottom: 12px; font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
-    .vol-explain b { color: var(--accent-bright); }
-    .collapsible { cursor: pointer; user-select: none; }
-    .collapsible::after { content: " \25BE"; font-size: 10px; color: var(--text-muted); }
-    .collapsible.collapsed::after { content: " \25B8"; }
-    .collapsible.collapsed + .collapsible-content { display: none; }
-    .ticker-strip { overflow: hidden; padding: 8px 0; font-family: var(--font-mono); font-size: 11px; white-space: nowrap; }
-    .ticker-track {
-      display: flex;
-      gap: 24px;
-      width: max-content;
-      animation: ticker-scroll 60s linear infinite;
+    :root {
+      --premium-green-bright: #00ff88;
+      --premium-green: #00cc66;
+      --premium-bg-top: #0a1a0a;
+      --premium-bg-bottom: #000000;
     }
-    .ticker-strip:hover .ticker-track { animation-play-state: paused; }
-    @keyframes ticker-scroll {
-      from { transform: translateX(0); }
-      to { transform: translateX(-50%); }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
     }
-    @media (prefers-reduced-motion: reduce) {
-      .ticker-track { animation: none; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      color: #e9f7ef;
+      background-color: var(--premium-bg-bottom);
+      /* Dark green (#0a1a0a) to black (#000000) gradient with subtle green glow */
+      background-image:
+        radial-gradient(circle at 50% -10%, rgba(0, 255, 136, 0.10) 0%, transparent 55%),
+        radial-gradient(circle at 0% 100%, rgba(0, 204, 102, 0.06) 0%, transparent 45%),
+        radial-gradient(circle at 100% 100%, rgba(0, 0, 0, 0.9) 0%, transparent 50%),
+        linear-gradient(180deg, var(--premium-bg-top) 0%, var(--premium-bg-bottom) 100%);
+      background-attachment: fixed;
+      padding-bottom: 64px;
+      -webkit-font-smoothing: antialiased;
     }
-    .ticker-item { color: var(--text-secondary); }
-/* Freshness badges: "updated Xm ago" shown next to each section heading. */
-.freshness-badge {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 1px 7px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--text-muted);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: 10px;
-  vertical-align: middle;
-  white-space: nowrap;
-}
-.freshness-badge.fresh { color: #22c55e; border-color: rgba(34,197,94,0.4); }
-.freshness-badge.stale { color: #f59e0b; border-color: rgba(245,158,11,0.4); }
-.freshness-badge.unknown { color: var(--text-muted); }
-/* Pick of the Hour entry-price + success-metric sub-line (Stream C). */
-.pick-context-line {
-  margin-top: 10px;
-  padding: 8px 10px;
-  background: var(--bg-surface);
-  border-radius: var(--radius-sm);
-  border-left: 3px solid var(--accent-bright);
-  font-size: 12px;
-  color: var(--text-secondary);
-  line-height: 1.5;
-}
-.pick-context-line .ctx-main { color: var(--text-primary); font-weight: 500; }
-.pick-context-line .ctx-now { color: var(--text-secondary); }
-.pick-context-line .pos { color: #22c55e; }
-.pick-context-line .neg { color: #ef4444; }
-.pick-vs-market {
-  margin-top: 6px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  font-family: var(--font-mono);
-}
-.pick-vs-market .vs-bar {
-  flex: 1;
-  max-width: 120px;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--border-default);
-  position: relative;
-  overflow: hidden;
-}
-.pick-vs-market .vs-bar-fill {
-  position: absolute;
-  top: 0; bottom: 0;
-  border-radius: 3px;
-}
-.pick-history-strip {
-  margin-top: 10px;
-  font-size: 11px;
-  font-family: var(--font-mono);
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
-.pick-history-strip .ph-title { color: var(--text-muted); }
-.pick-history-strip .ph-item { margin-right: 6px; }
-.pick-history-strip .ph-ok { color: #22c55e; }
-.pick-history-strip .ph-no { color: #ef4444; }
-.pick-success-rate {
-  margin-top: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--accent-bright);
-}
-.conviction-ring {
-  width: 56px; height: 56px; border-radius: 50%;
-  background: conic-gradient(var(--ring-color, #f59e0b) calc(var(--ring-pct, 0) * 1%), rgba(255,255,255,0.06) 0);
-  display: flex; align-items: center; justify-content: center; position: relative; flex-shrink: 0;
-}
-.conviction-ring::before {
-  content: ""; position: absolute; inset: 4px; border-radius: 50%;
-  background: var(--bg-card, #0a0e0a);
-}
-.conviction-pct { position: relative; z-index: 1; font-size: 11px; font-weight: 700; }
-.conviction-ring-wrap { display: flex; align-items: center; gap: 10px; }
-/* Info tooltip system */
-.info-term {
-  position: relative;
-  cursor: help;
-  border-bottom: 1px dotted rgba(255,255,255,0.3);
-  text-decoration: none;
-}
-.info-term:hover::after {
-  content: attr(data-tip);
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(15, 17, 21, 0.97);
-  color: #e8e8e8;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 400;
-  white-space: normal;
-  width: max-content;
-  max-width: 260px;
-  z-index: 1000;
-  line-height: 1.4;
-  border: 1px solid rgba(255,255,255,0.1);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-  pointer-events: none;
-  margin-bottom: 6px;
-}
+
+    /* Premium accent overrides — green highlights #00ff88 / #00cc66 */
+    .accent-bright { color: var(--premium-green-bright); }
+    .accent-primary { color: var(--premium-green); }
+    a { color: var(--premium-green-bright); }
+
+    .section-label { color: var(--premium-green-bright); }
+    .live-pill { color: var(--premium-green-bright); background: rgba(0, 255, 136, 0.08); border-color: rgba(0, 255, 136, 0.25); }
+    .live-dot { background: var(--premium-green-bright); box-shadow: 0 0 10px rgba(0, 255, 136, 0.7); }
+    .logo-mark { background: linear-gradient(135deg, var(--premium-green-bright) 0%, var(--premium-green) 100%); }
+    .logo-text span { color: var(--premium-green-bright); }
+    .src-tag b { color: var(--premium-green-bright); }
+
+    /* Card-based layout with subtle green glows */
+    .card { background: rgba(12, 26, 17, 0.72); backdrop-filter: blur(10px); border: 1px solid rgba(0, 255, 136, 0.12); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); }
+    .card:hover { border-color: rgba(0, 255, 136, 0.35); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.65), 0 0 24px rgba(0, 255, 136, 0.10); }
+
+    .hero-card {
+      background:
+        linear-gradient(180deg, rgba(0, 255, 136, 0.06) 0%, transparent 40%),
+        rgba(12, 26, 17, 0.78);
+      border-top: 2px solid var(--premium-green-bright);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55), 0 0 36px rgba(0, 255, 136, 0.12);
+    }
+    .hero-card::before { background: linear-gradient(180deg, rgba(0, 255, 136, 0.08) 0%, transparent 100%); }
+    .hero-audit { background: rgba(0, 255, 136, 0.08); border-color: rgba(0, 255, 136, 0.25); color: var(--premium-green-bright); }
+
+    .pick-card { background: rgba(12, 26, 17, 0.72); border: 1px solid rgba(0, 255, 136, 0.12); }
+    .pick-card::before { background: linear-gradient(90deg, var(--premium-green), var(--premium-green-bright)); }
+    .pick-card:hover { border-color: rgba(0, 255, 136, 0.35); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.65), 0 0 24px rgba(0, 255, 136, 0.10); }
+
+    .kpi-cell { background: rgba(8, 18, 12, 0.85); border: 1px solid rgba(0, 255, 136, 0.10); }
+    .kpi-cell .v { color: var(--premium-green-bright); }
+
+    .ind-cell { background: rgba(8, 18, 12, 0.85); border: 1px solid rgba(0, 255, 136, 0.10); }
+    .radar-item { background: rgba(8, 18, 12, 0.85); border: 1px solid rgba(0, 255, 136, 0.10); }
+
+    .tab-btn.active { color: var(--premium-green-bright); border-bottom-color: var(--premium-green-bright); text-shadow: 0 0 12px rgba(0, 255, 136, 0.5); }
+    .collapsible-toggle { color: var(--premium-green-bright); }
+    .flow-arrow { color: var(--premium-green-bright); }
+    .reasons li::before { color: var(--premium-green-bright); }
+
+    /* Color-coded conviction bars: red / gold / lime / cyan-green */
+    .conviction-fill.tier-red   { background: linear-gradient(90deg, #7f1d1d, #f43f5e); }
+    .conviction-fill.tier-gold  { background: linear-gradient(90deg, #92400e, #f5b942); }
+    .conviction-fill.tier-lime  { background: linear-gradient(90deg, #3f6212, #84cc16); }
+    .conviction-fill.tier-cyan  { background: linear-gradient(90deg, #00cc66, #00ff88); }
+
+    /* Premium table styling */
+    table.tbl th { color: #4a6b5c; border-bottom-color: rgba(0, 255, 136, 0.18); }
+    table.tbl td { border-bottom-color: rgba(0, 255, 136, 0.06); }
+    table.tbl tr:hover td { background: rgba(0, 255, 136, 0.05); }
+
+    .weight-fill { background: linear-gradient(90deg, var(--premium-green), var(--premium-green-bright)); }
+    .tmap-tile { background: rgba(0, 255, 136, 0.08); border-color: rgba(0, 255, 136, 0.18); color: var(--premium-green-bright); }
+    .tmap-tile.neg { background: rgba(244, 63, 94, 0.08); border-color: rgba(244, 63, 94, 0.3); color: #f43f5e; }
+
+    .st-dot { background: var(--premium-green-bright); box-shadow: 0 0 8px rgba(0, 255, 136, 0.7); }
+    footer.status { background: rgba(0, 0, 0, 0.92); }
+    .badge-audit-pending .ap-dot { background: #f5b942; }
+
+    .glow-text { text-shadow: 0 0 14px rgba(0, 255, 136, 0.45); }
   </style>
 </head>
+
 <body>
-  {% set _empty_list = [] %}
-  {% set market_intelligence = market_intelligence | default({'avg_change_24h': 0, 'gainers': 0, 'losers': 0, 'total_volume': 0, 'avg_apy': 0, 'total': 0, 'total_market_cap': 0, 'top_gainer': None, 'breadth': ''}) %}
-  {% set subnets = subnets | default(_empty_list) %}
-  {% set data_source = data_source | default('') %}
-  {% set mindmap = mindmap | default({}) %}
-  {% set learning_stats = learning_stats | default({}) %}
-  {% set simivision = simivision | default({}) %}
-  {% set simivision_picks = simivision_picks | default(_empty_list) %}
-  {% set undervalued_radar = undervalued_radar | default(_empty_list) %}
-  {% set technical_indicators = technical_indicators | default(_empty_list) %}
-  {% set staking_analytics = staking_analytics | default({'total_stake': 0, 'avg_apy': 0, 'subnet_count': 0, 'top_yield': _empty_list}) %}
-  {% set council_weights = council_weights | default(_empty_list) %}
-  {% set expert_weights = expert_weights | default({}) %}
-  {% set mindmap_trail = mindmap_trail | default(_empty_list) %}
-  {% set signal_impact = signal_impact | default(_empty_list) %}
-  {% set patterns = patterns | default(_empty_list) %}
-  {% set predictions = predictions | default(_empty_list) %}
-  {% set learning_metrics = learning_metrics | default({}) %}
-  {% set social_sentiment = social_sentiment | default(_empty_list) %}
-  {% set indicators_convergence = indicators_convergence | default({'oversold': {}, 'overbought': {}}) %}
-  {% set momentum_charts = momentum_charts | default({'treemap': _empty_list, 'radar': {'labels': _empty_list, 'datasets': _empty_list}}) %}
-  {% set judge_cards = judge_cards | default(_empty_list) %}
-  {% set usd_rate = usd_rate | default(None) %}
-  {% set hour_picks = hour_picks | default(_empty_list) %}
-  {% set day_picks = day_picks | default(_empty_list) %}
-  {% set daily_pick = daily_pick | default({}) %}
-  {% set rotation_tracker = rotation_tracker | default({}) %}
-  {% set scenario_memory = scenario_memory | default({'scenarios': _empty_list, 'stats': {'total': 0, 'by_regime': {}}, 'regimes': {}}) %}
-  {% set api_indicators_convergence = api_indicators_convergence | default({'subnets': _empty_list}) %}
-  {% set pump_analytics = pump_analytics | default({}) %}
-  {% set rotation_tokens = rotation_tokens | default(_empty_list) %}
-  <nav class="top-nav">
-    <div class="nav-brand">
-      <span class="nav-logo">SV</span>
-      <span class="nav-title">SimiVision</span>
-    </div>
-    <div class="nav-links">
-      <a href="#market-snapshot">Market</a>
-      <a href="#top-picks">Picks</a>
-      <a href="#simivision-picks">SimiVision</a>
-      <a href="#daily-pick">Daily Pick</a>
-      <a href="#undervalued-radar">Radar</a>
-      <a href="#indicators">Indicators</a>
-      <a href="#rotation-tracker">Rotation</a>
-      <a href="#volatility-clusters">Volatility</a>
-      <a href="#scenario-memory">Memory</a>
-      <a href="#judge-panel">Judges</a>
-      <a href="#mindmap-learning">Mindmap</a>
-      <a href="#pump-analytics">Pump</a>
-      <a href="#signal-impact">Signals</a>
-      <a href="#social-sentiment">Sentiment</a>
-    </div>
-  </nav>
+  <div class="wrap">
 
-  <header class="top">
-    <div class="top-inner">
-      <div class="logo">
-        <div class="logo-mark">SV</div>
-        <div>
-          <div class="logo-text">Simi<span style="color: var(--accent-bright);">Vision</span></div>
-          <div class="logo-sub">Intelligence Cockpit</div>
-        </div>
-      </div>
-      <div class="src-tag">DATA: <b>{{ data_source|upper }}</b> · {{ subnets|length }} subnets tracked</div>
-      <span class="live-pill"><span class="live-dot"></span> LIVE</span>
-    </div>
-  </header>
-
-  <div class="ticker-strip wrap">
-    <div class="ticker-track">
-    {% for t in (momentum_charts.treemap or []) | default([]) %}
-    <span class="ticker-item">{{ t.name }} <span class="{{ 'pos' if (t.change or 0) >= 0 else 'neg' }}">{{ '%+.2f'|format(t.change if t.change is not none else 0) }}%</span></span>
-    {% endfor %}
-    {% for t in (momentum_charts.treemap or []) | default([]) %}
-    <span class="ticker-item" aria-hidden="true">{{ t.name }} <span class="{{ 'pos' if (t.change or 0) >= 0 else 'neg' }}">{{ '%+.2f'|format(t.change if t.change is not none else 0) }}%</span></span>
-    {% endfor %}
-    </div>
-  </div>
-
-  <main class="wrap">
-    <!-- Market Snapshot -->
-    <div class="section-label" id="market-snapshot">Market Snapshot<span class="freshness-badge unknown" data-fresh="subnets">…</span></div>
-    <div class="section-sub">Aggregate subnet intelligence · KPI strip</div>
-    <div class="card">
-      <div class="layout-grid" style="grid-template-columns: repeat(5,1fr); gap: 16px;">
-        <div><div class="mono" style="font-size:10px;color:var(--text-muted);">AVG 24H CHANGE</div><div class="mono {{ 'pos' if market_intelligence.avg_change_24h >= 0 else 'neg' }}" style="font-size:24px;font-weight:700;">{{ '%+.2f'|format(market_intelligence.avg_change_24h) }}%</div><div class="mono" style="font-size:11px;color:var(--text-secondary);">{{ market_intelligence.gainers }} gainers / {{ market_intelligence.losers }} losers</div></div>
-        <div><div class="mono" style="font-size:10px;color:var(--text-muted);">TOTAL VOLUME</div><div class="mono" style="font-size:24px;font-weight:700;">{{ '%.2f'|format(market_intelligence.total_volume) }}</div><div class="mono" style="font-size:11px;color:var(--text-secondary);">TAO · breadth: {{ market_intelligence.breadth }}</div></div>
-        <div><div class="mono" style="font-size:10px;color:var(--text-muted);">AVG APY</div><div class="mono" style="font-size:24px;font-weight:700;">{{ '%.2f'|format(market_intelligence.avg_apy) }}%</div><div class="mono" style="font-size:11px;color:var(--text-secondary);">{{ market_intelligence.total }} subnets</div></div>
-        <div><div class="mono" style="font-size:10px;color:var(--text-muted);">TOTAL MARKET CAP</div><div class="mono" style="font-size:24px;font-weight:700;">{{ '%.0f'|format(market_intelligence.total_market_cap) }}</div><div class="mono" style="font-size:11px;color:var(--text-secondary);">Total Market Cap (TAO)</div></div>
-        <div><div class="mono" style="font-size:10px;color:var(--text-muted);">TOP GAINER / LOSER</div><div style="font-size:14px;font-weight:600;">{{ market_intelligence.top_gainer.name if market_intelligence.top_gainer else '—' }} <span class="pos">{{ '%+.2f'|format(market_intelligence.top_gainer.change) if market_intelligence.top_gainer else '' }}</span></div></div>
-      </div>
-    </div>
-
-    <!-- Top Picks Hour and Day (server-rendered) -->
-    <div class="section-label" id="top-picks">Top Picks<span class="freshness-badge unknown" data-fresh="top_pick_hour">…</span></div>
-    <div class="section-sub">Live council state-vector picks · hour and day</div>
-    <div class="layout-grid">
-      {% set hour = hour_picks[0] if hour_picks else None %}
-      <div class="card span-6">
-        <div class="card-head"><h3>H · Top Pick of the Hour</h3><span class="live-pill"><span class="live-dot"></span>LIVE</span></div>
-        {% if hour %}
-        <div class="pick-name pick-name-lg" id="hour-pick-name">{{ hour.name }}</div>
-        <div class="pick-meta mono" id="hour-pick-meta">SN{{ hour.netuid }} · score {{ '%.2f'|format(hour.score) }} · confidence {{ '%.0f'|format(hour.confidence*100) }}%</div>
-        <div style="margin-top:8px;"><div class="conviction-ring" id="hour-pick-ring" style="width: 40px; height: 40px; --ring-pct: {{ (hour.confidence*100)|round }}; --ring-color: {% if hour.confidence > 0.7 %}#22c55e{% elif hour.confidence > 0.4 %}#f59e0b{% else %}#ef4444{% endif %};"><span class="conviction-pct" id="hour-pick-pct">{{ '%.0f'|format(hour.confidence*100) }}%</span></div></div>
-        <div class="layout-grid" style="grid-template-columns: repeat(2,1fr); gap:8px; margin-top:12px;">
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="TAO tokens minted to this subnet's participants per day — higher = more income for stakers">Daily Rewards</span></span><br><span class="mono" id="hour-pick-emission">{{ '%.2f'|format(hour.signals.emission or 0) }} TAO/day</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Annual Percentage Yield — yearly return from subnet emissions relative to stake size">APY</span></span><br><span class="mono" id="hour-pick-apy">{{ '%.1f'|format(hour.signals.apy or 0) }}%</span></div>
-        </div>
-        <div style="margin-top:8px;" id="hour-pick-scenario">{% for k,v in ((hour.scenario_tags or {}).items()) %}<span class="mono" style="font-size:11px;color:var(--text-secondary);">{{ k|replace('regime','Market Mood') }}: {{ v }} · </span>{% endfor %}</div>
-        {# Stream C1/C2: Pick of the Hour entry price, trigger reason, and
-           live vs-market success metric. Rendered server-side from the fields
-           _record_hour_pick merges onto the #1 pick; updated live by app.js. #}
-        {% if hour.selected_at %}
-        <div class="pick-context-line" id="hour-pick-context">
-          <div class="ctx-main">Selected at ${{ '%.2f'|format(hour.entry_price or 0) }} · <span id="hour-pick-ago">{{ hour.selected_at }}</span> · triggered by {{ hour.trigger_reason or 'market scan' }}</div>
-          <div class="ctx-now">Currently ${{ '%.2f'|format(hour.current_price or hour.entry_price or 0) }} (<span class="{{ 'pos' if (hour.price_change_since_selection or 0) >= 0 else 'neg' }}" id="hour-pick-since">{{ '%+.2f'|format(hour.price_change_since_selection or 0) }}%</span> since pick)</div>
-          <div class="pick-vs-market">
-            <span>vs market:</span>
-            <span class="{{ 'pos' if (hour.vs_market or 0) >= 0 else 'neg' }}" id="hour-pick-vsmarket">{{ '%+.2f'|format(hour.vs_market or 0) }}%</span>
-            <span style="color:var(--text-muted);">vs median {{ '%+.2f'|format(hour.median_subnet_return or 0) }}%</span>
-            <span class="vs-bar"><span class="vs-bar-fill" id="hour-pick-vsbar" style="left:50%; width:0%; background:#22c55e;"></span></span>
-            <span id="hour-pick-success" class="{{ 'pos' if hour.success_so_far else 'neg' }}">{{ '✓ outperforming' if hour.success_so_far else '✗ underperforming' }}</span>
+    <!-- ===================== STICKY HEADER ===================== -->
+    <header class="top">
+      <div class="top-inner">
+        <div class="logo">
+          <div class="logo-mark">S</div>
+          <div>
+            <div class="logo-text">Simi<span>Vision</span></div>
+            <div class="logo-sub">Subnet Intelligence Cockpit</div>
           </div>
         </div>
-        {% endif %}
-        {# Stream C2: compact last-3-picks history + aggregate success rate.
-           Populated by app.js from /api/pick-history so the server render
-           stays cheap and the strip stays live. #}
-        <div class="pick-history-strip" id="hour-pick-history">
-          <span class="ph-title">Recent picks: </span><span class="ph-item" id="hour-pick-history-items">loading…</span>
+        <div class="src-tag">
+          DATA SOURCE: <b>{{ data_source|default('cache')|upper }}</b>
+          {% if usd_rate %}· TAO <b>${{ "%.2f"|format(usd_rate|float) }}</b>{% endif %}
         </div>
-        <div class="pick-success-rate" id="hour-pick-success-rate"></div>
-        {% else %}
-        <div class="section-sub">Council convening — picks refresh every 60 minutes</div>
-        {% endif %}
-      </div>
-      {% set day = day_picks[0] if day_picks else None %}
-      <div class="card span-6">
-        <div class="card-head"><h3>D · Top Pick of the Day</h3><span class="live-pill"><span class="live-dot"></span>LIVE</span></div>
-        {% if day %}
-        <div class="pick-name pick-name-lg" id="day-pick-name">{{ day.name }}</div>
-        <div class="pick-meta mono" id="day-pick-meta">SN{{ day.netuid }} · score {{ '%.2f'|format(day.score) }} · confidence {{ '%.0f'|format(day.confidence*100) }}%</div>
-        <div style="margin-top:8px;"><div class="conviction-ring" id="day-pick-ring" style="width: 40px; height: 40px; --ring-pct: {{ (day.confidence*100)|round }}; --ring-color: {% if day.confidence > 0.7 %}#22c55e{% elif day.confidence > 0.4 %}#f59e0b{% else %}#ef4444{% endif %};"><span class="conviction-pct" id="day-pick-pct">{{ '%.0f'|format(day.confidence*100) }}%</span></div></div>
-        <div class="layout-grid" style="grid-template-columns: repeat(2,1fr); gap:8px; margin-top:12px;">
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">Daily Rewards</span><br><span class="mono" id="day-pick-emission">{{ '%.2f'|format(day.signals.emission or 0) }} TAO/day</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">APY</span><br><span class="mono" id="day-pick-apy">{{ '%.1f'|format(day.signals.apy or 0) }}%</span></div>
+        <div class="header-actions">
+          <span class="live-pill"><span class="live-dot"></span>LIVE</span>
+          <span class="utc-clock" id="utcClock">--:--:-- UTC</span>
         </div>
-        <div style="margin-top:8px;" id="day-pick-scenario">{% for k,v in ((day.scenario_tags or {}).items()) %}<span class="mono" style="font-size:11px;color:var(--text-secondary);">{{ k|replace('regime','Market Mood') }}: {{ v }} · </span>{% endfor %}</div>
-        {% else %}
-        <div class="section-sub">Council convening — picks refresh every 60 minutes</div>
-        {% endif %}
       </div>
-    </div>
+    </header>
 
-    <!-- SimiVision Top Picks -->
-    <div class="section-label" id="simivision-picks">SimiVision Top Picks<span class="freshness-badge unknown" data-fresh="simivision_picks">…</span></div>
-    <div class="section-sub">Ranked by Daily Rewards, yield &amp; conviction — every forecast is predictive</div>
-    <div class="picks">
-      {% for p in (simivision_picks | default([]))[:3] %}
-      <div class="pick-card">
-        <div class="pick-rank">{{ p.rank }}</div>
-        <div class="pick-name pick-name-lg">{{ p.name }}</div>
-        <div class="pick-meta mono">SN{{ p.netuid }} · {{ '%.2f'|format(p.emission) }} TAO/day · {{ '%.1f'|format(p.apy) }}% APY</div>
-        <div style="margin-top:8px;"><div class="conviction-ring-wrap">
-  <div class="conviction-ring" style="--ring-pct: {{ p.conviction }}; --ring-color: {% if p.conviction > 70 %}#22c55e{% elif p.conviction > 40 %}#f59e0b{% else %}#ef4444{% endif %};">
-    <span class="conviction-pct">{{ p.conviction }}%</span>
-  </div>
-  <span class="badge {% if p.recommendation == 'BUY' %}badge-buy{% elif p.recommendation == 'HOLD' %}badge-hold{% elif p.recommendation == 'SELL' %}badge-sell{% else %}badge-watch{% endif %}">{{ p.recommendation }}</span>
-</div></div>
-        <div style="margin-top:12px;font-size:13px;color:var(--text-secondary);">{% for r in (p.reasons | default([])) %}• {{ r }}<br>{% endfor %}</div>
-        <div style="margin-top:12px;">
-          {% if p.recommendation == 'BUY' %}<span class="badge badge-buy">BUY</span>{% elif p.recommendation == 'HOLD' %}<span class="badge badge-hold">HOLD</span>{% elif p.recommendation == 'SELL' %}<span class="badge badge-sell">SELL</span>{% else %}<span class="badge badge-watch">WATCH</span>{% endif %}
-          {% if p.sell and p.sell.active %}<span class="badge badge-sell">SELL ALERT</span>{% elif p.hot and p.hot.active %}<span class="badge badge-hot">HOT</span>{% endif %}
-        </div>
-        {% if p.prediction and p.prediction.statement %}<div class="pick-meta" style="margin-top:8px;color:var(--accent-bright);">→ {{ p.prediction.statement }}</div>{% endif %}
-      </div>
-      {% endfor %}
+    {% if render_error %}
+    <div class="card card-muted mt-4" style="border-color: rgba(244,63,94,0.35);">
+      <div class="section-label" style="color:#f43f5e;">RENDER NOTICE</div>
+      <div class="section-sub">A section failed to compute; showing safe defaults. {{ render_error }}</div>
     </div>
-
-    <!-- Daily Pick -->
-    <div class="section-label" id="daily-pick">Daily Pick — Council Audited<span class="freshness-badge unknown" data-fresh="top_pick_day">…</span></div>
-    <div class="section-sub">Single 24h candidate vetted by the Risk Check layer</div>
-    {% if daily_pick and daily_pick.subnet %}
-    <div class="hero-card">
-      <div class="hero-top"><div><div class="hero-name">{{ daily_pick.subnet.name }}</div><div class="hero-meta mono">SN{{ daily_pick.subnet.netuid }} · {{ daily_pick.action|replace('long','BUY (expect price to rise)')|replace('Long','BUY (expect price to rise)')|replace('short','SELL (expect price to fall)')|replace('Short','SELL (expect price to fall)') }} · risk-adjusted confidence {{ '%.0f'|format(daily_pick.final_confidence*100) }}%</div></div></div>
-      <div class="hero-stats">
-        <div class="hero-stat"><div class="k"><span class="info-term" data-tip="Confidence level after the Risk Check adjusts for liquidity, volatility, and market conditions">Risk-Adjusted Confidence</span></div><div class="conviction-ring" style="--ring-pct: {{ (daily_pick.final_confidence*100)|round }}; --ring-color: {% if daily_pick.final_confidence > 0.7 %}#22c55e{% elif daily_pick.final_confidence > 0.4 %}#f59e0b{% else %}#ef4444{% endif %};"><span class="conviction-pct">{{ '%.0f'|format(daily_pick.final_confidence*100) }}%</span></div></div>
-        <div class="hero-stat"><div class="k"><span class="info-term" data-tip="Confidence level before the Risk Check adjustment">Initial Confidence</span></div><div class="v mono">{{ '%.0f'|format(daily_pick.confidence*100) }}%</div></div>
-        <div class="hero-stat"><div class="k"><span class="info-term" data-tip="Automated risk assessment that adjusts confidence based on liquidity, volatility, and market conditions">Risk Check</span></div><div class="v">{{ 'Passed' if daily_pick.audit.approved else 'Flagged' }}</div></div>
-      </div>
-      {% if daily_pick.audit.concerns %}<div class="hero-audit {{ 'flagged' if not daily_pick.audit.approved else '' }}">{% for c in (daily_pick.audit.concerns | default([])) %}• {{ c }}<br>{% endfor %}</div>{% endif %}
-      <div class="hero-reason">{% for k,v in ((daily_pick.scenario_tags or {}).items()) %}{{ k|replace('regime','Market Mood') }}: {{ v }} {% endfor %}</div>
-    </div>
-    {% else %}
-    <div class="card"><div class="section-sub">No daily pick available. The council audit layer requires sufficient subnet data and confidence thresholds. Picks regenerate every 24h.</div></div>
     {% endif %}
 
-    <!-- Undervalued Radar -->
-    <div class="section-label" id="undervalued-radar">Undervalued Radar</div>
-    <div class="section-sub">High Daily Rewards &amp; yield vs muted market cap · color-coded values</div>
-    <div class="card">
-      <table class="tbl">
-        <thead><tr><th>#</th><th><span class="info-term" data-tip="Bittensor network identifier — each subnet has a unique ID (e.g. SN40 = Subnet #40)">Subnet</span></th><th><span class="info-term" data-tip="TAO tokens minted to this subnet's participants per day — higher = more income for stakers">Daily Rewards</span></th><th>APY</th><th>24h</th><th>Market Cap</th><th>Score</th></tr></thead>
-        <tbody>
-          {% for u in (undervalued_radar | default([])) %}
-          <tr><td>{{ u.rank }}</td><td>{{ u.name }} SN{{ u.netuid }}</td><td>{{ '%.2f'|format(u.emission or 0) }}</td><td>{{ '%.1f'|format(u.apy or 0) }}%</td><td class="{{ 'pos' if u.price_change_24h and u.price_change_24h >= 0 else 'neg' }}">{{ '%+.1f'|format(u.price_change_24h or 0) }}%</td><td>{{ '%.0f'|format(u.market_cap or 0) }}</td><td>{{ '%.2f'|format(u.undervalued_score) }}</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <!-- ===================== MARKET SNAPSHOT KPI STRIP ===================== -->
+    <div class="row">
+      <div class="section-label">Market Snapshot</div>
+      <h2 class="section-title">Bittensor Subnet Intelligence</h2>
+      <p class="section-sub">Live scanner across {{ market_intelligence.total|default(0) }} subnets · breadth
+        <b class="{% if market_intelligence.breadth == 'bullish' %}text-buy{% elif market_intelligence.breadth == 'bearish' %}text-sell{% else %}text-hold{% endif %}">
+          {{ market_intelligence.breadth|default('neutral')|upper }}
+        </b>
+      </p>
+
+      <div class="kpi-grid" style="grid-template-columns: repeat(6, 1fr);">
+        <div class="kpi-cell">
+          <div class="k">Subnets</div>
+          <div class="v">{{ market_intelligence.total|default(0) }}</div>
+          <div class="sub">{{ market_intelligence.gainers|default(0) }} gainers / {{ market_intelligence.losers|default(0) }} losers</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="k">Avg 24h</div>
+          <div class="v {% if (market_intelligence.avg_change_24h|default(0)) >= 0 %}text-buy{% else %}text-sell{% endif %}">
+            {{ "%+.2f"|format(market_intelligence.avg_change_24h|default(0)|float) }}%
+          </div>
+          <div class="sub">24h change</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="k">Avg APY</div>
+          <div class="v">{{ "%.2f"|format(market_intelligence.avg_apy|default(0)|float) }}%</div>
+          <div class="sub">stake yield</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="k">Top Gainer</div>
+          <div class="v text-buy" style="font-size:15px;">{{ market_intelligence.top_gainer.name if market_intelligence.top_gainer else '—' }}</div>
+          <div class="sub text-buy">{{ "%+.2f"|format((market_intelligence.top_gainer.change|default(0))|float) }}% · 24h</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="k">Top Loser</div>
+          <div class="v text-sell" style="font-size:15px;">{{ market_intelligence.top_loser.name if market_intelligence.top_loser else '—' }}</div>
+          <div class="sub text-sell">{{ "%+.2f"|format((market_intelligence.top_loser.change|default(0))|float) }}% · 24h</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="k">TAO Price</div>
+          <div class="v">${{ "%.2f"|format((market_intelligence.tao_price_usd|default(usd_rate|default(0)))|float) }}</div>
+          <div class="sub">market cap ${{ "{:,.0f}".format(market_intelligence.total_market_cap_usd|default(0)|float) }}</div>
+        </div>
+      </div>
     </div>
 
-    <!-- Technical Indicators -->
-    <div class="section-label" id="indicators">Technical Indicators<span class="freshness-badge unknown" data-fresh="indicators">…</span></div>
-    <div class="section-sub">RSI · Stochastic · Bollinger · Money Flow Index · Commodity Channel Index · Williams %R · MACD</div>
-    <div class="picks">
-      {% for t in (technical_indicators | default([])) %}
-      {% set ind = t.indicators %}
-      <div class="pick-card">
-        <div class="card-head"><h3>{{ t.name }} SN{{ t.netuid }}</h3>{% if t.sell and t.sell.active %}<span class="badge badge-sell">SELL ALERT</span>{% elif t.hot and t.hot.active %}<span class="badge badge-hot">HOT</span>{% endif %}</div>
-        <div class="layout-grid" style="grid-template-columns: repeat(2,1fr); gap:8px;">
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Relative Strength Index (14-period) — momentum 0-100. Above 70 = overbought, below 30 = oversold">RSI (14)</span></span><br><span class="mono" style="font-size:18px;font-weight:700;">{{ '%.0f'|format(ind.rsi.value) }}</span><br><span class="{{ ind.rsi.signal|lower }}">{{ ind.rsi.signal|upper }}</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="How many of 7 technical indicators agree on overbought or oversold conditions">Convergence</span></span><br><span class="mono">{{ t.convergence.count }}/{{ t.convergence.total }} agree{% if t.convergence.convergent %} ✓{% endif %}</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Momentum oscillator comparing closing price to its range. K = fast line, D = slow signal line">Stochastic K/D</span></span><br><span class="mono">{{ '%.1f'|format(ind.stochastic.k) }} / {{ '%.1f'|format(ind.stochastic.d) }}</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Moving Average Convergence Divergence — compares short vs long-term momentum. Bullish = upward, Bearish = downward">MACD</span></span><br><span class="mono">{{ ind.macd.crossover }}</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Volume-weighted RSI — combines price and volume. Above 80 = overbought, below 20 = oversold">Money Flow Index</span></span><br><span class="mono">{{ '%.1f'|format(ind.mfi.mfi) }}</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Measures deviation from average price. Above +100 = overbought, below -100 = oversold">Commodity Channel Index</span></span><br><span class="mono">{{ '%.1f'|format(ind.cci.cci) }}</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Momentum from -100 to 0. Below -80 = oversold, above -20 = overbought">Williams %R</span></span><br><span class="mono">{{ '%.1f'|format(ind.williams_r.williams_r) }}</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Distance between upper and lower Bollinger Bands. Wider = more volatile, narrower = consolidation">Bollinger Band Width</span></span><br><span class="mono">{{ '%.3f'|format(ind.bollinger.width) }}</span></div>
-        </div>
-        {% if t.hot and t.hot.active %}<div style="margin-top:8px;font-size:12px;">{% for r in (t.hot.reasons | default([])) %}• {{ r }} {% endfor %}</div>{% elif t.sell and t.sell.active %}<div style="margin-top:8px;font-size:12px;">{% for r in (t.sell.reasons | default([])) %}• {{ r }} {% endfor %}</div>{% endif %}
-      </div>
-      {% endfor %}
-    </div>
+    <!-- ===================== SIMIVISION TOP PICKS ===================== -->
+    <div class="row">
+      <div class="section-label">SimiVision Top Picks</div>
+      <h2 class="section-title">Council Conviction Ranking</h2>
+      <p class="section-sub">Top 6 subnets by emission, yield & momentum — color-coded conviction indicators (red / gold / lime / cyan-green).</p>
 
-    <!-- Rotation Tracker with Volatility Explanation -->
-    <div class="section-label" id="rotation-tracker">Rotation Tracker<span class="freshness-badge unknown" data-fresh="rotation">…</span></div>
-    <div class="section-sub">Subnet rotation patterns &amp; volatility clusters</div>
-    <div class="card">
-      <div class="vol-explain">
-        <b>Why volatility clusters matter:</b> Clustering identifies subnets entering breakout or breakdown phases.
-        <b>High volatility</b> = rapid price swings, higher risk/reward, potential breakout or breakdown.
-        <b>Medium volatility</b> = normal trading range, suitable for trend-following.
-        <b>Low volatility</b> = consolidation phase, potential for impending move.
-        Subnets in the same cluster tend to move together.
-      </div>
-      <div class="layout-grid">
-        <div class="span-6">
-          <h3>Rotation Patterns</h3>
-          {% for pat in ((rotation_tracker.patterns or []) | default([])) %}
-          {% set _pat_tip = {'yield_rotation': 'Capital flowing toward subnets with high staking yields', 'emission_defense': 'Capital parking in high-daily-rewards subnets during market uncertainty', 'mean_reversion_rotation': 'Capital moving to subnets below their historical average — betting on a bounce', 'momentum_rotation': 'Capital flowing to subnets with strong recent price gains and healthy volume'}.get(pat.pattern, 'Capital rotating between subnets based on market conditions') %}
-          <div style="margin-bottom:12px;">
-            <div class="pick-name"><span class="info-term" data-tip="{{ _pat_tip }}">{{ pat.pattern|replace('_',' ')|title|replace('Yield Rotation','High-Yield Rotation')|replace('Emission Defense','Defensive High-Daily Rewards')|replace('Mean Reversion Rotation','Oversold Recovery Rotation')|replace('Momentum Rotation','Price Momentum Rotation') }}</span></div>
-            <div style="font-size:12px;color:var(--text-secondary);">{{ pat.description }}</div>
-            <div class="mono" style="font-size:11px;">confidence {{ '%.0f'|format((pat.confidence or 0)*100) }}% · {{ pat.count }} subnets</div>
-            <div class="mono" style="font-size:11px;color:var(--text-muted);">{% for uid in (pat.netuids | default([]))[:8] %}SN{{ uid }} {% endfor %}{% if (pat.netuids|length) > 8 %}+{{ (pat.netuids|length) - 8 }} more{% endif %}</div>
-          </div>
-          {% else %}<div class="section-sub">No rotation patterns detected.</div>{% endfor %}
-        </div>
-        <div class="span-6" id="volatility-clusters">
-          <h3><span class="info-term" data-tip="Subnets grouped by price volatility. High = risky/opportunity, Low = stable, Core = average">Volatility Clusters</span></h3>
+      {% if simivision_picks %}
+      <div class="picks">
+        {% for pick in simivision_picks %}
+        {% set conv = (pick.conviction|default(0))|int %}
+        {% set tier = 'tier-cyan' if conv > 80 else ('tier-lime' if conv > 60 else ('tier-gold' if conv > 40 else 'tier-red')) %}
+        {% set rec = (pick.recommendation|default('WATCH'))|string|upper %}
+        {% set sell_active = pick.sell.active if pick.sell is mapping else false %}
+        {% set hot_active = pick.hot.active if pick.hot is mapping else false %}
+        <div class="pick-card {{ 'sell-accent' if sell_active else '' }}">
+          <div class="pick-rank">#{{ pick.rank|default(loop.index) }}</div>
+          <div class="pick-name pick-name-lg">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
+          <div class="pick-meta">SN{{ pick.netuid }} · {{ "%.2f"|format((pick.emission|default(0))|float) }} TAO/day · {{ "%.1f"|format((pick.apy|default(0))|float) }}% APY</div>
 
-          <!-- Threshold transparency: show the actual cutoff values -->
-          {% set _vc = rotation_tracker.volatility_clusters or {} %}
-          {% set _vcs = _vc.get('summary', {}) or {} %}
-          {% set _vc_mean = _vcs.get('mean_volatility', 0) if _vcs.get('mean_volatility') is not none else 0 %}
-          {% set _vc_high = _vcs.get('high_threshold', 0) if _vcs.get('high_threshold') is not none else 0 %}
-          {% set _vc_low = _vcs.get('low_threshold', 0) if _vcs.get('low_threshold') is not none else 0 %}
-          <div class="mono" style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">
-            mean {{ '%.2f'|format(_vc_mean) }}
-            <span style="color:var(--text-muted);margin-left:8px;">·</span>
-            <span style="color:#ef4444;">high ≥ {{ '%.2f'|format(_vc_high) }}</span>
-            <span style="color:var(--text-muted);margin-left:4px;">·</span>
-            <span style="color:#10b981;">low &lt; {{ '%.2f'|format(_vc_low) }}</span>
-          </div>
-
-          <div class="vol-cluster-grid">
-            {% for cluster, items in _vc.items() if cluster != 'summary' %}
-            {% if items %}
-            <div class="vol-cluster-group vol-cluster-{{ cluster }}">
-              <div class="vol-cluster-header">
-                <span class="vol-cluster-dot vol-dot-{{ cluster }}"></span>
-                <span class="vol-cluster-label">{{ cluster|capitalize }} Volatility</span>
-                <span class="vol-cluster-count">{{ items|length }}</span>
-              </div>
-              <div class="vol-cluster-items">
-                {% for item in items[:12] %}
-                {% set _vol = item.volatility if item.volatility is not none else 0 %}
-                {% set _mean_div = _vc_mean if _vc_mean > 0 else 1 %}
-                {% set _bar_width = _vol / _mean_div * 50 %}
-                {% set _bar_w = _bar_width if _bar_width < 100 else 100 %}
-                <div class="vol-cluster-item">
-                  <span class="vol-cluster-name">{{ item.name }}</span>
-                  <div class="vol-cluster-bar-wrap">
-                    <!-- Mean line: a dashed vertical line at the mean volatility position -->
-                    <div class="vol-cluster-mean-line" style="left: 50%;" title="mean"></div>
-                    <div class="vol-cluster-bar vol-bar-{{ cluster }}" style="width: {{ '%.0f'|format(_bar_w) }}%"></div>
-                  </div>
-                  <span class="vol-cluster-value mono">{{ '%.2f'|format(_vol) }}</span>
-                </div>
-                {% endfor %}
-                {% if items|length > 12 %}
-                <div class="vol-cluster-more">+{{ items|length - 12 }} more</div>
-                {% endif %}
-              </div>
+          <div class="pick-row">
+            <div class="conviction-wrap">
+              <div class="conviction-lbl">Conviction</div>
+              <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ conv }}%;"></div></div>
+              <div class="pred-line">{{ "%+.2f"|format((pick.price_change_24h|default(0))|float) }}% 24h · ${{ "%.4f"|format((pick.price|default(0))|float) }}</div>
             </div>
-            {% endif %}
-            {% endfor %}
+            <!-- Color-coded conviction ring -->
+            <div class="conv-ring {{ tier }}" style="--ring-pct: {{ conv }};">
+              <svg viewBox="0 0 46 46">
+                <circle class="conv-ring-bg" cx="23" cy="23" r="20"></circle>
+                <circle class="conv-ring-fg" cx="23" cy="23" r="20"></circle>
+              </svg>
+              <div class="conv-ring-val">{{ conv }}</div>
+            </div>
           </div>
 
-          <details class="vol-explain">
-            <summary>How does this work?</summary>
-            <div class="vol-explain-body">
-              <div class="vol-explain-section">
-                <div class="vol-explain-heading"><span class="vol-dot-high"></span> <b>High Volatility</b> — Breakout/breakdown risk</div>
-                <div>These subnets see large price swings (top 25% by volatility). They may present short-term trading opportunities, but carry higher risk. Good for momentum plays if you have conviction.</div>
-              </div>
-              <div class="vol-explain-section">
-                <div class="vol-explain-heading"><span class="vol-dot-core"></span> <b>Core Volatility</b> — Trend-following zone</div>
-                <div>Moderate, average volatility (middle 50%). Steady price action — enough movement to profit from trends without getting whipped around. Healthiest zone for momentum strategies.</div>
-              </div>
-              <div class="vol-explain-section">
-                <div class="vol-explain-heading"><span class="vol-dot-low"></span> <b>Low Volatility</b> — Consolidation</div>
-                <div>Tight price range, barely moving (bottom 25%). A breakout may be imminent — these are "coiled springs." Lower risk but less immediate opportunity. Watch for volume spikes signaling an impending move.</div>
-              </div>
-              <div class="vol-explain-formula">
-                <div class="vol-explain-heading">📋 How the score is calculated</div>
-                <div>Each subnet's volatility score = <code>max(|24h price change|, |7d price change| ÷ 7)</code></div>
-                <div>Subnets are then split into quartiles: the top 25% are "High", the bottom 25% are "Low", and the middle 50% are "Core".</div>
-                <div>The dashed line on each bar shows where the <b>mean</b> volatility sits — bars extending past it are above average.</div>
-              </div>
-            </div>
-          </details>
-        </div>
-      </div>
-    </div>
+          <div class="tags" style="margin-top:12px;">
+            <span class="badge {% if rec == 'BUY' %}badge-buy{% elif rec == 'SELL' %}badge-sell{% elif rec == 'HOLD' %}badge-hold{% else %}badge-watch{% endif %}">{{ rec }}</span>
+            {% if sell_active %}<span class="badge badge-sell">SELL ALERT</span>{% elif hot_active %}<span class="badge badge-hot">HOT</span>{% endif %}
+          </div>
 
-    <!-- Scenario Memory -->
-    <div class="section-label" id="scenario-memory">Scenario Memory<span class="freshness-badge unknown" data-fresh="scenario_memory">…</span></div>
-    <div class="section-sub">Regime-aware memory · live from /api/scenario-memory</div>
-    <div class="card">
-      <div class="layout-grid" style="grid-template-columns: repeat(4,1fr); gap:12px;">
-        <div><div class="mono" style="font-size:10px;color:var(--text-muted);">TOTAL</div><div class="mono" style="font-size:24px;font-weight:700;">{{ scenario_memory.stats.total or 0 }}</div></div>
-        {% for regime, count in ((scenario_memory.stats.by_regime or {}).items()) %}
-        <div><div class="mono" style="font-size:10px;color:var(--text-muted);">{{ regime|upper }}</div><div class="mono" style="font-size:24px;font-weight:700;">{{ count }}</div></div>
+          {% if pick.reasons %}
+          <ul class="reasons">
+            {% for r in pick.reasons[:3] %}<li>{{ r }}</li>{% endfor %}
+          </ul>
+          {% endif %}
+
+          {% if pick.prediction and pick.prediction.statement %}
+          <div class="pred-line glow-text">{{ pick.prediction.statement }}</div>
+          {% endif %}
+
+          {% if pick.sparkline and pick.sparkline|length > 1 %}
+          <div class="spark-wrap" style="margin-top:12px;">
+            <canvas class="spark" width="96" height="36" data-spark="{{ pick.sparkline|join(',') }}"></canvas>
+          </div>
+          {% endif %}
+        </div>
         {% endfor %}
       </div>
-      {% if scenario_memory.scenarios %}
-      {% for sc in (scenario_memory.scenarios | default([]))[-5:]|reverse %}
-      <div style="margin-top:12px;padding-bottom:12px;border-bottom:1px solid var(--border-default);">
-        <div class="pick-name">{{ sc.name }}</div>
-        <div class="mono" style="font-size:11px;">Market Mood: <b>{{ sc.regime or '—' }}</b> · outcome <b>{{ sc.outcome or '—' }}</b></div>
-        {% if sc.features %}<div class="mono" style="font-size:11px;color:var(--text-secondary);margin-top:4px;">{% for k,v in ((sc.features or {}).items()) %}{{ k }}: {{ v }} · {% endfor %}</div>{% endif %}
-      </div>
-      {% endfor %}
       {% else %}
-      <div class="section-sub" style="margin-top:12px;">Scenario memory is empty — the engine will record regime snapshots as predictions resolve.</div>
+      <div class="card card-muted"><p class="empty">Council is convening — no SimiVision picks available yet.</p></div>
       {% endif %}
     </div>
 
-    <!-- Judge Panel with Postmortems -->
-    <div class="section-label" id="judge-panel">Judge panel<span class="freshness-badge unknown" data-fresh="judges">…</span></div>
-    <div class="section-sub">Oracle · Echo · Pulse — live scores, paper portfolios &amp; Prediction Reviews{% if usd_rate %} | TAO ${{ '%.2f'|format(usd_rate) }}{% endif %}</div>
-    <div class="picks">
-      {% for j in (judge_cards | default([])) %}
-      <div class="pick-card">
-        <div class="card-head">
-          <div style="display:flex;align-items:center;gap:12px;">
-            <div class="logo-mark" style="width:32px;height:32px;font-size:16px;">{{ (j.name | string)[0] }}</div>
-            <div><div class="pick-name">{{ j.name }}</div><div class="pick-meta">{{ j.role | default(j.name, true) }}</div></div>
+    <!-- ===================== HOUR / DAY PICKS ===================== -->
+    <div class="row">
+      <div class="section-label">Hour / Day Picks</div>
+      <h2 class="section-title">State-Vector Leaderboard</h2>
+      <p class="section-sub">Top 3 subnets by short-horizon (1h) and 24h Council state-vector scores — conviction bars color-coded by confidence.</p>
+
+      <div class="two-col">
+        <!-- Hour picks -->
+        <div class="card">
+          <div class="card-head"><h3>Hour Horizon</h3><span class="src-tag">top 3 · 1h lens</span></div>
+          {% set hp = hour_picks|safe_list %}
+          {% if hp %}
+          <div class="picks">
+            {% for pick in hp %}
+            {% set conf = ((pick.confidence|default(0))|float * 100)|round %}
+            {% set tier = 'tier-cyan' if conf > 75 else ('tier-lime' if conf > 55 else ('tier-gold' if conf > 35 else 'tier-red')) %}
+            {% set sig = pick.signals if pick.signals is mapping else {} %}
+            <div class="pick-card">
+              <div class="pick-rank">#{{ loop.index }}</div>
+              <div class="pick-name">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
+              <div class="pick-meta">SN{{ pick.netuid }} · score <b class="accent-bright">{{ "%.1f"|format((pick.score|default(0))|float) }}</b></div>
+              <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ conf }}%;"></div></div>
+              <div class="ind-grid">
+                <div class="ind-cell"><div class="k">24h</div><div class="v {% if (sig.price_change_24h|default(0)) >= 0 %}text-buy{% else %}text-sell{% endif %}">{{ "%+.2f"|format((sig.price_change_24h|default(0))|float) }}%</div></div>
+                <div class="ind-cell"><div class="k">APY</div><div class="v">{{ "%.1f"|format((sig.apy|default(0))|float) }}%</div></div>
+                <div class="ind-cell"><div class="k">Emission</div><div class="v">{{ "%.2f"|format((sig.emission|default(0))|float) }}</div></div>
+              </div>
+              <div class="tags">
+                {% for tk, tv in (pick.scenario_tags or {}).items() %}<span class="badge badge-watch">{{ tk }}: {{ tv }}</span>{% endfor %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="empty">No hour-horizon picks available.</p>
+          {% endif %}
+        </div>
+
+        <!-- Day picks -->
+        <div class="card">
+          <div class="card-head"><h3>Day Horizon</h3><span class="src-tag">top 3 · 24h lens</span></div>
+          {% set dyp = day_picks|safe_list %}
+          {% if dyp %}
+          <div class="picks">
+            {% for pick in dyp %}
+            {% set conf = ((pick.confidence|default(0))|float * 100)|round %}
+            {% set tier = 'tier-cyan' if conf > 75 else ('tier-lime' if conf > 55 else ('tier-gold' if conf > 35 else 'tier-red')) %}
+            {% set sig = pick.signals if pick.signals is mapping else {} %}
+            <div class="pick-card">
+              <div class="pick-rank">#{{ loop.index }}</div>
+              <div class="pick-name">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
+              <div class="pick-meta">SN{{ pick.netuid }} · score <b class="accent-bright">{{ "%.1f"|format((pick.score|default(0))|float) }}</b></div>
+              <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ conf }}%;"></div></div>
+              <div class="ind-grid">
+                <div class="ind-cell"><div class="k">24h</div><div class="v {% if (sig.price_change_24h|default(0)) >= 0 %}text-buy{% else %}text-sell{% endif %}">{{ "%+.2f"|format((sig.price_change_24h|default(0))|float) }}%</div></div>
+                <div class="ind-cell"><div class="k">APY</div><div class="v">{{ "%.1f"|format((sig.apy|default(0))|float) }}%</div></div>
+                <div class="ind-cell"><div class="k">Volume</div><div class="v">{{ "{:,.0f}".format((sig.volume|default(0))|float) }}</div></div>
+              </div>
+              <div class="tags">
+                {% for tk, tv in (pick.scenario_tags or {}).items() %}<span class="badge badge-watch">{{ tk }}: {{ tv }}</span>{% endfor %}
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="empty">No day-horizon picks available.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== DAILY PICK ===================== -->
+    <div class="row">
+      <div class="section-label">Daily Pick</div>
+      <h2 class="section-title">Audited Council Selection</h2>
+      <p class="section-sub">Single highest-conviction subnet for today, gated by RedTeam audit — downgraded to HOLD when confidence &lt; 0.45.</p>
+      {% set dpick = daily_pick if daily_pick is mapping else {} %}
+      {% set pk = dpick.pick if dpick.pick is mapping else none %}
+      {% if pk and pk.subnet %}
+      {% set audit = pk.audit if pk.audit is mapping else {} %}
+      {% set fc = ((pk.final_confidence|default(pk.confidence|default(0)))|float * 100)|round %}
+      {% set tier = 'tier-cyan' if fc > 75 else ('tier-lime' if fc > 55 else ('tier-gold' if fc > 35 else 'tier-red')) %}
+      {% set act = (dpick.action|default(pk.action|default('hold')))|string|upper %}
+      <div class="pick-card" style="max-width: 760px;">
+        <div class="pick-rank">★</div>
+        <div class="pick-name pick-name-lg">{{ pk.subnet.name|default('SN' ~ pk.subnet.netuid) }}</div>
+        <div class="pick-meta">SN{{ pk.subnet.netuid }}{% if pk.subnet.symbol %} · {{ pk.subnet.symbol }}{% endif %} · {{ dpick.date|default('today') }}{% if dpick.regime %} · {{ dpick.regime }}{% endif %}</div>
+        <div class="pick-row">
+          <div class="conviction-wrap">
+            <div class="conviction-lbl">Final Confidence</div>
+            <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ fc }}%;"></div></div>
+            <div class="pred-line">score <b class="accent-bright">{{ "%.1f"|format((pk.score|default(0))|float) }}</b> · raw conf {{ "%.2f"|format((pk.confidence|default(0))|float) }}</div>
+          </div>
+          <div class="conv-ring {{ tier }}" style="--ring-pct: {{ fc }};">
+            <svg viewBox="0 0 46 46"><circle class="conv-ring-bg" cx="23" cy="23" r="20"></circle><circle class="conv-ring-fg" cx="23" cy="23" r="20"></circle></svg>
+            <div class="conv-ring-val">{{ fc|round }}</div>
           </div>
         </div>
-        <div class="layout-grid" style="grid-template-columns: repeat(2,1fr); gap:8px; margin-top:12px;">
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="0-1 scale. Higher = more correct predictions over time">Accuracy Score</span></span><br><span class="mono" style="font-size:20px;font-weight:700;">{{ '%.3f'|format(j.score | float) }}</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">CONFIDENCE</span><br><span class="mono" style="font-size:20px;font-weight:700;">{{ '%.2f'|format(j.confidence | float) }}</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);">WIN RATE</span><br><span class="mono" style="font-size:20px;font-weight:700;">{{ j.win_pct | float }}%</span></div>
-          <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Total gains or losses from this judge's predictions. Negative = losing money">Profit / Loss</span></span><br><span class="mono {{ 'pos' if j.pnl|float >= 0 else 'neg' }}" style="font-size:20px;font-weight:700;">{{ '%.4f'|format(j.pnl | float) }}</span></div>
+        <div class="tags" style="margin-top:12px;">
+          <span class="badge {% if act == 'LONG' or act == 'BUY' %}badge-buy{% elif act == 'SHORT' or act == 'SELL' %}badge-sell{% elif act == 'HOLD' %}badge-hold{% else %}badge-watch{% endif %}">{{ act }}</span>
+          {% if audit.approved %}<span class="badge badge-buy">AUDIT PASSED</span>{% else %}<span class="badge badge-hot">AUDIT FLAGGED</span>{% endif %}
         </div>
-        <div class="mono" style="font-size:11px;color:var(--text-secondary);margin-top:8px;">{{ j.open_positions | int }} open · {{ j.postmortems | int }} <span class="info-term" data-tip="Review of why a prediction was wrong and what to adjust next time">Prediction Reviews</span></div>
-        {% if j.recent_postmortems %}
-        <div class="collapsible" style="margin-top:12px;font-size:13px;font-weight:600;color:var(--accent-bright);">Recent Prediction Reviews ({{ j.recent_postmortems|length }})</div>
-        <div class="collapsible-content">
-          {% for pm in j.recent_postmortems[:3] %}
-          <div class="pm-card">
-            <div class="mono" style="font-size:11px;color:var(--text-muted);">{{ pm.name }} · predicted {{ '%+.1f'|format(pm.predicted_pct) }}% · actual {{ '%+.1f'|format(pm.actual_pct) }}%</div>
-            <div class="pm-q">1. What signal did I overweight?</div>
-            <div class="pm-a">{{ pm.questions.what }}</div>
-            <div class="pm-q">2. What did the market/reality prove instead?</div>
-            <div class="pm-a">{{ pm.questions.why }}</div>
-            <div class="pm-q">3. What one adjustment to my scoring rule should I try next?</div>
-            <div class="pm-a">{{ pm.questions.rule }}</div>
-          </div>
-          {% endfor %}
-        </div>
+        {% if audit.concerns %}
+        <ul class="reasons">
+          {% for c in audit.concerns[:4] %}<li>{{ c }}</li>{% endfor %}
+        </ul>
         {% endif %}
+        {% if dpick.reason %}<div class="pred-line">Note: {{ dpick.reason }}</div>{% endif %}
       </div>
-      {% endfor %}
+      {% else %}
+      <div class="card card-muted"><p class="empty">No audited daily pick available.{% if dpick.reason %} ({{ dpick.reason }}){% endif %}</p></div>
+      {% endif %}
     </div>
 
-    <!-- Mind Map Learning Trail -->
-    <div class="section-label" id="mindmap-learning">Mind Map Learning Trail</div>
-    <div class="section-sub">evidence → signal → decision → judge → learning loop</div>
-    <div class="card">
-      {% for tr in (mindmap_trail | default([])) %}
-      <div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--border-default);">
-        <div class="mono" style="color:var(--text-secondary);">{{ tr.time }}</div>
-        <div><strong>{{ tr.subnet }}</strong></div>
-        <div style="margin:4px 0;">{{ tr.evidence }} → {{ tr.signal|replace('accuracy','Accuracy:') }} → {{ tr.decision|replace('weight update','Learning Adjustment') }} → {{ tr.judge }}</div>
-        {% if tr.prediction %}<div class="mono" style="color:var(--accent-bright);">→ {{ tr.prediction }}</div>{% endif %}
+    <!-- ===================== UNDervalued RADAR + MOMENTUM RADAR ===================== -->
+    <div class="row">
+      <div class="layout-grid">
+        <!-- Undervalued Radar table -->
+        <div class="card span-7">
+          <div class="card-head">
+            <h3>Undervalued Radar</h3>
+            <span class="src-tag">top 8 · score 0–100</span>
+          </div>
+          {% if undervalued_radar %}
+          <table class="tbl">
+            <thead>
+              <tr><th>#</th><th>Subnet</th><th>APY</th><th>24h</th><th>Score</th><th>Flag</th></tr>
+            </thead>
+            <tbody>
+              {% for sn in undervalued_radar %}
+              <tr>
+                <td>{{ sn.rank|default(loop.index) }}</td>
+                <td class="text-primary">{{ sn.name|default('SN' ~ sn.netuid) }} <span class="text-muted small">SN{{ sn.netuid }}</span></td>
+                <td>{{ "%.1f"|format((sn.apy|default(0))|float) }}%</td>
+                <td class="{% if (sn.price_change_24h|default(0)) >= 0 %}text-buy{% else %}text-sell{% endif %}">{{ "%+.2f"|format((sn.price_change_24h|default(0))|float) }}%</td>
+                <td><b class="accent-bright">{{ "%.1f"|format((sn.undervalued_score|default(0))|float) }}</b></td>
+                <td>{% if sn.significantly_undervalued %}<span class="badge badge-buy">DEEP VALUE</span>{% else %}<span class="text-muted small">—</span>{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <p class="empty">No undervalued subnets detected.</p>
+          {% endif %}
+        </div>
+
+        <!-- Momentum radar chart -->
+        <div class="card span-5">
+          <div class="card-head"><h3>Momentum Radar</h3><span class="src-tag">top 3 picks · 5 dims</span></div>
+          <div class="chart-wrap" style="height:240px;">
+            <canvas id="radarChart" data-radar="{{ momentum_charts.radar|default({'labels':[],'datasets':[]})|tojson }}"></canvas>
+          </div>
+        </div>
       </div>
-      {% else %}<div class="section-sub">Learning trail is empty — picks and resolutions will populate on the next refresh.</div>{% endfor %}
     </div>
 
-    <!-- Pump Cycle Analytics v2 -->
-    {% set _pa = (pump_analytics or {}) %}
-    {% set _pa_data = (_pa.get('data') if _pa is mapping else None) or {} %}
-    {% set _pa_subnets = _pa_data.get('subnets') or [] %}
-    {% set _pa_meta = _pa_data.get('meta') or {} %}
-    <div class="section-label" id="pump-analytics">Pump Cycle Analytics</div>
-    <div class="section-sub">CUSUM-based pump detection · 6-phase cycle model · per-subnet behavioral profiling</div>
-    <div class="card">
-      <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:16px;">
-        <div class="mono" style="color:var(--text-secondary);">Tracked: <strong style="color:var(--accent-bright);">{{ _pa_meta.get('tracked_subnets', 0) }}</strong> subnets</div>
-        <div class="mono" style="color:var(--text-secondary);">Cycles detected: <strong style="color:var(--accent-bright);">{{ _pa_meta.get('total_cycles', 0) }}</strong></div>
-        <div class="mono" style="color:var(--text-secondary);">Avg proneness: <strong style="color:var(--accent-bright);">{{ '%.1f' % (_pa_meta.get('avg_proneness', 0) or 0) }}</strong>/100</div>
-        <div class="mono" style="color:var(--text-secondary);">Updated: {{ _pa_meta.get('updated_at') or '—' }}</div>
-      </div>
+    <!-- ===================== TECHNICAL INDICATORS CARDS ===================== -->
+    <div class="row">
+      <div class="section-label">Technical Indicators</div>
+      <h2 class="section-title">Oscillator Panel</h2>
+      <p class="section-sub">RSI · Stochastic · Bollinger · MFI · CCI · Williams %R · Keltner · MACD — convergence across the top 6 subnets.</p>
 
-      {% if _pa_subnets|length > 0 %}
-      <!-- Top pump candidates -->
-      <h3 style="margin-top:8px;">Top Pump Candidates</h3>
-      <div class="pump-candidate-cards">
-        {% for s in _pa_subnets[:5] %}
-        {% set _ph = (s.get('current_phase') or 'ACCUMULATION')|lower %}
-        <div class="pump-card phase-{{ _ph }}">
-          <div class="pump-card-header">
-            <span class="subnet-name">{{ s.get('name') or ('SN' ~ s.get('netuid')) }} <span class="mono" style="color:var(--text-muted);">SN{{ s.get('netuid') }}</span></span>
-            <span class="phase-badge phase-{{ _ph }}">{{ s.get('current_phase') or 'ACCUMULATION' }}</span>
+      {% if technical_indicators %}
+      <div class="picks">
+        {% for ti in technical_indicators %}
+        {% set ind = ti.indicators if ti.indicators is mapping else {} %}
+        {% set conv = ti.convergence if ti.convergence is mapping else {} %}
+        {% set sell_active = ti.sell.active if ti.sell is mapping else false %}
+        <div class="pick-card {{ 'sell-accent' if sell_active else '' }}">
+          <div class="ti-head">
+            <div>
+              <div class="pick-name">{{ ti.name|default('SN' ~ ti.netuid) }}</div>
+              <div class="pick-meta">SN{{ ti.netuid }}</div>
+            </div>
+            {% if conv.convergent %}
+            <span class="badge {% if conv.type == 'oversold' %}badge-buy{% else %}badge-sell{% endif %}">{{ conv.type|default('')|upper }} {{ conv.count|default(0) }}/{{ conv.total|default(0) }}</span>
+            {% endif %}
           </div>
-          <div class="proneness-bar">
-            <div class="proneness-fill" style="width:{{ s.get('pump_proneness', 0) or 0 }}%"></div>
-            <span class="proneness-score">{{ s.get('pump_proneness', 0) or 0 }}/100</span>
+
+          <div class="ind-grid">
+            {% set rsi = ind.rsi if ind.rsi is mapping else {} %}
+            <div class="ind-cell"><div class="k">RSI</div><div class="v"><span class="sig-dot sig-{% if rsi.signal == 'oversold' %}oversold{% elif rsi.signal == 'overbought' %}overbought{% else %}neutral{% endif %}"></span>{{ "%.1f"|format((rsi.value|default(0))|float) }}</div></div>
+            {% set sto = ind.stochastic if ind.stochastic is mapping else {} %}
+            <div class="ind-cell"><div class="k">Stoch %K</div><div class="v"><span class="sig-dot sig-{% if sto.signal == 'oversold' %}oversold{% elif sto.signal == 'overbought' %}overbought{% else %}neutral{% endif %}"></span>{{ "%.1f"|format((sto.k|default(0))|float) }}</div></div>
+            {% set mfi = ind.mfi if ind.mfi is mapping else {} %}
+            <div class="ind-cell"><div class="k">MFI</div><div class="v"><span class="sig-dot sig-{% if mfi.signal == 'oversold' %}oversold{% elif mfi.signal == 'overbought' %}overbought{% else %}neutral{% endif %}"></span>{{ "%.1f"|format((mfi.mfi|default(0))|float) }}</div></div>
+            {% set cci = ind.cci if ind.cci is mapping else {} %}
+            <div class="ind-cell"><div class="k">CCI</div><div class="v"><span class="sig-dot sig-{% if cci.signal == 'oversold' %}oversold{% elif cci.signal == 'overbought' %}overbought{% else %}neutral{% endif %}"></span>{{ "%.1f"|format((cci.cci|default(0))|float) }}</div></div>
+            {% set wr = ind.williams_r if ind.williams_r is mapping else {} %}
+            <div class="ind-cell"><div class="k">Williams %R</div><div class="v"><span class="sig-dot sig-{% if wr.signal == 'oversold' %}oversold{% elif wr.signal == 'overbought' %}overbought{% else %}neutral{% endif %}"></span>{{ "%.1f"|format((wr.williams_r|default(0))|float) }}</div></div>
+            {% set macd = ind.macd if ind.macd is mapping else {} %}
+            <div class="ind-cell"><div class="k">MACD</div><div class="v"><span class="sig-dot sig-{% if macd.crossover == 'bullish' %}oversold{% elif macd.crossover == 'bearish' %}overbought{% else %}neutral{% endif %}"></span>{{ "%+.3f"|format((macd.histogram|default(0))|float) }}</div></div>
           </div>
-          {% set _cp = s.get('cycle_prediction') or {} %}
-          <div class="cycle-prediction">
-            <span>Next pump: ~{{ '%.1f' % (_cp.get('next_pump_expected_hours', 0) or 0) }}h</span>
-            <span>Expected: {{ '%+.1f' % (_cp.get('expected_pump_magnitude_pct', 0) or 0) }}%</span>
-            <span>Confidence: {{ '%.0f' % ((_cp.get('prediction_confidence', 0) or 0) * 100) }}%</span>
-          </div>
-          <div class="phase-duration">In {{ s.get('current_phase') or 'ACCUMULATION' }} for {{ s.get('phase_duration_minutes', 0) or 0 }}min</div>
+
+          {% if conv.indicators %}
+          <div class="pred-line">Convergence: <b class="accent-bright">{{ conv.count|default(0) }}/{{ conv.total|default(0) }}</b> {{ conv.type|default('') }} · agreement {{ "%.0f"|format((conv.agreement|default(0))|float * 100) }}%</div>
+          {% endif %}
         </div>
         {% endfor %}
       </div>
+      {% else %}
+      <div class="card card-muted"><p class="empty">No technical indicator data available.</p></div>
+      {% endif %}
+    </div>
 
-      <!-- Full table -->
-      <h3 style="margin-top:24px;">All Tracked Subnets</h3>
-      <div style="overflow-x:auto;">
-        <table class="pump-cycle-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Subnet</th>
-              <th>Phase</th>
-              <th>Phase Duration</th>
-              <th>Proneness</th>
-              <th>Volume</th>
-              <th>Sentiment</th>
-              <th>Signal Convergence</th>
-              <th>Adapted</th>
-              <th>Avg Pump</th>
-              <th>Re-Pump Rate</th>
-              <th>Next Pump Expected</th>
-              <th>Cycles Observed</th>
-            </tr>
-          </thead>
+    <!-- ===================== ROTATION TRACKER ===================== -->
+    <div class="row">
+      <div class="section-label">Rotation Tracker</div>
+      <h2 class="section-title">Capital Flow Patterns</h2>
+      <p class="section-sub">Detected rotation regimes (momentum / yield / defense / mean-reversion) and volatility clusters across the network.</p>
+      {% set rt = rotation_tracker if rotation_tracker is mapping else {} %}
+      {% set patterns = rt.patterns|safe_list %}
+      {% set vc = rt.volatility_clusters if rt.volatility_clusters is mapping else {} %}
+      {% set vsum = vc.summary if vc.summary is mapping else {} %}
+      <div class="two-col">
+        <div class="card">
+          <div class="card-head"><h3>Rotation Patterns</h3><span class="src-tag">{{ patterns|length }} active</span></div>
+          {% if patterns %}
+          <div class="scroll-y" style="max-height: 320px;">
+            {% for p in patterns %}
+            <div class="impact-row">
+              <div class="impact-line"><b class="accent-bright">{{ p.pattern|default('')|replace('_',' ')|upper }}</b> · {{ p.description|default('') }}</div>
+              <div class="impact-line impact-line-primary">{{ p.count|default(0) }} subnets · confidence {{ "%.0f"|format((p.confidence|default(0))|float * 100) }}%</div>
+              {% if p.netuids %}<div class="pred-line small">SN {{ p.netuids|join(', SN ') }}</div>{% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}<p class="empty">No rotation patterns detected.</p>{% endif %}
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Volatility Clusters</h3><span class="src-tag">mean {{ "%.2f"|format((vsum.mean_volatility|default(0))|float) }}</span></div>
+          <div class="kpi-grid" style="grid-template-columns: repeat(3,1fr); margin-bottom:12px;">
+            <div class="kpi-cell"><div class="k">High</div><div class="v">{{ vc.high|default([])|length }}</div><div class="sub">volatile</div></div>
+            <div class="kpi-cell"><div class="k">Core</div><div class="v">{{ vc.core|default([])|length }}</div><div class="sub">stable</div></div>
+            <div class="kpi-cell"><div class="k">Low</div><div class="v">{{ vc.low|default([])|length }}</div><div class="sub">dormant</div></div>
+          </div>
+          {% set high = vc.high|safe_list %}
+          {% if high %}
+          <div class="radar-list scroll-y" style="max-height: 220px;">
+            {% for s in high %}
+            <div class="radar-item">
+              <div class="name">{{ s.name|default('SN' ~ s.netuid) }} <span class="text-muted small">SN{{ s.netuid }}</span></div>
+              <div class="meta">vol {{ "%.2f"|format((s.volatility|default(0))|float) }} · <span class="{% if (s.price_change_24h|default(0)) >= 0 %}text-buy{% else %}text-sell{% endif %}">{{ "%+.2f"|format((s.price_change_24h|default(0))|float) }}%</span></div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}<p class="empty">No volatility clusters.</p>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== SCENARIO MEMORY ===================== -->
+    <div class="row">
+      <div class="section-label">Scenario Memory</div>
+      <h2 class="section-title">Regime-Aware Memory Bank</h2>
+      <p class="section-sub">Historical scenario outcomes indexed by market regime — the Council's experiential recall layer.</p>
+      {% set sm = scenario_memory if scenario_memory is mapping else {} %}
+      {% set stats = sm.stats if sm.stats is mapping else {} %}
+      {% set by_regime = stats.by_regime if stats.by_regime is mapping else {} %}
+      {% set scenarios = sm.scenarios|safe_list %}
+      <div class="two-col">
+        <div class="card">
+          <div class="card-head"><h3>Regime Distribution</h3><span class="src-tag">{{ stats.total|default(0) }} scenarios</span></div>
+          <div class="kpi-grid" style="grid-template-columns: repeat(3,1fr);">
+            {% for r in ['bullish','neutral','bearish'] %}
+            <div class="kpi-cell"><div class="k">{{ r|upper }}</div><div class="v">{{ by_regime.get(r, 0) }}</div><div class="sub">scenarios</div></div>
+            {% endfor %}
+          </div>
+          {% if scenarios %}
+          <div class="scroll-y" style="max-height: 280px; margin-top:12px;">
+            {% for sc in scenarios[:12] %}
+            <div class="impact-row">
+              <div class="impact-line"><b class="accent-bright">{{ sc.name|default('scenario') }}</b> · <span class="badge {% if sc.regime == 'bullish' %}badge-buy{% elif sc.regime == 'bearish' %}badge-sell{% else %}badge-hold{% endif %}">{{ sc.regime|default('neutral')|upper }}</span></div>
+              <div class="impact-line impact-line-primary">{% if sc.outcome %}outcome: <b>{{ sc.outcome|upper }}</b>{% else %}outcome: pending{% endif %} · {{ (sc.created_at|default(''))[:10] }}</div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}<p class="empty">No scenarios recorded yet.</p>{% endif %}
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Outcome Accuracy</h3><span class="src-tag">by regime</span></div>
+          {% set acc = stats.accuracy if stats.accuracy is mapping else {} %}
+          {% if acc %}
+          <div class="scroll-y" style="max-height: 360px;">
+            {% for r, a in acc.items() %}
+            {% set pct = (a|default(0))|float * 100 %}
+            <div class="weight-row">
+              <div class="weight-head"><span>{{ r|upper }}</span><span>{{ "%.0f"|format(pct) }}% accuracy</span></div>
+              <div class="weight-bar"><div class="weight-fill" style="width: {{ pct }}%;"></div></div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}<p class="empty">No resolved outcomes yet.</p>{% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== INDICATORS CONVERGENCE ===================== -->
+    <div class="row">
+      <div class="section-label">Indicators Convergence</div>
+      <h2 class="section-title">Multi-Oscillator Agreement</h2>
+      <p class="section-sub">Oversold (bullish reversal) vs overbought (bearish reversal) convergence across 7 oscillators for the top 6 subnets.</p>
+      {% set ic = api_indicators_convergence if api_indicators_convergence is mapping else {} %}
+      {% set ic_subnets = ic.subnets|safe_list %}
+      {% if ic_subnets %}
+      <div class="card">
+        <div class="card-head"><h3>Convergence Matrix</h3><span class="src-tag">{{ ic_subnets|length }} subnets · 7 oscillators</span></div>
+        <table class="tbl">
+          <thead><tr><th>#</th><th>Subnet</th><th>Oversold</th><th>Overbought</th><th>Signal</th></tr></thead>
           <tbody>
-            {% for s in _pa_subnets %}
-            {% set _ph = (s.get('current_phase') or 'ACCUMULATION')|lower %}
-            {% set _prof = s.get('profile') or {} %}
-            {% set _cp = s.get('cycle_prediction') or {} %}
-            {% set _vol_spike = s.get('volume_spike', False) %}
-            {% set _vf_raw = s.get('volume_factor', 1.0) %}
-            {% set _vol_factor = _vf_raw if _vf_raw is not none else 1.0 %}
-            {% set _sent_factor = s.get('sentiment_factor', 1.0) or 1.0 %}
-            {% set _conv_raw = s.get('signal_convergence', 0.5) %}
-            {% set _convergence = (_conv_raw if _conv_raw is not none else 0.5) * 100 %}
-            {% set _adapted_k = s.get('adapted_k') %}
-            {% set _adapt_note = s.get('adaptation_note') or '' %}
+            {% for sn in ic_subnets %}
+            {% set os = sn.oversold if sn.oversold is mapping else {} %}
+            {% set ob = sn.overbought if sn.overbought is mapping else {} %}
+            {% set signal = 'BUY' if os.convergent else ('SELL' if ob.convergent else 'HOLD') %}
             <tr>
-              <td class="mono">{{ s.get('netuid') }}</td>
-              <td>{{ s.get('name') or ('SN' ~ s.get('netuid')) }}</td>
-              <td><span class="phase-badge phase-{{ _ph }}">{{ s.get('current_phase') or 'ACCUMULATION' }}</span></td>
-              <td class="mono">{{ s.get('phase_duration_minutes', 0) or 0 }}min</td>
-              <td>
-                <div class="proneness-bar proneness-bar-sm">
-                  <div class="proneness-fill" style="width:{{ s.get('pump_proneness', 0) or 0 }}%"></div>
-                  <span class="proneness-score">{{ s.get('pump_proneness', 0) or 0 }}</span>
-                </div>
-              </td>
-              <td class="mono" title="Volume factor {{ '%.2f' % _vol_factor }}x vs 20-snapshot avg">
-                {% if _vol_spike %}<span class="pump-signal-tag pump-signal-vol">📊 {{ '%.1f' % _vol_factor }}x</span>{% else %}<span style="color:var(--text-muted);">{{ '%.1f' % _vol_factor }}x</span>{% endif %}
-              </td>
-              <td class="mono" title="Sentiment momentum factor">
-                {% if _sent_factor > 1.05 %}<span class="pump-signal-tag pump-signal-sent-pos">📈 {{ '%.2f' % _sent_factor }}</span>{% elif _sent_factor < 0.95 %}<span class="pump-signal-tag pump-signal-sent-neg">📉 {{ '%.2f' % _sent_factor }}</span>{% else %}<span style="color:var(--text-muted);">{{ '%.2f' % _sent_factor }}</span>{% endif %}
-              </td>
-              <td>
-                <div class="convergence-bar" title="{{ '%.0f' % _convergence }}% bullish indicator convergence">
-                  <div class="convergence-fill" style="width:{{ '%.0f' % _convergence }}%;"></div>
-                  <span class="convergence-label">{{ '%.0f' % _convergence }}%</span>
-                </div>
-              </td>
-              <td class="mono">
-                {% if _adapt_note %}<span class="pump-signal-tag pump-signal-adapted" title="{{ _adapt_note }}">ADAPTED</span>{% elif _adapted_k is not none and _adapted_k != 0.5 %}<span class="pump-signal-tag pump-signal-adapted" title="k={{ _adapted_k }}">ADAPTED</span>{% else %}<span style="color:var(--text-muted);">—</span>{% endif %}
-              </td>
-              <td class="mono">{{ '%+.1f' % (_prof.get('avg_pump_magnitude', 0) or 0) }}%</td>
-              <td class="mono">{{ '%.0f' % ((_prof.get('re_pump_rate', 0) or 0) * 100) }}%</td>
-              <td class="mono">~{{ '%.1f' % (_cp.get('next_pump_expected_hours', 0) or 0) }}h</td>
-              <td class="mono">{{ _prof.get('total_cycles_observed', 0) or 0 }}</td>
+              <td>{{ loop.index }}</td>
+              <td class="text-primary">{{ sn.name|default('SN' ~ sn.netuid) }} <span class="text-muted small">SN{{ sn.netuid }}</span></td>
+              <td><span class="{% if os.convergent %}text-buy{% else %}text-muted{% endif %}">{{ os.count|default(0) }}/{{ os.total|default(7) }}</span> <span class="text-muted small">{{ "%.0f"|format((os.agreement|default(0))|float * 100) }}%</span></td>
+              <td><span class="{% if ob.convergent %}text-sell{% else %}text-muted{% endif %}">{{ ob.count|default(0) }}/{{ ob.total|default(7) }}</span> <span class="text-muted small">{{ "%.0f"|format((ob.agreement|default(0))|float * 100) }}%</span></td>
+              <td><span class="badge {% if signal == 'BUY' %}badge-buy{% elif signal == 'SELL' %}badge-sell{% else %}badge-hold{% endif %}">{{ signal }}</span></td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
+      {% else %}
+      <div class="card card-muted"><p class="empty">No indicators convergence data available.</p></div>
+      {% endif %}
+    </div>
 
-      <!-- Mini cycle timeline + expandable profiles -->
-      <h3 style="margin-top:24px;">Recent Cycle Timeline &amp; Behavioral Profiles</h3>
-      {% for s in _pa_subnets[:10] %}
-      {% set _prof = s.get('profile') or {} %}
-      {% set _cycles = s.get('cycles') or [] %}
-      {% set _acc = s.get('cycle_accuracy') or {} %}
-      <div class="pump-profile-row">
-        <div class="pump-profile-head" data-netuid="{{ s.get('netuid') }}">
-          <span><strong>{{ s.get('name') or ('SN' ~ s.get('netuid')) }}</strong> <span class="mono" style="color:var(--text-muted);">SN{{ s.get('netuid') }}</span></span>
-          <span class="mono" style="color:var(--text-secondary);">{{ _prof.get('total_cycles_observed', 0) or 0 }} cycles · accuracy {{ '%.0f' % ((_acc.get('accuracy_score', 0) or 0) * 100) }}% · {{ _prof.get('typical_pattern', '—') }}</span>
-          <span class="pump-profile-toggle">▸</span>
+    <!-- ===================== MOMENTUM CHARTS ===================== -->
+    <div class="row">
+      <div class="section-label">Momentum Charts</div>
+      <h2 class="section-title">Top Movers Treemap</h2>
+      <p class="section-sub">Subnet 24h performance sized by emission weight — green tiles gainers, red tiles losers.</p>
+      {% set mc = momentum_charts if momentum_charts is mapping else {} %}
+      {% set tm = mc.treemap|safe_list %}
+      {% if tm %}
+      <div class="card">
+        <div class="card-head"><h3>Momentum Treemap</h3><span class="src-tag">{{ tm|length }} subnets</span></div>
+        <div class="treemap">
+          {% for t in tm %}
+          <div class="tmap-tile {{ '' if (t.change|default(0)) >= 0 else 'neg' }}" style="--tmap-flex: {{ t.value|default(5)|int }};">
+            <div class="tmap-name">{{ t.name|default('SN' ~ t.netuid) }}</div>
+            <div class="tmap-chg">{{ "%+.1f"|format((t.change|default(0))|float) }}%</div>
+          </div>
+          {% endfor %}
         </div>
-        <div class="pump-profile-body">
-          <!-- Mini timeline: last 5 cycles as colored segments -->
-          {% if _cycles|length > 0 %}
-          <div class="mini-timeline">
-            {% for cyc in _cycles[:5] %}
-            {% set _dur = (cyc.get('total_cycle_duration_minutes') or 1)|int %}
-            <div class="mini-timeline-seg" style="flex:{{ _dur }};min-width:24px;" title="Cycle {{ cyc.get('cycle_id') }}: {{ _dur }}min, {{ '%+.1f' % (cyc.get('pump_magnitude_pct', 0) or 0) }}% pump{% if cyc.get('re_pump') %}, re-pump {{ '%+.1f' % (cyc.get('re_pump_magnitude_pct', 0) or 0) }}%{% endif %}">
-              <span class="mini-timeline-label">{{ _dur }}m</span>
+      </div>
+      {% else %}
+      <div class="card card-muted"><p class="empty">No momentum chart data available.</p></div>
+      {% endif %}
+    </div>
+
+    <!-- ===================== MARKET INTELLIGENCE SCANNER ===================== -->
+    <div class="row">
+      <div class="section-label">Market Intelligence Scanner</div>
+      <h2 class="section-title">Network-Wide Scanner</h2>
+      <p class="section-sub">Real-time breadth, leadership and volume scan across all tracked subnets.</p>
+      {% set mi = market_intelligence if market_intelligence is mapping else {} %}
+      <div class="card">
+        <div class="card-head"><h3>Scanner Readout</h3>
+          <span class="badge {% if mi.breadth == 'bullish' %}badge-buy{% elif mi.breadth == 'bearish' %}badge-sell{% else %}badge-hold{% endif %}">BREADTH {{ mi.breadth|default('neutral')|upper }}</span>
+        </div>
+        <div class="kpi-grid" style="grid-template-columns: repeat(4,1fr);">
+          <div class="kpi-cell"><div class="k">Top Gainer</div><div class="v text-buy" style="font-size:15px;">{{ mi.top_gainer.name if mi.top_gainer else '—' }}</div><div class="sub text-buy">{{ "%+.2f"|format((mi.top_gainer.change|default(0))|float) }}% · 24h</div></div>
+          <div class="kpi-cell"><div class="k">Top Loser</div><div class="v text-sell" style="font-size:15px;">{{ mi.top_loser.name if mi.top_loser else '—' }}</div><div class="sub text-sell">{{ "%+.2f"|format((mi.top_loser.change|default(0))|float) }}% · 24h</div></div>
+          <div class="kpi-cell"><div class="k">Gainers / Losers</div><div class="v">{{ mi.gainers|default(0) }} <span class="text-muted">/</span> {{ mi.losers|default(0) }}</div><div class="sub">of {{ mi.total|default(0) }} subnets</div></div>
+          <div class="kpi-cell"><div class="k">Avg 24h / APY</div><div class="v {% if (mi.avg_change_24h|default(0)) >= 0 %}text-buy{% else %}text-sell{% endif %}">{{ "%+.2f"|format((mi.avg_change_24h|default(0))|float) }}%</div><div class="sub">{{ "%.2f"|format((mi.avg_apy|default(0))|float) }}% APY</div></div>
+        </div>
+        {% if mi.total_volume_usd %}
+        <div class="pred-line" style="margin-top:12px;">Network 24h volume: <b class="accent-bright">${{ "{:,.0f}".format((mi.total_volume_usd|default(0))|float) }}</b> · market cap <b class="accent-bright">${{ "{:,.0f}".format((mi.total_market_cap_usd|default(0))|float) }}</b></div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- ===================== TABBED SECONDARY SECTIONS ===================== -->
+    <div class="row">
+      <div class="card">
+        <div class="tab-bar">
+          <button class="tab-btn active" data-tab="judges" aria-selected="true">Judge Panel</button>
+          <button class="tab-btn" data-tab="trail" aria-selected="false">Mind Map Trail</button>
+          <button class="tab-btn" data-tab="staking" aria-selected="false">Staking &amp; Yield</button>
+          <button class="tab-btn" data-tab="council" aria-selected="false">Council Weights</button>
+          <button class="tab-btn" data-tab="signals" aria-selected="false">Signal Impact</button>
+          <button class="tab-btn" data-tab="patterns" aria-selected="false">Patterns</button>
+          <button class="tab-btn" data-tab="predictions" aria-selected="false">Predictive Engine</button>
+          <button class="tab-btn" data-tab="learning" aria-selected="false">Learning Loop</button>
+          <button class="tab-btn" data-tab="social" aria-selected="false">Social Sentiment</button>
+          <button class="tab-btn" data-tab="chat" aria-selected="false">SimiVision Chat</button>
+        </div>
+
+        <!-- ---------- JUDGE PANEL ---------- -->
+        <div class="tab-panel active" id="panel-judges">
+          {% if judge_cards %}
+          <div class="picks">
+            {% for jc in judge_cards %}
+            <div class="pick-card">
+              <div class="ti-head">
+                <div>
+                  <div class="pick-name pick-name-lg">{{ jc.name|default('Judge') }}</div>
+                  <div class="pick-meta">{{ jc.role|default('') }}</div>
+                </div>
+                <span class="badge {% if (jc.win_pct|default(0)) >= 50 %}badge-buy{% else %}badge-hold{% endif %}">{{ "%.0f"|format((jc.win_pct|default(0))|float) }}% WIN</span>
+              </div>
+              <div class="ind-grid">
+                <div class="ind-cell"><div class="k">Score</div><div class="v">{{ "%.2f"|format((jc.score|default(0))|float) }}</div></div>
+                <div class="ind-cell"><div class="k">Confidence</div><div class="v">{{ "%.2f"|format((jc.confidence|default(0))|float) }}</div></div>
+                <div class="ind-cell"><div class="k">P&amp;L</div><div class="v {% if (jc.pnl|default(0)) >= 0 %}text-buy{% else %}text-sell{% endif %}">{{ "%+.2f"|format((jc.pnl|default(0))|float) }}%</div></div>
+                <div class="ind-cell"><div class="k">Wins</div><div class="v text-buy">{{ jc.wins|default(0) }}</div></div>
+                <div class="ind-cell"><div class="k">Losses</div><div class="v text-sell">{{ jc.losses|default(0) }}</div></div>
+                <div class="ind-cell"><div class="k">Open</div><div class="v">{{ jc.open_positions|default(0) }}</div></div>
+              </div>
+
+              {% if jc.open_positions_list %}
+              <div class="collapsible">
+                <button class="collapsible-toggle" aria-expanded="false"><span class="chev">›</span> Open Positions ({{ jc.open_positions_list|length }})</button>
+                <div class="collapsible-body"><div class="collapsible-body-inner">
+                  {% for pos in jc.open_positions_list %}
+                  <div class="jp-pos"><span class="pos-name">{{ pos.name|default('SN' ~ pos.netuid) }} · {{ pos.direction|default('up')|upper }}</span>
+                    <span class="pos-val">entry ${{ "%.4f"|format((pos.entry_price|default(0))|float) }} → ${{ "%.4f"|format((pos.current_price|default(0))|float) }}</span></div>
+                  {% endfor %}
+                </div></div>
+              </div>
+              {% endif %}
+
+              {% if jc.latest_postmortem and jc.latest_postmortem.questions %}
+              <div class="collapsible">
+                <button class="collapsible-toggle" aria-expanded="false"><span class="chev">›</span> Latest Postmortem</button>
+                <div class="collapsible-body"><div class="collapsible-body-inner">
+                  {% for q in jc.latest_postmortem.questions %}
+                  <div class="jp-pm-q"><div class="q">{{ q.question }}</div><div class="a">{{ q.answer|default('—') }}</div></div>
+                  {% endfor %}
+                </div></div>
+              </div>
+              {% endif %}
             </div>
             {% endfor %}
           </div>
           {% else %}
-          <div class="section-sub">No completed cycles yet — accumulating data from scheduler ticks.</div>
-          {% endif %}
-          <div class="pump-profile-grid">
-            <div><span class="mono" style="color:var(--text-muted);">Avg pump duration</span><br>{{ _prof.get('avg_pump_duration', 0) or 0 }}min</div>
-            <div><span class="mono" style="color:var(--text-muted);">Avg consolidation</span><br>{{ _prof.get('avg_consolidation_duration', 0) or 0 }}min</div>
-            <div><span class="mono" style="color:var(--text-muted);">Avg pump magnitude</span><br>{{ '%+.1f' % (_prof.get('avg_pump_magnitude', 0) or 0) }}%</div>
-            <div><span class="mono" style="color:var(--text-muted);">Re-pump rate</span><br>{{ '%.0f' % ((_prof.get('re_pump_rate', 0) or 0) * 100) }}%</div>
-            <div><span class="mono" style="color:var(--text-muted);">Avg cycle period</span><br>{{ _prof.get('avg_cycle_period', 0) or 0 }}min</div>
-            <div><span class="mono" style="color:var(--text-muted);">Proneness</span><br>{{ s.get('pump_proneness', 0) or 0 }}/100</div>
-          </div>
-          {% if _acc.get('predictions_made', 0) %}
-          <div class="pump-profile-grid" style="margin-top:8px;">
-            <div><span class="mono" style="color:var(--text-muted);">Predictions made</span><br>{{ _acc.get('predictions_made', 0) }}</div>
-            <div><span class="mono" style="color:var(--text-muted);">Timing correct</span><br>{{ _acc.get('timing_correct', 0) }}</div>
-            <div><span class="mono" style="color:var(--text-muted);">Direction correct</span><br>{{ _acc.get('direction_correct', 0) }}</div>
-            <div><span class="mono" style="color:var(--text-muted);">Avg magnitude error</span><br>{{ '%.1f' % (_acc.get('magnitude_error_avg', 0) or 0) }}%</div>
-          </div>
+          <p class="empty">Judge panel unavailable — judge layer not initialized.</p>
           {% endif %}
         </div>
-      </div>
-      {% endfor %}
-      {% else %}
-      <div class="section-sub">Pump cycle tracker is warming up — no subnets tracked yet. Data accumulates from the first scheduler tick (CUSUM evidence + 6-phase classification build over time).</div>
-      {% endif %}
-    </div>
 
-    <!-- Signal Impact and Predictive Engine -->
-    <div class="section-label" id="signal-impact"><span class="info-term" data-tip="Each trading signal contributes a predicted price move. Combined = overall bullish or bearish impact.">Signal Impact</span> · Predictive Engine · Learning Loop</div>
-    <div class="section-sub">All outputs framed as "predicted to move +X% within N hours"</div>
-    <div class="layout-grid">
-      <div class="card span-8">
-        <h3>Signal Impact Engine</h3>
-        {% for si in (signal_impact | default([])) %}
-        <div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border-default);">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span class="pick-name">{{ si.name }}</span>
-            {% if si.dominant == 'SELL ALERT' %}<span class="badge badge-sell">SELL ALERT</span>{% elif si.dominant == 'HOT' %}<span class="badge badge-hot">HOT</span>{% endif %}
+        <!-- ---------- MIND MAP LEARNING TRAIL ---------- -->
+        <div class="tab-panel" id="panel-trail">
+          {% if mindmap_trail %}
+          <div class="trail-counter">Trail entries: <b>{{ mindmap_trail|length }}</b> · newest first</div>
+          <div class="trail">
+            {% for t in mindmap_trail %}
+            <div class="trail-item">
+              <div class="trail-time">{{ t.time|default('') }}{% if t.time_remaining %} · <span class="trail-countdown {% if t.time_remaining == 'resolved' %}resolved{% endif %}">{{ t.time_remaining }}</span>{% endif %}</div>
+              <div class="trail-net">{{ t.subnet|default('—') }}</div>
+              <div class="trail-flow">
+                <span class="flow-chip">{{ t.evidence|default('—') }}</span>
+                <span class="flow-arrow">→</span>
+                <span class="flow-chip">{{ t.signal|default('—') }}</span>
+                <span class="flow-arrow">→</span>
+                <span class="flow-chip">{{ t.decision|default('—') }}</span>
+              </div>
+              {% if t.prediction %}<div class="trail-pred">{{ t.prediction }}{% if t.predicted_pct is not none %} · <span class="pred-pct {% if t.predicted_pct >= 0 %}pos{% else %}neg{% endif %}">{{ "%+.2f"|format(t.predicted_pct|float) }}%</span>{% endif %}</div>{% endif %}
+              <div class="pred-line">{{ t.judge|default('') }}</div>
+            </div>
+            {% endfor %}
           </div>
-          <div class="mono {{ 'pos' if si.net_predicted_pct >= 0 else 'neg' }}" style="margin:8px 0;font-size:16px;font-weight:700;">{{ '%+.2f'|format(si.net_predicted_pct) }}% combined impact · {{ si.net_direction }}</div>
-          <div class="heat-bar"><div class="heat-marker" style="left: 50%;"></div></div>
-          {% for im in (si.impacts | default([])) %}<div class="pick-meta" style="font-size:12px;">• {{ im.predicted_move }} ({{ im.signal_type }}, fresh {{ im.freshness }})</div>{% endfor %}
-          {% if not si.impacts %}<div class="pick-meta">No active signals</div>{% endif %}
+          {% else %}
+          <p class="empty">No learning trail entries yet.</p>
+          {% endif %}
         </div>
-        {% endfor %}
-      </div>
-      <div class="card span-4">
-        <h3>Predictive Engine</h3>
-        <div class="layout-grid" style="grid-template-columns:repeat(2,1fr);gap:12px;margin-top:16px;">
-          <div><div class="mono" style="font-size:10px;color:var(--text-muted);">ACTIVE</div><div class="mono" style="font-size:24px;font-weight:700;">{{ signal_impact|length if signal_impact else 0 }}</div></div>
-          <div><div class="mono" style="font-size:10px;color:var(--text-muted);">PENDING</div><div class="mono" style="font-size:24px;font-weight:700;">10</div></div>
-          <div><div class="mono" style="font-size:10px;color:var(--text-muted);">CORRECT</div><div class="mono pos" style="font-size:24px;font-weight:700;">5</div></div>
-          <div><div class="mono" style="font-size:10px;color:var(--text-muted);">WRONG</div><div class="mono neg" style="font-size:24px;font-weight:700;">5</div></div>
+
+        <!-- ---------- STAKING & YIELD ---------- -->
+        <div class="tab-panel" id="panel-staking">
+          {% set sa = staking_analytics if staking_analytics is mapping else {} %}
+          <div class="kpi-grid" style="grid-template-columns: repeat(3,1fr); margin-bottom:16px;">
+            <div class="kpi-cell"><div class="k">Total Stake</div><div class="v">{{ "{:,.0f}".format((sa.total_stake|default(0))|float) }}</div><div class="sub">TAO</div></div>
+            <div class="kpi-cell"><div class="k">Avg APY</div><div class="v">{{ "%.2f"|format((sa.avg_apy|default(0))|float) }}%</div><div class="sub">network</div></div>
+            <div class="kpi-cell"><div class="k">Subnets</div><div class="v">{{ sa.subnet_count|default(0) }}</div><div class="sub">yield-bearing</div></div>
+          </div>
+          {% if sa.top_yield %}
+          <table class="tbl">
+            <thead><tr><th>Subnet</th><th>APY</th><th>Emission</th><th>Stake</th><th>Yield Score</th></tr></thead>
+            <tbody>
+              {% for y in sa.top_yield %}
+              <tr>
+                <td class="text-primary">{{ y.name|default('SN' ~ y.netuid) }}</td>
+                <td class="text-buy">{{ "%.2f"|format((y.apy|default(0))|float) }}%</td>
+                <td>{{ "%.2f"|format((y.emission|default(0))|float) }}</td>
+                <td>{{ "{:,.0f}".format((y.total_stake|default(0))|float) }}</td>
+                <td><b class="accent-bright">{{ "%.1f"|format((y.yield_score|default(0))|float) }}</b></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<p class="empty">No staking yield data.</p>{% endif %}
         </div>
-        <div style="margin-top:16px;">
-          <div class="mono" style="font-size:10px;color:var(--text-muted);margin-bottom:4px;">RESOLUTION RATE</div>
-          <div class="heat-bar" style="height: 12px; border-radius: 6px;"><div class="heat-marker" style="left: 50%;"></div></div>
+
+        <!-- ---------- COUNCIL WEIGHTS ---------- -->
+        <div class="tab-panel" id="panel-council">
+          {% if council_weights %}
+          <div class="two-col">
+            <div>
+              {% for cw in council_weights %}
+              <div class="weight-row">
+                <div class="weight-head"><span>{{ cw.expert|default('') }}</span><span>{{ "%.3f"|format((cw.weight|default(0))|float) }} · {{ cw.bias|default('neutral') }}</span></div>
+                <div class="weight-bar"><div class="weight-fill" style="width: {{ ((cw.weight|default(1))|float / 2 * 100)|round }}%;"></div></div>
+              </div>
+              {% endfor %}
+              <div class="weight-note">Weights adjust on prediction resolution: correct <code>+0.02</code>, wrong <code>-0.03</code>.</div>
+            </div>
+            <div>
+              <div class="section-label">Momentum Treemap</div>
+              <div class="treemap">
+                {% for tm in momentum_charts.treemap|default([]) %}
+                <div class="tmap-tile {{ '' if (tm.change|default(0)) >= 0 else 'neg' }}" style="--tmap-flex: {{ tm.value|default(5)|int }};">
+                  <div class="tmap-name">{{ tm.name|default('SN' ~ tm.netuid) }}</div>
+                  <div class="tmap-chg">{{ "%+.1f"|format((tm.change|default(0))|float) }}%</div>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          {% else %}<p class="empty">No council weight data.</p>{% endif %}
         </div>
+
+        <!-- ---------- SIGNAL IMPACT ---------- -->
+        <div class="tab-panel" id="panel-signals">
+          {% if signal_impact %}
+          <div class="radar-list">
+            {% for si in signal_impact %}
+            <div class="radar-item">
+              <div class="ti-head">
+                <div class="impact-net">{{ si.name|default('SN' ~ si.netuid) }}</div>
+                <span class="badge {% if si.net_direction == 'bullish' %}badge-buy{% elif si.net_direction == 'bearish' %}badge-sell{% else %}badge-hold{% endif %}">{{ si.net_direction|default('neutral')|upper }} {{ "%+.2f"|format((si.net_predicted_pct|default(0))|float) }}%</span>
+              </div>
+              {% for imp in si.impacts|default([]) %}
+              <div class="impact-row">
+                <div class="impact-line"><b class="accent-bright">{{ imp.signal_type|default('') }}</b> · {{ imp.description|default('') }}</div>
+                <div class="impact-line impact-line-primary">{{ imp.predicted_move|default('') }}</div>
+              </div>
+              {% endfor %}
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}<p class="empty">No signal impact data.</p>{% endif %}
+        </div>
+
+        <!-- ---------- PATTERNS ---------- -->
+        <div class="tab-panel" id="panel-patterns">
+          {% if patterns %}
+          <div class="radar-list">
+            {% for p in patterns %}
+            <div class="radar-item">
+              <div class="impact-net">{{ p.name|default('SN' ~ p.netuid) }}</div>
+              {% for pat in p.patterns|default([]) %}
+              <div style="margin-top:6px;">
+                <span class="pat-chip pat-{{ pat.type|default('neutral') }}">{{ pat.pattern|default('') }}</span>
+                <span class="impact-line">{{ pat.description|default('') }} · {{ pat.predicted_move|default('') }}</span>
+              </div>
+              {% endfor %}
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}<p class="empty">No pattern recognition data.</p>{% endif %}
+        </div>
+
+        <!-- ---------- PREDICTIVE ENGINE ---------- -->
+        <div class="tab-panel" id="panel-predictions">
+          {% if predictions %}
+          <table class="tbl">
+            <thead><tr><th>Subnet</th><th>Dir</th><th>Pred</th><th>Horizon</th><th>Expert</th><th>Remaining</th><th>Statement</th></tr></thead>
+            <tbody>
+              {% for pr in predictions %}
+              <tr>
+                <td class="text-primary">{{ pr.name|default('SN' ~ pr.netuid) }}</td>
+                <td class="{% if pr.direction == 'up' %}text-buy{% else %}text-sell{% endif %}">{{ pr.direction|default('up')|upper }}</td>
+                <td class="{% if (pr.predicted_pct|default(0)) >= 0 %}text-buy{% else %}text-sell{% endif %}">{{ "%+.2f"|format((pr.predicted_pct|default(0))|float) }}%</td>
+                <td>{{ pr.horizon_hours|default(0) }}h</td>
+                <td>{{ pr.expert|default('—') }}</td>
+                <td>{{ pr.time_remaining|default('—') }}</td>
+                <td class="small">{{ pr.statement|default('') }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}<p class="empty">No active predictions.</p>{% endif %}
+        </div>
+
+        <!-- ---------- LEARNING LOOP ---------- -->
+        <div class="tab-panel" id="panel-learning">
+          {% set lm = learning_metrics if learning_metrics is mapping else {} %}
+          <div class="learning-head">
+            <div class="acc-ring">
+              <svg width="92" height="92" viewBox="0 0 92 92">
+                <circle cx="46" cy="46" r="40" fill="none" stroke="rgba(0,255,136,0.10)" stroke-width="8"></circle>
+                <circle cx="46" cy="46" r="40" fill="none" stroke="#00ff88" stroke-width="8" stroke-linecap="round"
+                        stroke-dasharray="251.2" stroke-dashoffset="{{ (251.2 - 251.2 * (lm.accuracy|default(0)) / 100)|round(1) }}" transform="rotate(-90 46 46)"></circle>
+              </svg>
+              <div class="acc-val">{{ "%.0f"|format((lm.accuracy|default(0))|float) }}%</div>
+            </div>
+            <div class="learn-stat-wrap">
+              <div class="kpi-grid" style="grid-template-columns: repeat(4,1fr);">
+                <div class="kpi-cell"><div class="k">Records</div><div class="v">{{ lm.total_records|default(0) }}</div></div>
+                <div class="kpi-cell"><div class="k">Pending</div><div class="v">{{ lm.predictions_pending|default(0) }}</div></div>
+                <div class="kpi-cell"><div class="k">Correct</div><div class="v text-buy">{{ lm.correct|default(0) }}</div></div>
+                <div class="kpi-cell"><div class="k">Wrong</div><div class="v text-sell">{{ lm.wrong|default(0) }}</div></div>
+              </div>
+            </div>
+          </div>
+          {% if lm.recent_resolutions %}
+          <div class="scroll-y" style="margin-top:16px;">
+            <table class="tbl">
+              <thead><tr><th>Subnet</th><th>Predicted</th><th>Actual</th><th>Result</th><th>Statement</th></tr></thead>
+              <tbody>
+                {% for r in lm.recent_resolutions %}
+                <tr>
+                  <td class="text-primary">{{ r.name|default('—') }}</td>
+                  <td>{{ "%+.2f"|format((r.predicted_pct|default(0))|float) }}%</td>
+                  <td class="{% if (r.actual_pct|default(0)) >= 0 %}text-buy{% else %}text-sell{% endif %}">{{ "%+.2f"|format((r.actual_pct|default(0))|float) }}%</td>
+                  <td>{% if r.correct %}<span class="badge badge-buy">CORRECT</span>{% else %}<span class="badge badge-sell">WRONG</span>{% endif %}</td>
+                  <td class="small">{{ r.statement|default('') }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- ---------- SOCIAL SENTIMENT ---------- -->
+        <div class="tab-panel" id="panel-social">
+          {% if social_sentiment %}
+          <div class="soc-grid">
+            {% for s in social_sentiment %}
+            <div class="card card-muted soc-card">
+              <div class="soc-head">
+                <div class="pick-name">{{ s.name|default('SN' ~ s.netuid) }}</div>
+                <div class="soc-score {% if s.label == 'bullish' %}text-buy{% elif s.label == 'bearish' %}text-sell{% else %}text-hold{% endif %}">{{ s.score|default(0) }}</div>
+              </div>
+              <div class="pick-meta">{{ s.mentions|default(0) }} mentions · {{ s.label|default('neutral')|upper }}</div>
+              {% for f in s.feed|default([]) %}
+              <div class="feed-item">
+                <span class="feed-src">{{ f.source|default('') }}</span>
+                <span class="feed-text">{{ f.text|default('') }}</span>
+              </div>
+              {% endfor %}
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}<p class="empty">No social sentiment data.</p>{% endif %}
+        </div>
+
+        <!-- ---------- SIMIVISION CHAT ---------- -->
+        <div class="tab-panel" id="panel-chat">
+          <div class="chat-box">
+            <div id="chatLog" class="chat-log" style="max-height:320px; overflow-y:auto; padding:8px 0;"></div>
+            <div style="display:flex; gap:8px; margin-top:12px;">
+              <input id="chatInput" type="text" placeholder="Ask the council about any subnet…" style="flex:1; background:rgba(8,18,12,0.85); border:1px solid rgba(0,255,136,0.18); border-radius:8px; padding:10px 12px; color:#e9f7ef; font-family:'Inter',sans-serif;">
+              <button id="chatSend" class="live-pill" style="cursor:pointer; border:1px solid rgba(0,255,136,0.35);">SEND</button>
+            </div>
+            <div id="chatMeta" class="chat-meta">LLM: ready · mindmap context loaded</div>
+          </div>
+        </div>
+
       </div>
     </div>
 
-    <!-- Social Sentiment -->
-    <div class="section-label" id="social-sentiment">Social Sentiment Feed</div>
-    <div class="section-sub">Automated analysis · classified per subnet</div>
-    <div class="card">
-      {% for s in (social_sentiment | default([])) %}
-      <div style="margin-bottom:8px;padding:8px;background:var(--bg-surface);border-radius:8px;">
-        <div class="mono" style="color:var(--accent-bright);margin-bottom:4px;">{{ s.subnet or s.name or 'Unknown' }}</div>
-        <span class="badge {% if 'bullish' in (s.analysis or '')|lower %}badge-buy{% elif 'bearish' in (s.analysis or '')|lower %}badge-sell{% else %}badge-hold{% endif %}">{{ (s.analysis or 'NEUTRAL')|upper }}</span>
-        <div style="margin-top:4px;font-size:13px;">{{ s.summary or '' }}</div>
-      </div>
-      {% else %}<div class="section-sub">No social sentiment data available.</div>{% endfor %}
-    </div>
-  </main>
+  </div>
 
+  <!-- ===================== FOOTER STATUS STRIP ===================== -->
+  <footer class="status">
+    <div class="status-inner">
+      <span><span class="st-dot"></span>SimiVision v3.5 · {{ data_source|default('cache')|upper }} data</span>
+      <span>Subnets: <b>{{ subnets|length if subnets else 0 }}</b></span>
+      <span>Picks: <b>{{ simivision_picks|length if simivision_picks else 0 }}</b></span>
+      <span>Trail: <b>{{ mindmap_trail|length if mindmap_trail else 0 }}</b></span>
+      <span>Predictions: <b>{{ predictions|length if predictions else 0 }}</b></span>
+      <span class="footer-tag">Press <kbd>C</kbd> to toggle compact view</span>
+    </div>
+  </footer>
+
+  <!-- Dashboard controller: UTC clock, tabs, sparklines, radar, chat -->
+  <script src="/static/js/app.js"></script>
+
+  <!-- Collapsible + judge-portfolio expand handlers (vanilla) -->
   <script>
-    document.querySelectorAll('.collapsible').forEach(function(el) {
-      el.addEventListener('click', function() { el.classList.toggle('collapsed'); });
+  (function () {
+    'use strict';
+    document.querySelectorAll('.collapsible-toggle').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var body = btn.nextElementSibling;
+        var open = body.classList.toggle('open');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
     });
-    // Pump Cycle Analytics — expandable per-subnet behavioral profiles.
-    document.querySelectorAll('.pump-profile-head').forEach(function(el) {
-      el.addEventListener('click', function() { el.parentElement.classList.toggle('open'); });
-    });
-
-    // Live top-pick refresh (enhancement only). The picks are rendered
-    // server-side as the primary path; this polls /api/top-pick/hour and
-    // /api/top-pick/day every 5 minutes and updates the headline pick cards
-    // from the { "picks": [...] } response shape. All DOM updates are guarded
-    // so a failed fetch never breaks the server-rendered page.
-    (function () {
-      var REFRESH_MS = 5 * 60 * 1000;
-
-      function ringColor(conf) {
-        if (conf > 0.7) return '#22c55e';
-        if (conf > 0.4) return '#f59e0b';
-        return '#ef4444';
-      }
-
-      function fmtPct(v) { return (Math.round((Number(v) || 0) * 100)) + '%'; }
-      function fmtNum(v, d) { return (Number(v) || 0).toFixed(d); }
-
-      function scenarioHtml(tags) {
-        if (!tags || typeof tags !== 'object') return '';
-        var out = '';
-        Object.keys(tags).forEach(function (k) {
-          var label = k === 'regime' ? 'Market Mood' : k;
-          out += '<span class="mono" style="font-size:11px;color:var(--text-secondary);">' +
-                 label + ': ' + tags[k] + ' · </span>';
-        });
-        return out;
-      }
-
-      function applyPick(prefix, pick) {
-        if (!pick || typeof pick !== 'object') return;
-        var subnet = pick.subnet || pick;
-        var name = subnet.name || pick.name;
-        var netuid = subnet.netuid || pick.netuid;
-        var score = pick.score != null ? pick.score : 0;
-        var conf = pick.confidence != null ? pick.confidence : 0;
-        var signals = pick.signals || {};
-        var tags = pick.scenario_tags || {};
-
-        var elName = document.getElementById(prefix + '-pick-name');
-        var elMeta = document.getElementById(prefix + '-pick-meta');
-        var elRing = document.getElementById(prefix + '-pick-ring');
-        var elPct = document.getElementById(prefix + '-pick-pct');
-        var elEm = document.getElementById(prefix + '-pick-emission');
-        var elApy = document.getElementById(prefix + '-pick-apy');
-        var elSc = document.getElementById(prefix + '-pick-scenario');
-
-        if (elName && name != null) elName.textContent = name;
-        if (elMeta && netuid != null) elMeta.textContent = 'SN' + netuid + ' · score ' + fmtNum(score, 2) + ' · confidence ' + fmtPct(conf);
-        if (elRing) { elRing.style.setProperty('--ring-pct', Math.round((conf) * 100)); elRing.style.setProperty('--ring-color', ringColor(conf)); }
-        if (elPct) elPct.textContent = fmtPct(conf);
-        if (elEm) elEm.textContent = fmtNum(signals.emission, 2) + ' TAO/day';
-        if (elApy) elApy.textContent = fmtNum(signals.apy, 1) + '%';
-        if (elSc) elSc.innerHTML = scenarioHtml(tags);
-      }
-
-      function refresh() {
-        ['hour', 'day'].forEach(function (kind) {
-          fetch('/api/top-pick/' + kind, { headers: { 'Accept': 'application/json' } })
-            .then(function (r) { return r.ok ? r.json() : null; })
-            .then(function (data) {
-              var picks = data && data.picks;
-              if (Array.isArray(picks) && picks.length) applyPick(kind, picks[0]);
-            })
-            .catch(function () { /* silent — server render stays intact */ });
-        });
-      }
-
-      refresh();
-      setInterval(refresh, REFRESH_MS);
-    })();
-
-    // ---------------------------------------------------------------------
-    // Freshness badges (Stream B) + Pick of the Hour context/history (Stream C).
-    // Polls /api/freshness every 30s to render "updated Xm ago" badges next to
-    // each section heading, and /api/pick-history to keep the entry-price
-    // sub-line, vs-market bar, and last-3-picks strip live. All updates are
-    // guarded so a failed fetch never breaks the server-rendered page.
-    // ---------------------------------------------------------------------
-    (function () {
-      var FRESH_MS = 30 * 1000;
-
-      function relTime(iso, nowMs) {
-        if (!iso) return null;
-        var t = Date.parse(iso);
-        if (isNaN(t)) return null;
-        var delta = Math.max(0, Math.round((nowMs - t) / 1000));
-        if (delta < 30) return 'just now';
-        if (delta < 60) return delta + 's ago';
-        if (delta < 3600) return Math.floor(delta / 60) + 'm ago';
-        return Math.floor(delta / 3600) + 'h ago';
-      }
-
-      function applyFreshness(data) {
-        if (!data || typeof data !== 'object') return;
-        var nowMs = data.now ? Date.parse(data.now) : Date.now();
-        if (isNaN(nowMs)) nowMs = Date.now();
-        var map = data.last_updated || {};
-        document.querySelectorAll('.freshness-badge[data-fresh]').forEach(function (el) {
-          var key = el.getAttribute('data-fresh');
-          var iso = map[key];
-          var txt = relTime(iso, nowMs);
-          if (txt === null) {
-            el.textContent = '—';
-            el.className = 'freshness-badge unknown';
-          } else {
-            el.textContent = 'updated ' + txt;
-            // fresh < 2m, stale >= 5m, otherwise neutral.
-            var secs = Math.max(0, Math.round((nowMs - Date.parse(iso)) / 1000));
-            el.className = 'freshness-badge ' + (secs < 120 ? 'fresh' : (secs >= 300 ? 'stale' : ''));
-          }
-        });
-      }
-
-      function fetchFreshness() {
-        fetch('/api/freshness', { headers: { 'Accept': 'application/json' } })
-          .then(function (r) { return r.ok ? r.json() : null; })
-          .then(applyFreshness)
-          .catch(function () { /* silent */ });
-      }
-
-      function fmtSigned(v, d) { return (v >= 0 ? '+' : '') + (Number(v) || 0).toFixed(d); }
-
-      function applyPickContext(pick) {
-        if (!pick || typeof pick !== 'object') return;
-        // Update the live "ago" + since-pick + vs-market fields from the
-        // enriched #1 pick returned by /api/top-pick/hour.
-        var ago = document.getElementById('hour-pick-ago');
-        if (ago && pick.selected_at) {
-          var txt = relTime(pick.selected_at, Date.now());
-          if (txt) ago.textContent = txt;
-        }
-        var since = document.getElementById('hour-pick-since');
-        if (since) {
-          var v = Number(pick.price_change_since_selection) || 0;
-          since.textContent = fmtSigned(v, 2) + '%';
-          since.className = v >= 0 ? 'pos' : 'neg';
-        }
-        var vsm = document.getElementById('hour-pick-vsmarket');
-        if (vsm) {
-          var vm = Number(pick.vs_market) || 0;
-          vsm.textContent = fmtSigned(vm, 2) + '%';
-          vsm.className = vm >= 0 ? 'pos' : 'neg';
-        }
-        var bar = document.getElementById('hour-pick-vsbar');
-        if (bar) {
-          // Centered bar: positive extends right (green), negative left (red).
-          var pct = Math.min(50, Math.abs(Number(pick.vs_market) || 0) * 10);
-          bar.style.width = pct + '%';
-          bar.style.left = (Number(pick.vs_market) || 0) >= 0 ? '50%' : (50 - pct) + '%';
-          bar.style.background = (Number(pick.vs_market) || 0) >= 0 ? '#22c55e' : '#ef4444';
-        }
-        var succ = document.getElementById('hour-pick-success');
-        if (succ) {
-          var ok = !!pick.success_so_far;
-          succ.textContent = ok ? '✓ outperforming' : '✗ underperforming';
-          succ.className = ok ? 'pos' : 'neg';
-        }
-      }
-
-      function applyPickHistory(data) {
-        if (!data || typeof data !== 'object') return;
-        var items = document.getElementById('hour-pick-history-items');
-        var rate = document.getElementById('hour-pick-success-rate');
-        if (items && Array.isArray(data.history)) {
-          var last3 = data.history.slice(0, 3).map(function (h) {
-            var mark = h.success ? '✅' : '❌';
-            var vs = fmtSigned(h.absolute_return, 1) + '% vs median ' + fmtSigned(h.median_subnet_return, 1) + '%';
-            return '<span class="ph-item ' + (h.success ? 'ph-ok' : 'ph-no') + '">' + mark + ' ' + (h.name || 'SN' + h.netuid) + ' (' + vs + ')</span>';
-          });
-          items.innerHTML = last3.length ? last3.join(' · ') : 'no finalized picks yet';
-        }
-        if (rate && data.stats) {
-          var s = data.stats;
-          if (s.total > 0) {
-            rate.textContent = 'Pick of the Hour success rate: ' + s.wins + '/' + s.total + ' (' + s.success_rate + '%) — outperforming market median';
-          } else {
-            rate.textContent = '';
-          }
-        }
-      }
-
-      function fetchPickContext() {
-        fetch('/api/top-pick/hour', { headers: { 'Accept': 'application/json' } })
-          .then(function (r) { return r.ok ? r.json() : null; })
-          .then(function (d) {
-            if (d && Array.isArray(d.picks) && d.picks.length) applyPickContext(d.picks[0]);
-          })
-          .catch(function () { /* silent */ });
-        fetch('/api/pick-history', { headers: { 'Accept': 'application/json' } })
-          .then(function (r) { return r.ok ? r.json() : null; })
-          .then(applyPickHistory)
-          .catch(function () { /* silent */ });
-      }
-
-      fetchFreshness();
-      fetchPickContext();
-      setInterval(fetchFreshness, FRESH_MS);
-      setInterval(fetchPickContext, FRESH_MS);
-    })();
+  })();
   </script>
 </body>
 </html>
