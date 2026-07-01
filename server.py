@@ -1298,6 +1298,39 @@ def api_learning_stats_safe():
     }
 
 
+@app.post("/api/learning/trigger")
+def api_learning_trigger():
+    """Manually trigger a prediction-resolution cycle (the learning loop's judge).
+
+    Runs the resolver immediately so pending predictions are graded and expert
+    weights are nudged without waiting for the next scheduled tick (the
+    scheduler runs every 15 minutes by default). Returns the cycle summary and
+    the current scheduler state. Safe to call repeatedly.
+    """
+    scheduler = get_prediction_resolver_scheduler()
+    if scheduler is None:
+        # Scheduler not yet started (e.g. headless test): start it and run a
+        # single synchronous cycle so the trigger is still effective.
+        start_prediction_resolver_scheduler(immediate=False)
+        scheduler = get_prediction_resolver_scheduler()
+
+    cycle: Dict[str, Any] = {}
+    if scheduler is not None:
+        try:
+            cycle = scheduler.run_once()
+        except Exception as exc:
+            cycle = {"ok": False, "error": str(exc)}
+
+    return {
+        "status": "success",
+        "data": {
+            "cycle": cycle,
+            "scheduler": get_prediction_resolver_scheduler_state(),
+            "triggered_at": datetime.utcnow().isoformat() + "Z",
+        },
+    }
+
+
 @app.get("/api/pump-analytics")
 def api_pump_analytics(request: Request):
     """Pump Cycle Analytics v2 — CUSUM detection, 6-phase model, proneness.
@@ -2638,6 +2671,32 @@ def _create_prediction_entry(
         "proneness_at_prediction": _proneness_at_pred,
         "statement": f"predicted to move {'+' if predicted_pct >= 0 else ''}{predicted_pct:.1f}% within {horizon} hours",
     }
+
+    # Mint a pending scenario-memory record at prediction time so the resolver
+    # can later stamp the actual outcome onto the *same* record (via
+    # scenario_memory.record_outcome) instead of minting a duplicate. The
+    # scenario id is carried on the prediction so resolution can wire it back.
+    try:
+        from internal.council import scenario_memory as _sm
+        _scenario = _sm.add_scenario(
+            name=sn.get("name", f"subnet_{netuid}"),
+            features={
+                "netuid": netuid,
+                "expert": expert,
+                "direction": direction,
+                "predicted_pct": round(predicted_pct, 2),
+                "reference_price": ref_price,
+                "horizon_hours": horizon,
+            },
+            outcome=None,
+            regime=_sm.classify_regime({
+                "avg_change_24h": float(sn.get("price_change_24h", 0) or 0),
+            }),
+        )
+        prediction["scenario_id"] = _scenario.get("id")
+    except Exception as exc:
+        logger.warning("scenario_memory pre-record failed: %s", exc)
+
     PREDICTION_STORE.add(prediction)
 
     try:
@@ -3516,6 +3575,18 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         if sell.get("active"):
             rec = "SELL"
 
+        # Distinguish yield-driven staking plays from price-driven trading
+        # plays so the UI can surface a STAKE badge (gold) vs a BUY badge
+        # (green). A pick is "stake" when yield/fundamentals dominate the
+        # conviction — i.e. the primary Council expert is the quant
+        # (fundamental/yield) lens and APY is meaningful — otherwise "trade".
+        apy = float(sn.get("apy", 0) or 0)
+        primary_expert = (prediction or {}).get("expert") if isinstance(prediction, dict) else None
+        if primary_expert == "quant" and apy > 0:
+            recommendation_type = "stake"
+        else:
+            recommendation_type = "trade"
+
         sparkline = hist.get("closes", [])[-12:]
         simivision_picks.append({
             "rank": idx + 1,
@@ -3527,6 +3598,7 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
             "price_change_24h": chg,
             "conviction": conviction,
             "recommendation": rec,
+            "recommendation_type": recommendation_type,
             "reasons": reasons,
             "sparkline": sparkline,
             "hot": hot,

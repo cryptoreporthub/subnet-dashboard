@@ -879,7 +879,18 @@ def _scenario_tags(
     indicators: Dict[str, Any],
     market_context: Optional[Dict[str, Any]],
 ) -> Dict[str, str]:
-    """Derive regime, RSI and volume scenario tags."""
+    """Derive granular regime, RSI, volume and price-direction scenario tags.
+
+    Volume buckets are tuned to per-subnet USD turnover rather than the old
+    network-wide thresholds: ``very_low`` (<$500), ``low`` ($500-$5k),
+    ``medium`` ($5k-$50k), ``high`` (>$50k). RSI bands are tightened so the
+    neutral band is narrower (oversold <35, neutral 35-65, overbought >65),
+    giving the learning loop more signal to separate from noise. When the
+    regime is neutral it is further split by the sign of the 24h change
+    (``neutral_bullish`` / ``neutral_bearish`` / ``neutral``) so flat-but-
+    trending markets are still distinguishable. A ``price_direction`` field
+    captures the raw up/down move for downstream scenario matching.
+    """
     market_context = market_context or {}
     tao_chg = float(market_context.get("tao_change_24h", 0) or 0)
     if tao_chg > 3:
@@ -887,28 +898,46 @@ def _scenario_tags(
     elif tao_chg < -3:
         regime = "bearish"
     else:
-        regime = "neutral"
+        # Neutral regime: sub-classify by the sign of the 24h change so the
+        # learning loop can still tell a flat-but-rising market from a
+        # flat-but-falling one.
+        if tao_chg > 0:
+            regime = "neutral_bullish"
+        elif tao_chg < 0:
+            regime = "neutral_bearish"
+        else:
+            regime = "neutral"
 
     rsi_val = 50.0
     rsi = indicators.get("rsi", {})
     if isinstance(rsi, dict):
         rsi_val = float(rsi.get("value", 50))
-    if rsi_val < 30:
+    if rsi_val < 35:
         rsi_tag = "oversold"
-    elif rsi_val > 70:
+    elif rsi_val > 65:
         rsi_tag = "overbought"
     else:
         rsi_tag = "neutral"
 
     volume = float(sn.get("volume", 0) or 0)
-    if volume > 1_000_000:
-        volume_tag = "high"
-    elif volume < 100_000:
+    if volume < 500:
+        volume_tag = "very_low"
+    elif volume < 5_000:
         volume_tag = "low"
+    elif volume < 50_000:
+        volume_tag = "medium"
     else:
-        volume_tag = "normal"
+        volume_tag = "high"
 
-    return {"regime": regime, "rsi": rsi_tag, "volume": volume_tag}
+    price_change_24h = float(sn.get("price_change_24h", 0) or 0)
+    price_direction = "up" if price_change_24h >= 0 else "down"
+
+    return {
+        "regime": regime,
+        "rsi": rsi_tag,
+        "volume": volume_tag,
+        "price_direction": price_direction,
+    }
 
 
 def _compute_confidence(

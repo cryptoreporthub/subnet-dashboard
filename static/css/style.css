@@ -467,6 +467,27 @@ header.top {
   border-color: rgba(245, 158, 11, 0.25);
 }
 
+/* STAKE badge — gold/yellow, used for yield-driven staking picks to
+   distinguish them from price-driven BUY (green) picks. */
+.stake-badge {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+  border-color: rgba(251, 191, 36, 0.35);
+  text-shadow: 0 0 8px rgba(251, 191, 36, 0.35);
+}
+
+/* Gold accent text used for staking/yield figures and positive predictions
+   surfaced alongside a STAKE badge. */
+.stake-color {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+.pred-badge {
+  font-size: 0.7rem;
+  letter-spacing: 0.4px;
+}
+
 /* ---------- Pick cards ---------- */
 .picks {
   display: grid;

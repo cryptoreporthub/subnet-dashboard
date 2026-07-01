@@ -119,6 +119,87 @@ def add_scenario(
     return scenario
 
 
+def update_outcome(
+    scenario_id: str,
+    outcome: str,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    """Write an actual outcome back to an existing scenario memory record.
+
+    The resolver creates a scenario when a prediction is made (outcome left
+    ``None`` / pending); once the prediction resolves, this method stamps the
+    real outcome onto that record so the learning loop grades the *same*
+    scenario rather than minting a duplicate. Returns the updated scenario,
+    or ``None`` if no record matched ``scenario_id``.
+    """
+    if not scenario_id:
+        return None
+    data = _load()
+    for scenario in data.get("scenarios", []):
+        if scenario.get("id") == scenario_id:
+            scenario["outcome"] = outcome
+            scenario["resolved_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            if metadata:
+                existing = scenario.get("metadata") or {}
+                existing.update(metadata)
+                scenario["metadata"] = existing
+            _save(data)
+            return scenario
+    return None
+
+
+def record_outcome(
+    name: str,
+    outcome: str,
+    features: Optional[Dict[str, Any]] = None,
+    regime: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    scenario_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Record a resolved outcome, wiring it back to an existing record when possible.
+
+    If ``scenario_id`` is supplied (or a recent pending scenario for the same
+    ``name`` + ``regime`` exists), the outcome is stamped onto that record via
+    :func:`update_outcome` so the learning loop grades the original scenario in
+    place. Otherwise a new scenario is created carrying the outcome — preserving
+    the previous behavior as a fallback.
+    """
+    features = features or {}
+    if regime is None:
+        regime = classify_regime(features)
+    else:
+        regime = _normalize_regime(regime)
+
+    # Prefer the explicitly-linked scenario id (set on the prediction at
+    # creation time) so the outcome lands on the exact originating record.
+    if scenario_id:
+        updated = update_outcome(scenario_id, outcome, metadata)
+        if updated is not None:
+            return updated
+
+    # Otherwise look for the most recent pending (outcome-less) scenario for
+    # the same name + regime and stamp the outcome onto it.
+    data = _load()
+    candidates = [
+        s for s in data.get("scenarios", [])
+        if s.get("name") == name
+        and _normalize_regime(s.get("regime")) == regime
+        and s.get("outcome") is None
+    ]
+    if candidates:
+        return update_outcome(candidates[-1]["id"], outcome, metadata) or candidates[-1]
+
+    # Fallback: no matching pending record, so create a new one with the
+    # outcome already set (legacy behavior).
+    return add_scenario(
+        name=name,
+        features=features,
+        outcome=outcome,
+        regime=regime,
+        metadata=metadata,
+    )
+
+
 def get_scenarios(regime: Optional[str] = None, limit: Optional[int] = None) -> List[Dict[str, Any]]:
     """Return stored scenarios, optionally filtered by regime."""
     data = _load()

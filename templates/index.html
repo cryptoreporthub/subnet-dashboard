@@ -223,8 +223,16 @@
           </div>
 
           <div class="tags" style="margin-top:12px;">
+            {% set rec_type = (pick.recommendation_type|default('trade'))|string|lower %}
+            {% if rec == 'BUY' and rec_type == 'stake' %}
+            <span class="badge stake-badge">STAKE</span>
+            {% else %}
             <span class="badge {% if rec == 'BUY' %}badge-buy{% elif rec == 'SELL' %}badge-sell{% elif rec == 'HOLD' %}badge-hold{% else %}badge-watch{% endif %}">{{ rec }}</span>
+            {% endif %}
             {% if sell_active %}<span class="badge badge-sell">SELL ALERT</span>{% elif hot_active %}<span class="badge badge-hot">HOT</span>{% endif %}
+            {% if pick.prediction and pick.prediction.predicted_pct is not none %}
+            <span class="badge badge-watch pred-badge">PRED <span class="{% if (pick.prediction.predicted_pct|default(0))|float >= 0 %}stake-color{% else %}neg{% endif %}">{{ "%+.1f"|format((pick.prediction.predicted_pct|default(0))|float) }}%</span></span>
+            {% endif %}
           </div>
 
           {% if pick.reasons %}

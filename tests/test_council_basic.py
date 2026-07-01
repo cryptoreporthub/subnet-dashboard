@@ -38,7 +38,7 @@ def test_score_subnet_for_hour_shape():
     assert 0 <= result["total_score"] <= 100
     assert 0 <= result["confidence"] <= 1
     assert set(result["expert_contributions"].keys()) == {"quant", "hype", "contrarian", "technical"}
-    assert set(result["scenario_tags"].keys()) == {"regime", "rsi", "volume"}
+    assert set(result["scenario_tags"].keys()) == {"regime", "rsi", "volume", "price_direction"}
     assert result["horizon"] == "hour"
 
 
