@@ -304,6 +304,18 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     _start_telegram_listener()
 
+    # Start per-subnet baseline price recording (env-gated, default on).
+    try:
+        enabled = os.environ.get("ENABLE_BASELINE_RECORDING", "true").lower()
+        if enabled in ("1", "true", "yes", "on"):
+            interval = int(os.environ.get("BASELINE_INTERVAL_SECONDS", "300"))
+            tracker = _get_message_intel_price_tracker()
+            if tracker is not None:
+                tracker.start_baseline_recording(interval=interval)
+                logger.info("Baseline price recording started (interval=%ds)", interval)
+    except Exception as exc:
+        logger.warning("Failed to start baseline price recording: %s", exc)
+
     yield
     try:
         stop_indicator_scheduler()
@@ -618,6 +630,58 @@ def _safe_pump_analytics() -> Dict[str, Any]:
 @app.get("/health")
 def health_check():
     return PlainTextResponse("OK")
+
+
+@app.get("/api/price-tracking/baselines")
+def api_price_tracking_baselines():
+    """Return the recorded baseline price history for all tracked subnets."""
+    try:
+        baseline_file = os.environ.get(
+            "PRICE_BASELINE_FILE", "data/price_baselines.json"
+        )
+        if not os.path.exists(baseline_file):
+            return {
+                "status": "success",
+                "meta": {"count": 0, "source": "file"},
+                "baselines": [],
+            }
+        with open(baseline_file, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        if not isinstance(data, list):
+            data = []
+        netuids = {e.get("netuid") for e in data if e.get("netuid") is not None}
+        return {
+            "status": "success",
+            "meta": {
+                "count": len(data),
+                "tracked_subnets": len(netuids),
+                "source": "file",
+            },
+            "baselines": data,
+        }
+    except Exception as exc:
+        logger.warning("price-tracking/baselines failed: %s", exc)
+        return {"status": "error", "error": str(exc), "baselines": []}
+
+
+@app.get("/api/price-tracking/outcomes")
+def api_price_tracking_outcomes():
+    """Return recorded price outcomes (for debugging/verification)."""
+    try:
+        if not _MESSAGE_INTEL_AVAILABLE:
+            return {"status": "success", "meta": {"count": 0}, "outcomes": []}
+        db = _get_message_intel_db()
+        if db is None:
+            return {"status": "success", "meta": {"count": 0}, "outcomes": []}
+        outcomes = db.list_price_outcomes(limit=100)
+        return {
+            "status": "success",
+            "meta": {"count": len(outcomes)},
+            "outcomes": outcomes,
+        }
+    except Exception as exc:
+        logger.warning("price-tracking/outcomes failed: %s", exc)
+        return {"status": "error", "error": str(exc), "outcomes": []}
 
 
 @app.get("/api/resolve-predictions")

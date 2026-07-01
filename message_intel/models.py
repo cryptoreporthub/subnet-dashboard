@@ -87,6 +87,7 @@ class Database:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     message_id INTEGER NOT NULL REFERENCES messages(id),
                     tao_usd_price REAL,
+                    netuid INTEGER,
                     snapshot_timestamp TEXT
                 );
 
@@ -125,6 +126,19 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_verdicts_message ON message_verdicts(message_id);
                 CREATE INDEX IF NOT EXISTS idx_outcomes_message ON price_outcomes(message_id);
             """)
+        self._migrate_schema()
+
+    def _migrate_schema(self) -> None:
+        """Add columns introduced after initial schema (idempotent)."""
+        with self._connect() as conn:
+            cols = {
+                r[1] for r in conn.execute("PRAGMA table_info(price_snapshots)").fetchall()
+            }
+            if "netuid" not in cols:
+                try:
+                    conn.execute("ALTER TABLE price_snapshots ADD COLUMN netuid INTEGER")
+                except sqlite3.OperationalError:
+                    pass
 
     # ── Messages ──────────────────────────────────────────────────────
 
@@ -235,12 +249,12 @@ class Database:
 
     # ── Price ─────────────────────────────────────────────────────────
 
-    def save_price_snapshot(self, message_id: int, price: float) -> None:
+    def save_price_snapshot(self, message_id: int, price: float, netuid: Optional[int] = None) -> None:
         with self._connect() as conn:
             conn.execute(
-                """INSERT INTO price_snapshots (message_id, tao_usd_price, snapshot_timestamp)
-                   VALUES (?, ?, ?)""",
-                (message_id, price, _now_iso()),
+                """INSERT INTO price_snapshots (message_id, tao_usd_price, netuid, snapshot_timestamp)
+                   VALUES (?, ?, ?, ?)""",
+                (message_id, price, netuid, _now_iso()),
             )
 
     def save_price_outcome(self, message_id: int, outcome: Dict[str, Any]) -> None:
@@ -326,12 +340,24 @@ class Database:
         """Return messages with a price snapshot but no 24h outcome yet."""
         with self._connect() as conn:
             rows = conn.execute(
-                """SELECT m.*, ps.tao_usd_price, ps.snapshot_timestamp
+                """SELECT m.*, ps.tao_usd_price, ps.netuid, ps.snapshot_timestamp
                    FROM messages m
                    JOIN price_snapshots ps ON ps.message_id = m.id
                    LEFT JOIN price_outcomes po ON po.message_id = m.id
                    WHERE po.id IS NULL
                    ORDER BY m.id""",
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def list_price_outcomes(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Return recorded price outcomes (most recent first)."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT po.*, ps.netuid
+                   FROM price_outcomes po
+                   LEFT JOIN price_snapshots ps ON ps.message_id = po.message_id
+                   ORDER BY po.id DESC LIMIT ?""",
+                (limit,),
             ).fetchall()
             return [dict(r) for r in rows]
 
