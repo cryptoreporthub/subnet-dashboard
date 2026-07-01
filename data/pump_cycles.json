@@ -1,0 +1,15 @@
+{
+  "snapshots": {},
+  "cusum_state": {},
+  "cycles": {},
+  "profiles": {},
+  "accuracy": {},
+  "phase_state": {},
+  "meta": {
+    "version": "2.0",
+    "created": "2026-06-30T22:10:00Z",
+    "last_updated": null,
+    "total_snapshots": 0,
+    "total_cycles_detected": 0
+  }
+}

@@ -1,44 +1,44 @@
 {
   "expert_weights": {
-    "quant": 0.88,
+    "quant": 0.85,
     "hype": 1.0,
     "contrarian": 1.0,
     "technical": 1.0
   },
   "performance_history": {
-    "accuracy": 0.0,
-    "total_records": 13,
-    "correct": 0,
-    "wrong": 4,
-    "pending": 9
+    "accuracy": 0.5,
+    "total_records": 34,
+    "correct": 5,
+    "wrong": 5,
+    "pending": 24
   },
   "council_dispositions": {
     "quant": "bullish",
-    "hype": "bullish",
-    "contrarian": "bearish",
-    "technical": "bullish"
+    "hype": "bearish",
+    "contrarian": "neutral",
+    "technical": "bearish"
   },
   "council": {
     "quant": {
       "disposition": "bullish",
       "lens": "fundamental/yield",
-      "pick": "Coldint"
+      "pick": "Ralph"
     },
     "hype": {
-      "disposition": "bullish",
+      "disposition": "bearish",
       "lens": "momentum/social",
-      "pick": "Coldint"
+      "pick": "Ralph"
     },
     "contrarian": {
-      "disposition": "bearish",
+      "disposition": "neutral",
       "lens": "contrarian/RSI",
-      "pick": "Coldint"
+      "pick": "Ralph"
     },
     "technical": {
-      "disposition": "bullish",
+      "disposition": "bearish",
       "lens": "technical/trend",
-      "pick": "Coldint"
+      "pick": "Ralph"
     }
   },
-  "last_updated": "2026-06-28T23:14:34.333541Z"
+  "last_updated": "2026-07-01T19:37:31.626574Z"
 }

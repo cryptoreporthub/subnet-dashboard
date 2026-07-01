@@ -12,6 +12,15 @@ from typing import Any, Callable, Dict, Optional
 
 from internal.indicators.indicator_engine import IndicatorEngine
 
+# Ensure the data directory exists at module load time. Fly.io root filesystems
+# are ephemeral; without this the cycle-summary write below silently fails.
+# Uses the shared helper so the "directory missing, created" event is logged.
+try:
+    from internal.file_utils import ensure_data_dir
+    ensure_data_dir()
+except Exception:  # pragma: no cover - keep import-safe if file_utils is unavailable
+    os.makedirs('data', exist_ok=True)
+
 INDICATOR_REFRESH_MINUTES = int(os.environ.get("INDICATOR_REFRESH_MINUTES", "15"))
 MAX_BACKOFF_MINUTES = int(os.environ.get("INDICATOR_MAX_BACKOFF_MINUTES", "240"))
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
@@ -30,7 +39,14 @@ def _load_json(path: str) -> Dict[str, Any]:
     return {}
 
 def _save_json(path: str, data: Dict[str, Any]) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    # Re-check the data directory before every write cycle so a missing Fly.io
+    # volume never silently kills the scheduler tick.
+    try:
+        from internal.file_utils import ensure_data_dir
+        ensure_data_dir()
+    except Exception:
+        os.makedirs(os.path.dirname(path) or "data", exist_ok=True)
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(path) or ".", suffix=".tmp")
     try:
         with os.fdopen(fd, "w") as f:

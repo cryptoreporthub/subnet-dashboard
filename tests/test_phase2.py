@@ -308,7 +308,7 @@ def test_server_rotation_tracker_endpoint():
     assert "volatility_clusters" in body
 
 
-def test_server_predictions_resolved_endpoint(nudge_spy):
+def test_server_predictions_resolved_endpoint(nudge_spy, monkeypatch):
     from server import app
     from fastapi.testclient import TestClient
 
@@ -317,6 +317,18 @@ def test_server_predictions_resolved_endpoint(nudge_spy):
     resp = client.get("/api/predictions/resolved")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+    # Pin the subnet feed to the server's static fallback so the resolver sees
+    # a deterministic price for netuid 29 ($28.50). Without this the endpoint
+    # would resolve against live/cached market data, where netuid 29 trades at
+    # a tiny fraction of a dollar and the +5% "up" prediction would misclassify
+    # as a miss. This matches the test's documented intent.
+    fallback_subnets = [
+        {"netuid": 29, "name": "Coldint", "price": 28.50},
+        {"netuid": 19, "name": "Inference", "price": 15.20},
+        {"netuid": 12, "name": "Compute", "price": 12.40},
+    ]
+    monkeypatch.setattr("server._get_subnets_with_source", lambda: (fallback_subnets, "static-fallback"))
 
     # Use netuid 29 because the static fallback used by the server includes it.
     now = datetime.now(timezone.utc)

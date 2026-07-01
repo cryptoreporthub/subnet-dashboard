@@ -6,6 +6,7 @@ import sys
 import threading
 import time
 import traceback
+import urllib.request
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Optional
@@ -25,13 +26,33 @@ from fetchers.taomarketcap import get_all_subnets, get_subnet_data
 # Safe internal imports — endpoints stay live even if modules are incomplete.
 # ---------------------------------------------------------------------------
 try:
-    from internal.council.state_vector import score_subnet_for_hour, score_subnet_for_day
+    from internal.council.state_vector import (
+        score_subnet_for_hour,
+        score_subnet_for_day,
+        clamp_prediction_horizon,
+    )
 except Exception:  # pragma: no cover
     def score_subnet_for_hour(*_args, **_kwargs):
         return 0.0
 
     def score_subnet_for_day(*_args, **_kwargs):
         return 0.0
+
+    def clamp_prediction_horizon(horizon: int, predicted_pct: Optional[float] = None) -> int:
+        """Inline fallback: HARD 4-hour maximum for every prediction horizon."""
+        return max(1, min(int(horizon), 4))
+
+
+# Canonical percentage-based prediction horizon clamp. Delegates to the shared
+# implementation in ``internal.council.state_vector`` (with the safe fallback
+# above when that module is unavailable). Apply this at every point where a
+# prediction's horizon is determined, BEFORE the prediction is stored/displayed.
+#
+# NOTE: existing predictions already persisted with the old generic 1-168h clamp
+# (e.g. a -2.1% move pinned to 168h) will keep their stale horizon until they
+# either expire naturally or are re-clamped by ``_reclamp_stored_predictions``
+# on startup (see ``_lifespan``).
+_clamp_prediction_horizon = clamp_prediction_horizon
 
 try:
     from internal.council.daily_pick import select_daily_pick
@@ -46,6 +67,22 @@ except Exception:  # pragma: no cover
         return {}
 
 try:
+    from internal.council.hourly_pick import select_hourly_pick
+except Exception:  # pragma: no cover
+    def select_hourly_pick(*_args, **_kwargs):
+        return {"subnet": None, "score": 0.0, "confidence": 0.0, "expert_contributions": {}, "scenario_tags": {}, "audit": {"approved": False, "concerns": ["hourly_pick unavailable"], "adjusted_confidence": 0.0}, "final_confidence": 0.0, "action": "long"}
+
+try:
+    from internal.council import pick_history
+except Exception:  # pragma: no cover
+    pick_history = None  # type: ignore[assignment]
+
+try:
+    from internal import freshness_tracker
+except Exception:  # pragma: no cover
+    freshness_tracker = None  # type: ignore[assignment]
+
+try:
     from internal.council import resolver, scenario_memory, rotation_tracker
 except Exception:  # pragma: no cover
     class _FakeResolver:
@@ -58,7 +95,21 @@ except Exception:  # pragma: no cover
             return {"resolved": [], "pending": [], "stats": {}}
 
     resolver = _FakeResolver()
-    scenario_memory = type("_FakeModule", (), {"get_scenarios": lambda *_args, **_kwargs: []})()
+    scenario_memory = type(
+        "_FakeModule",
+        (),
+        {
+            "get_scenarios": lambda *_args, **_kwargs: [],
+            "add_scenario": lambda *_args, **_kwargs: {},
+            "classify_regime": lambda *_args, **_kwargs: "neutral",
+            "get_memory_snapshot": lambda *_args, **_kwargs: {
+                "scenarios": [],
+                "regimes": {},
+                "stats": {"total": 0, "by_regime": {}},
+                "meta": {},
+            },
+        },
+    )()
     rotation_tracker = type("_FakeModule", (), {"get_rotation_summary": lambda *_args, **_kwargs: {}})()
 
 try:
@@ -123,12 +174,40 @@ except Exception:  # pragma: no cover
     def stop_indicator_scheduler(*_args, **_kwargs):
         pass
 
+# Prediction resolver scheduler — grades pending predictions on a clock so the
+# learning loop's weights/accuracy update even when no dashboard is rendered.
 try:
-    from data.learning_engine import LearningEngine
+    from internal.council.resolver_scheduler import (
+        get_prediction_resolver_scheduler,
+        get_prediction_resolver_scheduler_state,
+        start_prediction_resolver_scheduler,
+        stop_prediction_resolver_scheduler,
+    )
+except Exception:  # pragma: no cover
+    def get_prediction_resolver_scheduler_state(*_args, **_kwargs):
+        return {"running": False}
+
+    def start_prediction_resolver_scheduler(*_args, **_kwargs):
+        pass
+
+    def stop_prediction_resolver_scheduler(*_args, **_kwargs):
+        pass
+
+    def get_prediction_resolver_scheduler(*_args, **_kwargs):
+        return None
+
+try:
+    from datastore.learning_engine import LearningEngine
 except Exception:  # pragma: no cover
     class LearningEngine:
         def __init__(self, *args, **kwargs):
             pass
+
+try:
+    from datastore.pump_tracker import get_pump_tracker
+except Exception:  # pragma: no cover
+    def get_pump_tracker(*_args, **_kwargs):
+        return None
 
 try:
     from message_intel import Database as _MessageIntelDatabase
@@ -145,7 +224,121 @@ except Exception as _message_intel_import_exc:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
 
-os.makedirs("data", exist_ok=True)
+# Runtime data directory. In production this is a Fly.io persistent volume
+# mount point (see fly.toml [mounts]); locally it is just ./data. The directory
+# is created on startup so the app works with or without a mounted volume.
+DATA_DIR = os.environ.get("DATA_DIR", "data")
+DATA_SEEDS_DIR = os.environ.get("DATA_SEEDS_DIR", "data_seeds")
+# Learning-critical files that should survive deploys. On the first boot of an
+# empty volume these are seeded from data_seeds/ so prior learning is preserved;
+# they are never overwritten once present on the volume.
+_PERSISTENT_DATA_FILES = ("predictions.json", "soul_map.json")
+
+
+def _ensure_data_dir() -> None:
+    """Create the data directory if missing and diagnose persistence state.
+
+    - Ensures ``DATA_DIR`` exists (works with or without a Fly volume).
+    - Seeds learning-critical files from ``DATA_SEEDS_DIR`` when the volume is
+      empty on first boot (never overwrites existing data).
+    - Logs a warning for each missing/empty persistent file so future resets
+      are diagnosable from the app logs.
+    """
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+    except Exception as exc:
+        logger.warning("Could not create data directory %s: %s", DATA_DIR, exc)
+        return
+
+    # Seed missing learning-critical files from packaged defaults so an empty
+    # volume does not silently discard prior learning on first boot.
+    for name in _PERSISTENT_DATA_FILES:
+        target = os.path.join(DATA_DIR, name)
+        if os.path.exists(target) and os.path.getsize(target) > 0:
+            continue
+        seed = os.path.join(DATA_SEEDS_DIR, name)
+        if os.path.exists(seed) and os.path.getsize(seed) > 0:
+            try:
+                import shutil
+
+                shutil.copy2(seed, target)
+                logger.info(
+                    "Seeded empty/missing data file %s from %s (first boot of "
+                    "persistent volume).", name, DATA_SEEDS_DIR
+                )
+            except Exception as exc:
+                logger.warning("Could not seed %s from %s: %s", name, seed, exc)
+
+    # Diagnostic logging: surface missing/empty persistent files so future
+    # learning-data resets are visible in the app logs.
+    for name in _PERSISTENT_DATA_FILES:
+        path = os.path.join(DATA_DIR, name)
+        try:
+            if not os.path.exists(path):
+                logger.warning(
+                    "Learning data file missing on startup: %s "
+                    "(data may have been reset or the volume is empty).", path
+                )
+            elif os.path.getsize(path) == 0:
+                logger.warning(
+                    "Learning data file is empty on startup: %s "
+                    "(data may have been reset or the volume is empty).", path
+                )
+            else:
+                logger.info("Learning data file present on startup: %s (%d bytes)", path, os.path.getsize(path))
+        except Exception as exc:
+            logger.warning("Could not stat %s: %s", path, exc)
+
+
+_ensure_data_dir()
+
+
+def _mark_fresh(key: str) -> None:
+    """Mark a dashboard section as freshly updated (no-op if tracker missing)."""
+    if freshness_tracker is not None:
+        try:
+            freshness_tracker.mark_updated(key)
+        except Exception:
+            pass
+
+
+def _freshness_snapshot() -> Dict[str, Any]:
+    """Return the freshness map for /api/freshness (safe default on failure)."""
+    if freshness_tracker is not None:
+        try:
+            return freshness_tracker.snapshot()  # type: ignore[no-any-return]
+        except Exception:
+            pass
+    return {"last_updated": {}, "now": datetime.utcnow().isoformat() + "Z"}
+
+
+def _record_hour_pick(pick: Dict[str, Any], subnets: List[Dict[str, Any]],
+                      indicators: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Track a Pick of the Hour selection (entry price/trigger/outcome).
+
+    Delegates to ``internal.council.pick_history`` so the #1 hourly pick
+    carries ``selected_at``/``entry_price``/``trigger_reason`` and a live
+    vs-market success metric. Returns the pick unchanged if the module is
+    unavailable so the render path never breaks.
+    """
+    if pick_history is None:
+        return pick
+    try:
+        return pick_history.record_pick(pick, subnets, indicators)
+    except Exception as exc:
+        logger.warning("pick_history.record_pick failed: %s", exc)
+        return pick
+
+
+def _hour_pick_history(limit: int = 20) -> Dict[str, Any]:
+    """Return the pick-of-the-hour history + aggregate success stats."""
+    if pick_history is None:
+        return {"active": None, "history": [], "stats": {"total": 0, "wins": 0, "losses": 0, "success_rate": 0.0}}
+    try:
+        return pick_history.get_history(limit=limit)  # type: ignore[no-any-return]
+    except Exception as exc:
+        logger.warning("pick_history.get_history failed: %s", exc)
+        return {"active": None, "history": [], "stats": {"total": 0, "wins": 0, "losses": 0, "success_rate": 0.0}}
 
 # ---------------------------------------------------------------------------
 # Message Intelligence pipeline singletons (Telegram → NLP → Jury → Learning)
@@ -242,15 +435,57 @@ def _start_telegram_listener() -> None:
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Start background services on startup and stop them on shutdown."""
+    # Ensure the persistent data directory exists and diagnose any missing
+    # learning-data files (e.g. an empty/unmounted Fly volume) on every boot.
+    try:
+        _ensure_data_dir()
+    except Exception as exc:
+        logger.warning("Startup data-dir check skipped: %s", exc)
+
+    # Re-clamp any stale pending predictions to the magnitude-based horizon
+    # bands so legacy entries (e.g. a -2.1% move pinned to 168h) expire on a
+    # sensible schedule instead of lingering for up to a week.
+    try:
+        _reclamp_stored_predictions()
+    except Exception as exc:
+        logger.warning("Startup prediction re-clamp skipped: %s", exc)
+
     try:
         start_indicator_scheduler()
         logger.info("Indicator scheduler started")
     except Exception as exc:
         logger.warning("Failed to start indicator scheduler: %s", exc)
 
+    # Start the prediction resolver on a clock so pending predictions get
+    # graded (and learning-loop weights updated) even when no dashboard is
+    # being rendered. The first tick runs shortly after boot to clear any
+    # backlog of stuck ``pending`` predictions.
+    try:
+        start_prediction_resolver_scheduler(immediate=False)
+        logger.info("Prediction resolver scheduler started")
+    except Exception as exc:
+        logger.warning("Failed to start prediction resolver scheduler: %s", exc)
+
     _start_telegram_listener()
 
+    # Start per-subnet baseline price recording (env-gated, default on).
+    try:
+        enabled = os.environ.get("ENABLE_BASELINE_RECORDING", "true").lower()
+        if enabled in ("1", "true", "yes", "on"):
+            interval = int(os.environ.get("BASELINE_INTERVAL_SECONDS", "300"))
+            tracker = _get_message_intel_price_tracker()
+            if tracker is not None:
+                tracker.start_baseline_recording(interval=interval)
+                logger.info("Baseline price recording started (interval=%ds)", interval)
+    except Exception as exc:
+        logger.warning("Failed to start baseline price recording: %s", exc)
+
     yield
+    try:
+        stop_prediction_resolver_scheduler()
+        logger.info("Prediction resolver scheduler stopped")
+    except Exception as exc:
+        logger.warning("Failed to stop prediction resolver scheduler: %s", exc)
     try:
         stop_indicator_scheduler()
         logger.info("Indicator scheduler stopped")
@@ -321,6 +556,73 @@ def _app_version() -> str:
 _APP_VERSION = _app_version()
 
 _ROTATION_TOKENS = ["hyperliquid", "vvv", "near", "render", "fetch"]
+
+# CoinGecko coin-id mapping for the rotation watchlist. Symbols that CoinGecko
+# does not list under their ticker are mapped to their canonical coin id.
+_ROTATION_COINGECKO_IDS = {
+    "hyperliquid": "hyperliquid",
+    "vvv": "venice-token",
+    "near": "near",
+    "render": "render-token",
+    "fetch": "fetch-ai",
+}
+
+# In-process cache for rotation-token prices (shared by /api/rotation-tokens).
+_ROTATION_PRICE_CACHE: Dict[str, Any] = {"data": None, "at": 0.0}
+_ROTATION_PRICE_CACHE_TTL = 60  # seconds
+
+
+def _fetch_rotation_token_prices() -> Dict[str, Dict[str, Any]]:
+    """Fetch current USD prices + 24h change for the rotation watchlist.
+
+    Uses CoinGecko's public simple/price endpoint (no API key required) and
+    caches the result for 60 seconds. Returns a dict keyed by lower-case
+    symbol, e.g. ``{"near": {"price": 1.79, "price_change_24h": 0.67}}``.
+    On failure returns the last cached value (or an empty dict).
+    """
+    now = time.time()
+    cached = _ROTATION_PRICE_CACHE.get("data")
+    if cached is not None and (now - _ROTATION_PRICE_CACHE.get("at", 0.0)) < _ROTATION_PRICE_CACHE_TTL:
+        return cached
+
+    ids = ",".join(
+        _ROTATION_COINGECKO_IDS[sym]
+        for sym in _ROTATION_TOKENS
+        if sym in _ROTATION_COINGECKO_IDS
+    )
+    result: Dict[str, Dict[str, Any]] = {}
+    if ids:
+        try:
+            url = (
+                "https://api.coingecko.com/api/v3/simple/price"
+                f"?ids={ids}&vs_currencies=usd&include_24hr_change=true"
+            )
+            req = urllib.request.Request(url, headers={"User-Agent": "SubnetDashboard/1.0"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                payload = json.loads(resp.read().decode())
+        except Exception as exc:
+            logger.warning("CoinGecko rotation-token price fetch failed: %s", exc)
+            payload = None
+
+        if isinstance(payload, dict):
+            for sym in _ROTATION_TOKENS:
+                coin_id = _ROTATION_COINGECKO_IDS.get(sym)
+                entry = payload.get(coin_id) if coin_id else None
+                if isinstance(entry, dict):
+                    price = entry.get("usd")
+                    change = entry.get("usd_24h_change")
+                    result[sym] = {
+                        "price": float(price) if price is not None else None,
+                        "price_change_24h": round(float(change), 2) if change is not None else None,
+                    }
+
+    if result:
+        _ROTATION_PRICE_CACHE["data"] = result
+        _ROTATION_PRICE_CACHE["at"] = now
+        return result
+    # Fall back to stale cache so transient CoinGecko failures don't null out
+    # previously-known prices.
+    return cached or {}
 
 # ---------------------------------------------------------------------------
 # SimiVision chat helpers (Phase 4: LLM interaction with mindmap context)
@@ -533,9 +835,123 @@ def _safe_rotation_summary() -> Dict[str, Any]:
         }
 
 
+def _safe_pump_analytics() -> Dict[str, Any]:
+    """Return the Pump Cycle Analytics v2 payload for the homepage context.
+
+    Defensive: never raises — a tracker failure degrades to an empty payload so
+    the dashboard still renders.
+    """
+    try:
+        tracker = get_pump_tracker()
+        if tracker is None:
+            raise RuntimeError("pump tracker unavailable")
+        return tracker.get_all_analytics()
+    except Exception as exc:
+        logger.warning("Could not load pump analytics: %s", exc)
+        return {
+            "status": "success",
+            "data": {
+                "subnets": [],
+                "meta": {
+                    "tracked_subnets": 0,
+                    "total_cycles": 0,
+                    "avg_proneness": 0.0,
+                    "top_pump_candidates": [],
+                    "updated_at": datetime.utcnow().isoformat() + "Z",
+                },
+            },
+        }
+
+
 @app.get("/health")
 def health_check():
     return PlainTextResponse("OK")
+
+
+@app.get("/api/health")
+def api_health_check():
+    """JSON health probe for Fly.io / monitoring tooling.
+
+    Mirrors the plain-text ``/health`` route but returns a JSON body so probes
+    that expect a structured response (and the ``/api/health`` path requested
+    by external monitors) get a 200 instead of a 404.
+    """
+    return {"status": "ok"}
+
+
+@app.get("/api/freshness")
+def api_freshness():
+    """Per-section "last updated" timestamps for the dashboard freshness badges.
+
+    Returns ``{"last_updated": {section: iso_ts, ...}, "now": <iso>}``. The
+    frontend polls this on load and every 30s to render "updated Xm ago"
+    badges next to each section heading.
+    """
+    return _freshness_snapshot()
+
+
+@app.get("/api/pick-history")
+def api_pick_history():
+    """Pick-of-the-Hour history + aggregate success metric.
+
+    Returns the currently-tenured pick, the most recent finalized picks (each
+    with absolute/median/percentile returns + success flag), and aggregate
+    success stats (wins/losses/success_rate). A pick is "successful" when its
+    absolute return beats the median subnet return over its tenure.
+    """
+    return _hour_pick_history(limit=20)
+
+
+@app.get("/api/price-tracking/baselines")
+def api_price_tracking_baselines():
+    """Return the recorded baseline price history for all tracked subnets."""
+    try:
+        baseline_file = os.environ.get(
+            "PRICE_BASELINE_FILE", "data/price_baselines.json"
+        )
+        if not os.path.exists(baseline_file):
+            return {
+                "status": "success",
+                "meta": {"count": 0, "source": "file"},
+                "baselines": [],
+            }
+        with open(baseline_file, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        if not isinstance(data, list):
+            data = []
+        netuids = {e.get("netuid") for e in data if e.get("netuid") is not None}
+        return {
+            "status": "success",
+            "meta": {
+                "count": len(data),
+                "tracked_subnets": len(netuids),
+                "source": "file",
+            },
+            "baselines": data,
+        }
+    except Exception as exc:
+        logger.warning("price-tracking/baselines failed: %s", exc)
+        return {"status": "error", "error": str(exc), "baselines": []}
+
+
+@app.get("/api/price-tracking/outcomes")
+def api_price_tracking_outcomes():
+    """Return recorded price outcomes (for debugging/verification)."""
+    try:
+        if not _MESSAGE_INTEL_AVAILABLE:
+            return {"status": "success", "meta": {"count": 0}, "outcomes": []}
+        db = _get_message_intel_db()
+        if db is None:
+            return {"status": "success", "meta": {"count": 0}, "outcomes": []}
+        outcomes = db.list_price_outcomes(limit=100)
+        return {
+            "status": "success",
+            "meta": {"count": len(outcomes)},
+            "outcomes": outcomes,
+        }
+    except Exception as exc:
+        logger.warning("price-tracking/outcomes failed: %s", exc)
+        return {"status": "error", "error": str(exc), "outcomes": []}
 
 
 @app.get("/api/resolve-predictions")
@@ -733,14 +1149,40 @@ def _fallback_state_pick(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
 def api_top_pick_day():
     """Return the top pick for the current day with a safe fallback."""
     subnets, _ = _get_subnets_with_source()
-    market_context = {"tao_change_24h": 0.0}
+    # Use the same real market-wide mood proxy as the homepage so the day
+    # pick endpoint stays in sync with the rendered dashboard.
+    market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
     try:
-        day_pick = select_daily_pick(subnets, market_context)
+        _dp_raw = get_or_create_today_pick(subnets, market_context)
+        day_pick = _dp_raw.get("pick") if isinstance(_dp_raw, dict) and _dp_raw.get("pick") else _dp_raw
     except Exception as exc:
         logger.error("Error selecting daily pick: %s", exc)
         day_pick = None
     if not day_pick:
         return {"picks": [_highest_emission_pick(subnets)]}
+    _mark_fresh("top_pick_day")
+    # Record the day pick's market context into the scenario memory so
+    # /api/scenario-memory reflects real picks, not just resolved predictions.
+    try:
+        candidate = day_pick.get("subnet") if isinstance(day_pick, dict) else None
+        if isinstance(candidate, dict):
+            sn = next((s for s in subnets if s.get("netuid") == candidate.get("netuid")), {})
+            _record_pick_scenario({
+                "name": candidate.get("name"),
+                "netuid": candidate.get("netuid"),
+                "score": day_pick.get("score", 0.0),
+                "confidence": day_pick.get("confidence", 0.0),
+                "scenario_tags": day_pick.get("scenario_tags", {}),
+                "signals": {
+                    "price_change_24h": sn.get("price_change_24h"),
+                    "price_change_7d": sn.get("price_change_7d"),
+                    "emission": sn.get("emission"),
+                    "apy": sn.get("apy"),
+                    "volume": sn.get("volume"),
+                },
+            }, market_context)
+    except Exception as exc:
+        logger.warning("day pick scenario record failed: %s", exc)
     return {"picks": [day_pick]}
 
 
@@ -765,21 +1207,25 @@ def api_simivision_safe():
 
 @app.get("/api/rotation-tokens")
 def api_rotation_tokens_safe():
-    """Return the rotation-token watchlist with safe price placeholders.
+    """Return the rotation-token watchlist with live CoinGecko prices.
 
-    Each token includes its symbol, a display label, and any available price
-    data we can derive without requiring external services to be up.  This
-    keeps the watchlist endpoint useful even when live price feeds are
-    unavailable.
+    Each token includes its symbol, a display label, and the current USD price
+    plus 24h change fetched from CoinGecko (cached for 60 seconds).  When the
+    live price feed is unavailable we fall back to the last cached value so the
+    watchlist endpoint stays useful.
     """
+    prices = _fetch_rotation_token_prices()
     tokens = []
     for symbol in _ROTATION_TOKENS:
+        entry = prices.get(symbol, {}) if isinstance(prices, dict) else {}
+        price = entry.get("price")
+        change = entry.get("price_change_24h")
         tokens.append({
             "symbol": symbol.upper(),
             "name": symbol.title(),
-            "price": None,
-            "price_change_24h": None,
-            "source": "watchlist",
+            "price": price,
+            "price_change_24h": change,
+            "source": "coingecko" if price is not None else "watchlist",
         })
     return {
         "status": "success",
@@ -850,6 +1296,27 @@ def api_learning_stats_safe():
             "last_updated": stats.get("last_updated") or datetime.utcnow().isoformat() + "Z",
         },
     }
+
+
+@app.get("/api/pump-analytics")
+def api_pump_analytics(request: Request):
+    """Pump Cycle Analytics v2 — CUSUM detection, 6-phase model, proneness.
+
+    Optional ``?netuid=`` filter restricts the response to a single subnet.
+    """
+    tracker = get_pump_tracker()
+    if tracker is None:
+        return {"status": "error", "data": {"subnets": [], "meta": {"tracked_subnets": 0, "total_cycles": 0, "avg_proneness": 0.0, "top_pump_candidates": [], "updated_at": None}}}
+    data = tracker.get_all_analytics()
+    netuid = request.query_params.get("netuid")
+    if netuid:
+        try:
+            nid = int(netuid)
+            data["data"]["subnets"] = [s for s in data["data"]["subnets"] if s.get("netuid") == nid]
+            data["data"]["meta"]["tracked_subnets"] = len(data["data"]["subnets"])
+        except (TypeError, ValueError):
+            pass
+    return data
 
 
 # ---------------------------------------------------------------------------
@@ -974,6 +1441,41 @@ def api_indicators_scheduler():
         "status": "success",
         "data": get_indicator_scheduler_state(),
     }
+
+
+@app.get("/api/predictions/resolver")
+def api_predictions_resolver_state():
+    """Return the current state of the background prediction resolver.
+
+    Exposes whether the resolver is running, when it last graded predictions,
+    and how many it has resolved/expired so the learning loop's health is
+    observable from the dashboard.
+    """
+    return {
+        "status": "success",
+        "data": get_prediction_resolver_scheduler_state(),
+    }
+
+
+@app.post("/api/predictions/resolver/run")
+def api_predictions_resolver_run():
+    """Trigger a single prediction-resolution cycle on demand.
+
+    Useful for clearing a backlog of stuck ``pending`` predictions without
+    waiting for the next scheduled tick. Returns the cycle summary.
+    """
+    scheduler = get_prediction_resolver_scheduler()
+    if scheduler is None:
+        return {
+            "status": "error",
+            "message": "prediction resolver scheduler is not initialized",
+        }, 500
+    try:
+        result = scheduler.run_once()
+        return {"status": "success", "data": result}
+    except Exception as exc:
+        logger.warning("Manual prediction resolver run failed: %s", exc)
+        return {"status": "error", "message": str(exc)}, 500
 
 
 @app.post("/api/simivision/chat")
@@ -1180,17 +1682,21 @@ class PREDICTION_STORE:
 def _dedupe_predictions(data: Dict[str, Any]) -> Dict[str, Any]:
     """Collapse duplicate pending predictions.
 
-    Keeps only the most recent pending prediction per (netuid, direction) pair;
-    older duplicates for the same pair are dropped so the predictive engine
-    does not accumulate one entry per refresh cycle. Resolved predictions are
-    left untouched. Stats are recomputed afterwards by the caller.
+    Keeps only the most recent pending prediction per (netuid, direction,
+    expert) triple; older duplicates for the same triple are dropped so the
+    predictive engine does not accumulate one entry per refresh cycle. The
+    ``expert`` dimension is included so multiple experts can independently
+    forecast the same subnet+direction without collapsing onto each other
+    (each expert must keep its own prediction so the learning loop can grade
+    it). Resolved predictions are left untouched. Stats are recomputed
+    afterwards by the caller.
     """
     pending = data.get("predictions", [])
     if not isinstance(pending, list):
         pending = []
     newest_by_key: Dict[tuple, Dict[str, Any]] = {}
     for pred in pending:
-        key = (pred.get("netuid"), pred.get("direction"))
+        key = (pred.get("netuid"), pred.get("direction"), pred.get("expert") or "quant")
         prev = newest_by_key.get(key)
         if prev is None:
             newest_by_key[key] = pred
@@ -1221,6 +1727,59 @@ def resolve_predictions(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     PREDICTION_STORE.update_stats(data)
     PREDICTION_STORE._save(data)
     return resolved_now
+
+
+def _reclamp_stored_predictions() -> int:
+    """Re-apply the percentage-based horizon clamp to existing pending predictions.
+
+    Predictions persisted before the magnitude-based banding was introduced may
+    carry stale, over-long horizons (e.g. a -2.1% move pinned to 168h). This
+    re-clamps each still-pending prediction's ``horizon_hours`` and ``resolve_at``
+    to the band allowed by its ``predicted_pct`` so they expire on a sensible
+    schedule instead of lingering for up to a week. Already-resolved predictions
+    are left untouched. Returns the number of pending predictions re-clamped.
+    """
+    try:
+        data = PREDICTION_STORE._load()
+    except Exception as exc:
+        logger.warning("reclamp: failed to load predictions store: %s", exc)
+        return 0
+
+    pending = data.get("predictions", [])
+    if not isinstance(pending, list) or not pending:
+        return 0
+
+    changed = 0
+    now = _dt.utcnow()
+    for pred in pending:
+        if not isinstance(pred, dict):
+            continue
+        try:
+            old_h = int(pred.get("horizon_hours", 0) or 0)
+            pct = pred.get("predicted_pct", 0)
+            new_h = _clamp_prediction_horizon(old_h or 24, pct)
+            if new_h != old_h:
+                pred["horizon_hours"] = new_h
+                # Re-anchor resolve_at from the original creation time so the
+                # remaining wait is consistent with the new horizon.
+                try:
+                    created = _dt.fromisoformat(str(pred.get("created_at", "")).replace("Z", ""))
+                except Exception:
+                    created = now
+                pred["resolve_at"] = (created + _td(hours=new_h)).isoformat() + "Z"
+                pred["statement"] = (
+                    f"predicted to move {'+' if (pct or 0) >= 0 else ''}"
+                    f"{(pct or 0):.1f}% within {new_h} hours"
+                )
+                changed += 1
+        except Exception as exc:
+            logger.warning("reclamp: failed to re-clamp prediction %s: %s", pred.get("id"), exc)
+
+    if changed:
+        PREDICTION_STORE.update_stats(data)
+        PREDICTION_STORE._save(data)
+        logger.info("Re-clamped %d stale pending predictions to magnitude-based horizons", changed)
+    return changed
 
 
 # ---------------------------------------------------------------------------
@@ -1560,7 +2119,7 @@ def _compute_hot_signals(sn: Dict[str, Any], indicators: Dict[str, Any], converg
         reasons.append(f"High yield ({apy:.1f}% APY)")
     if emission > 3:
         score += 1
-        reasons.append(f"Strong emission ({emission:.2f} TAO/day)")
+        reasons.append(f"Strong Daily Rewards ({emission:.2f} TAO/day)")
 
     active = score >= 5
     return {
@@ -1624,6 +2183,9 @@ def _compute_signal_impact(sn: Dict[str, Any], indicators: Dict[str, Any], hot: 
 
     def _add(signal_type: str, direction: str, magnitude_pct: float, horizon_hours: int, confidence: int, description: str) -> None:
         mag = round(abs(magnitude_pct), 2)
+        # HARD 4-hour maximum: every "predicted to move +X% within N hours"
+        # framing surfaced to users must resolve within at most 4 hours.
+        horizon_hours = _clamp_prediction_horizon(horizon_hours, mag)
         impacts.append({
             "signal_type": signal_type,
             "description": description,
@@ -1721,11 +2283,11 @@ def _compute_signal_impact(sn: Dict[str, Any], indicators: Dict[str, Any], hot: 
 
     # 9. Emission/yield signal (Gamma's domain).
     if emission > 1 and apy > 20:
-        _add("emission_change", "bullish", emission * 0.3 + apy * 0.02, 168, 68, f"Emission {emission:.2f} TAO/day + {apy:.1f}% APY")
+        _add("emission_change", "bullish", emission * 0.3 + apy * 0.02, 168, 68, f"Daily Rewards {emission:.2f} TAO/day + {apy:.1f}% APY")
     elif emission < 0.05 or apy < 0:
-        _add("emission_change", "bearish", 1.0, 168, 55, f"Weak emission {emission:.2f} / APY {apy:.1f}%")
+        _add("emission_change", "bearish", 1.0, 168, 55, f"Weak Daily Rewards {emission:.2f} / APY {apy:.1f}%")
     else:
-        _add("emission_change", "neutral", 0.5, 168, 50, f"Emission {emission:.2f} TAO/day / APY {apy:.1f}%")
+        _add("emission_change", "neutral", 0.5, 168, 50, f"Daily Rewards {emission:.2f} TAO/day / APY {apy:.1f}%")
 
     # 10. Social/sentiment fallback if mentions exist.
     mentions = int(sn.get("social_mentions", 0) or 0)
@@ -1940,56 +2502,125 @@ def _expert_from_signal_source(source: Optional[str]) -> str:
     return "quant"
 
 
-def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> Dict[str, Any]:
-    """Create a PREDICTIVE forecast: 'predicted to move +X% within N hours'.
+# Canonical Council experts that should each be exercised by the prediction
+# engine so the learning loop can grade them independently. Keeping this list
+# in sync with ``weights.DEFAULT_WEIGHTS`` guarantees every expert receives
+# predictions and therefore diverges from the untested 1.0 baseline.
+_COUNCIL_EXPERTS = ("quant", "hype", "contrarian", "technical")
 
-    Duplicate suppression: if a pending prediction for the same netuid +
-    direction already exists and was created within the dedup window, the
-    existing prediction is returned instead of minting a new one. This stops
-    every dashboard refresh from appending a fresh (always 24h-ahead) entry
-    that would never reach its resolve_at.
+# Per-expert default prediction horizon (in hours), chosen to match each
+# expert's signal decay. All values are still passed through the hard 4-hour
+# clamp, so e.g. contrarian's 6h view resolves within 4h in practice.
+_EXPERT_BASE_HORIZON_HOURS = {
+    "quant": 4,        # data-driven fundamentals (emission/yield) — steady
+    "technical": 4,    # indicator-driven (MACD/MA) — medium cadence
+    "hype": 2,         # sentiment decays fast — short horizon
+    "contrarian": 6,   # mean-reversion reversal — longer view (clamped to 4h)
+}
 
-    Each prediction is tagged with the council expert whose signal triggered
-    it so weight updates can be applied per-expert on resolution.
+
+def _expert_prediction_view(
+    impacts: List[Dict[str, Any]], expert: str, sn: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Derive one expert's directional view from the shared signal-impact list.
+
+    Aggregates every impact whose signal type maps to ``expert`` (via
+    ``_expert_from_signal_source``) into a single net direction + magnitude.
+    When an expert has no strong signal of its own, it still produces a view
+    derived from the subnet's 24h move so the expert is *tested* by the
+    learning loop rather than sitting idle at weight 1.0 forever.
+
+    Returns ``{direction, magnitude, signal_source, base_horizon}``.
     """
-    net = signal_impact.get("net_predicted_pct", 0)
-    raw_direction = signal_impact.get("net_direction", "neutral")
-    # Map impact direction (bullish/bearish/neutral) -> prediction direction (up/down).
-    if raw_direction == "bullish":
+    signed = 0.0
+    strongest: Optional[Dict[str, Any]] = None
+    strongest_mag = -1.0
+    for imp in impacts or []:
+        if _expert_from_signal_source(imp.get("signal_type")) != expert:
+            continue
+        mag = float(imp.get("magnitude_pct", 0) or 0)
+        direction = imp.get("direction", "neutral")
+        sign = 1 if direction == "bullish" else (-1 if direction == "bearish" else 0)
+        signed += mag * sign
+        if mag > strongest_mag:
+            strongest_mag = mag
+            strongest = imp
+
+    chg = float(sn.get("price_change_24h", 0) or 0)
+    if signed > 0:
         direction = "up"
-    elif raw_direction == "bearish":
+    elif signed < 0:
         direction = "down"
     else:
-        direction = "up" if float(sn.get("price_change_24h", 0) or 0) >= 0 else "down"
+        # No directional edge for this expert: lean on the 24h move so the
+        # expert still commits to a testable direction.
+        direction = "up" if chg >= 0 else "down"
 
-    # --- duplicate suppression -------------------------------------------------
+    # Magnitude scales with the expert's conviction (|net|), floored so even a
+    # weak/neutral expert produces a non-trivial, resolvable prediction.
+    magnitude = max(abs(signed), 0.8)
+    # Cap overly large aggregate magnitudes to keep predictions realistic.
+    magnitude = min(magnitude, 8.0)
+
+    signal_source = (
+        strongest.get("signal_type") if strongest and strongest.get("signal_type") else expert
+    )
+    base_horizon = _EXPERT_BASE_HORIZON_HOURS.get(expert, 4)
+    return {
+        "direction": direction,
+        "magnitude": round(magnitude, 2),
+        "signal_source": signal_source,
+        "base_horizon": base_horizon,
+    }
+
+
+def _create_prediction_entry(
+    sn: Dict[str, Any],
+    expert: str,
+    direction: str,
+    magnitude: float,
+    signal_source: str,
+    base_horizon: int,
+) -> Dict[str, Any]:
+    """Persist a single prediction tagged with ``expert`` and return it.
+
+    Duplicate suppression is keyed on (netuid, direction, expert): each expert
+    may hold at most one recent pending prediction per subnet+direction, so
+    multiple experts can independently forecast the same subnet without
+    colliding. The horizon is clamped to the hard 4-hour maximum.
+    """
     netuid = sn.get("netuid")
     now = _dt.utcnow()
     cutoff = now - _td(hours=_PREDICTION_DEDUP_WINDOW_HOURS)
     for existing in PREDICTION_STORE.all():
-        if existing.get("netuid") != netuid or existing.get("direction") != direction:
+        if (
+            existing.get("netuid") != netuid
+            or existing.get("direction") != direction
+            or (existing.get("expert") or "quant") != expert
+        ):
             continue
         try:
             created = _dt.fromisoformat(existing.get("created_at", "").replace("Z", ""))
         except Exception:
             continue
         if created >= cutoff:
-            return existing  # recent pending prediction already covers this pair
+            return existing  # recent pending prediction already covers this (netuid, direction, expert)
 
-    magnitude = abs(net) if net != 0 else 1.5
-    horizon = 24
-    impacts = signal_impact.get("impacts", [])
-    if impacts:
-        strongest = max(impacts, key=lambda i: i.get("magnitude_pct", 0))
-        st = SIGNAL_TYPES.get(strongest.get("signal_type", ""), {})
-        horizon = int(st.get("half_life_hours", 24))
-    # Global prediction horizon clamp: 1 hour <= horizon <= 168 hours (1 week).
-    horizon = max(1, min(horizon, 168))
-
+    horizon = _clamp_prediction_horizon(int(base_horizon or 4), magnitude)
     predicted_pct = magnitude if direction == "up" else -magnitude
     ref_price = float(sn.get("price", 0) or 0) or 1.0
-    signal_source = signal_impact.get("dominant") or direction
-    expert = _expert_from_signal_source(signal_source)
+    # Record the pump-cycle phase + proneness at prediction time so the
+    # self-learning loop can later grade cycle accuracy separately from
+    # direction accuracy.
+    _phase_at_pred = "UNKNOWN"
+    _proneness_at_pred = 0
+    try:
+        _pt = get_pump_tracker()
+        if _pt is not None:
+            _phase_at_pred = _pt.get_current_phase(netuid)
+            _proneness_at_pred = _pt.get_proneness(netuid)
+    except Exception:
+        pass
     prediction = {
         "id": _uuid.uuid4().hex[:10],
         "netuid": sn.get("netuid"),
@@ -2003,6 +2634,8 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
         "status": "pending",
         "signal_source": signal_source,
         "expert": expert,
+        "phase_at_prediction": _phase_at_pred,
+        "proneness_at_prediction": _proneness_at_pred,
         "statement": f"predicted to move {'+' if predicted_pct >= 0 else ''}{predicted_pct:.1f}% within {horizon} hours",
     }
     PREDICTION_STORE.add(prediction)
@@ -2013,6 +2646,102 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
         logger.warning("Judge tracker on_prediction_created failed: %s", exc)
 
     return prediction
+
+
+def _generate_multi_expert_predictions(
+    sn: Dict[str, Any], signal_impact: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Generate one prediction per Council expert for a subnet.
+
+    This is the core of expert diversity: instead of a single consensus
+    prediction (which historically always resolved to the "quant" expert via
+    the dominant-signal fallback), each of the 4 experts (quant, hype,
+    contrarian, technical) commits to its own directional view derived from
+    the subset of signals that belong to its lens. Every expert therefore
+    gets resolved and graded by the learning loop, so weights diverge from
+    the untested 1.0 baseline instead of staying flat.
+
+    Returns the list of created (or dedup-returned) predictions, ordered
+    ``quant, hype, contrarian, technical``.
+    """
+    impacts = signal_impact.get("impacts", []) or []
+    created: List[Dict[str, Any]] = []
+    for expert in _COUNCIL_EXPERTS:
+        try:
+            view = _expert_prediction_view(impacts, expert, sn)
+            pred = _create_prediction_entry(
+                sn=sn,
+                expert=expert,
+                direction=view["direction"],
+                magnitude=view["magnitude"],
+                signal_source=view["signal_source"],
+                base_horizon=view["base_horizon"],
+            )
+            created.append(pred)
+        except Exception as exc:
+            logger.warning("Multi-expert prediction failed for expert=%s: %s", expert, exc)
+    return created
+
+
+def _pick_primary_prediction(
+    expert_preds: List[Dict[str, Any]], signal_impact: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    """Choose the prediction to surface in the simivision pick card.
+
+    Prefers the prediction whose direction matches the consensus net
+    direction, breaking ties toward the quant expert (the data-driven
+    baseline). Falls back to the first available prediction.
+    """
+    if not expert_preds:
+        return None
+    raw_direction = signal_impact.get("net_direction", "neutral")
+    want = "up" if raw_direction == "bullish" else "down" if raw_direction == "bearish" else None
+    if want:
+        for expert in _COUNCIL_EXPERTS:
+            for pred in expert_preds:
+                if (pred.get("expert") or "quant") == expert and pred.get("direction") == want:
+                    return pred
+        for pred in expert_preds:
+            if pred.get("direction") == want:
+                return pred
+    for expert in _COUNCIL_EXPERTS:
+        for pred in expert_preds:
+            if (pred.get("expert") or "quant") == expert:
+                return pred
+    return expert_preds[0]
+
+
+def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a PREDICTIVE consensus forecast: 'predicted to move +X% within N hours'.
+
+    This is the single consensus/primary prediction used for the simivision
+    pick card display. The full per-expert prediction set (one entry per
+    Council expert, so the learning loop can grade each expert) is produced by
+    ``_generate_multi_expert_predictions``; this function delegates to it and
+    returns the primary pick.
+
+    Each prediction is tagged with the council expert whose signal triggered
+    it so weight updates can be applied per-expert on resolution.
+    """
+    expert_preds = _generate_multi_expert_predictions(sn, signal_impact)
+    primary = _pick_primary_prediction(expert_preds, signal_impact)
+    if primary is not None:
+        return primary
+    # Extremely defensive fallback (multi-expert generation produced nothing):
+    # mint a single quant-tagged consensus prediction so the render loop never
+    # receives None.
+    net = signal_impact.get("net_predicted_pct", 0)
+    raw_direction = signal_impact.get("net_direction", "neutral")
+    if raw_direction == "bullish":
+        direction = "up"
+    elif raw_direction == "bearish":
+        direction = "down"
+    else:
+        direction = "up" if float(sn.get("price_change_24h", 0) or 0) >= 0 else "down"
+    magnitude = abs(net) if net != 0 else 1.5
+    return _create_prediction_entry(
+        sn, "quant", direction, magnitude, signal_impact.get("dominant") or direction, 4
+    )
 
 
 def _resolve_prediction(prediction: Dict[str, Any], latest_price: float) -> Dict[str, Any]:
@@ -2038,6 +2767,35 @@ def _resolve_prediction(prediction: Dict[str, Any], latest_price: float) -> Dict
         on_prediction_resolved(prediction)
     except Exception as exc:
         logger.warning("Judge tracker on_prediction_resolved failed: %s", exc)
+
+    # Feed the outcome back into the Pump Cycle Tracker so cycle accuracy is
+    # tracked separately from direction accuracy and feeds the proneness score.
+    try:
+        _pt = get_pump_tracker()
+        if _pt is not None:
+            _hours_elapsed = float(prediction.get("horizon_hours", 0) or 0)
+            try:
+                _created = _dt.fromisoformat(prediction.get("created_at", "").replace("Z", ""))
+                _hours_elapsed = max(0.0, (_dt.utcnow() - _created).total_seconds() / 3600.0)
+            except Exception:
+                pass
+            _pt.record_cycle_outcome(
+                netuid=prediction.get("netuid"),
+                prediction={
+                    "predicted_direction": prediction.get("direction"),
+                    "predicted_magnitude": abs(float(prediction.get("predicted_pct", 0) or 0)),
+                    "predicted_timing": _hours_elapsed,
+                    "phase_at_prediction": prediction.get("phase_at_prediction", "UNKNOWN"),
+                },
+                actual={
+                    "actual_direction": "up" if actual_pct > 0 else "down",
+                    "actual_magnitude": abs(float(actual_pct)),
+                    "actual_timing": _hours_elapsed,
+                    "phase_at_resolution": _pt.get_current_phase(prediction.get("netuid")),
+                },
+            )
+    except Exception as exc:
+        logger.warning("pump_tracker record_cycle_outcome failed: %s", exc)
 
     return prediction
 
@@ -2211,9 +2969,9 @@ def _compute_social_sentiment(sn: Dict[str, Any]) -> Dict[str, Any]:
         yield_note = "yield compression noted"
 
     if emission > 0:
-        emit_note = f"emission {emission:.0f} TAO/day"
+        emit_note = f"Daily Rewards {emission:.0f} TAO/day"
     else:
-        emit_note = "no fresh emission"
+        emit_note = "no fresh Daily Rewards"
 
     tw_text = (
         f"${name} {momentum_word} — {chg:+.1f}% 24h / {chg7:+.1f}% 7d; "
@@ -2274,7 +3032,7 @@ def _compute_simivision_reasons(sn: Dict[str, Any], indicators: Dict[str, Any], 
     apy = float(sn.get("apy", 0) or 0)
     chg = float(sn.get("price_change_24h", 0) or 0)
     if emission > 3:
-        reasons.append(f"Strong emission {emission:.2f} TAO/day")
+        reasons.append(f"Strong Daily Rewards {emission:.2f} TAO/day")
     if apy > 30:
         reasons.append(f"High yield {apy:.1f}% APY")
     rsi = indicators.get("rsi", {})
@@ -2500,6 +3258,9 @@ def _build_judge_cards(subnets: Optional[List[Dict[str, Any]]] = None, tao_usd: 
             "open_positions_list": open_positions_list,
             "closed_positions_list": closed_positions_list,
             "latest_postmortem": latest_postmortem,
+            # Newest-first postmortem history for the Judge Panel, sourced from
+            # the postmortem store via ``list_for_judge``.
+            "recent_postmortems": list_for_judge(name)[:5] if _JUDGES_AVAILABLE else [],
             "tao_usd": tao_usd,
         })
 
@@ -2711,8 +3472,21 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     patterns_all: List[Dict[str, Any]] = []
     social_feed: List[Dict[str, Any]] = []
 
+    _pt = None
+    try:
+        _pt = get_pump_tracker()
+    except Exception:
+        _pt = None
+
     for idx, sn in enumerate(top_subnets):
         indicators = _compute_technical_indicators(sn)
+        # Enhancement 3: feed technical indicators into the Pump Cycle Tracker
+        # so multi-signal convergence can factor into the proneness score.
+        try:
+            if _pt is not None:
+                _pt.update_indicators(sn.get("netuid"), indicators)
+        except Exception as exc:
+            logger.warning("pump_tracker update_indicators hook failed: %s", exc)
         oversold = _detect_oversold_convergence(indicators)
         overbought = _detect_overbought_convergence(indicators)
         convergence = oversold if oversold.get("count", 0) >= overbought.get("count", 0) else overbought
@@ -2728,8 +3502,12 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         patterns = _detect_patterns(hist.get("closes", []), hist.get("highs", []), hist.get("lows", []), indicators, sn)
         patterns_all.append({"netuid": sn.get("netuid"), "name": sn.get("name"), "patterns": patterns})
 
-        prediction = _generate_prediction(sn, impact)
-        predictions.append(prediction)
+        # Generate one prediction per Council expert (quant/hype/contrarian/
+        # technical) so the learning loop grades every expert, not just quant.
+        # The primary (consensus) prediction is surfaced on the pick card.
+        expert_preds = _generate_multi_expert_predictions(sn, impact)
+        predictions.extend(expert_preds)
+        prediction = _pick_primary_prediction(expert_preds, impact) or (expert_preds[0] if expert_preds else {})
 
         reasons = _compute_simivision_reasons(sn, indicators, hot)
         chg = float(sn.get("price_change_24h", 0) or 0)
@@ -2766,7 +3544,19 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
             "sell": sell,
         })
 
-        social_feed.append({"netuid": sn.get("netuid"), "name": sn.get("name"), **_compute_social_sentiment(sn)})
+        _sentiment = _compute_social_sentiment(sn)
+        social_feed.append({"netuid": sn.get("netuid"), "name": sn.get("name"), **_sentiment})
+        # Enhancement 2: feed social sentiment into the Pump Cycle Tracker so
+        # sentiment momentum can factor into the proneness score.
+        try:
+            if _pt is not None:
+                _pt.update_sentiment(
+                    sn.get("netuid"),
+                    sentiment_score=_sentiment.get("score"),
+                    mention_count=_sentiment.get("mentions"),
+                )
+        except Exception as exc:
+            logger.warning("pump_tracker update_sentiment hook failed: %s", exc)
 
     undervalued = _compute_undervalued(subnets)
     tao_usd = _get_tao_usd()
@@ -2848,16 +3638,35 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     mindmap_trail = []
     now_ts = _dt.utcnow().strftime("%H:%M:%S")
+    # Pump Cycle Analytics context: append the current phase + proneness to
+    # each trail entry so the Mind Map stays wired into the pump cycle loop.
+    _pump_tracker = None
+    try:
+        _pump_tracker = get_pump_tracker()
+    except Exception:
+        _pump_tracker = None
+
+    def _pump_ctx_for(netuid: Any) -> str:
+        if _pump_tracker is None or netuid is None:
+            return ""
+        try:
+            return _pump_tracker.get_cycle_context(netuid)
+        except Exception:
+            return ""
+
     # One trail entry per pick (up to 6) so the learning trail reflects the
     # full top-of-book rather than only the first few picks.
     for p in simivision_picks[:6]:
+        _ctx = _pump_ctx_for(p.get("netuid"))
+        _pred = p.get("prediction", {}).get("statement")
+        _prediction_text = (_pred + (" " + _ctx if _ctx else "")) if _pred else (_ctx or None)
         mindmap_trail.append({
             "time": now_ts,
             "subnet": p.get("name"),
             "evidence": p.get("reasons", [])[0] if p.get("reasons") else "metrics scanned",
             "signal": p.get("signal_impact", {}).get("dominant") or p.get("signal_impact", {}).get("net_direction"),
             "decision": p.get("recommendation"),
-            "prediction": p.get("prediction", {}).get("statement"),
+            "prediction": _prediction_text,
             "judge": f"conviction {p.get('conviction')}%",
         })
     # Signal-impact trail entries: surface the strongest directional signal per
@@ -2867,13 +3676,16 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         if not impacts:
             continue
         strongest = max(impacts, key=lambda i: abs(i.get("magnitude_pct", 0)))
+        _ctx = _pump_ctx_for(si.get("netuid"))
+        _pred = strongest.get("predicted_move")
+        _prediction_text = (_pred + (" " + _ctx if _ctx else "")) if _pred else (_ctx or None)
         mindmap_trail.append({
             "time": now_ts,
             "subnet": si.get("name"),
             "evidence": strongest.get("description") or strongest.get("signal_type"),
             "signal": strongest.get("direction"),
             "decision": "signal logged",
-            "prediction": strongest.get("predicted_move"),
+            "prediction": _prediction_text,
             "judge": f"magnitude {strongest.get('magnitude_pct', 0):.1f}%",
         })
     # Learning-loop trail entry: weight update + accuracy snapshot.
@@ -2881,8 +3693,8 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         "time": now_ts,
         "subnet": "—",
         "evidence": "Learning loop",
-        "signal": f"accuracy {learning_metrics.get('accuracy', 0)}",
-        "decision": "weight update",
+        "signal": f"Accuracy: {learning_metrics.get('accuracy', 0)}",
+        "decision": "Learning Adjustment",
         "prediction": f"correct +{_LEARNING_DELTA_CORRECT} / wrong {_LEARNING_DELTA_WRONG}",
         "judge": f"{learning_metrics.get('correct', 0)} correct / {learning_metrics.get('wrong', 0)} wrong",
     })
@@ -3087,7 +3899,166 @@ def _default_premium_context() -> Dict[str, Any]:
         "rotation_tracker": _default_rotation_tracker(),
         "scenario_memory": _default_scenario_memory(),
         "api_indicators_convergence": {"subnets": []},
+        "pump_analytics": _safe_pump_analytics(),
     }
+
+
+# ---------------------------------------------------------------------------
+# Scenario-memory wiring helpers for the homepage top-pick sections.
+#
+# The top picks previously showed static "Market Mood: neutral · rsi: neutral ·
+# volume: low" because (a) the market mood was derived from a hardcoded
+# tao_change_24h of 0.0, and (b) nothing attached the recorded scenario-memory
+# regime/features/outcome to each pick. The helpers below derive a real
+# market-wide mood, look up the latest recorded scenario per subnet, and build
+# fallback picks from the top-conviction subnets when the pipeline is empty.
+# ---------------------------------------------------------------------------
+
+# Map the canonical scenario-memory regime buckets onto the display vocabulary
+# used by the "Market Mood" scenario tag.
+_REGIME_DISPLAY = {
+    "bull": "bullish",
+    "bear": "bearish",
+    "volatile": "volatile",
+    "neutral": "neutral",
+}
+
+
+def _market_mood_proxy(subnets: List[Dict[str, Any]]) -> float:
+    """Return a market-wide 24h change proxy from the average subnet change.
+
+    Used as ``tao_change_24h`` for the regime classifier so "Market Mood"
+    reflects actual aggregate movement instead of a static 0.0.
+    """
+    changes = []
+    for sn in subnets or []:
+        try:
+            chg = float(sn.get("price_change_24h", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        changes.append(chg)
+    if not changes:
+        return 0.0
+    return sum(changes) / len(changes)
+
+
+def _latest_scenario_by_name(scenarios: Any) -> Dict[str, Dict[str, Any]]:
+    """Index the most recent scenario per subnet name from a scenario list."""
+    by_name: Dict[str, Dict[str, Any]] = {}
+    if not isinstance(scenarios, list):
+        return by_name
+    for sc in scenarios:
+        if not isinstance(sc, dict):
+            continue
+        name = sc.get("name")
+        if not name:
+            continue
+        # Scenarios are appended in time order, so the last one wins.
+        by_name[str(name)] = sc
+    return by_name
+
+
+def _enrich_pick_scenario(
+    pick: Dict[str, Any],
+    scenarios_by_name: Dict[str, Dict[str, Any]],
+) -> None:
+    """Attach the latest recorded scenario (regime/features/outcome) to a pick.
+
+    When a recorded scenario exists for the pick's subnet, its regime overrides
+    the live "Market Mood" tag (mapped to the display vocabulary) and the
+    scenario is exposed as ``pick["sc"]`` for templates that render
+    ``sc.regime`` / ``sc.features`` / ``sc.outcome``. When no scenario has been
+    recorded yet, the live indicator-derived ``scenario_tags`` (already computed
+    by the scoring functions) are kept as the fallback.
+    """
+    if not isinstance(pick, dict):
+        return
+    name = pick.get("name")
+    sc = scenarios_by_name.get(str(name)) if name else None
+    if not isinstance(sc, dict):
+        return
+    pick["sc"] = {
+        "regime": sc.get("regime"),
+        "features": sc.get("features", {}),
+        "outcome": sc.get("outcome"),
+    }
+    tags = pick.get("scenario_tags")
+    if not isinstance(tags, dict):
+        tags = {}
+        pick["scenario_tags"] = tags
+    recorded_regime = _REGIME_DISPLAY.get(str(sc.get("regime", "")).lower())
+    if recorded_regime:
+        tags["regime"] = recorded_regime
+    # Surface recorded RSI/volume signals when present in the scenario features.
+    features = sc.get("features", {})
+    if isinstance(features, dict):
+        if features.get("rsi"):
+            tags["rsi"] = str(features["rsi"])
+        if features.get("volume"):
+            tags["volume"] = str(features["volume"])
+
+
+def _conviction_proxy(sn: Dict[str, Any]) -> float:
+    """A simple conviction proxy for ranking fallback picks.
+
+    Combines emission (income), APY (yield) and absolute 24h momentum so the
+    fallback surfaces subnets that are both rewarding and moving.
+    """
+    try:
+        emission = float(sn.get("emission", 0) or 0)
+    except (TypeError, ValueError):
+        emission = 0.0
+    try:
+        apy = float(sn.get("apy", 0) or 0)
+    except (TypeError, ValueError):
+        apy = 0.0
+    try:
+        chg = abs(float(sn.get("price_change_24h", 0) or 0))
+    except (TypeError, ValueError):
+        chg = 0.0
+    return emission + apy + chg
+
+
+def _build_fallback_picks(
+    subnets: List[Dict[str, Any]],
+    market_context: Dict[str, Any],
+    horizon: str,
+) -> List[Dict[str, Any]]:
+    """Build minimal top-3 picks from the highest-conviction subnets.
+
+    Used when the primary scoring pipeline produced no picks. Each pick carries
+    its current indicator-derived scenario tags (regime/rsi/volume) computed via
+    the shared scoring functions, so the sections never render empty or
+    all-defaults.
+    """
+    picks: List[Dict[str, Any]] = []
+    try:
+        ranked = sorted(subnets, key=_conviction_proxy, reverse=True)[:3]
+        scorer = score_subnet_for_hour if horizon == "hour" else score_subnet_for_day
+        for sn in ranked:
+            try:
+                score = scorer(sn, market_context)
+            except Exception as exc:
+                logger.warning("Fallback scorer failed for SN%s: %s", sn.get("netuid"), exc)
+                continue
+            picks.append({
+                "netuid": sn.get("netuid"),
+                "name": sn.get("name"),
+                "symbol": sn.get("symbol"),
+                "score": score.get("total_score", 0.0),
+                "confidence": score.get("confidence", 0.0),
+                "signals": {
+                    "price_change_24h": sn.get("price_change_24h"),
+                    "price_change_7d": sn.get("price_change_7d"),
+                    "emission": sn.get("emission"),
+                    "apy": sn.get("apy"),
+                    "volume": sn.get("volume"),
+                },
+                "scenario_tags": score.get("scenario_tags", {}),
+            })
+    except Exception as exc:
+        logger.error("Error building fallback %s picks: %s", horizon, exc)
+    return picks
 
 
 @app.get("/")
@@ -3105,6 +4076,9 @@ async def dashboard(request: Request):
     subnets: List[Dict[str, Any]] = []
     source = "unknown"
     premium = _default_premium_context()
+    # Derive a real market-wide mood from the average subnet 24h change so the
+    # "Market Mood" scenario tag reflects actual movement instead of a static
+    # 0.0 (which always classified as "neutral"). Recomputed after subnets load.
     market_context = {"tao_change_24h": 0.0}
     hour_picks: List[Dict[str, Any]] = []
     day_picks: List[Dict[str, Any]] = []
@@ -3116,49 +4090,50 @@ async def dashboard(request: Request):
 
     try:
         subnets, source = _get_subnets_with_source()
+        _mark_fresh("subnets")
     except Exception as e:
         logger.error("Error fetching subnets for dashboard: %s", e)
         subnets, source = [], "error"
 
+    # Recompute the market mood now that we have real subnets.
+    market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
+
     try:
         premium = _build_premium_context(subnets)
+        # The premium context composes simivision picks, technical indicators,
+        # predictions, social sentiment, and judge cards in one pass.
+        _mark_fresh("simivision_picks")
+        _mark_fresh("indicators")
+        _mark_fresh("predictions")
+        _mark_fresh("social_sentiment")
+        _mark_fresh("judges")
     except Exception as e:
         logger.error("Error building premium context: %s", e)
         premium = _default_premium_context()
 
     try:
-        for sn in subnets:
-            score = score_subnet_for_hour(sn, market_context)
-            hour_picks.append({
-                "netuid": sn.get("netuid"),
-                "name": sn.get("name"),
-                "symbol": sn.get("symbol"),
-                "score": score["total_score"],
-                "confidence": score["confidence"],
-                "signals": {
-                    "price_change_24h": sn.get("price_change_24h"),
-                    "price_change_7d": sn.get("price_change_7d"),
-                    "emission": sn.get("emission"),
-                    "apy": sn.get("apy"),
-                    "volume": sn.get("volume"),
-                },
-                "scenario_tags": score["scenario_tags"],
-            })
-        hour_picks.sort(key=lambda x: x["score"], reverse=True)
-        hour_picks = hour_picks[:3]
+        # Use the SAME shared helper as /api/top-pick/hour so the homepage #1
+        # pick always matches the highest-scored (audited) pick from the API.
+        # The helper returns a unified shape carrying both top-level
+        # name/netuid/score/confidence/signals/scenario_tags (template) and
+        # nested subnet{}/action (API), and records each pick into the
+        # regime-aware scenario memory.
+        hour_picks = _ordered_hour_picks(subnets, market_context, limit=3)
+        _mark_fresh("top_pick_hour")
     except Exception as e:
         logger.error("Error computing hour picks: %s", e)
         hour_picks = []
 
     try:
-        daily_pick_result = select_daily_pick(subnets, market_context)
+        _dp_raw = get_or_create_today_pick(subnets, market_context)
+        daily_pick_result = _dp_raw.get("pick") if isinstance(_dp_raw, dict) and _dp_raw.get("pick") else _dp_raw
         if daily_pick_result and daily_pick_result.get("subnet"):
             candidate = daily_pick_result["subnet"]
             sn = next(
                 (s for s in subnets if s.get("netuid") == candidate.get("netuid")),
                 {},
             )
-            day_picks.append({
+            _day_pick = {
                 "netuid": candidate.get("netuid"),
                 "name": candidate.get("name"),
                 "symbol": candidate.get("symbol"),
@@ -3172,7 +4147,11 @@ async def dashboard(request: Request):
                     "volume": sn.get("volume"),
                 },
                 "scenario_tags": daily_pick_result.get("scenario_tags", {}),
-            })
+            }
+            day_picks.append(_day_pick)
+            # Record the day pick's market context into the scenario memory.
+            _record_pick_scenario(_day_pick, market_context)
+            _mark_fresh("top_pick_day")
     except Exception as e:
         logger.error("Error computing day picks: %s", e)
         day_picks = []
@@ -3186,22 +4165,53 @@ async def dashboard(request: Request):
         day_picks = [_fallback_state_pick(subnets)]
 
     try:
-        daily_pick = await api_daily_pick()
+        # Use the Council engine directly so the homepage shows the audited,
+        # persisted daily pick. ``get_or_create_today_pick`` returns the engine
+        # payload whose ``pick`` key holds the actual pick data
+        # (subnet/action/final_confidence/confidence/audit/scenario_tags) that
+        # templates/index.html renders as ``daily_pick.*``.
+        daily_pick_result = get_or_create_today_pick(subnets, market_context)
+        daily_pick = daily_pick_result.get("pick") if isinstance(daily_pick_result, dict) else None
+        if not isinstance(daily_pick, dict):
+            daily_pick = {}
     except Exception as e:
         logger.error("Error fetching daily pick: %s", e)
         daily_pick = {}
 
     try:
         rotation_tracker = await api_rotation_tracker()
+        _mark_fresh("rotation")
     except Exception as e:
         logger.error("Error fetching rotation tracker: %s", e)
         rotation_tracker = _default_rotation_tracker()
 
     try:
         scenario_memory_snapshot = await api_scenario_memory()
+        _mark_fresh("scenario_memory")
     except Exception as e:
         logger.error("Error fetching scenario memory: %s", e)
         scenario_memory_snapshot = _default_scenario_memory()
+
+    # Enrich each pick with the latest recorded scenario for its subnet
+    # (regime, features, outcome) and let the recorded regime override the live
+    # "Market Mood" tag when available. Falls back to the live indicator-derived
+    # tags (already computed above) when no scenario has been recorded yet.
+    scenarios_by_name = _latest_scenario_by_name(
+        scenario_memory_snapshot.get("scenarios", [])
+    )
+    for pick in hour_picks:
+        _enrich_pick_scenario(pick, scenarios_by_name)
+    for pick in day_picks:
+        _enrich_pick_scenario(pick, scenarios_by_name)
+
+    # Fallback: if the picks pipeline produced nothing (e.g. scoring failed but
+    # subnets are available), pull the top subnets by conviction and build
+    # minimal pick objects carrying their current indicator-derived scenario
+    # tags so the sections never render empty or all-defaults.
+    if not hour_picks and subnets:
+        hour_picks = _build_fallback_picks(subnets, market_context, "hour")
+    if not day_picks and subnets:
+        day_picks = _build_fallback_picks(subnets, market_context, "day")
 
     try:
         indicators_convergence = await api_indicators_convergence()
@@ -3244,6 +4254,7 @@ async def dashboard(request: Request):
         "rotation_tracker": rotation_tracker,
         "scenario_memory": scenario_memory_snapshot,
         "api_indicators_convergence": indicators_convergence,
+        "pump_analytics": _safe_pump_analytics(),
     }
 
     try:
@@ -3316,6 +4327,7 @@ async def api_predictions_resolved(resolve: bool = False):
 async def api_scenario_memory():
     """Return the full regime-aware scenario memory snapshot."""
     try:
+        _mark_fresh("scenario_memory")
         return {"status": "ok", **scenario_memory.get_memory_snapshot()}
     except Exception as e:
         logger.error("Error fetching scenario memory: %s", e)
@@ -3354,6 +4366,7 @@ async def api_rotation_tracker():
     """Return subnet rotation patterns and volatility clusters."""
     try:
         subnets, _ = _get_subnets_with_source()
+        _mark_fresh("rotation")
         return {"status": "ok", **rotation_tracker.get_rotation_summary(subnets)}
     except Exception as e:
         logger.error("Error fetching rotation tracker: %s", e)
@@ -3385,6 +4398,7 @@ async def api_indicators_convergence():
                 "oversold": _detect_oversold_convergence(indicators),
                 "overbought": _detect_overbought_convergence(indicators),
             })
+        _mark_fresh("indicators")
         return {"subnets": rows}
     except Exception as e:
         logger.error("Error fetching indicators convergence: %s", e)
@@ -3409,7 +4423,9 @@ async def api_top_picks():
     """Return top 3 subnets by short-horizon and 24h Council state-vector scores."""
     try:
         subnets, _ = _get_subnets_with_source()
-        market_context = {"tao_change_24h": 0.0}
+        # Use the same real market-wide mood proxy as the homepage so the
+        # short-horizon / day scores here match the audited picks everywhere.
+        market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
 
         hour_scored = []
         day_scored = []
@@ -3451,6 +4467,153 @@ async def api_top_picks():
         return {"hour_picks": [], "day_picks": [], "error": str(e)}
 
 
+def _record_pick_scenario(pick: Dict[str, Any], market_context: Optional[Dict[str, Any]] = None) -> None:
+    """Record a pick's market context into the regime-aware scenario memory.
+
+    Called at pick-generation time (both the hourly API and the homepage) so
+    ``/api/scenario-memory`` reflects real picks instead of staying empty
+    until a prediction is resolved. A per-name 1-hour dedup window prevents
+    the homepage refresh loop from flooding the memory with near-duplicate
+    entries. Failures are swallowed so a memory-store hiccup can never break
+    pick generation.
+    """
+    try:
+        name = pick.get("name")
+        if not name:
+            return
+        signals = pick.get("signals") if isinstance(pick.get("signals"), dict) else {}
+        tags = pick.get("scenario_tags") if isinstance(pick.get("scenario_tags"), dict) else {}
+        chg = float(signals.get("price_change_24h", 0) or 0)
+        features = {
+            "avg_change_24h": chg,
+            "price_change_24h": chg,
+            "volatility": abs(chg),
+            "score": float(pick.get("score", 0) or 0),
+            "confidence": float(pick.get("confidence", 0) or 0),
+            "rsi": tags.get("rsi"),
+            "volume": signals.get("volume") or tags.get("volume"),
+            "daily_rewards": signals.get("emission"),
+            "apy": signals.get("apy"),
+            "market_mood": (market_context or {}).get("tao_change_24h", 0),
+        }
+        # Dedup: skip if a scenario for this subnet was recorded in the last hour.
+        now = _dt.utcnow()
+        cutoff = now - _td(hours=1)
+        for existing in scenario_memory.get_scenarios():
+            if existing.get("name") != name:
+                continue
+            try:
+                created = _dt.fromisoformat(str(existing.get("created_at", "")).replace("Z", ""))
+            except Exception:
+                continue
+            if created >= cutoff:
+                return  # already recorded this subnet recently
+        scenario_memory.add_scenario(
+            name=str(name),
+            features=features,
+            regime=scenario_memory.classify_regime(features),
+        )
+    except Exception as exc:
+        logger.warning("scenario memory record failed for %s: %s", pick.get("name"), exc)
+
+
+def _ordered_hour_picks(
+    subnets: List[Dict[str, Any]],
+    market_context: Dict[str, Any],
+    limit: int = 3,
+) -> List[Dict[str, Any]]:
+    """Build the canonical ordered hourly picks used by BOTH the API and the
+    homepage so the two never diverge.
+
+    The #1 pick is the RedTeam-audited hourly pick from ``select_hourly_pick``
+    (which runs ``score_subnet_for_hour`` + the audit/tie-break layer);
+    remaining slots are filled from raw hourly scoring, excluding the #1
+    netuid, sorted by ``total_score`` desc.
+
+    Each returned pick carries a UNIFIED shape: top-level ``name``/``netuid``/
+    ``symbol``/``score``/``confidence``/``scenario_tags``/``signals`` (for the
+    homepage template) AND nested ``subnet{}``/``action``/``expert_contributions``
+    (for the ``/api/top-pick/hour`` response). Every pick is also recorded into
+    the scenario memory via ``_record_pick_scenario``.
+    """
+    picks: List[Dict[str, Any]] = []
+    if not subnets:
+        return picks
+
+    try:
+        audited = select_hourly_pick(subnets, market_context)
+    except Exception as exc:
+        logger.warning("select_hourly_pick failed: %s", exc)
+        audited = None
+    if not audited:
+        audited = _highest_emission_pick(subnets)
+
+    top_netuid = None
+    if isinstance(audited, dict) and isinstance(audited.get("subnet"), dict):
+        top_netuid = audited["subnet"].get("netuid")
+        # Graft the raw market signals the audited payload lacks.
+        if "signals" not in audited:
+            src = next((s for s in subnets if s.get("netuid") == top_netuid), {})
+            audited["signals"] = {
+                "price_change_24h": src.get("price_change_24h"),
+                "price_change_7d": src.get("price_change_7d"),
+                "emission": src.get("emission"),
+                "apy": src.get("apy"),
+                "volume": src.get("volume"),
+            }
+
+    def _unify(payload: Dict[str, Any], sn: Dict[str, Any]) -> Dict[str, Any]:
+        """Merge API shape (subnet{}/action) with template shape (top-level)."""
+        subnet = payload.get("subnet") if isinstance(payload.get("subnet"), dict) else {}
+        unified = dict(payload)
+        unified.setdefault("netuid", subnet.get("netuid", sn.get("netuid")))
+        unified.setdefault("name", subnet.get("name", sn.get("name")))
+        unified.setdefault("symbol", subnet.get("symbol", sn.get("symbol")))
+        unified.setdefault("score", payload.get("score", 0.0))
+        unified.setdefault("confidence", payload.get("confidence", 0.0))
+        unified.setdefault("scenario_tags", payload.get("scenario_tags", {}))
+        unified.setdefault("signals", payload.get("signals", {}))
+        return unified
+
+    if audited:
+        src = next((s for s in subnets if s.get("netuid") == top_netuid), {})
+        picks.append(_unify(audited, src))
+
+    scored: List[Dict[str, Any]] = []
+    for sn in subnets:
+        if top_netuid is not None and sn.get("netuid") == top_netuid:
+            continue
+        try:
+            score = score_subnet_for_hour(sn, market_context)
+        except Exception as exc:
+            logger.warning("score_subnet_for_hour failed for SN%s: %s", sn.get("netuid"), exc)
+            continue
+        scored.append({"subnet": sn, "score": score})
+    scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
+    for item in scored[: max(0, limit - len(picks))]:
+        picks.append(_unify(_build_hour_pick_payload(item["subnet"], item["score"]), item["subnet"]))
+
+    # Record each pick's market context into the regime-aware scenario memory.
+    for pick in picks:
+        _record_pick_scenario(pick, market_context)
+
+    # Track the #1 Pick of the Hour for the entry-price + success-metric
+    # feature (Stream C). This records selected_at/entry_price/trigger_reason
+    # on first sight of a new #1 netuid and finalizes the previous pick's
+    # outcome (absolute vs median subnet return) when the #1 changes. The
+    # enriched fields are merged back onto the #1 pick so both the homepage
+    # and /api/top-pick/hour surface them. Idempotent for the same netuid.
+    if picks:
+        try:
+            top_sn = next((s for s in subnets if s.get("netuid") == picks[0].get("netuid")), {})
+            top_ind = _compute_technical_indicators(top_sn) if top_sn else None
+            picks[0] = _record_hour_pick(picks[0], subnets, top_ind)
+        except Exception as exc:
+            logger.warning("hour pick history tracking failed: %s", exc)
+
+    return picks[:limit]
+
+
 def _build_hour_pick_payload(sn: Dict[str, Any], score: Dict[str, Any]) -> Dict[str, Any]:
     """Format a subnet + hour state-vector into the public hour-pick shape."""
     return {
@@ -3476,20 +4639,23 @@ def _build_hour_pick_payload(sn: Dict[str, Any], score: Dict[str, Any]) -> Dict[
 
 @app.get("/api/top-pick/hour")
 async def api_top_pick_hour():
-    """Return the top 3 short-horizon picks with a safe fallback."""
+    """Return the top short-horizon picks with a safe fallback.
+
+    Uses the shared ``_ordered_hour_picks`` helper so the #1 pick is identical
+    to what the homepage renders (RedTeam-audited hourly pick first, then raw
+    score-ranked fill). This guarantees the API and homepage never diverge.
+    """
     try:
         subnets, _ = _get_subnets_with_source()
-        market_context = {"tao_change_24h": 0.0}
-        scored = []
-        for sn in subnets:
-            try:
-                score = score_subnet_for_hour(sn, market_context)
-            except Exception as exc:  # per-subnet scoring failure -> skip
-                logger.warning("score_subnet_for_hour failed for SN%s: %s", sn.get("netuid"), exc)
-                continue
-            scored.append({"subnet": sn, "score": score})
-        scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
-        return {"picks": [_build_hour_pick_payload(i["subnet"], i["score"]) for i in scored[:3]]}
+        # Use the SAME real market-wide mood proxy as the homepage so the
+        # audited #1 pick is byte-for-byte identical between the API and the
+        # rendered dashboard (a static 0.0 here previously let the two drift).
+        market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
+        picks = _ordered_hour_picks(subnets, market_context, limit=3)
+        _mark_fresh("top_pick_hour")
+        if picks:
+            return {"picks": picks}
+        return {"picks": [_highest_emission_pick(subnets)]}
     except Exception as e:
         logger.error("Error fetching hour pick: %s", e)
         subnets, _ = _get_subnets_with_source()
@@ -3501,7 +4667,10 @@ async def api_daily_pick():
     """Return today's audited daily pick from the Council engine."""
     try:
         subnets, _ = _get_subnets_with_source()
-        market_context = {"tao_change_24h": 0.0}
+        # Use the same real market-wide mood proxy as the homepage so the
+        # daily pick stays in sync with the rendered dashboard.
+        market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
+        _mark_fresh("top_pick_day")
         return get_or_create_today_pick(subnets, market_context)
     except Exception as e:
         logger.error("Error fetching daily pick: %s", e)
@@ -3613,11 +4782,11 @@ def build_signal_breakdown(sn: Dict[str, Any], rank: int) -> List[str]:
     breakdown = []
     emission = sn.get("emission", 0)
     if emission >= 5:
-        breakdown.append(f"Strong emission ({emission:.2f} TAO/day) - high priority for miners")
+        breakdown.append(f"Strong Daily Rewards ({emission:.2f} TAO/day) - high priority for miners")
     elif emission >= 1:
-        breakdown.append(f"Solid emission ({emission:.2f} TAO/day) - consistent rewards")
+        breakdown.append(f"Solid Daily Rewards ({emission:.2f} TAO/day) - consistent rewards")
     else:
-        breakdown.append(f"Emission at {emission:.2f} TAO/day - emerging subnet")
+        breakdown.append(f"Daily Rewards at {emission:.2f} TAO/day - emerging subnet")
     chg = sn.get("price_change_24h", 0)
     if chg >= 5:
         breakdown.append(f"Bullish 24h momentum (+{chg:.1f}%) - strong buying pressure")
@@ -3820,7 +4989,7 @@ def build_mindmap_feed(picks: List[Dict], council_votes: List[Dict], undervalued
 # ---------------------------------------------------------------------------
 # Phase 2: Mount the self-learning loop's feedback router (APIRouter)
 # ---------------------------------------------------------------------------
-from data.learning_engine import create_feedback_router
+from datastore.learning_engine import create_feedback_router
 
 _feedback_router = create_feedback_router()
 if _feedback_router is not None:

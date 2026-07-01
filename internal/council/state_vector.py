@@ -596,6 +596,22 @@ def _expert_from_signal_source(source: Optional[str]) -> str:
     return "alpha"
 
 
+
+
+
+def clamp_prediction_horizon(horizon: int, predicted_pct: Optional[float] = None) -> int:
+    """Clamp a prediction horizon to a HARD 4-hour maximum.
+
+    All predictions surfaced to users (API responses, homepage rendering, pick
+    generation, signal-impact framing) must resolve within at most 4 hours.
+    The previous magnitude-based banding (up to 168h) is intentionally removed
+    so no prediction can ever advertise a horizon greater than 4 hours.
+
+    Returns a horizon in ``[1, 4]``.
+    """
+    return max(1, min(int(horizon), 4))
+
+
 def build_prediction_statement(
     sn: Dict[str, Any],
     predicted_pct: float,
@@ -606,6 +622,7 @@ def build_prediction_statement(
     now: _dt,
 ) -> Dict[str, Any]:
     """Build a predictive forecast dict without persisting it."""
+    horizon = clamp_prediction_horizon(horizon, predicted_pct)
     return {
         "id": _uuid.uuid4().hex[:10],
         "netuid": sn.get("netuid"),
