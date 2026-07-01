@@ -13,6 +13,7 @@ of the Council hygiene pass; only the signal-emission phase remains optional.
 """
 
 import json
+import logging
 import os
 import tempfile
 from datetime import datetime, timezone
@@ -24,10 +25,7 @@ from internal.indicators.momentum import compute_momentum
 from internal.indicators.price_fetcher import fetch_ohlcv
 from internal.indicators.rsi import compute_rsi
 
-try:
-    from data import pump_tracker
-except Exception:  # pragma: no cover - optional dependency
-    pump_tracker = None
+logger = logging.getLogger(__name__)
 
 # Ensure the data directory exists at module load time.
 os.makedirs('data', exist_ok=True)
@@ -148,17 +146,23 @@ class IndicatorEngine:
         if len(candles) < 30:
             raise RuntimeError(f"Insufficient candle data for subnet {subnet_id}")
 
-        # Feed the latest close into the pump-cycle tracker so it accumulates a
-        # price snapshot on every scheduler tick.
-        if pump_tracker is not None:
-            try:
-                last = candles[-1]
-                name = registry_item.get("name") or registry_item.get("symbol") or str(subnet_id)
-                pump_tracker.record_price_snapshot(
-                    subnet_id, name, last.get("close"), last.get("timestamp")
-                )
-            except Exception:
-                pass
+        # Feed the latest candle into the Pump Cycle Tracker (v2) so the
+        # CUSUM evidence accumulator + 6-phase model stay in sync with every
+        # scheduler tick. Defensive: a tracker failure must never break the
+        # indicator pipeline.
+        try:
+            from data.pump_tracker import get_pump_tracker
+            last = candles[-1]
+            name = registry_item.get("name") if isinstance(registry_item, dict) else None
+            get_pump_tracker().on_tick(
+                netuid=subnet_id,
+                name=name,
+                price=float(last.get("close", 0.0) or 0.0),
+                volume=float(last.get("volume", 0.0) or 0.0),
+                timestamp=last.get("timestamp"),
+            )
+        except Exception as exc:
+            logger.warning("pump_tracker hook in indicator engine failed: %s", exc)
 
         rsi = compute_rsi(candles)
         macd = compute_macd(candles)
