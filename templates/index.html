@@ -37,6 +37,78 @@
       .ticker-track { animation: none; }
     }
     .ticker-item { color: var(--text-secondary); }
+/* Freshness badges: "updated Xm ago" shown next to each section heading. */
+.freshness-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.freshness-badge.fresh { color: #22c55e; border-color: rgba(34,197,94,0.4); }
+.freshness-badge.stale { color: #f59e0b; border-color: rgba(245,158,11,0.4); }
+.freshness-badge.unknown { color: var(--text-muted); }
+/* Pick of the Hour entry-price + success-metric sub-line (Stream C). */
+.pick-context-line {
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--accent-bright);
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.pick-context-line .ctx-main { color: var(--text-primary); font-weight: 500; }
+.pick-context-line .ctx-now { color: var(--text-secondary); }
+.pick-context-line .pos { color: #22c55e; }
+.pick-context-line .neg { color: #ef4444; }
+.pick-vs-market {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+.pick-vs-market .vs-bar {
+  flex: 1;
+  max-width: 120px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border-default);
+  position: relative;
+  overflow: hidden;
+}
+.pick-vs-market .vs-bar-fill {
+  position: absolute;
+  top: 0; bottom: 0;
+  border-radius: 3px;
+}
+.pick-history-strip {
+  margin-top: 10px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.pick-history-strip .ph-title { color: var(--text-muted); }
+.pick-history-strip .ph-item { margin-right: 6px; }
+.pick-history-strip .ph-ok { color: #22c55e; }
+.pick-history-strip .ph-no { color: #ef4444; }
+.pick-success-rate {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-bright);
+}
 .conviction-ring {
   width: 56px; height: 56px; border-radius: 50%;
   background: conic-gradient(var(--ring-color, #f59e0b) calc(var(--ring-pct, 0) * 1%), rgba(255,255,255,0.06) 0);
@@ -161,7 +233,7 @@
 
   <main class="wrap">
     <!-- Market Snapshot -->
-    <div class="section-label" id="market-snapshot">Market Snapshot</div>
+    <div class="section-label" id="market-snapshot">Market Snapshot<span class="freshness-badge unknown" data-fresh="subnets">…</span></div>
     <div class="section-sub">Aggregate subnet intelligence · KPI strip</div>
     <div class="card">
       <div class="layout-grid" style="grid-template-columns: repeat(5,1fr); gap: 16px;">
@@ -174,7 +246,7 @@
     </div>
 
     <!-- Top Picks Hour and Day (server-rendered) -->
-    <div class="section-label" id="top-picks">Top Picks</div>
+    <div class="section-label" id="top-picks">Top Picks<span class="freshness-badge unknown" data-fresh="top_pick_hour">…</span></div>
     <div class="section-sub">Live council state-vector picks · hour and day</div>
     <div class="layout-grid">
       {% set hour = hour_picks[0] if hour_picks else None %}
@@ -189,6 +261,29 @@
           <div><span class="mono" style="font-size:10px;color:var(--text-muted);"><span class="info-term" data-tip="Annual Percentage Yield — yearly return from subnet emissions relative to stake size">APY</span></span><br><span class="mono" id="hour-pick-apy">{{ '%.1f'|format(hour.signals.apy or 0) }}%</span></div>
         </div>
         <div style="margin-top:8px;" id="hour-pick-scenario">{% for k,v in ((hour.scenario_tags or {}).items()) %}<span class="mono" style="font-size:11px;color:var(--text-secondary);">{{ k|replace('regime','Market Mood') }}: {{ v }} · </span>{% endfor %}</div>
+        {# Stream C1/C2: Pick of the Hour entry price, trigger reason, and
+           live vs-market success metric. Rendered server-side from the fields
+           _record_hour_pick merges onto the #1 pick; updated live by app.js. #}
+        {% if hour.selected_at %}
+        <div class="pick-context-line" id="hour-pick-context">
+          <div class="ctx-main">Selected at ${{ '%.2f'|format(hour.entry_price or 0) }} · <span id="hour-pick-ago">{{ hour.selected_at }}</span> · triggered by {{ hour.trigger_reason or 'market scan' }}</div>
+          <div class="ctx-now">Currently ${{ '%.2f'|format(hour.current_price or hour.entry_price or 0) }} (<span class="{{ 'pos' if (hour.price_change_since_selection or 0) >= 0 else 'neg' }}" id="hour-pick-since">{{ '%+.2f'|format(hour.price_change_since_selection or 0) }}%</span> since pick)</div>
+          <div class="pick-vs-market">
+            <span>vs market:</span>
+            <span class="{{ 'pos' if (hour.vs_market or 0) >= 0 else 'neg' }}" id="hour-pick-vsmarket">{{ '%+.2f'|format(hour.vs_market or 0) }}%</span>
+            <span style="color:var(--text-muted);">vs median {{ '%+.2f'|format(hour.median_subnet_return or 0) }}%</span>
+            <span class="vs-bar"><span class="vs-bar-fill" id="hour-pick-vsbar" style="left:50%; width:0%; background:#22c55e;"></span></span>
+            <span id="hour-pick-success" class="{{ 'pos' if hour.success_so_far else 'neg' }}">{{ '✓ outperforming' if hour.success_so_far else '✗ underperforming' }}</span>
+          </div>
+        </div>
+        {% endif %}
+        {# Stream C2: compact last-3-picks history + aggregate success rate.
+           Populated by app.js from /api/pick-history so the server render
+           stays cheap and the strip stays live. #}
+        <div class="pick-history-strip" id="hour-pick-history">
+          <span class="ph-title">Recent picks: </span><span class="ph-item" id="hour-pick-history-items">loading…</span>
+        </div>
+        <div class="pick-success-rate" id="hour-pick-success-rate"></div>
         {% else %}
         <div class="section-sub">Council convening — picks refresh every 60 minutes</div>
         {% endif %}
@@ -212,7 +307,7 @@
     </div>
 
     <!-- SimiVision Top Picks -->
-    <div class="section-label" id="simivision-picks">SimiVision Top Picks</div>
+    <div class="section-label" id="simivision-picks">SimiVision Top Picks<span class="freshness-badge unknown" data-fresh="simivision_picks">…</span></div>
     <div class="section-sub">Ranked by Daily Rewards, yield &amp; conviction — every forecast is predictive</div>
     <div class="picks">
       {% for p in (simivision_picks | default([]))[:3] %}
@@ -237,7 +332,7 @@
     </div>
 
     <!-- Daily Pick -->
-    <div class="section-label" id="daily-pick">Daily Pick — Council Audited</div>
+    <div class="section-label" id="daily-pick">Daily Pick — Council Audited<span class="freshness-badge unknown" data-fresh="top_pick_day">…</span></div>
     <div class="section-sub">Single 24h candidate vetted by the Risk Check layer</div>
     {% if daily_pick and daily_pick.subnet %}
     <div class="hero-card">
@@ -269,7 +364,7 @@
     </div>
 
     <!-- Technical Indicators -->
-    <div class="section-label" id="indicators">Technical Indicators</div>
+    <div class="section-label" id="indicators">Technical Indicators<span class="freshness-badge unknown" data-fresh="indicators">…</span></div>
     <div class="section-sub">RSI · Stochastic · Bollinger · Money Flow Index · Commodity Channel Index · Williams %R · MACD</div>
     <div class="picks">
       {% for t in (technical_indicators | default([])) %}
@@ -292,7 +387,7 @@
     </div>
 
     <!-- Rotation Tracker with Volatility Explanation -->
-    <div class="section-label" id="rotation-tracker">Rotation Tracker</div>
+    <div class="section-label" id="rotation-tracker">Rotation Tracker<span class="freshness-badge unknown" data-fresh="rotation">…</span></div>
     <div class="section-sub">Subnet rotation patterns &amp; volatility clusters</div>
     <div class="card">
       <div class="vol-explain">
@@ -394,7 +489,7 @@
     </div>
 
     <!-- Scenario Memory -->
-    <div class="section-label" id="scenario-memory">Scenario Memory</div>
+    <div class="section-label" id="scenario-memory">Scenario Memory<span class="freshness-badge unknown" data-fresh="scenario_memory">…</span></div>
     <div class="section-sub">Regime-aware memory · live from /api/scenario-memory</div>
     <div class="card">
       <div class="layout-grid" style="grid-template-columns: repeat(4,1fr); gap:12px;">
@@ -417,7 +512,7 @@
     </div>
 
     <!-- Judge Panel with Postmortems -->
-    <div class="section-label" id="judge-panel">Judge panel</div>
+    <div class="section-label" id="judge-panel">Judge panel<span class="freshness-badge unknown" data-fresh="judges">…</span></div>
     <div class="section-sub">Oracle · Echo · Pulse — live scores, paper portfolios &amp; Prediction Reviews{% if usd_rate %} | TAO ${{ '%.2f'|format(usd_rate) }}{% endif %}</div>
     <div class="picks">
       {% for j in (judge_cards | default([])) %}
@@ -756,6 +851,135 @@
 
       refresh();
       setInterval(refresh, REFRESH_MS);
+    })();
+
+    // ---------------------------------------------------------------------
+    // Freshness badges (Stream B) + Pick of the Hour context/history (Stream C).
+    // Polls /api/freshness every 30s to render "updated Xm ago" badges next to
+    // each section heading, and /api/pick-history to keep the entry-price
+    // sub-line, vs-market bar, and last-3-picks strip live. All updates are
+    // guarded so a failed fetch never breaks the server-rendered page.
+    // ---------------------------------------------------------------------
+    (function () {
+      var FRESH_MS = 30 * 1000;
+
+      function relTime(iso, nowMs) {
+        if (!iso) return null;
+        var t = Date.parse(iso);
+        if (isNaN(t)) return null;
+        var delta = Math.max(0, Math.round((nowMs - t) / 1000));
+        if (delta < 30) return 'just now';
+        if (delta < 60) return delta + 's ago';
+        if (delta < 3600) return Math.floor(delta / 60) + 'm ago';
+        return Math.floor(delta / 3600) + 'h ago';
+      }
+
+      function applyFreshness(data) {
+        if (!data || typeof data !== 'object') return;
+        var nowMs = data.now ? Date.parse(data.now) : Date.now();
+        if (isNaN(nowMs)) nowMs = Date.now();
+        var map = data.last_updated || {};
+        document.querySelectorAll('.freshness-badge[data-fresh]').forEach(function (el) {
+          var key = el.getAttribute('data-fresh');
+          var iso = map[key];
+          var txt = relTime(iso, nowMs);
+          if (txt === null) {
+            el.textContent = '—';
+            el.className = 'freshness-badge unknown';
+          } else {
+            el.textContent = 'updated ' + txt;
+            // fresh < 2m, stale >= 5m, otherwise neutral.
+            var secs = Math.max(0, Math.round((nowMs - Date.parse(iso)) / 1000));
+            el.className = 'freshness-badge ' + (secs < 120 ? 'fresh' : (secs >= 300 ? 'stale' : ''));
+          }
+        });
+      }
+
+      function fetchFreshness() {
+        fetch('/api/freshness', { headers: { 'Accept': 'application/json' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(applyFreshness)
+          .catch(function () { /* silent */ });
+      }
+
+      function fmtSigned(v, d) { return (v >= 0 ? '+' : '') + (Number(v) || 0).toFixed(d); }
+
+      function applyPickContext(pick) {
+        if (!pick || typeof pick !== 'object') return;
+        // Update the live "ago" + since-pick + vs-market fields from the
+        // enriched #1 pick returned by /api/top-pick/hour.
+        var ago = document.getElementById('hour-pick-ago');
+        if (ago && pick.selected_at) {
+          var txt = relTime(pick.selected_at, Date.now());
+          if (txt) ago.textContent = txt;
+        }
+        var since = document.getElementById('hour-pick-since');
+        if (since) {
+          var v = Number(pick.price_change_since_selection) || 0;
+          since.textContent = fmtSigned(v, 2) + '%';
+          since.className = v >= 0 ? 'pos' : 'neg';
+        }
+        var vsm = document.getElementById('hour-pick-vsmarket');
+        if (vsm) {
+          var vm = Number(pick.vs_market) || 0;
+          vsm.textContent = fmtSigned(vm, 2) + '%';
+          vsm.className = vm >= 0 ? 'pos' : 'neg';
+        }
+        var bar = document.getElementById('hour-pick-vsbar');
+        if (bar) {
+          // Centered bar: positive extends right (green), negative left (red).
+          var pct = Math.min(50, Math.abs(Number(pick.vs_market) || 0) * 10);
+          bar.style.width = pct + '%';
+          bar.style.left = (Number(pick.vs_market) || 0) >= 0 ? '50%' : (50 - pct) + '%';
+          bar.style.background = (Number(pick.vs_market) || 0) >= 0 ? '#22c55e' : '#ef4444';
+        }
+        var succ = document.getElementById('hour-pick-success');
+        if (succ) {
+          var ok = !!pick.success_so_far;
+          succ.textContent = ok ? '✓ outperforming' : '✗ underperforming';
+          succ.className = ok ? 'pos' : 'neg';
+        }
+      }
+
+      function applyPickHistory(data) {
+        if (!data || typeof data !== 'object') return;
+        var items = document.getElementById('hour-pick-history-items');
+        var rate = document.getElementById('hour-pick-success-rate');
+        if (items && Array.isArray(data.history)) {
+          var last3 = data.history.slice(0, 3).map(function (h) {
+            var mark = h.success ? '✅' : '❌';
+            var vs = fmtSigned(h.absolute_return, 1) + '% vs median ' + fmtSigned(h.median_subnet_return, 1) + '%';
+            return '<span class="ph-item ' + (h.success ? 'ph-ok' : 'ph-no') + '">' + mark + ' ' + (h.name || 'SN' + h.netuid) + ' (' + vs + ')</span>';
+          });
+          items.innerHTML = last3.length ? last3.join(' · ') : 'no finalized picks yet';
+        }
+        if (rate && data.stats) {
+          var s = data.stats;
+          if (s.total > 0) {
+            rate.textContent = 'Pick of the Hour success rate: ' + s.wins + '/' + s.total + ' (' + s.success_rate + '%) — outperforming market median';
+          } else {
+            rate.textContent = '';
+          }
+        }
+      }
+
+      function fetchPickContext() {
+        fetch('/api/top-pick/hour', { headers: { 'Accept': 'application/json' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) {
+            if (d && Array.isArray(d.picks) && d.picks.length) applyPickContext(d.picks[0]);
+          })
+          .catch(function () { /* silent */ });
+        fetch('/api/pick-history', { headers: { 'Accept': 'application/json' } })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(applyPickHistory)
+          .catch(function () { /* silent */ });
+      }
+
+      fetchFreshness();
+      fetchPickContext();
+      setInterval(fetchFreshness, FRESH_MS);
+      setInterval(fetchPickContext, FRESH_MS);
     })();
   </script>
 </body>

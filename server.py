@@ -73,6 +73,16 @@ except Exception:  # pragma: no cover
         return {"subnet": None, "score": 0.0, "confidence": 0.0, "expert_contributions": {}, "scenario_tags": {}, "audit": {"approved": False, "concerns": ["hourly_pick unavailable"], "adjusted_confidence": 0.0}, "final_confidence": 0.0, "action": "long"}
 
 try:
+    from internal.council import pick_history
+except Exception:  # pragma: no cover
+    pick_history = None  # type: ignore[assignment]
+
+try:
+    from internal import freshness_tracker
+except Exception:  # pragma: no cover
+    freshness_tracker = None  # type: ignore[assignment]
+
+try:
     from internal.council import resolver, scenario_memory, rotation_tracker
 except Exception:  # pragma: no cover
     class _FakeResolver:
@@ -259,6 +269,54 @@ def _ensure_data_dir() -> None:
 
 
 _ensure_data_dir()
+
+
+def _mark_fresh(key: str) -> None:
+    """Mark a dashboard section as freshly updated (no-op if tracker missing)."""
+    if freshness_tracker is not None:
+        try:
+            freshness_tracker.mark_updated(key)
+        except Exception:
+            pass
+
+
+def _freshness_snapshot() -> Dict[str, Any]:
+    """Return the freshness map for /api/freshness (safe default on failure)."""
+    if freshness_tracker is not None:
+        try:
+            return freshness_tracker.snapshot()  # type: ignore[no-any-return]
+        except Exception:
+            pass
+    return {"last_updated": {}, "now": datetime.utcnow().isoformat() + "Z"}
+
+
+def _record_hour_pick(pick: Dict[str, Any], subnets: List[Dict[str, Any]],
+                      indicators: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Track a Pick of the Hour selection (entry price/trigger/outcome).
+
+    Delegates to ``internal.council.pick_history`` so the #1 hourly pick
+    carries ``selected_at``/``entry_price``/``trigger_reason`` and a live
+    vs-market success metric. Returns the pick unchanged if the module is
+    unavailable so the render path never breaks.
+    """
+    if pick_history is None:
+        return pick
+    try:
+        return pick_history.record_pick(pick, subnets, indicators)
+    except Exception as exc:
+        logger.warning("pick_history.record_pick failed: %s", exc)
+        return pick
+
+
+def _hour_pick_history(limit: int = 20) -> Dict[str, Any]:
+    """Return the pick-of-the-hour history + aggregate success stats."""
+    if pick_history is None:
+        return {"active": None, "history": [], "stats": {"total": 0, "wins": 0, "losses": 0, "success_rate": 0.0}}
+    try:
+        return pick_history.get_history(limit=limit)  # type: ignore[no-any-return]
+    except Exception as exc:
+        logger.warning("pick_history.get_history failed: %s", exc)
+        return {"active": None, "history": [], "stats": {"total": 0, "wins": 0, "losses": 0, "success_rate": 0.0}}
 
 # ---------------------------------------------------------------------------
 # Message Intelligence pipeline singletons (Telegram → NLP → Jury → Learning)
@@ -784,6 +842,29 @@ def api_health_check():
     return {"status": "ok"}
 
 
+@app.get("/api/freshness")
+def api_freshness():
+    """Per-section "last updated" timestamps for the dashboard freshness badges.
+
+    Returns ``{"last_updated": {section: iso_ts, ...}, "now": <iso>}``. The
+    frontend polls this on load and every 30s to render "updated Xm ago"
+    badges next to each section heading.
+    """
+    return _freshness_snapshot()
+
+
+@app.get("/api/pick-history")
+def api_pick_history():
+    """Pick-of-the-Hour history + aggregate success metric.
+
+    Returns the currently-tenured pick, the most recent finalized picks (each
+    with absolute/median/percentile returns + success flag), and aggregate
+    success stats (wins/losses/success_rate). A pick is "successful" when its
+    absolute return beats the median subnet return over its tenure.
+    """
+    return _hour_pick_history(limit=20)
+
+
 @app.get("/api/price-tracking/baselines")
 def api_price_tracking_baselines():
     """Return the recorded baseline price history for all tracked subnets."""
@@ -1007,6 +1088,7 @@ def api_top_pick_day():
         day_pick = None
     if not day_pick:
         return {"picks": [_highest_emission_pick(subnets)]}
+    _mark_fresh("top_pick_day")
     # Record the day pick's market context into the scenario memory so
     # /api/scenario-memory reflects real picks, not just resolved predictions.
     try:
@@ -3777,6 +3859,7 @@ async def dashboard(request: Request):
 
     try:
         subnets, source = _get_subnets_with_source()
+        _mark_fresh("subnets")
     except Exception as e:
         logger.error("Error fetching subnets for dashboard: %s", e)
         subnets, source = [], "error"
@@ -3786,6 +3869,13 @@ async def dashboard(request: Request):
 
     try:
         premium = _build_premium_context(subnets)
+        # The premium context composes simivision picks, technical indicators,
+        # predictions, social sentiment, and judge cards in one pass.
+        _mark_fresh("simivision_picks")
+        _mark_fresh("indicators")
+        _mark_fresh("predictions")
+        _mark_fresh("social_sentiment")
+        _mark_fresh("judges")
     except Exception as e:
         logger.error("Error building premium context: %s", e)
         premium = _default_premium_context()
@@ -3798,6 +3888,7 @@ async def dashboard(request: Request):
         # nested subnet{}/action (API), and records each pick into the
         # regime-aware scenario memory.
         hour_picks = _ordered_hour_picks(subnets, market_context, limit=3)
+        _mark_fresh("top_pick_hour")
     except Exception as e:
         logger.error("Error computing hour picks: %s", e)
         hour_picks = []
@@ -3829,6 +3920,7 @@ async def dashboard(request: Request):
             day_picks.append(_day_pick)
             # Record the day pick's market context into the scenario memory.
             _record_pick_scenario(_day_pick, market_context)
+            _mark_fresh("top_pick_day")
     except Exception as e:
         logger.error("Error computing day picks: %s", e)
         day_picks = []
@@ -3849,12 +3941,14 @@ async def dashboard(request: Request):
 
     try:
         rotation_tracker = await api_rotation_tracker()
+        _mark_fresh("rotation")
     except Exception as e:
         logger.error("Error fetching rotation tracker: %s", e)
         rotation_tracker = _default_rotation_tracker()
 
     try:
         scenario_memory_snapshot = await api_scenario_memory()
+        _mark_fresh("scenario_memory")
     except Exception as e:
         logger.error("Error fetching scenario memory: %s", e)
         scenario_memory_snapshot = _default_scenario_memory()
@@ -3994,6 +4088,7 @@ async def api_predictions_resolved(resolve: bool = False):
 async def api_scenario_memory():
     """Return the full regime-aware scenario memory snapshot."""
     try:
+        _mark_fresh("scenario_memory")
         return {"status": "ok", **scenario_memory.get_memory_snapshot()}
     except Exception as e:
         logger.error("Error fetching scenario memory: %s", e)
@@ -4032,6 +4127,7 @@ async def api_rotation_tracker():
     """Return subnet rotation patterns and volatility clusters."""
     try:
         subnets, _ = _get_subnets_with_source()
+        _mark_fresh("rotation")
         return {"status": "ok", **rotation_tracker.get_rotation_summary(subnets)}
     except Exception as e:
         logger.error("Error fetching rotation tracker: %s", e)
@@ -4063,6 +4159,7 @@ async def api_indicators_convergence():
                 "oversold": _detect_oversold_convergence(indicators),
                 "overbought": _detect_overbought_convergence(indicators),
             })
+        _mark_fresh("indicators")
         return {"subnets": rows}
     except Exception as e:
         logger.error("Error fetching indicators convergence: %s", e)
@@ -4261,6 +4358,20 @@ def _ordered_hour_picks(
     for pick in picks:
         _record_pick_scenario(pick, market_context)
 
+    # Track the #1 Pick of the Hour for the entry-price + success-metric
+    # feature (Stream C). This records selected_at/entry_price/trigger_reason
+    # on first sight of a new #1 netuid and finalizes the previous pick's
+    # outcome (absolute vs median subnet return) when the #1 changes. The
+    # enriched fields are merged back onto the #1 pick so both the homepage
+    # and /api/top-pick/hour surface them. Idempotent for the same netuid.
+    if picks:
+        try:
+            top_sn = next((s for s in subnets if s.get("netuid") == picks[0].get("netuid")), {})
+            top_ind = _compute_technical_indicators(top_sn) if top_sn else None
+            picks[0] = _record_hour_pick(picks[0], subnets, top_ind)
+        except Exception as exc:
+            logger.warning("hour pick history tracking failed: %s", exc)
+
     return picks[:limit]
 
 
@@ -4302,6 +4413,7 @@ async def api_top_pick_hour():
         # rendered dashboard (a static 0.0 here previously let the two drift).
         market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
         picks = _ordered_hour_picks(subnets, market_context, limit=3)
+        _mark_fresh("top_pick_hour")
         if picks:
             return {"picks": picks}
         return {"picks": [_highest_emission_pick(subnets)]}
@@ -4319,6 +4431,7 @@ async def api_daily_pick():
         # Use the same real market-wide mood proxy as the homepage so the
         # daily pick stays in sync with the rendered dashboard.
         market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
+        _mark_fresh("top_pick_day")
         return get_or_create_today_pick(subnets, market_context)
     except Exception as e:
         logger.error("Error fetching daily pick: %s", e)
