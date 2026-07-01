@@ -12,8 +12,6 @@ import threading
 from datetime import datetime, timezone
 from typing import Dict
 
-# Canonical dashboard sections. Keeping the keys in one place guarantees the
-# frontend badges and the backend markers stay in sync.
 SECTIONS = (
     "subnets",
     "predictions",
@@ -32,7 +30,6 @@ LAST_UPDATED: Dict[str, str] = {key: None for key in SECTIONS}
 
 
 def mark_updated(key: str) -> None:
-    """Record that the section ``key`` was just refreshed (UTC ISO timestamp)."""
     if key not in LAST_UPDATED:
         return
     ts = datetime.now(timezone.utc).isoformat()
@@ -41,7 +38,6 @@ def mark_updated(key: str) -> None:
 
 
 def snapshot() -> Dict[str, object]:
-    """Return ``{"last_updated": {...}, "now": <server time>}`` for the API/frontend."""
     with _lock:
         last = dict(LAST_UPDATED)
     return {
@@ -51,7 +47,6 @@ def snapshot() -> Dict[str, object]:
 
 
 def reset_for_tests() -> None:
-    """Clear all timestamps (test hook)."""
     with _lock:
         for key in LAST_UPDATED:
             LAST_UPDATED[key] = None
