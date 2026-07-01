@@ -2,11 +2,9 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install Node.js for npm
-RUN apt-get update && apt-get install -y curl && \
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
-    apt-get install -y nodejs && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+# NOTE: Node.js/npm was previously installed here but is unused by this app
+# (no package.json, no build step). Removing it speeds up the build and avoids
+# the Node.js 18 EOL deprecation noise. The app is pure Python (FastAPI/uvicorn).
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
