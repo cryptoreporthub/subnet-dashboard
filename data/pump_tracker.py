@@ -148,6 +148,8 @@ class PumpTracker:
         self.sentiment_state: Dict[int, Dict[str, Any]] = {}
         # netuid -> latest technical indicator values (Enhancement 3)
         self.indicator_state: Dict[int, Dict[str, Any]] = {}
+        self._indicator_file_cache: Optional[Dict[str, Any]] = None
+        self._indicator_file_cache_time: float = 0.0
         self.meta: Dict[str, Any] = {
             "version": "2.0",
             "created": _now_iso(),
@@ -711,19 +713,30 @@ class PumpTracker:
             if nid is None or not indicator_values:
                 return
             with self._lock:
-                self.indicator_state[nid] = dict(indicator_values)
+                import copy
+                self.indicator_state[nid] = copy.deepcopy(indicator_values)
         except Exception as exc:
             logger.warning("pump_tracker: update_indicators failed: %s", exc)
 
     def _read_indicator_state_file(self, nid: int) -> Dict[str, Any]:
-        """Fallback: read indicator values from data/indicator_state.json."""
+        """Fallback: read indicator values from data/indicator_state.json.
+
+        Results are cached for 30 seconds to avoid repeated disk reads
+        when the in-memory indicator_state is empty (e.g. cold start).
+        """
+        import time
         try:
-            path = os.environ.get("INDICATOR_STATE_PATH", "data/indicator_state.json")
-            if not os.path.exists(path):
-                return {}
-            with open(path, "r", encoding="utf-8") as fh:
-                data = json.load(fh) or {}
-            per = data.get("per_subnet", {}).get(str(nid), {})
+            now = time.time()
+            if self._indicator_file_cache is None or (now - self._indicator_file_cache_time) > 30:
+                path = os.environ.get("INDICATOR_STATE_PATH", "data/indicator_state.json")
+                if not os.path.exists(path):
+                    self._indicator_file_cache = {}
+                else:
+                    with open(path, "r", encoding="utf-8") as fh:
+                        data = json.load(fh) or {}
+                    self._indicator_file_cache = data.get("per_subnet", {})
+                self._indicator_file_cache_time = now
+            per = self._indicator_file_cache.get(str(nid), {})
             return {
                 "rsi": per.get("rsi"),
                 "macd_histogram": per.get("macd_histogram"),
@@ -774,7 +787,7 @@ class PumpTracker:
                 rsi = self._ind_value(indicator_values, "rsi")
                 rsi_prev = self._ind_value(indicator_values, "rsi_prev")
                 if rsi is not None:
-                    if rsi < 30 or (rsi > 50 and (rsi_prev is None or rsi > rsi_prev)):
+                    if rsi < 30 or (50 < rsi < 70 and (rsi_prev is None or rsi > rsi_prev)):
                         bullish_count += 1
 
                 macd_hist = self._ind_value(indicator_values, "macd_histogram")
@@ -790,7 +803,7 @@ class PumpTracker:
                     bullish_count += 1
 
                 mfi = self._ind_value(indicator_values, "mfi")
-                if mfi is not None and (mfi < 30 or mfi > 50):
+                if mfi is not None and (mfi < 30 or 50 < mfi < 80):
                     bullish_count += 1
 
                 cci = self._ind_value(indicator_values, "cci")
@@ -842,7 +855,13 @@ class PumpTracker:
                     st["adapted_k"] = new_k
                     st["adaptation_note"] = f"k lowered to {new_k:.2f} due to low accuracy ({accuracy_score:.0%})"
                 elif accuracy_score > 0.7:
-                    st["adaptation_note"] = f"parameters stable, accuracy good ({accuracy_score:.0%})"
+                    new_k = min(CUSUM_K, current_k + 0.05)
+                    if new_k != current_k:
+                        st["k"] = new_k
+                        st["adapted_k"] = new_k
+                        st["adaptation_note"] = f"k raised to {new_k:.2f}, accuracy recovered ({accuracy_score:.0%})"
+                    else:
+                        st["adaptation_note"] = f"parameters stable, accuracy good ({accuracy_score:.0%})"
                 # High false-positive handling would require separate FP
                 # tracking; left as a future hook when that data exists.
         except Exception as exc:
@@ -988,6 +1007,7 @@ class PumpTracker:
             # Enhancement 4: adapt CUSUM k every 10th tick per subnet.
             if adapt_due:
                 self.adapt_parameters(netuid)
+                self.save_state()
         except Exception as exc:
             logger.warning("pump_tracker: on_tick failed: %s", exc)
 

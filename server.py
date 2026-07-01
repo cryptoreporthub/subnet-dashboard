@@ -2700,12 +2700,17 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     patterns_all: List[Dict[str, Any]] = []
     social_feed: List[Dict[str, Any]] = []
 
+    _pt = None
+    try:
+        _pt = get_pump_tracker()
+    except Exception:
+        _pt = None
+
     for idx, sn in enumerate(top_subnets):
         indicators = _compute_technical_indicators(sn)
         # Enhancement 3: feed technical indicators into the Pump Cycle Tracker
         # so multi-signal convergence can factor into the proneness score.
         try:
-            _pt = get_pump_tracker()
             if _pt is not None:
                 _pt.update_indicators(sn.get("netuid"), indicators)
         except Exception as exc:
@@ -2768,7 +2773,6 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         # Enhancement 2: feed social sentiment into the Pump Cycle Tracker so
         # sentiment momentum can factor into the proneness score.
         try:
-            _pt = get_pump_tracker()
             if _pt is not None:
                 _pt.update_sentiment(
                     sn.get("netuid"),
