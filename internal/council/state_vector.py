@@ -862,7 +862,7 @@ def _scenario_tags(
     indicators: Dict[str, Any],
     market_context: Optional[Dict[str, Any]],
 ) -> Dict[str, str]:
-    """Derive regime, RSI and volume scenario tags."""
+    """Derive regime, RSI, volume, and price direction scenario tags."""
     market_context = market_context or {}
     tao_chg = float(market_context.get("tao_change_24h", 0) or 0)
     if tao_chg > 3:
@@ -872,26 +872,48 @@ def _scenario_tags(
     else:
         regime = "neutral"
 
+    # Tightened RSI bands: <35 oversold, 35-65 neutral, >65 overbought
     rsi_val = 50.0
     rsi = indicators.get("rsi", {})
     if isinstance(rsi, dict):
         rsi_val = float(rsi.get("value", 50))
-    if rsi_val < 30:
+    if rsi_val < 35:
         rsi_tag = "oversold"
-    elif rsi_val > 70:
+    elif rsi_val > 65:
         rsi_tag = "overbought"
     else:
         rsi_tag = "neutral"
 
+    # Granular volume bands: <$500, $500-$5k, $5k-$50k, >$50k
     volume = float(sn.get("volume", 0) or 0)
-    if volume > 1_000_000:
-        volume_tag = "high"
-    elif volume < 100_000:
+    if volume < 500:
         volume_tag = "low"
+    elif volume < 5000:
+        volume_tag = "medium"
+    elif volume < 50000:
+        volume_tag = "high"
     else:
-        volume_tag = "normal"
+        volume_tag = "very_high"
 
-    return {"regime": regime, "rsi": rsi_tag, "volume": volume_tag}
+    # Price direction based on 24h change
+    price_change_24h = float(sn.get("price_change_24h", 0) or 0)
+    if price_change_24h > 5:
+        price_direction = "strongly_bullish"
+    elif price_change_24h > 0:
+        price_direction = "bullish"
+    elif price_change_24h < -5:
+        price_direction = "strongly_bearish"
+    elif price_change_24h < 0:
+        price_direction = "bearish"
+    else:
+        price_direction = "neutral"
+
+    return {
+        "regime": regime,
+        "rsi": rsi_tag,
+        "volume": volume_tag,
+        "price_direction": price_direction,
+    }
 
 
 def _compute_confidence(
