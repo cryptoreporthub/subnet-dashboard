@@ -199,7 +199,10 @@ def resolve_prediction(
         prediction["expert"] = expert
         _nudge_weights(correct, expert)
 
-    # Record scenario in regime-aware memory for learning
+    # Record scenario in regime-aware memory for learning. Outcomes are wired
+    # back to the originating scenario record (created when the prediction was
+    # minted) via ``record_outcome`` so the learning loop grades the same
+    # scenario in place rather than minting a duplicate on every resolution.
     try:
         features = {
             "direction": prediction.get("direction"),
@@ -218,14 +221,16 @@ def resolve_prediction(
             features["rsi"] = rsi_signal
         if volume_signal:
             features["volume"] = volume_signal
-        scenario_memory.add_scenario(
+        regime = scenario_memory.classify_regime({
+            "avg_change_24h": actual_pct,
+            "volatility": abs(actual_pct),
+        })
+        scenario_memory.record_outcome(
             name=prediction.get("name", "unknown"),
-            features=features,
             outcome="correct" if correct else "wrong",
-            regime=scenario_memory.classify_regime({
-                "avg_change_24h": actual_pct,
-                "volatility": abs(actual_pct),
-            }),
+            features=features,
+            regime=regime,
+            scenario_id=prediction.get("scenario_id"),
         )
     except Exception:
         pass

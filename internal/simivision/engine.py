@@ -335,12 +335,24 @@ def _build_signal(
         "neutral": "hold",
     }.get(action, action)
 
+    # Distinguish yield-driven staking plays from price-driven trading plays.
+    # "stake" when the quant (fundamental/yield) lens drives the accumulate
+    # decision and the subnet offers meaningful yield; otherwise "trade".
+    apy = float(registry_item.get("apy", 0) or 0)
+    quant = decision.get("expert_breakdown", {}).get("quant", {}) if isinstance(decision.get("expert_breakdown"), dict) else {}
+    quant_score = float(quant.get("score", 0) or 0) if isinstance(quant, dict) else 0.0
+    if action == "accumulate" and apy > 0 and quant_score >= 0.7:
+        recommendation_type = "stake"
+    else:
+        recommendation_type = "trade"
+
     return {
         "netuid": netuid,
         "name": registry_item.get("name", f"Subnet {netuid}"),
         "rank": netuid,
         "conviction": conviction,
         "recommendation": recommendation,
+        "recommendation_type": recommendation_type,
         "rationale": _build_rationale(decision, registry_item, conviction, status),
         "delta": delta,
         "delta_value": delta_value,
