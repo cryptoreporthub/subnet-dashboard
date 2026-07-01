@@ -2702,6 +2702,14 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     for idx, sn in enumerate(top_subnets):
         indicators = _compute_technical_indicators(sn)
+        # Enhancement 3: feed technical indicators into the Pump Cycle Tracker
+        # so multi-signal convergence can factor into the proneness score.
+        try:
+            _pt = get_pump_tracker()
+            if _pt is not None:
+                _pt.update_indicators(sn.get("netuid"), indicators)
+        except Exception as exc:
+            logger.warning("pump_tracker update_indicators hook failed: %s", exc)
         oversold = _detect_oversold_convergence(indicators)
         overbought = _detect_overbought_convergence(indicators)
         convergence = oversold if oversold.get("count", 0) >= overbought.get("count", 0) else overbought
@@ -2755,7 +2763,20 @@ def _build_premium_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
             "sell": sell,
         })
 
-        social_feed.append({"netuid": sn.get("netuid"), "name": sn.get("name"), **_compute_social_sentiment(sn)})
+        _sentiment = _compute_social_sentiment(sn)
+        social_feed.append({"netuid": sn.get("netuid"), "name": sn.get("name"), **_sentiment})
+        # Enhancement 2: feed social sentiment into the Pump Cycle Tracker so
+        # sentiment momentum can factor into the proneness score.
+        try:
+            _pt = get_pump_tracker()
+            if _pt is not None:
+                _pt.update_sentiment(
+                    sn.get("netuid"),
+                    sentiment_score=_sentiment.get("score"),
+                    mention_count=_sentiment.get("mentions"),
+                )
+        except Exception as exc:
+            logger.warning("pump_tracker update_sentiment hook failed: %s", exc)
 
     undervalued = _compute_undervalued(subnets)
     tao_usd = _get_tao_usd()

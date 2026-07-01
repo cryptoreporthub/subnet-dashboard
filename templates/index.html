@@ -387,6 +387,10 @@
               <th>Phase</th>
               <th>Phase Duration</th>
               <th>Proneness</th>
+              <th>Volume</th>
+              <th>Sentiment</th>
+              <th>Signal Convergence</th>
+              <th>Adapted</th>
               <th>Avg Pump</th>
               <th>Re-Pump Rate</th>
               <th>Next Pump Expected</th>
@@ -398,6 +402,12 @@
             {% set _ph = (s.get('current_phase') or 'ACCUMULATION')|lower %}
             {% set _prof = s.get('profile') or {} %}
             {% set _cp = s.get('cycle_prediction') or {} %}
+            {% set _vol_spike = s.get('volume_spike', False) %}
+            {% set _vol_factor = s.get('volume_factor', 1.0) or 1.0 %}
+            {% set _sent_factor = s.get('sentiment_factor', 1.0) or 1.0 %}
+            {% set _convergence = (s.get('signal_convergence', 0.5) or 0.5) * 100 %}
+            {% set _adapted_k = s.get('adapted_k') %}
+            {% set _adapt_note = s.get('adaptation_note') or '' %}
             <tr>
               <td class="mono">{{ s.get('netuid') }}</td>
               <td>{{ s.get('name') or ('SN' ~ s.get('netuid')) }}</td>
@@ -408,6 +418,21 @@
                   <div class="proneness-fill" style="width:{{ s.get('pump_proneness', 0) or 0 }}%"></div>
                   <span class="proneness-score">{{ s.get('pump_proneness', 0) or 0 }}</span>
                 </div>
+              </td>
+              <td class="mono" title="Volume factor {{ '%.2f' % _vol_factor }}x vs 20-snapshot avg">
+                {% if _vol_spike %}<span class="pump-signal-tag pump-signal-vol">📊 {{ '%.1f' % _vol_factor }}x</span>{% else %}<span style="color:var(--text-muted);">{{ '%.1f' % _vol_factor }}x</span>{% endif %}
+              </td>
+              <td class="mono" title="Sentiment momentum factor">
+                {% if _sent_factor > 1.05 %}<span class="pump-signal-tag pump-signal-sent-pos">📈 {{ '%.2f' % _sent_factor }}</span>{% elif _sent_factor < 0.95 %}<span class="pump-signal-tag pump-signal-sent-neg">📉 {{ '%.2f' % _sent_factor }}</span>{% else %}<span style="color:var(--text-muted);">{{ '%.2f' % _sent_factor }}</span>{% endif %}
+              </td>
+              <td>
+                <div class="convergence-bar" title="{{ '%.0f' % _convergence }}% bullish indicator convergence">
+                  <div class="convergence-fill" style="width:{{ '%.0f' % _convergence }}%;"></div>
+                  <span class="convergence-label">{{ '%.0f' % _convergence }}%</span>
+                </div>
+              </td>
+              <td class="mono">
+                {% if _adapt_note %}<span class="pump-signal-tag pump-signal-adapted" title="{{ _adapt_note }}">ADAPTED</span>{% elif _adapted_k is not none and _adapted_k != 0.5 %}<span class="pump-signal-tag pump-signal-adapted" title="k={{ _adapted_k }}">ADAPTED</span>{% else %}<span style="color:var(--text-muted);">—</span>{% endif %}
               </td>
               <td class="mono">{{ '%+.1f' % (_prof.get('avg_pump_magnitude', 0) or 0) }}%</td>
               <td class="mono">{{ '%.0f' % ((_prof.get('re_pump_rate', 0) or 0) * 100) }}%</td>
