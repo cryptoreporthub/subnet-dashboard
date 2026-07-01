@@ -194,16 +194,26 @@ def resolve_prediction(
 
     # Record scenario in regime-aware memory for learning
     try:
+        features = {
+            "direction": prediction.get("direction"),
+            "predicted_pct": float(prediction.get("predicted_pct", 0) or 0),
+            "actual_pct": actual_pct,
+            "outcome": outcome,
+            "expert": expert or "unknown",
+            "volatility": abs(actual_pct),
+        }
+        # Surface RSI and volume signals when precomputed by the caller (the
+        # batch resolver looks up the subnet and derives these so the recorded
+        # scenario carries regime + rsi + volume, not just the move magnitude).
+        rsi_signal = prediction.get("_rsi_signal")
+        volume_signal = prediction.get("_volume_signal")
+        if rsi_signal:
+            features["rsi"] = rsi_signal
+        if volume_signal:
+            features["volume"] = volume_signal
         scenario_memory.add_scenario(
             name=prediction.get("name", "unknown"),
-            features={
-                "direction": prediction.get("direction"),
-                "predicted_pct": float(prediction.get("predicted_pct", 0) or 0),
-                "actual_pct": actual_pct,
-                "outcome": outcome,
-                "expert": expert or "unknown",
-                "volatility": abs(actual_pct),
-            },
+            features=features,
             outcome="correct" if correct else "wrong",
             regime=scenario_memory.classify_regime({
                 "avg_change_24h": actual_pct,
@@ -238,6 +248,39 @@ def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
         stats["accuracy"] = 0.0
     return stats
 
+def _scenario_signals_for_subnet(subnet: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Derive RSI and volume signals for a subnet to attach to recorded scenarios.
+
+    Returns a dict with optional ``rsi`` (overbought/oversold/neutral) and
+    ``volume`` (high/medium/low) signals. Best-effort: any failure yields an
+    empty dict so the resolver never crashes on scenario enrichment.
+    """
+    if not isinstance(subnet, dict):
+        return {}
+    out: Dict[str, Any] = {}
+    try:
+        from internal.council.state_vector import _compute_technical_indicators
+        indicators = _compute_technical_indicators(subnet)
+        rsi = indicators.get("rsi")
+        if isinstance(rsi, dict) and rsi.get("signal"):
+            out["rsi"] = rsi.get("signal")
+    except Exception:
+        pass
+    try:
+        vol = float(subnet.get("volume", 0) or 0)
+        # Bucket raw 24h volume into high/medium/low. Thresholds are deliberately
+        # coarse — this is a regime tag for memory, not a precise signal.
+        if vol >= 1_000_000:
+            out["volume"] = "high"
+        elif vol >= 100_000:
+            out["volume"] = "medium"
+        elif vol > 0:
+            out["volume"] = "low"
+    except Exception:
+        pass
+    return out
+
+
 def resolve_due_predictions(
     subnets: Optional[List[Dict[str, Any]]] = None,
     *,
@@ -253,6 +296,13 @@ def resolve_due_predictions(
     resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
 
     prices = fetch_prices(subnets)
+    # Index subnets by netuid so we can enrich each resolved prediction with
+    # real RSI/volume signals for the scenario-memory record.
+    subnet_by_uid: Dict[Any, Dict[str, Any]] = {}
+    if subnets:
+        for sn in subnets:
+            if isinstance(sn, dict) and sn.get("netuid") is not None:
+                subnet_by_uid[sn.get("netuid")] = sn
     now = datetime.now(timezone.utc)
 
     still_pending: List[Dict[str, Any]] = []
@@ -270,7 +320,17 @@ def resolve_due_predictions(
             resolve_at = now + timedelta(hours=horizon_hours)
 
         if price > 0 and now >= resolve_at:
+            # Attach current RSI/volume signals so the scenario recorded on
+            # resolution reflects real market state, not just the move size.
+            signals = _scenario_signals_for_subnet(subnet_by_uid.get(uid))
+            if signals.get("rsi"):
+                pred["_rsi_signal"] = signals["rsi"]
+            if signals.get("volume"):
+                pred["_volume_signal"] = signals["volume"]
             resolve_prediction(pred, price, tolerance)
+            # Don't persist the transient enrichment keys.
+            pred.pop("_rsi_signal", None)
+            pred.pop("_volume_signal", None)
             resolved.append(pred)
             resolved_now.append(pred)
         else:

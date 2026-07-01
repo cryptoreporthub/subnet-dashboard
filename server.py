@@ -25,13 +25,38 @@ from fetchers.taomarketcap import get_all_subnets, get_subnet_data
 # Safe internal imports — endpoints stay live even if modules are incomplete.
 # ---------------------------------------------------------------------------
 try:
-    from internal.council.state_vector import score_subnet_for_hour, score_subnet_for_day
+    from internal.council.state_vector import (
+        score_subnet_for_hour,
+        score_subnet_for_day,
+        clamp_prediction_horizon,
+    )
 except Exception:  # pragma: no cover
     def score_subnet_for_hour(*_args, **_kwargs):
         return 0.0
 
     def score_subnet_for_day(*_args, **_kwargs):
         return 0.0
+
+    def clamp_prediction_horizon(horizon: int, predicted_pct: Optional[float]) -> int:
+        """Inline fallback for the percentage-based horizon clamp.
+
+        |pct| < 5% -> max 4h, |pct| < 10% -> max 24h, else max 168h.
+        """
+        abs_pct = abs(predicted_pct) if predicted_pct is not None else 0.0
+        max_h = 4 if abs_pct < 5.0 else (24 if abs_pct < 10.0 else 168)
+        return max(1, min(int(horizon), max_h))
+
+
+# Canonical percentage-based prediction horizon clamp. Delegates to the shared
+# implementation in ``internal.council.state_vector`` (with the safe fallback
+# above when that module is unavailable). Apply this at every point where a
+# prediction's horizon is determined, BEFORE the prediction is stored/displayed.
+#
+# NOTE: existing predictions already persisted with the old generic 1-168h clamp
+# (e.g. a -2.1% move pinned to 168h) will keep their stale horizon until they
+# either expire naturally or are re-clamped by ``_reclamp_stored_predictions``
+# on startup (see ``_lifespan``).
+_clamp_prediction_horizon = clamp_prediction_horizon
 
 try:
     from internal.council.daily_pick import select_daily_pick
@@ -254,6 +279,14 @@ def _start_telegram_listener() -> None:
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Start background services on startup and stop them on shutdown."""
+    # Re-clamp any stale pending predictions to the magnitude-based horizon
+    # bands so legacy entries (e.g. a -2.1% move pinned to 168h) expire on a
+    # sensible schedule instead of lingering for up to a week.
+    try:
+        _reclamp_stored_predictions()
+    except Exception as exc:
+        logger.warning("Startup prediction re-clamp skipped: %s", exc)
+
     try:
         start_indicator_scheduler()
         logger.info("Indicator scheduler started")
@@ -1250,6 +1283,59 @@ def resolve_predictions(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return resolved_now
 
 
+def _reclamp_stored_predictions() -> int:
+    """Re-apply the percentage-based horizon clamp to existing pending predictions.
+
+    Predictions persisted before the magnitude-based banding was introduced may
+    carry stale, over-long horizons (e.g. a -2.1% move pinned to 168h). This
+    re-clamps each still-pending prediction's ``horizon_hours`` and ``resolve_at``
+    to the band allowed by its ``predicted_pct`` so they expire on a sensible
+    schedule instead of lingering for up to a week. Already-resolved predictions
+    are left untouched. Returns the number of pending predictions re-clamped.
+    """
+    try:
+        data = PREDICTION_STORE._load()
+    except Exception as exc:
+        logger.warning("reclamp: failed to load predictions store: %s", exc)
+        return 0
+
+    pending = data.get("predictions", [])
+    if not isinstance(pending, list) or not pending:
+        return 0
+
+    changed = 0
+    now = _dt.utcnow()
+    for pred in pending:
+        if not isinstance(pred, dict):
+            continue
+        try:
+            old_h = int(pred.get("horizon_hours", 0) or 0)
+            pct = pred.get("predicted_pct", 0)
+            new_h = _clamp_prediction_horizon(old_h or 24, pct)
+            if new_h != old_h:
+                pred["horizon_hours"] = new_h
+                # Re-anchor resolve_at from the original creation time so the
+                # remaining wait is consistent with the new horizon.
+                try:
+                    created = _dt.fromisoformat(str(pred.get("created_at", "")).replace("Z", ""))
+                except Exception:
+                    created = now
+                pred["resolve_at"] = (created + _td(hours=new_h)).isoformat() + "Z"
+                pred["statement"] = (
+                    f"predicted to move {'+' if (pct or 0) >= 0 else ''}"
+                    f"{(pct or 0):.1f}% within {new_h} hours"
+                )
+                changed += 1
+        except Exception as exc:
+            logger.warning("reclamp: failed to re-clamp prediction %s: %s", pred.get("id"), exc)
+
+    if changed:
+        PREDICTION_STORE.update_stats(data)
+        PREDICTION_STORE._save(data)
+        logger.info("Re-clamped %d stale pending predictions to magnitude-based horizons", changed)
+    return changed
+
+
 # ---------------------------------------------------------------------------
 # Price history helper — loads candles from data/price_cache.json keyed by
 # netuid. Falls back to a synthetic series derived from price + change fields
@@ -2010,8 +2096,11 @@ def _generate_prediction(sn: Dict[str, Any], signal_impact: Dict[str, Any]) -> D
         strongest = max(impacts, key=lambda i: i.get("magnitude_pct", 0))
         st = SIGNAL_TYPES.get(strongest.get("signal_type", ""), {})
         horizon = int(st.get("half_life_hours", 24))
-    # Global prediction horizon clamp: 1 hour <= horizon <= 168 hours (1 week).
-    horizon = max(1, min(horizon, 168))
+    # Percentage-based horizon clamp: the maximum horizon a prediction may span
+    # depends on the magnitude of the predicted move (|pct| < 5% -> max 4h,
+    # |pct| < 10% -> max 24h, |pct| >= 10% -> max 168h). ``magnitude`` is the
+    # absolute predicted percentage; the clamp is direction-agnostic.
+    horizon = _clamp_prediction_horizon(horizon, magnitude)
 
     predicted_pct = magnitude if direction == "up" else -magnitude
     ref_price = float(sn.get("price", 0) or 0) or 1.0
@@ -3087,6 +3176,164 @@ def _default_premium_context() -> Dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# Scenario-memory wiring helpers for the homepage top-pick sections.
+#
+# The top picks previously showed static "Market Mood: neutral · rsi: neutral ·
+# volume: low" because (a) the market mood was derived from a hardcoded
+# tao_change_24h of 0.0, and (b) nothing attached the recorded scenario-memory
+# regime/features/outcome to each pick. The helpers below derive a real
+# market-wide mood, look up the latest recorded scenario per subnet, and build
+# fallback picks from the top-conviction subnets when the pipeline is empty.
+# ---------------------------------------------------------------------------
+
+# Map the canonical scenario-memory regime buckets onto the display vocabulary
+# used by the "Market Mood" scenario tag.
+_REGIME_DISPLAY = {
+    "bull": "bullish",
+    "bear": "bearish",
+    "volatile": "volatile",
+    "neutral": "neutral",
+}
+
+
+def _market_mood_proxy(subnets: List[Dict[str, Any]]) -> float:
+    """Return a market-wide 24h change proxy from the average subnet change.
+
+    Used as ``tao_change_24h`` for the regime classifier so "Market Mood"
+    reflects actual aggregate movement instead of a static 0.0.
+    """
+    changes = []
+    for sn in subnets or []:
+        try:
+            chg = float(sn.get("price_change_24h", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        changes.append(chg)
+    if not changes:
+        return 0.0
+    return sum(changes) / len(changes)
+
+
+def _latest_scenario_by_name(scenarios: Any) -> Dict[str, Dict[str, Any]]:
+    """Index the most recent scenario per subnet name from a scenario list."""
+    by_name: Dict[str, Dict[str, Any]] = {}
+    if not isinstance(scenarios, list):
+        return by_name
+    for sc in scenarios:
+        if not isinstance(sc, dict):
+            continue
+        name = sc.get("name")
+        if not name:
+            continue
+        # Scenarios are appended in time order, so the last one wins.
+        by_name[str(name)] = sc
+    return by_name
+
+
+def _enrich_pick_scenario(
+    pick: Dict[str, Any],
+    scenarios_by_name: Dict[str, Dict[str, Any]],
+) -> None:
+    """Attach the latest recorded scenario (regime/features/outcome) to a pick.
+
+    When a recorded scenario exists for the pick's subnet, its regime overrides
+    the live "Market Mood" tag (mapped to the display vocabulary) and the
+    scenario is exposed as ``pick["sc"]`` for templates that render
+    ``sc.regime`` / ``sc.features`` / ``sc.outcome``. When no scenario has been
+    recorded yet, the live indicator-derived ``scenario_tags`` (already computed
+    by the scoring functions) are kept as the fallback.
+    """
+    if not isinstance(pick, dict):
+        return
+    name = pick.get("name")
+    sc = scenarios_by_name.get(str(name)) if name else None
+    if not isinstance(sc, dict):
+        return
+    pick["sc"] = {
+        "regime": sc.get("regime"),
+        "features": sc.get("features", {}),
+        "outcome": sc.get("outcome"),
+    }
+    tags = pick.get("scenario_tags")
+    if not isinstance(tags, dict):
+        tags = {}
+        pick["scenario_tags"] = tags
+    recorded_regime = _REGIME_DISPLAY.get(str(sc.get("regime", "")).lower())
+    if recorded_regime:
+        tags["regime"] = recorded_regime
+    # Surface recorded RSI/volume signals when present in the scenario features.
+    features = sc.get("features", {})
+    if isinstance(features, dict):
+        if features.get("rsi"):
+            tags["rsi"] = str(features["rsi"])
+        if features.get("volume"):
+            tags["volume"] = str(features["volume"])
+
+
+def _conviction_proxy(sn: Dict[str, Any]) -> float:
+    """A simple conviction proxy for ranking fallback picks.
+
+    Combines emission (income), APY (yield) and absolute 24h momentum so the
+    fallback surfaces subnets that are both rewarding and moving.
+    """
+    try:
+        emission = float(sn.get("emission", 0) or 0)
+    except (TypeError, ValueError):
+        emission = 0.0
+    try:
+        apy = float(sn.get("apy", 0) or 0)
+    except (TypeError, ValueError):
+        apy = 0.0
+    try:
+        chg = abs(float(sn.get("price_change_24h", 0) or 0))
+    except (TypeError, ValueError):
+        chg = 0.0
+    return emission + apy + chg
+
+
+def _build_fallback_picks(
+    subnets: List[Dict[str, Any]],
+    market_context: Dict[str, Any],
+    horizon: str,
+) -> List[Dict[str, Any]]:
+    """Build minimal top-3 picks from the highest-conviction subnets.
+
+    Used when the primary scoring pipeline produced no picks. Each pick carries
+    its current indicator-derived scenario tags (regime/rsi/volume) computed via
+    the shared scoring functions, so the sections never render empty or
+    all-defaults.
+    """
+    picks: List[Dict[str, Any]] = []
+    try:
+        ranked = sorted(subnets, key=_conviction_proxy, reverse=True)[:3]
+        scorer = score_subnet_for_hour if horizon == "hour" else score_subnet_for_day
+        for sn in ranked:
+            try:
+                score = scorer(sn, market_context)
+            except Exception as exc:
+                logger.warning("Fallback scorer failed for SN%s: %s", sn.get("netuid"), exc)
+                continue
+            picks.append({
+                "netuid": sn.get("netuid"),
+                "name": sn.get("name"),
+                "symbol": sn.get("symbol"),
+                "score": score.get("total_score", 0.0),
+                "confidence": score.get("confidence", 0.0),
+                "signals": {
+                    "price_change_24h": sn.get("price_change_24h"),
+                    "price_change_7d": sn.get("price_change_7d"),
+                    "emission": sn.get("emission"),
+                    "apy": sn.get("apy"),
+                    "volume": sn.get("volume"),
+                },
+                "scenario_tags": score.get("scenario_tags", {}),
+            })
+    except Exception as exc:
+        logger.error("Error building fallback %s picks: %s", horizon, exc)
+    return picks
+
+
 @app.get("/")
 async def dashboard(request: Request):
     """Render the SimiVision dashboard server-side via Jinja2.
@@ -3102,6 +3349,9 @@ async def dashboard(request: Request):
     subnets: List[Dict[str, Any]] = []
     source = "unknown"
     premium = _default_premium_context()
+    # Derive a real market-wide mood from the average subnet 24h change so the
+    # "Market Mood" scenario tag reflects actual movement instead of a static
+    # 0.0 (which always classified as "neutral"). Recomputed after subnets load.
     market_context = {"tao_change_24h": 0.0}
     hour_picks: List[Dict[str, Any]] = []
     day_picks: List[Dict[str, Any]] = []
@@ -3116,6 +3366,9 @@ async def dashboard(request: Request):
     except Exception as e:
         logger.error("Error fetching subnets for dashboard: %s", e)
         subnets, source = [], "error"
+
+    # Recompute the market mood now that we have real subnets.
+    market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
 
     try:
         premium = _build_premium_context(subnets)
@@ -3200,6 +3453,27 @@ async def dashboard(request: Request):
     except Exception as e:
         logger.error("Error fetching scenario memory: %s", e)
         scenario_memory_snapshot = _default_scenario_memory()
+
+    # Enrich each pick with the latest recorded scenario for its subnet
+    # (regime, features, outcome) and let the recorded regime override the live
+    # "Market Mood" tag when available. Falls back to the live indicator-derived
+    # tags (already computed above) when no scenario has been recorded yet.
+    scenarios_by_name = _latest_scenario_by_name(
+        scenario_memory_snapshot.get("scenarios", [])
+    )
+    for pick in hour_picks:
+        _enrich_pick_scenario(pick, scenarios_by_name)
+    for pick in day_picks:
+        _enrich_pick_scenario(pick, scenarios_by_name)
+
+    # Fallback: if the picks pipeline produced nothing (e.g. scoring failed but
+    # subnets are available), pull the top subnets by conviction and build
+    # minimal pick objects carrying their current indicator-derived scenario
+    # tags so the sections never render empty or all-defaults.
+    if not hour_picks and subnets:
+        hour_picks = _build_fallback_picks(subnets, market_context, "hour")
+    if not day_picks and subnets:
+        day_picks = _build_fallback_picks(subnets, market_context, "day")
 
     try:
         indicators_convergence = await api_indicators_convergence()

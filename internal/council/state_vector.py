@@ -596,6 +596,28 @@ def _expert_from_signal_source(source: Optional[str]) -> str:
     return "alpha"
 
 
+def clamp_prediction_horizon(horizon: int, predicted_pct: Optional[float]) -> int:
+    """Clamp a prediction horizon based on the magnitude of the predicted move.
+
+    Percentage-based horizon banding:
+      |pct| < 1%:   max 4h  (signal too weak — should be filtered earlier; safety clamp)
+      |pct| < 5%:   max 4h  (scalp signal)
+      |pct| < 10%:  max 24h (swing signal)
+      |pct| >= 10%: max 168h (high-conviction, weekly runway)
+
+    The clamp uses the absolute value of the predicted percentage regardless of
+    direction (up/down). Returns a horizon in ``[1, max_h]``.
+    """
+    abs_pct = abs(predicted_pct) if predicted_pct is not None else 0.0
+    if abs_pct < 5.0:
+        max_h = 4
+    elif abs_pct < 10.0:
+        max_h = 24
+    else:
+        max_h = 168
+    return max(1, min(int(horizon), max_h))
+
+
 def build_prediction_statement(
     sn: Dict[str, Any],
     predicted_pct: float,
@@ -606,6 +628,7 @@ def build_prediction_statement(
     now: _dt,
 ) -> Dict[str, Any]:
     """Build a predictive forecast dict without persisting it."""
+    horizon = clamp_prediction_horizon(horizon, predicted_pct)
     return {
         "id": _uuid.uuid4().hex[:10],
         "netuid": sn.get("netuid"),
