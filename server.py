@@ -174,6 +174,28 @@ except Exception:  # pragma: no cover
     def stop_indicator_scheduler(*_args, **_kwargs):
         pass
 
+# Prediction resolver scheduler — grades pending predictions on a clock so the
+# learning loop's weights/accuracy update even when no dashboard is rendered.
+try:
+    from internal.council.resolver_scheduler import (
+        get_prediction_resolver_scheduler,
+        get_prediction_resolver_scheduler_state,
+        start_prediction_resolver_scheduler,
+        stop_prediction_resolver_scheduler,
+    )
+except Exception:  # pragma: no cover
+    def get_prediction_resolver_scheduler_state(*_args, **_kwargs):
+        return {"running": False}
+
+    def start_prediction_resolver_scheduler(*_args, **_kwargs):
+        pass
+
+    def stop_prediction_resolver_scheduler(*_args, **_kwargs):
+        pass
+
+    def get_prediction_resolver_scheduler(*_args, **_kwargs):
+        return None
+
 try:
     from datastore.learning_engine import LearningEngine
 except Exception:  # pragma: no cover
@@ -434,6 +456,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:
         logger.warning("Failed to start indicator scheduler: %s", exc)
 
+    # Start the prediction resolver on a clock so pending predictions get
+    # graded (and learning-loop weights updated) even when no dashboard is
+    # being rendered. The first tick runs shortly after boot to clear any
+    # backlog of stuck ``pending`` predictions.
+    try:
+        start_prediction_resolver_scheduler(immediate=False)
+        logger.info("Prediction resolver scheduler started")
+    except Exception as exc:
+        logger.warning("Failed to start prediction resolver scheduler: %s", exc)
+
     _start_telegram_listener()
 
     # Start per-subnet baseline price recording (env-gated, default on).
@@ -449,6 +481,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.warning("Failed to start baseline price recording: %s", exc)
 
     yield
+    try:
+        stop_prediction_resolver_scheduler()
+        logger.info("Prediction resolver scheduler stopped")
+    except Exception as exc:
+        logger.warning("Failed to stop prediction resolver scheduler: %s", exc)
     try:
         stop_indicator_scheduler()
         logger.info("Indicator scheduler stopped")
@@ -1369,6 +1406,41 @@ def api_indicators_scheduler():
         "status": "success",
         "data": get_indicator_scheduler_state(),
     }
+
+
+@app.get("/api/predictions/resolver")
+def api_predictions_resolver_state():
+    """Return the current state of the background prediction resolver.
+
+    Exposes whether the resolver is running, when it last graded predictions,
+    and how many it has resolved/expired so the learning loop's health is
+    observable from the dashboard.
+    """
+    return {
+        "status": "success",
+        "data": get_prediction_resolver_scheduler_state(),
+    }
+
+
+@app.post("/api/predictions/resolver/run")
+def api_predictions_resolver_run():
+    """Trigger a single prediction-resolution cycle on demand.
+
+    Useful for clearing a backlog of stuck ``pending`` predictions without
+    waiting for the next scheduled tick. Returns the cycle summary.
+    """
+    scheduler = get_prediction_resolver_scheduler()
+    if scheduler is None:
+        return {
+            "status": "error",
+            "message": "prediction resolver scheduler is not initialized",
+        }, 500
+    try:
+        result = scheduler.run_once()
+        return {"status": "success", "data": result}
+    except Exception as exc:
+        logger.warning("Manual prediction resolver run failed: %s", exc)
+        return {"status": "error", "message": str(exc)}, 500
 
 
 @app.post("/api/simivision/chat")

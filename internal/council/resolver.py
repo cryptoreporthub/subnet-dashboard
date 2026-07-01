@@ -44,6 +44,13 @@ _LEARNING_DELTA_WRONG = -0.03
 _LEARNING_MIN_WEIGHT = 0.1
 _LEARNING_MAX_WEIGHT = 2.0
 
+# Predictions past their ``resolve_at`` with no resolvable price are marked
+# ``expired`` once this grace window (as a multiple of the prediction horizon)
+# has elapsed, so they do not linger in ``pending`` forever. Expired records
+# are excluded from the accuracy denominator (we never learned the outcome).
+_EXPIRY_GRACE_MULTIPLE = 2.0
+_EXPIRY_DEFAULT_HORIZON_HOURS = 24.0
+
 def _load_json(path: str, default: Any) -> Any:
     try:
         with open(path, "r") as f:
@@ -233,12 +240,18 @@ def resolve_prediction(
 def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
     resolved = data.get("resolved", [])
     pending = data.get("predictions", [])
-    correct = sum(1 for r in resolved if r.get("correct"))
-    wrong = sum(1 for r in resolved if not r.get("correct"))
+    # ``correct`` is True/False for resolved predictions and ``None`` for
+    # expired ones (no outcome could be determined). Expired records are
+    # tracked separately and excluded from the accuracy denominator so a
+    # missing price feed never silently drags accuracy toward zero.
+    correct = sum(1 for r in resolved if r.get("correct") is True)
+    wrong = sum(1 for r in resolved if r.get("correct") is False)
+    expired = sum(1 for r in resolved if r.get("outcome") == "expired")
     total = len(resolved) + len(pending)
     stats = {
         "correct": correct,
         "wrong": wrong,
+        "expired": expired,
         "pending": len(pending),
         "total": total,
     }
@@ -281,6 +294,104 @@ def _scenario_signals_for_subnet(subnet: Optional[Dict[str, Any]]) -> Dict[str, 
     return out
 
 
+def _is_expired(
+    prediction: Dict[str, Any],
+    resolve_at: datetime,
+    now: datetime,
+    grace_multiple: float = _EXPIRY_GRACE_MULTIPLE,
+) -> bool:
+    """Return True if a due prediction with no price has aged past its grace window.
+
+    A prediction is only eligible for expiry once it is past ``resolve_at``
+    (so not-yet-due predictions are never expired) AND the grace window — a
+    multiple of the prediction's own horizon — has elapsed, giving the price
+    feed a fair chance to recover before we retire the record.
+    """
+    if now < resolve_at:
+        return False
+    try:
+        horizon = float(prediction.get("horizon_hours", 0) or 0)
+    except (TypeError, ValueError):
+        horizon = 0.0
+    if horizon <= 0:
+        horizon = _EXPIRY_DEFAULT_HORIZON_HOURS
+    grace = timedelta(hours=horizon * grace_multiple)
+    return now >= resolve_at + grace
+
+
+def _expire_prediction(prediction: Dict[str, Any], now: datetime) -> Dict[str, Any]:
+    """Retire a prediction as ``expired`` (no verifiable outcome).
+
+    Expired predictions carry ``correct=None`` and ``outcome="expired"`` so
+    they are excluded from the accuracy denominator. Expert weights are NOT
+    nudged — we never learned whether the prediction was right.
+    """
+    prediction["status"] = "expired"
+    prediction["outcome"] = "expired"
+    prediction["correct"] = None
+    prediction["resolved_at"] = now.isoformat().replace("+00:00", "Z")
+    prediction["resolved_price"] = None
+    return prediction
+
+
+def expire_stale_predictions(
+    *,
+    grace_multiple: float = _EXPIRY_GRACE_MULTIPLE,
+) -> Dict[str, Any]:
+    """Retire pending predictions that are past due with no resolvable price.
+
+    This is the safety net for the scheduled resolver: predictions whose
+    ``resolve_at`` has passed but for which no price could ever be fetched
+    (delisted subnet, persistent feed outage, corrupt record) are moved out
+    of ``pending`` into ``resolved`` as ``expired`` so the registry does not
+    accumulate ungradeable records forever. Returns a summary of the pass.
+    """
+    data = _load_json(
+        PREDICTIONS_PATH,
+        {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}},
+    )
+    predictions: List[Dict[str, Any]] = list(data.get("predictions", []))
+    resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
+    now = datetime.now(timezone.utc)
+
+    still_pending: List[Dict[str, Any]] = []
+    expired_now: List[Dict[str, Any]] = []
+
+    for pred in predictions:
+        if not isinstance(pred, dict):
+            continue
+        try:
+            resolve_at = datetime.fromisoformat(
+                str(pred.get("resolve_at", "")).replace("Z", "+00:00")
+            )
+        except Exception:
+            # Corrupt/unparseable record: retire it as expired so a bad row
+            # can never block the resolver loop.
+            _expire_prediction(pred, now)
+            resolved.append(pred)
+            expired_now.append(pred)
+            continue
+
+        if _is_expired(pred, resolve_at, now, grace_multiple):
+            _expire_prediction(pred, now)
+            resolved.append(pred)
+            expired_now.append(pred)
+        else:
+            still_pending.append(pred)
+
+    data["predictions"] = still_pending
+    data["resolved"] = resolved
+    data["stats"] = _compute_stats(data)
+    _save_json(PREDICTIONS_PATH, data)
+
+    return {
+        "expired_now": expired_now,
+        "resolved": resolved,
+        "pending": still_pending,
+        "stats": data["stats"],
+    }
+
+
 def resolve_due_predictions(
     subnets: Optional[List[Dict[str, Any]]] = None,
     *,
@@ -307,6 +418,7 @@ def resolve_due_predictions(
 
     still_pending: List[Dict[str, Any]] = []
     resolved_now: List[Dict[str, Any]] = []
+    expired_now: List[Dict[str, Any]] = []
 
     for pred in predictions:
         uid = pred.get("netuid")
@@ -333,6 +445,13 @@ def resolve_due_predictions(
             pred.pop("_volume_signal", None)
             resolved.append(pred)
             resolved_now.append(pred)
+        elif _is_expired(pred, resolve_at, now):
+            # Past due AND no price available AND the grace window has elapsed:
+            # we will never be able to grade this prediction, so retire it as
+            # ``expired`` rather than letting it sit in ``pending`` forever.
+            _expire_prediction(pred, now)
+            resolved.append(pred)
+            expired_now.append(pred)
         else:
             still_pending.append(pred)
 
@@ -343,6 +462,7 @@ def resolve_due_predictions(
 
     return {
         "resolved_now": resolved_now,
+        "expired_now": expired_now,
         "resolved": resolved,
         "pending": still_pending,
         "stats": data["stats"],
