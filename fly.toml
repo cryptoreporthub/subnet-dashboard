@@ -6,6 +6,17 @@ app = "subnet-dashboard"
 [env]
   PORT = "8080"
 
+# Persistent volume for runtime/learning data (predictions.json, soul_map.json,
+# price caches, etc.). Fly.io root filesystems are ephemeral and are wiped on
+# every deploy, so without this mount the self-learning data resets each deploy.
+# The volume must exist on Fly's side (see DEPLOY_NOTES / final report):
+#   fly volumes create data_volume --app subnet-dashboard --region <primary_region>
+# `data/` holds only runtime data files (code modules live in `datastore/`),
+# so mounting a volume here does not shadow any application code.
+[mounts]
+  source = "data_volume"
+  destination = "/app/data"
+
 [http_service]
   internal_port = 8080
   force_https = true

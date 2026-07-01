@@ -164,14 +164,14 @@ except Exception:  # pragma: no cover
         pass
 
 try:
-    from data.learning_engine import LearningEngine
+    from datastore.learning_engine import LearningEngine
 except Exception:  # pragma: no cover
     class LearningEngine:
         def __init__(self, *args, **kwargs):
             pass
 
 try:
-    from data.pump_tracker import get_pump_tracker
+    from datastore.pump_tracker import get_pump_tracker
 except Exception:  # pragma: no cover
     def get_pump_tracker(*_args, **_kwargs):
         return None
@@ -191,7 +191,73 @@ except Exception as _message_intel_import_exc:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
 
-os.makedirs("data", exist_ok=True)
+# Runtime data directory. In production this is a Fly.io persistent volume
+# mount point (see fly.toml [mounts]); locally it is just ./data. The directory
+# is created on startup so the app works with or without a mounted volume.
+DATA_DIR = os.environ.get("DATA_DIR", "data")
+DATA_SEEDS_DIR = os.environ.get("DATA_SEEDS_DIR", "data_seeds")
+# Learning-critical files that should survive deploys. On the first boot of an
+# empty volume these are seeded from data_seeds/ so prior learning is preserved;
+# they are never overwritten once present on the volume.
+_PERSISTENT_DATA_FILES = ("predictions.json", "soul_map.json")
+
+
+def _ensure_data_dir() -> None:
+    """Create the data directory if missing and diagnose persistence state.
+
+    - Ensures ``DATA_DIR`` exists (works with or without a Fly volume).
+    - Seeds learning-critical files from ``DATA_SEEDS_DIR`` when the volume is
+      empty on first boot (never overwrites existing data).
+    - Logs a warning for each missing/empty persistent file so future resets
+      are diagnosable from the app logs.
+    """
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+    except Exception as exc:
+        logger.warning("Could not create data directory %s: %s", DATA_DIR, exc)
+        return
+
+    # Seed missing learning-critical files from packaged defaults so an empty
+    # volume does not silently discard prior learning on first boot.
+    for name in _PERSISTENT_DATA_FILES:
+        target = os.path.join(DATA_DIR, name)
+        if os.path.exists(target) and os.path.getsize(target) > 0:
+            continue
+        seed = os.path.join(DATA_SEEDS_DIR, name)
+        if os.path.exists(seed) and os.path.getsize(seed) > 0:
+            try:
+                import shutil
+
+                shutil.copy2(seed, target)
+                logger.info(
+                    "Seeded empty/missing data file %s from %s (first boot of "
+                    "persistent volume).", name, DATA_SEEDS_DIR
+                )
+            except Exception as exc:
+                logger.warning("Could not seed %s from %s: %s", name, seed, exc)
+
+    # Diagnostic logging: surface missing/empty persistent files so future
+    # learning-data resets are visible in the app logs.
+    for name in _PERSISTENT_DATA_FILES:
+        path = os.path.join(DATA_DIR, name)
+        try:
+            if not os.path.exists(path):
+                logger.warning(
+                    "Learning data file missing on startup: %s "
+                    "(data may have been reset or the volume is empty).", path
+                )
+            elif os.path.getsize(path) == 0:
+                logger.warning(
+                    "Learning data file is empty on startup: %s "
+                    "(data may have been reset or the volume is empty).", path
+                )
+            else:
+                logger.info("Learning data file present on startup: %s (%d bytes)", path, os.path.getsize(path))
+        except Exception as exc:
+            logger.warning("Could not stat %s: %s", path, exc)
+
+
+_ensure_data_dir()
 
 # ---------------------------------------------------------------------------
 # Message Intelligence pipeline singletons (Telegram → NLP → Jury → Learning)
@@ -288,6 +354,13 @@ def _start_telegram_listener() -> None:
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Start background services on startup and stop them on shutdown."""
+    # Ensure the persistent data directory exists and diagnose any missing
+    # learning-data files (e.g. an empty/unmounted Fly volume) on every boot.
+    try:
+        _ensure_data_dir()
+    except Exception as exc:
+        logger.warning("Startup data-dir check skipped: %s", exc)
+
     # Re-clamp any stale pending predictions to the magnitude-based horizon
     # bands so legacy entries (e.g. a -2.1% move pinned to 168h) expire on a
     # sensible schedule instead of lingering for up to a week.
@@ -4314,7 +4387,7 @@ def build_mindmap_feed(picks: List[Dict], council_votes: List[Dict], undervalued
 # ---------------------------------------------------------------------------
 # Phase 2: Mount the self-learning loop's feedback router (APIRouter)
 # ---------------------------------------------------------------------------
-from data.learning_engine import create_feedback_router
+from datastore.learning_engine import create_feedback_router
 
 _feedback_router = create_feedback_router()
 if _feedback_router is not None:
