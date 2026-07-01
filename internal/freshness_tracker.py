@@ -41,10 +41,13 @@ def mark_updated(key: str) -> None:
 
 
 def snapshot() -> Dict[str, object]:
-    """Return ``{"last_updated": {...}, "now": <iso>}`` for the API/frontend."""
+    """Return ``{"last_updated": {...}, "now": <server time>}`` for the API/frontend."""
     with _lock:
         last = dict(LAST_UPDATED)
-    return {"last_updated": last, "now": datetime.now(timezone.utc).isoformat()}
+    return {
+        "last_updated": last,
+        "now": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def reset_for_tests() -> None:
