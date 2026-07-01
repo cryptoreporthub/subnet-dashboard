@@ -596,26 +596,20 @@ def _expert_from_signal_source(source: Optional[str]) -> str:
     return "alpha"
 
 
-def clamp_prediction_horizon(horizon: int, predicted_pct: Optional[float]) -> int:
-    """Clamp a prediction horizon based on the magnitude of the predicted move.
 
-    Percentage-based horizon banding:
-      |pct| < 1%:   max 4h  (signal too weak — should be filtered earlier; safety clamp)
-      |pct| < 5%:   max 4h  (scalp signal)
-      |pct| < 10%:  max 24h (swing signal)
-      |pct| >= 10%: max 168h (high-conviction, weekly runway)
 
-    The clamp uses the absolute value of the predicted percentage regardless of
-    direction (up/down). Returns a horizon in ``[1, max_h]``.
+
+def clamp_prediction_horizon(horizon: int, predicted_pct: Optional[float] = None) -> int:
+    """Clamp a prediction horizon to a HARD 4-hour maximum.
+
+    All predictions surfaced to users (API responses, homepage rendering, pick
+    generation, signal-impact framing) must resolve within at most 4 hours.
+    The previous magnitude-based banding (up to 168h) is intentionally removed
+    so no prediction can ever advertise a horizon greater than 4 hours.
+
+    Returns a horizon in ``[1, 4]``.
     """
-    abs_pct = abs(predicted_pct) if predicted_pct is not None else 0.0
-    if abs_pct < 5.0:
-        max_h = 4
-    elif abs_pct < 10.0:
-        max_h = 24
-    else:
-        max_h = 168
-    return max(1, min(int(horizon), max_h))
+    return max(1, min(int(horizon), 4))
 
 
 def build_prediction_statement(

@@ -37,14 +37,9 @@ except Exception:  # pragma: no cover
     def score_subnet_for_day(*_args, **_kwargs):
         return 0.0
 
-    def clamp_prediction_horizon(horizon: int, predicted_pct: Optional[float]) -> int:
-        """Inline fallback for the percentage-based horizon clamp.
-
-        |pct| < 5% -> max 4h, |pct| < 10% -> max 24h, else max 168h.
-        """
-        abs_pct = abs(predicted_pct) if predicted_pct is not None else 0.0
-        max_h = 4 if abs_pct < 5.0 else (24 if abs_pct < 10.0 else 168)
-        return max(1, min(int(horizon), max_h))
+    def clamp_prediction_horizon(horizon: int, predicted_pct: Optional[float] = None) -> int:
+        """Inline fallback: HARD 4-hour maximum for every prediction horizon."""
+        return max(1, min(int(horizon), 4))
 
 
 # Canonical percentage-based prediction horizon clamp. Delegates to the shared
@@ -89,7 +84,21 @@ except Exception:  # pragma: no cover
             return {"resolved": [], "pending": [], "stats": {}}
 
     resolver = _FakeResolver()
-    scenario_memory = type("_FakeModule", (), {"get_scenarios": lambda *_args, **_kwargs: []})()
+    scenario_memory = type(
+        "_FakeModule",
+        (),
+        {
+            "get_scenarios": lambda *_args, **_kwargs: [],
+            "add_scenario": lambda *_args, **_kwargs: {},
+            "classify_regime": lambda *_args, **_kwargs: "neutral",
+            "get_memory_snapshot": lambda *_args, **_kwargs: {
+                "scenarios": [],
+                "regimes": {},
+                "stats": {"total": 0, "by_regime": {}},
+                "meta": {},
+            },
+        },
+    )()
     rotation_tracker = type("_FakeModule", (), {"get_rotation_summary": lambda *_args, **_kwargs: {}})()
 
 try:
@@ -780,6 +789,28 @@ def api_top_pick_day():
         day_pick = None
     if not day_pick:
         return {"picks": [_highest_emission_pick(subnets)]}
+    # Record the day pick's market context into the scenario memory so
+    # /api/scenario-memory reflects real picks, not just resolved predictions.
+    try:
+        candidate = day_pick.get("subnet") if isinstance(day_pick, dict) else None
+        if isinstance(candidate, dict):
+            sn = next((s for s in subnets if s.get("netuid") == candidate.get("netuid")), {})
+            _record_pick_scenario({
+                "name": candidate.get("name"),
+                "netuid": candidate.get("netuid"),
+                "score": day_pick.get("score", 0.0),
+                "confidence": day_pick.get("confidence", 0.0),
+                "scenario_tags": day_pick.get("scenario_tags", {}),
+                "signals": {
+                    "price_change_24h": sn.get("price_change_24h"),
+                    "price_change_7d": sn.get("price_change_7d"),
+                    "emission": sn.get("emission"),
+                    "apy": sn.get("apy"),
+                    "volume": sn.get("volume"),
+                },
+            }, market_context)
+    except Exception as exc:
+        logger.warning("day pick scenario record failed: %s", exc)
     return {"picks": [day_pick]}
 
 
@@ -1737,6 +1768,9 @@ def _compute_signal_impact(sn: Dict[str, Any], indicators: Dict[str, Any], hot: 
 
     def _add(signal_type: str, direction: str, magnitude_pct: float, horizon_hours: int, confidence: int, description: str) -> None:
         mag = round(abs(magnitude_pct), 2)
+        # HARD 4-hour maximum: every "predicted to move +X% within N hours"
+        # framing surfaced to users must resolve within at most 4 hours.
+        horizon_hours = _clamp_prediction_horizon(horizon_hours, mag)
         impacts.append({
             "signal_type": signal_type,
             "description": description,
@@ -3377,25 +3411,13 @@ async def dashboard(request: Request):
         premium = _default_premium_context()
 
     try:
-        for sn in subnets:
-            score = score_subnet_for_hour(sn, market_context)
-            hour_picks.append({
-                "netuid": sn.get("netuid"),
-                "name": sn.get("name"),
-                "symbol": sn.get("symbol"),
-                "score": score["total_score"],
-                "confidence": score["confidence"],
-                "signals": {
-                    "price_change_24h": sn.get("price_change_24h"),
-                    "price_change_7d": sn.get("price_change_7d"),
-                    "emission": sn.get("emission"),
-                    "apy": sn.get("apy"),
-                    "volume": sn.get("volume"),
-                },
-                "scenario_tags": score["scenario_tags"],
-            })
-        hour_picks.sort(key=lambda x: x["score"], reverse=True)
-        hour_picks = hour_picks[:3]
+        # Use the SAME shared helper as /api/top-pick/hour so the homepage #1
+        # pick always matches the highest-scored (audited) pick from the API.
+        # The helper returns a unified shape carrying both top-level
+        # name/netuid/score/confidence/signals/scenario_tags (template) and
+        # nested subnet{}/action (API), and records each pick into the
+        # regime-aware scenario memory.
+        hour_picks = _ordered_hour_picks(subnets, market_context, limit=3)
     except Exception as e:
         logger.error("Error computing hour picks: %s", e)
         hour_picks = []
@@ -3409,7 +3431,7 @@ async def dashboard(request: Request):
                 (s for s in subnets if s.get("netuid") == candidate.get("netuid")),
                 {},
             )
-            day_picks.append({
+            _day_pick = {
                 "netuid": candidate.get("netuid"),
                 "name": candidate.get("name"),
                 "symbol": candidate.get("symbol"),
@@ -3423,7 +3445,10 @@ async def dashboard(request: Request):
                     "volume": sn.get("volume"),
                 },
                 "scenario_tags": daily_pick_result.get("scenario_tags", {}),
-            })
+            }
+            day_picks.append(_day_pick)
+            # Record the day pick's market context into the scenario memory.
+            _record_pick_scenario(_day_pick, market_context)
     except Exception as e:
         logger.error("Error computing day picks: %s", e)
         day_picks = []
@@ -3724,6 +3749,139 @@ async def api_top_picks():
         return {"hour_picks": [], "day_picks": [], "error": str(e)}
 
 
+def _record_pick_scenario(pick: Dict[str, Any], market_context: Optional[Dict[str, Any]] = None) -> None:
+    """Record a pick's market context into the regime-aware scenario memory.
+
+    Called at pick-generation time (both the hourly API and the homepage) so
+    ``/api/scenario-memory`` reflects real picks instead of staying empty
+    until a prediction is resolved. A per-name 1-hour dedup window prevents
+    the homepage refresh loop from flooding the memory with near-duplicate
+    entries. Failures are swallowed so a memory-store hiccup can never break
+    pick generation.
+    """
+    try:
+        name = pick.get("name")
+        if not name:
+            return
+        signals = pick.get("signals") if isinstance(pick.get("signals"), dict) else {}
+        tags = pick.get("scenario_tags") if isinstance(pick.get("scenario_tags"), dict) else {}
+        chg = float(signals.get("price_change_24h", 0) or 0)
+        features = {
+            "avg_change_24h": chg,
+            "price_change_24h": chg,
+            "volatility": abs(chg),
+            "score": float(pick.get("score", 0) or 0),
+            "confidence": float(pick.get("confidence", 0) or 0),
+            "rsi": tags.get("rsi"),
+            "volume": signals.get("volume") or tags.get("volume"),
+            "emission": signals.get("emission"),
+            "apy": signals.get("apy"),
+            "market_mood": (market_context or {}).get("tao_change_24h", 0),
+        }
+        # Dedup: skip if a scenario for this subnet was recorded in the last hour.
+        now = _dt.utcnow()
+        cutoff = now - _td(hours=1)
+        for existing in scenario_memory.get_scenarios():
+            if existing.get("name") != name:
+                continue
+            try:
+                created = _dt.fromisoformat(str(existing.get("created_at", "")).replace("Z", ""))
+            except Exception:
+                continue
+            if created >= cutoff:
+                return  # already recorded this subnet recently
+        scenario_memory.add_scenario(
+            name=str(name),
+            features=features,
+            regime=scenario_memory.classify_regime(features),
+        )
+    except Exception as exc:
+        logger.warning("scenario memory record failed for %s: %s", pick.get("name"), exc)
+
+
+def _ordered_hour_picks(
+    subnets: List[Dict[str, Any]],
+    market_context: Dict[str, Any],
+    limit: int = 3,
+) -> List[Dict[str, Any]]:
+    """Build the canonical ordered hourly picks used by BOTH the API and the
+    homepage so the two never diverge.
+
+    The #1 pick is the RedTeam-audited hourly pick from ``select_hourly_pick``
+    (which runs ``score_subnet_for_hour`` + the audit/tie-break layer);
+    remaining slots are filled from raw hourly scoring, excluding the #1
+    netuid, sorted by ``total_score`` desc.
+
+    Each returned pick carries a UNIFIED shape: top-level ``name``/``netuid``/
+    ``symbol``/``score``/``confidence``/``scenario_tags``/``signals`` (for the
+    homepage template) AND nested ``subnet{}``/``action``/``expert_contributions``
+    (for the ``/api/top-pick/hour`` response). Every pick is also recorded into
+    the scenario memory via ``_record_pick_scenario``.
+    """
+    picks: List[Dict[str, Any]] = []
+    if not subnets:
+        return picks
+
+    try:
+        audited = select_hourly_pick(subnets, market_context)
+    except Exception as exc:
+        logger.warning("select_hourly_pick failed: %s", exc)
+        audited = None
+    if not audited:
+        audited = _highest_emission_pick(subnets)
+
+    top_netuid = None
+    if isinstance(audited, dict) and isinstance(audited.get("subnet"), dict):
+        top_netuid = audited["subnet"].get("netuid")
+        # Graft the raw market signals the audited payload lacks.
+        if "signals" not in audited:
+            src = next((s for s in subnets if s.get("netuid") == top_netuid), {})
+            audited["signals"] = {
+                "price_change_24h": src.get("price_change_24h"),
+                "price_change_7d": src.get("price_change_7d"),
+                "emission": src.get("emission"),
+                "apy": src.get("apy"),
+                "volume": src.get("volume"),
+            }
+
+    def _unify(payload: Dict[str, Any], sn: Dict[str, Any]) -> Dict[str, Any]:
+        """Merge API shape (subnet{}/action) with template shape (top-level)."""
+        subnet = payload.get("subnet") if isinstance(payload.get("subnet"), dict) else {}
+        unified = dict(payload)
+        unified.setdefault("netuid", subnet.get("netuid", sn.get("netuid")))
+        unified.setdefault("name", subnet.get("name", sn.get("name")))
+        unified.setdefault("symbol", subnet.get("symbol", sn.get("symbol")))
+        unified.setdefault("score", payload.get("score", 0.0))
+        unified.setdefault("confidence", payload.get("confidence", 0.0))
+        unified.setdefault("scenario_tags", payload.get("scenario_tags", {}))
+        unified.setdefault("signals", payload.get("signals", {}))
+        return unified
+
+    if audited:
+        src = next((s for s in subnets if s.get("netuid") == top_netuid), {})
+        picks.append(_unify(audited, src))
+
+    scored: List[Dict[str, Any]] = []
+    for sn in subnets:
+        if top_netuid is not None and sn.get("netuid") == top_netuid:
+            continue
+        try:
+            score = score_subnet_for_hour(sn, market_context)
+        except Exception as exc:
+            logger.warning("score_subnet_for_hour failed for SN%s: %s", sn.get("netuid"), exc)
+            continue
+        scored.append({"subnet": sn, "score": score})
+    scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
+    for item in scored[: max(0, limit - len(picks))]:
+        picks.append(_unify(_build_hour_pick_payload(item["subnet"], item["score"]), item["subnet"]))
+
+    # Record each pick's market context into the regime-aware scenario memory.
+    for pick in picks:
+        _record_pick_scenario(pick, market_context)
+
+    return picks[:limit]
+
+
 def _build_hour_pick_payload(sn: Dict[str, Any], score: Dict[str, Any]) -> Dict[str, Any]:
     """Format a subnet + hour state-vector into the public hour-pick shape."""
     return {
@@ -3751,48 +3909,17 @@ def _build_hour_pick_payload(sn: Dict[str, Any], score: Dict[str, Any]) -> Dict[
 async def api_top_pick_hour():
     """Return the top short-horizon picks with a safe fallback.
 
-    The headline pick is the RedTeam-audited hourly pick from
-    ``select_hourly_pick`` (which runs ``score_subnet_for_hour`` + the audit
-    layer); additional candidates are filled in from the raw hourly scoring
-    so callers still get a top-3 list.
+    Uses the shared ``_ordered_hour_picks`` helper so the #1 pick is identical
+    to what the homepage renders (RedTeam-audited hourly pick first, then raw
+    score-ranked fill). This guarantees the API and homepage never diverge.
     """
     try:
         subnets, _ = _get_subnets_with_source()
         market_context = {"tao_change_24h": 0.0}
-        _hour_result = select_hourly_pick(subnets, market_context)
-        day_pick = _hour_result if _hour_result else _highest_emission_pick(subnets)
-
-        top_netuid = None
-        if isinstance(day_pick, dict) and isinstance(day_pick.get("subnet"), dict):
-            top_netuid = day_pick["subnet"].get("netuid")
-
-        # The audited hourly payload carries audit/final_confidence but not the
-        # raw market signals callers expect; graft them on from the source subnet.
-        if isinstance(day_pick, dict) and top_netuid is not None and "signals" not in day_pick:
-            src = next((s for s in subnets if s.get("netuid") == top_netuid), {})
-            day_pick["signals"] = {
-                "price_change_24h": src.get("price_change_24h"),
-                "price_change_7d": src.get("price_change_7d"),
-                "emission": src.get("emission"),
-                "apy": src.get("apy"),
-                "volume": src.get("volume"),
-            }
-
-        picks: List[Dict[str, Any]] = [day_pick] if day_pick else []
-
-        scored = []
-        for sn in subnets:
-            if top_netuid is not None and sn.get("netuid") == top_netuid:
-                continue
-            try:
-                score = score_subnet_for_hour(sn, market_context)
-            except Exception as exc:  # per-subnet scoring failure -> skip
-                logger.warning("score_subnet_for_hour failed for SN%s: %s", sn.get("netuid"), exc)
-                continue
-            scored.append({"subnet": sn, "score": score})
-        scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
-        picks.extend(_build_hour_pick_payload(i["subnet"], i["score"]) for i in scored[: max(0, 3 - len(picks))])
-        return {"picks": picks}
+        picks = _ordered_hour_picks(subnets, market_context, limit=3)
+        if picks:
+            return {"picks": picks}
+        return {"picks": [_highest_emission_pick(subnets)]}
     except Exception as e:
         logger.error("Error fetching hour pick: %s", e)
         subnets, _ = _get_subnets_with_source()
