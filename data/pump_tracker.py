@@ -144,6 +144,10 @@ class PumpTracker:
         self.accuracy: Dict[int, Dict[str, Any]] = {}
         # netuid -> live phase state
         self.phase_state: Dict[int, Dict[str, Any]] = {}
+        # netuid -> social sentiment history (Enhancement 2)
+        self.sentiment_state: Dict[int, Dict[str, Any]] = {}
+        # netuid -> latest technical indicator values (Enhancement 3)
+        self.indicator_state: Dict[int, Dict[str, Any]] = {}
         self.meta: Dict[str, Any] = {
             "version": "2.0",
             "created": _now_iso(),
@@ -165,6 +169,8 @@ class PumpTracker:
                 self.profiles = {int(k): v for k, v in (data.get("profiles") or {}).items()}
                 self.accuracy = {int(k): v for k, v in (data.get("accuracy") or {}).items()}
                 self.phase_state = {int(k): v for k, v in (data.get("phase_state") or {}).items()}
+                self.sentiment_state = {int(k): v for k, v in (data.get("sentiment_state") or {}).items()}
+                self.indicator_state = {int(k): v for k, v in (data.get("indicator_state") or {}).items()}
                 self.meta = data.get("meta") or self.meta
         except Exception as exc:
             logger.warning("pump_tracker: load_state failed: %s", exc)
@@ -181,6 +187,8 @@ class PumpTracker:
                 "profiles": {str(k): v for k, v in self.profiles.items()},
                 "accuracy": {str(k): v for k, v in self.accuracy.items()},
                 "phase_state": {str(k): v for k, v in self.phase_state.items()},
+                "sentiment_state": {str(k): v for k, v in self.sentiment_state.items()},
+                "indicator_state": {str(k): v for k, v in self.indicator_state.items()},
                 "meta": self.meta,
             }
             try:
@@ -265,7 +273,29 @@ class PumpTracker:
                     z = (r_t - mu) / sigma
                 st = self.cusum_state.setdefault(nid, {"name": f"SN{nid}", "cusum": 0.0})
                 prev_c = float(st.get("cusum", 0.0))
-                c_t = max(0.0, prev_c + z - CUSUM_K)
+                # Enhancement 1: Volume-Weighted CUSUM.
+                # Volume factor = current_volume / avg_volume_last_20_snapshots.
+                # Unusual volume AMPLIFIES the pump-detection evidence; normal
+                # volume keeps the increment at baseline (factor == 1.0).
+                volumes = [float(h.get("volume", 0.0) or 0.0) for h in hist[-LOOKBACK:]]
+                current_vol = volumes[-1] if volumes else 0.0
+                prior_vols = volumes[:-1]
+                if len(prior_vols) >= 20:
+                    avg_vol = _mean(prior_vols[-20:])
+                elif prior_vols:
+                    avg_vol = _mean(prior_vols)
+                else:
+                    avg_vol = 0.0
+                volume_factor = (current_vol / avg_vol) if avg_vol > 0 else 1.0
+                # Clamp to a sane range so a single zero/noisy candle can't blow
+                # the accumulator up; a 5x spike still multiplies evidence by 5x.
+                volume_factor = max(0.0, min(volume_factor, 10.0))
+                st["volume_factor"] = round(volume_factor, 3)
+                st["volume_spike"] = volume_factor > 2.0
+                # Enhancement 4: Adaptive CUSUM k per subnet (default CUSUM_K).
+                k = float(st.get("k", CUSUM_K))
+                # Volume-weighted evidence increment: z-return scaled by volume.
+                c_t = max(0.0, prev_c + (z * volume_factor) - k)
                 st["cusum"] = c_t
                 st["z_return"] = z
                 st["rolling_mean"] = mu
@@ -462,9 +492,21 @@ class PumpTracker:
                     + 0.15 * vol
                     + 0.10 * (0.5 + acc_boost)
                 )
-                proneness = int(round(max(0.0, min(1.0, score)) * 100))
+                base_score = max(0.0, min(1.0, score)) * 100.0
+                # Enhancement 1: volume spike boosts proneness by +12 points.
+                if bool(st.get("volume_spike", False)):
+                    base_score = min(100.0, base_score + 12.0)
+                # Enhancement 2: social sentiment momentum multiplier.
+                sentiment_factor = self.get_sentiment_factor(nid)
+                base_score = base_score * sentiment_factor
+                # Enhancement 3: multi-signal convergence from technical indicators.
+                convergence = self.compute_signal_convergence(nid)
+                base_score = base_score * (0.5 + 0.5 * convergence)
+                proneness = int(round(max(0.0, min(100.0, base_score))))
                 if ps:
                     ps["pump_proneness"] = proneness
+                    ps["signal_convergence"] = round(convergence, 3)
+                    ps["sentiment_factor"] = round(sentiment_factor, 3)
                 return proneness
         except Exception as exc:
             logger.warning("pump_tracker: compute_proneness failed: %s", exc)
@@ -607,6 +649,205 @@ class PumpTracker:
         except Exception as exc:
             logger.warning("pump_tracker: record_cycle_outcome failed: %s", exc)
 
+    # ------------------------------------------------------------------ sentiment (Enhancement 2)
+    def update_sentiment(self, netuid: Any, sentiment_score: Optional[float] = None, mention_count: Optional[int] = None) -> None:
+        """Update social sentiment data for a subnet.
+
+        Called from server.py whenever sentiment data is available. Keeps a
+        rolling window of the last 20 scores/mentions so momentum can be
+        derived without storing unbounded history.
+        """
+        try:
+            nid = _coerce_netuid(netuid)
+            if nid is None:
+                return
+            with self._lock:
+                st = self.sentiment_state.setdefault(nid, {"scores": [], "mentions": []})
+                if sentiment_score is not None:
+                    st["scores"].append(float(sentiment_score))
+                    if len(st["scores"]) > 20:
+                        st["scores"].pop(0)
+                if mention_count is not None:
+                    st["mentions"].append(int(mention_count))
+                    if len(st["mentions"]) > 20:
+                        st["mentions"].pop(0)
+        except Exception as exc:
+            logger.warning("pump_tracker: update_sentiment failed: %s", exc)
+
+    def get_sentiment_factor(self, netuid: Any) -> float:
+        """Return a sentiment momentum multiplier for proneness scoring.
+
+        Positive sentiment momentum (recent scores rising vs older scores)
+        amplifies proneness; negative momentum dampens it. Clamped to 0.5-1.5.
+        Returns 1.0 (neutral) when there is insufficient history.
+        """
+        try:
+            nid = _coerce_netuid(netuid)
+            with self._lock:
+                scores = self.sentiment_state.get(nid, {}).get("scores", [])
+                if len(scores) < 3:
+                    return 1.0
+                recent_avg = _mean(scores[-3:])
+                older_window = scores[-6:-3] if len(scores) >= 6 else scores[:-3]
+                older_avg = _mean(older_window) if older_window else _mean(scores[:-3] or [0.0])
+                momentum = recent_avg - older_avg
+                factor = 1.0 + max(-0.5, min(0.5, momentum * 0.3))
+                return float(factor)
+        except Exception as exc:
+            logger.warning("pump_tracker: get_sentiment_factor failed: %s", exc)
+            return 1.0
+
+    # ------------------------------------------------------------------ indicators (Enhancement 3)
+    def update_indicators(self, netuid: Any, indicator_values: Optional[Dict[str, Any]] = None) -> None:
+        """Cache the latest technical indicator values for a subnet.
+
+        ``indicator_values`` is the dict produced by server.py's
+        ``_compute_technical_indicators`` (nested ``{value, signal}`` shape) or
+        the flat shape from the indicator engine. Stored verbatim so
+        ``compute_signal_convergence`` can read it next tick.
+        """
+        try:
+            nid = _coerce_netuid(netuid)
+            if nid is None or not indicator_values:
+                return
+            with self._lock:
+                self.indicator_state[nid] = dict(indicator_values)
+        except Exception as exc:
+            logger.warning("pump_tracker: update_indicators failed: %s", exc)
+
+    def _read_indicator_state_file(self, nid: int) -> Dict[str, Any]:
+        """Fallback: read indicator values from data/indicator_state.json."""
+        try:
+            path = os.environ.get("INDICATOR_STATE_PATH", "data/indicator_state.json")
+            if not os.path.exists(path):
+                return {}
+            with open(path, "r", encoding="utf-8") as fh:
+                data = json.load(fh) or {}
+            per = data.get("per_subnet", {}).get(str(nid), {})
+            return {
+                "rsi": per.get("rsi"),
+                "macd_histogram": per.get("macd_histogram"),
+                "stochastic_k": per.get("stochastic_k"),
+            }
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _ind_value(ind: Dict[str, Any], key: str) -> Optional[float]:
+        """Extract a numeric indicator value from either nested or flat shape."""
+        v = ind.get(key)
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            v = v.get("value", v.get("rsi", v.get("histogram", v.get("k"))))
+        try:
+            return float(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def compute_signal_convergence(self, netuid: Any, indicator_values: Optional[Dict[str, Any]] = None) -> float:
+        """Compute a 0-1 multi-signal convergence score from technical indicators.
+
+        Counts how many of 7 indicators are bullish:
+          RSI oversold (<30) or bullish (>50 & rising)
+          MACD histogram positive
+          Stochastic oversold (<20)
+          MFI oversold (<30) or bullish (>50)
+          CCI oversold (<-100)
+          Williams %R oversold (<-80)
+          Bollinger position near lower band (<0.2)
+        Returns bullish_count / 7, or 0.5 (neutral) when no data is available.
+        """
+        try:
+            nid = _coerce_netuid(netuid)
+            with self._lock:
+                if indicator_values is None:
+                    indicator_values = self.indicator_state.get(nid)
+                if not indicator_values:
+                    indicator_values = self._read_indicator_state_file(nid)
+                if not indicator_values:
+                    return 0.5
+
+                bullish_count = 0
+                total_indicators = 7
+
+                rsi = self._ind_value(indicator_values, "rsi")
+                rsi_prev = self._ind_value(indicator_values, "rsi_prev")
+                if rsi is not None:
+                    if rsi < 30 or (rsi > 50 and (rsi_prev is None or rsi > rsi_prev)):
+                        bullish_count += 1
+
+                macd_hist = self._ind_value(indicator_values, "macd_histogram")
+                if macd_hist is None:
+                    macd_hist = self._ind_value(indicator_values, "macd")
+                if macd_hist is not None and macd_hist > 0:
+                    bullish_count += 1
+
+                stoch = self._ind_value(indicator_values, "stochastic")
+                if stoch is None:
+                    stoch = self._ind_value(indicator_values, "stochastic_k")
+                if stoch is not None and stoch < 20:
+                    bullish_count += 1
+
+                mfi = self._ind_value(indicator_values, "mfi")
+                if mfi is not None and (mfi < 30 or mfi > 50):
+                    bullish_count += 1
+
+                cci = self._ind_value(indicator_values, "cci")
+                if cci is not None and cci < -100:
+                    bullish_count += 1
+
+                williams = self._ind_value(indicator_values, "williams_r")
+                if williams is not None and williams < -80:
+                    bullish_count += 1
+
+                bb_position = self._ind_value(indicator_values, "bollinger_position")
+                if bb_position is None:
+                    bb = indicator_values.get("bollinger")
+                    if isinstance(bb, dict):
+                        bb_position = bb.get("position")
+                        try:
+                            bb_position = float(bb_position) if bb_position is not None else None
+                        except (TypeError, ValueError):
+                            bb_position = None
+                if bb_position is not None and bb_position < 0.2:
+                    bullish_count += 1
+
+                return float(bullish_count) / float(total_indicators)
+        except Exception as exc:
+            logger.warning("pump_tracker: compute_signal_convergence failed: %s", exc)
+            return 0.5
+
+    # ------------------------------------------------------------------ adaptive params (Enhancement 4)
+    def adapt_parameters(self, netuid: Any) -> None:
+        """Adapt CUSUM k per subnet based on prediction accuracy.
+
+        Low accuracy (<40%) lowers k toward 0.2 to be more sensitive to smaller
+        pumps; high accuracy (>70%) leaves parameters stable. Requires at least
+        10 predictions before adapting. Records an ``adaptation_note``.
+        """
+        try:
+            nid = _coerce_netuid(netuid)
+            with self._lock:
+                acc = self.accuracy.get(nid, {})
+                predictions_made = int(acc.get("predictions_made", 0) or 0)
+                if predictions_made < 10:
+                    return
+                accuracy_score = float(acc.get("accuracy_score", 0.5) or 0.5)
+                st = self.cusum_state.setdefault(nid, {"name": f"SN{nid}", "cusum": 0.0})
+                current_k = float(st.get("k", CUSUM_K))
+                if accuracy_score < 0.4:
+                    new_k = max(0.2, current_k - 0.1)
+                    st["k"] = new_k
+                    st["adapted_k"] = new_k
+                    st["adaptation_note"] = f"k lowered to {new_k:.2f} due to low accuracy ({accuracy_score:.0%})"
+                elif accuracy_score > 0.7:
+                    st["adaptation_note"] = f"parameters stable, accuracy good ({accuracy_score:.0%})"
+                # High false-positive handling would require separate FP
+                # tracking; left as a future hook when that data exists.
+        except Exception as exc:
+            logger.warning("pump_tracker: adapt_parameters failed: %s", exc)
+
     # ------------------------------------------------------------------ accessors
     def get_current_phase(self, netuid: Any) -> str:
         nid = _coerce_netuid(netuid)
@@ -631,25 +872,39 @@ class PumpTracker:
                 dur = ps.get("phase_duration_minutes", 0)
                 proneness = ps.get("pump_proneness", 0)
                 pred = ps.get("cycle_prediction", {}) or {}
+                # Enhancement 1/2/3: append volume, sentiment, convergence
+                # signal tags to the Mind Map trail cycle context.
+                st = self.cusum_state.get(nid, {})
+                sig_tags: List[str] = []
+                if bool(st.get("volume_spike", False)):
+                    sig_tags.append("📊vol_spike")
+                sentiment_factor = float(ps.get("sentiment_factor", self.get_sentiment_factor(nid)))
+                if sentiment_factor > 1.05:
+                    sig_tags.append("📈sentiment+")
+                elif sentiment_factor < 0.95:
+                    sig_tags.append("📉sentiment-")
+                convergence = float(ps.get("signal_convergence", self.compute_signal_convergence(nid)))
+                sig_tags.append(f"convergence {int(round(convergence * 100))}%")
+                sig_suffix = (" " + " ".join(sig_tags)) if sig_tags else ""
                 if phase == "MARKUP":
                     peak_in = pred.get("expected_pump_duration_minutes")
                     tail = f", peak expected in ~{int(peak_in)}min" if peak_in else ""
-                    return f"→ {emoji} MARKUP phase ({int(dur)}min), proneness {proneness}/100{tail}"
+                    return f"→ {emoji} MARKUP phase ({int(dur)}min), proneness {proneness}/100{tail}{sig_suffix}"
                 if phase == "ACCUMULATION":
                     nxt = pred.get("next_pump_expected_hours")
                     tail = f", next pump expected in ~{nxt}h" if nxt else ""
-                    return f"→ {emoji} ACCUMULATION phase ({int(dur)}min){tail}, proneness {proneness}/100"
+                    return f"→ {emoji} ACCUMULATION phase ({int(dur)}min){tail}, proneness {proneness}/100{sig_suffix}"
                 if phase == "DISTRIBUTION":
-                    return f"→ {emoji} DISTRIBUTION phase ({int(dur)}min), pump may be ending, proneness {proneness}/100"
+                    return f"→ {emoji} DISTRIBUTION phase ({int(dur)}min), pump may be ending, proneness {proneness}/100{sig_suffix}"
                 if phase == "PARABOLIC":
-                    return f"→ {emoji} PARABOLIC phase ({int(dur)}min), extreme acceleration, proneness {proneness}/100"
+                    return f"→ {emoji} PARABOLIC phase ({int(dur)}min), extreme acceleration, proneness {proneness}/100{sig_suffix}"
                 if phase == "DECLINE":
-                    return f"→ {emoji} DECLINE phase ({int(dur)}min), proneness {proneness}/100"
+                    return f"→ {emoji} DECLINE phase ({int(dur)}min), proneness {proneness}/100{sig_suffix}"
                 if phase == "RE_ACCUMULATION":
                     nxt = pred.get("next_pump_expected_hours")
                     tail = f", next pump expected in ~{nxt}h" if nxt else ""
-                    return f"→ {emoji} RE-ACCUMULATION phase ({int(dur)}min){tail}, proneness {proneness}/100"
-                return f"→ {emoji} {phase} phase ({int(dur)}min), proneness {proneness}/100"
+                    return f"→ {emoji} RE-ACCUMULATION phase ({int(dur)}min){tail}, proneness {proneness}/100{sig_suffix}"
+                return f"→ {emoji} {phase} phase ({int(dur)}min), proneness {proneness}/100{sig_suffix}"
         except Exception:
             return ""
 
@@ -661,6 +916,9 @@ class PumpTracker:
             for nid, ps in self.phase_state.items():
                 cycles = self.cycles.get(nid, [])
                 acc = self.accuracy.get(nid, {})
+                st = self.cusum_state.get(nid, {})
+                convergence = float(ps.get("signal_convergence", self.compute_signal_convergence(nid)))
+                sentiment_factor = float(ps.get("sentiment_factor", self.get_sentiment_factor(nid)))
                 subnets.append({
                     "netuid": nid,
                     "name": ps.get("name", f"SN{nid}"),
@@ -679,6 +937,16 @@ class PumpTracker:
                     "profile": ps.get("profile", {}),
                     "cycles": cycles[-10:],
                     "cycle_accuracy": acc,
+                    # Enhancement 1: volume-weighted CUSUM
+                    "volume_factor": round(float(st.get("volume_factor", 1.0)), 3),
+                    "volume_spike": bool(st.get("volume_spike", False)),
+                    # Enhancement 2: social sentiment
+                    "sentiment_factor": round(sentiment_factor, 3),
+                    # Enhancement 3: multi-signal convergence
+                    "signal_convergence": round(convergence, 3),
+                    # Enhancement 4: adaptive CUSUM parameters
+                    "adapted_k": st.get("adapted_k") if st.get("adapted_k") is not None else st.get("k", CUSUM_K),
+                    "adaptation_note": st.get("adaptation_note", ""),
                 })
             subnets.sort(key=lambda s: s.get("pump_proneness", 0), reverse=True)
             total_cycles = sum(len(v) for v in self.cycles.values())
@@ -711,11 +979,15 @@ class PumpTracker:
             with self._lock:
                 self._tick += 1
                 due = (self._tick % PRONENESS_TICKS) == 0
+                adapt_due = (self._tick % 10) == 0
             if due:
                 self.compute_proneness(netuid)
                 self.predict_next_cycle(netuid)
                 self.compute_profile(netuid)
                 self.save_state()
+            # Enhancement 4: adapt CUSUM k every 10th tick per subnet.
+            if adapt_due:
+                self.adapt_parameters(netuid)
         except Exception as exc:
             logger.warning("pump_tracker: on_tick failed: %s", exc)
 
