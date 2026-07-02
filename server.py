@@ -4291,6 +4291,14 @@ async def dashboard(request: Request):
         logger.error("Error fetching indicators convergence: %s", e)
         indicators_convergence = {"subnets": []}
 
+    # Get trace stats for footer
+    trace_stats = {}
+    try:
+        if _trace_store is not None:
+            trace_stats = _trace_store.get_recent_runs(limit=1)
+    except Exception:
+        pass
+
     context = {
         "subnets": subnets,
         "data_source": source,
@@ -4327,6 +4335,7 @@ async def dashboard(request: Request):
         "scenario_memory": scenario_memory_snapshot,
         "api_indicators_convergence": indicators_convergence,
         "pump_analytics": _safe_pump_analytics(),
+        "trace_stats": trace_stats,
     }
 
     try:
@@ -5065,6 +5074,163 @@ def build_mindmap_feed(picks: List[Dict], council_votes: List[Dict], undervalued
     })
     
     return feed
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Trace Store Integration
+# ---------------------------------------------------------------------------
+try:
+    from internal.council.trace_store import get_trace_store, TraceStore
+    _trace_store = get_trace_store()
+except Exception:
+    _trace_store = None
+
+
+def _init_trace_store() -> None:
+    """Initialize trace store and record a boot run."""
+    if _trace_store is None:
+        return
+    try:
+        run_id = _trace_store.create_run(
+            subnet_id=0,
+            subnet_name="system_boot",
+            horizon="system",
+            total_score=0,
+            confidence=0,
+            final_action="boot",
+            final_confidence=0,
+        )
+        logger.info("Trace store initialized, boot run: %s", run_id)
+    except Exception as exc:
+        logger.warning("Could not initialize trace store: %s", exc)
+
+
+# Initialize on startup
+try:
+    _init_trace_store()
+except Exception:
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Trace API Endpoints
+# ---------------------------------------------------------------------------
+@app.get("/api/trace")
+async def api_trace(limit: int = 50) -> List[Dict[str, Any]]:
+    """Get recent trace entries."""
+    if _trace_store is None:
+        return []
+    try:
+        return _trace_store.get_recent_runs(limit=limit)
+    except Exception:
+        return []
+
+
+@app.get("/api/trace/{run_id}")
+async def api_trace_run(run_id: str) -> Optional[Dict[str, Any]]:
+    """Get full trace for one run."""
+    if _trace_store is None:
+        return None
+    try:
+        return _trace_store.get_run(run_id)
+    except Exception:
+        return None
+
+
+@app.get("/api/trace/stats")
+async def api_trace_stats() -> Dict[str, Any]:
+    """Get trace store stats."""
+    if _trace_store is None:
+        return {"error": "trace store unavailable"}
+    try:
+        conn = _trace_store._get_connection()
+        cursor = conn.cursor()
+        
+        stats = {}
+        for table in ["council_run", "signal_record", "decision_record", "judge_verdict", "learning_update", "evidence_record"]:
+            cursor.execute(f"SELECT COUNT(*) as cnt FROM {table}")
+            stats[f"{table}_count"] = cursor.fetchone()["cnt"]
+        
+        cursor.execute("SELECT MAX(created_at) as latest FROM council_run")
+        row = cursor.fetchone()
+        stats["last_run"] = row["latest"]
+        
+        return stats
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Projection API Endpoints
+# ---------------------------------------------------------------------------
+@app.post("/api/projection/rebuild")
+async def api_projection_rebuild() -> Dict[str, Any]:
+    """Trigger soul_map rebuild from trace."""
+    try:
+        from internal.council.projection import rebuild_soul_map
+        result = rebuild_soul_map()
+        return {"status": "rebuilt", "data": result}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+@app.get("/api/projection/status")
+async def api_projection_status() -> Dict[str, Any]:
+    """Get projection status."""
+    try:
+        from internal.council.projection import get_soul_map_projection
+        soul_map = get_soul_map_projection()
+        return {
+            "last_updated": soul_map.get("last_updated", "never"),
+            "expert_weights": soul_map.get("expert_weights", {}),
+            "total_records": soul_map.get("performance_history", {}).get("total_records", 0),
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Scout API Endpoints
+# ---------------------------------------------------------------------------
+@app.post("/api/scout/query")
+async def api_scout_query(request: Request) -> Dict[str, Any]:
+    """Submit a scout query."""
+    try:
+        body = await request.json()
+        query = body.get("query", "")
+        sources = body.get("sources")
+        time_window = body.get("time_window", "24h")
+        
+        if not query:
+            return {"error": "query required"}
+        
+        from internal.council.scout import search_and_store
+        findings = search_and_store(query, sources=sources, limit=10)
+        
+        return {"status": "ok", "query": query, "findings": findings}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.get("/api/scout/results/{query_id}")
+async def api_scout_results(query_id: str) -> List[Dict[str, Any]]:
+    """Get scout results (stub - returns empty for now)."""
+    return []
+
+
+@app.get("/api/scout/search")
+async def api_scout_search(q: str = "", sources: str = "") -> Dict[str, Any]:
+    """One-shot scout search."""
+    if not q:
+        return {"error": "q parameter required"}
+    
+    try:
+        from internal.council.scout import search_and_store
+        source_list = [s.strip() for s in sources.split(",") if s.strip()] if sources else None
+        findings = search_and_store(q, sources=source_list, limit=10)
+        return {"query": q, "findings": findings}
+    except Exception as exc:
+        return {"error": str(exc)}
 
 
 # ---------------------------------------------------------------------------
