@@ -1,0 +1,10 @@
+{
+  "scenarios": [],
+  "regimes": {
+      "bull": [],
+      "bear": [],
+      "volatile": [],
+      "neutral": []
+    },
+  "meta": {}
+}
