@@ -1,0 +1,29 @@
+{
+  "active": {
+    "netuid": 19,
+    "name": "Inference",
+    "selected_at": "2026-07-02T03:44:06.783368+00:00",
+    "entry_price": 15.2,
+    "trigger_reason": "8.70% 24h momentum \u00b7 38.2% APY yield",
+    "entry_prices_snapshot": {
+      "29": 28.5,
+      "19": 15.2,
+      "12": 12.4
+    }
+  },
+  "history": [
+    {
+      "netuid": 21,
+      "name": "AdTAO",
+      "selected_at": "2026-07-01T19:37:29.113825+00:00",
+      "replaced_at": "2026-07-02T03:44:06.783368+00:00",
+      "entry_price": 0.004784,
+      "exit_price": 0.004784,
+      "absolute_return": 0.0,
+      "median_subnet_return": 0.0,
+      "percentile_rank": 50.0,
+      "success": false,
+      "trigger_reason": "10.59% 24h momentum \u00b7 RSI overbought"
+    }
+  ]
+}

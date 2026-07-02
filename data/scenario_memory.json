@@ -1,0 +1,481 @@
+{
+  "scenarios": [
+    {
+      "id": "sc_20260701193729111973",
+      "name": "AdTAO",
+      "regime": "volatile",
+      "features": {
+        "avg_change_24h": 10.59,
+        "price_change_24h": 10.59,
+        "volatility": 10.59,
+        "score": 69.05,
+        "confidence": 0.8,
+        "rsi": "overbought",
+        "volume": 2093.78,
+        "daily_rewards": 0.1018,
+        "apy": 8.32,
+        "market_mood": -0.9810852713178295
+      },
+      "outcome": null,
+      "created_at": "2026-07-01T19:37:29.112001Z"
+    },
+    {
+      "id": "sc_20260701193729112425",
+      "name": "Synth",
+      "regime": "volatile",
+      "features": {
+        "avg_change_24h": 16.76,
+        "price_change_24h": 16.76,
+        "volatility": 16.76,
+        "score": 69.8,
+        "confidence": 0.8,
+        "rsi": "overbought",
+        "volume": 8343.87,
+        "daily_rewards": 0.282,
+        "apy": 10.56,
+        "market_mood": -0.9810852713178295
+      },
+      "outcome": null,
+      "created_at": "2026-07-01T19:37:29.112440Z"
+    },
+    {
+      "id": "sc_20260701193729112852",
+      "name": "Swap",
+      "regime": "volatile",
+      "features": {
+        "avg_change_24h": 11.91,
+        "price_change_24h": 11.91,
+        "volatility": 11.91,
+        "score": 68.25,
+        "confidence": 0.8,
+        "rsi": "overbought",
+        "volume": 3412.48,
+        "daily_rewards": 0.0,
+        "apy": 4.7,
+        "market_mood": -0.9810852713178295
+      },
+      "outcome": null,
+      "created_at": "2026-07-01T19:37:29.112866Z"
+    },
+    {
+      "id": "sc_20260701193729419347",
+      "name": "unknown",
+      "regime": "volatile",
+      "features": {
+        "direction": "up",
+        "predicted_pct": 10.0,
+        "actual_pct": 10.0,
+        "outcome": "hit",
+        "expert": "quant",
+        "volatility": 10.0,
+        "rsi": "neutral"
+      },
+      "outcome": "correct",
+      "created_at": "2026-07-01T19:37:29.419360Z"
+    },
+    {
+      "id": "sc_20260701193729432468",
+      "name": "unknown",
+      "regime": "volatile",
+      "features": {
+        "direction": "up",
+        "predicted_pct": 10.0,
+        "actual_pct": 10.0,
+        "outcome": "hit",
+        "expert": "quant",
+        "volatility": 10.0,
+        "rsi": "neutral"
+      },
+      "outcome": "correct",
+      "created_at": "2026-07-01T19:37:29.432481Z"
+    },
+    {
+      "id": "sc_20260701193729438178",
+      "name": "unknown",
+      "regime": "volatile",
+      "features": {
+        "direction": "up",
+        "predicted_pct": 10.0,
+        "actual_pct": 10.0,
+        "outcome": "hit",
+        "expert": "quant",
+        "volatility": 10.0,
+        "rsi": "neutral"
+      },
+      "outcome": "correct",
+      "created_at": "2026-07-01T19:37:29.438190Z"
+    },
+    {
+      "id": "sc_20260701193729964578",
+      "name": "Compelle",
+      "regime": "neutral",
+      "features": {
+        "avg_change_24h": 1.18,
+        "price_change_24h": 1.18,
+        "volatility": 1.18,
+        "score": 74.79,
+        "confidence": 0.7896,
+        "rsi": "overbought",
+        "volume": 680.69,
+        "daily_rewards": 2.9734,
+        "apy": 27.68,
+        "market_mood": -0.9810852713178295
+      },
+      "outcome": null,
+      "created_at": "2026-07-01T19:37:29.964597Z"
+    },
+    {
+      "id": "sc_20260702034406781182",
+      "name": "Coldint",
+      "regime": "volatile",
+      "features": {
+        "avg_change_24h": 12.3,
+        "price_change_24h": 12.3,
+        "volatility": 12.3,
+        "score": 85.0,
+        "confidence": 0.775,
+        "rsi": "overbought",
+        "volume": 1250000,
+        "daily_rewards": 3.0,
+        "apy": 42.5,
+        "market_mood": 8.733333333333333
+      },
+      "outcome": null,
+      "created_at": "2026-07-02T03:44:06.781205Z"
+    },
+    {
+      "id": "sc_20260702034406781846",
+      "name": "Compute",
+      "regime": "bull",
+      "features": {
+        "avg_change_24h": 5.2,
+        "price_change_24h": 5.2,
+        "volatility": 5.2,
+        "score": 80.04,
+        "confidence": 0.7756,
+        "rsi": "overbought",
+        "volume": 750000,
+        "daily_rewards": 1.8,
+        "apy": 35.1,
+        "market_mood": 8.733333333333333
+      },
+      "outcome": null,
+      "created_at": "2026-07-02T03:44:06.781862Z"
+    },
+    {
+      "id": "sc_20260702034415007085",
+      "name": "unknown",
+      "regime": "volatile",
+      "features": {
+        "direction": "up",
+        "predicted_pct": 10.0,
+        "actual_pct": 10.0,
+        "outcome": "hit",
+        "expert": "quant",
+        "volatility": 10.0,
+        "rsi": "neutral"
+      },
+      "outcome": "correct",
+      "created_at": "2026-07-02T03:44:15.007122Z"
+    },
+    {
+      "id": "sc_20260702034415036152",
+      "name": "unknown",
+      "regime": "volatile",
+      "features": {
+        "direction": "up",
+        "predicted_pct": 10.0,
+        "actual_pct": 10.0,
+        "outcome": "hit",
+        "expert": "quant",
+        "volatility": 10.0,
+        "rsi": "neutral"
+      },
+      "outcome": "correct",
+      "created_at": "2026-07-02T03:44:15.036178Z"
+    },
+    {
+      "id": "sc_20260702034415054058",
+      "name": "unknown",
+      "regime": "volatile",
+      "features": {
+        "direction": "up",
+        "predicted_pct": 10.0,
+        "actual_pct": 10.0,
+        "outcome": "hit",
+        "expert": "quant",
+        "volatility": 10.0,
+        "rsi": "neutral"
+      },
+      "outcome": "correct",
+      "created_at": "2026-07-02T03:44:15.054077Z"
+    },
+    {
+      "id": "sc_20260702034415083472",
+      "name": "Coldint",
+      "regime": "volatile",
+      "features": {
+        "netuid": 29,
+        "expert": "quant",
+        "direction": "up",
+        "predicted_pct": 1.75,
+        "reference_price": 28.5,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-02T03:44:15.083491Z"
+    },
+    {
+      "id": "sc_20260702034415097171",
+      "name": "Coldint",
+      "regime": "volatile",
+      "features": {
+        "netuid": 29,
+        "expert": "hype",
+        "direction": "up",
+        "predicted_pct": 6.15,
+        "reference_price": 28.5,
+        "horizon_hours": 2
+      },
+      "outcome": null,
+      "created_at": "2026-07-02T03:44:15.097189Z"
+    },
+    {
+      "id": "sc_20260702034415111564",
+      "name": "Coldint",
+      "regime": "volatile",
+      "features": {
+        "netuid": 29,
+        "expert": "contrarian",
+        "direction": "down",
+        "predicted_pct": -5.55,
+        "reference_price": 28.5,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-02T03:44:15.111581Z"
+    },
+    {
+      "id": "sc_20260702034415125522",
+      "name": "Coldint",
+      "regime": "volatile",
+      "features": {
+        "netuid": 29,
+        "expert": "technical",
+        "direction": "up",
+        "predicted_pct": 3.53,
+        "reference_price": 28.5,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-02T03:44:15.125539Z"
+    },
+    {
+      "id": "sc_20260702034415141997",
+      "name": "Inference",
+      "regime": "volatile",
+      "features": {
+        "netuid": 19,
+        "expert": "quant",
+        "direction": "up",
+        "predicted_pct": 1.39,
+        "reference_price": 15.2,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-02T03:44:15.142014Z"
+    },
+    {
+      "id": "sc_20260702034415156606",
+      "name": "Inference",
+      "regime": "volatile",
+      "features": {
+        "netuid": 19,
+        "expert": "hype",
+        "direction": "up",
+        "predicted_pct": 4.35,
+        "reference_price": 15.2,
+        "horizon_hours": 2
+      },
+      "outcome": null,
+      "created_at": "2026-07-02T03:44:15.156623Z"
+    },
+    {
+      "id": "sc_20260702034415171950",
+      "name": "Inference",
+      "regime": "volatile",
+      "features": {
+        "netuid": 19,
+        "expert": "contrarian",
+        "direction": "down",
+        "predicted_pct": -5.44,
+        "reference_price": 15.2,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-02T03:44:15.171968Z"
+    },
+    {
+      "id": "sc_20260702034415187574",
+      "name": "Inference",
+      "regime": "volatile",
+      "features": {
+        "netuid": 19,
+        "expert": "technical",
+        "direction": "up",
+        "predicted_pct": 1.48,
+        "reference_price": 15.2,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-02T03:44:15.187592Z"
+    },
+    {
+      "id": "sc_20260702034415204604",
+      "name": "Compute",
+      "regime": "bull",
+      "features": {
+        "netuid": 12,
+        "expert": "quant",
+        "direction": "up",
+        "predicted_pct": 1.24,
+        "reference_price": 12.4,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-02T03:44:15.204622Z"
+    },
+    {
+      "id": "sc_20260702034415220343",
+      "name": "Compute",
+      "regime": "bull",
+      "features": {
+        "netuid": 12,
+        "expert": "hype",
+        "direction": "up",
+        "predicted_pct": 2.6,
+        "reference_price": 12.4,
+        "horizon_hours": 2
+      },
+      "outcome": null,
+      "created_at": "2026-07-02T03:44:15.220361Z"
+    },
+    {
+      "id": "sc_20260702034415236943",
+      "name": "Compute",
+      "regime": "bull",
+      "features": {
+        "netuid": 12,
+        "expert": "contrarian",
+        "direction": "down",
+        "predicted_pct": -4.63,
+        "reference_price": 12.4,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-02T03:44:15.236959Z"
+    },
+    {
+      "id": "sc_20260702034415253123",
+      "name": "Compute",
+      "regime": "bull",
+      "features": {
+        "netuid": 12,
+        "expert": "technical",
+        "direction": "up",
+        "predicted_pct": 1.06,
+        "reference_price": 12.4,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-02T03:44:15.253140Z"
+    },
+    {
+      "id": "sc_20260702034513810033",
+      "name": "unknown",
+      "regime": "volatile",
+      "features": {
+        "direction": "up",
+        "predicted_pct": 10.0,
+        "actual_pct": 10.0,
+        "outcome": "hit",
+        "expert": "quant",
+        "volatility": 10.0,
+        "rsi": "neutral"
+      },
+      "outcome": "correct",
+      "created_at": "2026-07-02T03:45:13.810050Z"
+    },
+    {
+      "id": "sc_20260702034513838957",
+      "name": "unknown",
+      "regime": "volatile",
+      "features": {
+        "direction": "up",
+        "predicted_pct": 10.0,
+        "actual_pct": 10.0,
+        "outcome": "hit",
+        "expert": "quant",
+        "volatility": 10.0,
+        "rsi": "neutral"
+      },
+      "outcome": "correct",
+      "created_at": "2026-07-02T03:45:13.838977Z"
+    },
+    {
+      "id": "sc_20260702034513859010",
+      "name": "unknown",
+      "regime": "volatile",
+      "features": {
+        "direction": "up",
+        "predicted_pct": 10.0,
+        "actual_pct": 10.0,
+        "outcome": "hit",
+        "expert": "quant",
+        "volatility": 10.0,
+        "rsi": "neutral"
+      },
+      "outcome": "correct",
+      "created_at": "2026-07-02T03:45:13.859029Z"
+    }
+  ],
+  "regimes": {
+    "bear": [],
+    "volatile": [
+      "sc_20260701193729111973",
+      "sc_20260701193729112425",
+      "sc_20260701193729112852",
+      "sc_20260701193729419347",
+      "sc_20260701193729432468",
+      "sc_20260701193729438178",
+      "sc_20260702034406781182",
+      "sc_20260702034415007085",
+      "sc_20260702034415036152",
+      "sc_20260702034415054058",
+      "sc_20260702034415083472",
+      "sc_20260702034415097171",
+      "sc_20260702034415111564",
+      "sc_20260702034415125522",
+      "sc_20260702034415141997",
+      "sc_20260702034415156606",
+      "sc_20260702034415171950",
+      "sc_20260702034415187574",
+      "sc_20260702034513810033",
+      "sc_20260702034513838957",
+      "sc_20260702034513859010"
+    ],
+    "neutral": [
+      "sc_20260701193729964578"
+    ],
+    "bull": [
+      "sc_20260702034406781846",
+      "sc_20260702034415204604",
+      "sc_20260702034415220343",
+      "sc_20260702034415236943",
+      "sc_20260702034415253123"
+    ]
+  },
+  "meta": {
+    "last_updated": "2026-07-02T03:45:13.859057Z"
+  }
+}

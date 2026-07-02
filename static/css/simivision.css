@@ -1,0 +1,187 @@
+/* SimiVision Learning Trail panel styles */
+
+.learning-trail-section {
+  position: relative;
+}
+
+.learning-trail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+}
+
+@media (min-width: 1024px) {
+  .learning-trail-grid {
+    grid-template-columns: minmax(320px, 0.45fr) 1fr;
+  }
+}
+
+.learning-trail-experts {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+}
+
+.learning-trail-verdicts {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+}
+
+.lt-expert-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--border-radius-card);
+  padding: var(--space-4);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.lt-expert-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
+}
+
+.lt-expert-card.lt-top {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 24px rgba(34, 211, 238, 0.12);
+}
+
+.lt-expert-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.lt-expert-name {
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--text-primary);
+  text-transform: capitalize;
+}
+
+.lt-expert-weight {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  background: rgba(34, 211, 238, 0.1);
+  padding: 4px 10px;
+  border-radius: var(--border-radius-pill);
+}
+
+.lt-expert-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+
+.lt-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lt-stat-value {
+  font-family: var(--font-mono);
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.lt-stat-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lt-sparkline {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 32px;
+  margin-top: var(--space-3);
+}
+
+.lt-sparkline i {
+  flex: 1;
+  min-width: 4px;
+  height: var(--h, 50%);
+  background: var(--accent-cyan);
+  border-radius: 2px;
+  opacity: 0.85;
+}
+
+.lt-verdict-row {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: var(--space-3) var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.lt-verdict-row.lt-correct {
+  border-left: 4px solid var(--status-active);
+}
+
+.lt-verdict-row.lt-wrong {
+  border-left: 4px solid var(--status-deprecated);
+}
+
+.lt-verdict-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.lt-verdict-subnet {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.lt-verdict-outcome {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+}
+
+.lt-prediction {
+  color: var(--text-secondary);
+}
+
+.lt-arrow {
+  color: var(--text-muted);
+}
+
+.lt-actual {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.lt-verdict-experts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lt-badge {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  background: rgba(148, 163, 184, 0.12);
+  padding: 3px 8px;
+  border-radius: var(--border-radius-pill);
+}
+
+.lt-badge.lt-confident {
+  color: var(--accent-cyan);
+  background: rgba(34, 211, 238, 0.12);
+}

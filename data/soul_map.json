@@ -1,0 +1,44 @@
+{
+  "expert_weights": {
+    "quant": 0.97,
+    "hype": 1.0,
+    "contrarian": 1.0,
+    "technical": 1.0
+  },
+  "performance_history": {
+    "accuracy": 0.5,
+    "total_records": 46,
+    "correct": 5,
+    "wrong": 5,
+    "pending": 36
+  },
+  "council_dispositions": {
+    "quant": "bullish",
+    "hype": "bullish",
+    "contrarian": "bearish",
+    "technical": "bullish"
+  },
+  "council": {
+    "quant": {
+      "disposition": "bullish",
+      "lens": "fundamental/yield",
+      "pick": "Coldint"
+    },
+    "hype": {
+      "disposition": "bullish",
+      "lens": "momentum/social",
+      "pick": "Coldint"
+    },
+    "contrarian": {
+      "disposition": "bearish",
+      "lens": "contrarian/RSI",
+      "pick": "Coldint"
+    },
+    "technical": {
+      "disposition": "bullish",
+      "lens": "technical/trend",
+      "pick": "Coldint"
+    }
+  },
+  "last_updated": "2026-07-02T03:45:14.799200Z"
+}

@@ -1,0 +1,915 @@
+{
+  "0": {
+    "symbol": "TAO",
+    "taomarketcap_netuid": 0
+  },
+  "1": {
+    "symbol": "A",
+    "taomarketcap_netuid": 1,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-1"
+    }
+  },
+  "2": {
+    "symbol": "O",
+    "taomarketcap_netuid": 2,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-2"
+    }
+  },
+  "3": {
+    "symbol": "T",
+    "taomarketcap_netuid": 3,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-3"
+    }
+  },
+  "4": {
+    "symbol": "T",
+    "taomarketcap_netuid": 4,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-4"
+    }
+  },
+  "5": {
+    "symbol": "OK",
+    "taomarketcap_netuid": 5
+  },
+  "6": {
+    "symbol": "IG",
+    "taomarketcap_netuid": 6,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-6"
+    }
+  },
+  "7": {
+    "symbol": "S",
+    "taomarketcap_netuid": 7,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-7"
+    }
+  },
+  "8": {
+    "symbol": "PTN",
+    "taomarketcap_netuid": 8,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-8"
+    }
+  },
+  "9": {
+    "symbol": "P",
+    "taomarketcap_netuid": 9,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-9"
+    }
+  },
+  "10": {
+    "symbol": "S",
+    "taomarketcap_netuid": 10
+  },
+  "11": {
+    "symbol": "DR",
+    "taomarketcap_netuid": 11,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-11"
+    }
+  },
+  "12": {
+    "symbol": "H",
+    "taomarketcap_netuid": 12
+  },
+  "13": {
+    "symbol": "DU",
+    "taomarketcap_netuid": 13,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-13"
+    }
+  },
+  "14": {
+    "symbol": "V",
+    "taomarketcap_netuid": 14,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-14"
+    }
+  },
+  "15": {
+    "symbol": "DV",
+    "taomarketcap_netuid": 15,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-15"
+    }
+  },
+  "16": {
+    "symbol": "B",
+    "taomarketcap_netuid": 16,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-16"
+    }
+  },
+  "17": {
+    "symbol": "TG",
+    "taomarketcap_netuid": 17
+  },
+  "18": {
+    "symbol": "C",
+    "taomarketcap_netuid": 18
+  },
+  "19": {
+    "symbol": "N",
+    "taomarketcap_netuid": 19
+  },
+  "20": {
+    "symbol": "BR",
+    "taomarketcap_netuid": 20
+  },
+  "21": {
+    "symbol": "OATA",
+    "taomarketcap_netuid": 21,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-21"
+    }
+  },
+  "22": {
+    "symbol": "D",
+    "taomarketcap_netuid": 22,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-22"
+    }
+  },
+  "23": {
+    "symbol": "S",
+    "taomarketcap_netuid": 23,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-23"
+    }
+  },
+  "24": {
+    "symbol": "O",
+    "taomarketcap_netuid": 24,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-24"
+    }
+  },
+  "25": {
+    "symbol": "PF",
+    "taomarketcap_netuid": 25
+  },
+  "26": {
+    "symbol": "U",
+    "taomarketcap_netuid": 26
+  },
+  "27": {
+    "symbol": "NC",
+    "taomarketcap_netuid": 27,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-27"
+    }
+  },
+  "28": {
+    "symbol": "L",
+    "taomarketcap_netuid": 28,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-28"
+    }
+  },
+  "29": {
+    "symbol": "C",
+    "taomarketcap_netuid": 29,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-29"
+    }
+  },
+  "30": {
+    "symbol": "B",
+    "taomarketcap_netuid": 30,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-30"
+    }
+  },
+  "31": {
+    "symbol": "NC",
+    "taomarketcap_netuid": 31,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-31"
+    }
+  },
+  "32": {
+    "symbol": "IA",
+    "taomarketcap_netuid": 32,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-32"
+    }
+  },
+  "33": {
+    "symbol": "R",
+    "taomarketcap_netuid": 33,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-33"
+    }
+  },
+  "34": {
+    "symbol": "B",
+    "taomarketcap_netuid": 34
+  },
+  "35": {
+    "symbol": "L",
+    "taomarketcap_netuid": 35,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-35"
+    }
+  },
+  "36": {
+    "symbol": "WAA",
+    "taomarketcap_netuid": 36,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-36"
+    }
+  },
+  "37": {
+    "symbol": "F",
+    "taomarketcap_netuid": 37,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-37"
+    }
+  },
+  "38": {
+    "symbol": "DTS",
+    "taomarketcap_netuid": 38,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-38"
+    }
+  },
+  "39": {
+    "symbol": "E",
+    "taomarketcap_netuid": 39,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-39"
+    }
+  },
+  "40": {
+    "symbol": "C",
+    "taomarketcap_netuid": 40,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-40"
+    }
+  },
+  "41": {
+    "symbol": "S",
+    "taomarketcap_netuid": 41,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-41"
+    }
+  },
+  "42": {
+    "symbol": "RTDBM",
+    "taomarketcap_netuid": 42
+  },
+  "43": {
+    "symbol": "G",
+    "taomarketcap_netuid": 43
+  },
+  "44": {
+    "symbol": "S",
+    "taomarketcap_netuid": 44,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-44"
+    }
+  },
+  "45": {
+    "symbol": "SR",
+    "taomarketcap_netuid": 45,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-45"
+    }
+  },
+  "46": {
+    "symbol": "N",
+    "taomarketcap_netuid": 46,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-46"
+    }
+  },
+  "47": {
+    "symbol": "CA",
+    "taomarketcap_netuid": 47,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-47"
+    }
+  },
+  "48": {
+    "symbol": "NA",
+    "taomarketcap_netuid": 48
+  },
+  "49": {
+    "symbol": "HA",
+    "taomarketcap_netuid": 49
+  },
+  "50": {
+    "symbol": "S",
+    "taomarketcap_netuid": 50,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-50"
+    }
+  },
+  "51": {
+    "symbol": "CS",
+    "taomarketcap_netuid": 51,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-51"
+    }
+  },
+  "52": {
+    "symbol": "D",
+    "taomarketcap_netuid": 52
+  },
+  "53": {
+    "symbol": "EF",
+    "taomarketcap_netuid": 53
+  },
+  "54": {
+    "symbol": "W",
+    "taomarketcap_netuid": 54,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-54"
+    }
+  },
+  "55": {
+    "symbol": "P",
+    "taomarketcap_netuid": 55,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-55"
+    }
+  },
+  "56": {
+    "symbol": "G",
+    "taomarketcap_netuid": 56,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-56"
+    }
+  },
+  "57": {
+    "symbol": "G",
+    "taomarketcap_netuid": 57,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-57"
+    }
+  },
+  "58": {
+    "symbol": "DS",
+    "taomarketcap_netuid": 58,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-58"
+    }
+  },
+  "59": {
+    "symbol": "AABM",
+    "taomarketcap_netuid": 59,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-59"
+    }
+  },
+  "60": {
+    "symbol": "B",
+    "taomarketcap_netuid": 60,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-60"
+    }
+  },
+  "61": {
+    "symbol": "RT",
+    "taomarketcap_netuid": 61,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-61"
+    }
+  },
+  "62": {
+    "symbol": "A",
+    "taomarketcap_netuid": 62,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-62"
+    }
+  },
+  "63": {
+    "symbol": "U",
+    "taomarketcap_netuid": 63,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-63"
+    }
+  },
+  "64": {
+    "symbol": "C",
+    "taomarketcap_netuid": 64,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-64"
+    }
+  },
+  "65": {
+    "symbol": "TPN",
+    "taomarketcap_netuid": 65,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-65"
+    }
+  },
+  "66": {
+    "symbol": "F",
+    "taomarketcap_netuid": 66,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-66"
+    }
+  },
+  "67": {
+    "symbol": "U",
+    "taomarketcap_netuid": 67,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-67"
+    }
+  },
+  "68": {
+    "symbol": "N",
+    "taomarketcap_netuid": 68,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-68"
+    }
+  },
+  "69": {
+    "symbol": "U",
+    "taomarketcap_netuid": 69,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-69"
+    }
+  },
+  "70": {
+    "symbol": "U",
+    "taomarketcap_netuid": 70,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-70"
+    }
+  },
+  "71": {
+    "symbol": "U",
+    "taomarketcap_netuid": 71,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-71"
+    }
+  },
+  "72": {
+    "symbol": "U",
+    "taomarketcap_netuid": 72,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-72"
+    }
+  },
+  "73": {
+    "symbol": "U",
+    "taomarketcap_netuid": 73
+  },
+  "74": {
+    "symbol": "U",
+    "taomarketcap_netuid": 74,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-74"
+    }
+  },
+  "75": {
+    "symbol": "U",
+    "taomarketcap_netuid": 75,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-75"
+    }
+  },
+  "76": {
+    "symbol": "U",
+    "taomarketcap_netuid": 76,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-76"
+    }
+  },
+  "77": {
+    "symbol": "U",
+    "taomarketcap_netuid": 77,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-77"
+    }
+  },
+  "78": {
+    "symbol": "U",
+    "taomarketcap_netuid": 78,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-78"
+    }
+  },
+  "79": {
+    "symbol": "U",
+    "taomarketcap_netuid": 79,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-79"
+    }
+  },
+  "80": {
+    "symbol": "U",
+    "taomarketcap_netuid": 80,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-80"
+    }
+  },
+  "81": {
+    "symbol": "U",
+    "taomarketcap_netuid": 81,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-81"
+    }
+  },
+  "82": {
+    "symbol": "U",
+    "taomarketcap_netuid": 82,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-82"
+    }
+  },
+  "83": {
+    "symbol": "U",
+    "taomarketcap_netuid": 83,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-83"
+    }
+  },
+  "84": {
+    "symbol": "U",
+    "taomarketcap_netuid": 84,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-84"
+    }
+  },
+  "85": {
+    "symbol": "U",
+    "taomarketcap_netuid": 85,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-85"
+    }
+  },
+  "86": {
+    "symbol": "U",
+    "taomarketcap_netuid": 86
+  },
+  "87": {
+    "symbol": "U",
+    "taomarketcap_netuid": 87,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-87"
+    }
+  },
+  "88": {
+    "symbol": "U",
+    "taomarketcap_netuid": 88,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-88"
+    }
+  },
+  "89": {
+    "symbol": "U",
+    "taomarketcap_netuid": 89,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-89"
+    }
+  },
+  "90": {
+    "symbol": "U",
+    "taomarketcap_netuid": 90,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-90"
+    }
+  },
+  "91": {
+    "symbol": "U",
+    "taomarketcap_netuid": 91,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-91"
+    }
+  },
+  "92": {
+    "symbol": "U",
+    "taomarketcap_netuid": 92,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-92"
+    }
+  },
+  "93": {
+    "symbol": "U",
+    "taomarketcap_netuid": 93,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-93"
+    }
+  },
+  "94": {
+    "symbol": "U",
+    "taomarketcap_netuid": 94
+  },
+  "95": {
+    "symbol": "A",
+    "taomarketcap_netuid": 95,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-95"
+    }
+  },
+  "96": {
+    "symbol": "U",
+    "taomarketcap_netuid": 96,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-96"
+    }
+  },
+  "97": {
+    "symbol": "U",
+    "taomarketcap_netuid": 97,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-97"
+    }
+  },
+  "98": {
+    "symbol": "U",
+    "taomarketcap_netuid": 98
+  },
+  "99": {
+    "symbol": "U",
+    "taomarketcap_netuid": 99,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-99"
+    }
+  },
+  "100": {
+    "symbol": "U",
+    "taomarketcap_netuid": 100
+  },
+  "101": {
+    "symbol": "U",
+    "taomarketcap_netuid": 101,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-101"
+    }
+  },
+  "102": {
+    "symbol": "U",
+    "taomarketcap_netuid": 102,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-102"
+    }
+  },
+  "103": {
+    "symbol": "U",
+    "taomarketcap_netuid": 103,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-103"
+    }
+  },
+  "104": {
+    "symbol": "U",
+    "taomarketcap_netuid": 104
+  },
+  "105": {
+    "symbol": "U",
+    "taomarketcap_netuid": 105,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-105"
+    }
+  },
+  "106": {
+    "symbol": "U",
+    "taomarketcap_netuid": 106,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-106"
+    }
+  },
+  "107": {
+    "symbol": "U",
+    "taomarketcap_netuid": 107,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-107"
+    }
+  },
+  "108": {
+    "symbol": "U",
+    "taomarketcap_netuid": 108
+  },
+  "109": {
+    "symbol": "U",
+    "taomarketcap_netuid": 109,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-109"
+    }
+  },
+  "110": {
+    "symbol": "U",
+    "taomarketcap_netuid": 110,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-110"
+    }
+  },
+  "111": {
+    "symbol": "U",
+    "taomarketcap_netuid": 111,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-111"
+    }
+  },
+  "112": {
+    "symbol": "U",
+    "taomarketcap_netuid": 112,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-112"
+    }
+  },
+  "113": {
+    "symbol": "U",
+    "taomarketcap_netuid": 113,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-113"
+    }
+  },
+  "114": {
+    "symbol": "U",
+    "taomarketcap_netuid": 114,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-114"
+    }
+  },
+  "115": {
+    "symbol": "U",
+    "taomarketcap_netuid": 115
+  },
+  "116": {
+    "symbol": "U",
+    "taomarketcap_netuid": 116,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-116"
+    }
+  },
+  "117": {
+    "symbol": "U",
+    "taomarketcap_netuid": 117,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-117"
+    }
+  },
+  "118": {
+    "symbol": "U",
+    "taomarketcap_netuid": 118,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-118"
+    }
+  },
+  "119": {
+    "symbol": "U",
+    "taomarketcap_netuid": 119
+  },
+  "120": {
+    "symbol": "U",
+    "taomarketcap_netuid": 120,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-120"
+    }
+  },
+  "121": {
+    "symbol": "U",
+    "taomarketcap_netuid": 121
+  },
+  "122": {
+    "symbol": "U",
+    "taomarketcap_netuid": 122,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-122"
+    }
+  },
+  "123": {
+    "symbol": "U",
+    "taomarketcap_netuid": 123,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-123"
+    }
+  },
+  "124": {
+    "symbol": "U",
+    "taomarketcap_netuid": 124,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-124"
+    }
+  },
+  "125": {
+    "symbol": "U",
+    "taomarketcap_netuid": 125,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-125"
+    }
+  },
+  "126": {
+    "symbol": "U",
+    "taomarketcap_netuid": 126,
+    "geckoterminal": {
+      "network": "bittensor",
+      "pool": "0-126"
+    }
+  },
+  "127": {
+    "symbol": "U",
+    "taomarketcap_netuid": 127
+  },
+  "comment": "TaoMarketCap netuid is the default price source. GeckoTerminal mappings are explicit DEX pool fallbacks. Subnets without a live source fall back to deterministic synthetic candles."
+}
