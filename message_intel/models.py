@@ -397,3 +397,168 @@ class Database:
             "SELECT * FROM price_outcomes WHERE message_id = ?", (message_id,)
         ).fetchone()
         return dict(row) if row else None
+
+    # ── Summary, Authors, Topics ────────────────────────────────────────────
+
+    def get_summary(self, start_time: Optional[str] = None, end_time: Optional[str] = None, limit: int = 100) -> Dict[str, Any]:
+        """Get message intelligence summary with optional time range filtering."""
+        with self._connect() as conn:
+            # Total messages
+            total = conn.execute("SELECT COUNT(*) as cnt FROM messages").fetchone()["cnt"]
+            
+            # Messages by sentiment
+            sentiment_counts = {}
+            for row in conn.execute("SELECT sentiment, COUNT(*) as cnt FROM message_analysis GROUP BY sentiment"):
+                sentiment_counts[row["sentiment"]] = row["cnt"]
+            
+            # High conviction messages
+            high_conviction = conn.execute(
+                "SELECT COUNT(*) as cnt FROM message_verdicts WHERE conviction >= ?", (0.6,)
+            ).fetchone()["cnt"]
+            
+            # Price outcomes
+            outcomes = conn.execute("SELECT COUNT(*) as cnt FROM price_outcomes").fetchone()["cnt"]
+            
+            # Patterns
+            patterns = conn.execute("SELECT COUNT(*) as cnt FROM pattern_correlations").fetchone()["cnt"]
+            
+            return {
+                "total_messages": total,
+                "sentiment_distribution": sentiment_counts,
+                "high_conviction_count": high_conviction,
+                "price_outcomes": outcomes,
+                "patterns": patterns,
+                "time_range": {"start": start_time, "end": end_time},
+                "limit": limit,
+            }
+
+    def get_authors(self) -> List[Dict[str, Any]]:
+        """Get authors with emoji-weighted influence scores."""
+        with self._connect() as conn:
+            rows = conn.execute("""
+                SELECT ar.author_id, ar.author_name, ar.total_messages, 
+                       ar.correct_predictions, ar.accuracy_score,
+                       COALESCE(SUM(mm.views), 0) as total_views,
+                       COALESCE(SUM(mm.forwards), 0) as total_forwards,
+                       COALESCE(SUM(mm.replies), 0) as total_replies
+                FROM author_reliability ar
+                LEFT JOIN messages m ON m.author_id = ar.author_id
+                LEFT JOIN message_metrics mm ON mm.message_id = m.id
+                GROUP BY ar.author_id
+                ORDER BY ar.accuracy_score DESC, ar.total_messages DESC
+                LIMIT 100
+            """).fetchall()
+            
+            authors = []
+            for row in rows:
+                # Calculate influence score based on engagement and accuracy
+                influence = (row["total_views"] + row["total_forwards"] * 2 + row["total_replies"] * 3) / 1000
+                influence *= (row["accuracy_score"] if row["accuracy_score"] else 0)
+                
+                # Determine emoji based on influence
+                if influence >= 10:
+                    emoji = "🔥"
+                elif influence >= 5:
+                    emoji = "❤️"
+                else:
+                    emoji = "👍"
+                
+                authors.append({
+                    "author_id": row["author_id"],
+                    "author_name": row["author_name"],
+                    "total_messages": row["total_messages"],
+                    "correct_predictions": row["correct_predictions"],
+                    "accuracy_score": row["accuracy_score"],
+                    "influence_score": round(influence, 2),
+                    "emoji": emoji,
+                    "engagement": {
+                        "views": row["total_views"],
+                        "forwards": row["total_forwards"],
+                        "replies": row["total_replies"],
+                    },
+                })
+            
+            return authors
+
+    def get_topics(self) -> List[Dict[str, Any]]:
+        """Get topics from messages - dedicated bot topic page."""
+        with self._connect() as conn:
+            # Get topics from message analysis entities
+            topics = []
+            
+            # Extract subnets mentioned
+            subnets = conn.execute("""
+                SELECT DISTINCT m.id, m.content, ma.entities_json
+                FROM messages m
+                JOIN message_analysis ma ON ma.message_id = m.id
+                WHERE ma.entities_json IS NOT NULL
+            """).fetchall()
+            
+            subnet_counts = {}
+            for row in subnets:
+                try:
+                    entities = json.loads(row["entities_json"] or "{}")
+                    for subnet in entities.get("subnets", []):
+                        subnet_counts[subnet] = subnet_counts.get(subnet, 0) + 1
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            
+            for subnet, count in sorted(subnet_counts.items(), key=lambda x: -x[1])[:20]:
+                topics.append({
+                    "topic": f"Subnet {subnet}",
+                    "type": "subnet",
+                    "count": count,
+                    "relevance": min(count / 10, 1.0),
+                })
+            
+            # Extract protocols mentioned
+            protocols = conn.execute("""
+                SELECT DISTINCT m.id, m.content, ma.entities_json
+                FROM messages m
+                JOIN message_analysis ma ON ma.message_id = m.id
+                WHERE ma.entities_json IS NOT NULL
+            """).fetchall()
+            
+            protocol_counts = {}
+            for row in protocols:
+                try:
+                    entities = json.loads(row["entities_json"] or "{}")
+                    for protocol in entities.get("protocols", []):
+                        protocol_counts[protocol] = protocol_counts.get(protocol, 0) + 1
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            
+            for protocol, count in sorted(protocol_counts.items(), key=lambda x: -x[1])[:20]:
+                topics.append({
+                    "topic": protocol,
+                    "type": "protocol",
+                    "count": count,
+                    "relevance": min(count / 10, 1.0),
+                })
+            
+            # Extract TAO amounts mentioned
+            amounts = conn.execute("""
+                SELECT DISTINCT m.id, m.content, ma.entities_json
+                FROM messages m
+                JOIN message_analysis ma ON ma.message_id = m.id
+                WHERE ma.entities_json IS NOT NULL
+            """).fetchall()
+            
+            amount_counts = {}
+            for row in amounts:
+                try:
+                    entities = json.loads(row["entities_json"] or "{}")
+                    for amount in entities.get("tao_amounts", []):
+                        amount_counts[amount] = amount_counts.get(amount, 0) + 1
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            
+            for amount, count in sorted(amount_counts.items(), key=lambda x: -x[1])[:20]:
+                topics.append({
+                    "topic": f"{amount} TAO",
+                    "type": "amount",
+                    "count": count,
+                    "relevance": min(count / 10, 1.0),
+                })
+            
+            return topics

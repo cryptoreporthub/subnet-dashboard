@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -1465,6 +1465,52 @@ async def api_message_intel_patterns(limit: int = 20):
     except Exception as e:
         logger.error("Error fetching message intel patterns: %s", e)
         return {"status": "error", "patterns": [], "error": str(e)}
+
+
+@app.get("/api/message-intel/summary")
+async def get_message_summary(
+    start_time: Optional[str] = Query(None),
+    end_time: Optional[str] = Query(None),
+    limit: int = Query(100, gt=0, le=1000)
+) -> Dict[str, Any]:
+    """Get message intelligence summary with time range picker support."""
+    if not _MESSAGE_INTEL_AVAILABLE or _MessageIntelDatabase is None:
+        return {"status": "error", "message": "Message Intel unavailable", "summary": {}}
+    try:
+        db = _MessageIntelDatabase(DATA_DIR)
+        summary = db.get_summary(start_time=start_time, end_time=end_time, limit=limit)
+        return {"status": "success", "summary": summary}
+    except Exception as e:
+        logger.warning("Message Intel summary error: %s", e)
+        return {"status": "error", "message": str(e), "summary": {}}
+
+
+@app.get("/api/message-intel/authors")
+async def get_authors() -> Dict[str, Any]:
+    """Get authors with emoji-weighted influence scores (🔥 > ❤️ > 👍)."""
+    if not _MESSAGE_INTEL_AVAILABLE or _MessageIntelDatabase is None:
+        return {"status": "error", "message": "Message Intel unavailable", "authors": []}
+    try:
+        db = _MessageIntelDatabase(DATA_DIR)
+        authors = db.get_authors()
+        return {"status": "success", "authors": authors}
+    except Exception as e:
+        logger.warning("Message Intel authors error: %s", e)
+        return {"status": "error", "message": str(e), "authors": []}
+
+
+@app.get("/api/message-intel/topics")
+async def get_topics() -> Dict[str, Any]:
+    """Get topics from messages - dedicated bot topic page."""
+    if not _MESSAGE_INTEL_AVAILABLE or _MessageIntelDatabase is None:
+        return {"status": "error", "message": "Message Intel unavailable", "topics": []}
+    try:
+        db = _MessageIntelDatabase(DATA_DIR)
+        topics = db.get_topics()
+        return {"status": "success", "topics": topics}
+    except Exception as e:
+        logger.warning("Message Intel topics error: %s", e)
+        return {"status": "error", "message": str(e), "topics": []}
 
 
 @app.get("/api/indicators/scheduler")
@@ -5115,49 +5161,63 @@ except Exception:
 # ---------------------------------------------------------------------------
 # Phase 3: Trace API Endpoints
 # ---------------------------------------------------------------------------
-@app.get("/api/trace")
-async def api_trace(limit: int = 50) -> List[Dict[str, Any]]:
-    """Get recent trace entries."""
+@app.get("/api/trace/stats")
+async def api_trace_stats() -> Dict[str, Any]:
+    """Get trace store statistics with JSON-serializable response."""
     if _trace_store is None:
-        return []
+        return {"error": "trace store unavailable", "council_run_count": 0, "signal_record_count": 0}
     try:
-        return _trace_store.get_recent_runs(limit=limit)
-    except Exception:
-        return []
+        conn = _trace_store._get_connection()
+        cursor = conn.cursor()
+        stats = {}
+        for table in ["council_run", "signal_record", "decision_record", 
+                      "judge_verdict", "learning_update", "evidence_record"]:
+            cursor.execute(f"SELECT COUNT(*) as cnt FROM {table}")
+            row = cursor.fetchone()
+            stats[f"{table}_count"] = int(row["cnt"]) if row else 0
+        cursor.execute("SELECT MAX(created_at) as latest FROM council_run")
+        row = cursor.fetchone()
+        stats["latest_run"] = str(row["latest"]) if row and row["latest"] else None
+        return stats
+    except Exception as e:
+        logger.warning("Trace stats error: %s", e)
+        return {"error": str(e)}
+
+
+@app.get("/api/trace")
+async def api_trace_list(limit: int = Query(100, gt=0, le=1000)) -> Dict[str, Any]:
+    """Get list of recent council runs."""
+    if _trace_store is None:
+        return {"error": "trace store unavailable", "runs": []}
+    try:
+        conn = _trace_store._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM council_run ORDER BY created_at DESC LIMIT ?", (limit,))
+        rows = cursor.fetchall()
+        runs = [{"id": dict(r)["id"], "created_at": str(dict(r)["created_at"]), "status": dict(r).get("status", "unknown")} for r in rows]
+        return {"runs": runs, "count": len(runs)}
+    except Exception as e:
+        logger.warning("Trace list error: %s", e)
+        return {"error": str(e), "runs": []}
 
 
 @app.get("/api/trace/{run_id}")
-async def api_trace_run(run_id: str) -> Optional[Dict[str, Any]]:
-    """Get full trace for one run."""
-    if _trace_store is None:
-        return None
-    try:
-        return _trace_store.get_run(run_id)
-    except Exception:
-        return None
-
-
-@app.get("/api/trace/stats")
-async def api_trace_stats() -> Dict[str, Any]:
-    """Get trace store stats."""
+async def api_trace_get(run_id: str) -> Dict[str, Any]:
+    """Get specific trace by run ID."""
     if _trace_store is None:
         return {"error": "trace store unavailable"}
     try:
         conn = _trace_store._get_connection()
         cursor = conn.cursor()
-        
-        stats = {}
-        for table in ["council_run", "signal_record", "decision_record", "judge_verdict", "learning_update", "evidence_record"]:
-            cursor.execute(f"SELECT COUNT(*) as cnt FROM {table}")
-            stats[f"{table}_count"] = cursor.fetchone()["cnt"]
-        
-        cursor.execute("SELECT MAX(created_at) as latest FROM council_run")
+        cursor.execute("SELECT * FROM council_run WHERE id = ?", (run_id,))
         row = cursor.fetchone()
-        stats["last_run"] = row["latest"]
-        
-        return stats
-    except Exception as exc:
-        return {"error": str(exc)}
+        if row is None:
+            return {"error": "run not found"}
+        result = {k: (str(v) if isinstance(v, datetime) else v) for k, v in dict(row).items()}
+        return result
+    except Exception as e:
+        logger.warning("Trace get error: %s", e)
+        return {"error": str(e)}
 
 
 # ---------------------------------------------------------------------------
