@@ -4556,11 +4556,15 @@ def _record_pick_scenario(pick: Dict[str, Any], market_context: Optional[Dict[st
         signals = pick.get("signals") if isinstance(pick.get("signals"), dict) else {}
         tags = pick.get("scenario_tags") if isinstance(pick.get("scenario_tags"), dict) else {}
         chg = float(signals.get("price_change_24h", 0) or 0)
+        # score can be a dict (from state_vector) or a number
+        score_val = pick.get("score", 0)
+        if isinstance(score_val, dict):
+            score_val = score_val.get("total_score", 0)
         features = {
             "avg_change_24h": chg,
             "price_change_24h": chg,
             "volatility": abs(chg),
-            "score": float(pick.get("score", 0) or 0),
+            "score": float(score_val or 0),
             "confidence": float(pick.get("confidence", 0) or 0),
             "rsi": tags.get("rsi"),
             "volume": signals.get("volume") or tags.get("volume"),

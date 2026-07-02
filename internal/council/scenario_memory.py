@@ -55,6 +55,8 @@ def _normalize_regime(regime: Optional[str]) -> str:
         return "bear"
     if r in {"volatile", "high_volatility", "choppy"}:
         return "volatile"
+    if r in {"chop", "neutral"}:
+        return "neutral"
     return "neutral"
 
 
