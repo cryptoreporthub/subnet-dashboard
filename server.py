@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, AsyncIterator, Dict, List, Optional
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -232,7 +232,7 @@ DATA_SEEDS_DIR = os.environ.get("DATA_SEEDS_DIR", "data_seeds")
 # Learning-critical files that should survive deploys. On the first boot of an
 # empty volume these are seeded from data_seeds/ so prior learning is preserved;
 # they are never overwritten once present on the volume.
-_PERSISTENT_DATA_FILES = ("predictions.json", "soul_map.json")
+_PERSISTENT_DATA_FILES = ("predictions.json", "soul_map.json", "scenario_memory.json")
 
 
 def _ensure_data_dir() -> None:
@@ -1465,6 +1465,52 @@ async def api_message_intel_patterns(limit: int = 20):
     except Exception as e:
         logger.error("Error fetching message intel patterns: %s", e)
         return {"status": "error", "patterns": [], "error": str(e)}
+
+
+@app.get("/api/message-intel/summary")
+async def get_message_summary(
+    start_time: Optional[str] = Query(None),
+    end_time: Optional[str] = Query(None),
+    limit: int = Query(100, gt=0, le=1000)
+) -> Dict[str, Any]:
+    """Get message intelligence summary with time range picker support."""
+    if not _MESSAGE_INTEL_AVAILABLE or _MessageIntelDatabase is None:
+        return {"status": "error", "message": "Message Intel unavailable", "summary": {}}
+    try:
+        db = _MessageIntelDatabase(DATA_DIR)
+        summary = db.get_summary(start_time=start_time, end_time=end_time, limit=limit)
+        return {"status": "success", "summary": summary}
+    except Exception as e:
+        logger.warning("Message Intel summary error: %s", e)
+        return {"status": "error", "message": str(e), "summary": {}}
+
+
+@app.get("/api/message-intel/authors")
+async def get_authors() -> Dict[str, Any]:
+    """Get authors with emoji-weighted influence scores (🔥 > ❤️ > 👍)."""
+    if not _MESSAGE_INTEL_AVAILABLE or _MessageIntelDatabase is None:
+        return {"status": "error", "message": "Message Intel unavailable", "authors": []}
+    try:
+        db = _MessageIntelDatabase(DATA_DIR)
+        authors = db.get_authors()
+        return {"status": "success", "authors": authors}
+    except Exception as e:
+        logger.warning("Message Intel authors error: %s", e)
+        return {"status": "error", "message": str(e), "authors": []}
+
+
+@app.get("/api/message-intel/topics")
+async def get_topics() -> Dict[str, Any]:
+    """Get topics from messages - dedicated bot topic page."""
+    if not _MESSAGE_INTEL_AVAILABLE or _MessageIntelDatabase is None:
+        return {"status": "error", "message": "Message Intel unavailable", "topics": []}
+    try:
+        db = _MessageIntelDatabase(DATA_DIR)
+        topics = db.get_topics()
+        return {"status": "success", "topics": topics}
+    except Exception as e:
+        logger.warning("Message Intel topics error: %s", e)
+        return {"status": "error", "message": str(e), "topics": []}
 
 
 @app.get("/api/indicators/scheduler")
@@ -4291,6 +4337,14 @@ async def dashboard(request: Request):
         logger.error("Error fetching indicators convergence: %s", e)
         indicators_convergence = {"subnets": []}
 
+    # Get trace stats for footer
+    trace_stats = {}
+    try:
+        if _trace_store is not None:
+            trace_stats = _trace_store.get_recent_runs(limit=1)
+    except Exception:
+        pass
+
     context = {
         "subnets": subnets,
         "data_source": source,
@@ -4327,6 +4381,7 @@ async def dashboard(request: Request):
         "scenario_memory": scenario_memory_snapshot,
         "api_indicators_convergence": indicators_convergence,
         "pump_analytics": _safe_pump_analytics(),
+        "trace_stats": trace_stats,
     }
 
     try:
@@ -4648,9 +4703,9 @@ def _ordered_hour_picks(
         # Extract total_score from score dict for template compatibility
         score_val = payload.get("score", 0.0)
         if isinstance(score_val, dict):
-            unified.setdefault("score", score_val.get("total_score", 0.0))
+            unified["score"] = score_val.get("total_score", 0.0)
         else:
-            unified.setdefault("score", score_val)
+            unified["score"] = score_val
         unified.setdefault("confidence", payload.get("confidence", 0.0))
         unified.setdefault("scenario_tags", payload.get("scenario_tags", {}))
         unified.setdefault("signals", payload.get("signals", {}))
@@ -5065,6 +5120,177 @@ def build_mindmap_feed(picks: List[Dict], council_votes: List[Dict], undervalued
     })
     
     return feed
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Trace Store Integration
+# ---------------------------------------------------------------------------
+try:
+    from internal.council.trace_store import get_trace_store, TraceStore
+    _trace_store = get_trace_store()
+except Exception:
+    _trace_store = None
+
+
+def _init_trace_store() -> None:
+    """Initialize trace store and record a boot run."""
+    if _trace_store is None:
+        return
+    try:
+        run_id = _trace_store.create_run(
+            subnet_id=0,
+            subnet_name="system_boot",
+            horizon="system",
+            total_score=0,
+            confidence=0,
+            final_action="boot",
+            final_confidence=0,
+        )
+        logger.info("Trace store initialized, boot run: %s", run_id)
+    except Exception as exc:
+        logger.warning("Could not initialize trace store: %s", exc)
+
+
+# Initialize on startup
+try:
+    _init_trace_store()
+except Exception:
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Trace API Endpoints
+# ---------------------------------------------------------------------------
+@app.get("/api/trace/stats")
+async def api_trace_stats() -> Dict[str, Any]:
+    """Get trace store statistics with JSON-serializable response."""
+    if _trace_store is None:
+        return {"error": "trace store unavailable", "council_run_count": 0, "signal_record_count": 0}
+    try:
+        conn = _trace_store._get_connection()
+        cursor = conn.cursor()
+        stats = {}
+        for table in ["council_run", "signal_record", "decision_record", 
+                      "judge_verdict", "learning_update", "evidence_record"]:
+            cursor.execute(f"SELECT COUNT(*) as cnt FROM {table}")
+            row = cursor.fetchone()
+            stats[f"{table}_count"] = int(row["cnt"]) if row else 0
+        cursor.execute("SELECT MAX(created_at) as latest FROM council_run")
+        row = cursor.fetchone()
+        stats["latest_run"] = str(row["latest"]) if row and row["latest"] else None
+        return stats
+    except Exception as e:
+        logger.warning("Trace stats error: %s", e)
+        return {"error": str(e)}
+
+
+@app.get("/api/trace")
+async def api_trace_list(limit: int = Query(100, gt=0, le=1000)) -> Dict[str, Any]:
+    """Get list of recent council runs."""
+    if _trace_store is None:
+        return {"error": "trace store unavailable", "runs": []}
+    try:
+        conn = _trace_store._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM council_run ORDER BY created_at DESC LIMIT ?", (limit,))
+        rows = cursor.fetchall()
+        runs = [{"id": dict(r)["id"], "created_at": str(dict(r)["created_at"]), "status": dict(r).get("status", "unknown")} for r in rows]
+        return {"runs": runs, "count": len(runs)}
+    except Exception as e:
+        logger.warning("Trace list error: %s", e)
+        return {"error": str(e), "runs": []}
+
+
+@app.get("/api/trace/{run_id}")
+async def api_trace_get(run_id: str) -> Dict[str, Any]:
+    """Get specific trace by run ID."""
+    if _trace_store is None:
+        return {"error": "trace store unavailable"}
+    try:
+        conn = _trace_store._get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM council_run WHERE id = ?", (run_id,))
+        row = cursor.fetchone()
+        if row is None:
+            return {"error": "run not found"}
+        result = {k: (str(v) if isinstance(v, datetime) else v) for k, v in dict(row).items()}
+        return result
+    except Exception as e:
+        logger.warning("Trace get error: %s", e)
+        return {"error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Projection API Endpoints
+# ---------------------------------------------------------------------------
+@app.post("/api/projection/rebuild")
+async def api_projection_rebuild() -> Dict[str, Any]:
+    """Trigger soul_map rebuild from trace."""
+    try:
+        from internal.council.projection import rebuild_soul_map
+        result = rebuild_soul_map()
+        return {"status": "rebuilt", "data": result}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+@app.get("/api/projection/status")
+async def api_projection_status() -> Dict[str, Any]:
+    """Get projection status."""
+    try:
+        from internal.council.projection import get_soul_map_projection
+        soul_map = get_soul_map_projection()
+        return {
+            "last_updated": soul_map.get("last_updated", "never"),
+            "expert_weights": soul_map.get("expert_weights", {}),
+            "total_records": soul_map.get("performance_history", {}).get("total_records", 0),
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Scout API Endpoints
+# ---------------------------------------------------------------------------
+@app.post("/api/scout/query")
+async def api_scout_query(request: Request) -> Dict[str, Any]:
+    """Submit a scout query."""
+    try:
+        body = await request.json()
+        query = body.get("query", "")
+        sources = body.get("sources")
+        time_window = body.get("time_window", "24h")
+        
+        if not query:
+            return {"error": "query required"}
+        
+        from internal.council.scout import search_and_store
+        findings = search_and_store(query, sources=sources, limit=10)
+        
+        return {"status": "ok", "query": query, "findings": findings}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.get("/api/scout/results/{query_id}")
+async def api_scout_results(query_id: str) -> List[Dict[str, Any]]:
+    """Get scout results (stub - returns empty for now)."""
+    return []
+
+
+@app.get("/api/scout/search")
+async def api_scout_search(q: str = "", sources: str = "") -> Dict[str, Any]:
+    """One-shot scout search."""
+    if not q:
+        return {"error": "q parameter required"}
+    
+    try:
+        from internal.council.scout import search_and_store
+        source_list = [s.strip() for s in sources.split(",") if s.strip()] if sources else None
+        findings = search_and_store(q, sources=source_list, limit=10)
+        return {"query": q, "findings": findings}
+    except Exception as exc:
+        return {"error": str(exc)}
 
 
 # ---------------------------------------------------------------------------

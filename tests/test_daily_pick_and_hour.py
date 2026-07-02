@@ -35,6 +35,7 @@ def test_top_pick_hour_returns_picks_list(client):
         assert "subnet" in pick
         assert set(pick["subnet"].keys()) >= {"netuid", "name", "symbol"}
         assert "score" in pick
+        assert isinstance(pick["score"], (int, float)), "score must be a number, not a dict"
         assert "confidence" in pick
         assert "expert_contributions" in pick
         assert "scenario_tags" in pick

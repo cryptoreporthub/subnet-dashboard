@@ -165,12 +165,27 @@ def _nudge_weights(correct: bool, expert: Optional[str]) -> None:
     if expert not in weights:
         return
 
+    old_weight = weights[expert]
     weights[expert] = max(
         _LEARNING_MIN_WEIGHT,
         min(_LEARNING_MAX_WEIGHT, weights[expert] + delta),
     )
     weights[expert] = round(weights[expert], 4)
     save_weights(weights)
+    
+    # Log to trace store
+    try:
+        from internal.council.trace_store import get_trace_store
+        store = get_trace_store()
+        store.add_learning_update(
+            run_id=None,
+            expert=expert,
+            old_weight=old_weight,
+            new_weight=weights[expert],
+            reason="correct" if correct else "wrong",
+        )
+    except Exception:
+        pass
 
 def resolve_prediction(
     prediction: Dict[str, Any],
@@ -198,6 +213,20 @@ def resolve_prediction(
     if expert:
         prediction["expert"] = expert
         _nudge_weights(correct, expert)
+
+    # Add conviction phase fields to resolved prediction
+    try:
+        from internal.council.predictions import get_conviction_phase, get_phase_info
+        confidence = float(prediction.get("confidence", 0) or 0)
+        if confidence == 0:
+            # Derive from predicted_pct magnitude
+            confidence = min(100, abs(float(prediction.get("predicted_pct", 0) or 0)) * 10)
+        phase = get_conviction_phase(confidence)
+        prediction["conviction_phase"] = phase
+        prediction["phase_confidence"] = round(confidence, 1)
+        prediction["phase_changed_at"] = now
+    except Exception:
+        pass
 
     # Record scenario in regime-aware memory for learning. Outcomes are wired
     # back to the originating scenario record (created when the prediction was
@@ -448,6 +477,24 @@ def resolve_due_predictions(
             # Don't persist the transient enrichment keys.
             pred.pop("_rsi_signal", None)
             pred.pop("_volume_signal", None)
+            # Record outcome in outcomes.json for learning loop
+            try:
+                from internal.council.predictions import record_outcome, get_conviction_phase
+                confidence = float(pred.get("confidence", 0) or 0)
+                if confidence == 0:
+                    confidence = min(100, abs(float(pred.get("predicted_pct", 0) or 0)) * 10)
+                phase = get_conviction_phase(confidence)
+                record_outcome(
+                    netuid=int(uid),
+                    prediction_id=pred.get("id", ""),
+                    outcome=pred.get("outcome", "miss"),
+                    actual_pct=pred.get("actual_pct", 0),
+                    confidence=confidence,
+                    phase=phase,
+                    expert=pred.get("expert"),
+                )
+            except Exception:
+                pass
             resolved.append(pred)
             resolved_now.append(pred)
         elif _is_expired(pred, resolve_at, now):
