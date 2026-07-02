@@ -4641,7 +4641,12 @@ def _ordered_hour_picks(
         unified.setdefault("netuid", subnet.get("netuid", sn.get("netuid")))
         unified.setdefault("name", subnet.get("name", sn.get("name")))
         unified.setdefault("symbol", subnet.get("symbol", sn.get("symbol")))
-        unified.setdefault("score", payload.get("score", 0.0))
+        # Extract total_score from score dict for template compatibility
+        score_val = payload.get("score", 0.0)
+        if isinstance(score_val, dict):
+            unified.setdefault("score", score_val.get("total_score", 0.0))
+        else:
+            unified.setdefault("score", score_val)
         unified.setdefault("confidence", payload.get("confidence", 0.0))
         unified.setdefault("scenario_tags", payload.get("scenario_tags", {}))
         unified.setdefault("signals", payload.get("signals", {}))

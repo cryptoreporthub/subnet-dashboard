@@ -29,7 +29,7 @@ def select_hourly_pick(
     if not subnets:
         return {
             "subnet": None,
-            "score": 0.0,
+            "score": {"total_score": 0.0, "confidence": 0.0, "expert_contributions": {}, "scenario_tags": {}},
             "confidence": 0.0,
             "expert_contributions": {},
             "scenario_tags": {},
@@ -73,7 +73,7 @@ def select_hourly_pick(
             "name": candidate.get("name"),
             "symbol": candidate.get("symbol"),
         },
-        "score": score_payload["total_score"],
+        "score": score_payload,
         "confidence": score_payload["confidence"],
         "expert_contributions": score_payload["expert_contributions"],
         "scenario_tags": score_payload["scenario_tags"],
