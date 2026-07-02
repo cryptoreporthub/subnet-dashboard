@@ -37,9 +37,17 @@ import statistics
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
+from internal.council.weights import load_weights, save_weights
 from internal.file_utils import ensure_data_dir
 
 logger = logging.getLogger(__name__)
+
+# Learning-rate constants, kept in sync with resolver.py so both paths
+# (prediction-resolution and pick-outcome) move weights at similar pace.
+_LEARNING_DELTA_CORRECT = 0.02
+_LEARNING_DELTA_WRONG = -0.03
+_LEARNING_MIN_WEIGHT = 0.1
+_LEARNING_MAX_WEIGHT = 2.0
 
 PICK_HISTORY_PATH = os.environ.get("PICK_HISTORY_PATH", os.path.join("data", "pick_history.json"))
 
@@ -160,6 +168,53 @@ def _trigger_reason(sn: Dict[str, Any], indicators: Optional[Dict[str, Any]] = N
     return " · ".join(reasons[:2])
 
 
+def _nudge_weights_from_pick_outcome(
+    success: bool, expert_contributions: Dict[str, float]
+) -> None:
+    """Nudge Council expert weights based on a finalized pick outcome.
+
+    Contribution-weighted update: an expert that scored 0.77 gets ~3× the
+    nudge of one that scored 0.25, because the delta is scaled by the
+    contribution value (capped at 1.0).
+    """
+    if not expert_contributions:
+        return
+    weights = load_weights()
+    changed = False
+    for expert, contrib in expert_contributions.items():
+        if expert not in weights:
+            continue
+        contrib = max(0.0, min(1.0, float(contrib)))
+        if contrib <= 0.0:
+            continue
+        # Scale the base delta by the expert's contribution to the pick.
+        delta = (_LEARNING_DELTA_CORRECT if success else _LEARNING_DELTA_WRONG) * contrib
+        old_weight = weights[expert]
+        new_weight = max(
+            _LEARNING_MIN_WEIGHT,
+            min(_LEARNING_MAX_WEIGHT, old_weight + delta),
+        )
+        new_weight = round(new_weight, 4)
+        if abs(new_weight - old_weight) > 0.0001:
+            weights[expert] = new_weight
+            changed = True
+            # Log to trace store.
+            try:
+                from internal.council.trace_store import get_trace_store
+                store = get_trace_store()
+                store.add_learning_update(
+                    run_id=None,
+                    expert=expert,
+                    old_weight=old_weight,
+                    new_weight=new_weight,
+                    reason=f"pick_{'win' if success else 'loss'}_contrib_{contrib:.2f}",
+                )
+            except Exception:
+                pass
+    if changed:
+        save_weights(weights)
+
+
 def _finalize(
     active: Dict[str, Any],
     subnets: List[Dict[str, Any]],
@@ -178,6 +233,16 @@ def _finalize(
     rank_returns = list(returns)
     percentile = _percentile_rank(absolute_return, rank_returns)
     success = absolute_return > median_return
+
+    # Feed the outcome back into the learning loop so the experts that drove
+    # this pick are nudged up (success) or down (failure) proportionally to
+    # their contribution.
+    expert_contributions = active.get("expert_contributions") or {}
+    try:
+        _nudge_weights_from_pick_outcome(success, expert_contributions)
+    except Exception as exc:
+        logger.warning("_nudge_weights_from_pick_outcome failed: %s", exc)
+
     return {
         "netuid": active.get("netuid"),
         "name": active.get("name"),
@@ -265,12 +330,16 @@ def record_pick(
 
     entry_price = current_price if current_price > 0 else 1.0
     reason = _trigger_reason(sn, indicators)
+    # Persist the expert contributions that drove this pick so _finalize can
+    # later nudge each expert proportionally to their contribution.
+    expert_contributions = pick.get("expert_contributions") or {}
     store["active"] = {
         "netuid": netuid,
         "name": name,
         "selected_at": now_iso,
         "entry_price": round(entry_price, 6),
         "trigger_reason": reason,
+        "expert_contributions": expert_contributions,
         "entry_prices_snapshot": snapshot,
     }
     store["history"] = history
