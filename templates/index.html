@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SimiVision — Subnet Dashboard</title>
 
-  <!-- Premium typography: Inter (body) + JetBrains Mono (data) + Space Grotesk (display) -->
+  <!-- Premium typography: Orbitron (headings) + Rajdhani (body/data) + JetBrains Mono (mono/numbers) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Existing design system (cards, KPI strips, conviction rings, tables, tabs, trail) -->
   <link rel="stylesheet" href="/static/css/style.css">
@@ -16,13 +16,13 @@
   <!-- Chart.js for sparklines + radar visualizations -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
-  <!-- Premium styling layer: exact dark-green→black gradient + #00ff88/#00cc66 accents -->
+  <!-- Premium styling layer: cyberpunk neon gradient + #00ff41 green, #00f0ff cyan, #ff0099 pink accents -->
   <style>
     :root {
-      --premium-green-bright: #00ff88;
-      --premium-green: #00cc66;
-      --premium-bg-top: #0a1a0a;
-      --premium-bg-bottom: #000000;
+      --premium-green-bright: #00ff41;
+      --premium-green: #00ff41;
+      --premium-bg-top: #05070a;
+      --premium-bg-bottom: #05070a;
     }
 
     html, body {
@@ -32,13 +32,13 @@
     }
 
     body {
-      font-family: 'Inter', system-ui, sans-serif;
-      color: #e9f7ef;
+      font-family: 'Rajdhani', system-ui, sans-serif;
+      color: #e6f1ff;
       background-color: var(--premium-bg-bottom);
-      /* Dark green (#0a1a0a) to black (#000000) gradient with subtle green glow */
+      /* Cyberpunk neon: midnight black (#05070a) with neon green (#00ff41) accents gradient with subtle green glow */
       background-image:
-        radial-gradient(circle at 50% -10%, rgba(0, 255, 136, 0.10) 0%, transparent 55%),
-        radial-gradient(circle at 0% 100%, rgba(0, 204, 102, 0.06) 0%, transparent 45%),
+        radial-gradient(circle at 50% -10%, rgba(0, 255, 65, 0.10) 0%, transparent 55%),
+        radial-gradient(circle at 0% 100%, rgba(0, 240, 255, 0.06) 0%, transparent 45%),
         radial-gradient(circle at 100% 100%, rgba(0, 0, 0, 0.9) 0%, transparent 50%),
         linear-gradient(180deg, var(--premium-bg-top) 0%, var(--premium-bg-bottom) 100%);
       background-attachment: fixed;
@@ -46,67 +46,67 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    /* Premium accent overrides — green highlights #00ff88 / #00cc66 */
+    /* Premium accent overrides — green highlights #00ff41 / #00ff41 */
     .accent-bright { color: var(--premium-green-bright); }
     .accent-primary { color: var(--premium-green); }
     a { color: var(--premium-green-bright); }
 
     .section-label { color: var(--premium-green-bright); }
-    .live-pill { color: var(--premium-green-bright); background: rgba(0, 255, 136, 0.08); border-color: rgba(0, 255, 136, 0.25); }
-    .live-dot { background: var(--premium-green-bright); box-shadow: 0 0 10px rgba(0, 255, 136, 0.7); }
+    .live-pill { color: var(--premium-green-bright); background: rgba(0, 255, 65, 0.08); border-color: rgba(0, 255, 65, 0.35); }
+    .live-dot { background: var(--premium-green-bright); box-shadow: 0 0 10px rgba(0, 255, 65, 0.7); }
     .logo-mark { background: linear-gradient(135deg, var(--premium-green-bright) 0%, var(--premium-green) 100%); }
     .logo-text span { color: var(--premium-green-bright); }
     .src-tag b { color: var(--premium-green-bright); }
 
     /* Card-based layout with subtle green glows */
-    .card { background: rgba(12, 26, 17, 0.72); backdrop-filter: blur(10px); border: 1px solid rgba(0, 255, 136, 0.12); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); }
-    .card:hover { border-color: rgba(0, 255, 136, 0.35); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.65), 0 0 24px rgba(0, 255, 136, 0.10); }
+    .card { background: rgba(13, 17, 23, 0.72); backdrop-filter: blur(10px); border: 1px solid rgba(26, 31, 46, 1.0); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); }
+    .card:hover { border-color: rgba(0, 255, 65, 0.45); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.65), 0 0 24px rgba(0, 255, 65, 0.10); }
 
     .hero-card {
       background:
-        linear-gradient(180deg, rgba(0, 255, 136, 0.06) 0%, transparent 40%),
-        rgba(12, 26, 17, 0.78);
+        linear-gradient(180deg, rgba(0, 255, 65, 0.06) 0%, transparent 40%),
+        rgba(13, 17, 23, 0.78);
       border-top: 2px solid var(--premium-green-bright);
-      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55), 0 0 36px rgba(0, 255, 136, 0.12);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55), 0 0 36px rgba(26, 31, 46, 1.0);
     }
-    .hero-card::before { background: linear-gradient(180deg, rgba(0, 255, 136, 0.08) 0%, transparent 100%); }
-    .hero-audit { background: rgba(0, 255, 136, 0.08); border-color: rgba(0, 255, 136, 0.25); color: var(--premium-green-bright); }
+    .hero-card::before { background: linear-gradient(180deg, rgba(0, 255, 65, 0.08) 0%, transparent 100%); }
+    .hero-audit { background: rgba(0, 255, 65, 0.08); border-color: rgba(0, 255, 65, 0.35); color: var(--premium-green-bright); }
 
-    .pick-card { background: rgba(12, 26, 17, 0.72); border: 1px solid rgba(0, 255, 136, 0.12); }
+    .pick-card { background: rgba(13, 17, 23, 0.72); border: 1px solid rgba(26, 31, 46, 1.0); }
     .pick-card::before { background: linear-gradient(90deg, var(--premium-green), var(--premium-green-bright)); }
-    .pick-card:hover { border-color: rgba(0, 255, 136, 0.35); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.65), 0 0 24px rgba(0, 255, 136, 0.10); }
+    .pick-card:hover { border-color: rgba(0, 255, 65, 0.45); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.65), 0 0 24px rgba(0, 255, 65, 0.10); }
 
-    .kpi-cell { background: rgba(8, 18, 12, 0.85); border: 1px solid rgba(0, 255, 136, 0.10); }
+    .kpi-cell { background: rgba(13, 17, 23, 0.85); border: 1px solid rgba(0, 255, 65, 0.10); }
     .kpi-cell .v { color: var(--premium-green-bright); }
 
-    .ind-cell { background: rgba(8, 18, 12, 0.85); border: 1px solid rgba(0, 255, 136, 0.10); }
-    .radar-item { background: rgba(8, 18, 12, 0.85); border: 1px solid rgba(0, 255, 136, 0.10); }
+    .ind-cell { background: rgba(13, 17, 23, 0.85); border: 1px solid rgba(0, 255, 65, 0.10); }
+    .radar-item { background: rgba(13, 17, 23, 0.85); border: 1px solid rgba(0, 255, 65, 0.10); }
 
-    .tab-btn.active { color: var(--premium-green-bright); border-bottom-color: var(--premium-green-bright); text-shadow: 0 0 12px rgba(0, 255, 136, 0.5); }
+    .tab-btn.active { color: var(--premium-green-bright); border-bottom-color: var(--premium-green-bright); text-shadow: 0 0 12px rgba(0, 255, 65, 0.5); }
     .collapsible-toggle { color: var(--premium-green-bright); }
     .flow-arrow { color: var(--premium-green-bright); }
     .reasons li::before { color: var(--premium-green-bright); }
 
     /* Color-coded conviction bars: red / gold / lime / cyan-green */
-    .conviction-fill.tier-red   { background: linear-gradient(90deg, #7f1d1d, #f43f5e); }
-    .conviction-fill.tier-gold  { background: linear-gradient(90deg, #92400e, #f5b942); }
-    .conviction-fill.tier-lime  { background: linear-gradient(90deg, #3f6212, #84cc16); }
-    .conviction-fill.tier-cyan  { background: linear-gradient(90deg, #00cc66, #00ff88); }
+    .conviction-fill.tier-red   { background: linear-gradient(90deg, #7f1d1d, #ff3366); }
+    .conviction-fill.tier-gold  { background: linear-gradient(90deg, #92400e, #ff00ff); }
+    .conviction-fill.tier-lime  { background: linear-gradient(90deg, #006622, #00ff41); }
+    .conviction-fill.tier-cyan  { background: linear-gradient(90deg, #00ff41, #00ff41); }
 
     /* Premium table styling */
-    table.tbl th { color: #4a6b5c; border-bottom-color: rgba(0, 255, 136, 0.18); }
-    table.tbl td { border-bottom-color: rgba(0, 255, 136, 0.06); }
-    table.tbl tr:hover td { background: rgba(0, 255, 136, 0.05); }
+    table.tbl th { color: #1a1f2e; border-bottom-color: rgba(0, 240, 255, 0.18); }
+    table.tbl td { border-bottom-color: rgba(0, 255, 65, 0.06); }
+    table.tbl tr:hover td { background: rgba(0, 255, 65, 0.05); }
 
     .weight-fill { background: linear-gradient(90deg, var(--premium-green), var(--premium-green-bright)); }
-    .tmap-tile { background: rgba(0, 255, 136, 0.08); border-color: rgba(0, 255, 136, 0.18); color: var(--premium-green-bright); }
-    .tmap-tile.neg { background: rgba(244, 63, 94, 0.08); border-color: rgba(244, 63, 94, 0.3); color: #f43f5e; }
+    .tmap-tile { background: rgba(0, 255, 65, 0.08); border-color: rgba(0, 240, 255, 0.18); color: var(--premium-green-bright); }
+    .tmap-tile.neg { background: rgba(255, 51, 102, 0.08); border-color: rgba(255, 51, 102, 0.3); color: #ff3366; }
 
-    .st-dot { background: var(--premium-green-bright); box-shadow: 0 0 8px rgba(0, 255, 136, 0.7); }
+    .st-dot { background: var(--premium-green-bright); box-shadow: 0 0 8px rgba(0, 255, 65, 0.7); }
     footer.status { background: rgba(0, 0, 0, 0.92); }
-    .badge-audit-pending .ap-dot { background: #f5b942; }
+    .badge-audit-pending .ap-dot { background: #ff00ff; }
 
-    .glow-text { text-shadow: 0 0 14px rgba(0, 255, 136, 0.45); }
+    .glow-text { text-shadow: 0 0 14px rgba(0, 255, 65, 0.55); }
   </style>
 </head>
 
@@ -136,7 +136,7 @@
 
     {% if render_error %}
     <div class="card card-muted mt-4" style="border-color: rgba(244,63,94,0.35);">
-      <div class="section-label" style="color:#f43f5e;">RENDER NOTICE</div>
+      <div class="section-label" style="color:#ff3366;">RENDER NOTICE</div>
       <div class="section-sub">A section failed to compute; showing safe defaults. {{ render_error }}</div>
     </div>
     {% endif %}
@@ -851,8 +851,8 @@
           <div class="learning-head">
             <div class="acc-ring">
               <svg width="92" height="92" viewBox="0 0 92 92">
-                <circle cx="46" cy="46" r="40" fill="none" stroke="rgba(0,255,136,0.10)" stroke-width="8"></circle>
-                <circle cx="46" cy="46" r="40" fill="none" stroke="#00ff88" stroke-width="8" stroke-linecap="round"
+                <circle cx="46" cy="46" r="40" fill="none" stroke="rgba(0,255,65,0.10)" stroke-width="8"></circle>
+                <circle cx="46" cy="46" r="40" fill="none" stroke="#00ff41" stroke-width="8" stroke-linecap="round"
                         stroke-dasharray="251.2" stroke-dashoffset="{{ (251.2 - 251.2 * (lm.accuracy|default(0)) / 100)|round(1) }}" transform="rotate(-90 46 46)"></circle>
               </svg>
               <div class="acc-val">{{ "%.0f"|format((lm.accuracy|default(0))|float) }}%</div>
@@ -914,8 +914,8 @@
           <div class="chat-box">
             <div id="chatLog" class="chat-log" style="max-height:320px; overflow-y:auto; padding:8px 0;"></div>
             <div style="display:flex; gap:8px; margin-top:12px;">
-              <input id="chatInput" type="text" placeholder="Ask the council about any subnet…" style="flex:1; background:rgba(8,18,12,0.85); border:1px solid rgba(0,255,136,0.18); border-radius:8px; padding:10px 12px; color:#e9f7ef; font-family:'Inter',sans-serif;">
-              <button id="chatSend" class="live-pill" style="cursor:pointer; border:1px solid rgba(0,255,136,0.35);">SEND</button>
+              <input id="chatInput" type="text" placeholder="Ask the council about any subnet…" style="flex:1; background:rgba(13,17,23,0.85); border:1px solid rgba(0,240,255,0.18); border-radius:8px; padding:10px 12px; color:#e6f1ff; font-family:'Rajdhani',sans-serif;">
+              <button id="chatSend" class="live-pill" style="cursor:pointer; border:1px solid rgba(0,255,65,0.35);">SEND</button>
             </div>
             <div id="chatMeta" class="chat-meta">LLM: ready · mindmap context loaded</div>
           </div>
