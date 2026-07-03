@@ -628,6 +628,17 @@ def _fetch_rotation_token_prices() -> Dict[str, Dict[str, Any]]:
 # SimiVision chat helpers (Phase 4: LLM interaction with mindmap context)
 # ---------------------------------------------------------------------------
 
+def _safe_load_json(*path_parts: str, default: Any = None) -> Any:
+    """Safely load a JSON file from path parts, returning *default* on failure."""
+    try:
+        path = os.path.join(*path_parts)
+        if os.path.exists(path):
+            with open(path) as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return default
+
 def _build_simivision_prompt(message: str, context: Dict[str, Any]) -> str:
     """Build a prompt that fuses the user message with live SimiVision + soul_map context."""
     top = context.get("simivision_picks", [])
@@ -638,8 +649,34 @@ def _build_simivision_prompt(message: str, context: Dict[str, Any]) -> str:
         f"rec={p.get('recommendation')}"
         for p in top
     ) or "No picks available"
+
     weights = context.get("expert_weights", {})
     weights_str = ", ".join(f"{k}={v}" for k, v in weights.items()) or "none"
+
+    # Include recent predictions context
+    predictions = context.get("predictions", [])
+    preds_str = "; ".join(
+        f"{p.get('name')} (SN{p.get('netuid')}) {p.get('direction')} {p.get('predicted_pct')}% "
+        f"in {p.get('horizon_hours')}h [{p.get('status')}]"
+        for p in predictions[:8]
+    ) or "No active predictions"
+
+    # Include daily pick context
+    daily_pick = context.get("daily_pick", {})
+    daily_str = (
+        f"Daily pick: {daily_pick.get('name', 'N/A')} (SN{daily_pick.get('netuid', 'N/A')}) "
+        f"conviction={daily_pick.get('conviction', 'N/A')} rec={daily_pick.get('recommendation', 'N/A')}"
+        if daily_pick else "No daily pick available"
+    )
+
+    soul_map = context.get("soul_map", {})
+    perf = soul_map.get("performance_history", {})
+    perf_str = (
+        f"Council accuracy={perf.get('accuracy', 'N/A')} "
+        f"total_records={perf.get('total_records', 0)} "
+        f"correct={perf.get('correct', 0)} wrong={perf.get('wrong', 0)}"
+    )
+
     return (
         "You are SimiVision, an AI analyst for Bittensor subnets. "
         "Use the live subnet snapshot and the Council's learned expert weights below.\n\n"
@@ -647,20 +684,29 @@ def _build_simivision_prompt(message: str, context: Dict[str, Any]) -> str:
         f"Top SimiVision picks: {picks_str}\n"
         f"Source: {context.get('source', 'unknown')}\n"
         f"Council expert weights (self-learning loop): {weights_str}\n"
-        "Answer concisely and tie the reasoning back to the picks and expert weights."
+        f"Council performance: {perf_str}\n"
+        f"Active predictions: {preds_str}\n"
+        f"{daily_str}\n"
+        "Answer concisely and tie the reasoning back to the picks, predictions, and expert weights."
     )
 
 
 def _call_llm(prompt: str, message: str, context: Dict[str, Any]) -> tuple[str, bool]:
     """Call an LLM API when configured, otherwise fall back to the local explainer.
 
-    Returns (reply, llm_used). The local fallback keeps the endpoint fully
-    functional in environments without an LLM API key while still integrating
-    the mindmap / self-learning context.
+    Falls back through: Chutes AI (preferred) → OpenAI-compatible fallback
+    → local explainer → canned reply.
+
+    Returns (reply, llm_used).
     """
-    api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("LLM_API_KEY")
-    base_url = os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1")
-    model = os.environ.get("LLM_MODEL", "gpt-4o-mini")
+    # Prefer Chutes AI env vars
+    api_key = (
+        os.environ.get("CHUTES_API_KEY")
+        or os.environ.get("OPENAI_API_KEY")
+        or os.environ.get("LLM_API_KEY")
+    )
+    base_url = os.environ.get("CHUTES_BASE_URL") or os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1")
+    model = os.environ.get("CHUTES_MODEL") or os.environ.get("LLM_MODEL", "gpt-4o-mini")
 
     if api_key:
         try:
@@ -694,8 +740,8 @@ def _call_llm(prompt: str, message: str, context: Dict[str, Any]) -> tuple[str, 
     except Exception as exc:
         logger.warning("Local explainer failed (%s); returning canned reply", exc)
         return (
-            "SimiVision is online. I can explain top subnet picks, compare APY, "
-            "or analyze market trends. What would you like to know?",
+            "SimiVision's AI brain is resting — try again later. "
+            "In the meantime, you can explore subnet picks and APY data on the dashboard.",
             False,
         )
 
@@ -1564,9 +1610,10 @@ async def api_simivision_chat(request: Request):
     Pipeline (Phase 4):
       1. Fetch subnet data
       2. Load soul_map.json for learning context
-      3. Build prompt with context
-      4. Call LLM API (falls back to local explainer when no key is set)
-      5. Return response with mindmap context
+      3. Load predictions and daily picks for enriched context
+      4. Build prompt with context
+      5. Call LLM API (falls back to local explainer when no key is set)
+      6. Return response with mindmap context
     """
     try:
         payload = await request.json()
@@ -1584,7 +1631,12 @@ async def api_simivision_chat(request: Request):
     stats = engine.get_stats()
     expert_weights = stats.get("expert_weights", {})
 
-    # 3. Build prompt with context
+    # 3. Load predictions and daily picks for enriched context
+    predictions = _safe_load_json("data", "predictions.json", default={}).get("predictions", [])
+    daily_pick_data = _safe_load_json("data", "daily_picks.json", default=[{}])
+    daily_pick = daily_pick_data[0] if daily_pick_data else {}
+
+    # 4. Build prompt with context
     top = simivision.get("top", [])
     context = {
         "source": source,
@@ -1595,13 +1647,15 @@ async def api_simivision_chat(request: Request):
         },
         "expert_weights": expert_weights,
         "soul_map": soul_map,
+        "predictions": predictions,
+        "daily_pick": daily_pick,
     }
     prompt = _build_simivision_prompt(message, context)
 
-    # 4. Call LLM API (with graceful local fallback)
+    # 5. Call LLM API (with graceful local fallback)
     reply, llm_used = _call_llm(prompt, message, context)
 
-    # 5. Return response with mindmap context
+    # 6. Return response with mindmap context
     return {
         "status": "success",
         "data": {
