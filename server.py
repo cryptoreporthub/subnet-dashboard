@@ -658,9 +658,14 @@ def _call_llm(prompt: str, message: str, context: Dict[str, Any]) -> tuple[str, 
     functional in environments without an LLM API key while still integrating
     the mindmap / self-learning context.
     """
-    api_key = os.environ.get("OPENAI_API_KEY") or os.environ.get("LLM_API_KEY")
-    base_url = os.environ.get("LLM_BASE_URL", "https://api.openai.com/v1")
-    model = os.environ.get("LLM_MODEL", "gpt-4o-mini")
+    # Prefer Chutes AI env vars
+    api_key = (
+        os.environ.get("CHUTES_API_KEY")
+        or os.environ.get("OPENAI_API_KEY")
+        or os.environ.get("LLM_API_KEY")
+    )
+    base_url = os.environ.get("CHUTES_BASE_URL") or os.environ.get("LLM_BASE_URL", "https://api.chutes.ai/v1")
+    model = os.environ.get("CHUTES_MODEL") or os.environ.get("LLM_MODEL", "deepseek-ai/DeepSeek-V3.2-TEE")
 
     if api_key:
         try:
@@ -1513,14 +1518,14 @@ def api_predictions_resolver_run():
 
 @app.post("/api/simivision/chat")
 async def api_simivision_chat(request: Request):
-    """LLM interaction endpoint for SimiVision data.
+    """LLM chat endpoint for SimiVision powered by Chutes AI.
 
-    Pipeline (Phase 4):
-      1. Fetch subnet data
-      2. Load soul_map.json for learning context
-      3. Build prompt with context
-      4. Call LLM API (falls back to local explainer when no key is set)
-      5. Return response with mindmap context
+    Accepts a JSON body with a ``message`` field, builds a live-subnet prompt
+    from SimiVision context, and calls the Chutes API (``deepseek-ai/DeepSeek-V3.2-TEE``).
+    Falls back gracefully when Chutes is unreachable.
+
+    Returns ``{"reply": "...", "model": "chutes/deepseek-v3.2-tee"}`` on success
+    or an error shape on failure.
     """
     try:
         payload = await request.json()
@@ -1528,49 +1533,55 @@ async def api_simivision_chat(request: Request):
         payload = {}
     message = (payload or {}).get("message", "") or ""
 
-    # 1. Fetch subnet data
-    subnets, source = _get_subnets_with_source()
-    simivision = _safe_simivision_payload()["data"]
+    if not message.strip():
+        return {"reply": "Please provide a question in the `message` field.", "model": ""}
 
-    # 2. Load soul_map.json for learning context
-    engine = LearningEngine()
-    soul_map = engine.load_soul_map()
-    stats = engine.get_stats()
-    expert_weights = stats.get("expert_weights", {})
+    try:
+        # 1. Fetch subnet data
+        subnets, source = _get_subnets_with_source()
+        simivision = _safe_simivision_payload()["data"]
 
-    # 3. Build prompt with context
-    top = simivision.get("top", [])
-    context = {
-        "source": source,
-        "simivision_picks": top,
-        "market_overview": {
-            "count": simivision.get("meta", {}).get("count", len(subnets)),
-            "updated_at": simivision.get("meta", {}).get("updated_at"),
-        },
-        "expert_weights": expert_weights,
-        "soul_map": soul_map,
-    }
-    prompt = _build_simivision_prompt(message, context)
+        # 2. Load soul_map.json for learning context
+        engine = LearningEngine()
+        soul_map = engine.load_soul_map()
+        stats = engine.get_stats()
+        expert_weights = stats.get("expert_weights", {})
 
-    # 4. Call LLM API (with graceful local fallback)
-    reply, llm_used = _call_llm(prompt, message, context)
+        # 3. Load predictions and daily picks for enriched context
+        predictions = _safe_load_json("data", "predictions.json", default={}).get("predictions", [])
+        daily_pick_data = _safe_load_json("data", "daily_picks.json", default=[{}])
+        daily_pick = daily_pick_data[0] if daily_pick_data else {}
 
-    # 5. Return response with mindmap context
-    return {
-        "status": "success",
-        "data": {
-            "reply": reply,
-            "message": message,
-            "llm_used": llm_used,
-            "mindmap_context": {
-                "source": source,
-                "top_picks": top,
-                "expert_weights": expert_weights,
-                "learning_records": stats.get("total_records", 0),
+        # 4. Build prompt with context
+        top = simivision.get("top", [])
+        context = {
+            "source": source,
+            "simivision_picks": top,
+            "market_overview": {
+                "count": simivision.get("meta", {}).get("count", len(subnets)),
                 "updated_at": simivision.get("meta", {}).get("updated_at"),
             },
-        },
-    }
+            "expert_weights": expert_weights,
+            "soul_map": soul_map,
+            "predictions": predictions,
+            "daily_pick": daily_pick,
+        }
+        prompt = _build_simivision_prompt(message, context)
+
+        # 5. Call LLM API (with graceful local fallback)
+        reply, llm_used = _call_llm(prompt, message, context)
+
+        model_tag = os.environ.get("CHUTES_MODEL", "deepseek-ai/DeepSeek-V3.2-TEE")
+        display_model = f"chutes/{model_tag.split('/')[-1].lower()}" if llm_used else "local-fallback"
+
+        return {"reply": reply, "model": display_model}
+
+    except Exception as exc:
+        logger.error("SimiVision chat failed: %s", exc, exc_info=True)
+        return {
+            "reply": "SimiVision is temporarily unavailable. The Chutes AI service may be unreachable. Please try again shortly.",
+            "model": "",
+        }
 
 
 # ============================================================================

@@ -36,6 +36,17 @@ jobs:
           else
             echo "data_volume already has ${EXISTING} volume(s) in sjc; skipping creation."
           fi
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Set Chutes API secrets
+        run: |
+          flyctl secrets set \
+            CHUTES_API_KEY="cpk_f0d45191630e4ad9ade41d1e24d98e27.f69c1db28dbc537696ca25bd39e6836e.EWMHe2ksRB8vlWBbMLkcKKLgR4qT0Wfm" \
+            CHUTES_BASE_URL="https://api.chutes.ai/v1" \
+            CHUTES_MODEL="deepseek-ai/DeepSeek-V3.2-TEE" \
+            --app subnet-dashboard
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - run: flyctl deploy --remote-only --depot=false --no-cache
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
