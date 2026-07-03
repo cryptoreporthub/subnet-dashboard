@@ -176,6 +176,15 @@ def resolve_prediction(
     if ref > 0 and current_price > 0:
         actual_pct = round((current_price - ref) / ref * 100, 2)
 
+    # Price anomaly guard — if the price move is > 80%, it's likely a unit mismatch
+    if abs(actual_pct) > 80:
+        logger.warning(f"Price anomaly detected: {actual_pct}% — skipping resolution")
+        prediction["status"] = "expired"
+        prediction["outcome"] = "expired"
+        prediction["actual_pct"] = None
+        # Don't update weights for this prediction
+        return prediction
+
     outcome = classify_outcome(prediction, current_price, tolerance)
     correct = outcome == "hit"
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")

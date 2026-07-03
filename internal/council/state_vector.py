@@ -419,6 +419,81 @@ def _score_keltner(keltner_raw: Dict[str, Any]) -> float:
     return 0.5
 
 
+# ---------------------------------------------------------------------------
+# On-chain scoring helpers (TaoStats signals)
+# ---------------------------------------------------------------------------
+
+def _score_delegation_flow(sn: Dict[str, Any]) -> float:
+    """Score net delegation flow over 24h.
+    
+    Positive net flow (incoming > outgoing) = bullish.
+    Negative net flow = bearish.
+    Falls back to 0.5 (neutral) when no flow data is available.
+    """
+    incoming = float(sn.get("delegation_incoming_24h", 0) or 0)
+    outgoing = float(sn.get("delegation_outgoing_24h", 0) or 0)
+    net = incoming - outgoing
+    if net > 0:
+        return round(min(1.0, 0.6 + net / (incoming + outgoing + 1) * 0.4), 4)
+    elif net < 0:
+        return round(max(0.0, 0.4 - abs(net) / (incoming + outgoing + 1) * 0.4), 4)
+    return 0.5
+
+
+def _score_staking_conviction(sn: Dict[str, Any]) -> float:
+    """Score average staking conviction (lockup duration).
+    
+    Increasing average conviction = holders locking longer = bullish.
+    Decreasing = holders exiting = bearish.
+    Falls back to 0.5 when no conviction data is available.
+    """
+    current_conviction = float(sn.get("avg_conviction_current", 0) or 0)
+    prev_conviction = float(sn.get("avg_conviction_prev", 0) or 0)
+    if current_conviction > 0 and prev_conviction > 0:
+        change = (current_conviction - prev_conviction) / prev_conviction
+        if change > 0.01:
+            return round(min(1.0, 0.6 + change * 0.4), 4)
+        elif change < -0.01:
+            return round(max(0.0, 0.4 - abs(change) * 0.4), 4)
+    return 0.5
+
+
+def _score_emission_momentum(sn: Dict[str, Any]) -> float:
+    """Score current emission rate vs 7-day average.
+    
+    Accelerating emission = more capital flowing to subnet = bullish.
+    Decelerating = bearish.
+    Falls back to 0.5 when no emission data is available.
+    """
+    current = float(sn.get("emission", 0) or 0)
+    ema_7d = float(sn.get("emission_ema_7d", 0) or 0)
+    if current > 0 and ema_7d > 0:
+        ratio = current / ema_7d
+        if ratio > 1.02:
+            return round(min(1.0, 0.6 + (ratio - 1.02) * 0.4), 4)
+        elif ratio < 0.98:
+            return round(max(0.0, 0.4 - (0.98 - ratio) * 0.4), 4)
+    return 0.5
+
+
+def _score_registration_cost(sn: Dict[str, Any]) -> float:
+    """Score registration cost trend.
+    
+    Rising registration cost = increasing demand to mine = bullish.
+    Falling registration cost = decreasing demand = bearish.
+    Falls back to 0.5 when no registration cost data is available.
+    """
+    current_cost = float(sn.get("registration_cost_current", 0) or 0)
+    prev_cost = float(sn.get("registration_cost_prev", 0) or 0)
+    if current_cost > 0 and prev_cost > 0:
+        change = (current_cost - prev_cost) / prev_cost
+        if change > 0.01:
+            return round(min(1.0, 0.6 + change * 0.4), 4)
+        elif change < -0.01:
+            return round(max(0.0, 0.4 - abs(change) * 0.4), 4)
+    return 0.5
+
+
 def _compute_technical_indicators(sn: Dict[str, Any]) -> Dict[str, Any]:
     """Compute all 8 indicators and return per-signal scores."""
     hist = _get_price_history(sn.get("netuid"), sn)
@@ -461,6 +536,11 @@ def _compute_technical_indicators(sn: Dict[str, Any]) -> Dict[str, Any]:
         "cci_divergence": _score_cci(cci_raw),
         "williams_r": _score_williams(williams_raw),
         "keltner_channel": _score_keltner(keltner_raw),
+        # On-chain signal scores
+        "delegation_flow": _score_delegation_flow(sn),
+        "staking_conviction": _score_staking_conviction(sn),
+        "emission_momentum": _score_emission_momentum(sn),
+        "registration_cost": _score_registration_cost(sn),
     }
 
 
@@ -484,6 +564,8 @@ def _compute_technical_score(
         "rsi_crossover", "macd_cross", "stochastic_reversal",
         "bollinger_squeeze", "mfi_flow", "cci_divergence",
         "williams_r", "keltner_channel",
+        "delegation_flow", "staking_conviction",
+        "emission_momentum", "registration_cost",
     ]
 
     weighted_sum = 0.0

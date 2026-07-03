@@ -19,8 +19,12 @@ import tempfile
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from internal.indicators.bollinger import compute_bollinger
+from internal.indicators.cci import compute_cci
 from internal.indicators.crossover_detector import detect_crossovers
+from internal.indicators.keltner import compute_keltner
 from internal.indicators.macd import compute_macd
+from internal.indicators.mfi import compute_mfi
 from internal.indicators.momentum import compute_momentum
 from internal.indicators.price_fetcher import fetch_ohlcv
 from internal.indicators.rsi import compute_rsi
@@ -141,7 +145,7 @@ class IndicatorEngine:
         }
 
     def _process_subnet(self, subnet_id: int, registry_item: Dict[str, Any]) -> Dict[str, Any]:
-        """Fetch candles and compute indicators for a single subnet."""
+        """Fetch candles and compute all 8 oscillators for a single subnet."""
         candles = fetch_ohlcv(str(subnet_id), pairs_path=self.price_pairs_path)
         if len(candles) < 30:
             raise RuntimeError(f"Insufficient candle data for subnet {subnet_id}")
@@ -164,9 +168,14 @@ class IndicatorEngine:
         except Exception as exc:
             logger.warning("pump_tracker hook in indicator engine failed: %s", exc)
 
+        # Compute all 8 oscillators
         rsi = compute_rsi(candles)
         macd = compute_macd(candles)
         momentum = compute_momentum(candles)
+        bollinger = compute_bollinger(candles)
+        mfi = compute_mfi(candles)
+        cci = compute_cci(candles)
+        keltner = compute_keltner(candles)
 
         prev = self._last_per_subnet.get(str(subnet_id), {})
         prev_rsi = prev.get("rsi")
@@ -188,7 +197,12 @@ class IndicatorEngine:
             "rsi": rsi,
             "macd": macd,
             "momentum": momentum,
+            "bollinger": bollinger,
+            "mfi": mfi,
+            "cci": cci,
+            "keltner": keltner,
             "events": events,
+            "oscillators_computed": 7,
         }
 
     def _emit_signal(self, event: Dict[str, Any]) -> None:

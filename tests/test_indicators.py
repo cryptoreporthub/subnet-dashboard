@@ -136,7 +136,8 @@ def test_fetch_geckoterminal_ohlcv_parses_response(monkeypatch):
     assert candles[0]["close"] == 1.5
 
 
-def test_fetch_ohlcv_uses_cache(tmp_path):
+def test_fetch_ohlcv_uses_cache(tmp_path, monkeypatch):
+    monkeypatch.setattr("internal.indicators.price_fetcher.USE_LIVE_PRICES", False)
     cache_path = tmp_path / "price_cache.json"
     pairs_path = tmp_path / "price_pairs.json"
     json.dump({"1": {"symbol": "SN1"}}, open(pairs_path, "w"))

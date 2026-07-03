@@ -35,10 +35,9 @@ GECKO_TERMINAL_API = "https://api.geckoterminal.com/api/v2"
 DEFAULT_DAYS = int(os.environ.get("PRICE_LOOKBACK_DAYS", "7"))
 CACHE_TTL_SECONDS = int(os.environ.get("PRICE_CACHE_TTL_SECONDS", "300"))
 TMC_CACHE_TTL_SECONDS = int(os.environ.get("TMC_CACHE_TTL_SECONDS", "60"))
-# Default to synthetic candles on serverless/Fly hosts to avoid long network
-# stalls on the very first tick. Set INDICATOR_USE_LIVE_PRICES=true to enable
-# the TaoMarketCap -> GeckoTerminal tiered fetch.
-USE_LIVE_PRICES = os.environ.get("INDICATOR_USE_LIVE_PRICES", "false").lower() == "true"
+# Use live prices by default. TaoMarketCap is the primary source, GeckoTerminal
+# is the fallback, and synthetic candles are the last resort.
+USE_LIVE_PRICES = os.environ.get("INDICATOR_USE_LIVE_PRICES", "true").lower() == "true"
 LIVE_PRICE_TIMEOUT = int(os.environ.get("LIVE_PRICE_TIMEOUT_SECONDS", "10"))
 
 # Deterministic anchor for synthetic candles so repeated calls produce identical
