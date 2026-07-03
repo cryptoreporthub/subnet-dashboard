@@ -1724,12 +1724,44 @@ class PREDICTION_STORE:
     """Persists predictions to data/predictions.json and resolves them over time."""
 
     @staticmethod
+    def _migrate_phases(data: Dict[str, Any]) -> bool:
+        """Map legacy v1 pump-cycle phase names to the v2 ladder.
+
+        Returns True if any prediction was modified so the caller can persist
+        the cleansed data back to disk.
+        """
+        v1_to_v2 = {
+            "ACCUMULATION": "EARLY",
+            "MARKUP": "EARLY",
+            "PARABOLIC": "SELL",
+            "DISTRIBUTION": "SELL",
+            "DECLINE": "INACTIVE",
+            "RE_ACCUMULATION": "CONSOLIDATING",
+        }
+        changed = False
+        for bucket in ("predictions", "resolved"):
+            for pred in data.get(bucket, []) or []:
+                phase = pred.get("phase_at_prediction")
+                if phase in v1_to_v2:
+                    pred["phase_at_prediction"] = v1_to_v2[phase]
+                    changed = True
+        return changed
+
+    @staticmethod
     def _load() -> Dict[str, Any]:
         try:
             with open(_PREDICTIONS_PATH, "r") as f:
-                return _json.load(f)
+                data = _json.load(f)
         except Exception:
             return {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}}
+        if not isinstance(data, dict):
+            return {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}}
+        data.setdefault("predictions", [])
+        data.setdefault("resolved", [])
+        data.setdefault("stats", {"correct": 0, "wrong": 0, "pending": 0})
+        if PREDICTION_STORE._migrate_phases(data):
+            PREDICTION_STORE._save(data)
+        return data
 
     @staticmethod
     def _save(data: Dict[str, Any]) -> None:

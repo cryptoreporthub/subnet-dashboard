@@ -34,6 +34,25 @@ PHASES = {
 
 _PHASE_ORDER = ["INACTIVE", "EARLY", "EXHAUSTING", "CONSOLIDATING", "SECOND_WIND", "SELL"]
 
+# Legacy v1 phase names that may still exist in persisted state files.
+_V1_PHASES = {
+    "ACCUMULATION",
+    "MARKUP",
+    "PARABOLIC",
+    "DISTRIBUTION",
+    "DECLINE",
+    "RE_ACCUMULATION",
+}
+
+_V1_TO_V2 = {
+    "ACCUMULATION": "EARLY",
+    "MARKUP": "EARLY",
+    "PARABOLIC": "SELL",
+    "DISTRIBUTION": "SELL",
+    "DECLINE": "INACTIVE",
+    "RE_ACCUMULATION": "CONSOLIDATING",
+}
+
 
 class PumpTracker:
     """Rolling-window pump-cycle tracker with phase-lock and CUSUM detection."""
@@ -556,6 +575,7 @@ class PumpTracker:
             },
         )
         self._meta = dict(payload.get("meta", {"version": STATE_VERSION}))
+        self._migrate_state()
 
     def _save_state(self) -> None:
         os.makedirs(os.path.dirname(self._path) or ".", exist_ok=True)
@@ -572,6 +592,119 @@ class PumpTracker:
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, default=str)
         os.replace(tmp, self._path)
+
+    def _migrate_state(self) -> None:
+        """Cleanse any legacy v1 phase names from loaded state.
+
+        Converts old phase strings to the v2 ladder, drops v1-only profile
+        keys, and normalizes legacy cycle records into the current schema.
+        This makes the tracker resilient when the persisted file was written
+        by the previous ``datastore/pump_tracker.py`` implementation.
+        """
+        needs_save = False
+
+        def _map_phase(phase: Any) -> str:
+            if isinstance(phase, str) and phase in _V1_PHASES:
+                return _V1_TO_V2.get(phase, "INACTIVE")
+            return phase if phase in PHASES else "INACTIVE"
+
+        # Phase state
+        for nid, ps in self._phase_state.items():
+            new_phase = _map_phase(ps.get("phase"))
+            if new_phase != ps.get("phase"):
+                ps["phase"] = new_phase
+                ps["since"] = None
+                ps["duration_min"] = 0.0
+                ps["last_transition"] = None
+                needs_save = True
+
+        # Accuracy buckets
+        for nid in list(self._accuracy.keys()):
+            acc = self._accuracy[nid]
+            migrated: Dict[str, Dict[str, int]] = defaultdict(lambda: {"correct": 0, "total": 0})
+            for phase, bucket in list(acc.items()):
+                new_phase = _map_phase(phase)
+                migrated[new_phase]["correct"] += int(bucket.get("correct", 0))
+                migrated[new_phase]["total"] += int(bucket.get("total", 0))
+            if dict(acc) != dict(migrated):
+                self._accuracy[nid] = defaultdict(lambda: {"correct": 0, "total": 0}, migrated)
+                needs_save = True
+
+        # Cycles: normalize phase fields and convert legacy v1 records.
+        for nid in list(self._cycles.keys()):
+            cycles = self._cycles[nid]
+            new_cycles: List[Dict[str, Any]] = []
+            changed = False
+            for c in cycles:
+                nc = dict(c)
+                if "phase_sequence" in nc and isinstance(nc["phase_sequence"], list):
+                    seq = [_map_phase(p) for p in nc["phase_sequence"]]
+                    nc["start_phase"] = seq[0] if seq else "INACTIVE"
+                    nc["end_phase"] = seq[-1] if seq else "INACTIVE"
+                    nc.pop("phase_sequence", None)
+                    changed = True
+                else:
+                    nc["start_phase"] = _map_phase(nc.get("start_phase", "INACTIVE"))
+                    nc["end_phase"] = _map_phase(nc.get("end_phase", "INACTIVE"))
+                    if nc["start_phase"] != c.get("start_phase") or nc["end_phase"] != c.get("end_phase"):
+                        changed = True
+                # Drop v1-only keys that are not part of the v2 schema.
+                for legacy_key in (
+                    "pump_start",
+                    "pump_peak",
+                    "pump_duration_minutes",
+                    "pump_magnitude_pct",
+                    "peak_proneness_at_peak",
+                    "consolidation_duration_minutes",
+                    "consolidation_depth_pct",
+                    "re_pump",
+                    "re_pump_magnitude_pct",
+                    "total_cycle_duration_minutes",
+                ):
+                    if legacy_key in nc:
+                        nc.pop(legacy_key, None)
+                        changed = True
+                # Ensure required v2 keys exist.
+                if "start" not in nc:
+                    nc["start"] = nc.get("end") or _now_iso()
+                    changed = True
+                if "end" not in nc:
+                    nc["end"] = _now_iso()
+                    changed = True
+                if "duration_min" not in nc:
+                    nc["duration_min"] = self._minutes_between(nc.get("start"), nc.get("end"))
+                    changed = True
+                if "max_score" not in nc:
+                    nc["max_score"] = 0.0
+                    changed = True
+                new_cycles.append(nc)
+            if changed:
+                self._cycles[nid] = new_cycles
+                needs_save = True
+
+        # Profiles: drop v1-only keys and recompute from migrated cycles.
+        for nid in list(self._profiles.keys()):
+            profile = self._profiles[nid]
+            v1_keys = {
+                "phase_transition_matrix",
+                "avg_consolidation_duration",
+                "avg_pump_magnitude",
+                "total_cycles_observed",
+                "proneness_score",
+            }
+            if any(k in profile for k in v1_keys):
+                self._compute_profile(nid)
+                needs_save = True
+            # Also recompute if typical_pattern still references v1 phases.
+            pattern = self._profiles.get(nid, {}).get("typical_pattern", "")
+            if isinstance(pattern, str) and any(p in pattern for p in _V1_PHASES):
+                self._compute_profile(nid)
+                needs_save = True
+
+        if needs_save:
+            self._meta["version"] = STATE_VERSION
+            self._meta["migrated_at"] = _now_iso()
+            self._save_state()
 
     def load_state(self) -> None:
         with self._lock:
