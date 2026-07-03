@@ -1,26 +1,28 @@
 {
   "expert_weights": {
-    "quant": 0.85,
-    "hype": 1.0,
-    "contrarian": 1.0,
-    "technical": 1.0
+    "quant": 0.9,
+    "hype": 0.92,
+    "contrarian": 0.92,
+    "technical": 0.97,
+    "dark_horse": 1.0
   },
   "performance_history": {
-    "accuracy": 0.5,
-    "total_records": 34,
-    "correct": 5,
-    "wrong": 5,
+    "accuracy": 0.441,
+    "total_records": 58,
+    "correct": 15,
+    "wrong": 19,
     "pending": 24
   },
   "council_dispositions": {
-    "quant": "bullish",
+    "quant": "neutral",
     "hype": "bearish",
     "contrarian": "neutral",
-    "technical": "bearish"
+    "technical": "bearish",
+    "dark_horse": "bullish"
   },
   "council": {
     "quant": {
-      "disposition": "bullish",
+      "disposition": "neutral",
       "lens": "fundamental/yield",
       "pick": "Ralph"
     },
@@ -40,14 +42,5 @@
       "pick": "Ralph"
     }
   },
-  "last_updated": "2026-07-01T19:37:31.626574Z",
-  "adversarial_state": {
-    "council_weights": {
-      "quant": 0.89,
-      "hype": 1.0,
-      "contrarian": 1.0,
-      "technical": 1.0
-    },
-    "last_weight_update": "2026-07-03T06:59:29.779928+00:00"
-  }
+  "last_updated": "2026-07-03T18:45:21.145960Z"
 }

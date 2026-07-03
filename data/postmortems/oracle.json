@@ -83,5 +83,243 @@
       "devil": "To predict the opposite outcome I would have needed to believe that the dip was overdone, support was holding, and risk/reward favoured a down reversal instead."
     },
     "created_at": "2026-07-01T19:37:29.485985Z"
+  },
+  {
+    "judge": "oracle",
+    "prediction_id": "b4c29235bd",
+    "netuid": 40,
+    "name": "Ralph",
+    "direction": "down",
+    "predicted_pct": -4.72,
+    "actual_pct": 8.39,
+    "signal_source": "momentum_shift",
+    "questions": {
+      "what": "Direction was wrong: predicted down but price rose.",
+      "why": "Momentum/hype signal chased short-term energy and ignored exhaustion.",
+      "rule": "Require a confirming second signal before taking a down position when momentum_shift is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that momentum_shift was already priced in and that buyers were exhausted, favouring a up move instead."
+    },
+    "created_at": "2026-07-03T18:45:17.701677Z"
+  },
+  {
+    "judge": "oracle",
+    "prediction_id": "bfe4c992f0",
+    "netuid": 40,
+    "name": "Ralph",
+    "direction": "down",
+    "predicted_pct": -0.8,
+    "actual_pct": 8.39,
+    "signal_source": "stochastic_reversal",
+    "questions": {
+      "what": "Direction was wrong: predicted down but price rose.",
+      "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+      "rule": "Require a confirming second signal before taking a down position when stochastic_reversal is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that stochastic_reversal was already priced in and that buyers were exhausted, favouring a up move instead."
+    },
+    "created_at": "2026-07-03T18:45:17.714149Z"
+  },
+  {
+    "judge": "oracle",
+    "prediction_id": "68aa6b018a",
+    "netuid": 40,
+    "name": "Ralph",
+    "direction": "down",
+    "predicted_pct": -0.8,
+    "actual_pct": 8.39,
+    "signal_source": "macd_cross",
+    "questions": {
+      "what": "Direction was wrong: predicted down but price rose.",
+      "why": "Technical indicator gave a false positive in a range-bound regime.",
+      "rule": "Require a confirming second signal before taking a down position when macd_cross is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that macd_cross was already priced in and that buyers were exhausted, favouring a up move instead."
+    },
+    "created_at": "2026-07-03T18:45:17.727838Z"
+  },
+  {
+    "judge": "oracle",
+    "prediction_id": "20c11c27ea",
+    "netuid": 107,
+    "name": "Minos",
+    "direction": "down",
+    "predicted_pct": -0.8,
+    "actual_pct": 2.39,
+    "signal_source": "mfi_divergence",
+    "questions": {
+      "what": "Direction was wrong: predicted down but price rose.",
+      "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+      "rule": "Require a confirming second signal before taking a down position when mfi_divergence is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that mfi_divergence was already priced in and that buyers were exhausted, favouring a up move instead."
+    },
+    "created_at": "2026-07-03T18:45:17.740755Z"
+  },
+  {
+    "judge": "oracle",
+    "prediction_id": "21800a3a29",
+    "netuid": 107,
+    "name": "Minos",
+    "direction": "down",
+    "predicted_pct": -0.8,
+    "actual_pct": 2.39,
+    "signal_source": "momentum_shift",
+    "questions": {
+      "what": "Direction was wrong: predicted down but price rose.",
+      "why": "Momentum/hype signal chased short-term energy and ignored exhaustion.",
+      "rule": "Require a confirming second signal before taking a down position when momentum_shift is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that momentum_shift was already priced in and that buyers were exhausted, favouring a up move instead."
+    },
+    "created_at": "2026-07-03T18:45:17.754712Z"
+  },
+  {
+    "judge": "oracle",
+    "prediction_id": "b0390ab698",
+    "netuid": 107,
+    "name": "Minos",
+    "direction": "down",
+    "predicted_pct": -0.8,
+    "actual_pct": 2.39,
+    "signal_source": "stochastic_reversal",
+    "questions": {
+      "what": "Direction was wrong: predicted down but price rose.",
+      "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+      "rule": "Require a confirming second signal before taking a down position when stochastic_reversal is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that stochastic_reversal was already priced in and that buyers were exhausted, favouring a up move instead."
+    },
+    "created_at": "2026-07-03T18:45:17.769436Z"
+  },
+  {
+    "judge": "oracle",
+    "prediction_id": "b0a76669a0",
+    "netuid": 97,
+    "name": "Albedo",
+    "direction": "up",
+    "predicted_pct": 4.06,
+    "actual_pct": -4.35,
+    "signal_source": "stochastic_reversal",
+    "questions": {
+      "what": "Direction was wrong: predicted up but price fell.",
+      "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+      "rule": "Require a confirming second signal before taking a up position when stochastic_reversal is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that the dip was overdone, support was holding, and risk/reward favoured a down reversal instead."
+    },
+    "created_at": "2026-07-03T18:45:17.821377Z"
+  },
+  {
+    "judge": "oracle",
+    "prediction_id": "833645c8d4",
+    "netuid": 120,
+    "name": "Affine",
+    "direction": "down",
+    "predicted_pct": -1.0,
+    "actual_pct": 2.85,
+    "signal_source": "emission_change",
+    "questions": {
+      "what": "Direction was wrong: predicted down but price rose.",
+      "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+      "rule": "Require a confirming second signal before taking a down position when emission_change is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that emission_change was already priced in and that buyers were exhausted, favouring a up move instead."
+    },
+    "created_at": "2026-07-03T18:45:17.849765Z"
+  },
+  {
+    "judge": "oracle",
+    "prediction_id": "cccb67cdb2",
+    "netuid": 120,
+    "name": "Affine",
+    "direction": "down",
+    "predicted_pct": -0.8,
+    "actual_pct": 2.85,
+    "signal_source": "momentum_shift",
+    "questions": {
+      "what": "Direction was wrong: predicted down but price rose.",
+      "why": "Momentum/hype signal chased short-term energy and ignored exhaustion.",
+      "rule": "Require a confirming second signal before taking a down position when momentum_shift is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that momentum_shift was already priced in and that buyers were exhausted, favouring a up move instead."
+    },
+    "created_at": "2026-07-03T18:45:17.864587Z"
+  },
+  {
+    "judge": "oracle",
+    "prediction_id": "eaf7744f6f",
+    "netuid": 120,
+    "name": "Affine",
+    "direction": "down",
+    "predicted_pct": -0.8,
+    "actual_pct": 2.85,
+    "signal_source": "stochastic_reversal",
+    "questions": {
+      "what": "Direction was wrong: predicted down but price rose.",
+      "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+      "rule": "Require a confirming second signal before taking a down position when stochastic_reversal is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that stochastic_reversal was already priced in and that buyers were exhausted, favouring a up move instead."
+    },
+    "created_at": "2026-07-03T18:45:17.878563Z"
+  },
+  {
+    "judge": "oracle",
+    "prediction_id": "3747113a03",
+    "netuid": 120,
+    "name": "Affine",
+    "direction": "down",
+    "predicted_pct": -0.8,
+    "actual_pct": 2.85,
+    "signal_source": "macd_cross",
+    "questions": {
+      "what": "Direction was wrong: predicted down but price rose.",
+      "why": "Technical indicator gave a false positive in a range-bound regime.",
+      "rule": "Require a confirming second signal before taking a down position when macd_cross is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that macd_cross was already priced in and that buyers were exhausted, favouring a up move instead."
+    },
+    "created_at": "2026-07-03T18:45:17.893064Z"
+  },
+  {
+    "judge": "oracle",
+    "prediction_id": "53ba1a6c4a",
+    "netuid": 15,
+    "name": "ORO",
+    "direction": "down",
+    "predicted_pct": -1.0,
+    "actual_pct": 5.48,
+    "signal_source": "emission_change",
+    "questions": {
+      "what": "Direction was wrong: predicted down but price rose.",
+      "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+      "rule": "Require a confirming second signal before taking a down position when emission_change is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that emission_change was already priced in and that buyers were exhausted, favouring a up move instead."
+    },
+    "created_at": "2026-07-03T18:45:17.907899Z"
+  },
+  {
+    "judge": "oracle",
+    "prediction_id": "429340cf80",
+    "netuid": 15,
+    "name": "ORO",
+    "direction": "down",
+    "predicted_pct": -4.2,
+    "actual_pct": 5.48,
+    "signal_source": "momentum_shift",
+    "questions": {
+      "what": "Direction was wrong: predicted down but price rose.",
+      "why": "Momentum/hype signal chased short-term energy and ignored exhaustion.",
+      "rule": "Require a confirming second signal before taking a down position when momentum_shift is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that momentum_shift was already priced in and that buyers were exhausted, favouring a up move instead."
+    },
+    "created_at": "2026-07-03T18:45:17.922406Z"
+  },
+  {
+    "judge": "oracle",
+    "prediction_id": "ed161718f5",
+    "netuid": 15,
+    "name": "ORO",
+    "direction": "down",
+    "predicted_pct": -0.8,
+    "actual_pct": 5.48,
+    "signal_source": "macd_cross",
+    "questions": {
+      "what": "Direction was wrong: predicted down but price rose.",
+      "why": "Technical indicator gave a false positive in a range-bound regime.",
+      "rule": "Require a confirming second signal before taking a down position when macd_cross is the primary driver.",
+      "devil": "To predict the opposite outcome I would have needed to believe that macd_cross was already priced in and that buyers were exhausted, favouring a up move instead."
+    },
+    "created_at": "2026-07-03T18:45:17.949962Z"
   }
 ]

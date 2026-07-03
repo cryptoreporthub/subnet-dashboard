@@ -155,7 +155,7 @@ class IndicatorEngine:
         # scheduler tick. Defensive: a tracker failure must never break the
         # indicator pipeline.
         try:
-            from datastore.pump_tracker import get_pump_tracker
+            from internal.pump_tracker import get_pump_tracker
             last = candles[-1]
             name = registry_item.get("name") if isinstance(registry_item, dict) else None
             get_pump_tracker().on_tick(

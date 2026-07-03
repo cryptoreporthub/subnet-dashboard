@@ -1,15 +1,154 @@
 {
-  "snapshots": {},
-  "cusum_state": {},
-  "cycles": {},
-  "profiles": {},
-  "accuracy": {},
-  "phase_state": {},
   "meta": {
     "version": "2.0",
     "created": "2026-06-30T22:10:00Z",
     "last_updated": null,
     "total_snapshots": 0,
     "total_cycles_detected": 0
+  },
+  "snapshots": {
+    "1": []
+  },
+  "phase_state": {
+    "1": {
+      "phase": "INACTIVE",
+      "since": null,
+      "duration_min": 0.0,
+      "last_transition": null,
+      "name": "SN1"
+    },
+    "40": {
+      "phase": "INACTIVE",
+      "since": null,
+      "duration_min": 0.0,
+      "last_transition": null,
+      "name": "SN40"
+    },
+    "107": {
+      "phase": "INACTIVE",
+      "since": null,
+      "duration_min": 0.0,
+      "last_transition": null,
+      "name": "SN107"
+    },
+    "97": {
+      "phase": "INACTIVE",
+      "since": null,
+      "duration_min": 0.0,
+      "last_transition": null,
+      "name": "SN97"
+    },
+    "120": {
+      "phase": "INACTIVE",
+      "since": null,
+      "duration_min": 0.0,
+      "last_transition": null,
+      "name": "SN120"
+    },
+    "15": {
+      "phase": "INACTIVE",
+      "since": null,
+      "duration_min": 0.0,
+      "last_transition": null,
+      "name": "SN15"
+    },
+    "64": {
+      "phase": "INACTIVE",
+      "since": null,
+      "duration_min": 0.0,
+      "last_transition": null,
+      "name": "SN64"
+    }
+  },
+  "cusum_state": {
+    "1": {
+      "mean": 0.0,
+      "std": 0.0,
+      "cusum_pos": 0.0,
+      "cusum_neg": 0.0,
+      "cusum": 0.0
+    },
+    "40": {
+      "mean": 0.0,
+      "std": 0.0,
+      "cusum_pos": 0.0,
+      "cusum_neg": 0.0,
+      "cusum": 0.0
+    },
+    "107": {
+      "mean": 0.0,
+      "std": 0.0,
+      "cusum_pos": 0.0,
+      "cusum_neg": 0.0,
+      "cusum": 0.0
+    },
+    "97": {
+      "mean": 0.0,
+      "std": 0.0,
+      "cusum_pos": 0.0,
+      "cusum_neg": 0.0,
+      "cusum": 0.0
+    },
+    "120": {
+      "mean": 0.0,
+      "std": 0.0,
+      "cusum_pos": 0.0,
+      "cusum_neg": 0.0,
+      "cusum": 0.0
+    },
+    "15": {
+      "mean": 0.0,
+      "std": 0.0,
+      "cusum_pos": 0.0,
+      "cusum_neg": 0.0,
+      "cusum": 0.0
+    },
+    "64": {
+      "mean": 0.0,
+      "std": 0.0,
+      "cusum_pos": 0.0,
+      "cusum_neg": 0.0,
+      "cusum": 0.0
+    }
+  },
+  "cycles": {},
+  "profiles": {},
+  "accuracy": {
+    "40": {
+      "INACTIVE": {
+        "correct": 1,
+        "total": 4
+      }
+    },
+    "107": {
+      "INACTIVE": {
+        "correct": 1,
+        "total": 4
+      }
+    },
+    "97": {
+      "INACTIVE": {
+        "correct": 3,
+        "total": 4
+      }
+    },
+    "120": {
+      "INACTIVE": {
+        "correct": 0,
+        "total": 4
+      }
+    },
+    "15": {
+      "INACTIVE": {
+        "correct": 1,
+        "total": 4
+      }
+    },
+    "64": {
+      "INACTIVE": {
+        "correct": 4,
+        "total": 4
+      }
+    }
   }
 }

@@ -171,6 +171,456 @@
       },
       "outcome": "correct",
       "created_at": "2026-07-03T06:59:29.801907Z"
+    },
+    {
+      "id": "sc_20260703184516715592",
+      "name": "unknown",
+      "regime": "volatile",
+      "features": {
+        "avg_change_24h": 8.61,
+        "price_change_24h": 8.61,
+        "volatility": 8.61,
+        "score": 73.8,
+        "confidence": 0.8285,
+        "rsi": "overbought",
+        "volume": 1395.75,
+        "daily_rewards": 0.0,
+        "apy": 14.2,
+        "market_mood": -0.19054263565891474
+      },
+      "outcome": "correct",
+      "created_at": "2026-07-03T18:45:16.715617Z",
+      "resolved_at": "2026-07-03T18:45:17.629082Z"
+    },
+    {
+      "id": "sc_20260703184516716298",
+      "name": "Swap",
+      "regime": "volatile",
+      "features": {
+        "avg_change_24h": 9.91,
+        "price_change_24h": 9.91,
+        "volatility": 9.91,
+        "score": 74.04,
+        "confidence": 0.8246,
+        "rsi": "overbought",
+        "volume": 2744.56,
+        "daily_rewards": 0.0,
+        "apy": 7.6,
+        "market_mood": -0.19054263565891474
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:16.716314Z"
+    },
+    {
+      "id": "sc_20260703184516716939",
+      "name": "NOVA",
+      "regime": "bull",
+      "features": {
+        "avg_change_24h": 5.74,
+        "price_change_24h": 5.74,
+        "volatility": 5.74,
+        "score": 73.08,
+        "confidence": 0.834,
+        "rsi": "overbought",
+        "volume": 6386.59,
+        "daily_rewards": 2.0354,
+        "apy": 1.47,
+        "market_mood": -0.19054263565891474
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:16.716952Z"
+    },
+    {
+      "id": "sc_20260703184517649171",
+      "name": "unknown",
+      "regime": "volatile",
+      "features": {
+        "direction": "up",
+        "predicted_pct": 10.0,
+        "actual_pct": 10.0,
+        "outcome": "hit",
+        "expert": "quant",
+        "volatility": 10.0,
+        "rsi": "neutral"
+      },
+      "outcome": "correct",
+      "created_at": "2026-07-03T18:45:17.649187Z"
+    },
+    {
+      "id": "sc_20260703184517664015",
+      "name": "unknown",
+      "regime": "volatile",
+      "features": {
+        "direction": "up",
+        "predicted_pct": 10.0,
+        "actual_pct": 10.0,
+        "outcome": "hit",
+        "expert": "quant",
+        "volatility": 10.0,
+        "rsi": "neutral"
+      },
+      "outcome": "correct",
+      "created_at": "2026-07-03T18:45:17.664030Z"
+    },
+    {
+      "id": "sc_20260703184518015078",
+      "name": "Ralph",
+      "regime": "bull",
+      "features": {
+        "netuid": 40,
+        "expert": "quant",
+        "direction": "up",
+        "predicted_pct": 0.8,
+        "reference_price": 0.03896091,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.015097Z"
+    },
+    {
+      "id": "sc_20260703184518030146",
+      "name": "Ralph",
+      "regime": "bull",
+      "features": {
+        "netuid": 40,
+        "expert": "hype",
+        "direction": "up",
+        "predicted_pct": 0.8,
+        "reference_price": 0.03896091,
+        "horizon_hours": 2
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.030201Z"
+    },
+    {
+      "id": "sc_20260703184518045394",
+      "name": "Ralph",
+      "regime": "bull",
+      "features": {
+        "netuid": 40,
+        "expert": "contrarian",
+        "direction": "down",
+        "predicted_pct": -3.66,
+        "reference_price": 0.03896091,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.045409Z"
+    },
+    {
+      "id": "sc_20260703184518060964",
+      "name": "Ralph",
+      "regime": "bull",
+      "features": {
+        "netuid": 40,
+        "expert": "technical",
+        "direction": "down",
+        "predicted_pct": -0.8,
+        "reference_price": 0.03896091,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.060980Z"
+    },
+    {
+      "id": "sc_20260703184518078029",
+      "name": "Minos",
+      "regime": "neutral",
+      "features": {
+        "netuid": 107,
+        "expert": "quant",
+        "direction": "up",
+        "predicted_pct": 0.8,
+        "reference_price": 0.04510137,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.078044Z"
+    },
+    {
+      "id": "sc_20260703184518094185",
+      "name": "Minos",
+      "regime": "neutral",
+      "features": {
+        "netuid": 107,
+        "expert": "hype",
+        "direction": "up",
+        "predicted_pct": 0.8,
+        "reference_price": 0.04510137,
+        "horizon_hours": 2
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.094201Z"
+    },
+    {
+      "id": "sc_20260703184518110125",
+      "name": "Minos",
+      "regime": "neutral",
+      "features": {
+        "netuid": 107,
+        "expert": "contrarian",
+        "direction": "down",
+        "predicted_pct": -0.8,
+        "reference_price": 0.04510137,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.110139Z"
+    },
+    {
+      "id": "sc_20260703184518126090",
+      "name": "Minos",
+      "regime": "neutral",
+      "features": {
+        "netuid": 107,
+        "expert": "technical",
+        "direction": "up",
+        "predicted_pct": 0.8,
+        "reference_price": 0.04510137,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.126106Z"
+    },
+    {
+      "id": "sc_20260703184518144378",
+      "name": "Albedo",
+      "regime": "neutral",
+      "features": {
+        "netuid": 97,
+        "expert": "quant",
+        "direction": "down",
+        "predicted_pct": -1.0,
+        "reference_price": 0.02501847,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.144396Z"
+    },
+    {
+      "id": "sc_20260703184518161421",
+      "name": "Albedo",
+      "regime": "neutral",
+      "features": {
+        "netuid": 97,
+        "expert": "hype",
+        "direction": "down",
+        "predicted_pct": -0.8,
+        "reference_price": 0.02501847,
+        "horizon_hours": 2
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.161438Z"
+    },
+    {
+      "id": "sc_20260703184518178434",
+      "name": "Albedo",
+      "regime": "neutral",
+      "features": {
+        "netuid": 97,
+        "expert": "contrarian",
+        "direction": "up",
+        "predicted_pct": 0.8,
+        "reference_price": 0.02501847,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.178450Z"
+    },
+    {
+      "id": "sc_20260703184518196072",
+      "name": "Albedo",
+      "regime": "neutral",
+      "features": {
+        "netuid": 97,
+        "expert": "technical",
+        "direction": "down",
+        "predicted_pct": -0.8,
+        "reference_price": 0.02501847,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.196087Z"
+    },
+    {
+      "id": "sc_20260703184518215452",
+      "name": "ORO",
+      "regime": "bull",
+      "features": {
+        "netuid": 15,
+        "expert": "quant",
+        "direction": "down",
+        "predicted_pct": -1.0,
+        "reference_price": 0.0287698,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.215468Z"
+    },
+    {
+      "id": "sc_20260703184518233218",
+      "name": "ORO",
+      "regime": "bull",
+      "features": {
+        "netuid": 15,
+        "expert": "hype",
+        "direction": "up",
+        "predicted_pct": 0.8,
+        "reference_price": 0.0287698,
+        "horizon_hours": 2
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.233234Z"
+    },
+    {
+      "id": "sc_20260703184518250867",
+      "name": "ORO",
+      "regime": "bull",
+      "features": {
+        "netuid": 15,
+        "expert": "contrarian",
+        "direction": "down",
+        "predicted_pct": -2.75,
+        "reference_price": 0.0287698,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.250884Z"
+    },
+    {
+      "id": "sc_20260703184518268705",
+      "name": "ORO",
+      "regime": "bull",
+      "features": {
+        "netuid": 15,
+        "expert": "technical",
+        "direction": "down",
+        "predicted_pct": -0.8,
+        "reference_price": 0.0287698,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.268721Z"
+    },
+    {
+      "id": "sc_20260703184518288194",
+      "name": "Affine",
+      "regime": "neutral",
+      "features": {
+        "netuid": 120,
+        "expert": "quant",
+        "direction": "up",
+        "predicted_pct": 0.8,
+        "reference_price": 0.05482254,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.288210Z"
+    },
+    {
+      "id": "sc_20260703184518306452",
+      "name": "Affine",
+      "regime": "neutral",
+      "features": {
+        "netuid": 120,
+        "expert": "hype",
+        "direction": "up",
+        "predicted_pct": 0.8,
+        "reference_price": 0.05482254,
+        "horizon_hours": 2
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.306467Z"
+    },
+    {
+      "id": "sc_20260703184518325202",
+      "name": "Affine",
+      "regime": "neutral",
+      "features": {
+        "netuid": 120,
+        "expert": "contrarian",
+        "direction": "up",
+        "predicted_pct": 0.8,
+        "reference_price": 0.05482254,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.325217Z"
+    },
+    {
+      "id": "sc_20260703184518343960",
+      "name": "Affine",
+      "regime": "neutral",
+      "features": {
+        "netuid": 120,
+        "expert": "technical",
+        "direction": "down",
+        "predicted_pct": -0.8,
+        "reference_price": 0.05482254,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.343975Z"
+    },
+    {
+      "id": "sc_20260703184518364138",
+      "name": "Chutes",
+      "regime": "neutral",
+      "features": {
+        "netuid": 64,
+        "expert": "quant",
+        "direction": "down",
+        "predicted_pct": -1.0,
+        "reference_price": 0.07406842,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.364154Z"
+    },
+    {
+      "id": "sc_20260703184518383287",
+      "name": "Chutes",
+      "regime": "neutral",
+      "features": {
+        "netuid": 64,
+        "expert": "hype",
+        "direction": "down",
+        "predicted_pct": -0.8,
+        "reference_price": 0.07406842,
+        "horizon_hours": 2
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.383303Z"
+    },
+    {
+      "id": "sc_20260703184518402676",
+      "name": "Chutes",
+      "regime": "neutral",
+      "features": {
+        "netuid": 64,
+        "expert": "contrarian",
+        "direction": "down",
+        "predicted_pct": -0.8,
+        "reference_price": 0.07406842,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.402693Z"
+    },
+    {
+      "id": "sc_20260703184518422288",
+      "name": "Chutes",
+      "regime": "neutral",
+      "features": {
+        "netuid": 64,
+        "expert": "technical",
+        "direction": "down",
+        "predicted_pct": -0.8,
+        "reference_price": 0.07406842,
+        "horizon_hours": 4
+      },
+      "outcome": null,
+      "created_at": "2026-07-03T18:45:18.422305Z"
     }
   ],
   "regimes": {
@@ -184,14 +634,44 @@
       "sc_20260701193729438178",
       "sc_20260703065929758303",
       "sc_20260703065929780315",
-      "sc_20260703065929801890"
+      "sc_20260703065929801890",
+      "sc_20260703184516715592",
+      "sc_20260703184516716298",
+      "sc_20260703184517649171",
+      "sc_20260703184517664015"
     ],
     "neutral": [
-      "sc_20260701193729964578"
+      "sc_20260701193729964578",
+      "sc_20260703184518078029",
+      "sc_20260703184518094185",
+      "sc_20260703184518110125",
+      "sc_20260703184518126090",
+      "sc_20260703184518144378",
+      "sc_20260703184518161421",
+      "sc_20260703184518178434",
+      "sc_20260703184518196072",
+      "sc_20260703184518288194",
+      "sc_20260703184518306452",
+      "sc_20260703184518325202",
+      "sc_20260703184518343960",
+      "sc_20260703184518364138",
+      "sc_20260703184518383287",
+      "sc_20260703184518402676",
+      "sc_20260703184518422288"
     ],
-    "bull": []
+    "bull": [
+      "sc_20260703184516716939",
+      "sc_20260703184518015078",
+      "sc_20260703184518030146",
+      "sc_20260703184518045394",
+      "sc_20260703184518060964",
+      "sc_20260703184518215452",
+      "sc_20260703184518233218",
+      "sc_20260703184518250867",
+      "sc_20260703184518268705"
+    ]
   },
   "meta": {
-    "last_updated": "2026-07-03T06:59:29.801934Z"
+    "last_updated": "2026-07-03T18:45:18.422329Z"
   }
 }

@@ -204,10 +204,35 @@ except Exception:  # pragma: no cover
             pass
 
 try:
-    from datastore.pump_tracker import get_pump_tracker
+    from internal.pump_tracker import (
+        get_pump_tracker,
+        get_all_profiles,
+        get_current_phases,
+        get_recent_cycles,
+        get_cycle_analytics_accuracy,
+        get_pump_tracker_state,
+    )
+    _PUMP_TRACKER_AVAILABLE = True
 except Exception:  # pragma: no cover
+    _PUMP_TRACKER_AVAILABLE = False
+
     def get_pump_tracker(*_args, **_kwargs):
         return None
+
+    def get_all_profiles(*_args, **_kwargs):  # type: ignore[no-redef]
+        return {}
+
+    def get_current_phases(*_args, **_kwargs):  # type: ignore[no-redef]
+        return {}
+
+    def get_recent_cycles(*_args, **_kwargs):  # type: ignore[no-redef]
+        return []
+
+    def get_cycle_analytics_accuracy(*_args, **_kwargs):  # type: ignore[no-redef]
+        return {"status": "success", "accuracy": {}}
+
+    def get_pump_tracker_state(*_args, **_kwargs):  # type: ignore[no-redef]
+        return {"status": "error", "error": "pump tracker unavailable"}
 
 try:
     from message_intel import Database as _MessageIntelDatabase
@@ -1337,23 +1362,44 @@ def api_learning_trigger():
 
 
 @app.get("/api/pump-analytics")
-def api_pump_analytics(request: Request):
-    """Pump Cycle Analytics v2 — CUSUM detection, 6-phase model, proneness.
+async def api_pump_analytics(netuid: Optional[int] = None):
+    """Return pump cycle analytics for all subnets or a specific one.
 
     Optional ``?netuid=`` filter restricts the response to a single subnet.
     """
+    if not _PUMP_TRACKER_AVAILABLE:
+        return {
+            "status": "error",
+            "data": {
+                "subnets": [],
+                "meta": {
+                    "tracked_subnets": 0,
+                    "total_cycles": 0,
+                    "avg_proneness": 0.0,
+                    "top_pump_candidates": [],
+                    "updated_at": None,
+                },
+            },
+        }
     tracker = get_pump_tracker()
     if tracker is None:
-        return {"status": "error", "data": {"subnets": [], "meta": {"tracked_subnets": 0, "total_cycles": 0, "avg_proneness": 0.0, "top_pump_candidates": [], "updated_at": None}}}
+        return {
+            "status": "error",
+            "data": {
+                "subnets": [],
+                "meta": {
+                    "tracked_subnets": 0,
+                    "total_cycles": 0,
+                    "avg_proneness": 0.0,
+                    "top_pump_candidates": [],
+                    "updated_at": None,
+                },
+            },
+        }
     data = tracker.get_all_analytics()
-    netuid = request.query_params.get("netuid")
-    if netuid:
-        try:
-            nid = int(netuid)
-            data["data"]["subnets"] = [s for s in data["data"]["subnets"] if s.get("netuid") == nid]
-            data["data"]["meta"]["tracked_subnets"] = len(data["data"]["subnets"])
-        except (TypeError, ValueError):
-            pass
+    if netuid is not None:
+        data["data"]["subnets"] = [s for s in data["data"]["subnets"] if s.get("netuid") == netuid]
+        data["data"]["meta"]["tracked_subnets"] = len(data["data"]["subnets"])
     return data
 
 
@@ -2658,11 +2704,17 @@ def _create_prediction_entry(
     # direction accuracy.
     _phase_at_pred = "UNKNOWN"
     _proneness_at_pred = 0
+    _pump_score_at_pred = 0.0
+    _final_score_at_pred = 0.0
+    _re_pump_prob_at_pred = 0.0
     try:
         _pt = get_pump_tracker()
         if _pt is not None:
             _phase_at_pred = _pt.get_current_phase(netuid)
             _proneness_at_pred = _pt.get_proneness(netuid)
+            _pump_score_at_pred = getattr(_pt, "get_pump_score", lambda _: 0.0)(netuid)
+            _final_score_at_pred = getattr(_pt, "get_final_score", lambda _: 0.0)(netuid)
+            _re_pump_prob_at_pred = getattr(_pt, "get_re_pump_prob", lambda _: 0.0)(netuid)
     except Exception:
         pass
     prediction = {
@@ -2680,6 +2732,9 @@ def _create_prediction_entry(
         "expert": expert,
         "phase_at_prediction": _phase_at_pred,
         "proneness_at_prediction": _proneness_at_pred,
+        "pump_score_at_prediction": round(_pump_score_at_pred, 4),
+        "final_score_at_prediction": round(_final_score_at_pred, 4),
+        "re_pump_prob_at_prediction": round(_re_pump_prob_at_pred, 4),
         "statement": f"predicted to move {'+' if predicted_pct >= 0 else ''}{predicted_pct:.1f}% within {horizon} hours",
     }
 

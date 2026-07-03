@@ -509,6 +509,57 @@
       </div>
     </div>
 
+    <!-- ===================== PUMP CYCLE ANALYTICS ===================== -->
+    <div class="row">
+      <div class="section-label">Pump Cycle Analytics</div>
+      <h2 class="section-title">5-Phase Conviction Ladder</h2>
+      <p class="section-sub">Real-time pump cycle detection, behavioral profiles, and re-pump probability per subnet.</p>
+      {% set pump = pump_analytics if pump_analytics is mapping else {} %}
+      {% set pump_subnets = pump.data.subnets|safe_list if pump.data is mapping else [] %}
+      <div class="card">
+        <div class="card-head"><h3>Cycle Profiles</h3><span class="src-tag">{{ pump_subnets|length }} tracked</span></div>
+        {% if pump_subnets %}
+        <div class="table-wrap">
+          <table class="pump-cycle-table">
+            <thead>
+              <tr>
+                <th>Subnet</th>
+                <th>Current Phase</th>
+                <th>Duration in Phase</th>
+                <th>Avg Pump Duration</th>
+                <th>Avg Consolidation</th>
+                <th>Re-Pump Rate</th>
+                <th>Typical Pattern</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in pump_subnets %}
+              {% set phase = s.current_phase|default('INACTIVE') %}
+              {% set phase_class = 'phase-inactive' %}
+              {% if phase in ['EARLY', 'SECOND_WIND'] %}{% set phase_class = 'phase-early' %}
+              {% elif phase == 'CONSOLIDATING' %}{% set phase_class = 'phase-consolidating' %}
+              {% elif phase == 'SELL' %}{% set phase_class = 'phase-sell' %}
+              {% elif phase == 'EXHAUSTING' %}{% set phase_class = 'phase-exhausting' %}
+              {% endif %}
+              <tr>
+                <td><b>{{ s.name|default('SN' ~ s.netuid) }}</b> <span class="text-muted small">SN{{ s.netuid }}</span></td>
+                <td><span class="phase-badge {{ phase_class }}">{{ phase|replace('_',' ') }}</span></td>
+                <td>{{ "%.1f"|format((s.phase_duration_minutes|default(0))|float) }} min</td>
+                <td>{{ "%.1f"|format((s.profile.avg_pump_duration|default(0))|float) }} min</td>
+                <td>{{ "%.1f"|format((s.profile.avg_consolidation_length|default(0))|float) }} min</td>
+                <td>{{ "%.1f"|format((s.profile.re_pump_rate|default(0))|float * 100) }}%</td>
+                <td>{{ s.profile.typical_pattern|default('—')|replace('_',' ') }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="card card-muted"><p class="empty">Pump tracker is accumulating data — check back after a few scheduler cycles.</p></div>
+        {% endif %}
+      </div>
+    </div>
+
     <!-- ===================== SCENARIO MEMORY ===================== -->
     <div class="row">
       <div class="section-label">Scenario Memory</div>
