@@ -40,5 +40,14 @@
       "pick": "Ralph"
     }
   },
-  "last_updated": "2026-07-01T19:37:31.626574Z"
+  "last_updated": "2026-07-01T19:37:31.626574Z",
+  "adversarial_state": {
+    "council_weights": {
+      "quant": 0.89,
+      "hype": 1.0,
+      "contrarian": 1.0,
+      "technical": 1.0
+    },
+    "last_weight_update": "2026-07-03T06:59:29.779928+00:00"
+  }
 }

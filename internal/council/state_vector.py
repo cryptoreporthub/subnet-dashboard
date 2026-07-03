@@ -312,31 +312,205 @@ def _compute_ma_cross(prices: List[float]) -> Dict[str, Any]:
     return {"ma7": round(ma7, 4), "ma25": round(ma25_val, 4), "signal": signal}
 
 
+# ---------------------------------------------------------------------------
+# Per-signal scoring helpers (0.0 = bearish, 0.5 = neutral, 1.0 = bullish)
+# ---------------------------------------------------------------------------
+
+def _score_rsi(rsi_raw: Any) -> float:
+    """Score RSI: <30 oversold=bullish, >70 overbought=bearish, 30-70 linear."""
+    if isinstance(rsi_raw, dict):
+        val = float(rsi_raw.get("value", 50))
+    else:
+        val = float(rsi_raw) if rsi_raw else 50.0
+    if val < 30:
+        return round(0.7 + (30 - val) / 30.0 * 0.3, 4)
+    elif val > 70:
+        return round(0.3 - (val - 70) / 30.0 * 0.3, 4)
+    else:
+        return round(0.3 + (val - 30) / 40.0 * 0.4, 4)
+
+
+def _score_macd(macd_raw: Dict[str, Any]) -> float:
+    """Score MACD: bullish cross=0.7-1.0, bearish cross=0.0-0.3, neutral=0.5."""
+    if not isinstance(macd_raw, dict):
+        return 0.5
+    crossover = macd_raw.get("crossover", "neutral")
+    hist = float(macd_raw.get("histogram", 0) or 0)
+    if crossover == "bullish":
+        return round(min(1.0, 0.7 + abs(hist) * 0.5), 4)
+    elif crossover == "bearish":
+        return round(max(0.0, 0.3 - abs(hist) * 0.5), 4)
+    return 0.5
+
+
+def _score_stochastic(stoch_raw: Dict[str, Any]) -> float:
+    """Score Stochastic: K<20 & K>D = bullish, K>80 & K<D = bearish."""
+    if not isinstance(stoch_raw, dict):
+        return 0.5
+    k = float(stoch_raw.get("k", 50))
+    d = float(stoch_raw.get("d", 50))
+    if k < 20 and k > d:
+        return round(0.7 + (20 - k) / 20.0 * 0.3, 4)
+    elif k > 80 and k < d:
+        return round(0.3 - (k - 80) / 20.0 * 0.3, 4)
+    return 0.5
+
+
+def _score_bollinger(boll_raw: Dict[str, Any]) -> float:
+    """Score Bollinger: price below lower band=bullish, above upper= bearish."""
+    if not isinstance(boll_raw, dict):
+        return 0.5
+    sig = boll_raw.get("signal", "neutral")
+    if sig == "oversold":
+        return 0.85
+    elif sig == "overbought":
+        return 0.15
+    return 0.5
+
+
+def _score_mfi(mfi_raw: Dict[str, Any]) -> float:
+    """Score MFI: <20 oversold=bullish, >80 overbought=bearish, 20-80 linear."""
+    if not isinstance(mfi_raw, dict):
+        return 0.5
+    val = float(mfi_raw.get("mfi", 50))
+    if val < 20:
+        return round(0.7 + (20 - val) / 20.0 * 0.3, 4)
+    elif val > 80:
+        return round(0.3 - (val - 80) / 20.0 * 0.3, 4)
+    else:
+        return round(0.3 + (val - 20) / 60.0 * 0.4, 4)
+
+
+def _score_cci(cci_raw: Dict[str, Any]) -> float:
+    """Score CCI: <-100 oversold=bullish, >100 overbought=bearish, -100-100 linear."""
+    if not isinstance(cci_raw, dict):
+        return 0.5
+    val = float(cci_raw.get("cci", 0))
+    if val < -100:
+        return round(0.7 + min(100, abs(val) - 100) / 100.0 * 0.3, 4)
+    elif val > 100:
+        return round(0.3 - min(100, val - 100) / 100.0 * 0.3, 4)
+    else:
+        return round(0.5 + val / 200.0, 4)
+
+
+def _score_williams(williams_raw: Dict[str, Any]) -> float:
+    """Score Williams %R: <-80 oversold=bullish, >-20 overbought=bearish."""
+    if not isinstance(williams_raw, dict):
+        return 0.5
+    val = float(williams_raw.get("williams_r", -50))
+    if val < -80:
+        return round(0.7 + min(20, abs(val) - 80) / 20.0 * 0.3, 4)
+    elif val > -20:
+        return round(0.3 - (val + 20) / 80.0 * 0.3, 4)
+    else:
+        return round(0.5 + (val + 50) / 60.0 * 0.2, 4)
+
+
+def _score_keltner(keltner_raw: Dict[str, Any]) -> float:
+    """Score Keltner: price below lower band=bullish, above upper=bearish."""
+    if not isinstance(keltner_raw, dict):
+        return 0.5
+    sig = keltner_raw.get("signal", "neutral")
+    if sig == "oversold":
+        return 0.85
+    elif sig == "overbought":
+        return 0.15
+    return 0.5
+
+
 def _compute_technical_indicators(sn: Dict[str, Any]) -> Dict[str, Any]:
-    """Compute all 8 indicators for a subnet, with simplified RSI fallback."""
+    """Compute all 8 indicators and return per-signal scores."""
     hist = _get_price_history(sn.get("netuid"), sn)
     closes = hist.get("closes", [])
     highs = hist.get("highs", closes)
     lows = hist.get("lows", closes)
     volumes = hist.get("volumes", [])
 
-    rsi_val = _compute_rsi_series(closes, 14)
+    rsi_raw = _compute_rsi_series(closes, 14)
     if len(closes) < 15:
         changes = [float(sn.get("price_change_24h", 0) or 0), float(sn.get("price_change_7d", 0) or 0) / 7.0]
-        rsi_val = _compute_rsi(changes, 14)
+        rsi_raw = _compute_rsi(changes, 14)
+
+    macd_raw = _compute_macd_series(closes)
+    stoch_raw = _compute_stochastic(highs, lows, closes)
+    boll_raw = _compute_bollinger(closes)
+    mfi_raw = _compute_mfi(highs, lows, closes, volumes)
+    cci_raw = _compute_cci(highs, lows, closes)
+    williams_raw = _compute_williams_r(highs, lows, closes)
+    keltner_raw = _compute_keltner(closes, highs, lows)
 
     return {
-        "rsi": {"value": rsi_val, "signal": "overbought" if rsi_val > 70 else "oversold" if rsi_val < 30 else "neutral"},
-        "stochastic": _compute_stochastic(highs, lows, closes),
-        "bollinger": _compute_bollinger(closes),
-        "mfi": _compute_mfi(highs, lows, closes, volumes),
-        "cci": _compute_cci(highs, lows, closes),
-        "williams_r": _compute_williams_r(highs, lows, closes),
-        "keltner": _compute_keltner(closes, highs, lows),
-        "macd": _compute_macd_series(closes),
+        "rsi": {"value": rsi_raw, "signal": "overbought" if rsi_raw > 70 else "oversold" if rsi_raw < 30 else "neutral"},
+        "stochastic": stoch_raw,
+        "bollinger": boll_raw,
+        "mfi": mfi_raw,
+        "cci": cci_raw,
+        "williams_r": williams_raw,
+        "keltner": keltner_raw,
+        "macd": macd_raw,
         "ma_cross": _compute_ma_cross(closes),
         "history_source": hist.get("source"),
         "history_length": len(closes),
+        # Per-signal scores for weighted scoring
+        "rsi_crossover": _score_rsi(rsi_raw),
+        "macd_cross": _score_macd(macd_raw),
+        "stochastic_reversal": _score_stochastic(stoch_raw),
+        "bollinger_squeeze": _score_bollinger(boll_raw),
+        "mfi_flow": _score_mfi(mfi_raw),
+        "cci_divergence": _score_cci(cci_raw),
+        "williams_r": _score_williams(williams_raw),
+        "keltner_channel": _score_keltner(keltner_raw),
+    }
+
+
+def _compute_technical_score(
+    sn: Dict[str, Any],
+    horizon_type: str = "day",
+) -> Dict[str, Any]:
+    """Compute weighted technical score for a specific horizon type.
+
+    Uses per-signal, per-horizon weights from soul_map.json to produce a
+    single technical score (0.0-1.0), signal contributions, and the set of
+    active signals that deviated meaningfully from neutral.
+    """
+    from internal.council.weights import load_signal_weights
+
+    indicators = _compute_technical_indicators(sn)
+    signal_weights = load_signal_weights()
+    horizon_weights = signal_weights.get(horizon_type, signal_weights.get("day", {}))
+
+    signal_names = [
+        "rsi_crossover", "macd_cross", "stochastic_reversal",
+        "bollinger_squeeze", "mfi_flow", "cci_divergence",
+        "williams_r", "keltner_channel",
+    ]
+
+    weighted_sum = 0.0
+    total_weight = 0.0
+    contributions: Dict[str, Any] = {}
+
+    for signal_name in signal_names:
+        score = float(indicators.get(signal_name, 0.5))
+        weight = float(horizon_weights.get(signal_name, 1.0))
+        contributions[signal_name] = {
+            "score": round(score, 4),
+            "weight": round(weight, 4),
+            "contribution": round(score * weight, 4),
+        }
+        weighted_sum += score * weight
+        total_weight += weight
+
+    tech_score = weighted_sum / total_weight if total_weight > 0 else 0.5
+
+    return {
+        "technical_score": round(tech_score, 4),
+        "signal_contributions": contributions,
+        "active_signals": [
+            k for k, v in contributions.items()
+            if v.get("score", 0.5) > 0.55 or v.get("score", 0.5) < 0.45
+        ],
+        "horizon_type": horizon_type,
     }
 
 
@@ -620,10 +794,12 @@ def build_prediction_statement(
     signal_source: str,
     expert: str,
     now: _dt,
+    signal_contributions: Optional[Dict[str, Any]] = None,
+    horizon_type: str = "hour",
 ) -> Dict[str, Any]:
     """Build a predictive forecast dict without persisting it."""
     horizon = clamp_prediction_horizon(horizon, predicted_pct)
-    return {
+    prediction: Dict[str, Any] = {
         "id": _uuid.uuid4().hex[:10],
         "netuid": sn.get("netuid"),
         "name": sn.get("name"),
@@ -637,7 +813,11 @@ def build_prediction_statement(
         "signal_source": signal_source,
         "expert": expert,
         "statement": f"predicted to move {'+' if predicted_pct >= 0 else ''}{predicted_pct:.1f}% within {horizon} hours",
+        "horizon_type": horizon_type,
     }
+    if signal_contributions:
+        prediction["signal_contributions"] = signal_contributions
+    return prediction
 
 
 # ---------------------------------------------------------------------------
@@ -1009,12 +1189,21 @@ def score_subnet_for_hour(
     confidence = _compute_confidence(sn, indicators, experts)
     tags = _scenario_tags(sn, indicators, market_context)
 
+    # Compute weighted technical score for hour horizon
+    tech_score = _compute_technical_score(sn, "hour")
+
     return {
         "total_score": total,
-        "expert_contributions": experts,
+        "expert_contributions": {
+            **experts,
+            "signal_contributions": tech_score["signal_contributions"],
+            "active_signals": tech_score["active_signals"],
+            "technical_score": tech_score["technical_score"],
+        },
         "confidence": confidence,
         "scenario_tags": tags,
         "horizon": "hour",
+        "horizon_type": "hour",
         "weights_used": hour_weights,
     }
 
@@ -1056,12 +1245,21 @@ def score_subnet_for_day(
     confidence = _compute_confidence(sn, indicators, experts)
     tags = _scenario_tags(sn, indicators, market_context)
 
+    # Compute weighted technical score for day horizon
+    tech_score = _compute_technical_score(sn, "day")
+
     return {
         "total_score": total,
-        "expert_contributions": experts,
+        "expert_contributions": {
+            **experts,
+            "signal_contributions": tech_score["signal_contributions"],
+            "active_signals": tech_score["active_signals"],
+            "technical_score": tech_score["technical_score"],
+        },
         "confidence": confidence,
         "scenario_tags": tags,
         "horizon": "day",
+        "horizon_type": "day",
         "weights_used": day_weights,
     }
 

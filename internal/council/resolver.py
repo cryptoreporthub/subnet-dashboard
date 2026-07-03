@@ -14,7 +14,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from internal.council.weights import load_weights, save_weights
+from internal.council.weights import load_weights, save_weights, nudge_signal_weight
 
 try:
     from internal.judges.tracker import on_prediction_resolved
@@ -198,6 +198,23 @@ def resolve_prediction(
     if expert:
         prediction["expert"] = expert
         _nudge_weights(correct, expert)
+
+    # Nudge per-signal weights when signal_contributions are available.
+    signal_contributions = prediction.get("signal_contributions")
+    horizon_type = prediction.get("horizon_type", "hour")
+    if isinstance(signal_contributions, dict):
+        active_signals = prediction.get("active_signals", [])
+        if not active_signals:
+            # Derive active signals from contributions if not pre-computed.
+            active_signals = [
+                k for k, v in signal_contributions.items()
+                if isinstance(v, dict) and (v.get("score", 0.5) > 0.55 or v.get("score", 0.5) < 0.45)
+            ]
+        for signal_name in active_signals:
+            try:
+                nudge_signal_weight(horizon_type, signal_name, correct)
+            except Exception:
+                pass
 
     # Record scenario in regime-aware memory for learning. Outcomes are wired
     # back to the originating scenario record (created when the prediction was

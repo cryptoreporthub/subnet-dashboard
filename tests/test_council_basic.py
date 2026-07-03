@@ -37,9 +37,13 @@ def test_score_subnet_for_hour_shape():
     assert isinstance(result, dict)
     assert 0 <= result["total_score"] <= 100
     assert 0 <= result["confidence"] <= 1
-    assert set(result["expert_contributions"].keys()) == {"quant", "hype", "contrarian", "technical"}
+    assert set(result["expert_contributions"].keys()) == {
+        "quant", "hype", "contrarian", "technical",
+        "signal_contributions", "active_signals", "technical_score",
+    }
     assert set(result["scenario_tags"].keys()) == {"regime", "rsi", "volume", "price_direction"}
     assert result["horizon"] == "hour"
+    assert result["horizon_type"] == "hour"
 
 
 def test_score_subnet_for_day_shape():
@@ -49,9 +53,13 @@ def test_score_subnet_for_day_shape():
     assert isinstance(result, dict)
     assert 0 <= result["total_score"] <= 100
     assert 0 <= result["confidence"] <= 1
-    assert set(result["expert_contributions"].keys()) == {"quant", "hype", "contrarian", "technical"}
+    assert set(result["expert_contributions"].keys()) == {
+        "quant", "hype", "contrarian", "technical",
+        "signal_contributions", "active_signals", "technical_score",
+    }
     assert result["scenario_tags"]["regime"] == "bearish"
     assert result["horizon"] == "day"
+    assert result["horizon_type"] == "day"
 
 
 def test_hour_vs_day_weight_difference():
@@ -103,7 +111,10 @@ def test_select_daily_pick_returns_payload():
     assert 0 <= pick["confidence"] <= 1
     assert "audit" in pick
     assert "final_confidence" in pick
-    assert set(pick["expert_contributions"].keys()) == {"quant", "hype", "contrarian", "technical"}
+    assert set(pick["expert_contributions"].keys()) == {
+        "quant", "hype", "contrarian", "technical",
+        "signal_contributions", "active_signals", "technical_score",
+    }
 
 
 def test_select_daily_pick_empty_input():

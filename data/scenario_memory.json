@@ -123,6 +123,54 @@
       },
       "outcome": null,
       "created_at": "2026-07-01T19:37:29.964597Z"
+    },
+    {
+      "id": "sc_20260703065929758303",
+      "name": "unknown",
+      "regime": "volatile",
+      "features": {
+        "direction": "up",
+        "predicted_pct": 10.0,
+        "actual_pct": 10.0,
+        "outcome": "hit",
+        "expert": "quant",
+        "volatility": 10.0,
+        "rsi": "neutral"
+      },
+      "outcome": "correct",
+      "created_at": "2026-07-03T06:59:29.758323Z"
+    },
+    {
+      "id": "sc_20260703065929780315",
+      "name": "unknown",
+      "regime": "volatile",
+      "features": {
+        "direction": "up",
+        "predicted_pct": 10.0,
+        "actual_pct": 10.0,
+        "outcome": "hit",
+        "expert": "quant",
+        "volatility": 10.0,
+        "rsi": "neutral"
+      },
+      "outcome": "correct",
+      "created_at": "2026-07-03T06:59:29.780334Z"
+    },
+    {
+      "id": "sc_20260703065929801890",
+      "name": "unknown",
+      "regime": "volatile",
+      "features": {
+        "direction": "up",
+        "predicted_pct": 10.0,
+        "actual_pct": 10.0,
+        "outcome": "hit",
+        "expert": "quant",
+        "volatility": 10.0,
+        "rsi": "neutral"
+      },
+      "outcome": "correct",
+      "created_at": "2026-07-03T06:59:29.801907Z"
     }
   ],
   "regimes": {
@@ -133,7 +181,10 @@
       "sc_20260701193729112852",
       "sc_20260701193729419347",
       "sc_20260701193729432468",
-      "sc_20260701193729438178"
+      "sc_20260701193729438178",
+      "sc_20260703065929758303",
+      "sc_20260703065929780315",
+      "sc_20260703065929801890"
     ],
     "neutral": [
       "sc_20260701193729964578"
@@ -141,6 +192,6 @@
     "bull": []
   },
   "meta": {
-    "last_updated": "2026-07-01T19:37:29.964623Z"
+    "last_updated": "2026-07-03T06:59:29.801934Z"
   }
 }
