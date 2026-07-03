@@ -141,11 +141,11 @@ def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
         return None
     expert = expert.lower().strip()
 
-    if expert in {"quant", "hype", "contrarian", "technical"}:
+    if expert in {"quant", "hype", "dark_horse", "technical"}:
         return expert
 
-    if "sell" in expert or "bear" in expert or "contrarian" in expert:
-        return "contrarian"
+    if "dark" in expert or "horse" in expert or "onchain" in expert or "on-chain" in expert or "flow" in expert:
+        return "dark_horse"
     if "whale" in expert or "momentum" in expert or "hype" in expert:
         return "hype"
     if "rsi" in expert or "macd" in expert or "technical" in expert:

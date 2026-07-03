@@ -45,7 +45,7 @@ class PathfinderWorker:
                     return self._weights
             except Exception:
                 pass
-        self._weights = {"quant": 0.4, "hype": 0.3, "contrarian": 0.3}
+        self._weights = {"quant": 0.4, "hype": 0.3, "dark_horse": 0.3}
         return self._weights
 
     def weighted_consensus(self, decision: Dict[str, Any]) -> float:

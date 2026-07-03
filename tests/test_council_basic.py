@@ -45,7 +45,7 @@ def test_score_subnet_for_hour_shape():
     assert 0 <= result["total_score"] <= 100
     assert 0 <= result["confidence"] <= 1
     assert set(result["expert_contributions"].keys()) == {
-        "quant", "hype", "contrarian", "technical",
+        "quant", "hype", "dark_horse", "technical",
         "signal_contributions", "active_signals", "technical_score",
     }
     assert set(result["scenario_tags"].keys()) == {"regime", "rsi", "volume", "price_direction"}
@@ -61,7 +61,7 @@ def test_score_subnet_for_day_shape():
     assert 0 <= result["total_score"] <= 100
     assert 0 <= result["confidence"] <= 1
     assert set(result["expert_contributions"].keys()) == {
-        "quant", "hype", "contrarian", "technical",
+        "quant", "hype", "dark_horse", "technical",
         "signal_contributions", "active_signals", "technical_score",
     }
     assert result["scenario_tags"]["regime"] == "bearish"
@@ -73,7 +73,7 @@ def test_hour_vs_day_weight_difference():
     sn = _sample_subnet()
     hour = score_subnet_for_hour(sn)
     day = score_subnet_for_day(sn)
-    # Hour lens overweights hype/technical; day lens overweights quant/contrarian.
+    # Hour lens overweights hype/technical; day lens overweights quant/dark_horse.
     assert hour["weights_used"]["hype"] > day["weights_used"]["hype"]
     assert day["weights_used"]["quant"] > hour["weights_used"]["quant"]
 
@@ -119,7 +119,7 @@ def test_select_daily_pick_returns_payload():
     assert "audit" in pick
     assert "final_confidence" in pick
     assert set(pick["expert_contributions"].keys()) == {
-        "quant", "hype", "contrarian", "technical",
+        "quant", "hype", "dark_horse", "technical",
         "signal_contributions", "active_signals", "technical_score",
     }
 

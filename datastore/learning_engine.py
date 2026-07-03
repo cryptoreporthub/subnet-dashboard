@@ -16,7 +16,7 @@ from internal.council.weights import load_weights, save_weights
 logger = logging.getLogger(__name__)
 
 # Canonical experts used by the live Council.
-CANONICAL_EXPERTS = {"quant", "hype", "contrarian", "technical"}
+CANONICAL_EXPERTS = {"quant", "hype", "dark_horse", "technical"}
 
 
 def _now_iso() -> str:
@@ -128,8 +128,8 @@ class LearningEngine:
         rec = recommendation.lower().strip()
         if rec in CANONICAL_EXPERTS:
             return rec
-        if any(k in rec for k in ("sell", "bear", "contrarian")):
-            return "contrarian"
+        if any(k in rec for k in ("dark", "horse", "onchain", "on-chain", "flow")):
+            return "dark_horse"
         if any(k in rec for k in ("whale", "momentum", "hype", "social")):
             return "hype"
         if any(k in rec for k in ("rsi", "macd", "technical", "indicator")):
