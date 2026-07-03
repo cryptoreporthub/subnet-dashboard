@@ -934,9 +934,6 @@
       <span>Picks: <b>{{ simivision_picks|length if simivision_picks else 0 }}</b></span>
       <span>Trail: <b>{{ mindmap_trail|length if mindmap_trail else 0 }}</b></span>
       <span>Predictions: <b>{{ predictions|length if predictions else 0 }}</b></span>
-      {% if trace_stats and trace_stats|length > 0 %}
-      <span>Trace: <b>{{ trace_stats[0].get('id', '—') if trace_stats else '—' }}</b></span>
-      {% endif %}
       <span class="footer-tag">Press <kbd>C</kbd> to toggle compact view</span>
     </div>
   </footer>

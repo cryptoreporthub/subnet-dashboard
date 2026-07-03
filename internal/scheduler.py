@@ -224,13 +224,27 @@ class AdversarialScheduler:
         }
         self._state_cache = summary
         try:
-            from internal.file_utils import ensure_data_dir, safe_write_json
-            ensure_data_dir()
+            # Re-check the data directory before every write cycle: on Fly.io
+            # the volume can be absent on a fresh machine and the module-load
+            # makedirs may have run before the mount was ready.
+            try:
+                from internal.file_utils import ensure_data_dir
+                ensure_data_dir()
+            except Exception:
+                os.makedirs(os.path.dirname(self.soul_map_path) or "data", exist_ok=True)
             data: Dict[str, Any] = {}
             if os.path.exists(self.soul_map_path):
                 data = _load_json(self.soul_map_path) or {}
             data.setdefault("adversarial_scheduler", {})["last_cycle"] = summary
-            safe_write_json(self.soul_map_path, data)
+            os.makedirs(os.path.dirname(self.soul_map_path) or ".", exist_ok=True)
+            fd, temp_path = tempfile.mkstemp(suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w") as f:
+                    json.dump(data, f, indent=2)
+                os.replace(temp_path, self.soul_map_path)
+            finally:
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
         except Exception:
             pass
 

@@ -408,7 +408,7 @@ def _compute_hot_signals(sn: Dict[str, Any], indicators: Dict[str, Any], converg
         reasons.append(f"High yield ({apy:.1f}% APY)")
     if emission > 3:
         score += 1
-        reasons.append(f"Strong Daily Rewards ({emission:.2f} TAO/day)")
+        reasons.append(f"Strong emission ({emission:.2f} TAO/day)")
 
     active = score >= 5
     return {
@@ -554,11 +554,11 @@ def _compute_signal_impact(sn: Dict[str, Any], indicators: Dict[str, Any], hot: 
         _add("momentum_shift", "neutral", 0.5, 12, 50, f"24h change {chg:+.1f}% muted")
 
     if emission > 1 and apy > 20:
-        _add("emission_change", "bullish", emission * 0.3 + apy * 0.02, 168, 68, f"Daily Rewards {emission:.2f} TAO/day + {apy:.1f}% APY")
+        _add("emission_change", "bullish", emission * 0.3 + apy * 0.02, 168, 68, f"Emission {emission:.2f} TAO/day + {apy:.1f}% APY")
     elif emission < 0.05 or apy < 0:
-        _add("emission_change", "bearish", 1.0, 168, 55, f"Weak Daily Rewards {emission:.2f} / APY {apy:.1f}%")
+        _add("emission_change", "bearish", 1.0, 168, 55, f"Weak emission {emission:.2f} / APY {apy:.1f}%")
     else:
-        _add("emission_change", "neutral", 0.5, 168, 50, f"Daily Rewards {emission:.2f} TAO/day / APY {apy:.1f}%")
+        _add("emission_change", "neutral", 0.5, 168, 50, f"Emission {emission:.2f} TAO/day / APY {apy:.1f}%")
 
     mentions = int(sn.get("social_mentions", 0) or 0)
     if mentions > 1000:
@@ -594,6 +594,9 @@ def _expert_from_signal_source(source: Optional[str]) -> str:
     if any(k in s for k in ("emission", "apy", "yield", "fundamental")):
         return "gamma"
     return "alpha"
+
+
+
 
 
 def clamp_prediction_horizon(horizon: int, predicted_pct: Optional[float] = None) -> int:
@@ -685,7 +688,7 @@ def _compute_social_sentiment(sn: Dict[str, Any]) -> Dict[str, Any]:
         rsi_note = f"RSI {rsi_val:.0f} holds in neutral range"
 
     yield_note = f"{apy:.1f}% APY rewards stakers" if apy > 0 else "yield compression noted"
-    emit_note = f"Daily Rewards {emission:.0f} TAO/day" if emission > 0 else "no fresh Daily Rewards"
+    emit_note = f"emission {emission:.0f} TAO/day" if emission > 0 else "no fresh emission"
 
     tw_text = f"${name} {momentum_word} — {chg:+.1f}% 24h / {chg7:+.1f}% 7d; {rsi_note}"
     discord_text = f"Validators weigh {emit_note} vs {yield_note}; 30d trend {chg30:+.1f}%"
@@ -876,22 +879,35 @@ def _scenario_tags(
     indicators: Dict[str, Any],
     market_context: Optional[Dict[str, Any]],
 ) -> Dict[str, str]:
-    """Derive regime, RSI, volume, and price direction scenario tags."""
+    """Derive granular regime, RSI, volume and price-direction scenario tags.
+
+    Volume buckets are tuned to per-subnet USD turnover rather than the old
+    network-wide thresholds: ``very_low`` (<$500), ``low`` ($500-$5k),
+    ``medium`` ($5k-$50k), ``high`` (>$50k). RSI bands are tightened so the
+    neutral band is narrower (oversold <35, neutral 35-65, overbought >65),
+    giving the learning loop more signal to separate from noise. When the
+    regime is neutral it is further split by the sign of the 24h change
+    (``neutral_bullish`` / ``neutral_bearish`` / ``neutral``) so flat-but-
+    trending markets are still distinguishable. A ``price_direction`` field
+    captures the raw up/down move for downstream scenario matching.
+    """
     market_context = market_context or {}
     tao_chg = float(market_context.get("tao_change_24h", 0) or 0)
-    # Neutral regime with direction split: small moves get neutral_bullish/neutral_bearish
     if tao_chg > 3:
         regime = "bullish"
     elif tao_chg < -3:
         regime = "bearish"
-    elif tao_chg > 0:
-        regime = "neutral_bullish"
-    elif tao_chg < 0:
-        regime = "neutral_bearish"
     else:
-        regime = "neutral"
+        # Neutral regime: sub-classify by the sign of the 24h change so the
+        # learning loop can still tell a flat-but-rising market from a
+        # flat-but-falling one.
+        if tao_chg > 0:
+            regime = "neutral_bullish"
+        elif tao_chg < 0:
+            regime = "neutral_bearish"
+        else:
+            regime = "neutral"
 
-    # Tightened RSI bands: <35 oversold, 35-65 neutral, >65 overbought
     rsi_val = 50.0
     rsi = indicators.get("rsi", {})
     if isinstance(rsi, dict):
@@ -903,25 +919,18 @@ def _scenario_tags(
     else:
         rsi_tag = "neutral"
 
-    # Granular volume bands: <$500=very_low, $500-$5k=low, $5k-$50k=medium, >$50k=high
     volume = float(sn.get("volume", 0) or 0)
     if volume < 500:
         volume_tag = "very_low"
-    elif volume < 5000:
+    elif volume < 5_000:
         volume_tag = "low"
-    elif volume < 50000:
+    elif volume < 50_000:
         volume_tag = "medium"
     else:
         volume_tag = "high"
 
-    # Price direction based on 24h change: up/down/flat
     price_change_24h = float(sn.get("price_change_24h", 0) or 0)
-    if price_change_24h > 0:
-        price_direction = "up"
-    elif price_change_24h < 0:
-        price_direction = "down"
-    else:
-        price_direction = "up"  # flat defaults to up per test expectation
+    price_direction = "up" if price_change_24h >= 0 else "down"
 
     return {
         "regime": regime,
@@ -1086,7 +1095,7 @@ def _compute_simivision_reasons(sn: Dict[str, Any], indicators: Dict[str, Any], 
     apy = float(sn.get("apy", 0) or 0)
     chg = float(sn.get("price_change_24h", 0) or 0)
     if emission > 3:
-        reasons.append(f"Strong Daily Rewards {emission:.2f} TAO/day")
+        reasons.append(f"Strong emission {emission:.2f} TAO/day")
     if apy > 30:
         reasons.append(f"High yield {apy:.1f}% APY")
     rsi = indicators.get("rsi", {})
