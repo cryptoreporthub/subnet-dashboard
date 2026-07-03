@@ -43,7 +43,7 @@
 
 .lt-expert-card.lt-top {
   border-color: var(--accent-cyan);
-  box-shadow: 0 0 24px rgba(34, 211, 238, 0.12);
+  box-shadow: 0 0 24px rgba(0, 240, 255, 0.12);
 }
 
 .lt-expert-header {
@@ -65,7 +65,7 @@
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--accent-cyan);
-  background: rgba(34, 211, 238, 0.1);
+  background: rgba(0, 240, 255, 0.1);
   padding: 4px 10px;
   border-radius: var(--border-radius-pill);
 }
@@ -183,5 +183,5 @@
 
 .lt-badge.lt-confident {
   color: var(--accent-cyan);
-  background: rgba(34, 211, 238, 0.12);
+  background: rgba(0, 240, 255, 0.12);
 }

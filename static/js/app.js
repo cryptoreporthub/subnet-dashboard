@@ -53,11 +53,11 @@
     var pts = raw.split(',').map(Number).filter(function (n) { return !isNaN(n); });
     if (pts.length < 2) return;
     var up = pts[pts.length - 1] >= pts[0];
-    var col = up ? '#34d399' : '#f43f5e';
+    var col = up ? '#00ff41' : '#ff3366';
     var ctx = canvas.getContext('2d');
     var grad = ctx.createLinearGradient(0, 0, 0, canvas.height || 36);
-    grad.addColorStop(0, up ? 'rgba(52,211,153,0.25)' : 'rgba(244,63,94,0.25)');
-    grad.addColorStop(1, up ? 'rgba(52,211,153,0.0)' : 'rgba(244,63,94,0.0)');
+    grad.addColorStop(0, up ? 'rgba(0, 255, 65, 0.25)' : 'rgba(255, 51, 102, 0.25)');
+    grad.addColorStop(1, up ? 'rgba(0, 255, 65, 0.0)' : 'rgba(255, 51, 102, 0.0)');
 
     new Chart(ctx, {
       type: 'line',
@@ -112,11 +112,11 @@
             return {
               label: ds.label,
               data: ds.data,
-              borderColor: ds.color || '#34d399',
-              backgroundColor: hexToRgba(ds.color || '#34d399', 0.18),
+              borderColor: ds.color || '#00ff41',
+              backgroundColor: hexToRgba(ds.color || '#00ff41', 0.18),
               borderWidth: 2,
               pointRadius: 2,
-              pointBackgroundColor: ds.color || '#34d399'
+              pointBackgroundColor: ds.color || '#00ff41'
             };
           })
         },
@@ -125,14 +125,14 @@
           maintainAspectRatio: false,
           plugins: {
             legend: {
-              labels: { color: '#8cb39f', font: { family: 'JetBrains Mono', size: 11 } }
+              labels: { color: '#00f0ff', font: { family: 'JetBrains Mono', size: 11 } }
             }
           },
           scales: {
             r: {
-              angleLines: { color: 'rgba(233,247,239,0.06)' },
-              grid: { color: 'rgba(233,247,239,0.06)' },
-              pointLabels: { color: '#8cb39f', font: { family: 'JetBrains Mono', size: 11 } },
+              angleLines: { color: 'rgba(240, 246, 252, 0.06)' },
+              grid: { color: 'rgba(240, 246, 252, 0.06)' },
+              pointLabels: { color: '#00f0ff', font: { family: 'JetBrains Mono', size: 11 } },
               ticks: { display: false, backdropColor: 'transparent' },
               suggestedMin: 0,
               suggestedMax: 100
