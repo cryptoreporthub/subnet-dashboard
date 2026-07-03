@@ -246,6 +246,7 @@ def _ensure_data_dir() -> None:
     """
     try:
         os.makedirs(DATA_DIR, exist_ok=True)
+        os.chmod(DATA_DIR, 0o755)
     except Exception as exc:
         logger.warning("Could not create data directory %s: %s", DATA_DIR, exc)
         return
@@ -460,8 +461,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # graded (and learning-loop weights updated) even when no dashboard is
     # being rendered. The first tick runs shortly after boot to clear any
     # backlog of stuck ``pending`` predictions.
+    # We pass ``_get_subnets_with_source`` as the subnet provider so the
+    # scheduler does not need to re-import ``server`` at runtime (avoiding
+    # a fragile circular-dependency path that would silently return []).
     try:
-        start_prediction_resolver_scheduler(immediate=False)
+        start_prediction_resolver_scheduler(
+            immediate=False,
+            subnet_provider=lambda: _get_subnets_with_source()[0],
+        )
         logger.info("Prediction resolver scheduler started")
     except Exception as exc:
         logger.warning("Failed to start prediction resolver scheduler: %s", exc)
@@ -1357,7 +1364,10 @@ def api_learning_trigger():
     if scheduler is None:
         # Scheduler not yet started (e.g. headless test): start it and run a
         # single synchronous cycle so the trigger is still effective.
-        start_prediction_resolver_scheduler(immediate=False)
+        start_prediction_resolver_scheduler(
+            immediate=False,
+            subnet_provider=lambda: _get_subnets_with_source()[0],
+        )
         scheduler = get_prediction_resolver_scheduler()
 
     cycle: Dict[str, Any] = {}

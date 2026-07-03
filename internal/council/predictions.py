@@ -219,11 +219,8 @@ def _load_outcomes() -> Dict[str, Any]:
 def _save_outcomes(data: Dict[str, Any]) -> None:
     """Persist outcomes to disk."""
     try:
-        os.makedirs(os.path.dirname(OUTCOMES_PATH) or ".", exist_ok=True)
-        tmp = OUTCOMES_PATH + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump(data, f, indent=2)
-        os.replace(tmp, OUTCOMES_PATH)
+        from internal.file_utils import safe_write_json
+        safe_write_json(OUTCOMES_PATH, data)
     except Exception as exc:
         logger.warning("Could not save outcomes: %s", exc)
 

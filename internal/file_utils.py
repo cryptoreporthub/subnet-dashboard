@@ -26,11 +26,17 @@ def ensure_data_dir() -> str:
     directory is missing at write time the background schedulers silently fail,
     so every write path calls this before touching disk. The "created" event
     is logged once per process so a missing volume is visible in the app logs.
+
+    Permissions are set to 0o755 (rwxr-xr-x) so the gunicorn/uvicorn worker
+    process — which may run under a different umask — can always write to the
+    directory. On Fly.io the persistent volume's permission bits are preserved,
+    so this only matters on first boot or when the mount is absent.
     """
     global _data_dir_created_logged
     try:
         if not os.path.isdir(DATA_DIR):
             os.makedirs(DATA_DIR, exist_ok=True)
+            os.chmod(DATA_DIR, 0o755)
             _logger.info("data/ directory missing, created at %s", DATA_DIR)
             _data_dir_created_logged = True
     except Exception as exc:

@@ -35,14 +35,11 @@ def _load(path: Optional[str] = None) -> Dict[str, Any]:
 
 
 def _save(data: Dict[str, Any], path: Optional[str] = None) -> None:
+    from internal.file_utils import safe_write_json
     path = path or SCENARIO_MEMORY_PATH
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     data.setdefault("meta", {})
     data["meta"]["last_updated"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(data, f, indent=2)
-    os.replace(tmp, path)
+    safe_write_json(path, data)
 
 
 def _normalize_regime(regime: Optional[str]) -> str:

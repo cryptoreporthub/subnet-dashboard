@@ -35,18 +35,11 @@ def _load_raw(path: str = SOUL_MAP_PATH) -> Dict[str, Any]:
 
 
 def _save_raw(data: Dict[str, Any], path: str = SOUL_MAP_PATH) -> None:
+    from internal.file_utils import safe_write_json
     try:
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        tmp = path + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump(data, f, indent=2)
-        os.replace(tmp, path)
+        safe_write_json(path, data)
     except Exception:
-        try:
-            with open(path, "w") as f:
-                json.dump(data, f, indent=2)
-        except Exception:
-            pass
+        pass
 
 
 def load_weights(path: str = SOUL_MAP_PATH) -> Dict[str, float]:

@@ -59,11 +59,8 @@ def _load_json(path: str, default: Any) -> Any:
         return default
 
 def _save_json(path: str, data: Any) -> None:
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(data, f, indent=2)
-    os.replace(tmp, path)
+    from internal.file_utils import safe_write_json
+    safe_write_json(path, data)
 
 def fetch_prices(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[Any, float]:
     """Return a ``netuid -> price`` map from live subnets or the price cache."""

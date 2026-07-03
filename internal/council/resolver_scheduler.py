@@ -57,19 +57,20 @@ def _load_json(path: str) -> Dict[str, Any]:
 
 def _save_json(path: str, data: Dict[str, Any]) -> None:
     try:
-        from internal.file_utils import ensure_data_dir
+        from internal.file_utils import ensure_data_dir, safe_write_json
         ensure_data_dir()
+        safe_write_json(path, data)
     except Exception:
-        os.makedirs(os.path.dirname(path) or "data", exist_ok=True)
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(path) or ".", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w") as f:
-            json.dump(data, f, indent=2)
-        os.replace(temp_path, path)
-    finally:
-        if os.path.exists(temp_path):
-            os.unlink(temp_path)
+        # Fallback if file_utils is unavailable.
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(path) or ".", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(data, f, indent=2)
+            os.replace(temp_path, path)
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
 
 
 class PredictionResolverScheduler:
