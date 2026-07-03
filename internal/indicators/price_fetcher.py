@@ -20,6 +20,11 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+try:
+    from internal.chain_client import ChainClient
+except Exception:
+    ChainClient = None  # type: ignore
+
 # Ensure the data directory exists at module load time.
 os.makedirs('data', exist_ok=True)
 
@@ -39,6 +44,7 @@ TMC_CACHE_TTL_SECONDS = int(os.environ.get("TMC_CACHE_TTL_SECONDS", "60"))
 # is the fallback, and synthetic candles are the last resort.
 USE_LIVE_PRICES = os.environ.get("INDICATOR_USE_LIVE_PRICES", "true").lower() == "true"
 LIVE_PRICE_TIMEOUT = int(os.environ.get("LIVE_PRICE_TIMEOUT_SECONDS", "10"))
+BLOCKMACHINE_RPC_URL = os.environ.get("BLOCKMACHINE_RPC_URL", "https://rpc.blockmachine.io")
 
 # Deterministic anchor for synthetic candles so repeated calls produce identical
 # output (required by the test suite and useful for reproducible local runs).
@@ -49,10 +55,8 @@ _SYNTHETIC_EPOCH = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
 _tmc_subnets_cache: Dict[str, Any] = {"data": None, "cached_at": 0.0}
 _tmc_candles_cache: Dict[str, Any] = {"data": None, "cached_at": 0.0}
 
-
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
 
 def _load_json(path: str) -> Dict[str, Any]:
     if os.path.exists(path):
@@ -62,7 +66,6 @@ def _load_json(path: str) -> Dict[str, Any]:
         except Exception:
             return {}
     return {}
-
 
 def _save_json(path: str, data: Dict[str, Any]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -75,10 +78,8 @@ def _save_json(path: str, data: Dict[str, Any]) -> None:
         if os.path.exists(temp_path):
             os.unlink(temp_path)
 
-
 def _load_price_pairs(path: str = PRICE_PAIRS_PATH) -> Dict[str, Any]:
     return _load_json(path)
-
 
 def _price_sources_for_subnet(subnet_id: str, pairs: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Return ordered list of price sources to attempt for a subnet."""
@@ -100,10 +101,12 @@ def _price_sources_for_subnet(subnet_id: str, pairs: Dict[str, Any]) -> List[Dic
             }
         )
 
+    # Fallback: Blockmachine JSON-RPC alpha price + TAO/USD history.
+    sources.append({"source": "blockmachine", "netuid": str(netuid)})
+
     # Final fallback: deterministic synthetic candles.
     sources.append({"source": "synthetic", "key": f"subnet-{subnet_id}"})
     return sources
-
 
 def _fetch_tmc_subnets(timeout: int = LIVE_PRICE_TIMEOUT) -> Dict[str, Dict[str, Any]]:
     """Fetch and cache the TaoMarketCap subnets snapshot keyed by netuid."""
@@ -126,7 +129,6 @@ def _fetch_tmc_subnets(timeout: int = LIVE_PRICE_TIMEOUT) -> Dict[str, Dict[str,
     _tmc_subnets_cache["cached_at"] = now
     return mapping
 
-
 def _fetch_tmc_candles(timeout: int = LIVE_PRICE_TIMEOUT) -> List[Dict[str, Any]]:
     """Fetch and cache the global hourly TAO/USD candle series."""
     now = time.time()
@@ -145,22 +147,12 @@ def _fetch_tmc_candles(timeout: int = LIVE_PRICE_TIMEOUT) -> List[Dict[str, Any]
     _tmc_candles_cache["cached_at"] = now
     return data
 
-
-def _fetch_tmc_subnet_candles(netuid: str, days: int = DEFAULT_DAYS) -> List[Dict[str, Any]]:
-    """Derive hourly USD candles for a subnet from TAO/USD * alpha price."""
-    subnets = _fetch_tmc_subnets()
-    snapshot = subnets.get(str(netuid))
-    if not snapshot:
-        raise RuntimeError(f"TaoMarketCap has no snapshot for netuid {netuid}")
-
-    latest = snapshot.get("latest_snapshot", {})
-    alpha_price = float(latest.get("price", 0.0))
+def _derive_subnet_candles(alpha_price: float, days: int, tao_candles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Scale TAO/USD OHLCV by a subnet alpha price to derive subnet USD candles."""
     if alpha_price <= 0:
-        raise RuntimeError(f"TaoMarketCap returned invalid alpha price for netuid {netuid}")
-
-    tao_candles = _fetch_tmc_candles()
+        raise RuntimeError("Invalid alpha price for subnet candle derivation")
     if len(tao_candles) < 2:
-        raise RuntimeError("TaoMarketCap returned empty TAO/USD candles")
+        raise RuntimeError("Insufficient TAO/USD candles for subnet derivation")
 
     needed = days * 24
     if len(tao_candles) > needed:
@@ -180,6 +172,51 @@ def _fetch_tmc_subnet_candles(netuid: str, days: int = DEFAULT_DAYS) -> List[Dic
         )
     return derived
 
+
+_chain_client: Optional[Any] = None
+
+
+def _get_chain_client() -> Optional[Any]:
+    """Lazy singleton for the Blockmachine JSON-RPC client."""
+    global _chain_client
+    if _chain_client is None and ChainClient is not None:
+        try:
+            _chain_client = ChainClient(endpoint=BLOCKMACHINE_RPC_URL)
+        except Exception:
+            _chain_client = None
+    return _chain_client
+
+
+def _fetch_rpc_subnet_candles(netuid: str, days: int = DEFAULT_DAYS) -> List[Dict[str, Any]]:
+    """Derive hourly USD candles from Blockmachine RPC alpha price + TAO/USD history."""
+    client = _get_chain_client()
+    if client is None:
+        raise RuntimeError("Blockmachine RPC client is not available")
+    if not client.is_healthy():
+        raise RuntimeError("Blockmachine RPC client is unhealthy")
+
+    alpha_price = client.get_alpha_price(int(netuid))
+    if alpha_price is None or alpha_price <= 0:
+        raise RuntimeError(f"Blockmachine RPC returned invalid alpha price for netuid {netuid}")
+
+    tao_candles = _fetch_tmc_candles()
+    return _derive_subnet_candles(alpha_price, days, tao_candles)
+
+
+def _fetch_tmc_subnet_candles(netuid: str, days: int = DEFAULT_DAYS) -> List[Dict[str, Any]]:
+    """Derive hourly USD candles for a subnet from TAO/USD * alpha price."""
+    subnets = _fetch_tmc_subnets()
+    snapshot = subnets.get(str(netuid))
+    if not snapshot:
+        raise RuntimeError(f"TaoMarketCap has no snapshot for netuid {netuid}")
+
+    latest = snapshot.get("latest_snapshot", {})
+    alpha_price = float(latest.get("price", 0.0))
+    if alpha_price <= 0:
+        raise RuntimeError(f"TaoMarketCap returned invalid alpha price for netuid {netuid}")
+
+    tao_candles = _fetch_tmc_candles()
+    return _derive_subnet_candles(alpha_price, days, tao_candles)
 
 def _fetch_geckoterminal_ohlcv(
     network: str,
@@ -216,7 +253,6 @@ def _fetch_geckoterminal_ohlcv(
         )
     return candles
 
-
 def _synthetic_candles(source_key: str, days: int = DEFAULT_DAYS) -> List[Dict[str, Any]]:
     """Generate deterministic synthetic OHLCV candles when no live source exists."""
     candles: List[Dict[str, Any]] = []
@@ -244,7 +280,6 @@ def _synthetic_candles(source_key: str, days: int = DEFAULT_DAYS) -> List[Dict[s
         price = c
     return candles
 
-
 def fetch_ohlcv(
     subnet_id: str,
     days: int = DEFAULT_DAYS,
@@ -256,8 +291,8 @@ def fetch_ohlcv(
     Fetch OHLCV candles for a subnet token.
 
     Tries TaoMarketCap first when INDICATOR_USE_LIVE_PRICES=true, falls back to
-    GeckoTerminal for explicitly mapped pools, and finally to deterministic
-    synthetic candles.
+    GeckoTerminal for explicitly mapped pools, then to the Blockmachine RPC
+    alpha price, and finally to deterministic synthetic candles.
     """
     pairs = _load_price_pairs(pairs_path)
     sources = _price_sources_for_subnet(subnet_id, pairs)
@@ -285,6 +320,10 @@ def fetch_ohlcv(
                         src["network"], src["pool"], days=days
                     )
                     source = "geckoterminal"
+                    break
+                if src["source"] == "blockmachine":
+                    candles = _fetch_rpc_subnet_candles(src["netuid"], days=days)
+                    source = "blockmachine"
                     break
             except Exception as exc:
                 error = str(exc)
