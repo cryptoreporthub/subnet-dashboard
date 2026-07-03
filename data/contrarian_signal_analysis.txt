@@ -1,0 +1,93 @@
+=== CONTRARIAN EXPERT — PER-SIGNAL ACCURACY ===
+Total resolved: 129
+Contrarian resolved: 78
+Contrarian correct: 17
+Contrarian overall accuracy: 21.8%
+
+Signal Type               C Acc    C Dir    All Acc  C Count  C vs All  
+------------------------------------------------------------------------
+SELL ALERT                 22.2%   34.7%   22.2%  72       SAME      
+stochastic_reversal        20.0%   60.0%   20.0%  5        SAME      
+rsi_crossover               0.0%    0.0%    0.0%  1        SAME      
+
+=== INDIVIDUAL CONTRARIAN PREDICTIONS ===
+Subnet       Signal                 Dir    Pred%    Actual%   Correct  DirOK 
+----------------------------------------------------------------------
+Ralph        SELL ALERT             down    -1.58%  +24.51% False    False 
+Minos        SELL ALERT             down    -5.74%   +5.21% False    False 
+Chutes       SELL ALERT             down    -6.56%   -2.23% False    True  
+Ralph        SELL ALERT             down    -1.58%  +24.51% False    False 
+Minos        SELL ALERT             down    -5.74%   +5.21% False    False 
+Chutes       SELL ALERT             down    -6.56%   -2.23% False    True  
+Ralph        SELL ALERT             down    -5.29%  +26.66% False    False 
+Minos        SELL ALERT             down    -5.75%   +5.18% False    False 
+Chutes       SELL ALERT             down    -6.57%   -2.23% False    True  
+Ralph        SELL ALERT             down    -5.29%  +26.66% False    False 
+Minos        SELL ALERT             down    -5.75%   +5.18% False    False 
+Chutes       SELL ALERT             down    -6.57%   -2.23% False    True  
+Ralph        SELL ALERT             down    -5.29%  +26.66% False    False 
+Minos        SELL ALERT             down    -5.75%   +5.18% False    False 
+Chutes       SELL ALERT             down    -6.57%   -2.23% False    True  
+Ralph        SELL ALERT             down    -5.29%  +26.66% False    False 
+Minos        SELL ALERT             down    -5.75%   +5.18% False    False 
+Chutes       SELL ALERT             down    -6.57%   -2.23% False    True  
+Ralph        SELL ALERT             down    -5.29%  +26.66% False    False 
+Minos        SELL ALERT             down    -5.75%   +5.18% False    False 
+Chutes       SELL ALERT             down    -6.57%   -2.23% False    True  
+Ralph        SELL ALERT             down    -5.29%  +26.66% False    False 
+Minos        SELL ALERT             down    -5.75%   +5.18% False    False 
+Chutes       SELL ALERT             down    -6.57%   -2.23% False    True  
+Ralph        SELL ALERT             down    -5.29%  +26.66% False    False 
+Minos        SELL ALERT             down    -5.75%   +5.18% False    False 
+Chutes       SELL ALERT             down    -6.57%   -2.23% False    True  
+Coldint      SELL ALERT             up     +12.75%  -99.99% False    False 
+Inference    SELL ALERT             up      +0.20%  -99.93% False    False 
+Compute      SELL ALERT             down    -4.05%  -99.95% True     True  
+Coldint      SELL ALERT             up     +12.75%  -99.99% False    False 
+Inference    SELL ALERT             up      +0.20%  -99.93% False    False 
+Compute      SELL ALERT             down    -4.05%  -99.95% True     True  
+Coldint      SELL ALERT             up     +12.75%  -99.99% False    False 
+Inference    SELL ALERT             up      +0.20%  -99.93% False    False 
+Compute      SELL ALERT             down    -4.05%  -99.95% True     True  
+Coldint      SELL ALERT             up     +12.75%  -99.99% False    False 
+Inference    SELL ALERT             up      +0.20%  -99.93% False    False 
+Compute      SELL ALERT             down    -4.05%  -99.95% True     True  
+Coldint      SELL ALERT             up     +12.75%  -99.99% False    False 
+Inference    SELL ALERT             up      +0.20%  -99.93% False    False 
+Compute      SELL ALERT             down    -4.05%  -99.95% True     True  
+Coldint      SELL ALERT             up     +12.75%  -99.99% False    False 
+Inference    SELL ALERT             up      +0.20%  -99.93% False    False 
+Compute      SELL ALERT             down    -4.05%  -99.95% True     True  
+Coldint      SELL ALERT             up     +12.75%  -99.99% False    False 
+Inference    SELL ALERT             up      +0.20%  -99.93% False    False 
+Compute      SELL ALERT             down    -4.05%  -99.95% True     True  
+Coldint      SELL ALERT             up     +12.75%  -99.99% False    False 
+Inference    SELL ALERT             up      +0.20%  -99.93% False    False 
+Compute      SELL ALERT             down    -4.05%  -99.95% True     True  
+Coldint      SELL ALERT             up     +12.75%  -99.99% False    False 
+Inference    SELL ALERT             up      +0.20%  -99.93% False    False 
+Compute      SELL ALERT             down    -4.05%  -99.95% True     True  
+Coldint      SELL ALERT             up     +12.75%  -99.99% False    False 
+Inference    SELL ALERT             up      +0.20%  -99.93% False    False 
+Compute      SELL ALERT             down    -4.05%  -99.95% True     True  
+Coldint      SELL ALERT             up     +12.75%  -99.99% False    False 
+Inference    SELL ALERT             up      +0.20%  -99.93% False    False 
+Compute      SELL ALERT             down    -4.05%  -99.95% True     True  
+Coldint      SELL ALERT             up     +13.30%  -99.99% False    False 
+Inference    SELL ALERT             up      +0.47%  -99.93% False    False 
+Compute      SELL ALERT             down    -3.74%  -99.95% True     True  
+Coldint      SELL ALERT             up     +13.30%  -99.99% False    False 
+Inference    SELL ALERT             up      +0.47%  -99.93% False    False 
+Compute      SELL ALERT             down    -3.74%  -99.95% True     True  
+Coldint      SELL ALERT             up     +13.30%  -99.99% False    False 
+Inference    SELL ALERT             up      +0.47%  -99.93% False    False 
+Compute      SELL ALERT             down    -3.74%  -99.95% True     True  
+Coldint      SELL ALERT             up      +2.71%  -99.99% False    False 
+Inference    SELL ALERT             down    -1.54%  -99.93% True     True  
+Compute      SELL ALERT             down    -3.12%  -99.95% True     True  
+Ralph        stochastic_reversal    down    -2.54%   -0.97% False    True  
+Minos        stochastic_reversal    up      +0.80%   -0.92% False    False 
+Albedo       stochastic_reversal    down    -0.80%   -0.44% True     True  
+ORO          stochastic_reversal    up      +2.84%   +0.93% False    True  
+Affine       rsi_crossover          up      +0.80%   -0.03% False    False 
+Chutes       stochastic_reversal    down    -0.80%   +0.08% False    False 
