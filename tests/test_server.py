@@ -69,7 +69,7 @@ def test_mindmap_summary_route(client):
     payload = data.get('data', data)
     assert 'expert_weights' in payload
     weights = payload['expert_weights']
-    assert any(k in weights for k in ('quant', 'hype', 'contrarian', 'technical'))
+    assert any(k in weights for k in ('quant', 'hype', 'dark_horse', 'technical'))
 
 
 def test_learning_stats_route(client):
@@ -79,7 +79,7 @@ def test_learning_stats_route(client):
     payload = data.get('data', data)
     assert 'expert_weights' in payload
     assert 'last_updated' in payload
-    assert any(k in payload['expert_weights'] for k in ('quant', 'hype', 'contrarian', 'technical'))
+    assert any(k in payload['expert_weights'] for k in ('quant', 'hype', 'dark_horse', 'technical'))
 
 
 def test_predictions_route(client):

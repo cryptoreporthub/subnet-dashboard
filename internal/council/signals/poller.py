@@ -152,7 +152,7 @@ def build_learning_trail(
     records = adversarial_state.get("expert_track_records", {})
     verdicts = _load_jsonl(verdicts_path)
 
-    expert_names = ("quant", "hype", "contrarian")
+    expert_names = ("quant", "hype", "dark_horse")
     experts: List[Dict[str, Any]] = []
     for name in expert_names:
         record = records.get(name, {})

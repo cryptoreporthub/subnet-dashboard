@@ -536,11 +536,6 @@ def _compute_technical_indicators(sn: Dict[str, Any]) -> Dict[str, Any]:
         "cci_divergence": _score_cci(cci_raw),
         "williams_r": _score_williams(williams_raw),
         "keltner_channel": _score_keltner(keltner_raw),
-        # On-chain signal scores
-        "delegation_flow": _score_delegation_flow(sn),
-        "staking_conviction": _score_staking_conviction(sn),
-        "emission_momentum": _score_emission_momentum(sn),
-        "registration_cost": _score_registration_cost(sn),
     }
 
 
@@ -564,8 +559,6 @@ def _compute_technical_score(
         "rsi_crossover", "macd_cross", "stochastic_reversal",
         "bollinger_squeeze", "mfi_flow", "cci_divergence",
         "williams_r", "keltner_channel",
-        "delegation_flow", "staking_conviction",
-        "emission_momentum", "registration_cost",
     ]
 
     weighted_sum = 0.0
@@ -1057,10 +1050,100 @@ def build_subnet_state_vector(netuid: int, subnets: List[dict], registry: Option
 # ---------------------------------------------------------------------------
 # Council expert scoring
 # ---------------------------------------------------------------------------
+def _compute_onchain_quant_score(sn: Dict[str, Any]) -> float:
+    """Compute quant expert score from on-chain fundamentals.
+
+    Combines emission_momentum, staking_conviction, and registration_cost
+    into a single quant score. These are fundamental economics — not price-based.
+    """
+    weights = {"emission_momentum": 0.4, "staking_conviction": 0.3, "registration_cost": 0.3}
+    score = 0.0
+    total_w = 0.0
+
+    emission = _score_emission_momentum(sn)
+    conviction = _score_staking_conviction(sn)
+    reg_cost = _score_registration_cost(sn)
+
+    for name, val in [("emission_momentum", emission), ("staking_conviction", conviction), ("registration_cost", reg_cost)]:
+        w = weights.get(name, 1.0)
+        score += val * w
+        total_w += w
+
+    return round(score / total_w, 4) if total_w > 0 else 0.5
+
+
+def _compute_hype_score(sn: Dict[str, Any]) -> float:
+    """Compute hype expert score from delegation flow.
+
+    Delegation flow (capital moving in/out of a subnet) is a pure sentiment/momentum
+    signal — delegators voting with their TAO. Belongs to Hype, not Quant.
+    """
+    return _score_delegation_flow(sn)
+
+
+def _compute_dark_horse_score(sn: Dict[str, Any]) -> float:
+    """Compute Dark Horse expert score from on-chain flow signals.
+
+    The Dark Horse uses signals that are uncorrelated with price charts:
+    - TAO pool depth: rising TAO in subnet pool = conviction
+    - Supply contraction: circulating supply dropping relative to market cap = accumulation
+    - Price/emission ratio: how much price per unit emission (undervaluation)
+
+    Falls back to 0.5 (neutral) when data is unavailable.
+    """
+    # TAO pool depth — ratio of subnet TAO pool to total stake
+    tao_pool = float(sn.get("tao_pool", 0) or 0)
+    total_stake = float(sn.get("total_stake", 0) or 1)
+    pool_ratio = tao_pool / total_stake if total_stake > 0 else 0
+    # Higher ratio = more conviction = bullish
+    pool_score = 0.5
+    if pool_ratio > 0.1:
+        pool_score = min(1.0, 0.5 + pool_ratio * 2.0)
+    elif pool_ratio > 0.05:
+        pool_score = 0.6
+    elif pool_ratio > 0.01:
+        pool_score = 0.55
+
+    # Supply contraction — circulating supply change
+    circ_supply = float(sn.get("circulating_supply", 0) or 0)
+    prev_supply = float(sn.get("circulating_supply_prev", 0) or 0)
+    supply_score = 0.5
+    if circ_supply > 0 and prev_supply > 0:
+        supply_change = (circ_supply - prev_supply) / prev_supply
+        if supply_change < -0.01:  # contracting supply = accumulation
+            supply_score = min(1.0, 0.6 + abs(supply_change) * 5.0)
+        elif supply_change > 0.01:  # expanding supply = dilution
+            supply_score = max(0.0, 0.4 - supply_change * 5.0)
+
+    # Price/emission ratio — undervaluation signal
+    price = float(sn.get("price", 0) or 0)
+    emission = float(sn.get("emission", 0) or 1)
+    if price > 0 and emission > 0:
+        pe_ratio = price / emission
+        # Compare to market average — below average = undervalued
+        # We'll normalize relative to a reasonable range
+        if pe_ratio < 0.5:
+            pe_score = 0.8  # significantly undervalued
+        elif pe_ratio < 1.0:
+            pe_score = 0.65
+        elif pe_ratio < 2.0:
+            pe_score = 0.5
+        elif pe_ratio < 5.0:
+            pe_score = 0.4
+        else:
+            pe_score = 0.3  # overvalued
+    else:
+        pe_score = 0.5
+
+    # Weighted combination
+    dark_horse_score = pool_score * 0.4 + supply_score * 0.3 + pe_score * 0.3
+    return round(dark_horse_score, 4)
+
+
 _DEFAULT_WEIGHTS = {
     "quant": 0.30,
     "hype": 0.25,
-    "contrarian": 0.20,
+    "dark_horse": 0.20,
     "technical": 0.25,
 }
 
@@ -1080,10 +1163,8 @@ def _expert_contributions(
     mentions = int(sn.get("social_mentions", 0) or 0)
     chg24 = float(sn.get("price_change_24h", 0) or 0)
     chg7 = float(sn.get("price_change_7d", 0) or 0)
-    is_overvalued = bool(sn.get("is_overvalued", False))
 
     rsi = indicators.get("rsi", {}) if isinstance(indicators.get("rsi"), dict) else {"value": 50}
-    rsi_val = float(rsi.get("value", 50))
     macd = indicators.get("macd", {}) if isinstance(indicators.get("macd"), dict) else {}
     ma = indicators.get("ma_cross", {}) if isinstance(indicators.get("ma_cross"), dict) else {}
 
@@ -1102,15 +1183,8 @@ def _expert_contributions(
     hype += min(0.10, chg7 / 30.0)
     hype = min(1.0, max(0.0, hype))
 
-    # Contrarian: inverse overvaluation, mean-reversion to RSI extremes
-    contrarian = 0.50
-    if is_overvalued:
-        contrarian -= 0.30
-    if rsi_val < 30:
-        contrarian += 0.35
-    elif rsi_val > 70:
-        contrarian -= 0.25
-    contrarian = min(1.0, max(0.0, contrarian))
+    # Dark Horse: uncorrelated on-chain flow signals
+    dark_horse = _compute_dark_horse_score(sn)
 
     # Technical: indicator consensus
     technical = 0.50
@@ -1131,7 +1205,7 @@ def _expert_contributions(
     return {
         "quant": round(quant, 4),
         "hype": round(hype, 4),
-        "contrarian": round(contrarian, 4),
+        "dark_horse": round(dark_horse, 4),
         "technical": round(technical, 4),
     }
 
@@ -1252,11 +1326,11 @@ def score_subnet_for_hour(
     if market_context and isinstance(market_context.get("weights"), dict):
         weights.update(market_context["weights"])
 
-    # Hour lens: overweight hype/technical, underweight contrarian
+    # Hour lens: overweight hype/technical, underweight dark_horse
     hour_weights = {
         "quant": weights.get("quant", 0.30) * 0.90,
         "hype": weights.get("hype", 0.25) * 1.20,
-        "contrarian": weights.get("contrarian", 0.20) * 0.80,
+        "dark_horse": weights.get("dark_horse", 0.20) * 0.80,
         "technical": weights.get("technical", 0.25) * 1.10,
     }
     total_weight = sum(hour_weights.values()) or 1.0
@@ -1307,11 +1381,11 @@ def score_subnet_for_day(
     if market_context and isinstance(market_context.get("weights"), dict):
         weights.update(market_context["weights"])
 
-    # Day lens: overweight quant/contrarian, underweight hype
+    # Day lens: overweight quant/dark_horse, underweight hype
     day_weights = {
         "quant": weights.get("quant", 0.30) * 1.15,
         "hype": weights.get("hype", 0.25) * 0.80,
-        "contrarian": weights.get("contrarian", 0.20) * 1.10,
+        "dark_horse": weights.get("dark_horse", 0.20) * 1.10,
         "technical": weights.get("technical", 0.25) * 0.95,
     }
     total_weight = sum(day_weights.values()) or 1.0

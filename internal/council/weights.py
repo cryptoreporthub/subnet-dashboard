@@ -17,7 +17,7 @@ import json
 import os
 from typing import Any, Dict, Optional
 
-DEFAULT_WEIGHTS = {"quant": 1.0, "hype": 1.0, "contrarian": 1.0, "technical": 1.0}
+DEFAULT_WEIGHTS = {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
 SOUL_MAP_PATH = os.path.join("data", "soul_map.json")
 
 # Signal weight learning constants (shared with resolver.py)
@@ -38,6 +38,10 @@ DEFAULT_SIGNAL_WEIGHTS: Dict[str, Dict[str, float]] = {
         "cci_divergence": 1.0,
         "williams_r": 1.0,
         "keltner_channel": 1.0,
+        "delegation_flow": 1.0,
+        "staking_conviction": 1.0,
+        "emission_momentum": 1.0,
+        "registration_cost": 1.0,
     },
     "day": {
         "rsi_crossover": 1.0,
@@ -49,15 +53,19 @@ DEFAULT_SIGNAL_WEIGHTS: Dict[str, Dict[str, float]] = {
         "cci_divergence": 1.0,
         "williams_r": 1.0,
         "keltner_channel": 1.0,
+        "delegation_flow": 1.0,
+        "staking_conviction": 1.0,
+        "emission_momentum": 1.0,
+        "registration_cost": 1.0,
     },
 }
 
 # Regime -> per-expert multiplier. >1 boosts, <1 dampens.
 REGIME_ADJUSTMENTS: Dict[str, Dict[str, float]] = {
-    "risk_on": {"quant": 1.05, "hype": 1.10, "contrarian": 0.90, "technical": 1.05},
-    "risk_off": {"quant": 1.05, "hype": 0.85, "contrarian": 1.10, "technical": 1.05},
-    "chop": {"quant": 1.00, "hype": 0.95, "contrarian": 1.05, "technical": 1.00},
-    "high_volatility": {"quant": 0.95, "hype": 1.05, "contrarian": 1.05, "technical": 1.10},
+    "risk_on": {"quant": 1.05, "hype": 1.10, "dark_horse": 0.95, "technical": 1.05},
+    "risk_off": {"quant": 1.05, "hype": 0.85, "dark_horse": 1.10, "technical": 1.05},
+    "chop": {"quant": 1.00, "hype": 0.95, "dark_horse": 1.00, "technical": 1.00},
+    "high_volatility": {"quant": 0.95, "hype": 1.05, "dark_horse": 0.95, "technical": 1.10},
 }
 
 

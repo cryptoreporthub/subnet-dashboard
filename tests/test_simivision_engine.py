@@ -10,11 +10,11 @@ def test_pathfinder_weighted_consensus_uses_council_weights():
         "expert_breakdown": {
             "quant": {"score": 0.9, "confidence": 0.8},
             "hype": {"score": 0.2, "confidence": 0.6},
-            "contrarian": {"score": 0.5, "confidence": 0.4},
+            "dark_horse": {"score": 0.5, "confidence": 0.4},
         },
         "brain": {"action": "hold", "target_weight": 0.5, "agreement": 0.5},
     }
-    worker._weights = {"quant": 0.5, "hype": 0.3, "contrarian": 0.2}
+    worker._weights = {"quant": 0.5, "hype": 0.3, "dark_horse": 0.2}
     adjusted = worker.apply_weights(decision)
     assert "brain" in adjusted
     assert "consensus_score" in adjusted

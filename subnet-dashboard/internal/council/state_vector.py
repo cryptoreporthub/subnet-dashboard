@@ -781,7 +781,7 @@ def build_subnet_state_vector(netuid: int, subnets: List[dict], registry: Option
 _DEFAULT_WEIGHTS = {
     "quant": 0.30,
     "hype": 0.25,
-    "contrarian": 0.20,
+    "dark_horse": 0.20,
     "technical": 0.25,
 }
 
@@ -824,14 +824,14 @@ def _expert_contributions(
     hype = min(1.0, max(0.0, hype))
 
     # Contrarian: inverse overvaluation, mean-reversion to RSI extremes
-    contrarian = 0.50
+    dark_horse = 0.50
     if is_overvalued:
-        contrarian -= 0.30
+        dark_horse -= 0.30
     if rsi_val < 30:
-        contrarian += 0.35
+        dark_horse += 0.35
     elif rsi_val > 70:
-        contrarian -= 0.25
-    contrarian = min(1.0, max(0.0, contrarian))
+        dark_horse -= 0.25
+    dark_horse = min(1.0, max(0.0, dark_horse))
 
     # Technical: indicator consensus
     technical = 0.50
@@ -852,7 +852,7 @@ def _expert_contributions(
     return {
         "quant": round(quant, 4),
         "hype": round(hype, 4),
-        "contrarian": round(contrarian, 4),
+        "dark_horse": round(dark_horse, 4),
         "technical": round(technical, 4),
     }
 
@@ -944,11 +944,11 @@ def score_subnet_for_hour(
     if market_context and isinstance(market_context.get("weights"), dict):
         weights.update(market_context["weights"])
 
-    # Hour lens: overweight hype/technical, underweight contrarian
+    # Hour lens: overweight hype/technical, underweight dark_horse
     hour_weights = {
         "quant": weights.get("quant", 0.30) * 0.90,
         "hype": weights.get("hype", 0.25) * 1.20,
-        "contrarian": weights.get("contrarian", 0.20) * 0.80,
+        "dark_horse": weights.get("dark_horse", 0.20) * 0.80,
         "technical": weights.get("technical", 0.25) * 1.10,
     }
     total_weight = sum(hour_weights.values()) or 1.0
@@ -990,11 +990,11 @@ def score_subnet_for_day(
     if market_context and isinstance(market_context.get("weights"), dict):
         weights.update(market_context["weights"])
 
-    # Day lens: overweight quant/contrarian, underweight hype
+    # Day lens: overweight quant/dark_horse, underweight hype
     day_weights = {
         "quant": weights.get("quant", 0.30) * 1.15,
         "hype": weights.get("hype", 0.25) * 0.80,
-        "contrarian": weights.get("contrarian", 0.20) * 1.10,
+        "dark_horse": weights.get("dark_horse", 0.20) * 1.10,
         "technical": weights.get("technical", 0.25) * 0.95,
     }
     total_weight = sum(day_weights.values()) or 1.0
