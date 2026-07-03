@@ -21,7 +21,6 @@ from internal.indicators.price_fetcher import (
 )
 from internal.indicators.rsi import compute_rsi
 
-
 def _make_candles(closes, highs=None, lows=None, volumes=None):
     """Build minimal OHLCV candle list from a close series."""
     now = datetime.now(timezone.utc)
@@ -43,13 +42,11 @@ def _make_candles(closes, highs=None, lows=None, volumes=None):
         )
     return candles
 
-
 def test_price_sources_default_to_taomarketcap():
     pairs = {"5": {"symbol": "KAON"}}
     sources = _price_sources_for_subnet("5", pairs)
     assert sources[0]["source"] == "taomarketcap"
     assert sources[0]["netuid"] == "5"
-
 
 def test_price_sources_include_geckoterminal_fallback():
     pairs = {
@@ -64,14 +61,12 @@ def test_price_sources_include_geckoterminal_fallback():
     assert sources[1]["network"] == "bittensor"
     assert sources[-1]["source"] == "synthetic"
 
-
 def test_synthetic_candles_are_deterministic():
     a = _synthetic_candles("subnet-7", days=2)
     b = _synthetic_candles("subnet-7", days=2)
     assert len(a) == len(b) == 48
     assert a[0] == b[0]
     assert a[-1] == b[-1]
-
 
 def test_fetch_tmc_subnet_candles_scales_by_alpha_price(monkeypatch):
     def fake_subnets():
@@ -109,7 +104,6 @@ def test_fetch_tmc_subnet_candles_scales_by_alpha_price(monkeypatch):
     assert candles[0]["close"] == 52.5
     assert candles[0]["volume"] == 1000
 
-
 def test_fetch_geckoterminal_ohlcv_parses_response(monkeypatch):
     import requests
 
@@ -135,7 +129,6 @@ def test_fetch_geckoterminal_ohlcv_parses_response(monkeypatch):
     assert candles[0]["open"] == 1.0
     assert candles[0]["close"] == 1.5
 
-
 def test_fetch_ohlcv_uses_cache(tmp_path, monkeypatch):
     monkeypatch.setattr("internal.indicators.price_fetcher.USE_LIVE_PRICES", False)
     cache_path = tmp_path / "price_cache.json"
@@ -152,7 +145,6 @@ def test_fetch_ohlcv_uses_cache(tmp_path, monkeypatch):
         "1", days=2, use_cache=True, cache_path=str(cache_path), pairs_path=str(pairs_path)
     )
     assert cached == candles
-
 
 def test_fetch_ohlcv_tiered_fallback_to_geckoterminal(monkeypatch, tmp_path):
     import requests
@@ -209,7 +201,6 @@ def test_fetch_ohlcv_tiered_fallback_to_geckoterminal(monkeypatch, tmp_path):
     cache = json.load(open(cache_path))
     assert cache["1"]["source"] == "geckoterminal"
 
-
 def test_rsi_returns_neutral_for_balanced_prices():
     # Oscillating series with comparable gains/losses keeps RSI near 50.
     closes = [100.0 + (i % 2) * ((-1) ** i) * 2 for i in range(30)]
@@ -217,7 +208,6 @@ def test_rsi_returns_neutral_for_balanced_prices():
     result = compute_rsi(candles)
     assert 40.0 <= result["rsi"] <= 60.0
     assert result["neutral"] is True
-
 
 def test_rsi_detects_overbought_and_oversold():
     # Strong sustained rise pushes RSI into overbought territory.
@@ -232,7 +222,6 @@ def test_rsi_detects_overbought_and_oversold():
     result2 = compute_rsi(candles2)
     assert result2["oversold"] is True
 
-
 def test_macd_cross_flags():
     # Build a series that creates a histogram cross.
     base = [100.0] * 40
@@ -245,7 +234,6 @@ def test_macd_cross_flags():
     assert isinstance(result["bullish_cross"], bool)
     assert isinstance(result["bearish_cross"], bool)
 
-
 def test_momentum_stochastic_overbought():
     # Close at the high of the lookback window pushes %K to 100.
     closes = list(range(1, 50)) + [100.0] * 20
@@ -255,14 +243,12 @@ def test_momentum_stochastic_overbought():
     result = compute_momentum(candles)
     assert result["stochastic_overbought"] is True
 
-
 def test_momentum_roc_positive_after_recovery():
     # ROC turns positive when price recovers above the lookback close.
     closes = [100.0] * 10 + [90.0] * 5 + [110.0] * 5
     candles = _make_candles(closes)
     result = compute_momentum(candles)
     assert result["roc"] > 0
-
 
 def test_crossover_detects_rsi_reversal():
     rsi = {"rsi": 35.0}
@@ -272,14 +258,12 @@ def test_crossover_detects_rsi_reversal():
     events = detect_crossovers(rsi, macd, mom, prev_rsi=rsi_prev)
     assert any(e["event_type"] == "rsi_oversold_reversal" for e in events)
 
-
 def test_crossover_detects_macd_bullish_cross():
     rsi = {"rsi": 50.0}
     macd = {"bullish_cross": True, "bearish_cross": False, "histogram": 0.5}
     mom = {"roc": 1.0, "stochastic_k": 50.0, "stochastic_d": 50.0, "williams_r": -50.0}
     events = detect_crossovers(rsi, macd, mom)
     assert any(e["event_type"] == "macd_bullish_cross" for e in events)
-
 
 def test_indicator_engine_run_cycle(tmp_path):
     reg = tmp_path / "registry.json"
@@ -306,7 +290,6 @@ def test_indicator_engine_run_cycle(tmp_path):
     assert "per_subnet" in state
     assert "1" in state["per_subnet"]
 
-
 def test_indicator_scheduler_run_once(tmp_path):
     reg = tmp_path / "registry.json"
     soul = tmp_path / "soul_map.json"
@@ -330,7 +313,6 @@ def test_indicator_scheduler_run_once(tmp_path):
     assert state["running"] is False
     assert state["consecutive_failures"] == 0
 
-
 def test_scheduler_start_stop_are_idempotent():
     scheduler = IndicatorScheduler(refresh_minutes=60)
     res1 = scheduler.start(immediate=False)
@@ -338,3 +320,75 @@ def test_scheduler_start_stop_are_idempotent():
     res2 = scheduler.start(immediate=False)
     assert res2["started"] is False
     scheduler.stop()
+
+
+
+def test_price_sources_include_blockmachine_fallback():
+    pairs = {"5": {"symbol": "KAON"}}
+    sources = _price_sources_for_subnet("5", pairs)
+    assert sources[0]["source"] == "taomarketcap"
+    assert any(s["source"] == "blockmachine" for s in sources)
+    assert sources[-1]["source"] == "synthetic"
+
+
+def test_fetch_ohlcv_tiered_fallback_to_blockmachine(monkeypatch, tmp_path):
+    class FakeClient:
+        degraded = False
+
+        def is_healthy(self):
+            return True
+
+        def get_alpha_price(self, netuid):
+            return 0.5
+
+    monkeypatch.setattr(
+        "internal.indicators.price_fetcher._get_chain_client", lambda: FakeClient()
+    )
+    monkeypatch.setattr(
+        "internal.indicators.price_fetcher._fetch_tmc_candles",
+        lambda: [
+            {
+                "timestamp": "2024-01-01T00:00:00+00:00",
+                "open": 100,
+                "high": 110,
+                "low": 90,
+                "close": 105,
+                "volume": 1000,
+            },
+            {
+                "timestamp": "2024-01-01T01:00:00+00:00",
+                "open": 105,
+                "high": 115,
+                "low": 95,
+                "close": 110,
+                "volume": 2000,
+            },
+        ],
+    )
+
+    import requests
+
+    def fake_get(url, **kwargs):
+        class Bad:
+            def raise_for_status(self):
+                raise RuntimeError("source down")
+
+            def json(self):
+                return {}
+
+        return Bad()
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    monkeypatch.setattr("internal.indicators.price_fetcher.USE_LIVE_PRICES", True)
+
+    cache_path = tmp_path / "price_cache.json"
+    pairs_path = tmp_path / "price_pairs.json"
+    json.dump({"1": {"symbol": "SN1"}}, open(pairs_path, "w"))
+
+    candles = fetch_ohlcv(
+        "1", days=1, use_cache=True, cache_path=str(cache_path), pairs_path=str(pairs_path)
+    )
+    assert len(candles) == 2
+    assert candles[0]["close"] == 52.5
+    cache = json.load(open(cache_path))
+    assert cache["1"]["source"] == "blockmachine"
