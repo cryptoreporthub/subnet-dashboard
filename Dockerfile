@@ -5,10 +5,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-RUN echo "VERSION: 3.7.0" > VERSION.txt
+RUN echo "VERSION: 3.8.0" > VERSION.txt
 
 COPY . .
 
 EXPOSE 8080
 
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "council_app:app", "--host", "0.0.0.0", "--port", "8080"]
