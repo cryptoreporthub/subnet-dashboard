@@ -13,7 +13,6 @@ from internal.judges.judges import ORACLE, ECHO, PULSE
 
 DATA_DIR = os.environ.get("DATA_DIR", "data")
 
-
 def score_subnet(
     netuid: int,
     subnet: Dict[str, Any],
@@ -27,7 +26,7 @@ def score_subnet(
     oracle_prediction = {
         "subnet": name,
         "netuid": netuid,
-        "signal_impact": 0.5,  # neutral baseline
+        "signal_impact": 0.5,
         "subnet_data": {
             "price": subnet.get("price", 0),
             "apy": subnet.get("apy", 0),
@@ -50,7 +49,6 @@ def score_subnet(
         oracle_confidence = 0.0
         oracle_degraded = True
 
-    # Degrade Oracle when no fundamental data is available.
     if not any(
         subnet.get(k)
         for k in ("price", "apy", "emission", "emissions", "stake", "total_stake")
@@ -88,15 +86,17 @@ def score_subnet(
         "price_change_24h": subnet.get("price_change_24h", subnet.get("change_24h", 0)),
         "volume": subnet.get("volume", subnet.get("volume_24h", 0)),
         "price": subnet.get("price", 0),
+        "buys_24hr": subnet.get("buys_24hr", 0),
+        "sells_24hr": subnet.get("sells_24hr", 0),
+        "buy_volume_24h": subnet.get("buy_volume_24h", 0),
+        "sell_volume_24h": subnet.get("sell_volume_24h", 0),
     }
-    # Try Blockmachine on-chain alpha price
     on_chain_price_delta = None
     if chain_client is not None:
         try:
             if chain_client.is_healthy():
                 alpha_price = chain_client.get_alpha_price(netuid)
                 if alpha_price and alpha_price > 0:
-                    # Load cached price
                     cache_path = os.path.join(DATA_DIR, "price_cache.json")
                     cached = {}
                     if os.path.exists(cache_path):
@@ -109,7 +109,6 @@ def score_subnet(
                     prev = cached.get(key)
                     if prev and prev > 0:
                         on_chain_price_delta = (alpha_price - prev) / prev
-                    # Update cache
                     cached[key] = alpha_price
                     try:
                         os.makedirs(DATA_DIR, exist_ok=True)
@@ -121,7 +120,7 @@ def score_subnet(
                     if on_chain_price_delta is not None:
                         pulse_subnet_data["blockmachine_price_delta"] = on_chain_price_delta
         except Exception:
-            pass  # degraded handled below
+            pass
 
     pulse_prediction = {
         "subnet": name,
@@ -136,7 +135,7 @@ def score_subnet(
         pulse_confidence = pulse_result.get("confidence", 0.5)
         pulse_degraded = False
         if chain_client and (on_chain_price_delta is None):
-            pulse_degraded = True  # RPC was attempted but failed
+            pulse_degraded = True
     except Exception:
         pulse_score = 0.5
         pulse_confidence = 0.0
@@ -144,27 +143,22 @@ def score_subnet(
 
     # --- Consensus ---
     scores = [oracle_score, echo_score, pulse_score]
-    # Weighted average: oracle 0.35, echo 0.30, pulse 0.35
     consensus_score = oracle_score * 0.35 + echo_score * 0.30 + pulse_score * 0.35
-    # Agreement = 1 - stddev/clamp
     if len(scores) > 1:
         stddev = statistics.stdev(scores)
         agreement = max(0.0, min(1.0, 1.0 - stddev / 0.5))
     else:
         agreement = 1.0
-
     if all(s > 0.65 for s in scores):
         verdict = "long"
     elif all(s < 0.35 for s in scores):
         verdict = "short"
     else:
         verdict = "neutral"
-
     contested = agreement < 0.5
     consensus_confidence = sum(
         [oracle_confidence * 0.35, echo_confidence * 0.30, pulse_confidence * 0.35]
     )
-
     return {
         "netuid": netuid,
         "name": name,
@@ -198,13 +192,29 @@ def score_subnet(
         },
     }
 
-
 def score_all_subnets(
-    subnets: List[Dict[str, Any]],
+    subnets: Optional[List[Dict[str, Any]]] = None,
     market_context: Optional[Dict] = None,
     use_chain: bool = True,
 ) -> List[Dict[str, Any]]:
-    """Score all subnets and return sorted by consensus score descending."""
+    """Score all subnets and return sorted by consensus score descending.
+
+    If subnets is None, automatically fetches merged data from the layered
+    pipeline (Blockmachine > TaoStats > TaoMarketCap).
+    """
+    if subnets is None:
+        try:
+            from fetchers.merged_data import get_merged_subnet_data
+            subnets = get_merged_subnet_data()
+            if not subnets:
+                # Fallback to TaoMarketCap if merged data is empty
+                from fetchers.taomarketcap import get_all_subnets
+                subnets = get_all_subnets()
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("Failed to fetch merged data: %s", exc)
+            subnets = []
+
     chain_client = None
     if use_chain:
         try:
