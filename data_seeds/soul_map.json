@@ -1,44 +1,46 @@
 {
   "expert_weights": {
-    "quant": 0.88,
-    "hype": 1.0,
-    "contrarian": 1.0,
-    "technical": 1.0
+    "quant": 0.191,
+    "hype": 0.195,
+    "contrarian": 0.195,
+    "technical": 0.206,
+    "dark_horse": 0.212
   },
   "performance_history": {
-    "accuracy": 0.0,
-    "total_records": 13,
-    "correct": 0,
-    "wrong": 4,
-    "pending": 9
+    "accuracy": 0.441,
+    "total_records": 58,
+    "correct": 15,
+    "wrong": 19,
+    "pending": 24
   },
   "council_dispositions": {
-    "quant": "bullish",
-    "hype": "bullish",
-    "contrarian": "bearish",
-    "technical": "bullish"
+    "quant": "neutral",
+    "hype": "bearish",
+    "contrarian": "neutral",
+    "technical": "bearish",
+    "dark_horse": "bullish"
   },
   "council": {
     "quant": {
-      "disposition": "bullish",
+      "disposition": "neutral",
       "lens": "fundamental/yield",
-      "pick": "Coldint"
+      "pick": "Ralph"
     },
     "hype": {
-      "disposition": "bullish",
+      "disposition": "bearish",
       "lens": "momentum/social",
-      "pick": "Coldint"
+      "pick": "Ralph"
     },
     "contrarian": {
-      "disposition": "bearish",
+      "disposition": "neutral",
       "lens": "contrarian/RSI",
-      "pick": "Coldint"
+      "pick": "Ralph"
     },
     "technical": {
-      "disposition": "bullish",
+      "disposition": "bearish",
       "lens": "technical/trend",
-      "pick": "Coldint"
+      "pick": "Ralph"
     }
   },
-  "last_updated": "2026-06-28T23:14:34.333541Z"
+  "last_updated": "2026-07-04T23:18:55Z"
 }
