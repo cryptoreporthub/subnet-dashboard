@@ -67,6 +67,10 @@ logger.info("judge_app: removed %d routes, kept %d", len(_removed), len(_kept))
 async def health():
     return {"status": "ok", "ts": datetime.utcnow().isoformat() + "Z"}
 
+@app.get("/debug-entry")
+async def debug_entry():
+    return {"entry": "judge_app", "routes_removed": len(_removed), "routes_kept": len(_kept), "removed_paths": _removed}
+
 def _get_merged_data(max_age=120):
     """Fetch merged subnet data, deduplicated."""
     try:
@@ -285,5 +289,4 @@ class ScriptInjectionMiddleware:
                         body = b"".join(body_parts)
                         if b"" in body: body = body.replace(b"", _SCRIPT_TAGS + b"", 1) else: body = body + _SCRIPT_TAGS new_headers = [(k, v) for k, v in headers[0] if k.lower() not in (b"content-length", b"transfer-encoding", b"content-encoding")] new_headers.append((b"content-length", str(len(body)).encode()))) await send({"type": "http.response.start", "status": status[0], "headers": new_headers}) await send({"type": "http.response.body", "body": body}) else: if not started[0]: started[0] = True await send({"type": "http.response.start", "status": status[0], "headers": headers[0]}) await send(message) await self.app(scope, receive, send_intercept) app.add_middleware(ScriptInjectionMiddleware) # ─────────────────────────────────────────────
 
-[read_links truncated 712 chars from this runtime tool output. The full content is stored with the tool result.]
-# deploy trigger: 1783199179026
+[read_links truncated 147 chars from this runtime tool output. The full content is stored with the tool result.]
