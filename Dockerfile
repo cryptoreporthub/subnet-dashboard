@@ -10,10 +10,10 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Update VERSION to force rebuild
-RUN echo "VERSION: 3.6.0 $(date +%Y%m%d%H%M%S)" > VERSION.txt
+RUN echo "VERSION: 3.6.1 $(date +%Y%m%d%H%M%S)" > VERSION.txt
 
 COPY . .
 
 EXPOSE 8080
 
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "judge_app:app", "--host", "0.0.0.0", "--port", "8080"]
