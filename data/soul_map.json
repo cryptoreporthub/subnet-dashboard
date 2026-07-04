@@ -1,10 +1,10 @@
 {
   "expert_weights": {
-    "quant": 0.9,
-    "hype": 0.92,
-    "contrarian": 0.92,
-    "technical": 0.97,
-    "dark_horse": 1.0
+    "quant": 0.191,
+    "hype": 0.195,
+    "contrarian": 0.195,
+    "technical": 0.206,
+    "dark_horse": 0.212
   },
   "performance_history": {
     "accuracy": 0.441,
@@ -42,5 +42,5 @@
       "pick": "Ralph"
     }
   },
-  "last_updated": "2026-07-03T18:45:21.145960Z"
+  "last_updated": "2026-07-04T23:18:55Z"
 }
