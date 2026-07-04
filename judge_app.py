@@ -9,6 +9,7 @@ import logging
 import threading
 import time
 import os
+import traceback
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -16,6 +17,48 @@ logger = logging.getLogger(__name__)
 
 # --- Import the existing app from server.py ---
 from server import app  # noqa: E402
+
+# --- Debug: expose validation errors so we can see the root cause ---
+from fastapi.exceptions import RequestValidationError, ValidationException
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "RequestValidationError",
+            "path": str(request.url),
+            "method": request.method,
+            "detail": exc.errors(),
+            "body": str(exc.body) if hasattr(exc, "body") else None,
+        },
+    )
+
+@app.exception_handler(ValidationException)
+async def generic_validation_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "ValidationException",
+            "path": str(request.url),
+            "method": request.method,
+            "detail": str(exc),
+        },
+    )
+
+@app.exception_handler(Exception)
+async def all_exception_handler(request, exc):
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": type(exc).__name__,
+            "path": str(request.url),
+            "method": request.method,
+            "detail": str(exc),
+            "traceback": traceback.format_exc().split("\n"),
+        },
+    )
 
 # ─────────────────────────────────────────────────────────────
 # Deduplication helper — used everywhere
@@ -249,8 +292,8 @@ async def serve_data_fixer_js():
 # Pure ASGI middleware — inject script tags into HTML responses
 # ─────────────────────────────────────────────────────────────
 _SCRIPT_TAGS = (
-    b'<script src="/static/judge_panel.js"></script>'
-    b'<script src="/static/data_fixer.js"></script>'
+    b''
+    b''
 )
 
 class ScriptInjectionMiddleware:
@@ -277,45 +320,6 @@ class ScriptInjectionMiddleware:
                     body_parts.append(message.get("body", b""))
                     if not message.get("more_body", False):
                         body = b"".join(body_parts)
-                        if b"</body>" in body:
-                            body = body.replace(b"</body>", _SCRIPT_TAGS + b"</body>", 1)
-                        else:
-                            body = body + _SCRIPT_TAGS
-                        nh = [(k, v) for k, v in headers[0]
-                              if k.lower() not in (b"content-length", b"transfer-encoding", b"content-encoding")]
-                        nh.append((b"content-length", str(len(body)).encode()))
-                        await send({"type": "http.response.start", "status": status[0], "headers": nh})
-                        await send({"type": "http.response.body", "body": body})
-                else:
-                    if not sent[0]:
-                        await send({"type": "http.response.start", "status": status[0], "headers": headers[0]})
-                        sent[0] = True
-                    await send(message)
-        await self.app(scope, receive, send_intercept)
+                        if b"" in body: body = body.replace(b"", _SCRIPT_TAGS + b"", 1) else: body = body + _SCRIPT_TAGS nh = [(k, v) for k, v in headers[0] if k.lower() not in (b"content-length", b"transfer-encoding", b"content-encoding")] nh.append((b"content-length", str(len(body)).encode())) await send({"type": "http.response.start", "status": status[0], "headers": nh}) await send({"type": "http.response.body", "body": body}) else: if not sent[0]: await send({"type": "http.response.start", "status": status[0], "headers": headers[0]}) sent[0] = True await send(message) await self.app(scope, receive, send_intercept) app.add_middleware(ScriptInjectionMiddleware) # ────────────────────
 
-app.add_middleware(ScriptInjectionMiddleware)
-
-# ─────────────────────────────────────────────────────────────
-# Background judge score refresh — every 5 min
-# ─────────────────────────────────────────────────────────────
-def _start_scheduler():
-    def _loop():
-        time.sleep(10)
-        while True:
-            try:
-                merged, source = _get_merged_data()
-                if not merged:
-                    from fetchers.taomarketcap import get_all_subnets
-                    merged = _dedupe(get_all_subnets())
-                    source = "taomarketcap"
-                if merged:
-                    from internal.judges.subnet_judges import score_all_subnets
-                    score_all_subnets(merged)
-                    logger.info("Judge scores refreshed (%d subnets, source=%s)", len(merged), source)
-            except Exception as e:
-                logger.warning("Judge refresh failed: %s", e)
-            time.sleep(300)
-    threading.Thread(target=_loop, daemon=True).start()
-
-_start_scheduler()
-__all__ = ["app"]
+[read_links truncated 737 chars from this runtime tool output. The full content is stored with the tool result.]
