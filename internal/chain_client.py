@@ -1,16 +1,19 @@
 """Lightweight HTTPS JSON-RPC client for Bittensor-compatible nodes.
 
 Designed for Blockmachine's free public RPC (https://rpc.blockmachine.io)
-but works with any Substrate/Bittensor JSON-RPC endpoint that exposes the
-Bittensor runtime calls and state storage.
+but works with any Substrate/Bittensor JSON-RPC endpoint.
 
 Primary data source for the dashboard's layered pipeline:
   Layer 1 (Primary):   Blockmachine RPC — real-time, free, no API key
   Layer 2 (Supp):      TaoStats API — derived metrics, 5 calls/min
   Layer 3 (Fallback):  TaoMarketCap — display metadata only
+
+Swap volume detection uses pool reserve deltas:
+  - TAO reserve up + Alpha reserve down = BUY (someone swapped TAO for Alpha)
+  - TAO reserve down + Alpha reserve up = SELL (someone swapped Alpha for TAO)
+This is more reliable than parsing raw SCALE events without chain metadata.
 """
 
-import binascii
 import logging
 import os
 import sqlite3
@@ -38,6 +41,15 @@ def _init_volume_db():
     conn = sqlite3.connect(VOLUME_DB_PATH)
     c = conn.cursor()
     c.execute("""
+        CREATE TABLE IF NOT EXISTS pool_snapshots (
+            netuid INTEGER,
+            timestamp TEXT,
+            tao_reserve REAL,
+            alpha_reserve REAL,
+            PRIMARY KEY (netuid, timestamp)
+        )
+    """)
+    c.execute("""
         CREATE TABLE IF NOT EXISTS swap_volume (
             netuid INTEGER,
             timestamp TEXT,
@@ -46,16 +58,6 @@ def _init_volume_db():
             buy_volume_tao REAL DEFAULT 0.0,
             sell_volume_tao REAL DEFAULT 0.0,
             PRIMARY KEY (netuid, timestamp)
-        )
-    """)
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS volume_24h (
-            netuid INTEGER PRIMARY KEY,
-            buys_24h INTEGER DEFAULT 0,
-            sells_24h INTEGER DEFAULT 0,
-            buy_volume_24h REAL DEFAULT 0.0,
-            sell_volume_24h REAL DEFAULT 0.0,
-            last_updated TEXT
         )
     """)
     conn.commit()
@@ -120,11 +122,6 @@ def _hex_to_bytes(hex_str):
 
 def _encode_netuid_arg(netuid):
     return "0x" + struct.pack("<H", netuid).hex()
-
-
-def _contains_swap_event(raw, netuid):
-    target = struct.pack("<H", netuid)
-    return target in raw
 
 
 class ChainClient:
@@ -203,7 +200,6 @@ class ChainClient:
     def get_all_netuids(self):
         if not self.is_healthy():
             return []
-        # Method 1: runtime call for total subnets
         try:
             result = self._call_quiet("subnet_getN", [])
             if result is not None:
@@ -213,7 +209,6 @@ class ChainClient:
                 return netuids
         except Exception:
             pass
-        # Method 2: state_call
         try:
             result = self._call_quiet("state_call", ["SubtensorModule_get_total_subnets", "0x"])
             if result and result != "0x":
@@ -224,7 +219,6 @@ class ChainClient:
                 return netuids
         except Exception:
             pass
-        # Method 3: probe
         netuids = []
         for n in range(MAX_NETUIDS):
             try:
@@ -273,6 +267,7 @@ class ChainClient:
                         "netuid": netuid, "liquidity": round(tao + alpha, 4),
                         "total_tao": round(tao, 4), "total_alpha": round(alpha, 4),
                         "root_prop": round(root_prop, 4),
+                        "tao_reserve_raw": tao_reserve, "alpha_reserve_raw": alpha_reserve,
                     }
         except Exception as exc:
             logger.debug("get_pool_state failed for netuid %d: %s", netuid, exc)
@@ -307,55 +302,114 @@ class ChainClient:
             logger.debug("get_current_block failed: %s", exc)
         return None
 
-    def get_swap_events(self, netuid, block_count=256):
+    # ------------------------------------------------------------------
+    # Swap volume detection via pool reserve deltas
+    # ------------------------------------------------------------------
+
+    def get_swap_volume(self, netuid):
+        """Detect buy/sell volume by comparing pool reserves to previous snapshot.
+
+        - Buy: TAO in, Alpha out (tao_reserve up, alpha_reserve down)
+        - Sell: TAO out, Alpha in (tao_reserve down, alpha_reserve up)
+        - Both up/down: LP operation (skipped)
+        """
         if not self.is_healthy():
-            return {"buys": 0, "sells": 0, "buy_volume_tao": 0.0, "sell_volume_tao": 0.0,
-                    "window_blocks": 0, "buys_24h": 0, "sells_24h": 0}
-        current_block = self.get_current_block()
-        if not current_block:
-            return {"buys": 0, "sells": 0, "buy_volume_tao": 0.0, "sell_volume_tao": 0.0,
-                    "window_blocks": 0, "buys_24h": 0, "sells_24h": 0}
-        start_block = max(0, current_block - block_count)
-        buys, sells, buy_vol, sell_vol = 0, 0, 0.0, 0.0
-        batch_size = 10
-        blocks_scanned = 0
-        for batch_start in range(start_block, current_block, batch_size):
-            batch_end = min(batch_start + batch_size, current_block)
-            for block_num in range(batch_start, batch_end):
-                try:
-                    block_hash = self._call_quiet("chain_getBlockHash", [block_num])
-                    if not block_hash:
-                        continue
-                    events_result = self._call_quiet("state_getStorage", [
-                        "0x26aa394eea5630e07c48ae0c9558cea3a0c8a6e5e1c0e3b0e3b0e3b0e3b0e3b0e3b0e3b0e3b0e3b0e3b0e3b0e3b0e3b0e3b0e3b0",
-                    ])
-                    if events_result and events_result != "0x":
-                        raw = _hex_to_bytes(events_result)
-                        if _contains_swap_event(raw, netuid):
-                            buys += 1
-                    blocks_scanned += 1
-                    time.sleep(BATCH_DELAY)
-                except Exception:
-                    continue
-            time.sleep(0.5)
-        self._store_volume_snapshot(netuid, buys, sells, buy_vol, sell_vol)
+            return self._empty_volume()
+
+        current_pool = self.get_pool_state(netuid)
+        if not current_pool:
+            return self._empty_volume()
+
+        current_tao = current_pool.get("tao_reserve_raw", 0) or current_pool.get("total_tao", 0)
+        current_alpha = current_pool.get("alpha_reserve_raw", 0) or current_pool.get("total_alpha", 0)
+
+        if current_tao > 1e12:
+            current_tao_tao = current_tao / 1e9
+            current_alpha_tao = current_alpha / 1e9
+        else:
+            current_tao_tao = current_tao
+            current_alpha_tao = current_alpha
+
+        prev = self._get_last_pool_snapshot(netuid)
+
+        buys = 0
+        sells = 0
+        buy_vol = 0.0
+        sell_vol = 0.0
+
+        if prev:
+            prev_tao = prev.get("tao_reserve", 0)
+            prev_alpha = prev.get("alpha_reserve", 0)
+            tao_delta = current_tao_tao - prev_tao
+            alpha_delta = current_alpha_tao - prev_alpha
+
+            if tao_delta > 0.0001 and alpha_delta < -0.0001:
+                buys = 1
+                buy_vol = abs(tao_delta)
+            elif tao_delta < -0.0001 and alpha_delta > 0.0001:
+                sells = 1
+                sell_vol = abs(tao_delta)
+
+        self._store_pool_snapshot(netuid, current_tao_tao, current_alpha_tao)
+
+        if buys > 0 or sells > 0:
+            self._store_volume(netuid, buys, sells, buy_vol, sell_vol)
+
         cumulative = self._get_cumulative_volume_24h(netuid)
+
         return {
-            "buys": buys, "sells": sells, "buy_volume_tao": buy_vol,
-            "sell_volume_tao": sell_vol, "window_blocks": blocks_scanned,
+            "buys": buys,
+            "sells": sells,
+            "buy_volume_tao": round(buy_vol, 6),
+            "sell_volume_tao": round(sell_vol, 6),
             "buys_24h": cumulative.get("buys_24h", 0),
             "sells_24h": cumulative.get("sells_24h", 0),
-            "buy_volume_24h": cumulative.get("buy_volume_24h", 0.0),
-            "sell_volume_24h": cumulative.get("sell_volume_24h", 0.0),
+            "buy_volume_24h": round(cumulative.get("buy_volume_24h", 0.0), 6),
+            "sell_volume_24h": round(cumulative.get("sell_volume_24h", 0.0), 6),
+            "current_tao_reserve": round(current_tao_tao, 4),
+            "current_alpha_reserve": round(current_alpha_tao, 4),
         }
 
-    def _store_volume_snapshot(self, netuid, buys, sells, buy_vol, sell_vol):
+    def _empty_volume(self):
+        return {
+            "buys": 0, "sells": 0, "buy_volume_tao": 0.0, "sell_volume_tao": 0.0,
+            "buys_24h": 0, "sells_24h": 0, "buy_volume_24h": 0.0, "sell_volume_24h": 0.0,
+        }
+
+    def _store_pool_snapshot(self, netuid, tao_reserve, alpha_reserve):
         now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         conn = sqlite3.connect(VOLUME_DB_PATH)
         c = conn.cursor()
-        c.execute("""INSERT OR REPLACE INTO swap_volume
+        c.execute("""
+            INSERT OR REPLACE INTO pool_snapshots (netuid, timestamp, tao_reserve, alpha_reserve)
+            VALUES (?, ?, ?, ?)
+        """, (netuid, now, tao_reserve, alpha_reserve))
+        conn.commit()
+        conn.close()
+
+    def _get_last_pool_snapshot(self, netuid):
+        conn = sqlite3.connect(VOLUME_DB_PATH)
+        c = conn.cursor()
+        c.execute("""
+            SELECT timestamp, tao_reserve, alpha_reserve
+            FROM pool_snapshots WHERE netuid = ?
+            ORDER BY timestamp DESC LIMIT 1
+        """, (netuid,))
+        row = c.fetchone()
+        conn.close()
+        if row:
+            return {"timestamp": row[0], "tao_reserve": row[1], "alpha_reserve": row[2]}
+        return None
+
+    def _store_volume(self, netuid, buys, sells, buy_vol, sell_vol):
+        now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        conn = sqlite3.connect(VOLUME_DB_PATH)
+        c = conn.cursor()
+        c.execute("""
+            INSERT OR REPLACE INTO swap_volume
             (netuid, timestamp, buys, sells, buy_volume_tao, sell_volume_tao)
-            VALUES (?, ?, ?, ?, ?, ?)""", (netuid, now, buys, sells, buy_vol, sell_vol))
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (netuid, now, buys, sells, buy_vol, sell_vol))
         conn.commit()
         conn.close()
 
@@ -363,9 +417,11 @@ class ChainClient:
         cutoff = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() - 86400))
         conn = sqlite3.connect(VOLUME_DB_PATH)
         c = conn.cursor()
-        c.execute("""SELECT COALESCE(SUM(buys), 0), COALESCE(SUM(sells), 0),
-            COALESCE(SUM(buy_volume_tao), 0), COALESCE(SUM(sell_volume_tao), 0)
-            FROM swap_volume WHERE netuid = ? AND timestamp >= ?""", (netuid, cutoff))
+        c.execute("""
+            SELECT COALESCE(SUM(buys), 0), COALESCE(SUM(sells), 0),
+                   COALESCE(SUM(buy_volume_tao), 0), COALESCE(SUM(sell_volume_tao), 0)
+            FROM swap_volume WHERE netuid = ? AND timestamp >= ?
+        """, (netuid, cutoff))
         row = c.fetchone()
         conn.close()
         if row:
@@ -386,6 +442,7 @@ class ChainClient:
                 stake = self.get_subnet_stake(netuid)
                 pool = self.get_pool_state(netuid)
                 emission = self.get_subnet_emission(netuid)
+                volume = self.get_swap_volume(netuid)
                 subnet = {
                     "netuid": netuid, "name": f"SN{netuid}", "price": price or 0.0,
                     "stake": stake.get("stake", 0) if stake else 0,
@@ -395,6 +452,10 @@ class ChainClient:
                     "total_tao": pool.get("total_tao", 0) if pool else 0,
                     "total_alpha": pool.get("total_alpha", 0) if pool else 0,
                     "root_prop": pool.get("root_prop", 0) if pool else 0,
+                    "buys_24hr": volume.get("buys_24h", 0),
+                    "sells_24hr": volume.get("sells_24h", 0),
+                    "buy_volume_24h": volume.get("buy_volume_24h", 0.0),
+                    "sell_volume_24h": volume.get("sell_volume_24h", 0.0),
                     "source": "blockmachine",
                 }
                 subnets.append(subnet)
