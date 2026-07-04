@@ -1,19 +1,16 @@
 """
 Judge Council app wrapper — entry point for uvicorn.
 
-Imports the main server app, then wraps it with an ASGI middleware that
-intercepts all /health and /api/* requests and serves them directly from
-clean handlers using the merged data pipeline.  Non-API requests (homepage,
-static files) pass through to the original server app unchanged.
+Imports the main server app, removes broken route definitions,
+adds clean working API routes, injects client-side scripts via
+pure ASGI middleware, and starts the background judge scheduler.
 """
 
-import json
 import logging
-import os
 import threading
 import time
+import os
 from datetime import datetime
-from urllib.parse import parse_qs
 
 logger = logging.getLogger(__name__)
 
@@ -23,125 +20,78 @@ from server import app  # noqa: E402
 # --- Include the council router (adds /api/judges, /api/council, etc.) ---
 from internal.judges.council_routes import council_router  # noqa: E402
 
-# We can't safely remove server.py's broken routes (FastAPI compiles them),
-# so we intercept at the ASGI level instead. But we still include the council
-# router so its routes are registered — our middleware will handle them.
+# ─────────────────────────────────────────────────────────────
+# Route overrides — remove broken server.py route definitions
+# and replace with clean ones.  This fixes the 422 errors AND
+# ensures our council_router versions of /api/judges and
+# /api/council take precedence over server.py's stale versions.
+# ─────────────────────────────────────────────────────────────
+
+_OVERRIDE_PATHS = {
+    "/health",
+    "/api/subnets",
+    "/api/simivision",
+    "/api/mindmap/summary",
+    "/api/indicators",
+    "/api/rotation-tokens",
+    "/api/learning/stats",
+    "/api/scheduler/state",
+    "/api/judges",
+    "/api/council",
+    "/api/paper-portfolio",
+    "/api/postmortems",
+}
+
+# Collect original handlers we might want to delegate to
+_original_handlers = {}
+for _r in list(app.router.routes):
+    _p = getattr(_r, "path", None)
+    if _p in _OVERRIDE_PATHS:
+        _original_handlers[_p] = getattr(_r, "endpoint", None)
+
+# Remove the broken routes
+app.router.routes = [
+    _r for _r in app.router.routes
+    if getattr(_r, "path", None) not in _OVERRIDE_PATHS
+]
+
+# Now include the council router — its /api/judges, /api/council,
+# /api/paper-portfolio, /api/postmortems, /judge-council routes
+# will be the ONLY versions registered.
 app.include_router(council_router)
 
+# ── Health ──
+@app.get("/health")
+async def health():
+    return {"status": "ok", "ts": datetime.utcnow().isoformat() + "Z"}
 
-# ─────────────────────────────────────────────────────────────
-# Clean API handlers — these replace all broken server.py routes.
-# Each returns (status_code, headers, body_bytes).
-# ─────────────────────────────────────────────────────────────
-
-def _json(data, status=200):
-    body = json.dumps(data, default=str).encode()
-    return status, [
-        (b"content-type", b"application/json"),
-        (b"content-length", str(len(body)).encode()),
-    ], body
-
-def _handle_health(scope):
-    return _json({"status": "ok", "ts": datetime.utcnow().isoformat() + "Z"})
-
-def _handle_api_subnets(scope):
+# ── Subnets (merged data pipeline) ──
+@app.get("/api/subnets")
+async def api_subnets():
     try:
         from fetchers.merged_data import get_merged_subnet_data
         subnets = get_merged_subnet_data()
         if not subnets:
             from fetchers.taomarketcap import get_all_subnets
             subnets = get_all_subnets()
-        # Deduplicate by netuid
-        seen = set()
-        unique = []
-        for s in subnets:
-            nuid = s.get("netuid", 0)
-            if nuid not in seen:
-                seen.add(nuid)
-                unique.append(s)
-        return _json({"count": len(unique), "subnets": unique, "source": "merged" if unique else "none"})
+        return {"count": len(subnets), "subnets": subnets, "source": "merged" if subnets else "none"}
     except Exception as e:
         logger.error("api_subnets error: %s", e, exc_info=True)
-        return _json({"count": 0, "subnets": [], "error": str(e)})
+        return {"count": 0, "subnets": [], "error": str(e)}
 
-def _handle_api_judges(scope):
+# ── SimiVision ──
+@app.get("/api/simivision")
+async def api_simivision():
     try:
         from fetchers.merged_data import get_merged_subnet_data
-        merged, source = merged_data_with_source()
-        if not merged:
+        subnets = get_merged_subnet_data()
+        if not subnets:
             from fetchers.taomarketcap import get_all_subnets
-            merged = get_all_subnets()
-            source = "taomarketcap-fallback"
-        if not merged:
-            return _json({"success": False, "error": "No subnet data", "judges": [], "count": 0})
-        # Deduplicate by netuid before scoring
-        seen = set()
-        unique = []
-        for s in merged:
-            nuid = s.get("netuid", 0)
-            if nuid not in seen:
-                seen.add(nuid)
-                unique.append(s)
-        from internal.judges.subnet_judges import score_all_subnets
-        result = score_all_subnets(unique)
-        return _json({"success": True, "judges": result, "count": len(result), "source": source})
-    except Exception as e:
-        logger.error("api_judges error: %s", e, exc_info=True)
-        return _json({"success": False, "error": str(e), "judges": [], "count": 0})
-
-def _handle_api_council(scope):
-    try:
-        merged, source = merged_data_with_source()
-        if not merged:
-            from fetchers.taomarketcap import get_all_subnets
-            merged = get_all_subnets()
-            source = "taomarketcap-fallback"
-        if not merged:
-            return _json({"status": "degraded", "subnets": [], "judges": [], "meta": {"count": 0, "source": "none"}})
-        # Deduplicate
-        seen = set()
-        unique = []
-        for s in merged:
-            nuid = s.get("netuid", 0)
-            if nuid not in seen:
-                seen.add(nuid)
-                unique.append(s)
-        try:
-            from internal.judges.subnet_judges import score_all_subnets
-            scored = score_all_subnets(unique)
-        except Exception as e:
-            logger.warning("Judge scoring failed: %s", e)
-            scored = []
-        return _json({
-            "status": "success",
-            "subnets": unique,
-            "judges": scored,
-            "meta": {
-                "count": len(unique),
-                "judged": len(scored) if scored else 0,
-                "source": source,
-                "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-            },
-        })
-    except Exception as e:
-        logger.error("council API error: %s", e, exc_info=True)
-        return _json({"status": "error", "error": str(e), "subnets": [], "judges": [], "meta": {"count": 0}})
-
-def _handle_api_simivision(scope):
-    try:
-        merged, source = merged_data_with_source()
-        if not merged:
-            from fetchers.taomarketcap import get_all_subnets
-            merged = get_all_subnets()
+            subnets = get_all_subnets()
         items = []
-        seen = set()
-        for sn in merged:
-            nuid = sn.get("netuid", 0)
-            if nuid in seen:
-                continue
-            seen.add(nuid)
+        for sn in subnets:
             items.append({
-                "id": nuid,
+                "id": sn.get("netuid", 0),
                 "name": sn.get("name", "Unknown"),
                 "emission": sn.get("emission", 0),
                 "status": sn.get("status", "active"),
@@ -152,15 +102,18 @@ def _handle_api_simivision(scope):
                 "market_cap": sn.get("market_cap", 0),
                 "consensus": {"score": 0.5, "action": "hold"},
             })
-        return _json({"items": items, "count": len(items)})
+        return {"items": items, "count": len(items)}
     except Exception as e:
         logger.error("api_simivision error: %s", e, exc_info=True)
-        return _json({"items": [], "count": 0, "error": str(e)})
+        return {"items": [], "count": 0, "error": str(e)}
 
-def _handle_api_mindmap_summary(scope):
+# ── Mindmap summary ──
+@app.get("/api/mindmap/summary")
+async def api_mindmap_summary():
     try:
         soul_path = os.path.join("data", "soul_map.json")
         if os.path.exists(soul_path):
+            import json
             with open(soul_path) as f:
                 soul = json.load(f)
             decisions = soul.get("decisions", [])
@@ -173,15 +126,16 @@ def _handle_api_mindmap_summary(scope):
     except Exception as e:
         return {"total_decisions": 0, "error": str(e)}
 
-def _handle_api_indicators(scope):
+# ── Indicators ──
+@app.get("/api/indicators")
+async def api_indicators():
     try:
-        merged, _ = merged_data_with_source()
-        if not merged:
-            from fetchers.taomarketcap import get_all_subnets
-            merged = get_all_subnets()
-        if not merged:
-            return _json({"indicators": [], "count": 0})
-        top = sorted(merged, key=lambda s: s.get("volume", 0), reverse=True)[:20]
+        from fetchers.merged_data import get_merged_subnet_data
+        subnets = get_merged_subnet_data()
+        if not subnets:
+            return {"indicators": [], "count": 0}
+        # Return basic indicator data for top subnets
+        top = sorted(subnets, key=lambda s: s.get("volume", 0), reverse=True)[:20]
         indicators = []
         for sn in top:
             indicators.append({
@@ -192,86 +146,66 @@ def _handle_api_indicators(scope):
                 "volume": sn.get("volume", 0),
                 "price_change_24h": sn.get("price_change_24h", 0),
             })
-        return _json({"indicators": indicators, "count": len(indicators)})
+        return {"indicators": indicators, "count": len(indicators)}
     except Exception as e:
-        return _json({"indicators": [], "count": 0, "error": str(e)})
+        logger.error("api_indicators error: %s", e, exc_info=True)
+        return {"indicators": [], "count": 0, "error": str(e)}
 
-def _handle_api_rotation_tokens(scope):
-    return _json({"patterns": [], "count": 0})
+# ── Rotation tokens ──
+@app.get("/api/rotation-tokens")
+async def api_rotation_tokens():
+    try:
+        from internal.council.rotation_tracker import get_rotation_patterns
+        patterns = get_rotation_patterns() if hasattr(get_rotation_patterns, '__call__') else []
+        return {"patterns": patterns or [], "count": len(patterns or [])}
+    except Exception:
+        return {"patterns": [], "count": 0}
 
-def _handle_api_learning_stats(scope):
+# ── Learning stats ──
+@app.get("/api/learning/stats")
+async def api_learning_stats():
     try:
         soul_path = os.path.join("data", "soul_map.json")
         if os.path.exists(soul_path):
+            import json
             with open(soul_path) as f:
                 soul = json.load(f)
-            preds = soul.get("predictions", [])
-            correct = len([p for p in preds if p.get("correct")])
-            return _json({
-                "total_predictions": len(preds),
-                "correct": correct,
-                "accuracy": correct / len(preds) if preds else 0.0,
-            })
-        return _json({"total_predictions": 0, "correct": 0, "accuracy": 0.0})
+            return {
+                "total_predictions": len(soul.get("predictions", [])),
+                "correct": len([p for p in soul.get("predictions", []) if p.get("correct")]),
+                "accuracy": 0.0,
+            }
+        return {"total_predictions": 0, "correct": 0, "accuracy": 0.0}
     except Exception:
-        return _json({"total_predictions": 0, "correct": 0, "accuracy": 0.0})
+        return {"total_predictions": 0, "correct": 0, "accuracy": 0.0}
 
-def _handle_api_scheduler_state(scope):
-    return _json({
+# ── Scheduler state ──
+@app.get("/api/scheduler/state")
+async def api_scheduler_state():
+    return {
         "running": True,
         "last_run_ok": True,
         "consecutive_failures": 0,
         "refresh_minutes": 5,
-    })
+    }
 
-def _handle_api_paper_portfolio(scope):
-    try:
-        from internal.judges.portfolios import all_portfolios
-        portfolios = all_portfolios()
-        return _json({"success": True, "portfolios": portfolios})
-    except Exception as e:
-        return _json({"success": False, "error": str(e), "portfolios": {}})
+# ── Serve static JS files ──
+from fastapi.responses import FileResponse  # noqa: E402
 
-def _handle_api_postmortems(scope):
-    try:
-        from internal.judges.postmortems import all_postmortems
-        postmortems = all_postmortems()
-        return _json({"success": True, "postmortems": postmortems})
-    except Exception as e:
-        return _json({"success": False, "error": str(e), "postmortems": {}})
+@app.get("/static/judge_panel.js")
+async def serve_panel_js():
+    path = os.path.join(os.path.dirname(__file__), "static", "judge_panel.js")
+    return FileResponse(path, media_type="application/javascript")
 
-def merged_data_with_source():
-    """Try merged data, return (subnets, source_str)."""
-    try:
-        from fetchers.merged_data import get_merged_subnet_data
-        merged = get_merged_subnet_data()
-        if merged:
-            return merged, "merged"
-    except Exception as e:
-        logger.warning("Merged data fetch failed: %s", e)
-    return None, "none"
-
-# Route dispatch table
-API_ROUTES = {
-    "/health": _handle_health,
-    "/api/subnets": _handle_api_subnets,
-    "/api/judges": _handle_api_judges,
-    "/api/council": _handle_api_council,
-    "/api/simivision": _handle_api_simivision,
-    "/api/mindmap/summary": _handle_api_mindmap_summary,
-    "/api/indicators": _handle_api_indicators,
-    "/api/rotation-tokens": _handle_api_rotation_tokens,
-    "/api/learning/stats": _handle_api_learning_stats,
-    "/api/scheduler/state": _handle_api_scheduler_state,
-    "/api/paper-portfolio": _handle_api_paper_portfolio,
-    "/api/postmortems": _handle_api_postmortems,
-}
+@app.get("/static/data_fixer.js")
+async def serve_data_fixer_js():
+    path = os.path.join(os.path.dirname(__file__), "static", "data_fixer.js")
+    return FileResponse(path, media_type="application/javascript")
 
 
 # ─────────────────────────────────────────────────────────────
-# Pure ASGI middleware:
-#   1. Intercept /health and /api/* paths → serve from clean handlers
-#   2. For HTML responses, inject <script> tags before </body>
+# Pure ASGI middleware — injects script tags into HTML responses.
+# Avoids BaseHTTPMiddleware which can cause 422 on JSON endpoints.
 # ─────────────────────────────────────────────────────────────
 
 _SCRIPT_TAGS = (
@@ -279,13 +213,8 @@ _SCRIPT_TAGS = (
     b'<script src="/static/data_fixer.js"></script>'
 )
 
-_STATIC_FILES = {
-    "/static/judge_panel.js": ("static/judge_panel.js", "application/javascript"),
-    "/static/data_fixer.js": ("static/data_fixer.js", "application/javascript"),
-}
-
-class InterceptionMiddleware:
-    """Pure ASGI middleware: intercept API routes + inject scripts into HTML."""
+class ScriptInjectionMiddleware:
+    """Pure ASGI middleware: inject <script> tags before </body> in HTML."""
 
     def __init__(self, app):
         self.app = app
@@ -295,50 +224,11 @@ class InterceptionMiddleware:
             await self.app(scope, receive, send)
             return
 
-        path = scope.get("path", "")
-
-        # ── Serve static JS files directly ──
-        if path in _STATIC_FILES:
-            file_rel, mime = _STATIC_FILES[path]
-            file_path = os.path.join(os.path.dirname(__file__), file_rel)
-            try:
-                with open(file_path, "rb") as f:
-                    body = f.read()
-                headers = [
-                    (b"content-type", mime.encode()),
-                    (b"content-length", str(len(body)).encode()),
-                    (b"cache-control", b"no-cache"),
-                ]
-                await send({"type": "http.response.start", "status": 200, "headers": headers})
-                await send({"type": "http.response.body", "body": body})
-                return
-            except Exception as e:
-                logger.warning("Static file %s error: %s", path, e)
-
-        # ── Intercept API routes ──
-        if path in API_ROUTES:
-            handler = API_ROUTES[path]
-            try:
-                result = handler(scope)
-                if isinstance(result, tuple):
-                    status, headers, body = result
-                elif isinstance(result, dict):
-                    status, headers, body = _json(result)
-                else:
-                    status, headers, body = 500, [(b"content-type", b"text/plain")], b"Internal error"
-            except Exception as e:
-                logger.error("Handler %s error: %s", path, e, exc_info=True)
-                status, headers, body = _json({"error": str(e)}, 500)
-            await send({"type": "http.response.start", "status": status, "headers": headers})
-            await send({"type": "http.response.body", "body": body})
-            return
-
-        # ── Pass through to original app, inject scripts into HTML ──
         status = [None]
         headers = [None]
         body_parts = []
         is_html = [False]
-        started = [False]
+        sent_start = [False]
 
         async def send_intercept(message):
             mtype = message.get("type")
@@ -349,12 +239,14 @@ class InterceptionMiddleware:
                     if k == b"content-type" and b"text/html" in v:
                         is_html[0] = True
                 if not is_html[0]:
-                    started[0] = True
+                    # Non-HTML: pass through immediately
+                    sent_start[0] = True
                     await send(message)
             elif mtype == "http.response.body":
                 if is_html[0]:
                     body_parts.append(message.get("body", b""))
                     if not message.get("more_body", False):
+                        # Last chunk — combine, inject, send
                         body = b"".join(body_parts)
                         if b"</body>" in body:
                             body = body.replace(b"</body>", _SCRIPT_TAGS + b"</body>", 1)
@@ -368,41 +260,39 @@ class InterceptionMiddleware:
                         await send({"type": "http.response.start", "status": status[0], "headers": new_headers})
                         await send({"type": "http.response.body", "body": body})
                 else:
-                    if not started[0]:
+                    if not sent_start[0]:
                         await send({"type": "http.response.start", "status": status[0], "headers": headers[0]})
-                        started[0] = True
+                        sent_start[0] = True
                     await send(message)
 
         await self.app(scope, receive, send_intercept)
 
-app.add_middleware(InterceptionMiddleware)
+# Wrap the app with our pure ASGI middleware
+app.add_middleware(ScriptInjectionMiddleware)
 
 
 # ─────────────────────────────────────────────────────────────
 # Background judge score refresh scheduler
 # ─────────────────────────────────────────────────────────────
 def _start_judge_refresh_scheduler():
+    """Refresh judge scores every 5 min using merged data."""
     def _loop():
         time.sleep(10)
         while True:
             try:
-                merged, source = merged_data_with_source()
-                if not merged:
+                try:
+                    from fetchers.merged_data import get_merged_subnet_data
+                    subnets_data = get_merged_subnet_data()
+                    source = "merged"
+                except Exception as merged_exc:
+                    logger.warning("Merged data unavailable, falling back to TMC: %s", merged_exc)
                     from fetchers.taomarketcap import get_all_subnets
-                    merged = get_all_subnets()
+                    subnets_data = get_all_subnets()
                     source = "taomarketcap"
-                if merged:
-                    # Deduplicate
-                    seen = set()
-                    unique = []
-                    for s in merged:
-                        nuid = s.get("netuid", 0)
-                        if nuid not in seen:
-                            seen.add(nuid)
-                            unique.append(s)
+                if subnets_data:
                     from internal.judges.subnet_judges import score_all_subnets
-                    score_all_subnets(unique)
-                    logger.info("Judge scores refreshed (%d subnets, source=%s)", len(unique), source)
+                    score_all_subnets(subnets_data)
+                    logger.info("Judge scores refreshed (%d subnets, source=%s)", len(subnets_data), source)
             except Exception as e:
                 logger.warning("Judge refresh failed: %s", e)
             time.sleep(300)
