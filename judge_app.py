@@ -22,7 +22,7 @@ app.include_router(council_router)
 
 # --- Middleware: inject Judge Council panel into HTML pages ---
 from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
-from starlette.responses import Response  # noqa: E402
+from starlette.responses import Response, HTMLResponse  # noqa: E402
 
 PANEL_HTML = """<div id="judge-council-panel" style="position:fixed;bottom:20px;right:20px;background:#1a1a2e;border:1px solid #c99a4b;border-radius:12px;padding:16px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.5);max-width:320px;">
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
@@ -41,25 +41,35 @@ class JudgeCouncilLinkMiddleware(BaseHTTPMiddleware):
         if "text/html" not in content_type:
             return response
         try:
-            body = b""
-            async for chunk in response.body_iterator:
-                body += chunk
-            html = body.decode("utf-8", errors="ignore")
-            if "</body>" in html:
-                html = html.replace("</body>", PANEL_HTML + "</body>")
+            # Prefer response.body (available on HTMLResponse/TemplateResponse after rendering)
+            # Fall back to body_iterator for raw StreamingResponse
+            html = None
+            if hasattr(response, "body") and response.body:
+                html = response.body.decode("utf-8", errors="ignore")
+            else:
+                body = b""
+                async for chunk in response.body_iterator:
+                    body += chunk
+                html = body.decode("utf-8", errors="ignore")
+            
+            if not html or "</body>" not in html:
+                return response
+            
+            html = html.replace("</body>", PANEL_HTML + "</body>")
             new_body = html.encode("utf-8")
-            # Build headers from original, skip content-length/transfer-encoding
+            
+            # Copy safe headers from original
             safe_headers = {
                 k: v for k, v in response.headers.items()
                 if k.lower() not in ("content-length", "transfer-encoding", "content-encoding")
             }
-            new_response = Response(
+            
+            return Response(
                 content=new_body,
                 media_type="text/html",
                 status_code=response.status_code,
                 headers=safe_headers,
             )
-            return new_response
         except Exception as e:
             logger.warning("Judge council injection failed: %s", e)
             return response
