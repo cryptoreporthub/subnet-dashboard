@@ -143,6 +143,22 @@ except Exception as _judges_import_exc:  # pragma: no cover
     def list_for_judge(name):
         return []
 
+# Per-subnet judge scoring (new council surface). Safe fallback keeps the app
+# booting even if the module is incomplete or its dependencies are missing.
+try:
+    from internal.judges.subnet_judges import score_all_subnets, score_subnet
+    _SUBNET_JUDGES_AVAILABLE = True
+except Exception as _subnet_judges_import_exc:  # pragma: no cover
+    _SUBNET_JUDGES_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("Subnet judge layer unavailable: %s", _subnet_judges_import_exc)
+
+    def score_all_subnets(*_args, **_kwargs):
+        return []
+
+    def score_subnet(*_args, **_kwargs):
+        return {}
+
 try:
     from internal.council.weights import load_weights, save_weights
 except Exception:  # pragma: no cover
@@ -492,6 +508,17 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.warning("Failed to start prediction resolver scheduler: %s", exc)
 
     _start_telegram_listener()
+
+    # Start the per-subnet judge council score refresh scheduler. It runs in a
+    # background thread so startup is not blocked and degrades gracefully if the
+    # subnet data source is temporarily unavailable.
+    try:
+        if _SUBNET_JUDGES_AVAILABLE:
+            judge_scheduler_thread = threading.Thread(target=_refresh_judge_scores, daemon=True)
+            judge_scheduler_thread.start()
+            logger.info("Judge score scheduler started")
+    except Exception as exc:
+        logger.warning("Failed to start judge score scheduler: %s", exc)
 
     # Start per-subnet baseline price recording (env-gated, default on).
     try:
@@ -1014,62 +1041,130 @@ def api_council_weights():
         }
 
 
-@app.get("/api/judges")
-def api_judges():
-    """Return Oracle/Echo/Pulse scores and confidence for a sample prediction.
+# ---------------------------------------------------------------------------
+# Judge Council API endpoints
+# ---------------------------------------------------------------------------
+import threading
 
-    Scores are computed against the top-ranked live subnet so the endpoint is
-    always useful even when no pending prediction exists.
-    """
+# In-memory cache for judge scores
+_JUDGE_SCORES: List[Dict[str, Any]] = []
+_JUDGE_SCORES_LOCK = threading.Lock()
+_JUDGE_SCORES_REFRESHED = ""
+
+
+def _refresh_judge_scores():
+    """Refresh judge scores in background."""
+    global _JUDGE_SCORES, _JUDGE_SCORES_REFRESHED
     try:
-        from internal.judges import run_judges
+        subnets_data = get_all_subnets()
+        subnets = subnets_data if isinstance(subnets_data, list) else subnets_data.get("subnets", [])
+        scores = score_all_subnets(subnets)
+        with _JUDGE_SCORES_LOCK:
+            _JUDGE_SCORES = scores
+            _JUDGE_SCORES_REFRESHED = datetime.utcnow().isoformat() + "Z"
+    except Exception:
+        pass
+    # Schedule next refresh in 5 minutes
+    timer = threading.Timer(300, _refresh_judge_scores)
+    timer.daemon = True
+    timer.start()
 
-        subnets, source = _get_subnets_with_source()
-        top = sorted(
-            subnets,
-            key=lambda s: (s.get("emission", 0), s.get("apy", 0), s.get("volume", 0)),
-            reverse=True,
-        )[:1]
 
-        if not top:
-            return {
-                "status": "success",
-                "source": source,
-                "scores": {},
-                "sample": None,
-            }
+@app.get("/api/judges")
+async def api_judges():
+    """Return all subnet judge scores sorted by consensus."""
+    with _JUDGE_SCORES_LOCK:
+        scores = list(_JUDGE_SCORES)
+    return {
+        "judges": scores,
+        "meta": {
+            "count": len(scores),
+            "refreshed_at": _JUDGE_SCORES_REFRESHED,
+            "degraded_sources": [],
+        },
+    }
 
-        sn = top[0]
-        prediction = {
-            "predicted_pct": float(sn.get("price_change_24h", 0) or 0) * 0.5,
-            "direction": "up" if (sn.get("price_change_24h", 0) or 0) >= 0 else "down",
-        }
-        signal_impact = {
-            "impacts": [
-                {
-                    "direction": "bullish" if prediction["direction"] == "up" else "bearish",
-                    "magnitude_pct": abs(prediction["predicted_pct"]),
-                }
-            ]
-        }
-        subnet = {
-            "price_change_24h": sn.get("price_change_24h", 0),
-            "price": sn.get("price", 0),
-            "apy": sn.get("apy", 0),
-            "emission": sn.get("emission", 0),
-            "volume": sn.get("volume", 0),
-            "social_mentions": sn.get("social_mentions"),
-        }
-        scores = run_judges(prediction, signal_impact=signal_impact, subnet=subnet)
-        return {
-            "status": "success",
-            "source": source,
-            "scores": scores,
-            "sample": {"netuid": sn.get("netuid"), "name": sn.get("name")},
-        }
-    except Exception as exc:
-        logger.warning("api_judges failed: %s", exc)
-        return {"status": "stub", "scores": {}, "error": str(exc)}
+
+@app.get("/api/judges/{netuid}")
+async def api_judges_netuid(netuid: int):
+    """Return detailed judge breakdown for one subnet."""
+    with _JUDGE_SCORES_LOCK:
+        for entry in _JUDGE_SCORES:
+            if entry["netuid"] == netuid:
+                return entry
+    # If not cached, compute live
+    try:
+        subnets_data = get_all_subnets()
+        subnets = subnets_data if isinstance(subnets_data, list) else subnets_data.get("subnets", [])
+        target = next((s for s in subnets if s.get("netuid") == netuid or s.get("id") == netuid), None)
+        if target:
+            return score_subnet(netuid, target)
+    except Exception:
+        pass
+    return {"error": "subnet not found", "netuid": netuid}
+
+
+@app.get("/api/paper-portfolio")
+async def api_paper_portfolio():
+    """Return aggregate paper portfolios for all judges."""
+    try:
+        portfolios = all_portfolios()
+    except Exception:
+        portfolios = {}
+    return {"aggregate": _aggregate_portfolios(portfolios), "judges": portfolios}
+
+
+def _aggregate_portfolios(portfolios):
+    """Aggregate all judge portfolios into a single summary."""
+    total_open = 0
+    total_closed = 0
+    total_pl = 0.0
+    total_wins = 0
+    total_losses = 0
+    for name, pf in portfolios.items():
+        if not isinstance(pf, dict):
+            continue
+        open_pos = pf.get("open_positions", pf.get("open", []))
+        closed_pos = pf.get("closed_positions", pf.get("closed", []))
+        total_open += len(open_pos) if isinstance(open_pos, list) else 0
+        total_closed += len(closed_pos) if isinstance(closed_pos, list) else 0
+        pl = pf.get("pnl", pf.get("realized_pnl", pf.get("pl", 0)))
+        total_pl += pl if isinstance(pl, (int, float)) else 0
+        wins = pf.get("wins", pf.get("win_count", 0))
+        losses = pf.get("losses", pf.get("loss_count", 0))
+        total_wins += wins if isinstance(wins, int) else 0
+        total_losses += losses if isinstance(losses, int) else 0
+    total_trades = total_wins + total_losses
+    return {
+        "open_positions": total_open,
+        "closed_positions": total_closed,
+        "total_pnl": round(total_pl, 4),
+        "win_rate": round(total_wins / total_trades, 4) if total_trades > 0 else 0,
+        "total_trades": total_trades,
+    }
+
+
+@app.get("/api/postmortems")
+async def api_postmortems(judge: Optional[str] = None):
+    """Return all postmortems, optionally filtered by judge name."""
+    try:
+        if judge:
+            pms = list_for_judge(judge)
+            return {"judge": judge, "postmortems": pms if isinstance(pms, list) else []}
+        pms = all_postmortems()
+        return {"postmortems": pms if isinstance(pms, dict) else {}}
+    except Exception:
+        return {"postmortems": {}}
+
+
+@app.get("/api/postmortems/{judge_name}")
+async def api_postmortems_by_judge(judge_name: str):
+    """Return postmortems for a specific judge (alternative path)."""
+    try:
+        pms = list_for_judge(judge_name)
+        return {"judge": judge_name, "postmortems": pms if isinstance(pms, list) else []}
+    except Exception:
+        return {"judge": judge_name, "postmortems": []}
 
 
 @app.get("/api/portfolios")

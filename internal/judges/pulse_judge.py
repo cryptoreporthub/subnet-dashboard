@@ -61,6 +61,40 @@ def evaluate(
         proportion_score = _clamp(1.0 - abs(ratio - 1.0))
 
     alignment_bonus = 0.15 if aligned else 0.0
+
+    # Optional Blockmachine on-chain alpha price momentum bonus.
+    # Reads from the passed subnet dict or from prediction["subnet_data"]
+    # so the judge can be driven by real on-chain data when available.
+    bm_delta = None
+    bm_price = None
+    if subnet:
+        bm_delta = subnet.get("blockmachine_price_delta")
+        bm_price = subnet.get("blockmachine_alpha_price")
+    if bm_delta is None or bm_price is None:
+        prediction_subnet_data = prediction.get("subnet_data") or {}
+        if bm_delta is None:
+            bm_delta = prediction_subnet_data.get("blockmachine_price_delta")
+        if bm_price is None:
+            bm_price = prediction_subnet_data.get("blockmachine_alpha_price")
+    if bm_delta is None:
+        bm_delta = prediction.get("blockmachine_price_delta")
+    if bm_price is None:
+        bm_price = prediction.get("blockmachine_alpha_price")
+
+    bm_bonus = 0.0
+    try:
+        if bm_delta is not None and float(bm_delta) > 0:
+            bm_bonus = min(0.10, float(bm_delta) * 2.0)
+    except Exception:
+        bm_bonus = 0.0
+
+    bm_confidence_lift = 0.0
+    try:
+        if bm_price is not None and float(bm_price) > 0:
+            bm_confidence_lift = 0.05
+    except Exception:
+        bm_confidence_lift = 0.0
+
     score = _clamp(
         0.3
         + 0.25 * momentum_score
@@ -68,6 +102,9 @@ def evaluate(
         + 0.2 * impact_score
         + 0.1 * proportion_score
         + alignment_bonus
+        + bm_bonus
     )
-    confidence = _clamp(0.45 + 0.35 * volume_score + 0.2 * momentum_score)
+    confidence = _clamp(
+        0.45 + 0.35 * volume_score + 0.2 * momentum_score + bm_confidence_lift
+    )
     return {"score": round(score, 4), "confidence": round(confidence, 4)}

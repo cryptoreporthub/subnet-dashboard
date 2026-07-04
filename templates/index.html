@@ -107,6 +107,22 @@
     .badge-audit-pending .ap-dot { background: #ff00ff; }
 
     .glow-text { text-shadow: 0 0 14px rgba(0, 255, 65, 0.55); }
+
+    /* Judge Council panel */
+    .judge-council-panel { margin: 1em 0; padding: 1em; border: 1px solid #333; border-radius: 8px; }
+    .judge-grid { display: flex; flex-wrap: wrap; gap: 1em; }
+    .judge-section { flex: 1; min-width: 280px; }
+    .judge-card { border: 1px solid #444; border-radius: 6px; padding: 0.8em; margin: 0.5em 0; }
+    .judge-header { display: flex; justify-content: space-between; }
+    .judge-verdict { font-weight: bold; margin: 0.3em 0; }
+    .judge-verdict.long { color: #4caf50; }
+    .judge-verdict.short { color: #f44336; }
+    .judge-score-bar { display: flex; align-items: center; gap: 0.5em; font-size: 0.85em; margin: 0.2em 0; }
+    .judge-score-bar .label { min-width: 50px; }
+    .judge-score-bar .bar { height: 8px; background: #4fc3f7; border-radius: 4px; transition: width 0.5s; }
+    .judge-consensus { margin-top: 0.5em; font-size: 0.9em; color: #ccc; }
+    .portfolio-stats { display: flex; gap: 1em; }
+    .judge-refreshed { margin-top: 0.5em; font-size: 0.8em; color: #888; }
   </style>
 </head>
 
@@ -685,6 +701,16 @@
       </div>
     </div>
 
+    <!-- ===================== JUDGE COUNCIL PANEL ===================== -->
+    <div class="row">
+      <div class="card judge-council-panel">
+        <h2>⚖️ Judge Council</h2>
+        <div id="judge-council-content">
+          <p>Loading...</p>
+        </div>
+      </div>
+    </div>
+
     <!-- ===================== TABBED SECONDARY SECTIONS ===================== -->
     <div class="row">
       <div class="card">
@@ -1003,6 +1029,70 @@
         btn.setAttribute('aria-expanded', open ? 'true' : 'false');
       });
     });
+  })();
+  </script>
+
+  <!-- Judge Council live panel -->
+  <script>
+  (function () {
+    'use strict';
+    fetch('/api/judges')
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var container = document.getElementById('judge-council-content');
+        if (!data.judges || data.judges.length === 0) {
+          container.innerHTML = '<p>Judges calibrating...</p>';
+          return;
+        }
+        var longs = data.judges.filter(function (j) { return j.consensus.verdict === 'long'; }).slice(0, 3);
+        var shorts = data.judges.filter(function (j) { return j.consensus.verdict === 'short'; }).slice(0, 1);
+        var html = '<div class="judge-grid">';
+        html += '<div class="judge-section"><h3>📈 Top Longs</h3>';
+        longs.forEach(function (j) {
+          var s = j.consensus.score;
+          html += '<div class="judge-card">' +
+            '<div class="judge-header"><strong>' + j.name + '</strong> <span class="netuid">#' + j.netuid + '</span></div>' +
+            '<div class="judge-verdict long">' + j.consensus.verdict + '</div>' +
+            '<div class="judge-scores">' +
+              '<div class="judge-score-bar"><span class="label">Oracle</span><span class="bar" style="width:' + Math.round(j.oracle.score * 100) + '%"></span></div>' +
+              '<div class="judge-score-bar"><span class="label">Echo</span><span class="bar" style="width:' + Math.round(j.echo.score * 100) + '%"></span></div>' +
+              '<div class="judge-score-bar"><span class="label">Pulse</span><span class="bar" style="width:' + Math.round(j.pulse.score * 100) + '%"></span></div>' +
+            '</div>' +
+            '<div class="judge-consensus">Consensus: ' + s.toFixed(2) + '</div>' +
+          '</div>';
+        });
+        html += '</div>';
+        if (shorts.length > 0) {
+          html += '<div class="judge-section"><h3>📉 Top Short</h3>';
+          shorts.forEach(function (j) {
+            html += '<div class="judge-card">' +
+              '<div class="judge-header"><strong>' + j.name + '</strong> <span class="netuid">#' + j.netuid + '</span></div>' +
+              '<div class="judge-verdict short">' + j.consensus.verdict + '</div>' +
+              '<div class="judge-consensus">Consensus: ' + j.consensus.score.toFixed(2) + '</div>' +
+            '</div>';
+          });
+          html += '</div>';
+        }
+        fetch('/api/paper-portfolio')
+          .then(function (r) { return r.json(); })
+          .then(function (pf) {
+            if (pf.aggregate) {
+              html += '<div class="judge-section portfolio"><h3>💰 Paper Portfolio</h3>' +
+                '<div class="portfolio-stats">' +
+                  '<span>P&amp;L: <strong>' + pf.aggregate.total_pnl + '</strong></span>' +
+                  '<span>Win Rate: <strong>' + (pf.aggregate.win_rate * 100).toFixed(1) + '%</strong></span>' +
+                  '<span>Trades: ' + pf.aggregate.total_trades + '</span>' +
+                '</div></div>';
+            }
+            html += '<div class="judge-refreshed">Refreshed: ' + (data.meta.refreshed_at || 'N/A') + '</div>';
+            container.innerHTML = html;
+          })
+          .catch(function () { container.innerHTML = html; });
+      })
+      .catch(function () {
+        var container = document.getElementById('judge-council-content');
+        if (container) container.innerHTML = '<p>Judges calibrating...</p>';
+      });
   })();
   </script>
 </body>
