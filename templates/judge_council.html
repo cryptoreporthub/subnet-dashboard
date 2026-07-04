@@ -1,129 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Judge Council - Subnet Dashboard</title>
+<meta charset="UTF-8"><title>Judge Council</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0a0a0a;color:#e0e0e0;font-family:Rajdhani,sans-serif;min-height:100vh}
-.header{background:#111;border-bottom:2px solid #00ff41;padding:20px;display:flex;align-items:center;justify-content:space-between}
-.header h1{font-family:Orbitron,monospace;font-size:24px;color:#00ff41;text-shadow:0 0 10px rgba(0,255,65,.5)}
-.header a{color:#888;text-decoration:none}
-.header a:hover{color:#00ff41}
-.container{max-width:1200px;margin:0 auto;padding:20px}
-.section{margin-bottom:30px}
-.section-title{font-family:Orbitron,monospace;font-size:18px;color:#00ff41;margin-bottom:10px}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{background:#1a1a1a;color:#00ff41;padding:10px;text-align:left;font-family:JetBrains+Mono,monospace;font-size:11px;text-transform:uppercase}
-td{padding:8px;border-bottom:1px solid #222;font-family:JetBrains+Mono,monospace}
-tr:hover{background:#111}
-.score{display:inline-block;padding:2px 6px;border-radius:3px;font-weight:600;font-size:12px}
-.score-high{background:rgba(0,255,65,.15);color:#00ff41}
-.score-mid{background:rgba(255,200,0,.15);color:#ffc800}
-.score-low{background:rgba(255,50,50,.15);color:#ff3232}
-.badge{display:inline-block;padding:2px 5px;border-radius:2px;font-size:9px;font-weight:700;text-transform:uppercase}
-.badge-long{background:rgba(0,255,65,.2);color:#00ff41}
-.badge-short{background:rgba(255,50,50,.2);color:#ff3232}
-.badge-neutral{background:#222;color:#888}
-.loading{text-align:center;padding:40px;color:#555;font-family:JetBrains+Mono,monospace}
-.tabs{display:flex;gap:2px;margin-bottom:20px}
-.tab{padding:10px 16px;background:#111;color:#666;cursor:pointer;font-family:JetBrains+Mono,monospace;font-size:12px;border-radius:6px 6px 0 0;border:1px solid #222;border-bottom:none}
-.tab.active{background:#1a1a1a;color:#00ff41;border-color:#00ff41}
-.tab-content{display:none}.tab-content.active{display:block}
-.refresh-bar{display:flex;align-items:center;gap:10px;margin-bottom:15px}
-.refresh-bar button{background:#1a1a1a;color:#00ff41;border:1px solid #333;padding:6px 12px;border-radius:4px;cursor:pointer;font-family:JetBrains+Mono,monospace;font-size:12px}
-.status{font-size:11px;color:#555;font-family:JetBrains+Mono,monospace}
+body{background:#0a0a0a;color:#e0e0e0;font-family:monospace;min-height:100vh;padding:20px}
+h1{color:#00ff41;font-family:monospace;font-size:24px;margin-bottom:20px}
+.container{max-width:1200px;margin:0 auto}
+.table{width:100%;border-collapse:collapse;font-size:12px}
+.th,.td{border:1px solid #222;padding:8px;text-align:left}
+.th{background:#00ff41;color:#000;font-weight:bold}
+tr:hover{background:#1a1a1a}
 </style>
 </head>
 <body>
-<div class="header">
-<h1>⚖️ Judge Council</h1>
-<a href="/">← Back to Dashboard</a>
-</div>
 <div class="container">
-<div class="refresh-bar">
-<button onclick="loadAll()">↻ Refresh</button>
-<span class="status" id="status">Loading...</span>
-</div>
-<div class="tabs">
-<div class="tab active" onclick="switchTab('judges')">Subnet Scores</div>
-<div class="tab" onclick="switchTab('portfolios')">Portfolios</div>
-<div class="tab" onclick="switchTab('postmortems')">Postmortems</div>
-</div>
-<div class="tab-content active" id="tab-judges">
-<div class="section">
-<div class="section-title">Three-Judge Consensus</div>
-<div id="judges-table"><div class="loading">Loading...</div></div>
-</div>
-</div>
-<div class="tab-content" id="tab-portfolios">
-<div class="section"><div class="section-title">Paper Portfolios</div>
-<div id="portfolio-cards"><div class="loading">Loading...</div></div>
-</div>
-</div>
-<div class="tab-content" id="tab-postmortems">
-<div class="section"><div class="section-title">Wrong-Pick Postmortems</div>
-<div id="postmortem-list"><div class="loading">Loading...</div></div>
-</div>
-</div>
+<h1>⚖️ Judge Council</h1>
+<div id="content"><p>Loading...</p></div>
 </div>
 <script>
-function scoreClass(s){s=parseFloat(s);return s>0.6?'score-high':s>=0.4?'score-mid':'score-low'}
-function verdictClass(v){return v==='long'?'badge-long':v==='short'?'badge-short':'badge-neutral'}
-async function loadJudges(){
-const el=document.getElementById('judges-table');
+async function load(){
+const el=document.getElementById('content');
 try{
 const r=await fetch('/api/judges');const d=await r.json();
-if(!d.success||!d.judges||d.judges.length===0){el.innerHTML='<div class=loading>No data</div>';return;}
-let rows=d.judges.map((j,i)=>{
-const o=j.oracle||{},e=j.echo||{},p=j.pulse||{},c=j.consensus||{};
-return '<tr><td>'+(j.name||'SN'+j.netuid)+'<br><span style=color:#555;font-size:10px>SN'+j.netuid+'</span></td>'+
-'<td><span class="score '+scoreClass(o.score)+'">'+o.score+'</span></td>'+
-'<td><span class="score '+scoreClass(e.score)+'">'+e.score+'</span></td>'+
-'<td><span class="score '+scoreClass(p.score)+'">'+p.score+'</span></td>'+
-'<td><span class="score '+scoreClass(c.score)+'">'+c.score+'</span></td>'+
-'<td><span class="badge '+verdictClass(c.verdict)+'">'+c.verdict+'</span></td></tr>';
-}).join('');
-el.innerHTML='<table><thead><tr><th>Subnet</th><th>Oracle</th><th>Echo</th><th>Pulse</th><th>Consensus</th><th>Verdict</th></tr></thead><tbody>'+rows+'</tbody></table>';
-}catch(e){el.innerHTML='<div class=error>Error: '+e.message+'</div>';}
+if(!d.judges||!d.judges.length){el.innerHTML='<p>No data</p>';return;}
+let html='<table class="table"><tr><th>Subnet</th><th>Oracle</th><th>Echo</th><th>Pulse</th><th>Consensus</th><th>Verdict</th></tr>';
+for(const j of d.judges.slice(0,20)){
+html+=`<tr><td>${j.name||j.netuid}<br><span style="color:#555">${j.netuid}</span></td>`+
+`<td>${(j.oracle.score||0.5).toFixed(2)}</td>`+
+`<td>${(j.echo.score||0.5).toFixed(2)}</td>`+
+`<td>${(j.pulse.score||0.5).toFixed(2)}</td>`+
+`<td>${(j.consensus.score||0.5).toFixed(2)}</td>`+
+`<td>${j.consensus.verdict||'neutral'}</td></tr>`;
 }
-async function loadPortfolios(){
-const el=document.getElementById('portfolio-cards');
-try{
-const r=await fetch('/api/paper-portfolio');const d=await r.json();
-if(!d.success||!d.portfolios){el.innerHTML='<div class=loading>No data</div>';return;}
-let cards='';
-for(const[j,p]of Object.entries(d.portfolios)){
-const s=p.summary||{};const pnl=(s.total_pnl_pct||0)>=0?'pnl-positive':'pnl-negative';
-cards+='<div style="background:#111;border:1px solid #222;border-radius:8px;padding:15px;margin-bottom:10px">'+
-'<h3 style="color:#'+({oracle:'#4af',echo:'#fa4',pulse:'#f4a'}[j]||'#00ff41')+'">'+j+'</h3>'+
-'<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1a1a1a;font-size:12px">'+
-'<span style=color:#888>Positions</span><span>'+(s.open_positions||0)+'</span></div>'+
-'<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1a1a1a;font-size:12px">'+
-'<span style=color:#888>P&L</span><span class='+pnl+'>'+(s.total_pnl_pct||0).toFixed(2)+'%</span></div>';
+html+='</table>';
+el.innerHTML=html;
+}catch(e){el.innerHTML='<p>Error: '+e+'</p>';}
 }
-el.innerHTML='<div class=portfolio-grid>'+cards+'</div>';
-}catch(e){el.innerHTML='<div class=error>'+e.message+'</div>';}
-}
-async function loadPostmortems(){
-const el=document.getElementById('postmortem-list');
-try{
-const r=await fetch('/api/postmortems');const d=await r.json();
-if(!d.success||!d.postmortems){el.innerHTML='<div class=loading>No data</div>';return;}
-let items='';
-for(const[judge,entries]of Object.entries(d.postmortems)){
-for(const pm of entries.slice(0,5)){
-items+='<div style="background:#0d0d0d;border-left:3px solid #ff3232;padding:10px;margin-bottom:8px;border-radius:0 4px 4px 0">'+
-'<div style="font-size:11px;color:#aaa">'+(pm.name||'SN'+pm.netuid)+' ['+judge+']</div>'+
-'<div style="font-size:10px;color:#888;margin:4px 0">'+pm.direction+' '+pm.predicted_pct+'% → '+pm.actual_pct+'%</div>';
-}
-}
-el.innerHTML=items||'<div class=loading>No postmortems</div>';
-}catch(e){el.innerHTML='<div class=error>'+e.message+'</div>';}
-}
-function switchTab(name){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));event.target.classList.add('active');document.getElementById('tab-'+name).classList.add('active');}
-async function loadAll(){document.getElementById('status').textContent='Loading...';await Promise.all([loadJudges(),loadPortfolios(),loadPostmortems()]);document.getElementById('status').textContent='Updated '+new Date().toLocaleTimeString();}
-loadAll();setInterval(loadAll,60000);
+load();setInterval(load,30000);
 </script>
 </body>
 </html>
