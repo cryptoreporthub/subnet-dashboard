@@ -24,7 +24,6 @@ app.include_router(council_router)
 from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
 from starlette.responses import Response  # noqa: E402
 
-
 PANEL_HTML = """<div id="judge-council-panel" style="position:fixed;bottom:20px;right:20px;background:#1a1a2e;border:1px solid #c99a4b;border-radius:12px;padding:16px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.5);max-width:320px;">
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
     <span style="font-size:20px;">\u2696\ufe0f</span>
@@ -39,25 +38,31 @@ class JudgeCouncilLinkMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         response = await call_next(request)
         content_type = response.headers.get("content-type", "")
-        if "text/html" in content_type:
-            try:
-                body = b""
-                async for chunk in response.body_iterator:
-                    body += chunk
-                html = body.decode("utf-8", errors="ignore")
-                if "</body>" in html:
-                    html = html.replace("</body>", PANEL_HTML + "</body>")
-                    new_body = html.encode("utf-8")
-                    # Create a new Response with correct content-length
-                    response = Response(
-                        content=new_body,
-                        media_type="text/html",
-                        status_code=response.status_code,
-                        headers={k: v for k, v in response.headers.items() if k.lower() != "content-length"},
-                    )
-            except Exception as e:
-                logger.debug("Judge council injection skipped: %s", e)
-        return response
+        if "text/html" not in content_type:
+            return response
+        try:
+            body = b""
+            async for chunk in response.body_iterator:
+                body += chunk
+            html = body.decode("utf-8", errors="ignore")
+            if "</body>" in html:
+                html = html.replace("</body>", PANEL_HTML + "</body>")
+            new_body = html.encode("utf-8")
+            # Build headers from original, skip content-length/transfer-encoding
+            safe_headers = {
+                k: v for k, v in response.headers.items()
+                if k.lower() not in ("content-length", "transfer-encoding", "content-encoding")
+            }
+            new_response = Response(
+                content=new_body,
+                media_type="text/html",
+                status_code=response.status_code,
+                headers=safe_headers,
+            )
+            return new_response
+        except Exception as e:
+            logger.warning("Judge council injection failed: %s", e)
+            return response
 
 
 app.add_middleware(JudgeCouncilLinkMiddleware)
@@ -66,7 +71,7 @@ app.add_middleware(JudgeCouncilLinkMiddleware)
 def _start_judge_refresh_scheduler():
     """Refresh judge scores in background every 5 minutes."""
     def _loop():
-        time.sleep(10)  # Let the app fully start first
+        time.sleep(10)
         while True:
             try:
                 from fetchers.taomarketcap import get_all_subnets
