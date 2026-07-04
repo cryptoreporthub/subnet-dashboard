@@ -9,7 +9,6 @@ import logging
 import threading
 import time
 import os
-import traceback
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -17,48 +16,6 @@ logger = logging.getLogger(__name__)
 
 # --- Import the existing app from server.py ---
 from server import app  # noqa: E402
-
-# --- Debug: expose validation errors so we can see the root cause ---
-from fastapi.exceptions import RequestValidationError, ValidationException
-from fastapi.responses import JSONResponse
-
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc):
-    return JSONResponse(
-        status_code=422,
-        content={
-            "error": "RequestValidationError",
-            "path": str(request.url),
-            "method": request.method,
-            "detail": exc.errors(),
-            "body": str(exc.body) if hasattr(exc, "body") else None,
-        },
-    )
-
-@app.exception_handler(ValidationException)
-async def generic_validation_exception_handler(request, exc):
-    return JSONResponse(
-        status_code=422,
-        content={
-            "error": "ValidationException",
-            "path": str(request.url),
-            "method": request.method,
-            "detail": str(exc),
-        },
-    )
-
-@app.exception_handler(Exception)
-async def all_exception_handler(request, exc):
-    return JSONResponse(
-        status_code=500,
-        content={
-            "error": type(exc).__name__,
-            "path": str(request.url),
-            "method": request.method,
-            "detail": str(exc),
-            "traceback": traceback.format_exc().split("\n"),
-        },
-    )
 
 # ─────────────────────────────────────────────────────────────
 # Deduplication helper — used everywhere
@@ -93,7 +50,6 @@ _kept = []
 _removed = []
 for _r in _original_routes:
     _p = getattr(_r, "path", None)
-    # Also check the route's path without trailing slash
     _p_norm = _p.rstrip("/") if _p else None
     if _p in _paths_to_remove or _p_norm in _paths_to_remove:
         _removed.append(_p)
@@ -111,16 +67,18 @@ logger.info("judge_app: removed %d routes, kept %d", len(_removed), len(_kept))
 async def health():
     return {"status": "ok", "ts": datetime.utcnow().isoformat() + "Z"}
 
-def _get_merged_data():
+
+def _get_merged_data(max_age=120):
     """Fetch merged subnet data, deduplicated."""
     try:
         from fetchers.merged_data import get_merged_subnet_data
-        merged = get_merged_subnet_data()
+        merged = get_merged_subnet_data(max_age=max_age)
         if merged:
             return _dedupe(merged), "merged"
     except Exception as e:
         logger.warning("Merged data fetch failed: %s", e)
     return None, "none"
+
 
 @app.get("/api/judges")
 async def api_judges():
@@ -129,12 +87,10 @@ async def api_judges():
         merged, source = _get_merged_data()
         if merged:
             from internal.judges.subnet_judges import score_all_subnets
-            result = score_all_subnets(merged)
-            result = _dedupe(result)
+            result = _dedupe(score_all_subnets(merged))
             logger.info("api/judges: %d unique subnets scored (source=%s)", len(result), source)
             return {"success": True, "judges": result, "count": len(result), "source": source}
 
-        # Fall back to TMC
         from fetchers.taomarketcap import get_all_subnets
         subnets_data = _dedupe(get_all_subnets())
         if not subnets_data:
@@ -146,6 +102,7 @@ async def api_judges():
     except Exception as e:
         logger.error("api/judges error: %s", e, exc_info=True)
         return {"success": False, "error": str(e), "judges": [], "count": 0}
+
 
 @app.get("/api/council")
 async def api_council():
@@ -173,6 +130,7 @@ async def api_council():
         logger.error("api/council error: %s", e, exc_info=True)
         return {"status": "error", "error": str(e), "subnets": [], "judges": [], "meta": {"count": 0}}
 
+
 @app.get("/api/subnets")
 async def api_subnets():
     try:
@@ -186,10 +144,11 @@ async def api_subnets():
         logger.error("api_subnets error: %s", e, exc_info=True)
         return {"count": 0, "subnets": [], "error": str(e)}
 
+
 @app.get("/api/simivision")
 async def api_simivision():
     try:
-        merged, source = _get_merged_data()
+        merged, _ = _get_merged_data()
         if not merged:
             from fetchers.taomarketcap import get_all_subnets
             merged = _dedupe(get_all_subnets())
@@ -207,6 +166,7 @@ async def api_simivision():
     except Exception as e:
         return {"items": [], "count": 0, "error": str(e)}
 
+
 @app.get("/api/mindmap/summary")
 async def api_mindmap_summary():
     try:
@@ -222,11 +182,13 @@ async def api_mindmap_summary():
     except Exception as e:
         return {"total_decisions": 0, "error": str(e)}
 
+
 @app.get("/api/indicators")
 async def api_indicators():
     try:
         merged, _ = _get_merged_data()
-        if not merged: return {"indicators": [], "count": 0}
+        if not merged:
+            return {"indicators": [], "count": 0}
         top = sorted(merged, key=lambda s: s.get("volume", 0), reverse=True)[:20]
         return {"indicators": [{"netuid": s.get("netuid", 0), "name": s.get("name", ""),
                 "price": s.get("price", 0), "rsi": 50.0, "volume": s.get("volume", 0),
@@ -235,9 +197,11 @@ async def api_indicators():
     except Exception as e:
         return {"indicators": [], "count": 0, "error": str(e)}
 
+
 @app.get("/api/rotation-tokens")
 async def api_rotation_tokens():
     return {"patterns": [], "count": 0}
+
 
 @app.get("/api/learning/stats")
 async def api_learning_stats():
@@ -255,9 +219,11 @@ async def api_learning_stats():
     except Exception:
         return {"total_predictions": 0, "correct": 0, "accuracy": 0.0}
 
+
 @app.get("/api/scheduler/state")
 async def api_scheduler_state():
     return {"running": True, "last_run_ok": True, "consecutive_failures": 0, "refresh_minutes": 5}
+
 
 @app.get("/api/paper-portfolio")
 async def api_paper_portfolio():
@@ -267,6 +233,7 @@ async def api_paper_portfolio():
     except Exception as e:
         return {"success": False, "error": str(e), "portfolios": {}}
 
+
 @app.get("/api/postmortems")
 async def api_postmortems():
     try:
@@ -275,51 +242,109 @@ async def api_postmortems():
     except Exception as e:
         return {"success": False, "error": str(e), "postmortems": {}}
 
-# ── Serve static JS ──
+
+# ── Static JS endpoints ──
 from fastapi.responses import FileResponse  # noqa: E402
+
 
 @app.get("/static/judge_panel.js")
 async def serve_panel_js():
     return FileResponse(os.path.join(os.path.dirname(__file__), "static", "judge_panel.js"),
                         media_type="application/javascript")
 
+
 @app.get("/static/data_fixer.js")
 async def serve_data_fixer_js():
     return FileResponse(os.path.join(os.path.dirname(__file__), "static", "data_fixer.js"),
                         media_type="application/javascript")
 
+
 # ─────────────────────────────────────────────────────────────
 # Pure ASGI middleware — inject script tags into HTML responses
 # ─────────────────────────────────────────────────────────────
 _SCRIPT_TAGS = (
-    b''
-    b''
+    b'<script src="/static/judge_panel.js"></script>'
+    b'<script src="/static/data_fixer.js"></script>'
 )
+
 
 class ScriptInjectionMiddleware:
     def __init__(self, app):
         self.app = app
+
     async def __call__(self, scope, receive, send):
         if scope.get("type") != "http":
             await self.app(scope, receive, send)
             return
-        status = [None]; headers = [None]; body_parts = []; is_html = [False]; sent = [False]
+
+        status = [None]
+        headers = [None]
+        body_parts = []
+        is_html = [False]
+        started = [False]
+
         async def send_intercept(message):
             mtype = message.get("type")
             if mtype == "http.response.start":
                 status[0] = message["status"]
-                headers[0] = message.get("headers", [])
+                headers[0] = list(message.get("headers", []))
                 for k, v in headers[0]:
-                    if k == b"content-type" and b"text/html" in v:
+                    if k.lower() == b"content-type" and b"text/html" in v:
                         is_html[0] = True
                 if not is_html[0]:
-                    sent[0] = True
+                    started[0] = True
                     await send(message)
+
             elif mtype == "http.response.body":
                 if is_html[0]:
                     body_parts.append(message.get("body", b""))
                     if not message.get("more_body", False):
                         body = b"".join(body_parts)
-                        if b"" in body: body = body.replace(b"", _SCRIPT_TAGS + b"", 1) else: body = body + _SCRIPT_TAGS nh = [(k, v) for k, v in headers[0] if k.lower() not in (b"content-length", b"transfer-encoding", b"content-encoding")] nh.append((b"content-length", str(len(body)).encode())) await send({"type": "http.response.start", "status": status[0], "headers": nh}) await send({"type": "http.response.body", "body": body}) else: if not sent[0]: await send({"type": "http.response.start", "status": status[0], "headers": headers[0]}) sent[0] = True await send(message) await self.app(scope, receive, send_intercept) app.add_middleware(ScriptInjectionMiddleware) # ────────────────────
+                        if b"</body>" in body:
+                            body = body.replace(b"</body>", _SCRIPT_TAGS + b"</body>", 1)
+                        else:
+                            body = body + _SCRIPT_TAGS
 
-[read_links truncated 737 chars from this runtime tool output. The full content is stored with the tool result.]
+                        new_headers = [(k, v) for k, v in headers[0]
+                                       if k.lower() not in (b"content-length", b"transfer-encoding", b"content-encoding")]
+                        new_headers.append((b"content-length", str(len(body)).encode())))
+                        await send({"type": "http.response.start", "status": status[0], "headers": new_headers})
+                        await send({"type": "http.response.body", "body": body})
+                else:
+                    if not started[0]:
+                        started[0] = True
+                        await send({"type": "http.response.start", "status": status[0], "headers": headers[0]})
+                    await send(message)
+
+        await self.app(scope, receive, send_intercept)
+
+
+app.add_middleware(ScriptInjectionMiddleware)
+
+
+# ─────────────────────────────────────────────────────────────
+# Background judge score refresh — every 5 min
+# ─────────────────────────────────────────────────────────────
+def _start_scheduler():
+    def _loop():
+        time.sleep(10)
+        while True:
+            try:
+                merged, source = _get_merged_data()
+                if not merged:
+                    from fetchers.taomarketcap import get_all_subnets
+                    merged = _dedupe(get_all_subnets())
+                    source = "taomarketcap"
+                if merged:
+                    from internal.judges.subnet_judges import score_all_subnets
+                    score_all_subnets(merged)
+                    logger.info("Judge scores refreshed (%d subnets, source=%s)", len(merged), source)
+            except Exception as e:
+                logger.warning("Judge refresh failed: %s", e)
+            time.sleep(300)
+
+    threading.Thread(target=_loop, daemon=True).start()
+
+
+_start_scheduler()
+__all__ = ["app"]
