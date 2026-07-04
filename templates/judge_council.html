@@ -2,76 +2,43 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Judge Council — Subnet Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<title>Judge Council - Subnet Dashboard</title>
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #0a0a0a; color: #e0e0e0; font-family: Rajdhani, sans-serif; min-height: 100vh; }
-.header { background: #111; border-bottom: 2px solid #00ff41; padding: 20px 30px; display: flex; align-items: center; justify-content: space-between; }
-.header h1 { font-family: Orbitron, monospace; font-size: 28px; color: #00ff41; text-shadow: 0 0 10px rgba(0,255,65,0.5); }
-.header a { color: #888; text-decoration: none; font-size: 14px; font-family: JetBrains_Mono, monospace; }
-.header a:hover { color: #00ff41; }
-.container { max-width: 1400px; margin: 0 auto; padding: 30px; }
-.section { margin-bottom: 40px; }
-.section-title { font-family: Orbitron, monospace; font-size: 20px; color: #00ff41; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; }
-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th { background: #1a1a1a; color: #00ff41; padding: 12px 8px; text-align: left; font-family: JetBrains_Mono, monospace; font-size: 12px; text-transform: uppercase; }
-td { padding: 10px 8px; border-bottom: 1px solid #222; font-family: JetBrains_Mono, monospace; }
-tr:hover { background: #111; }
-.score { display: inline-block; padding: 3px 8px; border-radius: 4px; font-weight: 600; }
-.score-high { background: rgba(0,255,65,0.15); color: #00ff41; }
-.score-mid { background: rgba(255,200,0,0.15); color: #ffc800; }
-.score-low { background: rgba(255,50,50,0.15); color: #ff3232; }
-.badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
-.badge-degraded { background: #331; color: #cc0; }
-.badge-long { background: rgba(0,255,65,0.2); color: #00ff41; }
-.badge-short { background: rgba(255,50,50,0.2); color: #ff3232; }
-.badge-neutral { background: #222; color: #888; }
-.badge-contested { background: #331; color: #fc0; }
-.detail-row { display: none; background: #0d0d0d; }
-.detail-row.show { display: table-row; }
-.detail-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
-.detail-card { background: #111; border: 1px solid #222; border-radius: 8px; padding: 12px; }
-.detail-card h4 { font-family: Orbitron, monospace; font-size: 13px; margin-bottom: 8px; }
-.detail-card.oracle h4 { color: #4af; }
-.detail-card.echo h4 { color: #fa4; }
-.detail-card.pulse h4 { color: #f4a; }
-.detail-card p { font-size: 12px; color: #999; margin: 3px 0; }
-.loading { text-align: center; padding: 40px; color: #555; font-family: JetBrains_Mono, monospace; }
-.error { color: #ff3232; }
-.portfolio-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
-.portfolio-card { background: #111; border: 1px solid #222; border-radius: 8px; padding: 20px; }
-.portfolio-card h3 { font-family: Orbitron, monospace; font-size: 16px; margin-bottom: 15px; }
-.portfolio-card.oracle h3 { color: #4af; }
-.portfolio-card.echo h3 { color: #fa4; }
-.portfolio-card.pulse h3 { color: #f4a; }
-.stat { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #1a1a1a; font-size: 13px; }
-.stat-label { color: #888; }
-.stat-value { font-family: JetBrains_Mono, monospace; font-weight: 600; }
-.pnl-positive { color: #00ff41; }
-.pnl-negative { color: #ff3232; }
-.postmortem-list { max-height: 400px; overflow-y: auto; }
-.postmortem-item { background: #0d0d0d; border-left: 3px solid #ff3232; padding: 12px; margin-bottom: 10px; border-radius: 0 6px 6px 0; }
-.postmortem-item .pm-header { font-size: 13px; color: #aaa; margin-bottom: 6px; }
-.postmortem-item .pm-q { font-size: 12px; color: #888; margin: 4px 0; }
-.postmortem-item .pm-q strong { color: #ccc; }
-.refresh-bar { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; }
-.refresh-bar button { background: #1a1a1a; color: #00ff41; border: 1px solid #333; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: JetBrains_Mono, monospace; font-size: 13px; }
-.refresh-bar button:hover { background: #222; border-color: #00ff41; }
-.refresh-bar .status { font-size: 12px; color: #555; font-family: JetBrains_Mono, monospace; }
-.tabs { display: flex; gap: 2px; margin-bottom: 20px; }
-.tab { padding: 10px 20px; background: #111; color: #666; cursor: pointer; font-family: JetBrains_Mono, monospace; font-size: 13px; border-radius: 6px 6px 0 0; border: 1px solid #222; border-bottom: none; }
-.tab.active { background: #1a1a1a; color: #00ff41; border-color: #00ff41; }
-.tab-content { display: none; }
-.tab-content.active { display: block; }
-@media (max-width: 768px) { .detail-grid, .portfolio-grid { grid-template-columns: 1fr; } table { font-size: 12px; } }
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0a;color:#e0e0e0;font-family:Rajdhani,sans-serif;min-height:100vh}
+.header{background:#111;border-bottom:2px solid #00ff41;padding:20px;display:flex;align-items:center;justify-content:space-between}
+.header h1{font-family:Orbitron,monospace;font-size:24px;color:#00ff41;text-shadow:0 0 10px rgba(0,255,65,.5)}
+.header a{color:#888;text-decoration:none}
+.header a:hover{color:#00ff41}
+.container{max-width:1200px;margin:0 auto;padding:20px}
+.section{margin-bottom:30px}
+.section-title{font-family:Orbitron,monospace;font-size:18px;color:#00ff41;margin-bottom:10px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#1a1a1a;color:#00ff41;padding:10px;text-align:left;font-family:JetBrains+Mono,monospace;font-size:11px;text-transform:uppercase}
+td{padding:8px;border-bottom:1px solid #222;font-family:JetBrains+Mono,monospace}
+tr:hover{background:#111}
+.score{display:inline-block;padding:2px 6px;border-radius:3px;font-weight:600;font-size:12px}
+.score-high{background:rgba(0,255,65,.15);color:#00ff41}
+.score-mid{background:rgba(255,200,0,.15);color:#ffc800}
+.score-low{background:rgba(255,50,50,.15);color:#ff3232}
+.badge{display:inline-block;padding:2px 5px;border-radius:2px;font-size:9px;font-weight:700;text-transform:uppercase}
+.badge-long{background:rgba(0,255,65,.2);color:#00ff41}
+.badge-short{background:rgba(255,50,50,.2);color:#ff3232}
+.badge-neutral{background:#222;color:#888}
+.loading{text-align:center;padding:40px;color:#555;font-family:JetBrains+Mono,monospace}
+.tabs{display:flex;gap:2px;margin-bottom:20px}
+.tab{padding:10px 16px;background:#111;color:#666;cursor:pointer;font-family:JetBrains+Mono,monospace;font-size:12px;border-radius:6px 6px 0 0;border:1px solid #222;border-bottom:none}
+.tab.active{background:#1a1a1a;color:#00ff41;border-color:#00ff41}
+.tab-content{display:none}.tab-content.active{display:block}
+.refresh-bar{display:flex;align-items:center;gap:10px;margin-bottom:15px}
+.refresh-bar button{background:#1a1a1a;color:#00ff41;border:1px solid #333;padding:6px 12px;border-radius:4px;cursor:pointer;font-family:JetBrains+Mono,monospace;font-size:12px}
+.status{font-size:11px;color:#555;font-family:JetBrains+Mono,monospace}
 </style>
 </head>
 <body>
 <div class="header">
 <h1>⚖️ Judge Council</h1>
-<a href="/">&larr; Back to Dashboard</a>
+<a href="/">← Back to Dashboard</a>
 </div>
 <div class="container">
 <div class="refresh-bar">
@@ -80,108 +47,83 @@ tr:hover { background: #111; }
 </div>
 <div class="tabs">
 <div class="tab active" onclick="switchTab('judges')">Subnet Scores</div>
-<div class="tab" onclick="switchTab('portfolios')">Paper Portfolios</div>
+<div class="tab" onclick="switchTab('portfolios')">Portfolios</div>
 <div class="tab" onclick="switchTab('postmortems')">Postmortems</div>
 </div>
 <div class="tab-content active" id="tab-judges">
 <div class="section">
-<div class="section-title">Three-Judge Council Consensus</div>
-<div id="judges-table"><div class="loading">Loading judge scores...</div></div>
+<div class="section-title">Three-Judge Consensus</div>
+<div id="judges-table"><div class="loading">Loading...</div></div>
 </div>
 </div>
 <div class="tab-content" id="tab-portfolios">
-<div class="section">
-<div class="section-title">Paper Trading Portfolios</div>
-<div id="portfolio-cards"><div class="loading">Loading portfolios...</div></div>
+<div class="section"><div class="section-title">Paper Portfolios</div>
+<div id="portfolio-cards"><div class="loading">Loading...</div></div>
 </div>
 </div>
 <div class="tab-content" id="tab-postmortems">
-<div class="section">
-<div class="section-title">Wrong-Pick Postmortems</div>
-<div id="postmortem-list"><div class="loading">Loading postmortems...</div></div>
+<div class="section"><div class="section-title">Wrong-Pick Postmortems</div>
+<div id="postmortem-list"><div class="loading">Loading...</div></div>
 </div>
 </div>
 </div>
 <script>
-function scoreClass(s){s=parseFloat(s);if(s>0.6)return "score-high";if(s>=0.4)return "score-mid";return "score-low";}
-function verdictClass(v){return v==="long"?"badge-long":v==="short"?"badge-short":"badge-neutral";}
+function scoreClass(s){s=parseFloat(s);return s>0.6?'score-high':s>=0.4?'score-mid':'score-low'}
+function verdictClass(v){return v==='long'?'badge-long':v==='short'?'badge-short':'badge-neutral'}
 async function loadJudges(){
-const el=document.getElementById("judges-table");
+const el=document.getElementById('judges-table');
 try{
-const r=await fetch("/api/judges");const d=await r.json();
-if(!d.success||!d.judges||d.judges.length===0){el.innerHTML="<div class=loading>No judge data available</div>";return;}
+const r=await fetch('/api/judges');const d=await r.json();
+if(!d.success||!d.judges||d.judges.length===0){el.innerHTML='<div class=loading>No data</div>';return;}
 let rows=d.judges.map((j,i)=>{
 const o=j.oracle||{},e=j.echo||{},p=j.pulse||{},c=j.consensus||{};
-return "<tr onclick=\"toggleDetail("+i+")\" style=cursor:pointer>"+
-"<td>"+(j.name||"SN"+j.netuid)+"<br><span style=color:#555;font-size:11px>SN"+j.netuid+"</span></td>"+
-"<td><span class=\"score "+scoreClass(o.score)+"\">"+o.score+"</span>"+(o.degraded?" <span class=badge-degraded>DEG</span>":"")+"</td>"+
-"<td><span class=\"score "+scoreClass(e.score)+"\">"+e.score+"</span>"+(e.degraded?" <span class=badge-degraded>DEG</span>":"")+"</td>"+
-"<td><span class=\"score "+scoreClass(p.score)+"\">"+p.score+"</span>"+(p.degraded?" <span class=badge-degraded>DEG</span>":"")+"</td>"+
-"<td><span class=\"score "+scoreClass(c.score)+"\">"+c.score+"</span></td>"+
-"<td><span class=\"badge "+verdictClass(c.verdict)+"\">"+c.verdict+"</span>"+(c.contested?" <span class=badge-contested>CONTESTED</span>":"")+"</td>"+
-"<td>"+(c.confidence||0).toFixed(3)+"</td>"+
-"</tr>"+
-"<tr class=detail-row id=detail-"+i+"><td colspan=7>"+
-"<div class=detail-grid>"+
-"<div class=detail-card oracle><h4>Oracle</h4><p>Score: "+(o.score||0)+"</p><p>Confidence: "+(o.confidence||0)+"</p><p>Degraded: "+(o.degraded?"Yes":"No")+"</p></div>"+
-"<div class=detail-card echo><h4>Echo</h4><p>Score: "+(e.score||0)+"</p><p>Confidence: "+(e.confidence||0)+"</p><p>Degraded: "+(e.degraded?"Yes":"No")+"</p></div>"+
-"<div class=detail-card pulse><h4>Pulse</h4><p>Score: "+(p.score||0)+"</p><p>Confidence: "+(p.confidence||0)+"</p><p>Degraded: "+(p.degraded?"Yes":"No")+"</p></div>"+
-"</div></td></tr>";
-}).join("");
-el.innerHTML="<table><thead><tr><th>Subnet</th><th>Oracle</th><th>Echo</th><th>Pulse</th><th>Consensus</th><th>Verdict</th><th>Confidence</th></tr></thead><tbody>"+rows+"</tbody></table>";
-}catch(e){el.innerHTML="<div class=error>Failed to load: "+e.message+"</div>";}
+return '<tr><td>'+(j.name||'SN'+j.netuid)+'<br><span style=color:#555;font-size:10px>SN'+j.netuid+'</span></td>'+
+'<td><span class="score '+scoreClass(o.score)+'">'+o.score+'</span></td>'+
+'<td><span class="score '+scoreClass(e.score)+'">'+e.score+'</span></td>'+
+'<td><span class="score '+scoreClass(p.score)+'">'+p.score+'</span></td>'+
+'<td><span class="score '+scoreClass(c.score)+'">'+c.score+'</span></td>'+
+'<td><span class="badge '+verdictClass(c.verdict)+'">'+c.verdict+'</span></td></tr>';
+}).join('');
+el.innerHTML='<table><thead><tr><th>Subnet</th><th>Oracle</th><th>Echo</th><th>Pulse</th><th>Consensus</th><th>Verdict</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}catch(e){el.innerHTML='<div class=error>Error: '+e.message+'</div>';}
 }
 async function loadPortfolios(){
-const el=document.getElementById("portfolio-cards");
+const el=document.getElementById('portfolio-cards');
 try{
-const r=await fetch("/api/paper-portfolio");const d=await r.json();
-if(!d.success||!d.portfolios){el.innerHTML="<div class=loading>No portfolio data</div>";return;}
-const names={oracle:"Oracle",echo:"Echo",pulse:"Pulse"};
-const classes={oracle:"oracle",echo:"echo",pulse:"pulse"};
-let cards=Object.keys(d.portfolios).map(j=>{
-const p=d.portfolios[j];const s=p.summary||{};
-const pnlClass=(s.total_pnl_pct||0)>=0?"pnl-positive":"pnl-negative";
-return "<div class=\"portfolio-card "+classes[j]+"\"><h3>"+names[j]+"</h3>"+
-"<div class=stat><span class=stat-label>Open Positions</span><span class=stat-value>"+(s.open_positions||0)+"</span></div>"+
-"<div class=stat><span class=stat-label>Total Closed</span><span class=stat-value>"+(s.total_closed||0)+"</span></div>"+
-"<div class=stat><span class=stat-label>Wins / Losses</span><span class=stat-value>"+(s.win_count||0)+" / "+(s.loss_count||0)+"</span></div>"+
-"<div class=stat><span class=stat-label>Win Rate</span><span class=stat-value>"+((s.win_pct||0)*100).toFixed(1)+"%</span></div>"+
-"<div class=stat><span class=stat-label>Total P&L</span><span class=\"stat-value "+pnlClass+"\">"+(s.total_pnl_pct||0).toFixed(2)+"%</span></div>"+
-"<div class=stat><span class=stat-label>Hourly Win Rate</span><span class=stat-value>"+(((s.hourly||{}).win_pct||0)*100).toFixed(1)+"%</span></div>"+
-"<div class=stat><span class=stat-label>Daily Win Rate</span><span class=stat-value>"+(((s.daily||{}).win_pct||0)*100).toFixed(1)+"%</span></div>"+
-"</div>";
-}).join("");
-if(!cards)cards="<div class=loading>No portfolios found</div>";
-el.innerHTML="<div class=portfolio-grid>"+cards+"</div>";
-}catch(e){el.innerHTML="<div class=error>Failed to load: "+e.message+"</div>";}
+const r=await fetch('/api/paper-portfolio');const d=await r.json();
+if(!d.success||!d.portfolios){el.innerHTML='<div class=loading>No data</div>';return;}
+let cards='';
+for(const[j,p]of Object.entries(d.portfolios)){
+const s=p.summary||{};const pnl=(s.total_pnl_pct||0)>=0?'pnl-positive':'pnl-negative';
+cards+='<div style="background:#111;border:1px solid #222;border-radius:8px;padding:15px;margin-bottom:10px">'+
+'<h3 style="color:#'+({oracle:'#4af',echo:'#fa4',pulse:'#f4a'}[j]||'#00ff41')+'">'+j+'</h3>'+
+'<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1a1a1a;font-size:12px">'+
+'<span style=color:#888>Positions</span><span>'+(s.open_positions||0)+'</span></div>'+
+'<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1a1a1a;font-size:12px">'+
+'<span style=color:#888>P&L</span><span class='+pnl+'>'+(s.total_pnl_pct||0).toFixed(2)+'%</span></div>';
+}
+el.innerHTML='<div class=portfolio-grid>'+cards+'</div>';
+}catch(e){el.innerHTML='<div class=error>'+e.message+'</div>';}
 }
 async function loadPostmortems(){
-const el=document.getElementById("postmortem-list");
+const el=document.getElementById('postmortem-list');
 try{
-const r=await fetch("/api/postmortems");const d=await r.json();
-if(!d.success||!d.postmortems){el.innerHTML="<div class=loading>No postmortem data</div>";return;}
-let items=[];
+const r=await fetch('/api/postmortems');const d=await r.json();
+if(!d.success||!d.postmortems){el.innerHTML='<div class=loading>No data</div>';return;}
+let items='';
 for(const[judge,entries]of Object.entries(d.postmortems)){
-for(const pm of entries.slice(0,10)){
-const q=pm.questions||{};
-items.push("<div class=postmortem-item>"+
-"<div class=pm-header>"+(pm.name||"SN"+pm.netuid)+" SN"+pm.netuid+" \u2014 <span style=color:"+(pm.direction==="up"?"#00ff41":"#ff3232")+">"+pm.direction.toUpperCase()+"</span> \u2014 predicted "+(pm.predicted_pct||0)+"% / actual "+(pm.actual_pct||0)+"% \u2014 ["+judge+"]</div>"+
-"<div class=pm-q><strong>What went wrong:</strong> "+(q.what||"N/A")+"</div>"+
-"<div class=pm-q><strong>Why evidence failed:</strong> "+(q.why||"N/A")+"</div>"+
-"<div class=pm-q><strong>Rule to add:</strong> "+(q.rule||"N/A")+"</div>"+
-"<div class=pm-q><strong>Devils advocate:</strong> "+(q.devil||"N/A")+"</div>"+
-"</div>");
+for(const pm of entries.slice(0,5)){
+items+='<div style="background:#0d0d0d;border-left:3px solid #ff3232;padding:10px;margin-bottom:8px;border-radius:0 4px 4px 0">'+
+'<div style="font-size:11px;color:#aaa">'+(pm.name||'SN'+pm.netuid)+' ['+judge+']</div>'+
+'<div style="font-size:10px;color:#888;margin:4px 0">'+pm.direction+' '+pm.predicted_pct+'% → '+pm.actual_pct+'%</div>';
 }
 }
-if(items.length===0)items=["<div class=loading>No postmortems recorded yet</div>"];
-el.innerHTML="<div class=postmortem-list>"+items.join("")+"</div>";
-}catch(e){el.innerHTML="<div class=error>Failed to load: "+e.message+"</div>";}
+el.innerHTML=items||'<div class=loading>No postmortems</div>';
+}catch(e){el.innerHTML='<div class=error>'+e.message+'</div>';}
 }
-function toggleDetail(i){const el=document.getElementById("detail-"+i);if(el)el.classList.toggle("show");}
-function switchTab(name){document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));document.querySelectorAll(".tab-content").forEach(t=>t.classList.remove("active"));event.target.classList.add("active");document.getElementById("tab-"+name).classList.add("active");}
-async function loadAll(){const st=document.getElementById("status");st.textContent="Refreshing...";await Promise.all([loadJudges(),loadPortfolios(),loadPostmortems()]);st.textContent="Last updated: "+new Date().toLocaleTimeString();}
-loadAll();
-setInterval(loadAll,300000);
+function switchTab(name){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));event.target.classList.add('active');document.getElementById('tab-'+name).classList.add('active');}
+async function loadAll(){document.getElementById('status').textContent='Loading...';await Promise.all([loadJudges(),loadPortfolios(),loadPostmortems()]);document.getElementById('status').textContent='Updated '+new Date().toLocaleTimeString();}
+loadAll();setInterval(loadAll,60000);
 </script>
 </body>
 </html>
