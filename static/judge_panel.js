@@ -1,5 +1,7 @@
 // Judge Council popup panel with live data
 (function() {
+  'use strict';
+
   // Create floating button
   var btn = document.createElement('div');
   btn.id = 'jc-trigger';
@@ -11,7 +13,6 @@
   document.body.appendChild(btn);
 
   var modal = null;
-  var loaded = false;
 
   function togglePanel() {
     if (modal) { modal.remove(); modal = null; return; }
@@ -23,59 +24,71 @@
     var box = document.createElement('div');
     box.style.cssText = 'background:#1a1a2e;border:1px solid #c99a4b;border-radius:16px;max-width:800px;width:100%;max-height:85vh;overflow-y:auto;padding:24px;font-family:system-ui,sans-serif;color:#e0e0e0;';
     box.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
-      '<div style="display:flex;align-items:center;gap:10px;"><span style="font-size:28px;">\u2696\ufe0f</span><span style="font-size:20px;font-weight:bold;color:#c99a4b;">Judge Council</span></div>' +
+      '<h2 style="margin:0;font-size:20px;color:#c99a4b;">\u2696\ufe0f Judge Council</h2>' +
       '<button id="jc-close" style="background:none;border:none;color:#888;font-size:24px;cursor:pointer;">\u00d7</button></div>' +
-      '<p style="color:#888;font-size:13px;margin:0 0 16px;">AI judges evaluating subnet performance</p>' +
-      '<div id="jc-content" style="display:flex;align-items:center;justify-content:center;padding:40px;color:#888;">Loading judge scores...</div>';
+      '<p style="color:#888;font-size:13px;margin-bottom:16px;">AI judges evaluating subnet performance</p>' +
+      '<div id="jc-content" style="color:#aaa;"><p>Loading judge scores...</p></div>';
     modal.appendChild(box);
     document.body.appendChild(modal);
 
     document.getElementById('jc-close').onclick = function() { modal.remove(); modal = null; };
 
-    if (!loaded) { loadData(); }
+    loadData();
   }
 
   function loadData() {
-    fetch('/api/judges').then(function(r) { return r.json(); }).then(function(data) {
-      var el = document.getElementById('jc-content');
-      if (!el) return;
-      if (!data.success && data.judges && data.judges.length === 0) {
-        el.innerHTML = '<p style="color:#888;">No judge data available yet.</p>';
-        return;
-      }
-      var judges = data.judges || [];
-      var html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
-        '<thead><tr style="border-bottom:2px solid #c99a4b;text-align:left;">' +
-        '<th style="padding:8px;color:#c99a4b;">Subnet</th>' +
-        '<th style="padding:8px;color:#c99a4b;text-align:center;">Oracle</th>' +
-        '<th style="padding:8px;color:#c99a4b;text-align:center;">Echo</th>' +
-        '<th style="padding:8px;color:#c99a4b;text-align:center;">Pulse</th>' +
-        '<th style="padding:8px;color:#c99a4b;text-align:center;">Consensus</th>' +
-        '<th style="padding:8px;color:#c99a4b;text-align:center;">Verdict</th>' +
-        '</tr></thead><tbody>';
-      judges.forEach(function(j) {
-        var verdictColor = j.consensus && j.consensus.verdict === 'bullish' ? '#4caf50' : j.consensus && j.consensus.verdict === 'bearish' ? '#f44336' : '#888';
-        var score = j.consensus ? j.consensus.score.toFixed(2) : 'N/A';
-        var verdict = j.consensus ? j.consensus.verdict : 'N/A';
-        var agreement = j.consensus ? (j.consensus.agreement * 100).toFixed(0) + '%' : 'N/A';
-        html += '<tr style="border-bottom:1px solid #333;">' +
-          '<td style="padding:8px;"><span style="color:#c99a4b;font-weight:bold;">' + (j.name || 'SN' + j.netuid) + '</span><br><span style="color:#666;font-size:11px;">SN' + j.netuid + '</span></td>' +
-          '<td style="padding:8px;text-align:center;' + (j.oracle && j.oracle.degraded ? 'color:#667;' : 'color:#e0e0e0;') + '">' + (j.oracle ? j.oracle.score.toFixed(2) : '-') + '</td>' +
-          '<td style="padding:8px;text-align:center;' + (j.echo && j.echo.degraded ? 'color:#667;' : 'color:#e0e0e0;') + '">' + (j.echo ? j.echo.score.toFixed(2) : '-') + '</td>' +
-          '<td style="padding:8px;text-align:center;' + (j.pulse && j.pulse.degraded ? 'color:#667;' : 'color:#e0e0e0;') + '">' + (j.pulse ? j.pulse.score.toFixed(2) : '-') + '</td>' +
-          '<td style="padding:8px;text-align:center;font-weight:bold;color:#c99a4b;">' + score + '<br><span style="font-size:10px;color:#888;">' + agreement + ' agree</span></td>' +
-          '<td style="padding:8px;text-align:center;font-weight:bold;color:' + verdictColor + ';text-transform:uppercase;font-size:11px;">' + verdict + '</td>' +
-        '</tr>';
+    fetch('/api/judges')
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function(data) {
+        var el = document.getElementById('jc-content');
+        if (!el) return;
+
+        var judges = data.judges || [];
+        if (!judges.length) {
+          el.innerHTML = '<p style="color:#888;">No judge data available yet. The background scheduler refreshes every 5 minutes.</p>';
+          return;
+        }
+
+        var html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
+          '<thead><tr style="border-bottom:1px solid #333;">' +
+          '<th style="text-align:left;padding:8px;color:#c99a4b;">Subnet</th>' +
+          '<th style="padding:8px;color:#c99a4b;">Oracle</th>' +
+          '<th style="padding:8px;color:#c99a4b;">Echo</th>' +
+          '<th style="padding:8px;color:#c99a4b;">Pulse</th>' +
+          '<th style="padding:8px;color:#c99a4b;">Consensus</th>' +
+          '<th style="padding:8px;color:#c99a4b;">Verdict</th>' +
+          '</tr></thead><tbody>';
+
+        judges.slice(0, 30).forEach(function(j) {
+          var verdictColor = j.consensus && j.consensus.verdict === 'bullish' ? '#4caf50' :
+            j.consensus && j.consensus.verdict === 'bearish' ? '#f44336' : '#888';
+          var score = j.consensus ? j.consensus.score.toFixed(2) : 'N/A';
+          var verdict = j.consensus ? j.consensus.verdict : 'N/A';
+          var agreement = j.consensus ? (j.consensus.agreement * 100).toFixed(0) + '%' : 'N/A';
+
+          html += '<tr style="border-bottom:1px solid #222;">' +
+            '<td style="padding:8px;">' + (j.name || 'SN' + j.netuid) + ' SN' + j.netuid + '</td>' +
+            '<td style="padding:8px;text-align:center;">' + (j.oracle ? j.oracle.score.toFixed(2) : '-') + (j.oracle && j.oracle.degraded ? ' \u26a0' : '') + '</td>' +
+            '<td style="padding:8px;text-align:center;">' + (j.echo ? j.echo.score.toFixed(2) : '-') + (j.echo && j.echo.degraded ? ' \u26a0' : '') + '</td>' +
+            '<td style="padding:8px;text-align:center;">' + (j.pulse ? j.pulse.score.toFixed(2) : '-') + (j.pulse && j.pulse.degraded ? ' \u26a0' : '') + '</td>' +
+            '<td style="padding:8px;text-align:center;color:#c99a4b;">' + score + ' <span style="color:#666;font-size:11px;">' + agreement + ' agree</span></td>' +
+            '<td style="padding:8px;text-align:center;color:' + verdictColor + ';">' + verdict + '</td>' +
+            '</tr>';
+        });
+
+        html += '</tbody></table>';
+        html += '<p style="color:#666;font-size:12px;margin-top:12px;">' + judges.length + ' subnets scored \u00b7 3 judges (Oracle, Echo, Pulse)' +
+          (data.source ? ' \u00b7 source: ' + data.source : '') + '</p>';
+        el.innerHTML = html;
+        el.style.padding = '0';
+      })
+      .catch(function(err) {
+        var el = document.getElementById('jc-content');
+        if (el) el.innerHTML = '<p style="color:#f44336;">Failed to load judge data: ' + err.message + '</p>' +
+          '<p style="color:#888;font-size:12px;">The /api/judges endpoint may still be starting up. Try again in a moment.</p>';
       });
-      html += '</tbody></table>';
-      html += '<div style="margin-top:12px;color:#555;font-size:11px;text-align:right;">' + judges.length + ' subnets scored · 3 judges (Oracle, Echo, Pulse)</div>';
-      el.innerHTML = html;
-      el.style.padding = '0';
-      el.style.display = 'block';
-      loaded = true;
-    }).catch(function(err) {
-      var el = document.getElementById('jc-content');
-      if (el) el.innerHTML = '<p style="color:#f44336;">Failed to load judge data: ' + err.message + '</p>';
-    });
   }
 })();
