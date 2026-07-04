@@ -1,43 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"><title>Judge Council</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Judge Council</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0a0a0a;color:#e0e0e0;font-family:monospace;min-height:100vh;padding:20px}
-h1{color:#00ff41;font-family:monospace;font-size:24px;margin-bottom:20px}
-.container{max-width:1200px;margin:0 auto}
-.table{width:100%;border-collapse:collapse;font-size:12px}
-.th,.td{border:1px solid #222;padding:8px;text-align:left}
-.th{background:#00ff41;color:#000;font-weight:bold}
-tr:hover{background:#1a1a1a}
+body{background:#0d0d1a;color:#e0e0e0;font-family:system-ui,sans-serif;padding:20px}
+h1{color:#c99a4b;margin-bottom:10px}
 </style>
 </head>
 <body>
-<div class="container">
-<h1>⚖️ Judge Council</h1>
-<div id="content"><p>Loading...</p></div>
+<h1>\u2696\ufe0f Judge Council</h1>
+<p>Loading...</p>
+<div id="judge-council-panel" style="position:fixed;bottom:20px;right:20px;background:#1a1a2e;border:1px solid #c99a4b;border-radius:12px;padding:16px;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.5);max-width:320px;font-family:system-ui,sans-serif;">
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+    <span style="font-size:20px;">\u2696\ufe0f</span>
+    <span style="color:#c99a4b;font-weight:bold;font-size:14px;">Judge Council</span>
+  </div>
+  <p style="color:#aaa;font-size:12px;margin:0 0 10px 0;">AI judges evaluating subnet performance</p>
+  <a href="/judge-council" style="display:inline-block;background:#c99a4b;color:#1a1a2e;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:bold;">View Council \u2192</a>
 </div>
-<script>
-async function load(){
-const el=document.getElementById('content');
-try{
-const r=await fetch('/api/judges');const d=await r.json();
-if(!d.judges||!d.judges.length){el.innerHTML='<p>No data</p>';return;}
-let html='<table class="table"><tr><th>Subnet</th><th>Oracle</th><th>Echo</th><th>Pulse</th><th>Consensus</th><th>Verdict</th></tr>';
-for(const j of d.judges.slice(0,20)){
-html+=`<tr><td>${j.name||j.netuid}<br><span style="color:#555">${j.netuid}</span></td>`+
-`<td>${(j.oracle.score||0.5).toFixed(2)}</td>`+
-`<td>${(j.echo.score||0.5).toFixed(2)}</td>`+
-`<td>${(j.pulse.score||0.5).toFixed(2)}</td>`+
-`<td>${(j.consensus.score||0.5).toFixed(2)}</td>`+
-`<td>${j.consensus.verdict||'neutral'}</td></tr>`;
-}
-html+='</table>';
-el.innerHTML=html;
-}catch(e){el.innerHTML='<p>Error: '+e+'</p>';}
-}
-load();setInterval(load,30000);
-</script>
 </body>
 </html>
