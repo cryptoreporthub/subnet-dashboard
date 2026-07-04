@@ -3,6 +3,7 @@ FastAPI APIRouter for the Judge Council endpoints.
 
 Provides:
   GET /api/judges          - Score all subnets through the three-judge council
+  GET /api/council         - Full merged data pipeline (Blockmachine + TaoStats + TMC + judges)
   GET /api/paper-portfolio - Paper portfolio for all judges
   GET /api/postmortems     - Postmortems for all judges
   GET /judge-council       - Standalone Judge Council HTML page
@@ -12,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter
@@ -27,10 +29,73 @@ _TEMPLATES_DIR = os.path.join(
 )
 
 
+def _get_merged_data():
+    """Try to fetch merged subnet data. Returns (merged_list, source_str) or (None, 'none')."""
+    try:
+        from fetchers.merged_data import get_merged_subnet_data
+        merged = get_merged_subnet_data()
+        if merged:
+            return merged, "merged"
+    except Exception as e:
+        logger.warning("Merged data fetch failed: %s", e)
+    return None, "none"
+
+
+@council_router.get("/api/council")
+async def api_council():
+    """Full merged data pipeline: Blockmachine + TaoStats + TaoMarketCap + judge scores."""
+    try:
+        merged, source = _get_merged_data()
+        if not merged:
+            # Fall back to TMC only
+            from fetchers.taomarketcap import get_all_subnets
+            merged = get_all_subnets()
+            source = "taomarketcap-fallback"
+
+        if not merged:
+            return {
+                "status": "degraded",
+                "subnets": [],
+                "judges": [],
+                "meta": {"count": 0, "source": "none", "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")},
+            }
+
+        # Score through the judge council
+        try:
+            from internal.judges.subnet_judges import score_all_subnets
+            scored = score_all_subnets(merged)
+        except Exception as e:
+            logger.warning("Judge scoring in council endpoint failed: %s", e)
+            scored = []
+
+        return {
+            "status": "success",
+            "subnets": merged,
+            "judges": scored,
+            "meta": {
+                "count": len(merged),
+                "judged": len(scored) if scored else 0,
+                "source": source,
+                "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            },
+        }
+    except Exception as e:
+        logger.error("Council API error: %s", e, exc_info=True)
+        return {"status": "error", "error": str(e), "subnets": [], "judges": [], "meta": {"count": 0}}
+
+
 @council_router.get("/api/judges")
 async def api_judges():
     """Score all subnets with the three-judge council + consensus."""
     try:
+        # Try merged data first for richer scoring
+        merged, source = _get_merged_data()
+        if merged:
+            from internal.judges.subnet_judges import score_all_subnets
+            result = score_all_subnets(merged)
+            return {"success": True, "judges": result, "count": len(result), "source": source}
+
+        # Fall back to TMC-only data
         from fetchers.taomarketcap import get_all_subnets
         from internal.judges.subnet_judges import score_all_subnets
 
@@ -38,7 +103,7 @@ async def api_judges():
         if not subnets_data:
             return {"success": False, "error": "No subnet data available", "judges": [], "count": 0}
         result = score_all_subnets(subnets_data)
-        return {"success": True, "judges": result, "count": len(result)}
+        return {"success": True, "judges": result, "count": len(result), "source": "taomarketcap"}
     except Exception as e:
         logger.warning("Judge scoring failed: %s", e)
         return {"success": False, "error": str(e), "judges": [], "count": 0}

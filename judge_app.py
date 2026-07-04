@@ -34,8 +34,7 @@ async def serve_panel_js():
 from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
 from starlette.responses import Response  # noqa: E402
 
-SCRIPT_TAG = b'<script src="/static/judge_panel.js"></script></body>'
-
+SCRIPT_TAG = b'<script src="/static/judge_panel.js"></script>'
 
 class JudgeCouncilScriptMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
@@ -50,37 +49,48 @@ class JudgeCouncilScriptMiddleware(BaseHTTPMiddleware):
             if not body:
                 return response
             if b"</body>" in body:
-                body = body.replace(b"</body>", SCRIPT_TAG, 1)
+                body = body.replace(b"</body>", SCRIPT_TAG + b"</body>", 1)
             else:
-                body = body + b'<script src="/static/judge_panel.js"></script>'
-            safe_headers = {k: v for k, v in response.headers.items() if k.lower() not in ("content-length", "transfer-encoding", "content-encoding")}
+                body = body + SCRIPT_TAG
+            safe_headers = {
+                k: v for k, v in response.headers.items()
+                if k.lower() not in ("content-length", "transfer-encoding", "content-encoding")
+            }
             return Response(content=body, media_type="text/html", status_code=response.status_code, headers=safe_headers)
         except Exception as e:
             logger.warning("Judge council script injection failed: %s", e)
             return response
 
-
 app.add_middleware(JudgeCouncilScriptMiddleware)
 
 # --- Background judge score refresh scheduler ---
 def _start_judge_refresh_scheduler():
-    """Refresh judge scores in background every 5 minutes."""
+    """Refresh judge scores in background every 5 minutes using merged data."""
     def _loop():
         time.sleep(10)
         while True:
             try:
-                from fetchers.taomarketcap import get_all_subnets
-                from internal.judges.subnet_judges import score_all_subnets
-                subnets_data = get_all_subnets()
+                # Try merged data pipeline first (Blockmachine + TaoStats + TMC)
+                try:
+                    from fetchers.merged_data import get_merged_subnet_data
+                    subnets_data = get_merged_subnet_data()
+                    source = "merged"
+                except Exception as merged_exc:
+                    logger.warning("Merged data unavailable, falling back to TMC: %s", merged_exc)
+                    from fetchers.taomarketcap import get_all_subnets
+                    subnets_data = get_all_subnets()
+                    source = "taomarketcap"
+
                 if subnets_data:
+                    from internal.judges.subnet_judges import score_all_subnets
                     score_all_subnets(subnets_data)
-                    logger.info("Judge scores refreshed (%d subnets)", len(subnets_data))
+                    logger.info("Judge scores refreshed (%d subnets, source=%s)", len(subnets_data), source)
             except Exception as e:
                 logger.warning("Judge refresh failed: %s", e)
             time.sleep(300)
+
     t = threading.Thread(target=_loop, daemon=True)
     t.start()
-
 
 _start_judge_refresh_scheduler()
 
