@@ -1,4 +1,4 @@
-### Subnet Dashboard modular entry point.###
+"""Subnet Dashboard — modular entry point."""
 import os
 from server import app
 

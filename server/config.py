@@ -1,4 +1,4 @@
-### Server configuration.###
+"""Server configuration."""
 import json
 import logging
 import math
