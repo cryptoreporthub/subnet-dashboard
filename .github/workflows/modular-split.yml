@@ -1,0 +1,125 @@
+name: Modular Split (awk)
+
+on:
+  push:
+    paths:
+      - .github/workflows/modular-split.yml
+  workflow_dispatch: {}
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Split server.py with awk
+        run: |
+          set -e
+          echo "=== Phase 1: Find last route body end ==="
+
+          awk '
+          /^@app\.(get|post|put|delete|patch|api_route)\(/ {
+            getline
+            while (1) {
+              if (/^@/) { getline; continue }
+              if (/^(async )?def /) break
+              if (/^$/ || /^#/) { getline; continue }
+              getline
+            }
+            match($0, /^[ \t]*/)
+            base_indent = RLENGTH
+            getline
+            while (1) {
+              if (NR > 100000) break
+              if (/^$/) { getline; continue }
+              match($0, /^[ \t]*/)
+              if (RLENGTH <= base_indent) break
+              getline
+            }
+            if (NR > last_route_end) last_route_end = NR
+          }
+          END { print last_route_end }
+          ' server.py > /tmp/last_end.txt
+
+          LAST_END=$(cat /tmp/last_end.txt)
+          echo "Last route body ends at line: $LAST_END"
+
+          FIRST_ROUTE=$(awk '/^@app\.(get|post|put|delete|patch|api_route)\(/{print NR; exit}' server.py)
+          echo "First route at line: $FIRST_ROUTE"
+
+          TOTAL=$(wc -l < server.py)
+          echo "Total lines: $TOTAL"
+
+          echo "=== Phase 2: Split ==="
+          mkdir -p server
+
+          echo '"""Server configuration."""' > server/config.py
+          if [ "$FIRST_ROUTE" -gt 1 ]; then
+            head -n $((FIRST_ROUTE - 1)) server.py >> server/config.py
+          fi
+          echo "config.py: $(wc -l < server/config.py) lines"
+
+          echo '"""All API and web routes."""' > server/routes.py
+          echo 'from fastapi import APIRouter, Request' >> server/routes.py
+          echo 'from fastapi.responses import JSONResponse, PlainTextResponse' >> server/routes.py
+          echo 'from server.config import *  # noqa: F403' >> server/routes.py
+          echo '' >> server/routes.py
+          echo 'logger = logging.getLogger(__name__)' >> server/routes.py
+          echo 'router = APIRouter()' >> server/routes.py
+          echo '' >> server/routes.py
+
+          if [ "$LAST_END" -gt "$FIRST_ROUTE" ]; then
+            sed -n "${FIRST_ROUTE},$((LAST_END - 1))p" server.py | \
+              sed 's/@app.get(/@router.get(/' | sed 's/@app.post(/@router.post(/' | \
+              sed 's/@app.put(/@router.put(/' | sed 's/@app.delete(/@router.delete(/' | \
+              sed 's/@app.patch(/@router.patch(/' | sed 's/@app.api_route(/@router.api_route(/' \
+              >> server/routes.py
+          fi
+          echo "routes.py: $(wc -l < server/routes.py) lines"
+
+          echo '"""Subnet Dashboard server package."""' > server/__init__.py
+          echo 'from server.config import *  # noqa: F403' >> server/__init__.py
+          echo '' >> server/__init__.py
+          if [ "$LAST_END" -le "$TOTAL" ]; then
+            tail -n +"$LAST_END" server.py >> server/__init__.py
+          fi
+          echo "__init__.py: $(wc -l < server/__init__.py) lines"
+
+          cat > server.py << 'SHIMEOF'
+          """Subnet Dashboard modular entry point."""
+          import os
+          from server import app
+
+          if __name__ == "__main__":
+              import uvicorn
+              uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+          SHIMEOF
+
+          echo "=== Phase 3: Cleanup ==="
+          for f in judge_app.py council_app.py; do
+            [ -f "$f" ] && rm "$f" && echo "Removed $f"
+          done
+          for f in scripts/split_server.py scripts/recover_tail.py scripts/modular_split.py; do
+            [ -f "$f" ] && rm "$f" && echo "Removed $f"
+          done
+          rm -f .github/workflows/split-server.yml .github/workflows/restore-server.yml
+          # DONT delete modular-split.yml until after git commit
+
+          [ -f Dockerfile ] && { sed -i 's/council_app:app/server:app/g' Dockerfile; echo "Fixed Dockerfile"; }
+          [ -f Procfile ] && { sed -i 's/council_app:app/server:app/g' Procfile; sed -i 's/judge_app:app/server:app/g' Procfile; echo "Fixed Procfile"; }
+
+          echo "=== Phase 4: Verify ==="
+          echo "config:   $(wc -l < server/config.py)"
+          echo "routes:   $(wc -l < server/routes.py)"
+          echo "__init__: $(wc -l < server/__init__.py)"
+          echo "shim:     $(wc -l < server.py)"
+          grep -c '@router\.' server/routes.py && echo "@router OK" || echo "NO @router found!"
+          grep -c '@app\.' server/routes.py && echo "WARNING: leftover @app!" || echo "No leftover @app"
+      - name: Commit and push
+        run: |
+          git config user.name "Ditto"
+          git config user.email "ditto@heyditto.ai"
+          git add -A
+          git commit -m "refactor: split server.py into clean server/ package" || echo "no changes"
+          git push
