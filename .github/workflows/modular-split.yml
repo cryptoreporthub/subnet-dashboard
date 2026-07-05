@@ -1,4 +1,3 @@
-# v2 inline Python splitter — triggered by push
 name: Modular Split
 
 on:
@@ -14,12 +13,9 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
       - name: Split server.py into server/ package
-        shell: python
         run: |
+          cat > /tmp/split.py <<'PYEOF'
           import re, os, shutil, ast
           from pathlib import Path
 
@@ -32,7 +28,6 @@ jobs:
           print(f"Read {len(lines)} lines")
           n = len(lines)
 
-          # Find the LAST @app.<method> route function body end
           last_route_end = 0
           i = 0
           while i < n:
@@ -85,68 +80,44 @@ jobs:
           shutil.rmtree(pkg, ignore_errors=True)
           pkg.mkdir(parents=True, exist_ok=True)
 
-          # config.py
           with open(pkg / "config.py", "w", encoding="utf-8") as f:
-              f.write('"""Server config."""
-')
+              f.write('"""Server config."""\n')
               f.writelines(config_lines)
           print("Wrote config.py")
 
-          # routes.py
           with open(pkg / "routes.py", "w", encoding="utf-8") as f:
-              f.write('"""Routes."""
-')
-              f.write("from fastapi import APIRouter, Request
-")
-              f.write("from fastapi.responses import JSONResponse, PlainTextResponse
-")
-              f.write("from server.config import *  # noqa: F403
-")
-              f.write("
-")
-              f.write("logger = logging.getLogger(__name__)
-")
-              f.write("router = APIRouter()
-")
-              f.write("
-")
+              f.write('"""Routes."""\n')
+              f.write("from fastapi import APIRouter, Request\n")
+              f.write("from fastapi.responses import JSONResponse, PlainTextResponse\n")
+              f.write("from server.config import *  # noqa: F403\n")
+              f.write("\n")
+              f.write("logger = logging.getLogger(__name__)\n")
+              f.write("router = APIRouter()\n")
+              f.write("\n")
               for line in route_lines:
                   fixed = line
                   for method in ["get", "post", "put", "delete", "patch", "api_route"]:
-                      fixed = fixed.replace(f"@app.{method}(", f"@router.{method}(")
+                      fixed = fixed.replace("@app." + method + "(", "@router." + method + "(")
                   f.write(fixed)
           print("Wrote routes.py")
 
-          # __init__.py
           with open(pkg / "__init__.py", "w", encoding="utf-8") as f:
-              f.write('"""Server package."""
-')
-              f.write("from server.config import *  # noqa: F403
-")
-              f.write("
-")
+              f.write('"""Server package."""\n')
+              f.write("from server.config import *  # noqa: F403\n")
+              f.write("\n")
               f.writelines(tail_lines)
           print("Wrote __init__.py")
 
-          # server.py shim
           with open(ROOT / "server.py", "w", encoding="utf-8") as f:
-              f.write('"""Subnet Dashboard — modular entry point."""
-')
-              f.write("import os
-")
-              f.write("from server import app
-")
-              f.write("
-")
-              f.write('if __name__ == "__main__":
-')
-              f.write("    import uvicorn
-")
-              f.write('    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-')
+              f.write('"""Subnet Dashboard — modular entry point."""\n')
+              f.write("import os\n")
+              f.write("from server import app\n")
+              f.write("\n")
+              f.write('if __name__ == "__main__":\n')
+              f.write("    import uvicorn\n")
+              f.write('    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))\n')
           print("Wrote shim")
 
-          # Cleanup
           for old in ["judge_app.py", "council_app.py",
                       "scripts/split_server.py", "scripts/recover_tail.py",
                       ".github/workflows/split-server.yml", ".github/workflows/restore-server.yml"]:
@@ -157,13 +128,16 @@ jobs:
 
           df = ROOT / "Dockerfile"
           if df.exists():
-              c = df.read_text().replace("council_app:app", "server:app")
+              c = df.read_text()
+              c = c.replace("council_app:app", "server:app")
               df.write_text(c)
               print("Fixed Dockerfile")
 
           pf = ROOT / "Procfile"
           if pf.exists():
-              c = pf.read_text().replace("council_app:app", "server:app").replace("judge_app:app", "server:app")
+              c = pf.read_text()
+              c = c.replace("council_app:app", "server:app")
+              c = c.replace("judge_app:app", "server:app")
               pf.write_text(c)
               print("Fixed Procfile")
 
@@ -173,15 +147,18 @@ jobs:
                       ast.parse(fh.read())
                   print(f"  {path}: OK")
               except SyntaxError as e:
-                  print(f"  {path}: SYNTAX ERROR")
+                  print(f"  {path}: SYNTAX ERROR at line {e.lineno}")
                   with open(ROOT / path) as fh:
                       content = fh.read()
                   lines = content.split('\n')
-                  if hasattr(e, 'lineno') and e.lineno:
-                      for j in range(max(0, e.lineno - 3), min(len(lines), e.lineno + 2)):
+                  if e.lineno:
+                      start = max(0, e.lineno - 2)
+                      end = min(len(lines), e.lineno + 2)
+                      for j in range(start, end):
                           print(f"    {j+1}: {lines[j][:120]}")
-
           print("\nDone!")
+          PYEOF
+          python3 /tmp/split.py
       - name: Commit and push
         run: |
           git config user.name "Ditto"
