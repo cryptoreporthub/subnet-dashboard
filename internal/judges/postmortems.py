@@ -18,14 +18,11 @@ from typing import Any, Dict, List, Optional
 
 POSTMORTEMS_DIR = os.path.join("data", "postmortems")
 
-
 def _path(judge_name: str) -> str:
     return os.path.join(POSTMORTEMS_DIR, f"{judge_name.lower()}.json")
 
-
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
 
 def _load(judge_name: str) -> List[Dict[str, Any]]:
     path = _path(judge_name)
@@ -35,7 +32,6 @@ def _load(judge_name: str) -> List[Dict[str, Any]]:
     except Exception:
         return []
 
-
 def _save(judge_name: str, entries: List[Dict[str, Any]]) -> None:
     os.makedirs(POSTMORTEMS_DIR, exist_ok=True)
     path = _path(judge_name)
@@ -44,7 +40,6 @@ def _save(judge_name: str, entries: List[Dict[str, Any]]) -> None:
         json.dump(entries, f, indent=2)
     os.replace(tmp, path)
 
-
 def _diagnosis(prediction: Dict[str, Any], actual_pct: Optional[float]) -> Dict[str, str]:
     """Generate the four scientific-method questions for a wrong pick."""
     direction = prediction.get("direction", "up")
@@ -52,7 +47,6 @@ def _diagnosis(prediction: Dict[str, Any], actual_pct: Optional[float]) -> Dict[
     actual_pct = float(actual_pct or 0)
     signal_source = prediction.get("signal_source") or prediction.get("expert") or "unknown"
 
-    # Q1: what was wrong
     if direction == "up" and actual_pct < 0:
         q1 = "Direction was wrong: predicted up but price fell."
     elif direction == "down" and actual_pct > 0:
@@ -62,10 +56,9 @@ def _diagnosis(prediction: Dict[str, Any], actual_pct: Optional[float]) -> Dict[
     else:
         q1 = "Timing/continuation was wrong: direction signalled but did not sustain."
 
-    # Q2: evidence failure mode
     source_lower = str(signal_source).lower()
     if "sell" in source_lower or "bear" in source_lower:
-        q2 = "Contrarian/sell-alert signal over-interpreted a local pullback as trend."
+        q2 = "Dark Horse/sell-alert signal over-interpreted a local pullback as trend."
     elif "hot" in source_lower or "momentum" in source_lower:
         q2 = "Momentum/hype signal chased short-term energy and ignored exhaustion."
     elif "rsi" in source_lower or "macd" in source_lower or "technical" in source_lower:
@@ -73,13 +66,11 @@ def _diagnosis(prediction: Dict[str, Any], actual_pct: Optional[float]) -> Dict[
     else:
         q2 = "Supporting evidence was incomplete or stale relative to actual price action."
 
-    # Q3: actionable rule
     q3 = (
         "Require a confirming second signal before taking a "
         f"{direction} position when {signal_source} is the primary driver."
     )
 
-    # Q4: devil's advocate — what belief would have predicted the opposite outcome
     opposite_direction = "down" if direction == "up" else "up"
     if actual_pct > 0:
         q4 = (
@@ -101,7 +92,6 @@ def _diagnosis(prediction: Dict[str, Any], actual_pct: Optional[float]) -> Dict[
         )
 
     return {"what": q1, "why": q2, "rule": q3, "devil": q4}
-
 
 def record(
     judge_name: str,
@@ -127,11 +117,9 @@ def record(
     _save(judge_name, entries)
     return entry
 
-
 def list_for_judge(judge_name: str) -> List[Dict[str, Any]]:
     """Return all postmortems for a judge, newest first."""
     return list(reversed(_load(judge_name)))
-
 
 def all_postmortems() -> Dict[str, List[Dict[str, Any]]]:
     """Return postmortems for all three judges."""
