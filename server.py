@@ -1,7 +1,6 @@
 """Subnet Dashboard — modular entry point."""
 import os
-from server import create_app
-app = create_app()
+from server import app
 
 if __name__ == "__main__":
     import uvicorn

@@ -1,1 +1,1 @@
-"""Global state (caches, locks, timestamps) — extracted from config.py."""
+"""Global state placeholder."""
