@@ -15,101 +15,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Restore original
+      - name: Restore original server.py
         run: |
           git restore -s 5de12060 -- server.py
           wc -l server.py
-      - name: Find boundaries with Python
-        run: |
-          BOUNDS=$(python3 -c "
-import re, sys
-lines = open('server.py').readlines()
-decs = [i+1 for i,l in enumerate(lines) if re.match(r'^@app\.', l.strip())]
-if not decs: print('ERROR'); sys.exit(1)
-FIRST = decs[0]
-LAST = decs[-1]
-idx = LAST - 1
-while idx < len(lines):
-    s = lines[idx].strip()
-    if s.startswith('@app.') or s == '' or s.startswith('#'):
-        idx += 1; continue
-    if s.startswith('def ') or s.startswith('async def '): break
-    idx += 1
-base = len(lines[idx]) - len(lines[idx].lstrip())
-idx += 1
-while idx < len(lines):
-    s = lines[idx].strip()
-    if s:
-        if len(lines[idx]) - len(lines[idx].lstrip()) <= base: break
-    idx += 1
-print(f'{FIRST} {idx+1}')")
-          FIRST=$(echo $BOUNDS | cut -d' ' -f1)
-          TAIL=$(echo $BOUNDS | cut -d' ' -f2)
-          echo "FIRST=$FIRST TAIL=$TAIL"
-          TOTAL=$(wc -l < server.py)
-          echo "TOTAL=$TOTAL"
-          echo "config: $((FIRST-1)) lines, routes: $((TAIL-FIRST)) lines, tail: $((TOTAL-TAIL+1)) lines"
-      - name: Split files
-        run: |
-          set -ex
-          BOUNDS=$(python3 -c "
-import re, sys
-lines = open('server.py').readlines()
-decs = [i+1 for i,l in enumerate(lines) if re.match(r'^@app\.', l.strip())]
-if not decs: print('ERROR'); sys.exit(1)
-FIRST = decs[0]; LAST = decs[-1]
-idx = LAST - 1
-while idx < len(lines):
-    s = lines[idx].strip()
-    if s.startswith('@app.') or s == '' or s.startswith('#'):
-        idx += 1; continue
-    if s.startswith('def ') or s.startswith('async def '): break
-    idx += 1
-base = len(lines[idx]) - len(lines[idx].lstrip())
-idx += 1
-while idx < len(lines):
-    s = lines[idx].strip()
-    if s:
-        if len(lines[idx]) - len(lines[idx].lstrip()) <= base: break
-    idx += 1
-print(f'{FIRST} {idx+1}')")
-          FIRST=$(echo $BOUNDS | cut -d' ' -f1)
-          TAIL=$(echo $BOUNDS | cut -d' ' -f2)
-          mkdir -p server
-
-          printf '### Server configuration.###\n' > server/config.py
-          head -n $((FIRST - 1)) server.py >> server/config.py
-
-          printf '### All API and web routes.###\n' > server/routes.py
-          printf 'from fastapi import APIRouter, Request\n' >> server/routes.py
-          printf 'from fastapi.responses import JSONResponse, PlainTextResponse\n' >> server/routes.py
-          printf 'from server.config import *  # noqa: F403\n' >> server/routes.py
-          printf '\n' >> server/routes.py
-          printf 'logger = logging.getLogger(__name__)\n' >> server/routes.py
-          printf 'router = APIRouter()\n' >> server/routes.py
-          printf '\n' >> server/routes.py
-          sed -n "${FIRST},$((TAIL - 1))p" server.py | sed 's/@app.get(/@router.get(/' | sed 's/@app.post(/@router.post(/' | sed 's/@app.put(/@router.put(/' | sed 's/@app.delete(/@router.delete(/' | sed 's/@app.patch(/@router.patch(/' | sed 's/@app.api_route(/@router.api_route(/' >> server/routes.py
-
-          printf '### Subnet Dashboard server package.###\n' > server/__init__.py
-          printf 'from server.config import *  # noqa: F403\n' >> server/__init__.py
-          printf '\n' >> server/__init__.py
-          tail -n +$TAIL server.py >> server/__init__.py
-
-          printf '### Subnet Dashboard modular entry point.###\n' > server.py
-          printf 'import os\n' >> server.py
-          printf 'from server import app\n\n' >> server.py
-          printf 'if __name__ == "__main__":\n' >> server.py
-          printf '    import uvicorn\n' >> server.py
-          printf '    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))\n' >> server.py
-
-          wc -l server/config.py server/routes.py server/__init__.py server.py
-      - name: Cleanup
-        run: |
-          sed -i 's/council_app:app/server:app/g' Dockerfile
-          sed -i 's/council_app:app/server:app/g' Procfile
-          sed -i 's/judge_app:app/server:app/g' Procfile
-          rm -f judge_app.py council_app.py scripts/*split*.py scripts/*recover*.py
-          rm -f .github/workflows/*split*.yml .github/workflows/*restore*.yml
+      - name: Remove old split artifacts
+        run: rm -rf server/
+      - name: Run splitter
+        run: python3 scripts/split_server.py
+      - name: Verify line counts
+        run: wc -l server/config.py server/routes.py server/__init__.py server.py
       - name: Commit and push
         run: |
           git config user.name Ditto
@@ -117,3 +32,5 @@ print(f'{FIRST} {idx+1}')")
           git add -A
           git commit -m 'refactor: split server.py into server/ package' || echo 'no changes'
           git push
+      - name: Cleanup workflow
+        run: rm -f .github/workflows/split.yml
