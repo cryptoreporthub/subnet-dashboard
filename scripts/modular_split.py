@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Modular splitter — runs on the runner with the full server.py."""
-import re, os, shutil
+"""Modular splitter — reads server.py, writes server/ package."""
+import re, os, shutil, ast
 from pathlib import Path
 
 ROOT = Path(".")
@@ -11,7 +11,7 @@ with open(SRC, encoding="utf-8") as f:
 
 print(f"Read {len(lines)} lines from server.py")
 
-# Find the LAST @app.<method> route function body end.
+# Find the LAST @app.<method> route function body end
 n = len(lines)
 last_route_end = 0
 i = 0
@@ -36,7 +36,6 @@ while i < n:
     s2 = lines[i].strip()
     if not re.match(r'^(async )?def ', s2):
         continue
-    # Consume function body
     base_indent = len(lines[i]) - len(lines[i].lstrip())
     i += 1
     while i < n:
@@ -51,8 +50,6 @@ while i < n:
 print(f"Last route body ends at line {last_route_end}")
 
 preamble = lines[:last_route_end]
-
-# Find where @app routes actually START
 route_start = 0
 for idx, ln in enumerate(preamble):
     if re.match(r'^@app.(get|post|put|delete|patch|api_route)(', ln.strip()):
@@ -67,89 +64,62 @@ print(f"config.py: {len(config_lines)} lines")
 print(f"routes.py: {len(route_lines)} lines")
 print(f"__init__.py: {len(tail_lines)} lines")
 
-# Clean old structure
+# Clean and create
 pkg = ROOT / "server"
 shutil.rmtree(pkg, ignore_errors=True)
 pkg.mkdir(parents=True, exist_ok=True)
 
 # --- server/config.py ---
 with open(pkg / "config.py", "w", encoding="utf-8") as f:
-    f.write('"""Server configuration — imports, constants, and safe fallbacks."""
-')
-    for line in config_lines:
-        f.write(line)
+    f.write('"""Server configuration."""\n')
+    f.writelines(config_lines)
 print(f"Wrote server/config.py ({len(config_lines)} lines)")
 
 # --- server/routes.py ---
 with open(pkg / "routes.py", "w", encoding="utf-8") as f:
-    f.write('"""All API and web routes."""
-')
-    f.write('from fastapi import APIRouter, Request
-')
-    f.write('from fastapi.responses import JSONResponse, PlainTextResponse
-')
-    f.write('from server.config import *  # noqa: F403
-')
-    f.write('
-')
-    f.write('logger = logging.getLogger(__name__)
-')
-    f.write('router = APIRouter()
-')
-    f.write('
-')
+    f.write('"""All API and web routes."""\n')
+    f.write("from fastapi import APIRouter, Request\n")
+    f.write("from fastapi.responses import JSONResponse, PlainTextResponse\n")
+    f.write("from server.config import *  # noqa: F403\n")
+    f.write("\n")
+    f.write("logger = logging.getLogger(__name__)\n")
+    f.write("router = APIRouter()\n")
+    f.write("\n")
     for line in route_lines:
         fixed = line
-        for method in ['get', 'post', 'put', 'delete', 'patch', 'api_route']:
-            fixed = fixed.replace(f'@app.{method}(', f'@router.{method}(')
+        for method in ["get", "post", "put", "delete", "patch", "api_route"]:
+            fixed = fixed.replace(f"@app.{method}(", f"@router.{method}(")
         f.write(fixed)
 print(f"Wrote server/routes.py ({len(route_lines)} lines)")
 
 # --- server/__init__.py ---
 with open(pkg / "__init__.py", "w", encoding="utf-8") as f:
-    f.write('"""Subnet Dashboard server package."""
-')
-    f.write('from server.config import *  # noqa: F403
-')
-    f.write('
-')
-    for line in tail_lines:
-        f.write(line)
+    f.write('"""Subnet Dashboard server package."""\n')
+    f.write("from server.config import *  # noqa: F403\n")
+    f.write("\n")
+    f.writelines(tail_lines)
 print(f"Wrote server/__init__.py ({len(tail_lines)} lines)")
 
 # --- server.py shim ---
 with open(ROOT / "server.py", "w", encoding="utf-8") as f:
-    f.write('"""Subnet Dashboard — modular entry point."""
-')
-    f.write('import os
-')
-    f.write('from server import app
-')
-    f.write('
-')
-    f.write('if __name__ == "__main__":
-')
-    f.write('    import uvicorn
-')
-    f.write('    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-')
+    f.write('"""Subnet Dashboard — modular entry point."""\n')
+    f.write("import os\n")
+    f.write("from server import app\n")
+    f.write("\n")
+    f.write('if __name__ == "__main__":\n')
+    f.write("    import uvicorn\n")
+    f.write('    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))\n')
 print("Wrote server.py shim")
 
 # --- Cleanup ---
-for old in ["judge_app.py", "council_app.py"]:
-    p = ROOT / old
-    if p.exists():
-        p.unlink()
-        print(f"Removed {old}")
-
-for old in ["scripts/split_server.py", "scripts/recover_tail.py",
+for old in ["judge_app.py", "council_app.py",
+            "scripts/split_server.py", "scripts/recover_tail.py",
             ".github/workflows/split-server.yml", ".github/workflows/restore-server.yml"]:
     p = ROOT / old
     if p.exists():
         p.unlink()
         print(f"Removed {old}")
 
-# Fix Dockerfile
 df = ROOT / "Dockerfile"
 if df.exists():
     content = df.read_text()
@@ -157,7 +127,6 @@ if df.exists():
     df.write_text(content)
     print("Fixed Dockerfile")
 
-# Fix Procfile
 pf = ROOT / "Procfile"
 if pf.exists():
     content = pf.read_text()
@@ -167,7 +136,6 @@ if pf.exists():
     print("Fixed Procfile")
 
 # --- Verify ---
-import ast
 for path in ["server.py", "server/config.py", "server/routes.py", "server/__init__.py"]:
     try:
         with open(ROOT / path) as fh:
@@ -175,5 +143,11 @@ for path in ["server.py", "server/config.py", "server/routes.py", "server/__init
         print(f"  {path}: OK")
     except SyntaxError as e:
         print(f"  {path}: SYNTAX ERROR — {e}")
+        with open(ROOT / path) as fh:
+            content = fh.read()
+        lines = content.split('\n')
+        if hasattr(e, 'lineno') and e.lineno:
+            for j in range(max(0, e.lineno - 2), min(len(lines), e.lineno + 2)):
+                print(f"    {j+1}: {lines[j][:120]}")
 
 print("\nDone!")
