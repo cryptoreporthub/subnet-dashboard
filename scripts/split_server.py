@@ -1,10 +1,5 @@
-Title: 
-
-URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/scripts/split_server.py
-
-Markdown Content:
 #!/usr/bin/env python3
-"""Simple robust splitter — three-file split, nothing lost."""
+"""Simple robust splitter — three-file split, with proper line endings."""
 import subprocess, re, sys, os, shutil
 from pathlib import Path
 
@@ -67,9 +62,9 @@ def main():
     route_lines = orig[first_route:last_route_end] if first_route else []
     tail_lines = orig[last_route_end:]
 
-    print(f"  Preamble (imports/constants/helpers): {len(preamble)} lines")
-    print(f"  Route functions: {len(route_lines)} lines")
-    print(f"  Tail (app factory, lifespan, __main__): {len(tail_lines)} lines")
+    print(f"  Preamble: {len(preamble)} lines")
+    print(f"  Routes: {len(route_lines)} lines")
+    print(f"  Tail: {len(tail_lines)} lines")
 
     # Clean and create dirs
     pkg = ROOT / "server"
@@ -79,17 +74,18 @@ def main():
     routes_dir.mkdir(parents=True, exist_ok=True)
     services_dir.mkdir(parents=True, exist_ok=True)
 
-    # --- server/config.py: all preamble (imports, constants, stub helpers) ---
+    # --- server/config.py ---
     with open(pkg / "config.py", "w", encoding="utf-8") as f:
         f.write('"""Server configuration — imports, constants, and safe fallbacks."""\n')
-        for line in preamble:
-            f.write(line + "\n")
-    print(f"  server/config.py written ({len(preamble)} lines)")
+        f.write("\n".join(preamble))
+        f.write("\n")
+    print(f"  config.py: {len(preamble)} lines")
 
-    # --- server/routes/all.py: all routes in one file, converted from @app to @router ---
+    # --- server/routes/all.py ---
     with open(routes_dir / "all.py", "w", encoding="utf-8") as f:
-        f.write('"""All API and web routes — originally from server.py."""\n')
+        f.write('"""All API and web routes."""\n')
         f.write('from fastapi import APIRouter, Request\n')
+        f.write('from fastapi.responses import JSONResponse, PlainTextResponse\n')
         f.write('from server.config import *  # noqa: F403\n')
         f.write('\n')
         f.write('logger = logging.getLogger(__name__)\n')
@@ -99,7 +95,7 @@ def main():
             for method in ['get', 'post', 'put', 'delete', 'patch', 'api_route']:
                 fixed = fixed.replace(f'@app.{method}(', f'@router.{method}(')
             f.write(fixed + "\n")
-    print(f"  server/routes/all.py written ({len(route_lines)} lines)")
+    print(f"  routes/all.py: {len(route_lines)} lines")
 
     # --- server/routes/__init__.py ---
     with open(routes_dir / "__init__.py", "w", encoding="utf-8") as f:
@@ -107,23 +103,22 @@ def main():
         f.write('def register_routes(app):\n')
         f.write('    from server.routes.all import router\n')
         f.write('    app.include_router(router)\n')
-    print("  server/routes/__init__.py written")
+    print("  routes/__init__.py done")
 
     # --- server/services/__init__.py ---
     with open(services_dir / "__init__.py", "w", encoding="utf-8") as f:
         f.write('"""Background services."""\n')
 
-    # --- server/__init__.py: tail code (app factory, lifespan, __main__) ---
+    # --- server/__init__.py ---
     with open(pkg / "__init__.py", "w", encoding="utf-8") as f:
         f.write('"""Subnet Dashboard server package."""\n')
         f.write('from server.config import *  # noqa: F403\n')
         f.write('\n')
-        for line in tail_lines:
-            f.write(line + "\n")
-        f.write('\n')
-    print(f"  server/__init__.py written ({len(tail_lines)} lines")
+        f.write("\n".join(tail_lines))
+        f.write("\n")
+    print(f"  __init__.py: {len(tail_lines)} lines")
 
-    # --- server/state.py (placeholder) ---
+    # --- server/state.py ---
     with open(pkg / "state.py", "w", encoding="utf-8") as f:
         f.write('"""Global state placeholder."""\n')
 
@@ -136,7 +131,7 @@ def main():
         f.write('if __name__ == "__main__":\n')
         f.write('    import uvicorn\n')
         f.write('    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))\n')
-    print("  server.py shim written")
+    print("  server.py shim done")
 
     # Remove old wrappers
     for old in ["judge_app.py", "council_app.py"]:
@@ -151,12 +146,10 @@ def main():
     for ref in ["council_app:app", "judge_app:app"]:
         if ref in content:
             content = content.replace(ref, "server:app")
-            pf.write_text(content)
-            print(f"  Procfile: {ref} -> server:app")
+            print(f"  Procfile: fixed {ref}")
+    pf.write_text(content)
 
-    print("\n\u2705 Done. Commit and push to deploy.")
+    print("\n✅ Done.")
 
 if __name__ == "__main__":
     main()
-
-# v5: preserve line endings
