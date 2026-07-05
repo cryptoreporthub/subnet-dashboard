@@ -1,0 +1,27 @@
+name: Split server.py
+
+on:
+  push:
+    paths:
+      - scripts/split_server.py
+  workflow_dispatch: {}
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Split server.py
+        run: python scripts/split_server.py
+      - name: Commit and push
+        run: |
+          git config user.name "Ditto"
+          git config user.email "ditto@heyditto.ai"
+          git add -A
+          git commit -m "refactor: split server.py monolith into modular server/ package" || true
+          git push
