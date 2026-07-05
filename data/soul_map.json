@@ -2,9 +2,8 @@
   "expert_weights": {
     "quant": 0.191,
     "hype": 0.195,
-    "contrarian": 0.195,
-    "technical": 0.206,
-    "dark_horse": 0.212
+    "dark_horse": 0.195,
+    "technical": 0.206
   },
   "performance_history": {
     "accuracy": 0.441,
@@ -16,9 +15,8 @@
   "council_dispositions": {
     "quant": "neutral",
     "hype": "bearish",
-    "contrarian": "neutral",
-    "technical": "bearish",
-    "dark_horse": "bullish"
+    "dark_horse": "neutral",
+    "technical": "bearish"
   },
   "council": {
     "quant": {
@@ -31,9 +29,9 @@
       "lens": "momentum/social",
       "pick": "Ralph"
     },
-    "contrarian": {
+    "dark_horse": {
       "disposition": "neutral",
-      "lens": "contrarian/RSI",
+      "lens": "inverse/RSI mean-reversion",
       "pick": "Ralph"
     },
     "technical": {
@@ -42,5 +40,5 @@
       "pick": "Ralph"
     }
   },
-  "last_updated": "2026-07-04T23:18:55Z"
+  "last_updated": "2026-07-05T01:14:00Z"
 }
