@@ -37,3 +37,4 @@ jobs:
           git add -A
           git commit -m "restore: bring back original server.py monolith" || echo "no changes"
           git push
+# deploy trigger
