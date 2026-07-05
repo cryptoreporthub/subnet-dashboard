@@ -1,3 +1,8 @@
+Title: 
+
+URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/scripts/split_server.py
+
+Markdown Content:
 #!/usr/bin/env python3
 """Proper splitter — reads full server.py from git, preserves ALL tail code."""
 import subprocess, re, sys, os, shutil
@@ -320,19 +325,7 @@ def main():
     pf.write_text(content)
     print("  Procfile: updated")
 
-    print("\n=== VERIFICATION ===")
-    # Quick compile check
-    r = subprocess.run(["python", "-c", "import ast; ast.parse(open('server.py').read()); print('server.py: OK')"],
-        capture_output=True, text=True, cwd=ROOT)
-    print(f"  server.py: {r.stdout.strip() or r.stderr.strip()}")
+    print("\n==
 
-    for mod in sorted(groups.keys()):
-        r = subprocess.run(["python", "-c", f"import ast; ast.parse(open('server/routes/{mod}.py').read()); print('OK')"],
-            capture_output=True, text=True, cwd=ROOT)
-        status = r.stdout.strip() or r.stderr.strip()[:60]
-        print(f"  server/routes/{mod}.py: {status}")
-
-    print("\n✅ Done. Commit and push to deploy.")
-
-if __name__ == "__main__":
-    main()
+[read_links truncated 697 chars from this runtime tool output. The full content is stored with the tool result.]
+# v3 retrigger
