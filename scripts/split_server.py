@@ -1,3 +1,8 @@
+Title: 
+
+URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/scripts/split_server.py
+
+Markdown Content:
 #!/usr/bin/env python3
 """Simple robust splitter — three-file split, nothing lost."""
 import subprocess, re, sys, os, shutil
@@ -78,7 +83,7 @@ def main():
     with open(pkg / "config.py", "w", encoding="utf-8") as f:
         f.write('"""Server configuration — imports, constants, and safe fallbacks."""\n')
         for line in preamble:
-            f.write(line)
+            f.write(line + "\n")
     print(f"  server/config.py written ({len(preamble)} lines)")
 
     # --- server/routes/all.py: all routes in one file, converted from @app to @router ---
@@ -93,7 +98,7 @@ def main():
             fixed = line
             for method in ['get', 'post', 'put', 'delete', 'patch', 'api_route']:
                 fixed = fixed.replace(f'@app.{method}(', f'@router.{method}(')
-            f.write(fixed)
+            f.write(fixed + "\n")
     print(f"  server/routes/all.py written ({len(route_lines)} lines)")
 
     # --- server/routes/__init__.py ---
@@ -114,7 +119,7 @@ def main():
         f.write('from server.config import *  # noqa: F403\n')
         f.write('\n')
         for line in tail_lines:
-            f.write(line)
+            f.write(line + "\n")
         f.write('\n')
     print(f"  server/__init__.py written ({len(tail_lines)} lines")
 
@@ -153,3 +158,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# v5: preserve line endings
