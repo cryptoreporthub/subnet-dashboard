@@ -112,7 +112,8 @@ def load_weights(path: str = SOUL_MAP_PATH) -> Dict[str, float]:
 
 
 def save_weights(weights: Dict[str, float], path: str = SOUL_MAP_PATH) -> None:
-    """Persist weights to adversarial_state.council_weights (canonical slot)."""
+    """Persist weights to adversarial_state.council_weights (canonical slot)
+    AND mirror to root expert_weights for legacy compatibility."""
     data = _load_raw(path)
     adv = data.setdefault("adversarial_state", {})
     if not isinstance(adv, dict):
@@ -120,6 +121,8 @@ def save_weights(weights: Dict[str, float], path: str = SOUL_MAP_PATH) -> None:
         data["adversarial_state"] = adv
     adv["council_weights"] = {k: round(float(v), 4) for k, v in weights.items()}
     adv["last_weight_update"] = _now_iso()
+    # Mirror to root expert_weights so legacy readers always see learned values.
+    data["expert_weights"] = {k: round(float(v), 4) for k, v in weights.items()}
     _save_raw(data, path)
 
 
@@ -160,6 +163,7 @@ def _now_iso() -> str:
 # ---------------------------------------------------------------------------
 # Signal weights (per-signal, per-horizon)
 # ---------------------------------------------------------------------------
+
 
 def load_signal_weights(path: str = SOUL_MAP_PATH) -> Dict[str, Dict[str, float]]:
     """Read learned signal weights from soul_map.json, defaulting to DEFAULT_SIGNAL_WEIGHTS."""
