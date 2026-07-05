@@ -1,7 +1,7 @@
 """Subnet Dashboard server package."""
 from server.config import *  # noqa: F403
 
-# Wire council judge panel router
+# Wire council judge panel router (from internal/judges/council_routes.py)
 from internal.judges.council_routes import council_router
 app.include_router(council_router)
 
