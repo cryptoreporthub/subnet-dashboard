@@ -4,8 +4,11 @@ Self-Learning Loop — feedback mechanism that improves over time.
 After outcomes are recorded, this module:
 - Compares predicted vs actual price movements
 - Updates author_reliability scores
-- Discovers pattern correlations
+- Discovers pattern correlation
 - Adjusts jury weights for future evaluations
+
+Weight adjustments route through the canonical Council weight system
+(internal.council.weights) so all learning feeds into soul_map.json.
 """
 
 import json
@@ -19,7 +22,8 @@ from typing import Any, Dict, List, Optional
 
 try:
     from internal.council.judge.adversarial import AdversarialJudge
-except ModuleNotFoundError as _e:  # pragma: no cover - internal module absent in main
+    from internal.council.weights import load_weights, save_weights
+except ModuleNotFoundError as _e:
     logger = logging.getLogger(__name__)
     logger.warning(
         "Internal council judge not available (%s). Using fallback AdversarialJudge.",
@@ -30,13 +34,18 @@ except ModuleNotFoundError as _e:  # pragma: no cover - internal module absent i
         """Minimal fallback judge with the council weights API."""
 
         def __init__(self, *args, **kwargs):
-            self.weights = {"quant": 0.3, "hype": 0.25, "contrarian": 0.2, "technical": 0.25}
+            self.weights = {"quant": 0.25, "hype": 0.25, "dark_horse": 0.25, "technical": 0.25}
 
         def get_council_weights(self) -> Dict[str, float]:
             return dict(self.weights)
 
-logger = logging.getLogger(__name__)
+    def load_weights(path="data/soul_map.json"):
+        return {"quant": 0.25, "hype": 0.25, "dark_horse": 0.25, "technical": 0.25}
 
+    def save_weights(weights, path="data/soul_map.json"):
+        pass
+
+logger = logging.getLogger(__name__)
 
 class SelfLearning:
     """
@@ -44,6 +53,8 @@ class SelfLearning:
 
     Connects predictions to actual outcomes, scores authors, discovers
     pattern correlations, and adjusts the AdversarialJudge weights.
+    All weight changes flow through internal.council.weights so the
+    learning loop stays unified with the Council system.
     """
 
     def __init__(
@@ -59,17 +70,9 @@ class SelfLearning:
     def set_db(self, db) -> None:
         self.db = db
 
-    # ── Author Reliability ────────────────────────────────────────────
-
     def update_author_reliability(self) -> None:
-        """
-        Score each author's prediction accuracy by comparing their
-        message verdicts against actual price outcomes.
-        """
         if self.db is None:
             return
-
-        # Get all messages that have both verdicts and outcomes
         with self.db._connect() as conn:
             rows = conn.execute(
                 """SELECT m.author_id, m.author_name, m.id as message_id,
@@ -92,16 +95,12 @@ class SelfLearning:
                     "total_messages": 0,
                     "correct_predictions": 0,
                 }
-
             stats = author_stats[author_id]
             stats["total_messages"] += 1
-
-            # Check if prediction was correct
             verdict = row.get("verdict", "neutral")
             direction = row.get("predicted_direction", "neutral")
             outcome = row.get("outcome", "stable")
             pump_pct = row.get("pump_pct_max") or 0.0
-
             if self._is_correct_prediction(verdict, direction, outcome, pump_pct):
                 stats["correct_predictions"] += 1
 
@@ -111,21 +110,12 @@ class SelfLearning:
             stats["accuracy_score"] = round(correct / total, 4) if total > 0 else 0.0
             self.db.upsert_author_reliability(stats)
 
-        logger.info(
-            "Updated reliability for %d authors", len(author_stats)
-        )
+        logger.info("Updated reliability for %d authors", len(author_stats))
 
     @staticmethod
     def _is_correct_prediction(
         verdict: str, direction: str, outcome: str, pump_pct: float
     ) -> bool:
-        """
-        Determine if a prediction was correct based on the outcome.
-
-        - bullish/up predictions → pump or mild_pump = correct
-        - bearish/down predictions → dump or mild_dump = correct
-        - neutral predictions → stable = correct
-        """
         if verdict in ("bullish",) or direction == "up":
             return outcome in ("pump", "mild_pump") or pump_pct > 2.0
         elif verdict in ("bearish",) or direction == "down":
@@ -133,19 +123,9 @@ class SelfLearning:
         else:
             return outcome == "stable"
 
-    # ── Pattern Correlations ──────────────────────────────────────────
-
     def discover_patterns(self) -> List[Dict[str, Any]]:
-        """
-        Analyze past messages to discover patterns that correlate with
-        successful predictions.
-
-        Returns a list of pattern descriptions with match counts and
-        success rates.
-        """
         if self.db is None:
             return []
-
         with self.db._connect() as conn:
             rows = conn.execute(
                 """SELECT m.id, m.content, a.hype_score, a.substance_score,
@@ -161,31 +141,11 @@ class SelfLearning:
             return []
 
         patterns = [
-            {
-                "name": "high_substance_bullish",
-                "description": "Bullish messages with high substance score (>0.6)",
-                "matches": [],
-            },
-            {
-                "name": "high_hype_pump",
-                "description": "High hype score (>0.5) messages that predict pumps",
-                "matches": [],
-            },
-            {
-                "name": "specific_subnet_mention",
-                "description": "Messages mentioning specific subnet numbers",
-                "matches": [],
-            },
-            {
-                "name": "tao_amount_target",
-                "description": "Messages with specific TAO amount targets",
-                "matches": [],
-            },
-            {
-                "name": "low_substance_high_hype",
-                "description": "Low substance (<0.3) with high hype (>0.6) — likely noise",
-                "matches": [],
-            },
+            {"name": "high_substance_bullish", "description": "Bullish messages with high substance score (>0.6)", "matches": []},
+            {"name": "high_hype_pump", "description": "High hype score (>0.5) messages that predict pumps", "matches": []},
+            {"name": "specific_subnet_mention", "description": "Messages mentioning specific subnet numbers", "matches": []},
+            {"name": "tao_amount_target", "description": "Messages with specific TAO amount targets", "matches": []},
+            {"name": "low_substance_high_hype", "description": "Low substance (<0.3) with high hype (>0.6) - likely noise", "matches": []},
         ]
 
         for row in rows:
@@ -197,42 +157,24 @@ class SelfLearning:
             verdict = row.get("verdict", "neutral")
             outcome = row.get("outcome", "stable")
             pump_pct = row.get("pump_pct_max") or 0.0
-
-            is_success = self._is_correct_prediction(
-                verdict, row.get("predicted_direction", "neutral"),
-                outcome, pump_pct,
-            )
-
-            # Pattern 1: High substance + bullish
+            is_success = self._is_correct_prediction(verdict, row.get("predicted_direction", "neutral"), outcome, pump_pct)
             if substance > 0.6 and sentiment == "bullish":
                 patterns[0]["matches"].append(is_success)
-
-            # Pattern 2: High hype
             if hype > 0.5:
                 patterns[1]["matches"].append(is_success)
-
-            # Pattern 3: Mentions subnet number
             if re.search(r"\b(subnet\s*#?\d+|sn\s*\d+)\b", content, re.IGNORECASE):
                 patterns[2]["matches"].append(is_success)
-
-            # Pattern 4: TAO amount target
             if re.search(r"\b\d+\.?\d*\s*TAO\b", content, re.IGNORECASE):
                 patterns[3]["matches"].append(is_success)
-
-            # Pattern 5: Low substance + high hype
             if substance < 0.3 and hype > 0.6:
                 patterns[4]["matches"].append(is_success)
 
-        # Compute stats for each pattern
         results = []
         for p in patterns:
             total = len(p["matches"])
             successes = sum(1 for m in p["matches"] if m)
             success_rate = round(successes / total, 4) if total > 0 else 0.0
-            confidence = round(
-                (success_rate - 0.5) * min(1.0, total / 10.0), 4
-            ) if total > 0 else 0.0
-
+            confidence = round((success_rate - 0.5) * min(1.0, total / 10.0), 4) if total > 0 else 0.0
             pattern_entry = {
                 "pattern_description": p["description"],
                 "match_count": total,
@@ -245,15 +187,11 @@ class SelfLearning:
         logger.info("Discovered %d pattern correlations", len(results))
         return results
 
-    # ── Jury Weight Adjustment ────────────────────────────────────────
-
     def adjust_jury_weights(self) -> None:
         """
-        Adjust the AdversarialJudge council weights based on observed
-        pattern performance.
-
-        Patterns with high success rates boost the influence of their
-        corresponding expert dimensions.
+        Adjust council weights based on observed pattern performance.
+        Routes through internal.council.weights so changes persist to
+        soul_map.json and flow back into the next pick generation.
         """
         if self.db is None:
             return
@@ -262,19 +200,20 @@ class SelfLearning:
         if not patterns:
             return
 
-        weights = self.judge.get_council_weights()
+        # Load canonical weights from soul_map.json
+        weights = load_weights()
 
-        # Map pattern performance to weight adjustments
         for p in patterns:
             success = p.get("success_rate", 0.5)
             desc = p.get("pattern_description", "")
 
             if "substance" in desc.lower() or "specific subnet" in desc.lower():
-                weights["quant"] = min(0.5, weights.get("quant", 0.3) + (success - 0.5) * 0.1)
+                weights["quant"] = min(2.0, weights.get("quant", 1.0) + (success - 0.5) * 0.1)
             if "hype" in desc.lower():
-                weights["hype"] = min(0.4, weights.get("hype", 0.25) + (success - 0.5) * 0.08)
+                weights["hype"] = min(2.0, weights.get("hype", 1.0) + (success - 0.5) * 0.08)
             if "noise" in desc.lower() and success < 0.5:
-                weights["contrarian"] = min(0.4, weights.get("contrarian", 0.2) + 0.05)
+                # Noise patterns boost dark_horse (inverse strategy benefits when hype fails)
+                weights["dark_horse"] = min(2.0, weights.get("dark_horse", 1.0) + 0.05)
 
         # Normalize weights to sum to 1.0
         total = sum(weights.values())
@@ -282,17 +221,11 @@ class SelfLearning:
             for k in weights:
                 weights[k] = round(weights[k] / total, 4)
 
-        logger.info("Adjusted jury weights: %s", weights)
-
-    # ── Background Runner ─────────────────────────────────────────────
+        # Persist to soul_map.json via canonical path
+        save_weights(weights)
+        logger.info("Adjusted and persisted council weights: %s", weights)
 
     def start_background_learning(self, interval: int = 600) -> None:
-        """
-        Start a background thread that periodically runs the learning loop.
-
-        Args:
-            interval: Seconds between learning cycles (default 600 = 10 min).
-        """
         if self._running:
             return
         self._running = True
@@ -310,9 +243,7 @@ class SelfLearning:
 
         self._thread = threading.Thread(target=_loop, daemon=True)
         self._thread.start()
-        logger.info(
-            "Self-learning background loop started (interval=%ds)", interval
-        )
+        logger.info("Self-learning background loop started (interval=%ds)", interval)
 
     def stop(self) -> None:
         self._running = False
