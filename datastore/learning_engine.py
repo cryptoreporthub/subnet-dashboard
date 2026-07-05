@@ -1,7 +1,7 @@
 """
 Learning Engine for Subnet Dashboard
 
-Thin wrapper around the live Council weight system (quant/hype/contrarian/technical)
+Thin wrapper around the live Council weight system (quant/hype/dark_horse/technical)
 and the prediction resolver. Keeps the ``LearningEngine`` class name and the
 feedback router API so server.py stays compatible.
 """
@@ -15,13 +15,10 @@ from internal.council.weights import load_weights, save_weights
 
 logger = logging.getLogger(__name__)
 
-# Canonical experts used by the live Council.
 CANONICAL_EXPERTS = {"quant", "hype", "dark_horse", "technical"}
-
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
 
 class LearningEngine:
     """Manages the learning loop for expert council weights."""
@@ -30,15 +27,9 @@ class LearningEngine:
         self.soul_map_path = soul_map_path
 
     def save_soul_map(self, soul_map: Dict[str, Any]) -> None:
-        """Persist a soul-map payload for backward compatibility.
-
-        The live source of truth for expert weights is ``weights.save_weights``;
-        this method only writes the supplied dict back to disk so legacy callers
-        that build a soul-map blob can still persist it.
-        """
+        """Persist a soul-map payload for backward compatibility."""
         import json
         import os
-
         os.makedirs(os.path.dirname(self.soul_map_path) or ".", exist_ok=True)
         with open(self.soul_map_path, "w", encoding="utf-8") as fh:
             json.dump(soul_map, fh, indent=2)
@@ -93,7 +84,6 @@ class LearningEngine:
             weights[expert] = round(weights[expert], 4)
             save_weights(weights, self.soul_map_path)
 
-        # Log a lightweight record in scenario memory for observability.
         try:
             scenario_memory.add_scenario(
                 name=f"feedback_subnet_{subnet_id}",
@@ -136,8 +126,10 @@ class LearningEngine:
             return "technical"
         if any(k in rec for k in ("quant", "fundamental", "yield", "emission")):
             return "quant"
+        # Legacy: map contrarian to dark_horse for backward compatibility
+        if "contrarian" in rec:
+            return "dark_horse"
         return None
-
 
 def create_feedback_router():
     """Build a FastAPI APIRouter exposing the self-learning feedback loop."""
@@ -165,7 +157,6 @@ def create_feedback_router():
         return engine.record_feedback(subnet_id, recommendation, actual_performance)
 
     return router
-
 
 def create_feedback_endpoint(server_module):
     """Legacy registration hook (kept for backward compatibility)."""
