@@ -26,13 +26,12 @@ from internal.freshness import registry_freshness, soul_map_freshness
 
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
-# Exclude top ~40 subnets by total_stake (threshold: 400,000 TAO)
 STAKE_THRESHOLD_TAO = float(os.environ.get("STAKE_THRESHOLD_TAO", "400000"))
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-def _parse_iso(value: Optional[str]) -> Optional[datetime]:
+def _parse_iso(value):
     if not value:
         return None
     try:
@@ -40,8 +39,7 @@ def _parse_iso(value: Optional[str]) -> Optional[datetime]:
     except Exception:
         return None
 
-def _human_freshness(iso_timestamp: Optional[str]) -> str:
-    """Return a human-readable freshness statement for an ISO timestamp."""
+def _human_freshness(iso_timestamp):
     if not iso_timestamp:
         return "Unknown"
     parsed = _parse_iso(iso_timestamp)
@@ -56,7 +54,7 @@ def _human_freshness(iso_timestamp: Optional[str]) -> str:
         return f"Updated {age // 3600} h ago"
     return f"Updated {age // 86400} d ago"
 
-def _load_json(path: str) -> Dict[str, Any]:
+def _load_json(path):
     if os.path.exists(path):
         try:
             with open(path, "r") as f:
@@ -65,7 +63,7 @@ def _load_json(path: str) -> Dict[str, Any]:
             return {}
     return {}
 
-def _save_json(path: str, data: Dict[str, Any]) -> None:
+def _save_json(path, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(path) or ".", suffix=".tmp")
     try:
@@ -76,17 +74,10 @@ def _save_json(path: str, data: Dict[str, Any]) -> None:
         if os.path.exists(temp_path):
             os.unlink(temp_path)
 
-def _load_registry(registry_path: str = REGISTRY_PATH) -> Dict[str, Any]:
-    """Load registry.json; names are returned exactly as stored (canonical)."""
+def _load_registry(registry_path=REGISTRY_PATH):
     return _load_json(registry_path)
 
-def _filter_low_mid_cap_subnets(
-    registry: Dict[str, Any], stake_threshold_tao: float = STAKE_THRESHOLD_TAO
-) -> Dict[str, Any]:
-    """
-    Filter registry to only include low-mid cap subnets.
-    Excludes subnets with total_stake >= threshold (default: 400,000 TAO).
-    """
+def _filter_low_mid_cap_subnets(registry, stake_threshold_tao=STAKE_THRESHOLD_TAO):
     filtered = {}
     for sid_str, data in registry.items():
         try:
@@ -97,27 +88,22 @@ def _filter_low_mid_cap_subnets(
             filtered[sid_str] = data
     return filtered
 
-def _load_last_convictions(soul_map_path: str = SOUL_MAP_PATH) -> Dict[str, float]:
-    """Load previously persisted SimiVision conviction scores keyed by netuid."""
+def _load_last_convictions(soul_map_path=SOUL_MAP_PATH):
     soul_map = _load_json(soul_map_path)
     return soul_map.get("simivision_convictions", {})
 
-def _persist_convictions(
-    convictions: Dict[int, float], soul_map_path: str = SOUL_MAP_PATH
-) -> None:
-    """Persist current conviction scores back to the soul map for delta tracking."""
+def _persist_convictions(convictions, soul_map_path=SOUL_MAP_PATH):
     soul_map = _load_json(soul_map_path)
     soul_map["simivision_convictions"] = {str(k): v for k, v in convictions.items()}
     soul_map["simivision_convictions_updated_at"] = _now_iso()
     _save_json(soul_map_path, soul_map)
 
-def _load_council_decisions(soul_map_path: str = SOUL_MAP_PATH) -> List[Dict[str, Any]]:
-    """Read any Council decisions persisted in the soul map (legacy field)."""
+def _load_council_decisions(soul_map_path=SOUL_MAP_PATH):
     soul_map = _load_json(soul_map_path)
     last_output = soul_map.get("soul_map_state", {}).get("last_selector_output", {})
     return last_output.get("decisions", [])
 
-def _synthesize_decision(netuid: int, registry_item: Dict[str, Any]) -> Dict[str, Any]:
+def _synthesize_decision(netuid, registry_item):
     """Generate a neutral decision when no Council decision exists for a subnet."""
     emission = registry_item.get("emission", 0.0) or 0.0
     mentions = registry_item.get("social_mentions", 0) or 0
@@ -125,11 +111,11 @@ def _synthesize_decision(netuid: int, registry_item: Dict[str, Any]) -> Dict[str
 
     quant_score = 0.85 if emission > 1.0 else 0.4 if emission < 0.2 else 0.75
     hype_score = 0.9 if mentions > 1000 else 0.3 if mentions < 100 else 0.65
-    contrarian_score = 0.2 if is_overvalued else 0.8
+    dark_horse_score = 0.2 if is_overvalued else 0.8
     technical_score = 0.5
 
     consensus_score = round(
-        quant_score * 0.3 + hype_score * 0.25 + contrarian_score * 0.2 + technical_score * 0.25, 4
+        quant_score * 0.3 + hype_score * 0.25 + dark_horse_score * 0.2 + technical_score * 0.25, 4
     )
 
     if consensus_score >= 0.75:
@@ -144,88 +130,33 @@ def _synthesize_decision(netuid: int, registry_item: Dict[str, Any]) -> Dict[str
         "consensus_score": consensus_score,
         "recommended_action": action,
         "expert_breakdown": {
-            "quant": {
-                "score": quant_score,
-                "metrics": {
-                    "emission_stability": "high" if quant_score >= 0.7 else "low",
-                    "performance_index": quant_score * 100,
-                },
-            },
-            "hype": {
-                "score": hype_score,
-                "sentiment": (
-                    "bullish"
-                    if hype_score >= 0.7
-                    else "bearish"
-                    if hype_score <= 0.4
-                    else "neutral"
-                ),
-                "metrics": {
-                    "social_volume": mentions,
-                    "hype_index": hype_score * 100,
-                },
-            },
-            "contrarian": {
-                "score": contrarian_score,
-                "signal": "sell" if is_overvalued else "buy",
-                "metrics": {"contrarian_index": contrarian_score * 100},
-            },
-            "technical": {
-                "score": technical_score,
-                "signal": "hold",
-                "metrics": {"active_signals": []},
-            },
+            "quant": {"score": quant_score, "metrics": {"emission_stability": "high" if quant_score >= 0.7 else "low", "performance_index": quant_score * 100}},
+            "hype": {"score": hype_score, "sentiment": "bullish" if hype_score >= 0.7 else "bearish" if hype_score < 0.4 else "neutral", "metrics": {"social_volume": mentions, "hype_index": hype_score * 100}},
+            "dark_horse": {"score": dark_horse_score, "signal": "sell" if is_overvalued else "buy", "metrics": {"dark_horse_index": dark_horse_score * 100}},
+            "technical": {"score": technical_score, "signal": "hold", "metrics": {"active_signals": []}},
         },
         "synthesized": True,
     }
 
-def _compute_conviction(
-    decision: Dict[str, Any],
-    registry_item: Dict[str, Any],
-) -> tuple:
-    """
-    Compute a 0-100 conviction score from Council consensus and registry metrics.
-
-    Breakdown:
-    - consensus_score * 70
-    - emission rank bonus: top-10 = 15, top-25 = 10, top-50 = 5
-    - social mention bonus: >1500 = 10, >1000 = 5
-    - overvaluation penalty: -10 if overvalued
-    - fractional tiebreaker: inverse emission_rank so lower ranks edge ahead
-    """
+def _compute_conviction(decision, registry_item):
     consensus = decision.get("consensus_score", 0.5)
     base = min(100.0, max(0.0, consensus * 70.0))
-
     rank = registry_item.get("emission_rank")
     rank_bonus = 0.0
     if isinstance(rank, int):
-        if rank <= 10:
-            rank_bonus = 15.0
-        elif rank <= 25:
-            rank_bonus = 10.0
-        elif rank <= 50:
-            rank_bonus = 5.0
-
+        if rank <= 10: rank_bonus = 15.0
+        elif rank < 25: rank_bonus = 10.0
+        elif rank < 50: rank_bonus = 5.0
     social = registry_item.get("social_mentions", 0) or 0
-    social_bonus = 0.0
-    if social > 1500:
-        social_bonus = 10.0
-    elif social > 1000:
-        social_bonus = 5.0
-
+    social_bonus = 10.0 if social > 1500 else 5.0 if social > 1000 else 0.0
     overvalued = registry_item.get("is_overvalued", False)
     penalty = 10.0 if overvalued else 0.0
-
-    # Tiny fractional tiebreaker so top picks are ordered deterministically.
     tiebreaker = 0.0
     if isinstance(rank, int) and rank > 0:
         tiebreaker = min(0.99, 1.0 / rank)
-
     conviction = base + rank_bonus + social_bonus - penalty + tiebreaker
-
-    # Indicator layer: adjust conviction based on active technical signals.
     indicator_bonus = 0.0
-    indicator_phrases: List[str] = []
+    indicator_phrases = []
     breakdown = decision.get("expert_breakdown", {})
     technical = breakdown.get("technical", {})
     active_signals = technical.get("metrics", {}).get("active_signals", [])
@@ -243,13 +174,9 @@ def _compute_conviction(
         indicator_bonus += 3.0
         indicator_phrases.append("bullish confluence")
     conviction += indicator_bonus
-
     return round(min(100.0, max(0.0, conviction)), 2), indicator_phrases
 
-def _compute_delta(
-    netuid: int, conviction: float, last_convictions: Dict[str, float]
-) -> tuple:
-    """Return (delta_symbol, delta_value) compared to the last known conviction."""
+def _compute_delta(netuid, conviction, last_convictions):
     last = last_convictions.get(str(netuid))
     if last is None:
         return "stable", 0.0
@@ -258,195 +185,62 @@ def _compute_delta(
         return "stable", 0.0
     return ("+", diff) if diff > 0 else ("-", abs(diff))
 
-def _build_rationale(
-    decision: Dict[str, Any], registry_item: Dict[str, Any], conviction: float, status: str
-) -> str:
-    """Generate a one-line rationale from the expert breakdown and registry state."""
+def _build_rationale(decision, registry_item, conviction, status):
     if status == "Dimmed":
         return "Live but weak."
-
     action = decision.get("recommended_action", "hold")
     breakdown = decision.get("expert_breakdown", {})
-
     quant = breakdown.get("quant", {})
     hype = breakdown.get("hype", {})
-    contrarian = breakdown.get("contrarian", {})
+    dark_horse = breakdown.get("dark_horse", {})
     technical = breakdown.get("technical", {})
-
     quant_label = (quant.get("metrics") or {}).get("emission_stability", "neutral")
     hype_label = hype.get("sentiment", "neutral")
-    contrarian_label = contrarian.get("signal", "hold")
-
+    dark_horse_label = dark_horse.get("signal", "hold")
     overvalued = registry_item.get("is_overvalued", False)
-    registry_status = registry_item.get("status", "unknown")
-
-    quant_phrase = {
-        "high": "strong emission stability",
-        "medium": "stable emissions",
-        "low": "weak emission stability",
-    }.get(quant_label, f"emission stability {quant_label}")
-
-    hype_phrase = {
-        "bullish": "bullish social sentiment",
-        "neutral": "neutral social sentiment",
-        "bearish": "bearish social sentiment",
-    }.get(hype_label, f"sentiment {hype_label}")
-
-    contrarian_phrase = {
-        "buy": "contrarian buy signal",
-        "hold": "contrarian hold signal",
-        "sell": "contrarian sell signal",
-    }.get(contrarian_label, f"contrarian {contrarian_label}")
-
+    quant_phrase = {"high": "strong emission stability", "medium": "stable emissions", "low": "weak emission stability"}.get(quant_label, f"emission stability {quant_label}")
+    hype_phrase = {"bullish": "bullish social sentiment", "neutral": "neutral social sentiment", "bearish": "bearish social sentiment"}.get(hype_label, f"sentiment {hype_label}")
+    dark_horse_phrase = {"buy": "dark horse buy signal", "hold": "dark horse hold signal", "sell": "dark horse sell signal"}.get(dark_horse_label, f"dark horse {dark_horse_label}")
     if action == "accumulate":
         opener = "Strong consensus to accumulate"
     elif action == "reduce":
         opener = "Consensus favors reduction"
     else:
         opener = "Consensus is neutral"
-
-    parts = [opener, quant_phrase, hype_phrase, contrarian_phrase]
-
-    # Mention active indicator signals in the rationale.
+    parts = [opener, quant_phrase, hype_phrase, dark_horse_phrase]
     active_signals = technical.get("metrics", {}).get("active_signals", [])
     if active_signals:
         parts.append("; ".join(s.replace("_", " ") for s in active_signals))
-
     if overvalued:
         parts.append("overvalued")
-
     return " ".join(parts)
 
-def _build_signal(
-    netuid: int,
-    decision: Dict[str, Any],
-    registry_item: Dict[str, Any],
-    last_convictions: Dict[str, float],
-) -> Dict[str, Any]:
-    """Build a single SimiVision signal object for a subnet."""
+def _build_signal(netuid, decision, registry_item, last_convictions):
     conviction, indicator_phrases = _compute_conviction(decision, registry_item)
-    delta, delta_value = _compute_delta(netuid, conviction, last_convictions)
-    status = "Operative" if registry_item.get("status") == "active" else "Dimmed"
+    delta_symbol, delta_value = _compute_delta(netuid, conviction, last_convictions)
+    rationale = _build_rationale(decision, registry_item, conviction, "Operative")
+    status = "Operative" if conviction >= 50 else "Dimmed" if conviction >= 25 else "Hibernating"
+    return {"netuid": netuid, "name": registry_item.get("name", f"Subnet {netuid}"), "rank": registry_item.get("emission_rank"), "conviction": conviction, "rationale": rationale, "delta": delta_symbol, "delta_value": delta_value, "freshness": _human_freshness(registry_item.get("updated_at")), "source": registry_item.get("source", "taomarketcap"), "status": status, "indicator_signals": indicator_phrases}
 
-    action = decision.get("recommended_action", "hold")
-    recommendation = {
-        "accumulate": "buy",
-        "reduce": "sell",
-        "neutral": "hold",
-    }.get(action, action)
-
-    # Distinguish yield-driven staking plays from price-driven trading plays.
-    # "stake" when the quant (fundamental/yield) lens drives the accumulate
-    # decision and the subnet offers meaningful yield; otherwise "trade".
-    apy = float(registry_item.get("apy", 0) or 0)
-    quant = decision.get("expert_breakdown", {}).get("quant", {}) if isinstance(decision.get("expert_breakdown"), dict) else {}
-    quant_score = float(quant.get("score", 0) or 0) if isinstance(quant, dict) else 0.0
-    if action == "accumulate" and apy > 0 and quant_score >= 0.7:
-        recommendation_type = "stake"
-    else:
-        recommendation_type = "trade"
-
-    return {
-        "netuid": netuid,
-        "name": registry_item.get("name", f"Subnet {netuid}"),
-        "rank": netuid,
-        "conviction": conviction,
-        "recommendation": recommendation,
-        "recommendation_type": recommendation_type,
-        "rationale": _build_rationale(decision, registry_item, conviction, status),
-        "delta": delta,
-        "delta_value": delta_value,
-        "freshness": _human_freshness(registry_item.get("last_updated")),
-        "source": "registry",
-        "status": status,
-        "indicator_phrases": indicator_phrases,
-    }
-
-def _get_simivision_signals(
-    registry: Dict[str, Any],
-    soul_map_path: str = SOUL_MAP_PATH,
-) -> List[Dict[str, Any]]:
-    """Generate SimiVision signals for all subnets in the registry."""
+def generate_signals(registry=None, top_n=10, soul_map_path=SOUL_MAP_PATH):
+    if registry is None:
+        registry = _load_registry()
+    registry = _filter_low_mid_cap_subnets(registry)
+    decisions = _load_council_decisions(soul_map_path)
     last_convictions = _load_last_convictions(soul_map_path)
-    council_decisions = _load_council_decisions(soul_map_path)
-    decisions_by_subnet = {d["subnet_id"]: d for d in council_decisions}
-
     signals = []
-    for netuid_str, registry_item in registry.items():
+    for sid_str, item in registry.items():
         try:
-            netuid = int(netuid_str)
+            netuid = int(sid_str)
         except (ValueError, TypeError):
             continue
-
-        decision = decisions_by_subnet.get(netuid)
+        decision = next((d for d in decisions if d.get("subnet_id") == netuid), None)
         if decision is None:
-            decision = _synthesize_decision(netuid, registry_item)
-
-        signal = _build_signal(netuid, decision, registry_item, last_convictions)
+            decision = _synthesize_decision(netuid, item)
+        signal = _build_signal(netuid, decision, item, last_convictions)
         signals.append(signal)
-
-    # Sort by conviction descending
     signals.sort(key=lambda s: s["conviction"], reverse=True)
-    return signals
-
-class SimiVisionEngine:
-    """Engine for generating SimiVision signals."""
-
-    def __init__(
-        self,
-        registry_path: str = REGISTRY_PATH,
-        soul_map_path: str = SOUL_MAP_PATH,
-        stake_threshold_tao: float = STAKE_THRESHOLD_TAO,
-    ):
-        self.registry_path = registry_path
-        self.soul_map_path = soul_map_path
-        self.stake_threshold_tao = stake_threshold_tao
-
-    def get_signals(self) -> List[Dict[str, Any]]:
-        """Generate and return SimiVision signals for low-mid cap subnets."""
-        registry = _load_registry(self.registry_path)
-        filtered_registry = _filter_low_mid_cap_subnets(registry, self.stake_threshold_tao)
-        return _get_simivision_signals(filtered_registry, self.soul_map_path)
-
-    def top_signals(self, n: int = 10) -> List[Dict[str, Any]]:
-        """Return the top-N SimiVision signals."""
-        return self.get_signals()[:n]
-
-    def get_signal(self, netuid: int) -> Optional[Dict[str, Any]]:
-        """Get a single SimiVision signal for a specific subnet."""
-        registry = _load_registry(self.registry_path)
-        filtered_registry = _filter_low_mid_cap_subnets(registry, self.stake_threshold_tao)
-        if str(netuid) not in filtered_registry:
-            return None
-        signals = self.get_signals()
-        return next((s for s in signals if s["netuid"] == netuid), None)
-
-    def safe_snapshot(self, n: int = 5) -> Dict[str, Any]:
-        """Return a safe snapshot of top-N signals with metadata, falling back gracefully."""
-        try:
-            signals = self.get_signals()
-            top = signals[:n]
-            return {
-                "top": top,
-                "choices": top,
-                "meta": {
-                    "system_status": "Operative",
-                    "source": "engine",
-                    "fallback_used": False,
-                    "freshness_human": "Just now",
-                    "provenance_log": [],
-                },
-            }
-        except Exception:
-            return {
-                "top": [],
-                "choices": [],
-                "meta": {
-                    "system_status": "Operative",
-                    "source": "offline",
-                    "fallback_used": True,
-                    "error": "SimiVision unavailable",
-                    "freshness_human": "Unknown",
-                    "provenance_log": [],
-                },
-            }
+    top_signals = signals[:top_n]
+    convictions_map = {s["netuid"]: s["conviction"] for s in signals}
+    _persist_convictions(convictions_map, soul_map_path)
+    return top_signals
