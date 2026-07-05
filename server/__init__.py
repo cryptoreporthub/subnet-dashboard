@@ -4,6 +4,8 @@ from server.config import *  # noqa: F403
 # Wire council judge panel router (from internal/judges/council_routes.py)
 from internal.judges.council_routes import council_router
 app.include_router(council_router)
+from server.routes import router
+app.include_router(router)
 
 
 def get_dynamic_subnets():
@@ -276,12 +278,6 @@ def build_mindmap_feed(picks: List[Dict], council_votes: List[Dict], undervalued
         top_pick = picks[0]
         feed.append({
             "time": now,
-            "message": f"Processing top pick #{top_pick['rank']}: {top_pick['name']} (conviction: {top_pick['conviction']}%)"
-        })
-    
-    # Council votes
-    for vote in council_votes[:2]:
-        feed.append({
-       
+            "message": f"Processing top pick #{top_pick['
 
-[read_links truncated 1114 chars from this runtime tool output. The full content is stored with the tool result.]
+[read_links truncated 285 chars from this runtime tool output. The full content is stored with the tool result.]
