@@ -19,13 +19,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Recover tail code if needed
-        run: python scripts/recover_tail.py
-        continue-on-error: true
+      - name: Run splitter
+        run: python scripts/split_server.py
       - name: Commit and push
         run: |
           git config user.name "Ditto"
           git config user.email "ditto@heyditto.ai"
           git add -A
-          git commit -m "fix: restore tail code and fix Procfile" || true
+          git commit -m "refactor: split server.py monolith into modular server/ package" || echo "no changes"
           git push
