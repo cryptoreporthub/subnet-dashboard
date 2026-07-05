@@ -1,4 +1,4 @@
-name: Modular Split (awk)
+name: Modular Split
 
 on:
   push:
@@ -13,80 +13,82 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Split server.py with awk
+      - name: Split
         run: |
           set -e
-          echo "=== Phase 1: Find last route body end ==="
-
-          awk '
-          /^@app\.(get|post|put|delete|patch|api_route)\(/ {
-            getline
-            while (1) {
-              if (/^@/) { getline; continue }
-              if (/^(async )?def /) break
-              if (/^$/ || /^#/) { getline; continue }
-              getline
-            }
-            match($0, /^[ \t]*/)
-            base_indent = RLENGTH
-            getline
-            while (1) {
-              if (NR > 100000) break
-              if (/^$/) { getline; continue }
-              match($0, /^[ \t]*/)
-              if (RLENGTH <= base_indent) break
-              getline
-            }
-            if (NR > last_route_end) last_route_end = NR
-          }
-          END { print last_route_end }
-          ' server.py > /tmp/last_end.txt
+          # Find first route line (grep colon-separated: line:match)
+          FIRST_ROUTE=$(grep -nm1 "^@app\." server.py | head -1 | cut -d: -f1)
+          echo "FIRST_ROUTE=$FIRST_ROUTE"
+          # Find where the app-building code starts (tail)
+          TAIL_START=$(grep -n "^def create_app\|^async def lifespan\|^@asynccontextmanager\|^app = FastAPI\|^if __name__" server.py | head -1 | cut -d: -f1)
+          echo "TAIL_START=$TAIL_START"
+          # Find all route decorator lines before TAIL_START, get the last one
+          LAST_DEC=0
+          for ln in $(grep -n "^@app\." server.py | cut -d: -f1); do
+            if [ "$ln" -lt "$TAIL_START" ] && [ "$ln" -gt "$LAST_DEC" ]; then LAST_DEC=$ln; fi
+          done
+          echo "LAST_DEC=$LAST_DEC"
+          # Python to find end of last route body
+          python3 -c "
+import sys
+TAIL = int(sys.argv[1])
+LAST = int(sys.argv[2])
+with open("server.py") as f: lines = f.readlines()
+idx = LAST - 1
+while idx < TAIL - 1:
+    s = lines[idx].strip()
+    if s.startswith("@app.") or s == "" or s.startswith("#"):
+        idx += 1; continue
+    if s.startswith("def ") or s.startswith("async def "): break
+    idx += 1
+base = len(lines[idx]) - len(lines[idx].lstrip())
+idx += 1
+while idx < TAIL - 1:
+    s = lines[idx].strip()
+    if s:
+        ind = len(lines[idx]) - len(lines[idx].lstrip())
+        if ind <= base: break
+    idx += 1
+print(idx + 1)
+" $TAIL_START $LAST_DEC > /tmp/last_end.txt
 
           LAST_END=$(cat /tmp/last_end.txt)
-          echo "Last route body ends at line: $LAST_END"
-
-          FIRST_ROUTE=$(awk '/^@app\.(get|post|put|delete|patch|api_route)\(/{print NR; exit}' server.py)
-          echo "First route at line: $FIRST_ROUTE"
-
           TOTAL=$(wc -l < server.py)
-          echo "Total lines: $TOTAL"
+          echo "LAST_END=$LAST_END"
+          echo "TOTAL=$TOTAL"
+          echo "config: 1-$((FIRST_ROUTE-1)), routes: $FIRST_ROUTE-$((LAST_END-1)), tail: $LAST_END-$TOTAL"
 
-          echo "=== Phase 2: Split ==="
           mkdir -p server
 
-          echo '"""Server configuration."""' > server/config.py
-          if [ "$FIRST_ROUTE" -gt 1 ]; then
-            head -n $((FIRST_ROUTE - 1)) server.py >> server/config.py
-          fi
-          echo "config.py: $(wc -l < server/config.py) lines"
+          # config.py
+          printf "\043\043\043 Server configuration.\043\043\043\n" > server/config.py
+          if [ "$FIRST_ROUTE" -gt 1 ]; then head -n $((FIRST_ROUTE - 1)) server.py >> server/config.py; fi
 
-          echo '"""All API and web routes."""' > server/routes.py
-          echo 'from fastapi import APIRouter, Request' >> server/routes.py
-          echo 'from fastapi.responses import JSONResponse, PlainTextResponse' >> server/routes.py
-          echo 'from server.config import *  # noqa: F403' >> server/routes.py
-          echo '' >> server/routes.py
-          echo 'logger = logging.getLogger(__name__)' >> server/routes.py
-          echo 'router = APIRouter()' >> server/routes.py
-          echo '' >> server/routes.py
-
+          # routes.py
+          printf "\043\043\043 All API and web routes.\043\043\043\n" > server/routes.py
+          echo "from fastapi import APIRouter, Request" >> server/routes.py
+          echo "from fastapi.responses import JSONResponse, PlainTextResponse" >> server/routes.py
+          echo "from server.config import *  # noqa: F403" >> server/routes.py
+          echo "" >> server/routes.py
+          echo "logger = logging.getLogger(__name__)" >> server/routes.py
+          echo "router = APIRouter()" >> server/routes.py
+          echo "" >> server/routes.py
           if [ "$LAST_END" -gt "$FIRST_ROUTE" ]; then
             sed -n "${FIRST_ROUTE},$((LAST_END - 1))p" server.py | \
-              sed 's/@app.get(/@router.get(/' | sed 's/@app.post(/@router.post(/' | \
-              sed 's/@app.put(/@router.put(/' | sed 's/@app.delete(/@router.delete(/' | \
-              sed 's/@app.patch(/@router.patch(/' | sed 's/@app.api_route(/@router.api_route(/' \
+              sed -e "s/@app.get(/@router.get(/" -e "s/@app.post(/@router.post(/" \
+              -e "s/@app.put(/@router.put(/" -e "s/@app.delete(/@router.delete(/" \
+              -e "s/@app.patch(/@router.patch(/" -e "s/@app.api_route(/@router.api_route(/" \
               >> server/routes.py
           fi
-          echo "routes.py: $(wc -l < server/routes.py) lines"
 
-          echo '"""Subnet Dashboard server package."""' > server/__init__.py
-          echo 'from server.config import *  # noqa: F403' >> server/__init__.py
-          echo '' >> server/__init__.py
-          if [ "$LAST_END" -le "$TOTAL" ]; then
-            tail -n +"$LAST_END" server.py >> server/__init__.py
-          fi
-          echo "__init__.py: $(wc -l < server/__init__.py) lines"
+          # __init__.py
+          printf "\043\043\043 Subnet Dashboard server package.\043\043\043\n" > server/__init__.py
+          echo "from server.config import *  # noqa: F403" >> server/__init__.py
+          echo "" >> server/__init__.py
+          if [ "$LAST_END" -le "$TOTAL" ]; then tail -n +"$LAST_END" server.py >> server/__init__.py; fi
 
-          cat > server.py << 'SHIMEOF'
+          # server.py shim
+          cat > server.py << ENDSHIM
           """Subnet Dashboard modular entry point."""
           import os
           from server import app
@@ -94,28 +96,18 @@ jobs:
           if __name__ == "__main__":
               import uvicorn
               uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-          SHIMEOF
+          ENDSHIM
 
-          echo "=== Phase 3: Cleanup ==="
-          for f in judge_app.py council_app.py; do
-            [ -f "$f" ] && rm "$f" && echo "Removed $f"
-          done
-          for f in scripts/split_server.py scripts/recover_tail.py scripts/modular_split.py; do
-            [ -f "$f" ] && rm "$f" && echo "Removed $f"
-          done
-          rm -f .github/workflows/split-server.yml .github/workflows/restore-server.yml
-          # DONT delete modular-split.yml until after git commit
+          # Cleanup
+          rm -f judge_app.py council_app.py
+          rm -f scripts/split_server.py scripts/recover_tail.py scripts/modular_split.py
+          rm -f .github/workflows/split-server.yml .github/workflows/restore-server.yml .github/workflows/modular-split.yml .github/workflows/restore-server.yml
 
-          [ -f Dockerfile ] && { sed -i 's/council_app:app/server:app/g' Dockerfile; echo "Fixed Dockerfile"; }
-          [ -f Procfile ] && { sed -i 's/council_app:app/server:app/g' Procfile; sed -i 's/judge_app:app/server:app/g' Procfile; echo "Fixed Procfile"; }
+          [ -f Dockerfile ] && { sed -i "s/council_app:app/server:app/g" Dockerfile; echo "Fixed Dockerfile"; }
+          [ -f Procfile ] && { sed -i "s/council_app:app/server:app/g" Procfile; sed -i "s/judge_app:app/server:app/g" Procfile; echo "Fixed Procfile"; }
 
-          echo "=== Phase 4: Verify ==="
-          echo "config:   $(wc -l < server/config.py)"
-          echo "routes:   $(wc -l < server/routes.py)"
-          echo "__init__: $(wc -l < server/__init__.py)"
-          echo "shim:     $(wc -l < server.py)"
-          grep -c '@router\.' server/routes.py && echo "@router OK" || echo "NO @router found!"
-          grep -c '@app\.' server/routes.py && echo "WARNING: leftover @app!" || echo "No leftover @app"
+          echo "=== Line counts ==="
+          wc -l server/config.py server/routes.py server/__init__.py server.py
       - name: Commit and push
         run: |
           git config user.name "Ditto"
