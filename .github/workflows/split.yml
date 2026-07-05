@@ -17,24 +17,79 @@ jobs:
           fetch-depth: 0
       - name: Restore original server.py
         run: |
+          cp server.py server_original.py  # save current
           git restore -s 5de12060 -- server.py
-          echo "server.py: $(wc -c < server.py) bytes"
-      - name: Delete old split artifacts
+          echo "Restored server.py: $(wc -c < server.py) bytes, $(wc -l < server.py) lines"
+      - name: Split with shell
         run: |
-          rm -rf server/
+          set -ex
+          # Find first route line number
+          FIRST=$(grep -nm1 '^@app.' server.py | head -1 | cut -d: -f1)
+          echo "FIRST=$FIRST"
+          # Find where tail starts (first of: def create_app, async def lifespan, app = FastAPI, if __name__)
+          TAIL=$(grep -n '^def create_app\|^async def lifespan\|^app = FastAPI\|^if __name__' server.py | head -1 | cut -d: -f1)
+          echo "TAIL=$TAIL"
+          TOTAL=$(wc -l < server.py)
+          echo "TOTAL=$TOTAL"
+
+          C_LINES=$((FIRST - 1))
+          R_LINES=$((TAIL - FIRST))
+          T_LINES=$((TOTAL - TAIL + 1))
+          echo "config: $C_LINES  routes: $R_LINES  tail: $T_LINES"
+
+          # Create server/ directory
+          mkdir -p server
+
+          # config.py
+          printf '### Server configuration.###\n' > server/config.py
+          if [ $FIRST -gt 1 ]; then
+            head -n $((FIRST - 1)) server.py >> server/config.py
+          fi
+
+          # routes.py
+          printf '### All API and web routes.###\n' > server/routes.py
+          printf 'from fastapi import APIRouter, Request\n' >> server/routes.py
+          printf 'from fastapi.responses import JSONResponse, PlainTextResponse\n' >> server/routes.py
+          printf 'from server.config import *  # noqa: F403\n' >> server/routes.py
+          printf '\n' >> server/routes.py
+          printf 'logger = logging.getLogger(__name__)\n' >> server/routes.py
+          printf 'router = APIRouter()\n' >> server/routes.py
+          printf '\n' >> server/routes.py
+          if [ $TAIL -gt $FIRST ]; then
+            sed -n "${FIRST},$((TAIL - 1))p" server.py | sed 's/@app.get(/@router.get(/' | sed 's/@app.post(/@router.post(/' | sed 's/@app.put(/@router.put(/' | sed 's/@app.delete(/@router.delete(/' | sed 's/@app.patch(/@router.patch(/' | sed 's/@app.api_route(/@router.api_route(/' >> server/routes.py
+          fi
+
+          # __init__.py
+          printf '### Subnet Dashboard server package.###\n' > server/__init__.py
+          printf 'from server.config import *  # noqa: F403\n' >> server/__init__.py
+          printf '\n' >> server/__init__.py
+          tail -n +$TAIL server.py >> server/__init__.py
+
+          # server.py shim
+          printf '### Subnet Dashboard modular entry point.###\n' > server.py
+          printf 'import os\n' >> server.py
+          printf 'from server import app\n' >> server.py
+          printf '\n' >> server.py
+          printf 'if __name__ == "__main__":\n' >> server.py
+          printf '    import uvicorn\n' >> server.py
+          printf '    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))\n' >> server.py
+
+          echo "=== Line counts ==="
+          wc -l server/config.py server/routes.py server/__init__.py server.py
+
+          # Fix Dockerfile
+          sed -i 's/council_app:app/server:app/g' Dockerfile
+          sed -i 's/council_app:app/server:app/g' Procfile
+          sed -i 's/judge_app:app/server:app/g' Procfile
+
+          # Cleanup
           rm -f judge_app.py council_app.py
           rm -f scripts/split_server.py scripts/recover_tail.py scripts/modular_split.py
-          rm -f .github/workflows/split-server.yml .github/workflows/restore-server.yml .github/workflows/modular-split.yml .github/workflows/restore-server.yml
-      - name: Decode and run splitter
-        run: |
-          echo 'aW1wb3J0IHJlLCBvcywgc2h1dGlsLCBhc3QKZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpST09UID0gUGF0aCgiLiIpClNSQyA9IFJPT1QgLyAic2VydmVyLnB5IgoKd2l0aCBvcGVuKFNSQywgZW5jb2Rpbmc9InV0Zi04IikgYXMgZjoKICAgIGxpbmVzID0gZi5yZWFkbGluZXMoKQoKcHJpbnQoZiJSZWFkIHtsZW4obGluZXMpfSBsaW5lcyIpCgpuID0gbGVuKGxpbmVzKQpUQUlMX1NUQVJUID0gMApmb3IgaSwgbG4gaW4gZW51bWVyYXRlKGxpbmVzKToKICAgIHMgPSBsbi5zdHJpcCgpCiAgICBpZiBzLnN0YXJ0c3dpdGgoImRlZiBjcmVhdGVfYXBwIikgb3Igcy5zdGFydHN3aXRoKCJhc3luYyBkZWYgbGlmZXNwYW4iKSBvciBzLnN0YXJ0c3dpdGgoIkBhc3luY2NvbnRleHRtYW5hZ2VyIikgb3Igcy5zdGFydHN3aXRoKCJhcHAgPSBGYXN0QVBJIikgb3Igcy5zdGFydHN3aXRoKCJpZiBfX25hbWVfXyIpOgogICAgICAgIFRBSUxfU1RBUlQgPSBpICsgMQogICAgICAgIGJyZWFrCgpwcmludChmIlRBSUxfU1RBUlQ9e1RBSUxfU1RBUlR9IikKCnJvdXRlX2RlY29yYXRvcnMgPSBbXQpmb3IgaSwgbG4gaW4gZW51bWVyYXRlKGxpbmVzKToKICAgIGlmIGkgKyAxID49IFRBSUxfU1RBUlQ6CiAgICAgICAgYnJlYWsKICAgIHMgPSBsbi5zdHJpcCgpCiAgICBpZiByZS5tYXRjaChyIl5AYXBwXC4oZ2V0fHBvc3R8cHV0fGRlbGV0ZXxwYXRjaHxhcGlfcm91dGUpXCguKiIsIHMpOgogICAgICAgIHJvdXRlX2RlY29yYXRvcnMuYXBwZW5kKGkgKyAxKQoKcHJpbnQoZiJSb3V0ZSBkZWNvcmF0b3JzOiB7bGVuKHJvdXRlX2RlY29yYXRvcnMpfSwgZmlyc3Q9e3JvdXRlX2RlY29yYXRvcnNbMF0gaWYgcm91dGVfZGVjb3JhdG9ycyBlbHNlIDB9IikKCmlmIG5vdCByb3V0ZV9kZWNvcmF0b3JzOgogICAgcHJpbnQoIkVSUk9SIikKICAgIGltcG9ydCBzeXM7IHN5cy5leGl0KDEpCgpGSVJTVF9ST1VURSA9IHJvdXRlX2RlY29yYXRvcnNbMF0KTEFTVF9ERUMgPSByb3V0ZV9kZWNvcmF0b3JzWy0xXQoKaWR4ID0gTEFTVF9ERUMgLSAxCndoaWxlIGlkeCA8IFRBSUxfU1RBUlQgLSAxOgogICAgcyA9IGxpbmVzW2lkeF0uc3RyaXAoKQogICAgaWYgcy5zdGFydHN3aXRoKCJAYXBwLiIpIG9yIHMgPT0gIiIgb3Igcy5zdGFydHN3aXRoKCIjIik6CiAgICAgICAgaWR4ICs9IDE7IGNvbnRpbnVlCiAgICBpZiBzLnN0YXJ0c3dpdGgoImRlZiAiKSBvciBzLnN0YXJ0c3dpdGgoImFzeW5jIGRlZiAiKTogYnJlYWsKICAgIGlkeCArPSAxCgpiYXNlX2luZGVudCA9IGxlbihsaW5lc1tpZHhdKSAtIGxlbihsaW5lc1tpZHhdLmxzdHJpcCgpKQpwcmludChmIiAgZGVmIGF0IGxpbmUge2lkeCsxfSIpCmlkeCArPSAxCndoaWxlIGlkeCA8IFRBSUxfU1RBUlQgLSAxOgogICAgcyA9IGxpbmVzW2lkeF0uc3RyaXAoKQogICAgaWYgczoKICAgICAgICBpZiBsZW4obGluZXNbaWR4XSkgLSBsZW4obGluZXNbaWR4XS5sc3RyaXAoKSkgPD0gYmFzZV9pbmRlbnQ6IGJyZWFrCiAgICBpZHggKz0gMQoKTEFTVF9FTkQgPSBpZHggKyAxCnByaW50KGYiRklSU1RfUk9VVEU9e0ZJUlNUX1JPVVRFfSwgTEFTVF9FTkQ9e0xBU1RfRU5EfSIpCgpjb25maWdfbGluZXMgPSBsaW5lc1s6RklSU1RfUk9VVEUgLSAxXQpyb3V0ZV9saW5lcyA9IGxpbmVzW0ZJUlNUX1JPVVRFIC0gMTpMQVNUX0VORCAtIDFdCnRhaWxfbGluZXMgPSBsaW5lc1tMQVNUX0VORCAtIDE6XQoKcHJpbnQoZiIgIGNvbmZpZzoge2xlbihjb25maWdfbGluZXMpfSwgcm91dGVzOiB7bGVuKHJvdXRlX2xpbmVzKX0sIHRhaWw6IHtsZW4odGFpbF9saW5lcyl9IikKCnBrZyA9IFJPT1QgLyAic2VydmVyIgpzaHV0aWwucm10cmVlKHBrZywgaWdub3JlX2Vycm9ycz1UcnVlKQpwa2cubWtkaXIocGFyZW50cz1UcnVlLCBleGlzdF9vaz1UcnVlKQoKd2l0aCBvcGVuKHBrZyAvICJjb25maWcucHkiLCAidyIsIGVuY29kaW5nPSJ1dGYtOCIpIGFzIGY6CiAgICBmLndyaXRlKCIiIlNlcnZlciBjb25maWd1cmF0aW9uLiIiIiArICJcbiIpCiAgICBmLndyaXRlbGluZXMoY29uZmlnX2xpbmVzKQoKd2l0aCBvcGVuKHBrZyAvICJyb3V0ZXMucHkiLCAidyIsIGVuY29kaW5nPSJ1dGYtOCIpIGFzIGY6CiAgICBmLndyaXRlKCIiIkFsbCBBUEkgYW5kIHdlYiByb3V0ZXMuIiIiICsgIlxuIikKICAgIGYud3JpdGUoImZyb20gZmFzdGFwaSBpbXBvcnQgQVBJUm91dGVyLCBSZXF1ZXN0XG4iKQogICAgZi53cml0ZSgiZnJvbSBmYXN0YXBpLnJlc3BvbnNlcyBpbXBvcnQgSlNPTlJlc3BvbnNlLCBQbGFpblRleHRSZXNwb25zZVxuIikKICAgIGYud3JpdGUoImZyb20gc2VydmVyLmNvbmZpZyBpbXBvcnQgKiAgIyBub3FhOiBGNDAzXG4iKQogICAgZi53cml0ZSgiXG4iKQogICAgZi53cml0ZSgibG9nZ2VyID0gbG9nZ2luZy5nZXRMb2dnZXIoX19uYW1lX18pXG4iKQogICAgZi53cml0ZSgicm91dGVyID0gQVBJUm91dGVyKClcblxuIikKICAgIGZvciBsbiBpbiByb3V0ZV9saW5lczoKICAgICAgICBmaXhlZCA9IGxuCiAgICAgICAgZm9yIG0gaW4gWyJnZXQiLCAicG9zdCIsICJwdXQiLCAiZGVsZXRlIiwgInBhdGNoIiwgImFwaV9yb3V0ZSJdOgogICAgICAgICAgICBmaXhlZCA9IGZpeGVkLnJlcGxhY2UoIkBhcHAuIiArIG0gKyAiKCIsICJAcm91dGVyLiIgKyBtICsgIigiKQogICAgICAgIGYud3JpdGUoZml4ZWQpCgp3aXRoIG9wZW4ocGtnIC8gIl9faW5pdF9fLnB5IiwgInciLCBlbmNvZGluZz0idXRmLTgiKSBhcyBmOgogICAgZi53cml0ZSgiIiJTdWJuZXQgRGFzaGJvYXJkIHNlcnZlciBwYWNrYWdlLiIiIiArICJcbiIpCiAgICBmLndyaXRlKCJmcm9tIHNlcnZlci5jb25maWcgaW1wb3J0ICogICMgbm9xYTogRjQwM1xuIikKICAgIGYud3JpdGUoIlxuIikKICAgIGYud3JpdGVsaW5lcyh0YWlsX2xpbmVzKQoKd2l0aCBvcGVuKFJPT1QgLyAic2VydmVyLnB5IiwgInciLCBlbmNvZGluZz0idXRmLTgiKSBhcyBmOgogICAgZi53cml0ZSgiIiJTdWJuZXQgRGFzaGJvYXJkIG1vZHVsYXIgZW50cnkgcG9pbnQuIiIiICsgIlxuIikKICAgIGYud3JpdGUoImltcG9ydCBvc1xuIikKICAgIGYud3JpdGUoImZyb20gc2VydmVyIGltcG9ydCBhcHBcbiIpCiAgICBmLndyaXRlKCJcbiIpCiAgICBmLndyaXRlKCJpZiBfX25hbWVfXyA9PSBcIl9fbWFpbl9fXCI6XG4iKQogICAgZi53cml0ZSgiICAgIGltcG9ydCB1dmljb3JuXG4iKQogICAgZi53cml0ZSgiICAgIHV2aWNvcm4ucnVuKGFwcCwgaG9zdD1cIjAuMC4wLjBcIiwgcG9ydD1pbnQob3MuZW52aXJvbi5nZXQoXCJQT1JUXCIsIDUwMDApKSlcbiIpCgpmb3Igb2xkIGluIFsianVkZ2VfYXBwLnB5IiwgImNvdW5jaWxfYXBwLnB5IiwgInNjcmlwdHMvc3BsaXRfc2VydmVyLnB5IiwgInNjcmlwdHMvcmVjb3Zlcl90YWlsLnB5IiwgInNjcmlwdHMvbW9kdWxhcl9zcGxpdC5weSIsICIuZ2l0aHViL3dvcmtmbG93cy9zcGxpdC1zZXJ2ZXIueW1sIiwgIi5naXRodWIvd29ya2Zsb3dzL3Jlc3RvcmUtc2VydmVyLnltbCIsICIuZ2l0aHViL3dvcmtmbG93cy9tb2R1bGFyLXNwbGl0LnltbCIsICIuZ2l0aHViL3dvcmtmbG93cy9yZXN0b3JlLXNlcnZlci55bWwiXToKICAgIHAgPSBST09UIC8gb2xkCiAgICBpZiBwLmV4aXN0cygpOiBwLnVubGluaygpCgpkZiA9IFJPT1QgLyAiRG9ja2VyZmlsZSIKaWYgZGYuZXhpc3RzKCk6IGRmLndyaXRlX3RleHQoZGYucmVhZF90ZXh0KCkucmVwbGFjZSgiY291bmNpbF9hcHA6YXBwIiwgInNlcnZlcjphcHAiKSkKcGYgPSBST09UIC8gIlByb2NmaWxlIgppZiBwZi5leGlzdHMoKTogcGYud3JpdGVfdGV4dChwZi5yZWFkX3RleHQoKS5yZXBsYWNlKCJjb3VuY2lsX2FwcDphcHAiLCAic2VydmVyOmFwcCIpLnJlcGxhY2UoImp1ZGdlX2FwcDphcHAiLCAic2VydmVyOmFwcCIpKQoKcHJpbnQoIkRvbmUhIik=' | base64 -d > /tmp/split.py
-          python3 /tmp/split.py
+          rm -f .github/workflows/*split*.yml .github/workflows/*restore*.yml
       - name: Commit and push
         run: |
           git config user.name Ditto
           git config user.email ditto@heyditto.ai
           git add -A
-          git commit -m "refactor: split server.py into clean server/ package" || echo "no changes"
+          git commit -m 'refactor: split server.py into clean server/ package' || echo 'no changes'
           git push
-      - name: Cleanup workflow file
-        run: rm -f .github/workflows/split.yml
