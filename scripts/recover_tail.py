@@ -1,3 +1,8 @@
+Title: 
+
+URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/scripts/recover_tail.py
+
+Markdown Content:
 #!/usr/bin/env python3
 """Recover tail code from original server.py in git history."""
 import subprocess, re, sys
@@ -73,3 +78,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# retrigger
