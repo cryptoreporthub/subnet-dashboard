@@ -1,4 +1,4 @@
-name: Modular Split
+name: Modular Split (awk)
 
 on:
   push:
@@ -13,152 +13,123 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Split server.py into server/ package
+      - name: Split server.py with awk
         run: |
-          cat > /tmp/split.py <<'PYEOF'
-          import re, os, shutil, ast
-          from pathlib import Path
+          set -e
+          echo "=== Phase 1: Find last route body end ==="
 
-          ROOT = Path(".")
-          SRC = ROOT / "server.py"
+          awk '
+          /^@app\.(get|post|put|delete|patch|api_route)\(/ {
+            decorator_line = NR
+            getline
+            while (1) {
+              if (/^@/) { getline; continue }
+              if (/^(async )?def /) break
+              if (/^$/ || /^#/) { getline; continue }
+              getline
+            }
+            match($0, /^[ \t]*/)
+            base_indent = RLENGTH
+            getline
+            while (1) {
+              if (NR > 100000) break
+              if (/^$/) { getline; continue }
+              match($0, /^[ \t]*/)
+              if (RLENGTH <= base_indent) break
+              getline
+            }
+            if (NR > last_route_end) last_route_end = NR
+          }
+          END { print last_route_end }
+          ' server.py > /tmp/last_end.txt
 
-          with open(SRC, encoding="utf-8") as f:
-              lines = f.readlines()
+          LAST_END=$(cat /tmp/last_end.txt)
+          echo "Last route body ends at line: $LAST_END"
 
-          print(f"Read {len(lines)} lines")
-          n = len(lines)
+          FIRST_ROUTE=$(awk '/^@app\.(get|post|put|delete|patch|api_route)\(/{print NR; exit}' server.py)
+          echo "First route at line: $FIRST_ROUTE"
 
-          last_route_end = 0
-          i = 0
-          while i < n:
-              s = lines[i].strip()
-              if not re.match(r'^@app.(get|post|put|delete|patch|api_route)(', s):
-                  i += 1
-                  continue
-              while i < n:
-                  s2 = lines[i].strip()
-                  if s2.startswith('@'):
-                      i += 1
-                  elif re.match(r'^(async )?def ', s2):
-                      break
-                  elif s2 == '' or s2.startswith('#'):
-                      i += 1
-                  else:
-                      break
-              if i >= n:
-                  break
-              s2 = lines[i].strip()
-              if not re.match(r'^(async )?def ', s2):
-                  continue
-              base_indent = len(lines[i]) - len(lines[i].lstrip())
-              i += 1
-              while i < n:
-                  body = lines[i].strip()
-                  if body:
-                      current_indent = len(lines[i]) - len(lines[i].lstrip())
-                      if current_indent <= base_indent:
-                          break
-                  i += 1
-              last_route_end = max(last_route_end, i)
+          TOTAL=$(wc -l < server.py)
+          echo "Total lines: $TOTAL"
 
-          print(f"Last route body ends at line {last_route_end}")
+          echo ""
+          echo "=== Phase 2: Split ==="
+          mkdir -p server
 
-          preamble = lines[:last_route_end]
-          route_start = 0
-          for idx, ln in enumerate(preamble):
-              if re.match(r'^@app.(get|post|put|delete|patch|api_route)(', ln.strip()):
-                  route_start = idx
-                  break
+          # config.py
+          echo '"""Server configuration."""' > server/config.py
+          if [ "$FIRST_ROUTE" -gt 1 ]; then
+            head -n $((FIRST_ROUTE - 1)) server.py >> server/config.py
+          fi
+          echo "config.py: $(wc -l < server/config.py) lines"
 
-          config_lines = preamble[:route_start]
-          route_lines = preamble[route_start:]
-          tail_lines = lines[last_route_end:]
+          # routes.py
+          echo '"""All API and web routes."""' > server/routes.py
+          echo 'from fastapi import APIRouter, Request' >> server/routes.py
+          echo 'from fastapi.responses import JSONResponse, PlainTextResponse' >> server/routes.py
+          echo 'from server.config import *  # noqa: F403' >> server/routes.py
+          echo '' >> server/routes.py
+          echo 'logger = logging.getLogger(__name__)' >> server/routes.py
+          echo 'router = APIRouter()' >> server/routes.py
+          echo '' >> server/routes.py
 
-          print(f"config: {len(config_lines)}, routes: {len(route_lines)}, tail: {len(tail_lines)}")
+          if [ "$LAST_END" -gt "$FIRST_ROUTE" ]; then
+            sed -n "${FIRST_ROUTE},$((LAST_END - 1))p" server.py | \
+              sed 's/@app.get(/@router.get(/' | sed 's/@app.post(/@router.post(/' | \
+              sed 's/@app.put(/@router.put(/' | sed 's/@app.delete(/@router.delete(/' | \
+              sed 's/@app.patch(/@router.patch(/' | sed 's/@app.api_route(/@router.api_route(/' \
+              >> server/routes.py
+          fi
+          echo "routes.py: $(wc -l < server/routes.py) lines"
 
-          pkg = ROOT / "server"
-          shutil.rmtree(pkg, ignore_errors=True)
-          pkg.mkdir(parents=True, exist_ok=True)
+          # __init__.py
+          echo '"""Subnet Dashboard server package."""' > server/__init__.py
+          echo 'from server.config import *  # noqa: F403' >> server/__init__.py
+          echo '' >> server/__init__.py
+          if [ "$LAST_END" -le "$TOTAL" ]; then
+            tail -n +"$LAST_END" server.py >> server/__init__.py
+          fi
+          echo "__init__.py: $(wc -l < server/__init__.py) lines"
 
-          with open(pkg / "config.py", "w", encoding="utf-8") as f:
-              f.write('"""Server config."""\n')
-              f.writelines(config_lines)
-          print("Wrote config.py")
+          # server.py shim
+          cat > server.py << 'SHIMEOF'
+          """Subnet Dashboard — modular entry point."""
+          import os
+          from server import app
 
-          with open(pkg / "routes.py", "w", encoding="utf-8") as f:
-              f.write('"""Routes."""\n')
-              f.write("from fastapi import APIRouter, Request\n")
-              f.write("from fastapi.responses import JSONResponse, PlainTextResponse\n")
-              f.write("from server.config import *  # noqa: F403\n")
-              f.write("\n")
-              f.write("logger = logging.getLogger(__name__)\n")
-              f.write("router = APIRouter()\n")
-              f.write("\n")
-              for line in route_lines:
-                  fixed = line
-                  for method in ["get", "post", "put", "delete", "patch", "api_route"]:
-                      fixed = fixed.replace("@app." + method + "(", "@router." + method + "(")
-                  f.write(fixed)
-          print("Wrote routes.py")
+          if __name__ == "__main__":
+              import uvicorn
+              uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+          SHIMEOF
 
-          with open(pkg / "__init__.py", "w", encoding="utf-8") as f:
-              f.write('"""Server package."""\n')
-              f.write("from server.config import *  # noqa: F403\n")
-              f.write("\n")
-              f.writelines(tail_lines)
-          print("Wrote __init__.py")
+          echo ""
+          echo "=== Phase 3: Cleanup ==="
+          for f in judge_app.py council_app.py; do
+            [ -f "$f" ] && rm "$f" && echo "Removed $f"
+          done
+          for f in scripts/split_server.py scripts/recover_tail.py scripts/modular_split.py; do
+            [ -f "$f" ] && rm "$f" && echo "Removed $f"
+          done
+          for f in .github/workflows/split-server.yml .github/workflows/restore-server.yml .github/workflows/modular-split.yml; do
+            [ -f "$f" ] && rm "$f" && echo "Removed $f"
+          done
 
-          with open(ROOT / "server.py", "w", encoding="utf-8") as f:
-              f.write('"""Subnet Dashboard — modular entry point."""\n')
-              f.write("import os\n")
-              f.write("from server import app\n")
-              f.write("\n")
-              f.write('if __name__ == "__main__":\n')
-              f.write("    import uvicorn\n")
-              f.write('    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))\n')
-          print("Wrote shim")
+          [ -f Dockerfile ] && { sed -i "s/council_app:app/server:app/g" Dockerfile; echo "Fixed Dockerfile"; }
+          [ -f Procfile ] && { sed -i "s/council_app:app/server:app/g" Procfile; sed -i "s/judge_app:app/server:app/g" Procfile; echo "Fixed Procfile"; }
 
-          for old in ["judge_app.py", "council_app.py",
-                      "scripts/split_server.py", "scripts/recover_tail.py",
-                      ".github/workflows/split-server.yml", ".github/workflows/restore-server.yml"]:
-              p = ROOT / old
-              if p.exists():
-                  p.unlink()
-                  print(f"Removed {old}")
+          echo ""
+          echo "=== Phase 4: Verify ==="
+          ROUTER_COUNT=$(grep -c "@router\." server/routes.py || echo 0)
+          LEFTOVER=$(grep -c "@app\." server/routes.py || echo 0)
+          echo "@router decorators: $ROUTER_COUNT"
+          echo "Leftover @app. in routes: $LEFTOVER"
 
-          df = ROOT / "Dockerfile"
-          if df.exists():
-              c = df.read_text()
-              c = c.replace("council_app:app", "server:app")
-              df.write_text(c)
-              print("Fixed Dockerfile")
-
-          pf = ROOT / "Procfile"
-          if pf.exists():
-              c = pf.read_text()
-              c = c.replace("council_app:app", "server:app")
-              c = c.replace("judge_app:app", "server:app")
-              pf.write_text(c)
-              print("Fixed Procfile")
-
-          for path in ["server.py", "server/config.py", "server/routes.py", "server/__init__.py"]:
-              try:
-                  with open(ROOT / path) as fh:
-                      ast.parse(fh.read())
-                  print(f"  {path}: OK")
-              except SyntaxError as e:
-                  print(f"  {path}: SYNTAX ERROR at line {e.lineno}")
-                  with open(ROOT / path) as fh:
-                      content = fh.read()
-                  lines = content.split('\n')
-                  if e.lineno:
-                      start = max(0, e.lineno - 2)
-                      end = min(len(lines), e.lineno + 2)
-                      for j in range(start, end):
-                          print(f"    {j+1}: {lines[j][:120]}")
-          print("\nDone!")
-          PYEOF
-          python3 /tmp/split.py
+          echo ""
+          echo "=== Line counts ==="
+          echo "config:   $(wc -l < server/config.py)"
+          echo "routes:   $(wc -l < server/routes.py)"
+          echo "__init__: $(wc -l < server/__init__.py)"
+          echo "shim:     $(wc -l < server.py)"
       - name: Commit and push
         run: |
           git config user.name "Ditto"
