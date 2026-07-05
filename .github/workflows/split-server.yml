@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - scripts/split_server.py
+      - scripts/recover_tail.py
   workflow_dispatch: {}
 
 jobs:
@@ -13,15 +14,18 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      - name: Split server.py
-        run: python scripts/split_server.py
+          python-version: "3.11"
+      - name: Recover tail code if needed
+        run: python scripts/recover_tail.py
+        continue-on-error: true
       - name: Commit and push
         run: |
           git config user.name "Ditto"
           git config user.email "ditto@heyditto.ai"
           git add -A
-          git commit -m "refactor: split server.py monolith into modular server/ package" || true
+          git commit -m "fix: restore tail code and fix Procfile" || true
           git push
