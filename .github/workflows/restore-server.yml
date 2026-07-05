@@ -1,0 +1,30 @@
+name: Restore Server
+
+on:
+  push:
+    paths:
+      - .github/workflows/restore-server.yml
+  workflow_dispatch: {}
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore original server.py
+        run: |
+          git restore -s 5de12060 -- server.py
+          echo "Restored server.py: $(wc -c < server.py) bytes"
+          # Remove the old failed split artifacts
+          rm -rf server/
+      - name: Commit and push
+        run: |
+          git config user.name "Ditto"
+          git config user.email "ditto@heyditto.ai"
+          git add -A
+          git commit -m "restore: bring back original server.py monolith (218KB)" || echo "no changes"
+          git push
