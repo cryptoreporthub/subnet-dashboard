@@ -1,6 +1,11 @@
 """Subnet Dashboard server package."""
 from server.config import *  # noqa: F403
 
+# Wire council judge panel router
+from internal.judges.council_routes import council_router
+app.include_router(council_router)
+
+
 def get_dynamic_subnets():
     try:
         return get_all_subnets()
@@ -277,38 +282,6 @@ def build_mindmap_feed(picks: List[Dict], council_votes: List[Dict], undervalued
     # Council votes
     for vote in council_votes[:2]:
         feed.append({
-            "time": now,
-            "message": f"{vote['name']} council vote: {vote['vote']} ({vote['confidence']}% confidence)"
-        })
-    
-    # Undervalued analysis
-    if undervalued:
-        top_und = undervalued[0]
-        feed.append({
-            "time": now,
-            "message": f"Undervalued scan: {top_und['name']} flagged (score: {top_und['score']:.1f})"
-        })
-    
-    # Stance adjustments
-    feed.append({
-        "time": now,
-        "message": "Adjusting expert weights based on recent performance data"
-    })
-    
-    # Learning loop update
-    feed.append({
-        "time": now,
-        "message": "Recording learning loop updates to persistent memory"
-    })
-    
-    return feed
+       
 
-
-# ---------------------------------------------------------------------------
-# Phase 2: Mount the self-learning loop's feedback router (APIRouter)
-# ---------------------------------------------------------------------------
-from datastore.learning_engine import create_feedback_router
-
-_feedback_router = create_feedback_router()
-if _feedback_router is not None:
-    app.include_router(_feedback_router)
+[read_links truncated 1114 chars from this runtime tool output. The full content is stored with the tool result.]
