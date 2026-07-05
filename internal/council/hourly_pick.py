@@ -10,22 +10,20 @@ from typing import Any, Dict, List, Optional
 from internal.council.state_vector import score_subnet_for_hour
 from internal.council.red_team import audit_daily_pick
 
+try:
+    from internal.council.weights import load_weights
+except Exception:
+    def load_weights():
+        return {"quant": 0.30, "hype": 0.25, "dark_horse": 0.20, "technical": 0.25}
+
 
 def select_hourly_pick(
     subnets: List[Dict[str, Any]],
     market_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """
-    Select the single audited hourly pick from a list of subnets.
+    market_context = dict(market_context or {})
+    market_context.setdefault("weights", load_weights())
 
-    Args:
-        subnets: List of subnet dicts from the fetcher/API.
-        market_context: Optional market-wide context (e.g. TAO change, weights).
-
-    Returns:
-        dict with subnet, score, confidence, expert_contributions,
-        scenario_tags, audit, final_confidence, and action.
-    """
     if not subnets:
         return {
             "subnet": None,
@@ -52,7 +50,6 @@ def select_hourly_pick(
     candidate = top["subnet"]
     score_payload = top["score"]
 
-    # Tie-break: if the runner-up is within 2.0 points, apply deterministic rules.
     tie_break = None
     if len(scored) >= 2:
         runner_up = scored[1]
@@ -63,7 +60,6 @@ def select_hourly_pick(
                 candidate = runner_up["subnet"]
                 score_payload = runner_up["score"]
 
-    # Enrich the candidate with scoring metadata for the RedTeam audit.
     audit_candidate = {**candidate, "confidence": score_payload["confidence"]}
     audit = audit_daily_pick(audit_candidate, subnets)
 
@@ -87,7 +83,6 @@ def select_hourly_pick(
 def _apply_tie_break(
     leader: Dict[str, Any], runner_up: Dict[str, Any]
 ) -> Dict[str, Any]:
-    """Resolve a near-tie between two hourly-pick candidates."""
     l_score = leader["score"]
     r_score = runner_up["score"]
     l_sn = leader["subnet"]
@@ -99,35 +94,35 @@ def _apply_tie_break(
     l_conf = float(l_score.get("confidence", 0) or 0)
     r_conf = float(r_score.get("confidence", 0) or 0)
     if r_conf > l_conf + 0.02:
-        reasons.append(f"Runner-up has higher confidence ({r_conf:.3f} vs {l_conf:.3f})")
+        reasons.append("Runner-up has higher confidence (" + str(round(r_conf, 3)) + " vs " + str(round(l_conf, 3)) + ")")
         winner_changed = True
     elif l_conf > r_conf + 0.02:
-        reasons.append(f"Leader has higher confidence ({l_conf:.3f} vs {r_conf:.3f})")
+        reasons.append("Leader has higher confidence (" + str(round(l_conf, 3)) + " vs " + str(round(r_conf, 3)) + ")")
 
     l_contrib = l_score.get("expert_contributions", {})
     r_contrib = r_score.get("expert_contributions", {})
     l_qt = float(l_contrib.get("quant", 0)) + float(l_contrib.get("technical", 0))
     r_qt = float(r_contrib.get("quant", 0)) + float(r_contrib.get("technical", 0))
     if not winner_changed and r_qt > l_qt + 0.02:
-        reasons.append(f"Runner-up has higher quant+technical ({r_qt:.3f} vs {l_qt:.3f})")
+        reasons.append("Runner-up has higher quant+technical (" + str(round(r_qt, 3)) + " vs " + str(round(l_qt, 3)) + ")")
         winner_changed = True
     elif not winner_changed and l_qt > r_qt + 0.02:
-        reasons.append(f"Leader has higher quant+technical ({l_qt:.3f} vs {r_qt:.3f})")
+        reasons.append("Leader has higher quant+technical (" + str(round(l_qt, 3)) + " vs " + str(round(r_qt, 3)) + ")")
 
     if not winner_changed:
         l_vol = abs(float(l_sn.get("price_change_24h", 0) or 0))
         r_vol = abs(float(r_sn.get("price_change_24h", 0) or 0))
         if r_vol < l_vol - 0.5:
-            reasons.append(f"Runner-up has lower 24h volatility ({r_vol:.2f}% vs {l_vol:.2f}%)")
+            reasons.append("Runner-up has lower 24h volatility (" + str(round(r_vol, 2)) + "% vs " + str(round(l_vol, 2)) + "%)")
             winner_changed = True
         elif l_vol < r_vol - 0.5:
-            reasons.append(f"Leader has lower 24h volatility ({l_vol:.2f}% vs {r_vol:.2f}%)")
+            reasons.append("Leader has lower 24h volatility (" + str(round(l_vol, 2)) + "% vs " + str(round(r_vol, 2)) + "%)")
 
     if not winner_changed:
         l_vol_val = float(l_sn.get("volume", 0) or 0)
         r_vol_val = float(r_sn.get("volume", 0) or 0)
         if r_vol_val > l_vol_val * 1.1:
-            reasons.append(f"Runner-up has higher volume (${r_vol_val:.0f} vs ${l_vol_val:.0f})")
+            reasons.append("Runner-up has higher volume ($" + str(int(r_vol_val)) + " vs $" + str(int(l_vol_val)) + ")")
             winner_changed = True
 
     if not reasons:
