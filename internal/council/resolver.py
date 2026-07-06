@@ -47,7 +47,6 @@ _LEARNING_MAX_WEIGHT = 2.0
 _EXPIRY_GRACE_MULTIPLE = 2.0
 _EXPIRY_DEFAULT_HORIZON_HOURS = 24.0
 
-
 def _load_json(path: str, default: Any) -> Any:
     try:
         with open(path, "r") as f:
@@ -55,14 +54,12 @@ def _load_json(path: str, default: Any) -> Any:
     except Exception:
         return default
 
-
 def _save_json(path: str, data: Any) -> None:
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     tmp = path + ".tmp"
     with open(tmp, "w") as f:
         json.dump(data, f, indent=2)
     os.replace(tmp, path)
-
 
 def fetch_prices(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[Any, float]:
     prices: Dict[Any, float] = {}
@@ -95,7 +92,6 @@ def fetch_prices(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[Any, fl
                         pass
 
     return prices
-
 
 def classify_outcome(
     prediction: Dict[str, Any],
@@ -130,7 +126,6 @@ def classify_outcome(
         return "partial"
     return "miss"
 
-
 def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
     """Map a prediction's expert/signal source to a canonical Council expert."""
     expert = prediction.get("expert") or prediction.get("signal_source")
@@ -153,7 +148,6 @@ def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
 
     return None
 
-
 def _nudge_weights(correct: bool, expert: Optional[str]) -> None:
     if not expert:
         return
@@ -169,7 +163,6 @@ def _nudge_weights(correct: bool, expert: Optional[str]) -> None:
     )
     weights[expert] = round(weights[expert], 4)
     save_weights(weights)
-
 
 def resolve_prediction(
     prediction: Dict[str, Any],
@@ -254,7 +247,6 @@ def resolve_prediction(
 
     return prediction
 
-
 def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
     resolved = data.get("resolved", [])
     pending = data.get("predictions", [])
@@ -274,7 +266,6 @@ def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
     else:
         stats["accuracy"] = 0.0
     return stats
-
 
 def _scenario_signals_for_subnet(subnet: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if not isinstance(subnet, dict):
@@ -300,7 +291,6 @@ def _scenario_signals_for_subnet(subnet: Optional[Dict[str, Any]]) -> Dict[str, 
         pass
     return out
 
-
 def _is_expired(
     prediction: Dict[str, Any],
     resolve_at: datetime,
@@ -318,7 +308,6 @@ def _is_expired(
     grace = timedelta(hours=horizon * grace_multiple)
     return now >= resolve_at + grace
 
-
 def _expire_prediction(prediction: Dict[str, Any], now: datetime) -> Dict[str, Any]:
     prediction["status"] = "expired"
     prediction["outcome"] = "expired"
@@ -326,7 +315,6 @@ def _expire_prediction(prediction: Dict[str, Any], now: datetime) -> Dict[str, A
     prediction["resolved_at"] = now.isoformat().replace("+00:00", "Z")
     prediction["resolved_price"] = None
     return prediction
-
 
 def expire_stale_predictions(
     *,
@@ -375,13 +363,14 @@ def expire_stale_predictions(
         "stats": data["stats"],
     }
 
-
 def resolve_due_predictions(
     subnets: Optional[List[Dict[str, Any]]] = None,
     *,
+    horizon_h
     horizon_hours: float = 24.0,
     tolerance: float = 0.5,
 ) -> Dict[str, Any]:
+    """Resolve predictions whose horizon has elapsed and persist the result."""
     data = _load_json(
         PREDICTIONS_PATH,
         {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}},
@@ -389,29 +378,24 @@ def resolve_due_predictions(
     predictions: List[Dict[str, Any]] = list(data.get("predictions", []))
     resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
     prices = fetch_prices(subnets)
-
     subnet_by_uid: Dict[Any, Dict[str, Any]] = {}
     if subnets:
         for sn in subnets:
             if isinstance(sn, dict) and sn.get("netuid") is not None:
                 subnet_by_uid[sn.get("netuid")] = sn
     now = datetime.now(timezone.utc)
-
     still_pending: List[Dict[str, Any]] = []
     resolved_now: List[Dict[str, Any]] = []
     expired_now: List[Dict[str, Any]] = []
-
     for pred in predictions:
         uid = pred.get("netuid")
         price = prices.get(uid, 0.0)
-
         try:
             resolve_at = datetime.fromisoformat(
                 str(pred.get("resolve_at", "")).replace("Z", "+00:00")
             )
         except Exception:
             resolve_at = now + timedelta(hours=horizon_hours)
-
         if price > 0 and now >= resolve_at:
             signals = _scenario_signals_for_subnet(subnet_by_uid.get(uid))
             if signals.get("rsi"):
@@ -429,12 +413,10 @@ def resolve_due_predictions(
             expired_now.append(pred)
         else:
             still_pending.append(pred)
-
     data["predictions"] = still_pending
     data["resolved"] = resolved
     data["stats"] = _compute_stats(data)
     _save_json(PREDICTIONS_PATH, data)
-
     return {
         "resolved_now": resolved_now,
         "expired_now": expired_now,
@@ -445,6 +427,7 @@ def resolve_due_predictions(
 
 
 def get_resolved_predictions() -> Dict[str, Any]:
+    """Return the current resolved prediction ledger without mutating it."""
     data = _load_json(
         PREDICTIONS_PATH,
         {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}},
