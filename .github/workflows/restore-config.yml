@@ -18,15 +18,24 @@ jobs:
       - name: Insert static files mount
         run: |
           python3 - <<'PY'
-          import re
+          import os
           with open('server/config.py', 'r') as f:
-              content = f.read()
-          replacement = r'\1\n\n# Mount static files at /static\napp.mount("/static", StaticFiles(directory="static"), name="static")\n'
-          content, n = re.subn(r'(app = FastAPI\([^)]*\)\n)', replacement, content)
-          if n == 0:
-              print('WARNING: app = FastAPI(...) not found')
-          with open('server/config.py', 'w') as f:
-              f.write(content)
+              lines = f.readlines()
+          idx = None
+          for i, line in enumerate(lines):
+              if 'app = FastAPI(' in line:
+                  idx = i
+                  break
+          if idx is None:
+              print('WARNING: app = FastAPI not found')
+          else:
+              while idx < len(lines) and ')' not in lines[idx]:
+                  idx += 1
+              mount = '\n\n# Mount static files at /static\napp.mount("/static", StaticFiles(directory="static"), name="static")\n'
+              lines.insert(idx + 1, mount)
+              with open('server/config.py', 'w') as f:
+                  f.writelines(lines)
+              print('Static mount inserted')
           PY
       - name: Commit and push
         run: |
