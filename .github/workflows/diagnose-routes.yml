@@ -1,7 +1,8 @@
 name: Diagnose routes and config
 on:
   push:
-    branches: [diagnose-routes]
+    paths:
+      - '.diagnose-trigger'
   workflow_dispatch:
 
 jobs:
