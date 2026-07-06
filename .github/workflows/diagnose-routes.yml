@@ -16,49 +16,59 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r requirements.txt || true
-      - name: Inspect config.py around app mount
+      - name: Collect diagnostics
         run: |
           python3 - <<'PY'
-          import re
+          import os, re
+          from server import app
+          
+          # 1. Static mount & FastAPI context
           with open('server/config.py', 'r') as f:
               lines = f.readlines()
-          for i, line in enumerate(lines):
-              if 'app = FastAPI(' in line:
-                  print('=== app = FastAPI at line', i+1, '===')
-                  print(''.join(lines[max(0,i-3):i+8]))
-              if 'app.mount("/static"' in line:
-                  print('=== static mount at line', i+1, '===')
-                  print(''.join(lines[max(0,i-5):i+5]))
-          print('=== total lines:', len(lines))
-          PY
-      - name: Search for catch-all routes
-        run: |
-          grep -RnE '@.*"/.*{.*:path.*}|@.*"/{.*:path.*}"' server/ internal/ || echo 'no catch-all found'
-          grep -RnE '@app.get|@router.get' server/ internal/ || true
-      - name: List routes if import works
-        run: |
-          python3 -c "from server import app; routes=[f'{r.path} {type(r).__name__}' for r in app.routes]; print('\n'.join(routes))" || echo 'import failed'
-      - name: Write diagnostic report
-        run: |
-          python3 - <<'PY'
-          import re, subprocess
-          with open('server/config.py', 'r') as f:
-              lines = f.readlines()
+
           report = ['# Diagnostic Report', '']
           for i, line in enumerate(lines):
               if 'app = FastAPI(' in line:
                   report.append(f"app = FastAPI at line {i+1}")
                   report.extend(lines[max(0,i-3):i+8])
+                  report.append('')
               if 'app.mount("/static"' in line:
                   report.append(f"static mount at line {i+1}")
                   report.extend(lines[max(0,i-5):i+5])
+                  report.append('')
+              if '/{path' in line or '/{*path' in line or '/{path:path' in line:
+                  report.append(f"CATCH-ALL ROUTE at line {i+1}: {line.rstrip()}")
+
+          # 2. grep for catch-all routes across all .py files
+          report.append('
+## Catch-all grep results
+')
+          for root, _, files in os.walk('.'):
+              for f in files:
+                  if f.endswith('.py'):
+                      fp = os.path.join(root, f)
+                      try:
+                          with open(fp, 'r') as fh:
+                              for i, ln in enumerate(fh):
+                                  if re.search(r'[@\S]*\s*get|post|put|delete|patch.*', ln) and ('{path:path' in ln or '/{path' in ln):
+                                      report.append(f"{fp}:{i+1}: {ln.rstrip()}")
+                      except Exception:
+                          pass
+
+          # 3. Route listing from FastAPI app
+          report.append('
+## Route list (path → type)
+')
+          for r in app.routes:
+              report.append(f"{r.path}  [{type(r).__name__}]")
+
           with open('DIAGNOSTIC.md', 'w') as f:
               f.write('\n'.join(report))
           PY
-      - name: Commit report
+      - name: Commit diagnostic report
         run: |
           git config user.name "Ditto"
           git config user.email "ditto@heyditto.ai"
           git add DIAGNOSTIC.md
-          git diff --cached --quiet || git commit -m "docs: diagnostic report [skip ci]"
+          git diff --cached --quiet || git commit -m "docs: diagnostic report with routes [skip ci]"
           git push origin HEAD || true
