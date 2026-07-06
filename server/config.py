@@ -552,10 +552,6 @@ app = FastAPI(
     lifespan=_lifespan,
 )
 
-
-# Mount static files at /static
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
 # CORS middleware (replaces Flask's per-response CORS headers)
 app.add_middleware(
     CORSMiddleware,
