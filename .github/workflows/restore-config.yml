@@ -1,0 +1,37 @@
+name: Restore config.py and mount static files
+on:
+  push:
+    paths:
+      - '.restore-trigger'
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore config.py from last known-good commit
+        run: git checkout bb6fadf729aabf007edb190e81db79416f3aca50 -- server/config.py
+      - name: Insert static files mount
+        run: |
+          python3 - <<'PY'
+          import re
+          with open('server/config.py', 'r') as f:
+              content = f.read()
+          replacement = r'\1\n\n# Mount static files at /static\napp.mount("/static", StaticFiles(directory="static"), name="static")\n'
+          content, n = re.subn(r'(app = FastAPI\([^)]*\)\n)', replacement, content)
+          if n == 0:
+              print('WARNING: app = FastAPI(...) not found')
+          with open('server/config.py', 'w') as f:
+              f.write(content)
+          PY
+      - name: Commit and push
+        run: |
+          git config user.name "Ditto"
+          git config user.email "ditto@heyditto.ai"
+          git add server/config.py
+          git diff --cached --quiet || git commit -m "fix: restore config.py and mount /static"
+          git push origin main
