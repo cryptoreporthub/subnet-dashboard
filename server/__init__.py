@@ -268,16 +268,16 @@ def build_mindmap_summary(top_sn: Dict, picks: List[Dict], council_votes: List[D
         "timestamp": datetime.now().isoformat()
     }
 
-def build_mindmap_feed(picks: List[Dict], council_votes: List[Dict], undervalued: List[Dict]) -> List[Dict]:
+def build_mindmap_feed(picks: list, council_votes: list, undervalued: list) -> list:
     """Build a live play-by-play feed for the Mindmap + Learning Loop section."""
     feed = []
-    now = datetime.now().strftime("%H:%M:%S")
-    
-    # Processing picks
+    import datetime
+    now = datetime.datetime.now().strftime("%H:%M:%S")
+
     if picks:
         top_pick = picks[0]
         feed.append({
             "time": now,
-            "message": f"Processing top pick #{top_pick['
-
-[read_links truncated 285 chars from this runtime tool output. The full content is stored with the tool result.]
+            "message": f"Processing top pick #{top_pick.get('id', 'UNKNOWN')}"
+        })
+    return feed
