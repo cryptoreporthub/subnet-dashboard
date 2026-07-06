@@ -1,0 +1,27 @@
+name: Clean restore to known-good commit
+on:
+  push:
+    paths:
+      - '.clean-restore-trigger'
+  workflow_dispatch:
+
+jobs:
+  clean-restore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore server files from known-good commit
+        run: |
+          git checkout bb6fadf729aabf007edb190e81db79416f3aca50 -- server/config.py server/routes.py server/__init__.py templates/base.html
+      - name: Commit and push clean restore
+        run: |
+          git config user.name "Ditto"
+          git config user.email "ditto@heyditto.ai"
+          git add server/config.py server/routes.py server/__init__.py templates/base.html
+          git diff --cached --quiet || git commit -m "fix: clean restore of server files to pre-break state"
+          git push origin main
