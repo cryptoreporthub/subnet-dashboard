@@ -1,7 +1,1 @@
-"""Subnet Dashboard — modular entry point."""
-import os
-from server import app
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+IiIiU3VibmV0IERhc2hib2FyZCAUIGVudHJ5IHBvaW50LgoKSW1wb3J0cyB0aGUgYXBwIGZyb20gdGhlIG9yaWdpbmFsIG1vbm9saXRoIChzZXJ2ZXJfb3JpZ2luYWwucHkpIHdoaWNoIGhhcwphbGwgcm91dGVzLCBzdGF0aWMgbW91bnRzLCBhbmQgaGVhbHRoIGVuZHBvaW50cyBpbnRhY3QuCiIiIgpmcm9tIHNlcnZlcl9vcmlnaW5hbCBpbXBvcnQgYXBwICAjIG5vcWE6IEY0MDEKCmlmIF9fbmFtZV9fID09ICJfX21haW5fXyI6CiAgICBpbXBvcnQgdXZpY29ybgogICAgdXZpY29ybi5ydW4oYXBwLCBob3N0PSIwLjAuMC4wIiwgcG9ydD1pbnQob3MuZW52aXJvbi5nZXQoIlBPUlQiLCA4MDgwKSkpCg==
