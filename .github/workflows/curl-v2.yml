@@ -1,0 +1,41 @@
+name: Curl endpoints v2
+on:
+  workflow_dispatch:
+  push:
+    paths: [".curl-v2-trigger"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: curl /
+        run: |
+          echo "*** GET / ***"
+          code=$(curl -s -o /dev/null -w "%{http_code}" https://subnet-dashboard.fly.dev/)
+          echo "STATUS: $code"
+      - name: curl /health
+        run: |
+          echo "*** GET /health ***"
+          code=$(curl -s -o /dev/null -w "%{http_code}" https://subnet-dashboard.fly.dev/health)
+          echo "STATUS: $code"
+          if [ "$code" = "200" ]; then
+            echo "BODY: $(curl -s https://subnet-dashboard.fly.dev/health)"
+          fi
+      - name: curl /api/health
+        run: |
+          echo "*** GET /api/health ***"
+          code=$(curl -s -o /dev/null -w "%{http_code}" https://subnet-dashboard.fly.dev/api/health)
+          echo "STATUS: $code"
+          if [ "$code" = "200" ]; then
+            echo "BODY: $(curl -s https://subnet-dashboard.fly.dev/api/health)"
+          fi
+      - name: curl /api/subnets
+        run: |
+          echo "*** GET /api/subnets ***"
+          code=$(curl -s -o /dev/null -w "%{http_code}" https://subnet-dashboard.fly.dev/api/subnets)
+          echo "STATUS: $code"
+      - name: curl /static/style.css
+        run: |
+          echo "*** GET /static/css/style.css ***"
+          code=$(curl -s -o /dev/null -w "%{http_code}" https://subnet-dashboard.fly.dev/static/css/style.css)
+          echo "STATUS: $code"
