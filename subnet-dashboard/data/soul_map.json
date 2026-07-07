@@ -2,7 +2,7 @@
   "expert_weights": {
     "quant": 0.88,
     "hype": 1.0,
-    "contrarian": 1.0,
+    "dark_horse": 1.0,
     "technical": 1.0
   },
   "performance_history": {
@@ -15,7 +15,7 @@
   "council_dispositions": {
     "quant": "bullish",
     "hype": "bullish",
-    "contrarian": "bearish",
+    "dark_horse": "bearish",
     "technical": "bullish"
   },
   "council": {
@@ -29,9 +29,9 @@
       "lens": "momentum/social",
       "pick": "Coldint"
     },
-    "contrarian": {
+    "dark_horse": {
       "disposition": "bearish",
-      "lens": "contrarian/RSI",
+      "lens": "dark_horse/RSI",
       "pick": "Coldint"
     },
     "technical": {

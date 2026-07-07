@@ -163,7 +163,7 @@ except Exception as _subnet_judges_import_exc:  # pragma: no cover
 try:
     from internal.council.weights import load_weights, save_weights
 except Exception:  # pragma: no cover
-    _DEFAULT_WEIGHTS = {"quant": 1.0, "hype": 1.0, "contrarian": 1.0, "technical": 1.0}
+    _DEFAULT_WEIGHTS = {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
 
     def load_weights(*_args, **_kwargs):
         return dict(_DEFAULT_WEIGHTS)
