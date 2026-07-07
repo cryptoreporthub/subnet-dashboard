@@ -1,0 +1,27 @@
+name: Get Fly logs and test endpoints
+on:
+  workflow_dispatch:
+  push:
+    paths: [".fly-logs-trigger"]
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Get recent Fly logs
+        run: flyctl logs --app subnet-dashboard --since 2m || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Test endpoints with curl
+        run: |
+          echo "GET /health"
+          curl -s -o /dev/null -w "%{http_code}
+" https://subnet-dashboard.fly.dev/health
+          echo "GET /api/health"
+          curl -s -o /dev/null -w "%{http_code}
+" https://subnet-dashboard.fly.dev/api/health
+          echo "GET /"
+          curl -s -o /dev/null -w "%{http_code}
+" https://subnet-dashboard.fly.dev/
