@@ -1,0 +1,47 @@
+name: Commit curl results
+on:
+  workflow_dispatch:
+  push:
+    paths: [".commit-curl-trigger"]
+
+permissions:
+  contents: write
+
+jobs:
+  curl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: curl endpoints
+        run: |
+          echo "=== / ===" > curl_results.txt
+          curl -m 15 -s -w "
+HTTP_CODE=%{http_code}
+TIME=%{time_total}
+" https://subnet-dashboard.fly.dev/ >> curl_results.txt
+          echo "" >> curl_results.txt
+          echo "=== /health ===" >> curl_results.txt
+          curl -m 15 -s -w "
+HTTP_CODE=%{http_code}
+TIME=%{time_total}
+" https://subnet-dashboard.fly.dev/health >> curl_results.txt
+          echo "" >> curl_results.txt
+          echo "=== /api/health ===" >> curl_results.txt
+          curl -m 15 -s -w "
+HTTP_CODE=%{http_code}
+TIME=%{time_total}
+" https://subnet-dashboard.fly.dev/api/health >> curl_results.txt
+          echo "" >> curl_results.txt
+          echo "=== /api/subnets ===" >> curl_results.txt
+          curl -m 15 -s -w "
+HTTP_CODE=%{http_code}
+TIME=%{time_total}
+" https://subnet-dashboard.fly.dev/api/subnets >> curl_results.txt
+      - name: commit results
+        run: |
+          git config --global user.name "Ditto"
+          git config --global user.email "ditto@heyditto.ai"
+          git checkout main
+          git pull origin main
+          git add curl_results.txt
+          git commit -m "diagnostic: curl endpoint results"
+          git push origin main
