@@ -1,0 +1,64 @@
+name: Find and restore working server.py
+on:
+  push:
+    paths:
+      - '.restore-working-server'
+  workflow_dispatch:
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Find last good server.py
+        run: |
+          echo "=== Checking recent commits with server.py ==="
+          git log --oneline --format="%H %s" -- server.py | head -20
+          
+          echo "=== Testing candidate commits ==="
+          # Check commits before July 5 (when the split happened)
+          for commit in $(git log --format=%H --since="2025-06-01" --until="2025-07-04" -- server.py | head -5); do
+            echo "--- Testing commit $commit ---"
+            git show $commit:server.py | head -5
+            echo "Lines: $(git show $commit:server.py | wc -l)"
+            echo "Has FastAPI: $(git show $commit:server.py | grep -c 'app = FastAPI' || echo 0)"
+            echo "Has /health: $(git show $commit:server.py | grep -c '/health' || echo 0)"
+            echo "Has static mount: $(git show $commit:server.py | grep -c 'app.mount' || echo 0)"
+          done
+          
+          echo "=== Restoring from best candidate (first one with all features) ==="
+          RESTORE_COMMIT=""
+          for commit in $(git log --format=%H --since="2025-06-01" --until="2025-07-04" -- server.py | head -5); do
+            HAS_FASTAPI=$(git show $commit:server.py | grep -c 'app = FastAPI' || echo 0)
+            HAS_HEALTH=$(git show $commit:server.py | grep -c '/health' || echo 0)
+            HAS_STATIC=$(git show $commit:server.py | grep -c 'app.mount' || echo 0)
+            if [ "$HAS_FASTAPI" -gt 0 ] && [ "$HAS_HEALTH" -gt 0 ] && [ "$HAS_STATIC" -gt 0 ]; then
+              RESTORE_COMMIT=$commit
+              echo "Found good commit: $commit"
+              break
+            fi
+          done
+          
+          if [ -z "$RESTORE_COMMIT" ]; then
+            echo "No perfect commit found, trying fallback..."
+            RESTORE_COMMIT=$(git log --format=%H --since="2025-06-01" --until="2025-07-04" -- server.py | head -1)
+          fi
+          
+          echo "Restoring from $RESTORE_COMMIT"
+          git show $RESTORE_COMMIT:server.py > server.py
+          
+          # Also clean up broken files
+          rm -rf server/__init__.py server/routes server/services server/models server/api 2>/dev/null || true
+          
+          git add server.py
+          git status
+          
+          git config user.name "Ditto"
+          git config user.email "ditto@heyditto.ai"
+          git commit -m "fix: restore working server.py from commit $RESTORE_COMMIT"
+          git push origin main
