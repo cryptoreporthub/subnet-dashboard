@@ -1,0 +1,26 @@
+name: Inspect server_original.py routes
+on:
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          echo "=== Total lines ==="
+          wc -l server_original.py
+          echo "=== Last 30 lines ==="
+          tail -30 server_original.py
+          echo "=== Searching for app = FastAPI ==="
+          grep -n "app = FastAPI" server_original.py | head -5
+          echo "=== Searching for @app.get ==="
+          grep -n "@app.get" server_original.py | head -20
+          echo "=== Searching for app.mount ==="
+          grep -n "app.mount" server_original.py | head -10
+          echo "=== Searching for /health ==="
+          grep -n "/health" server_original.py | head -10
+          echo "=== Searching for /static ==="
+          grep -n "/static" server_original.py | head -10
+          echo "=== Searching for uvicorn ==="
+          grep -n "uvicorn" server_original.py | head -10
