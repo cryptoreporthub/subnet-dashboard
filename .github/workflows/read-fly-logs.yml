@@ -1,0 +1,17 @@
+name: Read Fly logs
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.read-logs-trigger']
+
+jobs:
+  logs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Get recent logs
+        run: flyctl logs --app subnet-dashboard --since 5m || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
