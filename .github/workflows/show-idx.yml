@@ -1,0 +1,11 @@
+name: Show index 700-710
+on:
+  workflow_dispatch:
+  push:
+    paths: [".show-idx-trigger"]
+jobs:
+  show:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sed -n '700,710p' templates/index.html && wc -l templates/index.html
