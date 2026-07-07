@@ -1,0 +1,31 @@
+name: Test Docker build locally
+on:
+  push:
+    paths: [".docker-build-trigger"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: |
+          docker build -t subnet-dashboard:test . 2>&1 | tee docker_build.log
+        continue-on-error: true
+      - name: Show error if build failed
+        run: |
+          if grep -q "error" docker_build.log; then
+            echo "DOCKER BUILD HAD ERRORS"
+            grep -i "error" docker_build.log | tail -20
+          else
+            echo "DOCKER BUILD APPEARED OK"
+          fi
+      - name: Test run the container
+        run: |
+          docker run -d --name test-deploy -p 8080:8080 subnet-dashboard:test
+          sleep 5
+          curl -v http://localhost:8080/health || echo "HEALTH FAILED"
+          docker logs test-deploy 2>&1 | tail -30
+          docker stop test-deploy
+        continue-on-error: true
