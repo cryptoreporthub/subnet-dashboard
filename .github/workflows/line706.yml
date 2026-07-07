@@ -1,0 +1,25 @@
+name: Find line 706 in index.html
+on:
+  workflow_dispatch:
+  push:
+    paths: [".find-line706-trigger"]
+permissions:
+  contents: write
+jobs:
+  find:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show line 706
+        run: sed -n '700,710p' templates/index.html
+      - name: Create diagnostic file
+        run: |
+          echo "=== lines 700-710 ===" > line706.txt
+          sed -n '700,710p' templates/index.html >> line706.txt
+      - name: Commit
+        run: |
+          git config user.name "Ditto"
+          git config user.email "ditto@heyditto.ai"
+          git add line706.txt
+          git commit -m "diagnostic: index.html line 706"
+          git push
