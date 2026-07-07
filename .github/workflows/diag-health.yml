@@ -1,0 +1,40 @@
+name: Diagnose health route
+on:
+  workflow_dispatch:
+  push:
+    paths: ['.trigger-health-diag']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -r requirements.txt
+      - run: |
+          python -c "
+          import server_original
+          from fastapi.routing import APIRoute, Mount
+          routes = [(type(r).__name__, getattr(r, 'path', getattr(r, 'name', '?'))) for r in server_original.app.routes]
+          for t, p in routes:
+              print(f'{t:20} {p}')
+          health = [p for t, p in routes if 'health' in str(p).lower()]
+          print('HEALTH ROUTES:', health)
+          "
+      - run: |
+          python -c "
+          import threading, time, sys
+          from server_original import app
+          import uvicorn
+          import urllib.request
+          def serve():
+              uvicorn.run(app, host='127.0.0.1', port=9999, log_level='error')
+          t = threading.Thread(target=serve, daemon=True)
+          t.start()
+          time.sleep(3)
+          try:
+              resp = urllib.request.urlopen('http://127.0.0.1:9999/health')
+              print('HEALTH STATUS:', resp.status)
+              print('HEALTH BODY:', resp.read().decode()[:200])
+          except Exception as e:
+              print('HEALTH ERROR:', type(e).__name__, e)
+          "
