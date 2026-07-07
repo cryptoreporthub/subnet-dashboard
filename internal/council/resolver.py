@@ -366,7 +366,6 @@ def expire_stale_predictions(
 def resolve_due_predictions(
     subnets: Optional[List[Dict[str, Any]]] = None,
     *,
-    horizon_h
     horizon_hours: float = 24.0,
     tolerance: float = 0.5,
 ) -> Dict[str, Any]:
