@@ -1,0 +1,30 @@
+name: Curl endpoints after deploy
+on:
+  workflow_dispatch:
+  push:
+    paths: [".curl-trigger"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for deploy propagation
+        run: sleep 10
+      - name: curl /
+        run: |
+          echo ">>> GET /"
+          curl -s -o /dev/null -w "%{http_code}
+" https://subnet-dashboard.fly.dev/
+      - name: curl /health
+        run: |
+          echo ">>> GET /health"
+          curl -v https://subnet-dashboard.fly.dev/health 2>&1 | head -20
+      - name: curl /api/health
+        run: |
+          echo ">>> GET /api/health"
+          curl -v https://subnet-dashboard.fly.dev/api/health 2>&1 | head -20
+      - name: curl /api/subnets
+        run: |
+          echo ">>> GET /api/subnets"
+          curl -s -o /dev/null -w "%{http_code}
+" https://subnet-dashboard.fly.dev/api/subnets
