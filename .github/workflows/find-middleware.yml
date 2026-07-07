@@ -1,0 +1,23 @@
+name: Find middleware
+on:
+  push:
+    paths: [".find-middleware-trigger"]
+  workflow_dispatch:
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: grep repo for middleware/exception handlers
+        run: |
+          echo "=== add_middleware ==="
+          grep -rn "add_middleware" --include="*.py" . || true
+          echo "=== exception_handler ==="
+          grep -rn "exception_handler" --include="*.py" . || true
+          echo "=== RequestValidationError ==="
+          grep -rn "RequestValidationError" --include="*.py" . || true
+          echo "=== ValidationError ==="
+          grep -rn "ValidationError" --include="*.py" . || true
+          echo "=== 422 ==="
+          grep -rn "422" --include="*.py" . || true
