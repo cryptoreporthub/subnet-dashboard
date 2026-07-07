@@ -1041,6 +1041,20 @@ def api_council_weights():
         }
 
 
+@app.get("/api/weights")
+def api_weights():
+    """Get current expert weights via LearningEngine."""
+    try:
+        engine = LearningEngine()
+        return engine.get_stats()
+    except Exception as exc:
+        logger.warning("api_weights failed: %s", exc)
+        return {
+            "status": "error",
+            "error": str(exc),
+        }
+
+
 # ---------------------------------------------------------------------------
 # Judge Council API endpoints
 # ---------------------------------------------------------------------------
