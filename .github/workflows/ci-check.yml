@@ -1,0 +1,39 @@
+name: CI Smoke Test
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  ci-smoke-test:
+    name: CI Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      
+      - name: Run smoke test
+        run: |
+          python -c "
+          import sys
+          # Verify all core imports work
+          from server_original import app
+          from fastapi.testclient import TestClient
+          client = TestClient(app)
+          r = client.get('/api/health')
+          assert r.status_code == 200, f'Health failed: {r.status_code}'
+          r = client.get('/api/judges')
+          assert r.status_code == 200, f'Judges failed: {r.status_code}'
+          print('CI SMOKE TEST PASS')
+          "
