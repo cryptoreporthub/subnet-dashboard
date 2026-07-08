@@ -1,8 +1,3 @@
 .pytest_cache/
 __pycache__/
-*.pycdata/
-*.db
-__pycache__/
 *.pyc
-.pytest_cache/
-.env
