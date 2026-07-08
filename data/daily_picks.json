@@ -73,7 +73,7 @@
       "expert_contributions": {
         "quant": 1.0,
         "hype": 0.7,
-        "contrarian": 0.25,
+        "dark_horse": 0.25,
         "technical": 0.85
       },
       "scenario_tags": {
@@ -1030,7 +1030,7 @@
       "expert_contributions": {
         "quant": 0.854,
         "hype": 0.609,
-        "contrarian": 0.25,
+        "dark_horse": 0.25,
         "technical": 0.75
       },
       "scenario_tags": {
