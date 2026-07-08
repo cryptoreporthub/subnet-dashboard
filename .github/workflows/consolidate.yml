@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   consolidate:
@@ -23,6 +22,15 @@ jobs:
         run: |
           python3 - <<'PY'
           import os, re, subprocess, glob
+
+          # Guard: if server.py is already the FastAPI app, skip (prevents re-run loops)
+          try:
+              cur = open("server.py", "r", encoding="utf-8", errors="ignore").read()
+              if "FastAPI(" in cur:
+                  print("ALREADY_CONSOLIDATED")
+                  raise SystemExit(0)
+          except FileNotFoundError:
+              pass
 
           def git(*a):
               subprocess.run(["git", *a], check=True)
@@ -73,13 +81,13 @@ jobs:
           open(fly_path, "w", encoding="utf-8").write(fly)
           git("add", fly_path)
 
-          # 8. remove this workflow file so the PR stays focused
+          # 8. remove this workflow file so the pushed commit does NOT re-trigger this workflow
           git("rm", "-f", ".github/workflows/consolidate.yml")
 
           print("CONSOLIDATION_DONE")
           PY
 
-      - name: Commit, push result branch, open PR
+      - name: Commit and push to branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -87,9 +95,4 @@ jobs:
           git config user.name "Ditto"
           git add -A
           git commit -m "refactor: consolidate to canonical FastAPI server.py; fix deps/entrypoint, drop dead guard" || echo "nothing to commit"
-          BRANCH="fastapi-consolidated"
-          git checkout -b "$BRANCH"
-          git push origin "$BRANCH" --force-with-lease
-          gh pr create --base main --head "$BRANCH" \
-            --title "Consolidate subnet-dashboard to canonical FastAPI server.py" \
-            --body "Restores the proven-working FastAPI app as server.py (from c2103ddc), aligns requirements/Dockerfile/Procfile to uvicorn+fastapi, and removes the dead deploy-guard that blocked FastAPI deploys. Makes main match the currently-live deployment." || echo "PR_ALREADY_EXISTS_OR_FAILED"
+          git push origin HEAD:refs/heads/restore-fastapi-server
