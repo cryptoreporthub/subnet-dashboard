@@ -15,7 +15,7 @@ jobs:
       - name: Checkout full history
         uses: actions/checkout@v4
         with:
-          token: ${{ github.token }}
+          token: ${{ secrets.REPO_PAT }}
           fetch-depth: 0
 
       - name: Consolidate
@@ -80,12 +80,12 @@ jobs:
 
       - name: Commit and push to a new branch
         env:
-          GH_TOKEN: ${{ github.token }}
+          REPO_PAT: ${{ secrets.REPO_PAT }}
         run: |
           git config user.email "ditto@heyditto.ai"
           git config user.name "Ditto"
           git add -A
           git commit -m "refactor: consolidate to canonical FastAPI server.py; fix deps/entrypoint, drop dead guard" || echo "nothing to commit"
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/cryptoreporthub/subnet-dashboard.git"
+          git remote set-url origin "https://x-access-token:${REPO_PAT}@github.com/cryptoreporthub/subnet-dashboard.git"
           git push origin HEAD:refs/heads/fastapi-consolidated
-# retrigger: push via explicit token-in-url
+# retrigger: push via secrets.REPO_PAT
