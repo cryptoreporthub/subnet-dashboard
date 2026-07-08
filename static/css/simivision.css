@@ -185,3 +185,83 @@
   color: var(--accent-cyan);
   background: rgba(34, 211, 238, 0.12);
 }
+
+/* Judge Council panel styles */
+.judge-council-panel {
+  margin: 1em 0;
+  padding: 1em;
+  border: 1px solid #333;
+  border-radius: 8px;
+}
+
+.judge-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1em;
+}
+
+.judge-section {
+  flex: 1;
+  min-width: 280px;
+}
+
+.judge-card {
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 0.8em;
+  margin: 0.5em 0;
+}
+
+.judge-header {
+  display: flex;
+  justify-content: space-between;
+}
+
+.judge-verdict {
+  font-weight: bold;
+  margin: 0.3em 0;
+}
+
+.judge-verdict.long {
+  color: #4caf50;
+}
+
+.judge-verdict.short {
+  color: #f44336;
+}
+
+.judge-score-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-size: 0.85em;
+  margin: 0.2em 0;
+}
+
+.judge-score-bar .label {
+  min-width: 50px;
+}
+
+.judge-score-bar .bar {
+  height: 8px;
+  background: #4fc3f7;
+  border-radius: 4px;
+  transition: width 0.5s;
+}
+
+.judge-consensus {
+  margin-top: 0.5em;
+  font-size: 0.9em;
+  color: #ccc;
+}
+
+.portfolio-stats {
+  display: flex;
+  gap: 1em;
+}
+
+.judge-refreshed {
+  margin-top: 0.5em;
+  font-size: 0.8em;
+  color: #888;
+}
