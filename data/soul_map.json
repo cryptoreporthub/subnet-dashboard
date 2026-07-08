@@ -23,7 +23,7 @@
                 "hype_index": 90.0
               }
             },
-            "contrarian": {
+            "dark_horse": {
               "score": 0.8,
               "signal": "buy",
               "metrics": {
@@ -52,7 +52,7 @@
                 "hype_index": 30.0
               }
             },
-            "contrarian": {
+            "dark_horse": {
               "score": 0.2,
               "signal": "sell",
               "metrics": {
@@ -90,7 +90,7 @@
                   "hype_index": 90.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.8,
                 "signal": "buy",
                 "metrics": {
@@ -119,7 +119,7 @@
                   "hype_index": 30.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.2,
                 "signal": "sell",
                 "metrics": {
@@ -2081,7 +2081,7 @@
                   "hype_index": 90.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.8,
                 "signal": "buy",
                 "metrics": {
@@ -2110,7 +2110,7 @@
                   "hype_index": 30.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.2,
                 "signal": "sell",
                 "metrics": {
@@ -4072,7 +4072,7 @@
                   "hype_index": 90.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.8,
                 "signal": "buy",
                 "metrics": {
@@ -4101,7 +4101,7 @@
                   "hype_index": 30.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.2,
                 "signal": "sell",
                 "metrics": {
@@ -6063,7 +6063,7 @@
                   "hype_index": 90.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.8,
                 "signal": "buy",
                 "metrics": {
@@ -6092,7 +6092,7 @@
                   "hype_index": 30.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.2,
                 "signal": "sell",
                 "metrics": {
@@ -8054,7 +8054,7 @@
                   "hype_index": 90.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.8,
                 "signal": "buy",
                 "metrics": {
@@ -8083,7 +8083,7 @@
                   "hype_index": 30.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.2,
                 "signal": "sell",
                 "metrics": {
@@ -10045,7 +10045,7 @@
                   "hype_index": 90.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.8,
                 "signal": "buy",
                 "metrics": {
@@ -10074,7 +10074,7 @@
                   "hype_index": 30.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.2,
                 "signal": "sell",
                 "metrics": {
@@ -12036,7 +12036,7 @@
                   "hype_index": 90.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.8,
                 "signal": "buy",
                 "metrics": {
@@ -12065,7 +12065,7 @@
                   "hype_index": 30.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.2,
                 "signal": "sell",
                 "metrics": {
@@ -14027,7 +14027,7 @@
                   "hype_index": 90.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.8,
                 "signal": "buy",
                 "metrics": {
@@ -14056,7 +14056,7 @@
                   "hype_index": 30.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.2,
                 "signal": "sell",
                 "metrics": {
@@ -16018,7 +16018,7 @@
                   "hype_index": 90.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.8,
                 "signal": "buy",
                 "metrics": {
@@ -16047,7 +16047,7 @@
                   "hype_index": 30.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.2,
                 "signal": "sell",
                 "metrics": {
@@ -18009,7 +18009,7 @@
                   "hype_index": 90.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.8,
                 "signal": "buy",
                 "metrics": {
@@ -18038,7 +18038,7 @@
                   "hype_index": 30.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.2,
                 "signal": "sell",
                 "metrics": {
@@ -20000,7 +20000,7 @@
                   "hype_index": 90.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.8,
                 "signal": "buy",
                 "metrics": {
@@ -20029,7 +20029,7 @@
                   "hype_index": 30.0
                 }
               },
-              "contrarian": {
+              "dark_horse": {
                 "score": 0.2,
                 "signal": "sell",
                 "metrics": {
