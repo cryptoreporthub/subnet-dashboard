@@ -96,3 +96,4 @@ jobs:
           git add -A
           git commit -m "refactor: consolidate to canonical FastAPI server.py; fix deps/entrypoint, drop dead guard" || echo "nothing to commit"
           git push origin HEAD:refs/heads/restore-fastapi-server
+# retrigger: workflow permissions set to read+write on 2026-07-08
