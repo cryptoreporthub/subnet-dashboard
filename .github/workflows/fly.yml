@@ -4,10 +4,45 @@ on:
     branches:
       - main
 jobs:
+  deploy-guard:
+    name: Deploy Guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Deploy Guards
+        run: |
+          set -e
+          echo "=== GUARD 1: uvicorn/fastapi must NOT be in requirements.txt ==="
+          if grep -niE "uvicorn|fastapi" requirements.txt; then
+            echo "GUARD FAIL: uvicorn/fastapi present in requirements.txt"
+            exit 1
+          fi
+          echo "=== GUARD 2: Procfile must NOT reference uvicorn ==="
+          if grep -ni uvicorn Procfile 2>/dev/null; then
+            echo "GUARD FAIL: uvicorn referenced in Procfile"
+            exit 1
+          fi
+          echo "=== GUARD 3: no stray server/ package or server_original.py ==="
+          if [ -d server ] || [ -f server_original.py ]; then
+            echo "GUARD FAIL: server/ package or server_original.py present"
+            exit 1
+          fi
+          echo "=== GUARD 4: no 'contrarian' string anywhere in tracked tree ==="
+          if grep -rni "contrarian" --include="*.py" --include="*.json" --include="*.html" --include="*.js" . | grep -v ".git/"; then
+            echo "GUARD FAIL: 'contrarian' string still present (must be dark_horse)"
+            exit 1
+          fi
+          echo "=== GUARD 5: gunicorn present in Procfile ==="
+          if ! grep -ni gunicorn Procfile 2>/dev/null; then
+            echo "GUARD FAIL: gunicorn missing from Procfile"
+            exit 1
+          fi
+          echo "ALL GUARDS PASSED"
   deploy:
     name: Deploy app
     runs-on: ubuntu-latest
     concurrency: deploy-group
+    needs: deploy-guard
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
