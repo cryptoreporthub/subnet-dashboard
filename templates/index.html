@@ -1,539 +1,1358 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="wrap">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Subnet Pulse — Live Bittensor Intelligence</title>
+  <meta name="description" content="Live intelligence for the Bittensor subnet economy.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #0B0F19;
+      --bg-surface: #111827;
+      --bg-elevated: #1F2937;
+      --bg-overlay: rgba(11, 15, 25, 0.92);
+      --border-subtle: #374151;
+      --border-accent: rgba(34, 211, 238, 0.25);
+      --border-radius-card: 16px;
+      --border-radius-input: 12px;
+      --border-radius-pill: 9999px;
+      --text-primary: #F9FAFB;
+      --text-secondary: #9CA3AF;
+      --text-muted: #6B7280;
+      --accent-cyan: #22D3EE;
+      --accent-violet: #8B5CF6;
+      --status-active: #10B981;
+      --status-at-risk: #F59E0B;
+      --status-deprecated: #F43F5E;
+      --status-bootstrap: #3B82F6;
+      --status-unknown: #6B7280;
+      --action-accumulate: #10B981;
+      --action-hold: #F59E0B;
+      --action-reduce: #F43F5E;
+      --overvalued: #FB7185;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+      --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35);
+      --shadow-glow: 0 0 24px rgba(34, 211, 238, 0.12);
+      --font-ui: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 24px;
+      --space-6: 32px;
+      --space-7: 48px;
+      --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
 
-  <!-- ===================== STICKY HEADER ===================== -->
-  <header class="top">
-    <div class="top-inner">
-      <div class="logo">
-        <div class="logo-mark">S</div>
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+    }
+
+    body {
+      font-family: var(--font-ui);
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .aurora {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(34, 211, 238, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at 85% 15%, rgba(139, 92, 246, 0.08) 0%, transparent 45%),
+        radial-gradient(circle at 50% 90%, rgba(34, 211, 238, 0.04) 0%, transparent 40%);
+    }
+
+    .grid-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background-image: radial-gradient(circle, rgba(34, 211, 238, 0.035) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: var(--space-5);
+    }
+
+    /* Nav */
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+      margin-bottom: var(--space-6);
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
+      box-shadow: var(--shadow-glow);
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--bg-base);
+    }
+
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0;
+    }
+
+    .brand-subtitle {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin: 0;
+    }
+
+    .live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: var(--border-radius-pill);
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      color: var(--status-active);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--status-active);
+      box-shadow: 0 0 8px var(--status-active);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.85); }
+    }
+
+    /* Hero */
+    .hero {
+      margin-bottom: var(--space-6);
+    }
+
+    .hero-headline {
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin: 0 0 var(--space-2);
+      background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-lead {
+      color: var(--text-secondary);
+      font-size: 1.05rem;
+      max-width: 640px;
+      margin: 0 0 var(--space-5);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--space-4);
+    }
+
+    @media (max-width: 1023px) {
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 639px) {
+      .summary-grid { grid-template-columns: 1fr; }
+      .app { padding: var(--space-4); }
+    }
+
+    .summary-card {
+      position: relative;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-card);
+      padding: var(--space-4);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+      transition: transform var(--transition-base), box-shadow var(--transition-base);
+    }
+
+    .summary-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      padding: 1px;
+      background: linear-gradient(135deg, var(--border-accent), transparent 60%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+
+    .summary-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-card), var(--shadow-glow);
+    }
+
+    .summary-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-secondary);
+      margin: 0 0 var(--space-2);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .summary-value {
+      font-family: var(--font-mono);
+      font-size: 2rem;
+      font-weight: 600;
+      line-height: 1.1;
+      margin: 0 0 var(--space-2);
+    }
+
+    .summary-meta {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin: 0;
+    }
+
+    .summary-card.accent .summary-value { color: var(--accent-cyan); }
+    .summary-card.violet .summary-value { color: var(--accent-violet); }
+    .summary-card.success .summary-value { color: var(--status-active); }
+    .summary-card.warning .summary-value { color: var(--status-at-risk); }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      margin-bottom: var(--space-4);
+      flex-wrap: wrap;
+    }
+
+    .search-wrap {
+      position: relative;
+      flex: 1 1 260px;
+      min-width: 220px;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .search-input {
+      width: 100%;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-input);
+      padding: 11px 14px 11px 40px;
+      color: var(--text-primary);
+      font-family: var(--font-ui);
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+
+    .search-input::placeholder { color: var(--text-muted); }
+    .search-input:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12);
+    }
+
+    .filter-pills {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      appearance: none;
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      border-radius: var(--border-radius-pill);
+      padding: 7px 14px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .pill:hover { border-color: var(--border-accent); color: var(--text-primary); }
+    .pill.active {
+      background: rgba(34, 211, 238, 0.12);
+      border-color: rgba(34, 211, 238, 0.4);
+      color: var(--accent-cyan);
+    }
+
+    .sort-select {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      border-radius: var(--border-radius-input);
+      padding: 8px 12px;
+      font-size: 0.85rem;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .sort-select:focus { border-color: var(--accent-cyan); }
+
+    .view-toggle {
+      display: flex;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-input);
+      overflow: hidden;
+      background: var(--bg-surface);
+    }
+
+    .view-btn {
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      padding: 8px 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .view-btn.active {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+    }
+
+    .results-meta {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      margin-bottom: var(--space-4);
+    }
+
+    /* Table */
+    .table-wrap {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-card);
+      overflow: hidden;
+      box-shadow: var(--shadow-card);
+      overflow-x: auto;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+      min-width: 900px;
+    }
+
+    .data-table th {
+      text-align: left;
+      padding: 14px 16px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-secondary);
+      background: rgba(17, 24, 39, 0.8);
+      border-bottom: 1px solid var(--border-subtle);
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .data-table th:hover { color: var(--text-primary); }
+    .data-table th .sort-icon { margin-left: 4px; opacity: 0.5; }
+    .data-table th.sorted .sort-icon { opacity: 1; color: var(--accent-cyan); }
+
+    .data-table td {
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(55, 65, 81, 0.5);
+      color: var(--text-primary);
+      vertical-align: middle;
+    }
+
+    .data-table tbody tr {
+      transition: background var(--transition-fast);
+      cursor: pointer;
+    }
+
+    .data-table tbody tr:hover { background: rgba(31, 41, 55, 0.5); }
+    .data-table tbody tr:last-child td { border-bottom: none; }
+
+    .col-id { width: 60px; }
+    .col-name { min-width: 160px; }
+    .col-status { width: 110px; }
+    .col-num { text-align: right; }
+    .data-table th.col-num { text-align: right; }
+
+    .subnet-name {
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .subnet-id {
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: var(--border-radius-pill);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: capitalize;
+      border: 1px solid transparent;
+    }
+
+    .status-badge::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .status-active { color: var(--status-active); background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.25); }
+    .status-at-risk { color: var(--status-at-risk); background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.25); }
+    .status-deprecated { color: var(--status-deprecated); background: rgba(244, 63, 94, 0.1); border-color: rgba(244, 63, 94, 0.25); }
+    .status-bootstrap { color: var(--status-bootstrap); background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.25); }
+    .status-unknown { color: var(--status-unknown); background: rgba(107, 114, 128, 0.1); border-color: rgba(107, 114, 128, 0.25); }
+
+    .status-active::before { animation: pulse 2s infinite; }
+
+    .action-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: var(--border-radius-pill);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: capitalize;
+    }
+
+    .action-accumulate { color: var(--action-accumulate); background: rgba(16, 185, 129, 0.1); }
+    .action-hold { color: var(--action-hold); background: rgba(245, 158, 11, 0.1); }
+    .action-reduce { color: var(--action-reduce); background: rgba(244, 63, 94, 0.1); }
+    .action-none { color: var(--text-muted); background: rgba(107, 114, 128, 0.1); }
+
+    .risk-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: var(--border-radius-pill);
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--overvalued);
+      border: 1px solid rgba(251, 113, 133, 0.35);
+      background: rgba(251, 113, 133, 0.08);
+      margin-left: 6px;
+    }
+
+    .bar-bg {
+      display: inline-block;
+      width: 64px;
+      height: 6px;
+      background: var(--bg-elevated);
+      border-radius: 3px;
+      overflow: hidden;
+      vertical-align: middle;
+      margin-left: 8px;
+    }
+
+    .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-cyan), var(--accent-violet));
+      border-radius: 3px;
+      min-width: 2px;
+    }
+
+    /* Cards view */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: var(--space-4);
+    }
+
+    .subnet-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--border-radius-card);
+      padding: var(--space-4);
+      box-shadow: var(--shadow-card);
+      cursor: pointer;
+      transition: transform var(--transition-base), box-shadow var(--transition-base);
+    }
+
+    .subnet-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-card), var(--shadow-glow);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-3);
+      margin-bottom: var(--space-3);
+    }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .card-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-3);
+      margin: var(--space-3) 0;
+    }
+
+    .card-stat-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin: 0 0 2px;
+    }
+
+    .card-stat-value {
+      font-family: var(--font-mono);
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--text-primary);
+      margin: 0;
+    }
+
+    /* Detail panel */
+    .panel-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--transition-base);
+      z-index: 50;
+    }
+
+    .panel-backdrop.open { opacity: 1; pointer-events: auto; }
+
+    .detail-panel {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: min(440px, 100vw);
+      height: 100%;
+      background: var(--bg-overlay);
+      backdrop-filter: blur(16px);
+      border-left: 1px solid var(--border-subtle);
+      box-shadow: -8px 0 40px rgba(0, 0, 0, 0.5);
+      transform: translateX(100%);
+      transition: transform var(--transition-base);
+      z-index: 60;
+      overflow-y: auto;
+      padding: var(--space-5);
+    }
+
+    .detail-panel.open { transform: translateX(0); }
+
+    @media (max-width: 639px) {
+      .detail-panel {
+        width: 100%;
+        border-left: none;
+        border-top: 1px solid var(--border-subtle);
+        top: auto;
+        bottom: 0;
+        height: 88vh;
+        transform: translateY(100%);
+        border-radius: var(--border-radius-card) var(--border-radius-card) 0 0;
+      }
+      .detail-panel.open { transform: translateY(0); }
+    }
+
+    .panel-close {
+      position: absolute;
+      top: var(--space-4);
+      right: var(--space-4);
+      background: transparent;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      border-radius: 8px;
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .panel-close:hover { color: var(--text-primary); border-color: var(--accent-cyan); }
+
+    .panel-header { margin-bottom: var(--space-5); padding-right: 40px; }
+
+    .panel-name {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin: 0 0 var(--space-2);
+      letter-spacing: -0.02em;
+    }
+
+    .panel-meta {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+      margin-bottom: var(--space-3);
+    }
+
+    .panel-section {
+      margin-bottom: var(--space-5);
+      padding-bottom: var(--space-4);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .panel-section:last-of-type { border-bottom: none; }
+
+    .panel-section-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-secondary);
+      margin: 0 0 var(--space-3);
+    }
+
+    .consensus-gauge {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+    }
+
+    .gauge-ring {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: conic-gradient(var(--accent-cyan) var(--score-deg), var(--bg-elevated) var(--score-deg));
+      display: grid;
+      place-items: center;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .gauge-ring::before {
+      content: "";
+      position: absolute;
+      inset: 6px;
+      border-radius: 50%;
+      background: var(--bg-surface);
+    }
+
+    .gauge-value {
+      position: relative;
+      font-family: var(--font-mono);
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .expert-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-3);
+    }
+
+    .expert-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: var(--space-3);
+      text-align: center;
+    }
+
+    .expert-name {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      margin: 0 0 var(--space-2);
+    }
+
+    .expert-score {
+      font-family: var(--font-mono);
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin: 0 0 var(--space-1);
+    }
+
+    .expert-note {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin: 0;
+      word-break: break-word;
+    }
+
+    .metric-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(55, 65, 81, 0.5);
+    }
+
+    .metric-row:last-child { border-bottom: none; }
+
+    .metric-label { color: var(--text-secondary); font-size: 0.85rem; }
+    .metric-value { font-family: var(--font-mono); font-weight: 500; }
+
+    .source-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--accent-cyan);
+      text-decoration: none;
+      font-size: 0.85rem;
+      word-break: break-all;
+    }
+
+    .source-link:hover { text-decoration: underline; }
+
+    .empty-state {
+      text-align: center;
+      padding: var(--space-7) var(--space-4);
+      color: var(--text-secondary);
+    }
+
+    .empty-state h3 { margin: 0 0 var(--space-2); color: var(--text-primary); }
+
+    .toast {
+      position: fixed;
+      bottom: var(--space-5);
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      padding: 10px 18px;
+      border-radius: var(--border-radius-pill);
+      font-size: 0.85rem;
+      box-shadow: var(--shadow-card);
+      opacity: 0;
+      pointer-events: none;
+      transition: all var(--transition-base);
+      z-index: 70;
+    }
+
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    .skeleton {
+      background: linear-gradient(90deg, var(--bg-elevated) 25%, rgba(55, 65, 81, 0.6) 50%, var(--bg-elevated) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s infinite;
+      border-radius: 6px;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="aurora" aria-hidden="true"></div>
+  <div class="grid-overlay" aria-hidden="true"></div>
+
+  <div class="app">
+    <nav class="nav" aria-label="Primary">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">S</div>
         <div>
-          <div class="logo-text">Simi<span>Vision</span></div>
-          <div class="logo-sub">Subnet Intelligence Cockpit</div>
+          <h1 class="brand-title">Subnet Pulse</h1>
+          <p class="brand-subtitle">Live Bittensor intelligence</p>
         </div>
       </div>
-      <div class="src-tag">
-        DATA SOURCE: <b>{{ data_source|default('cache')|upper }}</b>
-        {% if usd_rate %}· TAO <b>${{ "%.2f"|format(usd_rate|float) }}</b>{% endif %}
+      <div class="live-pill" aria-live="polite">
+        <span class="live-dot" aria-hidden="true"></span>
+        <span>Live</span>
       </div>
-      <div class="header-actions">
-        <span class="live-pill"><span class="live-dot"></span>LIVE</span>
-        <span class="utc-clock" id="utcClock">--:--:-- UTC</span>
-      </div>
-    </div>
-  </header>
+    </nav>
 
-  {% if render_error %}
-  <div class="card card-muted mt-4" style="border-color: rgba(244,63,94,0.35);">
-    <div class="section-label" style="color:#ff3366;">RENDER NOTICE</div>
-    <div class="section-sub">A section failed to compute; showing safe defaults. {{ render_error }}</div>
-  </div>
-  {% endif %}
+    <header class="hero">
+      <h2 class="hero-headline">Mission control for the subnet economy.</h2>
+      <p class="hero-lead">Real-time registry health, consensus signals, and economic metrics across every Bittensor subnet. Surface opportunities, spot risk, and act with clarity.</p>
+      <div class="summary-grid" id="summary-grid" aria-live="polite" aria-busy="true">
+        <!-- Summary cards injected here -->
+      </div>
+    </header>
 
-  <!-- ===================== MARKET SNAPSHOT KPI STRIP ===================== -->
-  <div class="row">
-    <div class="section-label">Market Snapshot</div>
-    <h2 class="section-title">Bittensor Subnet Intelligence</h2>
-    <p class="section-sub">Live scanner across {{ market_intelligence.total|default(0) }} subnets · breadth
-      <b>{{ market_intelligence.breadth|default('neutral')|upper }}</b>
-    </p>
+    <section class="controls" aria-label="Filters and sorting">
+      <div class="toolbar">
+        <div class="search-wrap">
+          <span class="search-icon" aria-hidden="true">🔎</span>
+          <input type="search" id="search" class="search-input" placeholder="Search subnets by name, ID, or status…" autocomplete="off" aria-label="Search subnets">
+        </div>
+        <div class="filter-pills" role="group" aria-label="Status filters">
+          <button class="pill active" data-filter="all" type="button">All</button>
+          <button class="pill" data-filter="active" type="button">Active</button>
+          <button class="pill" data-filter="at-risk" type="button">At Risk</button>
+          <button class="pill" data-filter="deprecated" type="button">Deprecated</button>
+          <button class="pill" data-filter="bootstrap" type="button">Bootstrap</button>
+        </div>
+        <select id="sort" class="sort-select" aria-label="Sort by">
+          <option value="id">Sort by ID</option>
+          <option value="emission">Sort by Emission</option>
+          <option value="total_stake">Sort by Stake</option>
+          <option value="apy">Sort by APY</option>
+          <option value="social_mentions">Sort by Social</option>
+          <option value="consensus_score">Sort by Consensus</option>
+        </select>
+        <div class="view-toggle" role="group" aria-label="View mode">
+          <button class="view-btn active" data-view="table" type="button">Table</button>
+          <button class="view-btn" data-view="cards" type="button">Cards</button>
+        </div>
+      </div>
+      <p class="results-meta" id="results-meta">Loading registry…</p>
+    </section>
 
-    <div class="kpi-grid" style="grid-template-columns: repeat(6, 1fr);">
-      <div class="kpi-cell">
-        <div class="k">Subnets</div>
-        <div class="v">{{ market_intelligence.total|default(0) }}</div>
-        <div class="sub">{{ market_intelligence.gainers|default(0) }} gainers / {{ market_intelligence.losers|default(0) }} losers</div>
-      </div>
-      <div class="kpi-cell">
-        <div class="k">Avg 24h</div>
-        <div class="v">{{ "%+.2f"|format(market_intelligence.avg_change_24h|default(0)|float) }}%</div>
-        <div class="sub">24h change</div>
-      </div>
-      <div class="kpi-cell">
-        <div class="k">Avg APY</div>
-        <div class="v">{{ "%.2f"|format(market_intelligence.avg_apy|default(0)|float) }}%</div>
-        <div class="sub">stake yield</div>
-      </div>
-      <div class="kpi-cell">
-        <div class="k">Top Gainer</div>
-        <div class="v" style="font-size:15px;">{{ market_intelligence.top_gainer.name if market_intelligence.top_gainer else '—' }}</div>
-        <div class="sub">{{ "%+.2f"|format((market_intelligence.top_gainer.change|default(0))|float) }}% · 24h</div>
-      </div>
-      <div class="kpi-cell">
-        <div class="k">Top Loser</div>
-        <div class="v" style="font-size:15px;">{{ market_intelligence.top_loser.name if market_intelligence.top_loser else '—' }}</div>
-        <div class="sub">{{ "%+.2f"|format((market_intelligence.top_loser.change|default(0))|float) }}% · 24h</div>
-      </div>
-      <div class="kpi-cell">
-        <div class="k">TAO Price</div>
-        <div class="v">${{ "%.2f"|format((market_intelligence.tao_price_usd|default(usd_rate|default(0)))|float) }}</div>
-        <div class="sub">market cap ${{ "{:,.0f}".format(market_intelligence.total_market_cap_usd|default(0)|float) }}</div>
-      </div>
-    </div>
+    <main id="main-stage" aria-live="polite">
+      <!-- Table or cards injected here -->
+    </main>
+
+    <footer style="margin-top: var(--space-7); color: var(--text-muted); font-size: 0.8rem; text-align: center;">
+      <p>Data sourced from the on-chain registry. <a href="/health" style="color: var(--accent-cyan);">Health check</a> · <a href="/api/registry" style="color: var(--accent-cyan);">Raw registry</a></p>
+    </footer>
   </div>
 
-  <!-- ===================== SIMIVISION TOP PICKS ===================== -->
-  <div class="row">
-    <div class="section-label">SimiVision Top Picks</div>
-    <h2 class="section-title">Council Conviction Ranking</h2>
-    <p class="section-sub">Top 6 subnets by emission, yield & momentum — color-coded conviction indicators (red / gold / lime / cyan-green).</p>
+  <div class="panel-backdrop" id="panel-backdrop" aria-hidden="true"></div>
+  <aside class="detail-panel" id="detail-panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" tabindex="-1">
+    <button class="panel-close" id="panel-close" aria-label="Close details">✕</button>
+    <div id="panel-content"></div>
+  </aside>
 
-    {% if simivision_picks %}
-    <div class="picks">
-      {% for pick in simivision_picks %}
-      {% set conv = (pick.conviction|default(0))|int %}
-      {% set tier = 'tier-cyan' if conv > 80 else ('tier-lime' if conv > 60 else ('tier-gold' if conv > 40 else 'tier-red')) %}
-      {% set rec = (pick.recommendation|default('WATCH'))|string|upper %}
-      {% set sell_active = pick.sell.active if pick.sell is mapping else false %}
-      {% set hot_active = pick.hot.active if pick.hot is mapping else false %}
-      <div class="pick-card {{ 'sell-accent' if sell_active else '' }}">
-        <div class="pick-rank">#{{ pick.rank|default(loop.index) }}</div>
-        <div class="pick-name pick-name-lg">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
-        <div class="pick-meta">SN{{ pick.netuid }} · {{ "%.2f"|format((pick.emission|default(0))|float) }} TAO/day · {{ "%.1f"|format((pick.apy|default(0))|float) }}% APY</div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-        <div class="pick-row">
-          <div class="conviction-wrap">
-            <div class="conviction-lbl">Conviction</div>
-            <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ conv }}%;"></div></div>
-            <div class="pred-line">{{ "%+.2f"|format((pick.price_change_24h|default(0))|float) }}% 24h · ${{ "%.4f"|format((pick.price|default(0))|float) }}</div>
-          </div>
-          <div class="conv-ring {{ tier }}" style="--ring-pct: {{ conv }};">
-            <svg viewBox="0 0 46 46">
-              <circle class="conv-ring-bg" cx="23" cy="23" r="20"></circle>
-              <circle class="conv-ring-fg" cx="23" cy="23" r="20"></circle>
-            </svg>
-            <div class="conv-ring-val">{{ conv }}</div>
-          </div>
-        </div>
+  <script>
+    (function () {
+      'use strict';
 
-        <div class="tags" style="margin-top:12px;">
-          {% set rec_type = (pick.recommendation_type|default('trade'))|string|lower %}
-          {% if rec == 'BUY' and rec_type == 'stake' %}
-          <span class="badge stake-badge">STAKE</span>
-          {% else %}
-          <span class="badge {% if rec == 'BUY' %}badge-buy{% elif rec == 'SELL' %}badge-sell{% elif rec == 'HOLD' %}badge-hold{% else %}badge-watch{% endif %}">{{ rec }}</span>
-          {% endif %}
-          {% if sell_active %}<span class="badge badge-sell">SELL ALERT</span>{% elif hot_active %}<span class="badge badge-hot">HOT</span>{% endif %}
-          {% if pick.prediction and pick.prediction.predicted_pct is not none %}
-          <span class="badge badge-watch pred-badge">PRED {{ "%+.1f"|format((pick.prediction.predicted_pct|default(0))|float) }}%</span>
-          {% endif %}
-        </div>
+      const state = {
+        subnets: [],
+        summary: null,
+        filter: 'all',
+        search: '',
+        sort: 'id',
+        sortDesc: false,
+        view: 'table',
+        maxValues: {},
+      };
 
-        {% if pick.reasons %}
-        <ul class="reasons">
-          {% for r in pick.reasons[:3] %}<li>{{ r }}</li>{% endfor %}
-        </ul>
-        {% endif %}
+      const els = {
+        summaryGrid: document.getElementById('summary-grid'),
+        search: document.getElementById('search'),
+        sort: document.getElementById('sort'),
+        resultsMeta: document.getElementById('results-meta'),
+        mainStage: document.getElementById('main-stage'),
+        panel: document.getElementById('detail-panel'),
+        backdrop: document.getElementById('panel-backdrop'),
+        panelContent: document.getElementById('panel-content'),
+        panelClose: document.getElementById('panel-close'),
+        toast: document.getElementById('toast'),
+      };
 
-        {% if pick.prediction and pick.prediction.statement %}
-        <div class="pred-line glow-text">{{ pick.prediction.statement }}</div>
-        {% endif %}
+      const statusClass = (s) => 'status-' + (s || 'unknown');
+      const actionClass = (a) => 'action-' + (a || 'none');
 
-        {% if pick.sparkline and pick.sparkline|length > 1 %}
-        <div class="spark-wrap" style="margin-top:12px;">
-          <canvas class="spark" width="96" height="36" data-spark="{{ pick.sparkline|join(',') }}"></canvas>
-        </div>
-        {% endif %}
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <div class="card card-muted"><p class="empty">Council is convening — no SimiVision picks available yet.</p></div>
-    {% endif %}
-  </div>
-
-  <!-- ===================== HOUR / DAY PICKS ===================== -->
-  <div class="row">
-    <div class="section-label">Hour / Day Picks</div>
-    <h2 class="section-title">State-Vector Leaderboard</h2>
-    <p class="section-sub">Top 3 subnets by short-horizon (1h) and 24h Council state-vector scores — conviction bars color-coded by confidence.</p>
-
-    <div class="two-col">
-      <div class="card">
-        <div class="card-head"><h3>Hour Horizon</h3><span class="src-tag">top 3 · 1h lens</span></div>
-        {% set hp = hour_picks|safe_list %}
-        {% if hp %}
-        <div class="picks">
-          {% for pick in hp %}
-          {% set conf = ((pick.confidence|default(0))|float * 100)|round %}
-          {% set tier = 'tier-cyan' if conf > 75 else ('tier-lime' if conf > 55 else ('tier-gold' if conf > 35 else 'tier-red')) %}
-          {% set sig = pick.signals if pick.signals is mapping else {} %}
-          <div class="pick-card">
-            <div class="pick-rank">#{{ loop.index }}</div>
-            <div class="pick-name pick-name-lg">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
-            <div class="pick-meta">SN{{ pick.netuid }} · score <b>{{ "%.1f"|format((pick.score|default(0))|float) }}</b></div>
-
-            <div class="conviction-bar" style="margin-top:8px;"><div class="conviction-fill {{ tier }}" style="width: {{ conf }}%;"></div></div>
-
-            <div class="kpi-grid" style="grid-template-columns: repeat(3,1fr); margin-top:8px;">
-              <div class="kpi-cell"><div class="k">24h</div><div class="v">{{ "%+.2f"|format((sig.price_change_24h|default(0))|float) }}%</div></div>
-              <div class="kpi-cell"><div class="k">APY</div><div class="v">{{ "%.1f"|format((sig.apy|default(0))|float) }}%</div></div>
-              <div class="kpi-cell"><div class="k">Emission</div><div class="v">{{ "%.2f"|format((sig.emission|default(0))|float) }}</div></div>
-            </div>
-
-            {% for tk, tv in (pick.scenario_tags or {}).items() %}<span class="badge badge-watch">{{ tk }}: {{ tv }}</span>{% endfor %}
-          </div>
-          {% endfor %}
-        </div>
-        {% else %}
-        <p class="empty">No hour-horizon picks available.</p>
-        {% endif %}
-      </div>
-
-      <div class="card">
-        <div class="card-head"><h3>Day Horizon</h3><span class="src-tag">top 3 · 24h lens</span></div>
-        {% set dyp = day_picks|safe_list %}
-        {% if dyp %}
-        <div class="picks">
-          {% for pick in dyp %}
-          {% set conf = ((pick.confidence|default(0))|float * 100)|round %}
-          {% set tier = 'tier-cyan' if conf > 75 else ('tier-lime' if conf > 55 else ('tier-gold' if conf > 35 else 'tier-red')) %}
-          {% set sig = pick.signals if pick.signals is mapping else {} %}
-          <div class="pick-card">
-            <div class="pick-rank">#{{ loop.index }}</div>
-            <div class="pick-name pick-name-lg">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
-            <div class="pick-meta">SN{{ pick.netuid }} · score <b>{{ "%.1f"|format((pick.score|default(0))|float) }}</b></div>
-
-            <div class="conviction-bar" style="margin-top:8px;"><div class="conviction-fill {{ tier }}" style="width: {{ conf }}%;"></div></div>
-
-            <div class="kpi-grid" style="grid-template-columns: repeat(3,1fr); margin-top:8px;">
-              <div class="kpi-cell"><div class="k">24h</div><div class="v">{{ "%+.2f"|format((sig.price_change_24h|default(0))|float) }}%</div></div>
-              <div class="kpi-cell"><div class="k">APY</div><div class="v">{{ "%.1f"|format((sig.apy|default(0))|float) }}%</div></div>
-              <div class="kpi-cell"><div class="k">Volume</div><div class="v">{{ "{:,.0f}".format((sig.volume|default(0))|float) }}</div></div>
-            </div>
-
-            {% for tk, tv in (pick.scenario_tags or {}).items() %}<span class="badge badge-watch">{{ tk }}: {{ tv }}</span>{% endfor %}
-          </div>
-          {% endfor %}
-        </div>
-        {% else %}
-        <p class="empty">No day-horizon picks available.</p>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-
-  <!-- ===================== DAILY PICK ===================== -->
-  <div class="row">
-    <div class="section-label">Daily Pick</div>
-    <h2 class="section-title">Audited Council Selection</h2>
-    <p class="section-sub">Single highest-conviction subnet for today, gated by RedTeam audit — downgraded to HOLD when confidence &lt; 0.45.</p>
-
-    {% set dpick = daily_pick if daily_pick is mapping else {} %}
-    {% set pk = dpick.pick if dpick.pick is mapping else none %}
-    {% if pk and pk.subnet %}
-    {% set audit = pk.audit if pk.audit is mapping else {} %}
-    {% set fc = ((pk.final_confidence|default(pk.confidence|default(0)))|float * 100)|round %}
-    {% set tier = 'tier-cyan' if fc > 75 else ('tier-lime' if fc > 55 else ('tier-gold' if fc > 35 else 'tier-red')) %}
-    {% set act = (dpick.action|default(pk.action|default('hold')))|string|upper %}
-    <div class="hero-card">
-      <div class="pick-rank" style="font-size:24px;">★</div>
-      <div class="pick-name pick-name-lg" style="font-size:28px;">{{ pk.subnet.name|default('SN' ~ pk.subnet.netuid) }}</div>
-      <div class="pick-meta">SN{{ pk.subnet.netuid }}{% if pk.subnet.symbol %} · {{ pk.subnet.symbol }}{% endif %} · {{ dpick.date|default('today') }}{% if dpick.regime %} · {{ dpick.regime }}{% endif %}</div>
-
-      <div class="pick-row">
-        <div class="conviction-wrap">
-          <div class="conviction-lbl">Final Confidence</div>
-          <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ fc|round }}%;"></div></div>
-          <div class="pred-line">score <b>{{ "%.1f"|format((pk.score|default(0))|float) }}</b> · raw conf {{ "%.2f"|format((pk.confidence|default(0))|float) }}</div>
-        </div>
-        <div class="conv-ring {{ tier }}" style="--ring-pct: {{ fc }};">
-          <svg viewBox="0 0 46 46">
-            <circle class="conv-ring-bg" cx="23" cy="23" r="20"></circle>
-            <circle class="conv-ring-fg" cx="23" cy="23" r="20"></circle>
-          </svg>
-          <div class="conv-ring-val">{{ fc|round }}</div>
-        </div>
-      </div>
-
-      <div class="tags" style="margin-top:12px;">
-        <span class="badge {% if act == 'BUY' %}badge-buy{% elif act == 'SELL' %}badge-sell{% else %}badge-hold{% endif %}">{{ act }}</span>
-        {% if audit.approved %}<span class="hero-audit">AUDIT PASSED</span>{% else %}<span class="hero-audit" style="border-color:rgba(244,63,94,0.35);color:#ff3366;">AUDIT FLAGGED</span>{% endif %}
-      </div>
-
-      {% if audit.concerns %}
-      <ul class="reasons">
-        {% for c in audit.concerns[:4] %}<li>{{ c }}</li>{% endfor %}
-      </ul>
-      {% endif %}
-
-      {% if dpick.reason %}
-      <div class="pred-line" style="margin-top:8px;">Note: {{ dpick.reason }}</div>
-      {% endif %}
-    </div>
-    {% else %}
-    <div class="card card-muted"><p class="empty">No audited daily pick available.{% if dpick.reason %} ({{ dpick.reason }}){% endif %}</p></div>
-    {% endif %}
-  </div>
-
-  <!-- ===================== UNDERVALUED RADAR + MOMENTUM RADAR ===================== -->
-  <div class="row">
-    <div class="two-col">
-      <div class="card span-7">
-        <div class="card-head">
-          <h3>Undervalued Radar</h3>
-          <span class="src-tag">top 8 · score 0–100</span>
-        </div>
-        {% if undervalued_radar %}
-        <table class="tbl">
-          <thead><tr><th>#</th><th>Subnet</th><th>APY</th><th>24h</th><th>Score</th><th>Flag</th></tr></thead>
-          <tbody>
-            {% for sn in undervalued_radar %}
-            <tr>
-              <td>{{ sn.rank|default(loop.index) }}</td>
-              <td class="text-primary">{{ sn.name|default('SN' ~ sn.netuid) }} <span class="pick-meta">SN{{ sn.netuid }}</span></td>
-              <td>{{ "%.1f"|format((sn.apy|default(0))|float) }}%</td>
-              <td>{{ "%+.2f"|format((sn.price_change_24h|default(0))|float) }}%</td>
-              <td><b>{{ "%.1f"|format((sn.undervalued_score|default(0))|float) }}</b></td>
-              <td>{% if sn.significantly_undervalued %}<span class="badge badge-buy">DEEP VALUE</span>{% else %}—{% endif %}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        {% else %}
-        <p class="empty">No undervalued subnets detected.</p>
-        {% endif %}
-      </div>
-
-      <div class="card span-5">
-        <div class="card-head"><h3>Momentum Radar</h3><span class="src-tag">top 3 picks · 5 dims</span></div>
-        <p class="empty">Momentum radar data pending.</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- ===================== TECHNICAL INDICATORS ===================== -->
-  <div class="row">
-    <div class="section-label">Technical Indicators</div>
-    <h2 class="section-title">Oscillator Panel</h2>
-    <p class="section-sub">RSI · Stochastic · Bollinger · MFI · CCI · Williams %R · Keltner · MACD — convergence across the top 6 subnets.</p>
-
-    {% if technical_indicators %}
-    <div class="picks">
-      {% for ti in technical_indicators %}
-      {% set ind = ti.indicators if ti.indicators is mapping else {} %}
-      {% set conv = ti.convergence if ti.convergence is mapping else {} %}
-      {% set sell_active = ti.sell.active if ti.sell is mapping else false %}
-      <div class="ind-cell">
-        <div class="ti-head">
-          <div class="pick-name">{{ ti.name|default('SN' ~ ti.netuid) }}</div>
-          <span class="pick-meta">SN{{ ti.netuid }}</span>
-          {% if conv.convergent %}<span class="badge {% if conv.type == 'oversold' %}badge-buy{% elif conv.type == 'overbought' %}badge-sell{% else %}badge-hold{% endif %}">{{ conv.type|default('')|upper }} {{ conv.count|default(0) }}/{{ conv.total|default(0) }}</span>{% endif %}
-        </div>
-        <div class="kpi-grid" style="grid-template-columns: repeat(5,1fr); margin-top:8px;">
-          {% set rsi = ind.rsi if ind.rsi is mapping else {} %}
-          <div class="kpi-cell"><div class="k">RSI</div><div class="v">{{ "%.1f"|format((rsi.value|default(0))|float) }}</div></div>
-          {% set sto = ind.stochastic if ind.stochastic is mapping else {} %}
-          <div class="kpi-cell"><div class="k">Stoch %K</div><div class="v">{{ "%.1f"|format((sto.k|default(0))|float) }}</div></div>
-          {% set mfi = ind.mfi if ind.mfi is mapping else {} %}
-          <div class="kpi-cell"><div class="k">MFI</div><div class="v">{{ "%.1f"|format((mfi.mfi|default(0))|float) }}</div></div>
-          {% set cci = ind.cci if ind.cci is mapping else {} %}
-          <div class="kpi-cell"><div class="k">CCI</div><div class="v">{{ "%.1f"|format((cci.cci|default(0))|float) }}</div></div>
-          {% set wr = ind.williams_r if ind.williams_r is mapping else {} %}
-          <div class="kpi-cell"><div class="k">Williams %R</div><div class="v">{{ "%.1f"|format((wr.williams_r|default(0))|float) }}</div></div>
-          {% set macd = ind.macd if ind.macd is mapping else {} %}
-          <div class="kpi-cell"><div class="k">MACD</div><div class="v">{{ "%+.3f"|format((macd.histogram|default(0))|float) }}</div></div>
-        </div>
-        {% if conv.indicators %}
-        <div class="pred-line" style="margin-top:8px;">Convergence: <b>{{ conv.count|default(0) }}/{{ conv.total|default(0) }}</b> {{ conv.type|default('') }} · agreement {{ "%.0f"|format((conv.agreement|default(0))|float * 100) }}%</div>
-        {% endif %}
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <div class="card card-muted"><p class="empty">No technical indicator data available.</p></div>
-    {% endif %}
-  </div>
-
-  <!-- ===================== ROTATION TRACKER ===================== -->
-  <div class="row">
-    <div class="section-label">Rotation Tracker</div>
-    <h2 class="section-title">Capital Flow Patterns</h2>
-    <p class="section-sub">Detected rotation regimes (momentum / yield / defense / mean-reversion) and volatility clusters across the network.</p>
-
-    {% set rt = rotation_tracker if rotation_tracker is mapping else {} %}
-    {% set patterns = rt.patterns|safe_list %}
-    {% set vc = rt.volatility_clusters if rt.volatility_clusters is mapping else {} %}
-    {% set vsum = vc.summary if vc.summary is mapping else {} %}
-
-    <div class="two-col">
-      <div class="card">
-        <div class="card-head"><h3>Rotation Patterns</h3><span class="src-tag">{{ patterns|length }} active</span></div>
-        {% if patterns %}
-        {% for p in patterns %}
-        <div class="radar-item">
-          <div class="pick-name"><b>{{ p.pattern|default('')|replace('_',' ')|upper }}</b> · {{ p.description|default('') }}</div>
-          <div class="pick-meta">{{ p.count|default(0) }} subnets · confidence {{ "%.0f"|format((p.confidence|default(0))|float * 100) }}%</div>
-          {% if p.netuids %}
-          <div class="pick-meta">SN {{ p.netuids|join(', SN ') }}</div>
-          {% endif %}
-        </div>
-        {% endfor %}
-        {% else %}
-        <p class="empty">No rotation patterns detected.</p>
-        {% endif %}
-      </div>
-
-      <div class="card">
-        <div class="card-head"><h3>Volatility Clusters</h3><span class="src-tag">mean {{ "%.2f"|format((vsum.mean_volatility|default(0))|float) }}</span></div>
-        <div class="kpi-grid" style="grid-template-columns: repeat(3,1fr); margin-bottom:12px;">
-          <div class="kpi-cell"><div class="k">High</div><div class="v">{{ vc.high|default([])|length }}</div><div class="sub">volatile</div></div>
-          <div class="kpi-cell"><div class="k">Core</div><div class="v">{{ vc.core|default([])|length }}</div><div class="sub">stable</div></div>
-          <div class="kpi-cell"><div class="k">Low</div><div class="v">{{ vc.low|default([])|length }}</div><div class="sub">dormant</div></div>
-        </div>
-        {% set high = vc.high|safe_list %}
-        {% if high %}
-        {% for s in high %}
-        <div class="radar-item">
-          <div class="pick-name">{{ s.name|default('SN' ~ s.netuid) }} <span class="pick-meta">SN{{ s.netuid }}</span></div>
-          <div class="pick-meta">vol {{ "%.2f"|format((s.volatility|default(0))|float) }} · {{ "%+.2f"|format((s.price_change_24h|default(0))|float) }}%</div>
-        </div>
-        {% endfor %}
-        {% else %}
-        <p class="empty">No volatility clusters.</p>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-
-  <!-- ===================== PUMP CYCLE ANALYTICS ===================== -->
-  <div class="row">
-    <div class="section-label">Pump Cycle Analytics</div>
-    <h2 class="section-title">5-Phase Conviction Ladder</h2>
-    <p class="section-sub">Real-time pump cycle detection, behavioral profiles, and re-pump probability per subnet.</p>
-
-    {% set pump = pump_analytics if pump_analytics is mapping else {} %}
-    {% set pump_subnets = pump.data.subnets|safe_list if pump.data is mapping else [] %}
-
-    <div class="card">
-      <div class="card-head"><h3>Cycle Profiles</h3><span class="src-tag">{{ pump_subnets|length }} tracked</span></div>
-      {% if pump_subnets %}
-      <table class="tbl">
-        <thead><tr><th>Subnet</th><th>Current Phase</th><th>Duration in Phase</th><th>Avg Pump Duration</th><th>Avg Consolidation</th><th>Re-Pump Rate</th><th>Typical Pattern</th></tr></thead>
-        <tbody>
-          {% for s in pump_subnets %}
-          {% set phase = s.current_phase|default('INACTIVE') %}
-          {% set phase_class = 'phase-inactive' %}
-          {% if phase in ['EARLY', 'SECOND_WIND'] %}{% set phase_class = 'phase-early' %}
-          {% elif phase == 'CONSOLIDATING' %}{% set phase_class = 'phase-consolidating' %}
-          {% elif phase == 'SELL' %}{% set phase_class = 'phase-sell' %}
-          {% elif phase == 'EXHAUSTING' %}{% set phase_class = 'phase-exhausting' %}
-          {% endif %}
-          <tr>
-            <td class="text-primary"><b>{{ s.name|default('SN' ~ s.netuid) }}</b> <span class="pick-meta">SN{{ s.netuid }}</span></td>
-            <td><span class="badge {{ phase_class }}">{{ phase|replace('_',' ') }}</span></td>
-            <td>{{ "%.1f"|format((s.phase_duration_minutes|default(0))|float) }} min</td>
-            <td>{{ "%.1f"|format((s.profile.avg_pump_duration|default(0))|float) }} min</td>
-            <td>{{ "%.1f"|format((s.profile.avg_consolidation_length|default(0))|float) }} min</td>
-            <td>{{ "%.1f"|format((s.profile.re_pump_rate|default(0))|float * 100) }}%</td>
-            <td>{{ s.profile.typical_pattern|default('—')|replace('_',' ') }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      {% else %}
-      <p class="empty">Pump tracker is accumulating data — check back after a few scheduler cycles.</p>
-      {% endif %}
-    </div>
-  </div>
-
-  <!-- ===================== JUDGE COUNCIL PANEL ===================== -->
-  <div class="row">
-    <div class="card judge-council-panel">
-      <h2>⚖️ Judge Council <a href="/judge-council" style="float:right;font-size:0.8em;color:#00ff41;text-decoration:none;">View Full Council →</a></h2>
-      <div id="judge-council-content">
-        <p>Loading...</p>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<!-- ===================== FOOTER STATUS STRIP ===================== -->
-<footer class="status">
-  <div class="status-inner">
-    <span><span class="st-dot"></span>SimiVision v3.5 · {{ data_source|default('cache')|upper }} data</span>
-    <span class="footer-tag">Press <kbd>C</kbd> to toggle compact view</span>
-  </div>
-</footer>
-
-<!-- Dashboard controller -->
-<script src="/static/js/app.js"></script>
-
-<script>
-(function () {
-  'use strict';
-  document.querySelectorAll('.collapsible-toggle').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var body = btn.nextElementSibling;
-      var open = body.classList.toggle('open');
-      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-    });
-  });
-})();
-</script>
-
-<!-- Judge Council live panel -->
-<script>
-(function () {
-  'use strict';
-  fetch('/api/judges')
-    .then(function (r) { return r.json(); })
-    .then(function (data) {
-      var container = document.getElementById('judge-council-content');
-      if (!data.judges || data.judges.length === 0) {
-        container.innerHTML = '<p>Judges calibrating...</p>';
-        return;
+      function formatNumber(n, digits = 2) {
+        if (n === null || n === undefined || isNaN(n)) return '—';
+        const num = Number(n);
+        if (num >= 1e9) return (num / 1e9).toFixed(digits) + 'B';
+        if (num >= 1e6) return (num / 1e6).toFixed(digits) + 'M';
+        if (num >= 1e3) return (num / 1e3).toFixed(digits) + 'K';
+        return num.toLocaleString(undefined, { maximumFractionDigits: digits });
       }
-      var longs = data.judges.filter(function (j) { return j.consensus.verdict === 'long'; }).slice(0, 3);
-      var shorts = data.judges.filter(function (j) { return j.consensus.verdict === 'short'; }).slice(0, 1);
-      var html = '<div class="judge-grid">';
-      html += '<div class="judge-section"><h3>📈 Top Longs</h3>';
-      longs.forEach(function (j) {
-        var s = j.consensus.score;
-        html += '<div class="judge-card">' +
-          '<div class="judge-header"><strong>' + j.name + '</strong> <span class="netuid">#' + j.netuid + '</span></div>' +
-          '<div class="judge-verdict long">' + j.consensus.verdict + '</div>' +
-          '<div class="judge-scores">' +
-            '<div class="judge-score-bar"><span class="label">Oracle</span><span class="bar" style="width:' + Math.round(j.oracle.score * 100) + '%"></span></div>' +
-            '<div class="judge-score-bar"><span class="label">Echo</span><span class="bar" style="width:' + Math.round(j.echo.score * 100) + '%"></span></div>' +
-            '<div class="judge-score-bar"><span class="label">Pulse</span><span class="bar" style="width:' + Math.round(j.pulse.score * 100) + '%"></span></div>' +
-          '</div>' +
-          '<div class="judge-consensus">Consensus: ' + s.toFixed(2) + '</div>' +
-        '</div>';
-      });
-      html += '</div>';
-      if (shorts.length > 0) {
-        html += '<div class="judge-section"><h3>📉 Top Short</h3>';
-        shorts.forEach(function (j) {
-          html += '<div class="judge-card">' +
-            '<div class="judge-header"><strong>' + j.name + '</strong> <span class="netuid">#' + j.netuid + '</span></div>' +
-            '<div class="judge-verdict short">' + j.consensus.verdict + '</div>' +
-            '<div class="judge-consensus">Consensus: ' + j.consensus.score.toFixed(2) + '</div>' +
-          '</div>';
+
+      function formatPercent(n, digits = 2) {
+        if (n === null || n === undefined || isNaN(n)) return '—';
+        return (Number(n) * 100).toFixed(digits) + '%';
+      }
+
+      function formatDate(iso) {
+        if (!iso) return '—';
+        const d = new Date(iso);
+        return isNaN(d) ? iso : d.toLocaleString();
+      }
+
+      function showToast(message) {
+        els.toast.textContent = message;
+        els.toast.classList.add('show');
+        setTimeout(() => els.toast.classList.remove('show'), 2500);
+      }
+
+      function fetchJSON(url) {
+        return fetch(url, { headers: { Accept: 'application/json' } }).then(r => {
+          if (!r.ok) throw new Error(url + ' ' + r.status);
+          return r.json();
         });
-        html += '</div>';
       }
-      fetch('/api/paper-portfolio')
-        .then(function (r) { return r.json(); })
-        .then(function (pf) {
-          if (pf.aggregate) {
-            html += '<div class="judge-section portfolio"><h3>💰 Paper Portfolio</h3>' +
-              '<div class="portfolio-stats">' +
-                '<span>P&amp;L: <strong>' + pf.aggregate.total_pnl + '</strong></span>' +
-                '<span>Win Rate: <strong>' + (pf.aggregate.win_rate * 100).toFixed(1) + '%</strong></span>' +
-                '<span>Trades: ' + pf.aggregate.total_trades + '</span>' +
-              '</div></div>';
+
+      function renderSkeletonSummary() {
+        const cards = [
+          { label: 'Total Subnets', cls: 'accent' },
+          { label: 'Active Subnets', cls: 'success' },
+          { label: 'Total Emission', cls: 'violet' },
+          { label: 'Avg APY', cls: 'warning' },
+        ];
+        els.summaryGrid.innerHTML = cards.map(c => `
+          <div class="summary-card ${c.cls}">
+            <p class="summary-label">${c.label}</p>
+            <p class="summary-value"><span class="skeleton" style="display:inline-block;width:80px;height:28px;">&nbsp;</span></p>
+            <p class="summary-meta"><span class="skeleton" style="display:inline-block;width:120px;height:14px;">&nbsp;</span></p>
+          </div>
+        `).join('');
+      }
+
+      function renderSummary() {
+        const s = state.summary;
+        if (!s) return;
+        const cards = [
+          { label: 'Total Subnets', value: s.total_subnets, meta: `${s.active_count} active · ${s.at_risk_count} at risk`, cls: 'accent' },
+          { label: 'Active Subnets', value: s.active_count, meta: `${s.deprecated_count} deprecated`, cls: 'success' },
+          { label: 'Total Emission', value: formatNumber(s.total_emission, 2), meta: `${s.overvalued_count} overvalued`, cls: 'violet' },
+          { label: 'Avg APY', value: formatPercent(s.avg_apy, 2), meta: `Updated ${formatDate(s.last_updated)}`, cls: 'warning' },
+        ];
+        els.summaryGrid.innerHTML = cards.map(c => `
+          <div class="summary-card ${c.cls}">
+            <p class="summary-label">${c.label}</p>
+            <p class="summary-value">${c.value}</p>
+            <p class="summary-meta">${c.meta}</p>
+          </div>
+        `).join('');
+        els.summaryGrid.setAttribute('aria-busy', 'false');
+      }
+
+      function computeMaxValues(items) {
+        const fields = ['emission', 'total_stake', 'apy', 'social_mentions', 'consensus_score'];
+        const out = {};
+        fields.forEach(f => {
+          out[f] = Math.max(0.0001, ...items.map(i => Math.abs(getField(i, f) || 0)));
+        });
+        return out;
+      }
+
+      function getField(item, field) {
+        if (field === 'total_stake' || field === 'apy') {
+          return item.staking_data?.[field];
+        }
+        if (field === 'consensus_score') {
+          return item.consensus?.score;
+        }
+        return item[field];
+      }
+
+      function filteredItems() {
+        let items = state.subnets.slice();
+        if (state.filter !== 'all') {
+          items = items.filter(i => (i.status || 'unknown').toLowerCase() === state.filter);
+        }
+        if (state.search.trim()) {
+          const q = state.search.trim().toLowerCase();
+          items = items.filter(i =>
+            String(i.id).includes(q) ||
+            (i.name || '').toLowerCase().includes(q) ||
+            (i.status || '').toLowerCase().includes(q)
+          );
+        }
+        const field = state.sort;
+        items.sort((a, b) => {
+          const av = getField(a, field) || 0;
+          const bv = getField(b, field) || 0;
+          if (typeof av === 'string' || typeof bv === 'string') {
+            return String(av).localeCompare(String(bv));
           }
-          html += '<div class="judge-refreshed">Refreshed: ' + (data.meta.refreshed_at || 'N/A') + '</div>';
-          container.innerHTML = html;
-        })
-        .catch(function () { container.innerHTML = html; });
-    })
-    .catch(function () {
-      var container = document.getElementById('judge-council-content');
-      if (container) container.innerHTML = '<p>Judges calibrating...</p>';
-    });
-})();
-</script>
-{% endblock %}
+          return av - bv;
+        });
+        if (state.sortDesc) items.reverse();
+        return items;
+      }
+
+      function renderBar(value, field) {
+        const max = state.maxValues[field] || 1;
+        const pct = Math.min(100, Math.max(0, (Math.abs(value || 0) / max) * 100));
+        return `<span class="bar-bg" aria-hidden="true"><span class="bar-fill" style="width:${pct.toFixed(1)}%"></span></span>`;
+      }
+
+      function renderStatusBadge(item) {
+        const status = item.status || 'unknown';
+        const flags = (item.risk_flags || []).map(f => `<span class="risk-chip">${f}</span>`).join('');
+        const overvalued = item.is_overvalued ? `<span class="risk-chip">overvalued</span>` : '';
+        return `<span class="status-badge ${statusClass(status)}">${status}</span>${flags}${overvalued}`;
+      }
+
+      function renderActionBadge(item) {
+        const action = item.consensus?.recommended_action;
+        if (!action) return `<span class="action-badge action-none">—</span>`;
+        return `<span class="action-badge ${actionClass(action)}">${action}</span>`;
+      }
+
+      function renderTable(items) {
+        if (!items.length) return renderEmpty();
+        const rows = items.map(item => {
+          const emission = item.emission ?? 0;
+          const stake = item.staking_data?.total_stake ?? 0;
+          const apy = item.staking_data?.apy ?? 0;
+          const social = item.social_mentions ?? 0;
+          const score = item.consensus?.score;
+          return `
+            <tr data-id="${item.id}" tabindex="0" role="button" aria-label="Open details for ${escapeHtml(item.name || 'Subnet ' + item.id)}">
+              <td class="col-id"><span class="subnet-id">#${item.id}</span></td>
+              <td class="col-name"><span class="subnet-name">${escapeHtml(item.name || 'Unnamed')}</span></td>
+              <td class="col-status">${renderStatusBadge(item)}</td>
+              <td class="col-num">${formatNumber(emission, 3)}${renderBar(emission, 'emission')}</td>
+              <td class="col-num">${formatNumber(stake, 0)}${renderBar(stake, 'total_stake')}</td>
+              <td class="col-num">${formatPercent(apy, 2)}</td>
+              <td class="col-num">${item.emission_rank ?? '—'}</td>
+              <td class="col-num">${formatNumber(social, 0)}${renderBar(social, 'social_mentions')}</td>
+              <td class="col-num">${score !== undefined ? (score * 100).toFixed(0) + '%' : '—'}</td>
+              <td class="col-status">${renderActionBadge(item)}</td>
+            </tr>
+          `;
+        }).join('');
+
+        return `
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="col-id" data-sort="id" scope="col">ID <span class="sort-icon">↕</span></th>
+                  <th class="col-name" data-sort="name" scope="col">Name <span class="sort-icon">↕</span></th>
+                  <th class="col-status" data-sort="status" scope="col">Status <span class="sort-icon">↕</span></th>
+                  <th class="col-num" data-sort="emission" scope="col">Emission <span class="sort-icon">↕</span></th>
+                  <th class="col-num" data-sort="total_stake" scope="col">Stake <span class="sort-icon">↕</span></th>
+                  <th class="col-num" data-sort="apy" scope="col">APY <span class="sort-icon">↕</span></th>
+                  <th class="col-num" data-sort="emission_rank" scope="col">Rank <span class="sort-icon">↕</span></th>
+                  <th class="col-num" data-sort="social_mentions" scope="col">Social <span class="sort-icon">↕</span></th>
+                  <th class="col-num" data-sort="consensus_score" scope="col">Consensus <span class="sort-icon">↕</span></th>
+                  <th class="col-status" data-sort="recommended_action" scope="col">Action <span class="sort-icon">↕</span></th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      function renderCards(items) {
+        if (!items.length) return renderEmpty();
+        return `<div class="cards-grid">${items.map(item => {
+          const emission = item.emission ?? 0;
+          const stake = item.staking_data?.total_stake ?? 0;
+          const apy = item.staking_data?.apy ?? 0;
+          const social = item.social_mentions ?? 0;
+          const score = item.consensus?.score;
+          return `
+            <article class="subnet-card" data-id="${item.id}" tabindex="0" role="button" aria-label="Open details for ${escapeHtml(item.name || 'Subnet ' + item.id)}">
+              <div class="card-header">
+                <div>
+                  <span class="subnet-id">#${item.id}</span>
+                  <h3 class="card-title">${escapeHtml(item.name || 'Unnamed')}</h3>
+                </div>
+                ${renderActionBadge(item)}
+              </div>
+              <div>${renderStatusBadge(item)}</div>
+              <div class="card-stats">
+                <div><p class="card-stat-label">Emission</p><p class="card-stat-value">${formatNumber(emission, 3)}</p></div>
+                <div><p class="card-stat-label">Stake</p><p class="card-stat-value">${formatNumber(stake, 0)}</p></div>
+                <div><p class="card-stat-label">APY</p><p class="card-stat-value">${formatPercent(apy, 2)}</p></div>
+                <div><p class="card-stat-label">Social</p><p class="card-stat-value">${formatNumber(social, 0)}</p></div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:var(--space-2);">
+                <span class="card-stat-label">Consensus ${score !== undefined ? (score * 100).toFixed(0) + '%' : '—'}</span>
+                <span class="card-stat-label">Rank ${item.emission_rank ?? '—'}</span>
+              </div>
+            </article>
+          `;
+        }).join('')}</div>`;
+      }
+
+      function renderEmpty() {
+        return `
+          <div class="empty-state">
+            <h3>No subnets match your filters</h3>
+            <p>Try clearing the search or selecting a different status.</p>
+          </div>
+        `;
+      }
+
+      function escapeHtml(str) {
+        return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      }
+
+      function renderMain() {
+        const items = filteredItems();
+        els.resultsMeta.textContent = `${items.length} subnet${items.length === 1 ? '' : 's'} · sorted by ${state.sort}${state.sortDesc ? ' desc' : ' asc'}`;
+        els.mainStage.innerHTML = state.view === 'table' ? renderTable(items) : renderCards(items);
+        attachRowHandlers();
+        attachHeaderSort();
+      }
+
+      function attachRowHandlers() {
+        const rows = els.mainStage.querySelectorAll('[data-id]');
+        rows.forEach(row => {
+          const open = () => openDetail(Number(row.dataset.id));
+          row.addEventListener('click', open);
+          row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+        });
+      }
+
+      function attachHeaderSort() {
+        if (state.view !== 'table') return;
+        const headers = els.mainStage.querySelectorAll('th[data-sort]');
+        headers.forEach(th => {
+          th.addEventListener('click', () => {
+            const field = th.dataset.sort;
+            if (state.sort === field) {
+              state.sortDesc = !state.sortDesc;
+            } else {
+              state.sort = field;
+              state.sortDesc = ['emission', 'total_stake', 'apy', 'social_mentions', 'consensus_score'].includes(field);
+            }
+            els.sort.value = state.sort;
+            renderMain();
+          });
+        });
+      }
+
+      function openDetail(id) {
+        const item = state.subnets.find(s => s.id === id);
+        if (!item) return;
+        const score = item.consensus?.score;
+        const action = item.consensus?.recommended_action;
+        const breakdown = item.consensus?.expert_breakdown || {};
+        const experts = ['quant', 'hype', 'contrarian'].map(k => {
+          const e = breakdown[k] || {};
+          const s = e.score;
+          const note = e.sentiment || e.signal || (e.metrics ? Object.values(e.metrics)[0] : null);
+          return `
+            <div class="expert-card">
+              <p class="expert-name">${k}</p>
+              <p class="expert-score" style="color:${s >= 0.7 ? 'var(--status-active)' : s >= 0.4 ? 'var(--status-at-risk)' : 'var(--status-deprecated)'}">${s !== undefined ? (s * 100).toFixed(0) + '%' : '—'}</p>
+              <p class="expert-note">${note !== undefined ? note : '—'}</p>
+            </div>
+          `;
+        }).join('');
+
+        const scoreDeg = score !== undefined ? Math.round(score * 360) + 'deg' : '0deg';
+        const sources = (item.sources || []).map(s => `<a class="source-link" href="${escapeHtml(s)}" target="_blank" rel="noopener">${escapeHtml(s)} ↗</a>`).join('<br>');
+
+        els.panelContent.innerHTML = `
+          <div class="panel-header">
+            <span class="subnet-id">Subnet #${item.id}</span>
+            <h2 class="panel-name" id="panel-title">${escapeHtml(item.name || 'Unnamed')}</h2>
+            <div class="panel-meta">${renderStatusBadge(item)} ${renderActionBadge(item)}</div>
+          </div>
+
+          <div class="panel-section">
+            <h3 class="panel-section-title">Consensus Signal</h3>
+            <div class="consensus-gauge">
+              <div class="gauge-ring" style="--score-deg: ${scoreDeg}" aria-hidden="true">
+                <span class="gauge-value">${score !== undefined ? (score * 100).toFixed(0) : '—'}</span>
+              </div>
+              <div>
+                <p style="margin:0 0 4px;font-weight:600;">${action ? action.charAt(0).toUpperCase() + action.slice(1) : 'No signal'}</p>
+                <p style="margin:0;color:var(--text-muted);font-size:0.85rem;">Blended quant, hype, and contrarian expert scores.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <h3 class="panel-section-title">Expert Breakdown</h3>
+            <div class="expert-grid">${experts}</div>
+          </div>
+
+          <div class="panel-section">
+            <h3 class="panel-section-title">Economics</h3>
+            <div class="metric-row"><span class="metric-label">Emission rank</span><span class="metric-value">${item.emission_rank ?? '—'}</span></div>
+            <div class="metric-row"><span class="metric-label">Total stake</span><span class="metric-value">${formatNumber(item.staking_data?.total_stake, 0)}</span></div>
+            <div class="metric-row"><span class="metric-label">APY</span><span class="metric-value">${formatPercent(item.staking_data?.apy, 4)}</span></div>
+            <div class="metric-row"><span class="metric-label">Emission</span><span class="metric-value">${formatNumber(item.emission, 4)}</span></div>
+            <div class="metric-row"><span class="metric-label">Social mentions</span><span class="metric-value">${formatNumber(item.social_mentions, 0)}</span></div>
+          </div>
+
+          <div class="panel-section">
+            <h3 class="panel-section-title">Provenance</h3>
+            <p style="margin:0 0 var(--space-3);color:var(--text-secondary);font-size:0.85rem;">Sources</p>
+            <p style="margin:0 0 var(--space-4);">${sources || '<span style="color:var(--text-muted)">No sources listed</span>'}</p>
+            <p style="margin:0;color:var(--text-muted);font-size:0.8rem;">Last updated ${formatDate(item.last_updated)}</p>
+          </div>
+        `;
+
+        els.panel.classList.add('open');
+        els.backdrop.classList.add('open');
+        els.backdrop.setAttribute('aria-hidden', 'false');
+        els.panel.focus();
+        document.body.style.overflow = 'hidden';
+      }
+
+      function closeDetail() {
+        els.panel.classList.remove('open');
+        els.backdrop.classList.remove('open');
+        els.backdrop.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+      }
+
+      function loadData() {
+        renderSkeletonSummary();
+        Promise.all([
+          fetchJSON('/api/summary'),
+          fetchJSON('/api/registry'),
+        ]).then(([summaryData, registryData]) => {
+          state.summary = summaryData.summary || summaryData;
+          state.subnets = Object.entries(registryData).map(([key, value]) => {
+            const item = { ...value };
+            item.id = item.id ?? Number(key);
+            return item;
+          });
+          state.maxValues = computeMaxValues(state.subnets);
+          renderSummary();
+          renderMain();
+          showToast('Registry refreshed');
+        }).catch(err => {
+          console.error(err);
+          els.resultsMeta.textContent = 'Failed to load registry data.';
+          showToast('Error loading data');
+        });
+      }
+
+      // Event bindings
+      document.querySelectorAll('.pill[data-filter]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.pill[data-filter]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.filter = btn.dataset.filter;
+          renderMain();
+        });
+      });
+
+      let searchDebounce;
+      els.search.addEventListener('input', () => {
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(() => {
+          state.search = els.search.value;
+          renderMain();
+        }, 150);
+      });
+
+      els.sort.addEventListener('change', () => {
+        state.sort = els.sort.value;
+        state.sortDesc = ['emission', 'total_stake', 'apy', 'social_mentions', 'consensus_score'].includes(state.sort);
+        renderMain();
+      });
+
+      document.querySelectorAll('.view-btn[data-view]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.view-btn[data-view]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.view = btn.dataset.view;
+          renderMain();
+        });
+      });
+
+      els.panelClose.addEventListener('click', closeDetail);
+      els.backdrop.addEventListener('click', closeDetail);
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
+
+      document.addEventListener('keydown', e => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+          e.preventDefault();
+          els.search.focus();
+        }
+        if (e.key === '/' && document.activeElement !== els.search) {
+          e.preventDefault();
+          els.search.focus();
+        }
+      });
+
+      // Initial load and refresh
+      loadData();
+      setInterval(loadData, 60000);
+    })();
+  </script>
+</body>
+</html>

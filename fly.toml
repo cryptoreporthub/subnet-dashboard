@@ -1,53 +1,16 @@
+# fly.toml app configuration file generated for subnet-dashboard
+# Triggering redeployment - 2026-06-14
+
 app = "subnet-dashboard"
+primary_region = "sea"
 
 [build]
-  strategy = "dockerfile"
-
-[env]
-  PORT = "8080"
-
-# Persistent volume for runtime/learning data (predictions.json, soul_map.json,
-# price caches, etc.). Fly.io root filesystems are ephemeral and are wiped on
-# every deploy, so without this mount the self-learning data resets each deploy.
-# The volume must exist on Fly's side (see DEPLOY_NOTES / final report):
-#   fly volumes create data_volume --app subnet-dashboard --region sjc -n 2
-# (region sjc + count 2 are required to satisfy min_machines_running=1 during
-# rolling deploys; the GitHub Actions workflow creates this idempotently.)
-# `data/` holds only runtime data files (code modules live in `datastore/`),
-# so mounting a volume here does not shadow any application code.
-[mounts]
-  source = "data_volume"
-  destination = "/app/data"
+  dockerfile = "Dockerfile"
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = false
+  auto_stop_machines = true
   auto_start_machines = true
-  min_machines_running = 1
-  processes = ["app"]
-  
-  [[http_service.checks]]
-    interval = "15s"
-    timeout = "2s"
-    grace_period = "5s"
-    method = "GET"
-    path = "/health"
-
-[[services]]
-  internal_port = 8080
-  protocol = "tcp"
-
-  [[services.ports]]
-    port = 80
-    handlers = ["http"]
-    force_https = true
-
-  [[services.ports]]
-    port = 443
-    handlers = ["tls", "http"]
-
-  [services.concurrency]
-    type = "connections"
-    hard_limit = 100
-    soft_limit = 50
+  min_machines_running = 0
+  processes = ["web"]
