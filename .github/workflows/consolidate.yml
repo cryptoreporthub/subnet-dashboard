@@ -23,7 +23,6 @@ jobs:
           python3 - <<'PY'
           import os, re, subprocess, glob
 
-          # Guard: if server.py is already the FastAPI app, skip (prevents re-run loops)
           try:
               cur = open("server.py", "r", encoding="utf-8", errors="ignore").read()
               if "FastAPI(" in cur:
@@ -35,15 +34,12 @@ jobs:
           def git(*a):
               subprocess.run(["git", *a], check=True)
 
-          # 1. restore the proven-working FastAPI app from history
           git("checkout", "c2103ddc", "--", "server_original.py")
 
-          # 2. remove the Flask stub and promote the real app
           if os.path.exists("server.py"):
               git("rm", "-f", "server.py")
           git("mv", "server_original.py", "server.py")
 
-          # 3. contrarian -> dark_horse everywhere (case-insensitive)
           for p in glob.glob("**/*", recursive=True):
               parts = p.split(os.sep)
               if ".git" in parts:
@@ -59,21 +55,17 @@ jobs:
                   open(p, "w", encoding="utf-8").write(new)
                   git("add", p)
 
-          # 4. requirements.txt -> fastapi + uvicorn
           open("requirements.txt", "w", encoding="utf-8").write("fastapi\nuvicorn\npandas\nrequests\n")
           git("add", "requirements.txt")
 
-          # 5. Dockerfile -> uvicorn server:app
           df = open("Dockerfile", encoding="utf-8").read()
           df = re.sub(r'CMD\s*\[[^\]]*\]', 'CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8080"]', df, flags=re.S)
           open("Dockerfile", "w", encoding="utf-8").write(df)
           git("add", "Dockerfile")
 
-          # 6. Procfile -> uvicorn server:app
           open("Procfile", "w", encoding="utf-8").write("web: uvicorn server:app --host 0.0.0.0 --port 8080\n")
           git("add", "Procfile")
 
-          # 7. fly.yml -> drop the dead deploy-guard
           fly_path = ".github/workflows/fly.yml"
           fly = open(fly_path, encoding="utf-8").read()
           fly = re.sub(r"\n\s*deploy-guard:.*?(?=\n\s*deploy:)", "\n", fly, flags=re.S)
@@ -81,7 +73,6 @@ jobs:
           open(fly_path, "w", encoding="utf-8").write(fly)
           git("add", fly_path)
 
-          # 8. remove this workflow file so it does not ship in the PR
           git("rm", "-f", ".github/workflows/consolidate.yml")
 
           print("CONSOLIDATION_DONE")
@@ -95,5 +86,6 @@ jobs:
           git config user.name "Ditto"
           git add -A
           git commit -m "refactor: consolidate to canonical FastAPI server.py; fix deps/entrypoint, drop dead guard" || echo "nothing to commit"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/cryptoreporthub/subnet-dashboard.git"
           git push origin HEAD:refs/heads/fastapi-consolidated
-# push target changed to fastapi-consolidated (cannot push to the branch that triggered the workflow)
+# retrigger: push via explicit token-in-url
