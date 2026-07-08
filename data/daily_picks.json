@@ -1,0 +1,2075 @@
+[
+  {
+    "status": "ok",
+    "date": "2026-06-28",
+    "timestamp_utc": "2026-06-28T22:42:47.214820Z",
+    "regime": "neutral",
+    "rotation_summary": {
+      "timestamp": "2026-06-28T22:42:47.214838Z",
+      "patterns": [
+        {
+          "pattern": "momentum_rotation",
+          "description": "Subnets with strong 24h momentum and healthy volume",
+          "netuids": [
+            29,
+            19
+          ],
+          "count": 2,
+          "confidence": 1.0
+        },
+        {
+          "pattern": "yield_rotation",
+          "description": "High-yield subnets attracting rotation",
+          "netuids": [
+            29,
+            19
+          ],
+          "count": 2,
+          "confidence": 1.0
+        }
+      ],
+      "volatility_clusters": {
+        "high": [
+          {
+            "netuid": 29,
+            "name": "Coldint",
+            "volatility": 12.3,
+            "price_change_24h": 12.3
+          }
+        ],
+        "low": [
+          {
+            "netuid": 12,
+            "name": "Compute",
+            "volatility": 5.2,
+            "price_change_24h": 5.2
+          }
+        ],
+        "core": [
+          {
+            "netuid": 19,
+            "name": "Inference",
+            "volatility": 8.7,
+            "price_change_24h": 8.7
+          }
+        ],
+        "summary": {
+          "count": 3,
+          "mean_volatility": 8.733,
+          "high_threshold": 10.5,
+          "low_threshold": 6.949999999999999
+        }
+      }
+    },
+    "action": "long",
+    "pick": {
+      "subnet": {
+        "netuid": 29,
+        "name": "Coldint",
+        "symbol": null
+      },
+      "score": 84.0,
+      "confidence": 0.775,
+      "expert_contributions": {
+        "quant": 1.0,
+        "hype": 0.7,
+        "contrarian": 0.25,
+        "technical": 0.85
+      },
+      "scenario_tags": {
+        "regime": "neutral",
+        "rsi": "overbought",
+        "volume": "high"
+      },
+      "audit": {
+        "approved": true,
+        "concerns": [
+          "Elevated 24h volatility: +12.3%"
+        ],
+        "adjusted_confidence": 0.7362
+      },
+      "final_confidence": 0.7362,
+      "action": "long"
+    },
+    "reason": null,
+    "market_context": {
+      "tao_change_24h": 0.0
+    }
+  },
+  {
+    "status": "ok",
+    "date": "2026-07-01",
+    "timestamp_utc": "2026-07-01T19:37:29.961500Z",
+    "regime": "neutral",
+    "rotation_summary": {
+      "timestamp": "2026-07-01T19:37:29.961515Z",
+      "patterns": [
+        {
+          "pattern": "emission_defense",
+          "description": "High-emission subnets used as defensive rotation",
+          "netuids": [
+            6,
+            7,
+            9,
+            11,
+            15,
+            16,
+            18,
+            22,
+            23,
+            24,
+            26,
+            28,
+            33,
+            36,
+            37,
+            38,
+            40,
+            47,
+            49,
+            53,
+            54,
+            60,
+            62,
+            67,
+            69,
+            74,
+            75,
+            78,
+            79,
+            80,
+            86,
+            88,
+            90,
+            91,
+            97,
+            98,
+            99,
+            100,
+            102,
+            105,
+            108,
+            113,
+            114,
+            115,
+            117,
+            119,
+            120,
+            122
+          ],
+          "count": 48,
+          "confidence": 0.93
+        },
+        {
+          "pattern": "yield_rotation",
+          "description": "High-yield subnets attracting rotation",
+          "netuids": [
+            10,
+            12,
+            20,
+            21,
+            29,
+            31,
+            39,
+            42,
+            43,
+            48,
+            50,
+            52,
+            55,
+            58,
+            59,
+            68,
+            71,
+            73,
+            82,
+            85,
+            87,
+            101,
+            106,
+            110,
+            112,
+            116,
+            126,
+            128
+          ],
+          "count": 28,
+          "confidence": 0.543
+        },
+        {
+          "pattern": "mean_reversion_rotation",
+          "description": "Oversold high-yield subnets poised for mean reversion",
+          "netuids": [
+            16,
+            33,
+            37,
+            40,
+            49,
+            54,
+            60,
+            62,
+            69,
+            74,
+            79,
+            100
+          ],
+          "count": 12,
+          "confidence": 0.233
+        },
+        {
+          "pattern": "momentum_rotation",
+          "description": "Subnets with strong 24h momentum and healthy volume",
+          "netuids": [
+            10,
+            21,
+            50,
+            71
+          ],
+          "count": 4,
+          "confidence": 0.078
+        }
+      ],
+      "volatility_clusters": {
+        "high": [
+          {
+            "netuid": 10,
+            "name": "Swap",
+            "volatility": 11.91,
+            "price_change_24h": 11.91
+          },
+          {
+            "netuid": 15,
+            "name": "ORO",
+            "volatility": 8.39,
+            "price_change_24h": -8.39
+          },
+          {
+            "netuid": 16,
+            "name": "Fast Thinker",
+            "volatility": 3.88,
+            "price_change_24h": -3.88
+          },
+          {
+            "netuid": 21,
+            "name": "AdTAO",
+            "volatility": 10.59,
+            "price_change_24h": 10.59
+          },
+          {
+            "netuid": 28,
+            "name": "gm",
+            "volatility": 3.773,
+            "price_change_24h": -1.95
+          },
+          {
+            "netuid": 37,
+            "name": "Aurelius",
+            "volatility": 4.8,
+            "price_change_24h": -4.8
+          },
+          {
+            "netuid": 38,
+            "name": "ChronoLLM",
+            "volatility": 5.88,
+            "price_change_24h": -5.88
+          },
+          {
+            "netuid": 40,
+            "name": "Ralph",
+            "volatility": 11.73,
+            "price_change_24h": -9.44
+          },
+          {
+            "netuid": 47,
+            "name": "EvolAI",
+            "volatility": 3.27,
+            "price_change_24h": -3.27
+          },
+          {
+            "netuid": 49,
+            "name": "Nepher Robotics",
+            "volatility": 4.536,
+            "price_change_24h": -4.46
+          },
+          {
+            "netuid": 50,
+            "name": "Synth",
+            "volatility": 16.76,
+            "price_change_24h": 16.76
+          },
+          {
+            "netuid": 53,
+            "name": "EfficientFrontier",
+            "volatility": 10.483,
+            "price_change_24h": -2.95
+          },
+          {
+            "netuid": 58,
+            "name": "greevils",
+            "volatility": 15.873,
+            "price_change_24h": 0.01
+          },
+          {
+            "netuid": 60,
+            "name": "Bitsec.ai",
+            "volatility": 4.57,
+            "price_change_24h": -4.57
+          },
+          {
+            "netuid": 62,
+            "name": "Ridges",
+            "volatility": 4.07,
+            "price_change_24h": -4.07
+          },
+          {
+            "netuid": 69,
+            "name": "SN69",
+            "volatility": 6.58,
+            "price_change_24h": -6.58
+          },
+          {
+            "netuid": 71,
+            "name": "Leadpoet",
+            "volatility": 5.34,
+            "price_change_24h": 5.34
+          },
+          {
+            "netuid": 74,
+            "name": "Gittensor",
+            "volatility": 3.63,
+            "price_change_24h": -3.63
+          },
+          {
+            "netuid": 75,
+            "name": "Hippius",
+            "volatility": 3.88,
+            "price_change_24h": -3.88
+          },
+          {
+            "netuid": 78,
+            "name": "Vocence",
+            "volatility": 6.26,
+            "price_change_24h": -6.26
+          },
+          {
+            "netuid": 79,
+            "name": "MVTRX",
+            "volatility": 4.04,
+            "price_change_24h": -4.04
+          },
+          {
+            "netuid": 82,
+            "name": "Compelle",
+            "volatility": 7.604,
+            "price_change_24h": 1.18
+          },
+          {
+            "netuid": 91,
+            "name": "Bitstarter #1",
+            "volatility": 4.874,
+            "price_change_24h": -2.56
+          },
+          {
+            "netuid": 97,
+            "name": "Albedo",
+            "volatility": 7.87,
+            "price_change_24h": -7.87
+          },
+          {
+            "netuid": 98,
+            "name": "ForeverMoney",
+            "volatility": 4.37,
+            "price_change_24h": -4.37
+          },
+          {
+            "netuid": 99,
+            "name": "Leoma",
+            "volatility": 3.51,
+            "price_change_24h": -3.51
+          },
+          {
+            "netuid": 100,
+            "name": "BASE",
+            "volatility": 3.37,
+            "price_change_24h": -3.37
+          },
+          {
+            "netuid": 102,
+            "name": "ConnitoAI",
+            "volatility": 21.63,
+            "price_change_24h": -21.63
+          },
+          {
+            "netuid": 105,
+            "name": "Beam",
+            "volatility": 7.67,
+            "price_change_24h": -7.67
+          },
+          {
+            "netuid": 114,
+            "name": "SOMA",
+            "volatility": 5.72,
+            "price_change_24h": -5.72
+          },
+          {
+            "netuid": 117,
+            "name": "SN117",
+            "volatility": 6.75,
+            "price_change_24h": -6.75
+          },
+          {
+            "netuid": 120,
+            "name": "Affine",
+            "volatility": 3.34,
+            "price_change_24h": -3.34
+          },
+          {
+            "netuid": 126,
+            "name": "Poker44",
+            "volatility": 3.979,
+            "price_change_24h": 2.35
+          }
+        ],
+        "low": [
+          {
+            "netuid": 0,
+            "name": "SN0",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 2,
+            "name": "DSperse",
+            "volatility": 0.41,
+            "price_change_24h": -0.41
+          },
+          {
+            "netuid": 3,
+            "name": "SN3",
+            "volatility": 0.58,
+            "price_change_24h": -0.58
+          },
+          {
+            "netuid": 4,
+            "name": "Targon",
+            "volatility": 0.41,
+            "price_change_24h": -0.41
+          },
+          {
+            "netuid": 5,
+            "name": "Hone",
+            "volatility": 0.21,
+            "price_change_24h": -0.21
+          },
+          {
+            "netuid": 8,
+            "name": "Vanta",
+            "volatility": 0.199,
+            "price_change_24h": -0.14
+          },
+          {
+            "netuid": 12,
+            "name": "Compute Horde",
+            "volatility": 0.02,
+            "price_change_24h": 0.01
+          },
+          {
+            "netuid": 13,
+            "name": "Data Universe",
+            "volatility": 0.164,
+            "price_change_24h": -0.05
+          },
+          {
+            "netuid": 14,
+            "name": "Cacheon",
+            "volatility": 0.05,
+            "price_change_24h": -0.05
+          },
+          {
+            "netuid": 17,
+            "name": "404\u2014GEN",
+            "volatility": 0.31,
+            "price_change_24h": 0.31
+          },
+          {
+            "netuid": 19,
+            "name": "blockmachine",
+            "volatility": 0.56,
+            "price_change_24h": -0.56
+          },
+          {
+            "netuid": 20,
+            "name": "GroundLayer",
+            "volatility": 0.281,
+            "price_change_24h": 0.23
+          },
+          {
+            "netuid": 25,
+            "name": "Mainframe",
+            "volatility": 0.22,
+            "price_change_24h": -0.17
+          },
+          {
+            "netuid": 27,
+            "name": "Team TBC",
+            "volatility": 0.3,
+            "price_change_24h": -0.3
+          },
+          {
+            "netuid": 32,
+            "name": "ItsAI",
+            "volatility": 0.42,
+            "price_change_24h": -0.42
+          },
+          {
+            "netuid": 34,
+            "name": "BitMind",
+            "volatility": 0.3,
+            "price_change_24h": -0.3
+          },
+          {
+            "netuid": 35,
+            "name": "OxMarkets",
+            "volatility": 0.356,
+            "price_change_24h": -0.09
+          },
+          {
+            "netuid": 43,
+            "name": "Graphite",
+            "volatility": 0.11,
+            "price_change_24h": 0.11
+          },
+          {
+            "netuid": 51,
+            "name": "lium.io",
+            "volatility": 0.49,
+            "price_change_24h": -0.49
+          },
+          {
+            "netuid": 52,
+            "name": "Dojo",
+            "volatility": 0.343,
+            "price_change_24h": 0.09
+          },
+          {
+            "netuid": 56,
+            "name": "Gradients",
+            "volatility": 0.41,
+            "price_change_24h": -0.41
+          },
+          {
+            "netuid": 59,
+            "name": "Babelbit",
+            "volatility": 0.15,
+            "price_change_24h": 0.15
+          },
+          {
+            "netuid": 63,
+            "name": "Enigma",
+            "volatility": 0.569,
+            "price_change_24h": -0.43
+          },
+          {
+            "netuid": 64,
+            "name": "Chutes",
+            "volatility": 0.233,
+            "price_change_24h": -0.05
+          },
+          {
+            "netuid": 65,
+            "name": "TAO Private Network",
+            "volatility": 0.34,
+            "price_change_24h": 0.34
+          },
+          {
+            "netuid": 73,
+            "name": "Parked",
+            "volatility": 0.239,
+            "price_change_24h": 0.09
+          },
+          {
+            "netuid": 76,
+            "name": "Byzantium",
+            "volatility": 0.526,
+            "price_change_24h": -0.37
+          },
+          {
+            "netuid": 84,
+            "name": "SN84",
+            "volatility": 0.31,
+            "price_change_24h": 0.27
+          },
+          {
+            "netuid": 103,
+            "name": "Djinn",
+            "volatility": 0.59,
+            "price_change_24h": -0.59
+          },
+          {
+            "netuid": 104,
+            "name": "for sale (burn to uid1)",
+            "volatility": 0.544,
+            "price_change_24h": -0.16
+          },
+          {
+            "netuid": 118,
+            "name": "Ditto",
+            "volatility": 0.479,
+            "price_change_24h": -0.33
+          },
+          {
+            "netuid": 121,
+            "name": "sundae_bar",
+            "volatility": 0.7,
+            "price_change_24h": 0.7
+          },
+          {
+            "netuid": 128,
+            "name": "ByteLeap",
+            "volatility": 0.27,
+            "price_change_24h": 0.27
+          }
+        ],
+        "core": [
+          {
+            "netuid": 1,
+            "name": "Apex",
+            "volatility": 0.807,
+            "price_change_24h": 0.04
+          },
+          {
+            "netuid": 6,
+            "name": "Numinous",
+            "volatility": 1.68,
+            "price_change_24h": -1.68
+          },
+          {
+            "netuid": 7,
+            "name": "Allways",
+            "volatility": 1.63,
+            "price_change_24h": -1.63
+          },
+          {
+            "netuid": 9,
+            "name": "iota",
+            "volatility": 1.393,
+            "price_change_24h": -1.18
+          },
+          {
+            "netuid": 11,
+            "name": "TrajectoryRL",
+            "volatility": 2.82,
+            "price_change_24h": -2.82
+          },
+          {
+            "netuid": 18,
+            "name": "Zeus",
+            "volatility": 1.15,
+            "price_change_24h": -1.15
+          },
+          {
+            "netuid": 22,
+            "name": "Desearch",
+            "volatility": 1.54,
+            "price_change_24h": -1.54
+          },
+          {
+            "netuid": 23,
+            "name": "Trishool",
+            "volatility": 2.66,
+            "price_change_24h": -2.66
+          },
+          {
+            "netuid": 24,
+            "name": "Quasar",
+            "volatility": 3.23,
+            "price_change_24h": -3.23
+          },
+          {
+            "netuid": 26,
+            "name": "Perturb",
+            "volatility": 1.44,
+            "price_change_24h": -1.44
+          },
+          {
+            "netuid": 29,
+            "name": "ho\u03c4floa\u03c4",
+            "volatility": 1.04,
+            "price_change_24h": 1.04
+          },
+          {
+            "netuid": 30,
+            "name": "Endure Network",
+            "volatility": 2.22,
+            "price_change_24h": 2.22
+          },
+          {
+            "netuid": 31,
+            "name": "rec4ll",
+            "volatility": 1.004,
+            "price_change_24h": 0.91
+          },
+          {
+            "netuid": 33,
+            "name": "ReadyAI",
+            "volatility": 3.06,
+            "price_change_24h": -3.06
+          },
+          {
+            "netuid": 36,
+            "name": "Eirel",
+            "volatility": 2.299,
+            "price_change_24h": -1.78
+          },
+          {
+            "netuid": 39,
+            "name": "SN39",
+            "volatility": 0.836,
+            "price_change_24h": 0.23
+          },
+          {
+            "netuid": 41,
+            "name": "Almanac",
+            "volatility": 2.07,
+            "price_change_24h": 2.07
+          },
+          {
+            "netuid": 42,
+            "name": "SN42",
+            "volatility": 2.07,
+            "price_change_24h": 2.07
+          },
+          {
+            "netuid": 44,
+            "name": "Score",
+            "volatility": 1.47,
+            "price_change_24h": 1.47
+          },
+          {
+            "netuid": 45,
+            "name": "AlphaRidge.ai",
+            "volatility": 0.88,
+            "price_change_24h": -0.88
+          },
+          {
+            "netuid": 46,
+            "name": "Zipcode",
+            "volatility": 2.1,
+            "price_change_24h": 2.1
+          },
+          {
+            "netuid": 48,
+            "name": "Quantum Compute",
+            "volatility": 1.78,
+            "price_change_24h": 1.78
+          },
+          {
+            "netuid": 54,
+            "name": "Yanez MIID",
+            "volatility": 3.03,
+            "price_change_24h": -3.03
+          },
+          {
+            "netuid": 55,
+            "name": "NIOME",
+            "volatility": 1.59,
+            "price_change_24h": 1.59
+          },
+          {
+            "netuid": 57,
+            "name": "SN57",
+            "volatility": 2.001,
+            "price_change_24h": 1.26
+          },
+          {
+            "netuid": 61,
+            "name": "RedTeam",
+            "volatility": 2.757,
+            "price_change_24h": -0.26
+          },
+          {
+            "netuid": 66,
+            "name": "ninja",
+            "volatility": 0.734,
+            "price_change_24h": -0.41
+          },
+          {
+            "netuid": 67,
+            "name": "Harnyx",
+            "volatility": 1.84,
+            "price_change_24h": -1.84
+          },
+          {
+            "netuid": 68,
+            "name": "NOVA",
+            "volatility": 2.26,
+            "price_change_24h": 2.26
+          },
+          {
+            "netuid": 70,
+            "name": "NexisGen",
+            "volatility": 0.854,
+            "price_change_24h": -0.16
+          },
+          {
+            "netuid": 72,
+            "name": "StreetVision by NATIX",
+            "volatility": 0.8,
+            "price_change_24h": -0.8
+          },
+          {
+            "netuid": 77,
+            "name": "Liquidity",
+            "volatility": 0.88,
+            "price_change_24h": -0.88
+          },
+          {
+            "netuid": 80,
+            "name": "unknown",
+            "volatility": 1.51,
+            "price_change_24h": -1.51
+          },
+          {
+            "netuid": 81,
+            "name": "SN81",
+            "volatility": 0.951,
+            "price_change_24h": -0.18
+          },
+          {
+            "netuid": 83,
+            "name": "CliqueAI",
+            "volatility": 1.651,
+            "price_change_24h": -0.88
+          },
+          {
+            "netuid": 85,
+            "name": "Vidaio",
+            "volatility": 0.95,
+            "price_change_24h": 0.95
+          },
+          {
+            "netuid": 86,
+            "name": "\u2692",
+            "volatility": 2.01,
+            "price_change_24h": -2.01
+          },
+          {
+            "netuid": 87,
+            "name": "unknown",
+            "volatility": 2.599,
+            "price_change_24h": 0.78
+          },
+          {
+            "netuid": 88,
+            "name": "Investing",
+            "volatility": 2.92,
+            "price_change_24h": -2.92
+          },
+          {
+            "netuid": 89,
+            "name": "InfiniteQuant",
+            "volatility": 1.933,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 90,
+            "name": "SN90",
+            "volatility": 1.611,
+            "price_change_24h": -1.27
+          },
+          {
+            "netuid": 92,
+            "name": "wgmi",
+            "volatility": 0.953,
+            "price_change_24h": -0.61
+          },
+          {
+            "netuid": 93,
+            "name": "Bitcast",
+            "volatility": 0.94,
+            "price_change_24h": -0.94
+          },
+          {
+            "netuid": 94,
+            "name": "pending...",
+            "volatility": 1.761,
+            "price_change_24h": -0.86
+          },
+          {
+            "netuid": 95,
+            "name": "Actual",
+            "volatility": 0.85,
+            "price_change_24h": -0.51
+          },
+          {
+            "netuid": 96,
+            "name": "Verathos",
+            "volatility": 2.179,
+            "price_change_24h": -0.25
+          },
+          {
+            "netuid": 101,
+            "name": "Tag101",
+            "volatility": 0.87,
+            "price_change_24h": 0.87
+          },
+          {
+            "netuid": 106,
+            "name": "Nodexo",
+            "volatility": 2.22,
+            "price_change_24h": 2.22
+          },
+          {
+            "netuid": 107,
+            "name": "Minos",
+            "volatility": 1.183,
+            "price_change_24h": -0.74
+          },
+          {
+            "netuid": 108,
+            "name": "TalkHead",
+            "volatility": 3.07,
+            "price_change_24h": -3.07
+          },
+          {
+            "netuid": 109,
+            "name": "GuardArena",
+            "volatility": 0.81,
+            "price_change_24h": -0.81
+          },
+          {
+            "netuid": 110,
+            "name": "Green Compute",
+            "volatility": 1.97,
+            "price_change_24h": 1.97
+          },
+          {
+            "netuid": 111,
+            "name": "Claims",
+            "volatility": 1.436,
+            "price_change_24h": -0.26
+          },
+          {
+            "netuid": 112,
+            "name": "minotaur",
+            "volatility": 2.07,
+            "price_change_24h": 2.07
+          },
+          {
+            "netuid": 113,
+            "name": "TensorUSD",
+            "volatility": 1.27,
+            "price_change_24h": -1.27
+          },
+          {
+            "netuid": 115,
+            "name": "HashiChain",
+            "volatility": 2.64,
+            "price_change_24h": -2.64
+          },
+          {
+            "netuid": 116,
+            "name": "Memo",
+            "volatility": 3.06,
+            "price_change_24h": 3.06
+          },
+          {
+            "netuid": 119,
+            "name": "Satori",
+            "volatility": 1.47,
+            "price_change_24h": -1.47
+          },
+          {
+            "netuid": 122,
+            "name": "CookingTAO",
+            "volatility": 2.53,
+            "price_change_24h": -2.53
+          },
+          {
+            "netuid": 123,
+            "name": "MANTIS",
+            "volatility": 0.71,
+            "price_change_24h": -0.71
+          },
+          {
+            "netuid": 124,
+            "name": "Swarm",
+            "volatility": 1.066,
+            "price_change_24h": -0.26
+          },
+          {
+            "netuid": 125,
+            "name": "8 Ball",
+            "volatility": 1.057,
+            "price_change_24h": -0.47
+          },
+          {
+            "netuid": 127,
+            "name": "Astrid",
+            "volatility": 1.0,
+            "price_change_24h": -0.27
+          }
+        ],
+        "summary": {
+          "count": 129,
+          "mean_volatility": 2.707,
+          "high_threshold": 3.27,
+          "low_threshold": 0.7
+        }
+      }
+    },
+    "action": "long",
+    "pick": {
+      "subnet": {
+        "netuid": 82,
+        "name": "Compelle",
+        "symbol": null
+      },
+      "score": 74.79,
+      "confidence": 0.7896,
+      "expert_contributions": {
+        "quant": 0.854,
+        "hype": 0.609,
+        "contrarian": 0.25,
+        "technical": 0.75
+      },
+      "scenario_tags": {
+        "regime": "neutral",
+        "rsi": "overbought",
+        "volume": "low"
+      },
+      "audit": {
+        "approved": true,
+        "concerns": [
+          "Low liquidity: volume $681 < $100k",
+          "Extreme 7d volatility: +53.2%"
+        ],
+        "adjusted_confidence": 0.5685
+      },
+      "final_confidence": 0.5685,
+      "action": "long",
+      "tie_break": null
+    },
+    "reason": null,
+    "market_context": {
+      "tao_change_24h": -0.9810852713178295
+    }
+  },
+  {
+    "status": "ok",
+    "date": "2026-07-03",
+    "timestamp_utc": "2026-07-03T18:45:18.948199Z",
+    "regime": "neutral",
+    "rotation_summary": {
+      "timestamp": "2026-07-03T18:45:18.948217Z",
+      "patterns": [
+        {
+          "pattern": "yield_rotation",
+          "description": "High-yield subnets attracting rotation",
+          "netuids": [
+            3,
+            4,
+            5,
+            10,
+            17,
+            21,
+            24,
+            25,
+            26,
+            31,
+            35,
+            37,
+            39,
+            40,
+            45,
+            46,
+            48,
+            50,
+            52,
+            53,
+            58,
+            60,
+            61,
+            63,
+            68,
+            69,
+            72,
+            74,
+            75,
+            81,
+            83,
+            87,
+            89,
+            100,
+            101,
+            107,
+            110,
+            112,
+            116,
+            120,
+            121
+          ],
+          "count": 41,
+          "confidence": 0.795
+        },
+        {
+          "pattern": "emission_defense",
+          "description": "High-emission subnets used as defensive rotation",
+          "netuids": [
+            16,
+            18,
+            20,
+            23,
+            28,
+            29,
+            32,
+            36,
+            41,
+            47,
+            59,
+            62,
+            67,
+            70,
+            71,
+            76,
+            80,
+            82,
+            84,
+            86,
+            90,
+            91,
+            92,
+            94,
+            95,
+            96,
+            98,
+            99,
+            102,
+            103,
+            108,
+            109,
+            113,
+            115,
+            117,
+            118,
+            122,
+            123,
+            124
+          ],
+          "count": 39,
+          "confidence": 0.756
+        },
+        {
+          "pattern": "momentum_rotation",
+          "description": "Subnets with strong 24h momentum and healthy volume",
+          "netuids": [
+            10,
+            11,
+            15,
+            40,
+            46,
+            50,
+            60,
+            63,
+            68,
+            74,
+            81,
+            87,
+            88,
+            100,
+            101,
+            110,
+            116
+          ],
+          "count": 17,
+          "confidence": 0.329
+        },
+        {
+          "pattern": "mean_reversion_rotation",
+          "description": "Oversold high-yield subnets poised for mean reversion",
+          "netuids": [
+            18,
+            91,
+            113,
+            123
+          ],
+          "count": 4,
+          "confidence": 0.078
+        }
+      ],
+      "volatility_clusters": {
+        "high": [
+          {
+            "netuid": 10,
+            "name": "Swap",
+            "volatility": 9.91,
+            "price_change_24h": 9.91
+          },
+          {
+            "netuid": 11,
+            "name": "TrajectoryRL",
+            "volatility": 4.8,
+            "price_change_24h": 4.8
+          },
+          {
+            "netuid": 36,
+            "name": "Eirel",
+            "volatility": 11.91,
+            "price_change_24h": -11.91
+          },
+          {
+            "netuid": 40,
+            "name": "Ralph",
+            "volatility": 4.92,
+            "price_change_24h": 4.92
+          },
+          {
+            "netuid": 46,
+            "name": "Zipcode",
+            "volatility": 4.68,
+            "price_change_24h": 4.68
+          },
+          {
+            "netuid": 49,
+            "name": "Nepher Robotics",
+            "volatility": 9.75,
+            "price_change_24h": 9.75
+          },
+          {
+            "netuid": 50,
+            "name": "Synth",
+            "volatility": 3.83,
+            "price_change_24h": 3.83
+          },
+          {
+            "netuid": 53,
+            "name": "EfficientFrontier",
+            "volatility": 6.887,
+            "price_change_24h": 1.0
+          },
+          {
+            "netuid": 58,
+            "name": "greevils",
+            "volatility": 16.166,
+            "price_change_24h": 0.01
+          },
+          {
+            "netuid": 60,
+            "name": "Bitsec.ai",
+            "volatility": 8.05,
+            "price_change_24h": 8.05
+          },
+          {
+            "netuid": 63,
+            "name": "Enigma",
+            "volatility": 4.68,
+            "price_change_24h": 4.68
+          },
+          {
+            "netuid": 68,
+            "name": "NOVA",
+            "volatility": 5.74,
+            "price_change_24h": 5.74
+          },
+          {
+            "netuid": 70,
+            "name": "NexisGen",
+            "volatility": 18.6,
+            "price_change_24h": -18.6
+          },
+          {
+            "netuid": 71,
+            "name": "Leadpoet",
+            "volatility": 7.46,
+            "price_change_24h": -7.46
+          },
+          {
+            "netuid": 74,
+            "name": "Gittensor",
+            "volatility": 7.62,
+            "price_change_24h": 7.62
+          },
+          {
+            "netuid": 80,
+            "name": "unknown",
+            "volatility": 4.25,
+            "price_change_24h": -4.25
+          },
+          {
+            "netuid": 81,
+            "name": "SN81",
+            "volatility": 6.01,
+            "price_change_24h": 6.01
+          },
+          {
+            "netuid": 86,
+            "name": "\u2692",
+            "volatility": 7.2,
+            "price_change_24h": -7.2
+          },
+          {
+            "netuid": 87,
+            "name": "unknown",
+            "volatility": 8.61,
+            "price_change_24h": 8.61
+          },
+          {
+            "netuid": 88,
+            "name": "Investing",
+            "volatility": 4.18,
+            "price_change_24h": 4.18
+          },
+          {
+            "netuid": 89,
+            "name": "InfiniteQuant",
+            "volatility": 6.2,
+            "price_change_24h": 6.2
+          },
+          {
+            "netuid": 91,
+            "name": "Bitstarter #1",
+            "volatility": 4.467,
+            "price_change_24h": -4.1
+          },
+          {
+            "netuid": 92,
+            "name": "wgmi",
+            "volatility": 11.75,
+            "price_change_24h": -11.75
+          },
+          {
+            "netuid": 96,
+            "name": "Verathos",
+            "volatility": 3.967,
+            "price_change_24h": -2.96
+          },
+          {
+            "netuid": 97,
+            "name": "Albedo",
+            "volatility": 3.91,
+            "price_change_24h": -0.03
+          },
+          {
+            "netuid": 99,
+            "name": "Leoma",
+            "volatility": 23.54,
+            "price_change_24h": -23.54
+          },
+          {
+            "netuid": 100,
+            "name": "BASE",
+            "volatility": 5.54,
+            "price_change_24h": 5.54
+          },
+          {
+            "netuid": 108,
+            "name": "TalkHead",
+            "volatility": 9.43,
+            "price_change_24h": -9.43
+          },
+          {
+            "netuid": 109,
+            "name": "GuardArena",
+            "volatility": 4.53,
+            "price_change_24h": -4.53
+          },
+          {
+            "netuid": 110,
+            "name": "Green Compute",
+            "volatility": 6.9,
+            "price_change_24h": 6.9
+          },
+          {
+            "netuid": 116,
+            "name": "Memo",
+            "volatility": 7.64,
+            "price_change_24h": 7.64
+          },
+          {
+            "netuid": 117,
+            "name": "SN117",
+            "volatility": 9.16,
+            "price_change_24h": -9.16
+          },
+          {
+            "netuid": 123,
+            "name": "MANTIS",
+            "volatility": 4.09,
+            "price_change_24h": -4.09
+          }
+        ],
+        "low": [
+          {
+            "netuid": 0,
+            "name": "SN0",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 1,
+            "name": "Apex",
+            "volatility": 0.371,
+            "price_change_24h": -0.16
+          },
+          {
+            "netuid": 5,
+            "name": "Hone",
+            "volatility": 0.08,
+            "price_change_24h": 0.08
+          },
+          {
+            "netuid": 7,
+            "name": "Allways",
+            "volatility": 0.146,
+            "price_change_24h": -0.06
+          },
+          {
+            "netuid": 8,
+            "name": "Vanta",
+            "volatility": 0.219,
+            "price_change_24h": -0.14
+          },
+          {
+            "netuid": 12,
+            "name": "Compute Horde",
+            "volatility": 0.074,
+            "price_change_24h": -0.05
+          },
+          {
+            "netuid": 13,
+            "name": "Data Universe",
+            "volatility": 0.2,
+            "price_change_24h": -0.2
+          },
+          {
+            "netuid": 14,
+            "name": "Cacheon",
+            "volatility": 0.106,
+            "price_change_24h": -0.04
+          },
+          {
+            "netuid": 17,
+            "name": "404\u2014GEN",
+            "volatility": 0.23,
+            "price_change_24h": 0.23
+          },
+          {
+            "netuid": 19,
+            "name": "blockmachine",
+            "volatility": 0.2,
+            "price_change_24h": -0.2
+          },
+          {
+            "netuid": 22,
+            "name": "Desearch",
+            "volatility": 0.606,
+            "price_change_24h": -0.13
+          },
+          {
+            "netuid": 30,
+            "name": "Endure Network",
+            "volatility": 0.1,
+            "price_change_24h": -0.1
+          },
+          {
+            "netuid": 34,
+            "name": "BitMind",
+            "volatility": 0.253,
+            "price_change_24h": 0.07
+          },
+          {
+            "netuid": 35,
+            "name": "OxMarkets",
+            "volatility": 0.55,
+            "price_change_24h": 0.55
+          },
+          {
+            "netuid": 42,
+            "name": "SN42",
+            "volatility": 0.66,
+            "price_change_24h": -0.66
+          },
+          {
+            "netuid": 43,
+            "name": "Graphite",
+            "volatility": 0.06,
+            "price_change_24h": -0.02
+          },
+          {
+            "netuid": 45,
+            "name": "AlphaRidge.ai",
+            "volatility": 0.234,
+            "price_change_24h": 0.08
+          },
+          {
+            "netuid": 52,
+            "name": "Dojo",
+            "volatility": 0.59,
+            "price_change_24h": 0.59
+          },
+          {
+            "netuid": 56,
+            "name": "Gradients",
+            "volatility": 0.47,
+            "price_change_24h": -0.47
+          },
+          {
+            "netuid": 64,
+            "name": "Chutes",
+            "volatility": 0.66,
+            "price_change_24h": -0.66
+          },
+          {
+            "netuid": 65,
+            "name": "TAO Private Network",
+            "volatility": 0.163,
+            "price_change_24h": 0.09
+          },
+          {
+            "netuid": 72,
+            "name": "StreetVision by NATIX",
+            "volatility": 0.14,
+            "price_change_24h": 0.14
+          },
+          {
+            "netuid": 73,
+            "name": "Parked",
+            "volatility": 0.4,
+            "price_change_24h": -0.4
+          },
+          {
+            "netuid": 75,
+            "name": "Hippius",
+            "volatility": 0.107,
+            "price_change_24h": 0.04
+          },
+          {
+            "netuid": 77,
+            "name": "Liquidity",
+            "volatility": 0.507,
+            "price_change_24h": -0.16
+          },
+          {
+            "netuid": 79,
+            "name": "MVTRX",
+            "volatility": 0.671,
+            "price_change_24h": 0.13
+          },
+          {
+            "netuid": 93,
+            "name": "Bitcast",
+            "volatility": 0.239,
+            "price_change_24h": -0.03
+          },
+          {
+            "netuid": 104,
+            "name": "for sale (burn to uid1)",
+            "volatility": 0.66,
+            "price_change_24h": -0.66
+          },
+          {
+            "netuid": 106,
+            "name": "Nodexo",
+            "volatility": 0.623,
+            "price_change_24h": -0.39
+          },
+          {
+            "netuid": 121,
+            "name": "sundae_bar",
+            "volatility": 0.15,
+            "price_change_24h": 0.15
+          },
+          {
+            "netuid": 125,
+            "name": "8 Ball",
+            "volatility": 0.577,
+            "price_change_24h": 0.02
+          },
+          {
+            "netuid": 127,
+            "name": "Astrid",
+            "volatility": 0.55,
+            "price_change_24h": 0.55
+          },
+          {
+            "netuid": 128,
+            "name": "ByteLeap",
+            "volatility": 0.481,
+            "price_change_24h": -0.09
+          }
+        ],
+        "core": [
+          {
+            "netuid": 2,
+            "name": "DSperse",
+            "volatility": 0.84,
+            "price_change_24h": -0.84
+          },
+          {
+            "netuid": 3,
+            "name": "SN3",
+            "volatility": 2.31,
+            "price_change_24h": 2.31
+          },
+          {
+            "netuid": 4,
+            "name": "Targon",
+            "volatility": 0.93,
+            "price_change_24h": 0.93
+          },
+          {
+            "netuid": 6,
+            "name": "Numinous",
+            "volatility": 0.79,
+            "price_change_24h": -0.79
+          },
+          {
+            "netuid": 9,
+            "name": "iota",
+            "volatility": 1.58,
+            "price_change_24h": 1.58
+          },
+          {
+            "netuid": 15,
+            "name": "ORO",
+            "volatility": 3.05,
+            "price_change_24h": 3.05
+          },
+          {
+            "netuid": 16,
+            "name": "Fast Thinker",
+            "volatility": 2.074,
+            "price_change_24h": -1.44
+          },
+          {
+            "netuid": 18,
+            "name": "Zeus",
+            "volatility": 3.39,
+            "price_change_24h": -3.39
+          },
+          {
+            "netuid": 20,
+            "name": "GroundLayer",
+            "volatility": 2.24,
+            "price_change_24h": -2.24
+          },
+          {
+            "netuid": 21,
+            "name": "AdTAO",
+            "volatility": 2.234,
+            "price_change_24h": 1.29
+          },
+          {
+            "netuid": 23,
+            "name": "Trishool",
+            "volatility": 2.88,
+            "price_change_24h": -2.88
+          },
+          {
+            "netuid": 24,
+            "name": "Quasar",
+            "volatility": 2.41,
+            "price_change_24h": 2.41
+          },
+          {
+            "netuid": 25,
+            "name": "Mainframe",
+            "volatility": 0.76,
+            "price_change_24h": 0.76
+          },
+          {
+            "netuid": 26,
+            "name": "Perturb",
+            "volatility": 1.54,
+            "price_change_24h": 1.54
+          },
+          {
+            "netuid": 27,
+            "name": "Team TBC",
+            "volatility": 0.91,
+            "price_change_24h": -0.91
+          },
+          {
+            "netuid": 28,
+            "name": "gm",
+            "volatility": 1.806,
+            "price_change_24h": -1.1
+          },
+          {
+            "netuid": 29,
+            "name": "ho\u03c4floa\u03c4",
+            "volatility": 1.06,
+            "price_change_24h": -1.06
+          },
+          {
+            "netuid": 31,
+            "name": "rec4ll",
+            "volatility": 2.08,
+            "price_change_24h": 2.08
+          },
+          {
+            "netuid": 32,
+            "name": "ItsAI",
+            "volatility": 2.19,
+            "price_change_24h": -2.19
+          },
+          {
+            "netuid": 33,
+            "name": "ReadyAI",
+            "volatility": 0.78,
+            "price_change_24h": -0.78
+          },
+          {
+            "netuid": 37,
+            "name": "Aurelius",
+            "volatility": 1.66,
+            "price_change_24h": 1.66
+          },
+          {
+            "netuid": 38,
+            "name": "ChronoLLM",
+            "volatility": 1.93,
+            "price_change_24h": 1.93
+          },
+          {
+            "netuid": 39,
+            "name": "SN39",
+            "volatility": 2.62,
+            "price_change_24h": 2.62
+          },
+          {
+            "netuid": 41,
+            "name": "Almanac",
+            "volatility": 1.6,
+            "price_change_24h": -1.6
+          },
+          {
+            "netuid": 44,
+            "name": "Score",
+            "volatility": 0.76,
+            "price_change_24h": 0.76
+          },
+          {
+            "netuid": 47,
+            "name": "EvolAI",
+            "volatility": 2.579,
+            "price_change_24h": -1.75
+          },
+          {
+            "netuid": 48,
+            "name": "Quantum Compute",
+            "volatility": 2.11,
+            "price_change_24h": 2.11
+          },
+          {
+            "netuid": 51,
+            "name": "lium.io",
+            "volatility": 0.7,
+            "price_change_24h": -0.7
+          },
+          {
+            "netuid": 54,
+            "name": "Yanez MIID",
+            "volatility": 0.691,
+            "price_change_24h": 0.53
+          },
+          {
+            "netuid": 55,
+            "name": "NIOME",
+            "volatility": 2.55,
+            "price_change_24h": 2.55
+          },
+          {
+            "netuid": 57,
+            "name": "SN57",
+            "volatility": 1.934,
+            "price_change_24h": -0.53
+          },
+          {
+            "netuid": 59,
+            "name": "Babelbit",
+            "volatility": 2.19,
+            "price_change_24h": -2.19
+          },
+          {
+            "netuid": 61,
+            "name": "RedTeam",
+            "volatility": 2.83,
+            "price_change_24h": 0.38
+          },
+          {
+            "netuid": 62,
+            "name": "Ridges",
+            "volatility": 3.48,
+            "price_change_24h": -3.48
+          },
+          {
+            "netuid": 66,
+            "name": "ninja",
+            "volatility": 2.0,
+            "price_change_24h": 0.18
+          },
+          {
+            "netuid": 67,
+            "name": "Harnyx",
+            "volatility": 2.25,
+            "price_change_24h": -2.25
+          },
+          {
+            "netuid": 69,
+            "name": "Herald",
+            "volatility": 0.92,
+            "price_change_24h": 0.92
+          },
+          {
+            "netuid": 76,
+            "name": "Byzantium",
+            "volatility": 2.52,
+            "price_change_24h": -2.52
+          },
+          {
+            "netuid": 78,
+            "name": "Vocence",
+            "volatility": 3.079,
+            "price_change_24h": 1.7
+          },
+          {
+            "netuid": 82,
+            "name": "Compelle",
+            "volatility": 3.62,
+            "price_change_24h": -3.62
+          },
+          {
+            "netuid": 83,
+            "name": "CliqueAI",
+            "volatility": 1.87,
+            "price_change_24h": 1.87
+          },
+          {
+            "netuid": 84,
+            "name": "SN84",
+            "volatility": 3.61,
+            "price_change_24h": -3.61
+          },
+          {
+            "netuid": 85,
+            "name": "Vidaio",
+            "volatility": 0.98,
+            "price_change_24h": -0.98
+          },
+          {
+            "netuid": 90,
+            "name": "SN90",
+            "volatility": 2.181,
+            "price_change_24h": -1.92
+          },
+          {
+            "netuid": 94,
+            "name": "pending...",
+            "volatility": 1.89,
+            "price_change_24h": -1.89
+          },
+          {
+            "netuid": 95,
+            "name": "Actual",
+            "volatility": 2.78,
+            "price_change_24h": -2.78
+          },
+          {
+            "netuid": 98,
+            "name": "NeverPlayAlone",
+            "volatility": 2.39,
+            "price_change_24h": -2.39
+          },
+          {
+            "netuid": 101,
+            "name": "Tag101",
+            "volatility": 3.11,
+            "price_change_24h": 3.11
+          },
+          {
+            "netuid": 102,
+            "name": "ConnitoAI",
+            "volatility": 3.686,
+            "price_change_24h": -1.14
+          },
+          {
+            "netuid": 103,
+            "name": "Djinn",
+            "volatility": 1.64,
+            "price_change_24h": -1.64
+          },
+          {
+            "netuid": 105,
+            "name": "Beam",
+            "volatility": 2.509,
+            "price_change_24h": 2.2
+          },
+          {
+            "netuid": 107,
+            "name": "Minos",
+            "volatility": 1.53,
+            "price_change_24h": 1.53
+          },
+          {
+            "netuid": 111,
+            "name": "Claims",
+            "volatility": 1.76,
+            "price_change_24h": 1.76
+          },
+          {
+            "netuid": 112,
+            "name": "minotaur",
+            "volatility": 1.58,
+            "price_change_24h": 1.58
+          },
+          {
+            "netuid": 113,
+            "name": "TensorUSD",
+            "volatility": 3.55,
+            "price_change_24h": -3.55
+          },
+          {
+            "netuid": 114,
+            "name": "SOMA",
+            "volatility": 1.84,
+            "price_change_24h": 1.84
+          },
+          {
+            "netuid": 115,
+            "name": "HashiChain",
+            "volatility": 2.91,
+            "price_change_24h": -2.91
+          },
+          {
+            "netuid": 118,
+            "name": "Ditto",
+            "volatility": 1.56,
+            "price_change_24h": -1.56
+          },
+          {
+            "netuid": 119,
+            "name": "Satori",
+            "volatility": 2.32,
+            "price_change_24h": 2.32
+          },
+          {
+            "netuid": 120,
+            "name": "Affine",
+            "volatility": 0.78,
+            "price_change_24h": 0.78
+          },
+          {
+            "netuid": 122,
+            "name": "CookingTAO",
+            "volatility": 1.81,
+            "price_change_24h": -1.6
+          },
+          {
+            "netuid": 124,
+            "name": "Swarm",
+            "volatility": 1.37,
+            "price_change_24h": -1.37
+          },
+          {
+            "netuid": 126,
+            "name": "Poker44",
+            "volatility": 2.227,
+            "price_change_24h": 1.58
+          }
+        ],
+        "summary": {
+          "count": 129,
+          "mean_volatility": 3.064,
+          "high_threshold": 3.83,
+          "low_threshold": 0.671
+        }
+      }
+    },
+    "action": "long",
+    "pick": {
+      "subnet": {
+        "netuid": 107,
+        "name": "Minos",
+        "symbol": null
+      },
+      "score": 77.9,
+      "confidence": 0.834,
+      "expert_contributions": {
+        "quant": 0.7173,
+        "hype": 0.6265,
+        "dark_horse": 0.59,
+        "technical": 0.75,
+        "signal_contributions": {
+          "rsi_crossover": {
+            "score": 0.264,
+            "weight": 1.0,
+            "contribution": 0.264
+          },
+          "macd_cross": {
+            "score": 0.7002,
+            "weight": 1.0,
+            "contribution": 0.7002
+          },
+          "stochastic_reversal": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          },
+          "bollinger_squeeze": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          },
+          "mfi_flow": {
+            "score": 0.5493,
+            "weight": 1.0,
+            "contribution": 0.5493
+          },
+          "cci_divergence": {
+            "score": 0.2757,
+            "weight": 1.0,
+            "contribution": 0.2757
+          },
+          "williams_r": {
+            "score": 0.5957,
+            "weight": 1.0,
+            "contribution": 0.5957
+          },
+          "keltner_channel": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          }
+        },
+        "active_signals": [
+          "rsi_crossover",
+          "macd_cross",
+          "cci_divergence",
+          "williams_r"
+        ],
+        "technical_score": 0.4856
+      },
+      "scenario_tags": {
+        "regime": "neutral_bearish",
+        "rsi": "overbought",
+        "volume": "low",
+        "price_direction": "up"
+      },
+      "audit": {
+        "approved": true,
+        "concerns": [
+          "Low liquidity: volume $2,855 < $100k"
+        ],
+        "adjusted_confidence": 0.6672
+      },
+      "final_confidence": 0.6672,
+      "action": "long",
+      "tie_break": null
+    },
+    "reason": null,
+    "market_context": {
+      "tao_change_24h": -0.19054263565891474
+    }
+  }
+]

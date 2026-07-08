@@ -1,0 +1,44 @@
+{
+  "expert_weights": {
+    "quant": 0.25,
+    "hype": 0.25,
+    "dark_horse": 0.25,
+    "technical": 0.25
+  },
+  "performance_history": {
+    "accuracy": 0.0,
+    "total_records": 0,
+    "correct": 0,
+    "wrong": 0,
+    "pending": 0
+  },
+  "council_dispositions": {
+    "quant": "neutral",
+    "hype": "neutral",
+    "dark_horse": "neutral",
+    "technical": "neutral"
+  },
+  "council": {
+    "quant": {
+      "disposition": "neutral",
+      "lens": "fundamental/yield",
+      "pick": null
+    },
+    "hype": {
+      "disposition": "neutral",
+      "lens": "momentum/social",
+      "pick": null
+    },
+    "dark_horse": {
+      "disposition": "neutral",
+      "lens": "inverse/RSI mean-reversion",
+      "pick": null
+    },
+    "technical": {
+      "disposition": "neutral",
+      "lens": "technical/trend",
+      "pick": null
+    }
+  },
+  "last_updated": "2026-07-05T01:14:00Z"
+}

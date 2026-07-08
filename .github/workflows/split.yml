@@ -1,0 +1,36 @@
+name: Split Server
+
+on:
+  push:
+    paths:
+      - .github/workflows/split.yml
+  workflow_dispatch: {}
+
+jobs:
+  split:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore original server.py
+        run: |
+          git restore -s 5de12060 -- server.py
+          wc -l server.py
+      - name: Remove old split artifacts
+        run: rm -rf server/
+      - name: Run splitter
+        run: python3 scripts/split_server.py
+      - name: Verify line counts
+        run: wc -l server/config.py server/routes.py server/__init__.py server.py
+      - name: Commit and push
+        run: |
+          git config user.name Ditto
+          git config user.email ditto@heyditto.ai
+          git add -A
+          git commit -m 'refactor: split server.py into server/ package' || echo 'no changes'
+          git push
+      - name: Cleanup workflow
+        run: rm -f .github/workflows/split.yml

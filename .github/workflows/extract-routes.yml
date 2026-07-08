@@ -1,0 +1,45 @@
+name: Extract server_original routes
+on:
+  push:
+    paths: ['.extract-routes-trigger']
+  workflow_dispatch:
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          echo "=== LINE COUNT ===" > routes_found.txt
+          wc -l server_original.py >> routes_found.txt
+          echo "" >> routes_found.txt
+          echo "=== APP INIT ===" >> routes_found.txt
+          grep -n "app = FastAPI" server_original.py >> routes_found.txt || echo "NO APP INIT" >> routes_found.txt
+          echo "" >> routes_found.txt
+          echo "=== HEALTH ===" >> routes_found.txt
+          grep -n "/health" server_original.py >> routes_found.txt || echo "NO HEALTH" >> routes_found.txt
+          echo "" >> routes_found.txt
+          echo "=== MOUNTS ===" >> routes_found.txt
+          grep -n "app.mount" server_original.py >> routes_found.txt || echo "NO MOUNTS" >> routes_found.txt
+          echo "" >> routes_found.txt
+          echo "=== ROUTES ===" >> routes_found.txt
+          grep -n "@app.get" server_original.py >> routes_found.txt || echo "NO ROUTES" >> routes_found.txt
+          echo "" >> routes_found.txt
+          echo "=== EXCEPTION HANDLERS ===" >> routes_found.txt
+          grep -n "exception_handler" server_original.py >> routes_found.txt || echo "NO HANDLERS" >> routes_found.txt
+          echo "" >> routes_found.txt
+          echo "=== LAST 10 LINES ===" >> routes_found.txt
+          tail -10 server_original.py >> routes_found.txt
+          echo "" >> routes_found.txt
+          echo "=== LINES 330-340 ===" >> routes_found.txt
+          sed -n '330,340p' server_original.py >> routes_found.txt
+      - run: |
+          git config user.name "Ditto"
+          git config user.email "ditto@heyditto.ai"
+          git add routes_found.txt
+          git commit -m "diagnostic: server_original.py route analysis"
+          git push origin main

@@ -1,0 +1,465 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="wrap">
+
+  <!-- ===================== STICKY HEADER ===================== -->
+  <header class="top">
+    <div class="top-inner">
+      <div class="logo">
+        <div class="logo-mark">S</div>
+        <div>
+          <div class="logo-text">Simi<span>Vision</span></div>
+          <div class="logo-sub">Subnet Intelligence Cockpit</div>
+        </div>
+      </div>
+      <div class="src-tag">
+        DATA SOURCE: <b>{{ data_source|default('cache')|upper }}</b>
+        {% if usd_rate %}· TAO <b>${{ "%.2f"|format(usd_rate|float) }}</b>{% endif %}
+      </div>
+      <div class="header-actions">
+        <span class="live-pill"><span class="live-dot"></span>LIVE</span>
+        <span class="utc-clock" id="utcClock">--:--:-- UTC</span>
+      </div>
+    </div>
+  </header>
+
+  {% if render_error %}
+  <div class="card card-muted mt-4" style="border-color: rgba(244,63,94,0.35);">
+    <div class="section-label" style="color:#ff3366;">RENDER NOTICE</div>
+    <div class="section-sub">A section failed to compute; showing safe defaults. {{ render_error }}</div>
+  </div>
+  {% endif %}
+
+  <!-- ===================== MARKET SNAPSHOT KPI STRIP ===================== -->
+  <div class="row">
+    <div class="section-label">Market Snapshot</div>
+    <h2 class="section-title">Bittensor Subnet Intelligence</h2>
+    <p class="section-sub">Live scanner across {{ market_intelligence.total|default(0) }} subnets · breadth
+      <b>{{ market_intelligence.breadth|default('neutral')|upper }}</b>
+    </p>
+
+    <div class="kpi-grid" style="grid-template-columns: repeat(6, 1fr);">
+      <div class="kpi-cell">
+        <div class="k">Subnets</div>
+        <div class="v">{{ market_intelligence.total|default(0) }}</div>
+        <div class="sub">{{ market_intelligence.gainers|default(0) }} gainers / {{ market_intelligence.losers|default(0) }} losers</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="k">Avg 24h</div>
+        <div class="v">{{ "%+.2f"|format(market_intelligence.avg_change_24h|default(0)|float) }}%</div>
+        <div class="sub">24h change</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="k">Avg APY</div>
+        <div class="v">{{ "%.2f"|format(market_intelligence.avg_apy|default(0)|float) }}%</div>
+        <div class="sub">stake yield</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="k">Top Gainer</div>
+        <div class="v" style="font-size:15px;">{{ market_intelligence.top_gainer.name if market_intelligence.top_gainer else '—' }}</div>
+        <div class="sub">{{ "%+.2f"|format((market_intelligence.top_gainer.change|default(0))|float) }}% · 24h</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="k">Top Loser</div>
+        <div class="v" style="font-size:15px;">{{ market_intelligence.top_loser.name if market_intelligence.top_loser else '—' }}</div>
+        <div class="sub">{{ "%+.2f"|format((market_intelligence.top_loser.change|default(0))|float) }}% · 24h</div>
+      </div>
+      <div class="kpi-cell">
+        <div class="k">TAO Price</div>
+        <div class="v">${{ "%.2f"|format((market_intelligence.tao_price_usd|default(usd_rate|default(0)))|float) }}</div>
+        <div class="sub">market cap ${{ "{:,.0f}".format(market_intelligence.total_market_cap_usd|default(0)|float) }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== SIMIVISION TOP PICKS ===================== -->
+  <div class="row">
+    <div class="section-label">SimiVision Top Picks</div>
+    <h2 class="section-title">Council Conviction Ranking</h2>
+    <p class="section-sub">Top 6 subnets by emission, yield & momentum — color-coded conviction indicators (red / gold / lime / cyan-green).</p>
+
+    {% if simivision_picks %}
+    <div class="picks">
+      {% for pick in simivision_picks %}
+      {% set conv = (pick.conviction|default(0))|int %}
+      {% set tier = 'tier-cyan' if conv > 80 else ('tier-lime' if conv > 60 else ('tier-gold' if conv > 40 else 'tier-red')) %}
+      {% set rec = (pick.recommendation|default('WATCH'))|string|upper %}
+      {% set sell_active = pick.sell.active if pick.sell is mapping else false %}
+      {% set hot_active = pick.hot.active if pick.hot is mapping else false %}
+      <div class="pick-card {{ 'sell-accent' if sell_active else '' }}">
+        <div class="pick-rank">#{{ pick.rank|default(loop.index) }}</div>
+        <div class="pick-name pick-name-lg">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
+        <div class="pick-meta">SN{{ pick.netuid }} · {{ "%.2f"|format((pick.emission|default(0))|float) }} TAO/day · {{ "%.1f"|format((pick.apy|default(0))|float) }}% APY</div>
+
+        <div class="pick-row">
+          <div class="conviction-wrap">
+            <div class="conviction-lbl">Conviction</div>
+            <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ conv }}%;"></div></div>
+            <div class="pred-line">{{ "%+.2f"|format((pick.price_change_24h|default(0))|float) }}% 24h · ${{ "%.4f"|format((pick.price|default(0))|float) }}</div>
+          </div>
+          <div class="conv-ring {{ tier }}" style="--ring-pct: {{ conv }};">
+            <svg viewBox="0 0 46 46">
+              <circle class="conv-ring-bg" cx="23" cy="23" r="20"></circle>
+              <circle class="conv-ring-fg" cx="23" cy="23" r="20"></circle>
+            </svg>
+            <div class="conv-ring-val">{{ conv }}</div>
+          </div>
+        </div>
+
+        <div class="tags" style="margin-top:12px;">
+          {% set rec_type = (pick.recommendation_type|default('trade'))|string|lower %}
+          {% if rec == 'BUY' and rec_type == 'stake' %}
+          <span class="badge stake-badge">STAKE</span>
+          {% else %}
+          <span class="badge {% if rec == 'BUY' %}badge-buy{% elif rec == 'SELL' %}badge-sell{% elif rec == 'HOLD' %}badge-hold{% else %}badge-watch{% endif %}">{{ rec }}</span>
+          {% endif %}
+          {% if sell_active %}<span class="badge badge-sell">SELL ALERT</span>{% elif hot_active %}<span class="badge badge-hot">HOT</span>{% endif %}
+          {% if pick.prediction and pick.prediction.predicted_pct is not none %}
+          <span class="badge badge-watch pred-badge">PRED {{ "%+.1f"|format((pick.prediction.predicted_pct|default(0))|float) }}%</span>
+          {% endif %}
+        </div>
+
+        {% if pick.reasons %}
+        <ul class="reasons">
+          {% for r in pick.reasons[:3] %}<li>{{ r }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if pick.prediction and pick.prediction.statement %}
+        <div class="pred-line glow-text">{{ pick.prediction.statement }}</div>
+        {% endif %}
+
+        {% if pick.sparkline and pick.sparkline|length > 1 %}
+        <div class="spark-wrap" style="margin-top:12px;">
+          <canvas class="spark" width="96" height="36" data-spark="{{ pick.sparkline|join(',') }}"></canvas>
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card card-muted"><p class="empty">Council is convening — no SimiVision picks available yet.</p></div>
+    {% endif %}
+  </div>
+
+  <!-- ===================== HOUR / DAY PICKS ===================== -->
+  <div class="row">
+    <div class="section-label">Hour / Day Picks</div>
+    <h2 class="section-title">State-Vector Leaderboard</h2>
+    <p class="section-sub">Top 3 subnets by short-horizon (1h) and 24h Council state-vector scores — conviction bars color-coded by confidence.</p>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-head"><h3>Hour Horizon</h3><span class="src-tag">top 3 · 1h lens</span></div>
+        {% set hp = hour_picks|safe_list %}
+        {% if hp %}
+        <div class="picks">
+          {% for pick in hp %}
+          {% set conf = ((pick.confidence|default(0))|float * 100)|round %}
+          {% set tier = 'tier-cyan' if conf > 75 else ('tier-lime' if conf > 55 else ('tier-gold' if conf > 35 else 'tier-red')) %}
+          {% set sig = pick.signals if pick.signals is mapping else {} %}
+          <div class="pick-card">
+            <div class="pick-rank">#{{ loop.index }}</div>
+            <div class="pick-name pick-name-lg">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
+            <div class="pick-meta">SN{{ pick.netuid }} · score <b>{{ "%.1f"|format((pick.score|default(0))|float) }}</b></div>
+
+            <div class="conviction-bar" style="margin-top:8px;"><div class="conviction-fill {{ tier }}" style="width: {{ conf }}%;"></div></div>
+
+            <div class="kpi-grid" style="grid-template-columns: repeat(3,1fr); margin-top:8px;">
+              <div class="kpi-cell"><div class="k">24h</div><div class="v">{{ "%+.2f"|format((sig.price_change_24h|default(0))|float) }}%</div></div>
+              <div class="kpi-cell"><div class="k">APY</div><div class="v">{{ "%.1f"|format((sig.apy|default(0))|float) }}%</div></div>
+              <div class="kpi-cell"><div class="k">Emission</div><div class="v">{{ "%.2f"|format((sig.emission|default(0))|float) }}</div></div>
+            </div>
+
+            {% for tk, tv in (pick.scenario_tags or {}).items() %}<span class="badge badge-watch">{{ tk }}: {{ tv }}</span>{% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty">No hour-horizon picks available.</p>
+        {% endif %}
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Day Horizon</h3><span class="src-tag">top 3 · 24h lens</span></div>
+        {% set dyp = day_picks|safe_list %}
+        {% if dyp %}
+        <div class="picks">
+          {% for pick in dyp %}
+          {% set conf = ((pick.confidence|default(0))|float * 100)|round %}
+          {% set tier = 'tier-cyan' if conf > 75 else ('tier-lime' if conf > 55 else ('tier-gold' if conf > 35 else 'tier-red')) %}
+          {% set sig = pick.signals if pick.signals is mapping else {} %}
+          <div class="pick-card">
+            <div class="pick-rank">#{{ loop.index }}</div>
+            <div class="pick-name pick-name-lg">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
+            <div class="pick-meta">SN{{ pick.netuid }} · score <b>{{ "%.1f"|format((pick.score|default(0))|float) }}</b></div>
+
+            <div class="conviction-bar" style="margin-top:8px;"><div class="conviction-fill {{ tier }}" style="width: {{ conf }}%;"></div></div>
+
+            <div class="kpi-grid" style="grid-template-columns: repeat(3,1fr); margin-top:8px;">
+              <div class="kpi-cell"><div class="k">24h</div><div class="v">{{ "%+.2f"|format((sig.price_change_24h|default(0))|float) }}%</div></div>
+              <div class="kpi-cell"><div class="k">APY</div><div class="v">{{ "%.1f"|format((sig.apy|default(0))|float) }}%</div></div>
+              <div class="kpi-cell"><div class="k">Volume</div><div class="v">{{ "{:,.0f}".format((sig.volume|default(0))|float) }}</div></div>
+            </div>
+
+            {% for tk, tv in (pick.scenario_tags or {}).items() %}<span class="badge badge-watch">{{ tk }}: {{ tv }}</span>{% endfor %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty">No day-horizon picks available.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== DAILY PICK ===================== -->
+  <div class="row">
+    <div class="section-label">Daily Pick</div>
+    <h2 class="section-title">Audited Council Selection</h2>
+    <p class="section-sub">Single highest-conviction subnet for today, gated by RedTeam audit — downgraded to HOLD when confidence &lt; 0.45.</p>
+
+    {% set dpick = daily_pick if daily_pick is mapping else {} %}
+    {% set pk = dpick.pick if dpick.pick is mapping else none %}
+    {% if pk and pk.subnet %}
+    {% set audit = pk.audit if pk.audit is mapping else {} %}
+    {% set fc = ((pk.final_confidence|default(pk.confidence|default(0)))|float * 100)|round %}
+    {% set tier = 'tier-cyan' if fc > 75 else ('tier-lime' if fc > 55 else ('tier-gold' if fc > 35 else 'tier-red')) %}
+    {% set act = (dpick.action|default(pk.action|default('hold')))|string|upper %}
+    <div class="hero-card">
+      <div class="pick-rank" style="font-size:24px;">★</div>
+      <div class="pick-name pick-name-lg" style="font-size:28px;">{{ pk.subnet.name|default('SN' ~ pk.subnet.netuid) }}</div>
+      <div class="pick-meta">SN{{ pk.subnet.netuid }}{% if pk.subnet.symbol %} · {{ pk.subnet.symbol }}{% endif %} · {{ dpick.date|default('today') }}{% if dpick.regime %} · {{ dpick.regime }}{% endif %}</div>
+
+      <div class="pick-row">
+        <div class="conviction-wrap">
+          <div class="conviction-lbl">Final Confidence</div>
+          <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ fc|round }}%;"></div></div>
+          <div class="pred-line">score <b>{{ "%.1f"|format((pk.score|default(0))|float) }}</b> · raw conf {{ "%.2f"|format((pk.confidence|default(0))|float) }}</div>
+        </div>
+        <div class="conv-ring {{ tier }}" style="--ring-pct: {{ fc }};">
+          <svg viewBox="0 0 46 46">
+            <circle class="conv-ring-bg" cx="23" cy="23" r="20"></circle>
+            <circle class="conv-ring-fg" cx="23" cy="23" r="20"></circle>
+          </svg>
+          <div class="conv-ring-val">{{ fc|round }}</div>
+        </div>
+      </div>
+
+      <div class="tags" style="margin-top:12px;">
+        <span class="badge {% if act == 'BUY' %}badge-buy{% elif act == 'SELL' %}badge-sell{% else %}badge-hold{% endif %}">{{ act }}</span>
+        {% if audit.approved %}<span class="hero-audit">AUDIT PASSED</span>{% else %}<span class="hero-audit" style="border-color:rgba(244,63,94,0.35);color:#ff3366;">AUDIT FLAGGED</span>{% endif %}
+      </div>
+
+      {% if audit.concerns %}
+      <ul class="reasons">
+        {% for c in audit.concerns[:4] %}<li>{{ c }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+
+      {% if dpick.reason %}
+      <div class="pred-line" style="margin-top:8px;">Note: {{ dpick.reason }}</div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="card card-muted"><p class="empty">No audited daily pick available.{% if dpick.reason %} ({{ dpick.reason }}){% endif %}</p></div>
+    {% endif %}
+  </div>
+
+  <!-- ===================== UNDERVALUED RADAR + MOMENTUM RADAR ===================== -->
+  <div class="row">
+    <div class="two-col">
+      <div class="card span-7">
+        <div class="card-head">
+          <h3>Undervalued Radar</h3>
+          <span class="src-tag">top 8 · score 0–100</span>
+        </div>
+        {% if undervalued_radar %}
+        <table class="tbl">
+          <thead><tr><th>#</th><th>Subnet</th><th>APY</th><th>24h</th><th>Score</th><th>Flag</th></tr></thead>
+          <tbody>
+            {% for sn in undervalued_radar %}
+            <tr>
+              <td>{{ sn.rank|default(loop.index) }}</td>
+              <td class="text-primary">{{ sn.name|default('SN' ~ sn.netuid) }} <span class="pick-meta">SN{{ sn.netuid }}</span></td>
+              <td>{{ "%.1f"|format((sn.apy|default(0))|float) }}%</td>
+              <td>{{ "%+.2f"|format((sn.price_change_24h|default(0))|float) }}%</td>
+              <td><b>{{ "%.1f"|format((sn.undervalued_score|default(0))|float) }}</b></td>
+              <td>{% if sn.significantly_undervalued %}<span class="badge badge-buy">DEEP VALUE</span>{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p class="empty">No undervalued subnets detected.</p>
+        {% endif %}
+      </div>
+
+      <div class="card span-5">
+        <div class="card-head"><h3>Momentum Radar</h3><span class="src-tag">top 3 picks · 5 dims</span></div>
+        <p class="empty">Momentum radar data pending.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== TECHNICAL INDICATORS ===================== -->
+  <div class="row">
+    <div class="section-label">Technical Indicators</div>
+    <h2 class="section-title">Oscillator Panel</h2>
+    <p class="section-sub">RSI · Stochastic · Bollinger · MFI · CCI · Williams %R · Keltner · MACD — convergence across the top 6 subnets.</p>
+
+    {% if technical_indicators %}
+    <div class="picks">
+      {% for ti in technical_indicators %}
+      {% set ind = ti.indicators if ti.indicators is mapping else {} %}
+      {% set conv = ti.convergence if ti.convergence is mapping else {} %}
+      {% set sell_active = ti.sell.active if ti.sell is mapping else false %}
+      <div class="ind-cell">
+        <div class="ti-head">
+          <div class="pick-name">{{ ti.name|default('SN' ~ ti.netuid) }}</div>
+          <span class="pick-meta">SN{{ ti.netuid }}</span>
+          {% if conv.convergent %}<span class="badge {% if conv.type == 'oversold' %}badge-buy{% elif conv.type == 'overbought' %}badge-sell{% else %}badge-hold{% endif %}">{{ conv.type|default('')|upper }} {{ conv.count|default(0) }}/{{ conv.total|default(0) }}</span>{% endif %}
+        </div>
+        <div class="kpi-grid" style="grid-template-columns: repeat(5,1fr); margin-top:8px;">
+          {% set rsi = ind.rsi if ind.rsi is mapping else {} %}
+          <div class="kpi-cell"><div class="k">RSI</div><div class="v">{{ "%.1f"|format((rsi.value|default(0))|float) }}</div></div>
+          {% set sto = ind.stochastic if ind.stochastic is mapping else {} %}
+          <div class="kpi-cell"><div class="k">Stoch %K</div><div class="v">{{ "%.1f"|format((sto.k|default(0))|float) }}</div></div>
+          {% set mfi = ind.mfi if ind.mfi is mapping else {} %}
+          <div class="kpi-cell"><div class="k">MFI</div><div class="v">{{ "%.1f"|format((mfi.mfi|default(0))|float) }}</div></div>
+          {% set cci = ind.cci if ind.cci is mapping else {} %}
+          <div class="kpi-cell"><div class="k">CCI</div><div class="v">{{ "%.1f"|format((cci.cci|default(0))|float) }}</div></div>
+          {% set wr = ind.williams_r if ind.williams_r is mapping else {} %}
+          <div class="kpi-cell"><div class="k">Williams %R</div><div class="v">{{ "%.1f"|format((wr.williams_r|default(0))|float) }}</div></div>
+          {% set macd = ind.macd if ind.macd is mapping else {} %}
+          <div class="kpi-cell"><div class="k">MACD</div><div class="v">{{ "%+.3f"|format((macd.histogram|default(0))|float) }}</div></div>
+        </div>
+        {% if conv.indicators %}
+        <div class="pred-line" style="margin-top:8px;">Convergence: <b>{{ conv.count|default(0) }}/{{ conv.total|default(0) }}</b> {{ conv.type|default('') }} · agreement {{ "%.0f"|format((conv.agreement|default(0))|float * 100) }}%</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="card card-muted"><p class="empty">No technical indicator data available.</p></div>
+    {% endif %}
+  </div>
+
+  <!-- ===================== ROTATION TRACKER ===================== -->
+  <div class="row">
+    <div class="section-label">Rotation Tracker</div>
+    <h2 class="section-title">Capital Flow Patterns</h2>
+    <p class="section-sub">Detected rotation regimes (momentum / yield / defense / mean-reversion) and volatility clusters across the network.</p>
+
+    {% set rt = rotation_tracker if rotation_tracker is mapping else {} %}
+    {% set patterns = rt.patterns|safe_list %}
+    {% set vc = rt.volatility_clusters if rt.volatility_clusters is mapping else {} %}
+    {% set vsum = vc.summary if vc.summary is mapping else {} %}
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-head"><h3>Rotation Patterns</h3><span class="src-tag">{{ patterns|length }} active</span></div>
+        {% if patterns %}
+        {% for p in patterns %}
+        <div class="radar-item">
+          <div class="pick-name"><b>{{ p.pattern|default('')|replace('_',' ')|upper }}</b> · {{ p.description|default('') }}</div>
+          <div class="pick-meta">{{ p.count|default(0) }} subnets · confidence {{ "%.0f"|format((p.confidence|default(0))|float * 100) }}%</div>
+          {% if p.netuids %}
+          <div class="pick-meta">SN {{ p.netuids|join(', SN ') }}</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="empty">No rotation patterns detected.</p>
+        {% endif %}
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Volatility Clusters</h3><span class="src-tag">mean {{ "%.2f"|format((vsum.mean_volatility|default(0))|float) }}</span></div>
+        <div class="kpi-grid" style="grid-template-columns: repeat(3,1fr); margin-bottom:12px;">
+          <div class="kpi-cell"><div class="k">High</div><div class="v">{{ vc.high|default([])|length }}</div><div class="sub">volatile</div></div>
+          <div class="kpi-cell"><div class="k">Core</div><div class="v">{{ vc.core|default([])|length }}</div><div class="sub">stable</div></div>
+          <div class="kpi-cell"><div class="k">Low</div><div class="v">{{ vc.low|default([])|length }}</div><div class="sub">dormant</div></div>
+        </div>
+        {% set high = vc.high|safe_list %}
+        {% if high %}
+        {% for s in high %}
+        <div class="radar-item">
+          <div class="pick-name">{{ s.name|default('SN' ~ s.netuid) }} <span class="pick-meta">SN{{ s.netuid }}</span></div>
+          <div class="pick-meta">vol {{ "%.2f"|format((s.volatility|default(0))|float) }} · {{ "%+.2f"|format((s.price_change_24h|default(0))|float) }}%</div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="empty">No volatility clusters.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== PUMP CYCLE ANALYTICS ===================== -->
+  <div class="row">
+    <div class="section-label">Pump Cycle Analytics</div>
+    <h2 class="section-title">5-Phase Conviction Ladder</h2>
+    <p class="section-sub">Real-time pump cycle detection, behavioral profiles, and re-pump probability per subnet.</p>
+
+    {% set pump = pump_analytics if pump_analytics is mapping else {} %}
+    {% set pump_subnets = pump.data.subnets|safe_list if pump.data is mapping else [] %}
+
+    <div class="card">
+      <div class="card-head"><h3>Cycle Profiles</h3><span class="src-tag">{{ pump_subnets|length }} tracked</span></div>
+      {% if pump_subnets %}
+      <table class="tbl">
+        <thead><tr><th>Subnet</th><th>Current Phase</th><th>Duration in Phase</th><th>Avg Pump Duration</th><th>Avg Consolidation</th><th>Re-Pump Rate</th><th>Typical Pattern</th></tr></thead>
+        <tbody>
+          {% for s in pump_subnets %}
+          {% set phase = s.current_phase|default('INACTIVE') %}
+          {% set phase_class = 'phase-inactive' %}
+          {% if phase in ['EARLY', 'SECOND_WIND'] %}{% set phase_class = 'phase-early' %}
+          {% elif phase == 'CONSOLIDATING' %}{% set phase_class = 'phase-consolidating' %}
+          {% elif phase == 'SELL' %}{% set phase_class = 'phase-sell' %}
+          {% elif phase == 'EXHAUSTING' %}{% set phase_class = 'phase-exhausting' %}
+          {% endif %}
+          <tr>
+            <td class="text-primary"><b>{{ s.name|default('SN' ~ s.netuid) }}</b> <span class="pick-meta">SN{{ s.netuid }}</span></td>
+            <td><span class="badge {{ phase_class }}">{{ phase|replace('_',' ') }}</span></td>
+            <td>{{ "%.1f"|format((s.phase_duration_minutes|default(0))|float) }} min</td>
+            <td>{{ "%.1f"|format((s.profile.avg_pump_duration|default(0))|float) }} min</td>
+            <td>{{ "%.1f"|format((s.profile.avg_consolidation_length|default(0))|float) }} min</td>
+            <td>{{ "%.1f"|format((s.profile.re_pump_rate|default(0))|float * 100) }}%</td>
+            <td>{{ s.profile.typical_pattern|default('—')|replace('_',' ') }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty">Pump tracker is accumulating data — check back after a few scheduler cycles.</p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- ===================== FOOTER STATUS STRIP ===================== -->
+<footer class="status">
+  <div class="status-inner">
+    <span><span class="st-dot"></span>SimiVision v3.5 · {{ data_source|default('cache')|upper }} data</span>
+    <span class="footer-tag">Press <kbd>C</kbd> to toggle compact view</span>
+  </div>
+</footer>
+
+<!-- Dashboard controller -->
+<script src="/static/js/app.js"></script>
+
+<script>
+(function () {
+  'use strict';
+  document.querySelectorAll('.collapsible-toggle').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var body = btn.nextElementSibling;
+      var open = body.classList.toggle('open');
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+  });
+})();
+</script>
+{% endblock %}

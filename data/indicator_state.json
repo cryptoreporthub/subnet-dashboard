@@ -1,0 +1,17 @@
+{
+  "run_at": "2026-07-03T18:45:17.506209+00:00",
+  "last_run_at": "2026-07-03T18:45:17.506209+00:00",
+  "signals_emitted": 0,
+  "subnets_processed": 1,
+  "errors": [],
+  "phase_errors": [],
+  "per_subnet": {
+    "1": {
+      "rsi": 57.0654,
+      "macd_histogram": -0.00169,
+      "stochastic_k": 57.746,
+      "active_signals": [],
+      "last_updated": "2026-07-03T18:45:17.506209+00:00"
+    }
+  }
+}

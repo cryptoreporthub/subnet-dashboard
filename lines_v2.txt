@@ -1,0 +1,147 @@
+=== LINES 900-950 (around /health) ===
+    """
+    try:
+        tracker = get_pump_tracker()
+        if tracker is None:
+            raise RuntimeError("pump tracker unavailable")
+        return tracker.get_all_analytics()
+    except Exception as exc:
+        logger.warning("Could not load pump analytics: %s", exc)
+        return {
+            "status": "success",
+            "data": {
+                "subnets": [],
+                "meta": {
+                    "tracked_subnets": 0,
+                    "total_cycles": 0,
+                    "avg_proneness": 0.0,
+                    "top_pump_candidates": [],
+                    "updated_at": datetime.utcnow().isoformat() + "Z",
+                },
+            },
+        }
+
+
+@app.get("/health")
+def health_check():
+    return PlainTextResponse("OK")
+
+
+@app.get("/api/health")
+def api_health_check():
+    """JSON health probe for Fly.io / monitoring tooling.
+
+    Mirrors the plain-text ``/health`` route but returns a JSON body so probes
+    that expect a structured response (and the ``/api/health`` path requested
+    by external monitors) get a 200 instead of a 404.
+    """
+    return {"status": "ok"}
+
+
+@app.get("/api/freshness")
+def api_freshness():
+    """Per-section "last updated" timestamps for the dashboard freshness badges.
+
+    Returns ``{"last_updated": {section: iso_ts, ...}, "now": <iso>}``. The
+    frontend polls this on load and every 30s to render "updated Xm ago"
+    badges next to each section heading.
+    """
+    return _freshness_snapshot()
+
+
+@app.get("/api/pick-history")
+
+=== LINES 4300-4360 (around / route) ===
+    try:
+        ranked = sorted(subnets, key=_conviction_proxy, reverse=True)[:3]
+        scorer = score_subnet_for_hour if horizon == "hour" else score_subnet_for_day
+        for sn in ranked:
+            try:
+                score = scorer(sn, market_context)
+            except Exception as exc:
+                logger.warning("Fallback scorer failed for SN%s: %s", sn.get("netuid"), exc)
+                continue
+            picks.append({
+                "netuid": sn.get("netuid"),
+                "name": sn.get("name"),
+                "symbol": sn.get("symbol"),
+                "score": score.get("total_score", 0.0),
+                "confidence": score.get("confidence", 0.0),
+                "signals": {
+                    "price_change_24h": sn.get("price_change_24h"),
+                    "price_change_7d": sn.get("price_change_7d"),
+                    "emission": sn.get("emission"),
+                    "apy": sn.get("apy"),
+                    "volume": sn.get("volume"),
+                },
+                "scenario_tags": score.get("scenario_tags", {}),
+            })
+    except Exception as exc:
+        logger.error("Error building fallback %s picks: %s", horizon, exc)
+    return picks
+
+
+@app.get("/")
+async def dashboard(request: Request):
+    """Render the SimiVision dashboard server-side via Jinja2.
+
+    Context flows: server fetches subnets + SimiVision picks + mindmap summary
+    + learning stats -> renders into templates/index.html -> user sees the
+    complete dashboard. Vanilla JS polls /api/subnets every 5 min for refresh.
+
+    The route is hardened so that any partial failure still yields a renderable
+    context: every template key is guaranteed, and per-section helpers fall back
+    to safe defaults rather than aborting the whole page.
+    """
+    subnets: List[Dict[str, Any]] = []
+    source = "unknown"
+    premium = _default_premium_context()
+    # Derive a real market-wide mood from the average subnet 24h change so the
+    # "Market Mood" scenario tag reflects actual movement instead of a static
+    # 0.0 (which always classified as "neutral"). Recomputed after subnets load.
+    market_context = {"tao_change_24h": 0.0}
+    hour_picks: List[Dict[str, Any]] = []
+    day_picks: List[Dict[str, Any]] = []
+    daily_pick: Dict[str, Any] = {}
+    rotation_tracker: Dict[str, Any] = _default_rotation_tracker()
+    scenario_memory_snapshot: Dict[str, Any] = _default_scenario_memory()
+    indicators_convergence: Dict[str, Any] = {"subnets": []}
+    render_error: Optional[str] = None
+
+    try:
+        subnets, source = _get_subnets_with_source()
+        _mark_fresh("subnets")
+    except Exception as e:
+        logger.error("Error fetching subnets for dashboard: %s", e)
+
+=== ALL app = lines ===
+548:app = FastAPI(
+
+=== ALL FastAPI constructor lines ===
+548:app = FastAPI(
+
+=== ALL app.mount lines ===
+566:    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
+=== /health ROUTE FULL BODY ===
+        }
+
+
+@app.get("/health")
+def health_check():
+    return PlainTextResponse("OK")
+
+
+@app.get("/api/health")
+def api_health_check():
+    """JSON health probe for Fly.io / monitoring tooling.
+
+    Mirrors the plain-text ``/health`` route but returns a JSON body so probes
+    that expect a structured response (and the ``/api/health`` path requested
+    by external monitors) get a 200 instead of a 404.
+    """
+    return {"status": "ok"}
+
+
+@app.get("/api/freshness")
+def api_freshness():

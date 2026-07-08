@@ -1,0 +1,33 @@
+name: Restore working server.py
+on:
+  push:
+    paths:
+      - '.restore-server-trigger'
+  workflow_dispatch:
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Find and restore working server.py
+        run: |
+          echo "=== Finding revert commit ==="
+          git log --oneline --all --grep="revert" | head -5
+          
+          echo "=== Looking for last commit where server.py existed as a single file (not package) ==="
+          git log --oneline --follow -- server.py | head -10
+          
+          echo "=== Check size of server.py from revert commit 9e26974 ==="
+          git show 9e26974:server.py | wc -l || echo "revert commit not found"
+          
+          echo "=== Check size of server.py from 5 commits ago ==="
+          git show HEAD~5:server.py | wc -l || echo "HEAD~5 not found"
+          
+          echo "=== List recent commits ==="
+          git log --oneline -15

@@ -1,0 +1,57 @@
+name: Fly Deploy
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-group
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: latest  # Must be >= 0.2.71
+      # The fly.toml [mounts] block requires a named volume `data_volume` to
+      # exist in the app's primary region (sjc). Fly deploys fail with exit
+      # code 1 if it is missing ("Process group 'app' needs volumes with name
+      # 'data_volume'"). This idempotent step creates it once (needs 2 to
+      # satisfy min_machines_running=1 during rolling deploys) and is a no-op
+      # on subsequent runs. Safe to run every deploy.
+      - name: Ensure data_volume exists (idempotent)
+        run: |
+          set +e
+          EXISTING=$(flyctl volumes list --app subnet-dashboard -j 2>/dev/null \
+            | jq -r '.[] | select(.name=="data_volume" and .region=="sjc") | .id' 2>/dev/null \
+            | wc -l)
+          if [ "${EXISTING:-0}" -lt 2 ]; then
+            echo "data_volume has ${EXISTING:-0} volume(s) in sjc; creating 2..."
+            flyctl volumes create data_volume --app subnet-dashboard --region sjc -n 2
+          else
+            echo "data_volume already has ${EXISTING} volume(s) in sjc; skipping creation."
+          fi
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Set Chutes API secrets (idempotent)
+        run: |
+          set +e
+          flyctl secrets set \
+            CHUTES_API_KEY="cpk_f0d45191630e4ad9ade41d1e24d98e27.f69c1db28dbc537696ca25bd39e6836e.EWMHe2ksRB8vlWBbMLkcKKLgR4qT0Wfm" \
+            CHUTES_BASE_URL="https://api.chutes.ai/v1" \
+            CHUTES_MODEL="deepseek-ai/DeepSeek-V3.2-TEE" \
+            --app subnet-dashboard
+          exit 0
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Verify templates compile
+        run: python .github/scripts/check_templates.py
+      - run: flyctl deploy --remote-only --depot=false --no-cache
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+  # deploy-trigger: retrigger deploy 2026-07-03

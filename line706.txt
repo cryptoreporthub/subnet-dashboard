@@ -1,0 +1,9 @@
+=== lines 700-710 ===
+ 
+ 
+ | Subnet | Current Phase | Duration in Phase | Avg Pump Duration | Avg Consolidation | Re-Pump Rate | Typical Pattern |
+| --- | --- | --- | --- | --- | --- | --- |
+   {% for s in pump_subnets %} {% set phase = s.current_phase|default('INACTIVE') %} {% set phase_class = 'phase-inactive' %} {% if phase in ['EARLY', 'SECOND_WIND'] %}{% set phase_class = 'phase-early' %} {% elif phase == 'CONSOLIDATING' %}{% set phase_class = 'phase-consolidating' %} {% elif phase == 'SELL' %}{% set phase_class = 'phase-sell' %} {% elif phase == 'EXHAUSTING' %}{% set phase_class = 'phase-exhausting' %} {% endif %} | **{{ s.name|default('SN' ~ s.netuid) }}** SN{{ s.netuid }} | {{ phase|replace('_',' ') }} | {{ "%.1f"|format((s.phase_duration_minutes|default(0))|float)
+
+[read_links truncated 10499 chars from this runtime tool output. The full content is stored with the tool result.]
+{% endblock %}

@@ -1,0 +1,89 @@
+=== APP INIT (lines 545-575) ===
+        logger.warning("Failed to stop indicator scheduler: %s", exc)
+
+
+app = FastAPI(
+    title="SimiVision Subnet Dashboard",
+    version="3.5.0",
+    lifespan=_lifespan,
+)
+
+# CORS middleware (replaces Flask's per-response CORS headers)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount static files at /static
+_static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+if os.path.isdir(_static_dir):
+    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
+# Jinja2 templates for server-side rendered dashboard
+_templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+templates = Jinja2Templates(directory=_templates_dir)
+# Disable the Jinja2 template cache to avoid unhashable-type errors
+# with Starlette 1.0.0+ (the cache_key can contain unhashable dicts).
+templates.env.cache_size = 0
+templates.env.cache = None
+
+
+=== HEALTH ENDPOINT (lines 918-945) ===
+                },
+            },
+        }
+
+
+@app.get("/health")
+def health_check():
+    return PlainTextResponse("OK")
+
+
+@app.get("/api/health")
+def api_health_check():
+    """JSON health probe for Fly.io / monitoring tooling.
+
+    Mirrors the plain-text ``/health`` route but returns a JSON body so probes
+    that expect a structured response (and the ``/api/health`` path requested
+    by external monitors) get a 200 instead of a 404.
+    """
+    return {"status": "ok"}
+
+
+@app.get("/api/freshness")
+def api_freshness():
+    """Per-section "last updated" timestamps for the dashboard freshness badges.
+
+    Returns ``{"last_updated": {section: iso_ts, ...}, "now": <iso>}``. The
+    frontend polls this on load and every 30s to render "updated Xm ago"
+    badges next to each section heading.
+
+=== HOMEPAGE (lines 4326-4350) ===
+    return picks
+
+
+@app.get("/")
+async def dashboard(request: Request):
+    """Render the SimiVision dashboard server-side via Jinja2.
+
+    Context flows: server fetches subnets + SimiVision picks + mindmap summary
+    + learning stats -> renders into templates/index.html -> user sees the
+    complete dashboard. Vanilla JS polls /api/subnets every 5 min for refresh.
+
+    The route is hardened so that any partial failure still yields a renderable
+    context: every template key is guaranteed, and per-section helpers fall back
+    to safe defaults rather than aborting the whole page.
+    """
+    subnets: List[Dict[str, Any]] = []
+    source = "unknown"
+    premium = _default_premium_context()
+    # Derive a real market-wide mood from the average subnet 24h change so the
+    # "Market Mood" scenario tag reflects actual movement instead of a static
+    # 0.0 (which always classified as "neutral"). Recomputed after subnets load.
+    market_context = {"tao_change_24h": 0.0}
+    hour_picks: List[Dict[str, Any]] = []
+    day_picks: List[Dict[str, Any]] = []
+    daily_pick: Dict[str, Any] = {}

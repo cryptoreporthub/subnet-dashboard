@@ -1,0 +1,45 @@
+name: Find routes and commit results
+on:
+  push:
+    paths: ['.grep-routes-trigger']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  grep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Search server_original.py
+        run: |
+          echo "=== server_original.py analysis ===" > routes_diagnostic.txt
+          echo "" >> routes_diagnostic.txt
+          echo "app = FastAPI:" >> routes_diagnostic.txt
+          grep -n "app = FastAPI" server_original.py || echo "NOT FOUND" >> routes_diagnostic.txt
+          echo "" >> routes_diagnostic.txt
+          echo "/health route:" >> routes_diagnostic.txt
+          grep -n "/health" server_original.py || echo "NOT FOUND" >> routes_diagnostic.txt
+          echo "" >> routes_diagnostic.txt
+          echo "app.mount:" >> routes_diagnostic.txt
+          grep -n "app.mount" server_original.py || echo "NOT FOUND" >> routes_diagnostic.txt
+          echo "" >> routes_diagnostic.txt
+          echo "@app.get routes:" >> routes_diagnostic.txt
+          grep -n "@app.get" server_original.py | head -30 >> routes_diagnostic.txt
+          echo "" >> routes_diagnostic.txt
+          echo "exception_handler:" >> routes_diagnostic.txt
+          grep -n "exception_handler" server_original.py | head -10 >> routes_diagnostic.txt
+          echo "" >> routes_diagnostic.txt
+          echo "line count:" >> routes_diagnostic.txt
+          wc -l server_original.py >> routes_diagnostic.txt
+          echo "" >> routes_diagnostic.txt
+          echo "lines 340-375:" >> routes_diagnostic.txt
+          sed -n '325,360p' server_original.py >> routes_diagnostic.txt
+      - name: Commit results
+        run: |
+          git config user.name "Ditto"
+          git config user.email "ditto@heyditto.ai"
+          git add routes_diagnostic.txt
+          git diff --cached --quiet || git commit -m "diagnostic: server_original.py route analysis"
+          git push origin main

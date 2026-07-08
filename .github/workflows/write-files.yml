@@ -1,0 +1,40 @@
+name: Write server files
+on:
+  push:
+    paths:
+      - '.write-files-trigger'
+  workflow_dispatch:
+
+jobs:
+  write-files:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Write server.py
+        run: |
+          cat > server.py << 'ENDOFFILE'
+          """Subnet Dashboard - entry point."""
+          from server_original import app  # noqa: F401
+          if __name__ == "__main__":
+              import uvicorn
+              uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+          ENDOFFILE
+      - name: Write server/__init__.py
+        run: |
+          mkdir -p server
+          cat > server/__init__.py << 'ENDOFFILE'
+          """Subnet Dashboard server package."""
+          from server_original import app  # noqa: F401
+          ENDOFFILE
+      - name: Commit and push
+        run: |
+          git config user.name "Ditto"
+          git config user.email "ditto@heyditto.ai"
+          git add server.py server/__init__.py
+          git diff --cached --quiet || git commit -m "fix: write server files as plain Python via workflow"
+          git push origin main

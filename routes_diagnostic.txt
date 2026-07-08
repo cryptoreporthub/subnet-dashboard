@@ -1,0 +1,82 @@
+=== server_original.py analysis ===
+
+app = FastAPI:
+
+/health route:
+
+app.mount:
+
+@app.get routes:
+923:@app.get("/health")
+928:@app.get("/api/health")
+939:@app.get("/api/freshness")
+950:@app.get("/api/pick-history")
+962:@app.get("/api/price-tracking/baselines")
+994:@app.get("/api/price-tracking/outcomes")
+1014:@app.get("/api/resolve-predictions")
+1030:@app.get("/api/council/weights")
+1073:@app.get("/api/judges")
+1088:@app.get("/api/judges/{netuid}")
+1107:@app.get("/api/paper-portfolio")
+1147:@app.get("/api/postmortems")
+1160:@app.get("/api/postmortems/{judge_name}")
+1170:@app.get("/api/portfolios")
+1180:@app.get("/api/judges/{judge}/postmortems")
+1193:@app.get("/api/oracle")
+1273:@app.get("/api/top-pick/day")
+1314:@app.get("/api/subnets")
+1328:@app.get("/api/simivision")
+1333:@app.get("/api/rotation-tokens")
+1361:@app.get("/api/mindmap/summary")
+1407:@app.get("/api/learning/stats")
+1459:@app.get("/api/pump-analytics")
+1542:@app.get("/api/message-intel/list")
+1561:@app.get("/api/message-intel/detail/{msg_id}")
+1578:@app.get("/api/message-intel/chatter")
+1597:@app.get("/api/message-intel/patterns")
+1616:@app.get("/api/indicators/scheduler")
+1625:@app.get("/api/predictions/resolver")
+4329:@app.get("/")
+
+exception_handler:
+
+line count:
+5261 server_original.py
+
+lines 340-375:
+                    "Learning data file is empty on startup: %s "
+                    "(data may have been reset or the volume is empty).", path
+                )
+            else:
+                logger.info("Learning data file present on startup: %s (%d bytes)", path, os.path.getsize(path))
+        except Exception as exc:
+            logger.warning("Could not stat %s: %s", path, exc)
+
+
+_ensure_data_dir()
+
+
+def _mark_fresh(key: str) -> None:
+    """Mark a dashboard section as freshly updated (no-op if tracker missing)."""
+    if freshness_tracker is not None:
+        try:
+            freshness_tracker.mark_updated(key)
+        except Exception:
+            pass
+
+
+def _freshness_snapshot() -> Dict[str, Any]:
+    """Return the freshness map for /api/freshness (safe default on failure)."""
+    if freshness_tracker is not None:
+        try:
+            return freshness_tracker.snapshot()  # type: ignore[no-any-return]
+        except Exception:
+            pass
+    return {"last_updated": {}, "now": datetime.utcnow().isoformat() + "Z"}
+
+
+def _record_hour_pick(pick: Dict[str, Any], subnets: List[Dict[str, Any]],
+                      indicators: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Track a Pick of the Hour selection (entry price/trigger/outcome).
+
+    Delegates to ``internal.council.pick_history`` so the #1 hourly pick
