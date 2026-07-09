@@ -5,7 +5,6 @@ from flask import Flask, jsonify, render_template, request
 
 from internal.council.mindmap_bridge import MindmapBridge
 
-# Force rebuild - temporary comment for redeploy
 app = Flask(__name__)
 
 def load_data(filename):
