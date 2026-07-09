@@ -95,8 +95,14 @@ def _parse_subnet_row(row: dict) -> Dict:
     }
 
 def fetch_all_subnets_from_api() -> Optional[List[Dict]]:
-    """Fetch ALL subnets from taomarketcap.com public API by paginating through all pages."""
+    """Fetch ALL subnets from taomarketcap.com public API.
+
+    The upstream API ignores the `?page=` param and returns the same
+    full dataset on every call, so naive pagination duplicates rows.
+    We dedupe by netuid and stop as soon as a page adds no new subnets.
+    """
     all_subnets = []
+    seen_netuids = set()
     for page in range(1, MAX_PAGES + 1):
         try:
             url = f"{API_BASE}?page={page}"
@@ -121,9 +127,21 @@ def fetch_all_subnets_from_api() -> Optional[List[Dict]]:
             if not rows:
                 break
 
-            parsed = [_parse_subnet_row(row) for row in rows]
-            all_subnets.extend(parsed)
-            logger.info("Page %d: parsed %d subnets (total: %d)", page, len(parsed), len(all_subnets))
+            new_count = 0
+            for row in rows:
+                parsed = _parse_subnet_row(row)
+                netuid = parsed.get("netuid")
+                if netuid in seen_netuids:
+                    continue
+                seen_netuids.add(netuid)
+                all_subnets.append(parsed)
+                new_count += 1
+
+            logger.info("Page %d: %d new / %d parsed (total unique: %d)", page, new_count, len(rows), len(all_subnets))
+
+            if new_count == 0:
+                logger.info("No new subnets on page %d; stopping pagination", page)
+                break
 
             if len(rows) < PAGE_SIZE:
                 break
@@ -134,8 +152,13 @@ def fetch_all_subnets_from_api() -> Optional[List[Dict]]:
             logger.warning("Error fetching page %d: %s", page, e)
             break
 
+    deduped = {}
+    for s in all_subnets:
+        deduped.setdefault(s.get("netuid"), s)
+    all_subnets = list(deduped.values())
+
     if all_subnets:
-        logger.info("Fetched %d total subnets across all pages", len(all_subnets))
+        logger.info("Fetched %d unique subnets across all pages", len(all_subnets))
         return all_subnets
     return None
 
