@@ -21,7 +21,6 @@ API_BASE = "https://api.taomarketcap.com/public/v1/subnets/table/"
 PAGE_SIZE = 10
 MAX_PAGES = 20
 
-
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
@@ -36,7 +35,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-
 def get_cached(key: str) -> Optional[Dict]:
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -50,7 +48,6 @@ def get_cached(key: str) -> Optional[Dict]:
             return json.loads(data_str)
     return None
 
-
 def set_cache(key: str, data: Dict):
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -60,7 +57,6 @@ def set_cache(key: str, data: Dict):
     )
     conn.commit()
     conn.close()
-
 
 def _parse_subnet_row(row: dict) -> Dict:
     """Normalise a raw API row into our standard subnet dict."""
@@ -84,7 +80,7 @@ def _parse_subnet_row(row: dict) -> Dict:
         "volume": round(row.get("volume", 0), 2),
         "market_cap": round(row.get("marketcap", 0), 2),
         "price": round(row.get("price", 0), 8),
-        "price_change_24h": round(row.get("price_difference", 0), 4),
+        "price_change_24h": round(row.get("price_difference_day", row.get("price_difference", 0)), 4),
         "price_change_7d": round(row.get("price_difference_week", 0), 4),
         "price_change_30d": round(row.get("price_difference_month", 0), 4),
         "status": "active" if row.get("subnet") is not None else "unknown",
@@ -97,7 +93,6 @@ def _parse_subnet_row(row: dict) -> Dict:
         "symbol": row.get("symbol", ""),
         "marketcap_rank": row.get("marketcap_rank", 0),
     }
-
 
 def fetch_all_subnets_from_api() -> Optional[List[Dict]]:
     """Fetch ALL subnets from taomarketcap.com public API by paginating through all pages."""
@@ -144,7 +139,6 @@ def fetch_all_subnets_from_api() -> Optional[List[Dict]]:
         return all_subnets
     return None
 
-
 def get_all_subnets() -> List[Dict]:
     """Return all subnets (cached, 5 min TTL). Falls back to stale cache or static data."""
     init_db()
@@ -167,7 +161,6 @@ def get_all_subnets() -> List[Dict]:
             return cached_data
     logger.warning("No cache available, returning static fallback")
     return []
-
 
 def get_subnet_data(netuid: int) -> Optional[Dict]:
     """Get data for a single subnet by netuid."""
