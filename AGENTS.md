@@ -20,8 +20,9 @@ access are required to run it locally.
   startup update script. **Activate it before running anything:**
   `source .venv/bin/activate` (or call binaries as `.venv/bin/python` / `.venv/bin/pytest`).
 - App dependencies live in `requirements.txt` (`fastapi`, `uvicorn[standard]`,
-  `jinja2`, `pandas`, `requests`). `pytest` is a dev-only tool installed separately
-  by the update script (it is not in `requirements.txt`).
+  `jinja2`, `pandas`, `requests`). `pytest` and `httpx` are dev-only tools installed
+  separately by the update script (not in `requirements.txt`). `httpx` is required
+  by `fastapi.testclient.TestClient`, so the test suite needs it.
 
 ### Running the app (development)
 - Dev server: `python server.py` — runs Uvicorn with `--reload`. Honors `$PORT`

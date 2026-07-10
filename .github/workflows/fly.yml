@@ -37,7 +37,7 @@ jobs:
           set -e
           echo "=== Enforcing endpoint contract (every route must return non-5xx / 200) ==="
           pip install -r requirements.txt
-          pip install pytest
+          pip install pytest httpx
           python -m pytest tests/test_endpoint_contract.py -q
   deploy:
     name: Deploy app
