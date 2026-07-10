@@ -61,10 +61,10 @@
 |------------|--------|-----|------------|
 | 2026-07-10 | Slice 3 Whale Intelligence | #65 | merged |
 | 2026-07-10 | Slice 4 duplicate (closed) | #68 | — |
-| 2026-07-10 | Slice 4b Ruggers router | #70 | **OPEN — rebase onto `4f9da76`** |
+| 2026-07-10 | Slice 4b Ruggers router | #70 | **OPEN — rebased onto `4f9da76`, ready for merge** |
 
 ### In progress
-- **PR #70** — ruggers watchlist facade; must rebase onto post-#69 `main` before merge
+- **PR #70** — ruggers watchlist facade; rebased onto post-#69 `main`, tests green (53), ready for merge
 
 ### Do not touch
 - `internal/council/learning_routes.py`, `council_routes.py` (Agent A)
@@ -79,7 +79,7 @@
 | **main** | `4f9da76` (includes #69 slice 5) |
 | **Rebuild** | Incremental FastAPI — one `server.py` + `include_router` only |
 | **Open PRs** | #70 ruggers (`-e78a`) |
-| **Next merge** | #70 after rebase |
+| **Next merge** | #70 (rebased, tests green) |
 | **Closed forever** | #63 monolith, #68 duplicate judges |
 
 ## Shared rules
@@ -98,7 +98,7 @@
 | 2 | SimiVision picks | A | ✅ #66 |
 | 3 | Whale Intelligence | B | ✅ #65 |
 | 4 | Judge Council | A | ✅ #67 |
-| 4b | Ruggers facade | B | 🟡 #70 |
+| 4b | Ruggers facade | B | 🟢 #70 (rebased) |
 | 5 | Learning read APIs | A | ✅ #69 |
 | 6 | Learning write APIs | A | pending |
 | 7 | Indicators read | B | pending |
