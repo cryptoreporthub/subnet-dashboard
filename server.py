@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from internal.council.mindmap_bridge import MindmapBridge
+from internal.judges.council_routes import council_router
 from internal.whales.routes import whales_router
 
 logger = logging.getLogger("server")
@@ -32,6 +33,7 @@ except Exception as _exc:  # pragma: no cover - defensive import guard
 
 app = FastAPI(title="Subnet Dashboard")
 app.include_router(whales_router)
+app.include_router(council_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))

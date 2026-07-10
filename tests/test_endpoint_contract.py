@@ -58,6 +58,14 @@ CONTRACT = [
         },
     ),
     ("POST", "/api/whales/scan", {"netuids": [1], "top_n": 1}),
+    # Judge Council (slice 4)
+    ("GET", "/api/judges", None),
+    ("GET", "/api/judges/1", None),
+    ("GET", "/api/judges/oracle/postmortems", None),
+    ("GET", "/api/paper-portfolio", None),
+    ("GET", "/api/portfolios", None),
+    ("GET", "/api/postmortems", None),
+    ("GET", "/api/postmortems/oracle", None),
 ]
 
 
@@ -70,14 +78,7 @@ NOT_YET_PORTED = [
     "/api/pick-history",
     "/api/rotation-tracker",
     "/api/scenario-memory",
-    "/api/judges",
-    "/api/judges/{netuid}",
-    "/api/judges/{judge}/postmortems",
     "/api/oracle",
-    "/api/paper-portfolio",
-    "/api/portfolios",
-    "/api/postmortems",
-    "/api/postmortems/{judge_name}",
     "/api/council/weights",
     "/api/weights",
     "/api/feedback",

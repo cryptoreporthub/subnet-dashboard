@@ -102,8 +102,6 @@ def test_consensus_agreement(monkeypatch):
 
 def test_api_judges_returns_200(client, monkeypatch):
     """GET /api/judges returns 200 and a judges list."""
-    import server
-
     def _fake_subnets():
         return [
             {"netuid": 1, "name": "A", "price": 1.0, "apy": 0.1, "emission": 1.0, "volume": 1000000, "price_change_24h": 5.0, "social_mentions": 10, "social_sentiment": 0.6},
@@ -111,8 +109,7 @@ def test_api_judges_returns_200(client, monkeypatch):
             {"netuid": 3, "name": "C", "price": 3.0, "apy": 0.3, "emission": 3.0, "volume": 3000000, "price_change_24h": 15.0, "social_mentions": 30, "social_sentiment": 0.8},
         ]
 
-    monkeypatch.setattr(server, "get_all_subnets", _fake_subnets)
-    server._refresh_judge_scores()
+    monkeypatch.setattr("fetchers.taomarketcap.get_all_subnets", _fake_subnets)
     response = client.get("/api/judges")
     assert response.status_code == 200
     data = response.json()
