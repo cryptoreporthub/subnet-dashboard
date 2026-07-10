@@ -46,6 +46,14 @@ except Exception as _indicators_exc:  # pragma: no cover - defensive import guar
     logger.warning("Indicator routes unavailable: %s", _indicators_exc)
     _INDICATORS_ROUTES = False
 
+try:
+    from internal.oracle.routes import oracle_router
+
+    _ORACLE_ROUTES = True
+except Exception as _oracle_exc:  # pragma: no cover - defensive import guard
+    logger.warning("Oracle routes unavailable: %s", _oracle_exc)
+    _ORACLE_ROUTES = False
+
 # Council pick engine (guarded so a broken/missing engine module can never stop
 # the app from booting — the picks endpoints degrade to a safe fallback).
 try:
@@ -72,6 +80,8 @@ if _RUGGERS_ROUTES:
     app.include_router(ruggers_router)
 if _INDICATORS_ROUTES:
     app.include_router(indicators_router)
+if _ORACLE_ROUTES:
+    app.include_router(oracle_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))

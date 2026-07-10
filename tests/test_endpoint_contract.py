@@ -115,6 +115,8 @@ CONTRACT = [
         {"name": "contract-test", "features": {"avg_change_24h": 1.0}},
     ),
     ("GET", "/api/pick-history", None),
+    # Oracle snapshot stub (slice 9)
+    ("GET", "/api/oracle", None),
 ]
 
 
@@ -125,7 +127,6 @@ NOT_YET_PORTED = [
     "/api/freshness",
     "/api/rotation-tokens",
     "/api/rotation-tracker",
-    "/api/oracle",
     "/api/council/weights",
     "/api/weights",
     "/api/resolve-predictions",
