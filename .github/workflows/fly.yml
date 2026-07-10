@@ -9,30 +9,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Run Deploy Guards
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Static guards
         run: |
           set -e
-          echo "=== GUARD 1: uvicorn/fastapi must NOT be in requirements.txt ==="
-          if grep -niE "uvicorn|fastapi" requirements.txt; then
-            echo "GUARD FAIL: uvicorn/fastapi present in requirements.txt"
+          echo "=== GUARD 1: FastAPI + uvicorn must be declared in requirements.txt ==="
+          if ! grep -qi "fastapi" requirements.txt || ! grep -qi "uvicorn" requirements.txt; then
+            echo "GUARD FAIL: fastapi/uvicorn missing from requirements.txt"
             exit 1
           fi
-          echo "=== GUARD 2: Procfile must NOT reference uvicorn ==="
-          if grep -ni uvicorn Procfile 2>/dev/null; then
-            echo "GUARD FAIL: uvicorn referenced in Procfile"
+          echo "=== GUARD 2: Procfile must start the ASGI app via uvicorn ==="
+          if ! grep -qi uvicorn Procfile 2>/dev/null; then
+            echo "GUARD FAIL: Procfile must reference uvicorn"
             exit 1
           fi
-          echo "=== GUARD 3: no stray server/ package or server_original.py ==="
+          echo "=== GUARD 3: single foundation — no stray server/ package or server_original.py ==="
           if [ -d server ] || [ -f server_original.py ]; then
-            echo "GUARD FAIL: server/ package or server_original.py present"
+            echo "GUARD FAIL: a second server foundation is present (server/ or server_original.py)"
             exit 1
           fi
-          echo "=== GUARD 4: gunicorn present in Procfile ==="
-          if ! grep -ni gunicorn Procfile 2>/dev/null; then
-            echo "GUARD FAIL: gunicorn missing from Procfile"
-            exit 1
-          fi
-          echo "ALL GUARDS PASSED"
+          echo "STATIC GUARDS PASSED"
+      - name: Endpoint contract guard
+        run: |
+          set -e
+          echo "=== Enforcing endpoint contract (every route must return non-5xx / 200) ==="
+          pip install -r requirements.txt
+          pip install pytest httpx
+          python -m pytest tests/test_endpoint_contract.py -q
   deploy:
     name: Deploy app
     runs-on: ubuntu-latest

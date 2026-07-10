@@ -1,42 +1,51 @@
-import pytest
 import json
+
+import pytest
+from fastapi.testclient import TestClient
+
 from server import app
+
 
 @pytest.fixture
 def client():
-    app.config['TESTING'] = True
-    with app.test_client() as client:
-        yield client
+    with TestClient(app) as c:
+        yield c
+
 
 def test_index_route(client):
     response = client.get('/')
     assert response.status_code == 200
 
+
 def test_registry_route(client):
     response = client.get('/api/registry')
     assert response.status_code == 200
-    data = json.loads(response.data)
+    data = response.json()
     assert isinstance(data, dict)
+
 
 def test_subnet_route_found(client):
     # Subnet 1 should exist in config/registry.json
     response = client.get('/api/subnet/1')
     assert response.status_code == 200
-    data = json.loads(response.data)
+    data = response.json()
     assert data['subnet_id'] == 1
     assert 'data' in data
+
 
 def test_subnet_route_not_found(client):
     # Subnet 999999 should not exist
     response = client.get('/api/subnet/999999')
     assert response.status_code == 404
-    data = json.loads(response.data)
+    data = response.json()
     assert 'error' in data
+
 
 def test_health_route(client):
     response = client.get('/health')
     assert response.status_code == 200
-    assert response.data == b"OK"
+    assert response.text == "OK"
+
 
 def test_cors_headers(client):
     response = client.get('/api/registry')
@@ -47,7 +56,7 @@ def test_cors_headers(client):
 def test_stats_route(client):
     response = client.get('/api/stats')
     assert response.status_code == 200
-    data = json.loads(response.data)
+    data = response.json()
     assert data['status'] == 'success'
     assert 'summary' in data
     assert 'top_emitters' in data
@@ -57,7 +66,7 @@ def test_stats_route(client):
 def test_subnets_list_route(client):
     response = client.get('/api/subnets?status=active&sort=emission&order=desc&limit=2')
     assert response.status_code == 200
-    data = json.loads(response.data)
+    data = response.json()
     assert data['status'] == 'success'
     assert 'meta' in data
     assert 'subnets' in data
@@ -67,7 +76,7 @@ def test_subnets_list_route(client):
 def test_recommendations_route(client):
     response = client.get('/api/recommendations')
     assert response.status_code == 200
-    data = json.loads(response.data)
+    data = response.json()
     assert data['status'] == 'success'
     assert 'recommendations' in data['data']
 
@@ -75,7 +84,7 @@ def test_recommendations_route(client):
 def test_soul_map_route(client):
     response = client.get('/api/soul-map')
     assert response.status_code == 200
-    data = json.loads(response.data)
+    data = response.json()
     assert data['status'] == 'success'
     assert 'data' in data
 
@@ -83,7 +92,7 @@ def test_soul_map_route(client):
 def test_daily_rotation_route(client):
     response = client.get('/api/daily-rotation')
     assert response.status_code == 200
-    data = json.loads(response.data)
+    data = response.json()
     assert data['status'] == 'success'
     assert 'data' in data
     assert 'decisions' in data['data']

@@ -1,11 +1,25 @@
 import json
 import os
 
-from flask import Flask, jsonify, render_template, request
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from internal.council.mindmap_bridge import MindmapBridge
 
-app = Flask(__name__)
+app = FastAPI(title="Subnet Dashboard")
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+
+_static_dir = os.path.join(BASE_DIR, "static")
+if os.path.isdir(_static_dir):
+    app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
+# Paths that get a short public cache to keep the dashboard snappy on Fly.io.
+_CACHE_PATHS = ("/api/registry", "/api/summary", "/api/stats")
+
 
 def load_data(filename):
     if os.path.exists(filename):
@@ -13,16 +27,19 @@ def load_data(filename):
             return json.load(f)
     return {}
 
+
 def _load_subnets_source():
     """Return subnets for /api/subnets: live TaoMarketCap when available, else committed registry."""
     try:
         from fetchers.taomarketcap import get_all_subnets
+
         live = get_all_subnets()
         if live:
             return live
     except Exception:
         pass
     return list(load_data("config/registry.json").values())
+
 
 def _consensus_map():
     """Build a subnet_id -> consensus decision lookup from the latest soul-map output."""
@@ -31,41 +48,43 @@ def _consensus_map():
     decisions = last_output.get("decisions", [])
     return {d["subnet_id"]: d for d in decisions if "subnet_id" in d}
 
-@app.after_request
-def add_cors_headers(response):
-    """Allow dashboard embedding and cross-origin API access."""
+
+@app.middleware("http")
+async def add_cors_headers(request: Request, call_next):
+    """Allow dashboard embedding and cross-origin API access (parity with prior Flask behavior)."""
+    response = await call_next(request)
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     response.headers["X-Frame-Options"] = "ALLOWALL"
-    # Short cache for registry/summary to keep the dashboard snappy on Fly.io.
-    if request.path in ("/api/registry", "/api/summary", "/api/stats"):
+    if request.url.path in _CACHE_PATHS:
         response.headers["Cache-Control"] = "public, max-age=30"
     return response
 
-@app.route("/")
-def index():
-    return render_template("index.html")
 
-@app.route("/api/daily-rotation", methods=["GET"])
+@app.get("/")
+def index(request: Request):
+    return templates.TemplateResponse(request, "index.html")
+
+
+@app.get("/api/daily-rotation")
 def daily_rotation():
     """Return the latest daily rotation decisions plus live recommendations."""
     soul_map = load_data("data/soul_map.json")
     last_output = soul_map.get("soul_map_state", {}).get("last_selector_output", {})
     recommendations = MindmapBridge().get_brain_recommendations()
-    return jsonify(
-        {
-            "status": "success",
-            "data": {
-                "date": last_output.get("date"),
-                "decisions": last_output.get("decisions", []),
-                "recommendations": recommendations.get("recommendations", {}),
-                "updated_at": soul_map.get("soul_map_state", {}).get("updated_at"),
-            },
-        }
-    )
+    return {
+        "status": "success",
+        "data": {
+            "date": last_output.get("date"),
+            "decisions": last_output.get("decisions", []),
+            "recommendations": recommendations.get("recommendations", {}),
+            "updated_at": soul_map.get("soul_map_state", {}).get("updated_at"),
+        },
+    }
 
-@app.route("/api/registry", methods=["GET"])
+
+@app.get("/api/registry")
 def get_registry():
     data = load_data("config/registry.json")
     consensus = _consensus_map()
@@ -83,10 +102,11 @@ def get_registry():
                 "expert_breakdown": decision.get("expert_breakdown"),
             }
         enriched[key] = item
-    return jsonify(enriched)
+    return enriched
 
-@app.route("/api/subnets", methods=["GET"])
-def list_subnets():
+
+@app.get("/api/subnets")
+def list_subnets(request: Request):
     """List subnets with optional filtering, sorting, and pagination."""
     # Prefer LIVE TaoMarketCap data (real 24h/7d/30d); fall back to the committed registry.
     source = _load_subnets_source()
@@ -96,13 +116,14 @@ def list_subnets():
         item.setdefault("id", s.get("netuid", 0))
         items.append(item)
 
-    status_filter = request.args.get("status")
+    params = request.query_params
+    status_filter = params.get("status")
     if status_filter:
         statuses = {s.strip().lower() for s in status_filter.split(",")}
         items = [i for i in items if str(i.get("status", "")).lower() in statuses]
 
-    sort_field = request.args.get("sort", "id")
-    order = request.args.get("order", "asc").lower()
+    sort_field = params.get("sort", "id")
+    order = params.get("order", "asc").lower()
     reverse = order == "desc"
 
     def sort_key(item):
@@ -120,8 +141,8 @@ def list_subnets():
     items = sorted(items, key=sort_key, reverse=reverse)
 
     try:
-        limit = int(request.args.get("limit", 0))
-        offset = int(request.args.get("offset", 0))
+        limit = int(params.get("limit", 0))
+        offset = int(params.get("offset", 0))
     except ValueError:
         limit = 0
         offset = 0
@@ -132,18 +153,19 @@ def list_subnets():
     if limit > 0:
         items = items[:limit]
 
-    return jsonify({"status": "success", "meta": {"total": total, "limit": limit, "offset": offset}, "subnets": items})
+    return {"status": "success", "meta": {"total": total, "limit": limit, "offset": offset}, "subnets": items}
 
-@app.route("/api/subnet/<subnet_id>", methods=["GET"])
-def get_subnet(subnet_id):
+
+@app.get("/api/subnet/{subnet_id}")
+def get_subnet(subnet_id: int):
     data = load_data("config/registry.json")
     subnet_data = data.get(str(subnet_id))
     if subnet_data is None:
-        return jsonify({"error": "Subnet not found"}), 404
-    return jsonify({"subnet_id": subnet_id, "data": subnet_data})
+        return JSONResponse(status_code=404, content={"error": "Subnet not found"})
+    return {"subnet_id": subnet_id, "data": subnet_data}
 
 
-@app.route("/api/summary", methods=["GET"])
+@app.get("/api/summary")
 def get_summary():
     """Lightweight aggregated hero-card data for the dashboard."""
     data = load_data("config/registry.json")
@@ -243,39 +265,37 @@ def get_summary():
         + overvalued
     )
 
-    return jsonify(
-        {
-            "status": "success",
-            "summary": {
-                "total_subnets": len(subnets),
-                "status_counts": status_counts,
-                "status_distribution": status_distribution,
-                "active_count": status_counts.get("active", 0),
-                "at_risk_count": status_counts.get("at-risk", 0),
-                "deprecated_count": status_counts.get("deprecated", 0),
-                "unknown_count": status_counts.get("unknown", 0),
-                "total_stake": round(total_stake, 4),
-                "total_emission": round(total_emission, 4),
-                "total_social_mentions": total_mentions,
-                "overvalued_count": overvalued,
-                "flagged_count": flagged_count,
-                "avg_apy": round(sum(apys) / len(apys), 6) if apys else 0.0,
-                "network_health": network_health,
-                "last_updated": last_updated,
-            },
-            "highlights": {
-                "top_emitter": top_by("emission", 1),
-                "top_staked": top_by("total_stake", 1),
-                "top_apy": top_by("apy", 1),
-                "most_mentioned": top_by("social_mentions", 1),
-                "top_consensus": top_by_consensus(1),
-                "riskiest": riskiest_by_consensus(1),
-            },
-        }
-    )
+    return {
+        "status": "success",
+        "summary": {
+            "total_subnets": len(subnets),
+            "status_counts": status_counts,
+            "status_distribution": status_distribution,
+            "active_count": status_counts.get("active", 0),
+            "at_risk_count": status_counts.get("at-risk", 0),
+            "deprecated_count": status_counts.get("deprecated", 0),
+            "unknown_count": status_counts.get("unknown", 0),
+            "total_stake": round(total_stake, 4),
+            "total_emission": round(total_emission, 4),
+            "total_social_mentions": total_mentions,
+            "overvalued_count": overvalued,
+            "flagged_count": flagged_count,
+            "avg_apy": round(sum(apys) / len(apys), 6) if apys else 0.0,
+            "network_health": network_health,
+            "last_updated": last_updated,
+        },
+        "highlights": {
+            "top_emitter": top_by("emission", 1),
+            "top_staked": top_by("total_stake", 1),
+            "top_apy": top_by("apy", 1),
+            "most_mentioned": top_by("social_mentions", 1),
+            "top_consensus": top_by_consensus(1),
+            "riskiest": riskiest_by_consensus(1),
+        },
+    }
 
 
-@app.route("/api/stats", methods=["GET"])
+@app.get("/api/stats")
 def get_stats():
     """Aggregated registry intelligence for dashboard hero panels."""
     data = load_data("config/registry.json")
@@ -335,51 +355,54 @@ def get_stats():
         if s.get("status") in ("at-risk", "deprecated") or s.get("is_overvalued")
     ]
 
-    return jsonify(
-        {
-            "status": "success",
-            "summary": {
-                "total_subnets": len(subnets),
-                "status_counts": status_counts,
-                "total_stake": round(total_stake, 4),
-                "total_emission": round(total_emission, 4),
-                "total_social_mentions": total_mentions,
-                "overvalued_count": overvalued,
-                "avg_apy": round(sum(apys) / len(apys), 6) if apys else 0.0,
-            },
-            "top_emitters": top_n("emission"),
-            "top_staked": top_n("total_stake"),
-            "top_mentioned": top_n("social_mentions"),
-            "flagged_subnets": flagged,
-        }
-    )
+    return {
+        "status": "success",
+        "summary": {
+            "total_subnets": len(subnets),
+            "status_counts": status_counts,
+            "total_stake": round(total_stake, 4),
+            "total_emission": round(total_emission, 4),
+            "total_social_mentions": total_mentions,
+            "overvalued_count": overvalued,
+            "avg_apy": round(sum(apys) / len(apys), 6) if apys else 0.0,
+        },
+        "top_emitters": top_n("emission"),
+        "top_staked": top_n("total_stake"),
+        "top_mentioned": top_n("social_mentions"),
+        "flagged_subnets": flagged,
+    }
 
 
-@app.route("/api/soul-map", methods=["GET"])
+@app.get("/api/soul-map")
 def get_soul_map():
     """Expose the persisted Soul-Map state and feedback history."""
     data = load_data("data/soul_map.json")
-    return jsonify({"status": "success", "data": data})
+    return {"status": "success", "data": data}
 
 
-@app.route("/api/recommendations", methods=["GET"])
+@app.get("/api/recommendations")
 def get_recommendations():
     """Live Brain recommendations derived from the current registry."""
     bridge = MindmapBridge()
-    return jsonify({"status": "success", "data": bridge.get_brain_recommendations()})
+    return {"status": "success", "data": bridge.get_brain_recommendations()}
 
 
-@app.route("/api/mindmap/feedback", methods=["POST"])
-def post_feedback():
-    feedback = request.get_json(silent=True)
-    return jsonify({"status": "received", "feedback": feedback})
+@app.post("/api/mindmap/feedback")
+async def post_feedback(request: Request):
+    try:
+        feedback = await request.json()
+    except Exception:
+        feedback = None
+    return {"status": "received", "feedback": feedback}
 
 
-@app.route("/health", methods=["GET"])
+@app.get("/health")
 def health():
-    return "OK"
+    return PlainTextResponse("OK")
 
 
 if __name__ == "__main__":
+    import uvicorn
+
     port = int(os.environ.get("PORT", 50745))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    uvicorn.run("server:app", host="0.0.0.0", port=port, reload=True)
