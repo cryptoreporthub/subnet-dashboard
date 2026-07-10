@@ -67,6 +67,13 @@ CONTRACT = [
     ("GET", "/api/postmortems", None),
     ("GET", "/api/postmortems/oracle", None),
     ("GET", "/api/council", None),
+    # Learning loop read APIs (slice 5)
+    ("GET", "/api/mindmap/summary", None),
+    ("GET", "/api/learning/stats", None),
+    ("GET", "/api/learning-metrics", None),
+    ("GET", "/api/predictions", None),
+    ("GET", "/api/predictions/resolved", None),
+    ("GET", "/api/predictions/resolver", None),
 ]
 
 
@@ -83,14 +90,8 @@ NOT_YET_PORTED = [
     "/api/council/weights",
     "/api/weights",
     "/api/feedback",
-    "/api/mindmap/summary",
-    "/api/learning/stats",
     "/api/learning/trigger",
-    "/api/learning-metrics",
     "/api/resolve-predictions",
-    "/api/predictions",
-    "/api/predictions/resolved",
-    "/api/predictions/resolver",
     "/api/predictions/resolver/run",
     "/api/indicators",
     "/api/indicators-convergence",
