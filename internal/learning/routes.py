@@ -374,3 +374,31 @@ async def api_weights():
     except Exception as exc:
         logger.warning("api_weights failed: %s", exc)
         return {"status": "error", "error": str(exc)}
+
+
+@learning_router.get("/api/resolve-predictions")
+async def api_resolve_predictions():
+    """Trigger prediction resolution for any due predictions."""
+    try:
+        subnets = _subnets_for_tracker()
+        result = resolver.resolve_due_predictions(subnets)
+        return {"status": "success", "data": result}
+    except Exception as exc:
+        logger.warning("resolve_due_predictions failed: %s", exc)
+        return {
+            "status": "stub",
+            "data": {"resolved_now": [], "resolved": [], "pending": [], "stats": {}},
+            "error": str(exc),
+        }
+
+
+@learning_router.get("/api/rotation-tokens")
+async def api_rotation_tokens():
+    """Rotation-token watchlist with live CoinGecko prices (60s cache)."""
+    try:
+        from internal.council.rotation_tokens import build_rotation_tokens_response
+
+        return build_rotation_tokens_response()
+    except Exception as exc:
+        logger.warning("rotation-tokens failed: %s", exc)
+        return {"status": "error", "tokens": [], "error": str(exc)}

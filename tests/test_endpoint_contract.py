@@ -130,14 +130,15 @@ CONTRACT = [
     ("GET", "/api/weights", None),
     # SimiVision chat (slice 13)
     ("POST", "/api/simivision/chat", {"message": "contract-test ping"}),
+    # Resolve + rotation tokens (slice 14a)
+    ("GET", "/api/resolve-predictions", None),
+    ("GET", "/api/rotation-tokens", None),
 ]
 
 
 # Remaining routes from the historical FastAPI monolith, to be ported in later
 # slices. Kept here as a visible checklist (NOT asserted yet).
 NOT_YET_PORTED = [
-    "/api/rotation-tokens",
-    "/api/resolve-predictions",
 ]
 
 
