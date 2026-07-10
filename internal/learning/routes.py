@@ -1,4 +1,4 @@
-"""FastAPI routes for the learning loop (slices 5–6)."""
+"""FastAPI routes for the learning loop (slices 5–8)."""
 
 from __future__ import annotations
 
@@ -6,10 +6,10 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 
 from datastore.learning_engine import LearningEngine, create_feedback_router
-from internal.council import resolver, rotation_tracker, scenario_memory
+from internal.council import pick_history, resolver, rotation_tracker, scenario_memory
 from internal.council.resolver_scheduler import (
     get_prediction_resolver_scheduler,
     get_prediction_resolver_scheduler_state,
@@ -255,3 +255,61 @@ async def api_predictions_resolver_run():
     except Exception as exc:
         logger.warning("Manual prediction resolver run failed: %s", exc)
         return {"status": "error", "message": str(exc)}
+
+
+@learning_router.get("/api/scenario-memory")
+async def api_scenario_memory():
+    """Return the full regime-aware scenario memory snapshot."""
+    try:
+        return {"status": "ok", **scenario_memory.get_memory_snapshot()}
+    except Exception as exc:
+        logger.error("Error fetching scenario memory: %s", exc)
+        return {
+            "status": "error",
+            "scenarios": [],
+            "regimes": {},
+            "stats": {},
+            "meta": {},
+            "error": str(exc),
+        }
+
+
+@learning_router.post("/api/scenario-memory")
+async def api_scenario_memory_add(request: Request):
+    """Record a new regime-aware scenario into persistent memory."""
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        return {"status": "error", "error": f"Invalid JSON body: {exc}"}
+
+    name = payload.get("name")
+    features = payload.get("features", {})
+    if not name or not isinstance(features, dict):
+        return {"status": "error", "error": "Missing 'name' or 'features'"}
+
+    try:
+        scenario = scenario_memory.add_scenario(
+            name=name,
+            features=features,
+            outcome=payload.get("outcome"),
+            regime=payload.get("regime"),
+            metadata=payload.get("metadata"),
+        )
+        return {"status": "ok", "scenario": scenario}
+    except Exception as exc:
+        logger.error("Error adding scenario: %s", exc)
+        return {"status": "error", "error": str(exc)}
+
+
+@learning_router.get("/api/pick-history")
+async def api_pick_history():
+    """Pick-of-the-Hour history and aggregate success stats."""
+    try:
+        return pick_history.get_history(limit=20)
+    except Exception as exc:
+        logger.warning("pick_history.get_history failed: %s", exc)
+        return {
+            "active": None,
+            "history": [],
+            "stats": {"total": 0, "wins": 0, "losses": 0, "success_rate": 0.0},
+        }
