@@ -107,6 +107,14 @@ CONTRACT = [
     ),
     ("POST", "/api/learning/trigger", None),
     ("POST", "/api/predictions/resolver/run", None),
+    # Scenario memory + pick history (slice 8)
+    ("GET", "/api/scenario-memory", None),
+    (
+        "POST",
+        "/api/scenario-memory",
+        {"name": "contract-test", "features": {"avg_change_24h": 1.0}},
+    ),
+    ("GET", "/api/pick-history", None),
 ]
 
 
@@ -116,9 +124,7 @@ NOT_YET_PORTED = [
     "/api/health",
     "/api/freshness",
     "/api/rotation-tokens",
-    "/api/pick-history",
     "/api/rotation-tracker",
-    "/api/scenario-memory",
     "/api/oracle",
     "/api/council/weights",
     "/api/weights",
