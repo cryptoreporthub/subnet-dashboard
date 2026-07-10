@@ -1,4 +1,4 @@
-"""FastAPI routes for the learning loop (slices 5–8)."""
+"""FastAPI routes for the learning loop (slices 5–11)."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from fastapi import APIRouter, Query, Request
 
 from datastore.learning_engine import LearningEngine, create_feedback_router
 from internal.council import pick_history, resolver, rotation_tracker, scenario_memory
+from internal.council.weights import load_weights
 from internal.council.resolver_scheduler import (
     get_prediction_resolver_scheduler,
     get_prediction_resolver_scheduler_state,
@@ -30,6 +31,16 @@ def _utcnow_z() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _subnets_for_tracker() -> list:
+    try:
+        from fetchers.taomarketcap import get_all_subnets
+
+        return get_all_subnets() or []
+    except Exception as exc:
+        logger.warning("Subnet list for council trackers failed: %s", exc)
+        return []
+
+
 def _scenario_memory_summary() -> Dict[str, Any]:
     try:
         data = scenario_memory._load()
@@ -46,10 +57,7 @@ def _scenario_memory_summary() -> Dict[str, Any]:
 
 def _rotation_summary() -> Dict[str, Any]:
     try:
-        from fetchers.taomarketcap import get_all_subnets
-
-        subnets = get_all_subnets() or []
-        return rotation_tracker.get_rotation_summary(subnets)
+        return rotation_tracker.get_rotation_summary(_subnets_for_tracker())
     except Exception as exc:
         logger.warning("Could not load rotation tracker summary: %s", exc)
         return {
@@ -313,3 +321,56 @@ async def api_pick_history():
             "history": [],
             "stats": {"total": 0, "wins": 0, "losses": 0, "success_rate": 0.0},
         }
+
+
+@learning_router.get("/api/rotation-tracker")
+async def api_rotation_tracker():
+    """Return subnet rotation patterns and volatility clusters."""
+    try:
+        subnets = _subnets_for_tracker()
+        try:
+            from internal import freshness_tracker
+
+            freshness_tracker.mark_updated("rotation")
+        except Exception:
+            pass
+        return {"status": "ok", **rotation_tracker.get_rotation_summary(subnets)}
+    except Exception as exc:
+        logger.error("Error fetching rotation tracker: %s", exc)
+        return {"status": "error", "patterns": [], "volatility_clusters": {}, "error": str(exc)}
+
+
+@learning_router.get("/api/freshness")
+async def api_freshness():
+    """Per-section last-updated timestamps for dashboard freshness badges."""
+    try:
+        from internal import freshness_tracker
+
+        return freshness_tracker.snapshot()
+    except Exception as exc:
+        logger.warning("freshness snapshot failed: %s", exc)
+        return {"last_updated": {}, "now": _utcnow_z()}
+
+
+@learning_router.get("/api/council/weights")
+async def api_council_weights():
+    """Return the current Council expert weights."""
+    try:
+        return {"status": "success", "data": load_weights()}
+    except Exception as exc:
+        logger.warning("load_weights failed: %s", exc)
+        return {
+            "status": "stub",
+            "data": {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0},
+            "error": str(exc),
+        }
+
+
+@learning_router.get("/api/weights")
+async def api_weights():
+    """Return learning stats including expert weights."""
+    try:
+        return LearningEngine().get_stats()
+    except Exception as exc:
+        logger.warning("api_weights failed: %s", exc)
+        return {"status": "error", "error": str(exc)}

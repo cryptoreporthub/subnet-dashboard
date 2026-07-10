@@ -121,6 +121,12 @@ CONTRACT = [
     ("GET", "/api/pump-analytics", None),
     ("GET", "/api/price-tracking/baselines", None),
     ("GET", "/api/price-tracking/outcomes", None),
+    # Rotation tracker (slice 10a)
+    ("GET", "/api/rotation-tracker", None),
+    # Freshness + weights (slice 11)
+    ("GET", "/api/freshness", None),
+    ("GET", "/api/council/weights", None),
+    ("GET", "/api/weights", None),
 ]
 
 
@@ -128,11 +134,7 @@ CONTRACT = [
 # slices. Kept here as a visible checklist (NOT asserted yet).
 NOT_YET_PORTED = [
     "/api/health",
-    "/api/freshness",
     "/api/rotation-tokens",
-    "/api/rotation-tracker",
-    "/api/council/weights",
-    "/api/weights",
     "/api/resolve-predictions",
     "/api/simivision/chat",
 ]
