@@ -1,0 +1,19 @@
+{
+  "flip_thresholds_hours": [6, 24, 72],
+  "min_flip_count": 2,
+  "min_tao_notional": 50.0,
+  "rugger_risk_threshold": 0.65,
+  "alert_before_exit_hours": 2.0,
+  "small_cap_stake_threshold_tao": 400000,
+  "small_cap_max_market_cap_rank": 80,
+  "alpha_min_closed_trades": 3,
+  "alpha_min_win_rate": 0.55,
+  "market_mover_min_impact_score": 0.4,
+  "early_mover_horizon_hours": 24,
+  "early_mover_min_move_pct": 8.0,
+  "conviction_min_hold_hours": 72,
+  "rotator_min_subnets": 4,
+  "rotator_window_days": 30,
+  "leaderboard_limit": 50,
+  "poll_interval_minutes": 15
+}

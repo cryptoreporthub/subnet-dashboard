@@ -39,6 +39,25 @@ CONTRACT = [
     ("GET", "/api/daily-pick", None),
     ("GET", "/api/top-pick/day", None),
     ("GET", "/api/top-pick/hour", None),
+    # Whale Intelligence (slice 3)
+    ("GET", "/api/whales/summary", None),
+    ("GET", "/api/whales/dimensions", None),
+    ("GET", "/api/whales/leaderboards", None),
+    ("GET", "/api/whales/leaderboards/ruggers", None),
+    ("GET", "/api/whales/wallet/5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", None),
+    ("GET", "/api/whales/alerts", None),
+    ("GET", "/api/whales/subnet/1/flow", None),
+    (
+        "POST",
+        "/api/whales/events",
+        {
+            "wallet": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+            "netuid": 1,
+            "side": "buy",
+            "amount_tao": 100.0,
+        },
+    ),
+    ("POST", "/api/whales/scan", {"netuids": [1], "top_n": 1}),
 ]
 
 
@@ -87,6 +106,37 @@ def client():
         yield c
 
 
+def _collect_registered_routes():
+    """Collect (method, path) pairs from the app and any included routers."""
+    registered = set()
+    stack = list(app.routes)
+    while stack:
+        route = stack.pop()
+        methods = getattr(route, "methods", set()) or set()
+        path = getattr(route, "path", None)
+        if path:
+            for method in methods:
+                registered.add((method, path))
+        original = getattr(route, "original_router", None)
+        if original is not None:
+            stack.extend(original.routes)
+    return registered
+
+
+def _path_matches(contract_path: str, registered_path: str) -> bool:
+    if contract_path == registered_path:
+        return True
+    contract_parts = contract_path.strip("/").split("/")
+    registered_parts = registered_path.strip("/").split("/")
+    if len(contract_parts) != len(registered_parts):
+        return False
+    return all(
+        part.startswith("{") and part.endswith("}")
+        or contract_part == part
+        for contract_part, part in zip(contract_parts, registered_parts)
+    )
+
+
 @pytest.mark.parametrize("method,path,body", CONTRACT, ids=[f"{m} {p}" for m, p, _ in CONTRACT])
 def test_contract_route_ok(client, method, path, body):
     if method == "GET":
@@ -104,18 +154,17 @@ def test_contract_route_ok(client, method, path, body):
 
 def test_registered_routes_cover_contract():
     """Every GET/POST path in CONTRACT is actually registered on the app."""
-    registered = set()
-    for route in app.routes:
-        methods = getattr(route, "methods", set()) or set()
-        for m in methods:
-            registered.add((m, getattr(route, "path", "")))
+    registered = _collect_registered_routes()
     for method, path, _ in CONTRACT:
         bare = path.split("?", 1)[0]
-        # Path params render as {name} in the route table.
-        template = bare.rsplit("/", 1)
         candidates = {bare}
+        template = bare.rsplit("/", 1)
         if template[-1].isdigit():
             candidates.add(template[0] + "/{subnet_id}")
-        assert any((method, c) in registered for c in candidates), (
-            f"{method} {bare} not registered on app"
+
+        matched = any(
+            reg_method == method and _path_matches(candidate, reg_path)
+            for candidate in candidates
+            for reg_method, reg_path in registered
         )
+        assert matched, f"{method} {bare} not registered on app"

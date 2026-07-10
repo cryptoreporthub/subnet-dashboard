@@ -1,0 +1,507 @@
+"""
+Whale Intelligence Service
+
+Tracks wallet behavior across six dimensions:
+
+1. **Ruggers** — fast flippers to avoid (sell within 6h/24h/72h)
+2. **Alpha Whales** — highest win-rate + return % on closed trades
+3. **Market Movers** — largest price impact on small/mid-cap subnets
+4. **Early Movers** — enter before major moves (leading indicator)
+5. **Conviction Holders** — long holds with positive outcomes (smart money)
+6. **Rotators** — systematic cross-subnet capital rotation
+
+All dimensions share one event ledger and per-wallet profile store.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import statistics
+import tempfile
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
+
+from internal.whales.classifiers import classify_wallet, score_dimensions
+
+DEFAULT_CONFIG_PATH = os.environ.get("WHALES_CONFIG_PATH", "config/whales.json")
+DEFAULT_DATA_PATH = os.environ.get("WHALES_DATA_PATH", "data/whale_intelligence.json")
+
+TRACKING_DIMENSIONS = [
+    "ruggers",
+    "alpha_whales",
+    "market_movers",
+    "early_movers",
+    "conviction_holders",
+    "rotators",
+]
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _parse_iso(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _hours_between(start: str, end: str) -> float:
+    a = _parse_iso(start)
+    b = _parse_iso(end)
+    if not a or not b:
+        return 0.0
+    return max(0.0, (b - a).total_seconds() / 3600.0)
+
+
+def _return_pct(entry_price: Optional[float], exit_price: Optional[float]) -> Optional[float]:
+    if entry_price and exit_price and entry_price > 0:
+        return round((exit_price - entry_price) / entry_price * 100.0, 2)
+    return None
+
+
+class WhaleIntelligenceService:
+    """Central whale tracking service with multi-dimensional leaderboards."""
+
+    def __init__(
+        self,
+        config_path: str = DEFAULT_CONFIG_PATH,
+        data_path: str = DEFAULT_DATA_PATH,
+    ):
+        self.config_path = config_path
+        self.data_path = data_path
+        self.config = self._load_config()
+        self.data = self._load_data()
+
+    def _load_config(self) -> Dict[str, Any]:
+        defaults = {
+            "flip_thresholds_hours": [6, 24, 72],
+            "min_flip_count": 2,
+            "min_tao_notional": 50.0,
+            "rugger_risk_threshold": 0.65,
+            "alert_before_exit_hours": 2.0,
+            "small_cap_stake_threshold_tao": 400000,
+            "small_cap_max_market_cap_rank": 80,
+            "alpha_min_closed_trades": 3,
+            "alpha_min_win_rate": 0.55,
+            "market_mover_min_impact_score": 0.4,
+            "early_mover_horizon_hours": 24,
+            "early_mover_min_move_pct": 8.0,
+            "conviction_min_hold_hours": 72,
+            "rotator_min_subnets": 4,
+            "rotator_window_days": 30,
+            "leaderboard_limit": 50,
+        }
+        if os.path.exists(self.config_path):
+            try:
+                with open(self.config_path, "r") as f:
+                    loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    defaults.update(loaded)
+            except Exception:
+                pass
+        return defaults
+
+    def _load_data(self) -> Dict[str, Any]:
+        if os.path.exists(self.data_path):
+            try:
+                with open(self.data_path, "r") as f:
+                    raw = json.load(f)
+                if isinstance(raw, dict):
+                    for key in ("events", "open_positions", "profiles", "closed_trades"):
+                        raw.setdefault(key, [] if key != "open_positions" else {})
+                    if isinstance(raw.get("profiles"), list):
+                        raw["profiles"] = {}
+                    return raw
+            except Exception:
+                pass
+        return {
+            "updated_at": _now_iso(),
+            "events": [],
+            "open_positions": {},
+            "profiles": {},
+            "closed_trades": [],
+        }
+
+    def _save_data(self) -> None:
+        self.data["updated_at"] = _now_iso()
+        os.makedirs(os.path.dirname(self.data_path) or ".", exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(self.data_path) or ".", suffix=".json")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(self.data, f, indent=2)
+            os.replace(tmp, self.data_path)
+        except Exception:
+            try:
+                os.unlink(tmp)
+            except Exception:
+                pass
+            with open(self.data_path, "w") as f:
+                json.dump(self.data, f, indent=2)
+
+    def _position_key(self, wallet: str, netuid: int) -> str:
+        return f"{wallet}:{netuid}"
+
+    def record_event(
+        self,
+        wallet: str,
+        netuid: int,
+        side: str,
+        amount_tao: float,
+        timestamp: Optional[str] = None,
+        source: str = "manual",
+        tx_hash: Optional[str] = None,
+        subnet_name: Optional[str] = None,
+        entry_price: Optional[float] = None,
+        exit_price: Optional[float] = None,
+        market_cap_rank: Optional[int] = None,
+        total_stake_tao: Optional[float] = None,
+        price_change_after_hours: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Record a buy/sell event and update wallet intelligence."""
+        side_norm = side.strip().lower()
+        if side_norm in ("stake",):
+            side_norm = "buy"
+        elif side_norm in ("unstake",):
+            side_norm = "sell"
+        if side_norm not in ("buy", "sell"):
+            raise ValueError("side must be buy or sell")
+
+        wallet = wallet.strip()
+        if not wallet:
+            raise ValueError("wallet is required")
+
+        ts = timestamp or _now_iso()
+        min_notional = float(self.config.get("min_tao_notional", 50.0))
+        if amount_tao < min_notional:
+            return {"status": "ignored", "reason": "below_min_notional", "amount_tao": amount_tao}
+
+        event = {
+            "wallet": wallet,
+            "netuid": int(netuid),
+            "side": side_norm,
+            "amount_tao": round(float(amount_tao), 4),
+            "timestamp": ts,
+            "source": source,
+            "tx_hash": tx_hash,
+            "subnet_name": subnet_name,
+            "entry_price": entry_price,
+            "exit_price": exit_price,
+            "market_cap_rank": market_cap_rank,
+            "total_stake_tao": total_stake_tao,
+            "price_change_after_hours": price_change_after_hours,
+        }
+        self.data.setdefault("events", []).append(event)
+
+        closed_trade = None
+        pos_key = self._position_key(wallet, netuid)
+        open_positions: Dict[str, Any] = self.data.setdefault("open_positions", {})
+
+        if side_norm == "buy":
+            open_positions[pos_key] = {
+                "wallet": wallet,
+                "netuid": int(netuid),
+                "entry_ts": ts,
+                "amount_tao": round(float(amount_tao), 4),
+                "subnet_name": subnet_name,
+                "entry_price": entry_price,
+                "market_cap_rank": market_cap_rank,
+                "total_stake_tao": total_stake_tao,
+            }
+        else:
+            entry = open_positions.pop(pos_key, None)
+            if entry:
+                hold_hours = _hours_between(entry.get("entry_ts", ts), ts)
+                ep = entry.get("entry_price") or entry_price
+                xp = exit_price
+                ret = _return_pct(ep, xp)
+                stake = float(entry.get("total_stake_tao") or total_stake_tao or 0)
+                amt = float(entry.get("amount_tao") or amount_tao)
+                impact = self._compute_impact_score(amt, stake, market_cap_rank or entry.get("market_cap_rank"))
+                closed_trade = {
+                    "wallet": wallet,
+                    "netuid": int(netuid),
+                    "subnet_name": subnet_name or entry.get("subnet_name"),
+                    "entry_ts": entry.get("entry_ts"),
+                    "exit_ts": ts,
+                    "hold_hours": round(hold_hours, 2),
+                    "amount_tao": round(amt, 4),
+                    "entry_price": ep,
+                    "exit_price": xp,
+                    "return_pct": ret,
+                    "won": ret > 0 if ret is not None else None,
+                    "market_cap_rank": market_cap_rank or entry.get("market_cap_rank"),
+                    "impact_score": impact,
+                    "price_change_after_entry": price_change_after_hours,
+                    "source": source,
+                }
+                self.data.setdefault("closed_trades", []).append(closed_trade)
+                self._update_profile(wallet, closed_trade)
+
+        self._save_data()
+        return {
+            "status": "recorded",
+            "event": event,
+            "closed_trade": closed_trade,
+            "profile": self.data.get("profiles", {}).get(wallet),
+        }
+
+    def _compute_impact_score(
+        self,
+        amount_tao: float,
+        total_stake_tao: float,
+        market_cap_rank: Optional[int],
+    ) -> float:
+        """Estimate how much a wallet moves a small-cap subnet."""
+        rank = market_cap_rank or 999
+        max_rank = int(self.config.get("small_cap_max_market_cap_rank", 80))
+        if rank > max_rank:
+            return 0.0
+        if total_stake_tao > 0:
+            stake_ratio = min(1.0, amount_tao / total_stake_tao)
+        else:
+            stake_ratio = min(1.0, amount_tao / float(self.config.get("small_cap_stake_threshold_tao", 400000)))
+        rank_factor = max(0.0, 1.0 - (rank / max_rank))
+        return round(min(1.0, stake_ratio * 0.6 + rank_factor * 0.4), 3)
+
+    def _update_profile(self, wallet: str, trade: Dict[str, Any]) -> None:
+        profiles: Dict[str, Any] = self.data.setdefault("profiles", {})
+        profile = profiles.setdefault(
+            wallet,
+            {
+                "wallet": wallet,
+                "first_seen": trade.get("entry_ts"),
+                "last_seen": trade.get("exit_ts"),
+                "closed_trades": 0,
+                "wins": 0,
+                "losses": 0,
+                "win_rate": 0.0,
+                "avg_return_pct": None,
+                "returns_pct": [],
+                "hold_hours": [],
+                "impact_scores": [],
+                "early_moves": 0,
+                "subnets": [],
+                "subnet_timeline": [],
+                "total_volume_tao": 0.0,
+                "classifications": [],
+                "scores": {},
+                "tags": [],
+            },
+        )
+
+        profile["closed_trades"] = int(profile.get("closed_trades", 0)) + 1
+        profile["last_seen"] = trade.get("exit_ts")
+        profile["total_volume_tao"] = round(
+            float(profile.get("total_volume_tao", 0)) + float(trade.get("amount_tao", 0)), 2
+        )
+
+        hold = float(trade.get("hold_hours", 0))
+        profile.setdefault("hold_hours", []).append(hold)
+        profile["hold_hours"] = profile["hold_hours"][-100:]
+
+        ret = trade.get("return_pct")
+        if ret is not None:
+            profile.setdefault("returns_pct", []).append(float(ret))
+            profile["returns_pct"] = profile["returns_pct"][-100:]
+            if ret > 0:
+                profile["wins"] = int(profile.get("wins", 0)) + 1
+            else:
+                profile["losses"] = int(profile.get("losses", 0)) + 1
+
+        impact = trade.get("impact_score", 0)
+        if impact:
+            profile.setdefault("impact_scores", []).append(float(impact))
+            profile["impact_scores"] = profile["impact_scores"][-50:]
+
+        pca = trade.get("price_change_after_entry")
+        horizon = float(self.config.get("early_mover_horizon_hours", 24))
+        min_move = float(self.config.get("early_mover_min_move_pct", 8.0))
+        if hold <= horizon and pca is not None and abs(float(pca)) >= min_move:
+            if (ret is not None and ret > 0) or (float(pca) > 0 and trade.get("entry_price")):
+                profile["early_moves"] = int(profile.get("early_moves", 0)) + 1
+
+        nuid = trade.get("netuid")
+        subnets = profile.setdefault("subnets", [])
+        if nuid is not None and nuid not in subnets:
+            subnets.append(nuid)
+
+        timeline = profile.setdefault("subnet_timeline", [])
+        timeline.append({"netuid": nuid, "ts": trade.get("exit_ts"), "side": "sell"})
+        profile["subnet_timeline"] = timeline[-200:]
+
+        closed = profile["closed_trades"]
+        wins = profile.get("wins", 0)
+        profile["win_rate"] = round(wins / closed, 3) if closed else 0.0
+        rets = profile.get("returns_pct", [])
+        profile["avg_return_pct"] = round(statistics.mean(rets), 2) if rets else None
+        profile["median_hold_hours"] = round(statistics.median(profile["hold_hours"]), 2) if profile["hold_hours"] else None
+        profile["avg_impact_score"] = (
+            round(statistics.mean(profile["impact_scores"]), 3) if profile.get("impact_scores") else 0.0
+        )
+
+        profile["scores"] = score_dimensions(profile, self.config)
+        profile["classifications"] = classify_wallet(profile, self.config)
+        profile["tags"] = profile["classifications"]
+        profile["is_rugger"] = "ruggers" in profile["classifications"]
+        profile["is_alpha_whale"] = "alpha_whales" in profile["classifications"]
+        profile["is_market_mover"] = "market_movers" in profile["classifications"]
+        profile["is_early_mover"] = "early_movers" in profile["classifications"]
+        profile["is_conviction_holder"] = "conviction_holders" in profile["classifications"]
+        profile["is_rotator"] = "rotators" in profile["classifications"]
+
+    def get_leaderboard(self, category: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        limit = limit or int(self.config.get("leaderboard_limit", 50))
+        if category not in TRACKING_DIMENSIONS:
+            raise ValueError(f"Unknown category: {category}")
+
+        profiles = [
+            p for p in self.data.get("profiles", {}).values()
+            if category in p.get("classifications", [])
+        ]
+
+        sort_keys = {
+            "ruggers": lambda p: (p.get("scores", {}).get("rugger_risk", 0), p.get("closed_trades", 0)),
+            "alpha_whales": lambda p: (p.get("win_rate", 0), p.get("avg_return_pct") or 0),
+            "market_movers": lambda p: (p.get("avg_impact_score", 0), p.get("total_volume_tao", 0)),
+            "early_movers": lambda p: (p.get("early_moves", 0), p.get("win_rate", 0)),
+            "conviction_holders": lambda p: (p.get("median_hold_hours") or 0, p.get("win_rate", 0)),
+            "rotators": lambda p: (len(p.get("subnets", [])), p.get("win_rate", 0)),
+        }
+        profiles.sort(key=sort_keys[category], reverse=True)
+        return profiles[:limit]
+
+    def get_all_leaderboards(self, limit: Optional[int] = None) -> Dict[str, List[Dict[str, Any]]]:
+        return {cat: self.get_leaderboard(cat, limit) for cat in TRACKING_DIMENSIONS}
+
+    def get_profile(self, wallet: str) -> Optional[Dict[str, Any]]:
+        return self.data.get("profiles", {}).get(wallet.strip())
+
+    def get_rugger_watchlist(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        return self.get_leaderboard("ruggers", limit)
+
+    def get_active_alerts(self) -> Dict[str, Any]:
+        """Alerts: rugger exits imminent + alpha whale new entries."""
+        now = datetime.now(timezone.utc)
+        rugger_alerts = []
+        follow_alerts = []
+        open_positions = self.data.get("open_positions", {})
+        profiles = self.data.get("profiles", {})
+
+        for pos in open_positions.values():
+            wallet = pos.get("wallet")
+            profile = profiles.get(wallet) or {}
+            classifications = profile.get("classifications", [])
+            entry_ts = _parse_iso(pos.get("entry_ts"))
+            hold_so_far = (now - entry_ts).total_seconds() / 3600.0 if entry_ts else 0.0
+
+            base = {
+                "wallet": wallet,
+                "netuid": pos.get("netuid"),
+                "subnet_name": pos.get("subnet_name"),
+                "entry_ts": pos.get("entry_ts"),
+                "amount_tao": pos.get("amount_tao"),
+                "hold_hours_so_far": round(hold_so_far, 2),
+            }
+
+            if "ruggers" in classifications:
+                median_hold = profile.get("median_hold_hours") or 24.0
+                alert_before = float(self.config.get("alert_before_exit_hours", 2.0))
+                estimated_exit_in = max(0.0, median_hold - hold_so_far)
+                rugger_alerts.append({
+                    **base,
+                    "type": "rugger_exit_warning",
+                    "median_hold_hours": median_hold,
+                    "estimated_exit_in_hours": round(estimated_exit_in, 2),
+                    "urgency": "high" if estimated_exit_in <= alert_before else "medium",
+                    "recommendation": "do_not_follow",
+                })
+            elif "alpha_whales" in classifications or "early_movers" in classifications:
+                follow_alerts.append({
+                    **base,
+                    "type": "smart_money_entry",
+                    "classifications": classifications,
+                    "win_rate": profile.get("win_rate"),
+                    "avg_return_pct": profile.get("avg_return_pct"),
+                    "recommendation": "consider_following",
+                })
+
+        rugger_alerts.sort(key=lambda a: a.get("estimated_exit_in_hours", 999))
+        return {
+            "rugger_alerts": rugger_alerts,
+            "follow_alerts": follow_alerts,
+            "total": len(rugger_alerts) + len(follow_alerts),
+        }
+
+    def get_subnet_flow(self, netuid: int) -> Dict[str, Any]:
+        open_positions = self.data.get("open_positions", {})
+        profiles = self.data.get("profiles", {})
+        by_class: Dict[str, List[Dict[str, Any]]] = {c: [] for c in TRACKING_DIMENSIONS}
+
+        for pos in open_positions.values():
+            if int(pos.get("netuid", -1)) != int(netuid):
+                continue
+            wallet = pos.get("wallet")
+            profile = profiles.get(wallet) or {}
+            entry = {
+                "wallet": wallet,
+                "amount_tao": pos.get("amount_tao"),
+                "entry_ts": pos.get("entry_ts"),
+                "classifications": profile.get("classifications", []),
+                "win_rate": profile.get("win_rate"),
+            }
+            for cls in profile.get("classifications", []):
+                if cls in by_class:
+                    by_class[cls].append(entry)
+
+        return {
+            "netuid": int(netuid),
+            "open_positions": sum(len(v) for v in by_class.values()),
+            "by_classification": by_class,
+            "avoid_follow": len(by_class.get("ruggers", [])) > 0,
+            "smart_money_present": bool(
+                by_class.get("alpha_whales") or by_class.get("early_movers") or by_class.get("conviction_holders")
+            ),
+        }
+
+    def discount_score(self, netuid: int, base_score: float) -> Tuple[float, Dict[str, Any]]:
+        flow = self.get_subnet_flow(netuid)
+        ruggers = flow.get("by_classification", {}).get("ruggers", [])
+        if not ruggers:
+            return base_score, {"adjusted": False, "reason": "no_rugger_exposure"}
+
+        profiles = self.data.get("profiles", {})
+        max_risk = max(
+            (profiles.get(r["wallet"], {}).get("scores", {}).get("rugger_risk", 0.5) for r in ruggers),
+            default=0.5,
+        )
+        penalty = min(0.35, 0.15 + max_risk * 0.25)
+        adjusted = round(max(0.0, base_score * (1.0 - penalty)), 4)
+        return adjusted, {
+            "adjusted": True,
+            "penalty": round(penalty, 3),
+            "rugger_count": len(ruggers),
+            "max_risk_score": max_risk,
+        }
+
+    def summary(self) -> Dict[str, Any]:
+        profiles = self.data.get("profiles", {})
+        counts = {cat: len(self.get_leaderboard(cat, limit=9999)) for cat in TRACKING_DIMENSIONS}
+        return {
+            "status": "success",
+            "service": "whale_intelligence",
+            "updated_at": self.data.get("updated_at"),
+            "dimensions": TRACKING_DIMENSIONS,
+            "config": self.config,
+            "stats": {
+                "total_wallets_tracked": len(profiles),
+                "open_positions": len(self.data.get("open_positions", {})),
+                "closed_trades": len(self.data.get("closed_trades", [])),
+                "total_events": len(self.data.get("events", [])),
+                "by_classification": counts,
+            },
+        }
