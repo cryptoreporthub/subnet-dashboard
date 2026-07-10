@@ -23,6 +23,7 @@ from server import app
 CONTRACT = [
     ("GET", "/", None),
     ("GET", "/health", None),
+    ("GET", "/api/health", None),
     ("GET", "/api/daily-rotation", None),
     ("GET", "/api/registry", None),
     ("GET", "/api/subnets", None),
@@ -138,7 +139,6 @@ CONTRACT = [
 # Remaining routes from the historical FastAPI monolith, to be ported in later
 # slices. Kept here as a visible checklist (NOT asserted yet).
 NOT_YET_PORTED = [
-    "/api/health",
 ]
 
 

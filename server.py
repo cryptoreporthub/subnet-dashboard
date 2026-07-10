@@ -70,6 +70,14 @@ except Exception as _analytics_exc:  # pragma: no cover - defensive import guard
     logger.warning("Analytics routes unavailable: %s", _analytics_exc)
     _ANALYTICS_ROUTES = False
 
+try:
+    from internal.health.routes import health_router
+
+    _HEALTH_ROUTES = True
+except Exception as _health_exc:  # pragma: no cover - defensive import guard
+    logger.warning("Health routes unavailable: %s", _health_exc)
+    _HEALTH_ROUTES = False
+
 # Council pick engine (guarded so a broken/missing engine module can never stop
 # the app from booting — the picks endpoints degrade to a safe fallback).
 try:
@@ -102,6 +110,8 @@ if _ORACLE_ROUTES:
     app.include_router(oracle_router)
 if _ANALYTICS_ROUTES:
     app.include_router(analytics_router)
+if _HEALTH_ROUTES:
+    app.include_router(health_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
