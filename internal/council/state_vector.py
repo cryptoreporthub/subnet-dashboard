@@ -833,16 +833,19 @@ def _compute_signal_impact(sn: Dict[str, Any], indicators: Dict[str, Any], hot: 
 # Prediction helper (pure, no persistence)
 # ---------------------------------------------------------------------------
 def _expert_from_signal_source(source: Optional[str]) -> str:
+    """Map signal labels to canonical Council experts (not legacy alpha/beta/gamma)."""
     if not source:
-        return "alpha"
+        return "quant"
     s = str(source).lower()
-    if any(k in s for k in ("momentum", "macd", "trend", "ma_cross", "market_breadth")):
-        return "alpha"
-    if any(k in s for k in ("rsi", "stochastic", "williams", "cci", "contrarian", "oversold", "overbought")):
-        return "beta"
-    if any(k in s for k in ("emission", "apy", "yield", "fundamental")):
-        return "gamma"
-    return "alpha"
+    if any(k in s for k in ("contrarian", "dark", "horse", "onchain", "on-chain", "flow")):
+        return "dark_horse"
+    if any(k in s for k in ("whale", "momentum", "hype", "social", "hot")):
+        return "hype"
+    if any(k in s for k in ("rsi", "stochastic", "williams", "cci", "macd", "technical", "indicator")):
+        return "technical"
+    if any(k in s for k in ("emission", "apy", "yield", "fundamental", "quant")):
+        return "quant"
+    return "quant"
 
 
 

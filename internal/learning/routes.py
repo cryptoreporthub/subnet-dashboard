@@ -380,9 +380,15 @@ async def api_weights():
 async def api_resolve_predictions():
     """Trigger prediction resolution for any due predictions."""
     try:
+        weights_before = load_weights()
         subnets = _subnets_for_tracker()
         result = resolver.resolve_due_predictions(subnets)
-        return {"status": "success", "data": result}
+        return {
+            "status": "success",
+            "data": result,
+            "expert_weights_before": weights_before,
+            "expert_weights": load_weights(),
+        }
     except Exception as exc:
         logger.warning("resolve_due_predictions failed: %s", exc)
         return {

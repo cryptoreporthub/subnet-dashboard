@@ -136,6 +136,14 @@ def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
     if expert in {"quant", "hype", "dark_horse", "technical"}:
         return expert
 
+    # Legacy mind-map expert lanes (alpha/beta/gamma) → canonical Council experts
+    if expert in {"alpha"}:
+        return "quant"
+    if expert in {"beta"}:
+        return "hype"
+    if expert in {"gamma"}:
+        return "dark_horse"
+
     # FIX: "contrarian" maps to dark_horse (legacy signal compatibility)
     if "contrarian" in expert or "dark" in expert or "horse" in expert or "onchain" in expert or "on-chain" in expert or "flow" in expert:
         return "dark_horse"
@@ -195,6 +203,12 @@ def resolve_prediction(
     if expert:
         prediction["expert"] = expert
         _nudge_weights(correct, expert)
+        try:
+            from internal.learning.trail_events import emit_prediction_resolved
+
+            emit_prediction_resolved(prediction, expert)
+        except Exception:
+            pass
 
     signal_contributions = prediction.get("signal_contributions")
     horizon_type = prediction.get("horizon_type", "hour")

@@ -6,6 +6,7 @@ import json
 import logging
 import time
 import urllib.request
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,36 @@ def fetch_rotation_token_prices() -> Dict[str, Dict[str, Any]]:
     return cached or {}
 
 
+def _mirror_rotation_snapshot_to_soul_map(tokens: List[Dict[str, Any]]) -> bool:
+    """Persist rotation-token snapshot into soul_map; return True if disposition changed."""
+    try:
+        from internal.council.weights import SOUL_MAP_PATH, _load_raw, _save_raw
+
+        data = _load_raw(SOUL_MAP_PATH)
+        sms = data.setdefault("soul_map_state", {})
+        if not isinstance(sms, dict):
+            sms = {}
+            data["soul_map_state"] = sms
+
+        prior = sms.get("rotation_tokens_snapshot") or {}
+        prior_tokens = prior.get("tokens") if isinstance(prior, dict) else None
+        changed = prior_tokens != tokens
+
+        sms["rotation_tokens_snapshot"] = {
+            "tokens": tokens,
+            "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
+        _save_raw(data, SOUL_MAP_PATH)
+
+        from internal.learning.trail_events import emit_rotation_tokens_snapshot
+
+        emit_rotation_tokens_snapshot(tokens, changed)
+        return changed
+    except Exception as exc:
+        logger.warning("rotation_tokens soul_map mirror failed: %s", exc)
+        return False
+
+
 def build_rotation_tokens_response() -> Dict[str, Any]:
     """Public shape for GET /api/rotation-tokens."""
     prices = fetch_rotation_token_prices()
@@ -77,13 +108,18 @@ def build_rotation_tokens_response() -> Dict[str, Any]:
         entry = prices.get(symbol, {}) if isinstance(prices, dict) else {}
         price = entry.get("price")
         change = entry.get("price_change_24h")
+        conviction = None
+        if change is not None:
+            conviction = min(95, max(5, 50 + int(float(change) * 2)))
         tokens.append(
             {
                 "symbol": symbol.upper(),
                 "name": symbol.title(),
                 "price": price,
                 "price_change_24h": change,
+                "conviction": conviction,
                 "source": "coingecko" if price is not None else "watchlist",
             }
         )
+    _mirror_rotation_snapshot_to_soul_map(tokens)
     return {"status": "success", "tokens": tokens}
