@@ -21,19 +21,9 @@ jobs:
           python-version: '3.12'
       
       - name: Install dependencies
-        run: pip install -r requirements.txt
-      
-      - name: Run smoke test
         run: |
-          python -c "
-          # Verify the Flask app imports and core endpoints respond.
-          from server import app
-          client = app.test_client()
-          r = client.get('/health')
-          assert r.status_code == 200, f'Health failed: {r.status_code}'
-          r = client.get('/api/registry')
-          assert r.status_code == 200, f'Registry failed: {r.status_code}'
-          r = client.get('/api/summary')
-          assert r.status_code == 200, f'Summary failed: {r.status_code}'
-          print('CI SMOKE TEST PASS')
-          "
+          pip install -r requirements.txt
+          pip install pytest
+      
+      - name: Endpoint contract + server tests
+        run: python -m pytest tests/test_endpoint_contract.py tests/test_server.py -q
