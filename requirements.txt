@@ -1,4 +1,5 @@
-flask
+fastapi
+uvicorn[standard]
+jinja2
 pandas
 requests
-gunicorn>=21.2.0
