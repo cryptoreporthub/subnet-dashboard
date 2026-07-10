@@ -67,6 +67,36 @@ def save_predictions(data: Dict[str, Any]) -> None:
         logger.warning("Failed to persist predictions.json: %s", exc)
 
 
+def append_prediction(prediction: Dict[str, Any]) -> bool:
+    """Append a pending prediction if no duplicate is already pending.
+
+    Duplicate key: same ``netuid`` + ``horizon_type`` while status is pending.
+    Returns True when the prediction was stored.
+    """
+    if not isinstance(prediction, dict):
+        return False
+    netuid = prediction.get("netuid")
+    horizon_type = prediction.get("horizon_type", "hour")
+    if netuid is None:
+        return False
+
+    data = load_predictions()
+    pending = data.get("predictions", [])
+    for existing in pending:
+        if (
+            existing.get("netuid") == netuid
+            and existing.get("horizon_type", "hour") == horizon_type
+            and existing.get("status") == "pending"
+        ):
+            return False
+
+    pending.append(prediction)
+    data["predictions"] = pending
+    update_stats(data)
+    save_predictions(data)
+    return True
+
+
 def update_stats(data: Dict[str, Any]) -> None:
     preds: List[Dict[str, Any]] = data.get("predictions", [])
     resolved: List[Dict[str, Any]] = data.get("resolved", [])
