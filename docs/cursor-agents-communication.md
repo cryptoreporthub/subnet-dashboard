@@ -38,10 +38,10 @@
 | 2026-07-10 | Slice 5 learning read APIs | #69 | `4f9da76` |
 
 ### In progress
-- **Next:** Slice 6 — learning write APIs (`POST /api/feedback`, `POST /api/learning/trigger`, resolver run) — when assigned
+- **Next:** Slice 6 — learning write APIs — **Agent A active**
 
 ### Do not touch
-- `internal/ruggers/*` while Agent B has open ruggers PR
+- `internal/ruggers/*` (merged)
 - Monolith restore (`restore-server-ruggers-watchlist`)
 
 ---
@@ -54,17 +54,18 @@
 |-------|-------|
 | Cloud agent | `bc-cbcc1f5c-0b66-4d68-909d-8101dc52e78a` |
 | Branch suffix | `-e78a` |
-| Owns | `internal/whales/*`, `internal/ruggers/*`, `internal/indicators/routes.py` (future) |
+| Owns | `internal/whales/*`, `internal/ruggers/*`, `internal/indicators/routes.py` |
 
 ### Log
 | Date (UTC) | Action | PR | main after |
 |------------|--------|-----|------------|
 | 2026-07-10 | Slice 3 Whale Intelligence | #65 | merged |
 | 2026-07-10 | Slice 4 duplicate (closed) | #68 | — |
-| 2026-07-10 | Slice 4b Ruggers router | #70 | **OPEN — rebased onto `4f9da76`, ready for merge** |
+| 2026-07-10 | Slice 4b Ruggers router | #70 | `fc31f83` |
+| 2026-07-10 | Slice 7 Indicators read | — | **IN PROGRESS** |
 
 ### In progress
-- **PR #70** — ruggers watchlist facade; rebased onto post-#69 `main`, tests green (53), ready for merge
+- **Slice 7** — indicators read APIs on branch `cursor/indicators-read-slice7-e78a`
 
 ### Do not touch
 - `internal/council/learning_routes.py`, `council_routes.py` (Agent A)
@@ -76,10 +77,10 @@
 
 | Item | Value |
 |------|-------|
-| **main** | `4f9da76` (includes #69 slice 5) |
+| **main** | `fc31f83` (includes #70 ruggers) |
 | **Rebuild** | Incremental FastAPI — one `server.py` + `include_router` only |
-| **Open PRs** | #70 ruggers (`-e78a`) |
-| **Next merge** | #70 (rebased, tests green) |
+| **Open PRs** | slice 6 (A), slice 7 indicators (B) — parallel |
+| **Next merge** | whichever lands first; rebase if both touch contract |
 | **Closed forever** | #63 monolith, #68 duplicate judges |
 
 ## Shared rules
@@ -98,7 +99,7 @@
 | 2 | SimiVision picks | A | ✅ #66 |
 | 3 | Whale Intelligence | B | ✅ #65 |
 | 4 | Judge Council | A | ✅ #67 |
-| 4b | Ruggers facade | B | 🟢 #70 (rebased) |
+| 4b | Ruggers facade | B | ✅ #70 |
 | 5 | Learning read APIs | A | ✅ #69 |
-| 6 | Learning write APIs | A | pending |
-| 7 | Indicators read | B | pending |
+| 6 | Learning write APIs | A | 🟡 in progress |
+| 7 | Indicators read | B | 🟡 in progress |

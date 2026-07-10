@@ -38,6 +38,14 @@ except Exception as _ruggers_exc:  # pragma: no cover - defensive import guard
     logger.warning("Ruggers watchlist routes unavailable: %s", _ruggers_exc)
     _RUGGERS_ROUTES = False
 
+try:
+    from internal.indicators.routes import indicators_router
+
+    _INDICATORS_ROUTES = True
+except Exception as _indicators_exc:  # pragma: no cover - defensive import guard
+    logger.warning("Indicator routes unavailable: %s", _indicators_exc)
+    _INDICATORS_ROUTES = False
+
 # Council pick engine (guarded so a broken/missing engine module can never stop
 # the app from booting — the picks endpoints degrade to a safe fallback).
 try:
@@ -62,6 +70,8 @@ if _LEARNING_ROUTES:
     app.include_router(learning_router)
 if _RUGGERS_ROUTES:
     app.include_router(ruggers_router)
+if _INDICATORS_ROUTES:
+    app.include_router(indicators_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))

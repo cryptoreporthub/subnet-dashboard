@@ -91,6 +91,10 @@ CONTRACT = [
         },
     ),
     ("POST", "/api/ruggers/scan", {"netuids": [1], "top_n": 1}),
+    # Technical indicators (slice 7)
+    ("GET", "/api/indicators", None),
+    ("GET", "/api/indicators-convergence", None),
+    ("GET", "/api/indicators/scheduler", None),
 ]
 
 
@@ -110,9 +114,6 @@ NOT_YET_PORTED = [
     "/api/learning/trigger",
     "/api/resolve-predictions",
     "/api/predictions/resolver/run",
-    "/api/indicators",
-    "/api/indicators-convergence",
-    "/api/indicators/scheduler",
     "/api/price-tracking/baselines",
     "/api/price-tracking/outcomes",
     "/api/pump-analytics",
