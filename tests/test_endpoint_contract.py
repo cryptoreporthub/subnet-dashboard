@@ -127,6 +127,8 @@ CONTRACT = [
     ("GET", "/api/freshness", None),
     ("GET", "/api/council/weights", None),
     ("GET", "/api/weights", None),
+    # SimiVision chat (slice 13)
+    ("POST", "/api/simivision/chat", {"message": "contract-test ping"}),
 ]
 
 
@@ -136,7 +138,6 @@ NOT_YET_PORTED = [
     "/api/health",
     "/api/rotation-tokens",
     "/api/resolve-predictions",
-    "/api/simivision/chat",
 ]
 
 

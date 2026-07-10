@@ -31,6 +31,14 @@ except Exception as _learning_exc:  # pragma: no cover - defensive import guard
     _LEARNING_ROUTES = False
 
 try:
+    from internal.simivision.routes import simivision_router
+
+    _SIMIVISION_ROUTES = True
+except Exception as _simivision_exc:  # pragma: no cover - defensive import guard
+    logger.warning("SimiVision routes unavailable: %s", _simivision_exc)
+    _SIMIVISION_ROUTES = False
+
+try:
     from internal.ruggers.routes import ruggers_router
 
     _RUGGERS_ROUTES = True
@@ -84,6 +92,8 @@ if _COUNCIL_ROUTES:
     app.include_router(council_router)
 if _LEARNING_ROUTES:
     app.include_router(learning_router)
+if _SIMIVISION_ROUTES:
+    app.include_router(simivision_router)
 if _RUGGERS_ROUTES:
     app.include_router(ruggers_router)
 if _INDICATORS_ROUTES:
