@@ -33,6 +33,12 @@ CONTRACT = [
     ("GET", "/api/soul-map", None),
     ("GET", "/api/recommendations", None),
     ("POST", "/api/mindmap/feedback", {"note": "contract-test"}),
+    # SimiVision picks (slice 2)
+    ("GET", "/api/simivision", None),
+    ("GET", "/api/top-picks", None),
+    ("GET", "/api/daily-pick", None),
+    ("GET", "/api/top-pick/day", None),
+    ("GET", "/api/top-pick/hour", None),
 ]
 
 
@@ -41,11 +47,7 @@ CONTRACT = [
 NOT_YET_PORTED = [
     "/api/health",
     "/api/freshness",
-    "/api/simivision",
     "/api/rotation-tokens",
-    "/api/top-pick/day",
-    "/api/top-pick/hour",
-    "/api/top-picks",
     "/api/pick-history",
     "/api/rotation-tracker",
     "/api/scenario-memory",
