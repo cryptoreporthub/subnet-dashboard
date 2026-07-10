@@ -102,7 +102,7 @@ def test_consensus_agreement(monkeypatch):
 
 def test_api_judges_returns_200(client, monkeypatch):
     """GET /api/judges returns 200 and a judges list."""
-    import server
+    from internal.judges import council_routes
 
     def _fake_subnets():
         return [
@@ -111,8 +111,7 @@ def test_api_judges_returns_200(client, monkeypatch):
             {"netuid": 3, "name": "C", "price": 3.0, "apy": 0.3, "emission": 3.0, "volume": 3000000, "price_change_24h": 15.0, "social_mentions": 30, "social_sentiment": 0.8},
         ]
 
-    monkeypatch.setattr(server, "get_all_subnets", _fake_subnets)
-    server._refresh_judge_scores()
+    monkeypatch.setattr(council_routes, "_get_merged_data", lambda: (_fake_subnets(), "test"))
     response = client.get("/api/judges")
     assert response.status_code == 200
     data = response.json()
