@@ -95,6 +95,18 @@ CONTRACT = [
     ("GET", "/api/indicators", None),
     ("GET", "/api/indicators-convergence", None),
     ("GET", "/api/indicators/scheduler", None),
+    # Learning loop write APIs (slice 6)
+    (
+        "POST",
+        "/api/feedback",
+        {
+            "subnet_id": 1,
+            "recommendation": "quant",
+            "actual_performance": {"correct_prediction": True},
+        },
+    ),
+    ("POST", "/api/learning/trigger", None),
+    ("POST", "/api/predictions/resolver/run", None),
 ]
 
 
@@ -110,10 +122,7 @@ NOT_YET_PORTED = [
     "/api/oracle",
     "/api/council/weights",
     "/api/weights",
-    "/api/feedback",
-    "/api/learning/trigger",
     "/api/resolve-predictions",
-    "/api/predictions/resolver/run",
     "/api/price-tracking/baselines",
     "/api/price-tracking/outcomes",
     "/api/pump-analytics",
