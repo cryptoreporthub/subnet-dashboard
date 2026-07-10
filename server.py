@@ -171,6 +171,15 @@ async def index(request: Request):
         "data_source": source,
         **learning_ctx,
     }
+
+    # slice 12b — Agent B root context (owned modules only)
+    try:
+        from internal.analytics.root_context import build_agent_b_root_context
+
+        context.update(build_agent_b_root_context(subnets=subnets, data_source=source))
+    except Exception as exc:
+        logger.warning("Agent B root context unavailable: %s", exc)
+
     return templates.TemplateResponse(request, "index.html", context)
 
 
