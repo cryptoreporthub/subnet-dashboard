@@ -4585,9 +4585,9 @@ async def api_top_picks():
             raw_score = sc["total_score"]
             rugger_meta = None
             try:
-                from internal.ruggers.watchlist import RuggerWatchlist
+                from internal.whales.service import WhaleIntelligenceService
 
-                adjusted, rugger_meta = RuggerWatchlist().discount_score(
+                adjusted, rugger_meta = WhaleIntelligenceService().discount_score(
                     int(netuid or 0), float(raw_score)
                 )
                 if rugger_meta.get("adjusted"):
@@ -5337,7 +5337,15 @@ try:
 except Exception as _council_exc:  # pragma: no cover
     logger.warning("Judge council router unavailable: %s", _council_exc)
 
-# Ruggers watchlist — fast-flip whale tracking
+# Whale Intelligence service (ruggers + alpha whales + market movers + more)
+try:
+    from internal.whales.routes import whales_router
+
+    app.include_router(whales_router)
+except Exception as _whales_exc:  # pragma: no cover
+    logger.warning("Whale intelligence unavailable: %s", _whales_exc)
+
+# Ruggers watchlist — backward-compatible aliases
 try:
     from internal.ruggers.routes import ruggers_router
 
