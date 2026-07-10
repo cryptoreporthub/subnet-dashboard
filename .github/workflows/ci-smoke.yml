@@ -21,10 +21,21 @@ jobs:
           python-version: '3.11'
       
       - name: Install dependencies
-        run: pip install -r requirements.txt
-      
+        run: pip install -r requirements.txt pytest
+
       - name: Compile Python
         run: python -m py_compile server.py
-      
-      - name: Health check
-        run: curl --fail http://localhost:8080/health || true
+
+      - name: Run smoke test
+        run: |
+          python -c "
+          from server import app
+          from fastapi.testclient import TestClient
+          client = TestClient(app)
+          assert client.get('/health').status_code == 200
+          assert client.get('/api/whales/summary').status_code == 200
+          print('smoke OK')
+          "
+
+      - name: Run unit tests
+        run: pytest tests/test_whale_intelligence.py tests/test_ruggers_watchlist.py tests/test_server.py -q

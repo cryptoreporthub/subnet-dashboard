@@ -12,14 +12,14 @@ jobs:
       - name: Run Deploy Guards
         run: |
           set -e
-          echo "=== GUARD 1: uvicorn/fastapi must NOT be in requirements.txt ==="
-          if grep -niE "uvicorn|fastapi" requirements.txt; then
-            echo "GUARD FAIL: uvicorn/fastapi present in requirements.txt"
+          echo "=== GUARD 1: FastAPI + uvicorn must be in requirements.txt ==="
+          if ! grep -niE "uvicorn|fastapi" requirements.txt; then
+            echo "GUARD FAIL: uvicorn/fastapi missing from requirements.txt"
             exit 1
           fi
-          echo "=== GUARD 2: Procfile must NOT reference uvicorn ==="
-          if grep -ni uvicorn Procfile 2>/dev/null; then
-            echo "GUARD FAIL: uvicorn referenced in Procfile"
+          echo "=== GUARD 2: Procfile must reference uvicorn ==="
+          if ! grep -ni uvicorn Procfile 2>/dev/null; then
+            echo "GUARD FAIL: uvicorn missing from Procfile"
             exit 1
           fi
           echo "=== GUARD 3: no stray server/ package or server_original.py ==="
@@ -27,11 +27,8 @@ jobs:
             echo "GUARD FAIL: server/ package or server_original.py present"
             exit 1
           fi
-          echo "=== GUARD 4: gunicorn present in Procfile ==="
-          if ! grep -ni gunicorn Procfile 2>/dev/null; then
-            echo "GUARD FAIL: gunicorn missing from Procfile"
-            exit 1
-          fi
+          echo "=== GUARD 4: server.py must exist and compile ==="
+          python -m py_compile server.py
           echo "ALL GUARDS PASSED"
   deploy:
     name: Deploy app
