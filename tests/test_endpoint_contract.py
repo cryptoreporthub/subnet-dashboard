@@ -117,6 +117,10 @@ CONTRACT = [
     ("GET", "/api/pick-history", None),
     # Oracle snapshot stub (slice 9)
     ("GET", "/api/oracle", None),
+    # Pump analytics + price tracking (slice 10b)
+    ("GET", "/api/pump-analytics", None),
+    ("GET", "/api/price-tracking/baselines", None),
+    ("GET", "/api/price-tracking/outcomes", None),
 ]
 
 
@@ -130,9 +134,6 @@ NOT_YET_PORTED = [
     "/api/council/weights",
     "/api/weights",
     "/api/resolve-predictions",
-    "/api/price-tracking/baselines",
-    "/api/price-tracking/outcomes",
-    "/api/pump-analytics",
     "/api/simivision/chat",
 ]
 
