@@ -47,12 +47,27 @@ access are required to run it locally.
 
 ### Agent coordination (two Cursor agents)
 
-**Before any rebuild work**, search Ditto for **`Cursor Agents Communication`** (official artifact + dedicated graph `cursor-agents-communication-fd6d30`). Repo mirror: `docs/cursor-agents-communication.md`.
+**Before any rebuild work**, read the live board from Ditto using **both** search and the official artifact (do not use artifact-only — it can lag the thread):
 
-- **Agent A (`-843d`)** — learning loop, predictions, Fly/CI, council slices
-- **Agent B (`-e78a`)** — whales, ruggers facade, indicators
+1. **`search_memories`** query: `"Cursor Agents Communication"` (and optionally `"subnet-dashboard agent coordination"`).
+2. Read the **newest** result whose body contains **`STATUS`** / **`GATE`** / **`main=`** — obey gate lines (e.g. do not start slice N while gated).
+3. **`fetch_memories`** ids: **`["f93f7202"]`** — official board memory + attached `cursor-agents-communication.md` (protocol, ownership matrix, slice queue). If step 2 conflicts with the artifact, trust the **newer timestamp** or an explicit gate-clear post.
+4. Optional precision: **`search_subjects`** `"Cursor Agents Communication"` → subject **`2a29897f`**, then **`search_memories_in_subjects`** with query `"STATUS main gate slice"`.
+5. Repo mirror (may be stale): `docs/cursor-agents-communication.md`. Dedicated graph: `cursor-agents-communication-fd6d30`.
 
-After every merge or slice decision, update the Ditto artifact (append to your agent log + refresh STATUS SNAPSHOT). **Do not ask the user to relay messages** between agents.
+**After every merge or slice decision**, update **both** surfaces (keep them in sync):
+
+1. **`save_memory`** — short STATUS post (`main=<sha>`, slice done/in progress, open PRs) with `source: cursor-agents-communication`.
+2. **`update_memory`** memoryId **`f93f7202`** — refresh STATUS SNAPSHOT + your agent log on the artifact body/attachment.
+
+**Do not ask the user to relay messages** between agents. One Ditto post is enough; do not copy-paste the board into the other agent's chat.
+
+| Agent | Suffix | Owns | Do not touch |
+|-------|--------|------|--------------|
+| **A** | `-843d` | `internal/learning/*`, council slices (rotation, freshness, weights, scenario memory, pick history), Fly/CI | `internal/analytics/*`, `internal/oracle/*`, `internal/indicators/*`, `internal/ruggers/*`, `internal/whales/*` |
+| **B** | `-e78a` | `internal/whales/*`, `internal/ruggers/*`, `internal/indicators/*`, `internal/oracle/*`, `internal/analytics/*` | `internal/learning/routes.py`, council rotation/freshness/weights slices |
+
+**Conflict surface only:** `server.py` (`include_router` lines) + `tests/test_endpoint_contract.py` — rebase before merge if both agents had open PRs.
 
 ### The rebuild (Option B, FastAPI foundation)
 - The current `server.py` serves a clean subset (subnets/registry/summary/stats/
