@@ -146,8 +146,32 @@ async def add_cors_headers(request: Request, call_next):
 
 
 @app.get("/")
-def index(request: Request):
-    return templates.TemplateResponse(request, "index.html")
+async def index(request: Request):
+    subnets, source = _get_subnets_with_source()
+    market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
+
+    # --- Agent A slice 12a: learning/council/freshness dashboard context ---
+    learning_ctx = {}
+    try:
+        from internal.learning.dashboard_context import (
+            build_learning_dashboard_context,
+            default_learning_dashboard_context,
+        )
+
+        learning_ctx = build_learning_dashboard_context(subnets, market_context)
+    except Exception as exc:
+        logger.warning("slice 12a learning dashboard context failed: %s", exc)
+        from internal.learning.dashboard_context import default_learning_dashboard_context
+
+        learning_ctx = default_learning_dashboard_context()
+
+    context = {
+        "request": request,
+        "subnets": subnets,
+        "data_source": source,
+        **learning_ctx,
+    }
+    return templates.TemplateResponse(request, "index.html", context)
 
 
 @app.get("/api/daily-rotation")
