@@ -45,6 +45,15 @@ access are required to run it locally.
   APIs/classes that no longer exist. These belong to the not-yet-ported feature
   slices and will be addressed as those routers are rebuilt.
 
+### Agent coordination (two Cursor agents)
+
+**Before any rebuild work**, search Ditto for **`Cursor Agents Communication`** (official artifact + dedicated graph `cursor-agents-communication-fd6d30`). Repo mirror: `docs/cursor-agents-communication.md`.
+
+- **Agent A (`-843d`)** — learning loop, predictions, Fly/CI, council slices
+- **Agent B (`-e78a`)** — whales, ruggers facade, indicators
+
+After every merge or slice decision, update the Ditto artifact (append to your agent log + refresh STATUS SNAPSHOT). **Do not ask the user to relay messages** between agents.
+
 ### The rebuild (Option B, FastAPI foundation)
 - The current `server.py` serves a clean subset (subnets/registry/summary/stats/
   soul-map/recommendations/daily-rotation). The full product (SimiVision picks,

@@ -74,6 +74,23 @@ CONTRACT = [
     ("GET", "/api/predictions", None),
     ("GET", "/api/predictions/resolved", None),
     ("GET", "/api/predictions/resolver", None),
+    # Ruggers watchlist facade (slice 4b — backward-compat over whales)
+    ("GET", "/api/ruggers/summary", None),
+    ("GET", "/api/ruggers/watchlist", None),
+    ("GET", "/api/ruggers/watchlist/5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", None),
+    ("GET", "/api/ruggers/alerts", None),
+    ("GET", "/api/ruggers/subnet/1", None),
+    (
+        "POST",
+        "/api/ruggers/events",
+        {
+            "wallet": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+            "netuid": 1,
+            "side": "buy",
+            "amount_tao": 100.0,
+        },
+    ),
+    ("POST", "/api/ruggers/scan", {"netuids": [1], "top_n": 1}),
 ]
 
 

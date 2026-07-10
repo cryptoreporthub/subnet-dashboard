@@ -30,6 +30,14 @@ except Exception as _learning_exc:  # pragma: no cover - defensive import guard
     logger.warning("Learning loop routes unavailable: %s", _learning_exc)
     _LEARNING_ROUTES = False
 
+try:
+    from internal.ruggers.routes import ruggers_router
+
+    _RUGGERS_ROUTES = True
+except Exception as _ruggers_exc:  # pragma: no cover - defensive import guard
+    logger.warning("Ruggers watchlist routes unavailable: %s", _ruggers_exc)
+    _RUGGERS_ROUTES = False
+
 # Council pick engine (guarded so a broken/missing engine module can never stop
 # the app from booting — the picks endpoints degrade to a safe fallback).
 try:
@@ -52,6 +60,8 @@ if _COUNCIL_ROUTES:
     app.include_router(council_router)
 if _LEARNING_ROUTES:
     app.include_router(learning_router)
+if _RUGGERS_ROUTES:
+    app.include_router(ruggers_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
