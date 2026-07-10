@@ -244,3 +244,40 @@ def generate_signals(registry=None, top_n=10, soul_map_path=SOUL_MAP_PATH):
     convictions_map = {s["netuid"]: s["conviction"] for s in signals}
     _persist_convictions(convictions_map, soul_map_path)
     return top_signals
+
+
+def _recommendation_for_conviction(conviction: int) -> str:
+    if conviction >= 75:
+        return "BUY"
+    if conviction >= 50:
+        return "HOLD"
+    return "WATCH"
+
+
+class SimiVisionEngine:
+    """Thin wrapper around ``generate_signals`` for API/tests compatibility."""
+
+    def top_signals(self, n: int = 10, registry=None):
+        signals = generate_signals(registry=registry, top_n=n)
+        for s in signals:
+            s.setdefault("recommendation", _recommendation_for_conviction(int(s.get("conviction", 0))))
+        return signals
+
+    def get_signals(self, registry=None):
+        return self.top_signals(n=50, registry=registry)
+
+    def get_signal(self, netuid: int, registry=None):
+        for signal in self.get_signals(registry=registry):
+            if signal.get("netuid") == netuid:
+                return signal
+        return None
+
+    def safe_snapshot(self, n: int = 10, registry=None):
+        top = self.top_signals(n=n, registry=registry)
+        return {
+            "top": top,
+            "meta": {
+                "count": len(top),
+                "updated_at": _now_iso(),
+            },
+        }

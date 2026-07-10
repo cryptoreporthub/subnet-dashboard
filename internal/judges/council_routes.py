@@ -134,11 +134,37 @@ async def api_paper_portfolio():
     """Return aggregate paper portfolio across all judges."""
     try:
         from internal.judges.portfolios import all_portfolios
+
         portfolios = all_portfolios()
-        return {"success": True, "portfolios": portfolios}
+        aggregate = {
+            "open_positions": sum(
+                int((p.get("summary") or {}).get("open_positions", 0) or 0)
+                for p in portfolios.values()
+                if isinstance(p, dict)
+            ),
+            "total_closed": sum(
+                int((p.get("summary") or {}).get("total_closed", 0) or 0)
+                for p in portfolios.values()
+                if isinstance(p, dict)
+            ),
+            "total_pnl_pct": round(
+                sum(
+                    float((p.get("summary") or {}).get("total_pnl_pct", 0) or 0)
+                    for p in portfolios.values()
+                    if isinstance(p, dict)
+                ),
+                4,
+            ),
+        }
+        return {
+            "success": True,
+            "aggregate": aggregate,
+            "judges": portfolios,
+            "portfolios": portfolios,
+        }
     except Exception as e:
         logger.warning("Portfolio fetch failed: %s", e)
-        return {"success": False, "error": str(e), "portfolios": {}}
+        return {"success": False, "error": str(e), "aggregate": {}, "judges": {}, "portfolios": {}}
 
 
 @council_router.get("/api/postmortems")
