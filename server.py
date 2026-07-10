@@ -1,5 +1,8 @@
 import json
+import logging
 import os
+from datetime import datetime
+from typing import Any, Dict, List
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -7,6 +10,24 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from internal.council.mindmap_bridge import MindmapBridge
+
+logger = logging.getLogger("server")
+
+# Council pick engine (guarded so a broken/missing engine module can never stop
+# the app from booting — the picks endpoints degrade to a safe fallback).
+try:
+    from fetchers.taomarketcap import get_all_subnets
+    from internal.council.state_vector import (
+        score_subnet_for_hour,
+        score_subnet_for_day,
+    )
+    from internal.council.hourly_pick import select_hourly_pick
+    from internal.council.daily_pick_engine import get_or_create_today_pick
+
+    _PICKS_ENGINE = True
+except Exception as _exc:  # pragma: no cover - defensive import guard
+    logger.warning("Pick engine unavailable, using fallbacks: %s", _exc)
+    _PICKS_ENGINE = False
 
 app = FastAPI(title="Subnet Dashboard")
 
@@ -399,6 +420,284 @@ async def post_feedback(request: Request):
 @app.get("/health")
 def health():
     return PlainTextResponse("OK")
+
+
+# ---------------------------------------------------------------------------
+# SimiVision picks (ported from server_original.py onto the FastAPI foundation)
+#
+# NOTE: pick-generation is read-only here. The scenario-memory and pick-history
+# *recording* side-effects from the original _ordered_hour_picks are deferred to
+# their own slices (/api/scenario-memory, /api/pick-history) so this slice stays
+# atomic. Subnets come from the deduped taomarketcap source, so picks never
+# repeat a subnet ("Minos multiple times" was upstream duplication, now fixed).
+# ---------------------------------------------------------------------------
+
+# taomarketcap-shaped static fallback used when live/cached data is unavailable.
+_STATIC_SUBNETS = [
+    {"netuid": 29, "name": "Coldint", "emission": 3.0, "apy": 42.5, "volume": 1250000,
+     "market_cap": 45000000, "price": 28.50, "price_change_24h": 12.3,
+     "price_change_7d": 18.2, "price_change_30d": 24.9, "status": "active"},
+    {"netuid": 19, "name": "Inference", "emission": 2.1, "apy": 38.2, "volume": 980000,
+     "market_cap": 32000000, "price": 15.20, "price_change_24h": 8.7,
+     "price_change_7d": 12.1, "price_change_30d": 16.8, "status": "active"},
+    {"netuid": 12, "name": "Compute", "emission": 1.8, "apy": 35.1, "volume": 750000,
+     "market_cap": 28000000, "price": 12.40, "price_change_24h": 5.2,
+     "price_change_7d": 9.4, "price_change_30d": 13.0, "status": "active"},
+]
+
+
+def _get_subnets_with_source():
+    """Return (subnets, source) for picks, deduped by netuid; static fallback otherwise."""
+    if _PICKS_ENGINE:
+        try:
+            subnets = get_all_subnets()
+            if subnets:
+                deduped = {}
+                for s in subnets:
+                    deduped.setdefault(s.get("netuid"), s)
+                return list(deduped.values()), "taomarketcap"
+        except Exception as exc:
+            logger.warning("Error fetching from taomarketcap: %s", exc)
+    return [dict(s) for s in _STATIC_SUBNETS], "static-fallback"
+
+
+def _market_mood_proxy(subnets: List[Dict[str, Any]]) -> float:
+    """Market-wide 24h change proxy from the average subnet change."""
+    changes = []
+    for sn in subnets or []:
+        try:
+            changes.append(float(sn.get("price_change_24h", 0) or 0))
+        except (TypeError, ValueError):
+            continue
+    return sum(changes) / len(changes) if changes else 0.0
+
+
+def _highest_emission_pick(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Pick-shaped fallback using the highest-emission subnet."""
+    best = max(subnets, key=lambda s: s.get("emission", 0) or 0) if subnets else {}
+    return {
+        "subnet": {"netuid": best.get("netuid"), "name": best.get("name"), "symbol": best.get("symbol")},
+        "score": 0.0,
+        "confidence": 0.0,
+        "expert_contributions": {},
+        "scenario_tags": {"fallback": "highest-emission"},
+        "signals": {
+            "price_change_24h": best.get("price_change_24h"),
+            "price_change_7d": best.get("price_change_7d"),
+            "emission": best.get("emission"),
+            "apy": best.get("apy"),
+            "volume": best.get("volume"),
+        },
+        "action": "long",
+    }
+
+
+def _safe_simivision_payload() -> Dict[str, Any]:
+    """SimiVision panel: top-3 subnets by emission / APY / volume (distinct subnets)."""
+    subnets, source = _get_subnets_with_source()
+    ranked = sorted(
+        subnets,
+        key=lambda s: (s.get("emission", 0), s.get("apy", 0), s.get("volume", 0)),
+        reverse=True,
+    )
+    top = []
+    for idx, sn in enumerate(ranked[:3], start=1):
+        top.append({
+            "rank": idx,
+            "netuid": sn.get("netuid"),
+            "name": sn.get("name"),
+            "emission": sn.get("emission", 0),
+            "apy": sn.get("apy", 0),
+            "price_change_24h": sn.get("price_change_24h", 0),
+            "conviction": min(95, 72 + int(abs(sn.get("price_change_24h", 0))) + int(sn.get("apy", 0) / 4)),
+            "recommendation": "BUY" if idx == 1 else ("HOLD" if idx == 2 else "WATCH"),
+        })
+    return {
+        "status": "success",
+        "data": {
+            "top": top,
+            "meta": {
+                "count": len(subnets),
+                "source": source,
+                "updated_at": datetime.utcnow().isoformat() + "Z",
+            },
+        },
+    }
+
+
+def _build_hour_pick_payload(sn: Dict[str, Any], score: Dict[str, Any]) -> Dict[str, Any]:
+    """Format a subnet + hour state-vector into the public hour-pick shape."""
+    return {
+        "subnet": {"netuid": sn.get("netuid"), "name": sn.get("name"), "symbol": sn.get("symbol")},
+        "score": score["total_score"],
+        "confidence": score["confidence"],
+        "expert_contributions": score["expert_contributions"],
+        "scenario_tags": score["scenario_tags"],
+        "signals": {
+            "price_change_24h": sn.get("price_change_24h"),
+            "price_change_7d": sn.get("price_change_7d"),
+            "emission": sn.get("emission"),
+            "apy": sn.get("apy"),
+            "volume": sn.get("volume"),
+        },
+        "action": "long",
+    }
+
+
+def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[str, Any]]:
+    """Canonical ordered hourly picks: RedTeam-audited #1 (select_hourly_pick),
+    then distinct fill by raw hour score. Excludes the #1 netuid so no subnet
+    repeats. (Scenario/history recording deferred to their own slices.)"""
+    picks: List[Dict[str, Any]] = []
+    if not subnets:
+        return picks
+
+    audited = None
+    if _PICKS_ENGINE:
+        try:
+            audited = select_hourly_pick(subnets, market_context)
+        except Exception as exc:
+            logger.warning("select_hourly_pick failed: %s", exc)
+    if not audited:
+        audited = _highest_emission_pick(subnets)
+
+    top_netuid = None
+    if isinstance(audited, dict) and isinstance(audited.get("subnet"), dict):
+        top_netuid = audited["subnet"].get("netuid")
+        if "signals" not in audited:
+            src = next((s for s in subnets if s.get("netuid") == top_netuid), {})
+            audited["signals"] = {
+                "price_change_24h": src.get("price_change_24h"),
+                "price_change_7d": src.get("price_change_7d"),
+                "emission": src.get("emission"),
+                "apy": src.get("apy"),
+                "volume": src.get("volume"),
+            }
+
+    def _unify(payload, sn):
+        subnet = payload.get("subnet") if isinstance(payload.get("subnet"), dict) else {}
+        unified = dict(payload)
+        unified.setdefault("netuid", subnet.get("netuid", sn.get("netuid")))
+        unified.setdefault("name", subnet.get("name", sn.get("name")))
+        unified.setdefault("symbol", subnet.get("symbol", sn.get("symbol")))
+        unified.setdefault("score", payload.get("score", 0.0))
+        unified.setdefault("confidence", payload.get("confidence", 0.0))
+        unified.setdefault("scenario_tags", payload.get("scenario_tags", {}))
+        unified.setdefault("signals", payload.get("signals", {}))
+        return unified
+
+    src = next((s for s in subnets if s.get("netuid") == top_netuid), {})
+    picks.append(_unify(audited, src))
+
+    if _PICKS_ENGINE:
+        scored = []
+        for sn in subnets:
+            if top_netuid is not None and sn.get("netuid") == top_netuid:
+                continue
+            try:
+                scored.append({"subnet": sn, "score": score_subnet_for_hour(sn, market_context)})
+            except Exception as exc:
+                logger.warning("score_subnet_for_hour failed for SN%s: %s", sn.get("netuid"), exc)
+        scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
+        for item in scored[: max(0, limit - len(picks))]:
+            picks.append(_unify(_build_hour_pick_payload(item["subnet"], item["score"]), item["subnet"]))
+
+    return picks[:limit]
+
+
+@app.get("/api/simivision")
+def api_simivision():
+    """SimiVision intelligence panel — top ranked subnets (distinct)."""
+    return _safe_simivision_payload()
+
+
+@app.get("/api/top-picks")
+def api_top_picks():
+    """Top 3 subnets by short-horizon (hour) and 24h (day) Council scores."""
+    subnets, _ = _get_subnets_with_source()
+    if not _PICKS_ENGINE:
+        return {"hour_picks": [], "day_picks": [], "error": "pick engine unavailable"}
+    market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
+    hour_scored, day_scored = [], []
+    for sn in subnets:
+        try:
+            hour_scored.append({"subnet": sn, "score": score_subnet_for_hour(sn, market_context)})
+            day_scored.append({"subnet": sn, "score": score_subnet_for_day(sn, market_context)})
+        except Exception as exc:
+            logger.warning("scoring failed for SN%s: %s", sn.get("netuid"), exc)
+    hour_scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
+    day_scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
+
+    def _format(item):
+        sn, sc = item["subnet"], item["score"]
+        return {
+            "netuid": sn.get("netuid"),
+            "name": sn.get("name"),
+            "symbol": sn.get("symbol"),
+            "score": sc["total_score"],
+            "confidence": sc["confidence"],
+            "expert_contributions": sc["expert_contributions"],
+            "signals": {
+                "price_change_24h": sn.get("price_change_24h"),
+                "price_change_7d": sn.get("price_change_7d"),
+                "emission": sn.get("emission"),
+                "apy": sn.get("apy"),
+                "volume": sn.get("volume"),
+            },
+            "scenario_tags": sc["scenario_tags"],
+        }
+
+    return {
+        "hour_picks": [_format(i) for i in hour_scored[:3]],
+        "day_picks": [_format(i) for i in day_scored[:3]],
+    }
+
+
+@app.get("/api/daily-pick")
+def api_daily_pick():
+    """Today's audited daily pick from the Council engine."""
+    subnets, _ = _get_subnets_with_source()
+    if not _PICKS_ENGINE:
+        return {"status": "error", "date": datetime.utcnow().date().isoformat(),
+                "action": "HOLD", "reason": "pick engine unavailable", "pick": None}
+    market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
+    try:
+        return get_or_create_today_pick(subnets, market_context)
+    except Exception as e:
+        logger.error("Error fetching daily pick: %s", e)
+        return {"status": "error", "date": datetime.utcnow().date().isoformat(),
+                "action": "HOLD", "reason": str(e), "pick": None}
+
+
+@app.get("/api/top-pick/day")
+def api_top_pick_day():
+    """Top pick for the current day, with a safe highest-emission fallback."""
+    subnets, _ = _get_subnets_with_source()
+    day_pick = None
+    if _PICKS_ENGINE:
+        market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
+        try:
+            raw = get_or_create_today_pick(subnets, market_context)
+            day_pick = raw.get("pick") if isinstance(raw, dict) and raw.get("pick") else raw
+        except Exception as exc:
+            logger.error("Error selecting daily pick: %s", exc)
+    if not day_pick:
+        return {"picks": [_highest_emission_pick(subnets)]}
+    return {"picks": [day_pick]}
+
+
+@app.get("/api/top-pick/hour")
+def api_top_pick_hour():
+    """Top short-horizon picks (audited #1 + distinct fill), with fallback."""
+    subnets, _ = _get_subnets_with_source()
+    market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
+    try:
+        picks = _ordered_hour_picks(subnets, market_context, limit=3)
+        if picks:
+            return {"picks": picks}
+    except Exception as e:
+        logger.error("Error fetching hour pick: %s", e)
+    return {"picks": [_highest_emission_pick(subnets)]}
 
 
 if __name__ == "__main__":
