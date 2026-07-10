@@ -14,6 +14,14 @@ from internal.whales.routes import whales_router
 
 logger = logging.getLogger("server")
 
+try:
+    from internal.judges.council_routes import council_router
+
+    _COUNCIL_ROUTES = True
+except Exception as _council_exc:  # pragma: no cover - defensive import guard
+    logger.warning("Council judge routes unavailable: %s", _council_exc)
+    _COUNCIL_ROUTES = False
+
 # Council pick engine (guarded so a broken/missing engine module can never stop
 # the app from booting — the picks endpoints degrade to a safe fallback).
 try:
@@ -32,6 +40,8 @@ except Exception as _exc:  # pragma: no cover - defensive import guard
 
 app = FastAPI(title="Subnet Dashboard")
 app.include_router(whales_router)
+if _COUNCIL_ROUTES:
+    app.include_router(council_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))

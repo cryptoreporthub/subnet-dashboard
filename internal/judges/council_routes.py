@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
@@ -54,11 +54,62 @@ def _get_merged_data():
     return None, "none"
 
 
+def _get_subnets_for_scoring() -> tuple[List[Dict[str, Any]], str]:
+    """Return deduped subnets for judge scoring.
+
+    Prefer cached TaoMarketCap data first — it is fast and already deduped.
+    Fall back to the merged pipeline only when TMC has nothing.
+    """
+    try:
+        from fetchers.taomarketcap import get_all_subnets
+
+        subnets = _deduplicate_subnets(get_all_subnets())
+        if subnets:
+            return subnets, "taomarketcap"
+    except Exception as e:
+        logger.warning("TMC subnet fetch failed: %s", e)
+
+    merged, source = _get_merged_data()
+    if merged:
+        return merged, source
+    return [], "none"
+
+
+def _aggregate_portfolios(portfolios: Dict[str, Any]) -> Dict[str, Any]:
+    """Aggregate judge portfolios (matches dashboard + other router work)."""
+    return {
+        "open_positions": sum(
+            int((p.get("summary") or {}).get("open_positions", 0) or 0)
+            for p in portfolios.values()
+            if isinstance(p, dict)
+        ),
+        "total_closed": sum(
+            int((p.get("summary") or {}).get("total_closed", 0) or 0)
+            for p in portfolios.values()
+            if isinstance(p, dict)
+        ),
+        "total_pnl_pct": round(
+            sum(
+                float((p.get("summary") or {}).get("total_pnl_pct", 0) or 0)
+                for p in portfolios.values()
+                if isinstance(p, dict)
+            ),
+            4,
+        ),
+    }
+
+
+def _score_all_judges(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    from internal.judges.subnet_judges import score_all_subnets
+
+    return _deduplicate_subnets(score_all_subnets(subnets))
+
+
 @council_router.get("/api/council")
 async def api_council():
     """Full merged data pipeline: Blockmachine + TaoStats + TaoMarketCap + judge scores."""
     try:
-        merged, source = _get_merged_data()
+        merged, source = _get_subnets_for_scoring()
         if not merged:
             # Fall back to TMC only
             from fetchers.taomarketcap import get_all_subnets
@@ -76,9 +127,7 @@ async def api_council():
 
         # Score through the judge council
         try:
-            from internal.judges.subnet_judges import score_all_subnets
-            scored = score_all_subnets(merged)
-            scored = _deduplicate_subnets(scored)
+            scored = _score_all_judges(merged)
         except Exception as e:
             logger.warning("Judge scoring in council endpoint failed: %s", e)
             scored = []
@@ -103,54 +152,117 @@ async def api_council():
 async def api_judges():
     """Score ALL subnets with the three-judge council + consensus."""
     try:
-        # Try merged data first for richer scoring
-        merged, source = _get_merged_data()
-        if merged:
-            from internal.judges.subnet_judges import score_all_subnets
-            result = score_all_subnets(merged)
-            result = _deduplicate_subnets(result)
+        subnets, source = _get_subnets_for_scoring()
+        if subnets:
+            result = _score_all_judges(subnets)
             logger.info("Judges: scored %d unique subnets (source=%s)", len(result), source)
-            return {"success": True, "judges": result, "count": len(result), "source": source}
+            return {
+                "success": True,
+                "judges": result,
+                "count": len(result),
+                "source": source,
+                "meta": {
+                    "count": len(result),
+                    "degraded_sources": [],
+                    "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                },
+            }
 
-        # Fall back to TMC-only data
-        from fetchers.taomarketcap import get_all_subnets
-        from internal.judges.subnet_judges import score_all_subnets
-
-        subnets_data = get_all_subnets()
-        subnets_data = _deduplicate_subnets(subnets_data)
-        if not subnets_data:
-            return {"success": False, "error": "No subnet data available", "judges": [], "count": 0}
-        result = score_all_subnets(subnets_data)
-        result = _deduplicate_subnets(result)
-        logger.info("Judges: scored %d unique subnets (source=taomarketcap)", len(result))
-        return {"success": True, "judges": result, "count": len(result), "source": "taomarketcap"}
+        return {"success": False, "error": "No subnet data available", "judges": [], "count": 0}
     except Exception as e:
         logger.warning("Judge scoring failed: %s", e, exc_info=True)
         return {"success": False, "error": str(e), "judges": [], "count": 0}
 
 
+@council_router.get("/api/judges/{netuid}")
+async def api_judges_netuid(netuid: int):
+    """Return detailed judge breakdown for one subnet."""
+    try:
+        subnets, _source = _get_subnets_for_scoring()
+        if not subnets:
+            return {"error": "subnet not found", "netuid": netuid}
+
+        from internal.judges.subnet_judges import score_subnet
+
+        target = next(
+            (s for s in subnets if s.get("netuid") == netuid or s.get("id") == netuid),
+            None,
+        )
+        if target:
+            return score_subnet(netuid, target)
+    except Exception as e:
+        logger.warning("Judge netuid lookup failed for %s: %s", netuid, e)
+    return {"error": "subnet not found", "netuid": netuid}
+
+
+@council_router.get("/api/judges/{judge}/postmortems")
+async def api_judge_postmortems(judge: str):
+    """Return scientific-method postmortems for a single judge."""
+    try:
+        from internal.judges import get_judge
+        from internal.judges.postmortems import list_for_judge
+
+        name = judge.lower()
+        if get_judge(name) is None:
+            return {"status": "error", "error": f"Unknown judge: {judge}"}
+        return {"status": "success", "judge": name, "postmortems": list_for_judge(name)}
+    except Exception as exc:
+        logger.warning("api_judge_postmortems failed: %s", exc)
+        return {"status": "stub", "judge": judge, "postmortems": [], "error": str(exc)}
+
+
 @council_router.get("/api/paper-portfolio")
 async def api_paper_portfolio():
-    """Return aggregate paper portfolio across all judges."""
+    """Return aggregate paper portfolios for all judges."""
     try:
         from internal.judges.portfolios import all_portfolios
+
         portfolios = all_portfolios()
-        return {"success": True, "portfolios": portfolios}
     except Exception as e:
         logger.warning("Portfolio fetch failed: %s", e)
-        return {"success": False, "error": str(e), "portfolios": {}}
+        portfolios = {}
+    return {"aggregate": _aggregate_portfolios(portfolios), "judges": portfolios}
+
+
+@council_router.get("/api/portfolios")
+async def api_portfolios():
+    """Return the current paper portfolios for Oracle, Echo and Pulse."""
+    try:
+        from internal.judges.portfolios import all_portfolios
+
+        return {"status": "success", "portfolios": all_portfolios()}
+    except Exception as exc:
+        logger.warning("api_portfolios failed: %s", exc)
+        return {"status": "stub", "portfolios": {}, "error": str(exc)}
 
 
 @council_router.get("/api/postmortems")
-async def api_postmortems():
-    """Return postmortems across all judges."""
+async def api_postmortems(judge: Optional[str] = None):
+    """Return all postmortems, optionally filtered by judge name."""
     try:
-        from internal.judges.postmortems import all_postmortems
-        postmortems = all_postmortems()
-        return {"success": True, "postmortems": postmortems}
+        from internal.judges.postmortems import all_postmortems, list_for_judge
+
+        if judge:
+            pms = list_for_judge(judge)
+            return {"judge": judge, "postmortems": pms if isinstance(pms, list) else []}
+        pms = all_postmortems()
+        return {"postmortems": pms if isinstance(pms, dict) else {}}
     except Exception as e:
         logger.warning("Postmortem fetch failed: %s", e)
-        return {"success": False, "error": str(e), "postmortems": {}}
+        return {"postmortems": {}}
+
+
+@council_router.get("/api/postmortems/{judge_name}")
+async def api_postmortems_by_judge(judge_name: str):
+    """Return postmortems for a specific judge."""
+    try:
+        from internal.judges.postmortems import list_for_judge
+
+        pms = list_for_judge(judge_name)
+        return {"judge": judge_name, "postmortems": pms if isinstance(pms, list) else []}
+    except Exception as e:
+        logger.warning("Postmortem fetch failed for %s: %s", judge_name, e)
+        return {"judge": judge_name, "postmortems": []}
 
 
 @council_router.get("/judge-council", response_class=HTMLResponse)
