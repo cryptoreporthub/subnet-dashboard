@@ -65,15 +65,11 @@
 | 2026-07-10 | Slice 7 Indicators read | — | **IN PROGRESS** |
 
 ### In progress
-- **PR #70** — merged at `fc31f83`
 - **Slice 7** — indicators read APIs on branch `cursor/indicators-read-slice7-e78a`
 
 ### Do not touch
 - `internal/council/learning_routes.py`, `council_routes.py` (Agent A)
 - Learning loop write endpoints (slice 6, Agent A)
-
-### In progress
-- **Slice 7** — indicators read APIs (`GET /api/indicators`, convergence, scheduler)
 
 ---
 
