@@ -1,4 +1,4 @@
-"""FastAPI read routes for the learning loop (slice 5)."""
+"""FastAPI routes for the learning loop (slices 5–6)."""
 
 from __future__ import annotations
 
@@ -8,14 +8,19 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Query
 
-from datastore.learning_engine import LearningEngine
+from datastore.learning_engine import LearningEngine, create_feedback_router
 from internal.council import resolver, rotation_tracker, scenario_memory
-from internal.council.resolver_scheduler import get_prediction_resolver_scheduler_state
+from internal.council.resolver_scheduler import (
+    get_prediction_resolver_scheduler,
+    get_prediction_resolver_scheduler_state,
+    start_prediction_resolver_scheduler,
+)
 from internal.learning.predictions_store import load_predictions, save_predictions, update_stats
 
 logger = logging.getLogger(__name__)
 
 learning_router = APIRouter(tags=["learning"])
+learning_router.include_router(create_feedback_router())
 
 _LEARNING_DELTA_CORRECT = 0.02
 _LEARNING_DELTA_WRONG = -0.03
@@ -203,3 +208,50 @@ async def api_predictions_resolver_state():
         "status": "success",
         "data": get_prediction_resolver_scheduler_state(),
     }
+
+
+def _ensure_resolver_scheduler():
+    """Start the resolver scheduler singleton if headless (tests / first trigger)."""
+    scheduler = get_prediction_resolver_scheduler()
+    if scheduler is None:
+        start_prediction_resolver_scheduler(immediate=False)
+        scheduler = get_prediction_resolver_scheduler()
+    return scheduler
+
+
+@learning_router.post("/api/learning/trigger")
+async def api_learning_trigger():
+    """Manually run a prediction-resolution cycle and return scheduler state."""
+    scheduler = _ensure_resolver_scheduler()
+    cycle: Dict[str, Any] = {}
+    if scheduler is not None:
+        try:
+            cycle = scheduler.run_once()
+        except Exception as exc:
+            cycle = {"ok": False, "error": str(exc)}
+
+    return {
+        "status": "success",
+        "data": {
+            "cycle": cycle,
+            "scheduler": get_prediction_resolver_scheduler_state(),
+            "triggered_at": _utcnow_z(),
+        },
+    }
+
+
+@learning_router.post("/api/predictions/resolver/run")
+async def api_predictions_resolver_run():
+    """Trigger a single prediction-resolution cycle on demand."""
+    scheduler = _ensure_resolver_scheduler()
+    if scheduler is None:
+        return {
+            "status": "error",
+            "message": "prediction resolver scheduler is not initialized",
+        }
+    try:
+        result = scheduler.run_once()
+        return {"status": "success", "data": result}
+    except Exception as exc:
+        logger.warning("Manual prediction resolver run failed: %s", exc)
+        return {"status": "error", "message": str(exc)}
