@@ -13,3 +13,10 @@ primary_region = "sea"
   auto_stop_machines = true
   auto_start_machines = true
   min_machines_running = 0
+
+# Persistent volume for runtime/learning data (soul_map.json, predictions.json,
+# SQLite caches under /app/data). The machine already has this volume attached;
+# declaring it here makes the config match reality so deploys don't prompt.
+[mounts]
+  source = "data_volume"
+  destination = "/app/data"
