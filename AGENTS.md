@@ -47,7 +47,9 @@ access are required to run it locally.
 
 ### Agent coordination (two Cursor agents)
 
-**Before any rebuild work**, read the live board from Ditto using **both** search and the official artifact (do not use artifact-only — it can lag the thread):
+**Concurrent J/H sprint (2026-07-11):** Read **`cursor-agents-communication/concurrent-protocol.md`** and **`cursor-agents-communication/board.md`** from git first. Do **not** use `fetch_memories(["f93f7202"])` for board STATUS this sprint. Phase J (A) and H-thin (B) may start in parallel; merge order J then H.
+
+**Before any other rebuild work**, read the live board from Ditto using **both** search and the official artifact (do not use artifact-only — it can lag the thread):
 
 1. **`search_memories`** query: `"Cursor Agents Communication"` (and optionally `"subnet-dashboard agent coordination"`).
 2. Read the **newest** result whose body contains **`STATUS`** / **`GATE`** / **`main=`** — obey gate lines (e.g. do not start slice N while gated).
