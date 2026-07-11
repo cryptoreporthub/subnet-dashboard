@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/cockpit.css">
   <style>
     :root {
       --bg-base: #0B0F19;
@@ -861,6 +862,8 @@
         <!-- Summary cards injected here -->
       </div>
     </header>
+
+    {% include "partials/cockpit_cards.html" %}
 
     <section class="controls" aria-label="Filters and sorting">
       <div class="toolbar">

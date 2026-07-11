@@ -1,0 +1,80 @@
+{# Premium Cockpit — always renders exactly 12 section cards (cold-redeploy safe) #}
+{% set _canonical = [
+  ('council_picks', 'Council Picks'),
+  ('judges', 'Judges'),
+  ('learning_loop', 'Learning Loop'),
+  ('predictions', 'Predictions'),
+  ('scenario_memory', 'Scenario Memory'),
+  ('pump_ladder', 'Pump Ladder'),
+  ('pump_tracker', 'Pump Tracker'),
+  ('trace', 'Decision Trace'),
+  ('message_intel', 'Message Intel'),
+  ('mindmap_trail', 'Mindmap Trail'),
+  ('rotation', 'Rotation Tokens'),
+  ('soul_map', 'Soul Map')
+] %}
+{% set _by_id = namespace(map={}) %}
+{% if cockpit_sections is defined and cockpit_sections and cockpit_sections.sections %}
+  {% for row in cockpit_sections.sections %}
+    {% set _ = _by_id.map.update({row.id: row}) %}
+  {% endfor %}
+{% endif %}
+
+<section class="cockpit" aria-labelledby="cockpit-heading">
+  <div class="cockpit-header">
+    <div>
+      <h2 id="cockpit-heading" class="cockpit-title">Premium Cockpit</h2>
+      <p class="cockpit-subtitle">Twelve live intelligence panels — honest-empty on cold deploy, never blank.</p>
+    </div>
+  </div>
+
+  <div class="cockpit-grid">
+    {% for sid, default_title in _canonical %}
+      {% set card = _by_id.map.get(sid) %}
+      {% if not card %}
+        {% set card = {
+          'id': sid,
+          'title': default_title,
+          'summary': default_title ~ ' is warming up on this deploy. Schedulers and stores will populate this card automatically.',
+          'metrics': {},
+          'status': 'empty',
+          'updated_at': ''
+        } %}
+      {% endif %}
+      {% set status = card.status if card.status in ['live', 'empty', 'unavailable'] else 'empty' %}
+      <article
+        class="cockpit-card"
+        data-section-id="{{ card.id }}"
+        data-status="{{ status }}"
+        aria-labelledby="cockpit-{{ card.id }}-title"
+      >
+        <header class="cockpit-card-head">
+          <div>
+            <h3 id="cockpit-{{ card.id }}-title" class="cockpit-card-title">{{ card.title }}</h3>
+            <span class="cockpit-card-id">{{ card.id }}</span>
+          </div>
+          <span class="cockpit-status cockpit-status-{{ status }}">{{ status }}</span>
+        </header>
+
+        <p class="cockpit-summary">{{ card.summary }}</p>
+
+        {% if card.metrics %}
+        <dl class="cockpit-metrics">
+          {% for key, val in card.metrics.items() %}
+            {% if val is not none and val != '' %}
+            <div class="cockpit-metric">
+              <dt>{{ key|replace('_', ' ')|title }}</dt>
+              <dd>{{ val }}</dd>
+            </div>
+            {% endif %}
+          {% endfor %}
+        </dl>
+        {% endif %}
+
+        <footer class="cockpit-updated">
+          {% if card.updated_at %}Updated {{ card.updated_at }}{% else %}Awaiting first scan{% endif %}
+        </footer>
+      </article>
+    {% endfor %}
+  </div>
+</section>
