@@ -172,6 +172,30 @@ Everything below maps 1:1 to R1–R6. **No threshold gaming.** If accuracy stays
 
 **Agent A owns:** `internal/council/resolver.py`, `resolver_scheduler.py`, `internal/learning/prediction_loop.py`, `internal/judges/*`, trace wiring, tests above.
 
+### SciWeave-informed defaults (2026-07-11)
+
+Peer-reviewed synthesis validates Phase J design. Implement these **constants and rules** unless a later SciWeave pass refines them.
+
+| SciWeave finding | Phase J rule | Implementation hint |
+|------------------|--------------|---------------------|
+| Late/batch resolution destroys accuracy | **Expire** if past grace; never grade on “now” price for stale horizons | `resolver.py`: if `now > resolve_at + grace` → `_expire_prediction`, not `resolve_prediction` |
+| Horizon-end price required | Replay/backfill at **`resolve_at`** from candles; document lag if nearest candle | Candle lookup ±15m; store `price_source`, `price_lag_seconds` on row |
+| Dual ledgers must not diverge | **Single atomic resolution** → predictions + portfolios + trace | One function; portfolio win = same `actual_pct` as resolver |
+| Direction before magnitude | **J4 phase 1:** direction-only `correct`; drop `predicted_pct` tolerance | Remove `classify_outcome` magnitude threshold until phase 2 |
+| Hybrid metrics later | **J4 phase 2:** hit rate + **Brier score** when magnitude is signal-derived | Store `brier` optional field; 0.4 dir + 0.6 cal only after phase 2 |
+| Asymmetric decay → collapse | **Symmetric** updates (+0.02 / −0.02) or Bayesian; pause during replay | `resolver.py` constants; no nudges in replay script |
+| TA needs real samples | **≥30 real candles** before RSI/MACD affect pick; no synthetic `sin()` fill | `state_vector`: degrade/suppress when `n < 30` |
+| Audit trail | Trace schema: signals, weights, regime, ref/resolve price, horizon, timestamps | J6 minimum fields |
+| Watchdog | Alert on backlog **or** max pending age (not count alone) | `pending_count > 10` **OR** `oldest_pending_age > 2 × horizon_hours` |
+| Duplicate forecasts | De-dupe before resolve and before stats | J2: one outcome per `(netuid, resolve_at window)` per 5 min |
+| Cadence-specific rules | **1h:** direction-only, tighter watchdog; **4h/24h:** same grading, optional Brier in phase 2 | `horizon_type` branch in grader only if needed |
+| Regime splits | Regime-specific weights only when **n ≥ 30** resolved per regime | `scenario_memory` gate; else global weights |
+| Illiquid price | **VWAP or median** in window at `resolve_at`; else **`ungradeable`** | New outcome status; do not force a miss/hit |
+
+**Replay protocol (SciWeave Q2):** Re-label from historical prices at each row’s `resolve_at`; exclude or expire rows with no valid candle; run forward-only holdout after replay to report honest post-fix accuracy (no lookahead in weight updates).
+
+**Transparency (future H):** Cite resolution protocol on `/transparency` — fixed-window, expire-late, horizon-end price.
+
 ---
 
 ## 7. Phase H — Premium UI (after J)
