@@ -198,6 +198,9 @@ def build_mindmap_state() -> Dict[str, Any]:
     message_intel = panel_summaries.summarize_message_intel_guarded()
     if message_intel:
         summaries["message_intel"] = message_intel
+    pump_tracker = panel_summaries.summarize_pump_tracker_guarded()
+    if pump_tracker:
+        summaries["pump_tracker"] = pump_tracker
 
     try:
         from internal.council.selector_scheduler import get_selector_scheduler_state

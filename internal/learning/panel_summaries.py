@@ -176,3 +176,14 @@ def summarize_message_intel_guarded() -> Optional[Dict[str, Any]]:
         return None
     except Exception:
         return None
+
+
+def summarize_pump_tracker_guarded() -> Optional[Dict[str, Any]]:
+    try:
+        from internal.pump_tracker.summary import summarize_pump_tracker
+
+        return summarize_pump_tracker()
+    except ImportError:
+        return None
+    except Exception:
+        return None

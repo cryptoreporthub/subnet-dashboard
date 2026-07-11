@@ -453,3 +453,10 @@ try:
     learning_router.include_router(message_intel_router)
 except ImportError:
     pass
+
+try:
+    from internal.pump_tracker.routes import pump_tracker_router
+
+    learning_router.include_router(pump_tracker_router)
+except ImportError as _pump_tracker_exc:
+    logger.warning("Pump-tracker routes unavailable: %s", _pump_tracker_exc)
