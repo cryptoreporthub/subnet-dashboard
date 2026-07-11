@@ -88,6 +88,14 @@ except Exception as _cockpit_exc:  # pragma: no cover - defensive import guard
     cockpit_router = None  # type: ignore[assignment,misc]
     _COCKPIT_ROUTES = False
 
+try:
+    from internal.analytics.store_routes import store_router
+
+    _STORE_ROUTES = True
+except Exception as _store_exc:  # pragma: no cover - defensive import guard
+    logger.warning("Store routes unavailable: %s", _store_exc)
+    _STORE_ROUTES = False
+
 # Council pick engine (guarded so a broken/missing engine module can never stop
 # the app from booting — the picks endpoints degrade to a safe fallback).
 try:
@@ -150,6 +158,8 @@ if _HEALTH_ROUTES:
     app.include_router(health_router)
 if _COCKPIT_ROUTES:
     app.include_router(cockpit_router)
+if _STORE_ROUTES:
+    app.include_router(store_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
