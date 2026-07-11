@@ -69,4 +69,15 @@ async def api_pump_tracker_top_movers(limit: int = Query(default=20, ge=1, le=10
 @pump_tracker_router.get("/api/pump-tracker/summary")
 async def api_pump_tracker_summary():
     """Panel summary (also folded into /api/mindmap/state)."""
-    return {"status": "success", "summary": summarize_pump_tracker()}
+    try:
+        return {"status": "success", "summary": summarize_pump_tracker()}
+    except Exception as exc:
+        logger.warning("pump-tracker summary failed: %s", exc)
+        return {
+            "status": "error",
+            "error": str(exc),
+            "summary": {
+                "text": "Pump tracker summary is temporarily unavailable.",
+                "sentences": ["Pump tracker summary is temporarily unavailable."],
+            },
+        }
