@@ -118,6 +118,27 @@ def record_pick_prediction(
     _append_mindmap_trail(pick, prediction, horizon_type)
     _mirror_pick_to_soul_map(pick, prediction, horizon_type)
 
+    try:
+        from internal.learning.trail_bus import emit_conviction_update, emit_signal_triggered
+
+        conf = pick.get("confidence", pick.get("final_confidence"))
+        emit_conviction_update(
+            subnet=prediction.get("name"),
+            netuid=prediction.get("netuid"),
+            conviction=float(conf) * 100 if conf and float(conf) <= 1 else conf,
+            horizon_type=horizon_type,
+            evidence={"pick_score": pick.get("score"), "expert": expert},
+        )
+        emit_signal_triggered(
+            subnet=prediction.get("name"),
+            netuid=prediction.get("netuid"),
+            signal_name=f"council_{horizon_type}_pick",
+            direction=prediction.get("direction"),
+            evidence={"prediction_id": prediction.get("id")},
+        )
+    except Exception as exc:
+        logger.warning("Pick trail emission failed: %s", exc)
+
     return prediction
 
 
@@ -144,6 +165,12 @@ def _link_scenario_memory(
             },
             outcome=None,
         )
+        try:
+            from internal.learning.trail_bus import emit_scenario_tagged
+
+            emit_scenario_tagged(created)
+        except Exception:
+            pass
         return created.get("id")
     except Exception as exc:
         logger.warning("Scenario memory link failed: %s", exc)

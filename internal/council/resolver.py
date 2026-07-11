@@ -165,12 +165,25 @@ def _nudge_weights(correct: bool, expert: Optional[str]) -> None:
     if expert not in weights:
         return
 
+    before = float(weights[expert])
     weights[expert] = max(
         _LEARNING_MIN_WEIGHT,
         min(_LEARNING_MAX_WEIGHT, weights[expert] + delta),
     )
     weights[expert] = round(weights[expert], 4)
     save_weights(weights)
+    try:
+        from internal.learning.trail_bus import emit_weight_change
+
+        emit_weight_change(
+            expert,
+            before=before,
+            after=float(weights[expert]),
+            reason="prediction_resolve",
+            correct=correct,
+        )
+    except Exception:
+        pass
 
 def resolve_prediction(
     prediction: Dict[str, Any],
@@ -430,6 +443,19 @@ def resolve_due_predictions(
     data["resolved"] = resolved
     data["stats"] = _compute_stats(data)
     _save_json(PREDICTIONS_PATH, data)
+    try:
+        from internal.learning.trail_bus import emit_accuracy_update
+
+        stats = data["stats"]
+        emit_accuracy_update(
+            accuracy=float(stats.get("accuracy", 0) or 0),
+            correct=int(stats.get("correct", 0) or 0),
+            wrong=int(stats.get("wrong", 0) or 0),
+            pending=int(stats.get("pending", 0) or 0),
+            resolved_now=len(resolved_now),
+        )
+    except Exception:
+        pass
     return {
         "resolved_now": resolved_now,
         "expired_now": expired_now,

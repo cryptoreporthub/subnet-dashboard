@@ -146,6 +146,36 @@ async def api_mindmap_summary():
     }
 
 
+@learning_router.get("/api/mindmap/trail")
+async def api_mindmap_trail(limit: int = Query(default=100, ge=1, le=500)):
+    """Populated Mindmap trail from Soul-Map, predictions, and scenario memory."""
+    try:
+        from internal.learning.mindmap_aggregator import collect_trail_events, event_type_counts
+
+        trail = collect_trail_events(limit=limit)
+        return {
+            "status": "success",
+            "trail": trail,
+            "count": len(trail),
+            "event_type_counts": event_type_counts(trail),
+        }
+    except Exception as exc:
+        logger.warning("mindmap trail failed: %s", exc)
+        return {"status": "error", "trail": [], "count": 0, "error": str(exc)}
+
+
+@learning_router.get("/api/mindmap/state")
+async def api_mindmap_state():
+    """Aggregator: trail + plain-language panel summaries from live state."""
+    try:
+        from internal.learning.mindmap_aggregator import build_mindmap_state
+
+        return build_mindmap_state()
+    except Exception as exc:
+        logger.warning("mindmap state failed: %s", exc)
+        return {"status": "error", "trail": [], "summaries": {}, "error": str(exc)}
+
+
 @learning_router.get("/api/learning/stats")
 async def api_learning_stats():
     engine = LearningEngine()
@@ -224,6 +254,13 @@ def _ensure_resolver_scheduler():
     if scheduler is None:
         start_prediction_resolver_scheduler(immediate=False)
         scheduler = get_prediction_resolver_scheduler()
+    try:
+        from internal.council.selector_scheduler import get_selector_scheduler_state, start_selector_scheduler
+
+        if not get_selector_scheduler_state().get("running"):
+            start_selector_scheduler(immediate=False)
+    except Exception:
+        pass
     return scheduler
 
 

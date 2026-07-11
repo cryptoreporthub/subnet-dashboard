@@ -73,5 +73,13 @@ def on_prediction_resolved(prediction: Dict[str, Any]) -> Dict[str, Any]:
             "closed": closed,
             "postmortem": postmortem,
         }
+        try:
+            from internal.learning.trail_bus import emit_judge_pnl, emit_judge_postmortem
+
+            emit_judge_pnl(judge.name, prediction, closed)
+            if postmortem:
+                emit_judge_postmortem(judge.name, prediction, postmortem)
+        except Exception:
+            pass
 
     return summary
