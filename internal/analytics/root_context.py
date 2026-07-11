@@ -12,6 +12,11 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from internal.analytics.phase_b_hooks import refresh_agent_b_trails
+from internal.analytics.pump_summary import summarize_pump
+from internal.analytics.scenario_state import load_scenario_snapshot
+from internal.analytics.scenario_summary import summarize_scenario
+
 logger = logging.getLogger(__name__)
 
 PRICE_BASELINE_FILE = os.environ.get("PRICE_BASELINE_FILE", "data/price_baselines.json")
@@ -161,8 +166,13 @@ def build_agent_b_root_context(
 ) -> Dict[str, Any]:
     """Return template keys owned by Agent B for the homepage."""
     subnets = subnets if isinstance(subnets, list) else []
+    pump_analytics = _safe_pump_analytics()
+    scenario_snapshot = load_scenario_snapshot()
+    refresh_agent_b_trails(pump_payload=pump_analytics, scenario_snapshot=scenario_snapshot)
     return {
-        "pump_analytics": _safe_pump_analytics(),
+        "pump_analytics": pump_analytics,
+        "pump_summary": summarize_pump(pump_analytics),
+        "scenario_summary": summarize_scenario(scenario_snapshot),
         "api_indicators_convergence": _safe_indicators_convergence(subnets),
         "indicator_state": _safe_indicator_state(),
         "whale_intelligence": _safe_whale_summary(),
