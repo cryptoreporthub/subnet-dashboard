@@ -11,7 +11,7 @@
 | Order | Phase | Agent | Branch | Status |
 |-------|-------|-------|--------|--------|
 | 0 | Protocol docs | A | `cursor/protocol-docs-843d` | ✅ merged |
-| 1 | **J** Accuracy fix | A | `agent-a/phase-j-accuracy-fix` | 🟡 PR open |
+| 1 | **J** Accuracy fix | A | `cursor/phase-j-accuracy-fix-843d` | 🟡 PR open |
 | 2 | **H-thin** UI shell | B | `agent-b/phase-h-thin-shell` | ⬜ rebase after J |
 | 3 | **H-full** premium UI | B | after J on main | ⬜ gated |
 | 4 | **K** CI gates | A + B | — | ⬜ gated (H on main) |
@@ -23,7 +23,7 @@
 | Field | Value |
 |-------|--------|
 | Phase | J |
-| Branch | `agent-a/phase-j-accuracy-fix` |
+| Branch | `cursor/phase-j-accuracy-fix-843d` |
 | PR | Phase J accuracy fix (non-draft) |
 | Status | J1–J7 implemented; pytest + mypy on touched modules |
 
