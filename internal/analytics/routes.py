@@ -113,3 +113,11 @@ async def api_price_tracking_outcomes():
     except Exception as exc:
         logger.warning("price-tracking/outcomes unavailable: %s", exc)
         return {"status": "success", "meta": {"count": 0}, "outcomes": []}
+
+
+try:
+    from internal.trace.routes import trace_router
+
+    analytics_router.include_router(trace_router)
+except Exception as _trace_exc:  # pragma: no cover - defensive import guard
+    logger.warning("Trace lineage routes unavailable: %s", _trace_exc)
