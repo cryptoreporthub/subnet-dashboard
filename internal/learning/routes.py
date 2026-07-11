@@ -445,3 +445,11 @@ async def api_rotation_tokens():
     except Exception as exc:
         logger.warning("rotation-tokens failed: %s", exc)
         return {"status": "error", "tokens": [], "error": str(exc)}
+
+
+try:
+    from internal.message_intel.routes import message_intel_router
+
+    learning_router.include_router(message_intel_router)
+except ImportError:
+    pass

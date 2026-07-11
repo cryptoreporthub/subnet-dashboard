@@ -165,3 +165,14 @@ def summarize_scenario_guarded() -> Optional[Dict[str, Any]]:
         return None
     except Exception:
         return None
+
+
+def summarize_message_intel_guarded() -> Optional[Dict[str, Any]]:
+    try:
+        from internal.message_intel.summary import summarize_message_intel
+
+        return summarize_message_intel()
+    except ImportError:
+        return None
+    except Exception:
+        return None

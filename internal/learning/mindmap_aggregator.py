@@ -195,6 +195,9 @@ def build_mindmap_state() -> Dict[str, Any]:
     scenario = panel_summaries.summarize_scenario_guarded()
     if scenario:
         summaries["scenario"] = scenario
+    message_intel = panel_summaries.summarize_message_intel_guarded()
+    if message_intel:
+        summaries["message_intel"] = message_intel
 
     try:
         from internal.council.selector_scheduler import get_selector_scheduler_state
