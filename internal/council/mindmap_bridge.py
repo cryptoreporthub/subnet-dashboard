@@ -33,6 +33,8 @@ class MindmapBridge:
         if dir_name and not os.path.exists(dir_name):
             os.makedirs(dir_name, exist_ok=True)
         try:
+            # Merge into the full soul_map file so adversarial_state / expert
+            # weights written by the learning loop are never clobbered.
             existing: Dict[str, Any] = {}
             if os.path.exists(self.persistence_path):
                 with open(self.persistence_path, "r") as f:

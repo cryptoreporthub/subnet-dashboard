@@ -1,7 +1,8 @@
 import json
 import logging
 import os
-from datetime import datetime
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from fastapi import FastAPI, Request
@@ -94,7 +95,33 @@ except Exception as _exc:  # pragma: no cover - defensive import guard
     logger.warning("Pick engine unavailable, using fallbacks: %s", _exc)
     _PICKS_ENGINE = False
 
-app = FastAPI(title="Subnet Dashboard")
+try:
+    from internal.council.weights import load_weights
+except Exception:
+    def load_weights():  # type: ignore
+        return {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Boot background learning-loop workers so predictions resolve headlessly."""
+    try:
+        from internal.council.resolver_scheduler import start_prediction_resolver_scheduler
+
+        start_prediction_resolver_scheduler(immediate=True)
+        logger.info("Prediction resolver scheduler started")
+    except Exception as exc:
+        logger.warning("Prediction resolver scheduler failed to start: %s", exc)
+    yield
+    try:
+        from internal.council.resolver_scheduler import stop_prediction_resolver_scheduler
+
+        stop_prediction_resolver_scheduler()
+    except Exception:
+        pass
+
+
+app = FastAPI(title="Subnet Dashboard", lifespan=_lifespan)
 app.include_router(whales_router)
 if _COUNCIL_ROUTES:
     app.include_router(council_router)
@@ -525,11 +552,61 @@ def get_recommendations():
 
 @app.post("/api/mindmap/feedback")
 async def post_feedback(request: Request):
+    """Close the mindmap feedback path into learning + soul-map alignment logs."""
     try:
-        feedback = await request.json()
+        payload = await request.json()
     except Exception:
-        feedback = None
-    return {"status": "received", "feedback": feedback}
+        payload = None
+    if not isinstance(payload, dict):
+        return {"status": "error", "detail": "JSON body required"}
+
+    result: Dict[str, Any] = {"status": "received", "feedback": payload}
+
+    subnet_id = payload.get("subnet_id")
+    recommendation = payload.get("recommendation")
+    actual_performance = payload.get("actual_performance")
+    if subnet_id and recommendation:
+        try:
+            from datastore.learning_engine import LearningEngine
+
+            engine = LearningEngine()
+            result["learning"] = engine.record_feedback(
+                int(subnet_id), str(recommendation), actual_performance or {}
+            )
+        except Exception as exc:
+            logger.warning("mindmap→learning feedback failed: %s", exc)
+            result["learning_error"] = str(exc)
+
+    daily_output = payload.get("daily_output") or payload.get("selector_output")
+    if isinstance(daily_output, dict) and daily_output.get("decisions"):
+        try:
+            bridge = MindmapBridge()
+            brain = bridge.get_brain_recommendations(payload.get("context"))
+            result["alignment"] = bridge.log_feedback(daily_output, brain)
+        except Exception as exc:
+            logger.warning("mindmap alignment log failed: %s", exc)
+            result["alignment_error"] = str(exc)
+
+    note = payload.get("note") or payload.get("message")
+    if note and not (subnet_id and recommendation):
+        try:
+            bridge = MindmapBridge()
+            bridge.append_learning_trail(
+                {
+                    "time": datetime.utcnow().isoformat() + "Z",
+                    "subnet": payload.get("subnet") or payload.get("name"),
+                    "evidence": {"note": note},
+                    "signal": "user_feedback",
+                    "decision": payload.get("decision"),
+                    "prediction": payload.get("prediction"),
+                    "judge": payload.get("judge"),
+                }
+            )
+            result["trail"] = "appended"
+        except Exception as exc:
+            logger.warning("mindmap trail note failed: %s", exc)
+
+    return result
 
 
 @app.get("/health")
@@ -585,6 +662,50 @@ def _market_mood_proxy(subnets: List[Dict[str, Any]]) -> float:
         except (TypeError, ValueError):
             continue
     return sum(changes) / len(changes) if changes else 0.0
+
+
+def _market_context_with_weights(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Market context for Council scoring — includes learned expert weights."""
+    return {
+        "tao_change_24h": _market_mood_proxy(subnets),
+        "weights": load_weights(),
+    }
+
+
+def _subnet_for_pick(subnets: List[Dict[str, Any]], pick: Dict[str, Any]) -> Dict[str, Any]:
+    subnet_info = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
+    netuid = pick.get("netuid") or subnet_info.get("netuid")
+    if netuid is not None:
+        for sn in subnets:
+            if sn.get("netuid") == netuid:
+                return sn
+    if subnet_info:
+        return {**subnet_info, "netuid": netuid}
+    return {}
+
+
+def _record_pick_in_learning_loop(
+    pick: Dict[str, Any],
+    subnets: List[Dict[str, Any]],
+    market_context: Dict[str, Any],
+    horizon_type: str,
+) -> None:
+    """Pick → prediction → resolver → weights (closes the learning loop)."""
+    if not pick:
+        return
+    try:
+        from internal.learning.prediction_loop import record_pick_prediction
+
+        subnet = _subnet_for_pick(subnets, pick)
+        if subnet.get("price"):
+            record_pick_prediction(
+                pick,
+                subnet,
+                horizon_type=horizon_type,
+                market_context=market_context,
+            )
+    except Exception as exc:
+        logger.warning("Learning loop record failed (%s pick): %s", horizon_type, exc)
 
 
 def _highest_emission_pick(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -704,6 +825,9 @@ def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[st
     src = next((s for s in subnets if s.get("netuid") == top_netuid), {})
     picks.append(_unify(audited, src))
 
+    if picks:
+        _record_pick_in_learning_loop(picks[0], subnets, market_context, "hour")
+
     if _PICKS_ENGINE:
         scored = []
         for sn in subnets:
@@ -732,7 +856,7 @@ def api_top_picks():
     subnets, _ = _get_subnets_with_source()
     if not _PICKS_ENGINE:
         return {"hour_picks": [], "day_picks": [], "error": "pick engine unavailable"}
-    market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
+    market_context = _market_context_with_weights(subnets)
     hour_scored, day_scored = [], []
     for sn in subnets:
         try:
@@ -775,7 +899,7 @@ def api_daily_pick():
     if not _PICKS_ENGINE:
         return {"status": "error", "date": datetime.utcnow().date().isoformat(),
                 "action": "HOLD", "reason": "pick engine unavailable", "pick": None}
-    market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
+    market_context = _market_context_with_weights(subnets)
     try:
         return get_or_create_today_pick(subnets, market_context)
     except Exception as e:
@@ -790,7 +914,7 @@ def api_top_pick_day():
     subnets, _ = _get_subnets_with_source()
     day_pick = None
     if _PICKS_ENGINE:
-        market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
+        market_context = _market_context_with_weights(subnets)
         try:
             raw = get_or_create_today_pick(subnets, market_context)
             day_pick = raw.get("pick") if isinstance(raw, dict) and raw.get("pick") else raw
@@ -805,7 +929,7 @@ def api_top_pick_day():
 def api_top_pick_hour():
     """Top short-horizon picks (audited #1 + distinct fill), with fallback."""
     subnets, _ = _get_subnets_with_source()
-    market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
+    market_context = _market_context_with_weights(subnets)
     try:
         picks = _ordered_hour_picks(subnets, market_context, limit=3)
         if picks:

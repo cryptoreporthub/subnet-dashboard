@@ -115,6 +115,24 @@ def get_or_create_today_pick(
 
     records.append(payload)
     _save(records)
+
+    if stored_pick is not None:
+        try:
+            from internal.learning.prediction_loop import record_pick_prediction
+
+            sn = stored_pick.get("subnet") if isinstance(stored_pick.get("subnet"), dict) else {}
+            netuid = sn.get("netuid")
+            subnet_row = next((s for s in subnets if s.get("netuid") == netuid), None)
+            if subnet_row and float(subnet_row.get("price", 0) or 0) > 0:
+                record_pick_prediction(
+                    stored_pick,
+                    subnet_row,
+                    horizon_type="day",
+                    market_context=market_context,
+                )
+        except Exception:
+            pass
+
     return payload
 
 
