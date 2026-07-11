@@ -397,3 +397,7 @@ class Database:
             "SELECT * FROM price_outcomes WHERE message_id = ?", (message_id,)
         ).fetchone()
         return dict(row) if row else None
+
+
+# Backward-compatible alias used by analytics routes.
+MessageIntelDB = Database
