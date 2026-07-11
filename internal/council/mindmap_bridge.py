@@ -33,13 +33,29 @@ class MindmapBridge:
         if dir_name and not os.path.exists(dir_name):
             os.makedirs(dir_name, exist_ok=True)
         try:
+            existing: Dict[str, Any] = {}
+            if os.path.exists(self.persistence_path):
+                with open(self.persistence_path, "r") as f:
+                    loaded = json.load(f)
+                    if isinstance(loaded, dict):
+                        existing = loaded
+            existing["soul_map_state"] = self.soul_map_state
+            existing["feedback_logs"] = self.feedback_logs
             with open(self.persistence_path, "w") as f:
-                json.dump({
-                    "soul_map_state": self.soul_map_state,
-                    "feedback_logs": self.feedback_logs
-                }, f, indent=2)
+                json.dump(existing, f, indent=2)
         except Exception:
             pass
+
+    def append_learning_trail(self, entry: Dict[str, Any]) -> None:
+        """Append a mind-map learning trail row (pick/resolve/rotation events)."""
+        trail = self.soul_map_state.setdefault("learning_trail", [])
+        if not isinstance(trail, list):
+            trail = []
+            self.soul_map_state["learning_trail"] = trail
+        trail.append(entry)
+        if len(trail) > 200:
+            self.soul_map_state["learning_trail"] = trail[-200:]
+        self._save_to_disk()
 
     def get_brain_recommendations(self, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
