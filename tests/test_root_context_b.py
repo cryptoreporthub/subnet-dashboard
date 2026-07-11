@@ -7,6 +7,8 @@ def test_build_agent_b_root_context_keys():
     ctx = build_agent_b_root_context(subnets=[], data_source="registry")
     for key in (
         "pump_analytics",
+        "pump_summary",
+        "scenario_summary",
         "api_indicators_convergence",
         "indicator_state",
         "whale_intelligence",
@@ -15,6 +17,12 @@ def test_build_agent_b_root_context_keys():
         "price_tracking_baselines",
     ):
         assert key in ctx
+
+
+def test_summaries_are_non_empty_strings():
+    ctx = build_agent_b_root_context(subnets=[], data_source="registry")
+    assert isinstance(ctx["pump_summary"], str) and len(ctx["pump_summary"]) > 10
+    assert isinstance(ctx["scenario_summary"], str) and len(ctx["scenario_summary"]) > 10
 
 
 def test_root_get_includes_agent_b_context():

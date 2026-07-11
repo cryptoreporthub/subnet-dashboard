@@ -9,6 +9,11 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query
 
+from internal.analytics.phase_b_hooks import refresh_agent_b_trails
+from internal.analytics.pump_summary import summarize_pump
+from internal.analytics.scenario_state import load_scenario_snapshot
+from internal.analytics.scenario_summary import summarize_scenario
+
 logger = logging.getLogger(__name__)
 
 analytics_router = APIRouter(tags=["analytics"])
@@ -40,8 +45,14 @@ async def api_pump_analytics(netuid: Optional[int] = Query(default=None)):
 
         tracker = get_pump_tracker()
         if tracker is None:
-            return _empty_pump_payload()
+            payload = _empty_pump_payload()
+            payload["summary"] = summarize_pump(payload)
+            return payload
         data = tracker.get_all_analytics()
+        scenario_snapshot = load_scenario_snapshot()
+        refresh_agent_b_trails(pump_payload=data, scenario_snapshot=scenario_snapshot)
+        data["summary"] = summarize_pump(data)
+        data["scenario_summary"] = summarize_scenario(scenario_snapshot)
         if netuid is not None:
             subnets = [
                 s for s in data["data"]["subnets"] if s.get("netuid") == netuid
@@ -53,6 +64,7 @@ async def api_pump_analytics(netuid: Optional[int] = Query(default=None)):
         logger.warning("pump-analytics failed: %s", exc)
         payload = _empty_pump_payload()
         payload["error"] = str(exc)
+        payload["summary"] = summarize_pump(payload)
         return payload
 
 
