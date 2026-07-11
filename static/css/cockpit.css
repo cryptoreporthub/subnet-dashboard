@@ -182,3 +182,51 @@
   color: var(--text-muted, #6b7280);
   font-family: var(--font-mono, monospace);
 }
+
+/* H-thin: prominent accuracy / judge P&L strip */
+.cockpit-highlight {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-3, 12px);
+  margin-bottom: var(--space-3, 12px);
+  padding: var(--space-3, 12px);
+  border-radius: 10px;
+  background: rgba(34, 211, 238, 0.06);
+  border: 1px solid rgba(34, 211, 238, 0.15);
+}
+
+.cockpit-highlight-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cockpit-highlight-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary, #9ca3af);
+}
+
+.cockpit-highlight-value {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary, #f9fafb);
+}
+
+.cockpit-highlight-value.cockpit-negative {
+  color: #f87171;
+}
+
+.cockpit-highlight-mono {
+  font-size: 0.78rem;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.cockpit-highlight-judges {
+  grid-column: 1 / -1;
+}
