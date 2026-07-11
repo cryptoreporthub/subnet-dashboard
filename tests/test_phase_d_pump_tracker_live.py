@@ -121,6 +121,19 @@ def test_phase_filter_live(client, fake_engine_ladder):
     assert all(row.get("current_phase") == "PUMPING" for row in body["subnets"])
 
 
+def test_phase_accumulating_live(client, fake_engine_ladder):
+    """Agent A five-phase vocab: GET /phase/ACCUMULATING must succeed."""
+    resp = client.get("/api/pump-tracker/phase/ACCUMULATING")
+    assert resp.status_code == 200
+    body = resp.json()
+    _assert_ok_dict(body)
+    assert body["status"] == "success"
+    assert body["phase"] == "ACCUMULATING"
+    assert isinstance(body["subnets"], list)
+    assert len(body["subnets"]) == 1
+    assert body["subnets"][0]["current_phase"] == "ACCUMULATING"
+
+
 def test_legacy_path_survives_dict_subnets(client):
     """Simulate legacy analytics returning subnets as dict — must not int.get crash."""
     fake_analytics = {

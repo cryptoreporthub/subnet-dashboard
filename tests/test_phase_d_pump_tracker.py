@@ -36,6 +36,17 @@ def test_pump_tracker_phase_filter(client):
         assert all(row.get("current_phase") == "DORMANT" for row in body["subnets"])
 
 
+def test_pump_tracker_phase_accumulating(client):
+    resp = client.get("/api/pump-tracker/phase/ACCUMULATING")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("phase") == "ACCUMULATING"
+    assert body["status"] in {"success", "unavailable", "error"}
+    assert "subnets" in body
+    if body.get("status") == "error":
+        assert "Unknown phase" not in body.get("error", "")
+
+
 def test_pump_tracker_top_movers(client):
     resp = client.get("/api/pump-tracker/top-movers?limit=5")
     assert resp.status_code == 200
