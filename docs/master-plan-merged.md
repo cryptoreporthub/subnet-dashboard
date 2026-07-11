@@ -4,7 +4,7 @@
 > **Baseline:** `main` after Phases A–G (cockpit, store, mindmap graph on main).  
 > **Updated:** 2026-07-11  
 > **Authors:** Ditto (Phase I root-cause, original structure) · Cursor Agent A (merge revisions, contracts, verification).  
-> **Companion doc:** `docs/research-to-roadmap-merged-plan.md` (13-theme research map, absorption %, §8 checklist).
+> **Companion docs:** `docs/research-to-roadmap-merged-plan.md` (research map) · `docs/sciweave-answers-phase-j.md` (Phase J science constants) · `cursor-agents-communication/concurrent-protocol.md` (parallel J/H rules).
 
 ---
 
@@ -172,6 +172,10 @@ Everything below maps 1:1 to R1–R6. **No threshold gaming.** If accuracy stays
 
 **Agent A owns:** `internal/council/resolver.py`, `resolver_scheduler.py`, `internal/learning/prediction_loop.py`, `internal/judges/*`, trace wiring, tests above.
 
+**SciWeave binding:** See **`docs/sciweave-answers-phase-j.md`** for constants (expire-late, direction-first, symmetric weights, dedupe, VWAP/ungradeable, trace schema). Summary table also in prior Cursor merge revision — full spec is the SciWeave doc.
+
+**Concurrent sprint:** Phase **J** (A) and **H-thin** (B) may start together; merge **J → H**. See **`cursor-agents-communication/concurrent-protocol.md`**.
+
 ---
 
 ## 7. Phase H — Premium UI (after J)
@@ -288,6 +292,9 @@ Agent B: alert UX + config. Agent A: trigger hooks on indicator/whale/pump signa
 |----------|------|
 | `docs/premium-dashboard-redesign.md` | UI variable contract |
 | `docs/research-to-roadmap-merged-plan.md` | Research audit + contracts appendix |
+| `docs/sciweave-answers-phase-j.md` | Phase J peer-reviewed constants |
+| `cursor-agents-communication/concurrent-protocol.md` | Parallel agent rules |
+| `cursor-agents-communication/board.md` | Live STATUS / GATE |
 | `docs/ux-architecture.md` | Subnet Pulse IA |
 | `docs/file-map-and-scope.md` | Original risks |
 | `AGENTS.md` | Agent protocol |
