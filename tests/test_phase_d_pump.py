@@ -175,3 +175,85 @@ def test_api_pump_ladder_state(client, ladder_env):
 def test_cooling_from_pumping():
     phase = raw_phase_from_score(0.48, was_pumping=True)
     assert phase == "COOLING"
+
+
+def test_engine_api_aliases_for_tracker_adapter(ladder_env):
+    from internal.pump.engine import build_ladder_snapshot as engine_build
+    from internal.pump.state import (
+        build_ladder_snapshot,
+        get_ladder,
+        get_top_movers,
+        save_state,
+    )
+
+    save_state(
+        {
+            "subnets": {
+                "7": {
+                    "netuid": 7,
+                    "name": "Seven",
+                    "phase": "ACCUMULATING",
+                    "composite_score": 0.55,
+                    "transitions": [
+                        {
+                            "time": "2026-07-11T01:00:00Z",
+                            "from_phase": "STIRRING",
+                            "to_phase": "ACCUMULATING",
+                            "composite_score": 0.55,
+                        }
+                    ],
+                }
+            },
+            "meta": {},
+        },
+        ladder_env["state_path"],
+    )
+
+    ladder = get_ladder(ladder_env["state_path"])
+    assert ladder["source"] == "internal.pump.state"
+    assert ladder["subnets"][0]["current_phase"] == "ACCUMULATING"
+
+    assert build_ladder_snapshot(ladder_env["state_path"])["count"] == 1
+    assert engine_build(ladder_env["state_path"])["count"] == 1
+
+    movers = get_top_movers(limit=5, path=ladder_env["state_path"])
+    assert movers["status"] == "success"
+    assert movers["count"] == 1
+    assert movers["movers"][0]["to_phase"] == "ACCUMULATING"
+
+    empty = get_top_movers(limit=5, path=ladder_env["state_path"])
+    assert empty["movers"]  # still one transition
+
+    save_state({"subnets": {}, "meta": {}}, ladder_env["state_path"])
+    assert get_top_movers(limit=5, path=ladder_env["state_path"])["movers"] == []
+
+
+def test_pump_tracker_uses_engine_not_legacy(client, ladder_env, monkeypatch):
+    from internal.pump import constants as pump_constants
+    from internal.pump import state as pump_state
+
+    monkeypatch.setattr(pump_constants, "STATE_PATH", ladder_env["state_path"])
+    pump_state.save_state(
+        {
+            "subnets": {
+                "1": {
+                    "netuid": 1,
+                    "name": "One",
+                    "phase": "STIRRING",
+                    "composite_score": 0.3,
+                    "transitions": [],
+                }
+            },
+            "meta": {"last_scan_at": "2026-07-11T01:00:00Z"},
+        },
+        ladder_env["state_path"],
+    )
+
+    ladder = client.get("/api/pump-tracker/ladder").json()
+    assert ladder["status"] == "success"
+    assert ladder.get("source") == "internal.pump.state"
+    assert ladder["subnets"][0]["current_phase"] == "STIRRING"
+
+    summary = client.get("/api/pump-tracker/summary").json()
+    assert summary["status"] == "success"
+    assert "STIRRING" in summary["summary"]["text"] or "pump ladder" in summary["summary"]["text"].lower()
