@@ -96,6 +96,15 @@ except Exception as _store_exc:  # pragma: no cover - defensive import guard
     logger.warning("Store routes unavailable: %s", _store_exc)
     _STORE_ROUTES = False
 
+try:
+    from internal.mindmap import mindmap_graph_router
+
+    _MINDMAP_GRAPH_ROUTES = mindmap_graph_router is not None
+except Exception as _mindmap_graph_exc:  # pragma: no cover - defensive import guard
+    logger.warning("Mindmap graph routes unavailable: %s", _mindmap_graph_exc)
+    mindmap_graph_router = None  # type: ignore[assignment,misc]
+    _MINDMAP_GRAPH_ROUTES = False
+
 # Council pick engine (guarded so a broken/missing engine module can never stop
 # the app from booting — the picks endpoints degrade to a safe fallback).
 try:
@@ -160,6 +169,8 @@ if _COCKPIT_ROUTES:
     app.include_router(cockpit_router)
 if _STORE_ROUTES:
     app.include_router(store_router)
+if _MINDMAP_GRAPH_ROUTES:
+    app.include_router(mindmap_graph_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))

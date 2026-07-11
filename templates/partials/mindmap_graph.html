@@ -1,0 +1,144 @@
+{# Interactive Mindmap graph — explorable nodes/edges (Phase G Agent B) #}
+<style>
+  .mindmap-graph-section { margin-bottom: var(--space-6, 2rem); }
+  .mindmap-graph-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-4, 1rem);
+  }
+  @media (min-width: 960px) {
+    .mindmap-graph-layout {
+      grid-template-columns: minmax(0, 1fr) 320px;
+      align-items: stretch;
+    }
+  }
+  .mindmap-graph-root {
+    position: relative;
+    min-height: 360px;
+    background: var(--bg-surface, #111827);
+    border: 1px solid var(--border-subtle, #374151);
+    border-radius: var(--border-radius-card, 16px);
+    overflow: hidden;
+  }
+  .mindmap-graph-svg {
+    width: 100%;
+    height: 360px;
+    display: block;
+  }
+  .mindmap-honest-empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 1.5rem;
+    text-align: center;
+    color: var(--text-secondary, #9ca3af);
+    font-size: 0.9rem;
+    margin: 0;
+    pointer-events: none;
+  }
+  .mindmap-honest-empty.hidden { display: none; }
+  .mindmap-node circle {
+    cursor: pointer;
+    stroke: rgba(255,255,255,0.25);
+    stroke-width: 1.5;
+    transition: stroke-width 120ms ease, filter 120ms ease;
+  }
+  .mindmap-node text {
+    font-family: var(--font-ui, Inter, sans-serif);
+    font-size: 10px;
+    fill: var(--text-primary, #f9fafb);
+    pointer-events: none;
+  }
+  .mindmap-node.is-selected circle { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(34,211,238,0.6)); }
+  .mindmap-node.is-hovered circle { stroke-width: 2.5; }
+  .mindmap-edge {
+    stroke: rgba(156, 163, 175, 0.45);
+    stroke-width: 1;
+  }
+  .mindmap-edge.is-highlight { stroke: rgba(34, 211, 238, 0.85); stroke-width: 2; }
+  .mindmap-detail-panel {
+    background: var(--bg-surface, #111827);
+    border: 1px solid var(--border-subtle, #374151);
+    border-radius: var(--border-radius-card, 16px);
+    padding: var(--space-4, 1rem);
+    min-height: 200px;
+  }
+  .mindmap-detail-panel[hidden] { display: none; }
+  .mindmap-detail-kind {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted, #6b7280);
+    margin: 0 0 0.35rem;
+  }
+  .mindmap-detail-title {
+    margin: 0 0 0.5rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+  .mindmap-detail-id {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.7rem;
+    color: var(--text-muted, #6b7280);
+    margin: 0 0 0.75rem;
+  }
+  .mindmap-detail-metrics {
+    display: grid;
+    gap: 0.45rem;
+    margin: 0 0 0.75rem;
+    font-size: 0.8rem;
+  }
+  .mindmap-detail-metrics dt {
+    color: var(--text-muted, #6b7280);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .mindmap-detail-metrics dd {
+    margin: 0.1rem 0 0;
+    font-family: var(--font-mono, monospace);
+    color: var(--text-primary, #f9fafb);
+    word-break: break-word;
+  }
+  .mindmap-detail-updated {
+    font-size: 0.65rem;
+    color: var(--text-muted, #6b7280);
+    font-family: var(--font-mono, monospace);
+  }
+</style>
+
+<section class="cockpit mindmap-graph-section" id="mindmap-graph-section" aria-labelledby="mindmap-graph-heading">
+  <div class="cockpit-header">
+    <div>
+      <h2 id="mindmap-graph-heading" class="cockpit-title">Interactive Mindmap</h2>
+      <p class="cockpit-subtitle">Click nodes to explore Soul-Map dispositions, trail events, predictions, and scenario links.</p>
+    </div>
+  </div>
+
+  <div class="mindmap-graph-layout">
+    <div
+      id="mindmap-graph-root"
+      class="mindmap-graph-root"
+      data-api="/api/mindmap/graph"
+      {% if mindmap_graph is defined and mindmap_graph %}
+      data-initial-graph='{{ mindmap_graph | tojson }}'
+      {% endif %}
+    >
+      <p id="mindmap-graph-empty" class="mindmap-honest-empty">
+        Mindmap graph is empty on this deploy — trail rows and dispositions will appear as Soul-Map and the learning loop warm up.
+      </p>
+      <svg id="mindmap-graph-svg" class="mindmap-graph-svg" role="img" aria-label="Mindmap graph"></svg>
+    </div>
+
+    <aside id="mindmap-detail-panel" class="mindmap-detail-panel" hidden aria-live="polite">
+      <p class="mindmap-detail-kind" id="mindmap-detail-kind">—</p>
+      <h3 class="mindmap-detail-title" id="mindmap-detail-title">Select a node</h3>
+      <p class="mindmap-detail-id" id="mindmap-detail-id"></p>
+      <dl class="mindmap-detail-metrics" id="mindmap-detail-metrics"></dl>
+      <p class="mindmap-detail-updated" id="mindmap-detail-updated"></p>
+    </aside>
+  </div>
+</section>
+
+<script src="/static/js/mindmap_graph.js" defer></script>
