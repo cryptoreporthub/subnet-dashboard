@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from internal.pump.constants import PHASE_ORDER
 from internal.pump_tracker.adapter import live_stats
 
 
@@ -23,8 +24,8 @@ def summarize_pump_tracker() -> Dict[str, Any]:
             "ladder endpoints return a clear degraded response instead of a 500."
         )
         parts.append(
-            "When Agent A's internal.pump detection lands, this panel will read phases "
-            "from that engine automatically via guarded imports."
+            "The panel reads Agent A's internal.pump ladder when present and otherwise "
+            "returns an honest empty state."
         )
         return _sentences(parts)
 
@@ -35,42 +36,51 @@ def summarize_pump_tracker() -> Dict[str, Any]:
 
     if total == 0:
         parts.append(
-            "Pump-tracker ladder has no subnet rows yet — price/volume ticks have not "
+            "Pump-tracker ladder has no subnet rows yet — the detection engine has not "
             "seeded phase state across the registry."
         )
     else:
+        order_index = {p: i for i, p in enumerate(PHASE_ORDER)}
         distribution = ", ".join(
-            f"{phase} {count}" for phase, count in sorted(phase_counts.items(), key=lambda kv: -kv[1])
+            f"{phase} {count}"
+            for phase, count in sorted(
+                phase_counts.items(),
+                key=lambda kv: order_index.get(kv[0], 99),
+            )
         )
         parts.append(
             f"The pump ladder tracks {total} subnets from {source}; "
-            f"phase distribution is {distribution or 'all INACTIVE'}."
+            f"phase distribution is {distribution or 'all DORMANT'}."
         )
 
-        early = phase_counts.get("EARLY", 0)
-        sell = phase_counts.get("SELL", 0)
-        if early or sell:
+        accumulating = phase_counts.get("ACCUMULATING", 0)
+        pumping = phase_counts.get("PUMPING", 0)
+        stirring = phase_counts.get("STIRRING", 0)
+        signal_count = accumulating + pumping + stirring
+        if signal_count:
             parts.append(
-                f"{early} subnet(s) sit in EARLY accumulation and {sell} in SELL distribution — "
-                "these are the highest-signal ladder rungs for Pulse and trail consumers."
+                f"{stirring} subnet(s) are STIRRING, {accumulating} ACCUMULATING, and "
+                f"{pumping} PUMPING — the highest-signal ladder rungs for Pulse and trail consumers."
             )
         else:
             parts.append(
-                "No subnets are in EARLY or SELL right now; most names are consolidating or inactive."
+                "No subnets are in STIRRING, ACCUMULATING, or PUMPING right now; "
+                "most names are DORMANT or COOLING."
             )
 
     movers = stats.get("top_movers") or []
     if movers:
         top = movers[0]
+        score = float(top.get("composite_score") or top.get("max_score") or 0.0)
         parts.append(
             f"Largest recent transition: SN{top.get('netuid')} moved "
             f"{top.get('from_phase')} → {top.get('to_phase')} "
-            f"(max score {float(top.get('max_score') or 0):.2f})."
+            f"(score {score:.2f})."
         )
     else:
         parts.append(
-            f"Cycle store reports {meta.get('total_cycles', 0)} transitions; "
-            "no fresh phase movers in the latest window."
+            f"Ladder meta reports {meta.get('last_transition_count', meta.get('total_cycles', 0))} "
+            "recent transitions; no fresh movers in the latest window."
         )
 
     return _sentences(parts[:4])
