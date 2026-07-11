@@ -79,6 +79,15 @@ except Exception as _health_exc:  # pragma: no cover - defensive import guard
     logger.warning("Health routes unavailable: %s", _health_exc)
     _HEALTH_ROUTES = False
 
+try:
+    from internal.cockpit import cockpit_router
+
+    _COCKPIT_ROUTES = cockpit_router is not None
+except Exception as _cockpit_exc:  # pragma: no cover - defensive import guard
+    logger.warning("Cockpit routes unavailable: %s", _cockpit_exc)
+    cockpit_router = None  # type: ignore[assignment,misc]
+    _COCKPIT_ROUTES = False
+
 # Council pick engine (guarded so a broken/missing engine module can never stop
 # the app from booting — the picks endpoints degrade to a safe fallback).
 try:
@@ -139,6 +148,8 @@ if _ANALYTICS_ROUTES:
     app.include_router(analytics_router)
 if _HEALTH_ROUTES:
     app.include_router(health_router)
+if _COCKPIT_ROUTES:
+    app.include_router(cockpit_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
@@ -226,6 +237,13 @@ async def index(request: Request):
         context.update(build_agent_b_root_context(subnets=subnets, data_source=source))
     except Exception as exc:
         logger.warning("Agent B root context unavailable: %s", exc)
+
+    try:
+        from internal.cockpit import get_cockpit_sections
+
+        context["cockpit_sections"] = get_cockpit_sections()
+    except Exception as exc:
+        logger.warning("Cockpit sections unavailable: %s", exc)
 
     return templates.TemplateResponse(request, "index.html", context)
 
