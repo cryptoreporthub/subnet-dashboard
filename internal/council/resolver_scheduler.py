@@ -319,6 +319,12 @@ def start_prediction_resolver_scheduler(
         start_selector_scheduler(immediate=False)
     except Exception:
         pass
+    try:
+        from internal.pump.scheduler import start_pump_ladder_scheduler
+
+        start_pump_ladder_scheduler(immediate=False)
+    except Exception:
+        pass
     return result
 
 
