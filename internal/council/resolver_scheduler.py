@@ -312,18 +312,32 @@ def start_prediction_resolver_scheduler(
             _scheduler = PredictionResolverScheduler(
                 refresh_minutes=refresh_minutes, **kwargs
             )
-        return _scheduler.start(immediate=immediate)
+    result = _scheduler.start(immediate=immediate)
+    try:
+        from internal.council.selector_scheduler import start_selector_scheduler
+
+        start_selector_scheduler(immediate=False)
+    except Exception:
+        pass
+    return result
 
 
 def stop_prediction_resolver_scheduler() -> Dict[str, Any]:
     """Stop the module-level prediction resolver scheduler singleton."""
+    try:
+        from internal.council.selector_scheduler import stop_selector_scheduler
+
+        stop_selector_scheduler()
+    except Exception:
+        pass
     global _scheduler
+    sched: Optional[PredictionResolverScheduler] = None
     with _scheduler_lock:
-        if _scheduler is None:
-            return {"stopped": False, "reason": "not running"}
-        result = _scheduler.stop()
+        sched = _scheduler
         _scheduler = None
-        return result
+    if sched is None:
+        return {"stopped": False, "reason": "not running"}
+    return sched.stop()
 
 
 def get_prediction_resolver_scheduler_state() -> Dict[str, Any]:

@@ -13,6 +13,16 @@ from internal.learning.predictions_store import load_predictions, update_stats
 logger = logging.getLogger(__name__)
 
 
+def _mindmap_trail_panel() -> List[Dict[str, Any]]:
+    try:
+        from internal.learning.mindmap_aggregator import collect_trail_events
+
+        return collect_trail_events(limit=50)
+    except Exception as exc:
+        logger.warning("mindmap trail panel failed: %s", exc)
+        return []
+
+
 def default_learning_dashboard_context() -> Dict[str, Any]:
     """Safe fallbacks when learning/council sections fail to load."""
     return {
@@ -277,6 +287,7 @@ def build_learning_dashboard_context(
             "scenario_memory": _scenario_panel(),
             "pick_history": pick_history.get_history(limit=20),
             "freshness": _freshness_panel(),
+            "mindmap_trail": _mindmap_trail_panel(),
         }
     )
     _mark_learning_freshness()

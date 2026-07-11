@@ -111,7 +111,14 @@ class Selector:
         """
         brain_recommendations = self.mindmap_bridge.get_brain_recommendations(context=context)
         feedback = self.mindmap_bridge.log_feedback(daily_output, brain_recommendations)
-        
+
+        try:
+            from internal.learning.alignment_nudge import apply_alignment_nudge
+
+            feedback["alignment_nudge"] = apply_alignment_nudge(feedback)
+        except Exception:
+            pass
+
         # Update the Soul-Map state with the daily output
         self.mindmap_bridge.update_soul_map(daily_output)
         
@@ -132,6 +139,7 @@ class Selector:
         """
         import json
         import os
+        from datetime import datetime, timezone
         
         context_map = context_map or {}
         registry_path = getattr(self.mindmap_bridge, "registry_path", "config/registry.json")
@@ -167,7 +175,7 @@ class Selector:
             decisions.append(payload)
             
         daily_output = {
-            "date": "2026-06-10",
+            "date": datetime.now(timezone.utc).date().isoformat(),
             "decisions": decisions
         }
         
