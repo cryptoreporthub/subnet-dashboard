@@ -51,6 +51,12 @@ async def api_pump_analytics(netuid: Optional[int] = Query(default=None)):
         data = tracker.get_all_analytics()
         scenario_snapshot = load_scenario_snapshot()
         refresh_agent_b_trails(pump_payload=data, scenario_snapshot=scenario_snapshot)
+        try:
+            from internal.pump.scheduler import ensure_pump_ladder_scheduler
+
+            ensure_pump_ladder_scheduler(immediate=False)
+        except ImportError:
+            pass
         data["summary"] = summarize_pump(data)
         data["scenario_summary"] = summarize_scenario(scenario_snapshot)
         if netuid is not None:
@@ -121,3 +127,10 @@ try:
     analytics_router.include_router(trace_router)
 except Exception as _trace_exc:  # pragma: no cover - defensive import guard
     logger.warning("Trace lineage routes unavailable: %s", _trace_exc)
+
+try:
+    from internal.pump.routes import pump_ladder_router
+
+    analytics_router.include_router(pump_ladder_router)
+except ImportError as _pump_exc:
+    logger.warning("Pump ladder routes unavailable: %s", _pump_exc)

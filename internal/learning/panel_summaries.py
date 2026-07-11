@@ -187,3 +187,14 @@ def summarize_pump_tracker_guarded() -> Optional[Dict[str, Any]]:
         return None
     except Exception:
         return None
+
+
+def summarize_pump_ladder_guarded() -> Optional[Dict[str, Any]]:
+    try:
+        from internal.pump.summary import summarize_pump
+
+        return summarize_pump()
+    except ImportError:
+        return None
+    except Exception:
+        return None
