@@ -13,7 +13,6 @@ from internal.pump.constants import (
     PHASE_INDEX,
     PHASE_LOCK_MINUTES,
     PHASE_ORDER,
-    STATE_PATH,
 )
 from internal.pump.engine import classify_signals
 from internal.pump.signals import build_subnet_signals, fetch_all_subnet_signals
@@ -44,9 +43,18 @@ def _minutes_between(a: Optional[str], b: datetime) -> float:
     return max(0.0, (b - start).total_seconds() / 60.0)
 
 
-def load_state(path: str = STATE_PATH) -> Dict[str, Any]:
+def _resolve_path(path: Optional[str] = None) -> str:
+    if path:
+        return path
+    from internal.pump.constants import STATE_PATH as _path
+
+    return _path
+
+
+def load_state(path: Optional[str] = None) -> Dict[str, Any]:
+    resolved = _resolve_path(path)
     with _lock:
-        data = safe_read_json(path, default={})
+        data = safe_read_json(resolved, default={})
         if not isinstance(data, dict):
             return {"version": "1.0", "subnets": {}, "meta": {}}
         data.setdefault("subnets", {})
@@ -54,9 +62,10 @@ def load_state(path: str = STATE_PATH) -> Dict[str, Any]:
         return data
 
 
-def save_state(data: Dict[str, Any], path: str = STATE_PATH) -> None:
+def save_state(data: Dict[str, Any], path: Optional[str] = None) -> None:
+    resolved = _resolve_path(path)
     with _lock:
-        safe_write_json(path, data)
+        safe_write_json(resolved, data)
 
 
 def _apply_hysteresis(
@@ -195,15 +204,96 @@ def scan_all_subnets(state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         }
 
 
-def get_ladder_snapshot(path: str = STATE_PATH) -> Dict[str, Any]:
+def get_ladder_snapshot(path: Optional[str] = None) -> Dict[str, Any]:
+    return _build_ladder_payload(path)
+
+
+def get_ladder(path: Optional[str] = None) -> Dict[str, Any]:
+    """Public alias imported by ``internal.pump_tracker.adapter``."""
+    return get_ladder_snapshot(path)
+
+
+def build_ladder_snapshot(path: Optional[str] = None) -> Dict[str, Any]:
+    """Alias of ``get_ladder_snapshot`` (Agent B adapter import name)."""
+    return get_ladder_snapshot(path)
+
+
+def _normalize_ladder_subnet(entry: Dict[str, Any]) -> Dict[str, Any]:
+    """Shape persisted state rows for pump-tracker read API consumers."""
+    phase = str(entry.get("phase") or entry.get("current_phase") or "DORMANT").upper()
+    score = float(entry.get("composite_score") or 0.0)
+    netuid = entry.get("netuid")
+    return {
+        "netuid": netuid,
+        "name": entry.get("name") or f"SN{netuid}",
+        "current_phase": phase,
+        "phase": phase,
+        "composite_score": score,
+        "pump_score": score,
+        "final_score": score,
+        "pump_proneness": round(score * 100, 1),
+        "re_pump_prob": 0.0,
+        "since": entry.get("since"),
+        "updated_at": entry.get("updated_at"),
+        "last_transition": entry.get("last_transition"),
+        "transitions": entry.get("transitions") or [],
+    }
+
+
+def _build_ladder_payload(path: Optional[str] = None) -> Dict[str, Any]:
     data = load_state(path)
-    subnets = list((data.get("subnets") or {}).values())
+    subnets_raw = [
+        entry for entry in (data.get("subnets") or {}).values() if isinstance(entry, dict)
+    ]
+    subnets = [_normalize_ladder_subnet(entry) for entry in subnets_raw]
     subnets.sort(key=lambda s: float(s.get("composite_score") or 0), reverse=True)
+    meta = dict(data.get("meta") or {})
+    meta.setdefault("total_subnets", len(subnets))
+    meta.setdefault("tracked_subnets", len(subnets))
+    meta.setdefault("updated_at", meta.get("last_scan_at"))
     return {
         "status": "success",
-        "meta": data.get("meta") or {},
+        "source": "internal.pump.state",
+        "meta": meta,
         "subnets": subnets,
         "count": len(subnets),
+    }
+
+
+def get_top_movers(limit: int = 20, path: Optional[str] = None) -> Dict[str, Any]:
+    """Recent phase transitions from persisted ladder state (graceful empty list)."""
+    data = load_state(path)
+    rows: List[Dict[str, Any]] = []
+    for entry in (data.get("subnets") or {}).values():
+        if not isinstance(entry, dict):
+            continue
+        netuid = entry.get("netuid")
+        name = entry.get("name") or f"SN{netuid}"
+        for tx in entry.get("transitions") or []:
+            if not isinstance(tx, dict):
+                continue
+            from_phase = tx.get("from_phase")
+            to_phase = tx.get("to_phase")
+            if not from_phase or not to_phase or from_phase == to_phase:
+                continue
+            max_score = float(tx.get("composite_score") or entry.get("composite_score") or 0.0)
+            rows.append(
+                {
+                    "netuid": netuid,
+                    "name": name,
+                    "from_phase": from_phase,
+                    "to_phase": to_phase,
+                    "max_score": max_score,
+                    "transition_at": tx.get("time"),
+                }
+            )
+    rows.sort(key=lambda row: float(row.get("max_score") or 0.0), reverse=True)
+    movers = rows[: max(0, int(limit))]
+    return {
+        "status": "success",
+        "source": "internal.pump.state",
+        "count": len(movers),
+        "movers": movers,
     }
 
 

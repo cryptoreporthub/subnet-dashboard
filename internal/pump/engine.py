@@ -56,3 +56,19 @@ def classify_signals(signals: Dict[str, Any], *, current_phase: str = "DORMANT")
         "suggested_phase": suggested,
         "signals": signals,
     }
+
+
+def build_ladder_snapshot(path: str | None = None) -> Dict[str, Any]:
+    """Agent B adapter import — delegates to persisted ladder state."""
+    from internal.pump.constants import STATE_PATH
+
+    from internal.pump.state import build_ladder_snapshot as _build
+
+    return _build(path)
+
+
+def get_top_movers(limit: int = 20) -> Dict[str, Any]:
+    """Agent B adapter import — recent transitions from ladder state."""
+    from internal.pump.state import get_top_movers as _top
+
+    return _top(limit=limit)
