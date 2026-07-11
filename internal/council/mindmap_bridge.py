@@ -9,6 +9,8 @@ import os
 import json
 from typing import Any, Dict, Optional
 
+from internal.file_utils import safe_write_json
+
 class MindmapBridge:
     def __init__(self, persistence_path: str = "data/soul_map.json", registry_path: str = "config/registry.json"):
         self.persistence_path = persistence_path
@@ -43,8 +45,7 @@ class MindmapBridge:
                         existing = loaded
             existing["soul_map_state"] = self.soul_map_state
             existing["feedback_logs"] = self.feedback_logs
-            with open(self.persistence_path, "w") as f:
-                json.dump(existing, f, indent=2)
+            safe_write_json(self.persistence_path, existing)
         except Exception:
             pass
 
