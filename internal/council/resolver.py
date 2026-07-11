@@ -1,20 +1,28 @@
 """
 24h prediction resolver for the modular state-vector Council engine.
 
-Fetches current subnet prices, resolves pending 24h predictions against them,
-and classifies each outcome as hit / partial / miss. Resolved predictions are
-persisted back to ``data/predictions.json`` and the learning loop is updated
-via ``internal.council.weights`` so expert weights reflect resolver feedback.
+Phase J: horizon-end pricing, expire-late, direction-only grading, symmetric
+weights, atomic ledger resolution, and dedupe before resolve.
 """
 
 from __future__ import annotations
 
 import json
 import os
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
-from internal.council.weights import load_weights, save_weights, nudge_signal_weight
+from internal.council.deduplication import dedupe_predictions
+from internal.council.grading import (
+    classify_outcome_direction_only,
+    compute_actual_pct,
+    direction_correct,
+)
+from internal.council.price_reference import CANDLE_LOOKUP_MINUTES, price_at_resolve_at
+from internal.council.watchdog import check_resolver_watchdog
+from internal.council.weights import load_weights, nudge_signal_weight, save_weights
 
 try:
     from internal.judges.tracker import on_prediction_resolved
@@ -34,32 +42,54 @@ except Exception:  # pragma: no cover
         def classify_regime(*_args, **_kwargs):
             return "neutral"
 
+        @staticmethod
+        def record_outcome(*_args, **_kwargs):
+            return None
+
     scenario_memory = _FakeScenarioMemory()
 
 PREDICTIONS_PATH = os.path.join("data", "predictions.json")
 PRICE_CACHE_PATH = os.path.join("data", "price_cache.json")
 
 _LEARNING_DELTA_CORRECT = 0.02
-_LEARNING_DELTA_WRONG = -0.03
-_LEARNING_MIN_WEIGHT = 0.1
+_LEARNING_DELTA_WRONG = -0.02
+_LEARNING_MIN_WEIGHT = 0.3
 _LEARNING_MAX_WEIGHT = 2.0
 
 _EXPIRY_GRACE_MULTIPLE = 2.0
 _EXPIRY_DEFAULT_HORIZON_HOURS = 24.0
 
+_replay_mode: ContextVar[bool] = ContextVar("resolver_replay_mode", default=False)
+
+
+@contextmanager
+def replay_mode(enabled: bool = True) -> Iterator[None]:
+    token = _replay_mode.set(enabled)
+    try:
+        yield
+    finally:
+        _replay_mode.reset(token)
+
+
+def _in_replay_mode() -> bool:
+    return _replay_mode.get()
+
+
 def _load_json(path: str, default: Any) -> Any:
     try:
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return default
 
+
 def _save_json(path: str, data: Any) -> None:
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     tmp = path + ".tmp"
-    with open(tmp, "w") as f:
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
     os.replace(tmp, path)
+
 
 def fetch_prices(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[Any, float]:
     prices: Dict[Any, float] = {}
@@ -93,41 +123,21 @@ def fetch_prices(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[Any, fl
 
     return prices
 
+
 def classify_outcome(
     prediction: Dict[str, Any],
     current_price: float,
     tolerance: float = 0.5,
 ) -> str:
+    """Direction-only grading (Phase J4). ``tolerance`` kept for API compatibility."""
     ref = float(prediction.get("reference_price", 0) or 0)
     if ref <= 0 or current_price <= 0:
         return "miss"
+    actual_pct = compute_actual_pct(ref, current_price)
+    return classify_outcome_direction_only(prediction, actual_pct)
 
-    actual_pct = (current_price - ref) / ref * 100
-    predicted_pct = float(prediction.get("predicted_pct", 0) or 0)
-    if predicted_pct == 0:
-        return "miss"
-
-    direction = prediction.get("direction")
-    if direction is None:
-        direction = "up" if predicted_pct > 0 else "down"
-
-    threshold = predicted_pct * (1 - tolerance)
-
-    if direction == "up":
-        if actual_pct >= threshold:
-            return "hit"
-        if actual_pct > 0:
-            return "partial"
-        return "miss"
-
-    if actual_pct <= threshold:
-        return "hit"
-    if actual_pct < 0:
-        return "partial"
-    return "miss"
 
 def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
-    """Map a prediction's expert/signal source to a canonical Council expert."""
     expert = prediction.get("expert") or prediction.get("signal_source")
     if not isinstance(expert, str):
         return None
@@ -136,7 +146,6 @@ def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
     if expert in {"quant", "hype", "dark_horse", "technical"}:
         return expert
 
-    # Legacy mind-map expert lanes (alpha/beta/gamma) → canonical Council experts
     if expert in {"alpha"}:
         return "quant"
     if expert in {"beta"}:
@@ -144,7 +153,6 @@ def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
     if expert in {"gamma"}:
         return "dark_horse"
 
-    # FIX: "contrarian" maps to dark_horse (legacy signal compatibility)
     if "contrarian" in expert or "dark" in expert or "horse" in expert or "onchain" in expert or "on-chain" in expert or "flow" in expert:
         return "dark_horse"
     if "whale" in expert or "momentum" in expert or "hype" in expert:
@@ -156,8 +164,9 @@ def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
 
     return None
 
+
 def _nudge_weights(correct: bool, expert: Optional[str]) -> None:
-    if not expert:
+    if _in_replay_mode() or not expert:
         return
 
     delta = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
@@ -185,59 +194,101 @@ def _nudge_weights(correct: bool, expert: Optional[str]) -> None:
     except Exception:
         pass
 
-def resolve_prediction(
+
+def _parse_resolve_at(prediction: Dict[str, Any]) -> Optional[datetime]:
+    try:
+        return datetime.fromisoformat(
+            str(prediction.get("resolve_at", "")).replace("Z", "+00:00")
+        ).astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def _horizon_hours(prediction: Dict[str, Any]) -> float:
+    try:
+        horizon = float(prediction.get("horizon_hours", 0) or 0)
+    except (TypeError, ValueError):
+        horizon = 0.0
+    return horizon if horizon > 0 else _EXPIRY_DEFAULT_HORIZON_HOURS
+
+
+def _is_expired(
     prediction: Dict[str, Any],
-    current_price: float,
-    tolerance: float = 0.5,
-) -> Dict[str, Any]:
-    ref = float(prediction.get("reference_price", 0) or 0)
-    actual_pct = 0.0
-    if ref > 0 and current_price > 0:
-        actual_pct = round((current_price - ref) / ref * 100, 2)
+    resolve_at: datetime,
+    now: datetime,
+    grace_multiple: float = _EXPIRY_GRACE_MULTIPLE,
+) -> bool:
+    if now < resolve_at:
+        return False
+    grace = timedelta(hours=_horizon_hours(prediction) * grace_multiple)
+    return now >= resolve_at + grace
 
-    if abs(actual_pct) > 80:
-        prediction["status"] = "expired"
-        prediction["outcome"] = "expired"
-        prediction["actual_pct"] = None
-        return prediction
 
-    outcome = classify_outcome(prediction, current_price, tolerance)
-    correct = outcome == "hit"
-    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+def _expire_prediction(prediction: Dict[str, Any], now: datetime) -> Dict[str, Any]:
+    prediction["status"] = "expired"
+    prediction["outcome"] = "expired"
+    prediction["correct"] = None
+    prediction["resolved_at"] = now.isoformat().replace("+00:00", "Z")
+    prediction["resolved_price"] = None
+    prediction["actual_pct"] = None
+    return prediction
 
-    prediction["actual_pct"] = actual_pct
-    prediction["outcome"] = outcome
-    prediction["correct"] = correct
-    prediction["status"] = "resolved"
-    prediction["resolved_at"] = now
-    prediction["resolved_price"] = current_price
 
-    expert = _normalize_expert(prediction)
-    if expert:
-        prediction["expert"] = expert
-        _nudge_weights(correct, expert)
-        try:
-            from internal.learning.trail_events import emit_prediction_resolved
+def _mark_ungradeable(prediction: Dict[str, Any], now: datetime) -> Dict[str, Any]:
+    prediction["status"] = "ungradeable"
+    prediction["outcome"] = "ungradeable"
+    prediction["correct"] = None
+    prediction["resolved_at"] = now.isoformat().replace("+00:00", "Z")
+    prediction["resolved_price"] = None
+    prediction["actual_pct"] = None
+    return prediction
 
-            emit_prediction_resolved(prediction, expert)
-        except Exception:
-            pass
 
-    signal_contributions = prediction.get("signal_contributions")
-    horizon_type = prediction.get("horizon_type", "hour")
-    if isinstance(signal_contributions, dict):
-        active_signals = prediction.get("active_signals", [])
-        if not active_signals:
-            active_signals = [
-                k for k, v in signal_contributions.items()
-                if isinstance(v, dict) and (v.get("score", 0.5) > 0.55 or v.get("score", 0.5) < 0.45)
-            ]
-        for signal_name in active_signals:
-            try:
-                nudge_signal_weight(horizon_type, signal_name, correct)
-            except Exception:
-                pass
+def lookup_horizon_price(
+    prediction: Dict[str, Any],
+    *,
+    resolve_at: datetime,
+    now: datetime,
+    live_prices: Optional[Dict[Any, float]] = None,
+    cache_path: Optional[str] = None,
+) -> Tuple[str, float, Dict[str, Any]]:
+    """Return (status, price, meta). status: ok | ungradeable."""
+    cache = _load_json(cache_path or PRICE_CACHE_PATH, {})
+    status, price, meta = price_at_resolve_at(
+        prediction.get("netuid"),
+        resolve_at,
+        cache=cache,
+    )
+    if status == "ok" and price > 0:
+        return status, price, meta
 
+    live_prices = live_prices or {}
+    uid = prediction.get("netuid")
+    live = float(live_prices.get(uid, 0) or 0)
+    if live > 0 and abs((now - resolve_at).total_seconds()) <= CANDLE_LOOKUP_MINUTES * 60:
+        meta = {
+            "price_source": "live_oracle",
+            "price_lag_seconds": int(abs((now - resolve_at).total_seconds())),
+            "candles_in_window": meta.get("candles_in_window", 0),
+        }
+        return "ok", live, meta
+
+    return "ungradeable", 0.0, meta
+
+
+def _apply_price_meta(prediction: Dict[str, Any], meta: Dict[str, Any], price: float) -> None:
+    prediction["resolved_price"] = price
+    prediction["price_source"] = meta.get("price_source")
+    prediction["price_lag_seconds"] = meta.get("price_lag_seconds")
+
+
+def _record_scenario_outcome(
+    prediction: Dict[str, Any],
+    actual_pct: float,
+    outcome: str,
+    correct: bool,
+    expert: Optional[str],
+) -> None:
     try:
         features = {
             "direction": prediction.get("direction"),
@@ -267,24 +318,170 @@ def resolve_prediction(
     except Exception:
         pass
 
+
+def atomic_finalize_resolution(
+    prediction: Dict[str, Any],
+    *,
+    actual_pct: float,
+    outcome: str,
+    correct: Optional[bool],
+    resolved_price: float,
+    resolved_at: str,
+    price_meta: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """J3: one event updates prediction, judges, and trace."""
+    prediction["actual_pct"] = actual_pct
+    prediction["outcome"] = outcome
+    prediction["correct"] = correct
+    prediction["status"] = "resolved" if outcome == "hit" or outcome == "miss" else prediction.get("status", "resolved")
+    if outcome in {"hit", "miss"}:
+        prediction["status"] = "resolved"
+    prediction["resolved_at"] = resolved_at
+    prediction["resolved_price"] = resolved_price
+    if price_meta:
+        prediction["price_source"] = price_meta.get("price_source")
+        prediction["price_lag_seconds"] = price_meta.get("price_lag_seconds")
+
     try:
         on_prediction_resolved(prediction)
     except Exception:
         pass
 
+    try:
+        from internal.council.prediction_trace import record_prediction_resolved
+
+        record_prediction_resolved(prediction)
+    except Exception:
+        pass
+
     return prediction
+
+
+def resolve_prediction(
+    prediction: Dict[str, Any],
+    current_price: Optional[float] = None,
+    tolerance: float = 0.5,
+) -> Dict[str, Any]:
+    """Resolve using an explicit price (tests) or horizon lookup when omitted."""
+    now = datetime.now(timezone.utc)
+    if current_price is not None and current_price > 0:
+        ref = float(prediction.get("reference_price", 0) or 0)
+        actual_pct = compute_actual_pct(ref, current_price)
+        outcome = classify_outcome_direction_only(prediction, actual_pct)
+        correct = direction_correct(prediction, actual_pct)
+        resolved_at = now.isoformat().replace("+00:00", "Z")
+        expert = _normalize_expert(prediction)
+        if expert:
+            prediction["expert"] = expert
+            _nudge_weights(bool(correct), expert)
+        atomic_finalize_resolution(
+            prediction,
+            actual_pct=actual_pct,
+            outcome=outcome,
+            correct=correct,
+            resolved_price=current_price,
+            resolved_at=resolved_at,
+        )
+        _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
+        _nudge_signal_weights(prediction, bool(correct))
+        return prediction
+    return resolve_prediction_at_horizon(prediction, now=now)
+
+
+def _nudge_signal_weights(prediction: Dict[str, Any], correct: bool) -> None:
+    if _in_replay_mode():
+        return
+    signal_contributions = prediction.get("signal_contributions")
+    horizon_type = prediction.get("horizon_type", "hour")
+    if not isinstance(signal_contributions, dict):
+        return
+    active_signals = prediction.get("active_signals", [])
+    if not active_signals:
+        active_signals = [
+            k for k, v in signal_contributions.items()
+            if isinstance(v, dict) and (v.get("score", 0.5) > 0.55 or v.get("score", 0.5) < 0.45)
+        ]
+    for signal_name in active_signals:
+        try:
+            nudge_signal_weight(horizon_type, signal_name, correct)
+        except Exception:
+            pass
+
+
+def resolve_prediction_at_horizon(
+    prediction: Dict[str, Any],
+    *,
+    now: Optional[datetime] = None,
+    live_prices: Optional[Dict[Any, float]] = None,
+    grace_multiple: float = _EXPIRY_GRACE_MULTIPLE,
+) -> Dict[str, Any]:
+    """Grade at ``resolve_at`` price; expire late rows; never use stale live price."""
+    now = now or datetime.now(timezone.utc)
+    resolve_at = _parse_resolve_at(prediction)
+    if resolve_at is None:
+        return _expire_prediction(prediction, now)
+
+    if _is_expired(prediction, resolve_at, now, grace_multiple):
+        return _expire_prediction(prediction, now)
+
+    if now < resolve_at:
+        prediction["status"] = "pending"
+        return prediction
+
+    status, price, meta = lookup_horizon_price(
+        prediction,
+        resolve_at=resolve_at,
+        now=now,
+        live_prices=live_prices,
+    )
+    if status != "ok" or price <= 0:
+        if _is_expired(prediction, resolve_at, now, grace_multiple):
+            return _expire_prediction(prediction, now)
+        prediction["status"] = "pending"
+        return prediction
+
+    ref = float(prediction.get("reference_price", 0) or 0)
+    actual_pct = compute_actual_pct(ref, price)
+    outcome = classify_outcome_direction_only(prediction, actual_pct)
+    correct = direction_correct(prediction, actual_pct)
+    resolved_at = resolve_at.isoformat().replace("+00:00", "Z")
+    expert = _normalize_expert(prediction)
+    if expert:
+        prediction["expert"] = expert
+        _nudge_weights(bool(correct), expert)
+
+    atomic_finalize_resolution(
+        prediction,
+        actual_pct=actual_pct,
+        outcome=outcome,
+        correct=correct,
+        resolved_price=price,
+        resolved_at=resolved_at,
+        price_meta=meta,
+    )
+    _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
+    _nudge_signal_weights(prediction, bool(correct))
+    return prediction
+
 
 def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
     resolved = data.get("resolved", [])
     pending = data.get("predictions", [])
-    correct = sum(1 for r in resolved if r.get("correct") is True)
-    wrong = sum(1 for r in resolved if r.get("correct") is False)
+    gradable = [
+        r for r in resolved
+        if r.get("outcome") not in {"duplicate", "expired", "ungradeable"}
+        and r.get("correct") is not None
+    ]
+    correct = sum(1 for r in gradable if r.get("correct") is True)
+    wrong = sum(1 for r in gradable if r.get("correct") is False)
     expired = sum(1 for r in resolved if r.get("outcome") == "expired")
+    duplicates = sum(1 for r in resolved if r.get("outcome") == "duplicate")
     total = len(resolved) + len(pending)
-    stats = {
+    stats: Dict[str, Any] = {
         "correct": correct,
         "wrong": wrong,
         "expired": expired,
+        "duplicate": duplicates,
         "pending": len(pending),
         "total": total,
     }
@@ -293,6 +490,7 @@ def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
     else:
         stats["accuracy"] = 0.0
     return stats
+
 
 def _scenario_signals_for_subnet(subnet: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if not isinstance(subnet, dict):
@@ -318,30 +516,6 @@ def _scenario_signals_for_subnet(subnet: Optional[Dict[str, Any]]) -> Dict[str, 
         pass
     return out
 
-def _is_expired(
-    prediction: Dict[str, Any],
-    resolve_at: datetime,
-    now: datetime,
-    grace_multiple: float = _EXPIRY_GRACE_MULTIPLE,
-) -> bool:
-    if now < resolve_at:
-        return False
-    try:
-        horizon = float(prediction.get("horizon_hours", 0) or 0)
-    except (TypeError, ValueError):
-        horizon = 0.0
-    if horizon <= 0:
-        horizon = _EXPIRY_DEFAULT_HORIZON_HOURS
-    grace = timedelta(hours=horizon * grace_multiple)
-    return now >= resolve_at + grace
-
-def _expire_prediction(prediction: Dict[str, Any], now: datetime) -> Dict[str, Any]:
-    prediction["status"] = "expired"
-    prediction["outcome"] = "expired"
-    prediction["correct"] = None
-    prediction["resolved_at"] = now.isoformat().replace("+00:00", "Z")
-    prediction["resolved_price"] = None
-    return prediction
 
 def expire_stale_predictions(
     *,
@@ -361,17 +535,8 @@ def expire_stale_predictions(
     for pred in predictions:
         if not isinstance(pred, dict):
             continue
-        try:
-            resolve_at = datetime.fromisoformat(
-                str(pred.get("resolve_at", "")).replace("Z", "+00:00")
-            )
-        except Exception:
-            _expire_prediction(pred, now)
-            resolved.append(pred)
-            expired_now.append(pred)
-            continue
-
-        if _is_expired(pred, resolve_at, now, grace_multiple):
+        resolve_at = _parse_resolve_at(pred)
+        if resolve_at is None or _is_expired(pred, resolve_at, now, grace_multiple):
             _expire_prediction(pred, now)
             resolved.append(pred)
             expired_now.append(pred)
@@ -381,6 +546,7 @@ def expire_stale_predictions(
     data["predictions"] = still_pending
     data["resolved"] = resolved
     data["stats"] = _compute_stats(data)
+    data["watchdog"] = check_resolver_watchdog(still_pending, now=now)
     _save_json(PREDICTIONS_PATH, data)
 
     return {
@@ -388,7 +554,9 @@ def expire_stale_predictions(
         "resolved": resolved,
         "pending": still_pending,
         "stats": data["stats"],
+        "watchdog": data["watchdog"],
     }
+
 
 def resolve_due_predictions(
     subnets: Optional[List[Dict[str, Any]]] = None,
@@ -401,8 +569,11 @@ def resolve_due_predictions(
         PREDICTIONS_PATH,
         {"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0}},
     )
-    predictions: List[Dict[str, Any]] = list(data.get("predictions", []))
+    raw_pending: List[Dict[str, Any]] = list(data.get("predictions", []))
     resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
+    pending, duplicate_rows = dedupe_predictions(raw_pending)
+    resolved.extend(duplicate_rows)
+
     prices = fetch_prices(subnets)
     subnet_by_uid: Dict[Any, Dict[str, Any]] = {}
     if subnets:
@@ -413,35 +584,49 @@ def resolve_due_predictions(
     still_pending: List[Dict[str, Any]] = []
     resolved_now: List[Dict[str, Any]] = []
     expired_now: List[Dict[str, Any]] = []
-    for pred in predictions:
+
+    for pred in pending:
         uid = pred.get("netuid")
-        price = prices.get(uid, 0.0)
-        try:
-            resolve_at = datetime.fromisoformat(
-                str(pred.get("resolve_at", "")).replace("Z", "+00:00")
-            )
-        except Exception:
-            resolve_at = now + timedelta(hours=horizon_hours)
-        if price > 0 and now >= resolve_at:
+        resolve_at = _parse_resolve_at(pred)
+        if resolve_at is None:
+            _expire_prediction(pred, now)
+            resolved.append(pred)
+            expired_now.append(pred)
+            continue
+
+        if _is_expired(pred, resolve_at, now):
+            _expire_prediction(pred, now)
+            resolved.append(pred)
+            expired_now.append(pred)
+            continue
+
+        if now >= resolve_at:
             signals = _scenario_signals_for_subnet(subnet_by_uid.get(uid))
             if signals.get("rsi"):
                 pred["_rsi_signal"] = signals["rsi"]
             if signals.get("volume"):
                 pred["_volume_signal"] = signals["volume"]
-            resolve_prediction(pred, price, tolerance)
+            before_status = pred.get("status")
+            resolve_prediction_at_horizon(pred, now=now, live_prices=prices)
             pred.pop("_rsi_signal", None)
             pred.pop("_volume_signal", None)
-            resolved.append(pred)
-            resolved_now.append(pred)
-        elif _is_expired(pred, resolve_at, now):
-            _expire_prediction(pred, now)
-            resolved.append(pred)
-            expired_now.append(pred)
+            if pred.get("status") == "pending" and before_status == "pending":
+                still_pending.append(pred)
+            elif pred.get("status") == "expired":
+                resolved.append(pred)
+                expired_now.append(pred)
+            elif pred.get("status") in {"resolved", "ungradeable"}:
+                resolved.append(pred)
+                resolved_now.append(pred)
+            else:
+                still_pending.append(pred)
         else:
             still_pending.append(pred)
+
     data["predictions"] = still_pending
     data["resolved"] = resolved
     data["stats"] = _compute_stats(data)
+    data["watchdog"] = check_resolver_watchdog(still_pending, now=now)
     _save_json(PREDICTIONS_PATH, data)
     try:
         from internal.learning.trail_bus import emit_accuracy_update
@@ -459,9 +644,11 @@ def resolve_due_predictions(
     return {
         "resolved_now": resolved_now,
         "expired_now": expired_now,
+        "duplicates_now": duplicate_rows,
         "resolved": resolved,
         "pending": still_pending,
         "stats": data["stats"],
+        "watchdog": data["watchdog"],
     }
 
 

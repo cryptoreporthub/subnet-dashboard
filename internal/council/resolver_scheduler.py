@@ -251,6 +251,7 @@ class PredictionResolverScheduler:
             expired_count += len(expired.get("expired_now", []))
             result["expired_now"] = expired_count
             result["pending"] = expired.get("stats", {}).get("pending", 0)
+            result["watchdog"] = resolved.get("watchdog") or expired.get("watchdog")
 
             result["ok"] = True
             result["stats"] = expired.get("stats", resolved.get("stats", {}))
@@ -268,6 +269,7 @@ class PredictionResolverScheduler:
             "expired_now": result.get("expired_now", 0),
             "pending": result.get("pending", 0),
             "error": result.get("error"),
+            "watchdog": result.get("watchdog"),
         }
         data = _load_json(self.soul_map_path)
         data.setdefault("prediction_resolver_scheduler", {})["last_cycle"] = summary

@@ -79,9 +79,9 @@ def test_classify_outcome_up_hit():
     assert resolver.classify_outcome(pred, 115.0) == "hit"
 
 
-def test_classify_outcome_up_partial():
+def test_classify_outcome_up_direction_only_hit_on_small_move():
     pred = {"reference_price": 100.0, "predicted_pct": 10.0, "direction": "up"}
-    assert resolver.classify_outcome(pred, 102.0) == "partial"
+    assert resolver.classify_outcome(pred, 102.0) == "hit"
 
 
 def test_classify_outcome_up_miss():
@@ -92,7 +92,7 @@ def test_classify_outcome_up_miss():
 def test_classify_outcome_down_hit_and_miss():
     pred = {"reference_price": 100.0, "predicted_pct": -10.0, "direction": "down"}
     assert resolver.classify_outcome(pred, 92.0) == "hit"
-    assert resolver.classify_outcome(pred, 98.0) == "partial"
+    assert resolver.classify_outcome(pred, 101.0) == "miss"
     assert resolver.classify_outcome(pred, 105.0) == "miss"
 
 
@@ -138,6 +138,14 @@ def test_resolve_due_predictions_resolves_only_due(nudge_spy):
     }
     with open(resolver.PREDICTIONS_PATH, "w") as f:
         json.dump(data, f)
+
+    due_resolve_at = datetime.fromisoformat(data["predictions"][0]["resolve_at"].replace("Z", "+00:00"))
+    candles = []
+    for offset_min in (-5, 0, 5):
+        ts = (due_resolve_at + timedelta(minutes=offset_min)).isoformat().replace("+00:00", "Z")
+        candles.append({"timestamp": ts, "close": 110.0, "volume": 5000.0})
+    with open(resolver.PRICE_CACHE_PATH, "w") as f:
+        json.dump({"1": {"candles": candles}}, f)
 
     subnets = [{"netuid": 1, "price": 110.0}, {"netuid": 2, "price": 105.0}]
     result = resolver.resolve_due_predictions(subnets)
@@ -347,6 +355,14 @@ def test_server_predictions_resolved_endpoint(nudge_spy, monkeypatch):
     }
     with open(resolver.PREDICTIONS_PATH, "w") as f:
         json.dump(data, f)
+
+    due_resolve_at = datetime.fromisoformat(data["predictions"][0]["resolve_at"].replace("Z", "+00:00"))
+    candles = []
+    for offset_min in (-5, 0, 5):
+        ts = (due_resolve_at + timedelta(minutes=offset_min)).isoformat().replace("+00:00", "Z")
+        candles.append({"timestamp": ts, "close": 21.0, "volume": 5000.0})
+    with open(resolver.PRICE_CACHE_PATH, "w") as f:
+        json.dump({"29": {"candles": candles}}, f)
 
     resp = client.get("/api/predictions/resolved?resolve=1")
     assert resp.status_code == 200

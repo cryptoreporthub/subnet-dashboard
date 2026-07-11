@@ -64,8 +64,9 @@ def record_pick_prediction(
 
     netuid = subnet.get("netuid")
     if netuid is None:
-        subnet_info = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
-        netuid = subnet_info.get("netuid")
+        subnet_info = pick.get("subnet")
+        if isinstance(subnet_info, dict):
+            netuid = subnet_info.get("netuid")
     if netuid is None:
         return None
 
@@ -102,6 +103,17 @@ def record_pick_prediction(
         return None
 
     expert_weights = load_weights()
+    prediction["weights_at_creation"] = dict(expert_weights)
+    try:
+        from internal.council.prediction_trace import record_prediction_created
+
+        record_prediction_created(
+            prediction,
+            weights_at_creation=expert_weights,
+        )
+    except Exception as exc:
+        logger.warning("Prediction trace on create failed: %s", exc)
+
     try:
         from internal.judges.tracker import on_prediction_created
 

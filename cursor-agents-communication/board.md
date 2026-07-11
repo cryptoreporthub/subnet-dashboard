@@ -1,8 +1,8 @@
 # Board — subnet-dashboard concurrent session
 
-**Last updated:** 2026-07-11T19:50:00Z by Cursor Agent A (protocol docs PR)  
-**main:** `9804610`  
-**GATE:** `PROTOCOL_PR_PENDING` — merge protocol docs PR, then **go J** + **go H thin**
+**Last updated:** 2026-07-11T21:15:00Z by Cursor Agent A (Phase J PR open)  
+**main:** `53bf187`  
+**GATE:** Phase J PR open — merge **J before H-thin**
 
 ---
 
@@ -10,9 +10,9 @@
 
 | Order | Phase | Agent | Branch | Status |
 |-------|-------|-------|--------|--------|
-| 0 | Protocol docs | A | `cursor/protocol-docs-843d` | 🟡 PR pending |
-| 1 | **J** Accuracy fix | A | `agent-a/phase-j-accuracy-fix` | ⬜ not started |
-| 2 | **H-thin** UI shell | B | `agent-b/phase-h-thin-shell` | ⬜ not started |
+| 0 | Protocol docs | A | `cursor/protocol-docs-843d` | ✅ merged |
+| 1 | **J** Accuracy fix | A | `agent-a/phase-j-accuracy-fix` | 🟡 PR open |
+| 2 | **H-thin** UI shell | B | `agent-b/phase-h-thin-shell` | ⬜ rebase after J |
 | 3 | **H-full** premium UI | B | after J on main | ⬜ gated |
 | 4 | **K** CI gates | A + B | — | ⬜ gated (H on main) |
 
@@ -22,10 +22,10 @@
 
 | Field | Value |
 |-------|--------|
-| Phase | J (next) |
-| Branch | — |
-| PR | — |
-| Status | Protocol ack complete; waiting protocol PR merge |
+| Phase | J |
+| Branch | `agent-a/phase-j-accuracy-fix` |
+| PR | Phase J accuracy fix (non-draft) |
+| Status | J1–J7 implemented; pytest + mypy on touched modules |
 
 ---
 
@@ -33,25 +33,25 @@
 
 | Field | Value |
 |-------|--------|
-| Phase | H-thin (next, parallel with J) |
-| Branch | — |
+| Phase | H-thin (parallel; merge second) |
+| Branch | `agent-b/phase-h-thin-shell` |
 | PR | — |
-| Status | Waiting protocol PR merge + review prompt |
+| Status | Rebase onto main after J merges |
 
 ---
 
 ## Blockers
 
-- [ ] Merge PR: `cursor/protocol-docs-843d` → adds this folder + SciWeave doc + plan links
-- [ ] User paste: **go J** / **go H thin**
+- [ ] Merge Phase J PR (Agent A first)
+- [ ] Agent B rebase H-thin after J on main
 
 ---
 
-## Gate lines (after protocol PR merges)
+## Gate lines
 
 ```text
-Agent A: go J — branch agent-a/phase-j-accuracy-fix (merge first).
-Agent B: go H thin — branch agent-b/phase-h-thin-shell (start parallel; merge second).
+Agent A: Phase J PR open — merge first.
+Agent B: go H thin — rebase after J lands on main.
 ```
 
 ---
