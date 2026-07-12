@@ -1,9 +1,36 @@
-# Master Plan (redirect)
+# Subnet Dashboard Master Plan
 
-The canonical execution plan lives at:
+## Repo
+- `cryptoreporthub/subnet-dashboard`
 
-**[docs/master-plan-merged.md](docs/master-plan-merged.md)**
+## Phase Order
+1. J → Accuracy Fix + Tests
+2. H-full → Premium UI cockpit restoration
+3. K → CI Quality Gates
+4. L → Real-time signals & alerts
 
-Concurrent agent protocol:
+## Phase Responsibilities
+### J
+- Accuracy fixes and test coverage.
 
-**[cursor-agents-communication/concurrent-protocol.md](cursor-agents-communication/concurrent-protocol.md)**
+### H-full
+- Restore the premium UI cockpit on the homepage.
+- Frontend-heavy work only.
+- Keep the UI honest and production-safe.
+
+### K
+- CI quality gates.
+- Validation and safety checks.
+
+### L
+- Real-time signals and alerts.
+- Backend-heavy work only.
+
+## Sequencing Rule
+- Later phases must not overlap unless explicitly approved.
+- H-full should precede L for the current handoff.
+
+## Notes
+- Keep the dashboard minimal, honest, and behavior-preserving.
+- Do not introduce fake live data.
+- Extended history and contracts: `docs/master-plan-merged.md`.
