@@ -296,6 +296,7 @@ def get_registry():
         item = dict(value)
         subnet_id = item.get("id", int(key))
         item.setdefault("id", subnet_id)
+        item.setdefault("netuid", subnet_id)
         decision = consensus.get(subnet_id)
         if decision:
             item["consensus"] = {
@@ -316,6 +317,7 @@ def list_subnets(request: Request):
     for s in source:
         item = dict(s)
         item.setdefault("id", s.get("netuid", 0))
+        item.setdefault("netuid", item.get("id"))
         items.append(item)
 
     params = request.query_params

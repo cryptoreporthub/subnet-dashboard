@@ -29,6 +29,7 @@
 - Keep backend changes minimal and compatible.
 
 ## Handoff Status
+- **Agent B audit (subnet grouping):** Frontend-only lane — see `cursor-agents-communication/phase-h-subnet-grouping-audit.md`. Additive `netuid` alias on `/api/registry` and `/api/subnets`.
 - **Ready for Ave (H-full):** J and K are on `main`. H-full branches exist on origin; pick `cursor/phase-h-full-premium-ac2c` or audit open PRs before new work.
 - **Ready for B (L) after Ave handoff:** Slice 1 complete on `cursor/phase-l-signal-pipeline-b061` (PR #115 draft). Slices 2–4 remain (alerts, WebSocket, server-side Jinja context).
 - **Pending:** User merge of H-full and L PRs.
