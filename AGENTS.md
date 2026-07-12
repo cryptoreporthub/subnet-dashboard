@@ -45,6 +45,10 @@ access are required to run it locally.
   APIs/classes that no longer exist. These belong to the not-yet-ported feature
   slices and will be addressed as those routers are rebuilt.
 
+### Code style
+
+Follow [`.cursor/rules/ponytail.mdc`](.cursor/rules/ponytail.mdc) ([Ponytail](https://github.com/DietrichGebert/ponytail)): YAGNI, minimal diff, reuse existing patterns before adding files or dependencies. Do not cut validation, security, error handling, or contract-test coverage.
+
 ### Agent coordination (two Cursor agents)
 
 **Concurrent J/H sprint (2026-07-11):** Read **`cursor-agents-communication/concurrent-protocol.md`** and **`cursor-agents-communication/board.md`** from git first. Do **not** use `fetch_memories(["f93f7202"])` for board STATUS this sprint. Phase J (A) and H-thin (B) may start in parallel; merge order J then H.
