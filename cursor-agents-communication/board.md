@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-12T19:55:00Z by Agent B (`-e78a`)  
-**main:** `95b4c20`
+**Last updated:** 2026-07-12T22:45:00Z by Agent B (`-e78a`)  
+**main:** `dc8c611` (Phase L merged — PR #115)
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -22,21 +22,18 @@
 | **K** | ✅ merged | PR #107 |
 | **H-full** | ✅ merged | PR #120 |
 | **H-full optional** | ✅ merged | PR #125 |
-| **L slice 1** | ✅ on branch | `GET /api/signals`, persistence — PR #115 |
-| **L slices 2–4** | 🟢 **in progress** | Agent B — alerts, WS, rules engine |
+| **L** | ✅ merged | PR #115 — signals, alerts, WebSocket, rules engine |
 
-## Active Work — Phase L (Agent B)
+## Phase L — merged (Agent B)
 
-| Slice | Scope | Status |
-|-------|--------|--------|
-| 1 | `GET /api/signals`, `/api/signals/summary`, `data/signals.json` | ✅ done |
-| 2 | `GET/POST /api/alerts` | ✅ done |
-| 3 | `/ws/signals` WebSocket | ✅ done |
-| 4 | Rules engine (SELL > HOT, dedup) | ✅ done |
+| Slice | Capability | Status |
+|-------|------------|--------|
+| 1 | `GET /api/signals`, `/api/signals/summary`, `data/signals.json` | ✅ |
+| 2 | `GET/POST /api/alerts`, `POST /api/alerts/subscribe` | ✅ |
+| 3 | `/ws/signals` WebSocket | ✅ |
+| 4 | `rules.py` — SELL > HOT, dedup | ✅ |
 
-**Branch:** `cursor/phase-l-signal-pipeline-b061`  
-**Audit:** PR #113 (`cursor/phase-l-signals-alerts-b061`) — reference only; do not duplicate wholesale  
-**Do not touch:** `templates/*`, `static/*`, resolver, grading weights
+**Next:** Agent A may wire frontend consumers; M/N/O gated on user approval.
 
 ## Rules
 - Stay scoped to assigned phase.

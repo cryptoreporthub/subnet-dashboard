@@ -233,7 +233,7 @@ Promote individual checks to **blocking** only after J replay and H shell are st
 
 ## 9. Phase L — Signals & alerts (after J)
 
-> **Active on `main` @ 24333f8.** Agent B owns implementation. **Model guide:** `cursor-agents-communication/model-guide.md` (Grok before WebSocket/rules slices). **Ditto plans:** `cursor-agents-communication/ditto-phase-l-handoff.md`.
+> **Merged on `main` @ `dc8c611` (PR #115).** Backend: `internal/signals/*`, alerts API, `/ws/signals`, `build_signals_context()`. **Model guide:** `cursor-agents-communication/model-guide.md`. **Audit:** `cursor-agents-communication/phase-l-pr113-audit.md`.
 
 User-requested; Theme 12 was researched but unbuilt.
 
