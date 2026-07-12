@@ -3,1362 +3,464 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Subnet Pulse — Live Bittensor Intelligence</title>
-  <meta name="description" content="Live intelligence for the Bittensor subnet economy.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <title>SimiVision — Subnet Intelligence Cockpit</title>
+  <meta name="description" content="Live Bittensor subnet intelligence — picks, council weights, predictions, and learning trail.">
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="stylesheet" href="/static/css/cockpit.css">
-  <style>
-    :root {
-      --bg-base: #0B0F19;
-      --bg-surface: #111827;
-      --bg-elevated: #1F2937;
-      --bg-overlay: rgba(11, 15, 25, 0.92);
-      --border-subtle: #374151;
-      --border-accent: rgba(34, 211, 238, 0.25);
-      --border-radius-card: 16px;
-      --border-radius-input: 12px;
-      --border-radius-pill: 9999px;
-      --text-primary: #F9FAFB;
-      --text-secondary: #9CA3AF;
-      --text-muted: #6B7280;
-      --accent-cyan: #22D3EE;
-      --accent-violet: #8B5CF6;
-      --status-active: #10B981;
-      --status-at-risk: #F59E0B;
-      --status-deprecated: #F43F5E;
-      --status-bootstrap: #3B82F6;
-      --status-unknown: #6B7280;
-      --action-accumulate: #10B981;
-      --action-hold: #F59E0B;
-      --action-reduce: #F43F5E;
-      --overvalued: #FB7185;
-      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-      --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35);
-      --shadow-glow: 0 0 24px rgba(34, 211, 238, 0.12);
-      --font-ui: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
-      --space-1: 4px;
-      --space-2: 8px;
-      --space-3: 12px;
-      --space-4: 16px;
-      --space-5: 24px;
-      --space-6: 32px;
-      --space-7: 48px;
-      --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-      --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    * { box-sizing: border-box; }
-
-    html, body {
-      margin: 0;
-      padding: 0;
-      min-height: 100%;
-    }
-
-    body {
-      font-family: var(--font-ui);
-      background-color: var(--bg-base);
-      color: var(--text-primary);
-      line-height: 1.5;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    .aurora {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 0;
-      background:
-        radial-gradient(circle at 20% 10%, rgba(34, 211, 238, 0.08) 0%, transparent 45%),
-        radial-gradient(circle at 85% 15%, rgba(139, 92, 246, 0.08) 0%, transparent 45%),
-        radial-gradient(circle at 50% 90%, rgba(34, 211, 238, 0.04) 0%, transparent 40%);
-    }
-
-    .grid-overlay {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 0;
-      background-image: radial-gradient(circle, rgba(34, 211, 238, 0.035) 1px, transparent 1px);
-      background-size: 32px 32px;
-    }
-
-    .app {
-      position: relative;
-      z-index: 1;
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: var(--space-5);
-    }
-
-    /* Nav */
-    .nav {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--space-4);
-      margin-bottom: var(--space-6);
-      flex-wrap: wrap;
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: var(--space-3);
-    }
-
-    .brand-mark {
-      width: 36px;
-      height: 36px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
-      box-shadow: var(--shadow-glow);
-      display: grid;
-      place-items: center;
-      font-weight: 700;
-      font-size: 1.1rem;
-      color: var(--bg-base);
-    }
-
-    .brand-title {
-      font-size: 1.25rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      margin: 0;
-    }
-
-    .brand-subtitle {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      margin: 0;
-    }
-
-    .live-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
-      border-radius: var(--border-radius-pill);
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.25);
-      color: var(--status-active);
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .live-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--status-active);
-      box-shadow: 0 0 8px var(--status-active);
-      animation: pulse 2s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.6; transform: scale(0.85); }
-    }
-
-    /* Hero */
-    .hero {
-      margin-bottom: var(--space-6);
-    }
-
-    .hero-headline {
-      font-size: clamp(2rem, 5vw, 3rem);
-      font-weight: 700;
-      line-height: 1.1;
-      letter-spacing: -0.03em;
-      margin: 0 0 var(--space-2);
-      background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-cyan) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    .hero-lead {
-      color: var(--text-secondary);
-      font-size: 1.05rem;
-      max-width: 640px;
-      margin: 0 0 var(--space-5);
-    }
-
-    .summary-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: var(--space-4);
-    }
-
-    @media (max-width: 1023px) {
-      .summary-grid { grid-template-columns: repeat(2, 1fr); }
-    }
-
-    @media (max-width: 639px) {
-      .summary-grid { grid-template-columns: 1fr; }
-      .app { padding: var(--space-4); }
-    }
-
-    .summary-card {
-      position: relative;
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--border-radius-card);
-      padding: var(--space-4);
-      box-shadow: var(--shadow-card);
-      overflow: hidden;
-      transition: transform var(--transition-base), box-shadow var(--transition-base);
-    }
-
-    .summary-card::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      border-radius: inherit;
-      padding: 1px;
-      background: linear-gradient(135deg, var(--border-accent), transparent 60%);
-      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-      -webkit-mask-composite: xor;
-      mask-composite: exclude;
-      pointer-events: none;
-    }
-
-    .summary-card:hover {
-      transform: translateY(-2px);
-      box-shadow: var(--shadow-card), var(--shadow-glow);
-    }
-
-    .summary-label {
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-secondary);
-      margin: 0 0 var(--space-2);
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-    }
-
-    .summary-value {
-      font-family: var(--font-mono);
-      font-size: 2rem;
-      font-weight: 600;
-      line-height: 1.1;
-      margin: 0 0 var(--space-2);
-    }
-
-    .summary-meta {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      margin: 0;
-    }
-
-    .summary-card.accent .summary-value { color: var(--accent-cyan); }
-    .summary-card.violet .summary-value { color: var(--accent-violet); }
-    .summary-card.success .summary-value { color: var(--status-active); }
-    .summary-card.warning .summary-value { color: var(--status-at-risk); }
-
-    /* Toolbar */
-    .toolbar {
-      display: flex;
-      align-items: center;
-      gap: var(--space-3);
-      margin-bottom: var(--space-4);
-      flex-wrap: wrap;
-    }
-
-    .search-wrap {
-      position: relative;
-      flex: 1 1 260px;
-      min-width: 220px;
-    }
-
-    .search-icon {
-      position: absolute;
-      left: 14px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: var(--text-muted);
-      pointer-events: none;
-    }
-
-    .search-input {
-      width: 100%;
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--border-radius-input);
-      padding: 11px 14px 11px 40px;
-      color: var(--text-primary);
-      font-family: var(--font-ui);
-      font-size: 0.9rem;
-      outline: none;
-      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-    }
-
-    .search-input::placeholder { color: var(--text-muted); }
-    .search-input:focus {
-      border-color: var(--accent-cyan);
-      box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12);
-    }
-
-    .filter-pills {
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-      flex-wrap: wrap;
-    }
-
-    .pill {
-      appearance: none;
-      border: 1px solid var(--border-subtle);
-      background: var(--bg-surface);
-      color: var(--text-secondary);
-      border-radius: var(--border-radius-pill);
-      padding: 7px 14px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all var(--transition-fast);
-    }
-
-    .pill:hover { border-color: var(--border-accent); color: var(--text-primary); }
-    .pill.active {
-      background: rgba(34, 211, 238, 0.12);
-      border-color: rgba(34, 211, 238, 0.4);
-      color: var(--accent-cyan);
-    }
-
-    .sort-select {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-primary);
-      border-radius: var(--border-radius-input);
-      padding: 8px 12px;
-      font-size: 0.85rem;
-      outline: none;
-      cursor: pointer;
-    }
-
-    .sort-select:focus { border-color: var(--accent-cyan); }
-
-    .view-toggle {
-      display: flex;
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--border-radius-input);
-      overflow: hidden;
-      background: var(--bg-surface);
-    }
-
-    .view-btn {
-      appearance: none;
-      border: none;
-      background: transparent;
-      color: var(--text-secondary);
-      padding: 8px 12px;
-      font-size: 0.8rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all var(--transition-fast);
-    }
-
-    .view-btn.active {
-      background: var(--bg-elevated);
-      color: var(--text-primary);
-    }
-
-    .results-meta {
-      color: var(--text-muted);
-      font-size: 0.8rem;
-      margin-bottom: var(--space-4);
-    }
-
-    /* Table */
-    .table-wrap {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--border-radius-card);
-      overflow: hidden;
-      box-shadow: var(--shadow-card);
-      overflow-x: auto;
-    }
-
-    .data-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.875rem;
-      min-width: 900px;
-    }
-
-    .data-table th {
-      text-align: left;
-      padding: 14px 16px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-secondary);
-      background: rgba(17, 24, 39, 0.8);
-      border-bottom: 1px solid var(--border-subtle);
-      white-space: nowrap;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .data-table th:hover { color: var(--text-primary); }
-    .data-table th .sort-icon { margin-left: 4px; opacity: 0.5; }
-    .data-table th.sorted .sort-icon { opacity: 1; color: var(--accent-cyan); }
-
-    .data-table td {
-      padding: 14px 16px;
-      border-bottom: 1px solid rgba(55, 65, 81, 0.5);
-      color: var(--text-primary);
-      vertical-align: middle;
-    }
-
-    .data-table tbody tr {
-      transition: background var(--transition-fast);
-      cursor: pointer;
-    }
-
-    .data-table tbody tr:hover { background: rgba(31, 41, 55, 0.5); }
-    .data-table tbody tr:last-child td { border-bottom: none; }
-
-    .col-id { width: 60px; }
-    .col-name { min-width: 160px; }
-    .col-status { width: 110px; }
-    .col-num { text-align: right; }
-    .data-table th.col-num { text-align: right; }
-
-    .subnet-name {
-      font-weight: 600;
-      color: var(--text-primary);
-    }
-
-    .subnet-id {
-      font-family: var(--font-mono);
-      color: var(--text-muted);
-      font-size: 0.8rem;
-    }
-
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: var(--border-radius-pill);
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-transform: capitalize;
-      border: 1px solid transparent;
-    }
-
-    .status-badge::before {
-      content: "";
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: currentColor;
-    }
-
-    .status-active { color: var(--status-active); background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.25); }
-    .status-at-risk { color: var(--status-at-risk); background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.25); }
-    .status-deprecated { color: var(--status-deprecated); background: rgba(244, 63, 94, 0.1); border-color: rgba(244, 63, 94, 0.25); }
-    .status-bootstrap { color: var(--status-bootstrap); background: rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.25); }
-    .status-unknown { color: var(--status-unknown); background: rgba(107, 114, 128, 0.1); border-color: rgba(107, 114, 128, 0.25); }
-
-    .status-active::before { animation: pulse 2s infinite; }
-
-    .action-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 3px 10px;
-      border-radius: var(--border-radius-pill);
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-transform: capitalize;
-    }
-
-    .action-accumulate { color: var(--action-accumulate); background: rgba(16, 185, 129, 0.1); }
-    .action-hold { color: var(--action-hold); background: rgba(245, 158, 11, 0.1); }
-    .action-reduce { color: var(--action-reduce); background: rgba(244, 63, 94, 0.1); }
-    .action-none { color: var(--text-muted); background: rgba(107, 114, 128, 0.1); }
-
-    .risk-chip {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 8px;
-      border-radius: var(--border-radius-pill);
-      font-size: 0.7rem;
-      font-weight: 600;
-      color: var(--overvalued);
-      border: 1px solid rgba(251, 113, 133, 0.35);
-      background: rgba(251, 113, 133, 0.08);
-      margin-left: 6px;
-    }
-
-    .bar-bg {
-      display: inline-block;
-      width: 64px;
-      height: 6px;
-      background: var(--bg-elevated);
-      border-radius: 3px;
-      overflow: hidden;
-      vertical-align: middle;
-      margin-left: 8px;
-    }
-
-    .bar-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--accent-cyan), var(--accent-violet));
-      border-radius: 3px;
-      min-width: 2px;
-    }
-
-    /* Cards view */
-    .cards-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: var(--space-4);
-    }
-
-    .subnet-card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--border-radius-card);
-      padding: var(--space-4);
-      box-shadow: var(--shadow-card);
-      cursor: pointer;
-      transition: transform var(--transition-base), box-shadow var(--transition-base);
-    }
-
-    .subnet-card:hover {
-      transform: translateY(-3px);
-      box-shadow: var(--shadow-card), var(--shadow-glow);
-    }
-
-    .card-header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: var(--space-3);
-      margin-bottom: var(--space-3);
-    }
-
-    .card-title {
-      font-size: 1rem;
-      font-weight: 600;
-      margin: 0;
-    }
-
-    .card-stats {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: var(--space-3);
-      margin: var(--space-3) 0;
-    }
-
-    .card-stat-label {
-      font-size: 0.7rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin: 0 0 2px;
-    }
-
-    .card-stat-value {
-      font-family: var(--font-mono);
-      font-size: 0.95rem;
-      font-weight: 500;
-      color: var(--text-primary);
-      margin: 0;
-    }
-
-    /* Detail panel */
-    .panel-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.6);
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity var(--transition-base);
-      z-index: 50;
-    }
-
-    .panel-backdrop.open { opacity: 1; pointer-events: auto; }
-
-    .detail-panel {
-      position: fixed;
-      top: 0;
-      right: 0;
-      width: min(440px, 100vw);
-      height: 100%;
-      background: var(--bg-overlay);
-      backdrop-filter: blur(16px);
-      border-left: 1px solid var(--border-subtle);
-      box-shadow: -8px 0 40px rgba(0, 0, 0, 0.5);
-      transform: translateX(100%);
-      transition: transform var(--transition-base);
-      z-index: 60;
-      overflow-y: auto;
-      padding: var(--space-5);
-    }
-
-    .detail-panel.open { transform: translateX(0); }
-
-    @media (max-width: 639px) {
-      .detail-panel {
-        width: 100%;
-        border-left: none;
-        border-top: 1px solid var(--border-subtle);
-        top: auto;
-        bottom: 0;
-        height: 88vh;
-        transform: translateY(100%);
-        border-radius: var(--border-radius-card) var(--border-radius-card) 0 0;
-      }
-      .detail-panel.open { transform: translateY(0); }
-    }
-
-    .panel-close {
-      position: absolute;
-      top: var(--space-4);
-      right: var(--space-4);
-      background: transparent;
-      border: 1px solid var(--border-subtle);
-      color: var(--text-secondary);
-      border-radius: 8px;
-      width: 32px;
-      height: 32px;
-      display: grid;
-      place-items: center;
-      cursor: pointer;
-      transition: all var(--transition-fast);
-    }
-
-    .panel-close:hover { color: var(--text-primary); border-color: var(--accent-cyan); }
-
-    .panel-header { margin-bottom: var(--space-5); padding-right: 40px; }
-
-    .panel-name {
-      font-size: 1.5rem;
-      font-weight: 700;
-      margin: 0 0 var(--space-2);
-      letter-spacing: -0.02em;
-    }
-
-    .panel-meta {
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-      flex-wrap: wrap;
-      margin-bottom: var(--space-3);
-    }
-
-    .panel-section {
-      margin-bottom: var(--space-5);
-      padding-bottom: var(--space-4);
-      border-bottom: 1px solid var(--border-subtle);
-    }
-
-    .panel-section:last-of-type { border-bottom: none; }
-
-    .panel-section-title {
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--text-secondary);
-      margin: 0 0 var(--space-3);
-    }
-
-    .consensus-gauge {
-      display: flex;
-      align-items: center;
-      gap: var(--space-4);
-    }
-
-    .gauge-ring {
-      width: 80px;
-      height: 80px;
-      border-radius: 50%;
-      background: conic-gradient(var(--accent-cyan) var(--score-deg), var(--bg-elevated) var(--score-deg));
-      display: grid;
-      place-items: center;
-      position: relative;
-      flex-shrink: 0;
-    }
-
-    .gauge-ring::before {
-      content: "";
-      position: absolute;
-      inset: 6px;
-      border-radius: 50%;
-      background: var(--bg-surface);
-    }
-
-    .gauge-value {
-      position: relative;
-      font-family: var(--font-mono);
-      font-size: 1.1rem;
-      font-weight: 600;
-      color: var(--text-primary);
-    }
-
-    .expert-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: var(--space-3);
-    }
-
-    .expert-card {
-      background: var(--bg-elevated);
-      border: 1px solid var(--border-subtle);
-      border-radius: 12px;
-      padding: var(--space-3);
-      text-align: center;
-    }
-
-    .expert-name {
-      font-size: 0.7rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-secondary);
-      margin: 0 0 var(--space-2);
-    }
-
-    .expert-score {
-      font-family: var(--font-mono);
-      font-size: 1.1rem;
-      font-weight: 600;
-      margin: 0 0 var(--space-1);
-    }
-
-    .expert-note {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      margin: 0;
-      word-break: break-word;
-    }
-
-    .metric-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 0;
-      border-bottom: 1px solid rgba(55, 65, 81, 0.5);
-    }
-
-    .metric-row:last-child { border-bottom: none; }
-
-    .metric-label { color: var(--text-secondary); font-size: 0.85rem; }
-    .metric-value { font-family: var(--font-mono); font-weight: 500; }
-
-    .source-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      color: var(--accent-cyan);
-      text-decoration: none;
-      font-size: 0.85rem;
-      word-break: break-all;
-    }
-
-    .source-link:hover { text-decoration: underline; }
-
-    .empty-state {
-      text-align: center;
-      padding: var(--space-7) var(--space-4);
-      color: var(--text-secondary);
-    }
-
-    .empty-state h3 { margin: 0 0 var(--space-2); color: var(--text-primary); }
-
-    .toast {
-      position: fixed;
-      bottom: var(--space-5);
-      left: 50%;
-      transform: translateX(-50%) translateY(20px);
-      background: var(--bg-elevated);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-primary);
-      padding: 10px 18px;
-      border-radius: var(--border-radius-pill);
-      font-size: 0.85rem;
-      box-shadow: var(--shadow-card);
-      opacity: 0;
-      pointer-events: none;
-      transition: all var(--transition-base);
-      z-index: 70;
-    }
-
-    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-
-    .skeleton {
-      background: linear-gradient(90deg, var(--bg-elevated) 25%, rgba(55, 65, 81, 0.6) 50%, var(--bg-elevated) 75%);
-      background-size: 200% 100%;
-      animation: shimmer 1.2s infinite;
-      border-radius: 6px;
-    }
-
-    @keyframes shimmer {
-      0% { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
-    }
-
-    .sr-only {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-      }
-    }
-
-    .hidden { display: none !important; }
-  </style>
 </head>
 <body>
-  <div class="aurora" aria-hidden="true"></div>
-  <div class="grid-overlay" aria-hidden="true"></div>
+  <div class="wrap">
 
-  <div class="app">
-    <nav class="nav" aria-label="Primary">
-      <div class="brand">
-        <div class="brand-mark" aria-hidden="true">S</div>
-        <div>
-          <h1 class="brand-title">Subnet Pulse</h1>
-          <p class="brand-subtitle">Live Bittensor intelligence</p>
+    <!-- 1. HEADER -->
+    <header class="top" id="section-header" aria-label="Site header">
+      <div class="top-inner">
+        <div class="logo">
+          <div class="logo-mark" aria-hidden="true">S</div>
+          <div>
+            <div class="logo-text">Simi<span>Vision</span></div>
+            <div class="logo-sub">Subnet Intelligence Cockpit</div>
+          </div>
         </div>
-      </div>
-      <div class="live-pill" aria-live="polite">
-        <span class="live-dot" aria-hidden="true"></span>
-        <span>Live</span>
-      </div>
-    </nav>
-
-    <header class="hero">
-      <h2 class="hero-headline">Mission control for the subnet economy.</h2>
-      <p class="hero-lead">Real-time registry health, consensus signals, and economic metrics across every Bittensor subnet. Surface opportunities, spot risk, and act with clarity.</p>
-      <div class="summary-grid" id="summary-grid" aria-live="polite" aria-busy="true">
-        <!-- Summary cards injected here -->
+        <div class="src-tag">
+          DATA SOURCE: <b>{{ data_source|default('cache')|upper }}</b>
+        </div>
+        <div class="header-actions">
+          <span class="live-pill"><span class="live-dot" aria-hidden="true"></span>LIVE</span>
+          <span class="utc-clock" id="utcClock">--:--:-- UTC</span>
+        </div>
       </div>
     </header>
 
-    {% include "partials/cockpit_cards.html" %}
-
-    {% include "partials/mindmap_graph.html" %}
-
-    <section class="controls" aria-label="Filters and sorting">
-      <div class="toolbar">
-        <div class="search-wrap">
-          <span class="search-icon" aria-hidden="true">🔎</span>
-          <input type="search" id="search" class="search-input" placeholder="Search subnets by name, ID, or status…" autocomplete="off" aria-label="Search subnets">
+    <!-- 2. HERO -->
+    <section class="row" id="section-hero" aria-labelledby="hero-title">
+      <div class="section-label">Hero Signal</div>
+      <h2 class="section-title" id="hero-title">Audited Daily Conviction</h2>
+      <p class="section-sub">Highest-confidence Council pick for today — gated by RedTeam audit.</p>
+      {% set dpick = daily_pick if daily_pick is mapping else {} %}
+      {% set pk = dpick.pick if dpick.pick is mapping else none %}
+      {% if pk and pk.subnet is mapping %}
+      {% set audit = pk.audit if pk.audit is mapping else {} %}
+      {% set fc = ((pk.final_confidence|default(pk.confidence|default(0)))|float * 100)|round %}
+      {% set tier = 'tier-cyan' if fc > 75 else ('tier-lime' if fc > 55 else ('tier-gold' if fc > 35 else 'tier-red')) %}
+      {% set act = (dpick.action|default(pk.action|default('hold')))|string|upper %}
+      <div class="hero-card card">
+        <div class="hero-top">
+          <span class="badge badge-audit-pending"><span class="ap-dot" aria-hidden="true"></span>Daily Pick</span>
+          {% if audit.approved %}<span class="hero-audit">AUDIT PASSED</span>{% else %}<span class="badge badge-hot">AUDIT PENDING</span>{% endif %}
         </div>
-        <div class="filter-pills" role="group" aria-label="Status filters">
-          <button class="pill active" data-filter="all" type="button">All</button>
-          <button class="pill" data-filter="active" type="button">Active</button>
-          <button class="pill" data-filter="at-risk" type="button">At Risk</button>
-          <button class="pill" data-filter="deprecated" type="button">Deprecated</button>
-          <button class="pill" data-filter="bootstrap" type="button">Bootstrap</button>
+        <div class="hero-name">{{ pk.subnet.name|default('SN' ~ pk.subnet.netuid) }}</div>
+        <div class="hero-meta">SN{{ pk.subnet.netuid }}{% if pk.subnet.symbol %} · {{ pk.subnet.symbol }}{% endif %} · {{ dpick.date|default('today') }}</div>
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <span class="k">Score</span>
+            <span class="v accent-bright">{{ "%.1f"|format((pk.score|default(0))|float) }}</span>
+          </div>
+          <div class="hero-stat">
+            <span class="k">Confidence</span>
+            <span class="v">{{ fc }}%</span>
+          </div>
+          <div class="hero-stat">
+            <span class="k">Action</span>
+            <span class="v {% if act in ['LONG', 'BUY'] %}text-buy{% elif act in ['SHORT', 'SELL'] %}text-sell{% else %}text-hold{% endif %}">{{ act }}</span>
+          </div>
         </div>
-        <select id="sort" class="sort-select" aria-label="Sort by">
-          <option value="id">Sort by ID</option>
-          <option value="emission">Sort by Emission</option>
-          <option value="total_stake">Sort by Stake</option>
-          <option value="apy">Sort by APY</option>
-          <option value="social_mentions">Sort by Social</option>
-          <option value="consensus_score">Sort by Consensus</option>
-        </select>
-        <div class="view-toggle" role="group" aria-label="View mode">
-          <button class="view-btn active" data-view="table" type="button">Table</button>
-          <button class="view-btn" data-view="cards" type="button">Cards</button>
-        </div>
+        <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ fc }}%;"></div></div>
+        {% if dpick.reason %}<p class="pred-line">{{ dpick.reason }}</p>{% endif %}
       </div>
-      <p class="results-meta" id="results-meta">Loading registry…</p>
+      {% else %}
+      <div class="card card-muted">
+        <p class="empty">Daily pick is warming up — Council state-vector and audit pipeline will surface the top subnet here once scores stabilize.{% if dpick.reason %} ({{ dpick.reason }}){% endif %}</p>
+      </div>
+      {% endif %}
     </section>
 
-    <main id="main-stage" aria-live="polite">
-      <!-- Table or cards injected here -->
-    </main>
+    <!-- 3. SUMMARY GRID -->
+    <section class="row" id="section-summary" aria-labelledby="summary-title">
+      {% set mi = market_intelligence if market_intelligence is mapping else {} %}
+      {% set sn_list = subnets if subnets is iterable and subnets is not string else [] %}
+      {% set total = mi.total|default(sn_list|length, true) %}
+      {% set gainers = mi.gainers|default(none) %}
+      {% if gainers is none %}
+        {% set gainers = sn_list|selectattr('price_change_24h', 'defined')|selectattr('price_change_24h', 'gt', 0)|list|length %}
+      {% endif %}
+      {% set losers = mi.losers|default(none) %}
+      {% if losers is none %}
+        {% set losers = sn_list|selectattr('price_change_24h', 'defined')|selectattr('price_change_24h', 'lt', 0)|list|length %}
+      {% endif %}
+      {% set avg_24h = mi.avg_change_24h|default(none) %}
+      {% if avg_24h is none and sn_list %}
+        {% set avg_24h = (sn_list|map(attribute='price_change_24h')|select|list|sum / (sn_list|length or 1)) %}
+      {% endif %}
+      {% set avg_apy = mi.avg_apy|default(none) %}
+      {% if avg_apy is none and sn_list %}
+        {% set avg_apy = (sn_list|map(attribute='apy')|select|list|sum / (sn_list|length or 1)) %}
+      {% endif %}
+      {% set total_vol = mi.total_volume|default(none) %}
+      {% if total_vol is none and sn_list %}
+        {% set total_vol = sn_list|map(attribute='volume')|select|list|sum %}
+      {% endif %}
+      <div class="section-label">Market Snapshot</div>
+      <h2 class="section-title" id="summary-title">Subnet Economy Summary</h2>
+      <p class="section-sub">Live scanner across {{ total }} subnets · breadth
+        <b class="{% if mi.breadth == 'bullish' %}text-buy{% elif mi.breadth == 'bearish' %}text-sell{% else %}text-hold{% endif %}">
+          {{ mi.breadth|default('neutral')|upper }}
+        </b>
+      </p>
+      {% if total > 0 %}
+      <div class="kpi-grid">
+        <div class="kpi-cell">
+          <div class="k">Subnets</div>
+          <div class="v">{{ total }}</div>
+          <div class="sub">{{ gainers }} gainers / {{ losers }} losers</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="k">Avg 24h</div>
+          <div class="v {% if (avg_24h|default(0)) >= 0 %}text-buy{% else %}text-sell{% endif %}">{{ "%+.2f"|format((avg_24h|default(0))|float) }}%</div>
+          <div class="sub">price change</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="k">Avg APY</div>
+          <div class="v">{{ "%.2f"|format((avg_apy|default(0))|float) }}%</div>
+          <div class="sub">stake yield</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="k">Volume</div>
+          <div class="v">{{ total_vol|default(0)|shorten }}</div>
+          <div class="sub">aggregate 24h</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="k">Top Gainer</div>
+          <div class="v text-buy">{{ mi.top_gainer.name if mi.top_gainer else '—' }}</div>
+          <div class="sub text-buy">{{ "%+.2f"|format((mi.top_gainer.change|default(0))|float) if mi.top_gainer else '—' }}% · 24h</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="k">Learning</div>
+          {% set lm = learning_metrics if learning_metrics is mapping else {} %}
+          <div class="v">{{ "%.0f"|format((lm.accuracy|default(0))|float) }}%</div>
+          <div class="sub">{{ lm.predictions_pending|default(0) }} pending predictions</div>
+        </div>
+      </div>
+      {% else %}
+      <div class="card card-muted">
+        <p class="empty">Market summary is warming up — subnet registry and TaoMarketCap feed will populate KPIs once live data arrives.</p>
+      </div>
+      {% endif %}
+    </section>
 
-    <footer style="margin-top: var(--space-7); color: var(--text-muted); font-size: 0.8rem; text-align: center;">
-      <p>Data sourced from the on-chain registry. <a href="/health" style="color: var(--accent-cyan);">Health check</a> · <a href="/api/registry" style="color: var(--accent-cyan);">Raw registry</a></p>
+    <!-- 4. PICKS -->
+    <section class="row" id="section-picks" aria-labelledby="picks-title">
+      <div class="section-label">Council Picks</div>
+      <h2 class="section-title" id="picks-title">SimiVision &amp; State-Vector Leaders</h2>
+      <p class="section-sub">Top subnets by emission, yield, and short-horizon Council scores.</p>
+      {% set sv = simivision if simivision is mapping else {} %}
+      {% set simi_picks = simivision_picks if simivision_picks else (sv.top or []) %}
+      {% set hp = hour_picks if hour_picks else [] %}
+      {% set dyp = day_picks if day_picks else [] %}
+      {% if simi_picks or hp or dyp %}
+      {% if simi_picks %}
+      <div class="card" style="margin-bottom: var(--space-4);">
+        <div class="card-head"><h3>SimiVision Top</h3><span class="src-tag">{{ simi_picks|length }} ranked</span></div>
+        <div class="picks">
+          {% for pick in simi_picks %}
+          {% set conv = (pick.conviction|default(50))|int %}
+          {% set tier = 'tier-cyan' if conv > 80 else ('tier-lime' if conv > 60 else ('tier-gold' if conv > 40 else 'tier-red')) %}
+          {% set rec = (pick.recommendation|default('WATCH'))|string|upper %}
+          <div class="pick-card">
+            <div class="pick-rank">#{{ pick.rank|default(loop.index) }}</div>
+            <div class="pick-name">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
+            <div class="pick-meta">SN{{ pick.netuid }} · {{ "%.2f"|format((pick.emission|default(0))|float) }} emission · {{ "%.1f"|format((pick.apy|default(0))|float) }}% APY</div>
+            <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ conv }}%;"></div></div>
+            <div class="tags">
+              <span class="badge {% if rec == 'BUY' %}badge-buy{% elif rec == 'SELL' %}badge-sell{% elif rec == 'HOLD' %}badge-hold{% else %}badge-watch{% endif %}">{{ rec }}</span>
+            </div>
+            <div class="pred-line">{{ "%+.2f"|format((pick.price_change_24h|default(0))|float) }}% 24h</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      <div class="two-col">
+        <div class="card">
+          <div class="card-head"><h3>Hour Horizon</h3><span class="src-tag">top 3 · 1h</span></div>
+          {% if hp %}
+          <div class="picks">
+            {% for pick in hp %}
+            {% set conf = ((pick.confidence|default(0))|float * 100)|round %}
+            {% set tier = 'tier-cyan' if conf > 75 else ('tier-lime' if conf > 55 else ('tier-gold' if conf > 35 else 'tier-red')) %}
+            <div class="pick-card">
+              <div class="pick-rank">#{{ loop.index }}</div>
+              <div class="pick-name">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
+              <div class="pick-meta">SN{{ pick.netuid }} · score <b class="accent-bright">{{ "%.1f"|format((pick.score|default(0))|float) }}</b></div>
+              <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ conf }}%;"></div></div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="empty">Hour picks warming up — state-vector scheduler will rank 1h leaders once subnet snapshots refresh.</p>
+          {% endif %}
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Day Horizon</h3><span class="src-tag">top 3 · 24h</span></div>
+          {% if dyp %}
+          <div class="picks">
+            {% for pick in dyp %}
+            {% set conf = ((pick.confidence|default(0))|float * 100)|round %}
+            {% set tier = 'tier-cyan' if conf > 75 else ('tier-lime' if conf > 55 else ('tier-gold' if conf > 35 else 'tier-red')) %}
+            <div class="pick-card">
+              <div class="pick-rank">#{{ loop.index }}</div>
+              <div class="pick-name">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
+              <div class="pick-meta">SN{{ pick.netuid }} · score <b class="accent-bright">{{ "%.1f"|format((pick.score|default(0))|float) }}</b></div>
+              <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ conf }}%;"></div></div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="empty">Day picks warming up — 24h Council lens activates after the learning loop ingests price history.</p>
+          {% endif %}
+        </div>
+      </div>
+      {% else %}
+      <div class="card card-muted">
+        <p class="empty">Council is convening — SimiVision and state-vector picks will appear here once emission, yield, and momentum scores are computed.</p>
+      </div>
+      {% endif %}
+    </section>
+
+    <!-- 5. UNDERVALUED RADAR -->
+    <section class="row" id="section-undervalued" aria-labelledby="undervalued-title">
+      <div class="section-label">Undervalued Radar</div>
+      <h2 class="section-title" id="undervalued-title">Deep Value Scanner</h2>
+      <p class="section-sub">Subnets ranked by undervalued score (emission yield vs. price momentum).</p>
+      {% set radar = undervalued_radar if undervalued_radar else [] %}
+      {% if radar %}
+      <div class="card">
+        <table class="tbl">
+          <thead>
+            <tr><th>#</th><th>Subnet</th><th>APY</th><th>24h</th><th>Score</th><th>Flag</th></tr>
+          </thead>
+          <tbody>
+            {% for sn in radar %}
+            <tr>
+              <td>{{ sn.rank|default(loop.index) }}</td>
+              <td class="text-primary">{{ sn.name|default('SN' ~ sn.netuid) }} <span class="text-muted small">SN{{ sn.netuid }}</span></td>
+              <td>{{ "%.1f"|format((sn.apy|default(0))|float) }}%</td>
+              <td class="{% if (sn.price_change_24h|default(0)) >= 0 %}text-buy{% else %}text-sell{% endif %}">{{ "%+.2f"|format((sn.price_change_24h|default(0))|float) }}%</td>
+              <td><b class="accent-bright">{{ "%.1f"|format((sn.undervalued_score|default(0))|float) }}</b></td>
+              <td>{% if sn.significantly_undervalued %}<span class="badge badge-buy">DEEP VALUE</span>{% else %}<span class="text-muted small">—</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card card-muted">
+        <p class="empty">Undervalued radar is warming up — premium scoring runs once live subnet economics and price history are available.</p>
+      </div>
+      {% endif %}
+    </section>
+
+    <!-- 6. TECHNICAL INDICATORS -->
+    <section class="row" id="section-indicators" aria-labelledby="indicators-title">
+      <div class="section-label">Technical Indicators</div>
+      <h2 class="section-title" id="indicators-title">Oscillator Convergence</h2>
+      <p class="section-sub">RSI, stochastic, and multi-oscillator agreement across top subnets.</p>
+      {% set ti_rows = technical_indicators if technical_indicators else [] %}
+      {% if ti_rows %}
+      <div class="picks">
+        {% for ti in ti_rows %}
+        {% set ind = ti.indicators if ti.indicators is mapping else {} %}
+        {% set conv = ti.convergence if ti.convergence is mapping else {} %}
+        <div class="pick-card">
+          <div class="pick-name">{{ ti.name|default('SN' ~ ti.netuid) }}</div>
+          <div class="pick-meta">SN{{ ti.netuid }}</div>
+          <div class="ind-grid">
+            {% set rsi = ind.rsi if ind.rsi is mapping else {} %}
+            <div class="ind-cell"><div class="k">RSI</div><div class="v">{{ "%.1f"|format((rsi.value|default(0))|float) }}</div></div>
+            {% set macd = ind.macd if ind.macd is mapping else {} %}
+            <div class="ind-cell"><div class="k">MACD</div><div class="v">{{ "%+.3f"|format((macd.histogram|default(0))|float) }}</div></div>
+            {% if conv.convergent %}
+            <div class="ind-cell"><div class="k">Conv</div><div class="v accent-bright">{{ conv.count|default(0) }}/{{ conv.total|default(0) }}</div></div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% elif api_indicators_convergence is mapping and api_indicators_convergence.subnets %}
+      <div class="picks">
+        {% for row in api_indicators_convergence.subnets %}
+        {% set os = row.oversold if row.oversold is mapping else {} %}
+        {% set ob = row.overbought if row.overbought is mapping else {} %}
+        <div class="pick-card">
+          <div class="pick-name">{{ row.name|default('SN' ~ row.netuid) }}</div>
+          <div class="pick-meta">SN{{ row.netuid }}</div>
+          <div class="tags">
+            {% if os.convergent %}<span class="badge badge-buy">OVERSOLD {{ os.count|default(0) }}/{{ os.total|default(0) }}</span>{% endif %}
+            {% if ob.convergent %}<span class="badge badge-sell">OVERBOUGHT {{ ob.count|default(0) }}/{{ ob.total|default(0) }}</span>{% endif %}
+            {% if not os.convergent and not ob.convergent %}<span class="badge badge-watch">NEUTRAL</span>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="card card-muted">
+        <p class="empty">Technical indicators warming up — candle history and oscillator panel populate after price snapshots accumulate.</p>
+      </div>
+      {% endif %}
+    </section>
+
+    <!-- 7. COUNCIL WEIGHTS -->
+    <section class="row" id="section-council" aria-labelledby="council-title">
+      <div class="section-label">Council Weights</div>
+      <h2 class="section-title" id="council-title">Expert Soul Map</h2>
+      <p class="section-sub">Alpha, beta, gamma expert weights — adjusted on prediction resolution (+0.02 correct, −0.03 wrong).</p>
+      {% if council_weights %}
+      <div class="card">
+        {% for cw in council_weights %}
+        <div class="weight-row">
+          <div class="weight-head"><span>{{ cw.expert|default('expert') }}</span><span>{{ "%.3f"|format((cw.weight|default(0))|float) }} · {{ cw.bias|default('neutral') }}</span></div>
+          <div class="weight-bar"><div class="weight-fill" style="width: {{ ((cw.weight|default(1))|float / 2 * 100)|round }}%;"></div></div>
+        </div>
+        {% endfor %}
+        <p class="weight-note">Weights shift as the learning loop resolves predictions.</p>
+      </div>
+      {% else %}
+      <div class="card card-muted">
+        <p class="empty">Council weights warming up — expert priors load from the soul map once the learning engine initializes.</p>
+      </div>
+      {% endif %}
+    </section>
+
+    <!-- 8. COCKPIT -->
+    {% include "partials/cockpit_cards.html" %}
+
+    <!-- 9. MINDMAP -->
+    {% include "partials/mindmap_graph.html" %}
+
+    <!-- 10. PREDICTIONS -->
+    <section class="row" id="section-predictions" aria-labelledby="predictions-title">
+      <div class="section-label">Predictive Engine</div>
+      <h2 class="section-title" id="predictions-title">Active Predictions</h2>
+      <p class="section-sub">Every output is framed as predicted to move ±X% within N hours — never past tense.</p>
+      {% if predictions %}
+      <div class="card">
+        <table class="tbl">
+          <thead>
+            <tr><th>Subnet</th><th>Dir</th><th>Pred</th><th>Horizon</th><th>Status</th><th>Statement</th></tr>
+          </thead>
+          <tbody>
+            {% for pr in predictions %}
+            <tr>
+              <td class="text-primary">{{ pr.name|default('SN' ~ pr.netuid) }}</td>
+              <td class="{% if pr.direction == 'up' %}text-buy{% else %}text-sell{% endif %}">{{ pr.direction|default('up')|upper }}</td>
+              <td class="{% if (pr.predicted_pct|default(0)) >= 0 %}text-buy{% else %}text-sell{% endif %}">{{ "%+.2f"|format((pr.predicted_pct|default(0))|float) }}%</td>
+              <td>{{ pr.horizon_hours|default(0) }}h</td>
+              <td>{{ pr.status|default('pending') }}</td>
+              <td class="small">{{ pr.statement|default('') }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card card-muted">
+        <p class="empty">Predictions warming up — the learning loop will publish pending forecasts once Council signals fire.</p>
+      </div>
+      {% endif %}
+    </section>
+
+    <!-- 11. SCENARIO / PUMP -->
+    <section class="row" id="section-scenario-pump" aria-labelledby="scenario-pump-title">
+      <div class="section-label">Scenario &amp; Pump</div>
+      <h2 class="section-title" id="scenario-pump-title">Regime Memory &amp; Pump Ladder</h2>
+      <p class="section-sub">Historical scenario recall and five-phase pump tracker analytics.</p>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-head"><h3>Scenario Memory</h3></div>
+          {% set sm = scenario_memory if scenario_memory is mapping else {} %}
+          {% set scenarios = sm.scenarios if sm.scenarios else [] %}
+          {% if scenarios %}
+          <p class="pred-line">{{ scenario_summary|default('') }}</p>
+          <div class="scroll-y">
+            {% for sc in scenarios[:8] %}
+            <div class="impact-row">
+              <div class="impact-line"><b class="accent-bright">{{ sc.name|default('scenario') }}</b> · <span class="badge {% if sc.regime == 'bullish' %}badge-buy{% elif sc.regime == 'bearish' %}badge-sell{% else %}badge-hold{% endif %}">{{ sc.regime|default('neutral')|upper }}</span></div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="empty">Scenario memory warming up — regime-tagged snapshots appear when Council picks and resolver grades accumulate.</p>
+          {% if scenario_summary %}<p class="pred-line small">{{ scenario_summary }}</p>{% endif %}
+          {% endif %}
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Pump Tracker</h3></div>
+          {% set pump_data = pump_analytics.data if pump_analytics is mapping and pump_analytics.data is mapping else {} %}
+          {% set pump_subs = pump_data.subnets if pump_data.subnets else [] %}
+          {% if pump_subs %}
+          <p class="pred-line">{{ pump_summary|default('') }}</p>
+          <div class="radar-list scroll-y">
+            {% for row in pump_subs[:6] %}
+            <div class="radar-item">
+              <div class="name">{{ row.name|default('SN' ~ row.netuid) }} <span class="text-muted small">SN{{ row.netuid }}</span></div>
+              <div class="meta">{{ row.current_phase|default('INACTIVE') }} · proneness {{ row.pump_proneness|default(0) }}</div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="empty">Pump tracker warming up — price/volume cycles will advance subnets through the five-phase ladder once snapshots arrive.</p>
+          {% if pump_summary %}<p class="pred-line small">{{ pump_summary }}</p>{% endif %}
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    <!-- 12. TRAIL -->
+    <section class="row" id="section-trail" aria-labelledby="trail-title">
+      <div class="section-label">Learning Trail</div>
+      <h2 class="section-title" id="trail-title">Mind Map Decision Trail</h2>
+      <p class="section-sub">Evidence → signal → decision → prediction → judge — newest first.</p>
+      {% if mindmap_trail %}
+      <div class="card">
+        <div class="trail-counter">Trail entries: <b>{{ mindmap_trail|length }}</b></div>
+        <div class="trail">
+          {% for t in mindmap_trail %}
+          <div class="trail-item">
+            <div class="trail-time">{{ t.time|default('') }}</div>
+            <div class="trail-net">{{ t.subnet|default('—') }}</div>
+            <div class="trail-flow">
+              <span class="flow-chip">{{ t.evidence|default('—') }}</span>
+              <span class="flow-arrow">→</span>
+              <span class="flow-chip">{{ t.signal|default('—') }}</span>
+              <span class="flow-arrow">→</span>
+              <span class="flow-chip">{{ t.decision|default('—') }}</span>
+            </div>
+            {% if t.prediction %}<div class="trail-pred">{{ t.prediction }}</div>{% endif %}
+            {% if t.judge %}<div class="pred-line">{{ t.judge }}</div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% else %}
+      <div class="card card-muted">
+        <p class="empty">Learning trail warming up — trail bus events will chronicle Council decisions as the loop runs.</p>
+      </div>
+      {% endif %}
+    </section>
+
+    <!-- 13. FOOTER -->
+    <footer class="status" id="section-footer">
+      <div class="status-inner">
+        <span><span class="st-dot" aria-hidden="true"></span>SimiVision · {{ data_source|default('cache')|upper }} data</span>
+        <span>Subnets: <b>{{ sn_list|length }}</b></span>
+        <span>Picks: <b>{{ simi_picks|length if simi_picks is defined else 0 }}</b></span>
+        <span>Trail: <b>{{ mindmap_trail|length if mindmap_trail else 0 }}</b></span>
+        <span>Predictions: <b>{{ predictions|length if predictions else 0 }}</b></span>
+        <span class="footer-tag">UTC clock live · Press <kbd>C</kbd> for compact</span>
+      </div>
     </footer>
+
   </div>
 
-  <div class="panel-backdrop" id="panel-backdrop" aria-hidden="true"></div>
-  <aside class="detail-panel" id="detail-panel" role="dialog" aria-modal="true" aria-labelledby="panel-title" tabindex="-1">
-    <button class="panel-close" id="panel-close" aria-label="Close details">✕</button>
-    <div id="panel-content"></div>
-  </aside>
-
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-  <script>
-    (function () {
-      'use strict';
-
-      const state = {
-        subnets: [],
-        summary: null,
-        filter: 'all',
-        search: '',
-        sort: 'id',
-        sortDesc: false,
-        view: 'table',
-        maxValues: {},
-      };
-
-      const els = {
-        summaryGrid: document.getElementById('summary-grid'),
-        search: document.getElementById('search'),
-        sort: document.getElementById('sort'),
-        resultsMeta: document.getElementById('results-meta'),
-        mainStage: document.getElementById('main-stage'),
-        panel: document.getElementById('detail-panel'),
-        backdrop: document.getElementById('panel-backdrop'),
-        panelContent: document.getElementById('panel-content'),
-        panelClose: document.getElementById('panel-close'),
-        toast: document.getElementById('toast'),
-      };
-
-      const statusClass = (s) => 'status-' + (s || 'unknown');
-      const actionClass = (a) => 'action-' + (a || 'none');
-
-      function formatNumber(n, digits = 2) {
-        if (n === null || n === undefined || isNaN(n)) return '—';
-        const num = Number(n);
-        if (num >= 1e9) return (num / 1e9).toFixed(digits) + 'B';
-        if (num >= 1e6) return (num / 1e6).toFixed(digits) + 'M';
-        if (num >= 1e3) return (num / 1e3).toFixed(digits) + 'K';
-        return num.toLocaleString(undefined, { maximumFractionDigits: digits });
-      }
-
-      function formatPercent(n, digits = 2) {
-        if (n === null || n === undefined || isNaN(n)) return '—';
-        return (Number(n) * 100).toFixed(digits) + '%';
-      }
-
-      function formatDate(iso) {
-        if (!iso) return '—';
-        const d = new Date(iso);
-        return isNaN(d) ? iso : d.toLocaleString();
-      }
-
-      function showToast(message) {
-        els.toast.textContent = message;
-        els.toast.classList.add('show');
-        setTimeout(() => els.toast.classList.remove('show'), 2500);
-      }
-
-      function fetchJSON(url) {
-        return fetch(url, { headers: { Accept: 'application/json' } }).then(r => {
-          if (!r.ok) throw new Error(url + ' ' + r.status);
-          return r.json();
-        });
-      }
-
-      function renderSkeletonSummary() {
-        const cards = [
-          { label: 'Total Subnets', cls: 'accent' },
-          { label: 'Active Subnets', cls: 'success' },
-          { label: 'Total Emission', cls: 'violet' },
-          { label: 'Avg APY', cls: 'warning' },
-        ];
-        els.summaryGrid.innerHTML = cards.map(c => `
-          <div class="summary-card ${c.cls}">
-            <p class="summary-label">${c.label}</p>
-            <p class="summary-value"><span class="skeleton" style="display:inline-block;width:80px;height:28px;">&nbsp;</span></p>
-            <p class="summary-meta"><span class="skeleton" style="display:inline-block;width:120px;height:14px;">&nbsp;</span></p>
-          </div>
-        `).join('');
-      }
-
-      function renderSummary() {
-        const s = state.summary;
-        if (!s) return;
-        const cards = [
-          { label: 'Total Subnets', value: s.total_subnets, meta: `${s.active_count} active · ${s.at_risk_count} at risk`, cls: 'accent' },
-          { label: 'Active Subnets', value: s.active_count, meta: `${s.deprecated_count} deprecated`, cls: 'success' },
-          { label: 'Total Emission', value: formatNumber(s.total_emission, 2), meta: `${s.overvalued_count} overvalued`, cls: 'violet' },
-          { label: 'Avg APY', value: formatPercent(s.avg_apy, 2), meta: `Updated ${formatDate(s.last_updated)}`, cls: 'warning' },
-        ];
-        els.summaryGrid.innerHTML = cards.map(c => `
-          <div class="summary-card ${c.cls}">
-            <p class="summary-label">${c.label}</p>
-            <p class="summary-value">${c.value}</p>
-            <p class="summary-meta">${c.meta}</p>
-          </div>
-        `).join('');
-        els.summaryGrid.setAttribute('aria-busy', 'false');
-      }
-
-      function computeMaxValues(items) {
-        const fields = ['emission', 'total_stake', 'apy', 'social_mentions', 'consensus_score'];
-        const out = {};
-        fields.forEach(f => {
-          out[f] = Math.max(0.0001, ...items.map(i => Math.abs(getField(i, f) || 0)));
-        });
-        return out;
-      }
-
-      function getField(item, field) {
-        if (field === 'total_stake' || field === 'apy') {
-          return item.staking_data?.[field];
-        }
-        if (field === 'consensus_score') {
-          return item.consensus?.score;
-        }
-        return item[field];
-      }
-
-      function filteredItems() {
-        let items = state.subnets.slice();
-        if (state.filter !== 'all') {
-          items = items.filter(i => (i.status || 'unknown').toLowerCase() === state.filter);
-        }
-        if (state.search.trim()) {
-          const q = state.search.trim().toLowerCase();
-          items = items.filter(i =>
-            String(i.id).includes(q) ||
-            (i.name || '').toLowerCase().includes(q) ||
-            (i.status || '').toLowerCase().includes(q)
-          );
-        }
-        const field = state.sort;
-        items.sort((a, b) => {
-          const av = getField(a, field) || 0;
-          const bv = getField(b, field) || 0;
-          if (typeof av === 'string' || typeof bv === 'string') {
-            return String(av).localeCompare(String(bv));
-          }
-          return av - bv;
-        });
-        if (state.sortDesc) items.reverse();
-        return items;
-      }
-
-      function renderBar(value, field) {
-        const max = state.maxValues[field] || 1;
-        const pct = Math.min(100, Math.max(0, (Math.abs(value || 0) / max) * 100));
-        return `<span class="bar-bg" aria-hidden="true"><span class="bar-fill" style="width:${pct.toFixed(1)}%"></span></span>`;
-      }
-
-      function renderStatusBadge(item) {
-        const status = item.status || 'unknown';
-        const flags = (item.risk_flags || []).map(f => `<span class="risk-chip">${f}</span>`).join('');
-        const overvalued = item.is_overvalued ? `<span class="risk-chip">overvalued</span>` : '';
-        return `<span class="status-badge ${statusClass(status)}">${status}</span>${flags}${overvalued}`;
-      }
-
-      function renderActionBadge(item) {
-        const action = item.consensus?.recommended_action;
-        if (!action) return `<span class="action-badge action-none">—</span>`;
-        return `<span class="action-badge ${actionClass(action)}">${action}</span>`;
-      }
-
-      function renderTable(items) {
-        if (!items.length) return renderEmpty();
-        const rows = items.map(item => {
-          const emission = item.emission ?? 0;
-          const stake = item.staking_data?.total_stake ?? 0;
-          const apy = item.staking_data?.apy ?? 0;
-          const social = item.social_mentions ?? 0;
-          const score = item.consensus?.score;
-          return `
-            <tr data-id="${item.id}" tabindex="0" role="button" aria-label="Open details for ${escapeHtml(item.name || 'Subnet ' + item.id)}">
-              <td class="col-id"><span class="subnet-id">#${item.id}</span></td>
-              <td class="col-name"><span class="subnet-name">${escapeHtml(item.name || 'Unnamed')}</span></td>
-              <td class="col-status">${renderStatusBadge(item)}</td>
-              <td class="col-num">${formatNumber(emission, 3)}${renderBar(emission, 'emission')}</td>
-              <td class="col-num">${formatNumber(stake, 0)}${renderBar(stake, 'total_stake')}</td>
-              <td class="col-num">${formatPercent(apy, 2)}</td>
-              <td class="col-num">${item.emission_rank ?? '—'}</td>
-              <td class="col-num">${formatNumber(social, 0)}${renderBar(social, 'social_mentions')}</td>
-              <td class="col-num">${score !== undefined ? (score * 100).toFixed(0) + '%' : '—'}</td>
-              <td class="col-status">${renderActionBadge(item)}</td>
-            </tr>
-          `;
-        }).join('');
-
-        return `
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th class="col-id" data-sort="id" scope="col">ID <span class="sort-icon">↕</span></th>
-                  <th class="col-name" data-sort="name" scope="col">Name <span class="sort-icon">↕</span></th>
-                  <th class="col-status" data-sort="status" scope="col">Status <span class="sort-icon">↕</span></th>
-                  <th class="col-num" data-sort="emission" scope="col">Emission <span class="sort-icon">↕</span></th>
-                  <th class="col-num" data-sort="total_stake" scope="col">Stake <span class="sort-icon">↕</span></th>
-                  <th class="col-num" data-sort="apy" scope="col">APY <span class="sort-icon">↕</span></th>
-                  <th class="col-num" data-sort="emission_rank" scope="col">Rank <span class="sort-icon">↕</span></th>
-                  <th class="col-num" data-sort="social_mentions" scope="col">Social <span class="sort-icon">↕</span></th>
-                  <th class="col-num" data-sort="consensus_score" scope="col">Consensus <span class="sort-icon">↕</span></th>
-                  <th class="col-status" data-sort="recommended_action" scope="col">Action <span class="sort-icon">↕</span></th>
-                </tr>
-              </thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </div>
-        `;
-      }
-
-      function renderCards(items) {
-        if (!items.length) return renderEmpty();
-        return `<div class="cards-grid">${items.map(item => {
-          const emission = item.emission ?? 0;
-          const stake = item.staking_data?.total_stake ?? 0;
-          const apy = item.staking_data?.apy ?? 0;
-          const social = item.social_mentions ?? 0;
-          const score = item.consensus?.score;
-          return `
-            <article class="subnet-card" data-id="${item.id}" tabindex="0" role="button" aria-label="Open details for ${escapeHtml(item.name || 'Subnet ' + item.id)}">
-              <div class="card-header">
-                <div>
-                  <span class="subnet-id">#${item.id}</span>
-                  <h3 class="card-title">${escapeHtml(item.name || 'Unnamed')}</h3>
-                </div>
-                ${renderActionBadge(item)}
-              </div>
-              <div>${renderStatusBadge(item)}</div>
-              <div class="card-stats">
-                <div><p class="card-stat-label">Emission</p><p class="card-stat-value">${formatNumber(emission, 3)}</p></div>
-                <div><p class="card-stat-label">Stake</p><p class="card-stat-value">${formatNumber(stake, 0)}</p></div>
-                <div><p class="card-stat-label">APY</p><p class="card-stat-value">${formatPercent(apy, 2)}</p></div>
-                <div><p class="card-stat-label">Social</p><p class="card-stat-value">${formatNumber(social, 0)}</p></div>
-              </div>
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:var(--space-2);">
-                <span class="card-stat-label">Consensus ${score !== undefined ? (score * 100).toFixed(0) + '%' : '—'}</span>
-                <span class="card-stat-label">Rank ${item.emission_rank ?? '—'}</span>
-              </div>
-            </article>
-          `;
-        }).join('')}</div>`;
-      }
-
-      function renderEmpty() {
-        return `
-          <div class="empty-state">
-            <h3>No subnets match your filters</h3>
-            <p>Try clearing the search or selecting a different status.</p>
-          </div>
-        `;
-      }
-
-      function escapeHtml(str) {
-        return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-      }
-
-      function renderMain() {
-        const items = filteredItems();
-        els.resultsMeta.textContent = `${items.length} subnet${items.length === 1 ? '' : 's'} · sorted by ${state.sort}${state.sortDesc ? ' desc' : ' asc'}`;
-        els.mainStage.innerHTML = state.view === 'table' ? renderTable(items) : renderCards(items);
-        attachRowHandlers();
-        attachHeaderSort();
-      }
-
-      function attachRowHandlers() {
-        const rows = els.mainStage.querySelectorAll('[data-id]');
-        rows.forEach(row => {
-          const open = () => openDetail(Number(row.dataset.id));
-          row.addEventListener('click', open);
-          row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
-        });
-      }
-
-      function attachHeaderSort() {
-        if (state.view !== 'table') return;
-        const headers = els.mainStage.querySelectorAll('th[data-sort]');
-        headers.forEach(th => {
-          th.addEventListener('click', () => {
-            const field = th.dataset.sort;
-            if (state.sort === field) {
-              state.sortDesc = !state.sortDesc;
-            } else {
-              state.sort = field;
-              state.sortDesc = ['emission', 'total_stake', 'apy', 'social_mentions', 'consensus_score'].includes(field);
-            }
-            els.sort.value = state.sort;
-            renderMain();
-          });
-        });
-      }
-
-      function openDetail(id) {
-        const item = state.subnets.find(s => s.id === id);
-        if (!item) return;
-        const score = item.consensus?.score;
-        const action = item.consensus?.recommended_action;
-        const breakdown = item.consensus?.expert_breakdown || {};
-        const experts = ['quant', 'hype', 'contrarian'].map(k => {
-          const e = breakdown[k] || {};
-          const s = e.score;
-          const note = e.sentiment || e.signal || (e.metrics ? Object.values(e.metrics)[0] : null);
-          return `
-            <div class="expert-card">
-              <p class="expert-name">${k}</p>
-              <p class="expert-score" style="color:${s >= 0.7 ? 'var(--status-active)' : s >= 0.4 ? 'var(--status-at-risk)' : 'var(--status-deprecated)'}">${s !== undefined ? (s * 100).toFixed(0) + '%' : '—'}</p>
-              <p class="expert-note">${note !== undefined ? note : '—'}</p>
-            </div>
-          `;
-        }).join('');
-
-        const scoreDeg = score !== undefined ? Math.round(score * 360) + 'deg' : '0deg';
-        const sources = (item.sources || []).map(s => `<a class="source-link" href="${escapeHtml(s)}" target="_blank" rel="noopener">${escapeHtml(s)} ↗</a>`).join('<br>');
-
-        els.panelContent.innerHTML = `
-          <div class="panel-header">
-            <span class="subnet-id">Subnet #${item.id}</span>
-            <h2 class="panel-name" id="panel-title">${escapeHtml(item.name || 'Unnamed')}</h2>
-            <div class="panel-meta">${renderStatusBadge(item)} ${renderActionBadge(item)}</div>
-          </div>
-
-          <div class="panel-section">
-            <h3 class="panel-section-title">Consensus Signal</h3>
-            <div class="consensus-gauge">
-              <div class="gauge-ring" style="--score-deg: ${scoreDeg}" aria-hidden="true">
-                <span class="gauge-value">${score !== undefined ? (score * 100).toFixed(0) : '—'}</span>
-              </div>
-              <div>
-                <p style="margin:0 0 4px;font-weight:600;">${action ? action.charAt(0).toUpperCase() + action.slice(1) : 'No signal'}</p>
-                <p style="margin:0;color:var(--text-muted);font-size:0.85rem;">Blended quant, hype, and contrarian expert scores.</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel-section">
-            <h3 class="panel-section-title">Expert Breakdown</h3>
-            <div class="expert-grid">${experts}</div>
-          </div>
-
-          <div class="panel-section">
-            <h3 class="panel-section-title">Economics</h3>
-            <div class="metric-row"><span class="metric-label">Emission rank</span><span class="metric-value">${item.emission_rank ?? '—'}</span></div>
-            <div class="metric-row"><span class="metric-label">Total stake</span><span class="metric-value">${formatNumber(item.staking_data?.total_stake, 0)}</span></div>
-            <div class="metric-row"><span class="metric-label">APY</span><span class="metric-value">${formatPercent(item.staking_data?.apy, 4)}</span></div>
-            <div class="metric-row"><span class="metric-label">Emission</span><span class="metric-value">${formatNumber(item.emission, 4)}</span></div>
-            <div class="metric-row"><span class="metric-label">Social mentions</span><span class="metric-value">${formatNumber(item.social_mentions, 0)}</span></div>
-          </div>
-
-          <div class="panel-section">
-            <h3 class="panel-section-title">Provenance</h3>
-            <p style="margin:0 0 var(--space-3);color:var(--text-secondary);font-size:0.85rem;">Sources</p>
-            <p style="margin:0 0 var(--space-4);">${sources || '<span style="color:var(--text-muted)">No sources listed</span>'}</p>
-            <p style="margin:0;color:var(--text-muted);font-size:0.8rem;">Last updated ${formatDate(item.last_updated)}</p>
-          </div>
-        `;
-
-        els.panel.classList.add('open');
-        els.backdrop.classList.add('open');
-        els.backdrop.setAttribute('aria-hidden', 'false');
-        els.panel.focus();
-        document.body.style.overflow = 'hidden';
-      }
-
-      function closeDetail() {
-        els.panel.classList.remove('open');
-        els.backdrop.classList.remove('open');
-        els.backdrop.setAttribute('aria-hidden', 'true');
-        document.body.style.overflow = '';
-      }
-
-      function loadData() {
-        renderSkeletonSummary();
-        Promise.all([
-          fetchJSON('/api/summary'),
-          fetchJSON('/api/registry'),
-        ]).then(([summaryData, registryData]) => {
-          state.summary = summaryData.summary || summaryData;
-          state.subnets = Object.entries(registryData).map(([key, value]) => {
-            const item = { ...value };
-            item.id = item.id ?? Number(key);
-            return item;
-          });
-          state.maxValues = computeMaxValues(state.subnets);
-          renderSummary();
-          renderMain();
-          showToast('Registry refreshed');
-        }).catch(err => {
-          console.error(err);
-          els.resultsMeta.textContent = 'Failed to load registry data.';
-          showToast('Error loading data');
-        });
-      }
-
-      // Event bindings
-      document.querySelectorAll('.pill[data-filter]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          document.querySelectorAll('.pill[data-filter]').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          state.filter = btn.dataset.filter;
-          renderMain();
-        });
-      });
-
-      let searchDebounce;
-      els.search.addEventListener('input', () => {
-        clearTimeout(searchDebounce);
-        searchDebounce = setTimeout(() => {
-          state.search = els.search.value;
-          renderMain();
-        }, 150);
-      });
-
-      els.sort.addEventListener('change', () => {
-        state.sort = els.sort.value;
-        state.sortDesc = ['emission', 'total_stake', 'apy', 'social_mentions', 'consensus_score'].includes(state.sort);
-        renderMain();
-      });
-
-      document.querySelectorAll('.view-btn[data-view]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          document.querySelectorAll('.view-btn[data-view]').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          state.view = btn.dataset.view;
-          renderMain();
-        });
-      });
-
-      els.panelClose.addEventListener('click', closeDetail);
-      els.backdrop.addEventListener('click', closeDetail);
-      document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDetail(); });
-
-      document.addEventListener('keydown', e => {
-        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-          e.preventDefault();
-          els.search.focus();
-        }
-        if (e.key === '/' && document.activeElement !== els.search) {
-          e.preventDefault();
-          els.search.focus();
-        }
-      });
-
-      // Initial load and refresh
-      loadData();
-      setInterval(loadData, 60000);
-    })();
-  </script>
+  <script src="/static/js/app.js"></script>
 </body>
 </html>

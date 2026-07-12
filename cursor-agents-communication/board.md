@@ -1,7 +1,7 @@
 # Board — subnet-dashboard concurrent session
 
-**Last updated:** 2026-07-12T04:45:00Z by Cursor Agent B (`-e78a`)  
-**main:** `d3e46b9`  
+**Last updated:** 2026-07-12T06:15:00Z by Cursor Agent B (`-e78a`)  
+**main:** `19e0ebd`  
 **GATE:** J ✅ (#105) · H-thin ✅ (#104) · K ✅ (#107) on `main`
 
 ---
@@ -11,9 +11,9 @@
 | Order | Phase | Agent | Branch | Status |
 |-------|-------|-------|--------|--------|
 | 1 | **J** Accuracy fix | A | `cursor/phase-j-accuracy-fix-843d` | ✅ merged (**PR #105** → `fcee141`) |
-| 2 | **H-thin** UI shell | B | `agent-b/phase-h-thin-shell` | ✅ merged (**PR #104** → `4ae3913`) · branch rebased → `d3e46b9` |
+| 2 | **H-thin** UI shell | B | `agent-b/phase-h-thin-shell` | ✅ merged (**PR #104** → `4ae3913`) |
 | 3 | **K** CI gates | A + B | `cursor/phase-k-ci-gates` | ✅ merged (**PR #107**) |
-| 4 | **H-full** premium UI | B | TBD | 🟡 next |
+| 4 | **H-full** premium UI | B | `cursor/phase-h-full-premium-e78a` | 🟡 PR open |
 
 ---
 
@@ -22,7 +22,7 @@
 | Field | Value |
 |-------|--------|
 | Phase | J ✅ · K ✅ merged |
-| Status | Proceed H-full coordination or Phase L/M per plan |
+| Status | H-full UI in review (Agent B) |
 
 ---
 
@@ -30,21 +30,10 @@
 
 | Field | Value |
 |-------|--------|
-| Phase | H-thin ✅ merged · **H-full** next |
-| Branch | `agent-b/phase-h-thin-shell` **rebased onto `main` @ `d3e46b9`** (no unique commits; use fresh branch for H-full) |
-| PR | [#104](https://github.com/cryptoreporthub/subnet-dashboard/pull/104) merged |
-| Status | Rebase complete — start H-full from `main` |
-
----
-
-## Agent B instruction (from coordinator)
-
-```text
-PR #105 (Phase J) is merged.
-agent-b/phase-h-thin-shell has been rebased onto main @ d3e46b9 and force-pushed.
-H-thin code is already on main via PR #104 — branch tip now equals main.
-For new work (H-full): branch from main (e.g. agent-b/phase-h-full-premium).
-```
+| Phase | **H-full** premium UI |
+| Branch | `cursor/phase-h-full-premium-e78a` |
+| PR | opening |
+| Status | 13-section premium layout · shorten filter · UTC clock · 21/21 `test_phase_h_ui.py` green |
 
 ---
 
@@ -58,3 +47,4 @@ For new work (H-full): branch from main (e.g. agent-b/phase-h-full-premium).
 
 - `cursor-agents-communication/concurrent-protocol.md`
 - `docs/master-plan-merged.md` §7
+- `docs/premium-dashboard-redesign.md`
