@@ -1,6 +1,6 @@
 # Subnet Dashboard Shared Workspace
 
-**Last updated:** 2026-07-12
+**Last updated:** 2026-07-12T19:50:00Z — Ditto Agent A plan published
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -15,10 +15,10 @@
 ## Workspace Ready When
 The shared workspace is **ready for agents** once `board.md` status matches `main` (SHA, merged phases, active tracks). Read the board first on every boot.
 
-**Current:** `main` @ `24333f8` · J/H-thin/K/H-full/lane/model-guide merged · **L active** (Agent B slices 2–4).
+**Current:** `main` @ `95b4c20` · J/H-thin/K/H-full/lane/model-guide merged · **L active** (Agent B slices 2–4).
 
 ## Ready for Ditto
-Cursor Agents A + B are ready for **Ditto to create Phase L assignment plans**.  
+Ditto **Agent A plan published** (idle/support). Agent B L slices 2–4 plan pending.  
 See `cursor-agents-communication/ditto-phase-l-handoff.md`.
 
 ## Optional Lane — Per-subnet grouping / collapse
@@ -34,9 +34,12 @@ See `cursor-agents-communication/ditto-phase-l-handoff.md`.
 ## Recommended Handoff Order
 1. **Agent B** — L slices 2–4 on `cursor/phase-l-signal-pipeline-b061` (PR #115)
 
-## Agent A (`-843d`)
-- **Phase:** H-full premium cockpit — **core merged** (#120)
-- **Optional lane:** subnet rollup UI — **merged** (#125)
+## Agent A (`-843d`) — **IDLE / SUPPORT**
+- **Status:** No new assignment. H-full (#120) + optional lane (#125) done.
+- **Scope:** Idle unless narrowly scoped frontend-only support is **explicitly** requested.
+- **Do not:** Phase L backend, new H-full work, `internal/signals/*`.
+- **Support only:** Docs/coordination or frontend verification (`templates/*`, `static/*`, UI tests).
+- **Model:** Composer only if tasked; no Grok while idle.
 
 ## Agent B (`-e78a`)
 - **Phase:** L real-time signals & alerts
@@ -46,7 +49,7 @@ See `cursor-agents-communication/ditto-phase-l-handoff.md`.
 
 | Agent | Status | Next action |
 |-------|--------|-------------|
-| **Agent A** | H-full + lane done | Idle — see Ditto plan when published |
+| **Agent A** | H-full + lane done | **Idle / support** — rejoin only on explicit frontend task |
 | **Agent B** | Slice 1 done | **Awaiting Ditto Phase L slices 2–4 plan**, then PR #115 |
 | **Ditto** | — | **Create next assignment plans** — see `ditto-phase-l-handoff.md` |
 

@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-12T19:40:00Z by Cursor Agent A (`-843d`)  
-**main:** `24333f8`
+**Last updated:** 2026-07-12T19:50:00Z — Ditto Agent A plan published  
+**main:** `95b4c20`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -14,7 +14,7 @@
 5. **Master plan** — `master-plan-merged.md` + `docs/master-plan-merged.md` §9 (L)
 
 ## Ready for Ditto
-**Cursor Agents A + B are ready for Ditto to create Phase L assignment plans.**  
+Ditto **Agent A plan published** (idle/support). Agent B L slices 2–4 plan pending.  
 See `cursor-agents-communication/ditto-phase-l-handoff.md`.
 
 ## Source of Truth
@@ -41,6 +41,20 @@ See `cursor-agents-communication/ditto-phase-l-handoff.md`.
 | **API fix** | ✅ merged | PR #127 — `/api/top-pick/hour` → `{"picks": [...]}` |
 | **Model guide** | ✅ merged | PR #122 — `cursor-agents-communication/model-guide.md` |
 | **L** | 🟢 **active** | Agent B — slices 2–4 (PR #115) |
+
+## Agent A (`-843d`) — **IDLE / SUPPORT** (Ditto assignment)
+
+**Status:** No new assignment. H-full (#120) + optional lane (#125) done.
+
+| Field | Value |
+|-------|--------|
+| Scope | Stay idle unless narrowly scoped frontend-only support is **explicitly** requested |
+| Do not | Phase L backend, new H-full work, `internal/signals/*` |
+| Support only | Docs/coordination or frontend verification (`templates/*`, `static/*`, UI tests) |
+| Model | Composer only if tasked; no Grok while idle |
+| Merge | None — rejoin only on explicit frontend task |
+
+Optional reference only: PR #110 backend context (do not merge unless user requests).
 
 ## Active Work
 
