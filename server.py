@@ -1004,16 +1004,20 @@ def api_top_pick_day():
 
 @app.get("/api/top-pick/hour")
 def api_top_pick_hour():
-    """Top short-horizon picks (audited #1 + distinct fill), with fallback."""
+    """Top short-horizon picks (audited #1 + distinct fill), with fallback.
+
+    Response shape is always ``{"picks": [<pick>, ...]}`` — never a bare list.
+    """
     subnets, _ = _get_subnets_with_source()
     market_context = _market_context_with_weights(subnets)
+    picks: List[Dict[str, Any]] = []
     try:
         picks = _ordered_hour_picks(subnets, market_context, limit=3)
-        if picks:
-            return {"picks": picks}
     except Exception as e:
         logger.error("Error fetching hour pick: %s", e)
-    return {"picks": [_highest_emission_pick(subnets)]}
+    if not picks:
+        picks = [_highest_emission_pick(subnets)]
+    return {"picks": picks}
 
 
 if __name__ == "__main__":
