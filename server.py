@@ -175,6 +175,36 @@ if _MINDMAP_GRAPH_ROUTES:
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
+
+def _jinja_safe_list(value: Any) -> List[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    try:
+        return list(value)
+    except TypeError:
+        return []
+
+
+def _jinja_shorten(value: Any, places: int = 1) -> str:
+    """Compact numeric display for volumes (e.g. 1.2M, 340K)."""
+    try:
+        n = float(value)
+    except (TypeError, ValueError):
+        return "—"
+    if n >= 1e9:
+        return f"{n / 1e9:.{places}f}B"
+    if n >= 1e6:
+        return f"{n / 1e6:.{places}f}M"
+    if n >= 1e3:
+        return f"{n / 1e3:.{places}f}K"
+    return f"{n:.{places}f}"
+
+
+templates.env.filters["safe_list"] = _jinja_safe_list
+templates.env.filters["shorten"] = _jinja_shorten
+
 _static_dir = os.path.join(BASE_DIR, "static")
 if os.path.isdir(_static_dir):
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")
@@ -265,6 +295,12 @@ async def index(request: Request):
         context["cockpit_sections"] = load_cockpit_sections()
     except Exception as exc:
         logger.warning("Cockpit sections unavailable: %s", exc)
+
+    try:
+        context["simivision"] = _safe_simivision_payload().get("data", {})
+    except Exception as exc:
+        logger.warning("SimiVision context unavailable: %s", exc)
+        context["simivision"] = {"top": [], "meta": {"count": 0}}
 
     return templates.TemplateResponse(request, "index.html", context)
 

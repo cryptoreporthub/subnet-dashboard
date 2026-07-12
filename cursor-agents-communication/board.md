@@ -1,8 +1,8 @@
 # Board — subnet-dashboard concurrent session
 
-**Last updated:** 2026-07-12T04:45:00Z by Cursor Agent B (`-e78a`)  
-**main:** `d3e46b9`  
-**GATE:** J ✅ (#105) · H-thin ✅ (#104) · K ✅ (#107) on `main`
+**Last updated:** 2026-07-12T07:20:00Z by Cursor Agent A (`-843d`)  
+**main:** `19e0ebd`  
+**GATE:** J ✅ (#105) · H-thin ✅ (#104) · K ✅ (#107) on `main` · **H-full** 🟡 in progress (Agent A)
 
 ---
 
@@ -13,7 +13,7 @@
 | 1 | **J** Accuracy fix | A | `cursor/phase-j-accuracy-fix-843d` | ✅ merged (**PR #105** → `fcee141`) |
 | 2 | **H-thin** UI shell | B | `agent-b/phase-h-thin-shell` | ✅ merged (**PR #104** → `4ae3913`) · branch rebased → `d3e46b9` |
 | 3 | **K** CI gates | A + B | `cursor/phase-k-ci-gates` | ✅ merged (**PR #107**) |
-| 4 | **H-full** premium UI | B | TBD | 🟡 next |
+| 4 | **H-full** premium UI | A | `cursor/phase-h-full-premium-ac2c` | 🟡 PR open |
 
 ---
 
@@ -21,8 +21,9 @@
 
 | Field | Value |
 |-------|--------|
-| Phase | J ✅ · K ✅ merged |
-| Status | Proceed H-full coordination or Phase L/M per plan |
+| Phase | J ✅ · K ✅ · **H-full** 🟡 |
+| Branch | `cursor/phase-h-full-premium-ac2c` |
+| Status | H-full PR ready for review |
 
 ---
 

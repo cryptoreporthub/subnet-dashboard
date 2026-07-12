@@ -4,42 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Judge Council</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#0d0d1a;color:#e0e0e0;font-family:system-ui,sans-serif;padding:20px}
-h1{color:#c99a4b;margin-bottom:10px}
-#content{margin-top:20px}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{padding:8px;color:#c99a4b;border-bottom:2px solid #c99a4b;text-align:left}
-td{padding:8px;border-bottom:1px solid #333}
-.degraded{color:#667}
-.verdict-bullish{color:#4caf50;font-weight:bold;text-transform:uppercase;font-size:11px}
-.verdict-bearish{color:#f44336;font-weight:bold;text-transform:uppercase;font-size:11px}
-.verdict-neutral{color:#888;font-weight:bold;text-transform:uppercase;font-size:11px}
-</style>
+<link rel="stylesheet" href="/static/css/style.css">
 </head>
-<body>
-<h1>\u2696\ufe0f Judge Council</h1>
-<p style="color:#888;font-size:13px;">AI judges evaluating subnet performance</p>
-<div id="content">Loading judge scores...</div>
+<body class="wrap">
+<h1 class="section-title">Judge Council</h1>
+<p class="section-sub">AI judges evaluating subnet performance</p>
+<div id="content" class="card">Loading judge scores...</div>
 <script>
 fetch('/api/judges').then(function(r){return r.json()}).then(function(data){
   var el=document.getElementById('content');
   var judges=data.judges||[];
-  if(!judges.length){el.innerHTML='<p style="color:#888;">No judge data available.</p>';return}
-  var h='<table><thead><tr><th>Subnet</th><th style="text-align:center">Oracle</th><th style="text-align:center">Echo</th><th style="text-align:center">Pulse</th><th style="text-align:center">Consensus</th><th style="text-align:center">Verdict</th></tr></thead><tbody>';
+  if(!judges.length){el.innerHTML='<p class="empty">No judge data available.</p>';return}
+  var h='<table class="tbl"><thead><tr><th>Subnet</th><th>Oracle</th><th>Echo</th><th>Pulse</th><th>Consensus</th><th>Verdict</th></tr></thead><tbody>';
   judges.forEach(function(j){
-    var vc=j.consensus&&j.consensus.verdict==='bullish'?'verdict-bullish':j.consensus&&j.consensus.verdict==='bearish'?'verdict-bearish':'verdict-neutral';
-    h+='<tr><td><span style="color:#c99a4b;font-weight:bold">'+(j.name||'SN'+j.netuid)+'</span><br><span style="color:#666;font-size:11px">SN'+j.netuid+'</span></td>'+
-    '<td style="text-align:center" class="'+(j.oracle&&j.oracle.degraded?'degraded':'')+'">'+(j.oracle?j.oracle.score.toFixed(2):'-')+'</td>'+
-    '<td style="text-align:center" class="'+(j.echo&&j.echo.degraded?'degraded':'')+'">'+(j.echo?j.echo.score.toFixed(2):'-')+'</td>'+
-    '<td style="text-align:center" class="'+(j.pulse&&j.pulse.degraded?'degraded':'')+'">'+(j.pulse?j.pulse.score.toFixed(2):'-')+'</td>'+
-    '<td style="text-align:center;font-weight:bold;color:#c99a4b">'+(j.consensus?j.consensus.score.toFixed(2):'N/A')+'<br><span style="font-size:10px;color:#888">'+(j.consensus?(j.consensus.agreement*100).toFixed(0)+'%':'')+'</span></td>'+
-    '<td style="text-align:center" class="'+vc+'">'+(j.consensus?j.consensus.verdict:'N/A')+'</td></tr>';
+    var vc=j.consensus&&j.consensus.verdict==='bullish'?'badge-buy':j.consensus&&j.consensus.verdict==='bearish'?'badge-sell':'badge-watch';
+    h+='<tr><td><b>'+(j.name||'SN'+j.netuid)+'</b><br><span class="pick-meta">SN'+j.netuid+'</span></td>'+
+    '<td>'+(j.oracle?j.oracle.score.toFixed(2):'-')+'</td>'+
+    '<td>'+(j.echo?j.echo.score.toFixed(2):'-')+'</td>'+
+    '<td>'+(j.pulse?j.pulse.score.toFixed(2):'-')+'</td>'+
+    '<td><b>'+(j.consensus?j.consensus.score.toFixed(2):'N/A')+'</b></td>'+
+    '<td><span class="badge '+vc+'">'+(j.consensus?j.consensus.verdict:'N/A')+'</span></td></tr>';
   });
-  h+='</tbody></table><div style="margin-top:12px;color:#555;font-size:11px">'+judges.length+' subnets scored</div>';
+  h+='</tbody></table><p class="pick-meta">'+judges.length+' subnets scored</p>';
   el.innerHTML=h;
-}).catch(function(e){document.getElementById('content').innerHTML='<p style="color:#f44336">Error: '+e.message+'</p>'});
+}).catch(function(e){document.getElementById('content').innerHTML='<p class="empty">Error: '+e.message+'</p>'});
 </script>
 </body>
 </html>

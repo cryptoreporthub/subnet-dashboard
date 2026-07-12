@@ -1,23 +1,41 @@
-"""Phase H-thin — UI shell (Agent B): style.css link, cockpit cards, honest stats."""
+"""Phase H — UI shell + premium cockpit (style.css, Chart.js, 13 sections)."""
 
 from __future__ import annotations
 
 import re
 
 from fastapi.testclient import TestClient
+from fastapi.templating import Jinja2Templates
 
 from internal.analytics.cockpit_render import (
     enrich_cockpit_sections_for_display,
     load_cockpit_sections,
 )
 from internal.cockpit.sections import COCKPIT_SECTION_IDS
-from server import app
+from server import _jinja_shorten, app, templates
+
+
+H_FULL_SECTION_IDS = [
+    "section-indicators",
+    "section-scanner",
+    "section-staking",
+    "section-picks",
+    "section-kpi",
+    "section-council",
+    "section-radar",
+    "section-judges",
+    "section-mindmap",
+    "section-social",
+    "section-chat",
+    "section-trail",
+    "section-undervalued",
+]
 
 
 def test_index_links_style_css():
     client = TestClient(app)
     html = client.get("/").text
-    assert '/static/css/style.css' in html
+    assert "/static/css/style.css" in html
 
 
 def test_index_has_card_class():
@@ -80,11 +98,10 @@ def test_trace_and_message_intel_honest_status():
     assert 'data-section-id="message_intel"' in html
 
 
-def test_no_chartjs_in_h_thin_shell():
+def test_h_full_includes_chartjs():
     client = TestClient(app)
     html = client.get("/").text.lower()
-    assert "chart.js" not in html
-    assert "chartjs" not in html
+    assert "chart.js" in html or "chart.umd.min.js" in html
 
 
 def test_strip_markdown_headings_in_enrichment():
@@ -119,3 +136,85 @@ def test_cockpit_api_matches_display_enrichment():
         if isinstance(disp_row.get("summary"), str):
             assert "###" not in disp_row["summary"]
             assert not re.search(r"^#{1,6}\s", disp_row["summary"], re.MULTILINE)
+
+
+# --- Phase H-full acceptance tests ---
+
+
+def test_h_full_thirteen_premium_section_ids():
+    client = TestClient(app)
+    html = client.get("/").text
+    for section_id in H_FULL_SECTION_IDS:
+        assert f'id="{section_id}"' in html, f"missing {section_id}"
+    assert 'id="cockpit-heading"' in html
+    assert 'id="mindmap-graph-root"' in html
+
+
+def test_h_full_utc_clock_markup_and_app_js():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert 'id="utcClock"' in html
+    assert 'class="utc-clock"' in html
+    assert "/static/js/app.js" in html
+
+
+def test_h_full_shorten_filter_registered_and_formats_volume():
+    assert "shorten" in templates.env.filters
+    assert _jinja_shorten(1_500_000) == "1.5M"
+    assert _jinja_shorten(42_000) == "42.0K"
+    assert _jinja_shorten(None) == "—"
+
+
+def test_h_full_header_live_pill_and_data_source():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert 'class="live-pill"' in html
+    assert "DATA SOURCE:" in html
+    assert 'id="section-header"' in html
+
+
+def test_h_full_kpi_strip_learning_metrics():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert 'id="section-kpi"' in html
+    assert "kpi-strip" in html
+    assert "Accuracy" in html
+
+
+def test_h_full_picks_scanner_staking_sections():
+    client = TestClient(app)
+    html = client.get("/").text
+    for sid in ("section-picks", "section-scanner", "section-staking"):
+        assert f'id="{sid}"' in html
+
+
+def test_h_full_council_radar_judges_chat_sections():
+    client = TestClient(app)
+    html = client.get("/").text
+    for sid in ("section-council", "section-radar", "section-judges", "section-chat"):
+        assert f'id="{sid}"' in html
+    assert "chatLog" in html
+    assert "radarChart" in html or "warming up" in html
+
+
+def test_h_full_social_trail_undervalued_sections():
+    client = TestClient(app)
+    html = client.get("/").text
+    for sid in ("section-social", "section-trail", "section-undervalued"):
+        assert f'id="{sid}"' in html
+
+
+def test_h_full_footer_status_strip_counts():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert 'id="section-footer"' in html
+    assert 'class="status"' in html
+    assert "Subnets:" in html
+    assert "Predictions:" in html
+
+
+def test_h_full_premium_scanner_and_judges_js():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert "/static/js/premium_scanner.js" in html
+    assert "/static/js/premium_judges.js" in html
