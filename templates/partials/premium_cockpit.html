@@ -23,6 +23,159 @@
   </div>
 </header>
 
+{% set sv_picks = simivision.top if simivision is mapping and simivision.top else [] %}
+{% set dpick = daily_pick if daily_pick is mapping else {} %}
+{% set dp_subnet = dpick.subnet if dpick.subnet is mapping else none %}
+{% set mi_ns = namespace(chg_sum=0.0, apy_sum=0.0, apy_n=0, gainers=0, losers=0) %}
+{% for sn in sn_list %}
+  {% set chg = (sn.price_change_24h|default(0))|float %}
+  {% set mi_ns.chg_sum = mi_ns.chg_sum + chg %}
+  {% if chg > 0 %}{% set mi_ns.gainers = mi_ns.gainers + 1 %}{% elif chg < 0 %}{% set mi_ns.losers = mi_ns.losers + 1 %}{% endif %}
+  {% set apy_raw = sn.apy|default(none) %}
+  {% if apy_raw is none and sn.staking_data is mapping %}{% set apy_raw = sn.staking_data.apy %}{% endif %}
+  {% if apy_raw is not none %}
+    {% set mi_ns.apy_sum = mi_ns.apy_sum + (apy_raw|float) %}
+    {% set mi_ns.apy_n = mi_ns.apy_n + 1 %}
+  {% endif %}
+{% endfor %}
+{% set mi_total = sn_list|length %}
+{% set mi_avg_chg = (mi_ns.chg_sum / mi_total)|round(2) if mi_total else 0 %}
+{% set mi_avg_apy = ((mi_ns.apy_sum / mi_ns.apy_n) * 100)|round(2) if mi_ns.apy_n else 0 %}
+{% set mi_breadth = 'bullish' if mi_ns.gainers > mi_ns.losers else ('bearish' if mi_ns.losers > mi_ns.gainers else 'neutral') %}
+{% set mi_top_gainer = sn_list|sort(attribute='price_change_24h', reverse=true)|first if sn_list else none %}
+{% set mi_top_loser = sn_list|sort(attribute='price_change_24h')|first if sn_list else none %}
+
+<!-- Hero / Market Snapshot -->
+<section class="row" id="section-hero" aria-labelledby="hero-title">
+  <div class="section-label">Market Snapshot</div>
+  <h2 class="section-title" id="hero-title">Bittensor Subnet Intelligence</h2>
+  <p class="section-sub">Live scanner across {{ mi_total }} subnets · breadth <b>{{ mi_breadth|upper }}</b></p>
+  {% if sn_list %}
+  <div class="kpi-grid" style="grid-template-columns: repeat(6, 1fr);">
+    <div class="kpi-cell">
+      <div class="k">Subnets</div>
+      <div class="v">{{ mi_total }}</div>
+      <div class="sub">{{ mi_ns.gainers }} gainers / {{ mi_ns.losers }} losers</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="k">Avg 24h</div>
+      <div class="v">{{ "%+.2f"|format(mi_avg_chg) }}%</div>
+      <div class="sub">24h change</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="k">Avg APY</div>
+      <div class="v">{{ "%.2f"|format(mi_avg_apy) }}%</div>
+      <div class="sub">stake yield</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="k">Top Gainer</div>
+      <div class="v" style="font-size:15px;">{{ mi_top_gainer.name|default('—') if mi_top_gainer else '—' }}</div>
+      <div class="sub">{% if mi_top_gainer %}{{ "%+.2f"|format((mi_top_gainer.price_change_24h|default(0))|float) }}% · 24h{% else %}—{% endif %}</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="k">Top Loser</div>
+      <div class="v" style="font-size:15px;">{{ mi_top_loser.name|default('—') if mi_top_loser else '—' }}</div>
+      <div class="sub">{% if mi_top_loser %}{{ "%+.2f"|format((mi_top_loser.price_change_24h|default(0))|float) }}% · 24h{% else %}—{% endif %}</div>
+    </div>
+    <div class="kpi-cell">
+      <div class="k">Data</div>
+      <div class="v" style="font-size:15px;">{{ data_source|default('cache')|upper }}</div>
+      <div class="sub">registry source</div>
+    </div>
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">Market snapshot warming up — subnet registry populates after the first data fetch.</p></div>
+  {% endif %}
+</section>
+
+<!-- SimiVision spotlight picks -->
+<section class="row" id="section-simivision-picks" aria-labelledby="simivision-picks-title">
+  <div class="section-label">SimiVision Top Picks</div>
+  <h2 class="section-title" id="simivision-picks-title">Council Conviction Ranking</h2>
+  <p class="section-sub">Top subnets by emission, yield, and momentum — honest conviction tiers from live registry economics.</p>
+  {% if sv_picks %}
+  <div class="picks">
+    {% for pick in sv_picks %}
+    {% set conv = (pick.conviction|default(0))|int %}
+    {% set tier = 'tier-cyan' if conv > 80 else ('tier-lime' if conv > 60 else ('tier-gold' if conv > 40 else 'tier-red')) %}
+    {% set rec = (pick.recommendation|default('WATCH'))|string|upper %}
+    <div class="pick-card">
+      <div class="pick-rank">#{{ pick.rank|default(loop.index) }}</div>
+      <div class="pick-name pick-name-lg">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
+      <div class="pick-meta">SN{{ pick.netuid }} · {{ "%.2f"|format((pick.emission|default(0))|float) }} TAO/day · {{ "%.1f"|format((pick.apy|default(0))|float) }}% APY</div>
+      <div class="pick-row">
+        <div class="conviction-wrap">
+          <div class="conviction-lbl">Conviction</div>
+          <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ conv }}%;"></div></div>
+          <div class="pred-line">{{ "%+.2f"|format((pick.price_change_24h|default(0))|float) }}% 24h</div>
+        </div>
+        <div class="conv-ring {{ tier }}" style="--ring-pct: {{ conv }};">
+          <svg viewBox="0 0 46 46" aria-hidden="true">
+            <circle class="conv-ring-bg" cx="23" cy="23" r="20"></circle>
+            <circle class="conv-ring-fg" cx="23" cy="23" r="20"></circle>
+          </svg>
+          <div class="conv-ring-val">{{ conv }}</div>
+        </div>
+      </div>
+      <div class="tags" style="margin-top:12px;">
+        <span class="badge {% if rec == 'BUY' %}badge-buy{% elif rec == 'SELL' %}badge-sell{% elif rec == 'HOLD' %}badge-hold{% else %}badge-watch{% endif %}">{{ rec }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">SimiVision picks warming up — conviction cards appear once subnet registry economics load.</p></div>
+  {% endif %}
+</section>
+
+<!-- Daily audited pick hero -->
+<section class="row" id="section-daily-pick" aria-labelledby="daily-pick-title">
+  <div class="section-label">Daily Pick</div>
+  <h2 class="section-title" id="daily-pick-title">Audited Council Selection</h2>
+  <p class="section-sub">Highest-conviction subnet for today — downgraded when audit confidence is low.</p>
+  {% if dp_subnet %}
+  {% set fc = ((dpick.final_confidence|default(dpick.confidence|default(0)))|float * 100)|round %}
+  {% set tier = 'tier-cyan' if fc > 75 else ('tier-lime' if fc > 55 else ('tier-gold' if fc > 35 else 'tier-red')) %}
+  {% set act = (dpick.action|default('HOLD'))|string|upper %}
+  {% set audit = dpick.audit if dpick.audit is mapping else {} %}
+  <div class="hero-card">
+    <div class="pick-rank" style="font-size:24px;">★</div>
+    <div class="pick-name pick-name-lg hero-name">{{ dp_subnet.name|default('SN' ~ dp_subnet.netuid) }}</div>
+    <div class="pick-meta hero-meta">SN{{ dp_subnet.netuid }}{% if dp_subnet.symbol %} · {{ dp_subnet.symbol }}{% endif %}</div>
+    <div class="pick-row">
+      <div class="conviction-wrap">
+        <div class="conviction-lbl">Final Confidence</div>
+        <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ fc }}%;"></div></div>
+        <div class="pred-line">score <b>{{ "%.1f"|format((dpick.score|default(0))|float) }}</b> · raw conf {{ "%.2f"|format((dpick.confidence|default(0))|float) }}</div>
+      </div>
+      <div class="conv-ring {{ tier }}" style="--ring-pct: {{ fc }};">
+        <svg viewBox="0 0 46 46" aria-hidden="true">
+          <circle class="conv-ring-bg" cx="23" cy="23" r="20"></circle>
+          <circle class="conv-ring-fg" cx="23" cy="23" r="20"></circle>
+        </svg>
+        <div class="conv-ring-val">{{ fc }}</div>
+      </div>
+    </div>
+    <div class="tags" style="margin-top:12px;">
+      <span class="badge {% if act == 'BUY' %}badge-buy{% elif act == 'SELL' %}badge-sell{% else %}badge-hold{% endif %}">{{ act }}</span>
+      {% if audit.approved is defined %}
+        {% if audit.approved %}<span class="hero-audit">AUDIT PASSED</span>{% else %}<span class="hero-audit flagged">AUDIT FLAGGED</span>{% endif %}
+      {% endif %}
+    </div>
+    {% if audit.concerns %}
+    <ul class="reasons">
+      {% for c in audit.concerns[:4] %}<li>{{ c }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if dpick.reason %}
+    <div class="pred-line" style="margin-top:8px;">Note: {{ dpick.reason }}</div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">No audited daily pick yet — Council selection appears after subnet scoring stabilizes.{% if dpick.reason %} ({{ dpick.reason }}){% endif %}</p></div>
+  {% endif %}
+</section>
+
 <!-- 1. Technical Indicators -->
 <section class="row" id="section-indicators" aria-labelledby="indicators-title">
   <div class="section-label">Technical Indicators</div>
