@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-12T16:35:00Z by Cursor Agent A (`-843d`)  
-**main:** `5fd61b8` (post #118 shared workspace)
+**main:** `1d50232`  
+**Last updated:** 2026-07-12T16:50:00Z by Cursor Agent A (`-843d`)
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -16,27 +16,24 @@
 3. **K** → CI quality gates
 4. **L** → Real-time signals & alerts
 
-> **H-thin** (PR #104) is the partial H shell already on `main`. **H-full** is the remaining premium UI work.
+> **H-thin** (PR #104) on `main`. **H-full** shipped PR #120; optional lane UI in flight.
 
 ## Gate Status
 
 | Phase | Status | Notes |
 |-------|--------|-------|
 | **J** | ✅ merged | PR #105 |
-| **H-thin** | ✅ merged | PR #104 — 12 cockpit cards on `main` |
-| **K** | ✅ merged · **unblocked** | PR #107 — CI gates on `main`; no longer gates H-full or L |
-| **H-full** | 🟢 **active** | Agent A — **next frontend track**; not on `main` yet |
-| **L** | 🟡 slice 1 | Agent B — backend-owned; separate from H-full |
+| **H-thin** | ✅ merged | PR #104 |
+| **K** | ✅ merged · **unblocked** | PR #107 |
+| **H-full** | ✅ merged | PR #120 — lane grouping PR pending |
+| **L** | 🟢 **active** | Agent B — PR #115 |
 
 ## Active Work
 
-### H-full (Agent A) — frontend
-- **Owner:** Agent A (`-843d`)
-- **Scope:** `templates/*`, `static/*`, `tests/test_phase_h_ui.py`
-- **Recommended branch:** `cursor/phase-h-full-premium-ac2c-42f7` (PR #120, 20 UI tests, Chart.js)
-- **Alternates:** `cursor/phase-h-full-premium-ac2c`, `27f3`, PR #111 (`e78a`)
-- **Backend context only:** `cursor/phase-h-full-premium-843d` (PR #110) — merge **after** UI branch
-- **Do not touch:** `internal/signals/*`, resolver, grading, learning weights
+### H-full (Agent A) — complete on `main`
+- **Merged:** PR #120 (`cursor/phase-h-full-premium-ac2c-42f7`)
+- **Lane UI:** per-subnet signal grouping/collapse in oscillator panel (`#indicator-lanes`) — PR pending
+- **Optional follow-up:** backend context builders on PR #110 (`cursor/phase-h-full-premium-843d`) if extra Jinja context needed
 
 ### L (Agent B) — backend
 - **Owner:** Agent B (`-e78a`)

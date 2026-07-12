@@ -218,3 +218,23 @@ def test_h_full_premium_scanner_and_judges_js():
     html = client.get("/").text
     assert "/static/js/premium_scanner.js" in html
     assert "/static/js/premium_judges.js" in html
+
+
+def test_h_full_indicator_subnet_lanes():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert 'id="indicator-lanes"' in html
+    assert "/static/js/premium_indicators.js" in html
+    if 'id="indicator-lanes"' in html:
+        assert "lane-toggle" in html
+        assert 'class="vol-cluster-group"' in html
+        assert 'aria-expanded="true"' in html
+
+
+def test_h_full_indicator_lane_collapsible_controls():
+    client = TestClient(app)
+    html = client.get("/").text
+    if "lane-toggle" not in html:
+        return
+    assert "lane-body-" in html
+    assert "vol-cluster-items" in html

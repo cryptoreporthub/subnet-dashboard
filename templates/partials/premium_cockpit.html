@@ -24,10 +24,10 @@
 <section class="row" id="section-indicators" aria-labelledby="indicators-title">
   <div class="section-label">Technical Indicators</div>
   <h2 class="section-title" id="indicators-title">Oscillator Panel</h2>
-  <p class="section-sub">Sparkline momentum and heat-bar signal strength across top subnets.</p>
+  <p class="section-sub">Per-subnet signal lanes — sparkline, heat bar, and oscillator signals grouped by subnet.</p>
   {% set ti_rows = api_indicators_convergence.subnets if api_indicators_convergence is mapping and api_indicators_convergence.subnets else [] %}
   {% if ti_rows %}
-  <div class="picks">
+  <div class="vol-cluster-grid" id="indicator-lanes" aria-live="polite">
     {% for row in ti_rows[:6] %}
     {% set sn = sn_list|selectattr('netuid', 'equalto', row.netuid)|first|default(sn_list|selectattr('id', 'equalto', row.netuid)|first) %}
     {% set chg = (sn.price_change_24h|default(0))|float if sn else 0 %}
@@ -40,29 +40,52 @@
     {% set ob = row.overbought if row.overbought is mapping else {} %}
     {% set heat = (os.count|default(0))|int + (ob.count|default(0))|int %}
     {% set heat_pct = ((heat / (os.total|default(7)|int or 7)) * 100)|round %}
-    <div class="pick-card card">
-      <div class="ti-head">
-        <div>
-          <div class="pick-name">{{ row.name|default('SN' ~ row.netuid) }}</div>
-          <div class="pick-meta">SN{{ row.netuid }}</div>
-        </div>
+    {% set heat_tier = 'high' if heat_pct > 66 else ('core' if heat_pct > 33 else 'low') %}
+    {% set lane_n = (1 if os.convergent else 0) + (1 if ob.convergent else 0) %}
+    {% set lane_n = lane_n if lane_n > 0 else 1 %}
+    <div class="vol-cluster-group" data-netuid="{{ row.netuid }}">
+      <button type="button" class="vol-cluster-header lane-toggle" aria-expanded="true" aria-controls="lane-body-{{ row.netuid }}">
+        <span class="vol-cluster-chev" aria-hidden="true">▸</span>
+        <span class="vol-cluster-dot vol-dot-{{ heat_tier }}"></span>
+        <span class="vol-cluster-label">{{ row.name|default('SN' ~ row.netuid) }} · SN{{ row.netuid }}</span>
+        <span class="vol-cluster-count">{{ lane_n }}</span>
+      </button>
+      <div class="vol-cluster-body" id="lane-body-{{ row.netuid }}">
         {% if spark_pts|length > 2 %}
-        <div class="spark-wrap">
+        <div class="lane-spark-row">
           <canvas class="spark" width="96" height="36" data-spark="{{ spark_pts|join(',') }}" aria-label="Price sparkline for {{ row.name|default('subnet') }}"></canvas>
         </div>
         {% endif %}
-      </div>
-      <div class="vol-cluster-row" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
-        <span class="vol-cluster-label">Signal heat</span>
-        <div class="vol-cluster-bar-wrap" style="flex:1;">
-          <div class="vol-cluster-bar vol-bar-{% if heat_pct > 66 %}high{% elif heat_pct > 33 %}core{% else %}low{% endif %}" style="width:{{ [heat_pct, 100]|min }}%;"></div>
+        <div class="vol-cluster-row lane-heat-row">
+          <span class="vol-cluster-label">Signal heat</span>
+          <div class="vol-cluster-bar-wrap">
+            <div class="vol-cluster-bar lane-heat-bar vol-bar-{{ heat_tier }}" style="width:{{ [heat_pct, 100]|min }}%;"></div>
+          </div>
+          <span class="vol-cluster-value lane-heat-value">{{ heat_pct }}%</span>
         </div>
-        <span class="vol-cluster-value">{{ heat_pct }}%</span>
-      </div>
-      <div class="tags" style="margin-top:8px;">
-        {% if os.convergent %}<span class="badge badge-buy">OVERSOLD {{ os.count|default(0) }}/{{ os.total|default(0) }}</span>{% endif %}
-        {% if ob.convergent %}<span class="badge badge-sell">OVERBOUGHT {{ ob.count|default(0) }}/{{ ob.total|default(0) }}</span>{% endif %}
-        {% if not os.convergent and not ob.convergent %}<span class="badge badge-watch">NEUTRAL</span>{% endif %}
+        <div class="vol-cluster-items">
+          {% if os.convergent %}
+          <div class="vol-cluster-item">
+            <span class="vol-cluster-name">Oversold</span>
+            <div class="vol-cluster-bar-wrap"><div class="vol-cluster-bar vol-bar-low" style="width:{{ [((os.count|default(0)|int / (os.total|default(7)|int or 7)) * 100)|round, 100]|min }}%;"></div></div>
+            <span class="vol-cluster-value">{{ os.count|default(0) }}/{{ os.total|default(0) }}</span>
+          </div>
+          {% endif %}
+          {% if ob.convergent %}
+          <div class="vol-cluster-item">
+            <span class="vol-cluster-name">Overbought</span>
+            <div class="vol-cluster-bar-wrap"><div class="vol-cluster-bar vol-bar-high" style="width:{{ [((ob.count|default(0)|int / (ob.total|default(7)|int or 7)) * 100)|round, 100]|min }}%;"></div></div>
+            <span class="vol-cluster-value">{{ ob.count|default(0) }}/{{ ob.total|default(0) }}</span>
+          </div>
+          {% endif %}
+          {% if not os.convergent and not ob.convergent %}
+          <div class="vol-cluster-item">
+            <span class="vol-cluster-name">Convergence</span>
+            <div class="vol-cluster-bar-wrap"><div class="vol-cluster-bar vol-bar-core" style="width:20%;"></div></div>
+            <span class="vol-cluster-value">neutral</span>
+          </div>
+          {% endif %}
+        </div>
       </div>
     </div>
     {% endfor %}
@@ -440,5 +463,6 @@
   </div>
 </footer>
 
+<script src="/static/js/premium_indicators.js" defer></script>
 <script src="/static/js/premium_scanner.js" defer></script>
 <script src="/static/js/premium_judges.js" defer></script>

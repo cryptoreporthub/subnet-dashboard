@@ -2396,6 +2396,47 @@ header.top {
   padding: 2px 0;
 }
 
+/* Per-subnet indicator lanes (premium cockpit) */
+.vol-cluster-header.lane-toggle {
+  cursor: pointer;
+  width: 100%;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  padding: 0;
+  margin-bottom: 8px;
+  text-align: left;
+}
+.vol-cluster-header.lane-toggle:focus-visible {
+  outline: 2px solid var(--accent-bright, #34d399);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.vol-cluster-chev {
+  display: inline-block;
+  width: 12px;
+  font-size: 10px;
+  color: var(--accent-bright, #34d399);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+.vol-cluster-group:not(.is-collapsed) .vol-cluster-chev { transform: rotate(90deg); }
+.vol-cluster-group.is-collapsed .vol-cluster-body { display: none; }
+.vol-cluster-group.is-collapsed .vol-cluster-header.lane-toggle { margin-bottom: 0; }
+.lane-spark-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+.lane-heat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.lane-heat-row .vol-cluster-bar-wrap { flex: 1; }
+
 .vol-explain {
   margin-top: 10px;
   border: 1px solid rgba(255,255,255,0.06);
