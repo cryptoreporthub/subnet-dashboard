@@ -1,6 +1,6 @@
 # Board — subnet-dashboard concurrent session
 
-**Last updated:** 2026-07-12T04:45:00Z by Cursor Agent B (`-e78a`)  
+**Last updated:** 2026-07-12T07:20:00Z by Cursor Agent B (`-e78a`)  
 **main:** `d3e46b9`  
 **GATE:** J ✅ (#105) · H-thin ✅ (#104) · K ✅ (#107) on `main`
 
@@ -13,7 +13,8 @@
 | 1 | **J** Accuracy fix | A | `cursor/phase-j-accuracy-fix-843d` | ✅ merged (**PR #105** → `fcee141`) |
 | 2 | **H-thin** UI shell | B | `agent-b/phase-h-thin-shell` | ✅ merged (**PR #104** → `4ae3913`) · branch rebased → `d3e46b9` |
 | 3 | **K** CI gates | A + B | `cursor/phase-k-ci-gates` | ✅ merged (**PR #107**) |
-| 4 | **H-full** premium UI | B | TBD | 🟡 next |
+| 4 | **L** Signals & alerts | B | `cursor/phase-l-signals-alerts-b061` | 🟡 **in progress** (Agent B) |
+| 5 | **H-full** premium UI | B | TBD | ⏸ after L |
 
 ---
 
@@ -22,7 +23,7 @@
 | Field | Value |
 |-------|--------|
 | Phase | J ✅ · K ✅ merged |
-| Status | Proceed H-full coordination or Phase L/M per plan |
+| Status | Proceed H-full coordination or Phase M per plan |
 
 ---
 
@@ -30,10 +31,10 @@
 
 | Field | Value |
 |-------|--------|
-| Phase | H-thin ✅ merged · **H-full** next |
-| Branch | `agent-b/phase-h-thin-shell` **rebased onto `main` @ `d3e46b9`** (no unique commits; use fresh branch for H-full) |
-| PR | [#104](https://github.com/cryptoreporthub/subnet-dashboard/pull/104) merged |
-| Status | Rebase complete — start H-full from `main` |
+| Phase | **L** Signals & alerts — **in progress** |
+| Branch | `cursor/phase-l-signals-alerts-b061` |
+| PR | TBD (draft on push) |
+| Status | Building `/api/signals`, `/api/alerts`, `/ws/signals`, `data/signals.json` persistence, Jinja context hooks |
 
 ---
 
@@ -43,7 +44,7 @@
 PR #105 (Phase J) is merged.
 agent-b/phase-h-thin-shell has been rebased onto main @ d3e46b9 and force-pushed.
 H-thin code is already on main via PR #104 — branch tip now equals main.
-For new work (H-full): branch from main (e.g. agent-b/phase-h-full-premium).
+Phase L (signals/alerts backend) takes priority over H-full per user dispatch.
 ```
 
 ---
@@ -57,4 +58,4 @@ For new work (H-full): branch from main (e.g. agent-b/phase-h-full-premium).
 ## References
 
 - `cursor-agents-communication/concurrent-protocol.md`
-- `docs/master-plan-merged.md` §7
+- `docs/master-plan-merged.md` §9

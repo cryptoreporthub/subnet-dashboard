@@ -169,7 +169,7 @@ def build_agent_b_root_context(
     pump_analytics = _safe_pump_analytics()
     scenario_snapshot = load_scenario_snapshot()
     refresh_agent_b_trails(pump_payload=pump_analytics, scenario_snapshot=scenario_snapshot)
-    return {
+    ctx = {
         "pump_analytics": pump_analytics,
         "pump_summary": summarize_pump(pump_analytics),
         "scenario_summary": summarize_scenario(scenario_snapshot),
@@ -180,3 +180,11 @@ def build_agent_b_root_context(
         "oracle_snapshot": _safe_oracle_snapshot(subnets, data_source),
         "price_tracking_baselines": _safe_price_baselines(),
     }
+    try:
+        from internal.signals.context import build_signals_context
+
+        ctx.update(build_signals_context(refresh=False))
+    except Exception as exc:
+        logger.warning("Signals context unavailable for root: %s", exc)
+        ctx.update({"signals": [], "alerts": [], "signal_summary": {}})
+    return ctx

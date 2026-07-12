@@ -133,6 +133,11 @@ CONTRACT = [
     # Resolve + rotation tokens (slice 14a)
     ("GET", "/api/resolve-predictions", None),
     ("GET", "/api/rotation-tokens", None),
+    # Real-time signals & alerts (Phase L)
+    ("GET", "/api/signals", None),
+    ("GET", "/api/signals/summary", None),
+    ("GET", "/api/alerts", None),
+    ("POST", "/api/alerts/subscribe", {"url": "https://example.com/contract-hook"}),
 ]
 
 
