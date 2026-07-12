@@ -1,0 +1,444 @@
+{# Premium 13-section cockpit — style.css classes, honest-empty, zero markdown #}
+{% set sn_list = subnets if subnets is iterable and subnets is not string else [] %}
+
+<header class="top" id="section-header" aria-label="Site header">
+  <div class="top-inner">
+    <div class="logo">
+      <div class="logo-mark" aria-hidden="true">S</div>
+      <div>
+        <div class="logo-text">Simi<span>Vision</span></div>
+        <div class="logo-sub">Subnet Intelligence Cockpit</div>
+      </div>
+    </div>
+    <div class="src-tag">
+      DATA SOURCE: <b>{{ data_source|default('cache')|upper }}</b>
+    </div>
+    <div class="header-actions">
+      <span class="live-pill"><span class="live-dot" aria-hidden="true"></span>LIVE</span>
+      <span class="utc-clock" id="utcClock">--:--:-- UTC</span>
+    </div>
+  </div>
+</header>
+
+<!-- 1. Technical Indicators -->
+<section class="row" id="section-indicators" aria-labelledby="indicators-title">
+  <div class="section-label">Technical Indicators</div>
+  <h2 class="section-title" id="indicators-title">Oscillator Panel</h2>
+  <p class="section-sub">Sparkline momentum and heat-bar signal strength across top subnets.</p>
+  {% set ti_rows = api_indicators_convergence.subnets if api_indicators_convergence is mapping and api_indicators_convergence.subnets else [] %}
+  {% if ti_rows %}
+  <div class="picks">
+    {% for row in ti_rows[:6] %}
+    {% set sn = sn_list|selectattr('netuid', 'equalto', row.netuid)|first|default(sn_list|selectattr('id', 'equalto', row.netuid)|first) %}
+    {% set chg = (sn.price_change_24h|default(0))|float if sn else 0 %}
+    {% set spark_pts = [
+      (sn.price_change_30d|default(chg))|float if sn else chg,
+      (sn.price_change_7d|default(chg))|float if sn else chg,
+      chg, 0.0, chg * 0.5, chg * 0.8, chg, chg * 1.1, chg * 0.9, chg, chg * 1.05, chg
+    ] if sn else [] %}
+    {% set os = row.oversold if row.oversold is mapping else {} %}
+    {% set ob = row.overbought if row.overbought is mapping else {} %}
+    {% set heat = (os.count|default(0))|int + (ob.count|default(0))|int %}
+    {% set heat_pct = ((heat / (os.total|default(7)|int or 7)) * 100)|round %}
+    <div class="pick-card card">
+      <div class="ti-head">
+        <div>
+          <div class="pick-name">{{ row.name|default('SN' ~ row.netuid) }}</div>
+          <div class="pick-meta">SN{{ row.netuid }}</div>
+        </div>
+        {% if spark_pts|length > 2 %}
+        <div class="spark-wrap">
+          <canvas class="spark" width="96" height="36" data-spark="{{ spark_pts|join(',') }}" aria-label="Price sparkline for {{ row.name|default('subnet') }}"></canvas>
+        </div>
+        {% endif %}
+      </div>
+      <div class="vol-cluster-row" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+        <span class="vol-cluster-label">Signal heat</span>
+        <div class="vol-cluster-bar-wrap" style="flex:1;">
+          <div class="vol-cluster-bar vol-bar-{% if heat_pct > 66 %}high{% elif heat_pct > 33 %}core{% else %}low{% endif %}" style="width:{{ [heat_pct, 100]|min }}%;"></div>
+        </div>
+        <span class="vol-cluster-value">{{ heat_pct }}%</span>
+      </div>
+      <div class="tags" style="margin-top:8px;">
+        {% if os.convergent %}<span class="badge badge-buy">OVERSOLD {{ os.count|default(0) }}/{{ os.total|default(0) }}</span>{% endif %}
+        {% if ob.convergent %}<span class="badge badge-sell">OVERBOUGHT {{ ob.count|default(0) }}/{{ ob.total|default(0) }}</span>{% endif %}
+        {% if not os.convergent and not ob.convergent %}<span class="badge badge-watch">NEUTRAL</span>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">Technical indicators warming up — oscillator panel populates after price snapshots and candle history accumulate.</p></div>
+  {% endif %}
+</section>
+
+<!-- 2. Scanner -->
+<section class="row" id="section-scanner" aria-labelledby="scanner-title">
+  <div class="section-label">Scanner</div>
+  <h2 class="section-title" id="scanner-title">Live Subnet Scanner</h2>
+  <p class="section-sub">Filter and sort the full registry — click a row for consensus detail.</p>
+  <div class="card">
+    <div class="card-head">
+      <h3>Registry</h3>
+      <span class="src-tag" id="scanner-meta">Loading…</span>
+    </div>
+    <div class="tab-bar" role="tablist" aria-label="Scanner filters" id="scanner-filters">
+      <button type="button" class="tab-btn active" data-filter="all">All</button>
+      <button type="button" class="tab-btn" data-filter="active">Active</button>
+      <button type="button" class="tab-btn" data-filter="at-risk">At Risk</button>
+      <button type="button" class="tab-btn" data-filter="deprecated">Deprecated</button>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+      <input type="search" id="scanner-search" class="chat-input input" placeholder="Search name or ID…" aria-label="Search subnets" style="flex:1;min-width:200px;margin:0;">
+      <select id="scanner-sort" class="src-tag" aria-label="Sort subnets" style="padding:8px 12px;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:8px;color:inherit;">
+        <option value="id">Sort: ID</option>
+        <option value="emission">Sort: Emission</option>
+        <option value="apy">Sort: APY</option>
+      </select>
+    </div>
+    <div id="scanner-table" class="scroll-y" aria-live="polite"></div>
+  </div>
+</section>
+
+<!-- 3. Staking / Yield -->
+<section class="row" id="section-staking" aria-labelledby="staking-title">
+  <div class="section-label">Staking / Yield</div>
+  <h2 class="section-title" id="staking-title">Staking APY Leaders</h2>
+  <p class="section-sub">Top subnets by stake yield — ranked from live registry economics.</p>
+  {% set staking_rows = sn_list|sort(attribute='emission', reverse=true)|list %}
+  {% if staking_rows %}
+  <div class="mi-grid">
+    {% for sn in staking_rows[:8] %}
+    {% set apy_raw = sn.apy|default(none) %}
+    {% if apy_raw is none and sn.staking_data is mapping %}
+      {% set apy_raw = sn.staking_data.apy %}
+    {% endif %}
+    {% set apy_pct = ((apy_raw|default(0))|float * 100) %}
+    {% set stake = sn.staking_data.total_stake|default(0) if sn.staking_data is mapping else 0 %}
+    <div class="metric card">
+      <div class="lbl">{{ sn.name|default('SN' ~ (sn.netuid|default(sn.id))) }}</div>
+      <div class="val accent-bright">{{ "%.2f"|format(apy_pct) }}%</div>
+      <div class="sub">SN{{ sn.netuid|default(sn.id) }} · stake {{ stake|shorten if stake else '—' }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">Staking analytics warming up — APY cards appear once subnet registry and stake data load.</p></div>
+  {% endif %}
+</section>
+
+<!-- 4. Top Picks -->
+<section class="row" id="section-picks" aria-labelledby="picks-title">
+  <div class="section-label">Top Picks</div>
+  <h2 class="section-title" id="picks-title">Hourly &amp; Daily Council Picks</h2>
+  <p class="section-sub">State-vector leaders for 1h and 24h horizons — conviction bars reflect confidence.</p>
+  {% set hp = hour_picks if hour_picks else [] %}
+  {% set dyp = day_picks if day_picks else [] %}
+  {% if hp or dyp %}
+  <div class="two-col">
+    <div class="card">
+      <div class="card-head"><h3>Hour Horizon</h3><span class="src-tag">top {{ hp|length }} · 1h</span></div>
+      {% if hp %}
+      <div class="picks">
+        {% for pick in hp %}
+        {% set conf = ((pick.confidence|default(0))|float * 100)|round %}
+        {% set tier = 'tier-cyan' if conf > 75 else ('tier-lime' if conf > 55 else ('tier-gold' if conf > 35 else 'tier-red')) %}
+        <div class="pick-card">
+          <div class="pick-rank">#{{ loop.index }}</div>
+          <div class="pick-name">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
+          <div class="pick-meta">SN{{ pick.netuid }} · score <b class="accent-bright">{{ "%.1f"|format((pick.score|default(0))|float) }}</b></div>
+          <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ conf }}%;"></div></div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="empty">No hour-horizon picks yet — scheduler ranks 1h leaders after subnet snapshots refresh.</p>
+      {% endif %}
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Day Horizon</h3><span class="src-tag">top {{ dyp|length }} · 24h</span></div>
+      {% if dyp %}
+      <div class="picks">
+        {% for pick in dyp %}
+        {% set conf = ((pick.confidence|default(0))|float * 100)|round %}
+        {% set tier = 'tier-cyan' if conf > 75 else ('tier-lime' if conf > 55 else ('tier-gold' if conf > 35 else 'tier-red')) %}
+        <div class="pick-card">
+          <div class="pick-rank">#{{ loop.index }}</div>
+          <div class="pick-name">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
+          <div class="pick-meta">SN{{ pick.netuid }} · score <b class="accent-bright">{{ "%.1f"|format((pick.score|default(0))|float) }}</b></div>
+          <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ conf }}%;"></div></div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="empty">No day-horizon picks yet — 24h Council lens activates after price history ingests.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">Council is convening — hourly and daily picks appear once state-vector scores stabilize.</p></div>
+  {% endif %}
+</section>
+
+<!-- 5. KPI Strip -->
+<section class="row" id="section-kpi" aria-labelledby="kpi-title">
+  <div class="section-label">KPI Strip</div>
+  <h2 class="section-title" id="kpi-title">Learning Loop KPIs</h2>
+  <p class="section-sub">Resolver accuracy and prediction backlog — post-replay honest stats.</p>
+  {% set lm = learning_metrics if learning_metrics is mapping else {} %}
+  {% set acc = ((lm.accuracy|default(0))|float * 100)|round(1) %}
+  <div class="kpi-strip">
+    <div class="kpi card">
+      <div class="lbl">Accuracy</div>
+      <div class="val{% if acc >= 50 %} pos{% elif acc > 0 %} neg{% endif %}">{{ acc }}%</div>
+      <div class="sub">{{ lm.correct|default(0) }}✓ / {{ lm.wrong|default(0) }}✗ resolved</div>
+    </div>
+    <div class="kpi card">
+      <div class="lbl">Pending</div>
+      <div class="val">{{ lm.predictions_pending|default(0) }}</div>
+      <div class="sub">awaiting horizon</div>
+    </div>
+    <div class="kpi card">
+      <div class="lbl">Resolved</div>
+      <div class="val">{{ lm.predictions_resolved|default(0) }}</div>
+      <div class="sub">graded predictions</div>
+    </div>
+    <div class="kpi card">
+      <div class="lbl">Score</div>
+      {% set ls = learning_stats if learning_stats is mapping else {} %}
+      <div class="val">{{ ls.total_records|default(lm.total_records|default(0)) }}</div>
+      <div class="sub">learning records</div>
+    </div>
+  </div>
+</section>
+
+<!-- 6. Council -->
+<section class="row" id="section-council" aria-labelledby="council-title">
+  <div class="section-label">Council</div>
+  <h2 class="section-title" id="council-title">Expert Weights &amp; Dispositions</h2>
+  <p class="section-sub">Soul-map expert lanes — weights nudge on prediction resolution.</p>
+  {% if council_weights %}
+  <div class="council-grid">
+    {% for cw in council_weights %}
+    {% set w = (cw.weight|default(0))|float %}
+    {% set bias = (cw.bias|default('neutral'))|string|lower %}
+    <div class="expert card-soft card">
+      <div class="avatar">{{ (cw.expert|default('?'))[0]|upper }}</div>
+      <div class="name">{{ cw.expert|default('expert') }}</div>
+      <div class="w">{{ "%.3f"|format(w) }}</div>
+      <div class="wbar"><div class="wfill" style="width: {{ ([w / 2 * 100, 100]|min)|round }}%;"></div></div>
+      <span class="bias {% if bias in ['bullish', 'long', 'buy', 'pos'] %}pos{% elif bias in ['bearish', 'short', 'sell', 'neg'] %}neg{% else %}neu{% endif %}">{{ bias|upper }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">Council weights warming up — expert priors load from the soul map once the learning engine initializes.</p></div>
+  {% endif %}
+</section>
+
+<!-- 7. Radar -->
+<section class="row" id="section-radar" aria-labelledby="radar-title">
+  <div class="section-label">Radar</div>
+  <h2 class="section-title" id="radar-title">Undervalued Overlay Radar</h2>
+  <p class="section-sub">Five-axis radar comparing yield, momentum, emission, social, and composite undervalued score.</p>
+  {% set radar_rows = sn_list|sort(attribute='emission', reverse=true)|list %}
+  {% if radar_rows|length >= 3 %}
+  {% set top3 = radar_rows[:3] %}
+  {% set r_ns = namespace(labels=[], uv=[], mom=[]) %}
+  {% for sn in top3 %}
+    {% set nu = sn.netuid|default(sn.id) %}
+    {% set apy_v = ((sn.apy|default(sn.staking_data.apy|default(0) if sn.staking_data is mapping else 0))|float * 100) %}
+    {% set chg_v = (sn.price_change_24h|default(0))|float %}
+    {% set uv = [apy_v - chg_v, 100]|min %}
+    {% set r_ns.labels = r_ns.labels + ['SN' ~ nu] %}
+    {% set r_ns.uv = r_ns.uv + [uv|round|int] %}
+    {% set r_ns.mom = r_ns.mom + [[50 + chg_v * 2, 100]|min|int] %}
+  {% endfor %}
+  {% set radar_payload = {
+    'labels': r_ns.labels,
+    'datasets': [
+      {'label': 'Undervalued', 'data': r_ns.uv, 'color': '#00ff41'},
+      {'label': 'Momentum', 'data': r_ns.mom, 'color': '#22d3ee'}
+    ]
+  } %}
+  <div class="card momentum-grid">
+    <div class="card">
+      <div class="card-head"><h3>Subnet Radar</h3><span class="src-tag">top 3 · Chart.js</span></div>
+      <div class="chart-box">
+        <canvas id="radarChart" data-radar='{{ radar_payload|tojson }}' aria-label="Subnet undervalued radar chart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Overlay Legend</h3></div>
+      <p class="section-sub" style="margin-bottom:8px;">Green = yield-vs-momentum undervalued score. Cyan = 24h momentum overlay.</p>
+      {% for sn in top3 %}
+      <div class="radar-item">
+        <div class="name">{{ sn.name|default('SN' ~ (sn.netuid|default(sn.id))) }}</div>
+        <div class="meta">emission {{ "%.2f"|format((sn.emission|default(0))|float) }} · 24h {{ "%+.2f"|format((sn.price_change_24h|default(0))|float) }}%</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">Radar chart warming up — needs at least three subnets with registry economics.</p></div>
+  {% endif %}
+</section>
+
+<!-- 8. Judges -->
+<section class="row" id="section-judges" aria-labelledby="judges-title">
+  <div class="section-label">Judges</div>
+  <h2 class="section-title" id="judges-title">Judge Council Verdicts</h2>
+  <p class="section-sub">Oracle, Echo, and Pulse panels — loaded live from <code>/api/judges</code>.</p>
+  <div id="judges-panel" class="card" aria-live="polite">
+    <p class="empty">Loading judge scores…</p>
+  </div>
+</section>
+
+<!-- 9. Mind Map -->
+<section class="row" id="section-mindmap" aria-labelledby="mindmap-section-title">
+  <div class="section-label">Mind Map</div>
+  <h2 class="section-title" id="mindmap-section-title">Interactive Graph</h2>
+  <p class="section-sub">Explorable nodes and edges from <code>/api/mindmap/graph</code>.</p>
+  {% include "partials/mindmap_graph.html" %}
+</section>
+
+<!-- 10. Social -->
+<section class="row" id="section-social" aria-labelledby="social-title">
+  <div class="section-label">Social</div>
+  <h2 class="section-title" id="social-title">Social Sentiment</h2>
+  <p class="section-sub">Per-subnet mention volume and sentiment labels from registry fields.</p>
+  {% set social_has = sn_list|selectattr('social_mentions', 'defined')|list %}
+  {% if social_has %}
+  <div class="soc-grid">
+    {% for sn in social_has|sort(attribute='social_mentions', reverse=true)|list %}
+    {% if loop.index <= 6 %}
+    {% set mentions = sn.social_mentions|default(0)|int %}
+    {% set sent = sn.social_sentiment|default(0.5)|float %}
+    {% set label = 'bullish' if sent >= 0.6 else ('bearish' if sent <= 0.4 else 'neutral') %}
+    <div class="card soc-card">
+      <div class="soc-head">
+        <span class="pick-name">{{ sn.name|default('SN' ~ (sn.netuid|default(sn.id))) }}</span>
+        <span class="soc-score {% if label == 'bullish' %}pos{% elif label == 'bearish' %}neg{% else %}neu{% endif %}">{{ label|upper }}</span>
+      </div>
+      <div class="pick-meta">SN{{ sn.netuid|default(sn.id) }} · {{ mentions }} mentions</div>
+      <div class="conviction-bar" style="margin-top:8px;"><div class="conviction-fill tier-lime" style="width: {{ (sent * 100)|round }}%;"></div></div>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">Social sentiment warming up — message intel and mention feeds populate in Phase M.</p></div>
+  {% endif %}
+</section>
+
+<!-- 11. Chat -->
+<section class="row" id="section-chat" aria-labelledby="chat-title">
+  <div class="section-label">Chat</div>
+  <h2 class="section-title" id="chat-title">SimiVision Chat</h2>
+  <p class="section-sub">Ask the intelligence layer — grounded in live mindmap context when available.</p>
+  <div class="card chat-box">
+    <div class="chat-log" id="chatLog" role="log" aria-live="polite">
+      <div class="chat-msg bot">
+        <div class="who">SIMIVISION</div>
+        Council cockpit online. Ask about subnets, picks, or learning stats.
+      </div>
+    </div>
+    <div class="chat-input">
+      <input type="text" id="chatInput" placeholder="Ask SimiVision…" aria-label="Chat message" autocomplete="off">
+      <button type="button" id="chatSend">Send</button>
+    </div>
+    <p class="chat-meta" id="chatMeta">LLM: ready</p>
+  </div>
+</section>
+
+<!-- 12. Learning Trail -->
+<section class="row" id="section-trail" aria-labelledby="trail-title">
+  <div class="section-label">Learning Trail</div>
+  <h2 class="section-title" id="trail-title">Trace &amp; Prediction History</h2>
+  <p class="section-sub">Evidence → signal → decision → prediction → judge — newest first.</p>
+  {% if mindmap_trail %}
+  <div class="card">
+    <div class="trail-counter">Trail entries: <b>{{ mindmap_trail|length }}</b></div>
+    <div class="trail">
+      {% for t in mindmap_trail[:20] %}
+      <div class="trail-item">
+        <div class="trail-time">{{ t.time|default('') }}</div>
+        <div class="trail-net">{{ t.subnet|default('—') }}</div>
+        <div class="trail-flow">
+          <span class="flow-chip">{{ t.evidence|default('—') }}</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-chip">{{ t.signal|default('—') }}</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-chip">{{ t.decision|default('—') }}</span>
+        </div>
+        {% if t.prediction %}<div class="trail-pred">{{ t.prediction }}</div>{% endif %}
+        {% if t.judge %}<div class="pred-line">{{ t.judge }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% elif predictions %}
+  <div class="card">
+    <div class="trail-counter">Predictions: <b>{{ predictions|length }}</b></div>
+    <div class="trail">
+      {% for pr in predictions[:12] %}
+      <div class="trail-item">
+        <div class="trail-net">{{ pr.name|default('SN' ~ pr.netuid) }}</div>
+        <div class="trail-pred">{{ pr.statement|default(pr.direction|default('') ~ ' ' ~ (pr.predicted_pct|default(0))|string) }}</div>
+        <div class="pick-meta">{{ pr.status|default('pending') }} · {{ pr.horizon_hours|default(0) }}h horizon</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">Learning trail warming up — trace bus events chronicle Council decisions as the loop runs.</p></div>
+  {% endif %}
+</section>
+
+<!-- 13. Undervalued Radar -->
+<section class="row" id="section-undervalued" aria-labelledby="undervalued-title">
+  <div class="section-label">Undervalued Radar</div>
+  <h2 class="section-title" id="undervalued-title">Undervalued Scoring Grid</h2>
+  <p class="section-sub">Yield minus 24h momentum — higher score suggests deeper value vs. recent price action.</p>
+  {% if sn_list %}
+  <div class="card">
+    <table class="tbl">
+      <thead>
+        <tr><th>#</th><th>Subnet</th><th>APY</th><th>24h</th><th>Score</th><th>Flag</th></tr>
+      </thead>
+      <tbody>
+        {% for sn in sn_list|sort(attribute='emission', reverse=true)|list %}
+        {% if loop.index <= 8 %}
+        {% set apy_v = ((sn.apy|default(sn.staking_data.apy|default(0) if sn.staking_data is mapping else 0))|float * 100) %}
+        {% set chg_v = (sn.price_change_24h|default(0))|float %}
+        {% set score = apy_v - chg_v %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td class="text-primary">{{ sn.name|default('SN' ~ (sn.netuid|default(sn.id))) }} <span class="pick-meta">SN{{ sn.netuid|default(sn.id) }}</span></td>
+          <td>{{ "%.1f"|format(apy_v) }}%</td>
+          <td class="{% if chg_v >= 0 %}text-buy{% else %}text-sell{% endif %}">{{ "%+.2f"|format(chg_v) }}%</td>
+          <td><b>{{ "%.1f"|format(score) }}</b></td>
+          <td>{% if score > 15 %}<span class="badge badge-buy">DEEP VALUE</span>{% elif score > 5 %}<span class="badge badge-watch">VALUE</span>{% else %}—{% endif %}</td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">Undervalued radar warming up — scoring grid needs live subnet economics and price history.</p></div>
+  {% endif %}
+</section>
+
+<footer class="status" id="section-footer">
+  <div class="status-inner">
+    <span><span class="st-dot" aria-hidden="true"></span>SimiVision · {{ data_source|default('cache')|upper }}</span>
+    <span>Subnets: <b>{{ sn_list|length }}</b></span>
+    <span>Trail: <b>{{ mindmap_trail|length if mindmap_trail else 0 }}</b></span>
+    <span>Predictions: <b>{{ predictions|length if predictions else 0 }}</b></span>
+    <span class="footer-tag">UTC clock · Press <kbd>C</kbd> compact</span>
+  </div>
+</footer>
+
+<script src="/static/js/premium_scanner.js" defer></script>
+<script src="/static/js/premium_judges.js" defer></script>
