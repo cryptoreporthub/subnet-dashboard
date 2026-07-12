@@ -1,5 +1,8 @@
 {# Premium 13-section cockpit — style.css classes, honest-empty, zero markdown #}
 {% set sn_list = subnets if subnets is iterable and subnets is not string else [] %}
+{% set ti_rows = api_indicators_convergence.subnets if api_indicators_convergence is mapping and api_indicators_convergence.subnets else [] %}
+{% set hp = hour_picks if hour_picks else [] %}
+{% set dyp = day_picks if day_picks else [] %}
 
 <header class="top" id="section-header" aria-label="Site header">
   <div class="top-inner">
@@ -25,7 +28,6 @@
   <div class="section-label">Technical Indicators</div>
   <h2 class="section-title" id="indicators-title">Oscillator Panel</h2>
   <p class="section-sub">Sparkline momentum and heat-bar signal strength across top subnets.</p>
-  {% set ti_rows = api_indicators_convergence.subnets if api_indicators_convergence is mapping and api_indicators_convergence.subnets else [] %}
   {% if ti_rows %}
   <div class="picks">
     {% for row in ti_rows[:6] %}
@@ -100,6 +102,16 @@
   </div>
 </section>
 
+<!-- 2b. Subnet rollup (optional grouping lane) -->
+<section class="row" id="section-subnet-groups" aria-labelledby="subnet-groups-title">
+  <div class="section-label">Subnet lens</div>
+  <h2 class="section-title" id="subnet-groups-title">Per-subnet rollup</h2>
+  <p class="section-sub">Collapse indicators, picks, trail, and predictions by subnet — keyed on <code>netuid</code> / <code>id</code>.</p>
+  <div id="subnet-groups-root" class="subnet-groups-stack" aria-live="polite">
+    <p class="empty">Building subnet rollup…</p>
+  </div>
+</section>
+
 <!-- 3. Staking / Yield -->
 <section class="row" id="section-staking" aria-labelledby="staking-title">
   <div class="section-label">Staking / Yield</div>
@@ -132,8 +144,6 @@
   <div class="section-label">Top Picks</div>
   <h2 class="section-title" id="picks-title">Hourly &amp; Daily Council Picks</h2>
   <p class="section-sub">State-vector leaders for 1h and 24h horizons — conviction bars reflect confidence.</p>
-  {% set hp = hour_picks if hour_picks else [] %}
-  {% set dyp = day_picks if day_picks else [] %}
   {% if hp or dyp %}
   <div class="two-col">
     <div class="card">
@@ -440,5 +450,14 @@
   </div>
 </footer>
 
+<script type="application/json" id="subnet-group-data">{{ {
+  'roster': sn_list[:24] if sn_list else [],
+  'indicators': ti_rows,
+  'hour_picks': hp,
+  'day_picks': dyp,
+  'trail': mindmap_trail[:20] if mindmap_trail else [],
+  'predictions': predictions[:12] if predictions else []
+}|tojson }}</script>
+<script src="/static/js/subnet_grouping.js" defer></script>
 <script src="/static/js/premium_scanner.js" defer></script>
 <script src="/static/js/premium_judges.js" defer></script>

@@ -81,6 +81,7 @@
       state.rows = Object.keys(data).map(function (key) {
         var item = Object.assign({}, data[key]);
         item.id = item.id != null ? item.id : Number(key);
+        item.netuid = item.netuid != null ? item.netuid : item.id;
         return item;
       });
       render();
