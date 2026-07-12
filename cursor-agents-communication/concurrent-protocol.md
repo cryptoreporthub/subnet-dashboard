@@ -4,6 +4,8 @@
 > **Canonical plan:** `docs/master-plan-merged.md`  
 > **SciWeave:** `docs/sciweave-answers-phase-j.md`
 
+> **Post-K override (2026-07-12):** J, H-thin, and K are on `main`. For **current parallel work**, the alignment pack and `board.md` supersede §1 ownership: **Agent A = H-full UI**, **Agent B = Phase L**. This file remains authoritative for the J ∥ H-thin sprint history and file-ownership tables below.
+
 ---
 
 ## 1. Agents
