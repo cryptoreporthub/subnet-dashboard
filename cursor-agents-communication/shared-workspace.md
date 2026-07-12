@@ -8,13 +8,14 @@
 ## Where to Look
 1. **Board:** `cursor-agents-communication/board.md` — current phase, ownership, PRs
 2. **Master plan:** `master-plan-merged.md` — phase order and sequencing rules
-3. **Extended plan:** `docs/master-plan-merged.md` — contracts and history
-4. **Optional lane audit:** `cursor-agents-communication/phase-h-subnet-grouping-audit.md`
+3. **Model guide:** `cursor-agents-communication/model-guide.md` — Composer vs Grok per phase; Grok review checklists
+4. **Extended plan:** `docs/master-plan-merged.md` — contracts and history
+5. **Optional lane audit:** `cursor-agents-communication/phase-h-subnet-grouping-audit.md`
 
 ## Workspace Ready When
 The shared workspace is **ready for agents** once `board.md` status matches `main` (SHA, merged phases, active tracks). Read the board first on every boot.
 
-**Current:** `main` @ `397ac8d` · optional grouping lane merged (#125) · **L active** (Agent B slices 2–4).
+**Current:** `main` @ `132bf7a` · J/H-thin/K/H-full + optional lane (#125) merged · **L active** (Agent B slices 2–4).
 
 ## Optional Lane — Per-subnet grouping / collapse
 
@@ -22,7 +23,7 @@ The shared workspace is **ready for agents** once `board.md` status matches `mai
 |---|---|---|
 | Data-flow audit + edge-case checklist | Agent B | **Done** |
 | `netuid` alias on `/api/registry` + `/api/subnets` | Agent B | **Done** |
-| Premium UI grouping/collapse (`section-subnet-groups`) | Agent A | **Merged** — PR #125 on `main` |
+| Premium UI grouping/collapse (`section-subnet-groups`) | Agent A | **Merged** — PR #125 |
 
 **Verdict:** frontend-only; join key `netuid ?? id`; 12-card `cockpit_sections` grid stays flat.
 
@@ -31,7 +32,7 @@ The shared workspace is **ready for agents** once `board.md` status matches `mai
 
 ## Agent A (`-843d`)
 - **Phase:** H-full premium cockpit — **core merged** (#120)
-- **Optional lane:** subnet rollup UI — **done**, awaiting merge
+- **Optional lane:** subnet rollup UI — **merged** (#125)
 
 ## Agent B (`-e78a`)
 - **Phase:** L real-time signals & alerts
@@ -41,9 +42,9 @@ The shared workspace is **ready for agents** once `board.md` status matches `mai
 
 | Agent | Status | Next action |
 |-------|--------|-------------|
-| **Agent A** | Optional lane merged (#125) | Idle unless polish requested |
+| **Agent A** | H-full + lane done | Idle unless polish or PR #110 context |
 | **Agent B** | Slice 1 done | **Go** — alerts + WebSocket on PR #115 |
-| **User** | — | Approve L PR when ready |
+| **User** | — | Merge PR #122 (model guide), then L when ready |
 
 ## Conflict Surface
 - `server.py` — if both agents have open PRs, second merger rebases.

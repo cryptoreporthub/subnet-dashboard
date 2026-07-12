@@ -56,6 +56,7 @@
 - Keep the dashboard minimal and behavior-preserving.
 
 ## Extended Reference
+- Model selection: `cursor-agents-communication/model-guide.md`
 - Full history, contracts, and phase I root-cause: `docs/master-plan-merged.md`
 - UI spec: `docs/premium-dashboard-redesign.md`
 - Coordination board: `cursor-agents-communication/board.md`
