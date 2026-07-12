@@ -65,6 +65,13 @@ def default_learning_dashboard_context() -> Dict[str, Any]:
             "stats": {"total": 0, "wins": 0, "losses": 0, "success_rate": 0.0},
         },
         "freshness": {"last_updated": {}, "now": None},
+        "simivision_picks": [],
+        "undervalued_radar": [],
+        "technical_indicators": [],
+        "signal_impact": [],
+        "social_sentiment": [],
+        "market_intelligence": {},
+        "staking_analytics": {},
     }
 
 
@@ -251,6 +258,13 @@ def _mark_learning_freshness() -> None:
             "top_pick_day",
             "rotation",
             "scenario_memory",
+            "simivision_picks",
+            "undervalued_radar",
+            "technical_indicators",
+            "signal_impact",
+            "social_sentiment",
+            "market_intelligence",
+            "staking_analytics",
         ):
             freshness_tracker.mark_updated(key)
     except Exception:
@@ -269,6 +283,15 @@ def build_learning_dashboard_context(
     expert_weights = _learning_stats().get("expert_weights", weights)
     picks = _pick_sections(subnets, market_context)
     rotation = _rotation_panel(subnets)
+    predictions = _predictions_panel()
+
+    h_full: Dict[str, Any] = {}
+    try:
+        from internal.learning.premium_dashboard_builders import build_h_full_dashboard_keys
+
+        h_full = build_h_full_dashboard_keys(subnets, market_context, predictions=predictions)
+    except Exception as exc:
+        logger.warning("H-full premium context failed: %s", exc)
 
     ctx = default_learning_dashboard_context()
     ctx.update(
@@ -278,7 +301,7 @@ def build_learning_dashboard_context(
             "learning_metrics": _learning_metrics(),
             "expert_weights": expert_weights,
             "council_weights": _council_weights_list(weights),
-            "predictions": _predictions_panel(),
+            "predictions": predictions,
             "patterns": rotation.get("patterns", []),
             "hour_picks": picks["hour_picks"],
             "day_picks": picks["day_picks"],
@@ -288,6 +311,7 @@ def build_learning_dashboard_context(
             "pick_history": pick_history.get_history(limit=20),
             "freshness": _freshness_panel(),
             "mindmap_trail": _mindmap_trail_panel(),
+            **h_full,
         }
     )
     _mark_learning_freshness()
