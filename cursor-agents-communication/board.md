@@ -1,60 +1,34 @@
-# Board — subnet-dashboard concurrent session
+# Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-12T04:45:00Z by Cursor Agent B (`-e78a`)  
-**main:** `d3e46b9`  
-**GATE:** J ✅ (#105) · H-thin ✅ (#104) · K ✅ (#107) on `main`
+## Repo
+- `cryptoreporthub/subnet-dashboard`
 
----
+## Source of Truth
+- The board and master plan override memory, prior summaries, and informal instructions.
+- Agents must read this file first.
 
-## Merge queue
+## Current Phase Order
+- J → Accuracy Fix + Tests
+- H-full → Premium UI cockpit restoration
+- K → CI Quality Gates
+- L → Real-time signals & alerts
 
-| Order | Phase | Agent | Branch | Status |
-|-------|-------|-------|--------|--------|
-| 1 | **J** Accuracy fix | A | `cursor/phase-j-accuracy-fix-843d` | ✅ merged (**PR #105** → `fcee141`) |
-| 2 | **H-thin** UI shell | B | `agent-b/phase-h-thin-shell` | ✅ merged (**PR #104** → `4ae3913`) · branch rebased → `d3e46b9` |
-| 3 | **K** CI gates | A + B | `cursor/phase-k-ci-gates` | ✅ merged (**PR #107**) |
-| 4 | **H-full** premium UI | B | TBD | 🟡 next |
+## Active Phase
+- **Active phase:** H-full (primary handoff). J and K are merged on `main` @ `19e0ebd`. L slice 1 is in progress on a draft branch; full L work follows H-full handoff unless explicitly approved to run in parallel.
 
----
+## Agent Ownership
+- **Ave** = frontend / H-full premium cockpit
+- **B** = backend / L real-time signals & alerts
 
-## Agent A (`-843d`)
+## Status
+- `main` @ `19e0ebd`. J merged (PR #105). H-thin merged (PR #104). K merged (PR #107).
+- **H-full:** UI work exists on branches; not merged to `main`. Recommended merge candidate: `cursor/phase-h-full-premium-ac2c`. Alternate: `cursor/phase-h-full-premium-27f3`. Open PRs include #111 (`e78a`).
+- **L:** Slice 1 done on `cursor/phase-l-signal-pipeline-b061` (GET `/api/signals`, `/api/signals/summary`, `data/signals.json`). PR #115 draft. Remaining: alerts, WebSocket, Jinja context via `server.py` only.
+- **Blockers:** User merge required for H-full and L PRs before M/N/O.
+- **Conflict surface:** `server.py` if both agents have open PRs; second merger rebases.
 
-| Field | Value |
-|-------|--------|
-| Phase | J ✅ · K ✅ merged |
-| Status | Proceed H-full coordination or Phase L/M per plan |
-
----
-
-## Agent B (`-e78a`)
-
-| Field | Value |
-|-------|--------|
-| Phase | H-thin ✅ merged · **H-full** next |
-| Branch | `agent-b/phase-h-thin-shell` **rebased onto `main` @ `d3e46b9`** (no unique commits; use fresh branch for H-full) |
-| PR | [#104](https://github.com/cryptoreporthub/subnet-dashboard/pull/104) merged |
-| Status | Rebase complete — start H-full from `main` |
-
----
-
-## Agent B instruction (from coordinator)
-
-```text
-PR #105 (Phase J) is merged.
-agent-b/phase-h-thin-shell has been rebased onto main @ d3e46b9 and force-pushed.
-H-thin code is already on main via PR #104 — branch tip now equals main.
-For new work (H-full): branch from main (e.g. agent-b/phase-h-full-premium).
-```
-
----
-
-## Blockers
-
-- None
-
----
-
-## References
-
-- `cursor-agents-communication/concurrent-protocol.md`
-- `docs/master-plan-merged.md` §7
+## Rules
+- Stay scoped to the assigned phase.
+- Do not overlap H-full and L unless explicitly approved.
+- Do not modify resolver, grading, or learning-engine logic unless required for compatibility.
+- Keep changes minimal and behavior-preserving.
