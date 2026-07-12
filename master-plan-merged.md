@@ -1,7 +1,7 @@
 # Subnet Dashboard Master Plan
 
-**Last updated:** 2026-07-12  
-**main:** `24333f8`
+**Last updated:** 2026-07-12T23:05:00Z  
+**main:** `5055a80`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -20,15 +20,16 @@
 
 > **H-thin** (PR #104) partial shell on `main`. **H-full** complete (PR #120). Optional lane (PR #125).
 
-## Completion Snapshot (`main` @ `24333f8`)
+## Completion Snapshot (`main` @ `5055a80`)
 | Phase | Status |
 |-------|--------|
 | J | ✅ merged (PR #105) |
 | H-thin | ✅ merged (PR #104) |
 | K | ✅ merged (PR #107) |
-| H-full | ✅ merged (PR #120) |
+| H-full | ✅ merged (PR #120, hero #131) |
 | H-full optional lane | ✅ merged (PR #125) |
-| **L** | 🟢 **active** — Agent B, PR #115 |
+| Model guide | ✅ merged (PR #122) |
+| **L** | ✅ merged (PR #115) |
 
 ## Model selection (Composer vs Grok)
 **Canonical:** `cursor-agents-communication/model-guide.md`
@@ -47,11 +48,9 @@ Phase L: Composer slices 1–2; **Grok design before** slices 3–4 (WebSocket, 
 
 ### K — done
 
-### L — active (Agent B)
-- Real-time signals and alerts.
-- Backend: `internal/signals/*`, alerts API, WebSocket.
-- **Owner:** Agent B (`-e78a`).
-- **Ditto:** author slices 2–4 plans → `ditto-phase-l-handoff.md`
+### L — merged (Agent B)
+- Real-time signals and alerts on `main` (PR #115).
+- Backend: `internal/signals/*`, alerts API, WebSocket, `build_signals_context()`.
 
 ## Sequencing Rules
 - No overlap: Agent A frontend vs Agent B backend paths.

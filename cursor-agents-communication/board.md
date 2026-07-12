@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-12T19:55:00Z by Agent B (`-e78a`)  
-**main:** `95b4c20`
+**Last updated:** 2026-07-12T23:05:00Z by Agent A (`-843d`) — post-merge coordination  
+**main:** `5055a80`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -13,6 +13,18 @@
 4. **Ditto handoff** — `cursor-agents-communication/ditto-phase-l-handoff.md`
 5. **Master plan** — `master-plan-merged.md` + `docs/master-plan-merged.md` §9 (L)
 
+## Post-merge coordination (Agent A) — **DONE**
+
+| Task | PR | Merge commit | Status |
+|------|-----|--------------|--------|
+| Model guide | **#122** | `449b991` | ✅ merged (pre-task) |
+| L signals pipeline | **#115** | `dc8c611` | ✅ merged (pre-task; includes slices 1–4) |
+| H-full hero restore | **#131** | `5055a80` | ✅ merged (on current `main`) |
+
+**Health verified @ `5055a80`:** `GET /health` → 200 OK · `GET /api/signals` → 200 success (128 signals)
+
+**Agent A:** idle — no open merge gates.
+
 ## Gate Status
 
 | Phase | Status | Notes |
@@ -20,30 +32,29 @@
 | **J** | ✅ merged | PR #105 |
 | **H-thin** | ✅ merged | PR #104 |
 | **K** | ✅ merged | PR #107 |
-| **H-full** | ✅ merged | PR #120 |
+| **H-full** | ✅ merged | PR #120 + hero restore #131 |
 | **H-full optional** | ✅ merged | PR #125 |
-| **L slice 1** | ✅ on branch | `GET /api/signals`, persistence — PR #115 |
-| **L slices 2–4** | 🟢 **in progress** | Agent B — alerts, WS, rules engine |
+| **Model guide** | ✅ merged | PR #122 — `cursor-agents-communication/model-guide.md` |
+| **L** | ✅ merged | PR #115 — signals, alerts, WebSocket, rules engine |
 
-## Active Work — Phase L (Agent B)
+## Phase L — merged (Agent B)
 
-| Slice | Scope | Status |
-|-------|--------|--------|
-| 1 | `GET /api/signals`, `/api/signals/summary`, `data/signals.json` | ✅ done |
-| 2 | `GET/POST /api/alerts` | ✅ done |
-| 3 | `/ws/signals` WebSocket | ✅ done |
-| 4 | Rules engine (SELL > HOT, dedup) | ✅ done |
+| Slice | Capability | Status |
+|-------|------------|--------|
+| 1 | `GET /api/signals`, `/api/signals/summary`, `data/signals.json` | ✅ |
+| 2 | `GET/POST /api/alerts`, `POST /api/alerts/subscribe` | ✅ |
+| 3 | `/ws/signals` WebSocket | ✅ |
+| 4 | `rules.py` — SELL > HOT, dedup | ✅ |
 
-**Branch:** `cursor/phase-l-signal-pipeline-b061`  
-**Audit:** PR #113 (`cursor/phase-l-signals-alerts-b061`) — reference only; do not duplicate wholesale  
-**Do not touch:** `templates/*`, `static/*`, resolver, grading weights
+**Next:** M/N/O gated on user approval. Frontend signal consumers optional (Agent A, explicit task only).
 
 ## Rules
 - Stay scoped to assigned phase.
-- Agent B: `internal/signals/*`, `server.py` router + Jinja context only.
+- **Model guide:** merge/rebase/board → Composer; Grok only per §4–§5 triggers.
 - Honest-empty > fake data.
 
 ## References
 - `cursor-agents-communication/model-guide.md`
+- `cursor-agents-communication/phase-l-pr113-audit.md`
 - `cursor-agents-communication/phase-h-subnet-grouping-audit.md`
 - `docs/master-plan-merged.md` §9
