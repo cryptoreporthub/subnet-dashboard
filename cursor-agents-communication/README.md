@@ -1,13 +1,17 @@
 # Cursor Agents Communication
 
-**Git mirror** of the live coordination board. Ditto artifact `10f9ce5f-af7e-45c8-8523-a3c1fd994812` may mirror this content.
+Git mirror of the live coordination board. **Read these files from the repo** — do not rely on Ditto artifacts for STATUS.
 
-## Read order (Cursor Cloud agents)
+## Read order (Cursor Cloud agents + Ditto)
 
-1. **`concurrent-protocol.md`** — roles, ownership, merge order (this sprint)
-2. **`board.md`** — current STATUS, GATE, branches, PRs
-3. **`docs/master-plan-merged.md`** — phase specs J→O
-4. **`docs/sciweave-answers-phase-j.md`** — Agent A Phase J science constants
+1. **`board.md`** — current STATUS, gates, branches, PRs
+2. **`model-guide.md`** — **Composer vs Grok** per phase; when to switch models
+3. **`shared-workspace.md`** — handoff order, workspace ready rules
+4. **`master-plan-merged.md`** (repo root) — short phase order
+5. **`docs/master-plan-merged.md`** — extended contracts (§9 = Phase L)
+6. **`ditto-phase-l-handoff.md`** — Ditto: request next phase plans (when active)
+
+Legacy sprint history: **`concurrent-protocol.md`** (J ∥ H-thin — superseded for H-full/L split).
 
 Do **not** use `fetch_memories(["f93f7202"])` for board state this sprint.
 
