@@ -1,8 +1,8 @@
 # Board — subnet-dashboard concurrent session
 
-**Last updated:** 2026-07-12T04:45:00Z by Cursor Agent B (`-e78a`)  
-**main:** `d3e46b9`  
-**GATE:** J ✅ (#105) · H-thin ✅ (#104) · K ✅ (#107) on `main`
+**Last updated:** 2026-07-12T05:50:00Z by Cursor Agent A (`-843d`)  
+**main:** `19e0ebd`  
+**GATE:** H-full in progress — Agent A backend context PR open
 
 ---
 
@@ -10,10 +10,10 @@
 
 | Order | Phase | Agent | Branch | Status |
 |-------|-------|-------|--------|--------|
-| 1 | **J** Accuracy fix | A | `cursor/phase-j-accuracy-fix-843d` | ✅ merged (**PR #105** → `fcee141`) |
-| 2 | **H-thin** UI shell | B | `agent-b/phase-h-thin-shell` | ✅ merged (**PR #104** → `4ae3913`) · branch rebased → `d3e46b9` |
-| 3 | **K** CI gates | A + B | `cursor/phase-k-ci-gates` | ✅ merged (**PR #107**) |
-| 4 | **H-full** premium UI | B | TBD | 🟡 next |
+| 1 | **J** Accuracy fix | A | `cursor/phase-j-accuracy-fix-843d` | ✅ merged (#105) |
+| 2 | **H-thin** UI shell | B | `agent-b/phase-h-thin-shell` | ✅ merged (#104) |
+| 3 | **K** CI gates | A + B | `cursor/phase-k-ci-gates` | ✅ merged (#107) |
+| 4 | **H-full** premium UI | A + B | `cursor/phase-h-full-premium-843d` | 🟡 Agent A PR open · Agent B template pending |
 
 ---
 
@@ -21,8 +21,9 @@
 
 | Field | Value |
 |-------|--------|
-| Phase | J ✅ · K ✅ merged |
-| Status | Proceed H-full coordination or Phase L/M per plan |
+| Phase | **H-full** backend context |
+| Branch | `cursor/phase-h-full-premium-843d` |
+| Status | 7 context builders wired; pytest green (excl. pre-existing test_simivision import) |
 
 ---
 
@@ -30,31 +31,20 @@
 
 | Field | Value |
 |-------|--------|
-| Phase | H-thin ✅ merged · **H-full** next |
-| Branch | `agent-b/phase-h-thin-shell` **rebased onto `main` @ `d3e46b9`** (no unique commits; use fresh branch for H-full) |
-| PR | [#104](https://github.com/cryptoreporthub/subnet-dashboard/pull/104) merged |
-| Status | Rebase complete — start H-full from `main` |
-
----
-
-## Agent B instruction (from coordinator)
-
-```text
-PR #105 (Phase J) is merged.
-agent-b/phase-h-thin-shell has been rebased onto main @ d3e46b9 and force-pushed.
-H-thin code is already on main via PR #104 — branch tip now equals main.
-For new work (H-full): branch from main (e.g. agent-b/phase-h-full-premium).
-```
+| Phase | **H-full** frontend |
+| Branch | `cursor/phase-h-full-premium` (shared name; rebase onto A or merge after A) |
+| Status | Template + server.py shorten filter per kickoff |
 
 ---
 
 ## Blockers
 
-- None
+- `tests/test_simivision.py` — ImportError `SimiVisionEngine` (pre-existing on main; blocks bare `pytest tests/`)
 
 ---
 
 ## References
 
-- `cursor-agents-communication/concurrent-protocol.md`
+- `docs/premium-dashboard-redesign.md`
 - `docs/master-plan-merged.md` §7
+- Ditto artifact: phase-h-full-agent-prompts.html (full shapes)
