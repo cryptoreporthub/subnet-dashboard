@@ -27,6 +27,7 @@ def test_top_pick_hour_returns_picks_list(client):
     response = client.get("/api/top-pick/hour")
     assert response.status_code == 200
     data = response.json()
+    assert isinstance(data, dict), "response must be an object, not a bare list"
     assert "picks" in data
     assert isinstance(data["picks"], list)
     assert len(data["picks"]) <= 3
