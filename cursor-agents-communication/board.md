@@ -13,7 +13,7 @@
 | 1 | **J** Accuracy fix | A | `cursor/phase-j-accuracy-fix-843d` | ✅ merged (**PR #105** → `fcee141`) |
 | 2 | **H-thin** UI shell | B | `agent-b/phase-h-thin-shell` | ✅ merged (**PR #104** → `4ae3913`) · branch rebased → `d3e46b9` |
 | 3 | **K** CI gates | A + B | `cursor/phase-k-ci-gates` | ✅ merged (**PR #107**) |
-| 4 | **H-full** premium UI | A | `cursor/phase-h-full-premium-ac2c` | 🟡 PR open |
+| 4 | **H-full** premium UI | A | `cursor/phase-h-full-premium-ac2c` | 🟡 **PR #114** open |
 
 ---
 
@@ -23,7 +23,8 @@
 |-------|--------|
 | Phase | J ✅ · K ✅ · **H-full** 🟡 |
 | Branch | `cursor/phase-h-full-premium-ac2c` |
-| Status | H-full PR ready for review |
+| PR | [#114](https://github.com/cryptoreporthub/subnet-dashboard/pull/114) draft |
+| Status | H-full ready for review — awaiting merge |
 
 ---
 
