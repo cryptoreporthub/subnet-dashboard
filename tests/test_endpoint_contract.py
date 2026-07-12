@@ -133,6 +133,9 @@ CONTRACT = [
     # Resolve + rotation tokens (slice 14a)
     ("GET", "/api/resolve-predictions", None),
     ("GET", "/api/rotation-tokens", None),
+    # Signal pipeline (Phase L slice 1)
+    ("GET", "/api/signals", None),
+    ("GET", "/api/signals/summary", None),
 ]
 
 
