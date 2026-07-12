@@ -313,6 +313,14 @@ async def index(request: Request):
         logger.warning("SimiVision context unavailable: %s", exc)
         context["simivision"] = {"top": [], "meta": {"count": 0}}
 
+    # Phase L — signals/alerts Jinja context (server.py glue only)
+    try:
+        from internal.signals.context import build_signals_context
+
+        context.update(build_signals_context(refresh=False))
+    except Exception as exc:
+        logger.warning("Signals context unavailable: %s", exc)
+
     return templates.TemplateResponse(request, "index.html", context)
 
 

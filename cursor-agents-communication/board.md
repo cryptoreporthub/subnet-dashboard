@@ -30,9 +30,9 @@
 | Slice | Scope | Status |
 |-------|--------|--------|
 | 1 | `GET /api/signals`, `/api/signals/summary`, `data/signals.json` | ✅ done |
-| 2 | `GET/POST /api/alerts` | 🟢 implementing |
-| 3 | `/ws/signals` WebSocket | pending |
-| 4 | Rules engine (SELL > HOT, dedup) | pending |
+| 2 | `GET/POST /api/alerts` | ✅ done |
+| 3 | `/ws/signals` WebSocket | ✅ done |
+| 4 | Rules engine (SELL > HOT, dedup) | ✅ done |
 
 **Branch:** `cursor/phase-l-signal-pipeline-b061`  
 **Audit:** PR #113 (`cursor/phase-l-signals-alerts-b061`) — reference only; do not duplicate wholesale  

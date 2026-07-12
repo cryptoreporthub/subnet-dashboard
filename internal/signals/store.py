@@ -1,4 +1,4 @@
-"""Append-only signal log with 7-day TTL (Phase L slice 1)."""
+"""Append-only signal log with 7-day TTL (Phase L)."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from internal.file_utils import ensure_data_dir, safe_read_json, safe_write_json
+from internal.signals.rules import signals_unchanged
 
 SIGNALS_PATH = os.environ.get("SIGNALS_PATH", "data/signals.json")
 RETENTION_DAYS = int(os.environ.get("SIGNAL_RETENTION_DAYS", "7"))
@@ -87,35 +88,27 @@ class SignalStore:
         }
         safe_write_json(self.path, payload)
 
-    @staticmethod
-    def _unchanged(prev: Dict[str, Any], nxt: Dict[str, Any]) -> bool:
-        return (
-            prev.get("signal_type") == nxt.get("signal_type")
-            and prev.get("source_expert") == nxt.get("source_expert")
-            and prev.get("confidence") == nxt.get("confidence")
-        )
-
-    def append_many(self, signals: List[Dict[str, Any]]) -> int:
-        """Append changed signals; return count of new log rows."""
+    def append_many(self, signals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Append changed signals; return list of newly persisted rows."""
         self.load()
         latest = self._data.get("latest_by_subnet") or {}
-        added = 0
+        changed: List[Dict[str, Any]] = []
         for signal in signals:
             entry = dict(signal)
             entry.setdefault("timestamp", _utcnow_z())
             sid = entry.get("subnet_id")
             if sid is not None:
                 prev = latest.get(str(sid))
-                if prev and self._unchanged(prev, entry):
+                if prev and signals_unchanged(prev, entry):
                     continue
             self._data["entries"].append(entry)
             if sid is not None:
                 latest[str(sid)] = entry
-            added += 1
+            changed.append(entry)
         self._data["latest_by_subnet"] = latest
-        if added:
+        if changed:
             self.save()
-        return added
+        return changed
 
     def latest_all(self) -> List[Dict[str, Any]]:
         self.load()

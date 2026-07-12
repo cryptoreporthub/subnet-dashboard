@@ -136,6 +136,8 @@ CONTRACT = [
     # Signal pipeline (Phase L slice 1)
     ("GET", "/api/signals", None),
     ("GET", "/api/signals/summary", None),
+    ("GET", "/api/alerts", None),
+    ("POST", "/api/alerts", {"alert_type": "manual", "message": "contract", "severity": "info"}),
 ]
 
 

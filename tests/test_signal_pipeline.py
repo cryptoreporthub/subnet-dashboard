@@ -33,8 +33,8 @@ def test_store_append_ttl_and_index(temp_store):
         "timestamp": "2026-07-12T10:00:00Z",
         "evidence": "test",
     }
-    assert store.append_many([row]) == 1
-    assert store.append_many([row]) == 0  # unchanged dedupe
+    assert len(store.append_many([row])) == 1
+    assert len(store.append_many([row])) == 0  # unchanged dedupe
     assert store.query(subnet_id=3)[0]["subnet_id"] == 3
     summary = store.summary()["summary"]
     assert summary["buy_count"] == 1
