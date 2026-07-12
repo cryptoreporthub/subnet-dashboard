@@ -1,8 +1,8 @@
 # Board — subnet-dashboard concurrent session
 
-**Last updated:** 2026-07-12T01:25:00Z by Cursor Agent B (`-e78a`)  
-**main:** `fcee141` (Phase J merged)  
-**GATE:** **H-thin** rebased on J — ready to merge **#104** second
+**Last updated:** 2026-07-12T03:35:00Z by Cursor Agent B (`-e78a`)  
+**main:** `4ae3913` (Phase J + **H-thin** merged)  
+**GATE:** **H-full** next (B) · **K** unblocked once H stable on `main`
 
 ---
 
@@ -12,9 +12,9 @@
 |-------|-------|-------|--------|--------|
 | 0 | Protocol docs | A | `cursor/protocol-docs-843d` | ✅ merged |
 | 1 | **J** Accuracy fix | A | `cursor/phase-j-accuracy-fix-843d` | ✅ merged → `fcee141` |
-| 2 | **H-thin** UI shell | B | `agent-b/phase-h-thin-shell` | 🟡 **PR #104** — rebased on `main` |
-| 3 | **H-full** premium UI | B | after H-thin on main | ⬜ gated |
-| 4 | **K** CI gates | A + B | — | ⬜ gated (H on main) |
+| 2 | **H-thin** UI shell | B | `agent-b/phase-h-thin-shell` | ✅ merged → `4ae3913` (**PR #104**) |
+| 3 | **H-full** premium UI | B | TBD | 🟡 next |
+| 4 | **K** CI gates | A + B | — | ⬜ ready after H-full or H-thin verified |
 
 ---
 
@@ -25,7 +25,7 @@
 | Phase | J ✅ merged |
 | Branch | — |
 | PR | Phase J accuracy fix (merged) |
-| Status | J1–J7 on `main`; Agent A must not start K until H-thin merges |
+| Status | May proceed toward **K** once H-full lands or H-thin verified on prod |
 
 ---
 
@@ -33,24 +33,25 @@
 
 | Field | Value |
 |-------|--------|
-| Phase | H-thin |
-| Branch | `agent-b/phase-h-thin-shell` |
-| PR | [#104](https://github.com/cryptoreporthub/subnet-dashboard/pull/104) |
-| Status | Rebased onto `fcee141`; ready for merge second |
+| Phase | H-thin ✅ merged · **H-full** next |
+| Branch | — |
+| PR | [#104](https://github.com/cryptoreporthub/subnet-dashboard/pull/104) merged |
+| Status | `style.css` linked, 12 cockpit cards, accuracy/judge P&L highlights on `main` |
 
 ---
 
 ## Blockers
 
-- None — H-thin rebased after J
+- None — concurrent J/H sprint complete on `main`
 
 ---
 
 ## Gate lines
 
 ```text
-Agent A: Phase J merged (fcee141). Do not start Phase K until H-thin is on main.
-Agent B: merge PR #104 second.
+main=4ae3913 — Phase J + H-thin complete.
+Agent B: H-full (Chart.js hero, premium layout) when ready.
+Agent A + B: Phase K when H stable on main.
 ```
 
 ---
