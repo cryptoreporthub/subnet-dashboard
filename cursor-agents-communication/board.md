@@ -13,7 +13,7 @@
 | 1 | **J** Accuracy fix | A | `cursor/phase-j-accuracy-fix-843d` | ✅ merged (**PR #105** → `fcee141`) |
 | 2 | **H-thin** UI shell | B | `agent-b/phase-h-thin-shell` | ✅ merged (**PR #104** → `4ae3913`) · branch rebased → `d3e46b9` |
 | 3 | **K** CI gates | A + B | `cursor/phase-k-ci-gates` | ✅ merged (**PR #107**) |
-| 4 | **L** Signals & alerts | B | `cursor/phase-l-signals-alerts-b061` | 🟡 **in progress** (Agent B) |
+| 4 | **L** Signals & alerts | B | `cursor/phase-l-signals-alerts-b061` | 🟡 PR open (Agent B) |
 | 5 | **H-full** premium UI | B | TBD | ⏸ after L |
 
 ---
@@ -33,8 +33,8 @@
 |-------|--------|
 | Phase | **L** Signals & alerts — **in progress** |
 | Branch | `cursor/phase-l-signals-alerts-b061` |
-| PR | TBD (draft on push) |
-| Status | Building `/api/signals`, `/api/alerts`, `/ws/signals`, `data/signals.json` persistence, Jinja context hooks |
+| PR | [#113](https://github.com/cryptoreporthub/subnet-dashboard/pull/113) (draft) |
+| Status | Phase L complete — awaiting merge |
 
 ---
 
