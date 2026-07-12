@@ -18,6 +18,7 @@ from server import _jinja_shorten, app, templates
 H_FULL_SECTION_IDS = [
     "section-indicators",
     "section-scanner",
+    "section-subnet-groups",
     "section-staking",
     "section-picks",
     "section-kpi",
@@ -218,3 +219,12 @@ def test_h_full_premium_scanner_and_judges_js():
     html = client.get("/").text
     assert "/static/js/premium_scanner.js" in html
     assert "/static/js/premium_judges.js" in html
+
+
+def test_subnet_grouping_optional_lane():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert 'id="section-subnet-groups"' in html
+    assert 'id="subnet-group-data"' in html
+    assert "/static/js/subnet_grouping.js" in html
+    assert html.count('class="cockpit-card card"') == 12

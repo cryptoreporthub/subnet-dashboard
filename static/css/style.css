@@ -2575,3 +2575,79 @@ header.top {
   .hero-card { padding: 12px; }
   .card, .pick-card { padding: 10px; }
 }
+
+/* ---------- Subnet rollup (optional grouping lane) ---------- */
+.subnet-groups-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.subnet-group {
+  border: 1px solid var(--cockpit-green-line, rgba(0, 255, 65, 0.22));
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.subnet-group-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.subnet-group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.subnet-group-summary::before {
+  content: '▸';
+  color: var(--cockpit-green, #00ff41);
+  margin-right: 4px;
+  transition: transform 0.15s ease;
+}
+
+.subnet-group[open] .subnet-group-summary::before {
+  transform: rotate(90deg);
+}
+
+.subnet-group-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted, #6b7280);
+  font-family: var(--font-mono, monospace);
+}
+
+.subnet-group-body {
+  padding: 0 14px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.subnet-group-item {
+  display: flex;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.subnet-group-item:last-child {
+  border-bottom: none;
+}
+
+.subnet-group-item-label {
+  flex: 0 0 100px;
+  font-weight: 600;
+  color: var(--cockpit-green, #00ff41);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.subnet-group-item-val {
+  flex: 1;
+  color: var(--text-primary, #e6f1ff);
+}

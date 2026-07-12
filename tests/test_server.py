@@ -22,6 +22,9 @@ def test_registry_route(client):
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, dict)
+    if data:
+        first = next(iter(data.values()))
+        assert first.get('id') == first.get('netuid')
 
 
 def test_subnet_route_found(client):
