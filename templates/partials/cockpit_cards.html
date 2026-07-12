@@ -43,7 +43,7 @@
       {% endif %}
       {% set status = card.status if card.status in ['live', 'empty', 'unavailable'] else 'empty' %}
       <article
-        class="cockpit-card"
+        class="cockpit-card card"
         data-section-id="{{ card.id }}"
         data-status="{{ status }}"
         aria-labelledby="cockpit-{{ card.id }}-title"
@@ -55,6 +55,42 @@
           </div>
           <span class="cockpit-status cockpit-status-{{ status }}">{{ status }}</span>
         </header>
+
+        {% if card.highlights and card.id == 'learning_loop' %}
+        <div class="cockpit-highlight" aria-label="Learning loop accuracy">
+          <div class="cockpit-highlight-stat">
+            <span class="cockpit-highlight-label">Accuracy</span>
+            <span class="cockpit-highlight-value">{{ card.highlights.accuracy_pct }}%</span>
+          </div>
+          <div class="cockpit-highlight-stat">
+            <span class="cockpit-highlight-label">Resolved</span>
+            <span class="cockpit-highlight-value">{{ card.highlights.correct }}✓ / {{ card.highlights.wrong }}✗</span>
+          </div>
+          <div class="cockpit-highlight-stat">
+            <span class="cockpit-highlight-label">Pending</span>
+            <span class="cockpit-highlight-value">{{ card.highlights.pending }}</span>
+          </div>
+        </div>
+        {% elif card.highlights and card.id == 'judges' %}
+        <div class="cockpit-highlight" aria-label="Judge portfolio P and L">
+          <div class="cockpit-highlight-stat">
+            <span class="cockpit-highlight-label">Combined P&amp;L</span>
+            <span class="cockpit-highlight-value{% if card.highlights.combined_pnl_pct < 0 %} cockpit-negative{% endif %}">{{ '%+.2f'|format(card.highlights.combined_pnl_pct) }}%</span>
+          </div>
+          <div class="cockpit-highlight-stat">
+            <span class="cockpit-highlight-label">Open positions</span>
+            <span class="cockpit-highlight-value">{{ card.highlights.combined_open }}</span>
+          </div>
+          <div class="cockpit-highlight-stat cockpit-highlight-judges">
+            <span class="cockpit-highlight-label">Oracle / Echo / Pulse</span>
+            <span class="cockpit-highlight-value cockpit-highlight-mono">
+              {{ '%+.1f'|format(card.highlights.oracle_pnl_pct or 0) }}% /
+              {{ '%+.1f'|format(card.highlights.echo_pnl_pct or 0) }}% /
+              {{ '%+.1f'|format(card.highlights.pulse_pnl_pct or 0) }}%
+            </span>
+          </div>
+        </div>
+        {% endif %}
 
         <p class="cockpit-summary">{{ card.summary }}</p>
 
