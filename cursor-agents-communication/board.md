@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
 **Last updated:** 2026-07-12T18:12:00Z — PR #125 merged to `main`  
-**main:** `397ac8d` (H-full optional grouping lane merged)
+**main:** `132bf7a`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -86,6 +86,8 @@ Do NOT use fetch_memories(["f93f7202"]) for board state this sprint.
 ```
 
 ## References
+- `cursor-agents-communication/model-guide.md` — **Composer vs Grok** per phase + past-phase review checklists
+- `cursor-agents-communication/phase-h-subnet-grouping-audit.md` — optional lane audit
 - `master-plan-merged.md` (short canonical plan at repo root)
 - `docs/master-plan-merged.md` (extended history and contracts)
 - `cursor-agents-communication/shared-workspace.md` (handoff order)
