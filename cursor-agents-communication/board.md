@@ -13,7 +13,7 @@
 | 1 | **J** Accuracy fix | A | `cursor/phase-j-accuracy-fix-843d` | ✅ merged (**PR #105** → `fcee141`) |
 | 2 | **H-thin** UI shell | B | `agent-b/phase-h-thin-shell` | ✅ merged (**PR #104** → `4ae3913`) |
 | 3 | **K** CI gates | A + B | `cursor/phase-k-ci-gates` | ✅ merged (**PR #107**) |
-| 4 | **H-full** premium UI | B | `cursor/phase-h-full-premium-e78a` | 🟡 PR open |
+| 4 | **H-full** premium UI | B | `cursor/phase-h-full-premium-e78a` | 🟡 **PR #111** open |
 
 ---
 
@@ -32,7 +32,7 @@
 |-------|--------|
 | Phase | **H-full** premium UI |
 | Branch | `cursor/phase-h-full-premium-e78a` |
-| PR | opening |
+| PR | [#111](https://github.com/cryptoreporthub/subnet-dashboard/pull/111) open |
 | Status | 13-section premium layout · shorten filter · UTC clock · 21/21 `test_phase_h_ui.py` green |
 
 ---
