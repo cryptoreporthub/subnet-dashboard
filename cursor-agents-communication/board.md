@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-12T17:55:00Z by Cursor Agent (subnet grouping UI lane)  
-**main:** `1d50232` (H-full #120 merged)
+**Last updated:** 2026-07-12T18:12:00Z — PR #125 merged to `main`  
+**main:** `397ac8d` (H-full optional grouping lane merged)
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -26,8 +26,8 @@
 | **H-thin** | ✅ merged | PR #104 — 12 cockpit cards on `main` |
 | **K** | ✅ merged · **unblocked** | PR #107 — CI gates on `main`; no longer gates H-full or L |
 | **H-full** | ✅ merged | PR #120 on `main` |
-| **H-full optional** | 🟢 **done** | Per-subnet grouping UI — branch `cursor/phase-h-subnet-grouping-ui-4e98` |
-| **L** | 🟡 slice 1 | Agent B — backend-owned; separate from H-full |
+| **H-full optional** | ✅ merged | PR #125 — per-subnet grouping UI on `main` |
+| **L** | 🟢 **active** | Agent B — slices 2–4 next (PR #115) |
 
 ## Active Work
 
@@ -38,7 +38,7 @@ Parallel UI lane inside H-full; does **not** block L.
 | Owner | Task | Status |
 |---|---|---|
 | **Agent B** | Data-flow audit + `netuid` alias on `/api/registry` | **Done** — `phase-h-subnet-grouping-audit.md` |
-| **Agent A** | Collapsible per-subnet rollup in premium cockpit | **Done** — `cursor/phase-h-subnet-grouping-ui-4e98` |
+| **Agent A** | Collapsible per-subnet rollup in premium cockpit | **Merged** — PR #125 |
 
 **Rules:** frontend-only; bucket by `netuid ?? id`; **do not** group the 12-card `cockpit_sections` grid.
 
