@@ -1,7 +1,7 @@
 # Subnet Dashboard Master Plan
 
 **Last updated:** 2026-07-12  
-**main:** `9b5546d`
+**main:** `1d50232`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -14,14 +14,14 @@
 
 > **H-thin** shipped on `main` as the partial H shell (PR #104). **H-full** completes the premium cockpit (Chart.js, 13 sections).
 
-## Completion Snapshot (`main` @ `9b5546d`)
+## Completion Snapshot (`main` @ `1d50232`)
 | Phase | Status |
 |-------|--------|
 | J | ✅ merged (PR #105) |
 | H-thin | ✅ merged (PR #104) |
-| K | ✅ merged (PR #107) — gate **unblocked** |
-| H-full | 🟢 active — Agent A, not merged |
-| L | 🟡 slice 1 — Agent B, PR #115 draft |
+| K | ✅ merged (PR #107) |
+| H-full | ✅ merged (PR #120) |
+| L | 🟢 active — Agent B, PR #115 draft |
 
 ## Phase Responsibilities
 

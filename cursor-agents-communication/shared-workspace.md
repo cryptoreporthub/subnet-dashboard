@@ -13,7 +13,7 @@
 ## Workspace Ready When
 The shared workspace is **ready for agents** once `board.md` status matches `main` (SHA, merged phases, active tracks). Read the board first on every boot.
 
-**Current:** `main` @ `9b5546d` · J, H-thin, K merged · H-full (A) and L slice 1 (B) active.
+**Current:** `main` @ `1d50232` · J, H-thin, K, **H-full** merged · **L** active (Agent B, PR #115).
 
 ## Recommended Handoff Order
 1. **Agent A first** — H-full premium UI (`templates/*`, `static/*`)
@@ -29,9 +29,8 @@ Parallel development is OK (no file overlap). Merge order defaults to A then B u
 - Do not fabricate data or signals.
 
 ## Agent A (`-843d`)
-- **Phase:** H-full premium cockpit
-- **Focus:** templates, CSS, Chart.js, UI render quality
-- **Start:** `cursor/phase-h-full-premium-ac2c-42f7` (PR #120) or `cursor/phase-h-full-premium-ac2c`
+- **Phase:** H-full ✅ merged (PR #120)
+- **Optional:** PR #110 backend context builders if needed
 - **Do not touch:** `internal/signals/*`, resolver, grading, learning weights
 
 ## Agent B (`-e78a`)
@@ -43,9 +42,9 @@ Parallel development is OK (no file overlap). Merge order defaults to A then B u
 ## Handoff Status
 | Agent | Status | Next action |
 |-------|--------|-------------|
-| **Agent A** | Ready | Merge H-full UI (PR #120 recommended); then backend context PR #110 if needed |
-| **Agent B** | Slice 1 done | Continue alerts + WebSocket on PR #115; audit PR #113 before redoing |
-| **User** | Pending | Approve merge of H-full, then L |
+| **Agent A** | H-full merged | Optional PR #110; close superseded PR #111 |
+| **Agent B** | Slice 1 done | Continue alerts + WebSocket on PR #115 |
+| **User** | Pending | Merge L (PR #115) when ready |
 
 ## Conflict Surface
 - `server.py` — if both agents have open PRs, second merger rebases.
