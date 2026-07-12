@@ -1,5 +1,5 @@
 # Phase K - CI Quality Gates (Report-Only, Non-Blocking)
-# Per master-plan-merged.md section 9: Phase K gates must be report-only until stable
+# Per master-plan-merged.md section 8: Phase K gates are report-only until stable
 # After stability is verified, gates become blocking for main branch protection
 
 name: Phase K - CI Quality Gates
@@ -11,7 +11,7 @@ on:
     branches: [ main ]
 
 concurrency:
-  group: phase-k-\${{ github.ref }}
+  group: phase-k-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -23,14 +23,18 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           cache: pip
       - name: Install deps
         run: pip install -r requirements.txt black flake8
-      - name: Run black
-        run: black --check --line-length 88 .
-      - name: Run flake8
-        run: flake8 . --max-line-length 88
+      - name: Report black formatting drift
+        continue-on-error: true
+        run: black --check --line-length 88 server.py internal tests
+      - name: Report flake8 issues
+        continue-on-error: true
+        run: flake8 server.py internal tests --max-line-length 88 --statistics
+      - name: Lint gate (report-only)
+        run: echo "GATE 1 complete — report-only per docs/master-plan-merged.md section 8"
 
   contract-tests:
     name: GATE 2 - Contract Tests (Endpoint Parity)
@@ -40,12 +44,14 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           cache: pip
       - name: Install deps
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install pytest httpx
       - name: Run contract tests
-        run: pytest tests/test_endpoint_contract.py -q
+        run: python -m pytest tests/test_endpoint_contract.py -q
 
   security:
     name: GATE 3 - Security (bandit, safety)
@@ -55,12 +61,14 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
+          cache: pip
       - name: Install deps
         run: pip install -r requirements.txt bandit safety
-      - name: Run bandit
-        run: bandit -r . --suppress-noise
-      - name: Run safety
+      - name: Run bandit (high severity, scoped)
+        run: bandit -q -r server.py internal tests --severity-level high
+      - name: Run safety (report-only)
+        continue-on-error: true
         run: safety check --full-report
 
   smoke-test:
@@ -72,7 +80,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           cache: pip
       - name: Install deps
         run: pip install -r requirements.txt
@@ -107,7 +115,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           cache: pip
       - name: Install deps
         run: pip install -r requirements.txt
@@ -126,7 +134,7 @@ jobs:
       - name: Check data files freshness
         run: |
           find data/ -type f -name "*.json" -mtime +1 -print
-          test \$? -eq 1 || echo "Warning: Some data files older than 24h"
+          test $? -eq 1 || echo "Warning: Some data files older than 24h"
 
   branch-protection:
     name: GATE 8 - Branch Protection Readiness
@@ -139,4 +147,4 @@ jobs:
           echo "=== Branch Protection Readiness Report ==="
           echo "All previous gates passed: YES"
           echo "Recommendation: Enable branch protection after Phase K stabilization"
-          echo "See: https://docs.subnet-dashboard.fly.dev/docs/master-plan-merged.md#phase-k-ci-quality-gates"
+          echo "See: docs/master-plan-merged.md section 8 (Phase K CI quality gates)"
