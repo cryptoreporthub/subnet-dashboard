@@ -1,7 +1,7 @@
 # Cursor Agents Communication
 
 > **Canonical copy lives in Ditto.** Search: `Cursor Agents Communication` or `subnet-dashboard agent coordination`.
-> Dedicated graph: `cursor-agents-communication-fd6d30`
+> Dedicated graph: `cursor-agents-communication-98fdd3`
 > Do not ask the user to relay messages between agents.
 
 ## Parallel ownership (no toe-stepping)

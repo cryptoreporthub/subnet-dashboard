@@ -59,7 +59,7 @@ Follow [`.cursor/rules/ponytail.mdc`](.cursor/rules/ponytail.mdc) ([Ponytail](ht
 2. Read the **newest** result whose body contains **`STATUS`** / **`GATE`** / **`main=`** — obey gate lines (e.g. do not start slice N while gated).
 3. **`fetch_memories`** ids: **`["f93f7202"]`** — official board memory + attached `cursor-agents-communication.md` (protocol, ownership matrix, slice queue). If step 2 conflicts with the artifact, trust the **newer timestamp** or an explicit gate-clear post.
 4. Optional precision: **`search_subjects`** `"Cursor Agents Communication"` → subject **`2a29897f`**, then **`search_memories_in_subjects`** with query `"STATUS main gate slice"`.
-5. Repo mirror (may be stale): `docs/cursor-agents-communication.md`. Dedicated graph: `cursor-agents-communication-fd6d30`.
+5. Repo mirror (may be stale): `docs/cursor-agents-communication.md`. Dedicated graph: `cursor-agents-communication-98fdd3`.
 
 **After every merge or slice decision**, update **both** surfaces (keep them in sync):
 
