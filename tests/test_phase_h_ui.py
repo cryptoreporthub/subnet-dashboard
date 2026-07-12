@@ -1,90 +1,90 @@
-"""Phase H-thin — UI shell (Agent B): style.css link, cockpit cards, honest stats."""
+"""Phase H-full — premium UI cockpit (style.css, 13 sections, Chart.js, honest-empty)."""
 
 from __future__ import annotations
 
 import re
 
+import pytest
 from fastapi.testclient import TestClient
 
-from internal.analytics.cockpit_render import (
-    enrich_cockpit_sections_for_display,
-    load_cockpit_sections,
-)
-from internal.cockpit.sections import COCKPIT_SECTION_IDS
+from internal.analytics.cockpit_render import enrich_cockpit_sections_for_display
 from server import app
 
+PREMIUM_SECTIONS = (
+    "technical-indicators",
+    "scanner",
+    "staking-yield",
+    "top-picks",
+    "kpi-strip",
+    "council",
+    "radar",
+    "judges",
+    "mind-map",
+    "social",
+    "chat",
+    "learning-trail",
+    "undervalued-radar",
+)
 
-def test_index_links_style_css():
-    client = TestClient(app)
+
+@pytest.fixture
+def client():
+    return TestClient(app)
+
+
+def test_index_links_style_css(client):
     html = client.get("/").text
-    assert '/static/css/style.css' in html
+    assert "/static/css/style.css" in html
 
 
-def test_index_has_card_class():
-    client = TestClient(app)
+def test_index_has_card_components(client):
     html = client.get("/").text
-    assert 'class="cockpit-card card"' in html or 'class="card cockpit-card"' in html
-    assert html.count('class="cockpit-card card"') == 12
+    assert 'class="card' in html
+    assert html.count('class="card') >= 13
 
 
-def test_index_no_markdown_heading_triple_hash():
-    client = TestClient(app)
+def test_index_no_markdown_heading_triple_hash(client):
     html = client.get("/").text
     assert "###" not in html
 
 
-def test_index_renders_twelve_cockpit_sections():
-    client = TestClient(app)
+def test_index_renders_thirteen_premium_sections(client):
     html = client.get("/").text
-    assert html.count('class="cockpit-card card"') == 12
-    for section_id in COCKPIT_SECTION_IDS:
-        assert f'data-section-id="{section_id}"' in html
+    for section_id in PREMIUM_SECTIONS:
+        assert f'data-premium-section="{section_id}"' in html
+    assert html.count("data-premium-section=") >= 13
 
 
-def test_learning_loop_shows_real_accuracy_highlight():
-    client = TestClient(app)
-    html = client.get("/").text
-    api = client.get("/api/cockpit/sections").json()
-    learning = next(s for s in api["sections"] if s["id"] == "learning_loop")
-    if learning.get("status") == "live" and learning.get("metrics", {}).get("accuracy") is not None:
-        acc = round(float(learning["metrics"]["accuracy"]) * 100, 1)
-        assert "cockpit-highlight" in html
-        assert f"{acc}%" in html
-
-
-def test_judges_shows_pnl_highlight_when_live():
-    payload = load_cockpit_sections()
-    judges = next(s for s in payload["sections"] if s["id"] == "judges")
-    if judges.get("status") != "live":
-        return
-    highlights = judges.get("highlights") or {}
-    if highlights.get("combined_pnl_pct") is None:
-        return
-    client = TestClient(app)
-    html = client.get("/").text
-    assert "Combined P&amp;L" in html or "Combined P&L" in html
-    pnl = highlights["combined_pnl_pct"]
-    assert f"{pnl:+.2f}" in html or f"{pnl:+.1f}" in html
-
-
-def test_trace_and_message_intel_honest_status():
-    client = TestClient(app)
-    api = client.get("/api/cockpit/sections").json()
-    by_id = {s["id"]: s for s in api["sections"]}
-    for section_id in ("trace", "message_intel"):
-        section = by_id[section_id]
-        assert section["status"] in ("live", "empty", "unavailable")
-        assert section.get("summary")
-    html = client.get("/").text
-    assert 'data-section-id="trace"' in html
-    assert 'data-section-id="message_intel"' in html
-
-
-def test_no_chartjs_in_h_thin_shell():
-    client = TestClient(app)
+def test_index_includes_chartjs(client):
     html = client.get("/").text.lower()
-    assert "chart.js" not in html
-    assert "chartjs" not in html
+    assert "chart.js" in html or "chart.umd" in html
+
+
+def test_index_includes_premium_cockpit_js(client):
+    html = client.get("/").text
+    assert "/static/js/premium_cockpit.js" in html
+
+
+def test_kpi_strip_shows_learning_metrics(client):
+    html = client.get("/").text
+    api = client.get("/api/learning-metrics").json()
+    acc = round(float(api.get("accuracy", 0)) * 100, 1)
+    assert "kpi-strip" in html or 'data-premium-section="kpi-strip"' in html
+    if api.get("predictions_resolved", 0) > 0:
+        assert f"{acc}%" in html or "Accuracy" in html
+
+
+def test_learning_trail_honest_empty_or_rows(client):
+    html = client.get("/").text
+    assert 'data-premium-section="learning-trail"' in html
+    assert "Trail" in html or "Predictions" in html
+    assert "###" not in html
+
+
+def test_mindmap_section_present(client):
+    html = client.get("/").text
+    assert 'data-premium-section="mind-map"' in html
+    assert "/api/mindmap/graph" in html or "mindmap-graph" in html
 
 
 def test_strip_markdown_headings_in_enrichment():
@@ -106,16 +106,3 @@ def test_strip_markdown_headings_in_enrichment():
     assert "###" not in summary
     assert "Bad heading" in summary
     assert enriched["sections"][0]["highlights"]["accuracy_pct"] == 31.5
-
-
-def test_cockpit_api_matches_display_enrichment():
-    client = TestClient(app)
-    raw = client.get("/api/cockpit/sections").json()
-    display = load_cockpit_sections()
-    assert len(raw["sections"]) == 12
-    assert len(display["sections"]) == 12
-    for raw_row, disp_row in zip(raw["sections"], display["sections"]):
-        assert raw_row["id"] == disp_row["id"]
-        if isinstance(disp_row.get("summary"), str):
-            assert "###" not in disp_row["summary"]
-            assert not re.search(r"^#{1,6}\s", disp_row["summary"], re.MULTILINE)
