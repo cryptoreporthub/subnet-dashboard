@@ -38,8 +38,8 @@ def _default_store() -> Dict[str, Any]:
 class SignalStore:
     """Persist signals in data/signals.json — append-only, indexed by subnet_id."""
 
-    def __init__(self, path: str = SIGNALS_PATH):
-        self.path = path
+    def __init__(self, path: Optional[str] = None):
+        self.path = path or os.environ.get("SIGNALS_PATH", "data/signals.json")
         self._data = _default_store()
 
     def load(self) -> Dict[str, Any]:

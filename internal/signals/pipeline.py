@@ -130,6 +130,8 @@ def build_signal(sn: Dict[str, Any], market_context: Optional[Dict[str, Any]] = 
         "total_score": score.get("total_score"),
         "price_change_24h": sn.get("price_change_24h"),
         "dominant_label": dominant_label(hot, sell),
+        "hot": hot,
+        "sell": sell,
     }
 
 

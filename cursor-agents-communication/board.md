@@ -42,9 +42,9 @@
 | Slice | Capability | Status |
 |-------|------------|--------|
 | 1 | `GET /api/signals`, `/api/signals/summary`, `data/signals.json` | ✅ |
-| 2 | `GET/POST /api/alerts`, `POST /api/alerts/subscribe` | ✅ |
-| 3 | `/ws/signals` WebSocket | ✅ |
-| 4 | `rules.py` — SELL > HOT, dedup | ✅ |
+| 2 | `GET/POST /api/alerts`, filters, 201/400, idempotency | ✅ + hardening PR |
+| 3 | `/ws/signals` WebSocket | ✅ — design: `phase-l-slice3-ws-design.md` |
+| 4 | `rules.py` + `correlation.py` — SELL > HOT, dedup, composites | ✅ — design: `phase-l-slice4-rules-design.md` |
 
 **Next:** M/N/O gated on user approval. Frontend signal consumers optional (Agent A, explicit task only).
 

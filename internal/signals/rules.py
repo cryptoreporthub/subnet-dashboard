@@ -1,19 +1,38 @@
 """Signal rules engine — SELL > HOT precedence and deduplication (Phase L slice 4).
 
-Design notes (Grok pass → Composer implementation):
-- SELL ALERT always suppresses HOT when both flags are active.
-- Signal persistence dedupes unchanged (type, expert, confidence) per subnet.
-- Alert dedupes on dedupe_key + alert_type while prior row is still active.
+Design: cursor-agents-communication/phase-l-slice4-rules-design.md
 """
 
 from __future__ import annotations
 
+import os
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 
 SELL_LABEL = "SELL ALERT"
 HOT_LABEL = "HOT"
 
 ALLOWED_SEVERITIES = frozenset({"info", "warning", "critical"})
+ALLOWED_THRESHOLD_OPS = frozenset({"gt", "lt", "gte", "lte", "eq"})
+ALERT_DEDUP_WINDOW_MINUTES = int(os.environ.get("ALERT_DEDUP_WINDOW_MINUTES", "5"))
+ALERT_MAX_PER_SUBNET_HOUR = int(os.environ.get("ALERT_MAX_PER_SUBNET_HOUR", "10"))
+
+
+def _parse_ts(value: str) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _within_minutes(ts_a: str, ts_b: str, minutes: int) -> bool:
+    a = _parse_ts(ts_a)
+    b = _parse_ts(ts_b)
+    if not a or not b:
+        return False
+    return abs((b - a).total_seconds()) <= minutes * 60
 
 
 def apply_hot_sell_precedence(
@@ -83,13 +102,49 @@ def should_skip_alert(
     existing: Dict[str, Any],
     candidate: Dict[str, Any],
 ) -> bool:
-    """Skip when same dedupe key + type is already active."""
-    if not existing.get("active"):
-        return False
-    return (
-        alert_dedupe_key(existing) == alert_dedupe_key(candidate)
-        and existing.get("alert_type") == candidate.get("alert_type")
-    )
+    """Skip when same dedupe key + type is active, or same subnet+type within window."""
+    if alert_dedupe_key(existing) == alert_dedupe_key(candidate) and existing.get(
+        "alert_type"
+    ) == candidate.get("alert_type"):
+        if existing.get("active"):
+            return True
+        cand_ts = str(candidate.get("timestamp") or "")
+        exist_ts = str(existing.get("timestamp") or "")
+        if cand_ts and exist_ts and _within_minutes(
+            exist_ts, cand_ts, ALERT_DEDUP_WINDOW_MINUTES
+        ):
+            return True
+
+    sid = candidate.get("subnet_id")
+    if sid is not None and existing.get("subnet_id") == sid:
+        if existing.get("alert_type") == candidate.get("alert_type"):
+            cand_ts = str(candidate.get("timestamp") or "")
+            exist_ts = str(existing.get("timestamp") or "")
+            if cand_ts and exist_ts and _within_minutes(
+                exist_ts, cand_ts, ALERT_DEDUP_WINDOW_MINUTES
+            ):
+                return True
+    return False
+
+
+def subnet_hourly_cap_reached(
+    alerts: list[Dict[str, Any]],
+    subnet_id: int,
+    *,
+    max_per_hour: int = ALERT_MAX_PER_SUBNET_HOUR,
+) -> bool:
+    """True when subnet_id already has max_per_hour alerts in the last hour."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+    count = 0
+    for row in alerts:
+        if row.get("subnet_id") != subnet_id:
+            continue
+        ts = _parse_ts(str(row.get("timestamp") or ""))
+        if ts and ts >= cutoff:
+            count += 1
+            if count >= max_per_hour:
+                return True
+    return False
 
 
 def validate_alert_payload(payload: Dict[str, Any]) -> Optional[str]:
@@ -103,4 +158,24 @@ def validate_alert_payload(payload: Dict[str, Any]) -> Optional[str]:
     severity = str(payload.get("severity") or "info").strip().lower()
     if severity not in ALLOWED_SEVERITIES:
         return f"severity must be one of: {', '.join(sorted(ALLOWED_SEVERITIES))}"
+
+    subnet_id = payload.get("subnet_id")
+    if subnet_id is not None and not isinstance(subnet_id, int):
+        return "subnet_id (netuid) must be an integer"
+
+    threshold_type = payload.get("threshold_type")
+    threshold_value = payload.get("threshold_value")
+    threshold_operator = payload.get("threshold_operator")
+    if threshold_type is not None or threshold_value is not None:
+        if not str(threshold_type or "").strip():
+            return "threshold_type is required when configuring a threshold alert"
+        if threshold_value is None:
+            return "threshold_value is required when configuring a threshold alert"
+        try:
+            float(threshold_value)
+        except (TypeError, ValueError):
+            return "threshold_value must be numeric"
+        op = str(threshold_operator or "gte").strip().lower()
+        if op not in ALLOWED_THRESHOLD_OPS:
+            return f"threshold_operator must be one of: {', '.join(sorted(ALLOWED_THRESHOLD_OPS))}"
     return None
