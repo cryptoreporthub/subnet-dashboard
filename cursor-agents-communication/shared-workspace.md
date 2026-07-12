@@ -15,7 +15,11 @@
 ## Workspace Ready When
 The shared workspace is **ready for agents** once `board.md` status matches `main` (SHA, merged phases, active tracks). Read the board first on every boot.
 
-**Current:** `main` @ `132bf7a` · J/H-thin/K/H-full + optional lane (#125) merged · **L active** (Agent B slices 2–4).
+**Current:** `main` @ `24333f8` · J/H-thin/K/H-full/lane/model-guide merged · **L active** (Agent B slices 2–4).
+
+## Ready for Ditto
+Cursor Agents A + B are ready for **Ditto to create Phase L assignment plans**.  
+See `cursor-agents-communication/ditto-phase-l-handoff.md`.
 
 ## Optional Lane — Per-subnet grouping / collapse
 
@@ -42,9 +46,9 @@ The shared workspace is **ready for agents** once `board.md` status matches `mai
 
 | Agent | Status | Next action |
 |-------|--------|-------------|
-| **Agent A** | H-full + lane done | Idle unless polish or PR #110 context |
-| **Agent B** | Slice 1 done | **Go** — alerts + WebSocket on PR #115 |
-| **User** | — | Merge PR #122 (model guide), then L when ready |
+| **Agent A** | H-full + lane done | Idle — see Ditto plan when published |
+| **Agent B** | Slice 1 done | **Awaiting Ditto Phase L slices 2–4 plan**, then PR #115 |
+| **Ditto** | — | **Create next assignment plans** — see `ditto-phase-l-handoff.md` |
 
 ## Conflict Surface
 - `server.py` — if both agents have open PRs, second merger rebases.

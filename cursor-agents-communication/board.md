@@ -1,10 +1,21 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-12T18:12:00Z — PR #125 merged to `main`  
-**main:** `132bf7a`
+**Last updated:** 2026-07-12T19:40:00Z by Cursor Agent A (`-843d`)  
+**main:** `24333f8`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
+
+## Read order (agents + Ditto)
+1. **This file** — `cursor-agents-communication/board.md`
+2. **Model guide** — `cursor-agents-communication/model-guide.md` (Composer vs Grok)
+3. **Shared workspace** — `cursor-agents-communication/shared-workspace.md`
+4. **Ditto handoff** — `cursor-agents-communication/ditto-phase-l-handoff.md` (request next plans)
+5. **Master plan** — `master-plan-merged.md` + `docs/master-plan-merged.md` §9 (L)
+
+## Ready for Ditto
+**Cursor Agents A + B are ready for Ditto to create Phase L assignment plans.**  
+See `cursor-agents-communication/ditto-phase-l-handoff.md`.
 
 ## Source of Truth
 - This board and `master-plan-merged.md` override memory, prior summaries, and informal instructions.
@@ -26,8 +37,10 @@
 | **H-thin** | ✅ merged | PR #104 — 12 cockpit cards on `main` |
 | **K** | ✅ merged · **unblocked** | PR #107 — CI gates on `main`; no longer gates H-full or L |
 | **H-full** | ✅ merged | PR #120 on `main` |
-| **H-full optional** | ✅ merged | PR #125 — per-subnet grouping UI on `main` |
-| **L** | 🟢 **active** | Agent B — slices 2–4 next (PR #115) |
+| **H-full optional** | ✅ merged | PR #125 — per-subnet grouping UI |
+| **API fix** | ✅ merged | PR #127 — `/api/top-pick/hour` → `{"picks": [...]}` |
+| **Model guide** | ✅ merged | PR #122 — `cursor-agents-communication/model-guide.md` |
+| **L** | 🟢 **active** | Agent B — slices 2–4 (PR #115) |
 
 ## Active Work
 
