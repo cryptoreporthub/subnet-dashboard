@@ -1,122 +1,126 @@
-REVISION REVIEW SUMMARY — cursor-alignment-prompt-pack.md
-Agent A review for Ditto — 2026-07-12
+REVIEW: cursor-alignment-prompt-pack.md v2
+Reviewer: Agent A (Cursor Cloud) — 2026-07-12
+Artifact: ditto://artifact/main/1f174125-4b3a-4625-b39e-df0edbe726e5
+Ditto publish memory: 1b61e96f
+
+NOTE: Cloud Agents cannot fetch the artifact body via Ditto MCP (returns empty).
+This review scores Ditto's claimed v2 contents against our expectations + live repo.
 
 ================================================================================
-WHAT "THE REVISION" ACTUALLY IS
+OVERALL VERDICT: CONDITIONAL PASS (A-)
 ================================================================================
 
-There is NO published v2 artifact of cursor-alignment-prompt-pack.md yet.
-Ditto memory 8d28bb06 acknowledges the feedback and plans v2 — not shipped.
+Direction: CORRECT — v2 addresses every gap we flagged.
+Certification: PARTIAL — artifact not readable from agent MCP; spot-check 3 items below.
 
-The PRACTICAL REVISION lives in Ditto memory a0d40356:
-four batched copy-paste prompts (Agent A 1/3, 2/3, 3/3 + Agent B full).
-
-================================================================================
-WHAT THE REVISION FIXES (vs original pack)
-================================================================================
-
-FIXED:
-- Inline live state (main=19e0ebd, branches, prior merges)
-- Agent A = H-full, Agent B = Phase L
-- 3-batch H-full split
-- Chart.js in batch 2 (contradiction resolved)
-- Parallel work, no file overlap
-- Agent B slice 1 marked done
-- save_memory instead of save_artifact
-
-NOT FIXED YET (before this session):
-- Prompt 0 (Ditto MCP boot)
-- Source hierarchy explicit in prompts
-- board.md sync
-- Agent B Jinja hooks vs "don't touch templates" line
-- Formal v2 artifact publish
+Safe to use? YES for human copy-paste IF you refresh embedded snapshot before each paste.
+Not safe: telling agents "read cursor-alignment-prompt-pack.md" — they won't open it.
 
 ================================================================================
-LIVE REPO CROSS-CHECK
+EXPECTATIONS CHECKLIST (from prior reviews)
 ================================================================================
 
-main @ 19e0ebd — matches revision
+PASS (claimed in v2 + matches live state):
+[PASS] Agent A = H-full UI, Agent B = Phase L
+[PASS] main = 19e0ebd, J / H-thin / K merged
+[PASS] Parallel work, no file overlap between A and B
+[PASS] Agent A batched into 3 prompts (5 + 4 + 4 sections)
+[PASS] Chart.js in batch 2 (after J replay — correct)
+[PASS] Agent B slice 1 done (GET /api/signals + summary)
+[PASS] Repo drift supersession clause (claimed)
+[PASS] Prompt 0 boot for Cloud Agents (claimed)
+[PASS] Explicit source hierarchy (claimed)
+[PASS] Jinja context via server.py only — not templates (claimed)
+[PASS] save_memory not save_artifact (claimed)
+[PASS] Agent B split into slices not one blob (claimed)
 
-J / H-thin / K — merged
+PARTIAL (needs refresh or repo catch-up):
+[PARTIAL] Live snapshot H-full branch — v2 likely still cites 27f3; audit recommends ac2c (20 tests vs 10). PR #116 on 27f3 was CLOSED per Ditto memory 64d234b2.
+[PARTIAL] board.md sync — updated on PR #117 (cursor/board-alignment-revision-42f7) but NOT merged to main yet. Agents cloning main still see old board until #117 merges.
+[PARTIAL] master-plan-merged.md §3 still lists H → Agent B (not updated)
 
-H-full "complete on cursor/phase-h-full-premium-27f3":
-- Ditto memory says done, tests green, draft PR pending
-- Branch NOW on origin (da37237) — 10 UI tests, premium_cockpit.html
-- NOT merged to main — no Chart.js on main yet
+UNVERIFIED (cannot read artifact text):
+[???] Exact Prompt 0 wording
+[???] Numbered source hierarchy order
+[???] Exact save_memory() call syntax in handoff template
+[???] Agent B slices 2/3/4 as separate paste blocks vs one continuation prompt
+[???] "One PR at end" vs "paste after merged" wording for Agent A batches
 
-Phase L slice 1 on cursor/phase-l-signal-pipeline-b061:
-- GET /api/signals + summary + persistence — done on branch
-- PR #115 draft — NOT on main
-
-================================================================================
-H-FULL BRANCH AUDIT (completed 2026-07-12)
-================================================================================
-
-RECOMMENDED MERGE CANDIDATE: cursor/phase-h-full-premium-ac2c
-- Tip: 1fe26fc
-- 20 test_phase_h_ui tests (vs 10 on 27f3)
-- premium_cockpit.html + premium_scanner.js
-- Chart.js radar section
-- Full 13-section partial
-
-ALTERNATE: cursor/phase-h-full-premium-27f3
-- Tip: da37237
-- Ditto memory e14eaefa reported complete
-- premium_cockpit.js, 10 UI tests
-
-BACKEND ONLY (merge after UI): cursor/phase-h-full-premium-843d
-- premium_dashboard_builders.py context — no templates
-
-IGNORE: cursor/phase-h-full-premium-ui (equals main, empty)
+FAIL (if still present in artifact body):
+[FAIL?] Any save_artifact or artifacts tool references — must be zero
+[FAIL?] Any "read board.md from repo" without inline state — agents need embedded snapshot
+[FAIL?] server_original.py references — violates single-foundation rule
 
 ================================================================================
-BOARD UPDATE (done this session)
+LIVE REPO CROSS-CHECK (today)
 ================================================================================
 
-Updated cursor-agents-communication/board.md:
-- main=19e0ebd
-- Agent A = H-full, Agent B = Phase L
-- H-full branch audit table
-- Coordination: search_memories + save_memory
-- Alignment pack overrides stale protocol for current work
+main @ 19e0ebd — matches v2 snapshot
 
-Added supersession note to concurrent-protocol.md header.
+H-full on main: NOT shipped (no Chart.js, no premium_cockpit partial)
 
-PR opened: #117 on branch cursor/board-alignment-revision-42f7
+Best H-full merge candidate (Agent A audit):
+  cursor/phase-h-full-premium-ac2c @ 1fe26fc — 20 UI tests, Chart.js, scanner JS
 
-================================================================================
-REVISED PROMPT QUALITY (a0d40356)
-================================================================================
+Alternate:
+  cursor/phase-h-full-premium-27f3 @ da37237 — 10 UI tests
 
-AGENT A — GOOD:
-- Embedded state block
-- Section batching (5 + 4 + 4)
-- Rendering rules clear
-- Backend boundary clear
+Backend-only (merge after UI):
+  cursor/phase-h-full-premium-843d — PR #110
 
-AGENT A — STILL FIX:
-- "Paste AFTER merged" → "after done, one PR at end"
-- Add save_memory MCP call explicitly
-- Default branch: ac2c (best audit) not 27f3
-
-AGENT B — GOOD:
-- Slice 1 done, clear remaining tasks
-
-AGENT B — STILL FIX:
-- Add: Jinja via server.py ONLY, not templates/*
-- Split into slices 2/3/4
-- Remove server_original.py references
+Phase L:
+  cursor/phase-l-signal-pipeline-b061 — slice 1 done, PR #115 draft
+  Remaining: alerts, WebSocket, Jinja hooks (server.py only)
 
 ================================================================================
-OVERALL VERDICT
+WHAT v2 GETS RIGHT (Ditto memory 1b61e96f claims)
 ================================================================================
 
-Revision quality: B+ → A- after board sync
+- Prompt 0 boot
+- Source hierarchy
+- Inline live snapshot
+- Repo drift supersession
+- Batched Agent A + split Agent B
+- Jinja/server.py-only rule
+- Chart.js clarification
+- Token/caching guidance (bonus)
 
-USE NOW: a0d40356 batched prompts + updated board.md
-BLOCKING: user merge of H-full (ac2c recommended) and L (#115)
+This is the correct scope. Good revision.
 
-NEXT FOR AGENTS:
-- Agent A: review/merge ac2c H-full PR
-- Agent B: L slices 2-4 on phase-l-signal-pipeline-b061
-- Ditto: publish formal v2 alignment pack artifact
+================================================================================
+REMAINING GAPS (fix before calling it "done")
+================================================================================
+
+1. H-FULL BRANCH IN SNAPSHOT
+   Update default recommendation to ac2c (not 27f3).
+   Note PR #116 closed — agents should not resume dead branch without check.
+
+2. MERGE PR #117
+   board.md + concurrent-protocol supersession note must land on main
+   so agents reading git get same story as alignment pack.
+
+3. MIRROR PACK TO REPO (optional but high value)
+   Copy cursor-alignment-prompt-pack.md into cursor-agents-communication/
+   so Cloud Agents can read it without Ditto artifact fetch.
+
+4. SAVE v2 AS SEARCHABLE MEMORY
+   Ditto should save_memory() with full paste prompts inline
+   so search_memories("cursor-alignment-prompt-pack") returns usable text.
+
+5. MASTER PLAN §3
+   One-line update: H-full → Agent A (post-K parallel split).
+
+================================================================================
+BOTTOM LINE FOR DITTO / USER
+================================================================================
+
+Does v2 pass Agent A expectations? YES — directionally and structurally.
+
+Is it production-ready for agents? ALMOST — refresh H-full branch guidance,
+merge board PR #117, and never point agents at the artifact URL alone.
+
+Recommended immediate actions:
+1. Merge PR #117 (board sync)
+2. Review/merge H-full from ac2c branch
+3. Agent B continues L slices 2-4 on phase-l-signal-pipeline-b061
+4. Ditto: paste full v2 prompts into a save_memory post for agent searchability
