@@ -105,6 +105,15 @@ except Exception as _mindmap_graph_exc:  # pragma: no cover - defensive import g
     mindmap_graph_router = None  # type: ignore[assignment,misc]
     _MINDMAP_GRAPH_ROUTES = False
 
+try:
+    from internal.signals import signals_router
+
+    _SIGNALS_ROUTES = True
+except Exception as _signals_exc:  # pragma: no cover - defensive import guard
+    logger.warning("Signals routes unavailable: %s", _signals_exc)
+    signals_router = None  # type: ignore[assignment,misc]
+    _SIGNALS_ROUTES = False
+
 # Council pick engine (guarded so a broken/missing engine module can never stop
 # the app from booting — the picks endpoints degrade to a safe fallback).
 try:
@@ -171,6 +180,8 @@ if _STORE_ROUTES:
     app.include_router(store_router)
 if _MINDMAP_GRAPH_ROUTES:
     app.include_router(mindmap_graph_router)
+if _SIGNALS_ROUTES:
+    app.include_router(signals_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
@@ -301,6 +312,14 @@ async def index(request: Request):
     except Exception as exc:
         logger.warning("SimiVision context unavailable: %s", exc)
         context["simivision"] = {"top": [], "meta": {"count": 0}}
+
+    # Phase L — signals/alerts Jinja context (server.py glue only)
+    try:
+        from internal.signals.context import build_signals_context
+
+        context.update(build_signals_context(refresh=False))
+    except Exception as exc:
+        logger.warning("Signals context unavailable: %s", exc)
 
     return templates.TemplateResponse(request, "index.html", context)
 
