@@ -1,0 +1,122 @@
+REVISION REVIEW SUMMARY — cursor-alignment-prompt-pack.md
+Agent A review for Ditto — 2026-07-12
+
+================================================================================
+WHAT "THE REVISION" ACTUALLY IS
+================================================================================
+
+There is NO published v2 artifact of cursor-alignment-prompt-pack.md yet.
+Ditto memory 8d28bb06 acknowledges the feedback and plans v2 — not shipped.
+
+The PRACTICAL REVISION lives in Ditto memory a0d40356:
+four batched copy-paste prompts (Agent A 1/3, 2/3, 3/3 + Agent B full).
+
+================================================================================
+WHAT THE REVISION FIXES (vs original pack)
+================================================================================
+
+FIXED:
+- Inline live state (main=19e0ebd, branches, prior merges)
+- Agent A = H-full, Agent B = Phase L
+- 3-batch H-full split
+- Chart.js in batch 2 (contradiction resolved)
+- Parallel work, no file overlap
+- Agent B slice 1 marked done
+- save_memory instead of save_artifact
+
+NOT FIXED YET (before this session):
+- Prompt 0 (Ditto MCP boot)
+- Source hierarchy explicit in prompts
+- board.md sync
+- Agent B Jinja hooks vs "don't touch templates" line
+- Formal v2 artifact publish
+
+================================================================================
+LIVE REPO CROSS-CHECK
+================================================================================
+
+main @ 19e0ebd — matches revision
+
+J / H-thin / K — merged
+
+H-full "complete on cursor/phase-h-full-premium-27f3":
+- Ditto memory says done, tests green, draft PR pending
+- Branch NOW on origin (da37237) — 10 UI tests, premium_cockpit.html
+- NOT merged to main — no Chart.js on main yet
+
+Phase L slice 1 on cursor/phase-l-signal-pipeline-b061:
+- GET /api/signals + summary + persistence — done on branch
+- PR #115 draft — NOT on main
+
+================================================================================
+H-FULL BRANCH AUDIT (completed 2026-07-12)
+================================================================================
+
+RECOMMENDED MERGE CANDIDATE: cursor/phase-h-full-premium-ac2c
+- Tip: 1fe26fc
+- 20 test_phase_h_ui tests (vs 10 on 27f3)
+- premium_cockpit.html + premium_scanner.js
+- Chart.js radar section
+- Full 13-section partial
+
+ALTERNATE: cursor/phase-h-full-premium-27f3
+- Tip: da37237
+- Ditto memory e14eaefa reported complete
+- premium_cockpit.js, 10 UI tests
+
+BACKEND ONLY (merge after UI): cursor/phase-h-full-premium-843d
+- premium_dashboard_builders.py context — no templates
+
+IGNORE: cursor/phase-h-full-premium-ui (equals main, empty)
+
+================================================================================
+BOARD UPDATE (done this session)
+================================================================================
+
+Updated cursor-agents-communication/board.md:
+- main=19e0ebd
+- Agent A = H-full, Agent B = Phase L
+- H-full branch audit table
+- Coordination: search_memories + save_memory
+- Alignment pack overrides stale protocol for current work
+
+Added supersession note to concurrent-protocol.md header.
+
+PR opened: #117 on branch cursor/board-alignment-revision-42f7
+
+================================================================================
+REVISED PROMPT QUALITY (a0d40356)
+================================================================================
+
+AGENT A — GOOD:
+- Embedded state block
+- Section batching (5 + 4 + 4)
+- Rendering rules clear
+- Backend boundary clear
+
+AGENT A — STILL FIX:
+- "Paste AFTER merged" → "after done, one PR at end"
+- Add save_memory MCP call explicitly
+- Default branch: ac2c (best audit) not 27f3
+
+AGENT B — GOOD:
+- Slice 1 done, clear remaining tasks
+
+AGENT B — STILL FIX:
+- Add: Jinja via server.py ONLY, not templates/*
+- Split into slices 2/3/4
+- Remove server_original.py references
+
+================================================================================
+OVERALL VERDICT
+================================================================================
+
+Revision quality: B+ → A- after board sync
+
+USE NOW: a0d40356 batched prompts + updated board.md
+BLOCKING: user merge of H-full (ac2c recommended) and L (#115)
+
+NEXT FOR AGENTS:
+- Agent A: review/merge ac2c H-full PR
+- Agent B: L slices 2-4 on phase-l-signal-pipeline-b061
+- Ditto: publish formal v2 alignment pack artifact
