@@ -1,8 +1,8 @@
 # Board — subnet-dashboard concurrent session
 
-**Last updated:** 2026-07-12T03:35:00Z by Cursor Agent B (`-e78a`)  
-**main:** `4ae3913` (Phase J + **H-thin** merged)  
-**GATE:** **H-full** next (B) · **K** unblocked once H stable on `main`
+**Last updated:** 2026-07-12T04:45:00Z by Cursor Agent B (`-e78a`)  
+**main:** `d3e46b9`  
+**GATE:** J ✅ (#105) · H-thin ✅ (#104) · K ✅ (#107) on `main`
 
 ---
 
@@ -10,11 +10,10 @@
 
 | Order | Phase | Agent | Branch | Status |
 |-------|-------|-------|--------|--------|
-| 0 | Protocol docs | A | `cursor/protocol-docs-843d` | ✅ merged |
-| 1 | **J** Accuracy fix | A | `cursor/phase-j-accuracy-fix-843d` | ✅ merged → `fcee141` |
-| 2 | **H-thin** UI shell | B | `agent-b/phase-h-thin-shell` | ✅ merged → `4ae3913` (**PR #104**) |
-| 3 | **H-full** premium UI | B | TBD | 🟡 next |
-| 4 | **K** CI gates | A + B | — | ⬜ ready after H-full or H-thin verified |
+| 1 | **J** Accuracy fix | A | `cursor/phase-j-accuracy-fix-843d` | ✅ merged (**PR #105** → `fcee141`) |
+| 2 | **H-thin** UI shell | B | `agent-b/phase-h-thin-shell` | ✅ merged (**PR #104** → `4ae3913`) · branch rebased → `d3e46b9` |
+| 3 | **K** CI gates | A + B | `cursor/phase-k-ci-gates` | ✅ merged (**PR #107**) |
+| 4 | **H-full** premium UI | B | TBD | 🟡 next |
 
 ---
 
@@ -22,10 +21,8 @@
 
 | Field | Value |
 |-------|--------|
-| Phase | J ✅ merged |
-| Branch | — |
-| PR | Phase J accuracy fix (merged) |
-| Status | May proceed toward **K** once H-full lands or H-thin verified on prod |
+| Phase | J ✅ · K ✅ merged |
+| Status | Proceed H-full coordination or Phase L/M per plan |
 
 ---
 
@@ -34,25 +31,26 @@
 | Field | Value |
 |-------|--------|
 | Phase | H-thin ✅ merged · **H-full** next |
-| Branch | — |
+| Branch | `agent-b/phase-h-thin-shell` **rebased onto `main` @ `d3e46b9`** (no unique commits; use fresh branch for H-full) |
 | PR | [#104](https://github.com/cryptoreporthub/subnet-dashboard/pull/104) merged |
-| Status | `style.css` linked, 12 cockpit cards, accuracy/judge P&L highlights on `main` |
+| Status | Rebase complete — start H-full from `main` |
+
+---
+
+## Agent B instruction (from coordinator)
+
+```text
+PR #105 (Phase J) is merged.
+agent-b/phase-h-thin-shell has been rebased onto main @ d3e46b9 and force-pushed.
+H-thin code is already on main via PR #104 — branch tip now equals main.
+For new work (H-full): branch from main (e.g. agent-b/phase-h-full-premium).
+```
 
 ---
 
 ## Blockers
 
-- None — concurrent J/H sprint complete on `main`
-
----
-
-## Gate lines
-
-```text
-main=4ae3913 — Phase J + H-thin complete.
-Agent B: H-full (Chart.js hero, premium layout) when ready.
-Agent A + B: Phase K when H stable on main.
-```
+- None
 
 ---
 
@@ -60,4 +58,3 @@ Agent A + B: Phase K when H stable on main.
 
 - `cursor-agents-communication/concurrent-protocol.md`
 - `docs/master-plan-merged.md` §7
-- `tests/test_phase_h_ui.py`
