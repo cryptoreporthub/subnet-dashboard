@@ -16,6 +16,10 @@ from server import _jinja_shorten, app, templates
 
 
 H_FULL_SECTION_IDS = [
+    "section-header",
+    "section-hero",
+    "section-simivision-picks",
+    "section-daily-pick",
     "section-indicators",
     "section-scanner",
     "section-subnet-groups",
@@ -228,3 +232,35 @@ def test_subnet_grouping_optional_lane():
     assert 'id="subnet-group-data"' in html
     assert "/static/js/subnet_grouping.js" in html
     assert html.count('class="cockpit-card card"') == 12
+
+
+def test_h_full_hero_market_snapshot_section():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert 'id="section-hero"' in html
+    assert "Market Snapshot" in html
+    assert "kpi-grid" in html or "kpi-cell" in html
+
+
+def test_h_full_simivision_picks_or_honest_empty():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert 'id="section-simivision-picks"' in html
+    assert "SimiVision Top Picks" in html
+    sv = client.get("/api/simivision").json()
+    if sv.get("data", {}).get("top"):
+        assert "pick-card" in html
+        assert "Conviction" in html
+    else:
+        assert "warming up" in html
+
+
+def test_h_full_daily_pick_hero_or_honest_empty():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert 'id="section-daily-pick"' in html
+    assert "Daily Pick" in html
+    if 'class="hero-card"' in html:
+        assert "Final Confidence" in html
+    else:
+        assert "warming up" in html or "No audited daily pick" in html
