@@ -22,14 +22,26 @@
 - Frontend / H-full premium cockpit.
 - Focus on template, CSS, and UI render quality.
 - Restore the premium surface while keeping honest empty states.
+- **Optional lane (when ready):** per-subnet grouping/collapse — UI only; see audit doc below.
 
 ## Agent B
 - Backend / L real-time signals & alerts.
 - Focus on signal pipeline, alerts API, and backend test coverage.
 - Keep backend changes minimal and compatible.
+- **Optional lane (done):** data-flow audit for per-subnet grouping — frontend-only verdict + `netuid` alias.
+
+## Optional Lane — Per-subnet grouping / collapse
+
+| Step | Owner | Status |
+|---|---|---|
+| Data-flow audit + edge-case checklist | Agent B | **Done** |
+| Premium UI grouping/collapse | Agent Ave | **Pending** |
+
+- **Doc:** `cursor-agents-communication/phase-h-subnet-grouping-audit.md`
+- **Branch/PR:** `cursor/shared-agent-workspace-4e98` → PR #123
+- **Verdict:** frontend-only; join key `netuid ?? id`; 12-card cockpit grid stays flat
 
 ## Handoff Status
-- **Agent B audit (subnet grouping):** Frontend-only lane — see `cursor-agents-communication/phase-h-subnet-grouping-audit.md`. Additive `netuid` alias on `/api/registry` and `/api/subnets`.
 - **Ready for Ave (H-full):** J and K are on `main`. H-full branches exist on origin; pick `cursor/phase-h-full-premium-ac2c` or audit open PRs before new work.
 - **Ready for B (L) after Ave handoff:** Slice 1 complete on `cursor/phase-l-signal-pipeline-b061` (PR #115 draft). Slices 2–4 remain (alerts, WebSocket, server-side Jinja context).
 - **Pending:** User merge of H-full and L PRs.
