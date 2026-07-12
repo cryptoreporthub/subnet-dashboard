@@ -1,126 +1,159 @@
-REVIEW: cursor-alignment-prompt-pack.md v2
-Reviewer: Agent A (Cursor Cloud) — 2026-07-12
+MERGED REVIEW: cursor-alignment-prompt-pack.md v2
+Consolidated Agent A (-843d) + Agent B (-4e98) — single audit for Ditto
+Date: 2026-07-12
 Artifact: ditto://artifact/main/1f174125-4b3a-4625-b39e-df0edbe726e5
 Ditto publish memory: 1b61e96f
 
-NOTE: Cloud Agents cannot fetch the artifact body via Ditto MCP (returns empty).
-This review scores Ditto's claimed v2 contents against our expectations + live repo.
+NOTE: Neither Cloud Agent could read the artifact body via Ditto MCP.
+This is one merged review — not two competing copies. Both agents agree.
 
 ================================================================================
-OVERALL VERDICT: CONDITIONAL PASS (A-)
+VERDICT: CONDITIONAL PASS (A-)
 ================================================================================
 
-Direction: CORRECT — v2 addresses every gap we flagged.
-Certification: PARTIAL — artifact not readable from agent MCP; spot-check 3 items below.
+Both agents independently reached the same grade.
 
-Safe to use? YES for human copy-paste IF you refresh embedded snapshot before each paste.
-Not safe: telling agents "read cursor-alignment-prompt-pack.md" — they won't open it.
+v2 structurally addresses every fix we asked for (Prompt 0, source hierarchy,
+inline snapshot, A=H-full / B=L, batched prompts, B slices, Jinja server-only,
+Chart.js batch 2, save_memory, supersession clause).
 
-================================================================================
-EXPECTATIONS CHECKLIST (from prior reviews)
-================================================================================
-
-PASS (claimed in v2 + matches live state):
-[PASS] Agent A = H-full UI, Agent B = Phase L
-[PASS] main = 19e0ebd, J / H-thin / K merged
-[PASS] Parallel work, no file overlap between A and B
-[PASS] Agent A batched into 3 prompts (5 + 4 + 4 sections)
-[PASS] Chart.js in batch 2 (after J replay — correct)
-[PASS] Agent B slice 1 done (GET /api/signals + summary)
-[PASS] Repo drift supersession clause (claimed)
-[PASS] Prompt 0 boot for Cloud Agents (claimed)
-[PASS] Explicit source hierarchy (claimed)
-[PASS] Jinja context via server.py only — not templates (claimed)
-[PASS] save_memory not save_artifact (claimed)
-[PASS] Agent B split into slices not one blob (claimed)
-
-PARTIAL (needs refresh or repo catch-up):
-[PARTIAL] Live snapshot H-full branch — v2 likely still cites 27f3; audit recommends ac2c (20 tests vs 10). PR #116 on 27f3 was CLOSED per Ditto memory 64d234b2.
-[PARTIAL] board.md sync — updated on PR #117 (cursor/board-alignment-revision-42f7) but NOT merged to main yet. Agents cloning main still see old board until #117 merges.
-[PARTIAL] master-plan-merged.md §3 still lists H → Agent B (not updated)
-
-UNVERIFIED (cannot read artifact text):
-[???] Exact Prompt 0 wording
-[???] Numbered source hierarchy order
-[???] Exact save_memory() call syntax in handoff template
-[???] Agent B slices 2/3/4 as separate paste blocks vs one continuation prompt
-[???] "One PR at end" vs "paste after merged" wording for Agent A batches
-
-FAIL (if still present in artifact body):
-[FAIL?] Any save_artifact or artifacts tool references — must be zero
-[FAIL?] Any "read board.md from repo" without inline state — agents need embedded snapshot
-[FAIL?] server_original.py references — violates single-foundation rule
+Cannot certify line-by-line without artifact access. Safe for human copy-paste
+IF you embed live state in each paste block. NOT safe to tell agents "open the
+Ditto artifact link" — they will not read it.
 
 ================================================================================
-LIVE REPO CROSS-CHECK (today)
+AGREED EXPECTATIONS CHECKLIST
 ================================================================================
 
-main @ 19e0ebd — matches v2 snapshot
+Requirement                              | Status   | A+B agreement
+-----------------------------------------|----------|------------------------------------------
+Prompt 0 boot (search_memories)          | PASS     | Ditto v2 claim; board PR #117 has boot block
+Numbered source hierarchy                | PASS     | Ditto v2 claim; pack canonical over stale artifacts
+Live snapshot (main=19e0ebd, J/H/K done) | PASS     | Matches origin/main
+Agent A = H-full / Agent B = Phase L     | PASS     | Board PR role override + alignment pack
+Inline state in paste prompts            | LIKELY   | Ditto claims; both agents require embedded state
+Repo drift supersession clause           | PASS     | Board PR #117 + concurrent-protocol.md header
+save_memory not save_artifact            | PASS     | Board PR coordination section
+Agent B Jinja = server.py only           | PASS     | Board PR Agent B section
+Agent B slices 2/3/4 split               | CLAIMED  | Ditto v2 publish note — unverified in artifact
+Chart.js = YES (batch 2)                   | PASS     | Board audit + Ditto claim; correct post-J
+H-full branch: ac2c recommended          | PASS     | Both audits: ac2c (20 tests) > 27f3 (10 tests)
+L slice 1 done, PR #115 draft            | PASS     | Branch on origin; Ditto + board agree
+Parallel work, no file overlap           | PASS     | templates/static (A) vs signals/server (B)
+Artifacts = human cheat sheet only       | PASS     | Agents consume inline paste blocks only
 
-H-full on main: NOT shipped (no Chart.js, no premium_cockpit partial)
-
-Best H-full merge candidate (Agent A audit):
-  cursor/phase-h-full-premium-ac2c @ 1fe26fc — 20 UI tests, Chart.js, scanner JS
-
-Alternate:
-  cursor/phase-h-full-premium-27f3 @ da37237 — 10 UI tests
-
-Backend-only (merge after UI):
-  cursor/phase-h-full-premium-843d — PR #110
-
-Phase L:
-  cursor/phase-l-signal-pipeline-b061 — slice 1 done, PR #115 draft
-  Remaining: alerts, WebSocket, Jinja hooks (server.py only)
-
-================================================================================
-WHAT v2 GETS RIGHT (Ditto memory 1b61e96f claims)
-================================================================================
-
-- Prompt 0 boot
-- Source hierarchy
-- Inline live snapshot
-- Repo drift supersession
-- Batched Agent A + split Agent B
-- Jinja/server.py-only rule
-- Chart.js clarification
-- Token/caching guidance (bonus)
-
-This is the correct scope. Good revision.
+UNVERIFIED (both agents — artifact not fetchable):
+- Exact Prompt 0-4 wording
+- Agent B slices as separate paste blocks vs one blob
+- Agent A "one PR at end" vs "paste after merged" wording
+- Zero save_artifact / server_original.py references in artifact body
 
 ================================================================================
-REMAINING GAPS (fix before calling it "done")
+WHAT BOTH AGENTS AGREE IS STRONG
 ================================================================================
 
-1. H-FULL BRANCH IN SNAPSHOT
-   Update default recommendation to ac2c (not 27f3).
-   Note PR #116 closed — agents should not resume dead branch without check.
+1. Role split is finally canonical — A owns H-full UI, B owns Phase L backend.
 
-2. MERGE PR #117
-   board.md + concurrent-protocol supersession note must land on main
-   so agents reading git get same story as alignment pack.
+2. H-full branch audit — ac2c is best merge candidate (20 UI tests, Chart.js,
+   premium_cockpit.html + scanner JS). 27f3 is alternate only.
 
-3. MIRROR PACK TO REPO (optional but high value)
+3. Board PR #117 mirrors the pack — boot/write protocol, supersession note,
+   parallel rules, server.py conflict surface. Merge this before new agents.
+
+4. Agent B slice model — Slice 1 done; slices 2-4 scoped (alerts, WS, Jinja).
+
+5. v2 scope is correct — all 7 original revision fixes addressed in intent.
+
+================================================================================
+AGREED GAPS (keep v2 from full A)
+================================================================================
+
+1. ARTIFACT NOT READABLE FROM CURSOR
+   Cloud Agents cannot fetch ditto://artifact/... IDs.
+   FIX for Ditto: Add at top of artifact —
+   "Agents never open this link. User copies Prompt 0-4 blocks below."
+   ALSO: save_memory() full paste prompts so search_memories finds them.
+
+2. REPO ON MAIN STALE UNTIL PR #117 MERGES
+   main board.md still says Agent B owns H-full (main=d3e46b9).
+   Good board lives on cursor/board-alignment-revision-42f7 only.
+   ACTION: Merge PR #117 first.
+
+3. PR LANDSCAPE IS MESSY — PACK MUST SAY THIS EXPLICITLY
+
+   Branch                              | PR      | Status
+   ------------------------------------|---------|----------------------------------
+   phase-h-full-premium-ac2c           | —       | RECOMMENDED merge candidate
+   phase-h-full-premium-e78a           | #111    | OPEN — competing H-full candidate
+   phase-h-full-premium-27f3           | #116    | CLOSED — do not tell agents to reopen
+   phase-h-full-premium-843d           | #110    | OPEN — backend builders only; merge AFTER UI
+   phase-l-signal-pipeline-b061        | #115    | DRAFT — slice 1 done
+
+   v2 must say: "Do not restart H-full from scratch — audit existing branches first."
+
+4. docs/master-plan-merged.md section 3 still says H to Agent B
+   Neither pack nor PR #117 updates it.
+   FIX: One-line supersession in section 3, or "read board.md before master plan."
+
+5. AGENT A BATCH PROMPT WORDING (minor)
+   - "Paste after merged" → "finish all 3 batches in session, one PR at end"
+   - Default branch: ac2c (board PR fixes this; confirm artifact paste prompts match)
+
+6. MIRROR PACK TO REPO (Agent A addition — both should want this)
    Copy cursor-alignment-prompt-pack.md into cursor-agents-communication/
-   so Cloud Agents can read it without Ditto artifact fetch.
-
-4. SAVE v2 AS SEARCHABLE MEMORY
-   Ditto should save_memory() with full paste prompts inline
-   so search_memories("cursor-alignment-prompt-pack") returns usable text.
-
-5. MASTER PLAN §3
-   One-line update: H-full → Agent A (post-K parallel split).
+   so agents with repo access can read it without Ditto artifact fetch.
 
 ================================================================================
-BOTTOM LINE FOR DITTO / USER
+LIVE REPO CROSS-CHECK (both agents — PASSES)
 ================================================================================
 
-Does v2 pass Agent A expectations? YES — directionally and structurally.
+main @ 19e0ebd                         PASS
+J / H-thin / K merged on main          PASS
+H-full NOT on main (no Chart.js yet)   PASS
+L slice 1 on origin branch             PASS
+Board alignment branch on origin       PASS (cursor/board-alignment-revision-42f7)
 
-Is it production-ready for agents? ALMOST — refresh H-full branch guidance,
-merge board PR #117, and never point agents at the artifact URL alone.
+================================================================================
+CONTRADICTIONS BETWEEN AGENT A AND AGENT B REVIEWS
+================================================================================
 
-Recommended immediate actions:
-1. Merge PR #117 (board sync)
-2. Review/merge H-full from ac2c branch
-3. Agent B continues L slices 2-4 on phase-l-signal-pipeline-b061
-4. Ditto: paste full v2 prompts into a save_memory post for agent searchability
+NONE on substance. Both gave A-. Both recommend merge PR #117, merge H-full from
+ac2c, Agent B continues L on phase-l-signal-pipeline-b061.
+
+Agent B added PR #111 (e78a) as explicit competing candidate — Agent A audit
+listed e78a in branch table but did not highlight #111. MERGED POSITION: ac2c
+first; #111 (e78a) is fallback if user prefers that implementation; do not
+start fresh without auditing both.
+
+================================================================================
+BOTTOM LINE FOR DITTO
+================================================================================
+
+Does v2 meet our expectations?        YES, structurally
+Safe to use with agents today?        YES — paste inline prompts; merge #117 first
+Fully passes without conditions?      NO — artifact unverifiable, #116 closed,
+                                        master plan section 3 stale
+
+GRADE: A- (conditional pass) — unanimous Agent A + Agent B
+
+================================================================================
+UNIFIED NEXT MOVES (do not send separate A/B instructions)
+================================================================================
+
+FOR USER:
+1. Merge PR #117 (board + protocol sync to main)
+2. Pick and merge H-full: ac2c recommended (#111 e78a as alternate)
+3. Merge phase-h-full-premium-843d AFTER UI branch (backend context)
+4. Agent B: L slices 2-4 on cursor/phase-l-signal-pipeline-b061, PR #115
+
+FOR DITTO (v2 polish):
+1. Add "agents never open artifact link" banner at top
+2. Refresh paste prompts: ac2c default, PR #116 closed warning, audit-first rule
+3. save_memory() full Prompt 0-4 inline for agent searchability
+4. One-line master-plan section 3 supersession
+5. Agent A batches: "one PR at end" wording
+
+FOR NEW AGENTS (single paste — not artifact link):
+- Prompt 0: search_memories("cursor-agents-communication board")
+- Embedded snapshot from board.md on main AFTER #117 merges
+- Alignment pack overrides stale repo docs for H-full/L split
