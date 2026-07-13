@@ -1,8 +1,8 @@
 # Subnet Dashboard — Master Plan (Canonical)
 
 > **Status:** Approved execution plan (Ditto rev2 + Cursor A/B merge revisions).  
-> **Baseline:** `main` after Phases A–G (cockpit, store, mindmap graph on main).  
-> **Updated:** 2026-07-11  
+> **Baseline:** `main` @ `b1db31a` (Phases J–O merged).  
+> **Updated:** 2026-07-13  
 > **Authors:** Ditto (Phase I root-cause, original structure) · Cursor Agent A (merge revisions, contracts, verification).  
 > **Companion docs:** `docs/research-to-roadmap-merged-plan.md` (research map) · `docs/sciweave-answers-phase-j.md` (Phase J science constants) · `cursor-agents-communication/concurrent-protocol.md` (parallel J/H rules).
 
@@ -17,9 +17,9 @@
 |-------|-------------------|-----|
 | Backend / APIs (A–G) | **~65%** | Resolver horizon integrity; contract tests lag |
 | Premium UI / cockpit | **~25%** | Cards exist; `style.css` orphaned; markdown regression |
-| Accuracy / calibration | **~40%** | **Grading pipeline broken** (R1); trace empty (R6) |
-| Alerts & live social | **~15%** | APIs only; `message_intel` empty on prod |
-| Retrain / Signal Hub | **0%** | Researched; scheduled N/O |
+| Accuracy / calibration | **~40%→fixed** | Phase J replay + Phase N retrain pipeline on main |
+| Alerts & live social | **shipped** | Phase L alerts + Phase M message-intel ingestion |
+| Retrain / Signal Hub | **shipped** | Phase N calibration + Phase O signal hub on main |
 
 **Why accuracy first:** If the resolver grades 4h picks against a 6-day-late price snapshot, **31.5% accuracy and −1380% judge P&L are largely pipeline artifacts**, not signal quality. Fixing UI or alerts before J builds on bad numbers.
 
@@ -305,11 +305,9 @@ Agent B: alert UX + config. Agent A: trigger hooks on indicator/whale/pump signa
 
 ## 16. Current gate
 
-**Say "go J"** → Agent A opens `cursor/phaseJ-accuracy-fix-843d`, implements J1–J7, PR with before/after accuracy from replay.
+**Phases J–O merged** @ `b1db31a`. Agents idle — Ditto defines next roadmap slice.
 
-**Say "go H thin"** → Agent B may parallel thin shell only (§7).
-
-Update this doc when phases ship; bump baseline SHA in §1.
+Update this doc when new phases ship; bump baseline SHA in §1.
 
 ---
 
