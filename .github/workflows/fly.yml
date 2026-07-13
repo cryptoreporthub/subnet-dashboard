@@ -49,22 +49,22 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
         with:
           version: latest  # Must be >= 0.2.71 #
-      - name: Ensure data_volume exists (sea)
+      - name: Ensure data_volume exists (app primary region)
+        continue-on-error: true
         run: |
           set -e
-          REGION="sea"
-          WANT=1
+          REGION=$(flyctl config show -a subnet-dashboard 2>/dev/null | awk '/primary_region/{print $2}' | tr -d '"')
+          REGION=${REGION:-sea}
           COUNT=$(flyctl volumes list -a subnet-dashboard --json 2>/dev/null | python3 -c "
           import json,sys
           rows=json.load(sys.stdin)
-          print(sum(1 for v in rows if v.get('name')=='data_volume' and v.get('region')=='${REGION}'))
+          print(sum(1 for v in rows if v.get('name')=='data_volume'))
           " 2>/dev/null || echo 0)
-          if [ "$COUNT" -lt "$WANT" ]; then
-            NEED=$((WANT - COUNT))
-            echo "Creating $NEED data_volume volume(s) in $REGION"
-            flyctl volumes create data_volume --app subnet-dashboard --region "$REGION" -n "$NEED" --yes
+          if [ "$COUNT" -lt 1 ]; then
+            echo "Creating data_volume in $REGION"
+            flyctl volumes create data_volume --app subnet-dashboard --region "$REGION" -n 1 --yes
           else
-            echo "data_volume OK in $REGION (count=$COUNT)"
+            echo "data_volume already present (count=$COUNT)"
           fi
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
