@@ -1325,6 +1325,15 @@ def score_subnet_for_hour(
     signal_impact = _compute_signal_impact(sn, indicators, hot, sell)
 
     experts = _expert_contributions(sn, indicators, signal_impact, hot, sell)
+    try:
+        from internal.signal_hub.overlay import apply_hub_overlay
+
+        netuid = sn.get("netuid") or sn.get("id")
+        hub_map = (market_context or {}).get("hub_overlay") or {}
+        overlay = hub_map.get(int(netuid)) if netuid is not None else None
+        experts = apply_hub_overlay(experts, overlay)
+    except Exception:
+        pass
     weights = dict(_DEFAULT_WEIGHTS)
     if market_context and isinstance(market_context.get("weights"), dict):
         weights.update(market_context["weights"])
@@ -1380,6 +1389,15 @@ def score_subnet_for_day(
     signal_impact = _compute_signal_impact(sn, indicators, hot, sell)
 
     experts = _expert_contributions(sn, indicators, signal_impact, hot, sell)
+    try:
+        from internal.signal_hub.overlay import apply_hub_overlay
+
+        netuid = sn.get("netuid") or sn.get("id")
+        hub_map = (market_context or {}).get("hub_overlay") or {}
+        overlay = hub_map.get(int(netuid)) if netuid is not None else None
+        experts = apply_hub_overlay(experts, overlay)
+    except Exception:
+        pass
     weights = dict(_DEFAULT_WEIGHTS)
     if market_context and isinstance(market_context.get("weights"), dict):
         weights.update(market_context["weights"])

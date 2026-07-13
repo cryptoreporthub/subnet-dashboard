@@ -340,6 +340,14 @@ async def index(request: Request):
     except Exception as exc:
         logger.warning("Signals context unavailable: %s", exc)
 
+    # Phase O — signal hub Jinja context (server.py glue only)
+    try:
+        from internal.signal_hub.context import build_signal_hub_context
+
+        context.update(build_signal_hub_context())
+    except Exception as exc:
+        logger.warning("Signal hub context unavailable: %s", exc)
+
     return templates.TemplateResponse(request, "index.html", context)
 
 
