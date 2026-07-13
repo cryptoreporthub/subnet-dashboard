@@ -3,7 +3,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -320,7 +320,7 @@ def index(request: Request):
         logger.warning("Cockpit sections unavailable: %s", exc)
 
     try:
-        context["simivision"] = _safe_simivision_payload().get("data", {})
+        context["simivision"] = _safe_simivision_payload(subnets=subnets, source=source).get("data", {})
     except Exception as exc:
         logger.warning("SimiVision context unavailable: %s", exc)
         context["simivision"] = {"top": [], "meta": {"count": 0}}
@@ -851,9 +851,14 @@ def _highest_emission_pick(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def _safe_simivision_payload() -> Dict[str, Any]:
+def _safe_simivision_payload(
+    subnets: Optional[List[Dict[str, Any]]] = None,
+    source: Optional[str] = None,
+) -> Dict[str, Any]:
     """SimiVision panel: top-3 subnets by emission / APY / volume (distinct subnets)."""
-    subnets, source = _get_subnets_with_source()
+    if subnets is None:
+        subnets, source = _get_subnets_with_source()
+    source = source or "unknown"
     ranked = sorted(
         subnets,
         key=lambda s: (s.get("emission", 0), s.get("apy", 0), s.get("volume", 0)),
@@ -953,7 +958,13 @@ def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[st
 
     if _PICKS_ENGINE:
         scored = []
-        for sn in subnets:
+        # ponytail: score top 30 by emission for fill picks, not all 129 subnets
+        candidates = sorted(
+            subnets,
+            key=lambda s: (s.get("emission", 0) or 0, s.get("apy", 0) or 0),
+            reverse=True,
+        )[:30]
+        for sn in candidates:
             if top_netuid is not None and sn.get("netuid") == top_netuid:
                 continue
             try:
