@@ -41,13 +41,7 @@ def select_hourly_pick(
         }
 
     scored = []
-    # ponytail: score top 30 by emission on read paths, not all 129 subnets
-    candidates = sorted(
-        subnets,
-        key=lambda s: (s.get("emission", 0) or 0, s.get("apy", 0) or 0),
-        reverse=True,
-    )[:30]
-    for sn in candidates:
+    for sn in subnets:
         hour_score = score_subnet_for_hour(sn, market_context)
         scored.append({"subnet": sn, "score": hour_score})
 

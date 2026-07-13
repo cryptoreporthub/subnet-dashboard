@@ -16,7 +16,7 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
 logger = logging.getLogger(__name__)
@@ -149,17 +149,12 @@ async def api_council():
 
 
 @council_router.get("/api/judges")
-async def api_judges(limit: int = Query(default=30, ge=1, le=129)):
-    """Score subnets with the three-judge council + consensus (top-N by emission)."""
+async def api_judges():
+    """Score ALL subnets with the three-judge council + consensus."""
     try:
         subnets, source = _get_subnets_for_scoring()
         if subnets:
-            ranked = sorted(
-                subnets,
-                key=lambda s: (s.get("emission", 0) or 0, s.get("apy", 0) or 0),
-                reverse=True,
-            )[:limit]
-            result = _score_all_judges(ranked)
+            result = _score_all_judges(subnets)
             logger.info("Judges: scored %d unique subnets (source=%s)", len(result), source)
             return {
                 "success": True,
