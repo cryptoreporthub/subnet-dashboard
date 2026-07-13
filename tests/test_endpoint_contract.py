@@ -142,6 +142,9 @@ CONTRACT = [
     # Phase N calibration / retrain
     ("GET", "/api/calibration/status", None),
     ("POST", "/api/calibration/retrain", {"dry_run": True, "async": False}),
+    # Phase O TAO Signal Hub
+    ("GET", "/api/signal-hub/status", None),
+    ("GET", "/api/signal-hub/signals", None),
 ]
 
 

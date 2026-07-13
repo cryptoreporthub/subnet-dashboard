@@ -18,6 +18,13 @@ logger = logging.getLogger(__name__)
 
 signals_router = APIRouter(tags=["signals"])
 
+try:
+    from internal.signal_hub.routes import signal_hub_router
+
+    signals_router.include_router(signal_hub_router)
+except ImportError as _hub_exc:
+    logger.warning("Signal hub routes unavailable: %s", _hub_exc)
+
 _store: Optional[SignalStore] = None
 _alerts: Optional[AlertEngine] = None
 

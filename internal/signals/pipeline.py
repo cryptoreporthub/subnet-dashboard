@@ -59,7 +59,17 @@ def _market_context() -> Dict[str, Any]:
     return {
         "tao_change_24h": sum(changes) / len(changes) if changes else 0.0,
         "weights": weights,
+        "hub_overlay": _hub_overlay_safe(),
     }
+
+
+def _hub_overlay_safe() -> Dict[Any, Dict[str, Any]]:
+    try:
+        from internal.signal_hub.overlay import get_cached_hub_overlay
+
+        return get_cached_hub_overlay()
+    except Exception:
+        return {}
 
 
 def _source_expert(experts: Dict[str, Any]) -> str:
