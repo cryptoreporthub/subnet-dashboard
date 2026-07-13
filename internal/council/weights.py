@@ -93,21 +93,42 @@ def _save_raw(data: Dict[str, Any], path: str = SOUL_MAP_PATH) -> None:
             pass
 
 
+def normalize_council_weights(raw: Dict[str, float]) -> Dict[str, float]:
+    """Merge legacy ``contrarian`` into ``dark_horse``; return canonical experts only."""
+    merged: Dict[str, float] = {}
+    contrarian = 0.0
+    for key, val in (raw or {}).items():
+        name = str(key).lower().strip()
+        try:
+            fval = float(val)
+        except (TypeError, ValueError):
+            continue
+        if name == "contrarian":
+            contrarian = max(contrarian, fval)
+            continue
+        if name in ("darkhorse", "dark_horse"):
+            name = "dark_horse"
+        merged[name] = fval
+    if contrarian:
+        merged["dark_horse"] = max(merged.get("dark_horse", 0.0), contrarian)
+    out = dict(DEFAULT_WEIGHTS)
+    for name in DEFAULT_WEIGHTS:
+        if name in merged:
+            out[name] = merged[name]
+    return out
+
+
 def load_weights(path: str = SOUL_MAP_PATH) -> Dict[str, float]:
     """Read learned weights from soul_map.json, defaulting to DEFAULT_WEIGHTS."""
     data = _load_raw(path)
     adv = data.get("adversarial_state")
     if isinstance(adv, dict) and isinstance(adv.get("council_weights"), dict):
-        cw = {k: float(v) for k, v in adv["council_weights"].items()}
-        # Ensure all canonical experts are present.
-        for name, default in DEFAULT_WEIGHTS.items():
-            cw.setdefault(name, default)
-        return cw
+        return normalize_council_weights(adv["council_weights"])
     sms = data.get("soul_map_state")
     if isinstance(sms, dict) and isinstance(sms.get("expert_weights"), dict):
-        return {k: float(v) for k, v in sms["expert_weights"].items()}
+        return normalize_council_weights(sms["expert_weights"])
     if isinstance(data.get("expert_weights"), dict):
-        return {k: float(v) for k, v in data["expert_weights"].items()}
+        return normalize_council_weights(data["expert_weights"])
     return dict(DEFAULT_WEIGHTS)
 
 
@@ -119,10 +140,11 @@ def save_weights(weights: Dict[str, float], path: str = SOUL_MAP_PATH) -> None:
     if not isinstance(adv, dict):
         adv = {}
         data["adversarial_state"] = adv
-    adv["council_weights"] = {k: round(float(v), 4) for k, v in weights.items()}
+    canonical = normalize_council_weights(weights)
+    adv["council_weights"] = {k: round(float(v), 4) for k, v in canonical.items()}
     adv["last_weight_update"] = _now_iso()
     # Mirror to root expert_weights so legacy readers always see learned values.
-    data["expert_weights"] = {k: round(float(v), 4) for k, v in weights.items()}
+    data["expert_weights"] = {k: round(float(v), 4) for k, v in canonical.items()}
     _save_raw(data, path)
 
 

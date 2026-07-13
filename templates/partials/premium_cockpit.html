@@ -368,7 +368,9 @@
   <h2 class="section-title" id="staking-title">Staking APY Leaders</h2>
   <p class="section-sub">Top subnets by stake yield — ranked from live registry economics.</p>
   {% set staking_rows = sn_list|sort(attribute='emission', reverse=true)|list %}
-  {% if staking_rows %}
+  {% if degraded %}
+  <div class="card card-muted"><p class="empty">Loading staking APY leaders from live feed…</p></div>
+  {% elif staking_rows %}
   <div class="mi-grid">
     {% for sn in staking_rows[:8] %}
     {% set apy_raw = sn.apy|default(none) %}
@@ -660,7 +662,9 @@
   <div class="section-label">Undervalued Radar</div>
   <h2 class="section-title" id="undervalued-title">Undervalued Scoring Grid</h2>
   <p class="section-sub">Yield minus 24h momentum — higher score suggests deeper value vs. recent price action.</p>
-  {% if sn_list %}
+  {% if degraded %}
+  <div class="card card-muted"><p class="empty">Loading undervalued scores from live subnet feed…</p></div>
+  {% elif sn_list %}
   <div class="card">
     <table class="tbl">
       <thead>

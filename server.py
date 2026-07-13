@@ -280,11 +280,22 @@ async def add_cors_headers(request: Request, call_next):
 HOMEPAGE_BUILD_TIMEOUT = int(os.environ.get("HOMEPAGE_BUILD_TIMEOUT", "20"))
 
 
+def _normalize_registry_subnet(sn: Dict[str, Any]) -> Dict[str, Any]:
+    """Registry rows use ``id``; ensure ``netuid`` for templates and JS."""
+    row = dict(sn)
+    if row.get("netuid") is None and row.get("id") is not None:
+        row["netuid"] = row["id"]
+    name = str(row.get("name") or "")
+    if name.lower() in ("deprecated", "unknown", "none", ""):
+        row["name"] = f"SN{row.get('netuid', row.get('id', '?'))}"
+    return row
+
+
 def _degraded_index_context(request: Request) -> Dict[str, Any]:
     """Fast shell when full dashboard context exceeds HOMEPAGE_BUILD_TIMEOUT."""
     from internal.learning.dashboard_context import default_learning_dashboard_context
 
-    subnets = list(load_data("config/registry.json").values())
+    subnets = [_normalize_registry_subnet(s) for s in load_data("config/registry.json").values()]
     return {
         "request": request,
         "subnets": subnets,
@@ -1022,7 +1033,13 @@ def api_top_picks():
         return {"hour_picks": [], "day_picks": [], "error": "pick engine unavailable"}
     market_context = _market_context_with_weights(subnets)
     hour_scored, day_scored = [], []
-    for sn in subnets:
+    # ponytail: score top-30 by emission, not all 129 — keeps /api/top-picks under Fly timeouts
+    candidates = sorted(
+        subnets,
+        key=lambda s: (s.get("emission", 0) or 0, s.get("apy", 0) or 0),
+        reverse=True,
+    )[:30]
+    for sn in candidates:
         try:
             hour_scored.append({"subnet": sn, "score": score_subnet_for_hour(sn, market_context)})
             day_scored.append({"subnet": sn, "score": score_subnet_for_day(sn, market_context)})
