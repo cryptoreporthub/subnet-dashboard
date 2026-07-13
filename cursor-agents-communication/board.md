@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-13T21:10:00Z by Agent B (`-e78a`) — Phase 3 G3+G4 **merging** (#159)  
-**main:** `9622bf8` · **branch:** `cursor/phase3-g3-g4-4e98`
+**Last updated:** 2026-07-13T21:11:00Z by Agent B (`-e78a`) — Phase 3 **G3+G4 merged** (#159)  
+**main:** `d767dbb`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
