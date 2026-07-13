@@ -1,0 +1,688 @@
+/* SimiVision — premium cockpit overrides */
+/* =====================================================================
+   PREMIUM COCKPIT REDESIGN v4
+   Dark green (#05070a) → black gradient. #00ff41 green accents.
+   Completes the SimiVision Intelligence Cockpit layout: KPI strips,
+   styled tables, council grid, donuts, conviction color-coding.
+   Additive layer — overrides above where tokens are redefined.
+   ===================================================================== */
+
+:root {
+  --cockpit-green: #00ff41;
+  --cockpit-green-soft: rgba(0, 255, 65, 0.14);
+  --cockpit-green-line: rgba(0, 255, 65, 0.22);
+  --cockpit-green-glow: rgba(0, 255, 65, 0.10);
+  --bg-cockpit: #05070a;
+  --bg-cockpit-edge: #05070a;
+  --bg-cockpit-card: #0d1117;
+  --bg-cockpit-surface: #0d1117;
+  --bg-cockpit-elevated: #0d1117;
+  --txt: #e6f1ff;
+  --txt-2: #8b9bb4;
+  --txt-3: #1a1f2e;
+  --emerald-bright: #00ff41;
+  --emerald-dim: rgba(0, 255, 65, 0.10);
+  --neg: #ff4d5e;
+  --neg-dim: rgba(255, 77, 94, 0.10);
+  --neu: #ff00ff;
+  --neu-dim: rgba(255, 0, 255, 0.10);
+}
+
+/* ---------- Cockpit background: dark green → black ---------- */
+body {
+  background-color: var(--bg-cockpit);
+  background-image:
+    radial-gradient(circle at 50% -10%, rgba(0, 255, 65, 0.08) 0%, transparent 42%),
+    radial-gradient(circle at 12% 8%, rgba(0, 240, 255, 0.05) 0%, transparent 30%),
+    linear-gradient(180deg, var(--bg-cockpit) 0%, var(--bg-cockpit-edge) 100%);
+  background-attachment: fixed;
+  color: var(--txt);
+}
+
+/* ---------- Section blocks ---------- */
+.block {
+  margin-top: var(--space-6);
+  padding-top: var(--space-2);
+}
+.block:first-of-type { margin-top: var(--space-5); }
+
+/* ---------- Header refinements ---------- */
+.top-spacer { flex: 1 1 auto; }
+
+header.top {
+  background: linear-gradient(180deg, rgba(10, 26, 10, 0.92) 0%, rgba(5, 7, 10, 0.82) 100%);
+  border-bottom: 1px solid var(--cockpit-green-line);
+  box-shadow: 0 4px 28px rgba(0, 0, 0, 0.55), 0 1px 0 var(--cockpit-green-glow) inset;
+}
+
+.logo-mark {
+  background: linear-gradient(135deg, var(--cockpit-green) 0%, #00ff41 100%);
+  box-shadow: 0 0 18px var(--cockpit-green-glow);
+}
+.logo-text span { color: var(--cockpit-green); }
+.live-pill {
+  background: var(--cockpit-green-soft);
+  border-color: var(--cockpit-green-line);
+  color: var(--cockpit-green);
+}
+.live-dot { background: var(--cockpit-green); box-shadow: 0 0 12px var(--cockpit-green-glow); }
+.src-tag b { color: var(--cockpit-green); }
+
+/* ---------- Section titles ---------- */
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  position: relative;
+  padding-left: 12px;
+}
+.section-title::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 3px; bottom: 3px;
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--cockpit-green), rgba(0, 255, 65, 0.2));
+  box-shadow: 0 0 8px var(--cockpit-green-glow);
+}
+.section-sub { color: var(--txt-2); }
+
+/* ---------- Cards: green-accented cockpit surfaces ---------- */
+.card {
+  background:
+    linear-gradient(180deg, rgba(0, 255, 65, 0.035) 0%, transparent 38%),
+    var(--bg-cockpit-card);
+  border: 1px solid var(--cockpit-green-line);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 255, 65, 0.03) inset;
+  position: relative;
+}
+.card::after {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cockpit-green), transparent);
+  opacity: 0.5;
+  pointer-events: none;
+}
+.card:hover {
+  border-color: rgba(0, 255, 65, 0.55);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.65), 0 0 22px var(--cockpit-green-glow);
+  transform: translateY(-2px);
+}
+.card-head h3 { color: var(--txt); }
+
+/* Pick cards: top accent rail */
+.card.pick {
+  position: relative;
+  overflow: hidden;
+}
+.card.pick::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #00ff41, var(--cockpit-green));
+  z-index: 1;
+}
+.card.pick.sell-accent::before {
+  background: linear-gradient(90deg, var(--neg), #cc0044);
+}
+.card.pick.sell-accent {
+  border-color: rgba(255, 77, 94, 0.35);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55), 0 0 18px rgba(255, 77, 94, 0.10);
+}
+
+.pick-rank { color: rgba(0, 255, 65, 0.10); }
+.pick-name { color: var(--txt); }
+.pick-meta { color: var(--txt-2); }
+
+/* ---------- KPI strip ---------- */
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+}
+@media (max-width: 1024px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px)  { .kpi-strip { grid-template-columns: 1fr; } }
+
+.kpi {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(0, 255, 65, 0.06) 0%, transparent 50%),
+    var(--bg-cockpit-surface);
+  border: 1px solid var(--cockpit-green-line);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  overflow: hidden;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+.kpi::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--cockpit-green), rgba(0, 255, 65, 0.15));
+}
+.kpi:hover {
+  border-color: rgba(0, 255, 65, 0.55);
+  box-shadow: 0 0 18px var(--cockpit-green-glow);
+  transform: translateY(-1px);
+}
+.kpi .lbl {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--txt-3);
+}
+.kpi .val {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--txt);
+  margin-top: 6px;
+  line-height: 1.1;
+}
+.kpi .val.pos { color: var(--cockpit-green); text-shadow: 0 0 14px var(--cockpit-green-glow); }
+.kpi .val.neg { color: var(--neg); }
+.kpi .sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--txt-2);
+  margin-top: 6px;
+}
+.kpi .sub .pos { color: var(--cockpit-green); }
+.kpi .sub .neg { color: var(--neg); }
+.kpi .sub .neu { color: var(--neu); }
+
+/* ---------- Metric / market-intelligence grid ---------- */
+.mi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+}
+@media (max-width: 1024px) { .mi-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px)  { .mi-grid { grid-template-columns: 1fr; } }
+
+.metric {
+  background: var(--bg-cockpit-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+}
+.metric .lbl {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--txt-3);
+}
+.metric .val {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--txt);
+  margin-top: 4px;
+  word-break: break-word;
+}
+.metric .val.pos { color: var(--cockpit-green); }
+.metric .val.neg { color: var(--neg); }
+.metric .sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--txt-2);
+  margin-top: 4px;
+}
+
+.breadth {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+}
+.breadth.pos { color: var(--cockpit-green); }
+.breadth.neg { color: var(--neg); }
+.breadth.neu { color: var(--neu); }
+
+/* ---------- Styled tables ---------- */
+table.tbl {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+table.tbl thead th {
+  position: sticky;
+  top: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cockpit-green);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 11px 12px;
+  background: var(--bg-cockpit-elevated);
+  border-bottom: 1px solid var(--cockpit-green-line);
+}
+table.tbl tbody td {
+  padding: 11px 12px;
+  font-size: 13px;
+  color: var(--txt-2);
+  border-bottom: 1px solid rgba(0, 255, 65, 0.06);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+table.tbl tbody tr:last-child td { border-bottom: none; }
+table.tbl tbody tr:hover td {
+  background: linear-gradient(90deg, rgba(0, 255, 65, 0.06), transparent);
+  color: var(--txt);
+}
+table.tbl td.pos, table.tbl td .pos { color: var(--cockpit-green); }
+table.tbl td.neg, table.tbl td .neg { color: var(--neg); }
+table.tbl td.mono { font-family: var(--font-mono); }
+
+/* ---------- Technical indicators grid ---------- */
+.ti-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+}
+@media (max-width: 1100px) { .ti-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 720px)  { .ti-grid { grid-template-columns: 1fr; } }
+
+.ind-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.ind-cell {
+  background: var(--bg-cockpit-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+.ind-cell .k {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--txt-3);
+}
+.ind-cell .v {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--txt);
+  margin-top: 4px;
+}
+
+/* ---------- RSI donut ---------- */
+.donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.donut {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  flex-shrink: 0;
+}
+.donut svg { transform: rotate(-90deg); }
+.donut-val {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--txt);
+}
+.rsi-big {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+}
+.rsi-big.pos { color: var(--cockpit-green); }
+.rsi-big.neg { color: var(--neg); }
+.rsi-big.neu { color: var(--neu); }
+
+/* ---------- Momentum grid ---------- */
+.momentum-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: var(--space-4);
+}
+@media (max-width: 1024px) { .momentum-grid { grid-template-columns: 1fr; } }
+
+.chart-box {
+  position: relative;
+  height: 280px;
+  margin-top: 6px;
+}
+
+/* ---------- Council / judge grid ---------- */
+.council-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+@media (max-width: 1024px) { .council-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px)  { .council-grid { grid-template-columns: 1fr; } }
+
+.expert.card-soft {
+  background:
+    linear-gradient(180deg, rgba(0, 255, 65, 0.04) 0%, transparent 45%),
+    var(--bg-cockpit-surface);
+  border: 1px solid var(--cockpit-green-line);
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+.expert.card-soft:hover {
+  border-color: rgba(0, 255, 65, 0.55);
+  box-shadow: 0 0 18px var(--cockpit-green-glow);
+  transform: translateY(-2px);
+}
+.expert .avatar {
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 8px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--bg-cockpit);
+  background: linear-gradient(135deg, var(--cockpit-green), #00ff41);
+  box-shadow: 0 0 16px var(--cockpit-green-glow);
+}
+.expert .name {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--txt);
+}
+.expert .w {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--cockpit-green);
+  margin-top: 6px;
+  text-shadow: 0 0 14px var(--cockpit-green-glow);
+}
+.expert .wbar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(0, 255, 65, 0.08);
+  overflow: hidden;
+  margin: 8px 0 6px;
+}
+.expert .wfill {
+  height: 100%;
+  background: linear-gradient(90deg, #00ff41, var(--cockpit-green));
+  border-radius: 3px;
+  box-shadow: 0 0 8px var(--cockpit-green-glow);
+}
+.expert .bias {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  margin-top: 2px;
+}
+.expert .bias.pos { color: var(--cockpit-green); background: var(--cockpit-green-soft); }
+.expert .bias.neu { color: var(--neu); background: var(--neu-dim); }
+
+/* ---------- Pills (HOT / SELL ALERT) ---------- */
+.pill-hot, .pill-sell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  border: 1px solid;
+}
+.pill-hot {
+  color: var(--neu);
+  background: rgba(255, 0, 255, 0.10);
+  border-color: rgba(255, 0, 255, 0.4);
+  animation: hot-pulse 1.6s ease-in-out infinite;
+}
+.pill-sell {
+  color: var(--neg);
+  background: rgba(255, 77, 94, 0.10);
+  border-color: rgba(255, 77, 94, 0.45);
+  animation: sell-pulse 1.4s ease-in-out infinite;
+}
+@keyframes hot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 0, 255, 0.4); }
+  50%      { box-shadow: 0 0 10px 2px rgba(255, 0, 255, 0.25); }
+}
+@keyframes sell-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 94, 0.4); }
+  50%      { box-shadow: 0 0 10px 2px rgba(255, 77, 94, 0.25); }
+}
+
+.hot-sub {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 0, 255, 0.06);
+  border: 1px solid rgba(255, 0, 255, 0.22);
+}
+.hot-sub.sell {
+  background: rgba(255, 77, 94, 0.06);
+  border-color: rgba(255, 77, 94, 0.25);
+}
+.hot-sub .r {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--txt-2);
+  margin-top: 4px;
+}
+
+/* ---------- Tags (BUY / HOLD / SELL / WATCH) ---------- */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  border: 1px solid;
+}
+.tag-buy   { color: var(--cockpit-green); background: var(--cockpit-green-soft); border-color: var(--cockpit-green-line); }
+.tag-hold  { color: var(--neu); background: var(--neu-dim); border-color: rgba(255, 0, 255, 0.3); }
+.tag-sell  { color: var(--neg); background: var(--neg-dim); border-color: rgba(255, 77, 94, 0.35); }
+.tag-watch { color: var(--txt-2); background: rgba(143, 179, 160, 0.08); border-color: rgba(143, 179, 160, 0.25); }
+
+/* ---------- Yield bars ---------- */
+.yield-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(0, 255, 65, 0.08);
+  overflow: hidden;
+  margin-top: 5px;
+}
+.yield-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #00ff41, var(--cockpit-green));
+  border-radius: 3px;
+  box-shadow: 0 0 8px var(--cockpit-green-glow);
+}
+
+/* ---------- Conviction bars with color coding ---------- */
+/* The fill width is set inline (0–100%). A multi-stop gradient maps
+   conviction level → color so the visible portion self-color-codes:
+   low=red, mid=gold, high=lime, peak=cockpit green. */
+.conviction-bar {
+  height: 7px;
+  border-radius: 4px;
+  background: rgba(0, 255, 65, 0.06);
+  overflow: hidden;
+  margin-top: 5px;
+  box-shadow: inset 0 0 0 1px rgba(0, 240, 255, 0.05);
+}
+.conviction-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg,
+    #ff3366 0%, #ff3366 25%,
+    #ff00ff 40%, #ff00ff 55%,
+    #00ff41 70%, #00ff41 82%,
+    var(--cockpit-green) 100%);
+  background-size: 400% 100%;
+  background-position: right center;
+  box-shadow: 0 0 10px var(--cockpit-green-glow);
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+/* Explicit tier modifiers (when applied by template/JS) */
+.conviction-fill.tier-red   { background: #ff3366; box-shadow: 0 0 8px rgba(255, 51, 102, 0.5); }
+.conviction-fill.tier-gold  { background: #ff00ff; box-shadow: 0 0 8px rgba(245, 185, 66, 0.5); }
+.conviction-fill.tier-lime  { background: #00ff41; box-shadow: 0 0 8px rgba(132, 204, 22, 0.5); }
+.conviction-fill.tier-green { background: var(--cockpit-green); box-shadow: 0 0 12px var(--cockpit-green-glow); }
+.conviction-lbl { color: var(--txt-3); }
+
+/* ---------- Top picks (JS-driven) ---------- */
+.top-pick-content .impact-line.empty { color: var(--txt-3); font-style: italic; }
+
+/* ---------- Social sentiment ---------- */
+.soc-card .soc-head { margin-bottom: 6px; }
+.soc-score.pos { color: var(--cockpit-green); }
+.soc-score.neg { color: var(--neg); }
+.soc-score.neu { color: var(--neu); }
+.feed-src.src-auto {
+  background: var(--bg-cockpit-elevated);
+  color: var(--cockpit-green);
+  border: 1px solid var(--cockpit-green-line);
+}
+.feed-text .pos { color: var(--cockpit-green); font-weight: 600; }
+.feed-text .neg { color: var(--neg); font-weight: 600; }
+.feed-text .neu { color: var(--neu); font-weight: 600; }
+
+/* ---------- Impact / signal rows ---------- */
+.impact-row { border-bottom-color: rgba(0, 255, 65, 0.06); }
+.impact-line { color: var(--txt-2); }
+.impact-line.empty { color: var(--txt-3); font-style: italic; }
+.impact-net.pos { color: var(--cockpit-green); }
+.impact-net.neg { color: var(--neg); }
+.impact-net.neu { color: var(--neu); }
+
+/* ---------- Footer status strip ---------- */
+footer.status {
+  background: linear-gradient(180deg, rgba(2, 8, 4, 0.85) 0%, rgba(10, 26, 10, 0.95) 100%);
+  border-top: 1px solid var(--cockpit-green-line);
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
+}
+.status-inner b { color: var(--txt); }
+.st-dot { background: var(--cockpit-green); box-shadow: 0 0 10px var(--cockpit-green-glow); }
+
+/* ---------- Scrollbars (cockpit tint) ---------- */
+.scroll-y::-webkit-scrollbar,
+.trail::-webkit-scrollbar { width: 6px; }
+.scroll-y::-webkit-scrollbar-thumb,
+.trail::-webkit-scrollbar-thumb {
+  background: var(--cockpit-green-line);
+  border-radius: 3px;
+}
+.scroll-y::-webkit-scrollbar-thumb:hover,
+.trail::-webkit-scrollbar-thumb:hover { background: rgba(0, 255, 65, 0.4); }
+
+/* ---------- Treemap tiles (cockpit tint) ---------- */
+.tmap-tile {
+  background: var(--cockpit-green-soft);
+  border-color: var(--cockpit-green-line);
+  color: var(--cockpit-green);
+}
+.tmap-tile.neg { background: var(--neg-dim); border-color: rgba(255, 77, 94, 0.3); color: var(--neg); }
+
+
+/* ---------- Reasons list (cockpit tint) ---------- */
+.reasons li { border-top-color: rgba(0, 255, 65, 0.06); }
+.reasons li::before { color: var(--cockpit-green); }
+.pred-line { border-top-color: rgba(0, 255, 65, 0.06); }
+
+/* ---------- Mindmap trail (cockpit tint) ---------- */
+.trail::before { background: linear-gradient(180deg, var(--cockpit-green), transparent); }
+.trail-item { border-bottom-color: rgba(0, 255, 65, 0.06); }
+.trail-item::before { border-color: var(--cockpit-green); background: var(--bg-cockpit); }
+.flow-arrow { color: var(--cockpit-green); }
+.flow-chip { background: var(--bg-cockpit-surface); border-color: var(--border-subtle); }
+
+/* ---------- Learning accuracy ring (cockpit tint) ---------- */
+.acc-val { color: var(--txt); }
+
+/* ---------- Two-column + picks grids ---------- */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+@media (max-width: 1024px) { .two-col { grid-template-columns: 1fr; } }
+.picks { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); }
+@media (max-width: 1100px) { .picks { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 768px)  { .picks { grid-template-columns: 1fr; } }
+
+/* ---------- Pump Cycle Analytics v2 ---------- */
+.pump-candidate-cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:var(--space-4); }
+.pump-card { background:var(--bg-card); border:1px solid var(--border-default); border-radius:var(--radius-md); padding:14px; border-left:3px solid var(--text-muted); }
+.pump-card.phase-accumulation { border-left-color:#1a1f2e; }
+.pump-card.phase-markup { border-left-color:#00ff41; }
+.pump-card.phase-parabolic { border-left-color:#ff3366; }
+.pump-card.phase-distribution { border-left-color:#ff0099; }
+.pump-card.phase-decline { border-left-color:#ff3366; }
+.pump-card.phase-re_accumulation { border-left-color:#00f0ff; }
+.pump-card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; gap:8px; }
+.pump-card-header .subnet-name { font-weight:600; }
+.phase-badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-pill); font-size:11px; font-weight:700; letter-spacing:0.04em; }
+.phase-badge.phase-accumulation { background:rgba(26,31,46,0.35); color:#e6f1ff; }
+.phase-badge.phase-markup { background:rgba(0,255,65,0.15); color:#00ff41; }
+.phase-badge.phase-parabolic { background:linear-gradient(90deg,rgba(255,51,102,0.25),rgba(0,255,65,0.25)); color:#ffe6f0; }
+.phase-badge.phase-distribution { background:rgba(255,0,153,0.15); color:#ff99cc; }
+.phase-badge.phase-decline { background:rgba(255,51,102,0.15); color:#ff6699; }
+.phase-badge.phase-re_accumulation { background:rgba(0,240,255,0.15); color:#00f0ff; }
+.proneness-bar { position:relative; height:18px; background:rgba(255,255,255,0.05); border-radius:var(--radius-pill); overflow:hidden; margin:8px 0; }
+.proneness-bar-sm { height:14px; min-width:90px; }
+.proneness-fill { position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg,#ff3366 0%,#ff0099 50%,#00ff41 100%); border-radius:var(--radius-pill); }
+.proneness-score { position:absolute; right:6px; top:50%; transform:translateY(-50%); font-size:11px; font-weight:700; color:var(--text-secondary); text-shadow:0 1px 2px rgba(0,0,0,0.6); }
+.cycle-prediction { display:flex; flex-wrap:wrap; gap:10px; font-size:12px; color:var(--text-secondary); margin:6px 0; }
+.phase-duration { font-size:11px; color:var(--text-muted); }
+.pump-cycle-table { width:100%; border-collapse:collapse; font-size:13px; }
+.pump-cycle-table th { text-align:left; padding:8px 10px; color:var(--text-muted); font-weight:600; border-bottom:1px solid var(--border-default); white-space:nowrap; }
+.pump-cycle-table td { padding:8px 10px; border-bottom:1px solid var(--border-default); }
+.pump-cycle-table tbody tr:hover { background:rgba(52,211,153,0.04); }
+/* Pump Cycle Analytics — multi-signal enhancement tags & convergence bar */
+.pump-signal-tag { display:inline-block; padding:2px 7px; border-radius:var(--radius-pill); font-size:11px; font-weight:700; white-space:nowrap; }
+.pump-signal-vol { background:rgba(0,153,255,0.15); color:#00f0ff; }
+.pump-signal-sent-pos { background:rgba(0,255,65,0.15); color:#00ff41; }
+.pump-signal-sent-neg { background:rgba(255,51,102,0.15); color:#ff6699; }
+.pump-signal-adapted { background:rgba(255,0,255,0.15); color:#ff00ff; }
+.convergence-bar { position:relative; height:14px; min-width:80px; background:rgba(255,255,255,0.05); border-radius:var(--radius-pill); overflow:hidden; }
+.convergence-fill { position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg,#ff3366 0%,#ff0099 50%,#00ff41 100%); border-radius:var(--radius-pill); }
+.convergence-label { position:absolute; right:6px; top:50%; transform:translateY(-50%); font-size:10px; font-weight:700; color:var(--text-secondary); text-shadow:0 1px 2px rgba(0,0,0,0.6); }
+.pump-profile-row { border:1px solid var(--border-default); border-radius:var(--radius-md); margin-bottom:8px; overflow:hidden; }
+.pump-profile-head { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 14px; cursor:pointer; background:rgba(255,255,255,0.02); }
+.pump-profile-head:hover { background:rgba(52,211,153,0.05); }
+.pump-profile-toggle { color:var(--text-muted); transition:transform 0.2s; }
+.pump-profile-row.open .pump-profile-toggle { transform:rotate(90deg); }
+.pump-profile-body { display:none; padding:14px; border-top:1px solid var(--border-default); }
+.pump-profile-row.open .pump-profile-body { display:block; }
+.pump-profile-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; font-size:13px; }
+.mini-timeline { display:flex; gap:3px; height:26px; margin-bottom:12px; align-items:stretch; }
+.mini-timeline-seg { background:linear-gradient(180deg,rgba(72,187,120,0.5),rgba(72,187,120,0.2)); border-radius:4px; display:flex; align-items:center; justify-content:center; border:1px solid rgba(72,187,120,0.3); }
+.mini-timeline-seg:nth-child(even) { background:linear-gradient(180deg,rgba(237,138,54,0.5),rgba(237,138,54,0.2)); border-color:rgba(237,138,54,0.3); }
+.mini-timeline-label { font-size:10px; color:var(--text-secondary); font-weight:600; }

@@ -39,10 +39,11 @@ H_FULL_SECTION_IDS = [
 ]
 
 
-def test_index_links_style_css():
+def test_index_links_split_css():
     client = TestClient(app)
     html = client.get("/").text
-    assert "/static/css/style.css" in html
+    for name in ("base", "layout", "dashboard", "chat", "premium", "responsive"):
+        assert f"/static/css/{name}.css" in html
 
 
 def test_index_has_card_class():

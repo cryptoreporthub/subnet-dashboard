@@ -1,0 +1,463 @@
+/* SimiVision — nav, mobile, volatility UI v5 */
+
+/* =====================================================================
+   UI IMPROVEMENTS v5
+   - Sticky top navigation bar (Task 1)
+   - Volatility clusters heat-bar redesign (Task 2)
+   - Header scaling fixes (Task 3)
+   - Full mobile responsiveness (Task 4)
+   Additive layer — uses existing theme tokens (--accent-bright,
+   --text-primary/secondary/muted, --bg-surface, --border-default, etc.).
+   ===================================================================== */
+
+:root {
+  --nav-h: 34px;
+}
+
+/* ---------- Sticky top navigation bar ---------- */
+.top-nav {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: rgba(8, 12, 20, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-default, rgba(255,255,255,0.08));
+  gap: 12px;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.nav-logo {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--accent-bright, #00ff41);
+  padding: 2px 7px;
+  border: 1px solid var(--accent-bright, #00ff41);
+  border-radius: 4px;
+}
+
+.nav-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary, #e6f1ff);
+  letter-spacing: 0.5px;
+}
+
+.nav-links {
+  display: flex;
+  gap: 2px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.nav-links::-webkit-scrollbar { display: none; }
+
+.nav-links a {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary, #8b9bb4);
+  text-decoration: none;
+  padding: 5px 9px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.nav-links a:hover {
+  color: var(--accent-bright, #00ff41);
+  background: var(--accent-dim, rgba(0, 212, 170, 0.08));
+}
+
+/* Stack the sticky header directly below the nav bar so both stay visible
+   without overlapping (header keeps its existing sticky behavior). */
+header.top {
+  top: var(--nav-h);
+}
+
+/* ---------- Volatility Clusters ---------- */
+.vol-cluster-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.vol-cluster-group {
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.vol-cluster-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.vol-cluster-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.vol-dot-high { background: #ff3366; box-shadow: 0 0 6px rgba(255,51,102,0.4); }
+.vol-dot-core { background: #ff0099; box-shadow: 0 0 6px rgba(255,0,153,0.4); }
+.vol-dot-low  { background: #00ff41; box-shadow: 0 0 6px rgba(0,255,65,0.4); }
+
+.vol-cluster-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary, #e6f1ff);
+}
+
+.vol-cluster-count {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted, #1a1f2e);
+  background: rgba(255,255,255,0.06);
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-left: auto;
+}
+
+.vol-cluster-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vol-cluster-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.vol-cluster-name {
+  font-size: 11px;
+  color: var(--text-secondary, #8b9bb4);
+  width: 90px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vol-cluster-bar-wrap {
+  flex: 1;
+  height: 6px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 3px;
+  overflow: visible;
+  position: relative;
+}
+
+.vol-cluster-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.vol-cluster-mean-line {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 1px;
+  background: rgba(255,255,255,0.25);
+  border-left: 1px dashed rgba(255,255,255,0.3);
+  z-index: 2;
+}
+
+.vol-bar-high { background: linear-gradient(90deg, #ff3366, #ff6699); }
+.vol-bar-core { background: linear-gradient(90deg, #ff0099, #ff00ff); }
+.vol-bar-low  { background: linear-gradient(90deg, #00ff41, #00ff41); }
+
+.vol-cluster-value {
+  font-size: 11px;
+  color: var(--text-muted, #8b9bb4);
+  width: 44px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.vol-cluster-more {
+  font-size: 10px;
+  color: var(--text-muted, #1a1f2e);
+  text-align: center;
+  padding: 2px 0;
+}
+
+.vol-explain {
+  margin-top: 10px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.vol-explain summary {
+  font-size: 11px;
+  color: var(--text-secondary, #8b9bb4);
+  cursor: pointer;
+  padding: 6px 10px;
+  user-select: none;
+  transition: background 0.2s;
+}
+
+.vol-explain summary:hover { background: rgba(255,255,255,0.03); }
+
+.vol-explain-body {
+  padding: 8px 12px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-secondary, #8b9bb4);
+}
+
+.vol-explain-section {
+  margin-bottom: 8px;
+}
+
+.vol-explain-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+  font-weight: 600;
+}
+
+.vol-explain-heading .vol-dot-high,
+.vol-explain-heading .vol-dot-core,
+.vol-explain-heading .vol-dot-low {
+  margin-top: 0;
+}
+
+.vol-explain-body b { color: var(--text-primary, #e6f1ff); }
+
+.vol-explain-formula {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.vol-explain-formula code {
+  font-size: 10px;
+  background: rgba(255,255,255,0.06);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--accent-bright, #00ff41);
+}
+
+.vol-explain-formula div { margin-bottom: 3px; }
+
+/* ---------- Header scaling (Task 3) ---------- */
+/* Use responsive font sizes so the header never overflows or clips. */
+.logo-mark {
+  width: clamp(30px, 4vw, 38px);
+  height: clamp(30px, 4vw, 38px);
+  font-size: clamp(15px, 2vw, 20px);
+  border-radius: clamp(7px, 1vw, 10px);
+}
+
+.logo-text {
+  font-size: clamp(15px, 2.2vw, 20px);
+}
+
+.logo-sub {
+  font-size: clamp(8px, 1vw, 10px);
+}
+
+.top-inner {
+  padding: clamp(8px, 1.5vw, 12px) var(--space-5);
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.src-tag {
+  font-size: clamp(9px, 1.2vw, 11px);
+}
+
+@media (max-width: 768px) {
+  .top-inner { padding: 8px 12px; }
+  .src-tag { display: none; }       /* hide the data-source tag on phones */
+  .live-pill { padding: 4px 10px; font-size: 10px; }
+}
+
+/* ---------- Full mobile responsiveness (Task 4) ---------- */
+@media (max-width: 768px) {
+  /* Stack every grid column to full width (overrides inline grid-template
+     styles via !important, since inline styles otherwise win). */
+  .layout-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  .layout-grid > [class*="span-"] {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+  }
+  .span-6, .span-4, .span-3, .span-8, .span-7, .span-5, .span-2, .span-1 {
+    width: 100% !important;
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+  }
+  .grid, .flex-row, .row, .two-col, .momentum-grid, .mi-grid, .kpi-strip,
+  .council-grid, .soc-grid, .pump-candidate-cards, .pump-profile-grid {
+    grid-template-columns: 1fr !important;
+    flex-direction: column !important;
+  }
+
+  /* Scale down large headings and labels. */
+  h1 { font-size: clamp(20px, 6vw, 28px) !important; }
+  h2 { font-size: clamp(18px, 5vw, 24px) !important; }
+  h3 { font-size: clamp(14px, 4vw, 16px) !important; }
+  .section-label { font-size: 9px; letter-spacing: 1px; }
+  .section-title { font-size: 14px; }
+  .hero-name { font-size: clamp(26px, 9vw, 40px); letter-spacing: -0.5px; }
+  .pick-name-lg { font-size: 18px; }
+  .pick-name { font-size: 15px; }
+  .hero-stat .v { font-size: 22px; }
+  .kpi .val, .metric .val { font-size: 20px; }
+
+  /* Reduce page + card padding on phones. */
+  .wrap {
+    padding: 0 12px 32px;
+  }
+  .card, .pick-card, .hero-card {
+    padding: 12px;
+    border-radius: var(--radius-md);
+  }
+  .hero-card { padding: 16px; }
+  .block { margin-top: var(--space-5); }
+
+  /* Tables: scroll horizontally instead of overflowing the viewport. */
+  .card { overflow-x: auto; }
+  table.tbl, .pump-cycle-table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+  table.tbl thead th { position: static; }   /* sticky headers don't work in block tables */
+
+  /* KPI / metric strips wrap to a 2x2 grid instead of a single row. */
+  .kpi-strip, .mi-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .layout-grid[style*="repeat(5"] { grid-template-columns: repeat(2, 1fr) !important; }
+  .layout-grid[style*="repeat(4"] { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* Hero stats stack neatly. */
+  .hero-stats { gap: 12px; }
+
+  /* Prevent horizontal page scroll from any fixed-width element. */
+  body { overflow-x: hidden; }
+  .card, .pick-card, .hero-card, .pump-profile-row, .vol-cluster-group {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-title { display: none; }
+  .nav-logo { font-size: 11px; }
+  .top-nav { padding: 6px 10px; }
+  .kpi-strip, .mi-grid { grid-template-columns: 1fr !important; }
+  .layout-grid[style*="repeat(5"],
+  .layout-grid[style*="repeat(4"],
+  .layout-grid[style*="repeat(2"] { grid-template-columns: 1fr !important; }
+  .hero-name { font-size: clamp(22px, 10vw, 30px); }
+  .hero-card { padding: 12px; }
+  .card, .pick-card { padding: 10px; }
+}
+
+/* ---------- Subnet rollup (optional grouping lane) ---------- */
+.subnet-groups-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.subnet-group {
+  border: 1px solid var(--cockpit-green-line, rgba(0, 255, 65, 0.22));
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.subnet-group-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.subnet-group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.subnet-group-summary::before {
+  content: '▸';
+  color: var(--cockpit-green, #00ff41);
+  margin-right: 4px;
+  transition: transform 0.15s ease;
+}
+
+.subnet-group[open] .subnet-group-summary::before {
+  transform: rotate(90deg);
+}
+
+.subnet-group-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted, #6b7280);
+  font-family: var(--font-mono, monospace);
+}
+
+.subnet-group-body {
+  padding: 0 14px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.subnet-group-item {
+  display: flex;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.subnet-group-item:last-child {
+  border-bottom: none;
+}
+
+.subnet-group-item-label {
+  flex: 0 0 100px;
+  font-weight: 600;
+  color: var(--cockpit-green, #00ff41);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.subnet-group-item-val {
+  flex: 1;
+  color: var(--text-primary, #e6f1ff);
+}
