@@ -43,21 +43,33 @@ def load_subnets() -> List[Dict[str, Any]]:
 
 
 def _market_context() -> Dict[str, Any]:
-    try:
-        from internal.council.weights import load_weights
-
-        weights = load_weights()
-    except Exception:
-        weights = {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
     subnets = load_subnets()
     changes = []
+    gainers = 0
+    losers = 0
     for sn in subnets:
         try:
-            changes.append(float(sn.get("price_change_24h", 0) or 0))
+            chg = float(sn.get("price_change_24h", 0) or 0)
+            changes.append(chg)
+            if chg > 0:
+                gainers += 1
+            elif chg < 0:
+                losers += 1
         except (TypeError, ValueError):
             continue
+    market_data = {
+        "avg_change_24h": sum(changes) / len(changes) if changes else 0.0,
+        "gainers": gainers,
+        "losers": losers,
+    }
+    try:
+        from internal.council.weights import effective_weights
+
+        weights = effective_weights(market_data)
+    except Exception:
+        weights = {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
     return {
-        "tao_change_24h": sum(changes) / len(changes) if changes else 0.0,
+        "tao_change_24h": market_data["avg_change_24h"],
         "weights": weights,
         "hub_overlay": _hub_overlay_safe(),
     }

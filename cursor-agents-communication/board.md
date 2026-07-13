@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-13T21:11:00Z by Agent B (`-e78a`) — Phase 3 **G3+G4 merged** (#159)  
-**main:** `d767dbb`
+**Last updated:** 2026-07-13T21:55:00Z by Agent B (`-e78a`) — Phase 3 **G9–G11** in PR  
+**main:** `b4326bf`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -11,6 +11,7 @@
 2. **Model guide** — `cursor-agents-communication/model-guide.md`
 3. **Implementation guide** — `docs/cursor-implementation-guide.md` (Grok token rules)
 4. **Phase 3 Grok spec** — `cursor-agents-communication/phase-3-grok-design.md`
+5. **Phase 3 backend spec** — `cursor-agents-communication/phase-3-grok-backend-design.md`
 
 ## Grok switches (required)
 
@@ -22,18 +23,20 @@
 
 Composer spawns Grok via subagent — no manual model picker needed. Batch tasks; scope files only.
 
-## Active — Phase 3 (UX + backend)
+## Active — Phase 3 complete, Phase 4 next
 
 | Task | Agent | Status | Notes |
 |------|-------|--------|-------|
 | **Phase 1–2** | B | ✅ **merged** | #154 · #155 · #157 |
-| **G3** caret UX | B | ✅ **complete** | Grok sign-off PASS |
-| **G4** inline → CSS | B | ✅ **complete** | Grok sign-off PASS |
-| **G9–G11** backend | — | backlog | parallel-safe after G3/G4 |
+| **G3** caret UX | B | ✅ **merged** | #159 |
+| **G4** inline → CSS | B | ✅ **merged** | #159 |
+| **G9** confidence calibration | B | 🔄 **PR open** | resolver hit-rate prior |
+| **G10** effective weights | B | 🔄 **PR open** | regime-aware, no persist |
+| **G11** round-robin resolver | B | 🔄 **PR open** | `RESOLVER_BATCH_SIZE` |
 | C3–C6 | Composer | backlog | Phase 4/6 |
 
 ## Ready for Ditto
-**Phase 3 G3+G4 PR pending. G9–G11 after human go-ahead.**
+**Phase 3 G9–G11 PR pending human review. Phase 4 (C4–C6 hydration) next after merge.**
 
 Recent merges on `main` @ `82bbde7` (CI green):
 

@@ -38,7 +38,36 @@ except Exception:  # pragma: no cover - keep import-safe if file_utils is unavai
 
 RESOLVER_REFRESH_MINUTES = int(os.environ.get("RESOLVER_REFRESH_MINUTES", "15"))
 MAX_BACKOFF_MINUTES = int(os.environ.get("RESOLVER_MAX_BACKOFF_MINUTES", "240"))
+RESOLVER_BATCH_SIZE = int(os.environ.get("RESOLVER_BATCH_SIZE", "32"))
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
+
+
+def _round_robin_batch(
+    subnets: list,
+    cursor: int,
+    batch_size: int,
+) -> tuple:
+    """Return a netuid-sorted batch and the next cursor position."""
+    if not subnets or batch_size <= 0:
+        return [], 0
+
+    valid = [
+        sn for sn in subnets
+        if isinstance(sn, dict) and sn.get("netuid") is not None
+    ]
+    sorted_subnets = sorted(
+        valid,
+        key=lambda s: int(s["netuid"]) if str(s["netuid"]).isdigit() else s["netuid"],
+    )
+    n = len(sorted_subnets)
+    if n == 0:
+        return [], 0
+
+    size = min(batch_size, n)
+    cursor = cursor % n
+    batch = [sorted_subnets[(cursor + i) % n] for i in range(size)]
+    next_cursor = (cursor + size) % n
+    return batch, next_cursor
 
 
 def _now_iso() -> str:
@@ -233,12 +262,23 @@ class PredictionResolverScheduler:
         try:
             subnets = self._subnet_provider() or []
 
+            soul_data = _load_json(self.soul_map_path)
+            sched_state = soul_data.get("prediction_resolver_scheduler", {})
+            if not isinstance(sched_state, dict):
+                sched_state = {}
+            cursor = int(sched_state.get("round_robin_cursor", 0) or 0)
+            batch, next_cursor = _round_robin_batch(
+                subnets, cursor, RESOLVER_BATCH_SIZE
+            )
+            result["batch_size"] = len(batch)
+            result["round_robin_cursor"] = next_cursor
+
             # 1. Grade predictions whose horizon has elapsed against the live
             #    price feed. This also nudges expert weights (learning loop).
             #    ``resolve_due_predictions`` itself retires predictions that are
             #    past due with no price as ``expired`` (correct=None), so we
             #    count those here too.
-            resolved = resolver.resolve_due_predictions(subnets)
+            resolved = resolver.resolve_due_predictions(batch)
             result["resolved_now"] = len(resolved.get("resolved_now", []))
             expired_count = len(resolved.get("expired_now", []))
 
@@ -270,9 +310,14 @@ class PredictionResolverScheduler:
             "pending": result.get("pending", 0),
             "error": result.get("error"),
             "watchdog": result.get("watchdog"),
+            "batch_size": result.get("batch_size", 0),
+            "round_robin_cursor": result.get("round_robin_cursor"),
         }
         data = _load_json(self.soul_map_path)
-        data.setdefault("prediction_resolver_scheduler", {})["last_cycle"] = summary
+        sched = data.setdefault("prediction_resolver_scheduler", {})
+        sched["last_cycle"] = summary
+        if result.get("round_robin_cursor") is not None:
+            sched["round_robin_cursor"] = result["round_robin_cursor"]
         try:
             _save_json(self.soul_map_path, data)
         except Exception:

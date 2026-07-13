@@ -506,3 +506,72 @@ def test_default_subnets_fallback_returns_list():
     """The default subnet provider must never raise -- it returns a list."""
     result = resolver_scheduler._default_subnets()
     assert isinstance(result, list)
+
+
+# ---------------------------------------------------------------------------
+# G11 — round-robin batching
+# ---------------------------------------------------------------------------
+
+def test_round_robin_batch_sorts_by_netuid():
+    subnets = [
+        {"netuid": 3, "price": 3.0},
+        {"netuid": 1, "price": 1.0},
+        {"netuid": 2, "price": 2.0},
+    ]
+    batch, _ = resolver_scheduler._round_robin_batch(subnets, 0, 2)
+    assert [sn["netuid"] for sn in batch] == [1, 2]
+
+
+def test_round_robin_batch_wraps_cursor():
+    subnets = [{"netuid": i, "price": float(i)} for i in range(1, 6)]
+    batch, next_cursor = resolver_scheduler._round_robin_batch(subnets, 4, 3)
+    assert [sn["netuid"] for sn in batch] == [5, 1, 2]
+    assert next_cursor == 2
+
+
+def test_round_robin_batch_caps_at_subnet_count():
+    subnets = [{"netuid": 1, "price": 1.0}, {"netuid": 2, "price": 2.0}]
+    batch, next_cursor = resolver_scheduler._round_robin_batch(subnets, 0, 32)
+    assert len(batch) == 2
+    assert next_cursor == 0
+
+
+def test_scheduler_persists_round_robin_cursor(fresh_scheduler):
+    subnets = [{"netuid": i, "price": float(i)} for i in range(1, 11)]
+
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: subnets
+    )
+    sched.run_once()
+
+    with open(weights.SOUL_MAP_PATH, "r") as f:
+        soul = json.load(f)
+    sched_state = soul["prediction_resolver_scheduler"]
+    n = len(subnets)
+    batch_size = min(resolver_scheduler.RESOLVER_BATCH_SIZE, n)
+    assert sched_state["last_cycle"]["batch_size"] == batch_size
+    assert sched_state["round_robin_cursor"] == batch_size % n
+
+
+def test_scheduler_passes_batch_not_full_list(monkeypatch, fresh_scheduler):
+    subnets = [{"netuid": i, "price": float(i)} for i in range(1, 51)]
+    seen = {}
+
+    def _spy_resolve(batch):
+        seen["batch_len"] = len(batch)
+        return {
+            "resolved_now": [],
+            "expired_now": [],
+            "stats": {"pending": 0},
+            "watchdog": {},
+        }
+
+    monkeypatch.setattr(resolver, "resolve_due_predictions", _spy_resolve)
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_BATCH_SIZE", 8)
+
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: subnets
+    )
+    sched.run_once()
+
+    assert seen["batch_len"] == 8
