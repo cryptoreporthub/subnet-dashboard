@@ -1,7 +1,7 @@
 # Subnet Dashboard Master Plan
 
-**Last updated:** 2026-07-12T23:05:00Z  
-**main:** `5055a80`
+**Last updated:** 2026-07-13T01:45:00Z  
+**main:** `28e7ccd`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -20,16 +20,19 @@
 
 > **H-thin** (PR #104) partial shell on `main`. **H-full** complete (PR #120). Optional lane (PR #125).
 
-## Completion Snapshot (`main` @ `5055a80`)
+## Completion Snapshot (`main` @ `28e7ccd`)
 | Phase | Status |
 |-------|--------|
 | J | ✅ merged (PR #105) |
 | H-thin | ✅ merged (PR #104) |
 | K | ✅ merged (PR #107) |
-| H-full | ✅ merged (PR #120, hero #131) |
+| H-full | ✅ merged (PR #120, #131) |
 | H-full optional lane | ✅ merged (PR #125) |
 | Model guide | ✅ merged (PR #122) |
-| **L** | ✅ merged (PR #115) |
+| L | ✅ merged (PR #115, #133; UI #135) |
+| **M** | ✅ merged (PR #136) |
+| **N** | ⏸ gated — user approval |
+| **O** | ⏸ gated — user approval |
 
 ## Model selection (Composer vs Grok)
 **Canonical:** `cursor-agents-communication/model-guide.md`
@@ -48,9 +51,13 @@ Phase L: Composer slices 1–2; **Grok design before** slices 3–4 (WebSocket, 
 
 ### K — done
 
-### L — merged (Agent B)
-- Real-time signals and alerts on `main` (PR #115).
-- Backend: `internal/signals/*`, alerts API, WebSocket, `build_signals_context()`.
+### M — merged (Agent A)
+- Social live ingestion on `main` (PR #136).
+- Telegram listener, dedup, `GET /api/message-intel`, Jinja context.
+- Design: `cursor-agents-communication/phase-m-design.md`
+
+### N / O — gated
+- Awaiting user approval + Ditto assignment plans.
 
 ## Sequencing Rules
 - No overlap: Agent A frontend vs Agent B backend paths.
