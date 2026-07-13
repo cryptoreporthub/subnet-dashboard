@@ -277,8 +277,35 @@ async def add_cors_headers(request: Request, call_next):
     return response
 
 
-@app.get("/")
-def index(request: Request):
+HOMEPAGE_BUILD_TIMEOUT = int(os.environ.get("HOMEPAGE_BUILD_TIMEOUT", "20"))
+
+
+def _degraded_index_context(request: Request) -> Dict[str, Any]:
+    """Fast shell when full dashboard context exceeds HOMEPAGE_BUILD_TIMEOUT."""
+    from internal.learning.dashboard_context import default_learning_dashboard_context
+
+    subnets = list(load_data("config/registry.json").values())
+    return {
+        "request": request,
+        "subnets": subnets,
+        "data_source": "registry-fallback",
+        "degraded": True,
+        **default_learning_dashboard_context(),
+        "simivision": {"top": [], "meta": {"count": len(subnets), "source": "registry-fallback"}},
+        "signals": [],
+        "alerts": [],
+        "signal_summary": {
+            "total_subnets": 0,
+            "buy_count": 0,
+            "sell_count": 0,
+            "neutral_count": 0,
+            "buy_sell_ratio": 0.0,
+            "avg_confidence": 0.0,
+        },
+    }
+
+
+def _build_index_context(request: Request) -> Dict[str, Any]:
     subnets, source = _get_subnets_with_source()
     market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
 
@@ -348,6 +375,23 @@ def index(request: Request):
     except Exception as exc:
         logger.warning("Signal hub context unavailable: %s", exc)
 
+    return context
+
+
+@app.get("/")
+def index(request: Request):
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(_build_index_context, request)
+        try:
+            context = future.result(timeout=HOMEPAGE_BUILD_TIMEOUT)
+        except FuturesTimeout:
+            logger.warning(
+                "homepage context exceeded %ss; serving registry fallback",
+                HOMEPAGE_BUILD_TIMEOUT,
+            )
+            context = _degraded_index_context(request)
     return templates.TemplateResponse(request, "index.html", context)
 
 
@@ -952,9 +996,6 @@ def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[st
 
     src = next((s for s in subnets if s.get("netuid") == top_netuid), {})
     picks.append(_unify(audited, src))
-
-    if picks:
-        _record_pick_in_learning_loop(picks[0], subnets, market_context, "hour")
 
     if _PICKS_ENGINE:
         scored = []
