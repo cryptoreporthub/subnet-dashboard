@@ -130,7 +130,7 @@ header.top {
 .vol-cluster-count {
   font-size: 10px;
   font-weight: 600;
-  color: var(--text-muted, #1a1f2e);
+  color: var(--text-muted, #94a3b8);
   background: rgba(255,255,255,0.06);
   padding: 1px 6px;
   border-radius: 8px;
@@ -201,7 +201,7 @@ header.top {
 
 .vol-cluster-more {
   font-size: 10px;
-  color: var(--text-muted, #1a1f2e);
+  color: var(--text-muted, #94a3b8);
   text-align: center;
   padding: 2px 0;
 }
@@ -350,6 +350,19 @@ header.top {
 
   /* Tables: scroll horizontally instead of overflowing the viewport. */
   .card { overflow-x: auto; }
+  /* Chart.js tooltips and radar point labels clip inside overflow:hidden cards. */
+  #section-radar .card,
+  #section-indicators .pick-card {
+    overflow: visible;
+  }
+  .chart-box {
+    overflow: visible;
+    z-index: 30;
+    isolation: isolate;
+  }
+  .momentum-grid {
+    overflow: visible;
+  }
   table.tbl, .pump-cycle-table {
     display: block;
     overflow-x: auto;

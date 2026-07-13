@@ -27,7 +27,9 @@
     <div class="card">
       <div class="card-head"><h3>Subnet Radar</h3><span class="src-tag">top 3 · Chart.js</span></div>
       <div class="chart-box">
-        <canvas id="radarChart" data-radar='{{ radar_payload|tojson }}' aria-label="Subnet undervalued radar chart"></canvas>
+        <div class="chart-canvas-wrap">
+          <canvas id="radarChart" data-radar='{{ radar_payload|tojson }}' aria-label="Subnet undervalued radar chart"></canvas>
+        </div>
       </div>
     </div>
     <div class="card">

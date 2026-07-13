@@ -55,6 +55,22 @@ def _safe_pump_analytics() -> Dict[str, Any]:
         return _empty_pump_analytics()
 
 
+def _spark_closes_for_subnet(sn: Dict[str, Any]) -> List[float]:
+    """Last N cached close prices for sparklines — empty when only synthetic history exists."""
+    try:
+        from internal.council.state_vector import _get_price_history
+
+        hist = _get_price_history(sn.get("netuid"), sn)
+        if hist.get("source") == "synthetic":
+            return []
+        closes = hist.get("closes") or []
+        if len(closes) < 2:
+            return []
+        return [float(c) for c in closes[-24:]]
+    except Exception:
+        return []
+
+
 def _safe_indicators_convergence(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     try:
         from internal.council.state_vector import (
@@ -77,6 +93,7 @@ def _safe_indicators_convergence(subnets: List[Dict[str, Any]]) -> Dict[str, Any
                     "name": sn.get("name"),
                     "oversold": _detect_oversold_convergence(indicators),
                     "overbought": _detect_overbought_convergence(indicators),
+                    "spark_closes": _spark_closes_for_subnet(sn),
                 }
             )
         return {"subnets": rows}
