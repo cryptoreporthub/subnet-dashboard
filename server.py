@@ -999,13 +999,7 @@ def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[st
 
     if _PICKS_ENGINE:
         scored = []
-        # ponytail: score top 30 by emission for fill picks, not all 129 subnets
-        candidates = sorted(
-            subnets,
-            key=lambda s: (s.get("emission", 0) or 0, s.get("apy", 0) or 0),
-            reverse=True,
-        )[:30]
-        for sn in candidates:
+        for sn in subnets:
             if top_netuid is not None and sn.get("netuid") == top_netuid:
                 continue
             try:
@@ -1033,13 +1027,7 @@ def api_top_picks():
         return {"hour_picks": [], "day_picks": [], "error": "pick engine unavailable"}
     market_context = _market_context_with_weights(subnets)
     hour_scored, day_scored = [], []
-    # ponytail: score top-30 by emission, not all 129 — keeps /api/top-picks under Fly timeouts
-    candidates = sorted(
-        subnets,
-        key=lambda s: (s.get("emission", 0) or 0, s.get("apy", 0) or 0),
-        reverse=True,
-    )[:30]
-    for sn in candidates:
+    for sn in subnets:
         try:
             hour_scored.append({"subnet": sn, "score": score_subnet_for_hour(sn, market_context)})
             day_scored.append({"subnet": sn, "score": score_subnet_for_day(sn, market_context)})
