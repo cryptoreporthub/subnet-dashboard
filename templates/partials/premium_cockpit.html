@@ -3,6 +3,10 @@
 {% set ti_rows = api_indicators_convergence.subnets if api_indicators_convergence is mapping and api_indicators_convergence.subnets else [] %}
 {% set hp = hour_picks if hour_picks else [] %}
 {% set dyp = day_picks if day_picks else [] %}
+{% set sig_list = signals if signals is iterable and signals is not string else [] %}
+{% set alert_list = alerts if alerts is iterable and alerts is not string else [] %}
+{% set sig_sum = signal_summary if signal_summary is mapping else {} %}
+{% set top_signals = sig_list|sort(attribute='confidence', reverse=true)|list %}
 
 <header class="top" id="section-header" aria-label="Site header">
   <div class="top-inner">
@@ -252,6 +256,98 @@
       </select>
     </div>
     <div id="scanner-table" class="scroll-y" aria-live="polite"></div>
+  </div>
+</section>
+
+<!-- Phase L — Live signals -->
+<section class="row" id="section-signals" aria-labelledby="signals-title">
+  <div class="section-label">Live Signals</div>
+  <h2 class="section-title" id="signals-title">Council Signal Pipeline</h2>
+  <p class="section-sub">Buy / sell / neutral posture from the Phase L pipeline — <span id="signals-ws-status" class="src-tag">snapshot</span></p>
+  {% if sig_sum %}
+  <div class="kpi-strip" id="signal-summary-root">
+    <div class="kpi card">
+      <div class="lbl">Tracked</div>
+      <div class="val">{{ sig_sum.total_subnets|default(0) }}</div>
+      <div class="sub">subnets with signals</div>
+    </div>
+    <div class="kpi card">
+      <div class="lbl">Buy</div>
+      <div class="val pos">{{ sig_sum.buy_count|default(0) }}</div>
+      <div class="sub">bullish posture</div>
+    </div>
+    <div class="kpi card">
+      <div class="lbl">Sell</div>
+      <div class="val neg">{{ sig_sum.sell_count|default(0) }}</div>
+      <div class="sub">bearish posture</div>
+    </div>
+    <div class="kpi card">
+      <div class="lbl">Neutral</div>
+      <div class="val">{{ sig_sum.neutral_count|default(0) }}</div>
+      <div class="sub">ratio {{ sig_sum.buy_sell_ratio|default(0) }}</div>
+    </div>
+    <div class="kpi card">
+      <div class="lbl">Avg conf</div>
+      <div class="val accent-bright">{{ ((sig_sum.avg_confidence|default(0))|float * 100)|round(1) }}%</div>
+      <div class="sub">council confidence</div>
+    </div>
+  </div>
+  {% else %}
+  <div class="card card-muted" id="signal-summary-root"><p class="empty">Signal summary warming up — pipeline metrics appear after the first signal generation pass.</p></div>
+  {% endif %}
+  <div class="card" style="margin-top:12px;">
+    <div class="card-head">
+      <h3>Signal feed</h3>
+      <span class="src-tag" id="signals-count-meta">{{ sig_list|length }} subnets</span>
+    </div>
+    <div id="signals-feed-root" class="scroll-y" aria-live="polite">
+      {% if sig_list %}
+      <table class="tbl">
+        <thead>
+          <tr><th>Subnet</th><th>Type</th><th>Conf</th><th>Expert</th><th>Evidence</th></tr>
+        </thead>
+        <tbody>
+          {% for sig in top_signals[:12] %}
+          {% set st = (sig.signal_type|default('neutral'))|string|lower %}
+          <tr>
+            <td class="text-primary">{{ sig.name|default('SN' ~ sig.subnet_id) }} <span class="pick-meta">SN{{ sig.subnet_id }}</span></td>
+            <td><span class="badge {% if st == 'buy' %}badge-buy{% elif st == 'sell' %}badge-sell{% else %}badge-watch{% endif %}">{{ st|upper }}</span></td>
+            <td>{{ ((sig.confidence|default(0))|float * 100)|round(1) }}%</td>
+            <td>{{ sig.source_expert|default('—') }}</td>
+            <td class="pick-meta">{{ sig.evidence|default('—')|truncate(80, True) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty">Signal pipeline warming up — council scores populate after subnet registry loads.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<!-- Phase L — Alerts -->
+<section class="row" id="section-alerts" aria-labelledby="alerts-title">
+  <div class="section-label">Alerts</div>
+  <h2 class="section-title" id="alerts-title">Threshold &amp; Signal Alerts</h2>
+  <p class="section-sub">Active breaches and signal-change notifications from <code>/api/alerts</code>.</p>
+  <div id="alerts-feed-root" class="picks" aria-live="polite">
+    {% if alert_list %}
+    {% for alert in alert_list[:12] %}
+    {% set sev = (alert.severity|default('info'))|string|lower %}
+    {% set badge = 'badge-sell' if sev == 'critical' else ('badge-hot' if sev == 'warning' else 'badge-watch') %}
+    <article class="pick-card card">
+      <div class="pick-meta">{{ alert.timestamp|default('') }}{% if alert.subnet_id %} · SN{{ alert.subnet_id }}{% endif %}</div>
+      <div class="pick-name">{{ alert.message|default(alert.alert_type|default('alert')) }}</div>
+      <div class="tags" style="margin-top:8px;">
+        <span class="badge {{ badge }}">{{ sev|upper }}</span>
+        <span class="badge badge-watch">{{ alert.alert_type|default('system') }}</span>
+      </div>
+    </article>
+    {% endfor %}
+    {% else %}
+    <div class="card card-muted"><p class="empty">No active alerts — threshold breaches and signal changes appear here when detected.</p></div>
+    {% endif %}
   </div>
 </section>
 
@@ -614,3 +710,4 @@
 <script src="/static/js/subnet_grouping.js" defer></script>
 <script src="/static/js/premium_scanner.js" defer></script>
 <script src="/static/js/premium_judges.js" defer></script>
+<script src="/static/js/premium_signals.js" defer></script>
