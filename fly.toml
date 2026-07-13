@@ -10,9 +10,21 @@ primary_region = "sea"
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = false
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "60s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "10s"
+
+[env]
+  # Keep prod boot light; Telegram needs a live session on the volume.
+  MESSAGE_INTEL_LISTENER = "off"
+  RESOLVER_REFRESH_MINUTES = "15"
 
 # Persistent volume for runtime/learning data (soul_map.json, predictions.json,
 # SQLite caches under /app/data). The machine already has this volume attached;
