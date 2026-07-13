@@ -49,9 +49,23 @@
 
   function undervaluedScore(sn) {
     var apy = apyPercent(sn);
+    if (apy == null) return null;
     var chg = Number(sn.price_change_24h) || 0;
-    if (apy == null) return -9999;
     return apy - chg;
+  }
+
+  function undervaluedVerdict(score) {
+    if (score == null || isNaN(score)) return 'UNKNOWN';
+    if (score > 15) return 'DEEP VALUE';
+    if (score > 5) return 'VALUE';
+    if (score < 0) return 'RICH';
+    return 'FAIR';
+  }
+
+  function undervaluedBadgeClass(label) {
+    if (label === 'DEEP VALUE') return 'badge-buy';
+    if (label === 'RICH') return 'badge-sell';
+    return 'badge-watch';
   }
 
   function confTier(conf) {
@@ -244,20 +258,22 @@
   function renderUndervalued(subnets) {
     if (!subnets || !subnets.length) return;
     var ranked = subnets.slice().sort(function (a, b) {
-      return undervaluedScore(b) - undervaluedScore(a);
+      var sa = undervaluedScore(a);
+      var sb = undervaluedScore(b);
+      return (sb == null ? -9999 : sb) - (sa == null ? -9999 : sa);
     }).slice(0, 8);
     var rows = ranked.map(function (sn, idx) {
-      var apy = apyPercent(sn) || 0;
+      var apy = apyPercent(sn);
       var chg = Number(sn.price_change_24h) || 0;
-      var score = apy - chg;
-      var flag = score > 15 ? 'UNDERVALUED' : score < 0 ? 'RICH' : 'FAIR';
+      var score = undervaluedScore(sn);
+      var flag = undervaluedVerdict(score);
       return (
         '<tr><td>' + (idx + 1) + '</td>' +
         '<td class="text-primary">' + esc(subnetName(sn)) + ' <span class="pick-meta">SN' + esc(subnetNetuid(sn)) + '</span></td>' +
-        '<td>' + fmt(apy, 1) + '%</td>' +
+        '<td>' + (apy != null ? fmt(apy, 1) : '—') + '%</td>' +
         '<td class="' + (chg >= 0 ? 'text-buy' : 'text-sell') + '">' + fmtSigned(chg) + '</td>' +
-        '<td>' + fmt(score, 1) + '</td>' +
-        '<td><span class="badge badge-watch">' + flag + '</span></td></tr>'
+        '<td>' + (score != null ? fmt(score, 1) : '—') + '</td>' +
+        '<td><span class="badge ' + undervaluedBadgeClass(flag) + '">' + esc(flag) + '</span></td></tr>'
       );
     }).join('');
     var html =
