@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-13T21:55:00Z by Agent B (`-e78a`) — Phase 3 **G9–G11** in PR  
-**main:** `b4326bf`
+**Last updated:** 2026-07-13T21:56:00Z by Agent B (`-e78a`) — Phase 3 **G9–G11 merged** (#161)  
+**main:** `157b984`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -23,20 +23,20 @@
 
 Composer spawns Grok via subagent — no manual model picker needed. Batch tasks; scope files only.
 
-## Active — Phase 3 complete, Phase 4 next
+## Active — Phase 4 (hydration scripts)
 
 | Task | Agent | Status | Notes |
 |------|-------|--------|-------|
 | **Phase 1–2** | B | ✅ **merged** | #154 · #155 · #157 |
-| **G3** caret UX | B | ✅ **merged** | #159 |
-| **G4** inline → CSS | B | ✅ **merged** | #159 |
-| **G9** confidence calibration | B | 🔄 **PR open** | resolver hit-rate prior |
-| **G10** effective weights | B | 🔄 **PR open** | regime-aware, no persist |
-| **G11** round-robin resolver | B | 🔄 **PR open** | `RESOLVER_BATCH_SIZE` |
-| C3–C6 | Composer | backlog | Phase 4/6 |
+| **G3+G4** | B | ✅ **merged** | #159 |
+| **G9–G11** | B | ✅ **merged** | #161 — Grok sign-off PASS |
+| **C4** hydration binders | B | backlog | `base.html` + chart paint |
+| **C5** APY/confidence fix | B | backlog | after C4 |
+| **C6** conviction tiers | B | backlog | after C5 |
+| C3 htmx | Composer | backlog | Phase 6 |
 
 ## Ready for Ditto
-**Phase 3 G9–G11 PR pending human review. Phase 4 (C4–C6 hydration) next after merge.**
+**Phase 3 complete. Phase 4 C4 (hydration/chart binders) next — human go-ahead.**
 
 Recent merges on `main` @ `82bbde7` (CI green):
 
