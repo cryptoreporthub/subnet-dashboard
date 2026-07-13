@@ -196,7 +196,12 @@ def test_contract_route_ok(client, method, path, body):
     # Route must exist (not 404) and must not error (no 5xx).
     assert resp.status_code != 404, f"{method} {path} is missing (404)"
     assert resp.status_code < 500, f"{method} {path} returned {resp.status_code}"
-    assert resp.status_code == 200, f"{method} {path} returned {resp.status_code}, expected 200"
+    allowed = {200}
+    if method == "POST" and path == "/api/alerts":
+        allowed.add(201)
+    assert resp.status_code in allowed, (
+        f"{method} {path} returned {resp.status_code}, expected one of {sorted(allowed)}"
+    )
 
 
 def test_registered_routes_cover_contract():

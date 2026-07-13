@@ -119,6 +119,11 @@ def build_signal(sn: Dict[str, Any], market_context: Optional[Dict[str, Any]] = 
 
     experts = score.get("expert_contributions") or {}
     total = float(score.get("total_score", 50))
+    core_contribs = {
+        k: float(experts.get(k, 0) or 0)
+        for k in EXPERTS
+        if k in experts
+    }
     return {
         "subnet_id": netuid,
         "name": sn.get("name"),
@@ -130,6 +135,9 @@ def build_signal(sn: Dict[str, Any], market_context: Optional[Dict[str, Any]] = 
         "total_score": score.get("total_score"),
         "price_change_24h": sn.get("price_change_24h"),
         "dominant_label": dominant_label(hot, sell),
+        "hot": hot,
+        "sell": sell,
+        "expert_contributions": core_contribs,
     }
 
 

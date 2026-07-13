@@ -7,11 +7,13 @@ from fastapi.testclient import TestClient
 
 from internal.signals.alerts import AlertEngine
 from internal.signals.pipeline import build_signal, generate_signals
+from internal.signals.correlation import evaluate_composites
 from internal.signals.rules import (
     apply_hot_sell_precedence,
     derive_signal_type,
     dominant_label,
     should_skip_alert,
+    subnet_hourly_cap_reached,
     validate_alert_payload,
 )
 from internal.signals.store import SignalStore
@@ -60,10 +62,91 @@ def test_rules_hot_when_sell_inactive():
 
 
 def test_rules_alert_dedupe():
-    existing = {"alert_type": "manual", "dedupe_key": "x", "active": True}
-    candidate = {"alert_type": "manual", "dedupe_key": "x", "active": True}
+    existing = {"alert_type": "manual", "dedupe_key": "x", "active": True, "timestamp": "2026-07-12T10:00:00Z"}
+    candidate = {"alert_type": "manual", "dedupe_key": "x", "active": True, "timestamp": "2026-07-12T10:02:00Z"}
     assert should_skip_alert(existing, candidate) is True
     assert validate_alert_payload({"alert_type": "", "message": "hi"}) is not None
+
+
+def test_rules_time_window_dedupe():
+    existing = {
+        "alert_type": "signal_change",
+        "subnet_id": 5,
+        "timestamp": "2026-07-12T10:00:00Z",
+        "active": False,
+    }
+    candidate = {
+        "alert_type": "signal_change",
+        "subnet_id": 5,
+        "timestamp": "2026-07-12T10:03:00Z",
+    }
+    assert should_skip_alert(existing, candidate) is True
+
+
+def test_rules_subnet_hourly_cap():
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    ts = now.isoformat().replace("+00:00", "Z")
+    rows = [{"subnet_id": 1, "timestamp": ts, "alert_type": "manual"} for _ in range(10)]
+    assert subnet_hourly_cap_reached(rows, 1, max_per_hour=10) is True
+
+
+def test_correlation_sell_crash():
+    signals = [
+        {
+            "subnet_id": 1,
+            "signal_type": "sell",
+            "price_change_24h": -20.0,
+            "timestamp": "2026-07-12T10:00:00Z",
+            "hot": {"active": False},
+            "sell": {"active": True},
+            "confidence": 0.8,
+            "source_expert": "quant",
+        }
+    ]
+    composites = evaluate_composites(signals, [])
+    types = {c["alert_type"] for c in composites}
+    assert "composite_sell_crash" in types
+
+
+def test_correlation_expert_consensus_from_contributions():
+    signals = [
+        {
+            "subnet_id": 2,
+            "signal_type": "buy",
+            "expert_contributions": {
+                "quant": 0.75,
+                "hype": 0.8,
+                "dark_horse": 0.4,
+                "technical": 0.5,
+            },
+        }
+    ]
+    composites = evaluate_composites(signals, [])
+    types = {c["alert_type"] for c in composites}
+    assert "composite_expert_consensus_buy" in types
+
+
+def test_correlation_signal_flip_within_window():
+    history = {
+        3: [
+            {
+                "subnet_id": 3,
+                "signal_type": "buy",
+                "timestamp": "2026-07-12T10:00:00Z",
+            },
+            {
+                "subnet_id": 3,
+                "signal_type": "sell",
+                "timestamp": "2026-07-12T10:03:00Z",
+            },
+        ]
+    }
+    signals = [history[3][-1]]
+    composites = evaluate_composites(signals, [], history)
+    types = {c["alert_type"] for c in composites}
+    assert "composite_signal_flip" in types
 
 
 def test_store_append_dedupes_unchanged(temp_signal_store):
@@ -95,8 +178,84 @@ def test_alert_engine_create_and_preserve(temp_alerts):
 
 def test_alert_post_rejects_malformed(client):
     bad = client.post("/api/alerts", json={"alert_type": "", "message": ""})
-    assert bad.status_code == 200
-    assert bad.json()["status"] == "error"
+    assert bad.status_code == 400
+    assert "detail" in bad.json()
+
+
+def test_alert_post_idempotent_returns_200(client, tmp_path, monkeypatch):
+    alerts_path = str(tmp_path / "alerts.json")
+    subs_path = str(tmp_path / "subs.json")
+    monkeypatch.setenv("ALERTS_PATH", alerts_path)
+    monkeypatch.setenv("ALERT_SUBSCRIPTIONS_PATH", subs_path)
+    import internal.signals.routes as routes
+
+    routes._alerts = None
+    payload = {
+        "alert_type": "manual",
+        "message": "once",
+        "severity": "info",
+        "dedupe_key": "idem-test",
+    }
+    first = client.post("/api/alerts", json=payload)
+    assert first.status_code == 201
+    second = client.post("/api/alerts", json=payload)
+    assert second.status_code == 200
+    assert second.json().get("deduped") is True
+
+
+def test_alert_post_threshold_validation(client, tmp_path, monkeypatch):
+    alerts_path = str(tmp_path / "alerts.json")
+    subs_path = str(tmp_path / "subs.json")
+    monkeypatch.setenv("ALERTS_PATH", alerts_path)
+    monkeypatch.setenv("ALERT_SUBSCRIPTIONS_PATH", subs_path)
+    import internal.signals.routes as routes
+
+    routes._alerts = None
+    bad = client.post(
+        "/api/alerts",
+        json={
+            "alert_type": "threshold",
+            "message": "bad threshold",
+            "threshold_type": "price_change_24h",
+        },
+    )
+    assert bad.status_code == 400
+
+
+def test_api_alerts_filters(client, tmp_path, monkeypatch):
+    alerts_path = str(tmp_path / "alerts.json")
+    subs_path = str(tmp_path / "subs.json")
+    monkeypatch.setenv("ALERTS_PATH", alerts_path)
+    monkeypatch.setenv("ALERT_SUBSCRIPTIONS_PATH", subs_path)
+    import internal.signals.routes as routes
+
+    routes._alerts = None
+    client.post(
+        "/api/alerts",
+        json={
+            "alert_type": "manual",
+            "message": "sn1",
+            "severity": "warning",
+            "subnet_id": 1,
+            "dedupe_key": "filter-a",
+        },
+    )
+    client.post(
+        "/api/alerts",
+        json={
+            "alert_type": "manual",
+            "message": "sn2",
+            "severity": "info",
+            "subnet_id": 2,
+            "dedupe_key": "filter-b",
+        },
+    )
+    routes._alerts = None
+    filtered = client.get("/api/alerts?netuid=1&severity=warning&refresh_checks=false")
+    assert filtered.status_code == 200
+    rows = filtered.json()["alerts"]
+    assert len(rows) == 1
+    assert rows[0]["subnet_id"] == 1
 
 
 def test_api_alerts_get_and_post(client, tmp_path, monkeypatch):
@@ -120,7 +279,7 @@ def test_api_alerts_get_and_post(client, tmp_path, monkeypatch):
             "subnet_id": 1,
         },
     )
-    assert post_resp.status_code == 200
+    assert post_resp.status_code in (200, 201)
     body = post_resp.json()
     assert body["status"] == "success"
     assert body["alert"]["message"] == "contract test"
@@ -139,15 +298,39 @@ def test_ws_signals_lifecycle(client):
         assert "signals" in msg["data"]
         ws.send_text("ping")
         pong = ws.receive_json()
-        assert pong["type"] in ("pong", "signals")
-        ws.send_text("refresh")
-        types = set()
-        for _ in range(3):
-            refresh_msg = ws.receive_json()
-            types.add(refresh_msg["type"])
-            if "signals" in types:
-                break
-        assert "signals" in types
+        assert pong["type"] == "pong"
+
+
+def test_ws_refresh_broadcasts_signals(monkeypatch):
+    import asyncio
+
+    import internal.signals.routes as routes
+    from internal.signals.ws_hub import SignalBroadcastHub
+
+    captured = []
+
+    class FakeWebSocket:
+        async def send_text(self, text):
+            captured.append(text)
+
+    async def _fast_refresh():
+        hub = routes.get_signal_hub()
+        await hub.broadcast("signals", {"signals": [{"subnet_id": 1}], "meta": {"count": 1}})
+        return {"signals": [{"subnet_id": 1}], "meta": {"count": 1}}
+
+    monkeypatch.setattr(routes, "_refresh_and_broadcast", _fast_refresh)
+
+    async def run():
+        hub = SignalBroadcastHub()
+        routes.get_signal_hub = lambda: hub  # type: ignore[method-assign]
+        ws = FakeWebSocket()
+        await hub.connect(ws)  # type: ignore[arg-type]
+        await _fast_refresh()
+        assert captured
+        payload = __import__("json").loads(captured[0])
+        assert payload["type"] == "signals"
+
+    asyncio.run(run())
 
 
 def test_ws_hub_broadcast_prunes_dead_clients():

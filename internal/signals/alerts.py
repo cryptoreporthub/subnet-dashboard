@@ -12,7 +12,12 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from internal.file_utils import ensure_data_dir, safe_read_json, safe_write_json
-from internal.signals.rules import alert_dedupe_key, should_skip_alert, validate_alert_payload
+from internal.signals.rules import (
+    alert_dedupe_key,
+    should_skip_alert,
+    subnet_hourly_cap_reached,
+    validate_alert_payload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +47,13 @@ class AlertEngine:
 
     def __init__(
         self,
-        alerts_path: str = ALERTS_PATH,
-        subscriptions_path: str = SUBSCRIPTIONS_PATH,
+        alerts_path: Optional[str] = None,
+        subscriptions_path: Optional[str] = None,
     ):
-        self.alerts_path = alerts_path
-        self.subscriptions_path = subscriptions_path
+        self.alerts_path = alerts_path or os.environ.get("ALERTS_PATH", "data/alerts.json")
+        self.subscriptions_path = subscriptions_path or os.environ.get(
+            "ALERT_SUBSCRIPTIONS_PATH", "data/alert_subscriptions.json"
+        )
 
     def load_alerts(self) -> Dict[str, Any]:
         ensure_data_dir()
@@ -76,11 +83,33 @@ class AlertEngine:
         self.save_subscriptions(data)
         return {"status": "success", "url": url, "count": len(hooks)}
 
-    def recent_alerts(self, limit: int = 50, active_only: bool = False) -> Dict[str, Any]:
+    def recent_alerts(
+        self,
+        limit: int = 50,
+        active_only: bool = False,
+        *,
+        netuid: Optional[int] = None,
+        severity: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> Dict[str, Any]:
         data = self.load_alerts()
         rows = list(data.get("alerts") or [])
-        if active_only:
+
+        if netuid is not None:
+            rows = [r for r in rows if r.get("subnet_id") == netuid]
+
+        if severity:
+            sev = severity.strip().lower()
+            rows = [r for r in rows if str(r.get("severity") or "").lower() == sev]
+
+        status_norm = (status or "").strip().lower()
+        if status_norm == "active":
             rows = [r for r in rows if r.get("active", True)]
+        elif status_norm == "inactive":
+            rows = [r for r in rows if not r.get("active", True)]
+        elif active_only:
+            rows = [r for r in rows if r.get("active", True)]
+
         rows.sort(key=lambda r: str(r.get("timestamp") or ""), reverse=True)
         return {
             "status": "success",
@@ -90,6 +119,10 @@ class AlertEngine:
 
     def create_alert(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """POST /api/alerts — validate and append, preserving existing rows."""
+        if payload.get("netuid") is not None and payload.get("subnet_id") is None:
+            payload = dict(payload)
+            payload["subnet_id"] = payload.pop("netuid")
+
         err = validate_alert_payload(payload)
         if err:
             raise ValueError(err)
@@ -102,14 +135,64 @@ class AlertEngine:
             "dedupe_key": payload.get("dedupe_key"),
             "active": bool(payload.get("active", True)),
         }
-        saved = self._append_alert(alert)
-        if saved is None:
+        if payload.get("threshold_type") is not None:
+            alert["threshold_type"] = str(payload["threshold_type"]).strip()
+            alert["threshold_value"] = float(payload["threshold_value"])
+            alert["threshold_operator"] = str(
+                payload.get("threshold_operator") or "gte"
+            ).strip().lower()
+
+        existing = self._find_duplicate(alert)
+        if existing is not None:
             return {
                 "status": "success",
                 "deduped": True,
-                "alert": alert,
+                "alert": existing,
             }
+
+        saved = self._append_alert(alert)
+        if saved is None:
+            return {"status": "success", "skipped": True, "reason": "deduped_or_rate_limited"}
         return {"status": "success", "deduped": False, "alert": saved}
+
+    def _find_duplicate(self, alert: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        probe = dict(alert)
+        probe.setdefault("dedupe_key", alert_dedupe_key(alert))
+        data = self.load_alerts()
+        for existing in reversed(data.get("alerts") or []):
+            if should_skip_alert(existing, probe):
+                return existing
+        return None
+
+    def evaluate_correlation_alerts(self, signals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        from datetime import datetime, timedelta, timezone
+
+        from internal.signals.correlation import evaluate_composites
+        from internal.signals.rules import ALERT_DEDUP_WINDOW_MINUTES
+        from internal.signals.store import SignalStore
+
+        recent = self.load_alerts().get("alerts") or []
+        since = (
+            datetime.now(timezone.utc) - timedelta(minutes=ALERT_DEDUP_WINDOW_MINUTES)
+        ).isoformat().replace("+00:00", "Z")
+        store = SignalStore()
+        history_by_subnet: Dict[int, List[Dict[str, Any]]] = {}
+        for sig in signals:
+            sid = sig.get("subnet_id")
+            if sid is None:
+                continue
+            sid_int = int(sid)
+            if sid_int not in history_by_subnet:
+                history_by_subnet[sid_int] = store.query(
+                    subnet_id=sid_int, since=since, limit=50
+                )
+
+        created: List[Dict[str, Any]] = []
+        for composite in evaluate_composites(signals, recent, history_by_subnet):
+            row = self._append_alert(composite)
+            if row:
+                created.append(row)
+        return created
 
     def _append_alert(self, alert: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         data = self.load_alerts()
@@ -118,6 +201,13 @@ class AlertEngine:
         alert.setdefault("active", True)
         alert.setdefault("dedupe_key", alert_dedupe_key(alert))
         alert.setdefault("id", f"{alert.get('alert_type')}-{alert.get('timestamp')}")
+
+        sid = alert.get("subnet_id")
+        if sid is not None and subnet_hourly_cap_reached(
+            list(data.get("alerts") or []), int(sid)
+        ):
+            logger.debug("Subnet %s hourly alert cap reached; skipping", sid)
+            return None
 
         for existing in reversed(data.get("alerts") or []):
             if should_skip_alert(existing, alert):

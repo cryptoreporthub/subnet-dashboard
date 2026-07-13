@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel, Field, model_validator
 
 from internal.signals.alerts import AlertEngine
 from internal.signals.pipeline import generate_signals
@@ -41,9 +41,23 @@ class AlertCreateIn(BaseModel):
     message: str = Field(description="Human-readable alert text")
     severity: str = Field(default="info", description="info | warning | critical")
     details: Dict[str, Any] = Field(default_factory=dict)
-    subnet_id: Optional[int] = None
+    subnet_id: Optional[int] = Field(default=None, description="Subnet netuid")
+    netuid: Optional[int] = Field(default=None, description="Alias for subnet_id")
     dedupe_key: Optional[str] = None
     active: bool = True
+    threshold_type: Optional[str] = Field(
+        default=None, description="Metric for threshold alerts, e.g. price_change_24h"
+    )
+    threshold_value: Optional[float] = None
+    threshold_operator: Optional[str] = Field(
+        default="gte", description="gt | lt | gte | lte | eq"
+    )
+
+    @model_validator(mode="after")
+    def _merge_netuid(self) -> "AlertCreateIn":
+        if self.netuid is not None and self.subnet_id is None:
+            self.subnet_id = self.netuid
+        return self
 
 
 class WebhookSubscribeIn(BaseModel):
@@ -57,9 +71,12 @@ async def _refresh_and_broadcast() -> Dict[str, Any]:
     signal_alerts = await asyncio.to_thread(
         engine.record_signal_changes, result.get("changed_signals") or []
     )
+    composites = await asyncio.to_thread(
+        engine.evaluate_correlation_alerts, result.get("signals") or []
+    )
     hub = get_signal_hub()
     await hub.broadcast("signals", {"signals": result.get("signals", []), "meta": result.get("meta")})
-    new_alerts = system + signal_alerts
+    new_alerts = system + signal_alerts + composites
     if new_alerts:
         await hub.broadcast("alerts", {"alerts": new_alerts})
     return result
@@ -100,19 +117,35 @@ async def api_alerts(
     limit: int = Query(50, ge=1, le=200),
     active_only: bool = Query(False),
     refresh_checks: bool = Query(True),
+    netuid: Optional[int] = Query(None, description="Filter by subnet netuid"),
+    severity: Optional[str] = Query(None, description="Filter by severity"),
+    status: Optional[Literal["active", "inactive"]] = Query(
+        None, description="Filter by alert status"
+    ),
 ):
     engine = _get_alerts()
     if refresh_checks:
         await asyncio.to_thread(engine.check_system_alerts)
-    return engine.recent_alerts(limit=limit, active_only=active_only)
+        signals = _get_store().latest_all()
+        await asyncio.to_thread(engine.evaluate_correlation_alerts, signals)
+    return engine.recent_alerts(
+        limit=limit,
+        active_only=active_only,
+        netuid=netuid,
+        severity=severity,
+        status=status,
+    )
 
 
-@signals_router.post("/api/alerts")
-async def api_alerts_create(body: AlertCreateIn):
+@signals_router.post("/api/alerts", status_code=201)
+async def api_alerts_create(body: AlertCreateIn, response: Response):
     try:
-        return _get_alerts().create_alert(body.model_dump())
+        result = _get_alerts().create_alert(body.model_dump())
     except ValueError as exc:
-        return {"status": "error", "detail": str(exc)}
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if result.get("deduped"):
+        response.status_code = 200
+    return result
 
 
 @signals_router.post("/api/alerts/subscribe")
@@ -120,7 +153,7 @@ async def api_alerts_subscribe(body: WebhookSubscribeIn):
     try:
         return _get_alerts().subscribe_webhook(body.url)
     except ValueError as exc:
-        return {"status": "error", "detail": str(exc)}
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @signals_router.websocket("/ws/signals")
@@ -140,14 +173,11 @@ async def ws_signals(websocket: WebSocket):
         )
         while True:
             msg = await websocket.receive_text()
-            if msg.strip().lower() in ("refresh", "ping"):
-                result = await _refresh_and_broadcast()
-                await websocket.send_json(
-                    {
-                        "type": "signals",
-                        "data": {"signals": result.get("signals", []), "meta": result.get("meta")},
-                    }
-                )
+            cmd = msg.strip().lower()
+            if cmd == "ping":
+                await websocket.send_json({"type": "pong", "data": {}})
+            elif cmd == "refresh":
+                await _refresh_and_broadcast()
             else:
                 await websocket.send_json({"type": "pong", "data": {}})
     except WebSocketDisconnect:
