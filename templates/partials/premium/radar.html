@@ -34,7 +34,7 @@
     </div>
     <div class="card">
       <div class="card-head"><h3>Overlay Legend</h3></div>
-      <p class="section-sub" style="margin-bottom:8px;">Green = yield-vs-momentum undervalued score. Cyan = 24h momentum overlay.</p>
+      <p class="section-sub section-sub--compact">Green = yield-vs-momentum undervalued score. Cyan = 24h momentum overlay.</p>
       {% for sn in top3 %}
       <div class="radar-item">
         <div class="name">{{ sn.name|default('SN' ~ (sn.netuid|default(sn.id))) }}</div>

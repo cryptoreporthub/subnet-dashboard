@@ -4,7 +4,7 @@
   <h2 class="section-title" id="hero-title">Bittensor Subnet Intelligence</h2>
   <p class="section-sub">Live scanner across {{ mi_total }} subnets · breadth <b>{{ mi_breadth|upper }}</b></p>
   {% if sn_list %}
-  <div class="kpi-grid" style="grid-template-columns: repeat(6, 1fr);">
+  <div class="kpi-grid kpi-grid--6">
     <div class="kpi-cell">
       <div class="k">Subnets</div>
       <div class="v">{{ mi_total }}</div>
@@ -22,17 +22,17 @@
     </div>
     <div class="kpi-cell">
       <div class="k">Top Gainer</div>
-      <div class="v" style="font-size:15px;">{{ mi_top_gainer.name|default('—') if mi_top_gainer else '—' }}</div>
+      <div class="v kpi-v-sm">{{ mi_top_gainer.name|default('—') if mi_top_gainer else '—' }}</div>
       <div class="sub">{% if mi_top_gainer %}{{ "%+.2f"|format((mi_top_gainer.price_change_24h|default(0))|float) }}% · 24h{% else %}—{% endif %}</div>
     </div>
     <div class="kpi-cell">
       <div class="k">Top Loser</div>
-      <div class="v" style="font-size:15px;">{{ mi_top_loser.name|default('—') if mi_top_loser else '—' }}</div>
+      <div class="v kpi-v-sm">{{ mi_top_loser.name|default('—') if mi_top_loser else '—' }}</div>
       <div class="sub">{% if mi_top_loser %}{{ "%+.2f"|format((mi_top_loser.price_change_24h|default(0))|float) }}% · 24h{% else %}—{% endif %}</div>
     </div>
     <div class="kpi-cell">
       <div class="k">Data</div>
-      <div class="v" style="font-size:15px;">{{ data_source|default('cache')|upper }}</div>
+      <div class="v kpi-v-sm">{{ data_source|default('cache')|upper }}</div>
       <div class="sub">registry source</div>
     </div>
   </div>
