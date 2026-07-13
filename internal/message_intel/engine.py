@@ -33,7 +33,15 @@ def ingest_message(payload: Dict[str, Any], *, snapshot_price: bool = True) -> D
     nlp, price_tracker = _load_pipeline()
     db = get_db()
 
-    message_id = db.save_message(payload)
+    message_id, deduped = db.save_message(payload)
+    if deduped:
+        return {
+            "status": "success",
+            "message_id": message_id,
+            "deduped": True,
+            "sources": source_status(),
+        }
+
     content = str(payload.get("content") or "")
     analysis = nlp.analyze(content)
     db.save_analysis(message_id, analysis)
@@ -65,13 +73,19 @@ def ingest_message(payload: Dict[str, Any], *, snapshot_price: bool = True) -> D
         ],
     )
 
+    from internal.message_intel.signals_bridge import emit_social_alert_if_needed
+
+    social_alert = emit_social_alert_if_needed(message_id, payload, verdict, analysis)
+
     return {
         "status": "success",
         "message_id": message_id,
+        "deduped": False,
         "analysis": analysis,
         "verdict": verdict,
         "price_snapshot": price_result,
         "soul_map": soul,
+        "social_alert": social_alert,
     }
 
 
@@ -91,7 +105,9 @@ def ingest_batch(messages: List[Dict[str, Any]], *, snapshot_price: bool = False
             errors.append(f"row {idx}: missing content")
             continue
         try:
-            message_id = db.save_message(payload)
+            message_id, deduped = db.save_message(payload)
+            if deduped:
+                continue
             content = str(payload.get("content") or "")
             analysis = nlp.analyze(content)
             db.save_analysis(message_id, analysis)

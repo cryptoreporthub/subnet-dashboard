@@ -2,8 +2,8 @@
 Telegram Listener — monitors Telegram groups for new messages.
 
 Uses Telethon with session persistence to connect and listen to
-the configured group, forwarding normalized messages to the
-Flask server's ingest endpoint.
+the configured group, forwarding normalized messages to a callback
+or the FastAPI ingest endpoint.
 """
 
 import asyncio
@@ -54,6 +54,7 @@ class TelegramListener:
         ingest_url: Optional[str] = None,
         on_message: Optional[Callable[[Dict[str, Any]], None]] = None,
         session_name: str = "telegram_listener",
+        forward_to_ingest: bool = True,
     ):
         self.api_id = int(api_id or TELEGRAM_API_ID or 0)
         self.api_hash = api_hash or TELEGRAM_API_HASH or ""
@@ -61,6 +62,7 @@ class TelegramListener:
         self.group = group or TELEGRAM_GROUP
         self.ingest_url = ingest_url or INGEST_URL
         self.on_message = on_message
+        self.forward_to_ingest = forward_to_ingest
         self.session_name = session_name
         self._client: Optional[Any] = None
         self._running = False
@@ -197,8 +199,9 @@ class TelegramListener:
             if self.on_message:
                 self.on_message(normalized)
 
-            # Forward to ingest endpoint
-            await self._forward_to_ingest(normalized)
+            # Forward to ingest endpoint when no in-process handler
+            if self.forward_to_ingest and not self.on_message:
+                await self._forward_to_ingest(normalized)
 
         except Exception as e:
             logger.error("Error handling message event: %s", e)

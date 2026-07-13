@@ -139,19 +139,46 @@ class Database:
                     conn.execute("ALTER TABLE price_snapshots ADD COLUMN netuid INTEGER")
                 except sqlite3.OperationalError:
                     pass
+            msg_cols = {r[1] for r in conn.execute("PRAGMA table_info(messages)").fetchall()}
+            if "external_message_id" not in msg_cols:
+                try:
+                    conn.execute("ALTER TABLE messages ADD COLUMN external_message_id TEXT")
+                except sqlite3.OperationalError:
+                    pass
+            conn.execute(
+                """CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_dedup
+                   ON messages(source, group_id, external_message_id)
+                   WHERE external_message_id IS NOT NULL AND group_id IS NOT NULL"""
+            )
 
     # ── Messages ──────────────────────────────────────────────────────
 
-    def save_message(self, msg: Dict[str, Any]) -> int:
+    def save_message(self, msg: Dict[str, Any]) -> tuple[int, bool]:
+        """Persist message; return (id, deduped)."""
         raw = {k: v for k, v in msg.items() if k != "metrics"}
+        source = msg.get("source", "telegram")
+        group_id = msg.get("group_id")
+        external_id = msg.get("message_id")
+        if external_id is not None:
+            external_id = str(external_id)
+
         with self._connect() as conn:
+            if external_id and group_id:
+                row = conn.execute(
+                    """SELECT id FROM messages
+                       WHERE source = ? AND group_id = ? AND external_message_id = ?""",
+                    (source, str(group_id), external_id),
+                ).fetchone()
+                if row:
+                    return int(row["id"]), True
+
             cur = conn.execute(
                 """INSERT INTO messages (source, group_id, group_name, author_id,
-                   author_name, author_username, content, timestamp, raw_json)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   author_name, author_username, content, timestamp, raw_json, external_message_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    msg.get("source", "telegram"),
-                    msg.get("group_id"),
+                    source,
+                    group_id,
                     msg.get("group_name"),
                     msg.get("author_id"),
                     msg.get("author_name"),
@@ -159,6 +186,7 @@ class Database:
                     msg.get("content"),
                     msg.get("timestamp"),
                     json.dumps(raw),
+                    external_id,
                 ),
             )
             message_id = cur.lastrowid
@@ -176,7 +204,7 @@ class Database:
                         json.dumps(metrics.get("reactions", {})),
                     ),
                 )
-            return message_id
+            return int(message_id), False
 
     def get_message(self, message_id: int) -> Optional[Dict[str, Any]]:
         with self._connect() as conn:
