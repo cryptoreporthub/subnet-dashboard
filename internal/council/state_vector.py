@@ -1271,11 +1271,14 @@ def _scenario_tags(
     price_change_24h = float(sn.get("price_change_24h", 0) or 0)
     price_direction = "up" if price_change_24h >= 0 else "down"
 
+    from internal.subnets.apy import undervalued_verdict
+
     return {
         "regime": regime,
         "rsi": rsi_tag,
         "volume": volume_tag,
         "price_direction": price_direction,
+        "valuation": undervalued_verdict(sn),
     }
 
 
@@ -1441,10 +1444,14 @@ def score_subnet_for_day(
     day_weights = {k: v / total_weight for k, v in day_weights.items()}
 
     weighted = sum(experts[k] * day_weights[k] for k in experts)
-    chg7 = float(sn.get("price_change_7d", 0) or 0)
-    chg30 = float(sn.get("price_change_30d", 0) or 0)
-    trend_boost = max(-0.10, min(0.10, (chg7 * 0.6 + chg30 * 0.4) / 100.0))
-    total = round((weighted + trend_boost) * 100, 2)
+    from internal.subnets.apy import undervalued_score
+
+    value_gap = undervalued_score(sn)
+    if value_gap is None:
+        value_gap = 0.0
+    # Reward yield ahead of 24h price (lagging price = undervalued), not 7d/30d momentum.
+    value_boost = max(-0.10, min(0.10, value_gap / 100.0))
+    total = round((weighted + value_boost) * 100, 2)
     total = min(100.0, max(0.0, total))
 
     confidence = _compute_confidence(sn, indicators, experts)

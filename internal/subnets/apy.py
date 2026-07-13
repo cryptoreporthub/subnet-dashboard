@@ -26,3 +26,26 @@ def subnet_apy_percent(sn: Dict[str, Any]) -> Optional[float]:
     if sn.get("apy") is not None:
         return apy_as_percent(sn["apy"])
     return None
+
+
+def undervalued_score(sn: Dict[str, Any]) -> Optional[float]:
+    """Yield minus 24h price change (percent points). Higher = more undervalued."""
+    apy = subnet_apy_percent(sn)
+    if apy is None:
+        return None
+    chg24 = float(sn.get("price_change_24h", 0) or 0)
+    return round(apy - chg24, 2)
+
+
+def undervalued_verdict(sn: Dict[str, Any]) -> str:
+    """Council undervalued label: strong yield vs lagging 24h price."""
+    score = undervalued_score(sn)
+    if score is None:
+        return "unknown"
+    if score > 15:
+        return "deep_value"
+    if score > 5:
+        return "value"
+    if score < 0:
+        return "rich"
+    return "fair"

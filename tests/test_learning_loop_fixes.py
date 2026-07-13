@@ -52,7 +52,7 @@ def nudge_spy(monkeypatch):
 
 def test_scenario_tags_keys_include_price_direction():
     tags = _scenario_tags({"volume": 600_000, "price_change_24h": 1.2}, {}, {"tao_change_24h": 0.5})
-    assert set(tags.keys()) == {"regime", "rsi", "volume", "price_direction"}
+    assert set(tags.keys()) == {"regime", "rsi", "volume", "price_direction", "valuation"}
 
 
 def test_scenario_tags_volume_buckets():
