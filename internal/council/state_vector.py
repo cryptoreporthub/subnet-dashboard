@@ -1279,36 +1279,64 @@ def _scenario_tags(
     }
 
 
+def _resolver_hit_rate(min_n: int = 30) -> Optional[float]:
+    """Return historical resolver accuracy when enough graded outcomes exist."""
+    try:
+        from internal.council.resolver import PREDICTIONS_PATH
+
+        with open(PREDICTIONS_PATH, "r") as f:
+            data = _json.load(f)
+    except Exception:
+        return None
+
+    resolved = data.get("resolved", [])
+    graded = [
+        p for p in resolved
+        if isinstance(p, dict) and p.get("correct") is not None
+    ]
+    if len(graded) < min_n:
+        return None
+
+    hits = sum(1 for p in graded if p.get("correct") is True)
+    return hits / len(graded)
+
+
 def _compute_confidence(
     sn: Dict[str, Any],
     indicators: Dict[str, Any],
     expert_contributions: Dict[str, float],
 ) -> float:
-    """Return a 0-1 confidence score based on data completeness and consensus."""
-    confidence = 0.55
+    """Return a 0-1 confidence score calibrated against resolver history."""
+    prior = _resolver_hit_rate()
+    if prior is None:
+        prior = 0.5
 
     required = ("netuid", "name", "price", "volume")
     missing = sum(1 for f in required if sn.get(f) is None or sn.get(f) == "")
-    confidence -= missing * 0.10
-
-    if float(sn.get("volume", 0) or 0) > 0:
-        confidence += 0.10
-    if float(sn.get("price_change_24h", 0) is not None):
-        confidence += 0.05
-    if float(sn.get("price_change_7d", 0) is not None):
-        confidence += 0.05
+    completeness = 1.0 - missing * 0.15
 
     hist_len = int(indicators.get("history_length", 0) or 0)
-    if hist_len >= 30:
-        confidence += 0.10
-    elif hist_len >= 15:
-        confidence += 0.05
+    if hist_len < 15:
+        completeness -= 0.15
+    elif hist_len < 30:
+        completeness -= 0.05
 
-    scores = list(expert_contributions.values())
+    if float(sn.get("volume", 0) or 0) <= 0:
+        completeness -= 0.10
+
+    completeness = min(1.0, max(0.0, completeness))
+
+    scores = [
+        float(v) for v in expert_contributions.values()
+        if isinstance(v, (int, float))
+    ]
     if scores:
         dispersion = max(scores) - min(scores)
-        confidence -= dispersion * 0.10
+        agreement = max(0.0, 1.0 - dispersion)
+    else:
+        agreement = 0.5
 
+    confidence = prior * completeness * (0.75 + 0.25 * agreement)
     return round(min(1.0, max(0.0, confidence)), 4)
 
 

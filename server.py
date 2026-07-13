@@ -131,10 +131,13 @@ except Exception as _exc:  # pragma: no cover - defensive import guard
     _PICKS_ENGINE = False
 
 try:
-    from internal.council.weights import load_weights
+    from internal.council.weights import effective_weights, load_weights
 except Exception:
     def load_weights():  # type: ignore
         return {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
+
+    def effective_weights(market_data=None, path=None):  # type: ignore
+        return load_weights()
 
 
 @asynccontextmanager
@@ -833,9 +836,26 @@ def _market_mood_proxy(subnets: List[Dict[str, Any]]) -> float:
 
 def _market_context_with_weights(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Market context for Council scoring — includes learned expert weights."""
+    tao_chg = _market_mood_proxy(subnets)
+    gainers = 0
+    losers = 0
+    for sn in subnets or []:
+        try:
+            chg = float(sn.get("price_change_24h", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        if chg > 0:
+            gainers += 1
+        elif chg < 0:
+            losers += 1
+    market_data = {
+        "avg_change_24h": tao_chg,
+        "gainers": gainers,
+        "losers": losers,
+    }
     return {
-        "tao_change_24h": _market_mood_proxy(subnets),
-        "weights": load_weights(),
+        "tao_change_24h": tao_chg,
+        "weights": effective_weights(market_data),
     }
 
 

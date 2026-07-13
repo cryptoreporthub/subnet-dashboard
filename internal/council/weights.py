@@ -177,6 +177,16 @@ def apply_regime_adjustment(
     return adjusted
 
 
+def effective_weights(
+    market_data: Optional[Dict[str, Any]] = None,
+    path: str = SOUL_MAP_PATH,
+) -> Dict[str, float]:
+    """Load learned weights and apply regime adjustment without persisting."""
+    base = load_weights(path)
+    regime = detect_regime(market_data)
+    return apply_regime_adjustment(base, regime)
+
+
 def _now_iso() -> str:
     from datetime import datetime, timezone
     return datetime.now(timezone.utc).isoformat()

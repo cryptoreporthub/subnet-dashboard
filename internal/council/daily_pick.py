@@ -11,10 +11,20 @@ from internal.council.state_vector import score_subnet_for_day
 from internal.council.red_team import audit_daily_pick
 
 try:
-    from internal.council.weights import load_weights
+    from internal.council.weights import effective_weights
 except Exception:
-    def load_weights():
+    def effective_weights(market_data=None, path=None):
         return {"quant": 0.30, "hype": 0.25, "dark_horse": 0.20, "technical": 0.25}
+
+
+def _weights_for_context(market_context: Dict[str, Any]) -> Dict[str, float]:
+    return effective_weights({
+        "avg_change_24h": market_context.get("tao_change_24h", 0),
+        "breadth": market_context.get("breadth", "neutral"),
+        "volatility": market_context.get("volatility", 0),
+        "gainers": market_context.get("gainers", 0),
+        "losers": market_context.get("losers", 0),
+    })
 
 
 def select_daily_pick(
@@ -22,7 +32,7 @@ def select_daily_pick(
     market_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     market_context = dict(market_context or {})
-    market_context.setdefault("weights", load_weights())
+    market_context.setdefault("weights", _weights_for_context(market_context))
 
     if not subnets:
         return {
