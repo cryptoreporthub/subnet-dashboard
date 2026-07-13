@@ -22,6 +22,8 @@ H_FULL_SECTION_IDS = [
     "section-daily-pick",
     "section-indicators",
     "section-scanner",
+    "section-signals",
+    "section-alerts",
     "section-subnet-groups",
     "section-staking",
     "section-picks",
@@ -264,3 +266,31 @@ def test_h_full_daily_pick_hero_or_honest_empty():
         assert "Final Confidence" in html
     else:
         assert "warming up" in html or "No audited daily pick" in html
+
+
+def test_phase_l_cockpit_signals_and_summary():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert 'id="section-signals"' in html
+    assert 'id="signal-summary-root"' in html
+    assert 'id="signals-feed-root"' in html
+    assert "Council Signal Pipeline" in html
+    if 'id="signal-summary-root"' in html and "Signal summary warming up" not in html:
+        assert "Buy" in html
+        assert "Sell" in html
+
+
+def test_phase_l_cockpit_alerts_honest_empty_or_list():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert 'id="section-alerts"' in html
+    assert 'id="alerts-feed-root"' in html
+    assert "Threshold" in html or "Alerts" in html
+    assert "No active alerts" in html or "pick-card" in html
+
+
+def test_phase_l_premium_signals_js():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert "/static/js/premium_signals.js" in html
+    assert 'id="signals-ws-status"' in html
