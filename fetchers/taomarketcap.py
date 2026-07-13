@@ -19,11 +19,12 @@ DB_PATH = "data/subnets.db"
 CACHE_DURATION = timedelta(minutes=5)
 API_BASE = "https://api.taomarketcap.com/public/v1/subnets/table/"
 PAGE_SIZE = 10
-MAX_PAGES = 20
+MAX_PAGES = 5
+FETCH_DEADLINE_SEC = 25
 
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     c = conn.cursor()
     c.execute(
         """CREATE TABLE IF NOT EXISTS subnets_cache (
@@ -36,7 +37,7 @@ def init_db():
     conn.close()
 
 def get_cached(key: str) -> Optional[Dict]:
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     c = conn.cursor()
     c.execute("SELECT data, last_updated FROM subnets_cache WHERE key = ?", (key,))
     row = c.fetchone()
@@ -49,7 +50,7 @@ def get_cached(key: str) -> Optional[Dict]:
     return None
 
 def set_cache(key: str, data: Dict):
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     c = conn.cursor()
     c.execute(
         "INSERT OR REPLACE INTO subnets_cache (key, data, last_updated) VALUES (?, ?, ?)",
@@ -103,7 +104,11 @@ def fetch_all_subnets_from_api() -> Optional[List[Dict]]:
     """
     all_subnets = []
     seen_netuids = set()
+    started = time.monotonic()
     for page in range(1, MAX_PAGES + 1):
+        if time.monotonic() - started > FETCH_DEADLINE_SEC:
+            logger.warning("Subnet fetch deadline (%ss) reached on page %d", FETCH_DEADLINE_SEC, page)
+            break
         try:
             url = f"{API_BASE}?page={page}"
             logger.info("Fetching subnets page %d from %s", page, url)
@@ -146,7 +151,7 @@ def fetch_all_subnets_from_api() -> Optional[List[Dict]]:
             if len(rows) < PAGE_SIZE:
                 break
 
-            if page < MAX_PAGES:
+            if page < MAX_PAGES and time.monotonic() - started < FETCH_DEADLINE_SEC:
                 time.sleep(1)
         except Exception as e:
             logger.warning("Error fetching page %d: %s", page, e)
@@ -172,7 +177,7 @@ def get_all_subnets() -> List[Dict]:
     if raw:
         set_cache("all_subnets", {"subnets": raw})
         return raw
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     c = conn.cursor()
     c.execute("SELECT data FROM subnets_cache WHERE key = ?", ("all_subnets",))
     row = c.fetchone()

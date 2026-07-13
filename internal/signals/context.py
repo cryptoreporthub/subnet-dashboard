@@ -20,9 +20,7 @@ def build_signals_context(refresh: bool = False) -> Dict[str, Any]:
             signals = result.get("signals") or []
         else:
             signals = SignalStore().latest_all()
-            if not signals:
-                result = generate_signals(persist=True)
-                signals = result.get("signals") or []
+            # ponytail: homepage must not score 129 subnets inline — API/WS refresh only
         summary = SignalStore().summary().get("summary") or {}
         alerts_payload = AlertEngine().recent_alerts(limit=20, active_only=True)
         return {

@@ -174,7 +174,8 @@ def _pick_sections(
     day_picks: List[Dict[str, Any]] = []
     daily_pick: Dict[str, Any] = {}
     try:
-        from server import _ordered_hour_picks, get_or_create_today_pick
+        from internal.council.daily_pick_engine import get_or_create_today_pick
+        from server import _ordered_hour_picks
 
         hour_picks = _ordered_hour_picks(subnets, market_context, limit=3)
         raw = get_or_create_today_pick(subnets, market_context)
