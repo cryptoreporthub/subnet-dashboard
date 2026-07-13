@@ -1,0 +1,43 @@
+<!-- 12. Learning Trail -->
+<section class="row" id="section-trail" aria-labelledby="trail-title">
+  <div class="section-label">Learning Trail</div>
+  <h2 class="section-title" id="trail-title">Trace &amp; Prediction History</h2>
+  <p class="section-sub">Evidence → signal → decision → prediction → judge — newest first.</p>
+  {% if mindmap_trail %}
+  <div class="card">
+    <div class="trail-counter">Trail entries: <b>{{ mindmap_trail|length }}</b></div>
+    <div class="trail">
+      {% for t in mindmap_trail[:20] %}
+      <div class="trail-item">
+        <div class="trail-time">{{ t.time|default('') }}</div>
+        <div class="trail-net">{{ t.subnet|default('—') }}</div>
+        <div class="trail-flow">
+          <span class="flow-chip">{{ t.evidence|default('—') }}</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-chip">{{ t.signal|default('—') }}</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-chip">{{ t.decision|default('—') }}</span>
+        </div>
+        {% if t.prediction %}<div class="trail-pred">{{ t.prediction }}</div>{% endif %}
+        {% if t.judge %}<div class="pred-line">{{ t.judge }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% elif predictions %}
+  <div class="card">
+    <div class="trail-counter">Predictions: <b>{{ predictions|length }}</b></div>
+    <div class="trail">
+      {% for pr in predictions[:12] %}
+      <div class="trail-item">
+        <div class="trail-net">{{ pr.name|default('SN' ~ pr.netuid) }}</div>
+        <div class="trail-pred">{{ pr.statement|default(pr.direction|default('') ~ ' ' ~ (pr.predicted_pct|default(0))|string) }}</div>
+        <div class="pick-meta">{{ pr.status|default('pending') }} · {{ pr.horizon_hours|default(0) }}h horizon</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">Learning trail warming up — trace bus events chronicle Council decisions as the loop runs.</p></div>
+  {% endif %}
+</section>

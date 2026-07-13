@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-13T20:05:00Z by Agent B (`-e78a`) — Phase 1 **C1 complete** (awaiting human review)  
-**main:** `276cd19` · **branch:** `cursor/c1-css-split-4e98`
+**Last updated:** 2026-07-13T20:12:00Z by Agent B (`-e78a`) — Phase 1 **C2 complete** (awaiting human review)  
+**main:** `276cd19` · **branch:** `cursor/c2-premium-partials-4e98`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -16,8 +16,9 @@
 
 | Task | Agent | Status | Notes |
 |------|-------|--------|-------|
-| **C1** — split `style.css` → 6 files | B (`-e78a`) | 🔄 **in progress** | `base`, `layout`, `dashboard`, `chat`, `premium`, `responsive` + template links |
-| C2–C6 | — | blocked | after C1 merge + human review |
+| **C1** — split `style.css` → 6 files | B (`-e78a`) | ✅ **complete** | PR #154 |
+| **C2** — split `premium_cockpit.html` → partials | B (`-e78a`) | 🔄 **in progress** | `templates/partials/premium/*.html` |
+| C3–C6 | — | blocked | after C2 merge + human review |
 
 ## Ready for Ditto
 **Phases J–O merged. Phase 1 UI work started (C1).**
@@ -51,7 +52,7 @@ Recent merges on `main` @ `b1db31a` (CI green):
 | Agent | Status | Owns |
 |-------|--------|------|
 | **A** (`-843d`) | **Idle** | learning, council, calibration, signal_hub, message_intel, cockpit |
-| **B** (`-e78a`) | **C1** — CSS split | templates, static, analytics, indicators, oracle, whales |
+| **B** (`-e78a`) | **C2** — cockpit partials | templates, static, analytics, indicators, oracle, whales |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
 

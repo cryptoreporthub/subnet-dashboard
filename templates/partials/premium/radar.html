@@ -1,0 +1,47 @@
+<!-- 7. Radar -->
+<section class="row" id="section-radar" aria-labelledby="radar-title">
+  <div class="section-label">Radar</div>
+  <h2 class="section-title" id="radar-title">Undervalued Overlay Radar</h2>
+  <p class="section-sub">Five-axis radar comparing yield, momentum, emission, social, and composite undervalued score.</p>
+  {% set radar_rows = sn_list|sort(attribute='emission', reverse=true)|list %}
+  {% if radar_rows|length >= 3 %}
+  {% set top3 = radar_rows[:3] %}
+  {% set r_ns = namespace(labels=[], uv=[], mom=[]) %}
+  {% for sn in top3 %}
+    {% set nu = sn.netuid|default(sn.id) %}
+    {% set apy_v = ((sn.apy|default(sn.staking_data.apy|default(0) if sn.staking_data is mapping else 0))|float * 100) %}
+    {% set chg_v = (sn.price_change_24h|default(0))|float %}
+    {% set uv = [apy_v - chg_v, 100]|min %}
+    {% set r_ns.labels = r_ns.labels + ['SN' ~ nu] %}
+    {% set r_ns.uv = r_ns.uv + [uv|round|int] %}
+    {% set r_ns.mom = r_ns.mom + [[50 + chg_v * 2, 100]|min|int] %}
+  {% endfor %}
+  {% set radar_payload = {
+    'labels': r_ns.labels,
+    'datasets': [
+      {'label': 'Undervalued', 'data': r_ns.uv, 'color': '#00ff41'},
+      {'label': 'Momentum', 'data': r_ns.mom, 'color': '#22d3ee'}
+    ]
+  } %}
+  <div class="card momentum-grid">
+    <div class="card">
+      <div class="card-head"><h3>Subnet Radar</h3><span class="src-tag">top 3 · Chart.js</span></div>
+      <div class="chart-box">
+        <canvas id="radarChart" data-radar='{{ radar_payload|tojson }}' aria-label="Subnet undervalued radar chart"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Overlay Legend</h3></div>
+      <p class="section-sub" style="margin-bottom:8px;">Green = yield-vs-momentum undervalued score. Cyan = 24h momentum overlay.</p>
+      {% for sn in top3 %}
+      <div class="radar-item">
+        <div class="name">{{ sn.name|default('SN' ~ (sn.netuid|default(sn.id))) }}</div>
+        <div class="meta">emission {{ "%.2f"|format((sn.emission|default(0))|float) }} · 24h {{ "%+.2f"|format((sn.price_change_24h|default(0))|float) }}%</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">Radar chart warming up — needs at least three subnets with registry economics.</p></div>
+  {% endif %}
+</section>

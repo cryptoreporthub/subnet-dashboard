@@ -1,0 +1,18 @@
+<header class="top" id="section-header" aria-label="Site header">
+  <div class="top-inner">
+    <div class="logo">
+      <div class="logo-mark" aria-hidden="true">S</div>
+      <div>
+        <div class="logo-text">Simi<span>Vision</span></div>
+        <div class="logo-sub">Subnet Intelligence Cockpit</div>
+      </div>
+    </div>
+    <div class="src-tag">
+      DATA SOURCE: <b>{{ data_source|default('cache')|upper }}</b>
+    </div>
+    <div class="header-actions">
+      <span class="live-pill"><span class="live-dot" aria-hidden="true"></span>LIVE</span>
+      <span class="utc-clock" id="utcClock">--:--:-- UTC</span>
+    </div>
+  </div>
+</header>

@@ -1,0 +1,36 @@
+<!-- 13. Undervalued Radar -->
+<section class="row" id="section-undervalued" aria-labelledby="undervalued-title">
+  <div class="section-label">Undervalued Radar</div>
+  <h2 class="section-title" id="undervalued-title">Undervalued Scoring Grid</h2>
+  <p class="section-sub">Yield minus 24h momentum — higher score suggests deeper value vs. recent price action.</p>
+  {% if degraded %}
+  <div class="card card-muted"><p class="empty">Loading undervalued scores from live subnet feed…</p></div>
+  {% elif sn_list %}
+  <div class="card">
+    <table class="tbl">
+      <thead>
+        <tr><th>#</th><th>Subnet</th><th>APY</th><th>24h</th><th>Score</th><th>Flag</th></tr>
+      </thead>
+      <tbody>
+        {% for sn in sn_list|sort(attribute='emission', reverse=true)|list %}
+        {% if loop.index <= 8 %}
+        {% set apy_v = ((sn.apy|default(sn.staking_data.apy|default(0) if sn.staking_data is mapping else 0))|float * 100) %}
+        {% set chg_v = (sn.price_change_24h|default(0))|float %}
+        {% set score = apy_v - chg_v %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td class="text-primary">{{ sn.name|default('SN' ~ (sn.netuid|default(sn.id))) }} <span class="pick-meta">SN{{ sn.netuid|default(sn.id) }}</span></td>
+          <td>{{ "%.1f"|format(apy_v) }}%</td>
+          <td class="{% if chg_v >= 0 %}text-buy{% else %}text-sell{% endif %}">{{ "%+.2f"|format(chg_v) }}%</td>
+          <td><b>{{ "%.1f"|format(score) }}</b></td>
+          <td>{% if score > 15 %}<span class="badge badge-buy">DEEP VALUE</span>{% elif score > 5 %}<span class="badge badge-watch">VALUE</span>{% else %}—{% endif %}</td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">Undervalued radar warming up — scoring grid needs live subnet economics and price history.</p></div>
+  {% endif %}
+</section>

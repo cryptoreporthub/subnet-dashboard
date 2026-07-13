@@ -1,0 +1,39 @@
+<!-- SimiVision spotlight picks -->
+<section class="row" id="section-simivision-picks" aria-labelledby="simivision-picks-title">
+  <div class="section-label">SimiVision Top Picks</div>
+  <h2 class="section-title" id="simivision-picks-title">Council Conviction Ranking</h2>
+  <p class="section-sub">Top subnets by emission, yield, and momentum — honest conviction tiers from live registry economics.</p>
+  {% if sv_picks %}
+  <div class="picks">
+    {% for pick in sv_picks %}
+    {% set conv = (pick.conviction|default(0))|int %}
+    {% set tier = 'tier-cyan' if conv > 80 else ('tier-lime' if conv > 60 else ('tier-gold' if conv > 40 else 'tier-red')) %}
+    {% set rec = (pick.recommendation|default('WATCH'))|string|upper %}
+    <div class="pick-card">
+      <div class="pick-rank">#{{ pick.rank|default(loop.index) }}</div>
+      <div class="pick-name pick-name-lg">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
+      <div class="pick-meta">SN{{ pick.netuid }} · {{ "%.2f"|format((pick.emission|default(0))|float) }} TAO/day · {{ "%.1f"|format((pick.apy|default(0))|float) }}% APY</div>
+      <div class="pick-row">
+        <div class="conviction-wrap">
+          <div class="conviction-lbl">Conviction</div>
+          <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ conv }}%;"></div></div>
+          <div class="pred-line">{{ "%+.2f"|format((pick.price_change_24h|default(0))|float) }}% 24h</div>
+        </div>
+        <div class="conv-ring {{ tier }}" style="--ring-pct: {{ conv }};">
+          <svg viewBox="0 0 46 46" aria-hidden="true">
+            <circle class="conv-ring-bg" cx="23" cy="23" r="20"></circle>
+            <circle class="conv-ring-fg" cx="23" cy="23" r="20"></circle>
+          </svg>
+          <div class="conv-ring-val">{{ conv }}</div>
+        </div>
+      </div>
+      <div class="tags" style="margin-top:12px;">
+        <span class="badge {% if rec == 'BUY' %}badge-buy{% elif rec == 'SELL' %}badge-sell{% elif rec == 'HOLD' %}badge-hold{% else %}badge-watch{% endif %}">{{ rec }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">SimiVision picks warming up — conviction cards appear once subnet registry economics load.</p></div>
+  {% endif %}
+</section>

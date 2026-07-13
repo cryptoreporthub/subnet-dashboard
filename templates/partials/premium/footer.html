@@ -1,0 +1,9 @@
+<footer class="status" id="section-footer">
+  <div class="status-inner">
+    <span><span class="st-dot" aria-hidden="true"></span>SimiVision · {{ data_source|default('cache')|upper }}</span>
+    <span>Subnets: <b>{{ sn_list|length }}</b></span>
+    <span>Trail: <b>{{ mindmap_trail|length if mindmap_trail else 0 }}</b></span>
+    <span>Predictions: <b>{{ predictions|length if predictions else 0 }}</b></span>
+    <span class="footer-tag">UTC clock · Press <kbd>C</kbd> compact</span>
+  </div>
+</footer>

@@ -1,0 +1,47 @@
+<!-- Daily audited pick hero -->
+<section class="row" id="section-daily-pick" aria-labelledby="daily-pick-title">
+  <div class="section-label">Daily Pick</div>
+  <h2 class="section-title" id="daily-pick-title">Audited Council Selection</h2>
+  <p class="section-sub">Highest-conviction subnet for today — downgraded when audit confidence is low.</p>
+  {% if dp_subnet %}
+  {% set fc = ((dpick.final_confidence|default(dpick.confidence|default(0)))|float * 100)|round %}
+  {% set tier = 'tier-cyan' if fc > 75 else ('tier-lime' if fc > 55 else ('tier-gold' if fc > 35 else 'tier-red')) %}
+  {% set act = (dpick.action|default('HOLD'))|string|upper %}
+  {% set audit = dpick.audit if dpick.audit is mapping else {} %}
+  <div class="hero-card">
+    <div class="pick-rank" style="font-size:24px;">★</div>
+    <div class="pick-name pick-name-lg hero-name">{{ dp_subnet.name|default('SN' ~ dp_subnet.netuid) }}</div>
+    <div class="pick-meta hero-meta">SN{{ dp_subnet.netuid }}{% if dp_subnet.symbol %} · {{ dp_subnet.symbol }}{% endif %}</div>
+    <div class="pick-row">
+      <div class="conviction-wrap">
+        <div class="conviction-lbl">Final Confidence</div>
+        <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ fc }}%;"></div></div>
+        <div class="pred-line">score <b>{{ "%.1f"|format((dpick.score|default(0))|float) }}</b> · raw conf {{ "%.2f"|format((dpick.confidence|default(0))|float) }}</div>
+      </div>
+      <div class="conv-ring {{ tier }}" style="--ring-pct: {{ fc }};">
+        <svg viewBox="0 0 46 46" aria-hidden="true">
+          <circle class="conv-ring-bg" cx="23" cy="23" r="20"></circle>
+          <circle class="conv-ring-fg" cx="23" cy="23" r="20"></circle>
+        </svg>
+        <div class="conv-ring-val">{{ fc }}</div>
+      </div>
+    </div>
+    <div class="tags" style="margin-top:12px;">
+      <span class="badge {% if act == 'BUY' %}badge-buy{% elif act == 'SELL' %}badge-sell{% else %}badge-hold{% endif %}">{{ act }}</span>
+      {% if audit.approved is defined %}
+        {% if audit.approved %}<span class="hero-audit">AUDIT PASSED</span>{% else %}<span class="hero-audit flagged">AUDIT FLAGGED</span>{% endif %}
+      {% endif %}
+    </div>
+    {% if audit.concerns %}
+    <ul class="reasons">
+      {% for c in audit.concerns[:4] %}<li>{{ c }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if dpick.reason %}
+    <div class="pred-line" style="margin-top:8px;">Note: {{ dpick.reason }}</div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">No audited daily pick yet — Council selection appears after subnet scoring stabilizes.{% if dpick.reason %} ({{ dpick.reason }}){% endif %}</p></div>
+  {% endif %}
+</section>

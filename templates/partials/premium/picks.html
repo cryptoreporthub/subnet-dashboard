@@ -1,0 +1,50 @@
+<!-- 4. Top Picks -->
+<section class="row" id="section-picks" aria-labelledby="picks-title">
+  <div class="section-label">Top Picks</div>
+  <h2 class="section-title" id="picks-title">Hourly &amp; Daily Council Picks</h2>
+  <p class="section-sub">State-vector leaders for 1h and 24h horizons — conviction bars reflect confidence.</p>
+  {% if hp or dyp %}
+  <div class="two-col">
+    <div class="card">
+      <div class="card-head"><h3>Hour Horizon</h3><span class="src-tag">top {{ hp|length }} · 1h</span></div>
+      {% if hp %}
+      <div class="picks">
+        {% for pick in hp %}
+        {% set conf = ((pick.confidence|default(0))|float * 100)|round %}
+        {% set tier = 'tier-cyan' if conf > 75 else ('tier-lime' if conf > 55 else ('tier-gold' if conf > 35 else 'tier-red')) %}
+        <div class="pick-card">
+          <div class="pick-rank">#{{ loop.index }}</div>
+          <div class="pick-name">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
+          <div class="pick-meta">SN{{ pick.netuid }} · score <b class="accent-bright">{{ "%.1f"|format((pick.score|default(0))|float) }}</b></div>
+          <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ conf }}%;"></div></div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="empty">No hour-horizon picks yet — scheduler ranks 1h leaders after subnet snapshots refresh.</p>
+      {% endif %}
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Day Horizon</h3><span class="src-tag">top {{ dyp|length }} · 24h</span></div>
+      {% if dyp %}
+      <div class="picks">
+        {% for pick in dyp %}
+        {% set conf = ((pick.confidence|default(0))|float * 100)|round %}
+        {% set tier = 'tier-cyan' if conf > 75 else ('tier-lime' if conf > 55 else ('tier-gold' if conf > 35 else 'tier-red')) %}
+        <div class="pick-card">
+          <div class="pick-rank">#{{ loop.index }}</div>
+          <div class="pick-name">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
+          <div class="pick-meta">SN{{ pick.netuid }} · score <b class="accent-bright">{{ "%.1f"|format((pick.score|default(0))|float) }}</b></div>
+          <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ conf }}%;"></div></div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="empty">No day-horizon picks yet — 24h Council lens activates after price history ingests.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">Council is convening — hourly and daily picks appear once state-vector scores stabilize.</p></div>
+  {% endif %}
+</section>

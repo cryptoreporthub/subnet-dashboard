@@ -1,0 +1,28 @@
+<!-- 10. Social -->
+<section class="row" id="section-social" aria-labelledby="social-title">
+  <div class="section-label">Social</div>
+  <h2 class="section-title" id="social-title">Social Sentiment</h2>
+  <p class="section-sub">Per-subnet mention volume and sentiment labels from registry fields.</p>
+  {% set social_has = sn_list|selectattr('social_mentions', 'defined')|list %}
+  {% if social_has %}
+  <div class="soc-grid">
+    {% for sn in social_has|sort(attribute='social_mentions', reverse=true)|list %}
+    {% if loop.index <= 6 %}
+    {% set mentions = sn.social_mentions|default(0)|int %}
+    {% set sent = sn.social_sentiment|default(0.5)|float %}
+    {% set label = 'bullish' if sent >= 0.6 else ('bearish' if sent <= 0.4 else 'neutral') %}
+    <div class="card soc-card">
+      <div class="soc-head">
+        <span class="pick-name">{{ sn.name|default('SN' ~ (sn.netuid|default(sn.id))) }}</span>
+        <span class="soc-score {% if label == 'bullish' %}pos{% elif label == 'bearish' %}neg{% else %}neu{% endif %}">{{ label|upper }}</span>
+      </div>
+      <div class="pick-meta">SN{{ sn.netuid|default(sn.id) }} · {{ mentions }} mentions</div>
+      <div class="conviction-bar" style="margin-top:8px;"><div class="conviction-fill tier-lime" style="width: {{ (sent * 100)|round }}%;"></div></div>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">Social sentiment warming up — message intel and mention feeds populate in Phase M.</p></div>
+  {% endif %}
+</section>
