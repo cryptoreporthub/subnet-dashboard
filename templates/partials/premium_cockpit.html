@@ -1,5 +1,5 @@
 {# Premium 13-section cockpit — style.css classes, honest-empty, zero markdown #}
-{% if degraded %}<script>document.documentElement.dataset.hydrate='1';</script>{% endif %}
+<script>document.documentElement.dataset.hydrate='1';</script>
 {% set sn_list = subnets if subnets is iterable and subnets is not string else [] %}
 {% set ti_rows = api_indicators_convergence.subnets if api_indicators_convergence is mapping and api_indicators_convergence.subnets else [] %}
 {% set hp = hour_picks if hour_picks else [] %}

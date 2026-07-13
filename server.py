@@ -380,21 +380,8 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
 
 @app.get("/")
 def index(request: Request):
-    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
-
-    pool = ThreadPoolExecutor(max_workers=1)
-    future = pool.submit(_build_index_context, request)
-    try:
-        context = future.result(timeout=HOMEPAGE_BUILD_TIMEOUT)
-    except FuturesTimeout:
-        logger.warning(
-            "homepage context exceeded %ss; serving registry fallback",
-            HOMEPAGE_BUILD_TIMEOUT,
-        )
-        context = _degraded_index_context(request)
-    # ponytail: do not wait on shutdown — timed-out builds would block the response
-    pool.shutdown(wait=False, cancel_futures=True)
-    return templates.TemplateResponse(request, "index.html", context)
+    # ponytail: always serve the fast registry shell; cockpit_hydrate.js fills panels via APIs
+    return templates.TemplateResponse(request, "index.html", _degraded_index_context(request))
 
 
 @app.get("/api/daily-rotation")

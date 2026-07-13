@@ -1,4 +1,4 @@
-/* Hydrate empty/degraded cockpit sections from fast JSON APIs (prod shell fallback). */
+/* Hydrate cockpit sections from JSON APIs (homepage is a fast shell on Fly). */
 (function () {
   'use strict';
 
@@ -37,10 +37,26 @@
     return 'badge-watch';
   }
 
-  function fetchJson(url) {
-    return fetch(url, { headers: { Accept: 'application/json' } }).then(function (r) {
-      if (!r.ok) throw new Error(String(r.status));
-      return r.json();
+  function fetchJsonTimeout(url, ms) {
+    return new Promise(function (resolve, reject) {
+      var ctrl = new AbortController();
+      var timer = setTimeout(function () {
+        ctrl.abort();
+        reject(new Error('timeout'));
+      }, ms);
+      fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl.signal })
+        .then(function (r) {
+          if (!r.ok) throw new Error(String(r.status));
+          return r.json();
+        })
+        .then(function (data) {
+          clearTimeout(timer);
+          resolve(data);
+        })
+        .catch(function (err) {
+          clearTimeout(timer);
+          reject(err);
+        });
     });
   }
 
@@ -87,20 +103,20 @@
   function renderDailyPick(payload) {
     if (!payload) return;
     var pick = payload.pick;
-    var sn = (pick && pick.subnet) || {};
-    if (!sn.netuid && !pick) return;
-    var fc = confTier(payload.final_confidence != null ? payload.final_confidence : (pick && pick.confidence) || 0);
-    var act = String(payload.action || (pick && pick.action) || 'HOLD').toUpperCase();
-    var audit = payload.audit || (pick && pick.audit) || {};
+    if (!pick) return;
+    var sn = pick.subnet || {};
+    var fc = confTier(payload.final_confidence != null ? payload.final_confidence : pick.confidence || 0);
+    var act = String(payload.action || pick.action || 'HOLD').toUpperCase();
+    var audit = payload.audit || pick.audit || {};
     var html =
       '<div class="hero-card">' +
       '<div class="pick-rank" style="font-size:24px;">★</div>' +
-      '<div class="pick-name pick-name-lg hero-name">' + esc(sn.name || pickName(pick || {})) + '</div>' +
-      '<div class="pick-meta hero-meta">SN' + esc(sn.netuid || pickNetuid(pick || {})) + '</div>' +
+      '<div class="pick-name pick-name-lg hero-name">' + esc(sn.name || pickName(pick)) + '</div>' +
+      '<div class="pick-meta hero-meta">SN' + esc(sn.netuid || pickNetuid(pick)) + '</div>' +
       '<div class="pick-row"><div class="conviction-wrap">' +
       '<div class="conviction-lbl">Final Confidence</div>' +
       '<div class="conviction-bar"><div class="conviction-fill ' + fc.tier + '" style="width:' + fc.conf + '%;"></div></div>' +
-      '<div class="pred-line">score <b>' + fmt((pick && pick.score) || payload.score, 1) + '</b></div></div>' +
+      '<div class="pred-line">score <b>' + fmt(pick.score || payload.score, 1) + '</b></div></div>' +
       '<div class="conv-ring ' + fc.tier + '" style="--ring-pct:' + fc.conf + ';"><div class="conv-ring-val">' + fc.conf + '</div></div></div>' +
       '<div class="tags" style="margin-top:12px;"><span class="badge ' + recBadge(act) + '">' + esc(act) + '</span>' +
       (audit.approved ? '<span class="hero-audit">AUDIT PASSED</span>' : '') +
@@ -164,7 +180,109 @@
     );
   }
 
-  function updateGroupData(hourPicks, dayPicks, trail) {
+  function renderCouncilWeights(weights) {
+    if (!weights || typeof weights !== 'object') return;
+    var keys = Object.keys(weights);
+    if (!keys.length) return;
+    var cards = keys.map(function (name) {
+      var w = Number(weights[name]) || 0;
+      return (
+        '<div class="expert card-soft card">' +
+        '<div class="avatar">' + esc(name.charAt(0).toUpperCase()) + '</div>' +
+        '<div class="name">' + esc(name) + '</div>' +
+        '<div class="w">' + fmt(w, 3) + '</div>' +
+        '<div class="wbar"><div class="wfill" style="width:' + Math.min(w / 2 * 100, 100) + '%;"></div></div>' +
+        '<span class="bias neu">NEUTRAL</span></div>'
+      );
+    }).join('');
+    replaceEmptyIn('section-council', '<div class="council-grid">' + cards + '</div>');
+  }
+
+  function renderKpi(stats) {
+    if (!stats) return;
+    var acc = Math.round((Number(stats.accuracy) || 0) * 1000) / 10;
+    var section = document.getElementById('section-kpi');
+    if (!section) return;
+    var strip = section.querySelector('.kpi-strip');
+    if (!strip) return;
+    var vals = strip.querySelectorAll('.val');
+    if (vals[0]) vals[0].textContent = acc + '%';
+    if (vals[1]) vals[1].textContent = String(stats.pending || 0);
+    if (vals[2]) vals[2].textContent = String(stats.resolved || 0);
+    if (vals[3]) vals[3].textContent = String(stats.total_records || 0);
+  }
+
+  function renderHero(subnets) {
+    if (!subnets || !subnets.length) return;
+    var gainers = 0;
+    var losers = 0;
+    var chgSum = 0;
+    var apySum = 0;
+    var apyN = 0;
+    subnets.forEach(function (sn) {
+      var chg = Number(sn.price_change_24h) || 0;
+      chgSum += chg;
+      if (chg > 0) gainers += 1;
+      else if (chg < 0) losers += 1;
+      var apy = sn.apy != null ? Number(sn.apy) : null;
+      if (apy != null) {
+        apySum += apy;
+        apyN += 1;
+      }
+    });
+    replaceEmptyIn(
+      'section-hero',
+      '<div class="kpi-grid" style="grid-template-columns: repeat(6, 1fr);">' +
+      '<div class="kpi-cell"><div class="k">Subnets</div><div class="v">' + subnets.length + '</div>' +
+      '<div class="sub">' + gainers + ' gainers / ' + losers + ' losers</div></div>' +
+      '<div class="kpi-cell"><div class="k">Avg 24h</div><div class="v">' + fmtSigned(chgSum / subnets.length) + '</div><div class="sub">24h change</div></div>' +
+      '<div class="kpi-cell"><div class="k">Avg APY</div><div class="v">' + (apyN ? fmt(apySum / apyN * 100, 2) : '—') + '%</div><div class="sub">stake yield</div></div>' +
+      '<div class="kpi-cell"><div class="k">Data</div><div class="v" style="font-size:15px;">TAOMARKETCAP</div><div class="sub">live feed</div></div>' +
+      '</div>'
+    );
+    document.querySelectorAll('.src-tag b').forEach(function (el) {
+      el.textContent = 'TAOMARKETCAP';
+    });
+  }
+
+  function renderJudges(judges) {
+    var panel = document.getElementById('judges-panel');
+    if (!panel || !judges || !judges.length) return;
+    function verdictClass(v) {
+      if (v === 'bullish') return 'badge-buy';
+      if (v === 'bearish') return 'badge-sell';
+      return 'badge-watch';
+    }
+    var cards = judges.slice(0, 12).map(function (j) {
+      var verdict = (j.consensus && j.consensus.verdict) || 'neutral';
+      var score = j.consensus ? j.consensus.score : null;
+      return (
+        '<article class="card judge-summary" style="margin-bottom:10px;">' +
+        '<div class="card-head"><h3>' + esc(j.name || ('SN' + j.netuid)) + '</h3>' +
+        '<span class="badge ' + verdictClass(verdict) + '">' + esc(String(verdict).toUpperCase()) + '</span></div>' +
+        '<div class="pick-meta">SN' + esc(j.netuid) + (score != null ? ' · consensus ' + Number(score).toFixed(2) : '') + '</div></article>'
+      );
+    }).join('');
+    panel.innerHTML = '<div class="picks">' + cards + '</div><p class="pick-meta" style="margin-top:8px;">' + judges.length + ' subnets scored</p>';
+  }
+
+  function renderSignals(signals, alerts) {
+    if (typeof window.__applySignalsPayload === 'function') {
+      window.__applySignalsPayload(signals, alerts);
+      return;
+    }
+    var root = document.getElementById('signals-feed-root');
+    if (!root || !signals || !signals.length) return;
+    var rows = signals.slice(0, 12).map(function (sig) {
+      var st = String(sig.signal_type || 'neutral').toLowerCase();
+      return '<tr><td>' + esc(sig.name || ('SN' + sig.subnet_id)) + '</td>' +
+        '<td><span class="badge badge-watch">' + esc(st.toUpperCase()) + '</span></td>' +
+        '<td>' + ((Number(sig.confidence) || 0) * 100).toFixed(1) + '%</td></tr>';
+    }).join('');
+    root.innerHTML = '<table class="tbl"><thead><tr><th>Subnet</th><th>Type</th><th>Conf</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  function updateGroupData(hourPicks, dayPicks, trail, subnets) {
     var el = document.getElementById('subnet-group-data');
     if (!el) return;
     try {
@@ -172,6 +290,7 @@
       if (hourPicks && hourPicks.length) data.hour_picks = hourPicks;
       if (dayPicks && dayPicks.length) data.day_picks = dayPicks;
       if (trail && trail.length) data.trail = trail.slice(0, 20);
+      if (subnets && subnets.length) data.roster = subnets.slice(0, 24);
       el.textContent = JSON.stringify(data);
       if (typeof window.__refreshSubnetGroups === 'function') window.__refreshSubnetGroups();
     } catch (e) {
@@ -179,51 +298,57 @@
     }
   }
 
-  function needsHydrate() {
-    if (document.documentElement.dataset.hydrate === '1') return true;
-    return !!document.querySelector(
-      '#section-simivision-picks .empty, #section-daily-pick .empty, #section-picks .empty, #section-trail .empty'
-    );
-  }
-
-  function normalizeHourPicks(resp) {
-    return (resp && resp.picks) || [];
-  }
-
-  function normalizeDayPicks(resp) {
-    return (resp && resp.picks) || [];
-  }
-
   async function run() {
-    if (!needsHydrate()) return;
+    if (document.documentElement.dataset.hydrate !== '1') return;
 
     var results = await Promise.allSettled([
-      fetchJson('/api/simivision'),
-      fetchJson('/api/top-pick/hour'),
-      fetchJson('/api/daily-pick'),
-      fetchJson('/api/top-pick/day'),
-      fetchJson('/api/mindmap/trail?limit=20'),
+      fetchJsonTimeout('/api/simivision', 12000),
+      fetchJsonTimeout('/api/top-pick/hour', 12000),
+      fetchJsonTimeout('/api/daily-pick', 12000),
+      fetchJsonTimeout('/api/top-pick/day', 12000),
+      fetchJsonTimeout('/api/mindmap/trail?limit=20', 12000),
+      fetchJsonTimeout('/api/learning/stats', 8000),
+      fetchJsonTimeout('/api/subnets', 15000),
+      fetchJsonTimeout('/api/signals', 15000),
+      fetchJsonTimeout('/api/alerts?refresh_checks=false', 8000),
+      fetchJsonTimeout('/api/judges', 30000),
     ]);
+
+    var hourPicks = [];
+    var dayPicks = [];
+    var trail = [];
+    var subnets = [];
 
     if (results[0].status === 'fulfilled') {
       renderSimivision((results[0].value.data || {}).top || []);
     }
-    var hourPicks = results[1].status === 'fulfilled' ? normalizeHourPicks(results[1].value) : [];
-    var dayPicks = results[3].status === 'fulfilled' ? normalizeDayPicks(results[3].value) : [];
+    if (results[1].status === 'fulfilled') hourPicks = (results[1].value.picks) || [];
+    if (results[3].status === 'fulfilled') dayPicks = (results[3].value.picks) || [];
     if (results[2].status === 'fulfilled') renderDailyPick(results[2].value);
     renderHourDayPicks(hourPicks, dayPicks);
     if (results[4].status === 'fulfilled') {
-      renderTrail(results[4].value.trail || []);
-      updateGroupData(hourPicks, dayPicks, results[4].value.trail || []);
-    } else {
-      updateGroupData(hourPicks, dayPicks, []);
+      trail = results[4].value.trail || [];
+      renderTrail(trail);
+    }
+    if (results[5].status === 'fulfilled') {
+      var stats = results[5].value.data || {};
+      renderKpi(stats);
+      renderCouncilWeights(stats.expert_weights || {});
+    }
+    if (results[6].status === 'fulfilled') {
+      subnets = results[6].value.subnets || [];
+      renderHero(subnets);
+    }
+    if (results[7].status === 'fulfilled') {
+      var sigPayload = results[7].value;
+      var alertsPayload = results[8].status === 'fulfilled' ? results[8].value : {};
+      renderSignals(sigPayload.signals || [], (alertsPayload.alerts) || []);
+    }
+    if (results[9].status === 'fulfilled') {
+      renderJudges(results[9].value.judges || []);
     }
 
-    document.querySelectorAll('.src-tag b').forEach(function (el) {
-      if (String(el.textContent).toUpperCase().indexOf('REGISTRY') !== -1) {
-        el.textContent = 'TAOMARKETCAP';
-      }
-    });
+    updateGroupData(hourPicks, dayPicks, trail, subnets);
     console.log('[cockpit_hydrate] panels updated from APIs');
   }
 

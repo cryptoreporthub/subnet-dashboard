@@ -122,6 +122,8 @@
     if (alerts) renderAlerts(alerts);
   }
 
+  window.__applySignalsPayload = applyPayload;
+
   function setWsStatus(label) {
     if (wsStatus) wsStatus.textContent = label;
   }
