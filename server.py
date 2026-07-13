@@ -278,7 +278,7 @@ async def add_cors_headers(request: Request, call_next):
 
 
 @app.get("/")
-async def index(request: Request):
+def index(request: Request):
     subnets, source = _get_subnets_with_source()
     market_context = {"tao_change_24h": _market_mood_proxy(subnets)}
 
