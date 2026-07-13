@@ -483,7 +483,6 @@
       fetchJsonTimeout('/api/subnets', 15000),
       fetchJsonTimeout('/api/signals', 15000),
       fetchJsonTimeout('/api/alerts?refresh_checks=false', 8000),
-      fetchJsonTimeout('/api/judges', 30000),
       fetchJsonTimeout('/api/cockpit/sections', 20000),
     ]);
 
@@ -534,14 +533,19 @@
       renderSignals(sigPayload.signals || [], (alertsPayload.alerts) || []);
     }
     if (results[8].status === 'fulfilled') {
-      renderJudges(results[8].value.judges || []);
-    }
-    if (results[9].status === 'fulfilled') {
-      renderCockpitSections(results[9].value.sections || []);
+      renderCockpitSections(results[8].value.sections || []);
     }
 
     updateGroupData(hourPicks, dayPicks, trail, subnets);
     console.log('[cockpit_hydrate] panels updated from APIs');
+
+    // Defer heavy judge scoring so /health stays responsive on single-worker Fly.
+    try {
+      var judgesRes = await fetchJsonTimeout('/api/judges', 30000);
+      renderJudges(judgesRes.judges || []);
+    } catch (e) {
+      console.warn('[cockpit_hydrate] judges panel deferred load failed', e);
+    }
   }
 
   if (document.readyState === 'loading') {

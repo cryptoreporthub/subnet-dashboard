@@ -281,6 +281,22 @@ async def add_cors_headers(request: Request, call_next):
 
 
 HOMEPAGE_BUILD_TIMEOUT = int(os.environ.get("HOMEPAGE_BUILD_TIMEOUT", "20"))
+TOP_SCORING_UNIVERSE = int(os.environ.get("TOP_SCORING_UNIVERSE", "40"))
+
+
+def _cap_subnets_for_scoring(
+    subnets: List[Dict[str, Any]],
+    limit: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Limit council scoring to the highest-emission subnets (Fly single-worker safety)."""
+    cap = limit if limit is not None else TOP_SCORING_UNIVERSE
+    if not subnets or len(subnets) <= cap:
+        return subnets
+    return sorted(
+        subnets,
+        key=lambda s: float(s.get("emission", 0) or 0),
+        reverse=True,
+    )[:cap]
 
 
 def _normalize_registry_subnet(sn: Dict[str, Any]) -> Dict[str, Any]:
@@ -1043,6 +1059,7 @@ def api_simivision():
 def api_top_picks():
     """Top 3 subnets by short-horizon (hour) and 24h (day) Council scores."""
     subnets, _ = _get_subnets_with_source()
+    subnets = _cap_subnets_for_scoring(subnets)
     if not _PICKS_ENGINE:
         return {"hour_picks": [], "day_picks": [], "error": "pick engine unavailable"}
     market_context = _market_context_with_weights(subnets)
