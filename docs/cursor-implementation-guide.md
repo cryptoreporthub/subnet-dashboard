@@ -5,20 +5,20 @@ This guide is for Cursor (Composer + Grok) to pick up the visual/iterative UI ta
 ## Tool Assignment
 
 - **Composer 2.5** — structural multi-file work (splits, partials, htmx)
-- **Grok (xhigh)** — visual/UX fixes, audits, architecture decisions
-- **Grok-fast-xhigh** — pre-merge behavioral reviews and audits
+- **Grok (xhigh)** — all visual/UX fixes, audits, architecture decisions, and pre-merge behavioral reviews
 - Composer auto-invokes Grok via subagent for design/audit tasks per `model-guide.md`
 
 ## Grok Token-Saving Precautions
 
-Grok burns tokens fast, especially at xhigh reasoning. Follow these rules to avoid waste:
+Grok at xhigh reasoning burns tokens fast. Follow these rules to avoid waste:
 
 1. **Use slow mode** — Grok in slow mode is cheaper per token and produces better structured output for code tasks. Prefer slow mode unless you need a quick one-liner.
 2. **Batch tasks** — Don't send Grok one tiny fix at a time. Group related visual fixes (e.g., G2+G5+G6) into a single Grok session if they touch nearby code.
 3. **Scope context** — Only pass the relevant file(s) or file sections to Grok. Don't load the entire repo into context unnecessarily.
-4. **Use Grok-fast-xhigh for reviews only** — Reserve full Grok (xhigh) for actual implementation/audit work. Behavioral reviews and pre-merge checks should use the fast variant.
-5. **Avoid re-runs** — Get it right the first time. Provide clear, specific prompts to avoid Grok iterating multiple times on the same fix.
-6. **Skip Grok for trivial changes** — If a fix is a one-line color swap or text change, just do it in Composer directly. Don't invoke Grok for trivial work.
+4. **Avoid re-runs** — Get it right the first time. Provide clear, specific prompts to avoid Grok iterating multiple times on the same fix.
+5. **Skip Grok for trivial changes** — If a fix is a one-line color swap or text change, just do it in Composer directly. Don't invoke Grok for trivial work.
+
+> **Note:** Do NOT use Grok-fast for reviews or audits. Fast mode sacrifices reasoning depth for speed — exactly what you don't want when the task is catching subtle bugs and edge cases. Use full Grok (xhigh) for all Grok tasks. Save tokens through batching, context scoping, and skipping trivial work instead.
 
 ## Phased Plan (Sequential — Most Tasks Cannot Run in Parallel)
 
