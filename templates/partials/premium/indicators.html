@@ -6,13 +6,7 @@
   {% if ti_rows %}
   <div class="picks">
     {% for row in ti_rows[:6] %}
-    {% set sn = sn_list|selectattr('netuid', 'equalto', row.netuid)|first|default(sn_list|selectattr('id', 'equalto', row.netuid)|first) %}
-    {% set chg = (sn.price_change_24h|default(0))|float if sn else 0 %}
-    {% set spark_pts = [
-      (sn.price_change_30d|default(chg))|float if sn else chg,
-      (sn.price_change_7d|default(chg))|float if sn else chg,
-      chg, 0.0, chg * 0.5, chg * 0.8, chg, chg * 1.1, chg * 0.9, chg, chg * 1.05, chg
-    ] if sn else [] %}
+    {% set spark_pts = row.spark_closes if row.spark_closes is iterable and row.spark_closes is not string and row.spark_closes|length >= 2 else [] %}
     {% set os = row.oversold if row.oversold is mapping else {} %}
     {% set ob = row.overbought if row.overbought is mapping else {} %}
     {% set heat = (os.count|default(0))|int + (ob.count|default(0))|int %}
@@ -23,10 +17,12 @@
           <div class="pick-name">{{ row.name|default('SN' ~ row.netuid) }}</div>
           <div class="pick-meta">SN{{ row.netuid }}</div>
         </div>
-        {% if spark_pts|length > 2 %}
-        <div class="spark-wrap">
+        {% if spark_pts|length >= 2 %}
+        <div class="spark-wrap chart-canvas-wrap">
           <canvas class="spark" width="96" height="36" data-spark="{{ spark_pts|join(',') }}" aria-label="Price sparkline for {{ row.name|default('subnet') }}"></canvas>
         </div>
+        {% else %}
+        <div class="spark-empty" aria-hidden="true">—</div>
         {% endif %}
       </div>
       <div class="vol-cluster-row" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
