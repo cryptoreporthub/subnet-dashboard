@@ -1,7 +1,7 @@
 # Subnet Dashboard Master Plan
 
-**Last updated:** 2026-07-12T23:05:00Z  
-**main:** `5055a80`
+**Last updated:** 2026-07-13  
+**main:** `fbf0f27`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -10,7 +10,7 @@
 1. `cursor-agents-communication/board.md`
 2. `cursor-agents-communication/model-guide.md` — **Composer vs Grok per phase**
 3. `cursor-agents-communication/shared-workspace.md`
-4. `cursor-agents-communication/ditto-phase-l-handoff.md` — Ditto planning request
+4. `cursor-agents-communication/ditto-mno-handoff.md` — Ditto M/N/O planning request
 
 ## Phase Order
 1. **J** → Accuracy fix + tests
@@ -20,7 +20,7 @@
 
 > **H-thin** (PR #104) partial shell on `main`. **H-full** complete (PR #120). Optional lane (PR #125).
 
-## Completion Snapshot (`main` @ `5055a80`)
+## Completion Snapshot (`main` @ `fbf0f27`)
 | Phase | Status |
 |-------|--------|
 | J | ✅ merged (PR #105) |
@@ -29,7 +29,12 @@
 | H-full | ✅ merged (PR #120, hero #131) |
 | H-full optional lane | ✅ merged (PR #125) |
 | Model guide | ✅ merged (PR #122) |
-| **L** | ✅ merged (PR #115) |
+| **L** | ✅ merged (PR #115 + **#133**) |
+
+## Next (gated)
+- **M** Social ingestion — Agent A — Ditto plan + user approval
+- **N** Calibration / retrain — Agent A — Ditto plan + user approval
+- **O** TAO Signal Hub — Agent A — Ditto plan + user approval
 
 ## Model selection (Composer vs Grok)
 **Canonical:** `cursor-agents-communication/model-guide.md`
@@ -48,9 +53,13 @@ Phase L: Composer slices 1–2; **Grok design before** slices 3–4 (WebSocket, 
 
 ### K — done
 
-### L — merged (Agent B)
-- Real-time signals and alerts on `main` (PR #115).
-- Backend: `internal/signals/*`, alerts API, WebSocket, `build_signals_context()`.
+### L — complete (Agent B)
+- PR #115 (slice 1) + PR #133 (slices 2–4 hardening) on `main` @ `fbf0f27`.
+- Backend: `internal/signals/*`, alerts API, WebSocket, correlation, `build_signals_context()`.
+- Grok-fast sign-off PASS.
+
+### M/N/O — gated (Agent A)
+- Awaiting Ditto assignment plans — `cursor-agents-communication/ditto-mno-handoff.md`
 
 ## Sequencing Rules
 - No overlap: Agent A frontend vs Agent B backend paths.

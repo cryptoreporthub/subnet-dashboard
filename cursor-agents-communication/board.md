@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-12T23:05:00Z by Agent A (`-843d`) — post-merge coordination  
-**main:** `5055a80`
+**Last updated:** 2026-07-13T00:50:00Z by Agent B (`-e78a`) — Phase L complete, Ditto-ready  
+**main:** `fbf0f27` (PR #133 merged)
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -10,20 +10,18 @@
 1. **This file** — `cursor-agents-communication/board.md`
 2. **Model guide** — `cursor-agents-communication/model-guide.md` (Composer vs Grok)
 3. **Shared workspace** — `cursor-agents-communication/shared-workspace.md`
-4. **Ditto handoff** — `cursor-agents-communication/ditto-phase-l-handoff.md`
-5. **Master plan** — `master-plan-merged.md` + `docs/master-plan-merged.md` §9 (L)
+4. **Ditto handoff** — `cursor-agents-communication/ditto-mno-handoff.md`
+5. **Master plan** — `master-plan-merged.md` + `docs/master-plan-merged.md` §10–12 (M/N/O)
 
-## Post-merge coordination (Agent A) — **DONE**
+## ✅ Ready for Ditto
 
-| Task | PR | Merge commit | Status |
-|------|-----|--------------|--------|
-| Model guide | **#122** | `449b991` | ✅ merged (pre-task) |
-| L signals pipeline | **#115** | `dc8c611` | ✅ merged (pre-task; includes slices 1–4) |
-| H-full hero restore | **#131** | `5055a80` | ✅ merged (on current `main`) |
+| Agent | Status | Notes |
+|-------|--------|-------|
+| **Agent A** (`-843d`) | **Idle** | H-full + optional lane done; awaiting M/N/O plan |
+| **Agent B** (`-e78a`) | **Idle** | Phase L complete (#115 + #133); Grok-fast PASS |
+| **Ditto** | **Action needed** | Create M/N/O assignment plans — see `ditto-mno-handoff.md` |
 
-**Health verified @ `5055a80`:** `GET /health` → 200 OK · `GET /api/signals` → 200 success (128 signals)
-
-**Agent A:** idle — no open merge gates.
+**Health @ `fbf0f27`:** `GET /health` 200 · `GET /api/signals` 200 · `GET /api/alerts` 200
 
 ## Gate Status
 
@@ -32,29 +30,31 @@
 | **J** | ✅ merged | PR #105 |
 | **H-thin** | ✅ merged | PR #104 |
 | **K** | ✅ merged | PR #107 |
-| **H-full** | ✅ merged | PR #120 + hero restore #131 |
+| **H-full** | ✅ merged | PR #120 + hero #131 |
 | **H-full optional** | ✅ merged | PR #125 |
-| **Model guide** | ✅ merged | PR #122 — `cursor-agents-communication/model-guide.md` |
-| **L** | ✅ merged | PR #115 — signals, alerts, WebSocket, rules engine |
+| **Model guide** | ✅ merged | PR #122 |
+| **L** | ✅ merged | PR #115 + hardening **#133** @ `fbf0f27` |
+| **M** | 🔒 gated | User approval + Ditto plan |
+| **N** | 🔒 gated | User approval + Ditto plan |
+| **O** | 🔒 gated | User approval + Ditto plan |
 
-## Phase L — merged (Agent B)
+## Phase L — complete
 
-| Slice | Capability | Status |
-|-------|------------|--------|
-| 1 | `GET /api/signals`, `/api/signals/summary`, `data/signals.json` | ✅ |
-| 2 | `GET/POST /api/alerts`, filters, 201/400, idempotency | ✅ + hardening PR |
-| 3 | `/ws/signals` WebSocket | ✅ — design: `phase-l-slice3-ws-design.md` |
-| 4 | `rules.py` + `correlation.py` — SELL > HOT, dedup, composites | ✅ — design: `phase-l-slice4-rules-design.md` |
+| Slice | Capability | PR |
+|-------|------------|-----|
+| 1 | `GET /api/signals`, persistence | #115 |
+| 2 | Alerts API (filters, 201/400, idempotency) | #133 |
+| 3 | `/ws/signals` WebSocket | #133 |
+| 4 | `rules.py` + `correlation.py` | #133 |
 
-**Next:** M/N/O gated on user approval. Frontend signal consumers optional (Agent A, explicit task only).
+**Design docs:** `phase-l-slice3-ws-design.md`, `phase-l-slice4-rules-design.md`
 
 ## Rules
-- Stay scoped to assigned phase.
-- **Model guide:** merge/rebase/board → Composer; Grok only per §4–§5 triggers.
-- Honest-empty > fake data.
+- Grok-fast: design/audit/sign-off only; Composer implements
+- M/N/O: no agent work until Ditto plan + user approval
+- Honest-empty > fake data
 
 ## References
+- `cursor-agents-communication/ditto-mno-handoff.md`
 - `cursor-agents-communication/model-guide.md`
-- `cursor-agents-communication/phase-l-pr113-audit.md`
-- `cursor-agents-communication/phase-h-subnet-grouping-audit.md`
-- `docs/master-plan-merged.md` §9
+- `docs/master-plan-merged.md` §9–12
