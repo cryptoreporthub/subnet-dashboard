@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-12T23:05:00Z by Agent A (`-843d`) — post-merge coordination  
-**main:** `5055a80`
+**Last updated:** 2026-07-13T01:45:00Z by Agent A (`-843d`) — ready for Ditto next step  
+**main:** `28e7ccd`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -10,20 +10,24 @@
 1. **This file** — `cursor-agents-communication/board.md`
 2. **Model guide** — `cursor-agents-communication/model-guide.md` (Composer vs Grok)
 3. **Shared workspace** — `cursor-agents-communication/shared-workspace.md`
-4. **Ditto handoff** — `cursor-agents-communication/ditto-phase-l-handoff.md`
-5. **Master plan** — `master-plan-merged.md` + `docs/master-plan-merged.md` §9 (L)
+4. **Master plan** — `master-plan-merged.md` + `docs/master-plan-merged.md`
+5. **Phase designs** — `phase-m-design.md`, `phase-l-slice3-ws-design.md`, `phase-l-slice4-rules-design.md`
 
-## Post-merge coordination (Agent A) — **DONE**
+## Ready for Ditto
+**Agents idle — awaiting next assignment plans from Ditto.**
 
-| Task | PR | Merge commit | Status |
-|------|-----|--------------|--------|
-| Model guide | **#122** | `449b991` | ✅ merged (pre-task) |
-| L signals pipeline | **#115** | `dc8c611` | ✅ merged (pre-task; includes slices 1–4) |
-| H-full hero restore | **#131** | `5055a80` | ✅ merged (on current `main`) |
+Recent merges on `main` @ `28e7ccd` (all green CI):
 
-**Health verified @ `5055a80`:** `GET /health` → 200 OK · `GET /api/signals` → 200 success (128 signals)
+| PR | Phase | Summary |
+|----|-------|---------|
+| **#136** | **M** | Social ingestion — Telegram listener, dedup, `GET /api/message-intel`, Jinja context |
+| **#135** | L UI | Phase L signals/alerts wired in premium cockpit + `/ws/signals` client |
+| **#133** | L | Alerts hardening, correlation, Grok design docs |
+| **#131** | H-full | Hero market snapshot, SimiVision picks, daily pick |
+| **#115** | L | Signals pipeline, alerts API, WebSocket, rules engine |
+| **#122** | docs | Model guide (Composer vs Grok) |
 
-**Agent A:** idle — no open merge gates.
+**Health:** `GET /health` → 200 OK · `GET /api/signals` → 200 · `GET /api/message-intel` → 200 (honest-empty when no messages)
 
 ## Gate Status
 
@@ -32,29 +36,31 @@
 | **J** | ✅ merged | PR #105 |
 | **H-thin** | ✅ merged | PR #104 |
 | **K** | ✅ merged | PR #107 |
-| **H-full** | ✅ merged | PR #120 + hero restore #131 |
+| **H-full** | ✅ merged | PR #120 + #131 hero restore |
 | **H-full optional** | ✅ merged | PR #125 |
-| **Model guide** | ✅ merged | PR #122 — `cursor-agents-communication/model-guide.md` |
-| **L** | ✅ merged | PR #115 — signals, alerts, WebSocket, rules engine |
+| **Model guide** | ✅ merged | PR #122 |
+| **L** | ✅ merged | PR #115 + #133 hardening; UI #135 |
+| **M** | ✅ merged | PR #136 — design: `phase-m-design.md` |
+| **N** | ⏸ gated | Calibration / retrain — user approval |
+| **O** | ⏸ gated | TAO Signal Hub — user approval |
 
-## Phase L — merged (Agent B)
+## Agent posture
 
-| Slice | Capability | Status |
-|-------|------------|--------|
-| 1 | `GET /api/signals`, `/api/signals/summary`, `data/signals.json` | ✅ |
-| 2 | `GET/POST /api/alerts`, filters, 201/400, idempotency | ✅ + hardening PR |
-| 3 | `/ws/signals` WebSocket | ✅ — design: `phase-l-slice3-ws-design.md` |
-| 4 | `rules.py` + `correlation.py` — SELL > HOT, dedup, composites | ✅ — design: `phase-l-slice4-rules-design.md` |
+| Agent | Status | Owns |
+|-------|--------|------|
+| **A** (`-843d`) | **Idle** — ready for Ditto | `internal/message_intel/*`, learning/council, cockpit, Phase N |
+| **B** (`-e78a`) | **Idle** — ready for Ditto | `templates/*`, `static/*`, analytics/indicators/oracle |
 
-**Next:** M/N/O gated on user approval. Frontend signal consumers optional (Agent A, explicit task only).
+**Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
 
 ## Rules
-- Stay scoped to assigned phase.
-- **Model guide:** merge/rebase/board → Composer; Grok only per §4–§5 triggers.
+- Board + master plan + model guide override memory.
+- **Grok** only per `model-guide.md` §4–§5 (design before N/O; fast-xhigh default).
 - Honest-empty > fake data.
+- Auto-merge when CI green unless user says otherwise.
 
 ## References
-- `cursor-agents-communication/model-guide.md`
-- `cursor-agents-communication/phase-l-pr113-audit.md`
-- `cursor-agents-communication/phase-h-subnet-grouping-audit.md`
-- `docs/master-plan-merged.md` §9
+- `cursor-agents-communication/phase-m-design.md`
+- `cursor-agents-communication/phase-l-slice3-ws-design.md`
+- `cursor-agents-communication/phase-l-slice4-rules-design.md`
+- `docs/master-plan-merged.md` §10 (M), §11 (N), §12 (O)
