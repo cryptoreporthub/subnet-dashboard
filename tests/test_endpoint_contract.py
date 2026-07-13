@@ -139,6 +139,9 @@ CONTRACT = [
     ("GET", "/api/signals/summary", None),
     ("GET", "/api/alerts", None),
     ("POST", "/api/alerts", {"alert_type": "manual", "message": "contract", "severity": "info"}),
+    # Phase N calibration / retrain
+    ("GET", "/api/calibration/status", None),
+    ("POST", "/api/calibration/retrain", {"dry_run": True, "async": False}),
 ]
 
 
