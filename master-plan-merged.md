@@ -10,7 +10,8 @@
 1. `cursor-agents-communication/board.md`
 2. `cursor-agents-communication/model-guide.md` — **Composer vs Grok per phase**
 3. `cursor-agents-communication/shared-workspace.md`
-4. `cursor-agents-communication/ditto-phase-l-handoff.md` — Ditto planning request
+4. `cursor-agents-communication/ditto-phase-l-handoff.md` — Ditto planning request  
+5. **Optional:** `cursor-agents-communication/loop-engineering-adoption-plan.md` — agent ops + learning-loop health (not started)
 
 ## Phase Order
 1. **J** → Accuracy fix + tests
@@ -59,6 +60,17 @@ Phase L: Composer slices 1–2; **Grok design before** slices 3–4 (WebSocket, 
 ### N / O — gated
 - Awaiting user approval + Ditto assignment plans.
 
+### Optional — Loop-engineering ops (not a product phase)
+Borrow **operating patterns** from [loop-engineering](https://github.com/cobusgreyling/loop-engineering) — agent reliability + learning-loop health, **not** trading logic.
+
+| Slice | Owner | Scope |
+|-------|-------|--------|
+| **A** Agent ops | B | `LOOP.md`, loop-audit, failure modes, L1/L2/L3 in model-guide |
+| **B** Learning health | A | `/api/learning/health`, ledger drift check, cockpit strip |
+| **C** Scheduled ops | Both | Deferred |
+
+**Plan:** `cursor-agents-communication/loop-engineering-adoption-plan.md` — user approval before work starts.
+
 ## Sequencing Rules
 - No overlap: Agent A frontend vs Agent B backend paths.
 - L stable on `main` before M/N/O.
@@ -71,3 +83,4 @@ Phase L: Composer slices 1–2; **Grok design before** slices 3–4 (WebSocket, 
 - Full history: `docs/master-plan-merged.md`
 - UI spec: `docs/premium-dashboard-redesign.md`
 - Board: `cursor-agents-communication/board.md`
+- Optional ops adoption: `cursor-agents-communication/loop-engineering-adoption-plan.md`

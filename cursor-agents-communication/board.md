@@ -48,6 +48,14 @@ Recent merges on `main` @ `b1db31a` (CI green):
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
 
+## Optional backlog (user-approved)
+
+| Item | Doc | Owner |
+|------|-----|-------|
+| Loop-engineering ops slices A–B | `loop-engineering-adoption-plan.md` | A + B |
+
+Not started until user/Ditto assigns.
+
 ## Rules
 - Board + master plan override memory.
 - Honest-empty > fake data.
