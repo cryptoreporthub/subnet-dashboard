@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-13T20:14:00Z by Agent B (`-e78a`) — Phase 1 **C1 merged** (#154), **C2 merging** (#155)  
-**main:** `bba1f45` (post-C1) · **branch:** `cursor/c2-premium-partials-4e98`
+**Last updated:** 2026-07-13T20:23:00Z by Agent B (`-e78a`) — Phase 1 **complete** (C1 + C2 merged)  
+**main:** `aca286c`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -12,21 +12,23 @@
 3. **Master plan** — `docs/master-plan-merged.md`
 4. **Phase designs** — `phase-m-design.md`, `phase-n-design.md`, `phase-o-design.md`, L slice designs
 
-## Active — Phase 1 (UI structural splits)
+## Active — Phase 2 (Grok visual fixes)
 
 | Task | Agent | Status | Notes |
 |------|-------|--------|-------|
-| **C1** — split `style.css` → 6 files | B (`-e78a`) | ✅ **complete** | PR #154 |
-| **C2** — split `premium_cockpit.html` → partials | B (`-e78a`) | ✅ **complete** | 22 section partials in `templates/partials/premium/`; shared `{% set %}` kept in parent |
-| C3–C6 | — | blocked | after C2 merge + human review |
+| **Phase 1** C1 + C2 | B (`-e78a`) | ✅ **merged** | #154 CSS split · #155 cockpit partials |
+| **G1–G8** | Grok | ready | await human go-ahead per implementation guide |
+| C3–C6 | Composer | backlog | Phase 4/6 per guide |
 
 ## Ready for Ditto
-**Phases J–O merged. Phase 1 UI work started (C1).**
+**Phase 1 structural splits merged on `main`. Phase 2 Grok visual fixes next.**
 
-Recent merges on `main` @ `b1db31a` (CI green):
+Recent merges on `main` @ `aca286c` (CI green):
 
 | PR | Phase | Summary |
 |----|-------|---------|
+| **#155** | **Phase 1 C2** | Split `premium_cockpit.html` → 22 section partials |
+| **#154** | **Phase 1 C1** | Split `style.css` → 6 focused CSS files |
 | **#140** | **O** | TAO Signal Hub — `/api/signal-hub/*`, council overlay, L bridge |
 | **#138** | **N** | Calibration / retrain — `/api/calibration/*`, Retrain → Cert → Fire |
 | **#136** | **M** | Social ingestion — Telegram listener, `GET /api/message-intel` |
@@ -52,7 +54,7 @@ Recent merges on `main` @ `b1db31a` (CI green):
 | Agent | Status | Owns |
 |-------|--------|------|
 | **A** (`-843d`) | **Idle** | learning, council, calibration, signal_hub, message_intel, cockpit |
-| **B** (`-e78a`) | **Awaiting C2 review** | templates, static, analytics, indicators, oracle, whales |
+| **B** (`-e78a`) | **Idle** — Phase 2 ready | templates, static, analytics, indicators, oracle, whales |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
 
