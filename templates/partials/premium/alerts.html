@@ -1,0 +1,24 @@
+<!-- Phase L — Alerts -->
+<section class="row" id="section-alerts" aria-labelledby="alerts-title">
+  <div class="section-label">Alerts</div>
+  <h2 class="section-title" id="alerts-title">Threshold &amp; Signal Alerts</h2>
+  <p class="section-sub">Active breaches and signal-change notifications from <code>/api/alerts</code>.</p>
+  <div id="alerts-feed-root" class="picks" aria-live="polite">
+    {% if alert_list %}
+    {% for alert in alert_list[:12] %}
+    {% set sev = (alert.severity|default('info'))|string|lower %}
+    {% set badge = 'badge-sell' if sev == 'critical' else ('badge-hot' if sev == 'warning' else 'badge-watch') %}
+    <article class="pick-card card">
+      <div class="pick-meta">{{ alert.timestamp|default('') }}{% if alert.subnet_id %} · SN{{ alert.subnet_id }}{% endif %}</div>
+      <div class="pick-name">{{ alert.message|default(alert.alert_type|default('alert')) }}</div>
+      <div class="tags" style="margin-top:8px;">
+        <span class="badge {{ badge }}">{{ sev|upper }}</span>
+        <span class="badge badge-watch">{{ alert.alert_type|default('system') }}</span>
+      </div>
+    </article>
+    {% endfor %}
+    {% else %}
+    <div class="card card-muted"><p class="empty">No active alerts — threshold breaches and signal changes appear here when detected.</p></div>
+    {% endif %}
+  </div>
+</section>

@@ -1,0 +1,23 @@
+<!-- 6. Council -->
+<section class="row" id="section-council" aria-labelledby="council-title">
+  <div class="section-label">Council</div>
+  <h2 class="section-title" id="council-title">Expert Weights &amp; Dispositions</h2>
+  <p class="section-sub">Soul-map expert lanes — weights nudge on prediction resolution.</p>
+  {% if council_weights %}
+  <div class="council-grid">
+    {% for cw in council_weights %}
+    {% set w = (cw.weight|default(0))|float %}
+    {% set bias = (cw.bias|default('neutral'))|string|lower %}
+    <div class="expert card-soft card">
+      <div class="avatar">{{ (cw.expert|default('?'))[0]|upper }}</div>
+      <div class="name">{{ cw.expert|default('expert') }}</div>
+      <div class="w">{{ "%.3f"|format(w) }}</div>
+      <div class="wbar"><div class="wfill" style="width: {{ ([w / 2 * 100, 100]|min)|round }}%;"></div></div>
+      <span class="bias {% if bias in ['bullish', 'long', 'buy', 'pos'] %}pos{% elif bias in ['bearish', 'short', 'sell', 'neg'] %}neg{% else %}neu{% endif %}">{{ bias|upper }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">Council weights warming up — expert priors load from the soul map once the learning engine initializes.</p></div>
+  {% endif %}
+</section>

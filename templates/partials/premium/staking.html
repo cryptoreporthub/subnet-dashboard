@@ -1,0 +1,28 @@
+<!-- 3. Staking / Yield -->
+<section class="row" id="section-staking" aria-labelledby="staking-title">
+  <div class="section-label">Staking / Yield</div>
+  <h2 class="section-title" id="staking-title">Staking APY Leaders</h2>
+  <p class="section-sub">Top subnets by stake yield — ranked from live registry economics.</p>
+  {% set staking_rows = sn_list|sort(attribute='emission', reverse=true)|list %}
+  {% if degraded %}
+  <div class="card card-muted"><p class="empty">Loading staking APY leaders from live feed…</p></div>
+  {% elif staking_rows %}
+  <div class="mi-grid">
+    {% for sn in staking_rows[:8] %}
+    {% set apy_raw = sn.apy|default(none) %}
+    {% if apy_raw is none and sn.staking_data is mapping %}
+      {% set apy_raw = sn.staking_data.apy %}
+    {% endif %}
+    {% set apy_pct = ((apy_raw|default(0))|float * 100) %}
+    {% set stake = sn.staking_data.total_stake|default(0) if sn.staking_data is mapping else 0 %}
+    <div class="metric card">
+      <div class="lbl">{{ sn.name|default('SN' ~ (sn.netuid|default(sn.id))) }}</div>
+      <div class="val accent-bright">{{ "%.2f"|format(apy_pct) }}%</div>
+      <div class="sub">SN{{ sn.netuid|default(sn.id) }} · stake {{ stake|shorten if stake else '—' }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">Staking analytics warming up — APY cards appear once subnet registry and stake data load.</p></div>
+  {% endif %}
+</section>

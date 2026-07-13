@@ -1,0 +1,50 @@
+<!-- 1. Technical Indicators -->
+<section class="row" id="section-indicators" aria-labelledby="indicators-title">
+  <div class="section-label">Technical Indicators</div>
+  <h2 class="section-title" id="indicators-title">Oscillator Panel</h2>
+  <p class="section-sub">Sparkline momentum and heat-bar signal strength across top subnets.</p>
+  {% if ti_rows %}
+  <div class="picks">
+    {% for row in ti_rows[:6] %}
+    {% set sn = sn_list|selectattr('netuid', 'equalto', row.netuid)|first|default(sn_list|selectattr('id', 'equalto', row.netuid)|first) %}
+    {% set chg = (sn.price_change_24h|default(0))|float if sn else 0 %}
+    {% set spark_pts = [
+      (sn.price_change_30d|default(chg))|float if sn else chg,
+      (sn.price_change_7d|default(chg))|float if sn else chg,
+      chg, 0.0, chg * 0.5, chg * 0.8, chg, chg * 1.1, chg * 0.9, chg, chg * 1.05, chg
+    ] if sn else [] %}
+    {% set os = row.oversold if row.oversold is mapping else {} %}
+    {% set ob = row.overbought if row.overbought is mapping else {} %}
+    {% set heat = (os.count|default(0))|int + (ob.count|default(0))|int %}
+    {% set heat_pct = ((heat / (os.total|default(7)|int or 7)) * 100)|round %}
+    <div class="pick-card card">
+      <div class="ti-head">
+        <div>
+          <div class="pick-name">{{ row.name|default('SN' ~ row.netuid) }}</div>
+          <div class="pick-meta">SN{{ row.netuid }}</div>
+        </div>
+        {% if spark_pts|length > 2 %}
+        <div class="spark-wrap">
+          <canvas class="spark" width="96" height="36" data-spark="{{ spark_pts|join(',') }}" aria-label="Price sparkline for {{ row.name|default('subnet') }}"></canvas>
+        </div>
+        {% endif %}
+      </div>
+      <div class="vol-cluster-row" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+        <span class="vol-cluster-label">Signal heat</span>
+        <div class="vol-cluster-bar-wrap" style="flex:1;">
+          <div class="vol-cluster-bar vol-bar-{% if heat_pct > 66 %}high{% elif heat_pct > 33 %}core{% else %}low{% endif %}" style="width:{{ [heat_pct, 100]|min }}%;"></div>
+        </div>
+        <span class="vol-cluster-value">{{ heat_pct }}%</span>
+      </div>
+      <div class="tags" style="margin-top:8px;">
+        {% if os.convergent %}<span class="badge badge-buy">OVERSOLD {{ os.count|default(0) }}/{{ os.total|default(0) }}</span>{% endif %}
+        {% if ob.convergent %}<span class="badge badge-sell">OVERBOUGHT {{ ob.count|default(0) }}/{{ ob.total|default(0) }}</span>{% endif %}
+        {% if not os.convergent and not ob.convergent %}<span class="badge badge-watch">NEUTRAL</span>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card card-muted"><p class="empty">Technical indicators warming up — oscillator panel populates after price snapshots and candle history accumulate.</p></div>
+  {% endif %}
+</section>
