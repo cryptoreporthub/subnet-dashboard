@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-13T20:42:00Z by Agent B (`-e78a`) — Phase 2 **complete** (G1–G8, PR pending)  
-**main:** `026ed0e` · **branch:** `cursor/phase2-visual-fixes-4e98`
+**Last updated:** 2026-07-13T20:45:00Z by Agent B (`-e78a`) — Phase 2 **merged** (#157)  
+**main:** `d2a6dd7`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -12,21 +12,23 @@
 3. **Master plan** — `docs/master-plan-merged.md`
 4. **Phase designs** — `phase-m-design.md`, `phase-n-design.md`, `phase-o-design.md`, L slice designs
 
-## Active — Phase 2 (Grok visual fixes)
+## Active — Phase 3 (UX + backend)
 
 | Task | Agent | Status | Notes |
 |------|-------|--------|-------|
-| **Phase 1** C1 + C2 | B (`-e78a`) | ✅ **merged** | #154 CSS split · #155 cockpit partials |
-| **G1–G8** | B (`-e78a`) | ✅ **complete** | G1 canvas wraps · G2 mobile overflow · G5 muted contrast · G6 amber stake · G8 real sparklines |
-| **Phase 3** G3–G11 | — | ready | await human review before starting |
+| **Phase 1** C1 + C2 | B (`-e78a`) | ✅ **merged** | #154 · #155 |
+| **Phase 2** G1–G8 | B (`-e78a`) | ✅ **merged** PR #157 |
+| **G3–G11** | — | ready | await human go-ahead |
 | C3–C6 | Composer | backlog | Phase 4/6 per guide |
 
 ## Ready for Ditto
-**Phase 2 visual fixes complete — human review before Phase 3.**
+**Phase 2 merged on `main`. Phase 3 (G3–G11) next after human go-ahead.**
 
-Recent merges on `main` @ `aca286c` (CI green):
+Recent merges on `main` @ `d2a6dd7` (CI green):
 
 | PR | Phase | Summary |
+|----|-------|---------|
+| **#157** | **Phase 2** | G1/G2/G5/G6/G8 visual fixes — canvas wraps, contrast, sparklines |
 |----|-------|---------|
 | **#155** | **Phase 1 C2** | Split `premium_cockpit.html` → 22 section partials |
 | **#154** | **Phase 1 C1** | Split `style.css` → 6 focused CSS files |
@@ -55,7 +57,7 @@ Recent merges on `main` @ `aca286c` (CI green):
 | Agent | Status | Owns |
 |-------|--------|------|
 | **A** (`-843d`) | **Idle** | learning, council, calibration, signal_hub, message_intel, cockpit |
-| **B** (`-e78a`) | **Awaiting Phase 2 review** | templates, static, analytics, indicators, oracle, whales |
+| **B** (`-e78a`) | **Idle** — Phase 3 ready | templates, static, analytics, indicators, oracle, whales |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
 
