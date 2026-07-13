@@ -15,6 +15,9 @@ HOT_LABEL = "HOT"
 ALLOWED_SEVERITIES = frozenset({"info", "warning", "critical"})
 ALLOWED_THRESHOLD_OPS = frozenset({"gt", "lt", "gte", "lte", "eq"})
 ALERT_DEDUP_WINDOW_MINUTES = int(os.environ.get("ALERT_DEDUP_WINDOW_MINUTES", "5"))
+ALERT_COOLDOWN_MINUTES = int(
+    os.environ.get("ALERT_COOLDOWN_MINUTES", str(ALERT_DEDUP_WINDOW_MINUTES))
+)
 ALERT_MAX_PER_SUBNET_HOUR = int(os.environ.get("ALERT_MAX_PER_SUBNET_HOUR", "10"))
 
 

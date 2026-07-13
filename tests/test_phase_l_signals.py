@@ -110,6 +110,45 @@ def test_correlation_sell_crash():
     assert "composite_sell_crash" in types
 
 
+def test_correlation_expert_consensus_from_contributions():
+    signals = [
+        {
+            "subnet_id": 2,
+            "signal_type": "buy",
+            "expert_contributions": {
+                "quant": 0.75,
+                "hype": 0.8,
+                "dark_horse": 0.4,
+                "technical": 0.5,
+            },
+        }
+    ]
+    composites = evaluate_composites(signals, [])
+    types = {c["alert_type"] for c in composites}
+    assert "composite_expert_consensus_buy" in types
+
+
+def test_correlation_signal_flip_within_window():
+    history = {
+        3: [
+            {
+                "subnet_id": 3,
+                "signal_type": "buy",
+                "timestamp": "2026-07-12T10:00:00Z",
+            },
+            {
+                "subnet_id": 3,
+                "signal_type": "sell",
+                "timestamp": "2026-07-12T10:03:00Z",
+            },
+        ]
+    }
+    signals = [history[3][-1]]
+    composites = evaluate_composites(signals, [], history)
+    types = {c["alert_type"] for c in composites}
+    assert "composite_signal_flip" in types
+
+
 def test_store_append_dedupes_unchanged(temp_signal_store):
     store = temp_signal_store
     row = {
@@ -259,15 +298,39 @@ def test_ws_signals_lifecycle(client):
         assert "signals" in msg["data"]
         ws.send_text("ping")
         pong = ws.receive_json()
-        assert pong["type"] in ("pong", "signals")
-        ws.send_text("refresh")
-        types = set()
-        for _ in range(3):
-            refresh_msg = ws.receive_json()
-            types.add(refresh_msg["type"])
-            if "signals" in types:
-                break
-        assert "signals" in types
+        assert pong["type"] == "pong"
+
+
+def test_ws_refresh_broadcasts_signals(monkeypatch):
+    import asyncio
+
+    import internal.signals.routes as routes
+    from internal.signals.ws_hub import SignalBroadcastHub
+
+    captured = []
+
+    class FakeWebSocket:
+        async def send_text(self, text):
+            captured.append(text)
+
+    async def _fast_refresh():
+        hub = routes.get_signal_hub()
+        await hub.broadcast("signals", {"signals": [{"subnet_id": 1}], "meta": {"count": 1}})
+        return {"signals": [{"subnet_id": 1}], "meta": {"count": 1}}
+
+    monkeypatch.setattr(routes, "_refresh_and_broadcast", _fast_refresh)
+
+    async def run():
+        hub = SignalBroadcastHub()
+        routes.get_signal_hub = lambda: hub  # type: ignore[method-assign]
+        ws = FakeWebSocket()
+        await hub.connect(ws)  # type: ignore[arg-type]
+        await _fast_refresh()
+        assert captured
+        payload = __import__("json").loads(captured[0])
+        assert payload["type"] == "signals"
+
+    asyncio.run(run())
 
 
 def test_ws_hub_broadcast_prunes_dead_clients():

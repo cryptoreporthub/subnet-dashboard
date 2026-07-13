@@ -173,14 +173,11 @@ async def ws_signals(websocket: WebSocket):
         )
         while True:
             msg = await websocket.receive_text()
-            if msg.strip().lower() in ("refresh", "ping"):
-                result = await _refresh_and_broadcast()
-                await websocket.send_json(
-                    {
-                        "type": "signals",
-                        "data": {"signals": result.get("signals", []), "meta": result.get("meta")},
-                    }
-                )
+            cmd = msg.strip().lower()
+            if cmd == "ping":
+                await websocket.send_json({"type": "pong", "data": {}})
+            elif cmd == "refresh":
+                await _refresh_and_broadcast()
             else:
                 await websocket.send_json({"type": "pong", "data": {}})
     except WebSocketDisconnect:

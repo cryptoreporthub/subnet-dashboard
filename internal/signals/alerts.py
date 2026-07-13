@@ -165,11 +165,30 @@ class AlertEngine:
         return None
 
     def evaluate_correlation_alerts(self, signals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        from datetime import datetime, timedelta, timezone
+
         from internal.signals.correlation import evaluate_composites
+        from internal.signals.rules import ALERT_DEDUP_WINDOW_MINUTES
+        from internal.signals.store import SignalStore
 
         recent = self.load_alerts().get("alerts") or []
+        since = (
+            datetime.now(timezone.utc) - timedelta(minutes=ALERT_DEDUP_WINDOW_MINUTES)
+        ).isoformat().replace("+00:00", "Z")
+        store = SignalStore()
+        history_by_subnet: Dict[int, List[Dict[str, Any]]] = {}
+        for sig in signals:
+            sid = sig.get("subnet_id")
+            if sid is None:
+                continue
+            sid_int = int(sid)
+            if sid_int not in history_by_subnet:
+                history_by_subnet[sid_int] = store.query(
+                    subnet_id=sid_int, since=since, limit=50
+                )
+
         created: List[Dict[str, Any]] = []
-        for composite in evaluate_composites(signals, recent):
+        for composite in evaluate_composites(signals, recent, history_by_subnet):
             row = self._append_alert(composite)
             if row:
                 created.append(row)

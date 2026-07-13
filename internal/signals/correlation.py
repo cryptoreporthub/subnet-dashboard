@@ -5,24 +5,29 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional
 
+from internal.signals.rules import ALERT_DEDUP_WINDOW_MINUTES, _within_minutes
+
 PRICE_CRASH_PCT = float(os.environ.get("COMPOSITE_PRICE_CRASH_PCT", "15"))
 PRICE_SURGE_PCT = float(os.environ.get("COMPOSITE_PRICE_SURGE_PCT", "10"))
 CONSENSUS_MIN_CONFIDENCE = float(os.environ.get("COMPOSITE_CONSENSUS_CONF", "0.6"))
+CORE_EXPERTS = ("quant", "hype", "dark_horse", "technical")
 
 
 def evaluate_composites(
     signals: List[Dict[str, Any]],
     recent_alerts: Optional[List[Dict[str, Any]]] = None,
+    signal_history_by_subnet: Optional[Dict[int, List[Dict[str, Any]]]] = None,
 ) -> List[Dict[str, Any]]:
     """Return composite alert payloads (not yet persisted)."""
     recent_alerts = recent_alerts or []
+    signal_history_by_subnet = signal_history_by_subnet or {}
     composites: List[Dict[str, Any]] = []
-    by_subnet: Dict[int, List[Dict[str, Any]]] = {}
+    by_subnet: Dict[int, Dict[str, Any]] = {}
     for sig in signals:
         sid = sig.get("subnet_id")
         if sid is None:
             continue
-        by_subnet.setdefault(int(sid), []).append(sig)
+        by_subnet[int(sid)] = sig
 
     active_types = {
         str(a.get("alert_type"))
@@ -30,11 +35,7 @@ def evaluate_composites(
         if a.get("active", True)
     }
 
-    for sid, rows in by_subnet.items():
-        primary = _latest_row(rows)
-        if not primary:
-            continue
-
+    for sid, primary in by_subnet.items():
         hot = primary.get("hot") or {}
         sell = primary.get("sell") or {}
         pct = _float(primary.get("price_change_24h"))
@@ -62,12 +63,7 @@ def evaluate_composites(
                 )
             )
 
-        buy_experts = {
-            str(r.get("source_expert"))
-            for r in rows
-            if r.get("signal_type") == "buy"
-            and _float(r.get("confidence")) >= CONSENSUS_MIN_CONFIDENCE
-        }
+        buy_experts = _buy_consensus_experts(primary)
         if len(buy_experts) >= 2:
             composites.append(
                 _composite(
@@ -79,14 +75,15 @@ def evaluate_composites(
                 )
             )
 
-        if _signal_flipped_recently(rows):
+        history = signal_history_by_subnet.get(sid) or []
+        if _signal_flipped_recently(history, window_minutes=ALERT_DEDUP_WINDOW_MINUTES):
             composites.append(
                 _composite(
                     "signal_flip",
                     sid,
                     "warning",
-                    f"SN{sid} signal flipped within dedup window",
-                    {"subnet_id": sid, "signals": rows[-2:]},
+                    f"SN{sid} signal flipped within {ALERT_DEDUP_WINDOW_MINUTES}m window",
+                    {"subnet_id": sid, "signals": history[-2:]},
                 )
             )
 
@@ -102,6 +99,18 @@ def evaluate_composites(
         )
 
     return composites
+
+
+def _buy_consensus_experts(signal: Dict[str, Any]) -> set[str]:
+    """Experts with buy-leaning contribution scores on the latest snapshot."""
+    if str(signal.get("signal_type") or "") != "buy":
+        return set()
+    contribs = signal.get("expert_contributions") or {}
+    return {
+        name
+        for name in CORE_EXPERTS
+        if _float(contribs.get(name)) >= CONSENSUS_MIN_CONFIDENCE
+    }
 
 
 def _composite(
@@ -123,12 +132,6 @@ def _composite(
     }
 
 
-def _latest_row(rows: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    if not rows:
-        return None
-    return max(rows, key=lambda r: str(r.get("timestamp") or ""))
-
-
 def _float(value: Any) -> float:
     try:
         return float(value or 0)
@@ -136,13 +139,23 @@ def _float(value: Any) -> float:
         return 0.0
 
 
-def _signal_flipped_recently(rows: List[Dict[str, Any]]) -> bool:
+def _signal_flipped_recently(
+    rows: List[Dict[str, Any]],
+    *,
+    window_minutes: int = ALERT_DEDUP_WINDOW_MINUTES,
+) -> bool:
     if len(rows) < 2:
         return False
     ordered = sorted(rows, key=lambda r: str(r.get("timestamp") or ""))
-    prev_type = ordered[-2].get("signal_type")
-    curr_type = ordered[-1].get("signal_type")
+    prev_row = ordered[-2]
+    curr_row = ordered[-1]
+    prev_type = prev_row.get("signal_type")
+    curr_type = curr_row.get("signal_type")
     if prev_type == curr_type:
         return False
     flip_pairs = {("buy", "sell"), ("sell", "buy")}
-    return (prev_type, curr_type) in flip_pairs
+    if (prev_type, curr_type) not in flip_pairs:
+        return False
+    prev_ts = str(prev_row.get("timestamp") or "")
+    curr_ts = str(curr_row.get("timestamp") or "")
+    return bool(prev_ts and curr_ts and _within_minutes(prev_ts, curr_ts, window_minutes))

@@ -8,10 +8,12 @@
 | Model | Cursor slug | Best for |
 |-------|-------------|----------|
 | **Composer** | default Cloud Agent | Scoped implementation, multi-file edits, PR workflow, templates/routes/CI |
-| **Grok xhigh** | `grok-4.5-xhigh` | Deep reasoning, architecture, statistical correctness, cross-system debug |
-| **Grok fast-xhigh** | `grok-4.5-fast-xhigh` | Audits, second-opinion reviews, design spikes before Composer implements |
+| **Grok xhigh** | `grok-4.5-xhigh` | Deep architecture, Phase N pipeline — **use sparingly (high token cost)** |
+| **Grok fast-xhigh** | `grok-4.5-fast-xhigh` | **Default for Grok** — audits, sign-offs, design spikes; token-efficient |
 
 **Default:** Composer for both agents unless a trigger in §4 or §5 applies.
+
+**Grok token policy:** Prefer **`grok-4.5-fast-xhigh`** for all subagent sign-offs, audits, and design spikes. Escalate to `grok-4.5-xhigh` only when fast pass returns FAIL/CONDITIONAL with unresolved behavioral risk (Phase N, resolver bugs). Do **not** use full xhigh for routine L/M/O sign-offs.
 
 **Grok as reviewer:** Read-only pass — no edits unless findings require a follow-up Composer task. Save review conclusions to Ditto (`source: cursor-agents-communication`) or a PR comment.
 
@@ -150,8 +152,8 @@ Run these as **read-only Grok-fast-xhigh or Grok-xhigh** passes when touching re
 |-------|-------|---------------------------|
 | 1 — `GET /api/signals`, persistence | Composer ✅ done | Light — schema honesty |
 | 2 — `GET/POST /api/alerts` | Composer | Medium — idempotency, validation |
-| 3 — `/ws/signals` WebSocket | **Grok design → Composer build** | **High** — connection lifecycle, fan-out, reconnect |
-| 4 — rules engine / correlation | **Grok design → Composer build** | **High** — SELL > HOT, dedup, false-positive rate |
+| 3 — `/ws/signals` WebSocket | **Grok-fast design → Composer build** | **High** — connection lifecycle, fan-out, reconnect |
+| 4 — rules engine / correlation | **Grok-fast design → Composer build** | **High** — SELL > HOT, dedup, false-positive rate |
 | A triggers (whale/pump/indicator) | Composer | Low — bounded hooks |
 
 **Before B continues:** Grok-fast-xhigh audit **PR #113 vs #115** (read-only) to avoid duplicate work.
@@ -206,15 +208,21 @@ Switch the **active** Cloud Agent (or spawn a Grok subagent) when:
 ## 6. How to invoke Grok in Cursor
 
 ### Cloud Agent model picker
-Set model to `grok-4.5-xhigh` or `grok-4.5-fast-xhigh` for the run.
+Prefer **`grok-4.5-fast-xhigh`** when manually starting a Grok run (token-efficient). Use `grok-4.5-xhigh` only for high-risk architecture (Phase N, resolver).
 
-### Subagent (Task tool)
-```
-subagent_type: generalPurpose or debug
-model: grok-4.5-fast-xhigh   # audit / review
-model: grok-4.5-xhigh          # architecture / hard debug
-readonly: true                 # second-opinion reviews
-```
+### Agent auto-invokes Grok (no manual model switch required)
+
+When `model-guide.md` marks a step **Grok design first** or **Grok review before merge**, the active Composer agent spawns a **read-only Grok subagent** via the Task tool:
+
+| Task | Model | Why |
+|------|-------|-----|
+| Audits, sign-offs, slice 3–4 review | **`grok-4.5-fast-xhigh`** | Token-efficient; default |
+| Phase N retrain, resolver root-cause | `grok-4.5-xhigh` | Only if fast pass insufficient |
+
+User does not need to change the Cloud Agent model picker unless they want the entire run on Grok.
+
+**Workflow:** Grok-fast subagent audit → Composer implements → Grok-fast sign-off before merge.
+
 
 ### Review prompt template (paste into Grok run)
 ```text
