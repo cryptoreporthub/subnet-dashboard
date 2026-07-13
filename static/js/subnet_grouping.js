@@ -196,4 +196,6 @@
   } else {
     init();
   }
+
+  window.__refreshSubnetGroups = init;
 })();

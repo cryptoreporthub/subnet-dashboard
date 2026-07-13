@@ -34,7 +34,7 @@
 
   async function run() {
     try {
-      var resp = await fetch('/api/council');
+      var resp = await fetch('/api/subnets');
       if (!resp.ok) return;
       var data = await resp.json();
       var subnets = dedupe(data.subnets || []);
