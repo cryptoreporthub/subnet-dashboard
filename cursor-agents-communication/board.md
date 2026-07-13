@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-13T01:45:00Z by Agent A (`-843d`) — ready for Ditto next step  
-**main:** `28e7ccd`
+**Last updated:** 2026-07-13T02:30:00Z by Agent A (`-843d`) — Phase N in PR  
+**main:** `a758035`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -41,14 +41,14 @@ Recent merges on `main` @ `28e7ccd` (all green CI):
 | **Model guide** | ✅ merged | PR #122 |
 | **L** | ✅ merged | PR #115 + #133 hardening; UI #135 |
 | **M** | ✅ merged | PR #136 — design: `phase-m-design.md` |
-| **N** | ⏸ gated | Calibration / retrain — user approval |
+| **N** | 🟡 in PR | Calibration / retrain — `phase-n-design.md`, safety review |
 | **O** | ⏸ gated | TAO Signal Hub — user approval |
 
 ## Agent posture
 
 | Agent | Status | Owns |
 |-------|--------|------|
-| **A** (`-843d`) | **Idle** — ready for Ditto | `internal/message_intel/*`, learning/council, cockpit, Phase N |
+| **A** (`-843d`) | **Phase N** — calibration PR | `internal/calibration/*`, learning/council, cockpit, Phase N |
 | **B** (`-e78a`) | **Idle** — ready for Ditto | `templates/*`, `static/*`, analytics/indicators/oracle |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
@@ -61,6 +61,8 @@ Recent merges on `main` @ `28e7ccd` (all green CI):
 
 ## References
 - `cursor-agents-communication/phase-m-design.md`
+- `cursor-agents-communication/phase-n-design.md`
+- `cursor-agents-communication/phase-n-safety-review.md`
 - `cursor-agents-communication/phase-l-slice3-ws-design.md`
 - `cursor-agents-communication/phase-l-slice4-rules-design.md`
 - `docs/master-plan-merged.md` §10 (M), §11 (N), §12 (O)

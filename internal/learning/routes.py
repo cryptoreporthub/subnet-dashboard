@@ -460,3 +460,10 @@ try:
     learning_router.include_router(pump_tracker_router)
 except ImportError as _pump_tracker_exc:
     logger.warning("Pump-tracker routes unavailable: %s", _pump_tracker_exc)
+
+try:
+    from internal.calibration.routes import calibration_router
+
+    learning_router.include_router(calibration_router)
+except ImportError as _calibration_exc:
+    logger.warning("Calibration routes unavailable: %s", _calibration_exc)
