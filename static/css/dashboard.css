@@ -230,16 +230,16 @@
 /* STAKE badge — gold/yellow, used for yield-driven staking picks to
    distinguish them from price-driven BUY (green) picks. */
 .stake-badge {
-  color: #ff00ff;
-  background: rgba(255, 0, 255, 0.12);
-  border-color: rgba(255, 0, 255, 0.35);
-  text-shadow: 0 0 8px rgba(255, 0, 255, 0.35);
+  color: #f5b942;
+  background: rgba(245, 185, 66, 0.12);
+  border-color: rgba(245, 185, 66, 0.35);
+  text-shadow: 0 0 8px rgba(245, 185, 66, 0.35);
 }
 
 /* Gold accent text used for staking/yield figures and positive predictions
    surfaced alongside a STAKE badge. */
 .stake-color {
-  color: #ff00ff;
+  color: #f5b942;
   font-weight: 700;
 }
 
@@ -366,6 +366,19 @@
   width: 96px;
   height: 36px;
   flex-shrink: 0;
+}
+
+.spark-empty {
+  width: 96px;
+  height: 36px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-sm);
 }
 
 .spark {
