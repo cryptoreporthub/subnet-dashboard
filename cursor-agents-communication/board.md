@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-13T03:55:00Z by Agent A (`-843d`) — J→O complete  
-**main:** `b1db31a`
+**Last updated:** 2026-07-13T20:05:00Z by Agent B (`-e78a`) — Phase 1 **C1 complete** (awaiting human review)  
+**main:** `276cd19` · **branch:** `cursor/c1-css-split-4e98`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -12,8 +12,15 @@
 3. **Master plan** — `docs/master-plan-merged.md`
 4. **Phase designs** — `phase-m-design.md`, `phase-n-design.md`, `phase-o-design.md`, L slice designs
 
+## Active — Phase 1 (UI structural splits)
+
+| Task | Agent | Status | Notes |
+|------|-------|--------|-------|
+| **C1** — split `style.css` → 6 files | B (`-e78a`) | 🔄 **in progress** | `base`, `layout`, `dashboard`, `chat`, `premium`, `responsive` + template links |
+| C2–C6 | — | blocked | after C1 merge + human review |
+
 ## Ready for Ditto
-**All planned phases J–O merged. Agents A & B idle — send next assignment.**
+**Phases J–O merged. Phase 1 UI work started (C1).**
 
 Recent merges on `main` @ `b1db31a` (CI green):
 
@@ -44,7 +51,7 @@ Recent merges on `main` @ `b1db31a` (CI green):
 | Agent | Status | Owns |
 |-------|--------|------|
 | **A** (`-843d`) | **Idle** | learning, council, calibration, signal_hub, message_intel, cockpit |
-| **B** (`-e78a`) | **Idle** | templates, static, analytics, indicators, oracle, whales |
+| **B** (`-e78a`) | **C1** — CSS split | templates, static, analytics, indicators, oracle, whales |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
 
