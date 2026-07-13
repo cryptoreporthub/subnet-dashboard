@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-13T20:23:00Z by Agent B (`-e78a`) — Phase 1 **complete** (C1 + C2 merged)  
-**main:** `aca286c`
+**Last updated:** 2026-07-13T20:42:00Z by Agent B (`-e78a`) — Phase 2 **complete** (G1–G8, PR pending)  
+**main:** `026ed0e` · **branch:** `cursor/phase2-visual-fixes-4e98`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -17,11 +17,12 @@
 | Task | Agent | Status | Notes |
 |------|-------|--------|-------|
 | **Phase 1** C1 + C2 | B (`-e78a`) | ✅ **merged** | #154 CSS split · #155 cockpit partials |
-| **G1–G8** | Grok | ready | await human go-ahead per implementation guide |
+| **G1–G8** | B (`-e78a`) | ✅ **complete** | G1 canvas wraps · G2 mobile overflow · G5 muted contrast · G6 amber stake · G8 real sparklines |
+| **Phase 3** G3–G11 | — | ready | await human review before starting |
 | C3–C6 | Composer | backlog | Phase 4/6 per guide |
 
 ## Ready for Ditto
-**Phase 1 structural splits merged on `main`. Phase 2 Grok visual fixes next.**
+**Phase 2 visual fixes complete — human review before Phase 3.**
 
 Recent merges on `main` @ `aca286c` (CI green):
 
@@ -54,7 +55,7 @@ Recent merges on `main` @ `aca286c` (CI green):
 | Agent | Status | Owns |
 |-------|--------|------|
 | **A** (`-843d`) | **Idle** | learning, council, calibration, signal_hub, message_intel, cockpit |
-| **B** (`-e78a`) | **Idle** — Phase 2 ready | templates, static, analytics, indicators, oracle, whales |
+| **B** (`-e78a`) | **Awaiting Phase 2 review** | templates, static, analytics, indicators, oracle, whales |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
 
