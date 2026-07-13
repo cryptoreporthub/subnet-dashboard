@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-13T02:30:00Z by Agent A (`-843d`) — Phase N in PR  
-**main:** `a758035`
+**Last updated:** 2026-07-13T02:35:00Z by Agent A (`-843d`) — Phase N merged  
+**main:** `cc6de08`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -14,12 +14,13 @@
 5. **Phase designs** — `phase-m-design.md`, `phase-l-slice3-ws-design.md`, `phase-l-slice4-rules-design.md`
 
 ## Ready for Ditto
-**Agents idle — awaiting next assignment plans from Ditto.**
+**Agents idle — awaiting next assignment (Phase O or Ditto prompt).**
 
-Recent merges on `main` @ `28e7ccd` (all green CI):
+Recent merges on `main` @ `cc6de08` (all green CI):
 
 | PR | Phase | Summary |
 |----|-------|---------|
+| **#138** | **N** | Calibration / retrain — Retrain → Cert → Fire, `/api/calibration/*` |
 | **#136** | **M** | Social ingestion — Telegram listener, dedup, `GET /api/message-intel`, Jinja context |
 | **#135** | L UI | Phase L signals/alerts wired in premium cockpit + `/ws/signals` client |
 | **#133** | L | Alerts hardening, correlation, Grok design docs |
@@ -41,14 +42,14 @@ Recent merges on `main` @ `28e7ccd` (all green CI):
 | **Model guide** | ✅ merged | PR #122 |
 | **L** | ✅ merged | PR #115 + #133 hardening; UI #135 |
 | **M** | ✅ merged | PR #136 — design: `phase-m-design.md` |
-| **N** | 🟡 in PR | Calibration / retrain — `phase-n-design.md`, safety review |
+| **N** | ✅ merged | PR #138 — `phase-n-design.md`, safety review PASS |
 | **O** | ⏸ gated | TAO Signal Hub — user approval |
 
 ## Agent posture
 
 | Agent | Status | Owns |
 |-------|--------|------|
-| **A** (`-843d`) | **Phase N** — calibration PR | `internal/calibration/*`, learning/council, cockpit, Phase N |
+| **A** (`-843d`) | **Idle** — ready for Ditto | `internal/calibration/*`, learning/council, cockpit, Phase O |
 | **B** (`-e78a`) | **Idle** — ready for Ditto | `templates/*`, `static/*`, analytics/indicators/oracle |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
