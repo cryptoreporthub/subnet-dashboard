@@ -66,7 +66,7 @@ def sample_message():
 
 def test_save_and_retrieve_message(db, sample_message):
     """Verify a message can be saved to the database and retrieved."""
-    msg_id = db.save_message(sample_message)
+    msg_id, _ = db.save_message(sample_message)
     assert msg_id > 0
 
     retrieved = db.get_message(msg_id)
@@ -185,7 +185,7 @@ def test_price_snapshot_recorded(db):
     from message_intel.price_tracker import PriceTracker
 
     # Save a message first
-    msg_id = db.save_message({
+    msg_id, _ = db.save_message({
         "source": "telegram",
         "content": "Bullish on subnet 3",
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -211,7 +211,7 @@ def test_price_snapshot_recorded(db):
 def test_price_outcome_tracking(db):
     """Verify outcomes can be saved and retrieved."""
     # Save a message with a snapshot
-    msg_id = db.save_message({
+    msg_id, _ = db.save_message({
         "source": "telegram",
         "content": "Price prediction test",
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -255,7 +255,7 @@ def test_full_pipeline_integration(db, nlp):
     content = "Subnet 7 is massively bullish with 3.5 TAO emission and growing adoption!"
 
     # Save message
-    msg_id = db.save_message({
+    msg_id, _ = db.save_message({
         "source": "telegram",
         "content": content,
         "author_id": "999",
@@ -344,7 +344,7 @@ def test_pattern_discovery(db):
 
 def test_high_conviction_filter(db):
     """Verify filtering messages by conviction threshold works."""
-    msg_id = db.save_message({
+    msg_id, _ = db.save_message({
         "source": "telegram",
         "content": "Strong conviction signal",
         "timestamp": datetime.now(timezone.utc).isoformat(),

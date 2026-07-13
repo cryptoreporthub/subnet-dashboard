@@ -11,9 +11,13 @@ from message_intel.models import Database
 DB_PATH = os.environ.get("MESSAGE_INTEL_DB", "data/message_intel.db")
 
 
+def _resolve_db_path(db_path: Optional[str] = None) -> str:
+    return db_path or os.environ.get("MESSAGE_INTEL_DB", DB_PATH)
+
+
 @lru_cache(maxsize=1)
 def get_db(db_path: Optional[str] = None) -> Database:
-    return Database(db_path=db_path or DB_PATH)
+    return Database(db_path=_resolve_db_path(db_path))
 
 
 def reset_db_cache() -> None:

@@ -147,7 +147,19 @@ async def _lifespan(app: FastAPI):
         logger.info("Prediction resolver scheduler started")
     except Exception as exc:
         logger.warning("Prediction resolver scheduler failed to start: %s", exc)
+    try:
+        from internal.message_intel.listener_service import start_message_intel_listeners
+
+        start_message_intel_listeners()
+    except Exception as exc:
+        logger.warning("Message-intel listeners failed to start: %s", exc)
     yield
+    try:
+        from internal.message_intel.listener_service import stop_message_intel_listeners
+
+        stop_message_intel_listeners()
+    except Exception:
+        pass
     try:
         from internal.council.resolver_scheduler import stop_prediction_resolver_scheduler
 
@@ -312,6 +324,13 @@ async def index(request: Request):
     except Exception as exc:
         logger.warning("SimiVision context unavailable: %s", exc)
         context["simivision"] = {"top": [], "meta": {"count": 0}}
+
+    try:
+        from internal.message_intel.context import build_message_intel_context
+
+        context.update(build_message_intel_context())
+    except Exception as exc:
+        logger.warning("Message intel context unavailable: %s", exc)
 
     # Phase L — signals/alerts Jinja context (server.py glue only)
     try:
