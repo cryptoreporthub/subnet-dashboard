@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-13T21:02:00Z by Agent B (`-e78a`) — Phase 3 **G3+G4 in progress** (Grok design done)  
-**main:** `82bbde7` · **branch:** `cursor/phase3-g3-g4-4e98`
+**Last updated:** 2026-07-13T21:10:00Z by Agent B (`-e78a`) — Phase 3 G3+G4 **merging** (#159)  
+**main:** `9622bf8` · **branch:** `cursor/phase3-g3-g4-4e98`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -27,8 +27,8 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 | Task | Agent | Status | Notes |
 |------|-------|--------|-------|
 | **Phase 1–2** | B | ✅ **merged** | #154 · #155 · #157 |
-| **G3** caret UX | B | 🔄 **in progress** | `subnet_grouping.js` + responsive CSS |
-| **G4** inline → CSS | B | 🔄 **in progress** | premium partials |
+| **G3** caret UX | B | ✅ **complete** | Grok sign-off PASS |
+| **G4** inline → CSS | B | ✅ **complete** | Grok sign-off PASS |
 | **G9–G11** backend | — | backlog | parallel-safe after G3/G4 |
 | C3–C6 | Composer | backlog | Phase 4/6 |
 
