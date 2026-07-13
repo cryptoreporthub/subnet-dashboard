@@ -6,7 +6,7 @@
   var rootEl = document.getElementById('subnet-groups-root');
   if (!dataEl || !rootEl) return;
 
-  var STORAGE_PREFIX = 'subnet-group-open-';
+  var STORAGE_PREFIX = 'subnet-group-open-'; // persisted open state per netuid
 
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
@@ -148,6 +148,7 @@
     return (
       '<details class="subnet-group card" data-subnet-key="' + id + '"' + (open ? ' open' : '') + '>' +
       '<summary class="subnet-group-summary">' +
+      '<span class="subnet-group-caret" aria-hidden="true"></span>' +
       '<span class="pick-name">' + esc(name) + '</span>' +
       '<span class="pick-meta">SN' + id + '</span>' +
       '<span class="badge ' + badge + '">' + esc(status) + '</span>' +
