@@ -1,4 +1,5 @@
 {# Premium 13-section cockpit — style.css classes, honest-empty, zero markdown #}
+{% if degraded %}<script>document.documentElement.dataset.hydrate='1';</script>{% endif %}
 {% set sn_list = subnets if subnets is iterable and subnets is not string else [] %}
 {% set ti_rows = api_indicators_convergence.subnets if api_indicators_convergence is mapping and api_indicators_convergence.subnets else [] %}
 {% set hp = hour_picks if hour_picks else [] %}
@@ -707,6 +708,7 @@
   'trail': mindmap_trail[:20] if mindmap_trail else [],
   'predictions': predictions[:12] if predictions else []
 }|tojson }}</script>
+<script src="/static/js/cockpit_hydrate.js" defer></script>
 <script src="/static/js/subnet_grouping.js" defer></script>
 <script src="/static/js/premium_scanner.js" defer></script>
 <script src="/static/js/premium_judges.js" defer></script>
