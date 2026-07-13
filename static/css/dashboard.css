@@ -42,7 +42,7 @@
 }
 
 .card-glass {
-  background: rgba(8, 18, 12, 0.72);
+  background: rgba(8, 10, 18, 0.72);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
@@ -76,7 +76,7 @@
   position: relative;
   overflow: hidden;
   background:
-    linear-gradient(180deg, rgba(0, 255, 65, 0.04) 0%, transparent 40%),
+    linear-gradient(180deg, rgba(0, 240, 255, 0.04) 0%, transparent 40%),
     var(--bg-card);
   border: 1px solid var(--border-default);
   border-top: 2px solid var(--accent-bright);
@@ -166,7 +166,7 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.5px;
-  background: rgba(0, 255, 65, 0.08);
+  background: rgba(0, 240, 255, 0.08);
   border: 1px solid var(--border-default);
   color: var(--accent-bright);
 }
@@ -452,18 +452,31 @@
 }
 
 .kpi-cell {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  background:
+    linear-gradient(180deg, rgba(0, 240, 255, 0.06) 0%, transparent 55%),
+    var(--bg-surface);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: 0 0 0 1px rgba(0, 240, 255, 0.04) inset;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+
+.kpi-cell:hover {
+  border-color: var(--border-bright);
+  box-shadow: 0 0 20px rgba(0, 240, 255, 0.18), 0 0 32px rgba(180, 76, 255, 0.1);
+  transform: translateY(-1px);
 }
 
 .kpi-cell .k {
   font-family: var(--font-mono);
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
+  letter-spacing: 1px;
+  color: var(--accent-bright);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.25);
 }
 
 .kpi-cell .v {
@@ -588,7 +601,7 @@ table.tbl tr:last-child td {
 }
 
 table.tbl tr:hover td {
-  background: rgba(0, 255, 65, 0.04);
+  background: rgba(0, 240, 255, 0.04);
 }
 
 /* ---------- Technical indicators ---------- */
@@ -1038,7 +1051,7 @@ footer.status {
   min-height: 50px;
   padding: 8px 10px;
   border-radius: var(--radius-sm);
-  background: rgba(0, 255, 65, 0.08);
+  background: rgba(0, 240, 255, 0.08);
   border: 1px solid var(--border-default);
   color: var(--accent-bright);
   font-family: var(--font-mono);
@@ -1081,7 +1094,7 @@ footer.status {
 /* Color tiers by conviction level */
 .conv-ring.tier-red   { --ring-color: #ff3366; }
 .conv-ring.tier-gold  { --ring-color: #ff00ff; }
-.conv-ring.tier-lime  { --ring-color: #00ff41; }
+.conv-ring.tier-lime  { --ring-color: #39ff14; }
 .conv-ring.tier-cyan  { --ring-color: #00f0ff; }
 /* Pulse/glow when conviction > 80% */
 .conv-ring.tier-cyan .conv-ring-fg { filter: drop-shadow(0 0 5px rgba(34, 211, 238, 0.85)); }
