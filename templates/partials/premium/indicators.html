@@ -25,14 +25,14 @@
         <div class="spark-empty" aria-hidden="true">—</div>
         {% endif %}
       </div>
-      <div class="vol-cluster-row" style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+      <div class="ti-heat-row vol-cluster-row">
         <span class="vol-cluster-label">Signal heat</span>
-        <div class="vol-cluster-bar-wrap" style="flex:1;">
+        <div class="vol-cluster-bar-wrap">
           <div class="vol-cluster-bar vol-bar-{% if heat_pct > 66 %}high{% elif heat_pct > 33 %}core{% else %}low{% endif %}" style="width:{{ [heat_pct, 100]|min }}%;"></div>
         </div>
         <span class="vol-cluster-value">{{ heat_pct }}%</span>
       </div>
-      <div class="tags" style="margin-top:8px;">
+      <div class="tags tags-tight">
         {% if os.convergent %}<span class="badge badge-buy">OVERSOLD {{ os.count|default(0) }}/{{ os.total|default(0) }}</span>{% endif %}
         {% if ob.convergent %}<span class="badge badge-sell">OVERBOUGHT {{ ob.count|default(0) }}/{{ ob.total|default(0) }}</span>{% endif %}
         {% if not os.convergent and not ob.convergent %}<span class="badge badge-watch">NEUTRAL</span>{% endif %}

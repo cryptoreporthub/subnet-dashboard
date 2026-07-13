@@ -352,6 +352,27 @@ table.tbl td.mono { font-family: var(--font-mono); }
 .rsi-big.neg { color: var(--neg); }
 .rsi-big.neu { color: var(--neu); }
 
+.scanner-toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.scanner-search {
+  flex: 1;
+  min-width: 200px;
+  margin: 0;
+}
+
+.scanner-sort {
+  padding: 8px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: inherit;
+}
+
 /* ---------- Momentum grid ---------- */
 .momentum-grid {
   display: grid;

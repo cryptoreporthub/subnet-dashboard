@@ -14,9 +14,9 @@
       <button type="button" class="tab-btn" data-filter="at-risk">At Risk</button>
       <button type="button" class="tab-btn" data-filter="deprecated">Deprecated</button>
     </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
-      <input type="search" id="scanner-search" class="chat-input input" placeholder="Search name or ID…" aria-label="Search subnets" style="flex:1;min-width:200px;margin:0;">
-      <select id="scanner-sort" class="src-tag" aria-label="Sort subnets" style="padding:8px 12px;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:8px;color:inherit;">
+    <div class="scanner-toolbar">
+      <input type="search" id="scanner-search" class="chat-input input scanner-search" placeholder="Search name or ID…" aria-label="Search subnets">
+      <select id="scanner-sort" class="src-tag scanner-sort" aria-label="Sort subnets">
         <option value="id">Sort: ID</option>
         <option value="emission">Sort: Emission</option>
         <option value="apy">Sort: APY</option>

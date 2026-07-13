@@ -17,7 +17,7 @@
         <span class="soc-score {% if label == 'bullish' %}pos{% elif label == 'bearish' %}neg{% else %}neu{% endif %}">{{ label|upper }}</span>
       </div>
       <div class="pick-meta">SN{{ sn.netuid|default(sn.id) }} · {{ mentions }} mentions</div>
-      <div class="conviction-bar" style="margin-top:8px;"><div class="conviction-fill tier-lime" style="width: {{ (sent * 100)|round }}%;"></div></div>
+      <div class="conviction-bar mt-2"><div class="conviction-fill tier-lime" style="width: {{ (sent * 100)|round }}%;"></div></div>
     </div>
     {% endif %}
     {% endfor %}

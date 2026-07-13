@@ -11,7 +11,7 @@
     <article class="pick-card card">
       <div class="pick-meta">{{ alert.timestamp|default('') }}{% if alert.subnet_id %} · SN{{ alert.subnet_id }}{% endif %}</div>
       <div class="pick-name">{{ alert.message|default(alert.alert_type|default('alert')) }}</div>
-      <div class="tags" style="margin-top:8px;">
+      <div class="tags tags-tight">
         <span class="badge {{ badge }}">{{ sev|upper }}</span>
         <span class="badge badge-watch">{{ alert.alert_type|default('system') }}</span>
       </div>

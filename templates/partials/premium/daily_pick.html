@@ -9,7 +9,7 @@
   {% set act = (dpick.action|default('HOLD'))|string|upper %}
   {% set audit = dpick.audit if dpick.audit is mapping else {} %}
   <div class="hero-card">
-    <div class="pick-rank" style="font-size:24px;">★</div>
+    <div class="pick-rank pick-rank--hero">★</div>
     <div class="pick-name pick-name-lg hero-name">{{ dp_subnet.name|default('SN' ~ dp_subnet.netuid) }}</div>
     <div class="pick-meta hero-meta">SN{{ dp_subnet.netuid }}{% if dp_subnet.symbol %} · {{ dp_subnet.symbol }}{% endif %}</div>
     <div class="pick-row">
@@ -26,7 +26,7 @@
         <div class="conv-ring-val">{{ fc }}</div>
       </div>
     </div>
-    <div class="tags" style="margin-top:12px;">
+    <div class="tags">
       <span class="badge {% if act == 'BUY' %}badge-buy{% elif act == 'SELL' %}badge-sell{% else %}badge-hold{% endif %}">{{ act }}</span>
       {% if audit.approved is defined %}
         {% if audit.approved %}<span class="hero-audit">AUDIT PASSED</span>{% else %}<span class="hero-audit flagged">AUDIT FLAGGED</span>{% endif %}
@@ -38,7 +38,7 @@
     </ul>
     {% endif %}
     {% if dpick.reason %}
-    <div class="pred-line" style="margin-top:8px;">Note: {{ dpick.reason }}</div>
+    <div class="pred-line mt-2">Note: {{ dpick.reason }}</div>
     {% endif %}
   </div>
   {% else %}
