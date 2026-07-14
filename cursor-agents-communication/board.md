@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T05:03:00Z by Agent (`-6f98`) — **automated plan locked**; B6 next Build  
-**main:** `b3bf9d2`
+**Last updated:** 2026-07-14T05:20:00Z by Agent (`-5e45`) — **#183 merged**; B6 Build in progress  
+**main:** `deb8171`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -44,7 +44,7 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 | **B2** httpx + tenacity + aiocache | Cursor | ✅ **merged** | #179 — audit #4 |
 | **B4** prometheusrock metrics | Cursor | ✅ **merged** | #181 — audit #13 |
 | **B5** APY reconcile + candle gate | Cursor | ✅ **merged** | #182 |
-| **B6** slowapi rate-limit | Cursor | ⏳ **next Build** | see `automated-build-plan.md` |
+| **B6** slowapi rate-limit | Cursor | 🔄 **in progress** | `-5e45` Build |
 
 ## Active — Phase 4 (hydration scripts)
 
