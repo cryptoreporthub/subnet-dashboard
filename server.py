@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from internal.council.mindmap_bridge import MindmapBridge
+from internal.rate_limit import limit_or_noop, mount_rate_limit, strict_limit
 from internal.whales.routes import whales_router
 
 logger = logging.getLogger("server")
@@ -206,6 +207,8 @@ if _ENABLE_METRICS:
         app.add_route("/metrics", metrics_endpoint)
     except Exception as exc:
         logger.warning("Prometheus metrics unavailable: %s", exc)
+
+mount_rate_limit(app)
 
 app.include_router(whales_router)
 if _COUNCIL_ROUTES:
@@ -787,6 +790,7 @@ def get_recommendations():
 
 
 @app.post("/api/mindmap/feedback")
+@limit_or_noop(strict_limit(), override_defaults=True)
 async def post_feedback(request: Request):
     """Close the mindmap feedback path into learning + soul-map alignment logs."""
     try:
