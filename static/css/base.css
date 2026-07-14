@@ -1,5 +1,5 @@
 /* SimiVision / DEGEN PROTOCOL — base tokens, reset, typography */
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
   /* Backgrounds — deep obsidian */
@@ -65,7 +65,7 @@
   --shadow-bloom: 0 0 8px currentColor, 0 0 22px currentColor;
 
   /* Typography */
-  --font-display: 'Orbitron', system-ui, sans-serif;
+  --font-display: 'Rajdhani', system-ui, sans-serif;
   --font-body: 'Rajdhani', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 

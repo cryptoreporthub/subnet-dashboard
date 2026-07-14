@@ -197,26 +197,66 @@
   function renderDailyPick(payload) {
     if (!payload) return;
     var pick = payload.pick;
-    if (!pick) return;
+    var host = document.getElementById('council-stage-body');
+    if (!host) {
+      if (!pick) return;
+      /* fallback: legacy section empty replace */
+    }
+    if (!pick) {
+      if (host) {
+        host.innerHTML =
+          '<div class="council-call council-call--empty"><p class="empty">Council has not published today’s audited call yet. The stage stays empty until scoring and audit settle — no decorative pick.</p></div>';
+      }
+      return;
+    }
     var sn = pick.subnet || {};
     var finalConf = pick.final_confidence != null ? pick.final_confidence : payload.final_confidence;
     var fc = confTier(finalConf != null ? finalConf : pick.confidence || 0);
     var act = String(payload.action || pick.action || 'HOLD').toUpperCase();
     var audit = payload.audit || pick.audit || {};
+    var concerns = (audit.concerns || []).slice(0, 3);
     var html =
-      '<div class="hero-card">' +
-      '<div class="pick-rank" style="font-size:24px;">★</div>' +
-      '<div class="pick-name pick-name-lg hero-name">' + esc(sn.name || pickName(pick)) + '</div>' +
-      '<div class="pick-meta hero-meta">SN' + esc(sn.netuid || pickNetuid(pick)) + '</div>' +
-      '<div class="pick-row"><div class="conviction-wrap">' +
-      '<div class="conviction-lbl">Final Confidence</div>' +
-      '<div class="conviction-bar"><div class="conviction-fill ' + fc.tier + '" style="width:' + fc.conf + '%;"></div></div>' +
-      '<div class="pred-line">score <b>' + fmt(pick.score || payload.score, 1) + '</b></div></div>' +
-      '<div class="conv-ring ' + fc.tier + '" style="--ring-pct:' + fc.conf + ';"><div class="conv-ring-val">' + fc.conf + '</div></div></div>' +
-      '<div class="tags" style="margin-top:12px;"><span class="badge ' + recBadge(act) + '">' + esc(act) + '</span>' +
+      '<div class="council-call">' +
+      '<div class="council-call__action">' +
+      '<span class="badge ' + recBadge(act) + '">' + esc(act) + '</span>' +
       (audit.approved ? '<span class="hero-audit">AUDIT PASSED</span>' : '') +
-      '</div></div>';
-    replaceEmptyIn('section-daily-pick', html);
+      '</div>' +
+      '<p class="council-call__name">' + esc(sn.name || pickName(pick)) + '</p>' +
+      '<p class="council-call__meta">SN' + esc(sn.netuid != null ? sn.netuid : pickNetuid(pick)) + '</p>' +
+      '<p class="council-call__prediction">Predicted to move <strong class="accent-bright">with ' +
+      fc.conf +
+      '% confidence</strong> on the council horizon' +
+      (pick.score != null || payload.score != null
+        ? ' · score <b>' + fmt(pick.score != null ? pick.score : payload.score, 1) + '</b>'
+        : '') +
+      '</p>' +
+      '<div class="council-call__conviction">' +
+      '<div class="conviction-bar"><div class="conviction-fill ' +
+      fc.tier +
+      '" style="width:' +
+      fc.conf +
+      '%;"></div></div>' +
+      '<span class="council-call__conf ' +
+      fc.tier +
+      '">' +
+      fc.conf +
+      '</span></div>' +
+      (payload.reason || pick.reason
+        ? '<p class="council-call__note">' + esc(payload.reason || pick.reason) + '</p>'
+        : '') +
+      (concerns.length
+        ? '<ul class="council-call__concerns">' +
+          concerns.map(function (c) {
+            return '<li>' + esc(c) + '</li>';
+          }).join('') +
+          '</ul>'
+        : '') +
+      '</div>';
+    if (host) {
+      host.innerHTML = html;
+    } else {
+      replaceEmptyIn('section-daily-pick', html);
+    }
   }
 
   function renderPickCards(picks) {
