@@ -357,6 +357,19 @@ def test_c6_simivision_picks_template_uses_canonical_cutoffs():
     assert "conv > 40" not in src
 
 
+def test_c3_freshness_badge_has_aria_live():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert 'id="dataFreshnessBadge"' in html
+    assert 'data-freshness-badge' in html
+    assert 'aria-live="polite"' in html
+
+
+def test_c3_index_loads_200():
+    client = TestClient(app)
+    assert client.get("/").status_code == 200
+
+
 def test_c6_shared_conviction_thresholds_match_hydrate():
     tiers_src = open("static/js/conviction_tiers.js", encoding="utf-8").read()
     hydrate_src = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()

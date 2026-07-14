@@ -19,7 +19,7 @@
   --bg-cockpit-elevated: #0d1117;
   --txt: #e6f1ff;
   --txt-2: #8b9bb4;
-  --txt-3: #1a1f2e;
+  --txt-3: #7c8a9e; /* WCAG AA on cockpit surfaces (was #1a1f2e) */
   --emerald-bright: #00ff41;
   --emerald-dim: rgba(0, 255, 65, 0.10);
   --neg: #ff4d5e;

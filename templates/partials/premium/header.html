@@ -9,7 +9,7 @@
     </div>
     <div class="src-tag">
       DATA SOURCE: <b>{{ data_source|default('cache')|upper }}</b>
-      <span class="data-freshness-badge data-freshness-warming" id="dataFreshnessBadge">Chain feed: loading…</span>
+      <span class="data-freshness-badge data-freshness-warming" id="dataFreshnessBadge" role="status" aria-live="polite" aria-atomic="true">Chain feed: loading…</span>
     </div>
     <div class="header-actions">
       <span class="live-pill"><span class="live-dot" aria-hidden="true"></span>LIVE</span>
