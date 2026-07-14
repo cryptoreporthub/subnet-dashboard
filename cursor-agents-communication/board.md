@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T20:30:00Z by Agent (`-5e45`) — call-reasons signal-impact in flight  
-**main:** `1313bb9`
+**Last updated:** 2026-07-14T20:35:00Z by Agent (`-5e45`) — **#207 merged**; idle  
+**main:** `ab44d14`
 
 ## Ditto boot (read first)
 
@@ -70,14 +70,15 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 
 ## Ready for next work
 
-**In flight:** richer call reasons from scored `signal_impact` (`cursor/call-reasons-signal-impact-5e45`) — lead with directional live signal lines + impact-scaled edge; prediction expert/source from signal impact.
+**Idle — monitor only.** Call content lane complete (#201–#207). New work only when human/board explicitly queues it.
 
-**Automated queue:** COMPLETE — B6 #185 · C4–C6 · C1–C3 · G7+G12 · #198–#202 · #204–#206. **A2:** `smoke` required check verified on `main`.
+**Automated queue:** COMPLETE — B6 #185 · C4–C6 · C1–C3 · G7+G12 · #198–#202 · #204–#207. **A2:** `smoke` required check verified on `main`.
 
-Recent merges on `main` @ `1313bb9`:
+Recent merges on `main` @ `ab44d14`:
 
 | PR | Phase | Summary |
 |----|-------|---------|
+| **#207** | Council | Call reasons lead with live signal-impact edges; prediction expert/source from impact |
 | **#206** | Board | STATUS sync after #204 + #205 |
 | **#205** | Council | Cold-start confidence prior 0.62 + buy/sell volume completeness (45% gate unchanged) |
 | **#204** | Learning | Impact dial through full loop; hour picks recorded; trail on dial change |
@@ -104,7 +105,7 @@ Recent merges on `main` @ `1313bb9`:
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **Cursor** | **Active** | Call reasons from live signal impact |
+| **Cursor** | **Idle** | #201–#207 on main; new work only when explicitly queued |
 | **Ditto** | **Monitor** | Read-only — CI, Fly health, `/api/data-freshness` |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
