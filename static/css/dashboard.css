@@ -1150,12 +1150,12 @@ footer.status {
   display: inline-flex; align-items: center; gap: 5px;
   font-family: var(--font-mono); font-size: 10px;
   padding: 3px 8px; border-radius: 10px;
-  background: rgba(245, 185, 66, 0.12);
-  border: 1px solid rgba(245, 185, 66, 0.4);
-  color: #ff00ff; text-transform: uppercase; letter-spacing: 0.5px;
+  background: rgba(255, 179, 0, 0.1);
+  border: 1px solid rgba(255, 179, 0, 0.45);
+  color: var(--signal-amber); text-transform: uppercase; letter-spacing: 0.5px;
 }
 .badge-audit-pending .ap-dot {
-  width: 6px; height: 6px; border-radius: 50%; background: #ff00ff;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--signal-amber);
   animation: council-pulse 1.6s ease-in-out infinite;
 }
 
