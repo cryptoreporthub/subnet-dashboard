@@ -7,11 +7,12 @@
 - `cryptoreporthub/subnet-dashboard`
 
 ## Read order (agents + Ditto)
-1. **This file** — `cursor-agents-communication/board.md`
-2. **Model guide** — `cursor-agents-communication/model-guide.md`
-3. **Implementation guide** — `docs/cursor-implementation-guide.md` (Grok token rules)
-4. **Phase 3 Grok spec** — `cursor-agents-communication/phase-3-grok-design.md`
-5. **Phase 3 backend spec** — `cursor-agents-communication/phase-3-grok-backend-design.md`
+1. **Handoff** — `cursor-agents-communication/cursor-handoff-2026-07-14.md` (Ditto → Cursor full ownership)
+2. **This file** — `cursor-agents-communication/board.md`
+3. **Model guide** — `cursor-agents-communication/model-guide.md`
+4. **Implementation guide** — `docs/cursor-implementation-guide.md` (Grok token rules)
+5. **Phase 3 Grok spec** — `cursor-agents-communication/phase-3-grok-design.md`
+6. **Phase 3 backend spec** — `cursor-agents-communication/phase-3-grok-backend-design.md`
 
 ## Grok switches (required)
 

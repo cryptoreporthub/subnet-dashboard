@@ -43,7 +43,10 @@
 ## Status
 - [x] Audit written (EXTREME_AUDIT.md, GITHUB_TOOLING.md)
 - [x] Plan written (this file)
-- [x] A1 cruft deletion — PR #165 (review-ready)
-- [x] A3/A4 prompts handed off — PR #166 (CURSOR_PROMPTS.md)
-- [ ] A2 — pending (settings toggle + Cursor smoke-body fix)
-- [ ] Phase B/C — pending
+- [x] A1 cruft deletion — merged #170
+- [x] A3/A4 — merged #168
+- [x] A2 smoke body — merged #172 (+ timeout-minutes on smoke job)
+- [x] B1 live feed — merged #174
+- [ ] A2 branch-protection toggle — manual GitHub Settings (see cursor-handoff-2026-07-14.md)
+- [ ] B1 UI freshness badge — Cursor next
+- [ ] B2–B6, Phase C — pending
