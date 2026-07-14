@@ -52,57 +52,32 @@
     }
   });
 
-  // ---------- Sparklines (Chart.js mini line) ----------
+  // ---------- Sparklines (uPlot — see uplot_charts.js) ----------
+  window.__paintSparks = window.__paintSparks || function () {};
+
+  // ---------- Radar chart (Chart.js lazy-loaded when data-radar present) ----------
+  var chartJsPromise = null;
+
+  function loadChartJs() {
+    if (typeof Chart !== 'undefined') return Promise.resolve();
+    if (!chartJsPromise) {
+      chartJsPromise = new Promise(function (resolve, reject) {
+        var s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js';
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    return chartJsPromise;
+  }
+
   function destroyChart(canvas) {
     if (typeof Chart === 'undefined' || !canvas) return;
     var existing = Chart.getChart(canvas);
     if (existing) existing.destroy();
   }
 
-  function drawSpark(canvas) {
-    var raw = canvas.getAttribute('data-spark');
-    if (!raw) return;
-    var pts = raw.split(',').map(Number).filter(function (n) { return !isNaN(n); });
-    if (pts.length < 2) return;
-    if (typeof Chart === 'undefined') return;
-    var up = pts[pts.length - 1] >= pts[0];
-    var col = up ? '#34d399' : '#f43f5e';
-    var ctx = canvas.getContext('2d');
-    destroyChart(canvas);
-    var grad = ctx.createLinearGradient(0, 0, 0, canvas.height || 36);
-    grad.addColorStop(0, up ? 'rgba(52,211,153,0.25)' : 'rgba(244,63,94,0.25)');
-    grad.addColorStop(1, up ? 'rgba(52,211,153,0.0)' : 'rgba(244,63,94,0.0)');
-
-    new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: pts.map(function (_, i) { return i; }),
-        datasets: [{
-          data: pts,
-          borderColor: col,
-          backgroundColor: grad,
-          fill: true,
-          tension: 0.4,
-          pointRadius: 0,
-          borderWidth: 1.6
-        }]
-      },
-      options: {
-        responsive: false,
-        maintainAspectRatio: false,
-        animation: false,
-        plugins: { legend: { display: false }, tooltip: { enabled: false } },
-        scales: { x: { display: false }, y: { display: false } },
-        elements: { line: { borderCapStyle: 'round', borderJoinStyle: 'round' } }
-      }
-    });
-  }
-
-  function paintSparks() {
-    document.querySelectorAll('canvas.spark').forEach(drawSpark);
-  }
-
-  // ---------- Radar chart (optional momentum context) ----------
   function hexToRgba(hex, a) {
     var h = (hex || '').replace('#', '');
     if (h.length === 3) { h = h.split('').map(function (c) { return c + c; }).join(''); }
@@ -112,7 +87,7 @@
     return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
   }
 
-  function paintRadar() {
+  function drawRadar() {
     var radarCanvas = document.getElementById('radarChart');
     if (!radarCanvas || typeof Chart === 'undefined') return;
     var raw = radarCanvas.getAttribute('data-radar');
@@ -160,9 +135,17 @@
     } catch (e) { console.error('Radar chart error', e); }
   }
 
-  window.__paintSparks = paintSparks;
+  function paintRadar() {
+    var radarCanvas = document.getElementById('radarChart');
+    if (!radarCanvas) return;
+    if (!radarCanvas.getAttribute('data-radar')) return;
+    loadChartJs().then(drawRadar).catch(function (e) {
+      console.error('Chart.js load failed', e);
+    });
+  }
+
   window.__paintRadar = paintRadar;
-  paintSparks();
+  window.__paintSparks();
   paintRadar();
 
   // ---------- Chat ----------
