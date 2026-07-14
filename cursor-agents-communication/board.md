@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T21:45:00Z by Agent (`-6f98`) — **completion queue** (#215 canvas radar)  
-**main:** `30c4141`
+**Last updated:** 2026-07-14T21:50:00Z by Agent (`-6f98`) — **EXTREME audit COMPLETE**  
+**main:** `f267dd4`
 
 ## Ditto boot (read first)
 
@@ -70,17 +70,16 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 
 ## Ready for next work
 
-**In flight:** #215 — remove Chart.js radar CDN; canvas radar in `uplot_charts.js` (audit #10 completion).
+**Idle — monitor only.** EXTREME audit COMPLETE (#215 canvas radar merged).
 
-**EXTREME audit:** ✅ **COMPLETE** — all 16 findings addressed (#215 closes #10 radar deferral).
+**Automated queue:** COMPLETE — B6–C3 · G7+G12 · #198–#215. **A2:** `smoke` required on `main`.
 
-**Automated queue:** COMPLETE — B6–C3 · G7+G12 · #198–#214. **A2:** `smoke` required on `main`.
-
-Recent merges on `main` @ `30c4141`:
+Recent merges on `main` @ `f267dd4`:
 
 | PR | Phase | Summary |
 |----|-------|---------|
-| **#214** | Board | Call-quality lane complete (#201–#213) |
+| **#215** | UI | Canvas radar replaces Chart.js CDN (audit #10) |
+| **#214** | Board | Call-quality lane complete |
 | **#213** | Council | Priced scoring + SimiVision call lines |
 | **#212** | Data | Lazy OHLCV fill + audit #15/#16 polish |
 | **#211** | Board | STATUS sync after #210 |
@@ -106,7 +105,7 @@ Recent merges on `main` @ `30c4141`:
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **Cursor** | **Active** | #215 canvas radar — final audit #10 item |
+| **Cursor** | **Idle** | EXTREME audit complete; monitor only |
 | **Ditto** | **Monitor** | Read-only — CI, Fly health, `/api/data-freshness` |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
