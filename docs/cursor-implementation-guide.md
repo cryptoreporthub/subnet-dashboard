@@ -25,7 +25,7 @@ Grok at xhigh reasoning burns tokens fast. Follow these rules to avoid waste:
 ### Phase 1: Composer — Structural Splits
 **C1: Split `static/css/style.css` into 6 focused files**
 - `base.css`, `layout.css`, `dashboard.css`, `premium.css`, `chat.css`, `responsive.css`
-- Update all template `<link>` tags accordingly
+- Update all template tags accordingly
 - Nothing else may touch `style.css` during this phase
 
 **C2: Split `premium_cockpit.html` into 16 partials**
@@ -88,12 +88,17 @@ Ditto Code handles these in a separate PR:
 - Delete 35 junk files + 15 diagnostic workflows
 - Fix XSS in chat (`innerHTML` → `textContent`)
 - Pin `requirements.txt` versions
-- Fix `X-Frame-Options` invalid value
 - Remove `pandas` if unused
 - Fix undervalued score "DEEP VALUE" logic
 - Fix `loading.html`, remove `.bak` files
 - Remove `--text-muted` if Ditto's fix supersedes G5
 - Add favicon (if not done by G12)
 - Fix APY/confidence double-multiply (if not done by C5/C6)
+
+> **Updated 2026-07-13 (Phase A handoff — see `docs/IMPLEMENTATION_PLAN.md`):**
+> Audit **#11 (`X-Frame-Options` + CORS)** is now **Cursor-owned (A3)**, NOT Ditto.
+> Reason: Ditto's GitHub file tools cannot rewrite `server.py` (it exceeds the read limit), so
+> the `add_cors_headers` middleware fix must be done by Cursor. Implement it per
+> `docs/CURSOR_PROMPTS.md` A3. Do not wait on Ditto for this item.
 
 Coordinate via board to avoid duplicate work on overlapping items.
