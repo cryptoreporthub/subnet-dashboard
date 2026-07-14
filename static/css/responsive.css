@@ -44,9 +44,9 @@
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 1px;
-  color: var(--accent-bright, #00f0ff);
+  color: var(--accent-bright, #00ff41);
   padding: 2px 7px;
-  border: 1px solid var(--accent-bright, #00f0ff);
+  border: 1px solid var(--accent-bright, #00ff41);
   border-radius: 4px;
 }
 
@@ -79,7 +79,7 @@
 }
 
 .nav-links a:hover {
-  color: var(--accent-bright, #00f0ff);
+  color: var(--accent-bright, #00ff41);
   background: var(--accent-dim, rgba(0, 212, 170, 0.08));
 }
 
@@ -189,7 +189,7 @@ header.top {
 
 .vol-bar-high { background: linear-gradient(90deg, #ff3366, #ff6699); }
 .vol-bar-core { background: linear-gradient(90deg, #ff0099, #ff00ff); }
-.vol-bar-low  { background: linear-gradient(90deg, #39ff14, #00f0ff); }
+.vol-bar-low  { background: linear-gradient(90deg, #39ff14, #00ff41); }
 
 .vol-cluster-value {
   font-size: 11px;
@@ -262,7 +262,7 @@ header.top {
   background: rgba(255,255,255,0.06);
   padding: 1px 5px;
   border-radius: 3px;
-  color: var(--accent-bright, #00f0ff);
+  color: var(--accent-bright, #00ff41);
 }
 
 .vol-explain-formula div { margin-bottom: 3px; }
@@ -409,7 +409,7 @@ header.top {
 }
 
 .subnet-group {
-  border: 1px solid var(--cockpit-green-line, rgba(0, 240, 255, 0.22));
+  border: 1px solid var(--cockpit-green-line, rgba(0, 255, 65, 0.22));
   border-radius: 12px;
   overflow: hidden;
 }
@@ -433,7 +433,7 @@ header.top {
   flex-shrink: 0;
   font-size: 0.75rem;
   line-height: 1;
-  color: var(--cockpit-green, #00f0ff);
+  color: var(--cockpit-green, #00ff41);
   transition: transform 0.15s ease;
 }
 
@@ -446,7 +446,7 @@ header.top {
 }
 
 .subnet-group-summary:focus-visible {
-  outline: 2px solid var(--accent-primary, #00f0ff);
+  outline: 2px solid var(--accent-primary, #00ff41);
   outline-offset: 2px;
 }
 
@@ -477,7 +477,7 @@ header.top {
 .subnet-group-item-label {
   flex: 0 0 100px;
   font-weight: 600;
-  color: var(--cockpit-green, #00f0ff);
+  color: var(--cockpit-green, #00ff41);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;

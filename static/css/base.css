@@ -10,34 +10,39 @@
   --bg-elevated: rgba(14, 16, 24, 0.78);
   --bg-header: rgba(0, 0, 0, 0.72);
 
-  /* Accents — cyan primary, magenta secondary, purple depth */
-  --accent-primary: #00f0ff;
-  --accent-bright: #67f6ff;
+  /* Accents — green primary, blue logo, pink outlines, orange highlights */
+  --accent-primary: #00ff41;
+  --accent-bright: #5cff7a;
+  --accent-blue: #00c8ff;
   --accent-secondary: #ff2bd6;
   --accent-magenta: #ff2bd6;
-  --accent-purple: #b44cff;
-  --accent-dim: rgba(0, 240, 255, 0.12);
-  --accent-glow: rgba(0, 240, 255, 0.35);
+  --accent-orange: #ff7a1a;
+  --accent-purple: #9b59ff;
+  --accent-dim: rgba(0, 255, 65, 0.12);
+  --accent-glow: rgba(0, 255, 65, 0.35);
+  --accent-glow-blue: rgba(0, 200, 255, 0.35);
   --accent-glow-magenta: rgba(255, 43, 214, 0.45);
-  --accent-glow-purple: rgba(180, 76, 255, 0.28);
+  --accent-glow-orange: rgba(255, 122, 26, 0.4);
+  --accent-glow-purple: rgba(155, 89, 255, 0.22);
 
   /* Signals */
   --signal-buy: #39ff14;
   --signal-sell: #ff1744;
   --signal-hold: #ff2bd6;
-  --signal-watch: #ffb300;
-  --signal-amber: #ffb300;
+  --signal-watch: var(--accent-orange);
+  --signal-amber: var(--accent-orange);
 
   /* Text */
   --text-primary: #e8f7ff;
   --text-secondary: #8aa0b8;
   --text-muted: #6b7f96;
 
-  /* Borders — thin neon lines */
-  --border-subtle: rgba(0, 240, 255, 0.12);
-  --border-default: rgba(0, 240, 255, 0.22);
-  --border-bright: rgba(0, 240, 255, 0.55);
-  --border-magenta: rgba(255, 43, 214, 0.45);
+  /* Borders — green chrome, pink for hero sections */
+  --border-subtle: rgba(0, 255, 65, 0.12);
+  --border-default: rgba(0, 255, 65, 0.22);
+  --border-bright: rgba(0, 255, 65, 0.55);
+  --border-magenta: rgba(255, 43, 214, 0.55);
+  --border-important: rgba(255, 43, 214, 0.65);
 
   /* Radius */
   --radius-sm: 8px;
@@ -46,7 +51,8 @@
   --radius-pill: 9999px;
 
   /* Shadows / bloom */
-  --shadow-card: 0 8px 28px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(0, 240, 255, 0.06) inset;
+  --shadow-card: 0 8px 28px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(0, 255, 65, 0.06) inset;
+  --shadow-important: 0 0 24px rgba(255, 43, 214, 0.18), 0 0 48px rgba(255, 43, 214, 0.08);
   --shadow-elevated: 0 14px 48px rgba(0, 0, 0, 0.85);
   --shadow-glow: 0 0 18px var(--accent-glow), 0 0 40px var(--accent-glow-purple);
   --shadow-glow-magenta: 0 0 16px var(--accent-glow-magenta), 0 0 36px rgba(255, 43, 214, 0.2);
@@ -85,16 +91,17 @@ body {
   -webkit-font-smoothing: antialiased;
   background-color: var(--bg-base);
   background-image:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(180, 76, 255, 0.18) 0%, transparent 55%),
-    radial-gradient(circle at 85% 15%, rgba(255, 43, 214, 0.10) 0%, transparent 35%),
-    radial-gradient(circle at 10% 80%, rgba(0, 240, 255, 0.08) 0%, transparent 40%),
-    linear-gradient(180deg, #000000 0%, #050505 100%);
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 255, 65, 0.14) 0%, transparent 55%),
+    radial-gradient(circle at 85% 15%, rgba(255, 43, 214, 0.08) 0%, transparent 35%),
+    radial-gradient(circle at 12% 82%, rgba(255, 122, 26, 0.07) 0%, transparent 40%),
+    radial-gradient(circle at 72% 68%, rgba(0, 200, 255, 0.06) 0%, transparent 38%),
+    linear-gradient(180deg, #000000 0%, #050805 100%);
   background-attachment: fixed;
   padding-bottom: 64px;
 }
 
-a { color: var(--accent-bright); text-decoration: none; }
-a:hover { color: var(--accent-magenta); text-shadow: 0 0 12px var(--accent-glow-magenta); }
+a { color: var(--accent-blue); text-decoration: none; }
+a:hover { color: var(--accent-orange); text-shadow: 0 0 12px var(--accent-glow-orange); }
 
 .mono { font-family: var(--font-mono); }
 .display { font-family: var(--font-display); }

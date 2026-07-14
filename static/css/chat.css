@@ -22,7 +22,7 @@
 }
 
 .chat-msg.user {
-  background: rgba(0, 240, 255, 0.08);
+  background: rgba(0, 255, 65, 0.08);
   border: 1px solid var(--border-default);
   margin-left: auto;
 }
@@ -92,6 +92,6 @@
   box-shadow: 0 0 14px var(--cockpit-green-glow);
 }
 .chat-input button {
-  background: linear-gradient(135deg, #ff2bd6, #00f0ff);
+  background: linear-gradient(135deg, #00c8ff, #00ff41);
   color: var(--bg-cockpit);
 }
