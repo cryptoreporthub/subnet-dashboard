@@ -27,7 +27,9 @@ def test_cold_start_prior_when_insufficient_history(isolate_predictions):
     sn = {"netuid": 1, "name": "A", "price": 1.0, "volume": 100}
     indicators = {"history_length": 30}
     experts = {"quant": 0.6, "hype": 0.6, "dark_horse": 0.6, "technical": 0.6}
-    assert _confidence(sn, indicators, experts) == pytest.approx(0.5 * 1.0 * 1.0, rel=1e-3)
+    assert _confidence(sn, indicators, experts) == pytest.approx(
+        sv._COLD_START_PRIOR * 1.0 * 1.0, rel=1e-3
+    )
 
 
 def test_resolver_hit_rate_used_when_enough_graded(isolate_predictions):
