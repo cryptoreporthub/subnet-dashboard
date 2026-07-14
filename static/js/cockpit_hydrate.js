@@ -40,11 +40,16 @@
       var frac = Number(staking.apy);
       if (!isNaN(frac)) return frac <= 1 ? frac * 100 : frac;
     }
-    if (sn.apy != null) {
+    if (sn.apy != null && sn.id != null) {
       var raw = Number(sn.apy);
       if (!isNaN(raw)) return raw <= 1 ? raw * 100 : raw;
     }
     return null;
+  }
+
+  function confPercent(c) {
+    c = Number(c) || 0;
+    return c <= 1 ? c * 100 : c;
   }
 
   function undervaluedScore(sn) {
@@ -168,7 +173,8 @@
     var cards = top.map(function (pick, idx) {
       var t = confTier(pick.conviction || 0);
       var rec = String(pick.recommendation || 'WATCH').toUpperCase();
-      var apy = pick.apy != null ? fmt(pick.apy, 1) : '—';
+      var apyVal = apyPercent(pick);
+      var apy = apyVal != null ? fmt(apyVal, 1) : '—';
       return (
         '<div class="pick-card">' +
         '<div class="pick-rank">#' + esc(pick.rank || idx + 1) + '</div>' +
@@ -413,7 +419,7 @@
       var st = String(sig.signal_type || 'neutral').toLowerCase();
       return '<tr><td>' + esc(sig.name || ('SN' + sig.subnet_id)) + '</td>' +
         '<td><span class="badge badge-watch">' + esc(st.toUpperCase()) + '</span></td>' +
-        '<td>' + ((Number(sig.confidence) || 0) * 100).toFixed(1) + '%</td></tr>';
+        '<td>' + confPercent(sig.confidence).toFixed(1) + '%</td></tr>';
     }).join('');
     root.innerHTML = '<table class="tbl"><thead><tr><th>Subnet</th><th>Type</th><th>Conf</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }

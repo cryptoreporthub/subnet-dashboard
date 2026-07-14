@@ -12,9 +12,20 @@ def test_apy_already_percent():
     assert apy_as_percent(2.6) == 2.6
 
 
+def test_subnet_apy_staking_fraction_only():
+    sn = {"staking_data": {"apy": 0.18}}
+    assert subnet_apy_percent(sn) == 18.0
+
+
 def test_subnet_apy_prefers_staking_fraction():
     sn = {"apy": 5.0, "staking_data": {"apy": 0.18}}
     assert subnet_apy_percent(sn) == 18.0
+
+
+def test_subnet_apy_top_level_without_id_is_none():
+    """TaoMarketCap-shaped percent without registry id is not staking APY (B5)."""
+    sn = {"apy": 42.5}
+    assert subnet_apy_percent(sn) is None
 
 
 def test_subnet_apy_none_for_price_proxy_row():
