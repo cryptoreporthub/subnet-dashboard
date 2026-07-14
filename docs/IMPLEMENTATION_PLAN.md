@@ -54,5 +54,8 @@
 - [x] B3 apscheduler + sentry — merged #181
 - [x] B4 prometheus metrics — merged #181
 - [x] B5 APY + candle gate — merged #182
-- [ ] B6 slowapi — **next Build** (`cursor-agents-communication/automated-build-plan.md`)
-- [ ] Phase 4 C4–C6, Phase C — queued in automated plan
+- [x] B6 slowapi — merged #185
+- [x] Phase 4 C4 — merged #186
+- [x] Phase 4 C5 — merged #187
+- [ ] Phase 4 C6 — **in progress**
+- [ ] Phase C — queued
