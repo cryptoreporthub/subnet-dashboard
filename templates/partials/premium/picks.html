@@ -11,6 +11,7 @@
       <div class="picks">
         {% for pick in hp %}
         {% set conf = ((pick.confidence|default(0))|float * 100)|round %}
+        {# conviction tiers: canonical cutoffs 75 / 55 / 35 (see static/js/conviction_tiers.js) #}
         {% set tier = 'tier-cyan' if conf > 75 else ('tier-lime' if conf > 55 else ('tier-gold' if conf > 35 else 'tier-red')) %}
         <div class="pick-card">
           <div class="pick-rank">#{{ loop.index }}</div>
@@ -30,6 +31,7 @@
       <div class="picks">
         {% for pick in dyp %}
         {% set conf = ((pick.confidence|default(0))|float * 100)|round %}
+        {# conviction tiers: canonical cutoffs 75 / 55 / 35 (see static/js/conviction_tiers.js) #}
         {% set tier = 'tier-cyan' if conf > 75 else ('tier-lime' if conf > 55 else ('tier-gold' if conf > 35 else 'tier-red')) %}
         <div class="pick-card">
           <div class="pick-rank">#{{ loop.index }}</div>

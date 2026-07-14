@@ -331,3 +331,34 @@ def test_c4_hydrate_calls_chart_paint_hooks():
     assert "paintCharts" in hydrate
     assert "__paintSparks" in hydrate
     assert "__paintRadar" in hydrate
+
+
+def test_c6_conviction_tiers_script_on_index():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert "/static/js/conviction_tiers.js" in html
+    pos_tiers = html.index("/static/js/conviction_tiers.js")
+    pos_hydrate = html.index("/static/js/cockpit_hydrate.js")
+    assert pos_tiers < pos_hydrate
+
+
+def test_c6_simivision_picks_template_uses_canonical_cutoffs():
+    src = open("templates/partials/premium/simivision_picks.html", encoding="utf-8").read()
+    assert "conv > 75" in src
+    assert "conv > 55" in src
+    assert "conv > 35" in src
+    assert "conv > 80" not in src
+    assert "conv > 60" not in src
+    assert "conv > 40" not in src
+
+
+def test_c6_shared_conviction_thresholds_match_hydrate():
+    tiers_src = open("static/js/conviction_tiers.js", encoding="utf-8").read()
+    hydrate_src = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()
+    assert "cyan: 75" in tiers_src
+    assert "lime: 55" in tiers_src
+    assert "gold: 35" in tiers_src
+    assert "ConvictionTiers.confTier" in hydrate_src
+    assert "if (c > 75)" in hydrate_src
+    assert "if (c > 55)" in hydrate_src
+    assert "if (c > 35)" in hydrate_src
