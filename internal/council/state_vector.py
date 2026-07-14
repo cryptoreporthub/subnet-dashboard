@@ -929,6 +929,7 @@ def build_prediction_statement(
     now: _dt,
     signal_contributions: Optional[Dict[str, Any]] = None,
     horizon_type: str = "hour",
+    active_signals: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Build a predictive forecast dict without persisting it."""
     horizon = clamp_prediction_horizon(horizon, predicted_pct)
@@ -950,7 +951,87 @@ def build_prediction_statement(
     }
     if signal_contributions:
         prediction["signal_contributions"] = signal_contributions
+    if active_signals:
+        prediction["active_signals"] = list(active_signals)
     return prediction
+
+
+def unpack_score_learning_fields(score_payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Pull tech signal stamps out of the nested score payload shape."""
+    score_payload = score_payload if isinstance(score_payload, dict) else {}
+    ec = score_payload.get("expert_contributions") or {}
+    if not isinstance(ec, dict):
+        ec = {}
+    experts = {
+        k: float(v)
+        for k, v in ec.items()
+        if k in ("quant", "hype", "dark_horse", "technical") and isinstance(v, (int, float))
+    }
+    signal_contributions = ec.get("signal_contributions")
+    if not isinstance(signal_contributions, dict):
+        signal_contributions = None
+    active_signals = ec.get("active_signals")
+    if not isinstance(active_signals, list):
+        active_signals = []
+    signal_impact = score_payload.get("signal_impact")
+    if not isinstance(signal_impact, dict):
+        signal_impact = None
+    return {
+        "experts": experts,
+        "signal_contributions": signal_contributions,
+        "active_signals": active_signals,
+        "signal_impact": signal_impact,
+    }
+
+
+def predicted_pct_from_score(
+    score_payload: Optional[Dict[str, Any]],
+    sn: Dict[str, Any],
+    pick_conf: float,
+) -> float:
+    """Prefer signal-impact move; else confidence heuristic."""
+    si = (score_payload or {}).get("signal_impact") if isinstance(score_payload, dict) else None
+    if isinstance(si, dict):
+        raw = si.get("net_predicted_pct")
+        try:
+            if raw is not None and float(raw) != 0.0:
+                return float(raw)
+        except (TypeError, ValueError):
+            pass
+    base = max(0.5, float(pick_conf or 0) * 5.0)
+    chg = float(sn.get("price_change_24h", 0) or 0)
+    if chg < -2:
+        return -base
+    return base
+
+
+def attach_council_prediction(
+    candidate: Dict[str, Any],
+    score_payload: Optional[Dict[str, Any]],
+    final_confidence: float,
+    *,
+    horizon_type: str = "day",
+    horizon_hours: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Display/learning prediction for a published or candidate council pick."""
+    fields = unpack_score_learning_fields(score_payload)
+    ref = float(candidate.get("price", 0) or 0)
+    predicted_pct = predicted_pct_from_score(score_payload, candidate, final_confidence)
+    si = fields["signal_impact"] or {}
+    source = si.get("dominant") or si.get("net_direction") or f"council_{horizon_type}_pick"
+    hours = horizon_hours if horizon_hours is not None else (1 if horizon_type == "hour" else 4)
+    return build_prediction_statement(
+        sn=candidate,
+        predicted_pct=predicted_pct,
+        horizon=hours,
+        ref_price=ref,
+        signal_source=str(source),
+        expert=_expert_from_signal_source(str(source)),
+        now=_dt.now(_dt.UTC).replace(tzinfo=None) if hasattr(_dt, "UTC") else _dt.utcnow(),
+        signal_contributions=fields["signal_contributions"],
+        horizon_type=horizon_type,
+        active_signals=fields["active_signals"] or None,
+    )
 
 
 # ---------------------------------------------------------------------------

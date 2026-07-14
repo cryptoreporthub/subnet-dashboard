@@ -7,7 +7,12 @@ it through the RedTeam audit layer before returning a final payload.
 
 from typing import Any, Dict, List, Optional
 
-from internal.council.state_vector import score_subnet_for_hour
+from internal.council.state_vector import (
+    attach_council_prediction,
+    pick_reasons,
+    score_subnet_for_hour,
+    unpack_score_learning_fields,
+)
 from internal.council.red_team import audit_daily_pick
 from internal.subnets.tradable import tradable_subnets
 
@@ -50,6 +55,11 @@ def select_hourly_pick(
             },
             "final_confidence": 0.0,
             "action": "long",
+            "prediction": None,
+            "reasons": [],
+            "signal_impact": None,
+            "signal_contributions": None,
+            "active_signals": [],
         }
 
     scored = []
@@ -74,15 +84,18 @@ def select_hourly_pick(
 
     audit_candidate = {**candidate, "confidence": score_payload["confidence"]}
     audit = audit_daily_pick(audit_candidate, subnets)
+    final_confidence = audit["adjusted_confidence"]
+    learning = unpack_score_learning_fields(score_payload)
+    prediction = attach_council_prediction(
+        candidate, score_payload, final_confidence, horizon_type="hour", horizon_hours=1
+    )
     try:
         from internal.subnets.impact import impact_profile
-        from internal.council.state_vector import pick_reasons
 
         impact = impact_profile(candidate)
-        reasons = pick_reasons(candidate, score_payload.get("signal_impact"))
     except Exception:
         impact = None
-        reasons = []
+    reasons = pick_reasons(candidate, learning["signal_impact"])
 
     return {
         "subnet": {
@@ -95,11 +108,15 @@ def select_hourly_pick(
         "expert_contributions": score_payload["expert_contributions"],
         "scenario_tags": score_payload["scenario_tags"],
         "audit": audit,
-        "final_confidence": audit["adjusted_confidence"],
+        "final_confidence": final_confidence,
         "action": "long",
         "tie_break": tie_break,
         "impact": impact,
         "reasons": reasons,
+        "prediction": prediction,
+        "signal_impact": learning["signal_impact"],
+        "signal_contributions": learning["signal_contributions"],
+        "active_signals": learning["active_signals"],
     }
 
 

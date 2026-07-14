@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T20:40:00Z by Agent (`-6f98`) — synced after `-5e45` #207/#208  
-**main:** `312a514`
+**Last updated:** 2026-07-14T20:50:00Z by Agent (`-5e45`) — hour-pred + signal stamps in flight (#210)  
+**main:** `b58bc31`
 
 ## Ditto boot (read first)
 
@@ -106,7 +106,7 @@ Recent merges on `main` @ `312a514`:
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **Cursor** | **Idle** | #201–#207 on main; new work only when explicitly queued |
+| **Cursor** | **Active** | #210 hour pred + signal stamps + HOLD candidate text |
 | **Ditto** | **Monitor** | Read-only — CI, Fly health, `/api/data-freshness` |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
