@@ -147,6 +147,8 @@ CONTRACT = [
     # Phase O TAO Signal Hub
     ("GET", "/api/signal-hub/status", None),
     ("GET", "/api/signal-hub/signals", None),
+    # Cockpit SSE live hydration (C2)
+    ("GET", "/api/cockpit/stream?once=1", None),
 ]
 
 
