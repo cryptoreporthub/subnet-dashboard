@@ -4,7 +4,6 @@ Fetches all subnets from /public/v1/subnets/table/, caches in SQLite for 5 min.
 Handles both list and dict ({"subnets": [...]}) API responses.
 Now paginates through all pages to get the full ~129 subnets.
 """
-import requests
 import json
 import sqlite3
 import os
@@ -110,9 +109,11 @@ def fetch_all_subnets_from_api() -> Optional[List[Dict]]:
             logger.warning("Subnet fetch deadline (%ss) reached on page %d", FETCH_DEADLINE_SEC, page)
             break
         try:
+            from internal.http_client import sync_get
+
             url = f"{API_BASE}?page={page}"
             logger.info("Fetching subnets page %d from %s", page, url)
-            resp = requests.get(url, timeout=15)
+            resp = sync_get(url, timeout=15)
             if resp.status_code != 200:
                 logger.warning("API page %d returned %s", page, resp.status_code)
                 break

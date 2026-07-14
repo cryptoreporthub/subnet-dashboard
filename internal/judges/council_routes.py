@@ -11,6 +11,7 @@ Provides:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from datetime import datetime
@@ -119,8 +120,12 @@ def _score_all_judges(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 @council_router.get("/api/council")
-def api_council():
+async def api_council():
     """Full merged data pipeline: Blockmachine + TaoStats + TaoMarketCap + judge scores."""
+    return await asyncio.to_thread(_api_council_sync)
+
+
+def _api_council_sync():
     try:
         merged, source = _get_subnets_for_scoring()
         if not merged:
@@ -164,8 +169,12 @@ def api_council():
 
 
 @council_router.get("/api/judges")
-def api_judges():
+async def api_judges():
     """Score ALL subnets with the three-judge council + consensus."""
+    return await asyncio.to_thread(_api_judges_sync)
+
+
+def _api_judges_sync():
     try:
         subnets, source = _get_subnets_for_scoring()
         if subnets:
@@ -193,6 +202,10 @@ def api_judges():
 @council_router.get("/api/judges/{netuid}")
 async def api_judges_netuid(netuid: int):
     """Return detailed judge breakdown for one subnet."""
+    return await asyncio.to_thread(_api_judges_netuid_sync, netuid)
+
+
+def _api_judges_netuid_sync(netuid: int):
     try:
         subnets, _source = _get_subnets_for_scoring()
         if not subnets:
