@@ -72,7 +72,18 @@ def test_ingest_dedup_same_channel_message_id(client):
     with patch("internal.message_intel.engine._load_pipeline") as mock_pipe:
         from message_intel.nlp_engine import NLPAnalyzer
 
-        mock_pipe.return_value = (NLPAnalyzer(), type("PT", (), {"db": None, "snapshot": lambda *a, **k: None})())
+        mock_pipe.return_value = (
+            NLPAnalyzer(),
+            type(
+                "PT",
+                (),
+                {
+                    "db": None,
+                    "snapshot": lambda *a, **k: None,
+                    "snapshot_subnet": lambda *a, **k: None,
+                },
+            )(),
+        )
         first = client.post("/api/message-intel/ingest", json=payload).json()
         second = client.post("/api/message-intel/ingest", json=payload).json()
 
@@ -90,11 +101,22 @@ def test_jinja_message_intel_context(client):
     with patch("internal.message_intel.engine._load_pipeline") as mock_pipe:
         from message_intel.nlp_engine import NLPAnalyzer
 
-        mock_pipe.return_value = (NLPAnalyzer(), type("PT", (), {"db": None, "snapshot": lambda *a, **k: None})())
+        mock_pipe.return_value = (
+            NLPAnalyzer(),
+            type(
+                "PT",
+                (),
+                {
+                    "db": None,
+                    "snapshot": lambda *a, **k: None,
+                    "snapshot_subnet": lambda *a, **k: None,
+                },
+            )(),
+        )
         client.post("/api/message-intel/ingest", json=_ingest_payload())
 
     html = client.get("/").text
-    assert 'data-section-id="message_intel"' in html
+    assert 'id="section-social"' in html
     api = client.get("/api/message-intel").json()
     assert api["count"] >= 1
 
@@ -105,6 +127,88 @@ def test_build_message_intel_context_module():
     ctx = build_message_intel_context()
     assert "message_intel" in ctx
     assert isinstance(ctx["message_intel"].get("messages"), list)
+    assert "social_sentiment" in ctx
+    assert isinstance(ctx["social_sentiment"], list)
+
+
+def test_netuid_sentiment_rollup_from_entities(intel_env):
+    from internal.message_intel.store import get_db
+
+    db = get_db()
+    mid, _ = db.save_message(
+        {
+            "source": "telegram",
+            "group_id": "g1",
+            "message_id": "99",
+            "content": "Subnet 7 looks bullish",
+        }
+    )
+    db.save_analysis(
+        mid,
+        {
+            "sentiment": "bullish",
+            "sentiment_confidence": 0.8,
+            "entities": {"subnets": ["subnet 7"]},
+        },
+    )
+    db.save_price_snapshot(mid, 1.0, netuid=7)
+
+    rollup = db.netuid_sentiment_rollup()
+    assert len(rollup) == 1
+    assert rollup[0]["netuid"] == 7
+    assert rollup[0]["label"] == "bullish"
+    assert rollup[0]["mentions"] >= 1
+
+
+def test_build_social_sentiment_rows(intel_env):
+    from internal.message_intel.context import build_social_sentiment_rows
+    from internal.message_intel.store import get_db
+
+    db = get_db()
+    mid, _ = db.save_message(
+        {
+            "source": "telegram",
+            "group_id": "g2",
+            "message_id": "100",
+            "content": "SN 3 bearish dump",
+        }
+    )
+    db.save_analysis(
+        mid,
+        {
+            "sentiment": "bearish",
+            "sentiment_confidence": 0.7,
+            "entities": {"subnets": ["sn 3"]},
+        },
+    )
+
+    rows = build_social_sentiment_rows(
+        [{"netuid": 3, "name": "Gamma"}],
+        limit=6,
+    )
+    assert len(rows) == 1
+    assert rows[0]["netuid"] == 3
+    assert rows[0]["name"] == "Gamma"
+    assert rows[0]["label"] == "bearish"
+    assert rows[0]["mentions"] == 1
+
+
+def test_homepage_social_sentiment_from_message_intel(client):
+    with patch("internal.message_intel.engine._load_pipeline") as mock_pipe:
+        from message_intel.nlp_engine import NLPAnalyzer
+
+        mock_pipe.return_value = (
+            NLPAnalyzer(),
+            type("PT", (), {"db": None, "snapshot": lambda *a, **k: None, "snapshot_subnet": lambda *a, **k: None})(),
+        )
+        client.post(
+            "/api/message-intel/ingest",
+            json=_ingest_payload(content="Subnet 7 looks extremely bullish today!"),
+        )
+
+    html = client.get("/").text
+    assert "section-social" in html
+    assert "SN7" in html or "Subnet 7" in html or "bullish" in html.lower()
 
 
 def test_health_ok(client):

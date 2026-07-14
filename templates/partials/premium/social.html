@@ -2,9 +2,24 @@
 <section class="row" id="section-social" aria-labelledby="social-title">
   <div class="section-label">Social</div>
   <h2 class="section-title" id="social-title">Social Sentiment</h2>
-  <p class="section-sub">Per-subnet mention volume and sentiment labels from registry fields.</p>
+  <p class="section-sub">Per-subnet mention volume and sentiment from message intel or registry fields.</p>
+  {% set social_rows = social_sentiment if social_sentiment is defined and social_sentiment is iterable and social_sentiment is not string and social_sentiment|length > 0 else [] %}
   {% set social_has = sn_list|selectattr('social_mentions', 'defined')|list %}
-  {% if social_has %}
+  {% if social_rows %}
+  <div class="soc-grid">
+    {% for row in social_rows[:6] %}
+    {% set label = (row.label|default('neutral'))|string|lower %}
+    <div class="card soc-card">
+      <div class="soc-head">
+        <span class="pick-name">{{ row.name|default('SN' ~ row.netuid) }}</span>
+        <span class="soc-score {% if label == 'bullish' %}pos{% elif label == 'bearish' %}neg{% else %}neu{% endif %}">{{ label|upper }}</span>
+      </div>
+      <div class="pick-meta">SN{{ row.netuid }} · {{ row.mentions|default(0)|int }} mentions</div>
+      <div class="conviction-bar mt-2"><div class="conviction-fill tier-lime" style="width: {{ ((row.score|default(0.5)|float) * 100)|round }}%;"></div></div>
+    </div>
+    {% endfor %}
+  </div>
+  {% elif social_has %}
   <div class="soc-grid">
     {% for sn in social_has|sort(attribute='social_mentions', reverse=true)|list %}
     {% if loop.index <= 6 %}

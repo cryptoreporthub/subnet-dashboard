@@ -7,6 +7,7 @@ outcomes, author reliability, and pattern correlations.
 
 import json
 import os
+import re
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -388,6 +389,71 @@ class Database:
                 (limit,),
             ).fetchall()
             return [dict(r) for r in rows]
+
+    def netuid_sentiment_rollup(self, *, limit: int = 40) -> List[Dict[str, Any]]:
+        """Per-netuid mention + sentiment rollup from message_intel store."""
+        sentiment_val = {"bullish": 1.0, "bearish": -1.0, "neutral": 0.0}
+        buckets: Dict[int, Dict[str, Any]] = {}
+        try:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    """SELECT m.id, a.sentiment, a.entities_json, ps.netuid AS snap_netuid
+                       FROM messages m
+                       LEFT JOIN message_analysis a ON a.message_id = m.id
+                       LEFT JOIN price_snapshots ps ON ps.message_id = m.id"""
+                ).fetchall()
+        except Exception:
+            return []
+
+        for row in rows:
+            sentiment = (row["sentiment"] or "neutral").lower()
+            s_val = sentiment_val.get(sentiment, 0.0)
+            netuids: set[int] = set()
+            if row["snap_netuid"] is not None:
+                netuids.add(int(row["snap_netuid"]))
+            raw_entities = row["entities_json"]
+            if raw_entities:
+                try:
+                    entities = json.loads(raw_entities)
+                    for token in entities.get("subnets") or []:
+                        for num in re.findall(r"\d+", str(token)):
+                            netuids.add(int(num))
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    pass
+            if not netuids:
+                continue
+            for netuid in netuids:
+                bucket = buckets.setdefault(
+                    netuid,
+                    {"netuid": netuid, "scores": [], "mentions": 0},
+                )
+                bucket["scores"].append(s_val)
+                bucket["mentions"] += 1
+
+        out: List[Dict[str, Any]] = []
+        for bucket in buckets.values():
+            scores = bucket["scores"]
+            if not scores:
+                continue
+            raw_avg = sum(scores) / len(scores)
+            label = (
+                "bullish"
+                if raw_avg > 0.2
+                else "bearish"
+                if raw_avg < -0.2
+                else "neutral"
+            )
+            out.append(
+                {
+                    "netuid": bucket["netuid"],
+                    "avg_sentiment": round(raw_avg, 4),
+                    "score": round(max(0.0, min(1.0, (raw_avg + 1.0) / 2.0)), 3),
+                    "label": label,
+                    "mentions": int(bucket["mentions"]),
+                }
+            )
+        out.sort(key=lambda r: (r["mentions"], abs(r["avg_sentiment"])), reverse=True)
+        return out[:limit]
 
     # ── Private helpers ───────────────────────────────────────────────
 
