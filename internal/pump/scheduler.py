@@ -8,11 +8,13 @@ import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
+from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.pump.state import scan_all_subnets
 
 logger = logging.getLogger(__name__)
 
 PUMP_LADDER_REFRESH_MINUTES = int(os.environ.get("PUMP_LADDER_REFRESH_MINUTES", "20"))
+JOB_ID = "pump-ladder-scheduler"
 
 _scheduler: Optional["PumpLadderScheduler"] = None
 _lock = threading.Lock()
@@ -25,7 +27,6 @@ def _now_iso() -> str:
 class PumpLadderScheduler:
     def __init__(self, refresh_minutes: int = PUMP_LADDER_REFRESH_MINUTES):
         self.refresh_minutes = refresh_minutes
-        self._timer: Optional[threading.Timer] = None
         self._running = False
         self._last_run_at: Optional[str] = None
         self._last_ok: Optional[bool] = None
@@ -46,10 +47,7 @@ class PumpLadderScheduler:
     def stop(self) -> Dict[str, Any]:
         with _lock:
             self._running = False
-            timer = self._timer
-            self._timer = None
-        if timer:
-            timer.cancel()
+        cancel_job(JOB_ID)
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
@@ -69,9 +67,7 @@ class PumpLadderScheduler:
         with _lock:
             if not self._running:
                 return
-            self._timer = threading.Timer(minutes * 60, self._tick)
-            self._timer.daemon = True
-            self._timer.start()
+        schedule_in_seconds(JOB_ID, self._tick, minutes * 60)
 
     def _tick(self) -> Dict[str, Any]:
         result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}

@@ -22,6 +22,8 @@
 | A | Cruft cleanup + CURSOR_PROMPTS | #170 | superseded Ditto #165/#166 |
 | A | CI smoke gate (#2 partial) | #172 | uvicorn + real `curl --fail`; `timeout-minutes` added |
 | B | Live on-chain feed (#1) | #174 | `internal/live_subnets.py`, `/api/data-freshness`; superseded Ditto #169 |
+| B | httpx async I/O (#4) | #179 | `internal/http_client.py` |
+| B | apscheduler + sentry (#5 #6) | PR | `internal/job_scheduler.py`, `internal/sentry_setup.py` |
 
 **B1 guardrails (do not regress):**
 - `AUTO_SYNC` forced **off** under `GITHUB_ACTIONS`, `PYTEST_CURRENT_TEST`, `CI`
@@ -57,7 +59,7 @@ Smoke body is fixed (#172). Optional hardening in **GitHub → Settings → Bran
 |---|-------|------|-------|-------|
 | 1 | B1 UI | Freshness badge from `GET /api/data-freshness` | #1 | ✅ #177 |
 | 2 | B2 | `httpx` AsyncClient + `tenacity` + `aiocache` for handler I/O | #4 | ✅ #179 |
-| 3 | B3 | `apscheduler` + `sentry-sdk` | #5, #6 | **next** |
+| 3 | B3 | `apscheduler` + `sentry-sdk` | #5, #6 | 🔄 **PR open** |
 | 4 | B4–B6 | prometheus, APY reconcile, slowapi | #13, #14, #9 | Cursor |
 | 5 | C | uPlot, datastar SSE, CSS/a11y | #10, #15, #16 | Cursor (after B1 live on Fly) |
 

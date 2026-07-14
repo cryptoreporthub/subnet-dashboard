@@ -17,6 +17,8 @@ from typing import Any, Dict, Optional
 
 import requests
 
+from internal.job_scheduler import cancel_job, schedule_interval_seconds
+
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 WATCHLIST_PATH = os.environ.get("WATCHLIST_PATH", "config/watchlist.json")
@@ -40,6 +42,7 @@ THRESHOLDS: Dict[str, int] = {
 BACKGROUND_INTERVAL_SECONDS = int(
     os.environ.get("BACKGROUND_SYNC_INTERVAL_SECONDS", "300")
 )
+JOB_ID = "freshness-background-sync"
 
 _sync_state: Dict[str, Any] = {
     "last_sync_at": None,
@@ -49,7 +52,7 @@ _sync_state: Dict[str, Any] = {
     "background_running": False,
 }
 
-_timer: Optional[threading.Timer] = None
+_timer: Optional[object] = None  # legacy name kept for tests that import the symbol
 _lock = threading.Lock()
 
 def _now_iso() -> str:
@@ -408,24 +411,15 @@ def refresh_all(
     return result
 
 
-def _schedule_next(interval: int) -> None:
-    global _timer
-    _timer = threading.Timer(interval, _background_tick, args=(interval,))
-    _timer.daemon = True
-    _timer.start()
-    with _lock:
-        _sync_state["next_sync_at"] = (
-            datetime.now(timezone.utc).timestamp() + interval
-        )
-
-
-def _background_tick(interval: int) -> None:
+def _background_tick() -> None:
     report = refresh_all()
     with _lock:
         _sync_state["last_sync_at"] = report["synced_at"]
         _sync_state["last_sync_ok"] = report["registry"]["ok"]
         _sync_state["last_sync_error"] = report["registry"].get("error")
-    _schedule_next(interval)
+        _sync_state["next_sync_at"] = (
+            datetime.now(timezone.utc).timestamp() + BACKGROUND_INTERVAL_SECONDS
+        )
 
 
 def start_background_sync(
@@ -433,28 +427,27 @@ def start_background_sync(
     immediate: bool = False,
 ) -> Dict[str, Any]:
     """Start the background sync timer. Idempotent."""
-    global _timer
     with _lock:
         if _sync_state["background_running"]:
             return {"started": False, "reason": "already running"}
         _sync_state["background_running"] = True
+        _sync_state["next_sync_at"] = (
+            datetime.now(timezone.utc).timestamp() + interval
+        )
 
     if immediate:
-        refresh_all()
+        _background_tick()
 
-    _schedule_next(interval)
+    schedule_interval_seconds(JOB_ID, _background_tick, interval)
     return {"started": True, "interval_seconds": interval}
 
 
 def stop_background_sync() -> Dict[str, Any]:
     """Stop the background sync timer."""
-    global _timer
     with _lock:
         _sync_state["background_running"] = False
         _sync_state["next_sync_at"] = None
-    if _timer:
-        _timer.cancel()
-        _timer = None
+    cancel_job(JOB_ID)
     return {"stopped": True}
 
 

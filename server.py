@@ -6,6 +6,10 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from internal.sentry_setup import init_sentry
+
+init_sentry()
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
@@ -168,6 +172,12 @@ async def _lifespan(app: FastAPI):
         from internal.council.resolver_scheduler import stop_prediction_resolver_scheduler
 
         stop_prediction_resolver_scheduler()
+    except Exception:
+        pass
+    try:
+        from internal.job_scheduler import shutdown_background_scheduler
+
+        shutdown_background_scheduler()
     except Exception:
         pass
     try:

@@ -14,7 +14,7 @@ Each tick:
    record) so the registry never accumulates ungradeable ``pending`` rows.
 4. Persists a lightweight cycle summary to the Soul-Map for health checks.
 
-Follows the same ``threading.Timer`` + exponential-backoff pattern as the
+Follows the same APScheduler + exponential-backoff pattern as the
 indicator scheduler so it is safe for single-worker Fly.io deployments.
 """
 
@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
 
 from internal.council import resolver
+from internal.job_scheduler import cancel_job, schedule_in_seconds
 
 # Ensure the data directory exists at module load time. Fly.io root filesystems
 # are ephemeral; without this the cycle-summary write below silently fails.
@@ -40,6 +41,7 @@ RESOLVER_REFRESH_MINUTES = int(os.environ.get("RESOLVER_REFRESH_MINUTES", "15"))
 MAX_BACKOFF_MINUTES = int(os.environ.get("RESOLVER_MAX_BACKOFF_MINUTES", "240"))
 RESOLVER_BATCH_SIZE = int(os.environ.get("RESOLVER_BATCH_SIZE", "32"))
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
+JOB_ID = "prediction-resolver-scheduler"
 
 
 def _round_robin_batch(
@@ -121,7 +123,6 @@ class PredictionResolverScheduler:
         # circular import at module load time.
         self._subnet_provider = subnet_provider or _default_subnets
 
-        self._timer: Optional[threading.Timer] = None
         self._lock = threading.Lock()
         self._running = False
         self._backoff_minutes = refresh_minutes
@@ -163,10 +164,7 @@ class PredictionResolverScheduler:
         with self._lock:
             self._running = False
             self._next_run_at = None
-            timer = self._timer
-            self._timer = None
-        if timer:
-            timer.cancel()
+        cancel_job(JOB_ID)
         return {"stopped": True}
 
     @property
@@ -217,9 +215,7 @@ class PredictionResolverScheduler:
             if not self._running:
                 return
             self._next_run_at = time.time() + minutes * 60
-            self._timer = threading.Timer(minutes * 60, self._tick)
-            self._timer.daemon = True
-            self._timer.start()
+        schedule_in_seconds(JOB_ID, self._tick, minutes * 60)
 
     def _tick(self) -> Dict[str, Any]:
         """Run one resolution cycle and reschedule."""

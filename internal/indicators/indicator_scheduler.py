@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
 
 from internal.indicators.indicator_engine import IndicatorEngine
+from internal.job_scheduler import cancel_job, schedule_in_seconds
 
 # Ensure the data directory exists at module load time. Fly.io root filesystems
 # are ephemeral; without this the cycle-summary write below silently fails.
@@ -25,6 +26,7 @@ INDICATOR_REFRESH_MINUTES = int(os.environ.get("INDICATOR_REFRESH_MINUTES", "15"
 MAX_BACKOFF_MINUTES = int(os.environ.get("INDICATOR_MAX_BACKOFF_MINUTES", "240"))
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
+JOB_ID = "indicator-scheduler"
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -78,7 +80,6 @@ class IndicatorScheduler:
             )
         )
 
-        self._timer: Optional[threading.Timer] = None
         self._lock = threading.Lock()
         self._running = False
         self._backoff_minutes = refresh_minutes
@@ -117,10 +118,7 @@ class IndicatorScheduler:
         with self._lock:
             self._running = False
             self._next_run_at = None
-            timer = self._timer
-            self._timer = None
-        if timer:
-            timer.cancel()
+        cancel_job(JOB_ID)
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
@@ -170,9 +168,7 @@ class IndicatorScheduler:
             self._next_run_at = (
                 datetime.now(timezone.utc).timestamp() + minutes * 60
             )
-            self._timer = threading.Timer(minutes * 60, self._tick)
-            self._timer.daemon = True
-            self._timer.start()
+        schedule_in_seconds(JOB_ID, self._tick, minutes * 60)
 
     def _tick(self) -> Dict[str, Any]:
         """Run one indicator refresh cycle and reschedule."""

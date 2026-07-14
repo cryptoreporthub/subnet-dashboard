@@ -22,6 +22,8 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from internal.job_scheduler import cancel_job, schedule_in_seconds
+
 # Ensure the data directory exists at module load time. Fly.io root filesystems
 # are ephemeral; without this the heartbeat write below silently fails. Uses the
 # shared helper so the "directory missing, created" event is logged once.
@@ -35,6 +37,7 @@ REFRESH_MINUTES = int(os.environ.get("REFRESH_MINUTES", "60"))
 MAX_BACKOFF_MINUTES = int(os.environ.get("MAX_BACKOFF_MINUTES", "240"))
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
+JOB_ID = "adversarial-scheduler"
 
 def _now_iso() -> str:
     """Return current UTC time as ISO format string."""
@@ -72,7 +75,6 @@ class AdversarialScheduler:
         # stake_threshold_tao kept for API compatibility but no longer used.
         self.stake_threshold_tao = stake_threshold_tao
 
-        self._timer: Optional[threading.Timer] = None
         self._lock = threading.Lock()
         self._running = False
         self._backoff_minutes = refresh_minutes
@@ -111,10 +113,7 @@ class AdversarialScheduler:
         with self._lock:
             self._running = False
             self._next_run_at = None
-            timer = self._timer
-            self._timer = None
-        if timer:
-            timer.cancel()
+        cancel_job(JOB_ID)
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
@@ -161,9 +160,7 @@ class AdversarialScheduler:
             if not self._running:
                 return
             self._next_run_at = time.time() + minutes * 60
-            self._timer = threading.Timer(minutes * 60, self._tick)
-            self._timer.daemon = True
-            self._timer.start()
+        schedule_in_seconds(JOB_ID, self._tick, minutes * 60)
 
     def _tick(self) -> Dict[str, Any]:
         """Run one adversarial refresh cycle and reschedule."""
