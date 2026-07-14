@@ -8,6 +8,11 @@
 
   var STORAGE_PREFIX = 'subnet-group-open-'; // persisted open state per netuid
 
+  function confPct(c) {
+    c = Number(c) || 0;
+    return c <= 1 ? c * 100 : c;
+  }
+
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
@@ -124,14 +129,14 @@
       items += renderChild(
         'Hour pick',
         'score ' + Number(row.score || 0).toFixed(1) +
-          ' · conf ' + (Number(row.confidence || 0) * 100).toFixed(0) + '%'
+          ' · conf ' + confPct(row.confidence).toFixed(0) + '%'
       );
     });
     g.day_picks.forEach(function (row) {
       items += renderChild(
         'Day pick',
         'score ' + Number(row.score || 0).toFixed(1) +
-          ' · conf ' + (Number(row.confidence || 0) * 100).toFixed(0) + '%'
+          ' · conf ' + confPct(row.confidence).toFixed(0) + '%'
       );
     });
     g.trail.forEach(function (row) {

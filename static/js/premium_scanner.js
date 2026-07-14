@@ -22,10 +22,18 @@
     return Number(n).toLocaleString(undefined, { maximumFractionDigits: d || 2 });
   }
 
+  /** Staking yield APY only — matches internal/subnets/apy.subnet_apy_percent */
   function apyOf(item) {
-    if (item.apy != null) return Number(item.apy) * 100;
-    if (item.staking_data && item.staking_data.apy != null) return Number(item.staking_data.apy) * 100;
-    return 0;
+    var staking = item.staking_data;
+    if (staking && staking.apy != null) {
+      var frac = Number(staking.apy);
+      if (!isNaN(frac)) return frac <= 1 ? frac * 100 : frac;
+    }
+    if (item.apy != null && item.id != null) {
+      var raw = Number(item.apy);
+      if (!isNaN(raw)) return raw <= 1 ? raw * 100 : raw;
+    }
+    return null;
   }
 
   function filtered() {
@@ -45,7 +53,7 @@
     var field = state.sort;
     items.sort(function (a, b) {
       var av, bv;
-      if (field === 'apy') { av = apyOf(a); bv = apyOf(b); }
+      if (field === 'apy') { av = apyOf(a) || 0; bv = apyOf(b) || 0; }
       else if (field === 'emission') { av = a.emission || 0; bv = b.emission || 0; }
       else { av = a.id || a.netuid || 0; bv = b.id || b.netuid || 0; }
       return av - bv;
