@@ -32,7 +32,7 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 | **Audit docs** | Ditto | ✅ **merged** | #167 |
 | **A3** CORS + X-Frame-Options (#11) | Cursor | ✅ **merged** | #168 |
 | **A4** Cockpit panel isolation (#8) | Cursor | ✅ **merged** | #168 |
-| **A2** CI smoke gate | Cursor | ✅ **in progress** | #172 — start uvicorn + remove `|| true` |
+| **A2** CI smoke gate | Cursor | ✅ **merged** | #172 — uvicorn + real health curl |
 
 ## Active — Phase B (data truth)
 
