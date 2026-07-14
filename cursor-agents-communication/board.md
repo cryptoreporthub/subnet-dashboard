@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T19:30:00Z by Agent (`-5e45`) — **#204 + #205 merged**  
-**main:** `fb23c99`
+**Last updated:** 2026-07-14T20:30:00Z by Agent (`-5e45`) — call-reasons signal-impact in flight  
+**main:** `1313bb9`
 
 ## Ditto boot (read first)
 
@@ -70,19 +70,19 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 
 ## Ready for next work
 
-**Idle — monitor only.** Council picks lane + learning loop + confidence prior complete (#201–#205). New work only when human/board explicitly queues it.
+**In flight:** richer call reasons from scored `signal_impact` (`cursor/call-reasons-signal-impact-5e45`) — lead with directional live signal lines + impact-scaled edge; prediction expert/source from signal impact.
 
-**Automated queue:** COMPLETE — B6 #185 · C4–C6 · C1–C3 · G7+G12 · #198–#202 · **#204** · **#205**. **A2:** `smoke` required check verified on `main`.
+**Automated queue:** COMPLETE — B6 #185 · C4–C6 · C1–C3 · G7+G12 · #198–#202 · #204–#206. **A2:** `smoke` required check verified on `main`.
 
-Recent merges on `main` @ `fb23c99`:
+Recent merges on `main` @ `1313bb9`:
 
 | PR | Phase | Summary |
 |----|-------|---------|
+| **#206** | Board | STATUS sync after #204 + #205 |
 | **#205** | Council | Cold-start confidence prior 0.62 + buy/sell volume completeness (45% gate unchanged) |
 | **#204** | Learning | Impact dial through full loop; hour picks recorded; trail on dial change |
 | **#202** | Perf + polish | Score cache, price memo, judges dedupe, sticky nav, onboarding tour |
 | **#201** | Council | Root exclusion, TMC overlay, call reasons, impact-aware scoring + dial |
-| **#200** | Council | HOLD + display-only candidate under 45% gate |
 | **#198** | UI | Council-first overhaul |
 | **#195** | **G7+G12** | Rajdhani titles, favicon, fonts |
 | **#192** | **C3** | CSS/mobile/a11y |
@@ -104,7 +104,7 @@ Recent merges on `main` @ `fb23c99`:
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **Cursor** | **Idle** | #201–#205 on main; new work only when explicitly queued |
+| **Cursor** | **Active** | Call reasons from live signal impact |
 | **Ditto** | **Monitor** | Read-only — CI, Fly health, `/api/data-freshness` |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`

@@ -1602,42 +1602,121 @@ def format_top_pick(state_vector: Dict[str, Any], rank: int) -> Dict[str, Any]:
     }
 
 
-def _compute_simivision_reasons(sn: Dict[str, Any], indicators: Dict[str, Any], hot: Dict[str, Any]) -> List[str]:
+def _signal_impact_reason_lines(
+    signal_impact: Optional[Dict[str, Any]],
+    max_n: int = 2,
+) -> List[str]:
+    """Top live signal descriptions (skip neutral / filler / unavailable)."""
+    if not isinstance(signal_impact, dict):
+        return []
+    impacts = [i for i in (signal_impact.get("impacts") or []) if isinstance(i, dict)]
+    directional = []
+    for item in impacts:
+        direction = str(item.get("direction") or "").lower()
+        desc = str(item.get("description") or "").strip()
+        if direction not in ("bullish", "bearish") or not desc:
+            continue
+        low = desc.lower()
+        if "unavailable" in low or "filler" in low or "neutral" in low:
+            continue
+        mag = float(item.get("magnitude_pct") or 0)
+        conf = float(item.get("confidence") or 50)
+        directional.append((mag * conf / 100.0, desc, direction, mag))
+    directional.sort(key=lambda t: t[0], reverse=True)
+
+    lines: List[str] = []
+    seen: set = set()
+    for _score, desc, direction, mag in directional:
+        if desc in seen:
+            continue
+        seen.add(desc)
+        if mag >= 0.5 and "%" not in desc:
+            sign = "+" if direction == "bullish" else "-"
+            desc = f"{desc} ({sign}{mag:.1f}% edge)"
+        lines.append(desc)
+        if len(lines) >= max_n:
+            break
+
+    try:
+        net = float(signal_impact.get("net_predicted_pct"))
+    except (TypeError, ValueError):
+        net = 0.0
+    if abs(net) >= 0.5 and len(lines) < max_n:
+        raw = signal_impact.get("net_predicted_pct_raw")
+        try:
+            raw_f = float(raw) if raw is not None else None
+        except (TypeError, ValueError):
+            raw_f = None
+        if raw_f is not None and abs(raw_f - net) >= 0.15:
+            lines.append(f"Impact-scaled edge {net:+.1f}% (raw {raw_f:+.1f}%)")
+        else:
+            lines.append(f"Net signal edge {net:+.1f}%")
+    return lines
+
+
+def _compute_simivision_reasons(
+    sn: Dict[str, Any],
+    indicators: Dict[str, Any],
+    hot: Dict[str, Any],
+    signal_impact: Optional[Dict[str, Any]] = None,
+) -> List[str]:
     """Generate a short list of reasons for a SimiVision / council pick."""
     from internal.subnets.apy import subnet_apy_percent
 
     reasons: List[str] = []
+    # Lead with live signal-impact lines when available (call content quality).
+    for line in _signal_impact_reason_lines(signal_impact, max_n=2):
+        reasons.append(line)
+
     emission = float(sn.get("emission", 0) or 0)
     apy_pct = subnet_apy_percent(sn)
     if apy_pct is None:
         apy_pct = float(sn.get("apy", 0) or 0)
     chg = float(sn.get("price_change_24h", 0) or 0)
+    fallback: List[str] = []
     if emission > 3:
-        reasons.append(f"Strong emission {emission:.2f} TAO/day")
+        fallback.append(f"Strong emission {emission:.2f} TAO/day")
     if apy_pct and apy_pct > 30:
-        reasons.append(f"High yield {apy_pct:.1f}% APY")
+        fallback.append(f"High yield {apy_pct:.1f}% APY")
     rsi = indicators.get("rsi", {})
     if isinstance(rsi, dict) and rsi.get("signal") == "oversold":
-        reasons.append("RSI oversold — reversal setup")
+        fallback.append("RSI oversold — reversal setup")
     macd = indicators.get("macd", {})
     if isinstance(macd, dict) and macd.get("crossover") == "bullish":
-        reasons.append("MACD bullish crossover")
+        fallback.append("MACD bullish crossover")
     if chg > 5:
-        reasons.append(f"Bullish 24h momentum +{chg:.1f}%")
+        fallback.append(f"Bullish 24h momentum +{chg:.1f}%")
     elif chg < -5:
-        reasons.append(f"24h pullback {chg:.1f}% — mean-reversion watch")
+        fallback.append(f"24h pullback {chg:.1f}% — mean-reversion watch")
     if hot.get("active"):
         hot_reasons = hot.get("reasons") or []
         if hot_reasons:
-            reasons.append(str(hot_reasons[0]))
+            fallback.append(str(hot_reasons[0]))
         else:
-            reasons.append("HOT signal triggered")
+            fallback.append("HOT signal triggered")
+
+    # Fill remaining slots from fallbacks that aren't already covered by signal text.
+    joined = " ".join(reasons).lower()
+    for line in fallback:
+        if len(reasons) >= 3:
+            break
+        token = line.split("—")[0].split("(")[0].strip().lower()
+        if token and token[:12] in joined:
+            continue
+        if line in reasons:
+            continue
+        reasons.append(line)
+
     try:
         from internal.subnets.impact import impact_reason
 
         ir = impact_reason(sn)
-        if ir:
-            reasons = [ir] + [r for r in reasons if r != ir]
+        if ir and ir not in reasons:
+            # Keep one float-share line; prefer after signal edges when present.
+            if len(reasons) >= 3:
+                reasons[-1] = ir
+            else:
+                reasons.append(ir)
     except Exception:
         pass
     if not reasons:
@@ -1645,9 +1724,16 @@ def _compute_simivision_reasons(sn: Dict[str, Any], indicators: Dict[str, Any], 
     return reasons[:3]
 
 
-def pick_reasons(sn: Dict[str, Any]) -> List[str]:
+def pick_reasons(
+    sn: Dict[str, Any],
+    signal_impact: Optional[Dict[str, Any]] = None,
+) -> List[str]:
     """Public helper: compute display reasons for a subnet row."""
-    indicators = _compute_technical_indicators(sn or {})
+    sn = sn or {}
+    indicators = _compute_technical_indicators(sn)
     convergence = _detect_oversold_convergence(indicators)
-    hot = _compute_hot_signals(sn or {}, indicators, convergence)
-    return _compute_simivision_reasons(sn or {}, indicators, hot)
+    hot = _compute_hot_signals(sn, indicators, convergence)
+    if signal_impact is None:
+        sell = _compute_sell_signals(sn, indicators, convergence)
+        signal_impact = _compute_signal_impact(sn, indicators, hot, sell)
+    return _compute_simivision_reasons(sn, indicators, hot, signal_impact)

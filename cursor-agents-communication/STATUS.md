@@ -1,11 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-14T19:30:00Z · Agent `-5e45`  
-**main:** `fb23c99`
+**Updated:** 2026-07-14T20:30:00Z · Agent `-5e45`  
+**main:** `1313bb9`
 
 ## One-line
 
-**Council picks + learning loop + confidence prior fix complete (#201–#205). Ditto = monitor only unless new work is queued.**
+**Richer call reasons from live signal impact in flight (`cursor/call-reasons-signal-impact-5e45`). Prior lane #201–#206 on main.**
 
 ## Done (do not re-queue)
 
@@ -21,15 +21,16 @@
 | Score cache + perf + nav/tour polish | **#202** |
 | Learning loop impact dial + hour picks | **#204** |
 | Cold-start confidence prior (HOLD root cause) | **#205** |
+| Board sync | **#206** |
 | A2 `smoke` on `main` | verified |
 | Phase K, J–O | historical |
 
 ## Ditto
 
 - **Do:** read `board.md`, watch CI/Fly health
-- **Do not:** re-open #201–#205, cite July 14 morning queue as open, use GitHub Contents API writes
+- **Do not:** re-open #201–#206, cite July 14 morning queue as open, use GitHub Contents API writes
 
 ## Cursor
 
-- New work only when human/board explicitly queues it
+- Active: call reasons from scored `signal_impact` (daily/hourly picks)
 - Git only; Ponytail minimal diff

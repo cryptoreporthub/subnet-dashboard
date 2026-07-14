@@ -79,7 +79,7 @@ def select_hourly_pick(
         from internal.council.state_vector import pick_reasons
 
         impact = impact_profile(candidate)
-        reasons = pick_reasons(candidate)
+        reasons = pick_reasons(candidate, score_payload.get("signal_impact"))
     except Exception:
         impact = None
         reasons = []
