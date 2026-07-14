@@ -311,3 +311,23 @@ def test_phase_l_premium_signals_js():
     html = client.get("/").text
     assert "/static/js/premium_signals.js" in html
     assert 'id="signals-ws-status"' in html
+
+
+def test_c4_cockpit_hydrate_script_on_index():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert "/static/js/cockpit_hydrate.js" in html
+    assert "document.documentElement.dataset.hydrate='1'" in html or 'data-hydrate="1"' in html
+
+
+def test_c4_app_js_exposes_chart_paint_hooks():
+    hooks = open("static/js/app.js", encoding="utf-8").read()
+    assert "window.__paintSparks" in hooks
+    assert "window.__paintRadar" in hooks
+
+
+def test_c4_hydrate_calls_chart_paint_hooks():
+    hydrate = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()
+    assert "paintCharts" in hydrate
+    assert "__paintSparks" in hydrate
+    assert "__paintRadar" in hydrate
