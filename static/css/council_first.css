@@ -166,10 +166,38 @@
   font-size: 0.9rem;
 }
 
-.council-call--empty .empty {
-  font-size: 1.1rem;
+.council-call__regime {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.14em;
   color: var(--stage-muted);
+  border: 1px solid rgba(138, 154, 142, 0.35);
+  padding: 4px 8px;
+}
+
+.council-call__candidate {
+  font-size: 1.05rem;
+  color: var(--stage-ink);
+  margin: 0 0 16px;
   max-width: 36em;
+  line-height: 1.4;
+}
+
+.council-call__candidate-tag {
+  display: inline-block;
+  margin-left: 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--stage-muted);
+  border: 1px solid rgba(138, 154, 142, 0.4);
+  padding: 2px 6px;
+  vertical-align: middle;
+}
+
+.council-call--hold .council-call__name {
+  color: var(--stage-muted);
 }
 
 /* ---------- Primary council band ---------- */

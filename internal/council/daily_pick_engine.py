@@ -71,6 +71,19 @@ def get_or_create_today_pick(
     if not force:
         existing = _find_today(records)
         if existing is not None:
+            # HOLD with no audited pick: attach a live candidate for display only
+            # (does not change the persisted HOLD decision or invent a BUY).
+            if (
+                existing.get("pick") is None
+                and str(existing.get("action", "")).upper() == "HOLD"
+                and subnets
+                and existing.get("candidate") is None
+            ):
+                try:
+                    existing = dict(existing)
+                    existing["candidate"] = select_daily_pick(subnets, market_context)
+                except Exception:
+                    pass
             return existing
 
     if not subnets:
@@ -81,6 +94,7 @@ def get_or_create_today_pick(
             "action": "HOLD",
             "reason": "No subnets available",
             "pick": None,
+            "candidate": None,
             "regime": classify_regime(market_context),
             "rotation_summary": get_rotation_summary(subnets),
             "market_context": market_context,
@@ -95,11 +109,16 @@ def get_or_create_today_pick(
     if final_confidence < 0.45:
         action = "HOLD"
         stored_pick: Optional[Dict[str, Any]] = None
-        reason = "Confidence too low"
+        reason = (
+            f"Confidence {final_confidence:.0%} below 45% audit gate — "
+            "no long call published"
+        )
+        candidate: Optional[Dict[str, Any]] = pick
     else:
         action = pick.get("action", "long")
         stored_pick = pick
         reason = None
+        candidate = None
 
     payload = {
         "status": "ok",
@@ -109,6 +128,7 @@ def get_or_create_today_pick(
         "rotation_summary": get_rotation_summary(subnets),
         "action": action,
         "pick": stored_pick,
+        "candidate": candidate,
         "reason": reason,
         "market_context": market_context,
     }
