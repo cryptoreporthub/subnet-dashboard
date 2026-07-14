@@ -1,7 +1,7 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-14T20:35:00Z · Agent `-5e45`  
-**main:** `ab44d14`
+**Updated:** 2026-07-14T20:40:00Z · Agent `-6f98` (sync)  
+**main:** `312a514`
 
 ## One-line
 

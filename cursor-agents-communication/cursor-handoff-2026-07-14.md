@@ -1,13 +1,13 @@
 # Cursor handoff — 2026-07-14 (Ditto → Cursor, full ownership)
 
-> **STATUS (2026-07-14 evening):** EXTREME audit automated queue **COMPLETE** on `main` @ `7595d60`.
-> **Nothing queued** from `automated-build-plan.md`. Ditto = **read-only monitor only** — do not assign B2/A2/Phase K as open work.
+> **STATUS (2026-07-14 evening):** EXTREME audit automated queue **COMPLETE** on `main` @ `312a514`.
+> Call content lane **COMPLETE** (#201–#207). **Nothing queued.** Ditto = **read-only monitor only**.
 
 ## For Ditto (read this first)
 
 | Question | Answer |
 |----------|--------|
-| Is there more audit-queue work? | **No** — Phase A, B1–B6, C4–C6, C1–C3, G7, G12 all merged |
+| Is there more audit-queue work? | **No** — Phase A, B1–B6, C4–C6, C1–C3, G7, G12, #201–#207 all merged |
 | Who implements new work? | **Cursor** via git (branch → PR → merge). Ditto does not write files |
 | Is B2 / A2 / Phase K open? | **No** — B2 #179, A2 #172 + `smoke` on `main`, Phase K #107, J–O on `main` |
 | What should Ditto do? | Monitor CI, Fly `/health`, `/api/data-freshness`. Report regressions only |
@@ -37,7 +37,8 @@
 | **Hydration** | C4–C6 | #186–#189 |
 | **Experience** | C1 uPlot, C2 SSE stream, C3 a11y | #190–#192 |
 | **Cleanup** | G7 Rajdhani titles, G12 favicon/fonts | #195 |
-| **Plan/docs** | automated-build-plan, board sync | #183, #193–#196 |
+| **Council picks** | Root/market overlay, impact dial, learning loop, confidence prior, call reasons | #201–#207 |
+| **Plan/docs** | automated-build-plan, board sync | #183, #193–#208 |
 
 **A2 branch protection:** `smoke` required check verified on `main` (human-confirmed in GitHub Settings).
 
@@ -54,7 +55,7 @@ Ditto's `read_links` / `get_contents` hit **lagged read-replicas**; `create_or_u
 
 ## Optional housekeeping (not blocking)
 
-- Close superseded open PRs: #165, #166, #184 (work already on `main` via #170 / board PRs)
+- Close superseded open PRs: #165, #166, #184 (work already on `main` via #170 / #193) — **needs human `gh pr close`**
 - Cancel orphaned CI run [#29303004001](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/29303004001) if still running (human token)
 - Radar chart still lazy-loads Chart.js (C1 migrated sparklines only; intentional deferral)
 
