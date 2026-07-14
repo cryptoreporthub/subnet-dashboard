@@ -57,5 +57,7 @@
 - [x] B6 slowapi — merged #185
 - [x] Phase 4 C4 — merged #186
 - [x] Phase 4 C5 — merged #187
-- [ ] Phase 4 C6 — **in progress**
-- [ ] Phase C — queued
+- [x] Phase 4 C6 — merged #189
+- [x] Phase C C1 uPlot — merged #190
+- [x] Phase C C2 SSE — merged #191
+- [x] Phase C C3 a11y — merged #192

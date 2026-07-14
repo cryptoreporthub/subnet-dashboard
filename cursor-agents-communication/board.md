@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T05:45:00Z by Agent (`-5e45`) — **C5 merged #187**; C6 in progress  
-**main:** `06b7811`
+**Last updated:** 2026-07-14T06:15:00Z by Agent (`-5e45`) — **automated queue COMPLETE** (B6→C3)  
+**main:** `8e06f4f`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -55,11 +55,13 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 | **G9–G11** | B | ✅ **merged** | #161 — Grok sign-off PASS |
 | **C4** hydration binders | Cursor | ✅ **merged** | #186 |
 | **C5** APY/confidence fix | Cursor | ✅ **merged** | #187 |
-| **C6** conviction tiers | Cursor | 🔄 **in progress** | `-5e45` |
-| C3 htmx | Composer | backlog | Phase 6 |
+| **C6** conviction tiers | Cursor | ✅ **merged** | #189 |
+| **C1** uPlot sparklines | Cursor | ✅ **merged** | #190 |
+| **C2** SSE cockpit stream | Cursor | ✅ **merged** | #191 |
+| **C3** CSS/mobile/a11y | Cursor | ✅ **merged** | #192 |
 
 ## Ready for Build
-**Automated queue:** `cursor-agents-communication/automated-build-plan.md` — C6→C1→C2→C3 remaining.
+**Automated queue:** COMPLETE — B6 #185 · C4 #186 · C5 #187 · C6 #189 · C1 #190 · C2 #191 · C3 #192. A2 branch-protection remains human-only.
 
 Recent merges on `main` @ `82bbde7` (CI green):
 
