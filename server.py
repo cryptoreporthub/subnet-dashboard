@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -167,6 +168,12 @@ async def _lifespan(app: FastAPI):
         from internal.council.resolver_scheduler import stop_prediction_resolver_scheduler
 
         stop_prediction_resolver_scheduler()
+    except Exception:
+        pass
+    try:
+        from internal.http_client import close_async_client
+
+        await close_async_client()
     except Exception:
         pass
 
@@ -465,8 +472,12 @@ def get_registry():
 
 
 @app.get("/api/subnets")
-def list_subnets(request: Request):
+async def list_subnets(request: Request):
     """List subnets with optional filtering, sorting, and pagination."""
+    return await asyncio.to_thread(_list_subnets_sync, request)
+
+
+def _list_subnets_sync(request: Request):
     # Prefer LIVE TaoMarketCap data (real 24h/7d/30d); fall back to the committed registry.
     source = _load_subnets_source()
     items = []
