@@ -71,12 +71,10 @@ def _parse_subnet_row(row: dict) -> Dict:
     if name in ("Unknown", "None", "deprecated"):
         name = f"SN{netuid}"
     pchg_w = row.get("price_difference_week", 0) or 0
-    apy = round(pchg_w * 52.0 / 100.0, 2)
     return {
         "netuid": netuid,
         "name": name,
         "emission": round(row.get("emission", 0), 4),
-        "apy": apy,
         "volume": round(row.get("volume", 0), 2),
         "market_cap": round(row.get("marketcap", 0), 2),
         "price": round(row.get("price", 0), 8),

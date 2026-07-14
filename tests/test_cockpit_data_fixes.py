@@ -17,6 +17,16 @@ def test_subnet_apy_prefers_staking_fraction():
     assert subnet_apy_percent(sn) == 18.0
 
 
+def test_subnet_apy_none_for_price_proxy_row():
+    sn = {"netuid": 1, "apy": 5.2, "price_change_7d": 10.0}
+    assert subnet_apy_percent(sn) is None
+
+
+def test_subnet_apy_registry_top_level_fraction():
+    sn = {"id": "sn-12", "apy": 0.25}
+    assert subnet_apy_percent(sn) == 25.0
+
+
 def test_normalize_merges_contrarian_into_dark_horse():
     raw = {"quant": 0.2, "hype": 0.2, "contrarian": 0.5, "dark_horse": 0.3, "technical": 0.1}
     out = normalize_council_weights(raw)

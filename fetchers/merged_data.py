@@ -88,8 +88,6 @@ def _merge_subnet(bm, ts, tmc):
         bm.get("emission") if bm and bm.get("emission")
         else tmc.get("emission", 0) if tmc else 0
     )
-    pchg_w = price_change_7d or 0
-    apy = round(pchg_w * 52.0 / 100.0, 2) if pchg_w else 0
     liquidity = (
         bm.get("liquidity") if bm and bm.get("liquidity")
         else ts.get("liquidity", 0) if ts else 0
@@ -148,7 +146,6 @@ def _merge_subnet(bm, ts, tmc):
         "stake": round(stake, 4) if stake else 0,
         "total_stake": round(total_stake, 4) if total_stake else 0,
         "emission": round(emission, 4) if emission else 0,
-        "apy": apy,
         "liquidity": round(liquidity, 4) if liquidity else 0,
         "total_tao": round(total_tao, 4) if total_tao else 0,
         "total_alpha": round(total_alpha, 4) if total_alpha else 0,
