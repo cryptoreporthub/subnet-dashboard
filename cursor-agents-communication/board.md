@@ -1,12 +1,12 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T16:40:00Z by Agent (`-6f98`) — **#201 + #202 merged**  
-**main:** `78ffd0b`
+**Last updated:** 2026-07-14T19:25:00Z by Agent (`-5e45`) — **#204 merged**; confidence prior fix in flight  
+**main:** `9445178`
 
 ## Ditto boot (read first)
 
 **`cursor-agents-communication/STATUS.md`** — one-page truth card.  
-Automated queue **COMPLETE**. B2/A2/Phase K are **not** open. Ditto = monitor only.
+Automated queue **COMPLETE**. B2/A2/Phase K are **not** open.
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -70,14 +70,15 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 
 ## Ready for next work
 
-**Idle — monitor only.** Council picks lane complete (#201 + #202). New work only when human/board explicitly queues it.
+**In flight:** confidence cold-prior fix (`cursor/confidence-prior-fix-5e45`) — cold prior 0.5 capped confidence at 0.5 so mild RedTeam haircuts forced HOLD under the 45% gate (gate stays; formula fixed). Volume completeness uses buy+sell via `subnet_volume`.
 
-**Automated queue:** COMPLETE — B6 #185 · C4 #186 · C5 #187 · C6 #189 · C1 #190 · C2 #191 · C3 #192 · board #193. **A2:** `smoke` required check verified on `main`.
+**Automated queue:** COMPLETE — B6 #185 · C4–C6 · C1–C3 · G7+G12 · #198–#202 · **#204**. **A2:** `smoke` required check verified on `main`.
 
-Recent merges on `main` @ `78ffd0b` (#201 + #202):
+Recent merges on `main` @ `9445178`:
 
 | PR | Phase | Summary |
 |----|-------|---------|
+| **#204** | Learning | Impact dial through full loop; hour picks recorded; trail on dial change |
 | **#202** | Perf + polish | Score cache, price memo, judges dedupe, sticky nav, onboarding tour |
 | **#201** | Council | Root exclusion, TMC overlay, call reasons, impact-aware scoring + dial |
 | **#200** | Council | HOLD + display-only candidate under 45% gate |
@@ -102,7 +103,7 @@ Recent merges on `main` @ `78ffd0b` (#201 + #202):
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **Cursor** | **Idle** | Audit queue complete; new work only when explicitly queued |
+| **Cursor** | **Active** | Confidence prior / volume completeness (#204 follow-up) |
 | **Ditto** | **Monitor** | Read-only — CI, Fly health, `/api/data-freshness` |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`

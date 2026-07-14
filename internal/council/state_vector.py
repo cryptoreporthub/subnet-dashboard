@@ -1376,6 +1376,11 @@ def _resolver_hit_rate(min_n: int = 30) -> Optional[float]:
     return hits / len(graded)
 
 
+# Cold-start prior must clear the 45% publish gate after mild RedTeam haircuts.
+# Prior 0.5 capped raw confidence at 0.5, so any ×0.95 audit cut forced HOLD.
+_COLD_START_PRIOR = 0.62
+
+
 def _compute_confidence(
     sn: Dict[str, Any],
     indicators: Dict[str, Any],
@@ -1384,10 +1389,16 @@ def _compute_confidence(
     """Return a 0-1 confidence score calibrated against resolver history."""
     prior = _resolver_hit_rate()
     if prior is None:
-        prior = 0.5
+        prior = _COLD_START_PRIOR
 
-    required = ("netuid", "name", "price", "volume")
+    from internal.subnets.tradable import subnet_volume
+
+    vol = subnet_volume(sn)
+    required = ("netuid", "name", "price")
     missing = sum(1 for f in required if sn.get(f) is None or sn.get(f) == "")
+    # buy+sell volume counts — same as RedTeam / TMC overlay (not only `volume` key)
+    if vol <= 0 and (sn.get("volume") is None or sn.get("volume") == ""):
+        missing += 1
     completeness = 1.0 - missing * 0.15
 
     hist_len = int(indicators.get("history_length", 0) or 0)
@@ -1396,7 +1407,7 @@ def _compute_confidence(
     elif hist_len < 30:
         completeness -= 0.05
 
-    if float(sn.get("volume", 0) or 0) <= 0:
+    if vol <= 0:
         completeness -= 0.10
 
     completeness = min(1.0, max(0.0, completeness))
