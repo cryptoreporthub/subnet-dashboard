@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T09:15:00Z by Agent (`-5e45`) — **council-first overhaul merged**  
-**main:** `6a52c89`
+**Last updated:** 2026-07-14T16:40:00Z by Agent (`-6f98`) — **#201 + #202 merged**  
+**main:** `78ffd0b`
 
 ## Ditto boot (read first)
 
@@ -69,16 +69,17 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 | **G12** favicon + font cleanup | Cursor | ✅ **merged** | #195 |
 
 ## Ready for next work
-**Homepage:** council-first (#198) — decision stage + demoted market drawer. Dual cockpit grid removed.
 
-**In flight:** PR #201 — Root exclusion, TMC market overlay, call reasons, **impact-aware scoring** (large caps dampened by vol/mcap / 50 TAO float-share; no top-30 hard filter).
+**Idle — monitor only.** Council picks lane complete (#201 + #202). New work only when human/board explicitly queues it.
 
 **Automated queue:** COMPLETE — B6 #185 · C4 #186 · C5 #187 · C6 #189 · C1 #190 · C2 #191 · C3 #192 · board #193. **A2:** `smoke` required check verified on `main`.
 
-Recent merges on `main` @ `e7c805c` (council call substance #200):
+Recent merges on `main` @ `78ffd0b` (#201 + #202):
 
 | PR | Phase | Summary |
 |----|-------|---------|
+| **#202** | Perf + polish | Score cache, price memo, judges dedupe, sticky nav, onboarding tour |
+| **#201** | Council | Root exclusion, TMC overlay, call reasons, impact-aware scoring + dial |
 | **#200** | Council | HOLD + display-only candidate under 45% gate |
 | **#198** | UI | Council-first overhaul |
 | **#195** | **G7+G12** | Rajdhani titles, favicon, fonts |
