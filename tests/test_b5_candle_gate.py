@@ -9,6 +9,10 @@ from internal.council.state_vector import (
 
 def test_price_history_unavailable_without_cache(monkeypatch):
     monkeypatch.setattr("internal.council.state_vector._load_price_cache", lambda: {})
+    monkeypatch.setattr(
+        "internal.council.state_vector._lazy_fill_price_candles",
+        lambda _nid: [],
+    )
     hist = _get_price_history(1, {"netuid": 1, "price": 1.0})
     assert hist["source"] == "unavailable"
     assert hist["closes"] == []
@@ -16,6 +20,10 @@ def test_price_history_unavailable_without_cache(monkeypatch):
 
 def test_technical_score_degraded_without_history(monkeypatch):
     monkeypatch.setattr("internal.council.state_vector._load_price_cache", lambda: {})
+    monkeypatch.setattr(
+        "internal.council.state_vector._lazy_fill_price_candles",
+        lambda _nid: [],
+    )
     sn = {"netuid": 1, "price": 1.0, "price_change_24h": 2.0}
     indicators = _compute_technical_indicators(sn)
     assert indicators.get("degraded") is True

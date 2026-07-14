@@ -80,42 +80,24 @@ def _empty_price_history() -> Dict[str, Any]:
     }
 
 
-def _get_price_history(netuid: Any, sn: Dict[str, Any]) -> Dict[str, Any]:
-    """Return {closes, highs, lows, volumes, timestamps, source} for a subnet."""
+def _history_from_candles(candles: List[Dict[str, Any]], source: str) -> Dict[str, Any]:
+    """Parse OHLCV rows; honest-empty when fewer than 30 closes."""
     closes: List[float] = []
     highs: List[float] = []
     lows: List[float] = []
     volumes: List[float] = []
     timestamps: List[str] = []
-    source = "unavailable"
-
-    cache = _load_price_cache()
-    if isinstance(netuid, dict):
-        netuid = netuid.get("id") or netuid.get("netuid") or netuid.get("subnet") or 0
-    try:
-        netuid = int(netuid)
-    except (TypeError, ValueError):
-        netuid = str(netuid)
-    raw = cache.get(str(netuid)) or cache.get(int(netuid) if str(netuid).isdigit() else netuid)
-    if raw and isinstance(raw, dict):
-        source = raw.get("source", "cached")
-        if source == "synthetic":
-            return _empty_price_history()
-        candles = raw.get("candles") or []
-        if candles:
-            for c in candles:
-                cl = c.get("close")
-                if cl is None:
-                    continue
-                closes.append(float(cl))
-                highs.append(float(c.get("high", cl)))
-                lows.append(float(c.get("low", cl)))
-                volumes.append(float(c.get("volume", 0) or 0))
-                timestamps.append(c.get("timestamp", ""))
-
+    for c in candles:
+        cl = c.get("close")
+        if cl is None:
+            continue
+        closes.append(float(cl))
+        highs.append(float(c.get("high", cl)))
+        lows.append(float(c.get("low", cl)))
+        volumes.append(float(c.get("volume", 0) or 0))
+        timestamps.append(c.get("timestamp", ""))
     if len(closes) < 30:
         return _empty_price_history()
-
     return {
         "closes": closes,
         "highs": highs,
@@ -124,6 +106,51 @@ def _get_price_history(netuid: Any, sn: Dict[str, Any]) -> Dict[str, Any]:
         "timestamps": timestamps,
         "source": source,
     }
+
+
+def _lazy_fill_price_candles(netuid: Any) -> List[Dict[str, Any]]:
+    """On-demand OHLCV fetch when price_cache is cold (audit #16 / STATUS optional lever)."""
+    try:
+        from internal.indicators.price_fetcher import fetch_ohlcv
+
+        candles = fetch_ohlcv(str(netuid), use_cache=True)
+        _price_cache_memo["mtime"] = None
+        return candles if isinstance(candles, list) else []
+    except Exception:
+        return []
+
+
+def _get_price_history(netuid: Any, sn: Dict[str, Any]) -> Dict[str, Any]:
+    """Return {closes, highs, lows, volumes, timestamps, source} for a subnet."""
+    if isinstance(netuid, dict):
+        netuid = netuid.get("id") or netuid.get("netuid") or netuid.get("subnet") or 0
+    try:
+        netuid_key: Any = int(netuid)
+    except (TypeError, ValueError):
+        netuid_key = str(netuid)
+
+    cache = _load_price_cache()
+    raw = cache.get(str(netuid_key)) or (
+        cache.get(netuid_key) if isinstance(netuid_key, int) else None
+    )
+    if raw and isinstance(raw, dict):
+        source = raw.get("source", "cached")
+        if source == "synthetic":
+            return _empty_price_history()
+        hist = _history_from_candles(raw.get("candles") or [], source)
+        if hist["closes"]:
+            return hist
+
+    candles = _lazy_fill_price_candles(netuid_key)
+    if candles:
+        cache = _load_price_cache()
+        raw = cache.get(str(netuid_key)) or (
+            cache.get(netuid_key) if isinstance(netuid_key, int) else None
+        )
+        source = (raw or {}).get("source", "lazy_fill")
+        return _history_from_candles(candles, source)
+
+    return _empty_price_history()
 
 
 # ---------------------------------------------------------------------------

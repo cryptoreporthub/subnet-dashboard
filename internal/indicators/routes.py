@@ -11,6 +11,7 @@ from internal.council.state_vector import (
     _compute_technical_indicators,
     _detect_overbought_convergence,
     _detect_oversold_convergence,
+    _get_price_history,
 )
 from internal.indicators.indicator_engine import IndicatorEngine
 from internal.indicators.indicator_scheduler import get_indicator_scheduler_state
@@ -48,12 +49,19 @@ async def api_indicators_convergence():
         rows: List[Dict[str, Any]] = []
         for sn in ranked[:6]:
             indicators = _compute_technical_indicators(sn)
+            hist = _get_price_history(sn.get("netuid"), sn)
+            sparks = hist.get("closes") or []
+            if hist.get("source") in ("synthetic", "unavailable") or len(sparks) < 2:
+                sparks = []
+            else:
+                sparks = [float(c) for c in sparks[-24:]]
             rows.append(
                 {
                     "netuid": sn.get("netuid"),
                     "name": sn.get("name"),
                     "oversold": _detect_oversold_convergence(indicators),
                     "overbought": _detect_overbought_convergence(indicators),
+                    "spark_closes": sparks,
                 }
             )
         return {"subnets": rows}
