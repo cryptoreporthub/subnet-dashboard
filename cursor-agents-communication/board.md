@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T20:35:00Z by Agent (`-5e45`) — **#207 merged**; idle  
-**main:** `ab44d14`
+**Last updated:** 2026-07-14T20:40:00Z by Agent (`-6f98`) — synced after `-5e45` #207/#208  
+**main:** `312a514`
 
 ## Ditto boot (read first)
 
@@ -74,10 +74,11 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 
 **Automated queue:** COMPLETE — B6 #185 · C4–C6 · C1–C3 · G7+G12 · #198–#202 · #204–#207. **A2:** `smoke` required check verified on `main`.
 
-Recent merges on `main` @ `ab44d14`:
+Recent merges on `main` @ `312a514`:
 
 | PR | Phase | Summary |
 |----|-------|---------|
+| **#208** | Board | STATUS sync after #207 |
 | **#207** | Council | Call reasons lead with live signal-impact edges; prediction expert/source from impact |
 | **#206** | Board | STATUS sync after #204 + #205 |
 | **#205** | Council | Cold-start confidence prior 0.62 + buy/sell volume completeness (45% gate unchanged) |
