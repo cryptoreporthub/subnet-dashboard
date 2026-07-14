@@ -575,6 +575,26 @@
     }
   }
 
+  var cockpitStream = null;
+
+  function connectCockpitStream() {
+    if (cockpitStream || typeof EventSource === 'undefined') return;
+    cockpitStream = new EventSource('/api/cockpit/stream');
+    cockpitStream.addEventListener('cockpit.sections', function (ev) {
+      try {
+        var payload = JSON.parse(ev.data);
+        if (payload && payload.sections) {
+          renderCockpitSections(payload.sections);
+        }
+      } catch (e) {
+        console.warn('[cockpit_hydrate] SSE parse failed', e);
+      }
+    });
+    cockpitStream.onerror = function () {
+      console.warn('[cockpit_hydrate] SSE disconnect; keeping last snapshot');
+    };
+  }
+
   async function run() {
     if (document.documentElement.dataset.hydrate !== '1') return;
 
@@ -648,6 +668,7 @@
     updateGroupData(hourPicks, dayPicks, trail, subnets);
     paintCharts();
     console.log('[cockpit_hydrate] panels updated from APIs');
+    connectCockpitStream();
 
     // Defer heavy judge scoring so /health stays responsive on single-worker Fly.
     try {
