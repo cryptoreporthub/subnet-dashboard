@@ -119,6 +119,12 @@ def select_daily_pick(
     final_confidence = audit["adjusted_confidence"]
     prediction = _attach_prediction(candidate, score_payload, final_confidence)
     reasons = pick_reasons(candidate)
+    try:
+        from internal.subnets.impact import impact_profile
+
+        impact = impact_profile(candidate)
+    except Exception:
+        impact = None
 
     return {
         "subnet": {
@@ -136,6 +142,7 @@ def select_daily_pick(
         "tie_break": tie_break,
         "prediction": prediction,
         "reasons": reasons,
+        "impact": impact,
     }
 
 
@@ -178,11 +185,27 @@ def _apply_tie_break(
             reasons.append("Leader has lower 24h volatility (" + str(round(l_vol, 2)) + "% vs " + str(round(r_vol, 2)) + "%)")
 
     if not winner_changed:
-        l_vol_val = float(l_sn.get("volume", 0) or 0)
-        r_vol_val = float(r_sn.get("volume", 0) or 0)
-        if r_vol_val > l_vol_val * 1.1:
-            reasons.append("Runner-up has higher volume ($" + str(int(r_vol_val)) + " vs $" + str(int(l_vol_val)) + ")")
+        from internal.subnets.impact import relative_flow
+
+        l_flow = relative_flow(l_sn)
+        r_flow = relative_flow(r_sn)
+        if r_flow > l_flow * 1.15 and r_flow > 0:
+            reasons.append(
+                "Runner-up has higher relative flow (vol/mcap "
+                + str(round(r_flow, 3))
+                + " vs "
+                + str(round(l_flow, 3))
+                + ")"
+            )
             winner_changed = True
+        elif l_flow > r_flow * 1.15 and l_flow > 0:
+            reasons.append(
+                "Leader has higher relative flow (vol/mcap "
+                + str(round(l_flow, 3))
+                + " vs "
+                + str(round(r_flow, 3))
+                + ")"
+            )
 
     if not reasons:
         reasons.append("Scores within 2.0 but no tie-break rule triggered; leader retained.")

@@ -234,6 +234,7 @@
           (finalConf != null ? ' at <strong class="accent-bright">' + fc.conf + '% confidence</strong>' : '') +
           ' · resolve within ' + hz + ' hours');
       var reasons = (pick.reasons || []).slice(0, 3);
+      var impact = pick.impact || {};
       html =
         '<div class="council-call">' +
         actionBadges(act, true) +
@@ -247,6 +248,9 @@
           ? '<ul class="council-call__reasons">' +
             reasons.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') +
             '</ul>'
+          : '') +
+        (impact.summary
+          ? '<p class="council-call__impact">' + esc(impact.summary) + '</p>'
           : '') +
         '<div class="council-call__conviction">' +
         '<div class="conviction-bar"><div class="conviction-fill ' + fc.tier + '" style="width:' + fc.conf + '%;"></div></div>' +

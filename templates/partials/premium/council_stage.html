@@ -61,6 +61,10 @@
           {% for r in call_reasons[:3] %}<li>{{ r }}</li>{% endfor %}
         </ul>
         {% endif %}
+        {% set impact = audit_pick.impact if audit_pick.impact is mapping else none %}
+        {% if impact and impact.summary %}
+        <p class="council-call__impact">{{ impact.summary }}</p>
+        {% endif %}
         {% if fc is not none %}
         <div class="council-call__conviction">
           <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ fc }}%;"></div></div>
