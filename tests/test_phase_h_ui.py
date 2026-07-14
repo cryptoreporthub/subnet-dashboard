@@ -59,6 +59,22 @@ def test_index_no_markdown_heading_triple_hash():
     assert "###" not in html
 
 
+def test_index_has_data_freshness_badge():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert 'id="dataFreshnessBadge"' in html
+    assert "/static/js/data_freshness.js" in html
+
+
+def test_data_freshness_api_shape():
+    client = TestClient(app)
+    resp = client.get("/api/data-freshness")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "stale" in data
+    assert "source" in data
+
+
 def test_index_renders_twelve_cockpit_sections():
     client = TestClient(app)
     html = client.get("/").text
