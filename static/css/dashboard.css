@@ -42,7 +42,7 @@
 }
 
 .card-glass {
-  background: rgba(8, 18, 12, 0.72);
+  background: rgba(8, 10, 18, 0.72);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
@@ -75,14 +75,10 @@
 .hero-card {
   position: relative;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(0, 255, 65, 0.04) 0%, transparent 40%),
-    var(--bg-card);
-  border: 1px solid var(--border-default);
-  border-top: 2px solid var(--accent-bright);
+  border: var(--border-width-important) solid transparent;
   border-radius: var(--radius-lg);
   padding: var(--space-6);
-  box-shadow: var(--shadow-card), 0 0 32px var(--accent-glow);
+  box-shadow: var(--shadow-card), var(--shadow-important);
 }
 
 .hero-card::before {
@@ -248,34 +244,32 @@
   letter-spacing: 0.4px;
 }
 
-/* ---------- Pick cards ---------- */
+/* ---------- Pick cards (mobile-first) ---------- */
 .picks {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1fr;
   gap: var(--space-4);
 }
 
-@media (max-width: 1100px) {
+@media (min-width: 768px) {
   .picks { grid-template-columns: repeat(2, 1fr); }
 }
 
-@media (max-width: 768px) {
-  .picks { grid-template-columns: 1fr; }
+@media (min-width: 1100px) {
+  .picks { grid-template-columns: repeat(3, 1fr); }
 }
 
 .pick-card {
   position: relative;
   overflow: hidden;
-  background: var(--bg-card);
-  border: 1px solid var(--border-default);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-lg);
   padding: var(--space-4);
   box-shadow: var(--shadow-card);
-  transition: box-shadow var(--transition-base), transform var(--transition-base), border-color var(--transition-base);
+  transition: box-shadow var(--transition-base), transform var(--transition-base);
 }
 
 .pick-card:hover {
-  border-color: var(--border-bright);
   box-shadow: var(--shadow-elevated), var(--shadow-glow);
   transform: translateY(-2px);
 }
@@ -286,8 +280,8 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--accent-primary), var(--accent-bright));
+  height: 4px;
+  background: linear-gradient(90deg, #00c8ff, #00ff41);
 }
 
 .pick-card.sell-accent::before {
@@ -452,18 +446,24 @@
 }
 
 .kpi-cell {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-md);
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+
+.kpi-cell:hover {
+  box-shadow: 0 0 20px rgba(0, 255, 65, 0.18), 0 0 28px rgba(0, 200, 255, 0.12);
+  transform: translateY(-1px);
 }
 
 .kpi-cell .k {
   font-family: var(--font-mono);
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
+  letter-spacing: 1px;
+  color: var(--accent-bright);
+  text-shadow: 0 0 8px rgba(0, 255, 65, 0.25);
 }
 
 .kpi-cell .v {
@@ -1080,15 +1080,15 @@ footer.status {
 }
 /* Color tiers by conviction level */
 .conv-ring.tier-red   { --ring-color: #ff3366; }
-.conv-ring.tier-gold  { --ring-color: #ff00ff; }
-.conv-ring.tier-lime  { --ring-color: #00ff41; }
-.conv-ring.tier-cyan  { --ring-color: #00f0ff; }
+.conv-ring.tier-gold  { --ring-color: #ff7a1a; }
+.conv-ring.tier-lime  { --ring-color: #39ff14; }
+.conv-ring.tier-cyan  { --ring-color: #00ff41; }
 /* Pulse/glow when conviction > 80% */
-.conv-ring.tier-cyan .conv-ring-fg { filter: drop-shadow(0 0 5px rgba(34, 211, 238, 0.85)); }
+.conv-ring.tier-cyan .conv-ring-fg { filter: drop-shadow(0 0 5px rgba(0, 255, 65, 0.85)); }
 .conv-ring.tier-cyan { animation: conv-pulse 1.8s ease-in-out infinite; }
 @keyframes conv-pulse {
-  0%, 100% { filter: drop-shadow(0 0 2px rgba(34, 211, 238, 0.35)); }
-  50%      { filter: drop-shadow(0 0 7px rgba(34, 211, 238, 0.7)); }
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(0, 255, 65, 0.35)); }
+  50%      { filter: drop-shadow(0 0 7px rgba(0, 255, 65, 0.7)); }
 }
 @media (max-width: 768px) {
   .conv-ring { width: 36px; height: 36px; }

@@ -1,41 +1,54 @@
-/* SimiVision — base tokens, reset, typography utilities */
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
-/* =====================================================================
-   SimiVision — Cockpit Redesign v3
-   Dark green / black fade theme. Calm, premium, serious.
-   Fonts: Rajdhani (UI + section titles), JetBrains Mono (mono/numbers).
-   ===================================================================== */
+/* SimiVision / DEGEN PROTOCOL — base tokens, reset, typography */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-  /* Backgrounds */
-  --bg-base: #05070a;
-  --bg-edge: #05070a;
-  --bg-surface: #0d1117;
-  --bg-card: #0d1117;
-  --bg-elevated: #0d1117;
-  --bg-header: rgba(5, 7, 10, 0.82);
+  /* Backgrounds — deep obsidian */
+  --bg-base: #000000;
+  --bg-edge: #050505;
+  --bg-surface: rgba(8, 10, 16, 0.72);
+  --bg-card: rgba(10, 12, 18, 0.55);
+  --bg-elevated: rgba(14, 16, 24, 0.78);
+  --bg-header: rgba(0, 0, 0, 0.72);
 
-  /* Accents */
+  /* Accents — green primary, blue logo, pink outlines, orange highlights */
   --accent-primary: #00ff41;
-  --accent-bright: #00ff41;
-  --accent-dim: rgba(26, 31, 46, 1.0);
-  --accent-glow: rgba(0, 255, 65, 0.08);
+  --accent-bright: #5cff7a;
+  --accent-blue: #00c8ff;
+  --accent-secondary: #ff2bd6;
+  --accent-magenta: #ff2bd6;
+  --accent-orange: #ff7a1a;
+  --accent-purple: #9b59ff;
+  --accent-dim: rgba(0, 255, 65, 0.12);
+  --accent-glow: rgba(0, 255, 65, 0.35);
+  --accent-glow-blue: rgba(0, 200, 255, 0.35);
+  --accent-glow-magenta: rgba(255, 43, 214, 0.45);
+  --accent-glow-orange: rgba(255, 122, 26, 0.4);
+  --accent-glow-purple: rgba(155, 89, 255, 0.22);
 
   /* Signals */
-  --signal-buy: #00ff41;
-  --signal-hold: #ff0099;
-  --signal-sell: #ff3366;
-  --signal-watch: #8b9bb4;
+  --signal-buy: #39ff14;
+  --signal-sell: #ff1744;
+  --signal-hold: #ff2bd6;
+  --signal-watch: var(--accent-orange);
+  --signal-amber: var(--accent-orange);
 
   /* Text */
-  --text-primary: #e6f1ff;
-  --text-secondary: #8b9bb4;
+  --text-primary: #e8f7ff;
+  --text-secondary: #8aa0b8;
   --text-muted: #7c8a9e;
 
-  /* Borders */
-  --border-subtle: rgba(0, 255, 65, 0.08);
-  --border-default: rgba(26, 31, 46, 1.0);
-  --border-bright: rgba(0, 255, 65, 0.35);
+  /* Borders — green chrome, pink for hero sections */
+  --border-subtle: rgba(0, 255, 65, 0.12);
+  --border-default: rgba(0, 255, 65, 0.22);
+  --border-bright: rgba(0, 255, 65, 0.55);
+  --border-magenta: rgba(255, 43, 214, 0.55);
+  --border-important: rgba(255, 43, 214, 0.65);
+  --border-width: 2px;
+  --border-width-important: 3px;
+  --board-border-gradient: linear-gradient(135deg, #00c8ff 0%, #3dffa8 52%, #00ff41 100%);
+  --important-border-gradient: linear-gradient(135deg, #ff7a1a 0%, #ff4dc4 52%, #ff2bd6 100%);
+  --card-panel-fill: linear-gradient(rgba(10, 12, 18, 0.96), rgba(10, 12, 18, 0.96));
+  --card-panel-shine: linear-gradient(180deg, rgba(0, 200, 255, 0.06) 0%, rgba(0, 255, 65, 0.04) 38%, transparent 72%);
 
   /* Radius */
   --radius-sm: 8px;
@@ -43,13 +56,16 @@
   --radius-lg: 16px;
   --radius-pill: 9999px;
 
-  /* Shadows */
-  --shadow-card: 0 8px 28px rgba(0, 0, 0, 0.55);
-  --shadow-elevated: 0 12px 40px rgba(0, 0, 0, 0.65);
-  --shadow-glow: 0 0 24px var(--accent-glow);
+  /* Shadows / bloom */
+  --shadow-card: 0 8px 28px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(0, 255, 65, 0.06) inset;
+  --shadow-important: 0 0 24px rgba(255, 43, 214, 0.18), 0 0 48px rgba(255, 43, 214, 0.08);
+  --shadow-elevated: 0 14px 48px rgba(0, 0, 0, 0.85);
+  --shadow-glow: 0 0 18px var(--accent-glow), 0 0 40px var(--accent-glow-purple);
+  --shadow-glow-magenta: 0 0 16px var(--accent-glow-magenta), 0 0 36px rgba(255, 43, 214, 0.2);
+  --shadow-bloom: 0 0 8px currentColor, 0 0 22px currentColor;
 
   /* Typography */
-  --font-display: 'Rajdhani', system-ui, sans-serif;
+  --font-display: 'Orbitron', system-ui, sans-serif;
   --font-body: 'Rajdhani', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
@@ -81,21 +97,22 @@ body {
   -webkit-font-smoothing: antialiased;
   background-color: var(--bg-base);
   background-image:
-    radial-gradient(circle at 50% 0%, rgba(0, 255, 65, 0.06) 0%, transparent 45%),
-    radial-gradient(circle at 0% 100%, rgba(5, 7, 10, 0.95) 0%, transparent 50%),
-    radial-gradient(circle at 100% 100%, rgba(5, 7, 10, 0.95) 0%, transparent 50%),
-    linear-gradient(180deg, var(--bg-base) 0%, var(--bg-edge) 100%);
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 255, 65, 0.14) 0%, transparent 55%),
+    radial-gradient(circle at 85% 15%, rgba(255, 43, 214, 0.08) 0%, transparent 35%),
+    radial-gradient(circle at 12% 82%, rgba(255, 122, 26, 0.07) 0%, transparent 40%),
+    radial-gradient(circle at 72% 68%, rgba(0, 200, 255, 0.06) 0%, transparent 38%),
+    linear-gradient(180deg, #000000 0%, #050805 100%);
   background-attachment: fixed;
   padding-bottom: 64px;
 }
 
-a { color: var(--accent-bright); text-decoration: none; }
+a { color: var(--accent-blue); text-decoration: none; }
+a:hover { color: var(--accent-orange); text-shadow: 0 0 12px var(--accent-glow-orange); }
 
 .mono { font-family: var(--font-mono); }
 .display { font-family: var(--font-display); }
 
-.pos, .buy { color: var(--signal-buy); }
-.neg, .sell { color: var(--signal-sell); }
-.neu, .hold { color: var(--signal-hold); }
+.pos, .buy { color: var(--signal-buy); text-shadow: 0 0 10px rgba(57, 255, 20, 0.45); }
+.neg, .sell { color: var(--signal-sell); text-shadow: 0 0 10px rgba(255, 23, 68, 0.4); }
+.neu, .hold { color: var(--signal-hold); text-shadow: 0 0 10px rgba(255, 43, 214, 0.35); }
 .watch { color: var(--signal-watch); }
-

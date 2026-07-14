@@ -119,7 +119,7 @@ header.top {
 
 .vol-dot-high { background: #ff3366; box-shadow: 0 0 6px rgba(255,51,102,0.4); }
 .vol-dot-core { background: #ff0099; box-shadow: 0 0 6px rgba(255,0,153,0.4); }
-.vol-dot-low  { background: #00ff41; box-shadow: 0 0 6px rgba(0,255,65,0.4); }
+.vol-dot-low  { background: #39ff14; box-shadow: 0 0 6px rgba(57,255,20,0.4); }
 
 .vol-cluster-label {
   font-size: 12px;
@@ -189,7 +189,7 @@ header.top {
 
 .vol-bar-high { background: linear-gradient(90deg, #ff3366, #ff6699); }
 .vol-bar-core { background: linear-gradient(90deg, #ff0099, #ff00ff); }
-.vol-bar-low  { background: linear-gradient(90deg, #00ff41, #00ff41); }
+.vol-bar-low  { background: linear-gradient(90deg, #39ff14, #00ff41); }
 
 .vol-cluster-value {
   font-size: 11px;
@@ -322,7 +322,7 @@ header.top {
     max-width: 100% !important;
   }
   .grid, .flex-row, .row, .two-col, .momentum-grid, .mi-grid, .kpi-strip,
-  .council-grid, .soc-grid, .pump-candidate-cards, .pump-profile-grid {
+  .council-grid, .soc-grid, .pump-candidate-cards, .pump-profile-grid, .picks {
     grid-template-columns: 1fr !important;
     flex-direction: column !important;
   }
@@ -372,12 +372,6 @@ header.top {
     -webkit-overflow-scrolling: touch;
   }
   table.tbl thead th { position: static; }   /* sticky headers don't work in block tables */
-
-  /* KPI / metric strips wrap to a 2x2 grid instead of a single row. */
-  .kpi-strip, .mi-grid { grid-template-columns: repeat(2, 1fr) !important; }
-  .kpi-grid--6 { grid-template-columns: repeat(2, 1fr) !important; }
-  .layout-grid[style*="repeat(5"] { grid-template-columns: repeat(2, 1fr) !important; }
-  .layout-grid[style*="repeat(4"] { grid-template-columns: repeat(2, 1fr) !important; }
 
   /* Hero stats stack neatly. */
   .hero-stats { gap: 12px; }

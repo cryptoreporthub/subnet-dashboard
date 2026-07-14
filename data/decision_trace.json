@@ -1,0 +1,1003 @@
+{
+  "meta": {
+    "version": 1,
+    "last_updated": "2026-07-13T21:51:53.569913Z"
+  },
+  "records": [
+    {
+      "id": "tr_20260713143049385393",
+      "created_at": "2026-07-13T14:30:49.385405Z",
+      "decision_type": "prediction_create",
+      "decision": {
+        "prediction_id": "66ab201b1d",
+        "event": "created",
+        "signals": [
+          {
+            "type": "pick_signal",
+            "source": "quant",
+            "payload": {
+              "score": 0.8142
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "hype",
+            "payload": {
+              "score": 0.6266
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "dark_horse",
+            "payload": {
+              "score": 0.59
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "technical",
+            "payload": {
+              "score": 0.75
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "signal_contributions",
+            "payload": {
+              "rsi_crossover": {
+                "score": 0.211,
+                "weight": 1.0,
+                "contribution": 0.211
+              },
+              "macd_cross": {
+                "score": 0.7002,
+                "weight": 1.0,
+                "contribution": 0.7002
+              },
+              "stochastic_reversal": {
+                "score": 0.5,
+                "weight": 1.0,
+                "contribution": 0.5
+              },
+              "bollinger_squeeze": {
+                "score": 0.5,
+                "weight": 1.0,
+                "contribution": 0.5
+              },
+              "mfi_flow": {
+                "score": 0.5527,
+                "weight": 1.0,
+                "contribution": 0.5527
+              },
+              "cci_divergence": {
+                "score": 0.8965,
+                "weight": 1.0,
+                "contribution": 0.8965
+              },
+              "williams_r": {
+                "score": 0.2535,
+                "weight": 1.0,
+                "contribution": 0.2535
+              },
+              "keltner_channel": {
+                "score": 0.15,
+                "weight": 1.0,
+                "contribution": 0.15
+              }
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "active_signals",
+            "payload": {
+              "score": [
+                "rsi_crossover",
+                "macd_cross",
+                "mfi_flow",
+                "cci_divergence",
+                "williams_r",
+                "keltner_channel"
+              ]
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "technical_score",
+            "payload": {
+              "score": 0.4705
+            }
+          }
+        ],
+        "expert": "quant",
+        "weights_at_creation": {
+          "quant": 1.0,
+          "hype": 1.0,
+          "dark_horse": 1.0,
+          "technical": 1.0
+        },
+        "regime": null,
+        "reference_price": 0.01229946,
+        "resolved_price": null,
+        "horizon_hours": 4,
+        "created_at": "2026-07-13T14:30:49.345611Z",
+        "resolved_at": null,
+        "resolve_at": "2026-07-13T18:30:49.345611Z",
+        "actual_pct": null,
+        "outcome": null,
+        "direction": "up",
+        "price_source": null,
+        "price_lag_seconds": null
+      },
+      "signals": [
+        {
+          "type": "pick_signal",
+          "source": "quant",
+          "payload": {
+            "score": 0.8142
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "hype",
+          "payload": {
+            "score": 0.6266
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "dark_horse",
+          "payload": {
+            "score": 0.59
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "technical",
+          "payload": {
+            "score": 0.75
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "signal_contributions",
+          "payload": {
+            "rsi_crossover": {
+              "score": 0.211,
+              "weight": 1.0,
+              "contribution": 0.211
+            },
+            "macd_cross": {
+              "score": 0.7002,
+              "weight": 1.0,
+              "contribution": 0.7002
+            },
+            "stochastic_reversal": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "bollinger_squeeze": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "mfi_flow": {
+              "score": 0.5527,
+              "weight": 1.0,
+              "contribution": 0.5527
+            },
+            "cci_divergence": {
+              "score": 0.8965,
+              "weight": 1.0,
+              "contribution": 0.8965
+            },
+            "williams_r": {
+              "score": 0.2535,
+              "weight": 1.0,
+              "contribution": 0.2535
+            },
+            "keltner_channel": {
+              "score": 0.15,
+              "weight": 1.0,
+              "contribution": 0.15
+            }
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "active_signals",
+          "payload": {
+            "score": [
+              "rsi_crossover",
+              "macd_cross",
+              "mfi_flow",
+              "cci_divergence",
+              "williams_r",
+              "keltner_channel"
+            ]
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "technical_score",
+          "payload": {
+            "score": 0.4705
+          }
+        }
+      ],
+      "subnet": "Compelle",
+      "netuid": 82
+    },
+    {
+      "id": "tr_20260713195806128405",
+      "created_at": "2026-07-13T19:58:06.128418Z",
+      "decision_type": "prediction_create",
+      "decision": {
+        "prediction_id": "eea670049c",
+        "event": "created",
+        "signals": [
+          {
+            "type": "pick_signal",
+            "source": "quant",
+            "payload": {
+              "score": 0.654
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "hype",
+            "payload": {
+              "score": 0.7
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "dark_horse",
+            "payload": {
+              "score": 0.59
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "technical",
+            "payload": {
+              "score": 0.85
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "signal_contributions",
+            "payload": {
+              "rsi_crossover": {
+                "score": 0.154,
+                "weight": 1.0,
+                "contribution": 0.154
+              },
+              "macd_cross": {
+                "score": 0.7013,
+                "weight": 1.0,
+                "contribution": 0.7013
+              },
+              "stochastic_reversal": {
+                "score": 0.5,
+                "weight": 1.0,
+                "contribution": 0.5
+              },
+              "bollinger_squeeze": {
+                "score": 0.15,
+                "weight": 1.0,
+                "contribution": 0.15
+              },
+              "mfi_flow": {
+                "score": 0.6313,
+                "weight": 1.0,
+                "contribution": 0.6313
+              },
+              "cci_divergence": {
+                "score": 0.1641,
+                "weight": 1.0,
+                "contribution": 0.1641
+              },
+              "williams_r": {
+                "score": 0.2299,
+                "weight": 1.0,
+                "contribution": 0.2299
+              },
+              "keltner_channel": {
+                "score": 0.15,
+                "weight": 1.0,
+                "contribution": 0.15
+              }
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "active_signals",
+            "payload": {
+              "score": [
+                "rsi_crossover",
+                "macd_cross",
+                "bollinger_squeeze",
+                "mfi_flow",
+                "cci_divergence",
+                "williams_r",
+                "keltner_channel"
+              ]
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "technical_score",
+            "payload": {
+              "score": 0.3351
+            }
+          }
+        ],
+        "expert": "technical",
+        "weights_at_creation": {
+          "quant": 1.01,
+          "hype": 1.0,
+          "dark_horse": 1.0,
+          "technical": 1.0
+        },
+        "regime": null,
+        "reference_price": 0.00669391,
+        "resolved_price": null,
+        "horizon_hours": 4,
+        "created_at": "2026-07-13T19:58:06.095007Z",
+        "resolved_at": null,
+        "resolve_at": "2026-07-13T23:58:06.095007Z",
+        "actual_pct": null,
+        "outcome": null,
+        "direction": "up",
+        "price_source": null,
+        "price_lag_seconds": null
+      },
+      "signals": [
+        {
+          "type": "pick_signal",
+          "source": "quant",
+          "payload": {
+            "score": 0.654
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "hype",
+          "payload": {
+            "score": 0.7
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "dark_horse",
+          "payload": {
+            "score": 0.59
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "technical",
+          "payload": {
+            "score": 0.85
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "signal_contributions",
+          "payload": {
+            "rsi_crossover": {
+              "score": 0.154,
+              "weight": 1.0,
+              "contribution": 0.154
+            },
+            "macd_cross": {
+              "score": 0.7013,
+              "weight": 1.0,
+              "contribution": 0.7013
+            },
+            "stochastic_reversal": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "bollinger_squeeze": {
+              "score": 0.15,
+              "weight": 1.0,
+              "contribution": 0.15
+            },
+            "mfi_flow": {
+              "score": 0.6313,
+              "weight": 1.0,
+              "contribution": 0.6313
+            },
+            "cci_divergence": {
+              "score": 0.1641,
+              "weight": 1.0,
+              "contribution": 0.1641
+            },
+            "williams_r": {
+              "score": 0.2299,
+              "weight": 1.0,
+              "contribution": 0.2299
+            },
+            "keltner_channel": {
+              "score": 0.15,
+              "weight": 1.0,
+              "contribution": 0.15
+            }
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "active_signals",
+          "payload": {
+            "score": [
+              "rsi_crossover",
+              "macd_cross",
+              "bollinger_squeeze",
+              "mfi_flow",
+              "cci_divergence",
+              "williams_r",
+              "keltner_channel"
+            ]
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "technical_score",
+          "payload": {
+            "score": 0.3351
+          }
+        }
+      ],
+      "subnet": "pending...",
+      "netuid": 94
+    },
+    {
+      "id": "tr_20260713200035075438",
+      "created_at": "2026-07-13T20:00:35.075450Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": null,
+        "event": "resolved",
+        "signals": [],
+        "expert": "quant",
+        "weights_at_creation": null,
+        "regime": null,
+        "reference_price": 10.0,
+        "resolved_price": 10.5,
+        "horizon_hours": null,
+        "created_at": null,
+        "resolved_at": "2026-07-13T20:00:35.040239Z",
+        "resolve_at": "2026-07-13T19:00:35.040230Z",
+        "actual_pct": 5.0,
+        "outcome": "hit",
+        "direction": "up",
+        "price_source": null,
+        "price_lag_seconds": null
+      },
+      "signals": [],
+      "subnet": "Subnet D",
+      "netuid": 1
+    },
+    {
+      "id": "tr_20260713200035102731",
+      "created_at": "2026-07-13T20:00:35.102743Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": null,
+        "event": "resolved",
+        "signals": [],
+        "expert": "quant",
+        "weights_at_creation": null,
+        "regime": null,
+        "reference_price": 100.0,
+        "resolved_price": 115.0,
+        "horizon_hours": null,
+        "created_at": null,
+        "resolved_at": "2026-07-13T20:00:35.094217Z",
+        "resolve_at": null,
+        "actual_pct": 15.0,
+        "outcome": "hit",
+        "direction": "up",
+        "price_source": null,
+        "price_lag_seconds": null
+      },
+      "signals": [],
+      "subnet": null,
+      "netuid": 5
+    },
+    {
+      "id": "tr_20260713200035115396",
+      "created_at": "2026-07-13T20:00:35.115407Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": null,
+        "event": "resolved",
+        "signals": [],
+        "expert": "hype",
+        "weights_at_creation": null,
+        "regime": null,
+        "reference_price": 100.0,
+        "resolved_price": 110.0,
+        "horizon_hours": null,
+        "created_at": null,
+        "resolved_at": "2026-07-13T19:00:35.106105Z",
+        "resolve_at": "2026-07-13T19:00:35.106105Z",
+        "actual_pct": 10.0,
+        "outcome": "hit",
+        "direction": "up",
+        "price_source": "vwap",
+        "price_lag_seconds": 0
+      },
+      "signals": [],
+      "subnet": null,
+      "netuid": 1
+    },
+    {
+      "id": "tr_20260713200035152644",
+      "created_at": "2026-07-13T20:00:35.152655Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": null,
+        "event": "resolved",
+        "signals": [],
+        "expert": "quant",
+        "weights_at_creation": null,
+        "regime": null,
+        "reference_price": 20.0,
+        "resolved_price": 21.0,
+        "horizon_hours": null,
+        "created_at": null,
+        "resolved_at": "2026-07-13T19:00:35.141593Z",
+        "resolve_at": "2026-07-13T19:00:35.141593Z",
+        "actual_pct": 5.0,
+        "outcome": "hit",
+        "direction": "up",
+        "price_source": "vwap",
+        "price_lag_seconds": 0
+      },
+      "signals": [],
+      "subnet": null,
+      "netuid": 29
+    },
+    {
+      "id": "tr_20260713200049733479",
+      "created_at": "2026-07-13T20:00:49.733514Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "pred-ledger-1",
+        "event": "resolved",
+        "signals": [],
+        "expert": "quant",
+        "weights_at_creation": null,
+        "regime": null,
+        "reference_price": 50.0,
+        "resolved_price": 52.5,
+        "horizon_hours": 1,
+        "created_at": "2026-07-13T20:00:49.605398Z",
+        "resolved_at": "2026-07-13T20:00:49.606582Z",
+        "resolve_at": null,
+        "actual_pct": 5.0,
+        "outcome": "hit",
+        "direction": "up",
+        "price_source": null,
+        "price_lag_seconds": null
+      },
+      "signals": [],
+      "subnet": "TestNet",
+      "netuid": 12
+    },
+    {
+      "id": "tr_20260713200049934208",
+      "created_at": "2026-07-13T20:00:49.934225Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "horizon-1",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "regime": null,
+        "reference_price": 100.0,
+        "resolved_price": 110.0,
+        "horizon_hours": 1,
+        "created_at": null,
+        "resolved_at": "2026-07-01T12:00:00Z",
+        "resolve_at": "2026-07-01T12:00:00Z",
+        "actual_pct": 10.0,
+        "outcome": "hit",
+        "direction": "up",
+        "price_source": "vwap",
+        "price_lag_seconds": 0
+      },
+      "signals": [],
+      "subnet": null,
+      "netuid": 3
+    },
+    {
+      "id": "tr_20260713200049953840",
+      "created_at": "2026-07-13T20:00:49.953852Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": null,
+        "event": "resolved",
+        "signals": [],
+        "expert": "quant",
+        "weights_at_creation": null,
+        "regime": null,
+        "reference_price": 100.0,
+        "resolved_price": 105.0,
+        "horizon_hours": null,
+        "created_at": null,
+        "resolved_at": "2026-07-13T20:00:49.944758Z",
+        "resolve_at": null,
+        "actual_pct": 5.0,
+        "outcome": "hit",
+        "direction": "up",
+        "price_source": null,
+        "price_lag_seconds": null
+      },
+      "signals": [],
+      "subnet": null,
+      "netuid": null
+    },
+    {
+      "id": "tr_20260713200050000658",
+      "created_at": "2026-07-13T20:00:50.000669Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": null,
+        "event": "resolved",
+        "signals": [],
+        "expert": "quant",
+        "weights_at_creation": null,
+        "regime": null,
+        "reference_price": 100.0,
+        "resolved_price": 95.0,
+        "horizon_hours": null,
+        "created_at": null,
+        "resolved_at": "2026-07-13T20:00:49.964677Z",
+        "resolve_at": null,
+        "actual_pct": -5.0,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": null,
+        "price_lag_seconds": null
+      },
+      "signals": [],
+      "subnet": null,
+      "netuid": null
+    },
+    {
+      "id": "tr_20260713200050720593",
+      "created_at": "2026-07-13T20:00:50.720611Z",
+      "decision_type": "prediction_create",
+      "decision": {
+        "prediction_id": "f8fb61944d",
+        "event": "created",
+        "signals": [
+          {
+            "type": "pick_signal",
+            "source": "quant",
+            "payload": {
+              "score": 0.4
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "technical",
+            "payload": {
+              "score": 0.35
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "hype",
+            "payload": {
+              "score": 0.25
+            }
+          }
+        ],
+        "expert": "quant",
+        "weights_at_creation": {
+          "quant": 1.05,
+          "hype": 1.0,
+          "dark_horse": 1.0,
+          "technical": 1.0
+        },
+        "regime": null,
+        "reference_price": 28.5,
+        "resolved_price": null,
+        "horizon_hours": 1,
+        "created_at": "2026-07-13T20:00:50.716054Z",
+        "resolved_at": null,
+        "resolve_at": "2026-07-13T21:00:50.716054Z",
+        "actual_pct": null,
+        "outcome": null,
+        "direction": "up",
+        "price_source": null,
+        "price_lag_seconds": null
+      },
+      "signals": [
+        {
+          "type": "pick_signal",
+          "source": "quant",
+          "payload": {
+            "score": 0.4
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "technical",
+          "payload": {
+            "score": 0.35
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "hype",
+          "payload": {
+            "score": 0.25
+          }
+        }
+      ],
+      "subnet": "Coldint",
+      "netuid": 29
+    },
+    {
+      "id": "tr_20260713200050786690",
+      "created_at": "2026-07-13T20:00:50.786708Z",
+      "decision_type": "prediction_create",
+      "decision": {
+        "prediction_id": "5e33ea964d",
+        "event": "created",
+        "signals": [
+          {
+            "type": "pick_signal",
+            "source": "quant",
+            "payload": {
+              "score": 0.5
+            }
+          }
+        ],
+        "expert": "quant",
+        "weights_at_creation": {
+          "quant": 1.05,
+          "hype": 1.0,
+          "dark_horse": 1.0,
+          "technical": 1.0
+        },
+        "regime": null,
+        "reference_price": 10.0,
+        "resolved_price": null,
+        "horizon_hours": 1,
+        "created_at": "2026-07-13T20:00:50.782212Z",
+        "resolved_at": null,
+        "resolve_at": "2026-07-13T21:00:50.782212Z",
+        "actual_pct": null,
+        "outcome": null,
+        "direction": "up",
+        "price_source": null,
+        "price_lag_seconds": null
+      },
+      "signals": [
+        {
+          "type": "pick_signal",
+          "source": "quant",
+          "payload": {
+            "score": 0.5
+          }
+        }
+      ],
+      "subnet": "Coldint",
+      "netuid": 29
+    },
+    {
+      "id": "tr_20260713200050853863",
+      "created_at": "2026-07-13T20:00:50.853880Z",
+      "decision_type": "prediction_create",
+      "decision": {
+        "prediction_id": "c7e2bb4eea",
+        "event": "created",
+        "signals": [
+          {
+            "type": "pick_signal",
+            "source": "quant",
+            "payload": {
+              "score": 0.6
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "technical",
+            "payload": {
+              "score": 0.4
+            }
+          }
+        ],
+        "expert": "quant",
+        "weights_at_creation": {
+          "quant": 1.05,
+          "hype": 1.0,
+          "dark_horse": 1.0,
+          "technical": 1.0
+        },
+        "regime": null,
+        "reference_price": 100.0,
+        "resolved_price": null,
+        "horizon_hours": 1,
+        "created_at": "2026-07-13T20:00:50.849314Z",
+        "resolved_at": null,
+        "resolve_at": "2026-07-13T21:00:50.849314Z",
+        "actual_pct": null,
+        "outcome": null,
+        "direction": "up",
+        "price_source": null,
+        "price_lag_seconds": null
+      },
+      "signals": [
+        {
+          "type": "pick_signal",
+          "source": "quant",
+          "payload": {
+            "score": 0.6
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "technical",
+          "payload": {
+            "score": 0.4
+          }
+        }
+      ],
+      "subnet": "Alpha",
+      "netuid": 1
+    },
+    {
+      "id": "tr_20260713200050952423",
+      "created_at": "2026-07-13T20:00:50.952443Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "c7e2bb4eea",
+        "event": "resolved",
+        "signals": [
+          {
+            "type": "pick_signal",
+            "source": "quant",
+            "payload": {
+              "score": 0.6
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "technical",
+            "payload": {
+              "score": 0.4
+            }
+          }
+        ],
+        "expert": "quant",
+        "weights_at_creation": {
+          "quant": 1.05,
+          "hype": 1.0,
+          "dark_horse": 1.0,
+          "technical": 1.0
+        },
+        "regime": null,
+        "reference_price": 100.0,
+        "resolved_price": 103.0,
+        "horizon_hours": 1,
+        "created_at": "2026-07-13T20:00:50.849314Z",
+        "resolved_at": "2026-07-13T20:00:50.917659Z",
+        "resolve_at": "2026-07-13T20:00:50.917646Z",
+        "actual_pct": 3.0,
+        "outcome": "hit",
+        "direction": "up",
+        "price_source": null,
+        "price_lag_seconds": null
+      },
+      "signals": [
+        {
+          "type": "pick_signal",
+          "source": "quant",
+          "payload": {
+            "score": 0.6
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "technical",
+          "payload": {
+            "score": 0.4
+          }
+        }
+      ],
+      "subnet": "Alpha",
+      "netuid": 1
+    },
+    {
+      "id": "tr_20260713200052237301",
+      "created_at": "2026-07-13T20:00:52.237316Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "t1",
+        "event": "resolved",
+        "signals": [],
+        "expert": "dark_horse",
+        "weights_at_creation": null,
+        "regime": null,
+        "reference_price": 10.0,
+        "resolved_price": 10.3,
+        "horizon_hours": null,
+        "created_at": null,
+        "resolved_at": "2026-07-13T20:00:52.199806Z",
+        "resolve_at": null,
+        "actual_pct": 3.0,
+        "outcome": "hit",
+        "direction": "up",
+        "price_source": null,
+        "price_lag_seconds": null
+      },
+      "signals": [],
+      "subnet": "Test",
+      "netuid": 1
+    },
+    {
+      "id": "tr_20260713215153518039",
+      "created_at": "2026-07-13T21:51:53.518074Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": null,
+        "event": "resolved",
+        "signals": [],
+        "expert": "quant",
+        "weights_at_creation": null,
+        "regime": null,
+        "reference_price": 100.0,
+        "resolved_price": 105.0,
+        "horizon_hours": null,
+        "created_at": null,
+        "resolved_at": "2026-07-13T21:51:53.504383Z",
+        "resolve_at": null,
+        "actual_pct": 5.0,
+        "outcome": "hit",
+        "direction": "up",
+        "price_source": null,
+        "price_lag_seconds": null
+      },
+      "signals": [],
+      "subnet": null,
+      "netuid": null
+    },
+    {
+      "id": "tr_20260713215153569761",
+      "created_at": "2026-07-13T21:51:53.569772Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": null,
+        "event": "resolved",
+        "signals": [],
+        "expert": "quant",
+        "weights_at_creation": null,
+        "regime": null,
+        "reference_price": 100.0,
+        "resolved_price": 95.0,
+        "horizon_hours": null,
+        "created_at": null,
+        "resolved_at": "2026-07-13T21:51:53.532897Z",
+        "resolve_at": null,
+        "actual_pct": -5.0,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": null,
+        "price_lag_seconds": null
+      },
+      "signals": [],
+      "subnet": null,
+      "netuid": null
+    }
+  ]
+}

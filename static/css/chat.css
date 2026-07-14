@@ -92,6 +92,6 @@
   box-shadow: 0 0 14px var(--cockpit-green-glow);
 }
 .chat-input button {
-  background: linear-gradient(135deg, var(--cockpit-green), #00ff41);
+  background: linear-gradient(135deg, #00c8ff, #00ff41);
   color: var(--bg-cockpit);
 }
