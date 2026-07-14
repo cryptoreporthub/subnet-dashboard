@@ -379,6 +379,12 @@ def stop_prediction_resolver_scheduler() -> Dict[str, Any]:
         stop_selector_scheduler()
     except Exception:
         pass
+    try:
+        from internal.pump.scheduler import stop_pump_ladder_scheduler
+
+        stop_pump_ladder_scheduler()
+    except Exception:
+        pass
     global _scheduler
     sched: Optional[PredictionResolverScheduler] = None
     with _scheduler_lock:

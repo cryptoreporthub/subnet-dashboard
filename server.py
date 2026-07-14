@@ -189,6 +189,24 @@ async def _lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Subnet Dashboard", lifespan=_lifespan)
+
+_ENABLE_METRICS = os.environ.get("ENABLE_METRICS", "1").strip().lower() not in ("0", "false", "no")
+if _ENABLE_METRICS:
+    try:
+        from prometheusrock import PrometheusMiddleware
+
+        from internal.metrics import metrics_endpoint
+
+        app.add_middleware(
+            PrometheusMiddleware,
+            app_name="subnet_dashboard",
+            remove_labels=["headers"],
+            skip_paths=["/metrics", "/health", "/api/health"],
+        )
+        app.add_route("/metrics", metrics_endpoint)
+    except Exception as exc:
+        logger.warning("Prometheus metrics unavailable: %s", exc)
+
 app.include_router(whales_router)
 if _COUNCIL_ROUTES:
     app.include_router(council_router)

@@ -438,7 +438,9 @@ def start_background_sync(
     if immediate:
         _background_tick()
 
-    schedule_interval_seconds(JOB_ID, _background_tick, interval)
+    schedule_interval_seconds(
+        JOB_ID, _background_tick, interval, start_delay_seconds=interval
+    )
     return {"started": True, "interval_seconds": interval}
 
 

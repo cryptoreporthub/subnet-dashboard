@@ -60,7 +60,7 @@ Smoke body is fixed (#172). Optional hardening in **GitHub → Settings → Bran
 | 1 | B1 UI | Freshness badge from `GET /api/data-freshness` | #1 | ✅ #177 |
 | 2 | B2 | `httpx` AsyncClient + `tenacity` + `aiocache` for handler I/O | #4 | ✅ #179 |
 | 3 | B3 | `apscheduler` + `sentry-sdk` | #5, #6 | 🔄 **PR open** |
-| 4 | B4–B6 | prometheus, APY reconcile, slowapi | #13, #14, #9 | Cursor |
+| 4 | B4–B6 | prometheus, APY reconcile, slowapi | #13, #14, #9 | B4 in PR |
 | 5 | C | uPlot, datastar SSE, CSS/a11y | #10, #15, #16 | Cursor (after B1 live on Fly) |
 
 ## Guardrails
