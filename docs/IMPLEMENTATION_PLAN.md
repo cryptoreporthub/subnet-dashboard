@@ -56,5 +56,6 @@
 - [x] B5 APY + candle gate — merged #182
 - [x] B6 slowapi — merged #185
 - [x] Phase 4 C4 — merged #186
-- [ ] Phase 4 C5 — **in progress**
-- [ ] Phase 4 C6, Phase C — queued
+- [x] Phase 4 C5 — merged #187
+- [ ] Phase 4 C6 — **in progress**
+- [ ] Phase C — queued
