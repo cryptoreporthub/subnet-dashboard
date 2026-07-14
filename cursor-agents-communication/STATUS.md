@@ -1,11 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-14T21:50:00Z · Agent `-6f98`  
-**main:** `f267dd4`
+**Updated:** 2026-07-14T23:20:00Z · Agent `-5e45`  
+**main:** `d59782e`
 
 ## One-line
 
-**EXTREME audit COMPLETE (#1–#16). Ditto = monitor only.**
+**All queues COMPLETE. Site healthy on Fly (1GB). Ditto = monitor only.**
 
 ## Done (do not re-queue)
 
@@ -17,7 +17,10 @@
 | Council picks + learning | **#200–#213** |
 | Lazy OHLCV + badge polish | **#212** |
 | Canvas radar (Chart.js removed) | **#215** |
+| Social sentiment (message_intel) | **#217** |
+| Fly keep-warm / 1GB + health gate | **#218** |
 | A2 `smoke` on `main` | verified |
+| Stale open PRs closed | #101 · #110 · #112 · #129–#130 · #134 · #139 · #153 · #165–#166 · #184 |
 
 ## Ditto
 

@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T21:50:00Z by Agent (`-6f98`) — **EXTREME audit COMPLETE**  
-**main:** `f267dd4`
+**Last updated:** 2026-07-14T23:20:00Z by Agent (`-5e45`) — **queues COMPLETE; Fly healthy**  
+**main:** `d59782e`
 
 ## Ditto boot (read first)
 
@@ -70,28 +70,30 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 
 ## Ready for next work
 
-**Idle — monitor only.** EXTREME audit COMPLETE (#215 canvas radar merged).
+**Idle — monitor only.** Product queues + Fly outage fix COMPLETE.
 
-**Automated queue:** COMPLETE — B6–C3 · G7+G12 · #198–#215. **A2:** `smoke` required on `main`.
+**Automated queue:** COMPLETE — B6–C3 · G7+G12 · #198–#218. **A2:** `smoke` required on `main`.
 
-Recent merges on `main` @ `f267dd4`:
+Recent merges on `main` @ `d59782e`:
 
 | PR | Phase | Summary |
 |----|-------|---------|
+| **#218** | Ops | Fly 1GB + post-deploy restart/health gate (outage fix) |
+| **#217** | Social | Message-intel social sentiment (#110 cherry-pick) |
+| **#216** | Board | EXTREME audit COMPLETE status |
 | **#215** | UI | Canvas radar replaces Chart.js CDN (audit #10) |
 | **#214** | Board | Call-quality lane complete |
 | **#213** | Council | Priced scoring + SimiVision call lines |
 | **#212** | Data | Lazy OHLCV fill + audit #15/#16 polish |
-| **#211** | Board | STATUS sync after #210 |
 | **#210** | Council | Hourly prediction + learning signal stamps |
-| **#207** | Council | Call reasons from signal-impact |
-| **#204** | Learning | Impact dial through full loop |
 | **#198** | UI | Council-first overhaul |
 | **#195** | **G7+G12** | Rajdhani titles, favicon, fonts |
-| **#190** | **C1** | uPlot sparklines |
 | **#185** | **B6** | slowapi rate limit |
 
-**Health:** `GET /health` · `GET /api/signal-hub/status` · `GET /api/calibration/status` · `GET /api/signals` · `GET /api/message-intel` → 200 OK
+**Health:** `GET /health` · `GET /api/data-freshness` · `GET /api/signal-hub/status` · `GET /api/calibration/status` · `GET /api/message-intel` → 200 OK  
+**Fly:** machine `shared-cpu-1x:1024MB`, checks passing (was critical on 256MB).
+
+**Housekeeping done:** closed stale open PRs #101 #110 #112 #129 #130 #134 #139 #153 #165 #166 #184.
 
 ## Gate Status
 
@@ -105,7 +107,7 @@ Recent merges on `main` @ `f267dd4`:
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **Cursor** | **Idle** | EXTREME audit complete; monitor only |
+| **Cursor** | **Idle** | Queues + Fly fix complete; monitor only |
 | **Ditto** | **Monitor** | Read-only — CI, Fly health, `/api/data-freshness` |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
