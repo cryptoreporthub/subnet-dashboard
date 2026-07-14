@@ -1,1 +1,113 @@
-Ly8gSnVkZ2UgQ291bmNpbCBwb3B1cCBwYW5lbCB3aXRoIGxpdmUgZGF0YQooZnVuY3Rpb24oKSB7CiAgJ3VzZSBzdHJpY3QnOwoKICAvLyBDcmVhdGUgZmxvYXRpbmcgYnV0dG9uCiAgdmFyIGJ0biA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoJ2RpdicpOwogIGJ0bi5pZCA9ICdqYy10cmlnZ2VyJzsKICBidG4uaW5uZXJIVE1MID0gJ1x1MjY5Nlx1ZmUwZic7CiAgYnRuLnN0eWxlLmNzc1RleHQgPSAncG9zaXRpb246Zml4ZWQ7Ym90dG9tOjIwcHg7cmlnaHQ6MjBweDt3aWR0aDo1NnB4O2hlaWdodDo1NnB4O2JvcmRlci1yYWRpdXM6NTAlO2JhY2tncm91bmQ6I2M5OWE0Yjtjb2xvcjojMWExYTJlO2Rpc3BsYXk6ZmxleDthbGlnbi1pdGVtczpjZW50ZXI7anVzdGlmeS1jb250ZW50OmNlbnRlcjtmb250LXNpemU6MjRweDtjdXJzb3I6cG9pbnRlcjt6LWluZGV4Ojk5OTk5O2JveC1zaGFkb3c6MCA0cHggMjBweCByZ2JhKDAsMCwwLDAuNSk7dHJhbnNpdGlvbjp0cmFuc2Zvcm0gMC4yczsnOwogIGJ0bi5vbm1vdXNlb3ZlciA9IGZ1bmN0aW9uKCkgeyBidG4uc3R5bGUudHJhbnNmb3JtID0gJ3NjYWxlKDEuMSknOyB9OwogIGJ0bi5vbm1vdXNlb3V0ID0gZnVuY3Rpb24oKSB7IGJ0bi5zdHlsZS50cmFuc2Zvcm0gPSAnc2NhbGUoMSknOyB9OwogIGJ0bi5vbmNsaWNrID0gZnVuY3Rpb24oKSB7IHRvZ2dsZVBhbmVsKCk7IH07CiAgZG9jdW1lbnQuYm9keS5hcHBlbmRDaGlsZChidG4pOwoKICB2YXIgbW9kYWwgPSBudWxsOwoKICBmdW5jdGlvbiB0b2dnbGVQYW5lbCgpIHsKICAgIGlmIChtb2RhbCkgeyBtb2RhbC5yZW1vdmUoKTsgbW9kYWwgPSBudWxsOyByZXR1cm47IH0KICAgIG1vZGFsID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudCgnZGl2Jyk7CiAgICBtb2RhbC5pZCA9ICdqYy1tb2RhbCc7CiAgICBtb2RhbC5zdHlsZS5jc3NUZXh0ID0gJ3Bvc2l0aW9uOmZpeGVkO2luc2V0OjA7YmFja2dyb3VuZDpyZ2JhKDAsMCwwLDAuNyk7ei1pbmRleDo5OTk5ODtkaXNwbGF5OmZsZXg7YWxpZ24taXRlbXM6Y2VudGVyO2p1c3RpZnktY29udGVudDpjZW50ZXI7cGFkZGluZzoyMHB4Oyc7CiAgICBtb2RhbC5vbmNsaWNrID0gZnVuY3Rpb24oZSkgeyBpZiAoZS50YXJnZXQgPT09IG1vZGFsKSB7IG1vZGFsLnJlbW92ZSgpOyBtb2RhbCA9IG51bGw7IH0gfTsKCiAgICB2YXIgYm94ID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudCgnZGl2Jyk7CiAgICBib3guc3R5bGUuY3NzVGV4dCA9ICdiYWNrZ3JvdW5kOiMxYTFhMmU7Ym9yZGVyOjFweCBzb2xpZCAjYzk5YTRiO2JvcmRlci1yYWRpdXM6MTZweDttYXgtd2lkdGg6OTAwcHg7d2lkdGg6MTAwJTttYXgtaGVpZ2h0Ojg1dmg7b3ZlcmZsb3cteTphdXRvO3BhZGRpbmc6MjRweDtmb250LWZhbWlseTpzeXN0ZW0tdWksc2Fucy1zZXJpZjtjb2xvcjojZTBlMGUwOyc7CiAgICBib3guaW5uZXJIVE1MID0gJwoKJyArICcKIyMgXHUyNjk2XHVmZTBmIEp1ZGdlIENvdW5jaWwKCicgKyAnXHUwMGQ3CgonICsKICAgICAgJycgKwogICAgICAnCgpMb2FkaW5nIGp1ZGdlIHNjb3Jlcy4uLgoKJzsKICAgIG1vZGFsLmFwcGVuZENoaWxkKGJveCk7CiAgICBkb2N1bWVudC5ib2R5LmFwcGVuZENoaWxkKG1vZGFsKTsKCiAgICBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgnamMtY2xvc2UnKS5vbmNsaWNrID0gZnVuY3Rpb24oKSB7IG1vZGFsLnJlbW92ZSgpOyBtb2RhbCA9IG51bGw7IH07CgogICAgbG9hZERhdGEoKTsKICB9CgogIGZ1bmN0aW9uIGxvYWREYXRhKCkgewogICAgZmV0Y2goJy9hcGkvanVkZ2VzJykKICAgICAgLnRoZW4oZnVuY3Rpb24ocikgewogICAgICAgIGlmICghci5vaykgdGhyb3cgbmV3IEVycm9yKCdIVFRQICcgKyByLnN0YXR1cyk7CiAgICAgICAgcmV0dXJuIHIuanNvbigpOwogICAgICB9KQogICAgICAudGhlbihmdW5jdGlvbihkYXRhKSB7CiAgICAgICAgdmFyIGVsID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ2pjLWNvbnRlbnQnKTsKICAgICAgICB2YXIgc3RhdHMgPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgnamMtc3RhdHMnKTsKICAgICAgICBpZiAoIWVsKSByZXR1cm47CgogICAgICAgIHZhciBqdWRnZXMgPSBkYXRhLmp1ZGdlcyB8fCBbXTsKICAgICAgICBpZiAoIWp1ZGdlcy5sZW5ndGgpIHsKICAgICAgICAgIGVsLmlubmVySFRNTCA9ICcKTm8ganVkZ2UgZGF0YSBhdmFpbGFibGUgeWV0LiBUaGUgYmFja2dyb3VuZCBzY2hlZHVsZXIgcmVmcmVzaGVzIGV2ZXJ5IDUgbWludXRlcy4KCic7CiAgICAgICAgICBzdGF0cy5pbm5lckhUTUwgPSAnMCBzdWJuZXRzIHNjb3JlZCc7CiAgICAgICAgICByZXR1cm47CiAgICAgICAgfQoKICAgICAgICAvLyBVcGRhdGUgc3RhdHMKICAgICAgICBzdGF0cy5pbm5lckhUTUwgPSAnKionICsganVkZ2VzLmxlbmd0aCArICcqKiBzdWJuZXRzIHNjb3JlZCBcdTAwYjcgMyBqdWRnZXMgKE9yYWNsZSwgRWNobywgUHVsc2UpJyArCiAgICAgICAgICAoZGF0YS5zb3VyY2UgPyAnIFx1MDBiNyBzb3VyY2U6ICcgKyBkYXRhLnNvdXJjZSA6ICcnKTsKCiAgICAgICAgLy8gQnVpbGQgc2VhcmNoIGJveAogICAgICAgIHZhciBodG1sID0gJyc7CgogICAgICAgIC8vIEJ1aWxkIHRhYmxlCiAgICAgICAgaHRtbCArPSAnCicgKyAnCnwgIyB8IFN1Ym5ldCB8IE9yYWNsZSB8IEVjaG8gfCBQdWxzZSB8IENvbnNlbnN1cyB8IFZlcmRpY3QgfAp8IC0tLSB8IC0tLSB8IC0tLSB8IC0tLSB8IC0tLSB8IC0tLSB8IC0tLSB8Cic7IGp1ZGdlcy5mb3JFYWNoKGZ1bmN0aW9uKGosIGlkeCkgeyB2YXIgdmVyZGljdENvbG9yID0gai5jb25zZW5zdXMgJiYgai5jb25zZW5zdXMudmVyZGljdCA9PT0gJ2J1bGxpc2gnID8gJyM0Y2FmNTAnIDogai5jb25zZW5zdXMgJiYgai5jb25zZW5zdXMudmVyZGljdCA9PT0gJ2JlYXJpc2gnID8gJyNmNDQzMzYnIDogJyM4ODgnOyB2YXIgc2NvcmUgPSBqLmNvbnNlbnN1cyA/IGouY29uc2Vuc3VzLnNjb3JlLnRvRml4ZWQoMykgOiAnTi9BJzsgdmFyIHZlcmRpY3QgPSBqLmNvbnNlbnN1cyA/IGouY29uc2Vuc3VzLnZlcmRpY3QgOiAnTi9BJzsgdmFyIGFncmVlbWVudCA9IGouY29uc2Vuc3VzID8gKGouY29uc2Vuc3VzLmFncmVlbWVudCAqIDEwMCkudG9GaXhlZCgwKSArICclJyA6ICdOL0EnOyB2YXIgb3JhY2xlRGVnciA9IGoub3JhY2xlICYmIGoub3JhY2xlLmRlZ3JhZGVkID8gJyBcdTI2YTAnIDogJyc7IHZhciBlY2hvRGVnciA9IGouZWNobyAmJiBqLmVjaG8uZGVncmFkZWQgPyAnIFx1MjZhMCcgOiAnJzsgdmFyIHB1bHNlRGVnciA9IGoucHVsc2UgJiYgai5wdWxzZS5kZWdyYWRlZCA/ICcgXHUyNmEwJyA6ICcnOyBodG1sICs9ICd8ICcgKyAoaWR4ICsgMSkgKyAnIHwgJyArIChqLm5hbWUgfHwgJ1NOJyArIGoubmV0dWlkKSArICcgU04nICsgai5uZXR1aWQgKyAnIHwgJyArIChqLm9yYWNsZSA/IGoub3JhY2xlLnNjb3JlLnRvRml4ZWQoMykgOiAnLScpICsgJycgKyBvcmFjbGVEZWdyICsgJyB8ICcgKyAoai5lY2hvID8gai5lY2hvLnNjb3JlLnRvRml4ZWQoMykgOiAnLScpICsgJycgKyBlY2hvRGVnciArICcgfCAnICsgKGoucHVsc2UgPyBqLnB1bHNlLnNjb3JlLnRvRml4ZWQoMykgOiAnLScpICsgJycgKyBwdWxzZURlZ3IgKyAnIHwgJyArIHNjb3JlICsgJyAnICsgYWdyZWVtZW50ICsgJyB8ICcgKyB2ZXJkaWN0ICsgJyB8Cic7IH0pOyBodG1sICs9ICcKJzsKICAgICAgICBlbC5pbm5lckhUTUwgPSBodG1sOwogICAgICAgIGVsLnN0eWxlLnBhZGRpbmcgPSAnMCc7CgogICAgICAgIC8vIFdpcmUgdXAgc2VhcmNoCiAgICAgICAgdmFyIHNlYXJjaElucHV0ID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ2pjLXNlYXJjaCcpOwogICAgICAgIGlmIChzZWFyY2hJbnB1dCkgewogICAgICAgICAgc2VhcmNoSW5wdXQub25pbnB1dCA9IGZ1bmN0aW9uKCkgewogICAgICAgICAgICB2YXIgcSA9IHNlYXJjaElucHV0LnZhbHVlLnRvTG93ZXJDYXNlKCk7CiAgICAgICAgICAgIHZhciByb3dzID0gZG9jdW1lbnQucXVlcnlTZWxlY3RvckFsbCgnLmpjLXJvdycpOwogICAgICAgICAgICB2YXIgdmlzaWJsZSA9IDA7CiAgICAgICAgICAgIHJvd3MuZm9yRWFjaChmdW5jdGlvbihyKSB7CiAgICAgICAgICAgICAgdmFyIG1hdGNoID0gci5nZXRBdHRyaWJ1dGUoJ2RhdGEtc2VhcmNoJykuaW5kZXhPZihxKSAhPT0gLTE7CiAgICAgICAgICAgICAgci5zdHlsZS5kaXNwbGF5ID0gbWF0Y2ggPyAnJyA6ICdub25lJzsKICAgICAgICAgICAgICBpZiAobWF0Y2gpIHZpc2libGUrKzsKICAgICAgICAgICAgfSk7CiAgICAgICAgICB9OwogICAgICAgIH0KICAgICAgfSkKICAgICAgLmNhdGNoKGZ1bmN0aW9uKGVycikgewogICAgICAgIHZhciBlbCA9IGRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCdqYy1jb250ZW50Jyk7CiAgICAgICAgaWYgKGVsKSBlbC50ZXh0Q29udGVudCA9ICdGYWlsZWQgdG8gbG9hZCBqdWRnZSBkYXRhOiAnICsgZXJyLm1lc3NhZ2UgKyAnCgonICsKICAgICAgICAgICcKVGhlIC9hcGkvanVkZ2VzIGVuZHBvaW50IG1heSBzdGlsbCBiZSBzdGFydGluZyB1cC4gVHJ5IGFnYWluIGluIGEgbW9tZW50LgoKJzsKICAgICAgfSk7CiAgfQp9KSgpOwo=
+// Judge Council popup panel with live data
+(function() {
+  'use strict';
+
+  // Create floating button
+  var btn = document.createElement('div');
+  btn.id = 'jc-trigger';
+  btn.innerHTML = '\u2696\ufe0f';
+  btn.style.cssText = 'position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:50%;background:#c99a4b;color:#1a1a2e;display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,0.5);transition:transform 0.2s;';
+  btn.onmouseover = function() { btn.style.transform = 'scale(1.1)'; };
+  btn.onmouseout = function() { btn.style.transform = 'scale(1)'; };
+  btn.onclick = function() { togglePanel(); };
+  document.body.appendChild(btn);
+
+  var modal = null;
+
+  function togglePanel() {
+    if (modal) { modal.remove(); modal = null; return; }
+    modal = document.createElement('div');
+    modal.id = 'jc-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px;';
+    modal.onclick = function(e) { if (e.target === modal) { modal.remove(); modal = null; } };
+
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#1a1a2e;border:1px solid #c99a4b;border-radius:16px;max-width:900px;width:100%;max-height:85vh;overflow-y:auto;padding:24px;font-family:system-ui,sans-serif;color:#e0e0e0;';
+    box.innerHTML = '
+
+' + '
+## \u2696\ufe0f Judge Council
+
+' + '\u00d7
+
+' +
+      '' +
+      '
+
+Loading judge scores...
+
+';
+    modal.appendChild(box);
+    document.body.appendChild(modal);
+
+    document.getElementById('jc-close').onclick = function() { modal.remove(); modal = null; };
+
+    loadData();
+  }
+
+  function loadData() {
+    fetch('/api/judges')
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function(data) {
+        var el = document.getElementById('jc-content');
+        var stats = document.getElementById('jc-stats');
+        if (!el) return;
+
+        var judges = data.judges || [];
+        if (!judges.length) {
+          el.innerHTML = '
+No judge data available yet. The background scheduler refreshes every 5 minutes.
+
+';
+          stats.innerHTML = '0 subnets scored';
+          return;
+        }
+
+        // Update stats
+        stats.innerHTML = '**' + judges.length + '** subnets scored \u00b7 3 judges (Oracle, Echo, Pulse)' +
+          (data.source ? ' \u00b7 source: ' + data.source : '');
+
+        // Build search box
+        var html = '';
+
+        // Build table
+        html += '
+' + '
+| # | Subnet | Oracle | Echo | Pulse | Consensus | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+'; judges.forEach(function(j, idx) { var verdictColor = j.consensus && j.consensus.verdict === 'bullish' ? '#4caf50' : j.consensus && j.consensus.verdict === 'bearish' ? '#f44336' : '#888'; var score = j.consensus ? j.consensus.score.toFixed(3) : 'N/A'; var verdict = j.consensus ? j.consensus.verdict : 'N/A'; var agreement = j.consensus ? (j.consensus.agreement * 100).toFixed(0) + '%' : 'N/A'; var oracleDegr = j.oracle && j.oracle.degraded ? ' \u26a0' : ''; var echoDegr = j.echo && j.echo.degraded ? ' \u26a0' : ''; var pulseDegr = j.pulse && j.pulse.degraded ? ' \u26a0' : ''; html += '| ' + (idx + 1) + ' | ' + (j.name || 'SN' + j.netuid) + ' SN' + j.netuid + ' | ' + (j.oracle ? j.oracle.score.toFixed(3) : '-') + '' + oracleDegr + ' | ' + (j.echo ? j.echo.score.toFixed(3) : '-') + '' + echoDegr + ' | ' + (j.pulse ? j.pulse.score.toFixed(3) : '-') + '' + pulseDegr + ' | ' + score + ' ' + agreement + ' | ' + verdict + ' |
+'; }); html += '
+';
+        el.innerHTML = html;
+        el.style.padding = '0';
+
+        // Wire up search
+        var searchInput = document.getElementById('jc-search');
+        if (searchInput) {
+          searchInput.oninput = function() {
+            var q = searchInput.value.toLowerCase();
+            var rows = document.querySelectorAll('.jc-row');
+            var visible = 0;
+            rows.forEach(function(r) {
+              var match = r.getAttribute('data-search').indexOf(q) !== -1;
+              r.style.display = match ? '' : 'none';
+              if (match) visible++;
+            });
+          };
+        }
+      })
+      .catch(function(err) {
+        var el = document.getElementById('jc-content');
+        if (el) el.textContent = 'Failed to load judge data: ' + err.message + '
+
+' +
+          '
+The /api/judges endpoint may still be starting up. Try again in a moment.
+
+';
+      });
+  }
+})();

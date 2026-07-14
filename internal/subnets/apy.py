@@ -26,6 +26,8 @@ def subnet_apy_percent(sn: Dict[str, Any]) -> Optional[float]:
     # Registry-shaped rows without nested staking_data still store fraction at top level.
     if sn.get("apy") is not None and sn.get("id") is not None:
         return apy_as_percent(sn["apy"], from_fraction=True)
+    if sn.get("apy") is not None and sn.get("netuid") is not None:
+        return apy_as_percent(sn["apy"], from_fraction=False)
     return None
 
 

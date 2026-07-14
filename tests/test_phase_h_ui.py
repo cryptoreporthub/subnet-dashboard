@@ -102,8 +102,10 @@ def test_index_council_first_shell():
     # Brand is hero-level in the stage
     assert "council-stage__brand" in html
     pos_stage = html.index("council-stage")
-    pos_drawer = html.index("market-drawer")
+    pos_drawer = html.index('id="market-drawer"')
     assert pos_stage < pos_drawer
+    assert 'class="top-nav"' in html
+    assert "/static/js/onboarding_tour.js" in html
 
 
 def test_index_renders_twelve_cockpit_sections():
@@ -278,7 +280,8 @@ def test_h_full_premium_scanner_and_judges_js():
     client = TestClient(app)
     html = client.get("/").text
     assert "/static/js/premium_scanner.js" in html
-    assert "/static/js/premium_judges.js" in html
+    assert "/static/js/cockpit_hydrate.js" in html
+    assert "/static/js/premium_judges.js" not in html
 
 
 def test_subnet_grouping_optional_lane():
