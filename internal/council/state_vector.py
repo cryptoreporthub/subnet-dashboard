@@ -1189,9 +1189,18 @@ def _expert_contributions(
     sell: Dict[str, Any],
 ) -> Dict[str, float]:
     """Return deterministic 0-1 scores for the four council experts."""
+    from internal.subnets.apy import subnet_apy_percent
+    from internal.subnets.tradable import subnet_volume
+
     emission = float(sn.get("emission", 0) or 0)
-    apy = float(sn.get("apy", 0) or 0)
-    volume = float(sn.get("volume", 0) or 0)
+    apy_pct = subnet_apy_percent(sn)
+    if apy_pct is None:
+        try:
+            apy_pct = float(sn.get("apy", 0) or 0)
+        except (TypeError, ValueError):
+            apy_pct = 0.0
+    apy = float(apy_pct or 0)
+    volume = subnet_volume(sn)
     market_cap = float(sn.get("market_cap", 0) or 0)
     mentions = int(sn.get("social_mentions", 0) or 0)
     chg24 = float(sn.get("price_change_24h", 0) or 0)
@@ -1201,12 +1210,12 @@ def _expert_contributions(
     macd = indicators.get("macd", {}) if isinstance(indicators.get("macd"), dict) else {}
     ma = indicators.get("ma_cross", {}) if isinstance(indicators.get("ma_cross"), dict) else {}
 
-    # Quant: emission stability + yield + liquidity
+    # Quant: emission stability + yield + liquidity (alpha-scale volume)
     quant = 0.45
     quant += min(0.25, emission * 0.08)
     quant += min(0.20, apy * 0.006)
-    quant += 0.10 if volume > 500_000 else 0.0
-    quant += 0.10 if market_cap > 10_000_000 else 0.0
+    quant += 0.10 if volume > 5_000 else (0.05 if volume > 500 else 0.0)
+    quant += 0.10 if market_cap > 10_000_000 else (0.05 if market_cap > 1_000_000 else 0.0)
     quant = min(1.0, max(0.0, quant))
 
     # Hype: social volume + short-term momentum
@@ -1531,15 +1540,19 @@ def format_top_pick(state_vector: Dict[str, Any], rank: int) -> Dict[str, Any]:
 
 
 def _compute_simivision_reasons(sn: Dict[str, Any], indicators: Dict[str, Any], hot: Dict[str, Any]) -> List[str]:
-    """Generate a short list of reasons for a SimiVision pick."""
+    """Generate a short list of reasons for a SimiVision / council pick."""
+    from internal.subnets.apy import subnet_apy_percent
+
     reasons: List[str] = []
     emission = float(sn.get("emission", 0) or 0)
-    apy = float(sn.get("apy", 0) or 0)
+    apy_pct = subnet_apy_percent(sn)
+    if apy_pct is None:
+        apy_pct = float(sn.get("apy", 0) or 0)
     chg = float(sn.get("price_change_24h", 0) or 0)
     if emission > 3:
         reasons.append(f"Strong emission {emission:.2f} TAO/day")
-    if apy > 30:
-        reasons.append(f"High yield {apy:.1f}% APY")
+    if apy_pct and apy_pct > 30:
+        reasons.append(f"High yield {apy_pct:.1f}% APY")
     rsi = indicators.get("rsi", {})
     if isinstance(rsi, dict) and rsi.get("signal") == "oversold":
         reasons.append("RSI oversold — reversal setup")
@@ -1548,8 +1561,22 @@ def _compute_simivision_reasons(sn: Dict[str, Any], indicators: Dict[str, Any], 
         reasons.append("MACD bullish crossover")
     if chg > 5:
         reasons.append(f"Bullish 24h momentum +{chg:.1f}%")
+    elif chg < -5:
+        reasons.append(f"24h pullback {chg:.1f}% — mean-reversion watch")
     if hot.get("active"):
-        reasons.append("HOT signal triggered")
+        hot_reasons = hot.get("reasons") or []
+        if hot_reasons:
+            reasons.append(str(hot_reasons[0]))
+        else:
+            reasons.append("HOT signal triggered")
     if not reasons:
         reasons.append("Balanced metrics — accumulation phase")
     return reasons[:3]
+
+
+def pick_reasons(sn: Dict[str, Any]) -> List[str]:
+    """Public helper: compute display reasons for a subnet row."""
+    indicators = _compute_technical_indicators(sn or {})
+    convergence = _detect_oversold_convergence(indicators)
+    hot = _compute_hot_signals(sn or {}, indicators, convergence)
+    return _compute_simivision_reasons(sn or {}, indicators, hot)

@@ -166,6 +166,13 @@
   font-size: 0.9rem;
 }
 
+.council-call__reasons {
+  margin: 0.35rem 0 0;
+  padding-left: 1.2em;
+  color: var(--stage-ink);
+  font-size: 0.95rem;
+}
+
 .council-call__regime {
   font-family: var(--font-mono, monospace);
   font-size: 10px;

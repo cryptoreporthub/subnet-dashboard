@@ -86,7 +86,7 @@ def test_audit_daily_pick_approves_healthy_candidate():
 
 
 def test_audit_daily_pick_flags_low_volume():
-    candidate = _sample_subnet(volume=50_000)
+    candidate = _sample_subnet(volume=100)
     audit = audit_daily_pick(candidate, [candidate])
     assert any("Low liquidity" in c for c in audit["concerns"])
 

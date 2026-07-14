@@ -7,7 +7,7 @@ missing critical fields before a daily pick is promoted to the API.
 
 from typing import Any, Dict, List, Optional
 
-from internal.subnets.tradable import is_tradable_subnet, subnet_netuid
+from internal.subnets.tradable import is_tradable_subnet, subnet_netuid, subnet_volume
 
 
 def audit_daily_pick(
@@ -40,17 +40,21 @@ def audit_daily_pick(
     critical_fields = ("netuid", "name", "price", "volume")
     for field in critical_fields:
         value = candidate.get(field)
+        if field == "volume" and (value is None or value == ""):
+            # Chain merges expose buy/sell volume instead of unified volume.
+            if subnet_volume(candidate) > 0:
+                continue
         if value is None or value == "":
             concerns.append(f"Missing critical field: {field}")
             confidence_multiplier *= 0.5
 
-    # Liquidity check
-    volume = float(candidate.get("volume", 0) or 0)
-    if volume < 100_000:
-        concerns.append(f"Low liquidity: volume ${volume:,.0f} < $100k")
+    # Liquidity — alpha subnet turnover is typically $0.5k–$50k/day, not mega-cap USD.
+    volume = subnet_volume(candidate)
+    if volume < 500:
+        concerns.append(f"Low liquidity: volume ${volume:,.0f} < $500")
         confidence_multiplier *= 0.80
-    elif volume < 500_000:
-        concerns.append(f"Thin volume: ${volume:,.0f} < $500k")
+    elif volume < 5_000:
+        concerns.append(f"Thin volume: ${volume:,.0f} < $5k")
         confidence_multiplier *= 0.95
 
     # Extreme recent volatility

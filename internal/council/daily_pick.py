@@ -8,7 +8,7 @@ it through the RedTeam audit layer before returning a final payload.
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from internal.council.state_vector import build_prediction_statement, score_subnet_for_day
+from internal.council.state_vector import build_prediction_statement, pick_reasons, score_subnet_for_day
 from internal.council.red_team import audit_daily_pick
 from internal.subnets.tradable import tradable_subnets
 
@@ -91,6 +91,7 @@ def select_daily_pick(
             "final_confidence": 0.0,
             "action": "long",
             "prediction": None,
+            "reasons": [],
         }
 
     scored = []
@@ -117,6 +118,7 @@ def select_daily_pick(
     audit = audit_daily_pick(audit_candidate, subnets)
     final_confidence = audit["adjusted_confidence"]
     prediction = _attach_prediction(candidate, score_payload, final_confidence)
+    reasons = pick_reasons(candidate)
 
     return {
         "subnet": {
@@ -133,6 +135,7 @@ def select_daily_pick(
         "action": "long",
         "tie_break": tie_break,
         "prediction": prediction,
+        "reasons": reasons,
     }
 
 

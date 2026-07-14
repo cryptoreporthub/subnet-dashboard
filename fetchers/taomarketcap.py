@@ -166,22 +166,98 @@ def fetch_all_subnets_from_api() -> Optional[List[Dict]]:
         return all_subnets
     return None
 
-def get_all_subnets() -> List[Dict]:
-    """Return all subnets.
+def _rows_have_market_fields(rows: List[Dict]) -> bool:
+    """True when a majority of sampled tradable rows carry a live price.
 
-    Phase B1: prefer the live on-chain feed (internal.live_subnets), which merges
-    Bittensor chain data over the committed registry. Falls back to the original
-    TaoMarketCap scrape if the live feed is unavailable. See docs/EXTREME_AUDIT.md #1.
+    Registry-only snapshots (no price/volume) must not block TaoMarketCap —
+    that short-circuit is what left council picks scoring on bare metadata.
     """
+    sample = []
+    for r in rows or []:
+        n = r.get("netuid")
+        if n is None:
+            n = r.get("id")
+        try:
+            if n is not None and int(n) > 0:
+                sample.append(r)
+        except (TypeError, ValueError):
+            continue
+        if len(sample) >= 20:
+            break
+    if not sample:
+        return False
+    with_price = sum(1 for r in sample if r.get("price") is not None and r.get("price") != "")
+    return with_price >= max(1, (len(sample) + 1) // 2)
+
+
+def _overlay_market_fields(base: List[Dict], market: List[Dict]) -> List[Dict]:
+    """Copy TMC price/volume/chg onto registry/chain rows; append TMC-only netuids."""
+    by_netuid: Dict[int, Dict] = {}
+    for s in market or []:
+        try:
+            n = int(s.get("netuid"))
+        except (TypeError, ValueError):
+            continue
+        by_netuid[n] = s
+
+    out: List[Dict] = []
+    seen = set()
+    for row in base or []:
+        merged = dict(row)
+        raw_n = merged.get("netuid")
+        if raw_n is None:
+            raw_n = merged.get("id")
+        try:
+            n = int(raw_n) if raw_n is not None else None
+        except (TypeError, ValueError):
+            n = None
+        if n is not None:
+            merged["netuid"] = n
+            seen.add(n)
+            m = by_netuid.get(n)
+            if m:
+                for f in (
+                    "price", "volume", "market_cap",
+                    "price_change_24h", "price_change_7d", "price_change_30d",
+                    "marketcap_rank", "symbol", "emission",
+                ):
+                    if m.get(f) is not None:
+                        merged[f] = m[f]
+                if not merged.get("source"):
+                    merged["source"] = "taomarketcap"
+                merged["market_live"] = True
+        out.append(merged)
+
+    for n, m in by_netuid.items():
+        if n not in seen:
+            out.append(dict(m))
+    return out
+
+
+def get_all_subnets() -> List[Dict]:
+    """Return all subnets with market fields when possible.
+
+    Prefer the live on-chain feed when it already has prices. Otherwise overlay
+    TaoMarketCap market data (or use TMC alone) so picks are not stuck on a
+    registry snapshot without price/volume. See docs/EXTREME_AUDIT.md #1.
+    """
+    live: List[Dict] = []
     try:
         from internal.live_subnets import get_live_subnets
 
-        live = get_live_subnets()
-        if live:
-            return live
+        live = get_live_subnets() or []
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("Live subnet feed unavailable, using TaoMarketCap: %s", exc)
-    return _get_all_subnets_tao()
+
+    if live and _rows_have_market_fields(live):
+        return live
+
+    tmc = _get_all_subnets_tao()
+    if tmc and live:
+        return _overlay_market_fields(live, tmc)
+    if tmc:
+        return tmc
+    return live
 
 
 def _get_all_subnets_tao() -> List[Dict]:
@@ -206,6 +282,7 @@ def _get_all_subnets_tao() -> List[Dict]:
             return cached_data
     logger.warning("No cache available, returning static fallback")
     return []
+
 
 def get_subnet_data(netuid: int) -> Optional[Dict]:
     """Get data for a single subnet by netuid."""

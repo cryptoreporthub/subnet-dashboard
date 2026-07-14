@@ -115,10 +115,23 @@ def _merge_into_registry(live: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                       "buys_24hr", "sells_24hr", "buy_volume_24h", "sell_volume_24h"):
                 if f in lv and lv[f] not in (None, ""):
                     merged[f] = lv[f]
+            # RedTeam / scoring expect a single ``volume`` field.
+            if merged.get("volume") in (None, ""):
+                buy = float(lv.get("buy_volume_24h") or 0)
+                sell = float(lv.get("sell_volume_24h") or 0)
+                if buy or sell:
+                    merged["volume"] = round(buy + sell, 2)
+                elif lv.get("liquidity") not in (None, ""):
+                    try:
+                        merged["volume"] = float(lv["liquidity"])
+                    except (TypeError, ValueError):
+                        pass
             merged["source"] = "blockmachine"
             merged["live"] = True
         else:
             merged["live"] = False
+        if merged.get("netuid") is None and n is not None:
+            merged["netuid"] = n
         out.append(merged)
     for n, lv in by_netuid.items():
         if n not in seen:

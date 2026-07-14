@@ -49,3 +49,21 @@ def tradable_subnets(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             continue
         out[int(row["netuid"])] = row
     return list(out.values())
+
+
+def subnet_volume(sn: Dict[str, Any]) -> float:
+    """Unified 24h turnover — ``volume`` or buy+sell chain volumes."""
+    if not isinstance(sn, dict):
+        return 0.0
+    raw = sn.get("volume")
+    if raw is not None and raw != "":
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            pass
+    try:
+        buy = float(sn.get("buy_volume_24h") or 0)
+        sell = float(sn.get("sell_volume_24h") or 0)
+        return buy + sell
+    except (TypeError, ValueError):
+        return 0.0

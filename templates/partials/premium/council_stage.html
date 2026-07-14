@@ -55,6 +55,12 @@
           {% endif %}
           {% if audit_pick.score is defined %} · score <b>{{ "%.1f"|format((audit_pick.score|default(0))|float) }}</b>{% endif %}
         </p>
+        {% set call_reasons = audit_pick.reasons if audit_pick.reasons is iterable and audit_pick.reasons is not string else [] %}
+        {% if call_reasons %}
+        <ul class="council-call__reasons">
+          {% for r in call_reasons[:3] %}<li>{{ r }}</li>{% endfor %}
+        </ul>
+        {% endif %}
         {% if fc is not none %}
         <div class="council-call__conviction">
           <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ fc }}%;"></div></div>
