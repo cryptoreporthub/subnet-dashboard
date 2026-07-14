@@ -1,13 +1,13 @@
 # Cursor handoff — 2026-07-14 (Ditto → Cursor, full ownership)
 
-> **STATUS (2026-07-14 evening):** EXTREME audit automated queue **COMPLETE** on `main` @ `312a514`.
-> Call content lane **COMPLETE** (#201–#207). **Nothing queued.** Ditto = **read-only monitor only**.
+> **STATUS (2026-07-14 evening):** EXTREME audit **COMPLETE** on `main` @ `30c4141` (pending #215 Chart.js removal).
+> Council/call-quality lane **COMPLETE** (#201–#213). **Idle** after #215.
 
 ## For Ditto (read this first)
 
 | Question | Answer |
 |----------|--------|
-| Is there more audit-queue work? | **No** — Phase A, B1–B6, C4–C6, C1–C3, G7, G12, #201–#207 all merged |
+| Is there more audit-queue work? | **No** — all 16 EXTREME_AUDIT findings done after #215 |
 | Who implements new work? | **Cursor** via git (branch → PR → merge). Ditto does not write files |
 | Is B2 / A2 / Phase K open? | **No** — B2 #179, A2 #172 + `smoke` on `main`, Phase K #107, J–O on `main` |
 | What should Ditto do? | Monitor CI, Fly `/health`, `/api/data-freshness`. Report regressions only |
@@ -37,8 +37,9 @@
 | **Hydration** | C4–C6 | #186–#189 |
 | **Experience** | C1 uPlot, C2 SSE stream, C3 a11y | #190–#192 |
 | **Cleanup** | G7 Rajdhani titles, G12 favicon/fonts | #195 |
-| **Council picks** | Root/market overlay, impact dial, learning loop, confidence prior, call reasons | #201–#207 |
-| **Plan/docs** | automated-build-plan, board sync | #183, #193–#208 |
+| **Council picks** | Root/market overlay through priced scoring + call lines | #201–#213 |
+| **Audit completion** | Lazy OHLCV, badge polish, canvas radar | #212 · #215 |
+| **Plan/docs** | automated-build-plan, board sync | #183 · #193–#214 |
 
 **A2 branch protection:** `smoke` required check verified on `main` (human-confirmed in GitHub Settings).
 
@@ -57,7 +58,7 @@ Ditto's `read_links` / `get_contents` hit **lagged read-replicas**; `create_or_u
 
 - Close superseded open PRs: #165, #166, #184 (work already on `main` via #170 / #193) — **needs human `gh pr close`**
 - Cancel orphaned CI run [#29303004001](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/29303004001) if still running (human token)
-- Radar chart still lazy-loads Chart.js (C1 migrated sparklines only; intentional deferral)
+- ~~Radar chart still lazy-loads Chart.js~~ → **#215** canvas radar (no CDN)
 
 ## Guardrails
 

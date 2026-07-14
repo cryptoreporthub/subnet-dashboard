@@ -156,7 +156,7 @@ def test_trace_and_message_intel_honest_status():
 
 
 def test_h_full_includes_chartjs():
-    """No static Chart.js tag; uPlot spark assets loaded instead."""
+    """No Chart.js CDN; uPlot spark + canvas radar assets loaded instead."""
     client = TestClient(app)
     html = client.get("/").text
     lower = html.lower()
@@ -164,6 +164,11 @@ def test_h_full_includes_chartjs():
     assert "/static/vendor/uplot/uplot.iife.min.js" in lower
     assert "/static/js/uplot_charts.js" in lower
     assert "/static/vendor/uplot/uplot.min.css" in lower
+    app_js = open("static/js/app.js", encoding="utf-8").read().lower()
+    assert "chart.js" not in app_js
+    uplot_js = open("static/js/uplot_charts.js", encoding="utf-8").read()
+    assert "drawRadarCanvas" in uplot_js
+    assert "window.__paintRadar" in uplot_js
 
 
 def test_strip_markdown_headings_in_enrichment():
@@ -357,9 +362,11 @@ def test_c4_cockpit_hydrate_script_on_index():
 
 
 def test_c4_app_js_exposes_chart_paint_hooks():
-    hooks = open("static/js/app.js", encoding="utf-8").read()
-    assert "window.__paintSparks" in hooks
-    assert "window.__paintRadar" in hooks
+    app_js = open("static/js/app.js", encoding="utf-8").read()
+    uplot_js = open("static/js/uplot_charts.js", encoding="utf-8").read()
+    assert "__paintSparks" in app_js or "__paintSparks" in uplot_js
+    assert "drawRadarCanvas" in uplot_js
+    assert "window.__paintRadar" in uplot_js
 
 
 def test_c4_hydrate_calls_chart_paint_hooks():

@@ -617,7 +617,7 @@
     }).join('');
     var html =
       '<div class="card momentum-grid"><div class="card"><div class="card-head"><h3>Subnet Radar</h3>' +
-      '<span class="src-tag">top 3 · Chart.js</span></div><div class="chart-box"><div class="chart-canvas-wrap">' +
+      '<span class="src-tag">top 3 · canvas</span></div><div class="chart-box"><div class="chart-canvas-wrap">' +
       '<canvas id="radarChart" data-radar="' + JSON.stringify(payload).replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '" aria-label="Subnet undervalued radar chart"></canvas>' +
       '</div></div></div><div class="card"><div class="card-head"><h3>Overlay Legend</h3></div>' +
       '<p class="section-sub section-sub--compact">Green = yield-vs-momentum undervalued score. Cyan = 24h momentum overlay.</p>' +
