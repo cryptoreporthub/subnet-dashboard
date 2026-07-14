@@ -70,6 +70,7 @@ header.top {
 
 /* ---------- Section titles ---------- */
 .section-title {
+  font-family: var(--font-body);
   font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.2px;

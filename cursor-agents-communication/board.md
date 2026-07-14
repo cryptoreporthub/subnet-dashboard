@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T07:05:00Z by Agent (`-5e45`) — **A2 branch protection verified**; queue complete  
-**main:** `8a77deb`
+**Last updated:** 2026-07-14T08:15:00Z by Agent (`-5e45`) — **G7+G12 cleanup**  
+**main:** `bc23671` (pre-merge)
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -59,6 +59,8 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 | **C1** uPlot sparklines | Cursor | ✅ **merged** | #190 |
 | **C2** SSE cockpit stream | Cursor | ✅ **merged** | #191 |
 | **C3** CSS/mobile/a11y | Cursor | ✅ **merged** | #192 |
+| **G7** Rajdhani section titles | Cursor | 🔄 **in PR** | `-5e45` |
+| **G12** favicon + font cleanup | Cursor | 🔄 **in PR** | `-5e45` |
 
 ## Ready for next work
 **Automated queue:** COMPLETE — B6 #185 · C4 #186 · C5 #187 · C6 #189 · C1 #190 · C2 #191 · C3 #192 · board #193. **A2:** `smoke` required check verified on `main`.
