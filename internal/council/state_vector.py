@@ -1201,7 +1201,7 @@ def _expert_contributions(
 ) -> Dict[str, float]:
     """Return deterministic 0-1 scores for the four council experts."""
     from internal.subnets.apy import subnet_apy_percent
-    from internal.subnets.impact import impact_sensitivity, relative_flow
+    from internal.subnets.impact import impact_scale_factor, relative_flow
     from internal.subnets.tradable import subnet_volume
 
     emission = float(sn.get("emission", 0) or 0)
@@ -1214,7 +1214,6 @@ def _expert_contributions(
     apy = float(apy_pct or 0)
     volume = subnet_volume(sn)
     flow = relative_flow(sn)
-    sens = impact_sensitivity(sn)
     mentions = int(sn.get("social_mentions", 0) or 0)
     chg24 = float(sn.get("price_change_24h", 0) or 0)
     chg7 = float(sn.get("price_change_7d", 0) or 0)
@@ -1234,15 +1233,19 @@ def _expert_contributions(
     quant = min(1.0, max(0.0, quant))
 
     # Hype: social + momentum, amplified when the name is impact-sensitive (thin).
+    try:
+        hype_sens = impact_scale_factor(sn)
+    except Exception:
+        hype_sens = 1.0
     hype = 0.45
     hype += min(0.30, mentions / 5_000.0)
     mom = min(0.20, abs(chg24) / 20.0 + abs(chg7) / 60.0)
-    hype += mom * min(1.5, 0.5 + 0.5 * sens)  # large-cap momentum counts less
+    hype += mom * min(1.5, 0.5 + 0.5 * hype_sens)  # large-cap momentum counts less
     hype = min(1.0, max(0.0, hype))
 
     # Dark Horse: uncorrelated on-chain flow — prefer impact-sensitive names
     dark_horse = _compute_dark_horse_score(sn)
-    dark_horse = min(1.0, max(0.0, dark_horse * (0.75 + 0.25 * min(sens, 2.0))))
+    dark_horse = min(1.0, max(0.0, dark_horse * (0.75 + 0.25 * min(hype_sens, 2.0))))
 
     # Technical: indicator consensus
     technical = 0.50
@@ -1438,9 +1441,9 @@ def score_subnet_for_hour(
     chg24 = float(sn.get("price_change_24h", 0) or 0)
     # Short-horizon: impact-weighted momentum (thin names move more per TAO).
     try:
-        from internal.subnets.impact import impact_sensitivity
+        from internal.subnets.impact import impact_scale_factor
 
-        mom_scale = min(1.5, 0.55 + 0.45 * impact_sensitivity(sn))
+        mom_scale = min(1.5, 0.55 + 0.45 * impact_scale_factor(sn))
     except Exception:
         mom_scale = 1.0
     momentum_boost = max(-0.10, min(0.10, (chg24 / 100.0) * mom_scale))
@@ -1516,9 +1519,16 @@ def score_subnet_for_day(
     # Reward yield ahead of 24h price (lagging price = undervalued), not 7d/30d momentum.
     value_boost = max(-0.10, min(0.10, value_gap / 100.0))
     # Day lens: relative flow favors names where capital actually moves the float.
-    flow_boost = max(-0.05, min(0.08, relative_flow(sn) * 0.15))
+    # ``impact_strength`` dial scales how hard we tilt (0=flat, 1=default, 2=aggressive).
+    try:
+        from internal.council.weights import load_impact_strength
+
+        strength = float(load_impact_strength())
+    except Exception:
+        strength = 1.0
+    flow_boost = max(-0.05, min(0.08, relative_flow(sn) * 0.15)) * strength
     # Large caps stay eligible but score dampens vs mid/small for the same signals.
-    size_tilt = max(-0.06, min(0.06, (impact_sensitivity(sn) - 1.0) * 0.04))
+    size_tilt = max(-0.06, min(0.06, (impact_sensitivity(sn) - 1.0) * 0.04)) * strength
     total = round((weighted + value_boost + flow_boost + size_tilt) * 100, 2)
     total = min(100.0, max(0.0, total))
 

@@ -413,11 +413,14 @@ def get_calibration_status(
     soul_map_path: str = "data/soul_map.json",
     predictions_path: str = PREDICTIONS_PATH,
 ) -> Dict[str, Any]:
+    from internal.council.weights import load_impact_strength, load_weights
+
     cal = _load_calibration_state(soul_map_path)
     rows = load_training_rows(predictions_path)
     return {
         "status": "ok",
         "weights": load_weights(soul_map_path),
+        "impact_strength": load_impact_strength(soul_map_path),
         "calibration": {
             "last_retrain_at": cal.get("last_retrain_at"),
             "last_cert_status": cal.get("last_cert_status"),
@@ -427,6 +430,13 @@ def get_calibration_status(
             "auto_retrain_enabled": os.environ.get("CALIBRATION_AUTO_RETRAIN", "").lower()
             in {"1", "true", "on", "yes"},
             "history": cal.get("history", []),
+            "impact_strength": {
+                "value": load_impact_strength(soul_map_path),
+                "range": [0.0, 2.0],
+                "default": 1.0,
+                "env_override": "IMPACT_STRENGTH",
+                "meaning": "0=no size tilt, 1=default, 2=aggressive small-cap bias",
+            },
         },
         "thresholds": {
             "min_sample": MIN_RESOLVED_SAMPLE,

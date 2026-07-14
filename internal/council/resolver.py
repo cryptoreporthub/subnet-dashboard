@@ -22,7 +22,7 @@ from internal.council.grading import (
 )
 from internal.council.price_reference import CANDLE_LOOKUP_MINUTES, price_at_resolve_at
 from internal.council.watchdog import check_resolver_watchdog
-from internal.council.weights import load_weights, nudge_signal_weight, save_weights
+from internal.council.weights import load_weights, nudge_impact_strength, nudge_signal_weight, save_weights
 
 try:
     from internal.judges.tracker import on_prediction_resolved
@@ -384,6 +384,7 @@ def resolve_prediction(
         )
         _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
         _nudge_signal_weights(prediction, bool(correct))
+        _nudge_impact_strength(prediction, bool(correct))
         return prediction
     return resolve_prediction_at_horizon(prediction, now=now)
 
@@ -461,7 +462,24 @@ def resolve_prediction_at_horizon(
     )
     _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
     _nudge_signal_weights(prediction, bool(correct))
+    _nudge_impact_strength(prediction, bool(correct))
     return prediction
+
+
+def _nudge_impact_strength(prediction: Dict[str, Any], correct: bool) -> None:
+    """Let SimiVision dial impact_strength when size tilt over/under-corrects."""
+    if _in_replay_mode():
+        return
+    try:
+        impact = prediction.get("market_impact") or prediction.get("impact") or {}
+        tier = None
+        if isinstance(impact, dict):
+            tier = impact.get("tier")
+        if not tier:
+            tier = prediction.get("impact_tier")
+        nudge_impact_strength(bool(correct), tier=tier)
+    except Exception:
+        pass
 
 
 def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:

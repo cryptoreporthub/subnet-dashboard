@@ -113,6 +113,15 @@ def record_pick_prediction(
     prediction["pick_source"] = "council"
     prediction["pick_score"] = pick.get("score")
     prediction["pick_confidence"] = pick.get("confidence", pick.get("final_confidence"))
+    try:
+        from internal.subnets.impact import impact_profile
+
+        impact = pick.get("impact") if isinstance(pick.get("impact"), dict) else None
+        prediction["market_impact"] = impact or impact_profile(subnet)
+        prediction["impact_tier"] = prediction["market_impact"].get("tier")
+        prediction["impact_strength"] = prediction["market_impact"].get("strength")
+    except Exception:
+        pass
 
     scenario_id = _link_scenario_memory(prediction, subnet, market_context)
     if scenario_id:
