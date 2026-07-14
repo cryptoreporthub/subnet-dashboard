@@ -51,14 +51,43 @@ def emit_weight_change(
     after: float,
     reason: str,
     correct: Optional[bool] = None,
+    extra: Optional[Dict[str, Any]] = None,
 ) -> None:
+    evidence = {
+        "before": before,
+        "after": after,
+        "delta": round(after - before, 4),
+        "reason": reason,
+        "dial": expert,
+    }
+    if extra:
+        evidence.update(extra)
     emit_trail_event(
         "weight_change",
         judge=expert,
-        evidence={"before": before, "after": after, "delta": round(after - before, 4), "reason": reason},
+        evidence=evidence,
         decision="nudge_up" if after > before else "nudge_down",
         signal="learning_loop",
         extra={"correct": correct},
+    )
+
+
+def emit_impact_strength_change(
+    *,
+    before: float,
+    after: float,
+    correct: Optional[bool] = None,
+    tier: Optional[str] = None,
+    prediction_id: Optional[str] = None,
+) -> None:
+    """Trail when SimiVision nudges the market-impact dial."""
+    emit_weight_change(
+        "impact_strength",
+        before=before,
+        after=after,
+        reason="impact_resolve",
+        correct=correct,
+        extra={"tier": tier, "prediction_id": prediction_id},
     )
 
 

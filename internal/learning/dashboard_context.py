@@ -37,10 +37,17 @@ def default_learning_dashboard_context() -> Dict[str, Any]:
             "wrong": 0,
             "accuracy": 0.0,
             "deltas": {"correct": 0.02, "wrong": -0.03},
+            "impact_strength": {
+                "value": 1.0,
+                "range": [0.0, 2.0],
+                "default": 1.0,
+                "env_override": "IMPACT_STRENGTH",
+            },
             "recent_resolutions": [],
             "last_updated": None,
         },
         "expert_weights": {},
+        "impact_strength": 1.0,
         "council_weights": [],
         "predictions": [],
         "patterns": [],
@@ -267,6 +274,12 @@ def build_learning_dashboard_context(
     market_context = market_context if isinstance(market_context, dict) else {"tao_change_24h": 0.0}
 
     weights = load_weights()
+    try:
+        from internal.council.weights import load_impact_strength
+
+        impact_strength = load_impact_strength()
+    except Exception:
+        impact_strength = 1.0
     expert_weights = _learning_stats().get("expert_weights", weights)
     picks = _pick_sections(subnets, market_context)
     rotation = _rotation_panel(subnets)
@@ -278,6 +291,7 @@ def build_learning_dashboard_context(
             "learning_stats": _learning_stats(),
             "learning_metrics": _learning_metrics(),
             "expert_weights": expert_weights,
+            "impact_strength": impact_strength,
             "council_weights": _council_weights_list(weights),
             "predictions": _predictions_panel(),
             "patterns": rotation.get("patterns", []),

@@ -52,6 +52,7 @@ def emit_prediction_resolved(prediction: Dict[str, Any], expert: Optional[str]) 
     """Trail event when a prediction resolves and nudges expert weights."""
     correct = prediction.get("correct")
     outcome = prediction.get("outcome")
+    impact = prediction.get("market_impact") if isinstance(prediction.get("market_impact"), dict) else {}
     emit_trail_event(
         "prediction_resolved",
         subnet=prediction.get("name"),
@@ -63,6 +64,10 @@ def emit_prediction_resolved(prediction: Dict[str, Any], expert: Optional[str]) 
             "actual_pct": prediction.get("actual_pct"),
             "predicted_pct": prediction.get("predicted_pct"),
             "horizon_type": prediction.get("horizon_type"),
+            "impact_tier": prediction.get("impact_tier") or impact.get("tier"),
+            "impact_strength_at_creation": prediction.get("impact_strength_at_creation")
+            or prediction.get("impact_strength"),
+            "impact_strength_after": prediction.get("impact_strength_after"),
         },
         signal=prediction.get("signal_source"),
         decision="weight_nudge_up" if correct else "weight_nudge_down",
