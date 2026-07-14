@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T01:35:00Z by Agent A (`-6f98`) — Phase A **A3+A4 in progress** (audit #11 CORS/XFO, audit #8 cockpit isolation)  
-**main:** `02984a3`
+**Last updated:** 2026-07-14T01:40:00Z by Agent A (`-6f98`) — Phase A **A3+A4 done**, PR open for human review  
+**main:** `02984a3` · **branch:** `cursor/audit-11-8-security-cockpit-6f98`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
