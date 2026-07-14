@@ -113,7 +113,7 @@ def _lazy_fill_price_candles(netuid: Any) -> List[Dict[str, Any]]:
     try:
         from internal.indicators.price_fetcher import fetch_ohlcv
 
-        candles = fetch_ohlcv(str(netuid), use_cache=True)
+        candles = fetch_ohlcv(str(netuid), use_cache=True, allow_synthetic=False)
         _price_cache_memo["mtime"] = None
         return candles if isinstance(candles, list) else []
     except Exception:

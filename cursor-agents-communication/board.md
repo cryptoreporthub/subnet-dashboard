@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T20:55:00Z by Agent (`-5e45`) — **#210 merged**; idle  
-**main:** `3f4c98e`
+**Last updated:** 2026-07-14T21:20:00Z by Agent (`-5e45`) — #213 residuals after #212 OHLCV  
+**main:** `2565dc0`
 
 ## Ditto boot (read first)
 
@@ -70,19 +70,19 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 
 ## Ready for next work
 
-**Idle — monitor only.** Call content + learning stamps complete (#201–#210). Optional next: lazy OHLCV fill for cold `price_cache` indicators. New work only when human/board explicitly queues it.
+**In flight:** #213 residuals — priced scoring + SimiVision call lines (lazy OHLCV already #212).
 
-**Automated queue:** COMPLETE — B6–C3 · G7+G12 · #198–#202 · #204–#210. **A2:** `smoke` required on `main`.
+**Automated queue:** COMPLETE — B6–C3 · G7+G12 · #198–#211. **A2:** `smoke` required on `main`.
 
-Recent merges on `main` @ `3f4c98e`:
+Recent merges on `main` @ `abaea39`:
 
 | PR | Phase | Summary |
 |----|-------|---------|
-| **#210** | Council | Hourly prediction + learning signal stamps + HOLD candidate call text |
+| **#211** | Board | STATUS sync after #210 |
+| **#210** | Council | Hourly prediction + learning signal stamps + HOLD candidate text |
 | **#209** | Board | Handoff sync after #201–#208 |
 | **#208** | Board | STATUS sync after #207 |
 | **#207** | Council | Call reasons lead with live signal-impact edges |
-| **#206** | Board | STATUS sync after #204 + #205 |
 | **#205** | Council | Cold-start confidence prior 0.62 |
 | **#204** | Learning | Impact dial through full loop |
 | **#198** | UI | Council-first overhaul |
@@ -106,7 +106,7 @@ Recent merges on `main` @ `3f4c98e`:
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **Cursor** | **Idle** | #201–#210 on main; new work only when explicitly queued |
+| **Cursor** | **Active** | #213 priced scoring + SimiVision call_line |
 | **Ditto** | **Monitor** | Read-only — CI, Fly health, `/api/data-freshness` |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
