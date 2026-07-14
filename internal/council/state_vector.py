@@ -49,12 +49,24 @@ SIGNAL_TYPES = _load_signal_types()
 # ---------------------------------------------------------------------------
 # Price history helper
 # ---------------------------------------------------------------------------
+_price_cache_memo: Dict[str, Any] = {"mtime": None, "data": {}}
+
+
 def _load_price_cache() -> Dict[str, Any]:
     try:
-        with open(_PRICE_CACHE_PATH, "r") as f:
-            return _json.load(f)
-    except Exception:
+        mtime = _os.path.getmtime(_PRICE_CACHE_PATH)
+    except OSError:
         return {}
+    if _price_cache_memo["mtime"] == mtime:
+        return _price_cache_memo["data"]
+    try:
+        with open(_PRICE_CACHE_PATH, "r") as f:
+            data = _json.load(f)
+    except Exception:
+        data = {}
+    _price_cache_memo["mtime"] = mtime
+    _price_cache_memo["data"] = data
+    return data
 
 
 def _empty_price_history() -> Dict[str, Any]:
@@ -561,6 +573,7 @@ def _compute_technical_indicators(sn: Dict[str, Any]) -> Dict[str, Any]:
 def _compute_technical_score(
     sn: Dict[str, Any],
     horizon_type: str = "day",
+    indicators: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Compute weighted technical score for a specific horizon type.
 
@@ -570,7 +583,8 @@ def _compute_technical_score(
     """
     from internal.council.weights import load_signal_weights
 
-    indicators = _compute_technical_indicators(sn)
+    if indicators is None:
+        indicators = _compute_technical_indicators(sn)
     if indicators.get("degraded"):
         return {
             "technical_score": 0.5,
@@ -1454,7 +1468,7 @@ def score_subnet_for_hour(
     tags = _scenario_tags(sn, indicators, market_context)
 
     # Compute weighted technical score for hour horizon
-    tech_score = _compute_technical_score(sn, "hour")
+    tech_score = _compute_technical_score(sn, "hour", indicators)
 
     return {
         "total_score": total,
@@ -1536,7 +1550,7 @@ def score_subnet_for_day(
     tags = _scenario_tags(sn, indicators, market_context)
 
     # Compute weighted technical score for day horizon
-    tech_score = _compute_technical_score(sn, "day")
+    tech_score = _compute_technical_score(sn, "day", indicators)
 
     return {
         "total_score": total,

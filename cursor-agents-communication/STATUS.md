@@ -1,12 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-14T13:30:00Z · Agent `-5e45`  
-**main:** `e7c805c`  
-**Repo:** `cryptoreporthub/subnet-dashboard`
+**Updated:** 2026-07-14T16:00:00Z · Agent `-42f7`  
+**main:** `e7c805c` (in flight → `cursor/all-tracks-42f7`)
 
 ## One-line
 
-**Automated EXTREME audit queue COMPLETE. In flight: Root exclusion + call prediction content. Ditto = monitor only.**
+**Automated EXTREME audit queue COMPLETE. In flight: all-tracks (#201 substance + Phase 0 perf + council polish).**
 
 ## Done (do not re-queue)
 
@@ -25,7 +24,7 @@
 
 | Slice | Branch | Notes |
 |-------|--------|-------|
-| Root never a pick + call statement/horizon | `cursor/root-exclude-call-content-5e45` | netuid>0 universe; UI uses `prediction.statement` ≤4h |
+| All tracks (#201 + Phase 0 + polish) | `cursor/all-tracks-42f7` | Root/market overlay, score cache, judges dedupe, nav/skeletons/tour |
 
 ## Ditto
 

@@ -93,7 +93,7 @@ async def _refresh_and_broadcast() -> Dict[str, Any]:
 async def api_signals(
     subnet_id: Optional[int] = Query(None),
     since: Optional[str] = Query(None, description="ISO timestamp — return log entries since"),
-    refresh: bool = Query(True, description="Regenerate live signals before responding"),
+    refresh: bool = Query(False, description="Regenerate live signals before responding"),
 ):
     if refresh:
         result = await _refresh_and_broadcast()

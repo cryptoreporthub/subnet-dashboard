@@ -115,6 +115,32 @@
     return String(name || 'expert');
   }
 
+  function skeletonHtml(lines) {
+    var n = lines || 3;
+    var html = '<div class="hydrate-skeleton" aria-hidden="true">';
+    for (var i = 0; i < n; i++) {
+      var cls = i === n - 1 ? 'hydrate-skeleton__line hydrate-skeleton__line--short' : 'hydrate-skeleton__line hydrate-skeleton__line--med';
+      html += '<div class="' + cls + '"></div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function showHydrateSkeletons() {
+    ['judges-panel', 'signals-feed-root', 'cockpit-sections-root'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && el.querySelector('.empty')) {
+        el.innerHTML = skeletonHtml(3);
+      }
+    });
+    document.querySelectorAll('.empty').forEach(function (el) {
+      if (el.closest('#section-daily-pick, .council-stage')) return;
+      if (!el.querySelector('.hydrate-skeleton')) {
+        el.innerHTML = skeletonHtml(2);
+      }
+    });
+  }
+
   function fetchJsonTimeout(url, ms) {
     return new Promise(function (resolve, reject) {
       var ctrl = new AbortController();
@@ -487,11 +513,19 @@
     var cards = judges.slice(0, 12).map(function (j) {
       var verdict = (j.consensus && j.consensus.verdict) || 'neutral';
       var score = j.consensus ? j.consensus.score : null;
+      var oracle = j.oracle ? j.oracle.score.toFixed(2) : '—';
+      var echo = j.echo ? j.echo.score.toFixed(2) : '—';
+      var pulse = j.pulse ? j.pulse.score.toFixed(2) : '—';
       return (
         '<article class="card judge-summary" style="margin-bottom:10px;">' +
         '<div class="card-head"><h3>' + esc(j.name || ('SN' + j.netuid)) + '</h3>' +
         '<span class="badge ' + verdictClass(verdict) + '">' + esc(String(verdict).toUpperCase()) + '</span></div>' +
-        '<div class="pick-meta">SN' + esc(j.netuid) + (score != null ? ' · consensus ' + Number(score).toFixed(2) : '') + '</div></article>'
+        '<div class="pick-meta">SN' + esc(j.netuid) + (score != null ? ' · consensus ' + Number(score).toFixed(2) : '') + '</div>' +
+        '<div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-top:8px;">' +
+        '<div class="kpi-cell"><div class="k">Oracle</div><div class="v">' + oracle + '</div></div>' +
+        '<div class="kpi-cell"><div class="k">Echo</div><div class="v">' + echo + '</div></div>' +
+        '<div class="kpi-cell"><div class="k">Pulse</div><div class="v">' + pulse + '</div></div>' +
+        '</div></article>'
       );
     }).join('');
     panel.innerHTML = '<div class="picks">' + cards + '</div><p class="pick-meta" style="margin-top:8px;">' + judges.length + ' subnets scored</p>';
@@ -683,6 +717,7 @@
 
   async function run() {
     if (document.documentElement.dataset.hydrate !== '1') return;
+    showHydrateSkeletons();
 
     var results = await Promise.allSettled([
       fetchJsonTimeout('/api/simivision', 12000),
@@ -691,7 +726,7 @@
       fetchJsonTimeout('/api/mindmap/trail?limit=20', 12000),
       fetchJsonTimeout('/api/learning/stats', 8000),
       fetchJsonTimeout('/api/subnets', 15000),
-      fetchJsonTimeout('/api/signals', 15000),
+      fetchJsonTimeout('/api/signals?refresh=false', 15000),
       fetchJsonTimeout('/api/alerts?refresh_checks=false', 8000),
       fetchJsonTimeout('/api/cockpit/sections', 20000),
       fetchJsonTimeout('/api/indicators-convergence', 12000),

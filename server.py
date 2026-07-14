@@ -1131,14 +1131,18 @@ def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[st
     picks.append(_unify(audited, src))
 
     if _PICKS_ENGINE:
-        scored = []
-        for sn in subnets:
-            if top_netuid is not None and sn.get("netuid") == top_netuid:
-                continue
-            try:
-                scored.append({"subnet": sn, "score": score_subnet_for_hour(sn, market_context)})
-            except Exception as exc:
-                logger.warning("score_subnet_for_hour failed for SN%s: %s", sn.get("netuid"), exc)
+        from internal.council.score_cache import score_universe
+
+        hour_scored, _ = score_universe(
+            subnets,
+            market_context,
+            score_hour=score_subnet_for_hour,
+            score_day=score_subnet_for_day,
+        )
+        scored = [
+            item for item in hour_scored
+            if top_netuid is None or item["subnet"].get("netuid") != top_netuid
+        ]
         scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
         for item in scored[: max(0, limit - len(picks))]:
             picks.append(_unify(_build_hour_pick_payload(item["subnet"], item["score"]), item["subnet"]))
@@ -1155,18 +1159,19 @@ def api_simivision():
 @app.get("/api/top-picks")
 def api_top_picks():
     """Top 3 subnets by short-horizon (hour) and 24h (day) Council scores."""
+    from internal.council.score_cache import score_universe
+
     subnets, _ = _get_subnets_with_source()
     subnets = _cap_subnets_for_scoring(subnets)
     if not _PICKS_ENGINE:
         return {"hour_picks": [], "day_picks": [], "error": "pick engine unavailable"}
     market_context = _market_context_with_weights(subnets)
-    hour_scored, day_scored = [], []
-    for sn in subnets:
-        try:
-            hour_scored.append({"subnet": sn, "score": score_subnet_for_hour(sn, market_context)})
-            day_scored.append({"subnet": sn, "score": score_subnet_for_day(sn, market_context)})
-        except Exception as exc:
-            logger.warning("scoring failed for SN%s: %s", sn.get("netuid"), exc)
+    hour_scored, day_scored = score_universe(
+        subnets,
+        market_context,
+        score_hour=score_subnet_for_hour,
+        score_day=score_subnet_for_day,
+    )
     hour_scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
     day_scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
 
