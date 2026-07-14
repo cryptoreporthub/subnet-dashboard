@@ -7,7 +7,8 @@
   <div class="picks">
     {% for pick in sv_picks %}
     {% set conv = (pick.conviction|default(0))|int %}
-    {% set tier = 'tier-cyan' if conv > 80 else ('tier-lime' if conv > 60 else ('tier-gold' if conv > 40 else 'tier-red')) %}
+    {# conviction tiers: canonical cutoffs 75 / 55 / 35 (see static/js/conviction_tiers.js) #}
+    {% set tier = 'tier-cyan' if conv > 75 else ('tier-lime' if conv > 55 else ('tier-gold' if conv > 35 else 'tier-red')) %}
     {% set rec = (pick.recommendation|default('WATCH'))|string|upper %}
     <div class="pick-card">
       <div class="pick-rank">#{{ pick.rank|default(loop.index) }}</div>

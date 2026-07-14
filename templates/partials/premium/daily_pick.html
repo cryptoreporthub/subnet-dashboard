@@ -5,6 +5,7 @@
   <p class="section-sub">Highest-conviction subnet for today — downgraded when audit confidence is low.</p>
   {% if dp_subnet %}
   {% set fc = ((dpick.final_confidence|default(dpick.confidence|default(0)))|float * 100)|round %}
+  {# conviction tiers: canonical cutoffs 75 / 55 / 35 (see static/js/conviction_tiers.js) #}
   {% set tier = 'tier-cyan' if fc > 75 else ('tier-lime' if fc > 55 else ('tier-gold' if fc > 35 else 'tier-red')) %}
   {% set act = (dpick.action|default('HOLD'))|string|upper %}
   {% set audit = dpick.audit if dpick.audit is mapping else {} %}

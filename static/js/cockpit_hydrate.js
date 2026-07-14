@@ -74,6 +74,9 @@
   }
 
   function confTier(conf) {
+    if (typeof window !== 'undefined' && window.ConvictionTiers && window.ConvictionTiers.confTier) {
+      return window.ConvictionTiers.confTier(conf);
+    }
     var c = Number(conf);
     if (c <= 1) c *= 100;
     c = Math.round(c);
