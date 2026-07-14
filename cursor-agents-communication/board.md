@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T20:50:00Z by Agent (`-5e45`) — hour-pred + signal stamps in flight (#210)  
-**main:** `b58bc31`
+**Last updated:** 2026-07-14T20:55:00Z by Agent (`-5e45`) — **#210 merged**; idle  
+**main:** `3f4c98e`
 
 ## Ditto boot (read first)
 
@@ -70,17 +70,18 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 
 ## Ready for next work
 
-**In flight:** hourly prediction statements + learning `signal_contributions`/`active_signals` stamps + HOLD candidate call text (`cursor/hour-pred-signal-stamps-5e45`).
+**Idle — monitor only.** Call content + learning stamps complete (#201–#210). Optional next: lazy OHLCV fill for cold `price_cache` indicators. New work only when human/board explicitly queues it.
 
-**Automated queue:** COMPLETE — B6–C3 · G7+G12 · #198–#202 · #204–#209. **A2:** `smoke` required on `main`.
+**Automated queue:** COMPLETE — B6–C3 · G7+G12 · #198–#202 · #204–#210. **A2:** `smoke` required on `main`.
 
-Recent merges on `main` @ `b58bc31`:
+Recent merges on `main` @ `3f4c98e`:
 
 | PR | Phase | Summary |
 |----|-------|---------|
+| **#210** | Council | Hourly prediction + learning signal stamps + HOLD candidate call text |
 | **#209** | Board | Handoff sync after #201–#208 |
 | **#208** | Board | STATUS sync after #207 |
-| **#207** | Council | Call reasons lead with live signal-impact edges; prediction expert/source from impact |
+| **#207** | Council | Call reasons lead with live signal-impact edges |
 | **#206** | Board | STATUS sync after #204 + #205 |
 | **#205** | Council | Cold-start confidence prior 0.62 |
 | **#204** | Learning | Impact dial through full loop |
@@ -105,7 +106,7 @@ Recent merges on `main` @ `b58bc31`:
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **Cursor** | **Active** | #210 hour pred + signal stamps + HOLD candidate text |
+| **Cursor** | **Idle** | #201–#210 on main; new work only when explicitly queued |
 | **Ditto** | **Monitor** | Read-only — CI, Fly health, `/api/data-freshness` |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
