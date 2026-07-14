@@ -204,6 +204,10 @@
       var rec = String(pick.recommendation || 'WATCH').toUpperCase();
       var apyVal = apyPercent(pick);
       var apy = apyVal != null ? fmt(apyVal, 1) : '—';
+      var callLine =
+        pick.call_line ||
+        (pick.reasons && pick.reasons[0]) ||
+        (fmtSigned(pick.price_change_24h) + ' 24h');
       return (
         '<div class="pick-card">' +
         '<div class="pick-rank">#' + esc(pick.rank || idx + 1) + '</div>' +
@@ -212,7 +216,7 @@
         '<div class="pick-row"><div class="conviction-wrap">' +
         '<div class="conviction-lbl">Conviction</div>' +
         '<div class="conviction-bar"><div class="conviction-fill ' + t.tier + '" style="width:' + t.conf + '%;"></div></div>' +
-        '<div class="pred-line">' + fmtSigned(pick.price_change_24h) + ' 24h</div></div>' +
+        '<div class="pred-line">' + esc(callLine) + '</div></div>' +
         '<div class="conv-ring ' + t.tier + '" style="--ring-pct:' + t.conf + ';"><div class="conv-ring-val">' + t.conf + '</div></div></div>' +
         '<div class="tags" style="margin-top:12px;"><span class="badge ' + recBadge(rec) + '">' + esc(rec) + '</span></div></div>'
       );

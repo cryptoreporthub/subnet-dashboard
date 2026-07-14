@@ -1,11 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-14T20:55:00Z · Agent `-5e45`  
-**main:** `3f4c98e`
+**Updated:** 2026-07-14T21:20:00Z · Agent `-5e45`  
+**main:** `2565dc0`
 
 ## One-line
 
-**Call content + learning stamps complete (#201–#210). Ditto = monitor only unless new work is queued.**
+**Final residuals in flight (#213): priced scoring + SimiVision call lines (lazy OHLCV already on main via #212).**
 
 ## Done (do not re-queue)
 
@@ -18,16 +18,16 @@
 | Confidence prior | **#205** |
 | Call reasons from signal impact | **#207** |
 | Hourly prediction + signal stamps + HOLD candidate text | **#210** |
-| Board syncs | #206 · #208 · #209 |
+| Lazy OHLCV + audit polish | **#212** |
+| Board syncs | #206 · #208 · #209 · #211 |
 | A2 `smoke` on `main` | verified |
 
 ## Ditto
 
 - **Do:** read `board.md`, watch CI/Fly health
-- **Do not:** re-open #201–#210, cite July 14 morning queue as open
+- **Do not:** re-open #201–#212
 
 ## Cursor
 
-- New work only when human/board explicitly queues it
-- Next optional lever: lazy OHLCV fill for cold `price_cache` indicators
+- Active: #213 residuals (priced scoring + SimiVision call_line)
 - Git only; Ponytail minimal diff

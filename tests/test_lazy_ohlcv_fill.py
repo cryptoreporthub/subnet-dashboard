@@ -26,8 +26,9 @@ def test_history_from_candles_honest_empty_under_30():
 def test_lazy_fill_populates_cold_cache(monkeypatch):
     monkeypatch.setattr("internal.council.state_vector._load_price_cache", lambda: {})
 
-    def _fake_fetch(netuid, use_cache=True):
+    def _fake_fetch(netuid, use_cache=True, **kwargs):
         assert netuid == "7"
+        assert kwargs.get("allow_synthetic") is False
         return _sample_candles(32)
 
     monkeypatch.setattr(

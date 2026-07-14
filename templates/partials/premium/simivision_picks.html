@@ -18,7 +18,7 @@
         <div class="conviction-wrap">
           <div class="conviction-lbl">Conviction</div>
           <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ conv }}%;"></div></div>
-          <div class="pred-line">{{ "%+.2f"|format((pick.price_change_24h|default(0))|float) }}% 24h</div>
+          <div class="pred-line">{% if pick.call_line %}{{ pick.call_line }}{% elif pick.reasons and pick.reasons[0] %}{{ pick.reasons[0] }}{% else %}{{ "%+.2f"|format((pick.price_change_24h|default(0))|float) }}% 24h{% endif %}</div>
         </div>
         <div class="conv-ring {{ tier }}" style="--ring-pct: {{ conv }};">
           <svg viewBox="0 0 46 46" aria-hidden="true">

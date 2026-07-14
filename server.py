@@ -339,14 +339,21 @@ def _cap_subnets_for_scoring(
 ) -> List[Dict[str, Any]]:
     """Limit council scoring to the most active subnets (Fly single-worker safety).
 
-    Prefer live market activity (volume, market_cap) when present; fall back to
-    emission so registry-only snapshots still produce a stable universe.
+    Prefer live-priced market activity (volume, market_cap) when present; fall
+    back to emission so registry-only snapshots still produce a stable universe.
+    Unpriced emission-only rows rank below any row with a positive price.
     """
     from internal.subnets.tradable import subnet_volume
 
     cap = limit if limit is not None else TOP_SCORING_UNIVERSE
     if not subnets or len(subnets) <= cap:
         return subnets
+
+    def _has_price(s: Dict[str, Any]) -> int:
+        try:
+            return 1 if float(s.get("price") or 0) > 0 else 0
+        except (TypeError, ValueError):
+            return 0
 
     def _rank_key(s: Dict[str, Any]):
         vol = subnet_volume(s)
@@ -358,9 +365,10 @@ def _cap_subnets_for_scoring(
             rank_bonus = -int(mcr) if mcr not in (None, "", 0, "0") else 0
         except (TypeError, ValueError):
             rank_bonus = 0
+        priced = _has_price(s)
         if vol > 0 or mcap > 0:
-            return (1, vol, mcap, rank_bonus, emission)
-        return (0, 0.0, 0.0, 0, emission)
+            return (priced, 1, vol, mcap, rank_bonus, emission)
+        return (priced, 0, 0.0, 0.0, 0, emission)
 
     return sorted(subnets, key=_rank_key, reverse=True)[:cap]
 
@@ -1041,6 +1049,7 @@ def _safe_simivision_payload(
         if apy_val is None:
             apy_val = float(sn.get("apy", 0) or 0)
         chg = float(sn.get("price_change_24h", 0) or 0)
+        reasons = pick_reasons(sn)
         top.append({
             "rank": idx,
             "netuid": sn.get("netuid"),
@@ -1051,7 +1060,9 @@ def _safe_simivision_payload(
             "volume": subnet_volume(sn),
             "conviction": min(95, 72 + int(abs(chg)) + int(float(apy_val or 0) / 4)),
             "recommendation": "BUY" if idx == 1 else ("HOLD" if idx == 2 else "WATCH"),
-            "reasons": pick_reasons(sn),
+            "reasons": reasons,
+            # Call-quality line for UI (not a raw 24h scoreboard invent).
+            "call_line": (reasons[0] if reasons else None),
         })
     return {
         "status": "success",
@@ -1068,25 +1079,32 @@ def _safe_simivision_payload(
 
 def _build_hour_pick_payload(sn: Dict[str, Any], score: Dict[str, Any]) -> Dict[str, Any]:
     """Format a subnet + hour state-vector into the public hour-pick shape."""
+    from internal.council.state_vector import unpack_score_learning_fields
+
+    learning = unpack_score_learning_fields(score)
     try:
         from internal.subnets.impact import impact_profile
 
         impact = impact_profile(sn)
     except Exception:
         impact = None
+    metric_signals = {
+        "price_change_24h": sn.get("price_change_24h"),
+        "price_change_7d": sn.get("price_change_7d"),
+        "emission": sn.get("emission"),
+        "apy": sn.get("apy"),
+        "volume": sn.get("volume"),
+    }
     return {
         "subnet": {"netuid": sn.get("netuid"), "name": sn.get("name"), "symbol": sn.get("symbol")},
         "score": score["total_score"],
         "confidence": score["confidence"],
         "expert_contributions": score["expert_contributions"],
         "scenario_tags": score["scenario_tags"],
-        "signals": {
-            "price_change_24h": sn.get("price_change_24h"),
-            "price_change_7d": sn.get("price_change_7d"),
-            "emission": sn.get("emission"),
-            "apy": sn.get("apy"),
-            "volume": sn.get("volume"),
-        },
+        "signals": learning["signal_impact"] or metric_signals,
+        "signal_impact": learning["signal_impact"],
+        "signal_contributions": learning["signal_contributions"],
+        "active_signals": learning["active_signals"],
         "action": "long",
         "impact": impact,
     }
