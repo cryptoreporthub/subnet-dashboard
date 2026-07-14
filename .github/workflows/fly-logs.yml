@@ -10,18 +10,48 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Machine status
+        run: |
+          flyctl status --app subnet-dashboard || true
+          flyctl machines list --app subnet-dashboard || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      # Emergency recover without waiting for a full image rebuild: restart when
+      # the machine is started-but-critical (proxy has no healthy candidate).
+      - name: Restart unhealthy machine
+        run: |
+          set -e
+          for id in $(flyctl machines list -a subnet-dashboard --json | python3 -c "
+          import json,sys
+          for m in json.load(sys.stdin):
+              print(m.get('id',''))
+          "); do
+            [ -n "$id" ] || continue
+            echo "Restarting $id"
+            flyctl machines restart "$id" -a subnet-dashboard || flyctl machines start "$id" -a subnet-dashboard || true
+          done
+          for i in $(seq 1 24); do
+            code=$(curl -sS -m 10 -o /tmp/health_body -w "%{http_code}" https://subnet-dashboard.fly.dev/health || echo 000)
+            echo "attempt $i: HTTP $code $(cat /tmp/health_body 2>/dev/null || true)"
+            if [ "$code" = "200" ]; then
+              echo "Public health OK after restart"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "WARN: public /health still not 200 after restart"
+          flyctl status -a subnet-dashboard || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Get recent Fly logs
-        run: flyctl logs --app subnet-dashboard --since 2m || true
+        run: flyctl logs --app subnet-dashboard --no-tail || true
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Test endpoints with curl
         run: |
-          echo "GET /health"
-          curl -s -o /dev/null -w "%{http_code}
-" https://subnet-dashboard.fly.dev/health
-          echo "GET /api/health"
-          curl -s -o /dev/null -w "%{http_code}
-" https://subnet-dashboard.fly.dev/api/health
-          echo "GET /"
-          curl -s -o /dev/null -w "%{http_code}
-" https://subnet-dashboard.fly.dev/
+          set +e
+          for path in /health /api/health /; do
+            echo "GET $path"
+            curl -sS -m 15 -o /tmp/body -w "http=%{http_code} time=%{time_total}\n" "https://subnet-dashboard.fly.dev$path"
+            head -c 200 /tmp/body; echo
+          done
