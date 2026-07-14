@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T21:25:00Z by Agent (`-5e45`) — **call-quality lane COMPLETE (#201–#213)**  
-**main:** `67d2dd1`
+**Last updated:** 2026-07-14T21:45:00Z by Agent (`-6f98`) — **completion queue** (#215 canvas radar)  
+**main:** `30c4141`
 
 ## Ditto boot (read first)
 
@@ -70,25 +70,25 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 
 ## Ready for next work
 
-**In flight:** #213 residuals — priced scoring + SimiVision call lines (lazy OHLCV already #212).
+**In flight:** #215 — remove Chart.js radar CDN; canvas radar in `uplot_charts.js` (audit #10 completion).
 
-**Automated queue:** COMPLETE — B6–C3 · G7+G12 · #198–#211. **A2:** `smoke` required on `main`.
+**EXTREME audit:** ✅ **COMPLETE** — all 16 findings addressed (#215 closes #10 radar deferral).
 
-Recent merges on `main` @ `abaea39`:
+**Automated queue:** COMPLETE — B6–C3 · G7+G12 · #198–#214. **A2:** `smoke` required on `main`.
+
+Recent merges on `main` @ `30c4141`:
 
 | PR | Phase | Summary |
 |----|-------|---------|
+| **#214** | Board | Call-quality lane complete (#201–#213) |
+| **#213** | Council | Priced scoring + SimiVision call lines |
+| **#212** | Data | Lazy OHLCV fill + audit #15/#16 polish |
 | **#211** | Board | STATUS sync after #210 |
-| **#210** | Council | Hourly prediction + learning signal stamps + HOLD candidate text |
-| **#209** | Board | Handoff sync after #201–#208 |
-| **#208** | Board | STATUS sync after #207 |
-| **#207** | Council | Call reasons lead with live signal-impact edges |
-| **#205** | Council | Cold-start confidence prior 0.62 |
+| **#210** | Council | Hourly prediction + learning signal stamps |
+| **#207** | Council | Call reasons from signal-impact |
 | **#204** | Learning | Impact dial through full loop |
 | **#198** | UI | Council-first overhaul |
 | **#195** | **G7+G12** | Rajdhani titles, favicon, fonts |
-| **#192** | **C3** | CSS/mobile/a11y |
-| **#191** | **C2** | SSE cockpit stream |
 | **#190** | **C1** | uPlot sparklines |
 | **#185** | **B6** | slowapi rate limit |
 
@@ -106,7 +106,7 @@ Recent merges on `main` @ `abaea39`:
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **Cursor** | **Active** | #213 priced scoring + SimiVision call_line |
+| **Cursor** | **Active** | #215 canvas radar — final audit #10 item |
 | **Ditto** | **Monitor** | Read-only — CI, Fly health, `/api/data-freshness` |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
