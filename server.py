@@ -459,7 +459,7 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
     try:
         from internal.message_intel.context import build_message_intel_context
 
-        context.update(build_message_intel_context())
+        context.update(build_message_intel_context(subnets))
     except Exception as exc:
         logger.warning("Message intel context unavailable: %s", exc)
 

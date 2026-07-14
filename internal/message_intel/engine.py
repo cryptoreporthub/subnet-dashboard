@@ -57,6 +57,13 @@ def ingest_message(payload: Dict[str, Any], *, snapshot_price: bool = True) -> D
             snap = price_tracker.snapshot(message_id)
             if snap is not None:
                 price_result = {"tao_usd_price": snap}
+            from internal.message_intel.soul_sync import _extract_netuids
+
+            for netuid in _extract_netuids(analysis)[:1]:
+                subnet_snap = price_tracker.snapshot_subnet(message_id, netuid)
+                if subnet_snap is not None and price_result is not None:
+                    price_result["subnet_netuid"] = netuid
+                    price_result["subnet_price"] = subnet_snap
         except Exception as exc:
             logger.warning("Price snapshot skipped for message %s: %s", message_id, exc)
             price_result = {"error": str(exc)}
