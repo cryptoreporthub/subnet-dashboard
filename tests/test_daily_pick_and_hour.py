@@ -64,10 +64,28 @@ def test_daily_pick_returns_structured_payload(client):
     if data["action"] == "HOLD":
         assert data["pick"] is None
         assert "reason" in data
+        # Candidate may be attached for display when a live score exists
+        if data.get("candidate") is not None:
+            assert "subnet" in data["candidate"]
+            assert "final_confidence" in data["candidate"]
     else:
         assert data["pick"] is not None
         assert "subnet" in data["pick"]
         assert "final_confidence" in data["pick"]
+
+
+def test_daily_pick_hold_exposes_candidate_not_published(client):
+    """HOLD must not invent a BUY; candidate is display-only under the audit gate."""
+    data = client.get("/api/daily-pick").json()
+    assert data["status"] == "ok"
+    if data["action"] != "HOLD":
+        return
+    assert data["pick"] is None
+    cand = data.get("candidate")
+    if cand is None:
+        return
+    assert float(cand.get("final_confidence") or 0) < 0.45
+    assert "subnet" in cand
 
 
 def test_daily_pick_is_deterministic_and_cached(client):

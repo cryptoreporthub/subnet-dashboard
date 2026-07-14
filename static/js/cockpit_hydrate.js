@@ -195,68 +195,98 @@
   }
 
   function renderDailyPick(payload) {
-    if (!payload) return;
-    var pick = payload.pick;
     var host = document.getElementById('council-stage-body');
-    if (!host) {
-      if (!pick) return;
-      /* fallback: legacy section empty replace */
+    if (!payload) return;
+
+    var act = String(payload.action || 'HOLD').toUpperCase();
+    if (act === 'LONG') act = 'BUY';
+    var pick = payload.pick;
+    var cand = payload.candidate;
+    var active = pick || cand;
+    var sn = (active && active.subnet) || {};
+    var confSrc = active || payload;
+    var finalConf = confSrc.final_confidence != null ? confSrc.final_confidence : confSrc.confidence;
+    var fc = confTier(finalConf != null ? finalConf : 0);
+    var audit = (active && active.audit) || {};
+    var concerns = (audit.concerns || []).slice(0, 4);
+    var patterns = (payload.rotation_summary && payload.rotation_summary.patterns) || [];
+    var topPat = patterns[0];
+    var regime = payload.regime ? String(payload.regime).toUpperCase() + ' REGIME' : '';
+
+    function actionBadges(mainAct, audited) {
+      var html =
+        '<div class="council-call__action">' +
+        '<span class="badge ' + recBadge(mainAct) + '">' + esc(mainAct) + '</span>';
+      if (audited && audit.approved) html += '<span class="hero-audit">AUDIT PASSED</span>';
+      if (audited && audit.approved === false) html += '<span class="hero-audit flagged">AUDIT FLAGGED</span>';
+      if (regime) html += '<span class="council-call__regime">' + esc(regime) + '</span>';
+      return html + '</div>';
     }
-    if (!pick) {
-      if (host) {
-        host.innerHTML =
-          '<div class="council-call council-call--empty"><p class="empty">Council has not published today’s audited call yet. The stage stays empty until scoring and audit settle — no decorative pick.</p></div>';
-      }
-      return;
-    }
-    var sn = pick.subnet || {};
-    var finalConf = pick.final_confidence != null ? pick.final_confidence : payload.final_confidence;
-    var fc = confTier(finalConf != null ? finalConf : pick.confidence || 0);
-    var act = String(payload.action || pick.action || 'HOLD').toUpperCase();
-    var audit = payload.audit || pick.audit || {};
-    var concerns = (audit.concerns || []).slice(0, 3);
-    var html =
-      '<div class="council-call">' +
-      '<div class="council-call__action">' +
-      '<span class="badge ' + recBadge(act) + '">' + esc(act) + '</span>' +
-      (audit.approved ? '<span class="hero-audit">AUDIT PASSED</span>' : '') +
-      '</div>' +
-      '<p class="council-call__name">' + esc(sn.name || pickName(pick)) + '</p>' +
-      '<p class="council-call__meta">SN' + esc(sn.netuid != null ? sn.netuid : pickNetuid(pick)) + '</p>' +
-      '<p class="council-call__prediction">Predicted to move <strong class="accent-bright">with ' +
-      fc.conf +
-      '% confidence</strong> on the council horizon' +
-      (pick.score != null || payload.score != null
-        ? ' · score <b>' + fmt(pick.score != null ? pick.score : payload.score, 1) + '</b>'
-        : '') +
-      '</p>' +
-      '<div class="council-call__conviction">' +
-      '<div class="conviction-bar"><div class="conviction-fill ' +
-      fc.tier +
-      '" style="width:' +
-      fc.conf +
-      '%;"></div></div>' +
-      '<span class="council-call__conf ' +
-      fc.tier +
-      '">' +
-      fc.conf +
-      '</span></div>' +
-      (payload.reason || pick.reason
-        ? '<p class="council-call__note">' + esc(payload.reason || pick.reason) + '</p>'
-        : '') +
-      (concerns.length
-        ? '<ul class="council-call__concerns">' +
-          concerns.map(function (c) {
-            return '<li>' + esc(c) + '</li>';
-          }).join('') +
-          '</ul>'
-        : '') +
-      '</div>';
-    if (host) {
-      host.innerHTML = html;
+
+    var html;
+    if (pick && (sn.name != null || sn.netuid != null)) {
+      html =
+        '<div class="council-call">' +
+        actionBadges(act, true) +
+        '<p class="council-call__name">' + esc(sn.name || pickName(pick)) + '</p>' +
+        '<p class="council-call__meta">SN' + esc(sn.netuid != null ? sn.netuid : pickNetuid(pick)) +
+        ' · 24h council horizon</p>' +
+        '<p class="council-call__prediction">Predicted to move <strong class="accent-bright">with ' +
+        fc.conf +
+        '% confidence</strong> over the next 24 hours' +
+        (pick.score != null ? ' · score <b>' + fmt(pick.score, 1) + '</b>' : '') +
+        '</p>' +
+        '<div class="council-call__conviction">' +
+        '<div class="conviction-bar"><div class="conviction-fill ' + fc.tier + '" style="width:' + fc.conf + '%;"></div></div>' +
+        '<span class="council-call__conf ' + fc.tier + '">' + fc.conf + '</span></div>' +
+        (payload.reason ? '<p class="council-call__note">' + esc(payload.reason) + '</p>' : '') +
+        (concerns.length
+          ? '<ul class="council-call__concerns">' +
+            concerns.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') +
+            '</ul>'
+          : '') +
+        '</div>';
     } else {
-      replaceEmptyIn('section-daily-pick', html);
+      html =
+        '<div class="council-call council-call--hold">' +
+        actionBadges('HOLD', false) +
+        '<p class="council-call__name">No audited long call</p>' +
+        '<p class="council-call__prediction">Council stance is <strong>HOLD</strong>' +
+        (payload.reason ? ' — ' + esc(payload.reason) : ' until a candidate clears the 45% audit gate.') +
+        '</p>';
+      if (sn.name != null || sn.netuid != null) {
+        html +=
+          '<p class="council-call__candidate">Leading candidate under review: <strong>' +
+          esc(sn.name || ('SN' + sn.netuid)) +
+          '</strong>' +
+          (sn.netuid != null ? ' (SN' + esc(sn.netuid) + ')' : '') +
+          (finalConf != null ? ' · ' + fc.conf + '% confidence' : '') +
+          ' <span class="council-call__candidate-tag">not published</span></p>';
+        html +=
+          '<div class="council-call__conviction">' +
+          '<div class="conviction-bar"><div class="conviction-fill ' + fc.tier + '" style="width:' + fc.conf + '%;"></div></div>' +
+          '<span class="council-call__conf ' + fc.tier + '">' + fc.conf + '</span></div>';
+      }
+      if (topPat) {
+        html +=
+          '<p class="council-call__note">Rotation lens: ' +
+          esc(topPat.description || topPat.pattern || '') +
+          (topPat.confidence != null
+            ? ' (' + Math.round(Number(topPat.confidence) * 100) + '% pattern confidence)'
+            : '') +
+          '</p>';
+      }
+      if (concerns.length) {
+        html +=
+          '<ul class="council-call__concerns">' +
+          concerns.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') +
+          '</ul>';
+      }
+      html += '</div>';
     }
+
+    if (host) host.innerHTML = html;
+    else replaceEmptyIn('section-daily-pick', html);
   }
 
   function renderPickCards(picks) {

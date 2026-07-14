@@ -5,36 +5,56 @@
     <p class="council-stage__brand">Simi<span>Vision</span></p>
     <p class="council-stage__eyebrow">Council decision</p>
     <h1 class="council-stage__title" id="council-stage-title">Today’s call</h1>
-    <p class="council-stage__lede">One audited selection. Predictive framing — not a scrapbook of panels.</p>
+    <p class="council-stage__lede">One audited selection when confidence clears the gate. HOLD is a decision — not a blank screen.</p>
 
     <div id="council-stage-body" class="council-stage__body">
-      {% if dp_subnet %}
-      {% set fc = ((dpick.final_confidence|default(dpick.confidence|default(0)))|float * 100)|round %}
-      {% set tier = 'tier-cyan' if fc > 75 else ('tier-lime' if fc > 55 else ('tier-gold' if fc > 35 else 'tier-red')) %}
       {% set act = (dpick.action|default('HOLD'))|string|upper %}
-      {% set audit = dpick.audit if dpick.audit is mapping else {} %}
+      {% set audit_pick = dpick.pick if dpick.pick is mapping else none %}
+      {% set cand = dpick.candidate if dpick.candidate is mapping else none %}
+      {% set sn = none %}
+      {% if audit_pick and audit_pick.subnet is mapping %}{% set sn = audit_pick.subnet %}{% endif %}
+      {% if sn is none and cand and cand.subnet is mapping %}{% set sn = cand.subnet %}{% endif %}
+      {% set conf_src = audit_pick if audit_pick else cand %}
+      {% set fc_raw = none %}
+      {% if conf_src %}
+        {% set fc_raw = conf_src.final_confidence|default(conf_src.confidence|default(none)) %}
+      {% endif %}
+      {% if fc_raw is none %}{% set fc_raw = dpick.final_confidence|default(none) %}{% endif %}
+      {% set fc = ((fc_raw|float) * 100)|round if fc_raw is not none else none %}
+      {% set tier = 'tier-cyan' if fc and fc > 75 else ('tier-lime' if fc and fc > 55 else ('tier-gold' if fc and fc > 35 else 'tier-red')) %}
+      {% set audit = {} %}
+      {% if audit_pick and audit_pick.audit is mapping %}{% set audit = audit_pick.audit %}
+      {% elif cand and cand.audit is mapping %}{% set audit = cand.audit %}{% endif %}
+      {% set patterns = [] %}
+      {% if dpick.rotation_summary is mapping and dpick.rotation_summary.patterns %}
+        {% set patterns = dpick.rotation_summary.patterns %}
+      {% endif %}
+      {% set top_pat = patterns|first if patterns else none %}
+
+      {% if audit_pick and sn %}
       <div class="council-call">
         <div class="council-call__action">
-          <span class="badge {% if act == 'BUY' %}badge-buy{% elif act == 'SELL' %}badge-sell{% else %}badge-hold{% endif %}">{{ act }}</span>
+          <span class="badge {% if act == 'BUY' or act == 'LONG' %}badge-buy{% elif act == 'SELL' or act == 'SHORT' %}badge-sell{% else %}badge-hold{% endif %}">{{ 'BUY' if act == 'LONG' else act }}</span>
           {% if audit.approved is defined %}
             {% if audit.approved %}<span class="hero-audit">AUDIT PASSED</span>{% else %}<span class="hero-audit flagged">AUDIT FLAGGED</span>{% endif %}
           {% endif %}
+          {% if dpick.regime %}<span class="council-call__regime">{{ dpick.regime|upper }} REGIME</span>{% endif %}
         </div>
-        <p class="council-call__name">{{ dp_subnet.name|default('SN' ~ dp_subnet.netuid) }}</p>
-        <p class="council-call__meta">SN{{ dp_subnet.netuid }}{% if dp_subnet.symbol %} · {{ dp_subnet.symbol }}{% endif %}</p>
+        <p class="council-call__name">{{ sn.name|default('SN' ~ sn.netuid) }}</p>
+        <p class="council-call__meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %} · 24h council horizon</p>
         <p class="council-call__prediction">
           Predicted to move
-          <strong class="accent-bright">with {{ fc }}% confidence</strong>
-          on the council horizon
-          {% if dpick.score is defined %} · score <b>{{ "%.1f"|format((dpick.score|default(0))|float) }}</b>{% endif %}
+          <strong class="accent-bright">with {{ fc if fc is not none else '—' }}% confidence</strong>
+          over the next 24 hours
+          {% if audit_pick.score is defined %} · score <b>{{ "%.1f"|format((audit_pick.score|default(0))|float) }}</b>{% endif %}
         </p>
+        {% if fc is not none %}
         <div class="council-call__conviction">
           <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ fc }}%;"></div></div>
           <span class="council-call__conf {{ tier }}">{{ fc }}</span>
         </div>
-        {% if dpick.reason %}
-        <p class="council-call__note">{{ dpick.reason }}</p>
         {% endif %}
+        {% if dpick.reason %}<p class="council-call__note">{{ dpick.reason }}</p>{% endif %}
         {% if audit.concerns %}
         <ul class="council-call__concerns">
           {% for c in audit.concerns[:3] %}<li>{{ c }}</li>{% endfor %}
@@ -42,9 +62,43 @@
         {% endif %}
       </div>
       {% else %}
-      <div class="council-call council-call--empty">
-        <p class="empty">Council has not published today’s audited call yet. The stage stays empty until scoring and audit settle — no decorative pick.</p>
-        {% if dpick.reason %}<p class="council-call__note">{{ dpick.reason }}</p>{% endif %}
+      {# HOLD / no audited pick — still a full decision stage #}
+      <div class="council-call council-call--hold">
+        <div class="council-call__action">
+          <span class="badge badge-hold">HOLD</span>
+          {% if dpick.regime %}<span class="council-call__regime">{{ dpick.regime|upper }} REGIME</span>{% endif %}
+        </div>
+        <p class="council-call__name">No audited long call</p>
+        <p class="council-call__prediction">
+          Council stance is <strong>HOLD</strong>
+          {% if dpick.reason %} — {{ dpick.reason }}{% else %} until a candidate clears the 45% audit gate.{% endif %}
+        </p>
+        {% if sn %}
+        <p class="council-call__candidate">
+          Leading candidate under review:
+          <strong>{{ sn.name|default('SN' ~ sn.netuid) }}</strong>
+          {% if sn.netuid is not none %} (SN{{ sn.netuid }}){% endif %}
+          {% if fc is not none %} · {{ fc }}% confidence{% endif %}
+          <span class="council-call__candidate-tag">not published</span>
+        </p>
+        {% if fc is not none %}
+        <div class="council-call__conviction">
+          <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ fc }}%;"></div></div>
+          <span class="council-call__conf {{ tier }}">{{ fc }}</span>
+        </div>
+        {% endif %}
+        {% endif %}
+        {% if top_pat %}
+        <p class="council-call__note">
+          Rotation lens: {{ top_pat.description|default(top_pat.pattern) }}
+          {% if top_pat.confidence is defined %} ({{ (top_pat.confidence|float * 100)|round }}% pattern confidence){% endif %}
+        </p>
+        {% endif %}
+        {% if audit.concerns %}
+        <ul class="council-call__concerns">
+          {% for c in audit.concerns[:4] %}<li>{{ c }}</li>{% endfor %}
+        </ul>
+        {% endif %}
       </div>
       {% endif %}
     </div>

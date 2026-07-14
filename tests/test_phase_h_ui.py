@@ -314,10 +314,8 @@ def test_h_full_daily_pick_hero_or_honest_empty():
     assert 'id="section-daily-pick"' in html
     assert "council-stage" in html
     assert "Council decision" in html or "Today" in html
-    if "council-call__name" in html or 'class="council-call"' in html:
-        assert "confidence" in html.lower() or "Predicted" in html
-    else:
-        assert "warming up" in html or "not published" in html or "No audited" in html or "empty" in html
+    # Stage always states a stance (audited call or HOLD)
+    assert "council-call" in html or "HOLD" in html or "Predicted" in html
 
 
 def test_phase_l_cockpit_signals_and_summary():
