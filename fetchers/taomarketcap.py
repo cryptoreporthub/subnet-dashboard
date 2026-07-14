@@ -4,7 +4,6 @@ Fetches all subnets from /public/v1/subnets/table/, caches in SQLite for 5 min.
 Handles both list and dict ({"subnets": [...]}) API responses.
 Now paginates through all pages to get the full ~129 subnets.
 """
-import requests
 import json
 import sqlite3
 import os
@@ -72,12 +71,10 @@ def _parse_subnet_row(row: dict) -> Dict:
     if name in ("Unknown", "None", "deprecated"):
         name = f"SN{netuid}"
     pchg_w = row.get("price_difference_week", 0) or 0
-    apy = round(pchg_w * 52.0 / 100.0, 2)
     return {
         "netuid": netuid,
         "name": name,
         "emission": round(row.get("emission", 0), 4),
-        "apy": apy,
         "volume": round(row.get("volume", 0), 2),
         "market_cap": round(row.get("marketcap", 0), 2),
         "price": round(row.get("price", 0), 8),
@@ -110,9 +107,11 @@ def fetch_all_subnets_from_api() -> Optional[List[Dict]]:
             logger.warning("Subnet fetch deadline (%ss) reached on page %d", FETCH_DEADLINE_SEC, page)
             break
         try:
+            from internal.http_client import sync_get
+
             url = f"{API_BASE}?page={page}"
             logger.info("Fetching subnets page %d from %s", page, url)
-            resp = requests.get(url, timeout=15)
+            resp = sync_get(url, timeout=15)
             if resp.status_code != 200:
                 logger.warning("API page %d returned %s", page, resp.status_code)
                 break
@@ -168,7 +167,25 @@ def fetch_all_subnets_from_api() -> Optional[List[Dict]]:
     return None
 
 def get_all_subnets() -> List[Dict]:
-    """Return all subnets (cached, 5 min TTL). Falls back to stale cache or static data."""
+    """Return all subnets.
+
+    Phase B1: prefer the live on-chain feed (internal.live_subnets), which merges
+    Bittensor chain data over the committed registry. Falls back to the original
+    TaoMarketCap scrape if the live feed is unavailable. See docs/EXTREME_AUDIT.md #1.
+    """
+    try:
+        from internal.live_subnets import get_live_subnets
+
+        live = get_live_subnets()
+        if live:
+            return live
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Live subnet feed unavailable, using TaoMarketCap: %s", exc)
+    return _get_all_subnets_tao()
+
+
+def _get_all_subnets_tao() -> List[Dict]:
+    """Original TaoMarketCap implementation (cache + fallback)."""
     init_db()
     cached = get_cached("all_subnets")
     if cached:

@@ -57,6 +57,17 @@ def _load_price_cache() -> Dict[str, Any]:
         return {}
 
 
+def _empty_price_history() -> Dict[str, Any]:
+    return {
+        "closes": [],
+        "highs": [],
+        "lows": [],
+        "volumes": [],
+        "timestamps": [],
+        "source": "unavailable",
+    }
+
+
 def _get_price_history(netuid: Any, sn: Dict[str, Any]) -> Dict[str, Any]:
     """Return {closes, highs, lows, volumes, timestamps, source} for a subnet."""
     closes: List[float] = []
@@ -64,10 +75,9 @@ def _get_price_history(netuid: Any, sn: Dict[str, Any]) -> Dict[str, Any]:
     lows: List[float] = []
     volumes: List[float] = []
     timestamps: List[str] = []
-    source = "synthetic"
+    source = "unavailable"
 
     cache = _load_price_cache()
-    # Guard against malformed API rows where netuid may be a dict wrapper.
     if isinstance(netuid, dict):
         netuid = netuid.get("id") or netuid.get("netuid") or netuid.get("subnet") or 0
     try:
@@ -76,9 +86,11 @@ def _get_price_history(netuid: Any, sn: Dict[str, Any]) -> Dict[str, Any]:
         netuid = str(netuid)
     raw = cache.get(str(netuid)) or cache.get(int(netuid) if str(netuid).isdigit() else netuid)
     if raw and isinstance(raw, dict):
+        source = raw.get("source", "cached")
+        if source == "synthetic":
+            return _empty_price_history()
         candles = raw.get("candles") or []
         if candles:
-            source = raw.get("source", "cached")
             for c in candles:
                 cl = c.get("close")
                 if cl is None:
@@ -90,37 +102,16 @@ def _get_price_history(netuid: Any, sn: Dict[str, Any]) -> Dict[str, Any]:
                 timestamps.append(c.get("timestamp", ""))
 
     if len(closes) < 30:
-        price = float(sn.get("price", 0) or 0)
-        if price <= 0:
-            price = 1.0
-        chg_24h = float(sn.get("price_change_24h", 0) or 0)
-        chg_7d = float(sn.get("price_change_7d", 0) or 0)
-        chg_30d = float(sn.get("price_change_30d", 0) or 0)
-        steps = []
-        for i in range(30):
-            if i < 10:
-                steps.append(chg_30d / 10.0)
-            elif i < 22:
-                steps.append(chg_7d / 12.0)
-            else:
-                steps.append(chg_24h / 8.0)
-        steps = [s if abs(s) < 50 else (50 if s > 0 else -50) for s in steps]
-        p = price
-        synth_closes = []
-        for i, s in enumerate(steps):
-            amp = max(2.0, abs(s) * 2.0)
-            osc = _math.sin(i * 0.7) * amp
-            p = p * (1 + s / 100.0) * (1 + osc / 100.0)
-            synth_closes.append(p)
-        closes = (closes + synth_closes)[-30:]
-        highs = [c * 1.01 for c in closes]
-        lows = [c * 0.99 for c in closes]
-        base_vol = float(sn.get("volume", 0) or 0) / max(len(closes), 1)
-        volumes = [base_vol for _ in closes]
-        timestamps = timestamps[-len(closes):] or ["" for _ in closes]
-        source = "synthetic" if not timestamps or not timestamps[0] else source
+        return _empty_price_history()
 
-    return {"closes": closes, "highs": highs, "lows": lows, "volumes": volumes, "timestamps": timestamps, "source": source}
+    return {
+        "closes": closes,
+        "highs": highs,
+        "lows": lows,
+        "volumes": volumes,
+        "timestamps": timestamps,
+        "source": source,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -494,18 +485,46 @@ def _score_registration_cost(sn: Dict[str, Any]) -> float:
     return 0.5
 
 
+def _degraded_technical_indicators(hist: Dict[str, Any]) -> Dict[str, Any]:
+    """Honest-empty technical payload when history is unavailable (SciWeave Q6)."""
+    neutral = 0.5
+    return {
+        "rsi": {"value": 50.0, "signal": "neutral"},
+        "stochastic": {"k": 50.0, "d": 50.0, "signal": "neutral"},
+        "bollinger": {"upper": 0.0, "middle": 0.0, "lower": 0.0, "signal": "neutral"},
+        "mfi": {"value": 50.0, "signal": "neutral"},
+        "cci": {"value": 0.0, "signal": "neutral"},
+        "williams_r": {"value": -50.0, "signal": "neutral"},
+        "keltner": {"upper": 0.0, "middle": 0.0, "lower": 0.0, "signal": "neutral"},
+        "macd": {"macd": 0.0, "signal": 0.0, "histogram": 0.0},
+        "ma_cross": {"signal": "neutral"},
+        "history_source": hist.get("source", "unavailable"),
+        "history_length": len(hist.get("closes") or []),
+        "degraded": True,
+        "rsi_crossover": neutral,
+        "macd_cross": neutral,
+        "stochastic_reversal": neutral,
+        "bollinger_squeeze": neutral,
+        "mfi_flow": neutral,
+        "cci_divergence": neutral,
+        "williams_r": neutral,
+        "keltner_channel": neutral,
+    }
+
+
 def _compute_technical_indicators(sn: Dict[str, Any]) -> Dict[str, Any]:
     """Compute all 8 indicators and return per-signal scores."""
     hist = _get_price_history(sn.get("netuid"), sn)
     closes = hist.get("closes", [])
+    if hist.get("source") in ("synthetic", "unavailable") or len(closes) < 30:
+        return _degraded_technical_indicators(hist)
     highs = hist.get("highs", closes)
     lows = hist.get("lows", closes)
     volumes = hist.get("volumes", [])
 
     rsi_raw = _compute_rsi_series(closes, 14)
     if len(closes) < 15:
-        changes = [float(sn.get("price_change_24h", 0) or 0), float(sn.get("price_change_7d", 0) or 0) / 7.0]
-        rsi_raw = _compute_rsi(changes, 14)
+        rsi_raw = 50.0
 
     macd_raw = _compute_macd_series(closes)
     stoch_raw = _compute_stochastic(highs, lows, closes)
@@ -552,6 +571,17 @@ def _compute_technical_score(
     from internal.council.weights import load_signal_weights
 
     indicators = _compute_technical_indicators(sn)
+    if indicators.get("degraded"):
+        return {
+            "technical_score": 0.5,
+            "signal_contributions": {},
+            "active_signals": [],
+            "horizon_type": horizon_type,
+            "degraded": True,
+            "history_source": indicators.get("history_source", "unavailable"),
+            "history_length": indicators.get("history_length", 0),
+        }
+
     signal_weights = load_signal_weights()
     horizon_weights = signal_weights.get(horizon_type, signal_weights.get("day", {}))
 

@@ -1,0 +1,64 @@
+{
+  "updated_at": "2026-07-13T22:52:22.621358+00:00",
+  "events": [
+    {
+      "wallet": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+      "netuid": 1,
+      "side": "buy",
+      "amount_tao": 100.0,
+      "timestamp": "2026-07-13T19:59:30.301456+00:00",
+      "source": "api",
+      "tx_hash": null,
+      "subnet_name": null,
+      "entry_price": null,
+      "exit_price": null,
+      "market_cap_rank": null,
+      "total_stake_tao": null,
+      "price_change_after_hours": null
+    },
+    {
+      "wallet": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+      "netuid": 1,
+      "side": "buy",
+      "amount_tao": 100.0,
+      "timestamp": "2026-07-13T21:05:47.447860+00:00",
+      "source": "api",
+      "tx_hash": null,
+      "subnet_name": null,
+      "entry_price": null,
+      "exit_price": null,
+      "market_cap_rank": null,
+      "total_stake_tao": null,
+      "price_change_after_hours": null
+    },
+    {
+      "wallet": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+      "netuid": 1,
+      "side": "buy",
+      "amount_tao": 100.0,
+      "timestamp": "2026-07-13T22:52:22.621343+00:00",
+      "source": "api",
+      "tx_hash": null,
+      "subnet_name": null,
+      "entry_price": null,
+      "exit_price": null,
+      "market_cap_rank": null,
+      "total_stake_tao": null,
+      "price_change_after_hours": null
+    }
+  ],
+  "open_positions": {
+    "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY:1": {
+      "wallet": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+      "netuid": 1,
+      "entry_ts": "2026-07-13T22:52:22.621343+00:00",
+      "amount_tao": 100.0,
+      "subnet_name": null,
+      "entry_price": null,
+      "market_cap_rank": null,
+      "total_stake_tao": null
+    }
+  },
+  "profiles": {},
+  "closed_trades": []
+}

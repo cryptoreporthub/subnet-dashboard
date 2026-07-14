@@ -110,6 +110,30 @@ header.top {
   color: var(--accent-orange);
 }
 
+.data-freshness-badge {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+
+.data-freshness-live {
+  color: var(--accent-bright);
+}
+
+.data-freshness-stale {
+  color: var(--signal-hold, #f5a623);
+}
+
+.data-freshness-warming,
+.data-freshness-snapshot {
+  color: var(--text-muted);
+}
+
+.data-freshness-unknown {
+  color: var(--signal-sell, #f43f5e);
+}
+
 .live-pill {
   display: inline-flex;
   align-items: center;

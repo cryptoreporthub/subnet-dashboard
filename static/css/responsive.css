@@ -296,7 +296,9 @@ header.top {
 
 @media (max-width: 768px) {
   .top-inner { padding: 8px 12px; }
-  .src-tag { display: none; }       /* hide the data-source tag on phones */
+  /* Collapse DATA SOURCE label but keep freshness badge (aria-live) visible */
+  .src-tag { font-size: 0; flex: 1 1 auto; min-width: 0; }
+  .data-freshness-badge { font-size: 10px; }
   .live-pill { padding: 4px 10px; font-size: 10px; }
 }
 
@@ -320,7 +322,7 @@ header.top {
     max-width: 100% !important;
   }
   .grid, .flex-row, .row, .two-col, .momentum-grid, .mi-grid, .kpi-strip,
-  .council-grid, .soc-grid, .pump-candidate-cards, .pump-profile-grid {
+  .council-grid, .soc-grid, .pump-candidate-cards, .pump-profile-grid, .picks {
     grid-template-columns: 1fr !important;
     flex-direction: column !important;
   }
@@ -370,12 +372,6 @@ header.top {
     -webkit-overflow-scrolling: touch;
   }
   table.tbl thead th { position: static; }   /* sticky headers don't work in block tables */
-
-  /* KPI / metric strips wrap to a 2x2 grid instead of a single row. */
-  .kpi-strip, .mi-grid { grid-template-columns: repeat(2, 1fr) !important; }
-  .kpi-grid--6 { grid-template-columns: repeat(2, 1fr) !important; }
-  .layout-grid[style*="repeat(5"] { grid-template-columns: repeat(2, 1fr) !important; }
-  .layout-grid[style*="repeat(4"] { grid-template-columns: repeat(2, 1fr) !important; }
 
   /* Hero stats stack neatly. */
   .hero-stats { gap: 12px; }
@@ -496,5 +492,40 @@ header.top {
 
   .subnet-group-item-label {
     flex-basis: auto;
+  }
+}
+
+/* ---------- C3: touch targets + focus (mobile primary controls) ---------- */
+.tab-btn:focus-visible,
+.nav-links a:focus-visible,
+.chat-input button:focus-visible,
+.scanner-sort:focus-visible,
+.pump-profile-head:focus-visible,
+.subnet-group-summary:focus-visible {
+  outline: 2px solid var(--accent-primary, #00ff41);
+  outline-offset: 2px;
+}
+
+@media (max-width: 768px) {
+  .nav-links a,
+  .tab-btn,
+  .chat-input button,
+  .scanner-sort {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  .nav-links a,
+  .tab-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .nav-links a { padding: 10px 12px; }
+  .tab-btn { padding: 10px 14px; }
+  .chat-input button { padding: 0 16px; }
+  .scanner-sort { padding: 10px 12px; }
+  .chat-input input {
+    min-height: 44px;
+    padding: 10px 14px;
   }
 }

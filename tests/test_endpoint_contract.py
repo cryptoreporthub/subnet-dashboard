@@ -23,7 +23,9 @@ from server import app
 CONTRACT = [
     ("GET", "/", None),
     ("GET", "/health", None),
+    ("GET", "/metrics", None),
     ("GET", "/api/health", None),
+    ("GET", "/api/data-freshness", None),
     ("GET", "/api/daily-rotation", None),
     ("GET", "/api/registry", None),
     ("GET", "/api/subnets", None),
@@ -145,6 +147,8 @@ CONTRACT = [
     # Phase O TAO Signal Hub
     ("GET", "/api/signal-hub/status", None),
     ("GET", "/api/signal-hub/signals", None),
+    # Cockpit SSE live hydration (C2)
+    ("GET", "/api/cockpit/stream?once=1", None),
 ]
 
 

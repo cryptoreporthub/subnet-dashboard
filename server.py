@@ -1,9 +1,14 @@
 import json
 import logging
 import os
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+from internal.sentry_setup import init_sentry
+
+init_sentry()
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -11,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from internal.council.mindmap_bridge import MindmapBridge
+from internal.rate_limit import limit_or_noop, mount_rate_limit, strict_limit
 from internal.whales.routes import whales_router
 
 logger = logging.getLogger("server")
@@ -169,9 +175,41 @@ async def _lifespan(app: FastAPI):
         stop_prediction_resolver_scheduler()
     except Exception:
         pass
+    try:
+        from internal.job_scheduler import shutdown_background_scheduler
+
+        shutdown_background_scheduler()
+    except Exception:
+        pass
+    try:
+        from internal.http_client import close_async_client
+
+        await close_async_client()
+    except Exception:
+        pass
 
 
 app = FastAPI(title="Subnet Dashboard", lifespan=_lifespan)
+
+_ENABLE_METRICS = os.environ.get("ENABLE_METRICS", "1").strip().lower() not in ("0", "false", "no")
+if _ENABLE_METRICS:
+    try:
+        from prometheusrock import PrometheusMiddleware
+
+        from internal.metrics import metrics_endpoint
+
+        app.add_middleware(
+            PrometheusMiddleware,
+            app_name="subnet_dashboard",
+            remove_labels=["headers"],
+            skip_paths=["/metrics", "/health", "/api/health"],
+        )
+        app.add_route("/metrics", metrics_endpoint)
+    except Exception as exc:
+        logger.warning("Prometheus metrics unavailable: %s", exc)
+
+mount_rate_limit(app)
+
 app.include_router(whales_router)
 if _COUNCIL_ROUTES:
     app.include_router(council_router)
@@ -267,14 +305,25 @@ def _consensus_map():
     return {d["subnet_id"]: d for d in decisions if "subnet_id" in d}
 
 
+# audit #11: scoped CORS + valid X-Frame-Options (see docs/EXTREME_AUDIT.md #11)
+_ALLOWED_ORIGINS = frozenset(
+    o.strip()
+    for o in os.environ.get("ALLOWED_ORIGINS", "https://subnet-dashboard.fly.dev").split(",")
+    if o.strip()
+)
+
+
 @app.middleware("http")
 async def add_cors_headers(request: Request, call_next):
     """Allow dashboard embedding and cross-origin API access (parity with prior Flask behavior)."""
     response = await call_next(request)
-    response.headers["Access-Control-Allow-Origin"] = "*"
+    origin = request.headers.get("origin")
+    if origin and origin in _ALLOWED_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    response.headers["X-Frame-Options"] = "ALLOWALL"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
     if request.url.path in _CACHE_PATHS:
         response.headers["Cache-Control"] = "public, max-age=30"
     return response
@@ -454,8 +503,12 @@ def get_registry():
 
 
 @app.get("/api/subnets")
-def list_subnets(request: Request):
+async def list_subnets(request: Request):
     """List subnets with optional filtering, sorting, and pagination."""
+    return await asyncio.to_thread(_list_subnets_sync, request)
+
+
+def _list_subnets_sync(request: Request):
     # Prefer LIVE TaoMarketCap data (real 24h/7d/30d); fall back to the committed registry.
     source = _load_subnets_source()
     items = []
@@ -737,6 +790,7 @@ def get_recommendations():
 
 
 @app.post("/api/mindmap/feedback")
+@limit_or_noop(strict_limit(), override_defaults=True)
 async def post_feedback(request: Request):
     """Close the mindmap feedback path into learning + soul-map alignment logs."""
     try:

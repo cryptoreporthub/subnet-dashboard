@@ -59,6 +59,22 @@ def test_index_no_markdown_heading_triple_hash():
     assert "###" not in html
 
 
+def test_index_has_data_freshness_badge():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert 'id="dataFreshnessBadge"' in html
+    assert "/static/js/data_freshness.js" in html
+
+
+def test_data_freshness_api_shape():
+    client = TestClient(app)
+    resp = client.get("/api/data-freshness")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "stale" in data
+    assert "source" in data
+
+
 def test_index_renders_twelve_cockpit_sections():
     client = TestClient(app)
     html = client.get("/").text
@@ -107,9 +123,14 @@ def test_trace_and_message_intel_honest_status():
 
 
 def test_h_full_includes_chartjs():
+    """No static Chart.js tag; uPlot spark assets loaded instead."""
     client = TestClient(app)
-    html = client.get("/").text.lower()
-    assert "chart.js" in html or "chart.umd.min.js" in html
+    html = client.get("/").text
+    lower = html.lower()
+    assert 'src="https://cdn.jsdelivr.net/npm/chart.js' not in lower
+    assert "/static/vendor/uplot/uplot.iife.min.js" in lower
+    assert "/static/js/uplot_charts.js" in lower
+    assert "/static/vendor/uplot/uplot.min.css" in lower
 
 
 def test_strip_markdown_headings_in_enrichment():
@@ -295,3 +316,86 @@ def test_phase_l_premium_signals_js():
     html = client.get("/").text
     assert "/static/js/premium_signals.js" in html
     assert 'id="signals-ws-status"' in html
+
+
+def test_c4_cockpit_hydrate_script_on_index():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert "/static/js/cockpit_hydrate.js" in html
+    assert "document.documentElement.dataset.hydrate='1'" in html or 'data-hydrate="1"' in html
+
+
+def test_c4_app_js_exposes_chart_paint_hooks():
+    hooks = open("static/js/app.js", encoding="utf-8").read()
+    assert "window.__paintSparks" in hooks
+    assert "window.__paintRadar" in hooks
+
+
+def test_c4_hydrate_calls_chart_paint_hooks():
+    hydrate = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()
+    assert "paintCharts" in hydrate
+    assert "__paintSparks" in hydrate
+    assert "__paintRadar" in hydrate
+
+
+def test_c6_conviction_tiers_script_on_index():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert "/static/js/conviction_tiers.js" in html
+    pos_tiers = html.index("/static/js/conviction_tiers.js")
+    pos_hydrate = html.index("/static/js/cockpit_hydrate.js")
+    assert pos_tiers < pos_hydrate
+
+
+def test_c6_simivision_picks_template_uses_canonical_cutoffs():
+    src = open("templates/partials/premium/simivision_picks.html", encoding="utf-8").read()
+    assert "conv > 75" in src
+    assert "conv > 55" in src
+    assert "conv > 35" in src
+    assert "conv > 80" not in src
+    assert "conv > 60" not in src
+    assert "conv > 40" not in src
+
+
+def test_c3_freshness_badge_has_aria_live():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert 'id="dataFreshnessBadge"' in html
+    assert 'data-freshness-badge' in html
+    assert 'aria-live="polite"' in html
+
+
+def test_c3_index_loads_200():
+    client = TestClient(app)
+    assert client.get("/").status_code == 200
+
+
+def test_c6_shared_conviction_thresholds_match_hydrate():
+    tiers_src = open("static/js/conviction_tiers.js", encoding="utf-8").read()
+    hydrate_src = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()
+    assert "cyan: 75" in tiers_src
+    assert "lime: 55" in tiers_src
+    assert "gold: 35" in tiers_src
+    assert "ConvictionTiers.confTier" in hydrate_src
+    assert "if (c > 75)" in hydrate_src
+    assert "if (c > 55)" in hydrate_src
+    assert "if (c > 35)" in hydrate_src
+
+
+def test_g7_section_titles_use_rajdhani():
+    premium = open("static/css/premium.css", encoding="utf-8").read()
+    dashboard = open("static/css/dashboard.css", encoding="utf-8").read()
+    assert ".section-title" in premium
+    assert "font-family: var(--font-body)" in premium
+    assert "font-family: var(--font-body)" in dashboard.split(".section-title")[1][:120]
+
+
+def test_g12_favicon_and_font_consolidation():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert '/static/favicon.svg' in html
+    assert "Space+Grotesk" not in html
+    base_css = open("static/css/base.css", encoding="utf-8").read()
+    assert "Orbitron" not in base_css
+    assert "--font-display: 'Rajdhani'" in base_css
+    assert client.get("/static/favicon.svg").status_code == 200

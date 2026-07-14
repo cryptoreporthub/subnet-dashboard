@@ -40,11 +40,16 @@
       var frac = Number(staking.apy);
       if (!isNaN(frac)) return frac <= 1 ? frac * 100 : frac;
     }
-    if (sn.apy != null) {
+    if (sn.apy != null && sn.id != null) {
       var raw = Number(sn.apy);
       if (!isNaN(raw)) return raw <= 1 ? raw * 100 : raw;
     }
     return null;
+  }
+
+  function confPercent(c) {
+    c = Number(c) || 0;
+    return c <= 1 ? c * 100 : c;
   }
 
   function undervaluedScore(sn) {
@@ -69,6 +74,9 @@
   }
 
   function confTier(conf) {
+    if (typeof window !== 'undefined' && window.ConvictionTiers && window.ConvictionTiers.confTier) {
+      return window.ConvictionTiers.confTier(conf);
+    }
     var c = Number(conf);
     if (c <= 1) c *= 100;
     c = Math.round(c);
@@ -168,7 +176,8 @@
     var cards = top.map(function (pick, idx) {
       var t = confTier(pick.conviction || 0);
       var rec = String(pick.recommendation || 'WATCH').toUpperCase();
-      var apy = pick.apy != null ? fmt(pick.apy, 1) : '—';
+      var apyVal = apyPercent(pick);
+      var apy = apyVal != null ? fmt(apyVal, 1) : '—';
       return (
         '<div class="pick-card">' +
         '<div class="pick-rank">#' + esc(pick.rank || idx + 1) + '</div>' +
@@ -413,9 +422,104 @@
       var st = String(sig.signal_type || 'neutral').toLowerCase();
       return '<tr><td>' + esc(sig.name || ('SN' + sig.subnet_id)) + '</td>' +
         '<td><span class="badge badge-watch">' + esc(st.toUpperCase()) + '</span></td>' +
-        '<td>' + ((Number(sig.confidence) || 0) * 100).toFixed(1) + '%</td></tr>';
+        '<td>' + confPercent(sig.confidence).toFixed(1) + '%</td></tr>';
     }).join('');
     root.innerHTML = '<table class="tbl"><thead><tr><th>Subnet</th><th>Type</th><th>Conf</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  function radarPayloadFromSubnets(subnets) {
+    if (!subnets || subnets.length < 3) return null;
+    var ranked = subnets.slice().sort(function (a, b) {
+      return (Number(b.emission) || 0) - (Number(a.emission) || 0);
+    }).slice(0, 3);
+    var labels = [];
+    var uv = [];
+    var mom = [];
+    ranked.forEach(function (sn) {
+      var nu = subnetNetuid(sn);
+      var apy = apyPercent(sn) || 0;
+      var chg = Number(sn.price_change_24h) || 0;
+      labels.push('SN' + nu);
+      uv.push(Math.round(Math.min(apy - chg, 100)));
+      mom.push(Math.min(Math.round(50 + chg * 2), 100));
+    });
+    return {
+      labels: labels,
+      datasets: [
+        { label: 'Undervalued', data: uv, color: '#00ff41' },
+        { label: 'Momentum', data: mom, color: '#22d3ee' },
+      ],
+    };
+  }
+
+  function renderRadar(subnets) {
+    var payload = radarPayloadFromSubnets(subnets);
+    if (!payload) return;
+    var canvas = document.getElementById('radarChart');
+    if (canvas) {
+      canvas.setAttribute('data-radar', JSON.stringify(payload));
+      return;
+    }
+    var ranked = subnets.slice().sort(function (a, b) {
+      return (Number(b.emission) || 0) - (Number(a.emission) || 0);
+    }).slice(0, 3);
+    var legend = ranked.map(function (sn) {
+      var nu = subnetNetuid(sn);
+      var em = Number(sn.emission) || 0;
+      var chg = Number(sn.price_change_24h) || 0;
+      return (
+        '<div class="radar-item"><div class="name">' + esc(subnetName(sn)) + '</div>' +
+        '<div class="meta">emission ' + fmt(em, 2) + ' · 24h ' + fmtSigned(chg) + '</div></div>'
+      );
+    }).join('');
+    var html =
+      '<div class="card momentum-grid"><div class="card"><div class="card-head"><h3>Subnet Radar</h3>' +
+      '<span class="src-tag">top 3 · Chart.js</span></div><div class="chart-box"><div class="chart-canvas-wrap">' +
+      '<canvas id="radarChart" data-radar="' + JSON.stringify(payload).replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '" aria-label="Subnet undervalued radar chart"></canvas>' +
+      '</div></div></div><div class="card"><div class="card-head"><h3>Overlay Legend</h3></div>' +
+      '<p class="section-sub section-sub--compact">Green = yield-vs-momentum undervalued score. Cyan = 24h momentum overlay.</p>' +
+      legend + '</div></div>';
+    replaceSectionContent('section-radar', html, '.momentum-grid, .card');
+  }
+
+  function renderIndicators(rows) {
+    if (!rows || !rows.length) return;
+    var cards = rows.slice(0, 6).map(function (row) {
+      var os = row.oversold || {};
+      var ob = row.overbought || {};
+      var heat = (Number(os.count) || 0) + (Number(ob.count) || 0);
+      var heatTotal = Number(os.total) || 7;
+      var heatPct = Math.round((heat / (heatTotal || 7)) * 100);
+      var heatClass = heatPct > 66 ? 'high' : heatPct > 33 ? 'core' : 'low';
+      var sparks = row.spark_closes;
+      var sparkHtml = '';
+      if (sparks && sparks.length >= 2) {
+        sparkHtml =
+          '<div class="spark-wrap chart-canvas-wrap"><div class="spark" data-spark="' +
+          esc(sparks.join(',')) + '" role="img" aria-label="Price sparkline for ' + esc(row.name || 'subnet') + '"></div></div>';
+      } else {
+        sparkHtml = '<div class="spark-empty" aria-hidden="true">—</div>';
+      }
+      var tags = '';
+      if (os.convergent) tags += '<span class="badge badge-buy">OVERSOLD ' + esc(os.count) + '/' + esc(os.total) + '</span>';
+      if (ob.convergent) tags += '<span class="badge badge-sell">OVERBOUGHT ' + esc(ob.count) + '/' + esc(ob.total) + '</span>';
+      if (!os.convergent && !ob.convergent) tags = '<span class="badge badge-watch">NEUTRAL</span>';
+      return (
+        '<div class="pick-card card"><div class="ti-head"><div>' +
+        '<div class="pick-name">' + esc(row.name || 'SN' + row.netuid) + '</div>' +
+        '<div class="pick-meta">SN' + esc(row.netuid) + '</div></div>' + sparkHtml + '</div>' +
+        '<div class="ti-heat-row vol-cluster-row"><span class="vol-cluster-label">Signal heat</span>' +
+        '<div class="vol-cluster-bar-wrap"><div class="vol-cluster-bar vol-bar-' + heatClass + '" style="width:' + Math.min(heatPct, 100) + '%;"></div></div>' +
+        '<span class="vol-cluster-value">' + heatPct + '%</span></div>' +
+        '<div class="tags tags-tight">' + tags + '</div></div>'
+      );
+    }).join('');
+    replaceSectionContent('section-indicators', '<div class="picks">' + cards + '</div>', '.picks, .card-muted');
+  }
+
+  function paintCharts() {
+    if (typeof window.__paintSparks === 'function') window.__paintSparks();
+    if (typeof window.__paintRadar === 'function') window.__paintRadar();
   }
 
   function renderCockpitSections(sections) {
@@ -471,6 +575,26 @@
     }
   }
 
+  var cockpitStream = null;
+
+  function connectCockpitStream() {
+    if (cockpitStream || typeof EventSource === 'undefined') return;
+    cockpitStream = new EventSource('/api/cockpit/stream');
+    cockpitStream.addEventListener('cockpit.sections', function (ev) {
+      try {
+        var payload = JSON.parse(ev.data);
+        if (payload && payload.sections) {
+          renderCockpitSections(payload.sections);
+        }
+      } catch (e) {
+        console.warn('[cockpit_hydrate] SSE parse failed', e);
+      }
+    });
+    cockpitStream.onerror = function () {
+      console.warn('[cockpit_hydrate] SSE disconnect; keeping last snapshot');
+    };
+  }
+
   async function run() {
     if (document.documentElement.dataset.hydrate !== '1') return;
 
@@ -484,6 +608,7 @@
       fetchJsonTimeout('/api/signals', 15000),
       fetchJsonTimeout('/api/alerts?refresh_checks=false', 8000),
       fetchJsonTimeout('/api/cockpit/sections', 20000),
+      fetchJsonTimeout('/api/indicators-convergence', 12000),
     ]);
 
     var hourPicks = [];
@@ -526,6 +651,10 @@
       renderHero(subnets);
       renderStaking(subnets);
       renderUndervalued(subnets);
+      renderRadar(subnets);
+    }
+    if (results[9].status === 'fulfilled') {
+      renderIndicators((results[9].value.subnets) || []);
     }
     if (results[6].status === 'fulfilled') {
       var sigPayload = results[6].value;
@@ -537,7 +666,9 @@
     }
 
     updateGroupData(hourPicks, dayPicks, trail, subnets);
+    paintCharts();
     console.log('[cockpit_hydrate] panels updated from APIs');
+    connectCockpitStream();
 
     // Defer heavy judge scoring so /health stays responsive on single-worker Fly.
     try {

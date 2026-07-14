@@ -19,7 +19,7 @@
         </div>
         {% if spark_pts|length >= 2 %}
         <div class="spark-wrap chart-canvas-wrap">
-          <canvas class="spark" width="96" height="36" data-spark="{{ spark_pts|join(',') }}" aria-label="Price sparkline for {{ row.name|default('subnet') }}"></canvas>
+          <div class="spark" data-spark="{{ spark_pts|join(',') }}" role="img" aria-label="Price sparkline for {{ row.name|default('subnet') }}"></div>
         </div>
         {% else %}
         <div class="spark-empty" aria-hidden="true">—</div>

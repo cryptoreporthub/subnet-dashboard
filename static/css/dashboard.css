@@ -11,7 +11,7 @@
 }
 
 .section-title {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.3px;
@@ -244,19 +244,19 @@
   letter-spacing: 0.4px;
 }
 
-/* ---------- Pick cards ---------- */
+/* ---------- Pick cards (mobile-first) ---------- */
 .picks {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: 1fr;
   gap: var(--space-4);
 }
 
-@media (max-width: 1100px) {
+@media (min-width: 768px) {
   .picks { grid-template-columns: repeat(2, 1fr); }
 }
 
-@media (max-width: 768px) {
-  .picks { grid-template-columns: 1fr; }
+@media (min-width: 1100px) {
+  .picks { grid-template-columns: repeat(3, 1fr); }
 }
 
 .pick-card {

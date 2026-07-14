@@ -22,6 +22,11 @@
     return 'badge-watch';
   }
 
+  function confPct(c) {
+    c = parseFloat(c) || 0;
+    return c <= 1 ? c * 100 : c;
+  }
+
   function severityBadge(sev) {
     var s = String(sev || 'info').toLowerCase();
     if (s === 'critical') return 'badge-sell';
@@ -64,7 +69,7 @@
       '<div class="kpi card"><div class="lbl">Neutral</div><div class="val">' + esc(sum.neutral_count) +
       '</div><div class="sub">ratio ' + esc(sum.buy_sell_ratio) + '</div></div>' +
       '<div class="kpi card"><div class="lbl">Avg conf</div><div class="val accent-bright">' +
-      (sum.avg_confidence * 100).toFixed(1) + '%</div><div class="sub">council confidence</div></div>';
+      confPct(sum.avg_confidence).toFixed(1) + '%</div><div class="sub">council confidence</div></div>';
     summaryRoot.className = 'kpi-strip';
   }
 
@@ -81,7 +86,7 @@
     if (countMeta) countMeta.textContent = (signals || []).length + ' subnets';
     var body = rows.map(function (sig) {
       var st = String(sig.signal_type || 'neutral').toLowerCase();
-      var conf = ((parseFloat(sig.confidence) || 0) * 100).toFixed(1);
+      var conf = confPct(sig.confidence).toFixed(1);
       var evidence = String(sig.evidence || '—');
       if (evidence.length > 80) evidence = evidence.slice(0, 77) + '…';
       return '<tr><td class="text-primary">' + esc(sig.name || ('SN' + sig.subnet_id)) +

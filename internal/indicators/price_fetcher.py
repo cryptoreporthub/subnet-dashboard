@@ -8,7 +8,7 @@ Tiered strategy:
 2. GeckoTerminal fallback for explicitly mapped DEX pools:
    - config/price_pairs.json may contain "geckoterminal": {"network": ..., "pool": ...}
    - /networks/{network}/pools/{pool}/ohlcv/hour
-3. Synthetic final fallback (deterministic, always available).
+3. Synthetic optional fallback (deterministic, tests only when allow_synthetic=True).
 """
 
 import json
@@ -41,7 +41,7 @@ DEFAULT_DAYS = int(os.environ.get("PRICE_LOOKBACK_DAYS", "7"))
 CACHE_TTL_SECONDS = int(os.environ.get("PRICE_CACHE_TTL_SECONDS", "300"))
 TMC_CACHE_TTL_SECONDS = int(os.environ.get("TMC_CACHE_TTL_SECONDS", "60"))
 # Use live prices by default. TaoMarketCap is the primary source, GeckoTerminal
-# is the fallback, and synthetic candles are the last resort.
+# is the fallback. Synthetic candles are opt-in only (tests / explicit flag).
 USE_LIVE_PRICES = os.environ.get("INDICATOR_USE_LIVE_PRICES", "true").lower() == "true"
 LIVE_PRICE_TIMEOUT = int(os.environ.get("LIVE_PRICE_TIMEOUT_SECONDS", "10"))
 BLOCKMACHINE_RPC_URL = os.environ.get("BLOCKMACHINE_RPC_URL", "https://rpc.blockmachine.io")
@@ -81,7 +81,12 @@ def _save_json(path: str, data: Dict[str, Any]) -> None:
 def _load_price_pairs(path: str = PRICE_PAIRS_PATH) -> Dict[str, Any]:
     return _load_json(path)
 
-def _price_sources_for_subnet(subnet_id: str, pairs: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _price_sources_for_subnet(
+    subnet_id: str,
+    pairs: Dict[str, Any],
+    *,
+    include_synthetic: bool = False,
+) -> List[Dict[str, Any]]:
     """Return ordered list of price sources to attempt for a subnet."""
     info = pairs.get(str(subnet_id)) or pairs.get(subnet_id) or {}
     sources: List[Dict[str, Any]] = []
@@ -104,8 +109,8 @@ def _price_sources_for_subnet(subnet_id: str, pairs: Dict[str, Any]) -> List[Dic
     # Fallback: Blockmachine JSON-RPC alpha price + TAO/USD history.
     sources.append({"source": "blockmachine", "netuid": str(netuid)})
 
-    # Final fallback: deterministic synthetic candles.
-    sources.append({"source": "synthetic", "key": f"subnet-{subnet_id}"})
+    if include_synthetic:
+        sources.append({"source": "synthetic", "key": f"subnet-{subnet_id}"})
     return sources
 
 def _fetch_tmc_subnets(timeout: int = LIVE_PRICE_TIMEOUT) -> Dict[str, Dict[str, Any]]:
@@ -286,21 +291,25 @@ def fetch_ohlcv(
     use_cache: bool = True,
     cache_path: str = PRICE_CACHE_PATH,
     pairs_path: str = PRICE_PAIRS_PATH,
+    *,
+    allow_synthetic: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Fetch OHLCV candles for a subnet token.
 
     Tries TaoMarketCap first when INDICATOR_USE_LIVE_PRICES=true, falls back to
     GeckoTerminal for explicitly mapped pools, then to the Blockmachine RPC
-    alpha price, and finally to deterministic synthetic candles.
+    alpha price. Returns [] when no live source succeeds unless allow_synthetic=True.
     """
     pairs = _load_price_pairs(pairs_path)
-    sources = _price_sources_for_subnet(subnet_id, pairs)
+    sources = _price_sources_for_subnet(subnet_id, pairs, include_synthetic=allow_synthetic)
     cache_key = str(subnet_id)
 
     cache = _load_json(cache_path) if use_cache else {}
     now = time.time()
     cached = cache.get(cache_key)
+    if cached and cached.get("source") == "synthetic" and not allow_synthetic:
+        cached = None
     if cached and (now - cached.get("cached_at", 0)) < CACHE_TTL_SECONDS:
         return cached.get("candles", [])
 
@@ -329,10 +338,12 @@ def fetch_ohlcv(
                 error = str(exc)
                 # Continue to the next source in the tier.
 
-    if not candles:
+    if not candles and allow_synthetic:
         synthetic_key = f"subnet-{subnet_id}"
         candles = _synthetic_candles(synthetic_key, days=days)
         source = "synthetic"
+    elif not candles:
+        source = "unavailable"
 
     if use_cache:
         cache[cache_key] = {
