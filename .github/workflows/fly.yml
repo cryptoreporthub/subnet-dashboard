@@ -76,3 +76,42 @@ jobs:
         run: flyctl scale count 1 --app subnet-dashboard --yes
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      # flyctl treats "stopped" as a good post-deploy state; that leaves the
+      # public edge hanging with 0-byte timeouts. Force start + verify /health.
+      - name: Ensure machine is started
+        run: |
+          set -e
+          echo "=== Machine status before start ==="
+          flyctl machines list -a subnet-dashboard || true
+          for id in $(flyctl machines list -a subnet-dashboard --json | python3 -c "
+          import json,sys
+          for m in json.load(sys.stdin):
+              print(m.get('id',''))
+          "); do
+            [ -n "$id" ] || continue
+            echo "Starting machine $id (no-op if already started)"
+            flyctl machines start "$id" -a subnet-dashboard || true
+          done
+          echo "=== Machine status after start ==="
+          flyctl machines list -a subnet-dashboard || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Verify public /health
+        run: |
+          set -e
+          for i in $(seq 1 24); do
+            code=$(curl -sS -m 10 -o /tmp/health_body -w "%{http_code}" https://subnet-dashboard.fly.dev/health || echo 000)
+            body=$(cat /tmp/health_body 2>/dev/null || true)
+            echo "attempt $i: HTTP $code body=$body"
+            if [ "$code" = "200" ]; then
+              echo "Public health OK"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "=== Recent logs (best effort) ==="
+          flyctl logs -a subnet-dashboard --no-tail || true
+          echo "GUARD FAIL: public /health did not return 200 within ~2m"
+          exit 1
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

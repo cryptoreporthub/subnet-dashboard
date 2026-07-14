@@ -1,5 +1,5 @@
 # fly.toml app configuration file generated for subnet-dashboard
-# Triggering redeployment - 2026-06-14
+# Redeploy trigger — 2026-07-14: post-deploy start + health gate (machine left stopped)
 
 app = "subnet-dashboard"
 primary_region = "sea"
@@ -10,7 +10,8 @@ primary_region = "sea"
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = false
+  # String form preferred by current flyctl; keep machine warm (no idle stop).
+  auto_stop_machines = "off"
   auto_start_machines = true
   min_machines_running = 1
 
