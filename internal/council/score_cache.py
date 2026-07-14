@@ -23,7 +23,10 @@ def _universe_key(subnets: List[Dict[str, Any]], market_context: Optional[Dict[s
         "tao": round(float(ctx.get("tao_change_24h", 0) or 0), 4),
         "weights": w_bits,
     }
-    return hashlib.md5(json.dumps(payload, sort_keys=True).encode()).hexdigest()
+    return hashlib.md5(
+        json.dumps(payload, sort_keys=True).encode(),
+        usedforsecurity=False,
+    ).hexdigest()
 
 
 def score_universe(
