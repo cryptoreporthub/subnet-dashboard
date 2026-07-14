@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from internal.council.state_vector import score_subnet_for_hour
 from internal.council.red_team import audit_daily_pick
+from internal.subnets.tradable import tradable_subnets
 
 try:
     from internal.council.weights import effective_weights
@@ -33,6 +34,7 @@ def select_hourly_pick(
 ) -> Dict[str, Any]:
     market_context = dict(market_context or {})
     market_context.setdefault("weights", _weights_for_context(market_context))
+    subnets = tradable_subnets(subnets)
 
     if not subnets:
         return {
@@ -43,7 +45,7 @@ def select_hourly_pick(
             "scenario_tags": {},
             "audit": {
                 "approved": False,
-                "concerns": ["No subnets provided"],
+                "concerns": ["No tradable subnets provided"],
                 "adjusted_confidence": 0.0,
             },
             "final_confidence": 0.0,

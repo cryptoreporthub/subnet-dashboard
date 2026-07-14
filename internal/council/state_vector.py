@@ -1434,6 +1434,7 @@ def score_subnet_for_hour(
         "horizon": "hour",
         "horizon_type": "hour",
         "weights_used": hour_weights,
+        "signal_impact": signal_impact,
     }
 
 
@@ -1503,6 +1504,7 @@ def score_subnet_for_day(
         "horizon": "day",
         "horizon_type": "day",
         "weights_used": day_weights,
+        "signal_impact": signal_impact,
     }
 
 

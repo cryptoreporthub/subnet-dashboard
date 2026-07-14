@@ -5,10 +5,12 @@ Scores every subnet on the 24h horizon, picks the top candidate, and runs
 it through the RedTeam audit layer before returning a final payload.
 """
 
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from internal.council.state_vector import score_subnet_for_day
+from internal.council.state_vector import build_prediction_statement, score_subnet_for_day
 from internal.council.red_team import audit_daily_pick
+from internal.subnets.tradable import tradable_subnets
 
 try:
     from internal.council.weights import effective_weights
@@ -27,12 +29,52 @@ def _weights_for_context(market_context: Dict[str, Any]) -> Dict[str, float]:
     })
 
 
+def _predicted_pct(score_payload: Dict[str, Any], sn: Dict[str, Any], pick_conf: float) -> float:
+    """Prefer signal-impact move; else confidence heuristic (same as learning loop)."""
+    si = score_payload.get("signal_impact") if isinstance(score_payload, dict) else None
+    if isinstance(si, dict):
+        raw = si.get("net_predicted_pct")
+        try:
+            if raw is not None and float(raw) != 0.0:
+                return float(raw)
+        except (TypeError, ValueError):
+            pass
+    base = max(0.5, float(pick_conf or 0) * 5.0)
+    chg = float(sn.get("price_change_24h", 0) or 0)
+    if chg < -2:
+        return -base
+    return base
+
+
+def _attach_prediction(
+    candidate: Dict[str, Any],
+    score_payload: Dict[str, Any],
+    final_confidence: float,
+) -> Dict[str, Any]:
+    """Display/learning prediction for a published or candidate pick."""
+    ref = float(candidate.get("price", 0) or 0)
+    predicted_pct = _predicted_pct(score_payload, candidate, final_confidence)
+    contrib = score_payload.get("expert_contributions") if isinstance(score_payload, dict) else None
+    return build_prediction_statement(
+        sn=candidate,
+        predicted_pct=predicted_pct,
+        horizon=4,
+        ref_price=ref,
+        signal_source="council_day_pick",
+        expert="quant",
+        now=datetime.now(timezone.utc).replace(tzinfo=None),
+        signal_contributions=contrib if isinstance(contrib, dict) else None,
+        horizon_type="day",
+    )
+
+
 def select_daily_pick(
     subnets: List[Dict[str, Any]],
     market_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     market_context = dict(market_context or {})
     market_context.setdefault("weights", _weights_for_context(market_context))
+    subnets = tradable_subnets(subnets)
 
     if not subnets:
         return {
@@ -43,11 +85,12 @@ def select_daily_pick(
             "scenario_tags": {},
             "audit": {
                 "approved": False,
-                "concerns": ["No subnets provided"],
+                "concerns": ["No tradable subnets provided"],
                 "adjusted_confidence": 0.0,
             },
             "final_confidence": 0.0,
             "action": "long",
+            "prediction": None,
         }
 
     scored = []
@@ -72,6 +115,8 @@ def select_daily_pick(
 
     audit_candidate = {**candidate, "confidence": score_payload["confidence"]}
     audit = audit_daily_pick(audit_candidate, subnets)
+    final_confidence = audit["adjusted_confidence"]
+    prediction = _attach_prediction(candidate, score_payload, final_confidence)
 
     return {
         "subnet": {
@@ -84,9 +129,10 @@ def select_daily_pick(
         "expert_contributions": score_payload["expert_contributions"],
         "scenario_tags": score_payload["scenario_tags"],
         "audit": audit,
-        "final_confidence": audit["adjusted_confidence"],
+        "final_confidence": final_confidence,
         "action": "long",
         "tie_break": tie_break,
+        "prediction": prediction,
     }
 
 

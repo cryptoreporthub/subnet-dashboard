@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 from internal.council.daily_pick import select_daily_pick
 from internal.council.scenario_memory import classify_regime
 from internal.council.rotation_tracker import get_rotation_summary
+from internal.subnets.tradable import is_tradable_subnet, subnet_netuid, tradable_subnets
 
 DAILY_PICKS_PATH = os.path.join("data", "daily_picks.json")
 
@@ -52,6 +53,20 @@ def _find_today(records: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _payload_uses_root(payload: Dict[str, Any]) -> bool:
+    """True if cached pick/candidate points at Root or a missing netuid."""
+    for key in ("pick", "candidate"):
+        block = payload.get(key)
+        if not isinstance(block, dict):
+            continue
+        sn = block.get("subnet") if isinstance(block.get("subnet"), dict) else block
+        if isinstance(sn, dict) and not is_tradable_subnet(sn):
+            n = subnet_netuid(sn)
+            if n is None or n <= 0:
+                return True
+    return False
+
+
 def get_or_create_today_pick(
     subnets: List[Dict[str, Any]],
     market_context: Optional[Dict[str, Any]] = None,
@@ -66,11 +81,12 @@ def get_or_create_today_pick(
     low, and persisted.
     """
     market_context = market_context or {}
+    subnets = tradable_subnets(subnets)
     records = _load()
 
     if not force:
         existing = _find_today(records)
-        if existing is not None:
+        if existing is not None and not _payload_uses_root(existing):
             # HOLD with no audited pick: attach a live candidate for display only
             # (does not change the persisted HOLD decision or invent a BUY).
             if (
@@ -85,6 +101,7 @@ def get_or_create_today_pick(
                 except Exception:
                     pass
             return existing
+        # Stale Root-era cache: fall through and regenerate.
 
     if not subnets:
         payload: Dict[str, Any] = {

@@ -41,11 +41,18 @@
           {% if dpick.regime %}<span class="council-call__regime">{{ dpick.regime|upper }} REGIME</span>{% endif %}
         </div>
         <p class="council-call__name">{{ sn.name|default('SN' ~ sn.netuid) }}</p>
-        <p class="council-call__meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %} · 24h council horizon</p>
+        {% set pred = audit_pick.prediction if audit_pick.prediction is mapping else none %}
+        {% set hz = pred.horizon_hours if pred and pred.horizon_hours is defined else 4 %}
+        <p class="council-call__meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %} · {{ hz }}h resolve horizon</p>
         <p class="council-call__prediction">
-          Predicted to move
-          <strong class="accent-bright">with {{ fc if fc is not none else '—' }}% confidence</strong>
-          over the next 24 hours
+          {% if pred and pred.statement %}
+            {{ pred.statement|capitalize }}
+            {% if fc is not none %} · <strong class="accent-bright">{{ fc }}% confidence</strong>{% endif %}
+          {% else %}
+            Council call
+            {% if fc is not none %} at <strong class="accent-bright">{{ fc }}% confidence</strong>{% endif %}
+            · resolve within {{ hz }} hours
+          {% endif %}
           {% if audit_pick.score is defined %} · score <b>{{ "%.1f"|format((audit_pick.score|default(0))|float) }}</b>{% endif %}
         </p>
         {% if fc is not none %}

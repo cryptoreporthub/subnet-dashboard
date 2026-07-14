@@ -7,6 +7,8 @@ missing critical fields before a daily pick is promoted to the API.
 
 from typing import Any, Dict, List, Optional
 
+from internal.subnets.tradable import is_tradable_subnet, subnet_netuid
+
 
 def audit_daily_pick(
     candidate: Dict[str, Any],
@@ -26,6 +28,13 @@ def audit_daily_pick(
     all_subnets = all_subnets or []
     concerns: List[str] = []
     confidence_multiplier = 1.0
+
+    # Root (netuid 0) is TAO staking infrastructure — never a tradable pick.
+    if not is_tradable_subnet(candidate):
+        n = subnet_netuid(candidate)
+        label = "Root" if n == 0 else "missing/invalid netuid"
+        concerns.append(f"Not a tradable subnet: {label}")
+        confidence_multiplier = 0.0
 
     # Missing critical fields
     critical_fields = ("netuid", "name", "price", "volume")
@@ -95,7 +104,9 @@ def audit_daily_pick(
 
     base_confidence = float(candidate.get("confidence", 0.5) or 0.5)
     adjusted = round(min(1.0, max(0.0, base_confidence * confidence_multiplier)), 4)
-    approved = len([c for c in concerns if c.startswith("Missing critical")]) == 0
+    missing_critical = any(c.startswith("Missing critical") for c in concerns)
+    not_tradable = any(c.startswith("Not a tradable") for c in concerns)
+    approved = not missing_critical and not not_tradable
 
     return {
         "approved": approved,

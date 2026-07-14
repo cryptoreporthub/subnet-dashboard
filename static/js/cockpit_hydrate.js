@@ -225,15 +225,21 @@
 
     var html;
     if (pick && (sn.name != null || sn.netuid != null)) {
+      var pred = pick.prediction || {};
+      var hz = pred.horizon_hours != null ? pred.horizon_hours : 4;
+      var predLine = pred.statement
+        ? (esc(pred.statement.charAt(0).toUpperCase() + pred.statement.slice(1)) +
+          (finalConf != null ? ' · <strong class="accent-bright">' + fc.conf + '% confidence</strong>' : ''))
+        : ('Council call' +
+          (finalConf != null ? ' at <strong class="accent-bright">' + fc.conf + '% confidence</strong>' : '') +
+          ' · resolve within ' + hz + ' hours');
       html =
         '<div class="council-call">' +
         actionBadges(act, true) +
         '<p class="council-call__name">' + esc(sn.name || pickName(pick)) + '</p>' +
         '<p class="council-call__meta">SN' + esc(sn.netuid != null ? sn.netuid : pickNetuid(pick)) +
-        ' · 24h council horizon</p>' +
-        '<p class="council-call__prediction">Predicted to move <strong class="accent-bright">with ' +
-        fc.conf +
-        '% confidence</strong> over the next 24 hours' +
+        ' · ' + esc(hz) + 'h resolve horizon</p>' +
+        '<p class="council-call__prediction">' + predLine +
         (pick.score != null ? ' · score <b>' + fmt(pick.score, 1) + '</b>' : '') +
         '</p>' +
         '<div class="council-call__conviction">' +

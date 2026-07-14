@@ -879,18 +879,19 @@ _STATIC_SUBNETS = [
 
 
 def _get_subnets_with_source():
-    """Return (subnets, source) for picks, deduped by netuid; static fallback otherwise."""
+    """Return (subnets, source) for picks — tradable only (excludes Root)."""
+    from internal.subnets.tradable import tradable_subnets
+
     if _PICKS_ENGINE:
         try:
             subnets = get_all_subnets()
             if subnets:
-                deduped = {}
-                for s in subnets:
-                    deduped.setdefault(s.get("netuid"), s)
-                return list(deduped.values()), "taomarketcap"
+                tradable = tradable_subnets(subnets)
+                if tradable:
+                    return tradable, "taomarketcap"
         except Exception as exc:
             logger.warning("Error fetching from taomarketcap: %s", exc)
-    return [dict(s) for s in _STATIC_SUBNETS], "static-fallback"
+    return tradable_subnets([dict(s) for s in _STATIC_SUBNETS]), "static-fallback"
 
 
 def _market_mood_proxy(subnets: List[Dict[str, Any]]) -> float:
