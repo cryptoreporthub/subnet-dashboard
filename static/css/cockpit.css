@@ -55,29 +55,22 @@
   display: flex;
   flex-direction: column;
   min-height: 12rem;
-  background:
-    linear-gradient(180deg, rgba(0, 255, 65, 0.05) 0%, transparent 40%),
-    var(--bg-surface, rgba(10, 12, 18, 0.55));
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-default, rgba(0, 255, 65, 0.22));
+  border: var(--border-width) solid transparent;
   border-radius: var(--border-radius-card, 16px);
   padding: var(--space-4, 1rem);
   box-shadow: var(--shadow-card, 0 8px 28px rgba(0, 0, 0, 0.75));
-  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+  transition: transform 150ms ease, box-shadow 150ms ease;
 }
 
 .cockpit-card:hover {
   transform: translateY(-2px);
-  border-color: var(--border-bright, rgba(0, 255, 65, 0.55));
   box-shadow: var(--shadow-elevated, 0 14px 48px rgba(0, 0, 0, 0.85)),
     0 0 28px rgba(0, 255, 65, 0.2),
-    0 0 32px rgba(255, 122, 26, 0.1);
+    0 0 32px rgba(0, 200, 255, 0.12);
 }
 
 .cockpit-card[data-status="live"] {
-  border-color: rgba(0, 255, 65, 0.45);
-  box-shadow: 0 0 18px rgba(0, 255, 65, 0.12);
+  box-shadow: 0 0 18px rgba(0, 255, 65, 0.12), 0 0 24px rgba(0, 200, 255, 0.08);
 }
 
 .cockpit-card[data-status="empty"] {

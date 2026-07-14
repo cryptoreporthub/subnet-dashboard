@@ -113,29 +113,32 @@ header.top {
 .section-sub { color: var(--txt-2); }
 
 .card {
-  background:
-    linear-gradient(180deg, rgba(0, 255, 65, 0.05) 0%, transparent 40%),
-    var(--bg-cockpit-card);
+  border: var(--border-width) solid transparent;
+  background-image: var(--card-panel-shine), var(--card-panel-fill), var(--board-border-gradient);
+  background-origin: border-box;
+  background-clip: padding-box, padding-box, border-box;
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border: 1px solid var(--cockpit-green-line);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card), 0 0 24px rgba(180, 76, 255, 0.06);
+  box-shadow: var(--shadow-card), 0 0 24px rgba(0, 255, 65, 0.06);
   position: relative;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 .card::after {
   content: "";
   position: absolute;
   top: 0; left: 0; right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, #00ff41, #ff7a1a, #ff2bd6, transparent);
-  opacity: 0.65;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #00c8ff, #00ff41, transparent);
+  opacity: 0.75;
   pointer-events: none;
 }
 .card:hover {
-  border-color: var(--border-bright);
-  box-shadow: var(--shadow-elevated), 0 0 28px var(--accent-glow), 0 0 40px var(--accent-glow-purple);
+  background-image:
+    linear-gradient(180deg, rgba(0, 200, 255, 0.08) 0%, rgba(0, 255, 65, 0.05) 42%, transparent 72%),
+    var(--card-panel-fill),
+    linear-gradient(135deg, #33d4ff 0%, #5cff7a 52%, #39ff14 100%);
+  box-shadow: var(--shadow-elevated), 0 0 28px var(--accent-glow), 0 0 36px var(--accent-glow-blue);
   transform: translateY(-2px);
 }
 .card-head h3 { color: var(--txt); }
@@ -175,16 +178,19 @@ header.top {
 
 .kpi {
   position: relative;
-  background:
-    linear-gradient(180deg, rgba(0, 255, 65, 0.07) 0%, transparent 50%),
-    var(--bg-cockpit-surface);
+  border: var(--border-width) solid transparent;
+  background-image:
+    linear-gradient(180deg, rgba(0, 200, 255, 0.05) 0%, rgba(0, 255, 65, 0.06) 45%, transparent 72%),
+    var(--card-panel-fill),
+    var(--board-border-gradient);
+  background-origin: border-box;
+  background-clip: padding-box, padding-box, border-box;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--cockpit-green-line);
   border-radius: var(--radius-md);
   padding: 14px 16px;
   overflow: hidden;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 .kpi::before {
   content: "";
@@ -194,8 +200,11 @@ header.top {
   background: linear-gradient(180deg, #00ff41, #ff7a1a);
 }
 .kpi:hover {
-  border-color: var(--border-bright);
-  box-shadow: 0 0 18px var(--cockpit-green-glow), 0 0 28px var(--accent-glow-purple);
+  background-image:
+    linear-gradient(180deg, rgba(0, 200, 255, 0.08) 0%, rgba(0, 255, 65, 0.07) 45%, transparent 72%),
+    var(--card-panel-fill),
+    linear-gradient(135deg, #33d4ff 0%, #5cff7a 52%, #39ff14 100%);
+  box-shadow: 0 0 18px var(--cockpit-green-glow), 0 0 24px var(--accent-glow-blue);
   transform: translateY(-1px);
 }
 .kpi .lbl {
@@ -448,18 +457,24 @@ table.tbl td.mono { font-family: var(--font-mono); }
 @media (max-width: 640px)  { .council-grid { grid-template-columns: 1fr; } }
 
 .expert.card-soft {
-  background:
-    linear-gradient(180deg, rgba(0, 255, 65, 0.04) 0%, transparent 45%),
-    var(--bg-cockpit-surface);
-  border: 1px solid var(--cockpit-green-line);
+  border: var(--border-width) solid transparent;
+  background-image:
+    linear-gradient(180deg, rgba(0, 200, 255, 0.04) 0%, rgba(0, 255, 65, 0.04) 45%, transparent 72%),
+    var(--card-panel-fill),
+    var(--board-border-gradient);
+  background-origin: border-box;
+  background-clip: padding-box, padding-box, border-box;
   border-radius: 12px;
   padding: 14px;
   text-align: center;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 .expert.card-soft:hover {
-  border-color: rgba(255, 43, 214, 0.55);
-  box-shadow: 0 0 18px var(--cockpit-green-glow), 0 0 24px rgba(255, 43, 214, 0.12);
+  background-image:
+    linear-gradient(180deg, rgba(0, 200, 255, 0.06) 0%, rgba(0, 255, 65, 0.05) 45%, transparent 72%),
+    var(--card-panel-fill),
+    linear-gradient(135deg, #33d4ff 0%, #5cff7a 52%, #39ff14 100%);
+  box-shadow: 0 0 18px var(--cockpit-green-glow), 0 0 22px rgba(255, 43, 214, 0.12);
   transform: translateY(-2px);
 }
 .expert .avatar {
@@ -828,22 +843,70 @@ footer.status {
   filter: drop-shadow(0 0 12px rgba(0, 255, 65, 0.35));
 }
 
-/* Important sections — pink neon outline */
+/* Double-color board borders (blue → green) */
+.pick-card,
+.kpi-cell,
+.cockpit-card {
+  border: var(--border-width) solid transparent;
+  background-image: var(--card-panel-shine), var(--card-panel-fill), var(--board-border-gradient);
+  background-origin: border-box;
+  background-clip: padding-box, padding-box, border-box;
+}
+
+.pick-card::before {
+  height: 4px;
+  background: linear-gradient(90deg, #00c8ff, #00ff41);
+}
+
+/* Important sections — orange → pink gradient borders */
 #section-daily-pick .hero-card,
-#section-simivision-picks .pick-card,
-#section-kpi .kpi-strip,
-#section-council .council-grid {
-  border: 1px solid var(--border-important);
+#section-simivision-picks .pick-card {
+  border-width: var(--border-width-important);
+  background-image: var(--card-panel-shine), var(--card-panel-fill), var(--important-border-gradient);
+  background-origin: border-box;
+  background-clip: padding-box, padding-box, border-box;
   box-shadow: var(--shadow-card), var(--shadow-important);
+}
+
+#section-simivision-picks .pick-card::before {
+  height: 4px;
+  background: linear-gradient(90deg, #ff7a1a, #ff2bd6);
+}
+
+#section-daily-pick .hero-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #ff7a1a, #ff2bd6);
+  opacity: 1;
+  pointer-events: none;
+  z-index: 2;
 }
 
 #section-kpi .kpi-strip,
 #section-council .council-grid {
   padding: var(--space-3);
   border-radius: var(--radius-lg);
+  border: var(--border-width-important) solid transparent;
+  background-image:
+    linear-gradient(rgba(8, 10, 16, 0.9), rgba(8, 10, 16, 0.9)) padding-box,
+    var(--important-border-gradient) border-box;
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  box-shadow: var(--shadow-card), var(--shadow-important);
 }
 
-#section-daily-pick .hero-card {
-  border-width: 2px;
-  border-top-color: var(--border-important);
+#section-kpi .kpi {
+  border-width: var(--border-width);
+  background-image:
+    linear-gradient(180deg, rgba(255, 122, 26, 0.05) 0%, rgba(255, 43, 214, 0.04) 45%, transparent 72%),
+    var(--card-panel-fill),
+    var(--board-border-gradient);
+}
+
+#section-council .expert.card-soft {
+  border-width: var(--border-width);
 }

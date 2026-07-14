@@ -43,6 +43,12 @@
   --border-bright: rgba(0, 255, 65, 0.55);
   --border-magenta: rgba(255, 43, 214, 0.55);
   --border-important: rgba(255, 43, 214, 0.65);
+  --border-width: 2px;
+  --border-width-important: 3px;
+  --board-border-gradient: linear-gradient(135deg, #00c8ff 0%, #3dffa8 52%, #00ff41 100%);
+  --important-border-gradient: linear-gradient(135deg, #ff7a1a 0%, #ff4dc4 52%, #ff2bd6 100%);
+  --card-panel-fill: linear-gradient(rgba(10, 12, 18, 0.96), rgba(10, 12, 18, 0.96));
+  --card-panel-shine: linear-gradient(180deg, rgba(0, 200, 255, 0.06) 0%, rgba(0, 255, 65, 0.04) 38%, transparent 72%);
 
   /* Radius */
   --radius-sm: 8px;

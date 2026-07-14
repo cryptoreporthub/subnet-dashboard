@@ -75,11 +75,7 @@
 .hero-card {
   position: relative;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(0, 255, 65, 0.05) 0%, transparent 40%),
-    var(--bg-card);
-  border: 2px solid var(--border-important);
-  border-top: 2px solid var(--accent-magenta);
+  border: var(--border-width-important) solid transparent;
   border-radius: var(--radius-lg);
   padding: var(--space-6);
   box-shadow: var(--shadow-card), var(--shadow-important);
@@ -266,16 +262,14 @@
 .pick-card {
   position: relative;
   overflow: hidden;
-  background: var(--bg-card);
-  border: 1px solid var(--border-default);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-lg);
   padding: var(--space-4);
   box-shadow: var(--shadow-card);
-  transition: box-shadow var(--transition-base), transform var(--transition-base), border-color var(--transition-base);
+  transition: box-shadow var(--transition-base), transform var(--transition-base);
 }
 
 .pick-card:hover {
-  border-color: var(--border-bright);
   box-shadow: var(--shadow-elevated), var(--shadow-glow);
   transform: translateY(-2px);
 }
@@ -286,8 +280,8 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--accent-primary), var(--accent-bright));
+  height: 4px;
+  background: linear-gradient(90deg, #00c8ff, #00ff41);
 }
 
 .pick-card.sell-accent::before {
@@ -452,21 +446,14 @@
 }
 
 .kpi-cell {
-  background:
-    linear-gradient(180deg, rgba(0, 255, 65, 0.06) 0%, transparent 55%),
-    var(--bg-surface);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--border-default);
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);
-  box-shadow: 0 0 0 1px rgba(0, 255, 65, 0.04) inset;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 
 .kpi-cell:hover {
-  border-color: var(--border-bright);
-  box-shadow: 0 0 20px rgba(0, 255, 65, 0.18), 0 0 28px rgba(255, 122, 26, 0.1);
+  box-shadow: 0 0 20px rgba(0, 255, 65, 0.18), 0 0 28px rgba(0, 200, 255, 0.12);
   transform: translateY(-1px);
 }
 
@@ -601,7 +588,7 @@ table.tbl tr:last-child td {
 }
 
 table.tbl tr:hover td {
-  background: rgba(0, 240, 255, 0.04);
+  background: rgba(0, 255, 65, 0.04);
 }
 
 /* ---------- Technical indicators ---------- */
