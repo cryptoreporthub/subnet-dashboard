@@ -71,7 +71,7 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 ## Ready for next work
 **Homepage:** council-first (#198) — decision stage + demoted market drawer. Dual cockpit grid removed.
 
-**In flight:** Root exclusion + call content (`cursor/root-exclude-call-content-5e45`) — Root (netuid 0) never a pick; attach real `prediction.statement` / ≤4h horizon to published daily picks.
+**In flight:** Root exclusion + live market overlay + call reasons (`cursor/root-exclude-call-content-5e45` / PR #201) — TMC price/volume when registry-cold; alpha-scale liquidity audit; pick reasons.
 
 **Automated queue:** COMPLETE — B6 #185 · C4 #186 · C5 #187 · C6 #189 · C1 #190 · C2 #191 · C3 #192 · board #193. **A2:** `smoke` required check verified on `main`.
 
