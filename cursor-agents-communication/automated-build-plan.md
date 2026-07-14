@@ -18,7 +18,7 @@
 | **6** | **C2** datastar SSE hydration | Live 12-panel updates without SPA |
 | **7** | **C3** CSS/mobile/a11y | Polish pass last |
 
-**Deferred (human-only, not agent):** A2 branch-protection toggle in GitHub Settings.
+**Deferred (human-only, not agent):** ~~A2 branch-protection toggle~~ ✅ verified (`smoke` on `main`).
 
 ---
 

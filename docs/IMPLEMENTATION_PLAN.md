@@ -3,7 +3,9 @@
 > Split decided 2026-07-13 between Ditto (backend/infra/observability, via direct GitHub tools — NO agent harness) and Cursor (visual/experience, under human review, reads docs/cursor-implementation-guide.md).
 > Source audits: docs/EXTREME_AUDIT.md (16 findings) + docs/GITHUB_TOOLING.md (best-fit libs).
 
-## Ownership rule
+> **2026-07-14:** Ditto write access retired (GitHub MCP sha race). **Cursor owns all implementation** via git. Ditto monitors only. See `cursor-agents-communication/STATUS.md`.
+
+## Ownership rule (historical split — superseded)
 - Ditto owns: CI/repo hygiene, CORS/middleware, data feed (bittensor SDK), async fetch/cache, scheduler swap, observability — anything file:line-targeted and backend.
 - Cursor owns: uPlot migration, datastar live hydration, CSS/mobile/a11y, premium cockpit glow-up — anything iterative/visual.
 - Tooling constraint (Ditto): GitHub delete_file + create_or_update_file on SMALL files work. Large-file full rewrites (server.py, sections.py) are BLOCKED by 12k-char read truncation → those edits go to Cursor or a non-free Ditto Code job.

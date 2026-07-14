@@ -1,14 +1,20 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T08:20:00Z by Agent (`-5e45`) — **G7+G12 merged**  
-**main:** `348f74b`
+**Last updated:** 2026-07-14T08:30:00Z by Agent (`-5e45`) — **handoff synced for Ditto**  
+**main:** `7595d60`
+
+## Ditto boot (read first)
+
+**`cursor-agents-communication/STATUS.md`** — one-page truth card.  
+Automated queue **COMPLETE**. B2/A2/Phase K are **not** open. Ditto = monitor only.
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
 
 ## Read order (agents + Ditto)
-1. **Handoff** — `cursor-agents-communication/cursor-handoff-2026-07-14.md` (Ditto → Cursor full ownership)
+1. **STATUS card** — `cursor-agents-communication/STATUS.md` (Ditto: start here)
 2. **This file** — `cursor-agents-communication/board.md`
+3. **Handoff** — `cursor-agents-communication/cursor-handoff-2026-07-14.md` (context + guardrails)
 3. **Model guide** — `cursor-agents-communication/model-guide.md`
 4. **Implementation guide** — `docs/cursor-implementation-guide.md` (Grok token rules)
 5. **Phase 3 Grok spec** — `cursor-agents-communication/phase-3-grok-design.md`
@@ -65,13 +71,15 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 ## Ready for next work
 **Automated queue:** COMPLETE — B6 #185 · C4 #186 · C5 #187 · C6 #189 · C1 #190 · C2 #191 · C3 #192 · board #193. **A2:** `smoke` required check verified on `main`.
 
-Recent merges on `main` @ `82bbde7` (CI green):
+Recent merges on `main` @ `7595d60` (CI green):
 
 | PR | Phase | Summary |
 |----|-------|---------|
-| **#157** | **Phase 2** | G1/G2/G5/G6/G8 visual fixes |
-| **#155** | **Phase 1 C2** | Cockpit section partials |
-| **#154** | **Phase 1 C1** | CSS split |
+| **#195** | **G7+G12** | Rajdhani titles, favicon, fonts |
+| **#192** | **C3** | CSS/mobile/a11y |
+| **#191** | **C2** | SSE cockpit stream |
+| **#190** | **C1** | uPlot sparklines |
+| **#185** | **B6** | slowapi rate limit |
 
 **Health:** `GET /health` · `GET /api/signal-hub/status` · `GET /api/calibration/status` · `GET /api/signals` · `GET /api/message-intel` → 200 OK
 
@@ -85,10 +93,10 @@ Recent merges on `main` @ `82bbde7` (CI green):
 
 ## Agent posture
 
-| Agent | Status | Owns |
-|-------|--------|------|
-| **A** (`-843d`) | **Phase A A3+A4** | learning, council, calibration, signal_hub, message_intel, cockpit |
-| **B** (`-e78a`) | **Phase 3 G3+G4** | templates, static, analytics, indicators, oracle, whales |
+| Agent | Status | Notes |
+|-------|--------|-------|
+| **Cursor** | **Idle** | Audit queue complete; new work only when explicitly queued |
+| **Ditto** | **Monitor** | Read-only — CI, Fly health, `/api/data-freshness` |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
 
