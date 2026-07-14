@@ -183,9 +183,10 @@ GET /api/message-intel?limit=50&offset=0
 
 ## Composer acceptance checklist
 
-- [ ] `GET /api/message-intel` → `{status, messages: [], meta}` honest-empty
-- [ ] Duplicate `(source, group_id, message_id)` → same id, `deduped: true`
-- [ ] Listener starts on lifespan when creds set + `MESSAGE_INTEL_LISTENER!=off`
-- [ ] `message_intel` cockpit section live when DB has rows
-- [ ] `/health` OK; no credentials in code
-- [ ] Tests pass
+- [x] `GET /api/message-intel` → `{status, messages: [], meta}` honest-empty — **#136**
+- [x] Duplicate `(source, group_id, message_id)` → same id, `deduped: true` — **#136**
+- [x] Listener starts on lifespan when creds set + `MESSAGE_INTEL_LISTENER!=off` — **#136** (prod: off until Telegram session on volume)
+- [x] `message_intel` cockpit section live when DB has rows — **#136**
+- [x] `/health` OK; no credentials in code
+- [x] Tests pass — `tests/test_phase_m_social.py`
+- [x] Social sentiment rollup on homepage — **#217**

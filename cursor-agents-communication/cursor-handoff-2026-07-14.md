@@ -1,7 +1,8 @@
 # Cursor handoff — 2026-07-14 (Ditto → Cursor, full ownership)
 
-> **STATUS (2026-07-14 evening):** EXTREME audit **COMPLETE** on `main` @ `30c4141` (pending #215 Chart.js removal).
-> Council/call-quality lane **COMPLETE** (#201–#213). **Idle** after #215.
+> **STATUS (2026-07-14 late):** All queues **COMPLETE** on `main` @ `d59782e`.
+> Council/call-quality (#201–#213), canvas radar (#215), social sentiment (#217),
+> Fly 1GB keep-warm (#218). **Idle** — monitor only.
 
 ## For Ditto (read this first)
 
@@ -39,7 +40,9 @@
 | **Cleanup** | G7 Rajdhani titles, G12 favicon/fonts | #195 |
 | **Council picks** | Root/market overlay through priced scoring + call lines | #201–#213 |
 | **Audit completion** | Lazy OHLCV, badge polish, canvas radar | #212 · #215 |
-| **Plan/docs** | automated-build-plan, board sync | #183 · #193–#214 |
+| **Social** | Message-intel sentiment rollup | #217 |
+| **Ops** | Fly 1GB + post-deploy health gate | #218 |
+| **Plan/docs** | automated-build-plan, board sync | #183 · #193–#216 · board-complete |
 
 **A2 branch protection:** `smoke` required check verified on `main` (human-confirmed in GitHub Settings).
 
@@ -54,11 +57,11 @@ Ditto's `read_links` / `get_contents` hit **lagged read-replicas**; `create_or_u
 
 **Cursor rule:** never use GitHub Contents API for multi-file or large edits. Use **git only**.
 
-## Optional housekeeping (not blocking)
+## Optional housekeeping
 
-- Close superseded open PRs: #165, #166, #184 (work already on `main` via #170 / #193) — **needs human `gh pr close`**
-- Cancel orphaned CI run [#29303004001](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/29303004001) if still running (human token)
+- ~~Close superseded open PRs~~ → **closed** (#101 #110 #112 #129 #130 #134 #139 #153 #165 #166 #184)
 - ~~Radar chart still lazy-loads Chart.js~~ → **#215** canvas radar (no CDN)
+- Optional later: remove orphan second `data_volume` on Fly (count was 2; scale=1) — human/`fly volumes`
 
 ## Guardrails
 
