@@ -380,3 +380,22 @@ def test_c6_shared_conviction_thresholds_match_hydrate():
     assert "if (c > 75)" in hydrate_src
     assert "if (c > 55)" in hydrate_src
     assert "if (c > 35)" in hydrate_src
+
+
+def test_g7_section_titles_use_rajdhani():
+    premium = open("static/css/premium.css", encoding="utf-8").read()
+    dashboard = open("static/css/dashboard.css", encoding="utf-8").read()
+    assert ".section-title" in premium
+    assert "font-family: var(--font-body)" in premium
+    assert "font-family: var(--font-body)" in dashboard.split(".section-title")[1][:120]
+
+
+def test_g12_favicon_and_font_consolidation():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert '/static/favicon.svg' in html
+    assert "Space+Grotesk" not in html
+    base_css = open("static/css/base.css", encoding="utf-8").read()
+    assert "Orbitron" not in base_css
+    assert "--font-display: 'Rajdhani'" in base_css
+    assert client.get("/static/favicon.svg").status_code == 200
