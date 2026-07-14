@@ -1,11 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-14T19:25:00Z · Agent `-5e45`  
-**main:** `9445178`
+**Updated:** 2026-07-14T19:30:00Z · Agent `-5e45`  
+**main:** `fb23c99`
 
 ## One-line
 
-**#204 learning-loop impact merged. Confidence publish-gate fix in flight (`cursor/confidence-prior-fix-5e45`).**
+**Council picks + learning loop + confidence prior fix complete (#201–#205). Ditto = monitor only unless new work is queued.**
 
 ## Done (do not re-queue)
 
@@ -20,15 +20,16 @@
 | Root/market overlay + impact dial | **#201** |
 | Score cache + perf + nav/tour polish | **#202** |
 | Learning loop impact dial + hour picks | **#204** |
+| Cold-start confidence prior (HOLD root cause) | **#205** |
 | A2 `smoke` on `main` | verified |
 | Phase K, J–O | historical |
 
 ## Ditto
 
 - **Do:** read `board.md`, watch CI/Fly health
-- **Do not:** re-open #201/#202/#204, cite July 14 morning queue as open, use GitHub Contents API writes
+- **Do not:** re-open #201–#205, cite July 14 morning queue as open, use GitHub Contents API writes
 
 ## Cursor
 
-- Active: confidence cold-prior + volume completeness (HOLD root cause; gate stays 45%)
+- New work only when human/board explicitly queues it
 - Git only; Ponytail minimal diff
