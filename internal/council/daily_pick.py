@@ -5,10 +5,14 @@ Scores every subnet on the 24h horizon, picks the top candidate, and runs
 it through the RedTeam audit layer before returning a final payload.
 """
 
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from internal.council.state_vector import build_prediction_statement, pick_reasons, score_subnet_for_day
+from internal.council.state_vector import (
+    attach_council_prediction,
+    pick_reasons,
+    score_subnet_for_day,
+    unpack_score_learning_fields,
+)
 from internal.council.red_team import audit_daily_pick
 from internal.subnets.tradable import tradable_subnets
 
@@ -27,51 +31,6 @@ def _weights_for_context(market_context: Dict[str, Any]) -> Dict[str, float]:
         "gainers": market_context.get("gainers", 0),
         "losers": market_context.get("losers", 0),
     })
-
-
-def _predicted_pct(score_payload: Dict[str, Any], sn: Dict[str, Any], pick_conf: float) -> float:
-    """Prefer signal-impact move; else confidence heuristic (same as learning loop)."""
-    si = score_payload.get("signal_impact") if isinstance(score_payload, dict) else None
-    if isinstance(si, dict):
-        raw = si.get("net_predicted_pct")
-        try:
-            if raw is not None and float(raw) != 0.0:
-                return float(raw)
-        except (TypeError, ValueError):
-            pass
-    base = max(0.5, float(pick_conf or 0) * 5.0)
-    chg = float(sn.get("price_change_24h", 0) or 0)
-    if chg < -2:
-        return -base
-    return base
-
-
-def _attach_prediction(
-    candidate: Dict[str, Any],
-    score_payload: Dict[str, Any],
-    final_confidence: float,
-) -> Dict[str, Any]:
-    """Display/learning prediction for a published or candidate pick."""
-    from internal.council.state_vector import _expert_from_signal_source
-
-    ref = float(candidate.get("price", 0) or 0)
-    predicted_pct = _predicted_pct(score_payload, candidate, final_confidence)
-    contrib = score_payload.get("expert_contributions") if isinstance(score_payload, dict) else None
-    si = score_payload.get("signal_impact") if isinstance(score_payload, dict) else None
-    source = "council_day_pick"
-    if isinstance(si, dict):
-        source = si.get("dominant") or si.get("net_direction") or source
-    return build_prediction_statement(
-        sn=candidate,
-        predicted_pct=predicted_pct,
-        horizon=4,
-        ref_price=ref,
-        signal_source=str(source),
-        expert=_expert_from_signal_source(str(source)),
-        now=datetime.now(timezone.utc).replace(tzinfo=None),
-        signal_contributions=contrib if isinstance(contrib, dict) else None,
-        horizon_type="day",
-    )
 
 
 def select_daily_pick(
@@ -98,6 +57,9 @@ def select_daily_pick(
             "action": "long",
             "prediction": None,
             "reasons": [],
+            "signal_impact": None,
+            "signal_contributions": None,
+            "active_signals": [],
         }
 
     scored = []
@@ -123,8 +85,11 @@ def select_daily_pick(
     audit_candidate = {**candidate, "confidence": score_payload["confidence"]}
     audit = audit_daily_pick(audit_candidate, subnets)
     final_confidence = audit["adjusted_confidence"]
-    prediction = _attach_prediction(candidate, score_payload, final_confidence)
-    reasons = pick_reasons(candidate, score_payload.get("signal_impact"))
+    learning = unpack_score_learning_fields(score_payload)
+    prediction = attach_council_prediction(
+        candidate, score_payload, final_confidence, horizon_type="day", horizon_hours=4
+    )
+    reasons = pick_reasons(candidate, learning["signal_impact"])
     try:
         from internal.subnets.impact import impact_profile
 
@@ -149,6 +114,9 @@ def select_daily_pick(
         "prediction": prediction,
         "reasons": reasons,
         "impact": impact,
+        "signal_impact": learning["signal_impact"],
+        "signal_contributions": learning["signal_contributions"],
+        "active_signals": learning["active_signals"],
     }
 
 

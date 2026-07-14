@@ -297,6 +297,9 @@
         (payload.reason ? ' — ' + esc(payload.reason) : ' until a candidate clears the 45% audit gate.') +
         '</p>';
       if (sn.name != null || sn.netuid != null) {
+        var candPred = (cand && cand.prediction) || {};
+        var candReasons = ((cand && cand.reasons) || []).slice(0, 3);
+        var candImpact = (cand && cand.impact) || {};
         html +=
           '<p class="council-call__candidate">Leading candidate under review: <strong>' +
           esc(sn.name || ('SN' + sn.netuid)) +
@@ -304,6 +307,22 @@
           (sn.netuid != null ? ' (SN' + esc(sn.netuid) + ')' : '') +
           (finalConf != null ? ' · ' + fc.conf + '% confidence' : '') +
           ' <span class="council-call__candidate-tag">not published</span></p>';
+        if (candPred.statement) {
+          html +=
+            '<p class="council-call__prediction council-call__prediction--candidate">Would-be call: ' +
+            esc(candPred.statement.charAt(0).toUpperCase() + candPred.statement.slice(1)) +
+            (candPred.horizon_hours != null ? ' · ' + esc(candPred.horizon_hours) + 'h horizon' : '') +
+            '</p>';
+        }
+        if (candReasons.length) {
+          html +=
+            '<ul class="council-call__reasons">' +
+            candReasons.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') +
+            '</ul>';
+        }
+        if (candImpact.summary) {
+          html += '<p class="council-call__impact">' + esc(candImpact.summary) + '</p>';
+        }
         html +=
           '<div class="council-call__conviction">' +
           '<div class="conviction-bar"><div class="conviction-fill ' + fc.tier + '" style="width:' + fc.conf + '%;"></div></div>' +

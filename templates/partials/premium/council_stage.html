@@ -98,6 +98,23 @@
           {% if fc is not none %} · {{ fc }}% confidence{% endif %}
           <span class="council-call__candidate-tag">not published</span>
         </p>
+        {% set cand_pred = cand.prediction if cand and cand.prediction is mapping else none %}
+        {% if cand_pred and cand_pred.statement %}
+        <p class="council-call__prediction council-call__prediction--candidate">
+          Would-be call: {{ cand_pred.statement|capitalize }}
+          {% if cand_pred.horizon_hours is defined %} · {{ cand_pred.horizon_hours }}h horizon{% endif %}
+        </p>
+        {% endif %}
+        {% set cand_reasons = cand.reasons if cand and cand.reasons is iterable and cand.reasons is not string else [] %}
+        {% if cand_reasons %}
+        <ul class="council-call__reasons">
+          {% for r in cand_reasons[:3] %}<li>{{ r }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% set cand_impact = cand.impact if cand and cand.impact is mapping else none %}
+        {% if cand_impact and cand_impact.summary %}
+        <p class="council-call__impact">{{ cand_impact.summary }}</p>
+        {% endif %}
         {% if fc is not none %}
         <div class="council-call__conviction">
           <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ fc }}%;"></div></div>

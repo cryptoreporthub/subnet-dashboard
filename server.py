@@ -1113,14 +1113,18 @@ def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[st
     if isinstance(audited, dict) and isinstance(audited.get("subnet"), dict):
         top_netuid = audited["subnet"].get("netuid")
         if "signals" not in audited:
-            src = next((s for s in subnets if s.get("netuid") == top_netuid), {})
-            audited["signals"] = {
-                "price_change_24h": src.get("price_change_24h"),
-                "price_change_7d": src.get("price_change_7d"),
-                "emission": src.get("emission"),
-                "apy": src.get("apy"),
-                "volume": src.get("volume"),
-            }
+            # Prefer scored signal_impact; fall back to market snapshot metrics.
+            if isinstance(audited.get("signal_impact"), dict):
+                audited["signals"] = audited["signal_impact"]
+            else:
+                src = next((s for s in subnets if s.get("netuid") == top_netuid), {})
+                audited["signals"] = {
+                    "price_change_24h": src.get("price_change_24h"),
+                    "price_change_7d": src.get("price_change_7d"),
+                    "emission": src.get("emission"),
+                    "apy": src.get("apy"),
+                    "volume": src.get("volume"),
+                }
         if not audited.get("impact"):
             try:
                 from internal.subnets.impact import impact_profile

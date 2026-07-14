@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T20:40:00Z by Agent (`-6f98`) — synced after `-5e45` #207/#208  
-**main:** `312a514`
+**Last updated:** 2026-07-14T20:50:00Z by Agent (`-5e45`) — hour-pred + signal stamps in flight (#210)  
+**main:** `b58bc31`
 
 ## Ditto boot (read first)
 
@@ -70,21 +70,20 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 
 ## Ready for next work
 
-**Idle — monitor only.** Call content lane complete (#201–#207). New work only when human/board explicitly queues it.
+**In flight:** hourly prediction statements + learning `signal_contributions`/`active_signals` stamps + HOLD candidate call text (`cursor/hour-pred-signal-stamps-5e45`).
 
-**Automated queue:** COMPLETE — B6 #185 · C4–C6 · C1–C3 · G7+G12 · #198–#202 · #204–#207. **A2:** `smoke` required check verified on `main`.
+**Automated queue:** COMPLETE — B6–C3 · G7+G12 · #198–#202 · #204–#209. **A2:** `smoke` required on `main`.
 
-Recent merges on `main` @ `312a514`:
+Recent merges on `main` @ `b58bc31`:
 
 | PR | Phase | Summary |
 |----|-------|---------|
+| **#209** | Board | Handoff sync after #201–#208 |
 | **#208** | Board | STATUS sync after #207 |
 | **#207** | Council | Call reasons lead with live signal-impact edges; prediction expert/source from impact |
 | **#206** | Board | STATUS sync after #204 + #205 |
-| **#205** | Council | Cold-start confidence prior 0.62 + buy/sell volume completeness (45% gate unchanged) |
-| **#204** | Learning | Impact dial through full loop; hour picks recorded; trail on dial change |
-| **#202** | Perf + polish | Score cache, price memo, judges dedupe, sticky nav, onboarding tour |
-| **#201** | Council | Root exclusion, TMC overlay, call reasons, impact-aware scoring + dial |
+| **#205** | Council | Cold-start confidence prior 0.62 |
+| **#204** | Learning | Impact dial through full loop |
 | **#198** | UI | Council-first overhaul |
 | **#195** | **G7+G12** | Rajdhani titles, favicon, fonts |
 | **#192** | **C3** | CSS/mobile/a11y |
@@ -106,7 +105,7 @@ Recent merges on `main` @ `312a514`:
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **Cursor** | **Idle** | #201–#207 on main; new work only when explicitly queued |
+| **Cursor** | **Active** | #210 hour pred + signal stamps + HOLD candidate text |
 | **Ditto** | **Monitor** | Read-only — CI, Fly health, `/api/data-freshness` |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`

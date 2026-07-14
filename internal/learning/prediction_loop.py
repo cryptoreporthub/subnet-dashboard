@@ -99,24 +99,47 @@ def record_pick_prediction(
     else:
         predicted_pct = _predicted_pct_from_pick(pick, subnet)
     horizon_hours = 1 if horizon_type == "hour" else 4
-    if existing_pred and existing_pred.get("horizon_hours") is not None and horizon_type != "hour":
+    if existing_pred and existing_pred.get("horizon_hours") is not None:
         try:
             horizon_hours = int(existing_pred["horizon_hours"])
         except (TypeError, ValueError):
             pass
     now = datetime.now(timezone.utc)
 
-    prediction = build_prediction_statement(
-        sn=subnet,
-        predicted_pct=predicted_pct,
-        horizon=horizon_hours,
-        ref_price=ref_price,
-        signal_source=f"council_{horizon_type}_pick",
-        expert=expert,
-        now=now.replace(tzinfo=None),
-        signal_contributions=expert_contributions if expert_contributions else None,
-        horizon_type=horizon_type,
-    )
+    # Prefer tech signal stamps on the pick root; fall back to nested score shape.
+    signal_contributions = pick.get("signal_contributions")
+    if not isinstance(signal_contributions, dict):
+        nested = expert_contributions.get("signal_contributions")
+        signal_contributions = nested if isinstance(nested, dict) else None
+    active_signals = pick.get("active_signals")
+    if not isinstance(active_signals, list):
+        nested_active = expert_contributions.get("active_signals")
+        active_signals = nested_active if isinstance(nested_active, list) else []
+    signal_impact = pick.get("signal_impact")
+    if not isinstance(signal_impact, dict):
+        signal_impact = pick.get("signals") if isinstance(pick.get("signals"), dict) else None
+
+    if existing_pred and existing_pred.get("statement"):
+        prediction = dict(existing_pred)
+        prediction.setdefault("horizon_type", horizon_type)
+        prediction.setdefault("expert", expert)
+        if signal_contributions and not prediction.get("signal_contributions"):
+            prediction["signal_contributions"] = signal_contributions
+        if active_signals and not prediction.get("active_signals"):
+            prediction["active_signals"] = list(active_signals)
+    else:
+        prediction = build_prediction_statement(
+            sn=subnet,
+            predicted_pct=predicted_pct,
+            horizon=horizon_hours,
+            ref_price=ref_price,
+            signal_source=f"council_{horizon_type}_pick",
+            expert=expert,
+            now=now.replace(tzinfo=None),
+            signal_contributions=signal_contributions,
+            horizon_type=horizon_type,
+            active_signals=active_signals or None,
+        )
     prediction["pick_source"] = "council"
     prediction["pick_score"] = pick.get("score")
     prediction["pick_confidence"] = pick.get("confidence", pick.get("final_confidence"))
@@ -166,7 +189,7 @@ def record_pick_prediction(
 
         judge_scores = on_prediction_created(
             prediction,
-            signal_impact=pick.get("signals"),
+            signal_impact=signal_impact,
             subnet=subnet,
             expert_weights=expert_weights,
         )
