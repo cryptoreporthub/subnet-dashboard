@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T21:20:00Z by Agent (`-5e45`) — #213 residuals after #212 OHLCV  
-**main:** `2565dc0`
+**Last updated:** 2026-07-14T21:25:00Z by Agent (`-5e45`) — **call-quality lane COMPLETE (#201–#213)**  
+**main:** `67d2dd1`
 
 ## Ditto boot (read first)
 
