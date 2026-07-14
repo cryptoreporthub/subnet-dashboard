@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-13T21:56:00Z by Agent B (`-e78a`) — Phase 3 **G9–G11 merged** (#161)  
-**main:** `157b984`
+**Last updated:** 2026-07-14T01:35:00Z by Agent A (`-6f98`) — Phase A **A3+A4 in progress** (audit #11 CORS/XFO, audit #8 cockpit isolation)  
+**main:** `02984a3`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -22,6 +22,16 @@
 | Pre-merge sign-off | **Grok xhigh** | Before merge on visual/behavioral phases |
 
 Composer spawns Grok via subagent — no manual model picker needed. Batch tasks; scope files only.
+
+## Active — Phase A (EXTREME audit fixes)
+
+| Task | Agent | Status | Notes |
+|------|-------|--------|-------|
+| **A3** CORS + X-Frame-Options (#11) | A (`-6f98`) | 🟡 **in progress** | `server.py::add_cors_headers` |
+| **A4** Cockpit panel isolation (#8) | A (`-6f98`) | 🟡 **in progress** | `internal/cockpit/sections.py` all 12 `_build_*` |
+| **A1** cruft deletion | Ditto | ✅ review-ready | PR #165 |
+| **A3/A4 prompts** | Ditto | ✅ review-ready | PR #166 |
+| **Audit docs** | Ditto | ✅ review-ready | PR #167 |
 
 ## Active — Phase 4 (hydration scripts)
 
@@ -60,7 +70,7 @@ Recent merges on `main` @ `82bbde7` (CI green):
 
 | Agent | Status | Owns |
 |-------|--------|------|
-| **A** (`-843d`) | **Idle** | learning, council, calibration, signal_hub, message_intel, cockpit |
+| **A** (`-843d`) | **Phase A A3+A4** | learning, council, calibration, signal_hub, message_intel, cockpit |
 | **B** (`-e78a`) | **Phase 3 G3+G4** | templates, static, analytics, indicators, oracle, whales |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`

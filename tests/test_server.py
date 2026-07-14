@@ -52,8 +52,26 @@ def test_health_route(client):
 
 def test_cors_headers(client):
     response = client.get('/api/registry')
-    assert response.headers.get('Access-Control-Allow-Origin') == '*'
-    assert response.headers.get('X-Frame-Options') == 'ALLOWALL'
+    assert response.headers.get('X-Frame-Options') == 'SAMEORIGIN'
+    assert response.headers.get('Access-Control-Allow-Origin') is None
+
+
+def test_cors_headers_allowed_origin(client):
+    response = client.get(
+        '/api/registry',
+        headers={'Origin': 'https://subnet-dashboard.fly.dev'},
+    )
+    assert response.headers.get('X-Frame-Options') == 'SAMEORIGIN'
+    assert response.headers.get('Access-Control-Allow-Origin') == 'https://subnet-dashboard.fly.dev'
+    assert 'Origin' in (response.headers.get('Vary') or '')
+
+
+def test_cors_headers_disallowed_origin(client):
+    response = client.get(
+        '/api/registry',
+        headers={'Origin': 'https://evil.example'},
+    )
+    assert response.headers.get('Access-Control-Allow-Origin') is None
 
 
 def test_stats_route(client):

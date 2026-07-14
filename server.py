@@ -267,14 +267,25 @@ def _consensus_map():
     return {d["subnet_id"]: d for d in decisions if "subnet_id" in d}
 
 
+# audit #11: scoped CORS + valid X-Frame-Options (see docs/EXTREME_AUDIT.md #11)
+_ALLOWED_ORIGINS = frozenset(
+    o.strip()
+    for o in os.environ.get("ALLOWED_ORIGINS", "https://subnet-dashboard.fly.dev").split(",")
+    if o.strip()
+)
+
+
 @app.middleware("http")
 async def add_cors_headers(request: Request, call_next):
     """Allow dashboard embedding and cross-origin API access (parity with prior Flask behavior)."""
     response = await call_next(request)
-    response.headers["Access-Control-Allow-Origin"] = "*"
+    origin = request.headers.get("origin")
+    if origin and origin in _ALLOWED_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Vary"] = "Origin"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    response.headers["X-Frame-Options"] = "ALLOWALL"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
     if request.url.path in _CACHE_PATHS:
         response.headers["Cache-Control"] = "public, max-age=30"
     return response
