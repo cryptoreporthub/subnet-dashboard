@@ -69,6 +69,16 @@ def record_pick_prediction(
             netuid = subnet_info.get("netuid")
     if netuid is None:
         return None
+    try:
+        from internal.subnets.tradable import is_tradable_subnet
+
+        check = dict(subnet)
+        check.setdefault("netuid", netuid)
+        if not is_tradable_subnet(check):
+            return None
+    except Exception:
+        if int(netuid) <= 0:
+            return None
 
     ref_price = float(subnet.get("price", 0) or 0)
     if ref_price <= 0:
@@ -76,8 +86,17 @@ def record_pick_prediction(
 
     expert_contributions = pick.get("expert_contributions") or {}
     expert = _dominant_expert(expert_contributions)
-    predicted_pct = _predicted_pct_from_pick(pick, subnet)
+    existing_pred = pick.get("prediction") if isinstance(pick.get("prediction"), dict) else None
+    if existing_pred and existing_pred.get("predicted_pct") is not None:
+        predicted_pct = float(existing_pred["predicted_pct"])
+    else:
+        predicted_pct = _predicted_pct_from_pick(pick, subnet)
     horizon_hours = 1 if horizon_type == "hour" else 4
+    if existing_pred and existing_pred.get("horizon_hours") is not None and horizon_type != "hour":
+        try:
+            horizon_hours = int(existing_pred["horizon_hours"])
+        except (TypeError, ValueError):
+            pass
     now = datetime.now(timezone.utc)
 
     prediction = build_prediction_statement(
@@ -94,6 +113,15 @@ def record_pick_prediction(
     prediction["pick_source"] = "council"
     prediction["pick_score"] = pick.get("score")
     prediction["pick_confidence"] = pick.get("confidence", pick.get("final_confidence"))
+    try:
+        from internal.subnets.impact import impact_profile
+
+        impact = pick.get("impact") if isinstance(pick.get("impact"), dict) else None
+        prediction["market_impact"] = impact or impact_profile(subnet)
+        prediction["impact_tier"] = prediction["market_impact"].get("tier")
+        prediction["impact_strength"] = prediction["market_impact"].get("strength")
+    except Exception:
+        pass
 
     scenario_id = _link_scenario_memory(prediction, subnet, market_context)
     if scenario_id:

@@ -7,6 +7,8 @@ missing critical fields before a daily pick is promoted to the API.
 
 from typing import Any, Dict, List, Optional
 
+from internal.subnets.tradable import is_tradable_subnet, subnet_netuid, subnet_volume
+
 
 def audit_daily_pick(
     candidate: Dict[str, Any],
@@ -27,21 +29,32 @@ def audit_daily_pick(
     concerns: List[str] = []
     confidence_multiplier = 1.0
 
+    # Root (netuid 0) is TAO staking infrastructure — never a tradable pick.
+    if not is_tradable_subnet(candidate):
+        n = subnet_netuid(candidate)
+        label = "Root" if n == 0 else "missing/invalid netuid"
+        concerns.append(f"Not a tradable subnet: {label}")
+        confidence_multiplier = 0.0
+
     # Missing critical fields
     critical_fields = ("netuid", "name", "price", "volume")
     for field in critical_fields:
         value = candidate.get(field)
+        if field == "volume" and (value is None or value == ""):
+            # Chain merges expose buy/sell volume instead of unified volume.
+            if subnet_volume(candidate) > 0:
+                continue
         if value is None or value == "":
             concerns.append(f"Missing critical field: {field}")
             confidence_multiplier *= 0.5
 
-    # Liquidity check
-    volume = float(candidate.get("volume", 0) or 0)
-    if volume < 100_000:
-        concerns.append(f"Low liquidity: volume ${volume:,.0f} < $100k")
+    # Liquidity — alpha subnet turnover is typically $0.5k–$50k/day, not mega-cap USD.
+    volume = subnet_volume(candidate)
+    if volume < 500:
+        concerns.append(f"Low liquidity: volume ${volume:,.0f} < $500")
         confidence_multiplier *= 0.80
-    elif volume < 500_000:
-        concerns.append(f"Thin volume: ${volume:,.0f} < $500k")
+    elif volume < 5_000:
+        concerns.append(f"Thin volume: ${volume:,.0f} < $5k")
         confidence_multiplier *= 0.95
 
     # Extreme recent volatility
@@ -95,7 +108,9 @@ def audit_daily_pick(
 
     base_confidence = float(candidate.get("confidence", 0.5) or 0.5)
     adjusted = round(min(1.0, max(0.0, base_confidence * confidence_multiplier)), 4)
-    approved = len([c for c in concerns if c.startswith("Missing critical")]) == 0
+    missing_critical = any(c.startswith("Missing critical") for c in concerns)
+    not_tradable = any(c.startswith("Not a tradable") for c in concerns)
+    approved = not missing_critical and not not_tradable
 
     return {
         "approved": approved,

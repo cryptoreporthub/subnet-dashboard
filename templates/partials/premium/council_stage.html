@@ -41,13 +41,30 @@
           {% if dpick.regime %}<span class="council-call__regime">{{ dpick.regime|upper }} REGIME</span>{% endif %}
         </div>
         <p class="council-call__name">{{ sn.name|default('SN' ~ sn.netuid) }}</p>
-        <p class="council-call__meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %} · 24h council horizon</p>
+        {% set pred = audit_pick.prediction if audit_pick.prediction is mapping else none %}
+        {% set hz = pred.horizon_hours if pred and pred.horizon_hours is defined else 4 %}
+        <p class="council-call__meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %} · {{ hz }}h resolve horizon</p>
         <p class="council-call__prediction">
-          Predicted to move
-          <strong class="accent-bright">with {{ fc if fc is not none else '—' }}% confidence</strong>
-          over the next 24 hours
+          {% if pred and pred.statement %}
+            {{ pred.statement|capitalize }}
+            {% if fc is not none %} · <strong class="accent-bright">{{ fc }}% confidence</strong>{% endif %}
+          {% else %}
+            Council call
+            {% if fc is not none %} at <strong class="accent-bright">{{ fc }}% confidence</strong>{% endif %}
+            · resolve within {{ hz }} hours
+          {% endif %}
           {% if audit_pick.score is defined %} · score <b>{{ "%.1f"|format((audit_pick.score|default(0))|float) }}</b>{% endif %}
         </p>
+        {% set call_reasons = audit_pick.reasons if audit_pick.reasons is iterable and audit_pick.reasons is not string else [] %}
+        {% if call_reasons %}
+        <ul class="council-call__reasons">
+          {% for r in call_reasons[:3] %}<li>{{ r }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% set impact = audit_pick.impact if audit_pick.impact is mapping else none %}
+        {% if impact and impact.summary %}
+        <p class="council-call__impact">{{ impact.summary }}</p>
+        {% endif %}
         {% if fc is not none %}
         <div class="council-call__conviction">
           <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ fc }}%;"></div></div>

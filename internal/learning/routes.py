@@ -10,7 +10,7 @@ from fastapi import APIRouter, Query, Request
 
 from datastore.learning_engine import LearningEngine, create_feedback_router
 from internal.council import pick_history, resolver, rotation_tracker, scenario_memory
-from internal.council.weights import load_weights
+from internal.council.weights import load_impact_strength, load_weights
 from internal.council.resolver_scheduler import (
     get_prediction_resolver_scheduler,
     get_prediction_resolver_scheduler_state,
@@ -81,6 +81,13 @@ def _compute_learning_metrics() -> Dict[str, Any]:
         "wrong": resolved.get("stats", {}).get("wrong", 0),
         "accuracy": stats.get("accuracy", 0.0),
         "deltas": {"correct": _LEARNING_DELTA_CORRECT, "wrong": _LEARNING_DELTA_WRONG},
+        "impact_strength": {
+            "value": load_impact_strength(),
+            "range": [0.0, 2.0],
+            "default": 1.0,
+            "env_override": "IMPACT_STRENGTH",
+            "meaning": "0=no size tilt, 1=default, 2=aggressive small-cap bias; SimiVision nudges ±0.02 on resolve",
+        },
         "recent_resolutions": [
             {
                 "name": row.get("name"),

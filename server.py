@@ -337,15 +337,32 @@ def _cap_subnets_for_scoring(
     subnets: List[Dict[str, Any]],
     limit: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    """Limit council scoring to the highest-emission subnets (Fly single-worker safety)."""
+    """Limit council scoring to the most active subnets (Fly single-worker safety).
+
+    Prefer live market activity (volume, market_cap) when present; fall back to
+    emission so registry-only snapshots still produce a stable universe.
+    """
+    from internal.subnets.tradable import subnet_volume
+
     cap = limit if limit is not None else TOP_SCORING_UNIVERSE
     if not subnets or len(subnets) <= cap:
         return subnets
-    return sorted(
-        subnets,
-        key=lambda s: float(s.get("emission", 0) or 0),
-        reverse=True,
-    )[:cap]
+
+    def _rank_key(s: Dict[str, Any]):
+        vol = subnet_volume(s)
+        mcap = float(s.get("market_cap", 0) or 0)
+        emission = float(s.get("emission", 0) or 0)
+        mcr = s.get("marketcap_rank")
+        try:
+            # Lower marketcap_rank is better when present and positive.
+            rank_bonus = -int(mcr) if mcr not in (None, "", 0, "0") else 0
+        except (TypeError, ValueError):
+            rank_bonus = 0
+        if vol > 0 or mcap > 0:
+            return (1, vol, mcap, rank_bonus, emission)
+        return (0, 0.0, 0.0, 0, emission)
+
+    return sorted(subnets, key=_rank_key, reverse=True)[:cap]
 
 
 def _normalize_registry_subnet(sn: Dict[str, Any]) -> Dict[str, Any]:
@@ -879,18 +896,29 @@ _STATIC_SUBNETS = [
 
 
 def _get_subnets_with_source():
-    """Return (subnets, source) for picks, deduped by netuid; static fallback otherwise."""
+    """Return (subnets, source) for picks — tradable only (excludes Root)."""
+    from internal.subnets.tradable import tradable_subnets
+
     if _PICKS_ENGINE:
         try:
             subnets = get_all_subnets()
             if subnets:
-                deduped = {}
-                for s in subnets:
-                    deduped.setdefault(s.get("netuid"), s)
-                return list(deduped.values()), "taomarketcap"
+                tradable = tradable_subnets(subnets)
+                if tradable:
+                    # Honest label: registry-only snapshots used to claim "taomarketcap".
+                    priced = sum(
+                        1 for s in tradable[:20]
+                        if s.get("price") is not None and s.get("price") != ""
+                    )
+                    if priced >= max(1, min(10, len(tradable) // 2)):
+                        src = "taomarketcap" if any(s.get("market_live") or s.get("source") == "taomarketcap" for s in tradable[:20]) else "live"
+                    else:
+                        src = "registry-snapshot"
+                    return tradable, src
         except Exception as exc:
             logger.warning("Error fetching from taomarketcap: %s", exc)
-    return [dict(s) for s in _STATIC_SUBNETS], "static-fallback"
+    return tradable_subnets([dict(s) for s in _STATIC_SUBNETS]), "static-fallback"
+
 
 
 def _market_mood_proxy(subnets: List[Dict[str, Any]]) -> float:
@@ -990,25 +1018,40 @@ def _safe_simivision_payload(
     source: Optional[str] = None,
 ) -> Dict[str, Any]:
     """SimiVision panel: top-3 subnets by emission / APY / volume (distinct subnets)."""
+    from internal.council.state_vector import pick_reasons
+    from internal.subnets.apy import subnet_apy_percent
+    from internal.subnets.tradable import subnet_volume
+
     if subnets is None:
         subnets, source = _get_subnets_with_source()
     source = source or "unknown"
     ranked = sorted(
         subnets,
-        key=lambda s: (s.get("emission", 0), s.get("apy", 0), s.get("volume", 0)),
+        key=lambda s: (
+            subnet_volume(s),
+            float(s.get("market_cap", 0) or 0),
+            float(s.get("emission", 0) or 0),
+            float(subnet_apy_percent(s) or s.get("apy") or 0),
+        ),
         reverse=True,
     )
     top = []
     for idx, sn in enumerate(ranked[:3], start=1):
+        apy_val = subnet_apy_percent(sn)
+        if apy_val is None:
+            apy_val = float(sn.get("apy", 0) or 0)
+        chg = float(sn.get("price_change_24h", 0) or 0)
         top.append({
             "rank": idx,
             "netuid": sn.get("netuid"),
             "name": sn.get("name"),
             "emission": sn.get("emission", 0),
-            "apy": sn.get("apy", 0),
-            "price_change_24h": sn.get("price_change_24h", 0),
-            "conviction": min(95, 72 + int(abs(sn.get("price_change_24h", 0))) + int(sn.get("apy", 0) / 4)),
+            "apy": apy_val,
+            "price_change_24h": chg,
+            "volume": subnet_volume(sn),
+            "conviction": min(95, 72 + int(abs(chg)) + int(float(apy_val or 0) / 4)),
             "recommendation": "BUY" if idx == 1 else ("HOLD" if idx == 2 else "WATCH"),
+            "reasons": pick_reasons(sn),
         })
     return {
         "status": "success",

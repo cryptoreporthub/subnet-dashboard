@@ -71,12 +71,16 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 ## Ready for next work
 **Homepage:** council-first (#198) — decision stage + demoted market drawer. Dual cockpit grid removed.
 
+**In flight:** PR #201 — Root exclusion, TMC market overlay, call reasons, **impact-aware scoring** (large caps dampened by vol/mcap / 50 TAO float-share; no top-30 hard filter).
+
 **Automated queue:** COMPLETE — B6 #185 · C4 #186 · C5 #187 · C6 #189 · C1 #190 · C2 #191 · C3 #192 · board #193. **A2:** `smoke` required check verified on `main`.
 
-Recent merges on `main` @ `7595d60` (CI green):
+Recent merges on `main` @ `e7c805c` (council call substance #200):
 
 | PR | Phase | Summary |
 |----|-------|---------|
+| **#200** | Council | HOLD + display-only candidate under 45% gate |
+| **#198** | UI | Council-first overhaul |
 | **#195** | **G7+G12** | Rajdhani titles, favicon, fonts |
 | **#192** | **C3** | CSS/mobile/a11y |
 | **#191** | **C2** | SSE cockpit stream |

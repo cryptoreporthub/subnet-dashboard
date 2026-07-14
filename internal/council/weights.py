@@ -26,6 +26,12 @@ _LEARNING_DELTA_WRONG = -0.03
 _LEARNING_MIN_WEIGHT = 0.1
 _LEARNING_MAX_WEIGHT = 2.0
 
+# Market-impact tilt: 0 = ignore size, 1 = default, 2 = aggressive small-cap bias.
+DEFAULT_IMPACT_STRENGTH = 1.0
+_IMPACT_STRENGTH_MIN = 0.0
+_IMPACT_STRENGTH_MAX = 2.0
+_IMPACT_STRENGTH_DELTA = 0.02
+
 # Per-signal, per-horizon default weights
 DEFAULT_SIGNAL_WEIGHTS: Dict[str, Dict[str, float]] = {
     "hour": {
@@ -243,6 +249,70 @@ def nudge_signal_weight(
     new_val = max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, current + delta))
     horizon_weights[signal_name] = round(new_val, 4)
     save_signal_weights(signal_weights, path)
+
+
+def load_impact_strength(path: Optional[str] = None) -> float:
+    """Learned impact tilt from soul_map (default 1.0). Env IMPACT_STRENGTH overrides."""
+    path = path or SOUL_MAP_PATH
+    env = os.environ.get("IMPACT_STRENGTH")
+    if env is not None and str(env).strip() != "":
+        try:
+            return max(_IMPACT_STRENGTH_MIN, min(_IMPACT_STRENGTH_MAX, float(env)))
+        except (TypeError, ValueError):
+            pass
+    data = _load_raw(path)
+    adv = data.get("adversarial_state")
+    if isinstance(adv, dict) and adv.get("impact_strength") is not None:
+        try:
+            return max(
+                _IMPACT_STRENGTH_MIN,
+                min(_IMPACT_STRENGTH_MAX, float(adv["impact_strength"])),
+            )
+        except (TypeError, ValueError):
+            pass
+    return DEFAULT_IMPACT_STRENGTH
+
+
+def save_impact_strength(strength: float, path: Optional[str] = None) -> float:
+    """Persist impact_strength under adversarial_state for SimiVision learning."""
+    path = path or SOUL_MAP_PATH
+    clamped = max(_IMPACT_STRENGTH_MIN, min(_IMPACT_STRENGTH_MAX, float(strength)))
+    data = _load_raw(path)
+    adv = data.setdefault("adversarial_state", {})
+    if not isinstance(adv, dict):
+        adv = {}
+        data["adversarial_state"] = adv
+    adv["impact_strength"] = round(clamped, 4)
+    adv["last_impact_strength_update"] = _now_iso()
+    _save_raw(data, path)
+    return clamped
+
+
+def nudge_impact_strength(
+    correct: bool,
+    tier: Optional[str] = None,
+    path: Optional[str] = None,
+) -> float:
+    """Nudge impact strength after a resolved pick.
+
+    Small/mid correct → strengthen tilt (thin names deserved the edge).
+    Small/mid wrong → weaken (over-correction toward micros).
+    Large correct → weaken (large caps still work; tilt was too harsh).
+    Large wrong → strengthen (should have dampened large caps more).
+
+    No-op when IMPACT_STRENGTH env override is set (manual dial locked).
+    """
+    path = path or SOUL_MAP_PATH
+    if os.environ.get("IMPACT_STRENGTH", "").strip() != "":
+        return load_impact_strength(path)
+    tier_l = str(tier or "").lower()
+    current = load_impact_strength(path)
+    if tier_l == "large":
+        delta = -_IMPACT_STRENGTH_DELTA if correct else _IMPACT_STRENGTH_DELTA
+    else:
+        # small / mid / unknown
+        delta = _IMPACT_STRENGTH_DELTA if correct else -_IMPACT_STRENGTH_DELTA
+    return save_impact_strength(current + delta, path)
 
 
 def compute_weighted_signal_score(

@@ -88,6 +88,24 @@ def test_daily_pick_hold_exposes_candidate_not_published(client):
     assert "subnet" in cand
 
 
+def test_daily_pick_never_publishes_root(client):
+    """Root (netuid 0) must never appear as pick or candidate."""
+    data = client.get("/api/daily-pick").json()
+    assert data["status"] == "ok"
+    for key in ("pick", "candidate"):
+        block = data.get(key)
+        if not isinstance(block, dict):
+            continue
+        sn = block.get("subnet") or {}
+        assert sn.get("netuid") not in (0, "0")
+        assert str(sn.get("name") or "").lower() != "root"
+    if data.get("pick") and isinstance(data["pick"], dict):
+        pred = data["pick"].get("prediction")
+        assert isinstance(pred, dict)
+        assert "statement" in pred
+        assert pred.get("horizon_hours", 0) <= 4
+
+
 def test_daily_pick_is_deterministic_and_cached(client):
     r1 = client.get("/api/daily-pick").json()
     r2 = client.get("/api/daily-pick").json()

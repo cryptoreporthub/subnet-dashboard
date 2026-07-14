@@ -849,13 +849,24 @@ def _compute_signal_impact(sn: Dict[str, Any], indicators: Dict[str, Any], hot: 
         _add("market_breadth", "bullish" if chg >= 0 else "bearish", 0.6, 24, 50, "Market breadth filler")
 
     net = sum(i.get("magnitude_pct", 0) * (1 if i.get("direction") == "bullish" else -1) for i in impacts)
+    # Same absolute signals move thin names more than large caps (Chutes vs micro).
+    try:
+        from internal.subnets.impact import impact_profile, scale_move_by_impact
+
+        net_adj = scale_move_by_impact(net, sn)
+        impact_meta = impact_profile(sn)
+    except Exception:
+        net_adj = net
+        impact_meta = {}
     return {
         "impacts": impacts[:12],
-        "net_predicted_pct": round(net, 2),
-        "net_direction": "bullish" if net > 0 else "bearish" if net < 0 else "neutral",
+        "net_predicted_pct": round(net_adj, 2),
+        "net_predicted_pct_raw": round(net, 2),
+        "net_direction": "bullish" if net_adj > 0 else "bearish" if net_adj < 0 else "neutral",
         "hot_active": bool(hot.get("active")),
         "sell_active": bool(sell.get("active")),
         "dominant": "SELL ALERT" if sell.get("active") else ("HOT" if hot.get("active") else None),
+        "market_impact": impact_meta,
     }
 
 
@@ -1189,10 +1200,20 @@ def _expert_contributions(
     sell: Dict[str, Any],
 ) -> Dict[str, float]:
     """Return deterministic 0-1 scores for the four council experts."""
+    from internal.subnets.apy import subnet_apy_percent
+    from internal.subnets.impact import impact_scale_factor, relative_flow
+    from internal.subnets.tradable import subnet_volume
+
     emission = float(sn.get("emission", 0) or 0)
-    apy = float(sn.get("apy", 0) or 0)
-    volume = float(sn.get("volume", 0) or 0)
-    market_cap = float(sn.get("market_cap", 0) or 0)
+    apy_pct = subnet_apy_percent(sn)
+    if apy_pct is None:
+        try:
+            apy_pct = float(sn.get("apy", 0) or 0)
+        except (TypeError, ValueError):
+            apy_pct = 0.0
+    apy = float(apy_pct or 0)
+    volume = subnet_volume(sn)
+    flow = relative_flow(sn)
     mentions = int(sn.get("social_mentions", 0) or 0)
     chg24 = float(sn.get("price_change_24h", 0) or 0)
     chg7 = float(sn.get("price_change_7d", 0) or 0)
@@ -1201,23 +1222,30 @@ def _expert_contributions(
     macd = indicators.get("macd", {}) if isinstance(indicators.get("macd"), dict) else {}
     ma = indicators.get("ma_cross", {}) if isinstance(indicators.get("ma_cross"), dict) else {}
 
-    # Quant: emission stability + yield + liquidity
+    # Quant: yield + relative turnover (vol/mcap), not absolute mega-cap size.
+    # Large-cap absolute volume is easy; impactful flow is vol as a share of float.
     quant = 0.45
     quant += min(0.25, emission * 0.08)
     quant += min(0.20, apy * 0.006)
-    quant += 0.10 if volume > 500_000 else 0.0
-    quant += 0.10 if market_cap > 10_000_000 else 0.0
+    quant += min(0.18, flow * 2.5)  # high turnover vs size
+    if volume > 500:
+        quant += 0.04  # some absolute activity still matters for fills
     quant = min(1.0, max(0.0, quant))
 
-    # Hype: social volume + short-term momentum
+    # Hype: social + momentum, amplified when the name is impact-sensitive (thin).
+    try:
+        hype_sens = impact_scale_factor(sn)
+    except Exception:
+        hype_sens = 1.0
     hype = 0.45
     hype += min(0.30, mentions / 5_000.0)
-    hype += min(0.15, chg24 / 20.0)
-    hype += min(0.10, chg7 / 30.0)
+    mom = min(0.20, abs(chg24) / 20.0 + abs(chg7) / 60.0)
+    hype += mom * min(1.5, 0.5 + 0.5 * hype_sens)  # large-cap momentum counts less
     hype = min(1.0, max(0.0, hype))
 
-    # Dark Horse: uncorrelated on-chain flow signals
+    # Dark Horse: uncorrelated on-chain flow — prefer impact-sensitive names
     dark_horse = _compute_dark_horse_score(sn)
+    dark_horse = min(1.0, max(0.0, dark_horse * (0.75 + 0.25 * min(hype_sens, 2.0))))
 
     # Technical: indicator consensus
     technical = 0.50
@@ -1411,7 +1439,14 @@ def score_subnet_for_hour(
 
     weighted = sum(experts[k] * hour_weights[k] for k in experts)
     chg24 = float(sn.get("price_change_24h", 0) or 0)
-    momentum_boost = max(-0.10, min(0.10, chg24 / 100.0))
+    # Short-horizon: impact-weighted momentum (thin names move more per TAO).
+    try:
+        from internal.subnets.impact import impact_scale_factor
+
+        mom_scale = min(1.5, 0.55 + 0.45 * impact_scale_factor(sn))
+    except Exception:
+        mom_scale = 1.0
+    momentum_boost = max(-0.10, min(0.10, (chg24 / 100.0) * mom_scale))
     total = round((weighted + momentum_boost) * 100, 2)
     total = min(100.0, max(0.0, total))
 
@@ -1434,6 +1469,7 @@ def score_subnet_for_hour(
         "horizon": "hour",
         "horizon_type": "hour",
         "weights_used": hour_weights,
+        "signal_impact": signal_impact,
     }
 
 
@@ -1475,13 +1511,25 @@ def score_subnet_for_day(
 
     weighted = sum(experts[k] * day_weights[k] for k in experts)
     from internal.subnets.apy import undervalued_score
+    from internal.subnets.impact import impact_sensitivity, relative_flow
 
     value_gap = undervalued_score(sn)
     if value_gap is None:
         value_gap = 0.0
     # Reward yield ahead of 24h price (lagging price = undervalued), not 7d/30d momentum.
     value_boost = max(-0.10, min(0.10, value_gap / 100.0))
-    total = round((weighted + value_boost) * 100, 2)
+    # Day lens: relative flow favors names where capital actually moves the float.
+    # ``impact_strength`` dial scales how hard we tilt (0=flat, 1=default, 2=aggressive).
+    try:
+        from internal.council.weights import load_impact_strength
+
+        strength = float(load_impact_strength())
+    except Exception:
+        strength = 1.0
+    flow_boost = max(-0.05, min(0.08, relative_flow(sn) * 0.15)) * strength
+    # Large caps stay eligible but score dampens vs mid/small for the same signals.
+    size_tilt = max(-0.06, min(0.06, (impact_sensitivity(sn) - 1.0) * 0.04)) * strength
+    total = round((weighted + value_boost + flow_boost + size_tilt) * 100, 2)
     total = min(100.0, max(0.0, total))
 
     confidence = _compute_confidence(sn, indicators, experts)
@@ -1503,6 +1551,7 @@ def score_subnet_for_day(
         "horizon": "day",
         "horizon_type": "day",
         "weights_used": day_weights,
+        "signal_impact": signal_impact,
     }
 
 
@@ -1529,15 +1578,19 @@ def format_top_pick(state_vector: Dict[str, Any], rank: int) -> Dict[str, Any]:
 
 
 def _compute_simivision_reasons(sn: Dict[str, Any], indicators: Dict[str, Any], hot: Dict[str, Any]) -> List[str]:
-    """Generate a short list of reasons for a SimiVision pick."""
+    """Generate a short list of reasons for a SimiVision / council pick."""
+    from internal.subnets.apy import subnet_apy_percent
+
     reasons: List[str] = []
     emission = float(sn.get("emission", 0) or 0)
-    apy = float(sn.get("apy", 0) or 0)
+    apy_pct = subnet_apy_percent(sn)
+    if apy_pct is None:
+        apy_pct = float(sn.get("apy", 0) or 0)
     chg = float(sn.get("price_change_24h", 0) or 0)
     if emission > 3:
         reasons.append(f"Strong emission {emission:.2f} TAO/day")
-    if apy > 30:
-        reasons.append(f"High yield {apy:.1f}% APY")
+    if apy_pct and apy_pct > 30:
+        reasons.append(f"High yield {apy_pct:.1f}% APY")
     rsi = indicators.get("rsi", {})
     if isinstance(rsi, dict) and rsi.get("signal") == "oversold":
         reasons.append("RSI oversold — reversal setup")
@@ -1546,8 +1599,30 @@ def _compute_simivision_reasons(sn: Dict[str, Any], indicators: Dict[str, Any], 
         reasons.append("MACD bullish crossover")
     if chg > 5:
         reasons.append(f"Bullish 24h momentum +{chg:.1f}%")
+    elif chg < -5:
+        reasons.append(f"24h pullback {chg:.1f}% — mean-reversion watch")
     if hot.get("active"):
-        reasons.append("HOT signal triggered")
+        hot_reasons = hot.get("reasons") or []
+        if hot_reasons:
+            reasons.append(str(hot_reasons[0]))
+        else:
+            reasons.append("HOT signal triggered")
+    try:
+        from internal.subnets.impact import impact_reason
+
+        ir = impact_reason(sn)
+        if ir:
+            reasons = [ir] + [r for r in reasons if r != ir]
+    except Exception:
+        pass
     if not reasons:
         reasons.append("Balanced metrics — accumulation phase")
     return reasons[:3]
+
+
+def pick_reasons(sn: Dict[str, Any]) -> List[str]:
+    """Public helper: compute display reasons for a subnet row."""
+    indicators = _compute_technical_indicators(sn or {})
+    convergence = _detect_oversold_convergence(indicators)
+    hot = _compute_hot_signals(sn or {}, indicators, convergence)
+    return _compute_simivision_reasons(sn or {}, indicators, hot)

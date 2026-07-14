@@ -86,7 +86,7 @@ def test_audit_daily_pick_approves_healthy_candidate():
 
 
 def test_audit_daily_pick_flags_low_volume():
-    candidate = _sample_subnet(volume=50_000)
+    candidate = _sample_subnet(volume=100)
     audit = audit_daily_pick(candidate, [candidate])
     assert any("Low liquidity" in c for c in audit["concerns"])
 
@@ -103,6 +103,13 @@ def test_audit_daily_pick_rejects_missing_fields():
     audit = audit_daily_pick(candidate, [candidate])
     assert audit["approved"] is False
     assert any("Missing critical field: price" in c for c in audit["concerns"])
+
+
+def test_audit_daily_pick_rejects_root():
+    candidate = _sample_subnet(netuid=0, name="Root")
+    audit = audit_daily_pick(candidate, [candidate])
+    assert audit["approved"] is False
+    assert audit["adjusted_confidence"] == 0.0
 
 
 def test_select_daily_pick_returns_payload():
