@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T05:03:00Z by Agent (`-6f98`) — **automated plan locked**; B6 next Build  
-**main:** `b3bf9d2`
+**Last updated:** 2026-07-14T05:40:00Z by Agent (`-5e45`) — **C4 merged #186**; C5 in progress  
+**main:** `baaec1e`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -44,7 +44,7 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 | **B2** httpx + tenacity + aiocache | Cursor | ✅ **merged** | #179 — audit #4 |
 | **B4** prometheusrock metrics | Cursor | ✅ **merged** | #181 — audit #13 |
 | **B5** APY reconcile + candle gate | Cursor | ✅ **merged** | #182 |
-| **B6** slowapi rate-limit | Cursor | ⏳ **next Build** | see `automated-build-plan.md` |
+| **B6** slowapi rate-limit | Cursor | ✅ **merged** | #185 |
 
 ## Active — Phase 4 (hydration scripts)
 
@@ -53,8 +53,8 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 | **Phase 1–2** | B | ✅ **merged** | #154 · #155 · #157 |
 | **G3+G4** | B | ✅ **merged** | #159 |
 | **G9–G11** | B | ✅ **merged** | #161 — Grok sign-off PASS |
-| **C4** hydration binders | B | backlog | `base.html` + chart paint |
-| **C5** APY/confidence fix | B | backlog | after C4 |
+| **C4** hydration binders | Cursor | ✅ **merged** | #186 |
+| **C5** APY/confidence fix | Cursor | 🔄 **in progress** | `-5e45` |
 | **C6** conviction tiers | B | backlog | after C5 |
 | C3 htmx | Composer | backlog | Phase 6 |
 
