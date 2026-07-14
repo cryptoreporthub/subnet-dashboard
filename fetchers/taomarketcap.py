@@ -1,3 +1,8 @@
+Title: 
+
+URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/fetchers/taomarketcap.py
+
+Markdown Content:
 """
 Live data fetcher for taomarketcap.com public API v1.
 Fetches all subnets from /public/v1/subnets/table/, caches in SQLite for 5 min.
@@ -168,8 +173,7 @@ def fetch_all_subnets_from_api() -> Optional[List[Dict]]:
     return None
 
 def get_all_subnets() -> List[Dict]:
-    """Return all subnets (cached, 5 min TTL). Falls back to stale cache or static data."""
-    init_db()
+    """Return all subnets.\n\n    Phase B1: prefer the live on-chain feed (internal.live_subnets), which merges\n    Bittensor chain data over the committed registry. Falls back to the original\n    TaoMarketCap scrape if the live feed is unavailable. See docs/EXTREME_AUDIT.md #1.\n    """\n    try:\n        from internal.live_subnets import get_live_subnets\n        live = get_live_subnets()\n        if live:\n            return live\n    except Exception as exc:  # pragma: no cover - defensive\n        logger.warning("Live subnet feed unavailable, using TaoMarketCap: %s", exc)\n    return _get_all_subnets_tao()\n\n\ndef _get_all_subnets_tao() -> List[Dict]:\n    """Original TaoMarketCap implementation (cache + fallback)."""    init_db()
     cached = get_cached("all_subnets")
     if cached:
         return cached.get("subnets", [])
