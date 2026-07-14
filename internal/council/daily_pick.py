@@ -52,16 +52,22 @@ def _attach_prediction(
     final_confidence: float,
 ) -> Dict[str, Any]:
     """Display/learning prediction for a published or candidate pick."""
+    from internal.council.state_vector import _expert_from_signal_source
+
     ref = float(candidate.get("price", 0) or 0)
     predicted_pct = _predicted_pct(score_payload, candidate, final_confidence)
     contrib = score_payload.get("expert_contributions") if isinstance(score_payload, dict) else None
+    si = score_payload.get("signal_impact") if isinstance(score_payload, dict) else None
+    source = "council_day_pick"
+    if isinstance(si, dict):
+        source = si.get("dominant") or si.get("net_direction") or source
     return build_prediction_statement(
         sn=candidate,
         predicted_pct=predicted_pct,
         horizon=4,
         ref_price=ref,
-        signal_source="council_day_pick",
-        expert="quant",
+        signal_source=str(source),
+        expert=_expert_from_signal_source(str(source)),
         now=datetime.now(timezone.utc).replace(tzinfo=None),
         signal_contributions=contrib if isinstance(contrib, dict) else None,
         horizon_type="day",
@@ -118,7 +124,7 @@ def select_daily_pick(
     audit = audit_daily_pick(audit_candidate, subnets)
     final_confidence = audit["adjusted_confidence"]
     prediction = _attach_prediction(candidate, score_payload, final_confidence)
-    reasons = pick_reasons(candidate)
+    reasons = pick_reasons(candidate, score_payload.get("signal_impact"))
     try:
         from internal.subnets.impact import impact_profile
 
