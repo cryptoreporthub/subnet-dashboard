@@ -41,7 +41,8 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 |------|-------|--------|-------|
 | **B1** bittensor feed + `/api/data-freshness` | Cursor | ✅ **merged** | #174 feed + UI badge |
 | **B1 UI** freshness badge | Cursor | ✅ **merged** | #177 |
-| **B2** httpx + tenacity + aiocache | Cursor | 🟡 **in PR** | audit #4 — async routes + http_client |
+| **B2** httpx + tenacity + aiocache | Cursor | ✅ **merged** | #179 — audit #4 |
+| **B3–B6** scheduler/sentry/prometheus/rate-limit | Cursor | backlog | next: B3 |
 
 ## Active — Phase 4 (hydration scripts)
 
