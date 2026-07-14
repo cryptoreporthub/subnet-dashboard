@@ -42,10 +42,17 @@ def _predicted_pct_from_pick(pick: Dict[str, Any], subnet: Dict[str, Any]) -> fl
     change_24h = float(subnet.get("price_change_24h", 0) or 0)
     base = max(0.5, confidence * 5.0)
     if change_24h < -2:
-        return -base
-    if change_24h > 2:
-        return base
-    return base if pick.get("action", "long") != "short" else -base
+        pct = -base
+    elif change_24h > 2:
+        pct = base
+    else:
+        pct = base if pick.get("action", "long") != "short" else -base
+    try:
+        from internal.subnets.impact import scale_move_by_impact
+
+        return scale_move_by_impact(pct, subnet)
+    except Exception:
+        return pct
 
 
 def record_pick_prediction(
@@ -114,12 +121,19 @@ def record_pick_prediction(
     prediction["pick_score"] = pick.get("score")
     prediction["pick_confidence"] = pick.get("confidence", pick.get("final_confidence"))
     try:
+        from internal.council.weights import load_impact_strength
         from internal.subnets.impact import impact_profile
 
         impact = pick.get("impact") if isinstance(pick.get("impact"), dict) else None
         prediction["market_impact"] = impact or impact_profile(subnet)
         prediction["impact_tier"] = prediction["market_impact"].get("tier")
-        prediction["impact_strength"] = prediction["market_impact"].get("strength")
+        strength = float(
+            prediction["market_impact"].get("strength")
+            if prediction["market_impact"].get("strength") is not None
+            else load_impact_strength()
+        )
+        prediction["impact_strength"] = strength
+        prediction["impact_strength_at_creation"] = strength
     except Exception:
         pass
 
@@ -132,6 +146,11 @@ def record_pick_prediction(
 
     expert_weights = load_weights()
     prediction["weights_at_creation"] = dict(expert_weights)
+    prediction["learning_state_at_creation"] = {
+        "council_weights": dict(expert_weights),
+        "impact_strength": prediction.get("impact_strength_at_creation"),
+        "impact_tier": prediction.get("impact_tier"),
+    }
     try:
         from internal.council.prediction_trace import record_prediction_created
 
@@ -167,14 +186,22 @@ def record_pick_prediction(
             netuid=prediction.get("netuid"),
             conviction=float(conf) * 100 if conf and float(conf) <= 1 else conf,
             horizon_type=horizon_type,
-            evidence={"pick_score": pick.get("score"), "expert": expert},
+            evidence={
+                "pick_score": pick.get("score"),
+                "expert": expert,
+                "impact_tier": prediction.get("impact_tier"),
+                "impact_strength": prediction.get("impact_strength_at_creation"),
+            },
         )
         emit_signal_triggered(
             subnet=prediction.get("name"),
             netuid=prediction.get("netuid"),
             signal_name=f"council_{horizon_type}_pick",
             direction=prediction.get("direction"),
-            evidence={"prediction_id": prediction.get("id")},
+            evidence={
+                "prediction_id": prediction.get("id"),
+                "impact_tier": prediction.get("impact_tier"),
+            },
         )
     except Exception as exc:
         logger.warning("Pick trail emission failed: %s", exc)
@@ -202,6 +229,11 @@ def _link_scenario_memory(
                 "predicted_pct": prediction.get("predicted_pct"),
                 "horizon_type": prediction.get("horizon_type"),
                 "expert": prediction.get("expert"),
+                "impact_tier": prediction.get("impact_tier"),
+                "impact_strength": prediction.get("impact_strength_at_creation"),
+                "relative_flow": (prediction.get("market_impact") or {}).get("relative_flow")
+                if isinstance(prediction.get("market_impact"), dict)
+                else None,
             },
             outcome=None,
         )

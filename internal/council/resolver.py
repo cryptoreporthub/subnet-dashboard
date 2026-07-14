@@ -297,6 +297,9 @@ def _record_scenario_outcome(
             "outcome": outcome,
             "expert": expert or "unknown",
             "volatility": abs(actual_pct),
+            "impact_tier": prediction.get("impact_tier"),
+            "impact_strength_at_creation": prediction.get("impact_strength_at_creation"),
+            "impact_strength_after": prediction.get("impact_strength_after"),
         }
         rsi_signal = prediction.get("_rsi_signal")
         volume_signal = prediction.get("_volume_signal")
@@ -354,6 +357,13 @@ def atomic_finalize_resolution(
     except Exception:
         pass
 
+    try:
+        from internal.learning.trail_events import emit_prediction_resolved
+
+        emit_prediction_resolved(prediction, prediction.get("expert"))
+    except Exception:
+        pass
+
     return prediction
 
 
@@ -374,6 +384,8 @@ def resolve_prediction(
         if expert:
             prediction["expert"] = expert
             _nudge_weights(bool(correct), expert)
+        # Impact dial before finalize so prediction_resolved trail includes after value.
+        _nudge_impact_strength(prediction, bool(correct))
         atomic_finalize_resolution(
             prediction,
             actual_pct=actual_pct,
@@ -384,7 +396,6 @@ def resolve_prediction(
         )
         _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
         _nudge_signal_weights(prediction, bool(correct))
-        _nudge_impact_strength(prediction, bool(correct))
         return prediction
     return resolve_prediction_at_horizon(prediction, now=now)
 
@@ -451,6 +462,8 @@ def resolve_prediction_at_horizon(
         prediction["expert"] = expert
         _nudge_weights(bool(correct), expert)
 
+    # Impact dial before finalize so prediction_resolved trail includes after value.
+    _nudge_impact_strength(prediction, bool(correct))
     atomic_finalize_resolution(
         prediction,
         actual_pct=actual_pct,
@@ -462,7 +475,6 @@ def resolve_prediction_at_horizon(
     )
     _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
     _nudge_signal_weights(prediction, bool(correct))
-    _nudge_impact_strength(prediction, bool(correct))
     return prediction
 
 
@@ -471,13 +483,26 @@ def _nudge_impact_strength(prediction: Dict[str, Any], correct: bool) -> None:
     if _in_replay_mode():
         return
     try:
+        from internal.council.weights import load_impact_strength
+        from internal.learning.trail_bus import emit_impact_strength_change
+
         impact = prediction.get("market_impact") or prediction.get("impact") or {}
         tier = None
         if isinstance(impact, dict):
             tier = impact.get("tier")
         if not tier:
             tier = prediction.get("impact_tier")
-        nudge_impact_strength(bool(correct), tier=tier)
+        before = float(load_impact_strength())
+        after = float(nudge_impact_strength(bool(correct), tier=tier))
+        prediction["impact_strength_after"] = after
+        if abs(after - before) >= 1e-9:
+            emit_impact_strength_change(
+                before=before,
+                after=after,
+                correct=bool(correct),
+                tier=str(tier) if tier else None,
+                prediction_id=str(prediction.get("id") or "") or None,
+            )
     except Exception:
         pass
 

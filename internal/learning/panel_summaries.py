@@ -11,7 +11,7 @@ def _sentences(parts: List[str]) -> Dict[str, Any]:
 
 
 def summarize_council() -> Dict[str, Any]:
-    from internal.council.weights import _load_raw, load_weights
+    from internal.council.weights import _load_raw, load_impact_strength, load_weights
 
     weights = load_weights()
     if not weights:
@@ -20,6 +20,7 @@ def summarize_council() -> Dict[str, Any]:
     leader = max(weights.items(), key=lambda kv: float(kv[1] or 0))
     leader_name, leader_w = leader[0], float(leader[1])
     sorted_experts = sorted(weights.items(), key=lambda kv: float(kv[1] or 0), reverse=True)
+    impact_strength = load_impact_strength()
 
     data = _load_raw()
     sms = data.get("soul_map_state") or {}
@@ -33,6 +34,8 @@ def summarize_council() -> Dict[str, Any]:
         "Expert influence ranks as "
         + ", ".join(f"{name} ({float(w):.2f})" for name, w in sorted_experts[:4])
         + ".",
+        f"Impact strength dial is {impact_strength:.2f} — large caps stay eligible but relative float-share "
+        f"tilts day/hour picks toward movable names.",
     ]
     if decisions:
         parts.append(
@@ -70,10 +73,11 @@ def summarize_judges() -> Dict[str, Any]:
 
 def summarize_learning() -> Dict[str, Any]:
     from internal.council import resolver
-    from internal.council.weights import load_weights
+    from internal.council.weights import load_impact_strength, load_weights
     from internal.learning.predictions_store import load_predictions, update_stats
 
     weights = load_weights()
+    impact_strength = load_impact_strength()
     resolved = resolver.get_resolved_predictions()
     stats = resolved.get("stats") or {}
     correct = int(stats.get("correct", 0) or 0)
@@ -92,6 +96,8 @@ def summarize_learning() -> Dict[str, Any]:
         f"({accuracy * 100:.1f}% accuracy) with {pending} still pending.",
         f"Correct calls nudge expert weights +0.02 and misses nudge −0.03; {top_expert.replace('_', ' ').title()} "
         f"currently carries the strongest learned weight at {float(weights.get(top_expert, 1.0)):.2f}.",
+        f"Market-impact dial (impact_strength) sits at {impact_strength:.2f} "
+        f"(0=flat, 1=default, 2=aggressive small-cap tilt) and nudges ±0.02 when picks resolve.",
         "The resolver scheduler grades due picks against live prices so outcomes feed back into the next Council score.",
     ]
     if pending == 0:

@@ -1068,6 +1068,12 @@ def _safe_simivision_payload(
 
 def _build_hour_pick_payload(sn: Dict[str, Any], score: Dict[str, Any]) -> Dict[str, Any]:
     """Format a subnet + hour state-vector into the public hour-pick shape."""
+    try:
+        from internal.subnets.impact import impact_profile
+
+        impact = impact_profile(sn)
+    except Exception:
+        impact = None
     return {
         "subnet": {"netuid": sn.get("netuid"), "name": sn.get("name"), "symbol": sn.get("symbol")},
         "score": score["total_score"],
@@ -1082,13 +1088,14 @@ def _build_hour_pick_payload(sn: Dict[str, Any], score: Dict[str, Any]) -> Dict[
             "volume": sn.get("volume"),
         },
         "action": "long",
+        "impact": impact,
     }
 
 
 def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[str, Any]]:
     """Canonical ordered hourly picks: RedTeam-audited #1 (select_hourly_pick),
     then distinct fill by raw hour score. Excludes the #1 netuid so no subnet
-    repeats. (Scenario/history recording deferred to their own slices.)"""
+    repeats. #1 is recorded into the learning loop (pick → prediction)."""
     picks: List[Dict[str, Any]] = []
     if not subnets:
         return picks
@@ -1114,6 +1121,15 @@ def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[st
                 "apy": src.get("apy"),
                 "volume": src.get("volume"),
             }
+        if not audited.get("impact"):
+            try:
+                from internal.subnets.impact import impact_profile
+
+                src = next((s for s in subnets if s.get("netuid") == top_netuid), {})
+                if src:
+                    audited["impact"] = impact_profile(src)
+            except Exception:
+                pass
 
     def _unify(payload, sn):
         subnet = payload.get("subnet") if isinstance(payload.get("subnet"), dict) else {}
@@ -1129,6 +1145,8 @@ def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[st
 
     src = next((s for s in subnets if s.get("netuid") == top_netuid), {})
     picks.append(_unify(audited, src))
+    # Close the learning loop for the audited #1 hour pick.
+    _record_pick_in_learning_loop(audited, subnets, market_context, "hour")
 
     if _PICKS_ENGINE:
         scored = []
