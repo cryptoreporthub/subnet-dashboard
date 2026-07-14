@@ -1,11 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-14T16:00:00Z · Agent `-42f7`  
-**main:** `e7c805c` (in flight → `cursor/all-tracks-42f7`)
+**Updated:** 2026-07-14T16:40:00Z · Agent `-6f98`  
+**main:** `78ffd0b`
 
 ## One-line
 
-**Automated EXTREME audit queue COMPLETE. In flight: all-tracks (#201 substance + Phase 0 perf + council polish).**
+**Council picks lane complete (#201 + #202). Ditto = monitor only unless new work is queued.**
 
 ## Done (do not re-queue)
 
@@ -17,19 +17,15 @@
 | G7 + G12 | #195 |
 | Council-first UI | #198 |
 | HOLD + candidate substance | #200 |
+| Root/market overlay + impact dial | **#201** |
+| Score cache + perf + nav/tour polish | **#202** |
 | A2 `smoke` on `main` | verified |
-| Phase K, J–O | on `main` (historical) |
-
-## In flight
-
-| Slice | Branch | Notes |
-|-------|--------|-------|
-| All tracks (#201 + Phase 0 + polish) | `cursor/all-tracks-42f7` | Root/market overlay, score cache, judges dedupe, nav/skeletons/tour |
+| Phase K, J–O | historical |
 
 ## Ditto
 
 - **Do:** read `board.md`, watch CI/Fly health
-- **Do not:** assign implementation, cite July 14 morning handoff queue as open, use GitHub Contents API writes
+- **Do not:** re-open #201/#202, cite July 14 morning queue as open, use GitHub Contents API writes
 
 ## Cursor
 
