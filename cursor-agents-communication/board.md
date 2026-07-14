@@ -38,7 +38,7 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 
 | Task | Agent | Status | Notes |
 |------|-------|--------|-------|
-| **B1** bittensor feed + `/api/data-freshness` | Ditto + Cursor UI | backlog | audit #1 — stale registry |
+| **B1** bittensor feed + `/api/data-freshness` | Ditto → Cursor | ✅ **merged** | #174 (superseded Ditto #169) |
 | **B2–B6** async/scheduler/observability | Ditto | backlog | per IMPLEMENTATION_PLAN.md |
 
 ## Active — Phase 4 (hydration scripts)
