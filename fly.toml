@@ -33,3 +33,9 @@ primary_region = "sea"
 [mounts]
   source = "data_volume"
   destination = "/app/data"
+
+# 256MB OOMs / stalls under pandas + live_subnets workers; health goes critical
+# and the edge returns 0-byte timeouts ("no good candidate").
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
