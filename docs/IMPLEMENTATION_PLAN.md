@@ -53,5 +53,6 @@
 - [x] B2 httpx + tenacity + aiocache — merged #179
 - [x] B3 apscheduler + sentry — merged #181
 - [x] B4 prometheus metrics — merged #181
-- [ ] B5 APY + candle gate — PR open
-- [ ] B6, Phase C — pending
+- [x] B5 APY + candle gate — merged #182
+- [ ] B6 slowapi — **next Build** (`cursor-agents-communication/automated-build-plan.md`)
+- [ ] Phase 4 C4–C6, Phase C — queued in automated plan

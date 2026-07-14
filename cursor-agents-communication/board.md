@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T04:45:00Z by Agent A (`-6f98`) — **B3 in PR** (apscheduler + sentry)  
-**main:** `4250505`
+**Last updated:** 2026-07-14T05:03:00Z by Agent (`-6f98`) — **automated plan locked**; B6 next Build  
+**main:** `b3bf9d2`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -43,8 +43,8 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 | **B1 UI** freshness badge | Cursor | ✅ **merged** | #177 |
 | **B2** httpx + tenacity + aiocache | Cursor | ✅ **merged** | #179 — audit #4 |
 | **B4** prometheusrock metrics | Cursor | ✅ **merged** | #181 — audit #13 |
-| **B5** APY reconcile + candle gate | Cursor | 🔄 **PR open** | audit #7 #14 |
-| **B6** slowapi rate-limit | Cursor | backlog | next: B6 |
+| **B5** APY reconcile + candle gate | Cursor | ✅ **merged** | #182 |
+| **B6** slowapi rate-limit | Cursor | ⏳ **next Build** | see `automated-build-plan.md` |
 
 ## Active — Phase 4 (hydration scripts)
 
@@ -58,8 +58,8 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 | **C6** conviction tiers | B | backlog | after C5 |
 | C3 htmx | Composer | backlog | Phase 6 |
 
-## Ready for Ditto
-**Phase 3 complete. Phase 4 C4 (hydration/chart binders) next — human go-ahead.**
+## Ready for Build
+**Automated queue:** `cursor-agents-communication/automated-build-plan.md` — **B6 next**, then C4→C6→C1→C3.
 
 Recent merges on `main` @ `82bbde7` (CI green):
 
