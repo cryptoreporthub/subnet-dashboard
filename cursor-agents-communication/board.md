@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T01:40:00Z by Agent A (`-6f98`) — Phase A **A3+A4 done**, PR open for human review  
-**main:** `02984a3` · **branch:** `cursor/audit-11-8-security-cockpit-6f98`
+**Last updated:** 2026-07-14T02:30:00Z by Agent A (`-6f98`) — **Phase A complete** (#167 #168 #170); Phase B next  
+**main:** `4250505`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -23,15 +23,23 @@
 
 Composer spawns Grok via subagent — no manual model picker needed. Batch tasks; scope files only.
 
-## Active — Phase A (EXTREME audit fixes)
+## Phase A — EXTREME audit (complete)
 
 | Task | Agent | Status | Notes |
 |------|-------|--------|-------|
-| **A3** CORS + X-Frame-Options (#11) | A (`-6f98`) | 🟡 **in progress** | `server.py::add_cors_headers` |
-| **A4** Cockpit panel isolation (#8) | A (`-6f98`) | 🟡 **in progress** | `internal/cockpit/sections.py` all 12 `_build_*` |
-| **A1** cruft deletion | Ditto | ✅ review-ready | PR #165 |
-| **A3/A4 prompts** | Ditto | ✅ review-ready | PR #166 |
-| **Audit docs** | Ditto | ✅ review-ready | PR #167 |
+| **A1** cruft deletion | Ditto → Cursor | ✅ **merged** | #170 (superseded #165) |
+| **A3/A4 prompts** | Ditto → Cursor | ✅ **merged** | #170 (superseded #166) |
+| **Audit docs** | Ditto | ✅ **merged** | #167 |
+| **A3** CORS + X-Frame-Options (#11) | Cursor | ✅ **merged** | #168 |
+| **A4** Cockpit panel isolation (#8) | Cursor | ✅ **merged** | #168 |
+| **A2** CI smoke gate | Cursor | backlog | remove `|| true` in ci-smoke.yml |
+
+## Active — Phase B (data truth)
+
+| Task | Agent | Status | Notes |
+|------|-------|--------|-------|
+| **B1** bittensor feed + `/api/data-freshness` | Ditto + Cursor UI | backlog | audit #1 — stale registry |
+| **B2–B6** async/scheduler/observability | Ditto | backlog | per IMPLEMENTATION_PLAN.md |
 
 ## Active — Phase 4 (hydration scripts)
 
