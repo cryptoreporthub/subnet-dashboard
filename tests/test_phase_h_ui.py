@@ -123,9 +123,14 @@ def test_trace_and_message_intel_honest_status():
 
 
 def test_h_full_includes_chartjs():
+    """No static Chart.js tag; uPlot spark assets loaded instead."""
     client = TestClient(app)
-    html = client.get("/").text.lower()
-    assert "chart.js" in html or "chart.umd.min.js" in html
+    html = client.get("/").text
+    lower = html.lower()
+    assert 'src="https://cdn.jsdelivr.net/npm/chart.js' not in lower
+    assert "/static/vendor/uplot/uplot.iife.min.js" in lower
+    assert "/static/js/uplot_charts.js" in lower
+    assert "/static/vendor/uplot/uplot.min.css" in lower
 
 
 def test_strip_markdown_headings_in_enrichment():

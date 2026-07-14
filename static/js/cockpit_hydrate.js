@@ -495,8 +495,8 @@
       var sparkHtml = '';
       if (sparks && sparks.length >= 2) {
         sparkHtml =
-          '<div class="spark-wrap chart-canvas-wrap"><canvas class="spark" width="96" height="36" data-spark="' +
-          esc(sparks.join(',')) + '" aria-label="Price sparkline for ' + esc(row.name || 'subnet') + '"></canvas></div>';
+          '<div class="spark-wrap chart-canvas-wrap"><div class="spark" data-spark="' +
+          esc(sparks.join(',')) + '" role="img" aria-label="Price sparkline for ' + esc(row.name || 'subnet') + '"></div></div>';
       } else {
         sparkHtml = '<div class="spark-empty" aria-hidden="true">—</div>';
       }
