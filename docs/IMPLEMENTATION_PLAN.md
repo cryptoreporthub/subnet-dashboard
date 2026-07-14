@@ -49,5 +49,8 @@
 - [x] B1 live feed — merged #174
 - [ ] A2 branch-protection toggle — manual GitHub Settings (see cursor-handoff-2026-07-14.md)
 - [x] B1 live feed — merged #174
-- [x] B1 UI freshness badge — in PR
-- [ ] B2–B6, Phase C — pending
+- [x] B1 UI freshness badge — merged #177
+- [x] B2 httpx + tenacity + aiocache — merged #179
+- [ ] B3 apscheduler + sentry — PR #181 (Grok review fixes)
+- [ ] B4 prometheus metrics — PR #181
+- [ ] B5–B6, Phase C — pending

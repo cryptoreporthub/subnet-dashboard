@@ -1,6 +1,6 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T02:30:00Z by Agent A (`-6f98`) — **Phase A complete** (#167 #168 #170); Phase B next  
+**Last updated:** 2026-07-14T04:45:00Z by Agent A (`-6f98`) — **B3 in PR** (apscheduler + sentry)  
 **main:** `4250505`
 
 ## Repo
@@ -42,7 +42,9 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 | **B1** bittensor feed + `/api/data-freshness` | Cursor | ✅ **merged** | #174 feed + UI badge |
 | **B1 UI** freshness badge | Cursor | ✅ **merged** | #177 |
 | **B2** httpx + tenacity + aiocache | Cursor | ✅ **merged** | #179 — audit #4 |
-| **B3–B6** scheduler/sentry/prometheus/rate-limit | Cursor | backlog | next: B3 |
+| **B3** apscheduler + sentry-sdk | Cursor | 🔄 **PR open** | #181 — Grok review fixes applied |
+| **B4** prometheusrock metrics | Cursor | 🔄 **PR open** | #181 — audit #13 |
+| **B5–B6** APY/slowapi | Cursor | backlog | after B4 |
 
 ## Active — Phase 4 (hydration scripts)
 
