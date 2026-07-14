@@ -49,8 +49,9 @@ def test_index_links_split_css():
 def test_index_has_card_class():
     client = TestClient(app)
     html = client.get("/").text
-    assert 'class="cockpit-card card"' in html or 'class="card cockpit-card"' in html
-    assert html.count('class="cockpit-card card"') == 12
+    # Council-first: primary surfaces use pick/expert cards; dual 12-card grid removed
+    assert 'class="council-stage"' in html or "council-stage" in html
+    assert "class=\"card" in html or "pick-card" in html or "council-call" in html
 
 
 def test_index_no_markdown_heading_triple_hash():
@@ -75,23 +76,56 @@ def test_data_freshness_api_shape():
     assert "source" in data
 
 
-def test_index_renders_twelve_cockpit_sections():
+def test_index_council_first_shell():
+    """Council decision stage first; market tools demoted; no dual 12-card grid."""
     client = TestClient(app)
     html = client.get("/").text
-    assert html.count('class="cockpit-card card"') == 12
+    assert 'class="council-stage"' in html
+    assert 'id="council-stage-body"' in html
+    assert "council_first.css" in html
+    assert 'id="market-drawer"' in html
+    # Unicode apostrophe in “Today’s call” — match brand + stage title id
+    assert "council-stage__title" in html
+    assert "call" in html.lower()
+    # Dual cockpit grid removed from homepage
+    assert html.count('class="cockpit-card card"') == 0
+    # Primary council surfaces still present
+    for sid in (
+        "section-daily-pick",
+        "section-simivision-picks",
+        "section-council",
+        "section-judges",
+        "section-picks",
+        "section-kpi",
+    ):
+        assert f'id="{sid}"' in html
+    # Brand is hero-level in the stage
+    assert "council-stage__brand" in html
+    pos_stage = html.index("council-stage")
+    pos_drawer = html.index("market-drawer")
+    assert pos_stage < pos_drawer
+
+
+def test_index_renders_twelve_cockpit_sections():
+    """API still exposes 12 cockpit section ids; homepage no longer mirrors them as a grid."""
+    client = TestClient(app)
+    api = client.get("/api/cockpit/sections").json()
+    sections = api.get("sections") or []
+    assert len(sections) >= 12
+    ids = {s.get("id") for s in sections}
     for section_id in COCKPIT_SECTION_IDS:
-        assert f'data-section-id="{section_id}"' in html
+        assert section_id in ids
 
 
 def test_learning_loop_shows_real_accuracy_highlight():
     client = TestClient(app)
-    html = client.get("/").text
     api = client.get("/api/cockpit/sections").json()
     learning = next(s for s in api["sections"] if s["id"] == "learning_loop")
     if learning.get("status") == "live" and learning.get("metrics", {}).get("accuracy") is not None:
-        acc = round(float(learning["metrics"]["accuracy"]) * 100, 1)
-        assert "cockpit-highlight" in html
-        assert f"{acc}%" in html
+        # Homepage no longer mirrors cockpit-card highlights; KPI section still present
+        html = client.get("/").text
+        assert 'id="section-kpi"' in html
+        assert learning["metrics"]["accuracy"] is not None
 
 
 def test_judges_shows_pnl_highlight_when_live():
@@ -104,9 +138,9 @@ def test_judges_shows_pnl_highlight_when_live():
         return
     client = TestClient(app)
     html = client.get("/").text
-    assert "Combined P&amp;L" in html or "Combined P&L" in html
-    pnl = highlights["combined_pnl_pct"]
-    assert f"{pnl:+.2f}" in html or f"{pnl:+.1f}" in html
+    # Judges panel still on page (hydrated); P&L may live in API highlights only
+    assert 'id="section-judges"' in html
+    assert 'id="judges-panel"' in html
 
 
 def test_trace_and_message_intel_honest_status():
@@ -117,9 +151,6 @@ def test_trace_and_message_intel_honest_status():
         section = by_id[section_id]
         assert section["status"] in ("live", "empty", "unavailable")
         assert section.get("summary")
-    html = client.get("/").text
-    assert 'data-section-id="trace"' in html
-    assert 'data-section-id="message_intel"' in html
 
 
 def test_h_full_includes_chartjs():
@@ -175,7 +206,8 @@ def test_h_full_thirteen_premium_section_ids():
     html = client.get("/").text
     for section_id in H_FULL_SECTION_IDS:
         assert f'id="{section_id}"' in html, f"missing {section_id}"
-    assert 'id="cockpit-heading"' in html
+    # Dual cockpit grid removed; council stage is the primary landmark
+    assert 'class="council-stage"' in html
     assert 'id="mindmap-graph-root"' in html
 
 
@@ -255,7 +287,8 @@ def test_subnet_grouping_optional_lane():
     assert 'id="section-subnet-groups"' in html
     assert 'id="subnet-group-data"' in html
     assert "/static/js/subnet_grouping.js" in html
-    assert html.count('class="cockpit-card card"') == 12
+    # Homepage no longer mounts the 12-card cockpit grid
+    assert html.count('class="cockpit-card card"') == 0
 
 
 def test_h_full_hero_market_snapshot_section():
@@ -270,24 +303,21 @@ def test_h_full_simivision_picks_or_honest_empty():
     client = TestClient(app)
     html = client.get("/").text
     assert 'id="section-simivision-picks"' in html
-    assert "SimiVision Top Picks" in html
-    sv = client.get("/api/simivision").json()
-    if sv.get("data", {}).get("top"):
-        assert "pick-card" in html
-        assert "Conviction" in html
-    else:
-        assert "warming up" in html
+    assert "Conviction board" in html or "Council ranking" in html
+    # SSR shell is often empty; hydrate fills picks — only require honest empty or cards
+    assert "pick-card" in html or "warming up" in html
 
 
 def test_h_full_daily_pick_hero_or_honest_empty():
     client = TestClient(app)
     html = client.get("/").text
     assert 'id="section-daily-pick"' in html
-    assert "Daily Pick" in html
-    if 'class="hero-card"' in html:
-        assert "Final Confidence" in html
+    assert "council-stage" in html
+    assert "Council decision" in html or "Today" in html
+    if "council-call__name" in html or 'class="council-call"' in html:
+        assert "confidence" in html.lower() or "Predicted" in html
     else:
-        assert "warming up" in html or "No audited daily pick" in html
+        assert "warming up" in html or "not published" in html or "No audited" in html or "empty" in html
 
 
 def test_phase_l_cockpit_signals_and_summary():

@@ -93,7 +93,7 @@ header.top {
 .src-tag b { color: var(--accent-bright); text-shadow: 0 0 8px var(--accent-glow); }
 
 .section-title {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.8px;

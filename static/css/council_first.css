@@ -1,0 +1,306 @@
+/* Council-first composition — decision stage, then bench, market demoted */
+
+.council-first-theme {
+  --stage-ink: #e8f0e9;
+  --stage-muted: #8a9a8e;
+  --stage-accent: #00ff41;
+  --stage-wash: #06140a;
+}
+
+.app-shell.council-first {
+  min-height: 100vh;
+}
+
+.wrap-pad {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0 var(--space-5, 24px);
+}
+
+/* ---------- Full-bleed council stage (first viewport) ---------- */
+.council-stage {
+  position: relative;
+  min-height: calc(100vh - 64px);
+  display: flex;
+  align-items: center;
+  padding: clamp(48px, 8vh, 96px) var(--space-5, 24px) clamp(56px, 10vh, 120px);
+  overflow: hidden;
+  border-bottom: 1px solid rgba(0, 255, 65, 0.18);
+}
+
+.council-stage__atmosphere {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 70% 40%, rgba(0, 255, 65, 0.12) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 15% 80%, rgba(0, 200, 255, 0.06) 0%, transparent 50%),
+    linear-gradient(180deg, #020805 0%, var(--stage-wash) 45%, #000 100%);
+  pointer-events: none;
+}
+
+.council-stage__inner {
+  position: relative;
+  z-index: 1;
+  width: min(920px, 100%);
+  margin: 0 auto;
+  animation: stage-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes stage-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
+}
+
+.council-stage__brand {
+  font-family: var(--font-body, 'Rajdhani', system-ui, sans-serif);
+  font-size: clamp(2.5rem, 7vw, 4.5rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+  margin: 0 0 20px;
+  color: var(--stage-ink);
+}
+
+.council-stage__brand span {
+  color: var(--stage-accent);
+}
+
+.council-stage__eyebrow {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--stage-accent);
+  margin: 0 0 10px;
+}
+
+.council-stage__title {
+  font-family: var(--font-body, 'Rajdhani', system-ui, sans-serif);
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  font-weight: 600;
+  margin: 0 0 12px;
+  color: var(--stage-ink);
+  letter-spacing: -0.02em;
+}
+
+.council-stage__lede {
+  font-size: 1.05rem;
+  color: var(--stage-muted);
+  max-width: 36em;
+  margin: 0 0 36px;
+  line-height: 1.45;
+}
+
+.council-call {
+  padding: 0;
+  /* not a card — edge-to-edge type block */
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  animation: stage-rise 0.85s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.council-call__action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.council-call__name {
+  font-family: var(--font-body, 'Rajdhani', system-ui, sans-serif);
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  font-weight: 700;
+  margin: 0 0 6px;
+  letter-spacing: -0.02em;
+  color: var(--stage-ink);
+}
+
+.council-call__meta {
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  color: var(--stage-muted);
+  margin: 0 0 20px;
+}
+
+.council-call__prediction {
+  font-size: clamp(1.1rem, 2.4vw, 1.35rem);
+  line-height: 1.4;
+  color: var(--stage-ink);
+  margin: 0 0 24px;
+  max-width: 28em;
+}
+
+.council-call__conviction {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 420px;
+  margin-bottom: 20px;
+}
+
+.council-call__conviction .conviction-bar {
+  flex: 1;
+  height: 8px;
+}
+
+.council-call__conf {
+  font-family: var(--font-mono, monospace);
+  font-size: 1.25rem;
+  font-weight: 600;
+  min-width: 2.5ch;
+}
+
+.council-call__note {
+  color: var(--stage-muted);
+  font-size: 0.95rem;
+  margin: 0 0 12px;
+  max-width: 40em;
+}
+
+.council-call__concerns {
+  margin: 0;
+  padding-left: 1.2em;
+  color: var(--stage-muted);
+  font-size: 0.9rem;
+}
+
+.council-call--empty .empty {
+  font-size: 1.1rem;
+  color: var(--stage-muted);
+  max-width: 36em;
+}
+
+/* ---------- Primary council band ---------- */
+.council-primary {
+  padding-top: var(--space-6, 32px);
+  padding-bottom: var(--space-6, 32px);
+}
+
+.council-primary .section-label {
+  color: var(--stage-accent);
+}
+
+.council-bench {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5, 24px);
+  align-items: start;
+}
+
+.council-bench .row {
+  margin-top: 0;
+}
+
+@media (max-width: 900px) {
+  .council-bench {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Soften pick grids under stage — less equal-volume scream */
+.council-primary .picks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .council-primary .picks {
+    grid-template-columns: 1fr;
+  }
+}
+
+.council-primary .pick-card {
+  background: transparent;
+  border: 1px solid rgba(0, 255, 65, 0.16);
+  box-shadow: none;
+  border-radius: 4px;
+}
+
+.council-primary .pick-card:hover {
+  box-shadow: none;
+  border-color: rgba(0, 255, 65, 0.4);
+}
+
+/* ---------- Market drawer (demoted landfill) ---------- */
+.market-drawer {
+  margin: var(--space-6, 32px) auto var(--space-7, 48px);
+  border-top: 1px solid rgba(138, 154, 142, 0.25);
+  padding-top: 8px;
+}
+
+.market-drawer__summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px 24px;
+  padding: 20px 0;
+  font-family: var(--font-body, 'Rajdhani', system-ui, sans-serif);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--stage-ink);
+}
+
+.market-drawer__summary::-webkit-details-marker {
+  display: none;
+}
+
+.market-drawer__summary::before {
+  content: "+";
+  font-family: var(--font-mono, monospace);
+  color: var(--stage-accent);
+  margin-right: 4px;
+}
+
+.market-drawer[open] > .market-drawer__summary::before {
+  content: "−";
+}
+
+.market-drawer__hint {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--stage-muted);
+  font-family: var(--font-body, system-ui, sans-serif);
+}
+
+.market-drawer__body {
+  padding-bottom: 48px;
+  opacity: 0.92;
+}
+
+.market-drawer__body .row {
+  margin-top: var(--space-5, 24px);
+}
+
+/* Header: quieter under council-first */
+.council-first-theme header.top {
+  background: rgba(0, 0, 0, 0.55);
+  border-bottom-color: rgba(0, 255, 65, 0.12);
+}
+
+.council-first-theme .logo-sub {
+  letter-spacing: 0.12em;
+}
+
+/* Motion: subtle stage atmosphere drift */
+@media (prefers-reduced-motion: no-preference) {
+  .council-stage__atmosphere {
+    animation: stage-wash 14s ease-in-out infinite alternate;
+  }
+  @keyframes stage-wash {
+    from { transform: scale(1); }
+    to { transform: scale(1.04); }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .council-stage__inner,
+  .council-call,
+  .council-stage__atmosphere {
+    animation: none !important;
+  }
+}

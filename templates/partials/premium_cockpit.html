@@ -1,4 +1,4 @@
-{# Premium cockpit — section partials (C2 split), honest-empty, zero markdown #}
+{# Council-first cockpit — decision stage, then bench, then demoted market tools #}
 <script>document.documentElement.dataset.hydrate='1';</script>
 {% set sn_list = subnets if subnets is iterable and subnets is not string else [] %}
 {% set ti_rows = api_indicators_convergence.subnets if api_indicators_convergence is mapping and api_indicators_convergence.subnets else [] %}
@@ -8,10 +8,25 @@
 {% set alert_list = alerts if alerts is iterable and alerts is not string else [] %}
 {% set sig_sum = signal_summary if signal_summary is mapping else {} %}
 {% set top_signals = sig_list|sort(attribute='confidence', reverse=true)|list %}
-{% include "partials/premium/header.html" %}
 {% set sv_picks = simivision.top if simivision is mapping and simivision.top else [] %}
 {% set dpick = daily_pick if daily_pick is mapping else {} %}
 {% set dp_subnet = dpick.subnet if dpick.subnet is mapping else none %}
+
+{% include "partials/premium/header.html" %}
+{% include "partials/premium/council_stage.html" %}
+
+{# Primary council narrative — max 4 surfaces after the stage #}
+<div class="council-primary wrap-pad">
+  {% include "partials/premium/simivision_picks.html" %}
+  <div class="council-bench">
+    {% include "partials/premium/council.html" %}
+    {% include "partials/premium/judges.html" %}
+  </div>
+  {% include "partials/premium/picks.html" %}
+  {% include "partials/premium/kpi.html" %}
+</div>
+
+{# Market KPIs for demoted hero (honest registry snapshot) #}
 {% set mi_ns = namespace(chg_sum=0.0, apy_sum=0.0, apy_n=0, gainers=0, losers=0) %}
 {% for sn in sn_list %}
   {% set chg = (sn.price_change_24h|default(0))|float %}
@@ -30,24 +45,30 @@
 {% set mi_breadth = 'bullish' if mi_ns.gainers > mi_ns.losers else ('bearish' if mi_ns.losers > mi_ns.gainers else 'neutral') %}
 {% set mi_top_gainer = sn_list|sort(attribute='price_change_24h', reverse=true)|first if sn_list else none %}
 {% set mi_top_loser = sn_list|sort(attribute='price_change_24h')|first if sn_list else none %}
-{% include "partials/premium/hero.html" %}
-{% include "partials/premium/simivision_picks.html" %}
-{% include "partials/premium/daily_pick.html" %}
-{% include "partials/premium/indicators.html" %}
-{% include "partials/premium/scanner.html" %}
-{% include "partials/premium/signals.html" %}
-{% include "partials/premium/alerts.html" %}
-{% include "partials/premium/subnet_groups.html" %}
-{% include "partials/premium/staking.html" %}
-{% include "partials/premium/picks.html" %}
-{% include "partials/premium/kpi.html" %}
-{% include "partials/premium/council.html" %}
-{% include "partials/premium/radar.html" %}
-{% include "partials/premium/judges.html" %}
-{% include "partials/premium/mindmap.html" %}
-{% include "partials/premium/social.html" %}
-{% include "partials/premium/chat.html" %}
-{% include "partials/premium/trail.html" %}
-{% include "partials/premium/undervalued.html" %}
+
+{# Market / tools — demoted, not equal-volume landfill #}
+<details class="market-drawer wrap-pad" id="market-drawer">
+  <summary class="market-drawer__summary">
+    <span>Market &amp; tools</span>
+    <span class="market-drawer__hint">Scanner · signals · staking · analytics</span>
+  </summary>
+  <div class="market-drawer__body">
+    {% include "partials/premium/hero.html" %}
+    {% include "partials/premium/scanner.html" %}
+    {% include "partials/premium/signals.html" %}
+    {% include "partials/premium/alerts.html" %}
+    {% include "partials/premium/staking.html" %}
+    {% include "partials/premium/indicators.html" %}
+    {% include "partials/premium/undervalued.html" %}
+    {% include "partials/premium/radar.html" %}
+    {% include "partials/premium/subnet_groups.html" %}
+    {% include "partials/premium/mindmap.html" %}
+    {% include "partials/mindmap_graph.html" %}
+    {% include "partials/premium/trail.html" %}
+    {% include "partials/premium/social.html" %}
+    {% include "partials/premium/chat.html" %}
+  </div>
+</details>
+
 {% include "partials/premium/footer.html" %}
 {% include "partials/premium/scripts.html" %}

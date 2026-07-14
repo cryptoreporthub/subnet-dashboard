@@ -1,0 +1,52 @@
+{# Council Decision Stage — first viewport, brand + one call #}
+<section class="council-stage" id="section-daily-pick" aria-labelledby="council-stage-title">
+  <div class="council-stage__atmosphere" aria-hidden="true"></div>
+  <div class="council-stage__inner">
+    <p class="council-stage__brand">Simi<span>Vision</span></p>
+    <p class="council-stage__eyebrow">Council decision</p>
+    <h1 class="council-stage__title" id="council-stage-title">Today’s call</h1>
+    <p class="council-stage__lede">One audited selection. Predictive framing — not a scrapbook of panels.</p>
+
+    <div id="council-stage-body" class="council-stage__body">
+      {% if dp_subnet %}
+      {% set fc = ((dpick.final_confidence|default(dpick.confidence|default(0)))|float * 100)|round %}
+      {% set tier = 'tier-cyan' if fc > 75 else ('tier-lime' if fc > 55 else ('tier-gold' if fc > 35 else 'tier-red')) %}
+      {% set act = (dpick.action|default('HOLD'))|string|upper %}
+      {% set audit = dpick.audit if dpick.audit is mapping else {} %}
+      <div class="council-call">
+        <div class="council-call__action">
+          <span class="badge {% if act == 'BUY' %}badge-buy{% elif act == 'SELL' %}badge-sell{% else %}badge-hold{% endif %}">{{ act }}</span>
+          {% if audit.approved is defined %}
+            {% if audit.approved %}<span class="hero-audit">AUDIT PASSED</span>{% else %}<span class="hero-audit flagged">AUDIT FLAGGED</span>{% endif %}
+          {% endif %}
+        </div>
+        <p class="council-call__name">{{ dp_subnet.name|default('SN' ~ dp_subnet.netuid) }}</p>
+        <p class="council-call__meta">SN{{ dp_subnet.netuid }}{% if dp_subnet.symbol %} · {{ dp_subnet.symbol }}{% endif %}</p>
+        <p class="council-call__prediction">
+          Predicted to move
+          <strong class="accent-bright">with {{ fc }}% confidence</strong>
+          on the council horizon
+          {% if dpick.score is defined %} · score <b>{{ "%.1f"|format((dpick.score|default(0))|float) }}</b>{% endif %}
+        </p>
+        <div class="council-call__conviction">
+          <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ fc }}%;"></div></div>
+          <span class="council-call__conf {{ tier }}">{{ fc }}</span>
+        </div>
+        {% if dpick.reason %}
+        <p class="council-call__note">{{ dpick.reason }}</p>
+        {% endif %}
+        {% if audit.concerns %}
+        <ul class="council-call__concerns">
+          {% for c in audit.concerns[:3] %}<li>{{ c }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="council-call council-call--empty">
+        <p class="empty">Council has not published today’s audited call yet. The stage stays empty until scoring and audit settle — no decorative pick.</p>
+        {% if dpick.reason %}<p class="council-call__note">{{ dpick.reason }}</p>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</section>
