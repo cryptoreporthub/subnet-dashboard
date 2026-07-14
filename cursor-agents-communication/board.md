@@ -42,9 +42,9 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 | **B1** bittensor feed + `/api/data-freshness` | Cursor | ✅ **merged** | #174 feed + UI badge |
 | **B1 UI** freshness badge | Cursor | ✅ **merged** | #177 |
 | **B2** httpx + tenacity + aiocache | Cursor | ✅ **merged** | #179 — audit #4 |
-| **B3** apscheduler + sentry-sdk | Cursor | 🔄 **PR open** | #181 — Grok review fixes applied |
-| **B4** prometheusrock metrics | Cursor | 🔄 **PR open** | #181 — audit #13 |
-| **B5–B6** APY/slowapi | Cursor | backlog | after B4 |
+| **B4** prometheusrock metrics | Cursor | ✅ **merged** | #181 — audit #13 |
+| **B5** APY reconcile + candle gate | Cursor | 🔄 **PR open** | audit #7 #14 |
+| **B6** slowapi rate-limit | Cursor | backlog | next: B6 |
 
 ## Active — Phase 4 (hydration scripts)
 

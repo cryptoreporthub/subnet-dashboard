@@ -1,4 +1,4 @@
-"""Normalize subnet APY for display (registry fraction vs TaoMarketCap percent)."""
+"""Normalize subnet APY for display (registry staking fraction only)."""
 
 from __future__ import annotations
 
@@ -19,12 +19,13 @@ def apy_as_percent(value: Any, *, from_fraction: bool = False) -> Optional[float
 
 
 def subnet_apy_percent(sn: Dict[str, Any]) -> Optional[float]:
-    """Best-effort APY percent for a subnet dict from registry or TaoMarketCap."""
+    """Staking yield APY only — never price-change proxies (audit #14)."""
     staking = sn.get("staking_data")
     if isinstance(staking, dict) and staking.get("apy") is not None:
         return apy_as_percent(staking["apy"], from_fraction=True)
-    if sn.get("apy") is not None:
-        return apy_as_percent(sn["apy"])
+    # Registry-shaped rows without nested staking_data still store fraction at top level.
+    if sn.get("apy") is not None and sn.get("id") is not None:
+        return apy_as_percent(sn["apy"], from_fraction=True)
     return None
 
 

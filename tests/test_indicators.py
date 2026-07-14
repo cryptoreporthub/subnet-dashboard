@@ -59,7 +59,8 @@ def test_price_sources_include_geckoterminal_fallback():
     assert sources[0]["source"] == "taomarketcap"
     assert sources[1]["source"] == "geckoterminal"
     assert sources[1]["network"] == "bittensor"
-    assert sources[-1]["source"] == "synthetic"
+    assert sources[-1]["source"] == "blockmachine"
+    assert not any(s["source"] == "synthetic" for s in sources)
 
 def test_synthetic_candles_are_deterministic():
     a = _synthetic_candles("subnet-7", days=2)
@@ -136,13 +137,23 @@ def test_fetch_ohlcv_uses_cache(tmp_path, monkeypatch):
     json.dump({"1": {"symbol": "SN1"}}, open(pairs_path, "w"))
 
     candles = fetch_ohlcv(
-        "1", days=2, use_cache=True, cache_path=str(cache_path), pairs_path=str(pairs_path)
+        "1",
+        days=2,
+        use_cache=True,
+        cache_path=str(cache_path),
+        pairs_path=str(pairs_path),
+        allow_synthetic=True,
     )
     assert len(candles) == 48
     assert cache_path.exists()
 
     cached = fetch_ohlcv(
-        "1", days=2, use_cache=True, cache_path=str(cache_path), pairs_path=str(pairs_path)
+        "1",
+        days=2,
+        use_cache=True,
+        cache_path=str(cache_path),
+        pairs_path=str(pairs_path),
+        allow_synthetic=True,
     )
     assert cached == candles
 
@@ -328,7 +339,21 @@ def test_price_sources_include_blockmachine_fallback():
     sources = _price_sources_for_subnet("5", pairs)
     assert sources[0]["source"] == "taomarketcap"
     assert any(s["source"] == "blockmachine" for s in sources)
-    assert sources[-1]["source"] == "synthetic"
+    assert not any(s["source"] == "synthetic" for s in sources)
+
+
+def test_fetch_ohlcv_empty_without_synthetic(tmp_path, monkeypatch):
+    monkeypatch.setattr("internal.indicators.price_fetcher.USE_LIVE_PRICES", False)
+    cache_path = tmp_path / "price_cache.json"
+    pairs_path = tmp_path / "price_pairs.json"
+    json.dump({"1": {"symbol": "SN1"}}, open(pairs_path, "w"))
+
+    candles = fetch_ohlcv(
+        "1", days=2, use_cache=True, cache_path=str(cache_path), pairs_path=str(pairs_path)
+    )
+    assert candles == []
+    cache = json.load(open(cache_path))
+    assert cache["1"]["source"] == "unavailable"
 
 
 def test_fetch_ohlcv_tiered_fallback_to_blockmachine(monkeypatch, tmp_path):
@@ -383,12 +408,12 @@ def test_fetch_ohlcv_tiered_fallback_to_blockmachine(monkeypatch, tmp_path):
 
     cache_path = tmp_path / "price_cache.json"
     pairs_path = tmp_path / "price_pairs.json"
-    json.dump({"1": {"symbol": "SN1"}}, open(pairs_path, "w"))
+    json.dump({"501": {"symbol": "SN501"}}, open(pairs_path, "w"))
 
     candles = fetch_ohlcv(
-        "1", days=1, use_cache=True, cache_path=str(cache_path), pairs_path=str(pairs_path)
+        "501", days=1, use_cache=True, cache_path=str(cache_path), pairs_path=str(pairs_path)
     )
     assert len(candles) == 2
     assert candles[0]["close"] == 52.5
     cache = json.load(open(cache_path))
-    assert cache["1"]["source"] == "blockmachine"
+    assert cache["501"]["source"] == "blockmachine"

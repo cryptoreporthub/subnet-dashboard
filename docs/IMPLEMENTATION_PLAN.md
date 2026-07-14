@@ -51,6 +51,7 @@
 - [x] B1 live feed — merged #174
 - [x] B1 UI freshness badge — merged #177
 - [x] B2 httpx + tenacity + aiocache — merged #179
-- [ ] B3 apscheduler + sentry — PR #181 (Grok review fixes)
-- [ ] B4 prometheus metrics — PR #181
-- [ ] B5–B6, Phase C — pending
+- [x] B3 apscheduler + sentry — merged #181
+- [x] B4 prometheus metrics — merged #181
+- [ ] B5 APY + candle gate — PR open
+- [ ] B6, Phase C — pending
