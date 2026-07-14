@@ -24,6 +24,7 @@ CONTRACT = [
     ("GET", "/", None),
     ("GET", "/health", None),
     ("GET", "/api/health", None),
+    ("GET", "/api/data-freshness", None),
     ("GET", "/api/daily-rotation", None),
     ("GET", "/api/registry", None),
     ("GET", "/api/subnets", None),

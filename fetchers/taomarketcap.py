@@ -168,7 +168,25 @@ def fetch_all_subnets_from_api() -> Optional[List[Dict]]:
     return None
 
 def get_all_subnets() -> List[Dict]:
-    """Return all subnets (cached, 5 min TTL). Falls back to stale cache or static data."""
+    """Return all subnets.
+
+    Phase B1: prefer the live on-chain feed (internal.live_subnets), which merges
+    Bittensor chain data over the committed registry. Falls back to the original
+    TaoMarketCap scrape if the live feed is unavailable. See docs/EXTREME_AUDIT.md #1.
+    """
+    try:
+        from internal.live_subnets import get_live_subnets
+
+        live = get_live_subnets()
+        if live:
+            return live
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Live subnet feed unavailable, using TaoMarketCap: %s", exc)
+    return _get_all_subnets_tao()
+
+
+def _get_all_subnets_tao() -> List[Dict]:
+    """Original TaoMarketCap implementation (cache + fallback)."""
     init_db()
     cached = get_cached("all_subnets")
     if cached:
