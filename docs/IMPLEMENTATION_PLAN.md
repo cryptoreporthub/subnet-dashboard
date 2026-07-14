@@ -47,7 +47,7 @@
 - [x] A3/A4 — merged #168
 - [x] A2 smoke body — merged #172 (+ timeout-minutes on smoke job)
 - [x] B1 live feed — merged #174
-- [ ] A2 branch-protection toggle — manual GitHub Settings (see cursor-handoff-2026-07-14.md)
+- [x] A2 branch-protection toggle — verified (`smoke` required on `main`)
 - [x] B1 live feed — merged #174
 - [x] B1 UI freshness badge — merged #177
 - [x] B2 httpx + tenacity + aiocache — merged #179

@@ -183,10 +183,10 @@ Pre-merge sign-off (fast-xhigh) on visual diff.
 |------|-------|
 | Phase A | ✅ complete |
 | B1–B5 | ✅ merged (#174–#182) |
-| B6 | ⏳ **next build** |
-| Phase 4 C4–C6 | backlog |
-| Phase C C1–C3 | backlog |
-| A2 branch protection | manual |
+| B6 | ✅ merged #185 |
+| Phase 4 C4–C6 | ✅ merged #186–#189 |
+| Phase C C1–C3 | ✅ merged #190–#192 |
+| A2 branch protection | ✅ verified |
 
 ---
 

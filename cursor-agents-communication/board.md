@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T06:15:00Z by Agent (`-5e45`) — **automated queue COMPLETE** (B6→C3)  
-**main:** `8e06f4f`
+**Last updated:** 2026-07-14T07:05:00Z by Agent (`-5e45`) — **A2 branch protection verified**; queue complete  
+**main:** `8a77deb`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -33,7 +33,7 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 | **Audit docs** | Ditto | ✅ **merged** | #167 |
 | **A3** CORS + X-Frame-Options (#11) | Cursor | ✅ **merged** | #168 |
 | **A4** Cockpit panel isolation (#8) | Cursor | ✅ **merged** | #168 |
-| **A2** CI smoke gate | Cursor | ✅ **merged** | #172 — uvicorn + real health curl |
+| **A2** CI smoke gate + branch protection | Cursor | ✅ **complete** | #172 + `smoke` required on `main` |
 
 ## Active — Phase B (data truth)
 
@@ -60,8 +60,8 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 | **C2** SSE cockpit stream | Cursor | ✅ **merged** | #191 |
 | **C3** CSS/mobile/a11y | Cursor | ✅ **merged** | #192 |
 
-## Ready for Build
-**Automated queue:** COMPLETE — B6 #185 · C4 #186 · C5 #187 · C6 #189 · C1 #190 · C2 #191 · C3 #192. A2 branch-protection remains human-only.
+## Ready for next work
+**Automated queue:** COMPLETE — B6 #185 · C4 #186 · C5 #187 · C6 #189 · C1 #190 · C2 #191 · C3 #192 · board #193. **A2:** `smoke` required check verified on `main`.
 
 Recent merges on `main` @ `82bbde7` (CI green):
 
