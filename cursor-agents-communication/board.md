@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T08:30:00Z by Agent (`-5e45`) — **handoff synced for Ditto**  
-**main:** `7595d60`
+**Last updated:** 2026-07-14T09:15:00Z by Agent (`-5e45`) — **council-first overhaul merged**  
+**main:** `6a52c89`
 
 ## Ditto boot (read first)
 
@@ -69,6 +69,8 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 | **G12** favicon + font cleanup | Cursor | ✅ **merged** | #195 |
 
 ## Ready for next work
+**Homepage:** council-first (#198) — decision stage + demoted market drawer. Dual cockpit grid removed.
+
 **Automated queue:** COMPLETE — B6 #185 · C4 #186 · C5 #187 · C6 #189 · C1 #190 · C2 #191 · C3 #192 · board #193. **A2:** `smoke` required check verified on `main`.
 
 Recent merges on `main` @ `7595d60` (CI green):
