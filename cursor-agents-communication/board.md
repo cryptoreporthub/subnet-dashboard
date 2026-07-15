@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T05:18:00Z — **Phase N/O COMPLETE** (#228 B + #227 A)  
-**main:** `92737a7`
+**Last updated:** 2026-07-15T05:32:00Z — **Phase N/O + Phase P COMPLETE**  
+**main:** `7e1f0b3`
 
 ## Ditto boot (read first)
 
@@ -77,7 +77,8 @@ Composer spawns Grok via subagent — starts slow + medium; no manual model pick
 
 ## Ready for next work
 
-**Phase P — ACTIVE.** Prod flags + N1 snapshot persistence (`gameplan-phase-p.md`). N/O complete (#227 + #228).
+**Phase N/O + Phase P COMPLETE** (#227 · #228 · #232). Agents idle — monitor backtest lift.  
+**Human optional:** custom domain DNS (`DEPLOY.md`). Ditto defines next roadmap slice.
 
 **Automated July 14 queue:** COMPLETE. **A2:** `smoke` required on `main`.
 
@@ -104,7 +105,8 @@ Recent merges on `main` @ `778ad13`:
 | **UI Phase 1** | ✅ merged #154 + #155 |
 | **UI Phase 2** | ✅ merged #157 (Grok sign-off: CONDITIONAL — see phase-3-grok-design.md) |
 | **J–M** | ✅ merged |
-| **N/O** | ✅ **COMPLETE** — #227 (A) + #228 (B) merged |
+| **N/O** | ✅ **COMPLETE** — #227 (A) + #228 (B) |
+| **P** | ✅ **COMPLETE** — #232 (prod flags + N1 hardening) |
 | **P** | 🟢 **ACTIVE** — prod flags + N1 follow-through |
 
 ## N/O queue

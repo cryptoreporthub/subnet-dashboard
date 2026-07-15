@@ -1,6 +1,6 @@
 # Phase P — Production activation & N1 follow-through
 
-**Status:** ACTIVE 2026-07-15 · Agent A (`-843d`)  
+**Status:** COMPLETE 2026-07-15 · **#232 merged** @ `7e1f0b3`  
 **Precedes:** Ditto-defined roadmap slice (master plan §16)  
 **Binding prior:** `phase-n-o-step0-spec.md` · `n1-oracle-tuning-design.md`
 
