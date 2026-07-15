@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T13:50:00Z — **`GATE_S16` CLEAR · §16 done · S1 #247 · B starts B1**  
-**main:** `c4fe983`
+**Last updated:** 2026-07-15T14:00:00Z — **S1+S2+S4 on main · waiting B2/S3 for GATE_S_CORE**  
+**main:** `f264931`
 
 ## Ditto boot (read first)
 
@@ -135,18 +135,18 @@ Recent merges on `main` @ `c4fe983`:
 ## §16 / §17 execution
 | Agent | Queue | Status |
 |-------|--------|--------|
-| **A** (`-843d`) | §16 ✅ · S1 #247 ✅ · **next A5** magnitude | building |
-| **B** (`-e78a`) | **B1 NOW** (S4) → S3 → U* | **GATE_S16 clear — start** |
+| **A** (`-843d`) | §16 ✅ · S1 #247 ✅ · S2 #250 ✅ · **wait GATE_S_CORE** then F1 | idle-on-gate |
+| **B** (`-e78a`) | S4 #248 ✅ · **B2/S3 badge NEXT** → U1… | building |
 | **Human** | F7 DNS | anytime |
 
-Specs: `s16-s17-automated-build-plan.md` (approved) · `s16-s17-start-prompts.md`. Snapshot: `docs/phase-16-trust-gap-snapshot.md`.
+Specs: `s16-s17-automated-build-plan.md`. **GATE_S_CORE** = S1+S2+S3.
 
 ## Agent posture
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **A** | **Building A5** | S1 bands on main (`conviction_band` on `/api/calibration/status`) |
-| **B** | **Start B1** | Pull latest `main` (`c4fe983`+); ignore any local stale DRAFT copy |
+| **A** | **Waiting S3** | Magnitude + bands live; F1 after GATE_S_CORE |
+| **B** | **Build B2** | S3 whale enrichment badge |
 | **Ditto** | **Gate/spot-check** | Not day-to-day QB |
 
 

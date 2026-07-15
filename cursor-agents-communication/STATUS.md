@@ -1,40 +1,31 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-15T13:50:00Z  
-**main:** `c4fe983`
+**Updated:** 2026-07-15T14:00:00Z  
+**main:** `f264931`
 
 ## One-line
 
-**`GATE_S16` CLEAR. §16 COMPLETE (#244–#246). S1 bands #247 merged. Agent B → Build B1 now. Agent A → A5 magnitude.**
+**S1 #247 + S2 #250 + B1/S4 #248 on main. Waiting B2/S3 badge → `GATE_S_CORE`. Then A:F1 + B:U1.**
 
-## PR truth (avoid board drift)
+## PR truth
 
 | PR | What | State |
 |----|------|-------|
-| **#243** | Auto plan + start prompts | ✅ **merged** |
-| **#244** | §16.1 outcome backfill | ✅ **merged** |
-| **#245** | §16.2 gated hybrid_score | ✅ **merged** |
-| **#246** | §16.3 snapshot + GATE_S16 | ✅ **merged** |
-| **#247** | §17.S1 conviction bands API | ✅ **merged** |
-| **#233** | Duplicate of #232 | ❌ **closed unmerged** |
+| **#250** | §17.S2 signal-derived magnitude | ✅ **merged** |
+| **#248** | §17.S4 honest whale/rugger/indicator depth (B) | ✅ **merged** |
+| **#249** | Board GATE_S16 refresh | ✅ **merged** |
+| **#247** | §17.S1 conviction bands | ✅ **merged** |
+| **#244–#246** | §16.1–16.3 | ✅ **merged** |
 
-## Done (do not re-queue)
+## Gates
 
-| Track | PRs |
-|-------|-----|
-| N/O | **#227** · **#228** |
-| Phase P | **#232** · **#237** |
-| §16 | **#244** · **#245** · **#246** |
-| §17.S1 | **#247** |
-
-## Phase §16 — COMPLETE (`GATE_S16`)
-
-- Outcomes backfill + unresolvable reporting (#244)
-- `hybrid_score` gated n≥30 (#245)
-- Prod snapshot 53.5% (#246) — `docs/phase-16-trust-gap-snapshot.md`
+| Gate | Status |
+|------|--------|
+| **GATE_S16** | ✅ clear |
+| **GATE_S_CORE** | ⏳ need **B2/S3** enrichment badge (S1+S2 done) |
 
 ## Next
 
-- **Agent B (`-e78a`):** **Build B1 now** (S4 whale/rugger/indicator depth) — do not wait
-- **Agent A (`-843d`):** A5 signal-derived magnitude → …
+- **Agent B:** Build **B2** (S3 whale enrichment badge) — unblocks `GATE_S_CORE`
+- **Agent A:** Idle until `GATE_S_CORE`, then **A6** F1 watchlist API
 - Monitor `./scripts/verify_prod.sh` after deploys
