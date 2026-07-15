@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T16:10:00Z — **A:F6 · B: post-U2**  
-**main:** `e167972`
+**Last updated:** 2026-07-15T16:25:00Z — **A DONE · B: UI**  
+**main:** `eb01e70`
 
 ## Ditto boot (read first)
 
@@ -39,19 +39,19 @@ Composer spawns Grok via subagent — starts slow + medium; no manual model pick
 
 ## Ready for next work
 
-**`GATE_ACCOUNT` CLEAR.** F5 #260 on main.  
-**Agent A:** F6 message-intel (final A slice). **Agent B:** F1/F2 UI → U3.
+**Agent A §17 auto queue DONE** (F1–F6). All gates clear.  
+**Agent B:** F1/F2 UI → U3 → F3 UI. **Human:** F7 DNS.
 
 | PR | Role | State |
 |----|------|-------|
+| **#261** | §17.F6 message-intel | ✅ **merged** |
 | **#260** | §17.F5 streaming chat | ✅ **merged** |
 | **#259** | §17.F4 weekly letter | ✅ **merged** |
 | **#258** | §17.U2 story strip | ✅ **merged** |
 | **#257** | §17.F3 paper portfolio | ✅ **merged** |
 | **#254–#256** | F1/F2/U1 | ✅ **merged** |
-| **#244–#246** | §16 | ✅ **merged** |
 
-**Health:** `GET /health` · `GET /api/message-intel/status` · `POST /api/simivision/chat` → 200 OK  
+**Health:** `GET /health` · `GET /api/message-intel/status` → 200 OK  
 **Fly:** machine `shared-cpu-1x:1024MB`, checks passing.
 
 ## Gate Status
@@ -64,13 +64,13 @@ Composer spawns Grok via subagent — starts slow + medium; no manual model pick
 | **N/O** | ✅ **COMPLETE** — #227 (A) + #228 (B) |
 | **P** | ✅ **COMPLETE** — #232 + #237 |
 | **§16** | ✅ **`GATE_S16` CLEAR** — #244 · #245 · #246 |
-| **§17** | 🟡 **IN PROGRESS** — A→F6 (final); B post-U2 |
+| **§17** | 🟡 **IN PROGRESS** — A DONE; B UI remaining |
 
 ## §16 / §17 execution
 | Agent | Queue | Status |
 |-------|--------|--------|
-| **A** (`-843d`) | F5 ✅ · **F6 message-intel** | building → DONE after merge |
-| **B** (`-e78a`) | U2 ✅ · **F1/F2 UI** → U3 → F3 UI | next |
+| **A** (`-843d`) | F1–F6 ✅ | **DONE** |
+| **B** (`-e78a`) | U2 ✅ · **F1/F2 UI** → U3 → F3/F4/F5 UI | building |
 | **Human** | F7 DNS | anytime |
 
 Specs: `s16-s17-automated-build-plan.md`. All gates through ACCOUNT clear.
@@ -79,7 +79,7 @@ Specs: `s16-s17-automated-build-plan.md`. All gates through ACCOUNT clear.
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **A** | **Building F6** | Last A slice; then idle |
+| **A** | **Idle** | §17 A auto queue complete |
 | **B** | **Build F1/F2 UI** | After U2 |
 | **Ditto** | **Gate/spot-check** | Not day-to-day QB |
 
