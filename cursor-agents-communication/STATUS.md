@@ -1,37 +1,38 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-15T06:20:00Z  
-**main:** `ab1936c`
+**Updated:** 2026-07-15T13:45:00Z  
+**main:** `efe8027` (+ §16.3 pending this PR)
 
 ## One-line
 
-**Phase P code merged via #232 (not #233). Prod flags on; P5 verified (#237).**
+**`GATE_S16` COMPLETE — §16.1/#244 · §16.2/#245 · snapshot docs. Agent B may start B1. A continues A4 (S1 bands).**
 
 ## PR truth (avoid board drift)
 
 | PR | What | State |
 |----|------|-------|
-| **#232** | Phase P implementation — `fly.toml` flags, `subnet_snapshot`, judge persist | ✅ **merged** |
-| **#233** | Agent B duplicate of #232 | ❌ **closed unmerged** — do not wait on this |
-| **#237** | P5 prod verify + `scripts/verify_prod.sh` | ✅ **merged** |
+| **#243** | Auto plan + start prompts | ✅ **merged** |
+| **#244** | §16.1 outcome backfill | ✅ **merged** |
+| **#245** | §16.2 gated hybrid_score | ✅ **merged** |
+| **#232** | Phase P implementation | ✅ **merged** |
+| **#233** | Duplicate of #232 | ❌ **closed unmerged** |
 
 ## Done (do not re-queue)
 
 | Track | PRs |
 |-------|-----|
 | N/O | **#227** · **#228** |
-| Phase P code | **#232** |
-| Phase P verify | **#237** |
-| Board hygiene | **#229**–**#234** · **#236** |
+| Phase P | **#232** · **#237** |
+| §16 | **#244** · **#245** · (§16.3 snapshot) |
 
-## Phase P — COMPLETE (verified on prod)
+## Phase §16 — COMPLETE
 
-- `./scripts/verify_prod.sh` → auto_retrain **on**, conviction alerts **on**
-- Backtest: council/oracle **53.5%**; oracle ≥0.55 bin **69.8%** (n=116)
-- **P4 pending:** custom domain DNS — human (`DEPLOY.md`)
+- Outcomes: no duplicate mint; unresolvable reported
+- `hybrid_score`: gated n≥30; honest “not enough data yet”
+- Prod backtest still **53.5%** (vs P baseline) — see `docs/phase-16-trust-gap-snapshot.md`
 
 ## Next
 
-- **READY FOR REVIEW:** `s16-s17-automated-build-plan.md` + `s16-s17-start-prompts.md` — approve then Build A1.
-- Agent A (`-843d`): §16 → S1/S2 → F1–F6. Agent B (`-e78a`): idle until `GATE_S16`, then S4→S3→U*→F UIs.
+- **Agent B:** `GATE_S16` clear → Build **B1** (S4)
+- **Agent A:** A4 S1 conviction bands API → A5 S2 magnitude …
 - Monitor `./scripts/verify_prod.sh` after deploys
