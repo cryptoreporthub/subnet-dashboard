@@ -1,5 +1,5 @@
 {# U1 single-job home — pick + band + one-line why + CTA in first viewport #}
-<section class="council-stage home-job" id="section-daily-pick" aria-labelledby="council-stage-title">
+<section class="council-stage home-job" id="section-daily-pick" aria-labelledby="council-stage-title" data-home-live="1">
   <div class="council-stage__atmosphere" aria-hidden="true"></div>
   <div class="council-stage__inner">
     <p class="council-stage__brand">Simi<span>Vision</span></p>
@@ -49,6 +49,7 @@
       </div>
 
       {% if audit_pick and sn %}
+      <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
       <div class="council-call home-job__call">
         <div class="council-call__action">
           <span class="badge {% if act == 'BUY' or act == 'LONG' %}badge-buy{% elif act == 'SELL' or act == 'SHORT' %}badge-sell{% else %}badge-hold{% endif %}">{{ 'BUY' if act == 'LONG' else act }}</span>
@@ -59,7 +60,9 @@
         <p class="home-job__why">We expect: {{ why_line }}</p>
         {% endif %}
       </div>
+      </div>
       {% else %}
+      <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
       <div class="council-call council-call--hold home-job__call">
         <div class="council-call__action">
           <span class="badge badge-hold">HOLD</span>
@@ -73,6 +76,7 @@
         <p class="home-job__why">
           {% if why_line %}{{ why_line }}{% else %}Council waits until confidence clears the audit gate.{% endif %}
         </p>
+      </div>
       </div>
       {% endif %}
 
