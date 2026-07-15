@@ -2,12 +2,6 @@
 (function () {
   'use strict';
 
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
-    });
-  }
-
   // ---------- UTC clock ----------
   function updateClock() {
     var el = document.getElementById('utcClock');
@@ -55,49 +49,4 @@
   // ---------- Chart paint hooks (uplot_charts.js defines __paintSparks / __paintRadar) ----------
   if (typeof window.__paintSparks === 'function') window.__paintSparks();
   if (typeof window.__paintRadar === 'function') window.__paintRadar();
-
-  // ---------- Chat ----------
-  (function () {
-    var log = document.getElementById('chatLog');
-    var input = document.getElementById('chatInput');
-    var btn = document.getElementById('chatSend');
-    var meta = document.getElementById('chatMeta');
-    if (!log || !input || !btn) return;
-
-    function add(text, who) {
-      var d = document.createElement('div');
-      d.className = 'chat-msg ' + (who === 'user' ? 'user' : 'bot');
-      d.innerHTML = '<div class="who">' + (who === 'user' ? 'YOU' : 'SIMIVISION') + '</div>' + esc(text).replace(/\n/g, '<br>');
-      log.appendChild(d);
-      log.scrollTop = log.scrollHeight;
-    }
-
-    function send() {
-      var msg = (input.value || '').trim();
-      if (!msg) return;
-      add(msg, 'user');
-      input.value = '';
-      btn.disabled = true;
-      if (meta) meta.textContent = 'LLM: thinking…';
-      fetch('/api/simivision/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: msg })
-      })
-        .then(function (r) { return r.json(); })
-        .then(function (j) {
-          var d = (j && j.data) || {};
-          add((d.reply || 'No response.').replace(/\n/g, '\n'), 'bot');
-          if (meta) meta.textContent = 'LLM: ' + (d.llm_used ? 'used' : 'local fallback') + ' · records ' + ((d.mindmap_context || {}).learning_records || 0);
-        })
-        .catch(function () {
-          add('Connection error — intelligence layer unreachable.', 'bot');
-          if (meta) meta.textContent = 'LLM: error';
-        })
-        .finally(function () { btn.disabled = false; input.focus(); });
-    }
-
-    btn.addEventListener('click', send);
-    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') send(); });
-  })();
 })();
