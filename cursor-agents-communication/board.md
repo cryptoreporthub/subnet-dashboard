@@ -140,6 +140,7 @@ Specs: `gameplan-N-O.md` + `phase-n-o-step0-spec.md`. Models: Composer 2.5; **Gr
 - Board + master plan override memory.
 - Honest-empty > fake data.
 - **Grok slow + medium default** — escalate to **high** only if medium fails or is unsatisfactory (Phase 3+ design, pre-merge sign-off, Step 0).
+- **Build caching** — read binding specs once per session; scope reads to owned paths; batch Grok; cite doc paths instead of re-pasting (`model-guide.md`).
 
 ## References
 - `cursor-agents-communication/phase-3-grok-design.md`

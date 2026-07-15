@@ -21,6 +21,16 @@
 
 **Grok as reviewer:** Read-only pass — no edits unless findings require a follow-up Composer task. Save review conclusions to Ditto (`source: cursor-agents-communication`) or a PR comment.
 
+**Build caching (token discipline) — try during every slice:**
+1. **Read binding docs once per session** — `board.md`, `STATUS.md`, locked spec (`phase-*-step0-spec.md`, `gameplan-*.md`). After that, cite paths; do not re-paste full spec bodies into prompts or Ditto posts.
+2. **Stable prefix, variable tail** — when invoking Grok, put unchanged architecture/spec at the top and the slice-specific question at the end so provider prompt-cache can reuse the prefix across calls in the same build.
+3. **Scope tools** — `grep`/`read` only owned paths + conflict surface (`server.py`, contract test). No whole-repo exploration when the gameplan already names files.
+4. **Batch before Grok** — group related visual/behavioral questions into one slow-medium pass; escalate to high only if that pass fails (see §4 triggers).
+5. **Git is the cache of record** — prefer `main` + open PR diff over re-auditing merged reality; update `board.md`/`STATUS.md` once per merge, not every turn.
+6. **Skip redundant passes** — if Step 0 / a design note is LOCKED on `main`, Composer builds without a second Grok kickoff unless the slice is novel or medium review failed.
+
+Full token rules: `docs/cursor-implementation-guide.md` § Grok Token-Saving Precautions.
+
 ---
 
 ## 1. Rule of thumb

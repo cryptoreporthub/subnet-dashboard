@@ -75,6 +75,7 @@ Phase L: Composer slices 1–2; **Grok design before** slices 3–4 (WebSocket, 
 ## Non-Negotiables
 - Honest-empty > decorative summaries > 500 errors.
 - No fake live data or fabricated signals.
+- **Cache during builds** — read binding specs once; scope context; batch Grok calls; cite paths instead of re-pasting docs (`model-guide.md` → Build caching).
 
 ## Extended Reference
 - Full history: `docs/master-plan-merged.md`
