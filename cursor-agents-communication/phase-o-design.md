@@ -1,11 +1,16 @@
 # Phase O — TAO Signal Hub → Council (Grok design → Composer spec)
 
+> **SUPERSEDED 2026-07-15.** This document describes the **OLD** Phase O (TAO Signal Hub).  
+> That work is **COMPLETE on `main`** (`internal/signal_hub/`, `/api/signal-hub/*`).  
+> **Do not rebuild it.** The approved Phase O is now **Alerts / Reports / Launch** — see  
+> `cursor-agents-communication/gameplan-N-O.md` and `phase-n-o-step0-spec.md`.
+
 **Date:** 2026-07-13  
 **Model:** grok-4.5-xhigh design pass → Composer build  
 **Stack:** FastAPI + Uvicorn (`server:app`)  
 **main:** `cc6de08` (post-Phase N)
 
-## Verdict: ✅ PROCEED
+## Verdict: ✅ PROCEED (historical — shipped; see supersede banner above)
 
 Substantial signal infrastructure already exists. Phase O adds a **chart-led hub layer** that monitors subnet/TAO metrics, runs anomaly guards, emits rows into Phase L's `SignalStore`, and optionally enriches council scoring — without touching resolver, grading, or learning weight logic.
 
