@@ -413,6 +413,7 @@ def get_calibration_status(
     soul_map_path: str = "data/soul_map.json",
     predictions_path: str = PREDICTIONS_PATH,
 ) -> Dict[str, Any]:
+    from internal.council.conviction_bands import conviction_bands_status
     from internal.council.grading import hybrid_score_status
     from internal.council.weights import load_impact_strength, load_weights
 
@@ -423,6 +424,7 @@ def get_calibration_status(
         "weights": load_weights(soul_map_path),
         "impact_strength": load_impact_strength(soul_map_path),
         "hybrid_score": hybrid_score_status(),
+        "conviction_band": conviction_bands_status(),
         "calibration": {
             "last_retrain_at": cal.get("last_retrain_at"),
             "last_cert_status": cal.get("last_cert_status"),
