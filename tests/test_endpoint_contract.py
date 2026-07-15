@@ -154,6 +154,8 @@ CONTRACT = [
     ("PUT", "/api/watchlist", {"netuids": []}),
     # §17.F3 paper portfolio (council vs hold TAO)
     ("GET", "/api/portfolio/status", None),
+    # §17.F4 weekly letter
+    ("GET", "/api/letter/weekly", None),
     # Phase O TAO Signal Hub
     ("GET", "/api/signal-hub/status", None),
     ("GET", "/api/signal-hub/signals", None),

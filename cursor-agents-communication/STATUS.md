@@ -1,24 +1,22 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-15T15:05:00Z  
-**main:** `a451bcc` (F1+F2+U1 on main → **GATE_HABIT clear**)
+**Updated:** 2026-07-15T15:25:00Z  
+**main:** `2acb381` (F3 #257 → **GATE_ACCOUNT clear**)
 
 ## One-line
 
-**`GATE_HABIT` CLEAR (#254+#256+#255). A: F3 paper portfolio; B: U2 story strip.**
+**`GATE_ACCOUNT` CLEAR (#257). A: F4 weekly letter; B: U2 story strip.**
 
 ## PR truth
 
 | PR | What | State |
 |----|------|-------|
+| **#257** | §17.F3 paper portfolio | ✅ **merged** |
 | **#256** | §17.F2 alert delivery | ✅ **merged** |
 | **#255** | §17.U1 single-job home | ✅ **merged** |
 | **#254** | §17.F1 watchlist | ✅ **merged** |
 | **#253** | Grok lock HARD RULE | ✅ **merged** |
-| **#252** | §17.S3 whale enrichment badge | ✅ **merged** |
-| **#250** | §17.S2 signal-derived magnitude | ✅ **merged** |
-| **#248** | §17.S4 honest depth (B) | ✅ **merged** |
-| **#247** | §17.S1 conviction bands | ✅ **merged** |
+| **#252** | §17.S3 whale badge | ✅ **merged** |
 | **#244–#246** | §16 | ✅ **merged** |
 
 ## Gates
@@ -26,12 +24,12 @@
 | Gate | Status |
 |------|--------|
 | **GATE_S16** | ✅ clear |
-| **GATE_S_CORE** | ✅ clear (S1+S2+S3) |
+| **GATE_S_CORE** | ✅ clear |
 | **GATE_HABIT** | ✅ clear (F1+F2+U1) |
-| **GATE_ACCOUNT** | ⏳ F3 on main |
+| **GATE_ACCOUNT** | ✅ clear (F3 #257) |
 
 ## Next
 
-- **Agent A:** F3 paper portfolio → wait GATE_ACCOUNT → F4 weekly letter
-- **Agent B:** U2 story strip → F1/F2 UI → U3 polish
-- Obey `grok-lock-composer-write-rule.md` / model-guide HARD RULE
+- **Agent A:** F4 weekly letter → F5 streaming chat → F6 message-intel
+- **Agent B:** U2 story strip → F1/F2 UI → U3 → F3 UI (GATE_ACCOUNT clear)
+- Obey HARD RULE (#253)
