@@ -149,6 +149,9 @@ CONTRACT = [
     # Phase O conviction-threshold alerts (O1)
     ("GET", "/api/conviction-alerts/status", None),
     ("POST", "/api/conviction-alerts/notify", {}),
+    # §17.F1 watchlist
+    ("GET", "/api/watchlist", None),
+    ("PUT", "/api/watchlist", {"netuids": []}),
     # Phase O TAO Signal Hub
     ("GET", "/api/signal-hub/status", None),
     ("GET", "/api/signal-hub/signals", None),
@@ -206,6 +209,8 @@ def test_contract_route_ok(client, method, path, body):
         resp = client.get(path)
     elif method == "POST":
         resp = client.post(path, json=body)
+    elif method == "PUT":
+        resp = client.put(path, json=body)
     else:
         raise AssertionError(f"Unsupported method {method}")
 
