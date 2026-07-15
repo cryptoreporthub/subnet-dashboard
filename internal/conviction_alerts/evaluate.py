@@ -120,13 +120,17 @@ def _collect_candidates() -> List[Dict[str, Any]]:
 
 def get_conviction_config() -> Dict[str, Any]:
     min_conf = float(os.environ.get("CONVICTION_ALERT_MIN", str(_DEFAULT_THRESHOLDS["cyan"])))
+    from internal.conviction_alerts.delivery import delivery_mode
+
     return {
         "enabled": conviction_alerts_enabled(),
         "min_confidence": min_conf,
         "tiers": dict(_DEFAULT_THRESHOLDS),
+        "delivery_mode": delivery_mode(),
         "env": {
             "CONVICTION_ALERTS_ENABLED": "off",
             "CONVICTION_ALERT_MIN": "75",
+            "CONVICTION_ALERT_DELIVERY": "off|dry_run|webhook|telegram",
         },
     }
 
@@ -181,8 +185,19 @@ def run_conviction_evaluation(engine: "AlertEngine") -> Dict[str, Any]:
 
     result["created"] = created
     result["created_count"] = len(created)
+    try:
+        from internal.conviction_alerts.delivery import deliver_alerts
+
+        result["delivery"] = deliver_alerts(created)
+    except Exception as exc:
+        result["delivery"] = {"mode": "error", "error": str(exc)}
     _last_run.update(
-        {"last_run_at": run_at, "created": len(created), "reason": "evaluated"}
+        {
+            "last_run_at": run_at,
+            "created": len(created),
+            "reason": "evaluated",
+            "delivery": result.get("delivery"),
+        }
     )
     return result
 
