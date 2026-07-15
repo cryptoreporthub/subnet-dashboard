@@ -166,21 +166,24 @@ Run these as **read-only Grok-fast-xhigh or Grok-xhigh** passes when touching re
 | Port `message_intel/telegram_listener.py` | Composer |
 | Prod proof (`message_intel` non-empty) | Composer + manual |
 
-### Phase N (Agent A) — future
+### Phase N (Agent A + B) — approved 2026-07-15
 
-| Step | Model |
-|------|-------|
-| Retrain → Cert → Fire pipeline | **Grok-xhigh** |
-| `/api/calibration/status`, scheduler | Composer |
-| Hot-path safety review | **Grok-xhigh** |
+| Step | Owner | Model |
+|------|-------|-------|
+| N2 scenario-memory outcome wiring | A | Composer 2.5 |
+| N3 retrain → cert → fire + scheduler | A | **Grok-xhigh** design → Composer 2.5 wire |
+| N1 oracle/grader tuning | B | **Grok-xhigh** design → Composer 2.5 wire |
+| N4 backtest harness + analytics | B | Grok-fast design → Composer 2.5 |
 
-### Phase O (Agent A) — future
+### Phase O (Agent A + B) — approved 2026-07-15
 
-| Step | Model |
-|------|-------|
-| SignalTracker + anomaly guards | Grok-xhigh |
-| Council state-vector integration | Grok design, Composer wire |
-| L alert hooks | Composer |
+| Step | Owner | Model |
+|------|-------|-------|
+| O1 conviction-threshold alerts (backend) | A | Grok-fast design → Composer 2.5 |
+| O4 custom domain + CDN | A | Composer 2.5 |
+| O5 docs/handoff | A | Composer 2.5 |
+| O2 backtest history UI | B | Composer 2.5 + Grok-fast sign-off |
+| O3 exportable per-subnet report | B | Composer 2.5 |
 
 ### Agent A optional follow-ups
 
@@ -223,30 +226,7 @@ User does not need to change the Cloud Agent model picker unless they want the e
 
 **Workflow:** Grok-fast subagent audit → Composer implements → Grok-fast sign-off before merge.
 
-
 ### Review prompt template (paste into Grok run)
 ```text
 Read-only second opinion. Do not edit files.
-Phase: <J|H-full|K|L|…>
-Paths: <list>
-Verify: <checklist from §3>
-Output: PASS / CONDITIONAL / FAIL with file:line findings.
-```
-
----
-
-## 7. Quick reference — Agent A vs B
-
-| Agent | Composer default | Grok for build | Grok for review (past) |
-|-------|------------------|----------------|------------------------|
-| **A** | H-full follow-ups, M/O wiring, L triggers | M, N, O kickoff | **J**, H-full, K policy |
-| **B** | L slices 1–2, server.py routes | L slices 3–4 design | H-thin, L slice 1 schema |
-
----
-
-## References
-
-- `cursor-agents-communication/board.md` — current phase & ownership
-- `master-plan-merged.md` — phase order
-- `docs/master-plan-merged.md` — J/R1–R6, contracts, M/N/O detail
-- `docs/sciweave-answers-phase-j.md` — Phase J grading constants (Grok review binding)
+Phase:  Paths:  Verify:  Output: PASS / CONDITIONAL / FAIL with file:line findings. ``` --- ## 7. Quick reference — Agent A vs B | Agent | Composer default | Grok for build | Grok for review (past) | |-------|------------------|----------------|------------------------| | **A** | H-full follow-ups, M/O wiring, L triggers | M, N, O kickoff | **J**, H-full, K policy | | **B** | L slices 1–2, server.py routes | L slices 3–4 design | H-thin, L slice 1 schema | --- ## References - `cursor-agents-communication/board.md` — current phase & ownership - `master-plan-merged.md` — phase order - `docs/master-plan-merged.md` — J/R1–R6, contracts, M/N/O detail - `docs/sciweave-answers-phase-j.md` — Phase J grading constants (Grok review binding)
