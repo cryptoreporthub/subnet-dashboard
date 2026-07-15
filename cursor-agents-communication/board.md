@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T05:18:00Z — **Phase N/O COMPLETE** (#228 B + #227 A)  
-**main:** `92737a7`
+**Last updated:** 2026-07-15T06:20:00Z — **Phase P code on main (#232); #233 closed unmerged**  
+**main:** `ab1936c`
 
 ## Ditto boot (read first)
 
@@ -77,7 +77,13 @@ Composer spawns Grok via subagent — starts slow + medium; no manual model pick
 
 ## Ready for next work
 
-**Phase P — ACTIVE.** Prod flags + N1 snapshot persistence (`gameplan-phase-p.md`). N/O complete (#227 + #228).
+**Phase P — COMPLETE (implementation #232, not #233).** P5 verified (#237). N/O complete (#227 + #228).
+
+| PR | Role | State |
+|----|------|-------|
+| **#232** | Phase P code — prod flags + `subnet_snapshot` | ✅ **merged** |
+| **#233** | Agent B duplicate of #232 | ❌ **closed unmerged** (superseded by #232) |
+| **#237** | P5 prod verify + `scripts/verify_prod.sh` | ✅ **merged** |
 
 **Automated July 14 queue:** COMPLETE. **A2:** `smoke` required on `main`.
 
@@ -105,13 +111,13 @@ Recent merges on `main` @ `778ad13`:
 | **UI Phase 2** | ✅ merged #157 (Grok sign-off: CONDITIONAL — see phase-3-grok-design.md) |
 | **J–M** | ✅ merged |
 | **N/O** | ✅ **COMPLETE** — #227 (A) + #228 (B) merged |
-| **P** | ✅ **COMPLETE** — #232 merged |
+| **P** | ✅ **COMPLETE** — code **#232** + verify **#237** (#233 closed, not merged) |
 
-## N/O queue
+## Phase P queue
 | Agent | Slices | Status |
 |-------|--------|--------|
 | **A** (`-843d`) | P1–P3 | ✅ **#232 merged** |
-| **B** (`-e78a`) | — | idle / monitor backtest UI |
+| **B** (`-e78a`) | #233 duplicate | ❌ **#233 closed** — same scope landed in #232 |
 
 Specs: `gameplan-N-O.md` + `phase-n-o-step0-spec.md`. Models: Composer 2.5; **Grok slow + medium** (escalate **high** only if FAIL/unsatisfactory).
 
