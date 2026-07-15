@@ -148,6 +148,61 @@ curl -fsS https://subnet-dashboard.fly.dev/api/conviction-alerts/status | python
 
 Revert to live delivery with `telegram` or `webhook` secrets above, or `CONVICTION_ALERT_DELIVERY=off` to disable outbound only.
 
+### Message-intel Telegram listener (§18 C1)
+
+Live social ingest uses **Telethon user session** (not the conviction-alert bot). `fly.toml` keeps `MESSAGE_INTEL_LISTENER=off` by default so CI/cold boots stay safe — enable only after a session file exists on the volume.
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `TELEGRAM_API_ID` | yes | my.telegram.org app id |
+| `TELEGRAM_API_HASH` | yes | my.telegram.org app hash |
+| `TELEGRAM_PHONE` | first login | E.164 phone (`+1...`) for one-time auth |
+| `TELEGRAM_GROUP` | no | Group username to monitor (default `OfficialSubnetSummer`) |
+| `TELEGRAM_SESSION_PATH` | no | Session base path (default `data/telegram_listener` → `/app/data` on Fly) |
+| `MESSAGE_INTEL_LISTENER` | enable | Set `auto` or `on` to start listener at boot |
+
+**Step 1 — bootstrap session locally** (interactive SMS/Telegram code; not runnable headless on Fly):
+
+```bash
+export TELEGRAM_API_ID='<your-api-id>'
+export TELEGRAM_API_HASH='<your-api-hash>'
+export TELEGRAM_PHONE='<your-phone-e164>'
+python scripts/bootstrap_telegram_session.py
+# Creates data/telegram_listener.session (+ .session-journal while open)
+```
+
+**Step 2 — copy session to Fly volume** (human / `flyctl ssh`):
+
+```bash
+flyctl ssh console --app subnet-dashboard
+# From local machine in another terminal:
+flyctl ssh sftp shell --app subnet-dashboard
+# put data/telegram_listener.session /app/data/telegram_listener.session
+```
+
+**Step 3 — set Fly secrets and enable listener:**
+
+```bash
+flyctl secrets set \
+  TELEGRAM_API_ID='<your-api-id>' \
+  TELEGRAM_API_HASH='<your-api-hash>' \
+  TELEGRAM_PHONE='<your-phone-e164>' \
+  MESSAGE_INTEL_LISTENER=auto \
+  --app subnet-dashboard
+```
+
+Optional group override: `TELEGRAM_GROUP='YourGroupUsername'`.
+
+Verify:
+
+```bash
+curl -fsS https://subnet-dashboard.fly.dev/api/message-intel/status | python3 -m json.tool
+# listener.reason=running, listener.live=true when session + group resolve
+./scripts/verify_prod.sh
+```
+
+**Security:** never commit `*.session` files or API secrets. Rotate API hash at my.telegram.org if exposed.
+
 ---
 
 ## Environment reference
@@ -157,6 +212,7 @@ Revert to live delivery with `telegram` or `webhook` secrets above, or `CONVICTI
 | `CALIBRATION_AUTO_RETRAIN` | **on** (fly.toml) | N3 post-resolver retrain hook |
 | `CONVICTION_ALERTS_ENABLED` | **on** (fly.toml) | O1 notify evaluation |
 | `CONVICTION_ALERT_DELIVERY` | **off** | Outbound delivery: off/dry_run/webhook/telegram |
+| `MESSAGE_INTEL_LISTENER` | **off** (fly.toml) | Telegram ingest at boot (`auto`/`on` when session ready) |
 | `ALLOWED_ORIGINS` | fly.dev + cryptoreporthub.com | CORS allowlist |
 
 ---
