@@ -1,20 +1,22 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-14T23:20:00Z by Agent (`-5e45`) — **queues COMPLETE; Fly healthy**  
-**main:** `d59782e`
+**Last updated:** 2026-07-15T02:45:00Z by Agent (`-6f98`) — **N/O Step 0 LOCKED; #221 merged**  
+**main:** `778ad13`
 
 ## Ditto boot (read first)
 
 **`cursor-agents-communication/STATUS.md`** — one-page truth card.  
-Automated queue **COMPLETE**. B2/A2/Phase K are **not** open. Ditto = monitor only.
+**Step 0 spec:** `cursor-agents-communication/phase-n-o-step0-spec.md` (binding).
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
 
 ## N/O (approved 2026-07-15)
-- **APPROVED**: Agent A (`-843d`) + Agent B (`-e78a`) split; full spec: `cursor-agents-communication/gameplan-N-O.md`.
-- Agents idle until kickoff (Step 0: joint **Grok-fast** design pass; escalate to xhigh only on FAIL/CONDITIONAL).
-- Models: Composer 2.5 default; **Grok token-save** — every Grok call starts on `grok-4.5-fast-xhigh`.
+- **APPROVED** + **Step 0 LOCKED** — Agent A (`-843d`) + Agent B (`-e78a`).
+- Specs: `gameplan-N-O.md` · `phase-n-o-step0-spec.md`
+- Models: Composer 2.5 default; **Grok token-save** (`grok-4.5-fast-xhigh` first).
+- Old Phase O (`phase-o-design.md` / `signal_hub`) = **SUPERSEDED / COMPLETE — do not rebuild**.
+- **A start:** N2 (or N3/O1 in parallel). **B start:** N4 first.
 
 ## Read order (agents + Ditto)
 1. **STATUS card** — `cursor-agents-communication/STATUS.md` (Ditto: start here)
@@ -75,25 +77,18 @@ Composer spawns Grok via subagent — no manual model picker needed. Batch tasks
 
 ## Ready for next work
 
-**Idle — monitor only.** Product queues + Fly outage fix COMPLETE.
+**Phase N/O — Step 0 LOCKED.** A/B Composer builds unblocked after Step 0 PR merges.
 
-**Automated queue:** COMPLETE — B6–C3 · G7+G12 · #198–#218. **A2:** `smoke` required on `main`.
+**Automated July 14 queue:** COMPLETE. **A2:** `smoke` required on `main`.
 
-Recent merges on `main` @ `d59782e`:
+Recent merges on `main` @ `778ad13`:
 
 | PR | Phase | Summary |
 |----|-------|---------|
-| **#218** | Ops | Fly 1GB + post-deploy restart/health gate (outage fix) |
-| **#217** | Social | Message-intel social sentiment (#110 cherry-pick) |
-| **#216** | Board | EXTREME audit COMPLETE status |
-| **#215** | UI | Canvas radar replaces Chart.js CDN (audit #10) |
-| **#214** | Board | Call-quality lane complete |
-| **#213** | Council | Priced scoring + SimiVision call lines |
-| **#212** | Data | Lazy OHLCV fill + audit #15/#16 polish |
-| **#210** | Council | Hourly prediction + learning signal stamps |
-| **#198** | UI | Council-first overhaul |
-| **#195** | **G7+G12** | Rajdhani titles, favicon, fonts |
-| **#185** | **B6** | slowapi rate limit |
+| **#221** | Docs | N/O gameplan + Grok token-save + pre-flight |
+| **#218** | Ops | Fly 1GB + post-deploy restart/health gate |
+| **#217** | Social | Message-intel social sentiment |
+| **#215** | UI | Canvas radar replaces Chart.js CDN |
 
 **Health:** `GET /health` · `GET /api/data-freshness` · `GET /api/signal-hub/status` · `GET /api/calibration/status` · `GET /api/message-intel` → 200 OK  
 **Fly:** machine `shared-cpu-1x:1024MB`, checks passing (was critical on 256MB).
