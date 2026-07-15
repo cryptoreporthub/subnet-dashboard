@@ -1,7 +1,9 @@
 # Model Guide — Composer vs Grok
 
 **Last updated:** 2026-07-15  
-**Applies to:** Agent A (`-843d`), Agent B (`-e78a`), and human-initiated Cloud Agent runs
+**Applies to:** **One primary Cloud Agent** (Pro+; B UI tail) + Grok **subagent**. Agent A (`-843d`) **retired** — do not spawn.
+
+> **Mode:** One agent + Grok subagent only. Queue: B8 F3 UI → B9 F4 UI → B10 F5 UI. See `token-budget-rules.md` + `STATUS.md`.
 
 ## Models
 
