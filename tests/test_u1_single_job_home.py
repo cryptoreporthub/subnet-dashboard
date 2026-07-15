@@ -28,6 +28,9 @@ def test_index_u1_single_job_home():
     assert "home-band" in html or "home-band--empty" in html
     assert "home-enrichment" in html
     assert 'id="pro-cockpit"' in html
+    assert 'id="home-daily-call"' in html
+    assert 'id="story-strip-body"' in html
+    assert "home_live_refresh.js" in html
     # Hero before Pro + market drawers
     assert html.index("home-job") < html.index('id="pro-cockpit"')
     assert html.index('id="pro-cockpit"') < html.index('id="market-drawer"')

@@ -4,14 +4,15 @@
   {% set rows = strip.items if strip.items is iterable and strip.items is not string else [] %}
   <div class="story-strip__head">
     <h2 class="story-strip__title" id="story-strip-title">Recent calls</h2>
+  </div>
+  <div id="story-strip-body" aria-live="polite">
     {% if strip.data_available and strip.stats is mapping %}
-    <p class="story-strip__meta">
+    <p class="story-strip__meta" id="story-strip-meta">
       {{ strip.stats.correct|default(0) }} right · {{ strip.stats.wrong|default(0) }} wrong
     </p>
     {% endif %}
-  </div>
   {% if strip.data_available and rows %}
-  <ol class="story-strip__list">
+  <ol class="story-strip__list" id="story-strip-list">
     {% for row in rows %}
     <li class="story-strip__item story-strip__item--{{ row.outcome|default('pending') }}">
       <span class="story-strip__verdict" aria-label="{{ row.outcome }}">{{ '✓' if row.outcome == 'correct' else '✗' }}</span>
@@ -25,7 +26,7 @@
     {% endfor %}
   </ol>
   {% else %}
-  <p class="story-strip__empty">
+  <p class="story-strip__empty" id="story-strip-empty">
     {% if strip.reason == 'no_resolved_outcomes' %}
       No graded pick outcomes yet — the strip fills as §16 resolution runs.
     {% else %}
@@ -33,4 +34,5 @@
     {% endif %}
   </p>
   {% endif %}
+  </div>
 </section>

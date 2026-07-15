@@ -773,6 +773,7 @@
         if (payload && payload.sections) {
           renderCockpitSections(payload.sections);
         }
+        document.dispatchEvent(new CustomEvent('home:cockpit-tick'));
       } catch (e) {
         console.warn('[cockpit_hydrate] SSE parse failed', e);
       }
@@ -878,4 +879,6 @@
   } else {
     run();
   }
+
+  window.__cockpitHome = { renderHero: renderHero };
 })();

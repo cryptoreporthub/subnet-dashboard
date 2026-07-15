@@ -1,0 +1,245 @@
+/**
+ * §17.U4 — home hot-path live refresh (no full page reload).
+ * Path: cockpit SSE tick → fetch daily-pick + predictions/resolved + subnets
+ *       → patch #home-daily-call, #story-strip-body, #section-hero.
+ * a11y: aria-live regions; focus preserved; polite updates only.
+ */
+(function () {
+  "use strict";
+
+  var REFRESH_MS = 60000;
+  var SKIP = { duplicate: 1, expired: 1, ungradeable: 1 };
+  var busy = false;
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function fmtSigned(n) {
+    n = Number(n) || 0;
+    return (n >= 0 ? "+" : "") + n.toFixed(1) + "%";
+  }
+
+  function badgeClass(act) {
+    act = String(act || "HOLD").toUpperCase();
+    if (act === "BUY" || act === "LONG") return "badge-buy";
+    if (act === "SELL" || act === "SHORT") return "badge-sell";
+    return "badge-hold";
+  }
+
+  function fetchJson(url, ms) {
+    ms = ms || 12000;
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () {
+      ctrl.abort();
+    }, ms);
+    return fetch(url, { signal: ctrl.signal })
+      .then(function (r) {
+        clearTimeout(timer);
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .catch(function (e) {
+        clearTimeout(timer);
+        throw e;
+      });
+  }
+
+  function outcomeFromPred(pred) {
+    if (pred.correct === true) return "correct";
+    if (pred.correct === false) return "wrong";
+    var actual = Number(pred.actual_pct);
+    if (isNaN(actual)) return null;
+    var dir = String(pred.direction || "").toLowerCase();
+    if (dir === "up") return actual >= 0 ? "correct" : "wrong";
+    if (dir === "down") return actual <= 0 ? "correct" : "wrong";
+    return null;
+  }
+
+  function buildStoryStrip(resolved, limit) {
+    limit = limit || 8;
+    var items = [];
+    var rows = resolved || [];
+    for (var i = rows.length - 1; i >= 0 && items.length < limit; i--) {
+      var pred = rows[i];
+      if (!pred || typeof pred !== "object") continue;
+      if (SKIP[pred.outcome]) continue;
+      if (pred.actual_pct == null) continue;
+      var outcome = outcomeFromPred(pred);
+      if (!outcome) continue;
+      var netuid = pred.netuid;
+      items.push({
+        netuid: netuid,
+        name: pred.name || (netuid != null ? "SN" + netuid : "—"),
+        predicted_pct: pred.predicted_pct,
+        actual_pct: pred.actual_pct,
+        outcome: outcome,
+        statement: pred.statement,
+      });
+    }
+    var correct = items.filter(function (r) {
+      return r.outcome === "correct";
+    }).length;
+    return {
+      data_available: items.length > 0,
+      reason: items.length ? null : "no_resolved_outcomes",
+      items: items,
+      stats: { correct: correct, wrong: items.length - correct },
+    };
+  }
+
+  function patchHomeDailyCall(payload) {
+    var host = document.getElementById("home-daily-call");
+    if (!host || !payload) return;
+    var pick = payload.pick;
+    var cand = payload.candidate;
+    var sn = (pick && pick.subnet) || (cand && cand.subnet) || {};
+    var act = String(payload.action || "HOLD").toUpperCase();
+    if (act === "LONG") act = "BUY";
+    var reasons = (pick && pick.reasons) || (cand && cand.reasons) || [];
+    var why = reasons[0] || payload.reason || "";
+
+    var html;
+    if (pick && (sn.name != null || sn.netuid != null)) {
+      html =
+        '<div class="council-call home-job__call">' +
+        '<div class="council-call__action"><span class="badge ' +
+        badgeClass(act) +
+        '">' +
+        esc(act) +
+        "</span></div>" +
+        '<p class="council-call__name">' +
+        esc(sn.name || "SN" + sn.netuid) +
+        "</p>" +
+        '<p class="council-call__meta">SN' +
+        esc(sn.netuid) +
+        (sn.symbol ? " · " + esc(sn.symbol) : "") +
+        "</p>" +
+        (why ? '<p class="home-job__why">We expect: ' + esc(why) + "</p>" : "") +
+        "</div>";
+    } else {
+      html =
+        '<div class="council-call council-call--hold home-job__call">' +
+        '<div class="council-call__action"><span class="badge badge-hold">HOLD</span></div>';
+      if (sn.name != null || sn.netuid != null) {
+        html +=
+          '<p class="council-call__name">' +
+          esc(sn.name || "SN" + sn.netuid) +
+          "</p>" +
+          '<p class="council-call__meta">SN' +
+          esc(sn.netuid) +
+          (sn.symbol ? " · " + esc(sn.symbol) : "") +
+          " · candidate only</p>";
+      } else {
+        html += '<p class="council-call__name">No audited long call</p>';
+      }
+      html +=
+        '<p class="home-job__why">' +
+        esc(why || "Council waits until confidence clears the audit gate.") +
+        "</p></div>";
+    }
+    host.innerHTML = html;
+
+    var pin = document.getElementById("habit-pin-btn");
+    if (pin && sn.netuid != null) {
+      pin.dataset.netuid = String(sn.netuid);
+      pin.disabled = false;
+      pin.removeAttribute("aria-disabled");
+    }
+  }
+
+  function patchStoryStrip(strip) {
+    var body = document.getElementById("story-strip-body");
+    if (!body || !strip) return;
+    if (!strip.data_available || !strip.items || !strip.items.length) {
+      body.innerHTML =
+        '<p class="story-strip__empty" id="story-strip-empty">' +
+        (strip.reason === "no_resolved_outcomes"
+          ? "No graded pick outcomes yet — the strip fills as §16 resolution runs."
+          : "Pick story unavailable right now.") +
+        "</p>";
+      return;
+    }
+    var stats = strip.stats || { correct: 0, wrong: 0 };
+    var html =
+      '<p class="story-strip__meta" id="story-strip-meta">' +
+      stats.correct +
+      " right · " +
+      stats.wrong +
+      " wrong</p>" +
+      '<ol class="story-strip__list" id="story-strip-list">';
+    strip.items.forEach(function (row) {
+      html +=
+        '<li class="story-strip__item story-strip__item--' +
+        esc(row.outcome) +
+        '">' +
+        '<span class="story-strip__verdict" aria-label="' +
+        esc(row.outcome) +
+        '">' +
+        (row.outcome === "correct" ? "✓" : "✗") +
+        "</span>" +
+        '<span class="story-strip__name">' +
+        esc(row.name) +
+        "</span>";
+      if (row.predicted_pct != null && row.actual_pct != null) {
+        html +=
+          '<span class="story-strip__move">' +
+          fmtSigned(row.predicted_pct) +
+          " → " +
+          fmtSigned(row.actual_pct) +
+          "</span>";
+      } else if (row.statement) {
+        html +=
+          '<span class="story-strip__move">' + esc(String(row.statement).slice(0, 48)) + "</span>";
+      }
+      html += "</li>";
+    });
+    html += "</ol>";
+    body.innerHTML = html;
+  }
+
+  function patchHero(subnets) {
+    if (window.__cockpitHome && typeof window.__cockpitHome.renderHero === "function") {
+      window.__cockpitHome.renderHero(subnets);
+    }
+  }
+
+  async function refreshHomeHotPath() {
+    if (busy || document.documentElement.dataset.hydrate !== "1") return;
+    if (!document.querySelector("[data-home-live]")) return;
+    busy = true;
+    try {
+      var results = await Promise.allSettled([
+        fetchJson("/api/daily-pick"),
+        fetchJson("/api/predictions/resolved"),
+        fetchJson("/api/subnets"),
+      ]);
+      if (results[0].status === "fulfilled") patchHomeDailyCall(results[0].value);
+      if (results[1].status === "fulfilled") {
+        patchStoryStrip(buildStoryStrip(results[1].value.resolved || []));
+      }
+      if (results[2].status === "fulfilled") {
+        patchHero((results[2].value && results[2].value.subnets) || []);
+      }
+    } catch (e) {
+      console.warn("[home_live_refresh] tick failed", e);
+    } finally {
+      busy = false;
+    }
+  }
+
+  function bindCockpitTick() {
+    document.addEventListener("home:cockpit-tick", function () {
+      refreshHomeHotPath();
+    });
+    setInterval(refreshHomeHotPath, REFRESH_MS);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", bindCockpitTick);
+  } else {
+    bindCockpitTick();
+  }
+})();
