@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T15:25:00Z — **`GATE_ACCOUNT` CLEAR · A:F4 · B:U2**  
-**main:** `2acb381`
+**Last updated:** 2026-07-15T15:45:00Z — **A:F5 · B: post-U2**  
+**main:** `e5827e9`
 
 ## Ditto boot (read first)
 
