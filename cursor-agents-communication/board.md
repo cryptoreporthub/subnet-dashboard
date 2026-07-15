@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T15:05:00Z — **`GATE_HABIT` CLEAR · A:F3 · B:U2**  
-**main:** `a451bcc`
+**Last updated:** 2026-07-15T15:25:00Z — **`GATE_ACCOUNT` CLEAR · A:F4 · B:U2**  
+**main:** `2acb381`
 
 ## Ditto boot (read first)
 
@@ -39,22 +39,20 @@ Composer spawns Grok via subagent — starts slow + medium; no manual model pick
 
 ## Ready for next work
 
-**`GATE_HABIT` CLEAR** (F1 #254 + F2 #256 + U1 #255). **`GATE_S_CORE` / `GATE_S16` CLEAR.**  
-**Agent A:** F3 paper portfolio (this PR). **Agent B:** U2 story strip.
+**`GATE_ACCOUNT` CLEAR** (F3 #257). **`GATE_HABIT` / `GATE_S_CORE` / `GATE_S16` CLEAR.**  
+**Agent A:** F4 weekly letter. **Agent B:** U2 story strip (F3 UI unblocked).
 
 | PR | Role | State |
 |----|------|-------|
+| **#257** | §17.F3 paper portfolio | ✅ **merged** |
 | **#256** | §17.F2 alert delivery | ✅ **merged** |
 | **#255** | §17.U1 single-job home | ✅ **merged** |
 | **#254** | §17.F1 watchlist | ✅ **merged** |
 | **#253** | Grok lock HARD RULE | ✅ **merged** |
 | **#252** | §17.S3 whale badge | ✅ **merged** |
-| **#250** | §17.S2 magnitude | ✅ **merged** |
-| **#248** | §17.S4 honest depth | ✅ **merged** |
-| **#247** | §17.S1 conviction bands | ✅ **merged** |
 | **#244–#246** | §16 | ✅ **merged** |
 
-**Health:** `GET /health` · `GET /api/data-freshness` · `GET /api/portfolio/status` · `GET /api/watchlist` → 200 OK  
+**Health:** `GET /health` · `GET /api/portfolio/status` · `GET /api/letter/weekly` · `GET /api/watchlist` → 200 OK  
 **Fly:** machine `shared-cpu-1x:1024MB`, checks passing.
 
 ## Gate Status
@@ -67,23 +65,23 @@ Composer spawns Grok via subagent — starts slow + medium; no manual model pick
 | **N/O** | ✅ **COMPLETE** — #227 (A) + #228 (B) |
 | **P** | ✅ **COMPLETE** — #232 + #237 |
 | **§16** | ✅ **`GATE_S16` CLEAR** — #244 · #245 · #246 |
-| **§17** | 🟡 **IN PROGRESS** — habit spine done; A→F3; B→U2 |
+| **§17** | 🟡 **IN PROGRESS** — account gate clear; A→F4; B→U2 |
 
 ## §16 / §17 execution
 | Agent | Queue | Status |
 |-------|--------|--------|
-| **A** (`-843d`) | F1+F2 ✅ · **F3 paper portfolio** → wait `GATE_ACCOUNT` → F4 | building |
-| **B** (`-e78a`) | U1 ✅ · **U2 story strip** → F1/F2 UI → U3 | next |
+| **A** (`-843d`) | F3 ✅ · **F4 weekly letter** → F5 → F6 | building |
+| **B** (`-e78a`) | U1 ✅ · **U2 story strip** → F1/F2 UI → U3 → F3 UI | next |
 | **Human** | F7 DNS | anytime |
 
-Specs: `s16-s17-automated-build-plan.md`. **GATE_HABIT** = F1+F2+U1. **GATE_ACCOUNT** = F3 on main.
+Specs: `s16-s17-automated-build-plan.md`. **GATE_ACCOUNT** = F3 on main ✅.
 
 ## Agent posture
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **A** | **Building F3** | Paper portfolio engine; then wait GATE_ACCOUNT for F4 |
-| **B** | **Build U2** | Story strip |
+| **A** | **Building F4** | Weekly letter → F5 chat → F6 intel |
+| **B** | **Build U2** | Story strip; F3 UI unblocked |
 | **Ditto** | **Gate/spot-check** | Not day-to-day QB |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`

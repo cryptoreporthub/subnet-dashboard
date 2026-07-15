@@ -20,6 +20,7 @@ from internal.rate_limit import limit_or_noop, mount_rate_limit, strict_limit
 from internal.whales.routes import whales_router
 from internal.watchlist.routes import watchlist_router
 from internal.portfolio.routes import portfolio_router
+from internal.letter.routes import letter_router
 
 logger = logging.getLogger("server")
 
@@ -215,6 +216,7 @@ mount_rate_limit(app)
 app.include_router(whales_router)
 app.include_router(watchlist_router)
 app.include_router(portfolio_router)
+app.include_router(letter_router)
 if _COUNCIL_ROUTES:
     app.include_router(council_router)
 if _LEARNING_ROUTES:
