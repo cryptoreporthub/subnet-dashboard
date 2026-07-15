@@ -70,17 +70,18 @@ flyctl secrets set ALLOWED_ORIGINS="https://dashboard.yourdomain.com,https://sub
 
 Redeploy so CORS middleware picks up the new origin.
 
-### 5. Optional production flags
+### 5. Production flags
+
+**Default on prod** (committed in `fly.toml` since Phase P):
+
+- `CALIBRATION_AUTO_RETRAIN=on` — auto-retrain after resolver when ≥30 new resolved rows
+- `CONVICTION_ALERTS_ENABLED=on` — conviction-threshold alerts via `AlertEngine`
+
+To disable without redeploy:
 
 ```bash
-# N3 — auto-retrain after resolver when ≥30 new resolved rows since last retrain
-flyctl secrets set CALIBRATION_AUTO_RETRAIN=on --app subnet-dashboard
-
-# O1 — conviction-threshold alerts (uses existing AlertEngine store)
-flyctl secrets set CONVICTION_ALERTS_ENABLED=on --app subnet-dashboard
+flyctl secrets set CALIBRATION_AUTO_RETRAIN=off CONVICTION_ALERTS_ENABLED=off --app subnet-dashboard
 ```
-
-Both default **off** in `fly.toml` comments. Enable only after verifying sample size and webhook subscriptions.
 
 ---
 
@@ -88,10 +89,10 @@ Both default **off** in `fly.toml` comments. Enable only after verifying sample 
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `CALIBRATION_AUTO_RETRAIN` | off | N3 post-resolver retrain hook |
+| `CALIBRATION_AUTO_RETRAIN` | **on** (Phase P) | N3 post-resolver retrain hook |
 | `CALIBRATION_AUTO_RETRAIN_MIN_NEW` | 30 | Min new resolutions since last retrain |
 | `CALIBRATION_ADMIN_TOKEN` | unset | Guards `POST /api/calibration/retrain` |
-| `CONVICTION_ALERTS_ENABLED` | off | O1 notify evaluation |
+| `CONVICTION_ALERTS_ENABLED` | **on** (Phase P) | O1 notify evaluation |
 | `CONVICTION_ALERT_MIN` | 75 | Min confidence % for alerts (cyan tier) |
 | `RESOLVER_REFRESH_MINUTES` | 15 | Prediction resolver cadence |
 | `ALLOWED_ORIGINS` | `https://subnet-dashboard.fly.dev` | CORS allowlist |

@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T05:18:00Z — **Phase N/O COMPLETE** (#228 B + #227 A)  
-**main:** `92737a7`
+**Last updated:** 2026-07-15T05:28:00Z — **Phase P active** (post N/O)  
+**main:** `be62cd3`
 
 ## Ditto boot (read first)
 
@@ -77,7 +77,8 @@ Composer spawns Grok via subagent — starts slow + medium; no manual model pick
 
 ## Ready for next work
 
-**Phase N/O — COMPLETE.** All A+B slices merged (#227 + #228). Grok = slow + medium (escalate high only if needed).
+**Phase P — Launch activation** (`gameplan-P.md`): prod flags on + N1 council hardening.  
+**Phase N/O — COMPLETE** (#227 + #228).
 
 **Automated July 14 queue:** COMPLETE. **A2:** `smoke` required on `main`.
 

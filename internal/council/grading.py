@@ -41,3 +41,11 @@ def compute_actual_pct(reference_price: float, resolved_price: float) -> float:
     if reference_price <= 0 or resolved_price <= 0:
         return 0.0
     return round((resolved_price - reference_price) / reference_price * 100, 4)
+
+
+def hybrid_score(
+    prediction: Dict[str, Any],
+    actual_pct: float,
+) -> Optional[float]:
+    """Phase N1 deferral: magnitude scoring until forecasts are signal-derived."""
+    return None

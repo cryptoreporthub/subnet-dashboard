@@ -12,9 +12,24 @@ from typing import Any, Dict, Optional
 
 from internal.council.state_vector import build_prediction_statement
 from internal.council.weights import load_weights
-from internal.learning.predictions_store import append_prediction
+from internal.learning.predictions_store import append_prediction, sync_pending_prediction
 
 logger = logging.getLogger(__name__)
+
+
+def _subnet_snapshot(subnet: Dict[str, Any]) -> Dict[str, Any]:
+    apy = subnet.get("apy")
+    staking = subnet.get("staking_data")
+    if apy is None and isinstance(staking, dict):
+        apy = staking.get("apy")
+    return {
+        "price_change_24h": subnet.get("price_change_24h"),
+        "volume": subnet.get("volume"),
+        "apy": apy,
+        "emission": subnet.get("emission"),
+        "price": subnet.get("price"),
+        "social_mentions": subnet.get("social_mentions"),
+    }
 
 
 def _dominant_expert(expert_contributions: Optional[Dict[str, Any]]) -> str:
@@ -164,6 +179,8 @@ def record_pick_prediction(
     if scenario_id:
         prediction["scenario_id"] = scenario_id
 
+    prediction["subnet_snapshot"] = _subnet_snapshot(subnet)
+
     if not append_prediction(prediction):
         return None
 
@@ -194,6 +211,10 @@ def record_pick_prediction(
             expert_weights=expert_weights,
         )
         prediction["judge_scores_at_creation"] = judge_scores
+        sync_pending_prediction(
+            str(prediction.get("id") or ""),
+            {"judge_scores_at_creation": judge_scores},
+        )
     except Exception as exc:
         logger.warning("Judge on_prediction_created failed: %s", exc)
 

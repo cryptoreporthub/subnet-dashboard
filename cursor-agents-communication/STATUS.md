@@ -1,47 +1,36 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-15T05:18:00Z  
-**main:** `92737a7` — **Phase N/O COMPLETE**
+**Updated:** 2026-07-15T05:28:00Z  
+**main:** `be62cd3` · **Phase P in PR**
 
 ## One-line
 
-**Phase N/O code-complete: Agent A #227 + Agent B #228 merged. Monitor Fly deploy.**
+**Phase N/O complete (#227+#228). Phase P: prod flags on + N1 subnet_snapshot hardening.**
 
 ## Done (do not re-queue)
 
 | Track | PRs |
 |-------|-----|
+| Phase N/O (A+B) | **#227** · **#228** |
+| Board N/O complete | **#229** · **#230** |
 | Phase A–B audit | #167–#185 |
-| Phase C experience | #190–#192 |
-| G7+G12 / council-first | #195 · #198 |
 | Council picks + learning | **#200–#213** |
-| Lazy OHLCV + badge polish | **#212** |
-| Canvas radar (Chart.js removed) | **#215** |
-| Social sentiment (message_intel) | **#217** |
-| Fly keep-warm / 1GB + health gate | **#218** |
-| N/O gameplan | **#221** |
-| Step 0 lock | **#223** |
-| Grok slow+medium policy | **#225** |
-| Agent B N4/N1/O2/O3 | **#228** |
-| Agent A N2/N3/O1/O4/O5 | **#227** |
-| A2 `smoke` on `main` | verified |
-| Stale open PRs closed | #101 · #110 · #112 · #129–#130 · #134 · #139 · #153 · #165–#166 · #184 |
+| N/O gameplan + Step 0 | **#221** · **#223** · **#225** |
 
-## Ditto
+## Phase P (active)
 
-- **Do:** read `board.md`, watch CI/Fly health
-- **Do not:** re-open completed July 14 queue items; do not rebuild `signal_hub`
+| Slice | Status |
+|-------|--------|
+| P1 prod flags (`fly.toml`) | in PR |
+| P2 N1 `subnet_snapshot` + judge persist | in PR |
+| P3 docs | in PR |
+
+## Optional (human)
+
+- Custom domain DNS — `DEPLOY.md` §O4
+- Close duplicate PR **#231** (superseded by #229/#230)
 
 ## Cursor
 
-- **Idle** — Phase N/O complete; no queued N/O slices
-- Git only; Ponytail minimal diff
-- Grok: slow + medium default; high only if medium fails / unsatisfactory
-
-## Phase N/O — COMPLETE
-- **Step 0 LOCKED** — `phase-n-o-step0-spec.md`
-- **B** (`-e78a`): N4 → N1 → O2 → O3 ✅ **#228**
-- **A** (`-843d`): N2 → N3 → O1 → O4 → O5 ✅ **#227**
-- **Optional prod flags:** `CALIBRATION_AUTO_RETRAIN=on`, `CONVICTION_ALERTS_ENABLED=on` (see `DEPLOY.md`)
-- **Optional follow-up:** N1 council grader allowlist in `n1-oracle-tuning-design.md` if Oracle win-rate still low after backtest data accumulates
-- **Human-only:** O4 custom domain DNS at registrar (steps in `DEPLOY.md`)
+- **Active** — Phase P launch activation
+- Grok: slow + medium default

@@ -97,6 +97,19 @@ def append_prediction(prediction: Dict[str, Any]) -> bool:
     return True
 
 
+def sync_pending_prediction(prediction_id: str, fields: Dict[str, Any]) -> bool:
+    """Merge fields onto a pending prediction row (e.g. judge scores post-create)."""
+    if not prediction_id or not fields:
+        return False
+    data = load_predictions()
+    for row in data.get("predictions", []):
+        if row.get("id") == prediction_id:
+            row.update(fields)
+            save_predictions(data)
+            return True
+    return False
+
+
 def update_stats(data: Dict[str, Any]) -> None:
     preds: List[Dict[str, Any]] = data.get("predictions", [])
     resolved: List[Dict[str, Any]] = data.get("resolved", [])
