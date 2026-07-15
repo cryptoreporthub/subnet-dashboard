@@ -143,14 +143,19 @@ def ingest_batch(messages: List[Dict[str, Any]], *, snapshot_price: bool = False
 
 
 def list_messages(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
+    from internal.message_intel.listener_service import listener_status
+
     db = get_db()
     messages = db.list_messages(limit=limit, offset=offset)
+    meta = live_stats(db)
+    meta["listener"] = listener_status()
     return {
         "status": "success",
         "count": len(messages),
         "messages": messages,
-        "meta": live_stats(db),
+        "meta": meta,
         "sources": source_status(),
+        "empty": len(messages) == 0,
     }
 
 

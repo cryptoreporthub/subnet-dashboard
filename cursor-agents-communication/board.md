@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T15:45:00Z — **A:F5 · B: post-U2**  
-**main:** `e5827e9`
+**Last updated:** 2026-07-15T16:10:00Z — **A:F6 · B: post-U2**  
+**main:** `e167972`
 
 ## Ditto boot (read first)
 
@@ -39,21 +39,19 @@ Composer spawns Grok via subagent — starts slow + medium; no manual model pick
 
 ## Ready for next work
 
-**`GATE_ACCOUNT` CLEAR** (F3 #257). F4 #259 + U2 #258 on main.  
-**Agent A:** F5 streaming chat. **Agent B:** F1/F2 UI → U3 (F3 UI unblocked).
+**`GATE_ACCOUNT` CLEAR.** F5 #260 on main.  
+**Agent A:** F6 message-intel (final A slice). **Agent B:** F1/F2 UI → U3.
 
 | PR | Role | State |
 |----|------|-------|
+| **#260** | §17.F5 streaming chat | ✅ **merged** |
 | **#259** | §17.F4 weekly letter | ✅ **merged** |
 | **#258** | §17.U2 story strip | ✅ **merged** |
 | **#257** | §17.F3 paper portfolio | ✅ **merged** |
-| **#256** | §17.F2 alert delivery | ✅ **merged** |
-| **#255** | §17.U1 single-job home | ✅ **merged** |
-| **#254** | §17.F1 watchlist | ✅ **merged** |
-| **#253** | Grok lock HARD RULE | ✅ **merged** |
+| **#254–#256** | F1/F2/U1 | ✅ **merged** |
 | **#244–#246** | §16 | ✅ **merged** |
 
-**Health:** `GET /health` · `GET /api/letter/weekly` · `POST /api/simivision/chat` → 200 OK  
+**Health:** `GET /health` · `GET /api/message-intel/status` · `POST /api/simivision/chat` → 200 OK  
 **Fly:** machine `shared-cpu-1x:1024MB`, checks passing.
 
 ## Gate Status
@@ -66,12 +64,12 @@ Composer spawns Grok via subagent — starts slow + medium; no manual model pick
 | **N/O** | ✅ **COMPLETE** — #227 (A) + #228 (B) |
 | **P** | ✅ **COMPLETE** — #232 + #237 |
 | **§16** | ✅ **`GATE_S16` CLEAR** — #244 · #245 · #246 |
-| **§17** | 🟡 **IN PROGRESS** — A→F5; B post-U2 |
+| **§17** | 🟡 **IN PROGRESS** — A→F6 (final); B post-U2 |
 
 ## §16 / §17 execution
 | Agent | Queue | Status |
 |-------|--------|--------|
-| **A** (`-843d`) | F4 ✅ · **F5 streaming chat** → F6 | building |
+| **A** (`-843d`) | F5 ✅ · **F6 message-intel** | building → DONE after merge |
 | **B** (`-e78a`) | U2 ✅ · **F1/F2 UI** → U3 → F3 UI | next |
 | **Human** | F7 DNS | anytime |
 
@@ -81,8 +79,8 @@ Specs: `s16-s17-automated-build-plan.md`. All gates through ACCOUNT clear.
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **A** | **Building F5** | Streaming chat → F6 intel |
-| **B** | **Build F1/F2 UI** | After U2; F3 UI unblocked |
+| **A** | **Building F6** | Last A slice; then idle |
+| **B** | **Build F1/F2 UI** | After U2 |
 | **Ditto** | **Gate/spot-check** | Not day-to-day QB |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`

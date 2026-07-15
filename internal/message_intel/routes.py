@@ -46,13 +46,38 @@ async def api_message_intel(
         return engine.list_messages(limit=limit, offset=offset)
     except Exception as exc:
         logger.error("message-intel list failed: %s", exc)
+        from internal.message_intel.listener_service import listener_status
+
         return {
             "status": "success",
             "count": 0,
             "messages": [],
-            "meta": {"total_messages": 0, "ok": False, "error": str(exc)},
+            "empty": True,
+            "meta": {"total_messages": 0, "ok": False, "error": str(exc), "listener": listener_status()},
             "sources": {},
         }
+
+
+@message_intel_router.get("/api/message-intel/status")
+async def api_message_intel_status():
+    """Listener + store health (no secrets). Honest when creds absent."""
+    from internal.message_intel.listener_service import listener_status
+    from internal.message_intel.store import live_stats
+    from internal.message_intel.sources import source_status
+
+    try:
+        stats = live_stats()
+    except Exception as exc:
+        stats = {"ok": False, "error": str(exc), "total_messages": 0}
+    listener = listener_status()
+    return {
+        "status": "success",
+        "listener": listener,
+        "store": stats,
+        "sources": source_status(),
+        "live": bool(listener.get("live")),
+        "empty": int(stats.get("total_messages") or 0) == 0,
+    }
 
 
 @message_intel_router.get("/api/message-intel/list")
