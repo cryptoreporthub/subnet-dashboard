@@ -289,6 +289,35 @@
   outline-offset: 2px;
 }
 
+.home-cta:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.home-cta {
+  cursor: pointer;
+  font: inherit;
+}
+
+.home-habit-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin-top: 14px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--stage-muted);
+  letter-spacing: 0.04em;
+}
+
+.home-habit-status__alerts--off {
+  color: rgba(255, 179, 71, 0.85);
+}
+
+.home-habit-status__note {
+  color: var(--stage-accent);
+}
+
 /* ---------- U2 story strip ---------- */
 .story-strip {
   padding-top: 8px;
