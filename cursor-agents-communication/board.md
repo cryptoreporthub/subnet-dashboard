@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T18:02:00Z — **B8–B11 UI tail complete**  
-**main:** `d638cac`
+**Last updated:** 2026-07-15T19:40:00Z — **§18 in progress**  
+**main:** `0d0fe51`
 
 ## Ditto boot (read first)
 
@@ -23,31 +23,30 @@
 | **Branches** | `cursor/<slug>-e78a` or `-6f98` | `cursor/<slug>-6f98` off latest `main` |
 | **Grok** | Whole-agent switch | **Subagent only** — slow + low/med |
 
-Specs: `token-budget-rules.md` · `model-guide.md` · `s16-s17-automated-build-plan.md` (B12 optional).
+Specs: `token-budget-rules.md` · `model-guide.md` · `s18-automated-build-plan.md`.
 
 ## N/O (approved 2026-07-15)
 - **APPROVED** + **Step 0 LOCKED**
 - Models: **Composer 2.5-fast** build; **Grok slow + low/medium** subagent (escalate **high** only if medium fails).
-- **A:** N/O + §17 F1–F6 ✅ **DONE**. **B:** §17 UI tail B8–B11 ✅ **DONE**.
+- **§17** ✅ **COMPLETE** (#267–#271, #274). **§18** in progress.
 
 ## Read order (agents + Ditto)
 1. **STATUS card** — `cursor-agents-communication/STATUS.md`
 2. **This file** — `cursor-agents-communication/board.md`
 3. **Token budget** — `cursor-agents-communication/token-budget-rules.md`
 4. **Model guide** — `cursor-agents-communication/model-guide.md`
-5. **Build queue** — `cursor-agents-communication/s16-s17-automated-build-plan.md`
+5. **Build queue** — `cursor-agents-communication/s18-automated-build-plan.md`
 6. **Grok lock rule** — `cursor-agents-communication/grok-lock-composer-write-rule.md`
 
 ## Ready for next work
 
-**§17 UI (one agent):** B8–B11 ✅ **complete** · **B12** U5 waits F7 DNS. **Human:** F7 DNS.
+**§18 (one agent):** H1→H3 hygiene · A1–A2 alerts · B1 report UI. **Human:** F7 DNS · Telegram creds for C1.
 
 | PR | Role | State |
 |----|------|-------|
+| **#274** | §17.U4 home progressive enhance | ✅ **merged** |
 | **#271** | §17.F4b daily recap (B11) | ✅ **merged** |
-| **#270** | §17.F5 streaming chat UI (B10) | ✅ **merged** |
-| **#268** | §17.F4 weekly letter UI (B9) | ✅ **merged** |
-| **#267** | §17.F3 paper portfolio UI (B8) | ✅ **merged** |
+| **#265** | Token budget + `.cursorignore` (H1) | 🟡 **rebasing** |
 
 **Health:** `GET /health` · `GET /api/message-intel/status` → 200 OK
 
@@ -56,14 +55,14 @@ Specs: `token-budget-rules.md` · `model-guide.md` · `s16-s17-automated-build-p
 | Phase | Status |
 |-------|--------|
 | **N/O · P · §16** | ✅ complete |
-| **§17 backends (A)** | ✅ F1–F6 on main |
-| **§17 UI (B)** | ✅ **B8–B11 complete** · B12 optional (F7) |
+| **§17 product** | ✅ **complete** (#267–#271, #274) |
+| **§18** | 🟡 H1→B1 in progress |
 
 ## Agent posture
 
 | Role | Status | Notes |
 |------|--------|-------|
-| **Single agent** | **Idle / B12** | B12 U5 when F7 done |
+| **Single agent** | **Active** | §18 H1→B1; `composer-2.5-fast` |
 | **A (`-843d`)** | **Retired** | Do not spawn — saves Pro+ pool |
 | **Grok** | **Subagent** | DESIGN / sign-off only; short LOCK |
 | **Human** | **QB** | merge when green · F7 DNS · watch billing |
@@ -73,14 +72,14 @@ Specs: `token-budget-rules.md` · `model-guide.md` · `s16-s17-automated-build-p
 ## Rules
 - Board + STATUS override memory.
 - Honest-empty > fake data.
-- **One Cloud Agent** — no parallel A+B for rest of cycle.
-- **Grok slow + low/medium** — escalate **high** only if medium fails.
+- **One Cloud Agent** — no parallel agents.
+- **Grok slow + low/medium** — escalate **high** only if medium fails. Prefer **Composer 2.5-fast** for mechanical builds.
 - **HARD RULE — Grok lock → Composer write:** short LOCK only; Composer writes + builds.
-- **On-demand billing:** tell human if usage dashboard shows **On-Demand $** charges stacking beyond included Pro+ pool.
-- Obey `token-budget-rules.md` and `.cursorignore` when present.
+- **Token budget:** `.cursorignore` + `token-budget-rules.md` — no `data/*.json` in context.
+- **On-demand billing:** tell human if usage dashboard shows **On-Demand $** beyond included Pro+ pool.
 
 ## References
+- `cursor-agents-communication/s18-automated-build-plan.md`
 - `cursor-agents-communication/token-budget-rules.md`
 - `cursor-agents-communication/grok-lock-composer-write-rule.md`
-- `cursor-agents-communication/s16-s17-automated-build-plan.md`
 - `cursor-agents-communication/model-guide.md`

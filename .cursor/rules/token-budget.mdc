@@ -1,0 +1,17 @@
+---
+description: Billing-cycle token budget — cheap Composer/Grok pools and context cuts
+globs:
+alwaysApply: true
+---
+
+# Token budget (always on)
+
+When working in this repo during a constrained Cursor billing cycle:
+
+1. Prefer **Composer 2.5-fast** for mechanical implementation.
+2. Grok only **slow + low/medium**; escalate **high** only after FAIL/unsatisfactory.
+3. Never pull `data/*.json`, `.venv`, or superseded design dumps into context (see `.cursorignore`).
+4. Grok returns a short structured LOCK; Composer writes plans and code.
+5. One slice at a time; cite `board.md` / `STATUS.md` / plan paths instead of re-pasting.
+
+Full text: `cursor-agents-communication/token-budget-rules.md`

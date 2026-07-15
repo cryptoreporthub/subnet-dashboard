@@ -5,7 +5,7 @@
 ```
 HARD RULE (token-save) — both Agent A and Agent B must obey through end of §17:
 
-1) Grok = thinking only. Use slow Grok + medium thinking. Escalate to high ONLY if medium FAIL/CONDITIONAL or output unsatisfactory. Do not default to fast-xhigh or xhigh.
+1) Grok = thinking only. Prefer slow + **low**, else slow + **medium**. Escalate to high ONLY if medium FAIL/CONDITIONAL or output unsatisfactory. Do not default to fast-xhigh or xhigh.
 
 2) When a slice needs design (plan marks DESIGN, or path is ambiguous): spawn Grok read-only and demand a SHORT structured LOCK — not a long markdown plan. Cap ~1 screen:
 
