@@ -1,11 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-15T20:10:00Z  
-**main:** `ce6d046` (#276–#277 §18 H3/A1/A2/B1 merged)
+**Updated:** 2026-07-15T20:35:00Z  
+**main:** `4dab897` (#278 STATUS)
 
 ## One-line
 
-**§17 COMPLETE. §18 H3+A1+A2+B1 DONE (#276–#277). Human: Fly secrets for live Telegram alerts (A1). C1 blocked on Telegram API creds.**
+**§18 C1 docs + telethon + bootstrap script in PR. Human: session bootstrap + `flyctl secrets set` (API id/hash received).**
 
 ## §17 (done)
 
@@ -17,12 +17,8 @@ See **`s18-automated-build-plan.md`**.
 
 | Slice | State |
 |-------|--------|
-| **H1** | ✅ #265 merged |
-| **H2** | ✅ #240 closed |
-| **H3** | ✅ #276 |
-| **A1** | ✅ docs in `DEPLOY.md` — **human: `flyctl secrets set`** for live delivery |
-| **A2** | ✅ `verify_prod.sh` + dry_run docs (#276) |
-| **B1** | ✅ O3 report UI (#277) |
-| **C1** | Message-intel listener — **WAIT human Telegram API creds** |
+| **H1–B1** | ✅ #265–#277, #278 |
+| **A1** | ✅ docs — **human: Fly secrets** for conviction alert delivery |
+| **C1** | 🟡 PR — creds received; **human: phone + session bootstrap + Fly secrets** |
 
 **Billing watch:** On-Demand **$** beyond Pro+ → tell human.

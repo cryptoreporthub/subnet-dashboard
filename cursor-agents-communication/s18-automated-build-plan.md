@@ -14,7 +14,7 @@
 | **A1** | Alert delivery docs + Fly wiring | `CONVICTION_ALERT_DELIVERY` telegram/webhook; `DEPLOY.md` secrets section | **Yes** — Fly secrets |
 | **A2** | Alert test path | Dry-run + status docs; `verify_prod.sh` conviction-alerts line | No |
 | **B1** | O3 report UI | Render `GET /api/report/{netuid}` — template/static + link from subnet row | No |
-| **C1** | Message-intel listener | **WAIT** — human provides `TELEGRAM_API_ID/HASH` | **Yes** — skip until creds |
+| **C1** | Message-intel listener | `DEPLOY.md` + `bootstrap_telegram_session.py` + telethon | **Yes** — phone + session bootstrap + Fly secrets |
 
 **Skip unless asked:** F7 DNS · B12 · S5 Discord · weekly letter email
 

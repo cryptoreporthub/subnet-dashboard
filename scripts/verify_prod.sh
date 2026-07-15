@@ -28,7 +28,17 @@ if lr.get('delivery'):
     print('last_delivery_mode:', (lr.get('delivery') or {}).get('mode'))
 "
 
-echo "== backtest (P5) =="
+echo "== message-intel =="
+curl -fsS "$BASE/api/message-intel/status" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+lr=d.get('listener') or {}
+print('has_creds:', lr.get('has_creds'))
+print('running:', lr.get('running'))
+print('reason:', lr.get('reason'))
+print('empty:', d.get('empty'))
+"
+
 curl -fsS "$BASE/api/backtest" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
