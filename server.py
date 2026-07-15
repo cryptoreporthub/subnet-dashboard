@@ -388,12 +388,32 @@ def _normalize_registry_subnet(sn: Dict[str, Any]) -> Dict[str, Any]:
     return row
 
 
+def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """U1 hero keys for GET / (fast shell + hydrate)."""
+    from internal.analytics.root_context import _safe_conviction_band, _safe_enrichment_badge
+
+    pick_payload: Optional[Dict[str, Any]] = None
+    pick_netuid: Optional[int] = None
+    try:
+        if _PICKS_ENGINE:
+            market_context = _market_context_with_weights(subnets)
+            pick_payload = get_or_create_today_pick(subnets, market_context)
+            pick_netuid = _pick_netuid_from_daily_payload(pick_payload)
+    except Exception as exc:
+        logger.warning("home hero context failed: %s", exc)
+    return {
+        "daily_pick_stage": pick_payload if isinstance(pick_payload, dict) else {},
+        "conviction_band": _safe_conviction_band(pick_payload),
+        "enrichment_badge": _safe_enrichment_badge(pick_netuid),
+    }
+
+
 def _degraded_index_context(request: Request) -> Dict[str, Any]:
     """Fast shell when full dashboard context exceeds HOMEPAGE_BUILD_TIMEOUT."""
     from internal.learning.dashboard_context import default_learning_dashboard_context
 
     subnets = [_normalize_registry_subnet(s) for s in load_data("config/registry.json").values()]
-    return {
+    ctx = {
         "request": request,
         "subnets": subnets,
         "data_source": "registry-fallback",
@@ -411,6 +431,8 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
             "avg_confidence": 0.0,
         },
     }
+    ctx.update(_home_hero_context(subnets))
+    return ctx
 
 
 def _build_index_context(request: Request) -> Dict[str, Any]:
@@ -443,20 +465,13 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
     try:
         from internal.analytics.root_context import build_agent_b_root_context
 
-        pick_netuid = None
-        try:
-            if _PICKS_ENGINE:
-                market_context = _market_context_with_weights(subnets)
-                pick_payload = get_or_create_today_pick(subnets, market_context)
-                pick_netuid = _pick_netuid_from_daily_payload(pick_payload)
-        except Exception:
-            pick_netuid = None
-
+        context.update(_home_hero_context(subnets))
         context.update(
             build_agent_b_root_context(
                 subnets=subnets,
                 data_source=source,
-                pick_netuid=pick_netuid,
+                pick_netuid=_pick_netuid_from_daily_payload(context.get("daily_pick_stage")),
+                daily_pick_payload=context.get("daily_pick_stage"),
             )
         )
     except Exception as exc:

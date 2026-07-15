@@ -80,7 +80,7 @@ def test_index_council_first_shell():
     """Council decision stage first; market tools demoted; no dual 12-card grid."""
     client = TestClient(app)
     html = client.get("/").text
-    assert 'class="council-stage"' in html
+    assert "council-stage" in html
     assert 'id="council-stage-body"' in html
     assert "council_first.css" in html
     assert 'id="market-drawer"' in html

@@ -1,13 +1,12 @@
-{# Council Decision Stage — first viewport, brand + one call #}
-<section class="council-stage" id="section-daily-pick" aria-labelledby="council-stage-title">
+{# U1 single-job home — pick + band + one-line why + CTA in first viewport #}
+<section class="council-stage home-job" id="section-daily-pick" aria-labelledby="council-stage-title">
   <div class="council-stage__atmosphere" aria-hidden="true"></div>
   <div class="council-stage__inner">
     <p class="council-stage__brand">Simi<span>Vision</span></p>
-    <p class="council-stage__eyebrow">Council decision</p>
-    <h1 class="council-stage__title" id="council-stage-title">Today’s call</h1>
-    <p class="council-stage__lede">One audited selection when confidence clears the gate. HOLD is a decision — not a blank screen.</p>
+    <p class="council-stage__eyebrow">Today’s subnet call</p>
+    <h1 class="council-stage__title" id="council-stage-title">One job: know what to watch</h1>
 
-    <div id="council-stage-body" class="council-stage__body">
+    <div id="council-stage-body" class="council-stage__body home-job__body">
       {% set act = (dpick.action|default('HOLD'))|string|upper %}
       {% set audit_pick = dpick.pick if dpick.pick is mapping else none %}
       {% set cand = dpick.candidate if dpick.candidate is mapping else none %}
@@ -15,126 +14,62 @@
       {% if audit_pick and audit_pick.subnet is mapping %}{% set sn = audit_pick.subnet %}{% endif %}
       {% if sn is none and cand and cand.subnet is mapping %}{% set sn = cand.subnet %}{% endif %}
       {% set conf_src = audit_pick if audit_pick else cand %}
-      {% set fc_raw = none %}
-      {% if conf_src %}
-        {% set fc_raw = conf_src.final_confidence|default(conf_src.confidence|default(none)) %}
+      {% set band_obj = conviction_band if conviction_band is mapping else {} %}
+      {% set band = band_obj.band %}
+      {% set badge = enrichment_badge if enrichment_badge is mapping else {} %}
+      {% set call_reasons = [] %}
+      {% if audit_pick and audit_pick.reasons is iterable and audit_pick.reasons is not string %}
+        {% set call_reasons = audit_pick.reasons %}
+      {% elif cand and cand.reasons is iterable and cand.reasons is not string %}
+        {% set call_reasons = cand.reasons %}
       {% endif %}
-      {% if fc_raw is none %}{% set fc_raw = dpick.final_confidence|default(none) %}{% endif %}
-      {% set fc = ((fc_raw|float) * 100)|round if fc_raw is not none else none %}
-      {% set tier = 'tier-cyan' if fc and fc > 75 else ('tier-lime' if fc and fc > 55 else ('tier-gold' if fc and fc > 35 else 'tier-red')) %}
-      {% set audit = {} %}
-      {% if audit_pick and audit_pick.audit is mapping %}{% set audit = audit_pick.audit %}
-      {% elif cand and cand.audit is mapping %}{% set audit = cand.audit %}{% endif %}
-      {% set patterns = [] %}
-      {% if dpick.rotation_summary is mapping and dpick.rotation_summary.patterns %}
-        {% set patterns = dpick.rotation_summary.patterns %}
-      {% endif %}
-      {% set top_pat = patterns|first if patterns else none %}
+      {% set why_line = call_reasons|first if call_reasons else (dpick.reason|default('')) %}
+
+      <div class="home-job__signals">
+        {% if band %}
+        <span class="home-band home-band--{{ band }}">{{ band|upper }} conviction</span>
+        {% elif band_obj.reason %}
+        <span class="home-band home-band--empty" title="{{ band_obj.reason }}">Band pending</span>
+        {% endif %}
+        {% if badge.status == 'live' %}
+        <span class="home-enrichment home-enrichment--live">{{ badge.label }}</span>
+        {% elif badge.label %}
+        <span class="home-enrichment home-enrichment--empty">{{ badge.label }} · no signal yet</span>
+        {% endif %}
+      </div>
 
       {% if audit_pick and sn %}
-      <div class="council-call">
+      <div class="council-call home-job__call">
         <div class="council-call__action">
           <span class="badge {% if act == 'BUY' or act == 'LONG' %}badge-buy{% elif act == 'SELL' or act == 'SHORT' %}badge-sell{% else %}badge-hold{% endif %}">{{ 'BUY' if act == 'LONG' else act }}</span>
-          {% if audit.approved is defined %}
-            {% if audit.approved %}<span class="hero-audit">AUDIT PASSED</span>{% else %}<span class="hero-audit flagged">AUDIT FLAGGED</span>{% endif %}
-          {% endif %}
-          {% if dpick.regime %}<span class="council-call__regime">{{ dpick.regime|upper }} REGIME</span>{% endif %}
         </div>
         <p class="council-call__name">{{ sn.name|default('SN' ~ sn.netuid) }}</p>
-        {% set pred = audit_pick.prediction if audit_pick.prediction is mapping else none %}
-        {% set hz = pred.horizon_hours if pred and pred.horizon_hours is defined else 4 %}
-        <p class="council-call__meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %} · {{ hz }}h resolve horizon</p>
-        <p class="council-call__prediction">
-          {% if pred and pred.statement %}
-            {{ pred.statement|capitalize }}
-            {% if fc is not none %} · <strong class="accent-bright">{{ fc }}% confidence</strong>{% endif %}
-          {% else %}
-            Council call
-            {% if fc is not none %} at <strong class="accent-bright">{{ fc }}% confidence</strong>{% endif %}
-            · resolve within {{ hz }} hours
-          {% endif %}
-          {% if audit_pick.score is defined %} · score <b>{{ "%.1f"|format((audit_pick.score|default(0))|float) }}</b>{% endif %}
-        </p>
-        {% set call_reasons = audit_pick.reasons if audit_pick.reasons is iterable and audit_pick.reasons is not string else [] %}
-        {% if call_reasons %}
-        <ul class="council-call__reasons">
-          {% for r in call_reasons[:3] %}<li>{{ r }}</li>{% endfor %}
-        </ul>
-        {% endif %}
-        {% set impact = audit_pick.impact if audit_pick.impact is mapping else none %}
-        {% if impact and impact.summary %}
-        <p class="council-call__impact">{{ impact.summary }}</p>
-        {% endif %}
-        {% if fc is not none %}
-        <div class="council-call__conviction">
-          <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ fc }}%;"></div></div>
-          <span class="council-call__conf {{ tier }}">{{ fc }}</span>
-        </div>
-        {% endif %}
-        {% if dpick.reason %}<p class="council-call__note">{{ dpick.reason }}</p>{% endif %}
-        {% if audit.concerns %}
-        <ul class="council-call__concerns">
-          {% for c in audit.concerns[:3] %}<li>{{ c }}</li>{% endfor %}
-        </ul>
+        <p class="council-call__meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}</p>
+        {% if why_line %}
+        <p class="home-job__why">{{ why_line }}</p>
         {% endif %}
       </div>
       {% else %}
-      {# HOLD / no audited pick — still a full decision stage #}
-      <div class="council-call council-call--hold">
+      <div class="council-call council-call--hold home-job__call">
         <div class="council-call__action">
           <span class="badge badge-hold">HOLD</span>
-          {% if dpick.regime %}<span class="council-call__regime">{{ dpick.regime|upper }} REGIME</span>{% endif %}
         </div>
-        <p class="council-call__name">No audited long call</p>
-        <p class="council-call__prediction">
-          Council stance is <strong>HOLD</strong>
-          {% if dpick.reason %} — {{ dpick.reason }}{% else %} until a candidate clears the 45% audit gate.{% endif %}
-        </p>
         {% if sn %}
-        <p class="council-call__candidate">
-          Leading candidate under review:
-          <strong>{{ sn.name|default('SN' ~ sn.netuid) }}</strong>
-          {% if sn.netuid is not none %} (SN{{ sn.netuid }}){% endif %}
-          {% if fc is not none %} · {{ fc }}% confidence{% endif %}
-          <span class="council-call__candidate-tag">not published</span>
+        <p class="council-call__name">{{ sn.name|default('SN' ~ sn.netuid) }}</p>
+        <p class="council-call__meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %} · candidate only</p>
+        {% else %}
+        <p class="council-call__name">No audited long call</p>
+        {% endif %}
+        <p class="home-job__why">
+          {% if why_line %}{{ why_line }}{% else %}Council waits until confidence clears the audit gate.{% endif %}
         </p>
-        {% set cand_pred = cand.prediction if cand and cand.prediction is mapping else none %}
-        {% if cand_pred and cand_pred.statement %}
-        <p class="council-call__prediction council-call__prediction--candidate">
-          Would-be call: {{ cand_pred.statement|capitalize }}
-          {% if cand_pred.horizon_hours is defined %} · {{ cand_pred.horizon_hours }}h horizon{% endif %}
-        </p>
-        {% endif %}
-        {% set cand_reasons = cand.reasons if cand and cand.reasons is iterable and cand.reasons is not string else [] %}
-        {% if cand_reasons %}
-        <ul class="council-call__reasons">
-          {% for r in cand_reasons[:3] %}<li>{{ r }}</li>{% endfor %}
-        </ul>
-        {% endif %}
-        {% set cand_impact = cand.impact if cand and cand.impact is mapping else none %}
-        {% if cand_impact and cand_impact.summary %}
-        <p class="council-call__impact">{{ cand_impact.summary }}</p>
-        {% endif %}
-        {% if fc is not none %}
-        <div class="council-call__conviction">
-          <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ fc }}%;"></div></div>
-          <span class="council-call__conf {{ tier }}">{{ fc }}</span>
-        </div>
-        {% endif %}
-        {% endif %}
-        {% if top_pat %}
-        <p class="council-call__note">
-          Rotation lens: {{ top_pat.description|default(top_pat.pattern) }}
-          {% if top_pat.confidence is defined %} ({{ (top_pat.confidence|float * 100)|round }}% pattern confidence){% endif %}
-        </p>
-        {% endif %}
-        {% if audit.concerns %}
-        <ul class="council-call__concerns">
-          {% for c in audit.concerns[:4] %}<li>{{ c }}</li>{% endfor %}
-        </ul>
-        {% endif %}
       </div>
       {% endif %}
+
+      <div class="home-job__cta" role="group" aria-label="Primary actions">
+        <a class="home-cta home-cta--primary" href="#section-alerts">Set alert</a>
+        <a class="home-cta home-cta--ghost" href="#pro-cockpit">Open Pro cockpit</a>
+      </div>
     </div>
   </div>
 </section>
