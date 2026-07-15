@@ -34,4 +34,16 @@ N/O shipped code on `main` (#227 + #228) but prod flags were off and N1 council 
 
 ## After Phase P
 
-Agents idle / monitor. Re-open N1 council grader work only if P5 shows insufficient lift.
+**P5 verified 2026-07-15** on `subnet-dashboard.fly.dev`:
+
+| Metric | Value | vs baseline (~45.5%) |
+|--------|-------|----------------------|
+| Council win-rate | **53.5%** | ✅ lift |
+| Oracle win-rate | **53.5%** | ✅ lift |
+| Oracle score ≥0.55 hit-rate | **69.8%** (n=116) | ✅ strong separation |
+
+**Verdict:** No N1 council grader reopen needed. Run `./scripts/verify_prod.sh` after each deploy.
+
+**P4:** DNS + `flyctl certs add dashboard.cryptoreporthub.com` — blocked on registrar + Fly auth (see `DEPLOY.md`).
+
+Agents idle / monitor until Ditto defines next roadmap slice.

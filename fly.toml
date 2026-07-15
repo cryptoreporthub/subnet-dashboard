@@ -30,6 +30,8 @@ primary_region = "sea"
   CALIBRATION_AUTO_RETRAIN = "on"
   # O1: conviction-threshold notify (opt-in alerts via AlertEngine)
   CONVICTION_ALERTS_ENABLED = "on"
+  # O4: allow fly.dev + cryptoreporthub hostnames when DNS is pointed (see DEPLOY.md)
+  ALLOWED_ORIGINS = "https://subnet-dashboard.fly.dev,https://dashboard.cryptoreporthub.com,https://cryptoreporthub.com"
 
 # Persistent volume for runtime/learning data (soul_map.json, predictions.json,
 # SQLite caches under /app/data). The machine already has this volume attached;

@@ -326,6 +326,8 @@ async def add_cors_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
     if request.url.path in _CACHE_PATHS:
         response.headers["Cache-Control"] = "public, max-age=30"
+    elif request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "public, max-age=3600"
     return response
 
 
