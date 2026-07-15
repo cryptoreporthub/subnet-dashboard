@@ -1,11 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-15T05:15:00Z · Agent A `-843d`  
-**main:** `8f44d9c` (B #228 merged) · **A:** PR #227 rebasing
+**Updated:** 2026-07-15T05:18:00Z  
+**main:** `92737a7` — **Phase N/O COMPLETE**
 
 ## One-line
 
-**B N/O complete (#228). A landing N2+N3+O1+O4+O5 (#227 rebase → merge).**
+**Phase N/O code-complete: Agent A #227 + Agent B #228 merged. Monitor Fly deploy.**
 
 ## Done (do not re-queue)
 
@@ -23,6 +23,7 @@
 | Step 0 lock | **#223** |
 | Grok slow+medium policy | **#225** |
 | Agent B N4/N1/O2/O3 | **#228** |
+| Agent A N2/N3/O1/O4/O5 | **#227** |
 | A2 `smoke` on `main` | verified |
 | Stale open PRs closed | #101 · #110 · #112 · #129–#130 · #134 · #139 · #153 · #165–#166 · #184 |
 
@@ -33,11 +34,14 @@
 
 ## Cursor
 
-- **Active** — merge Agent A #227 onto `main` (last N/O code slice)
+- **Idle** — Phase N/O complete; no queued N/O slices
 - Git only; Ponytail minimal diff
 - Grok: slow + medium default; high only if medium fails / unsatisfactory
 
-## Phase N/O
-- **APPROVED (2026-07-15)** · **Step 0 LOCKED** — `phase-n-o-step0-spec.md`
-- **B** (`-e78a`): N4 → N1 → O2 → O3 ✅ **#228 merged**
-- **A** (`-843d`): N2 → N3 → O1 → O4 → O5 — **#227** (rebase + merge pending)
+## Phase N/O — COMPLETE
+- **Step 0 LOCKED** — `phase-n-o-step0-spec.md`
+- **B** (`-e78a`): N4 → N1 → O2 → O3 ✅ **#228**
+- **A** (`-843d`): N2 → N3 → O1 → O4 → O5 ✅ **#227**
+- **Optional prod flags:** `CALIBRATION_AUTO_RETRAIN=on`, `CONVICTION_ALERTS_ENABLED=on` (see `DEPLOY.md`)
+- **Optional follow-up:** N1 council grader allowlist in `n1-oracle-tuning-design.md` if Oracle win-rate still low after backtest data accumulates
+- **Human-only:** O4 custom domain DNS at registrar (steps in `DEPLOY.md`)
