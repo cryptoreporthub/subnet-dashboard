@@ -1,12 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-<<<<<<< HEAD
-**Last updated:** 2026-07-15T05:15:00Z by Agent A (`-843d`) — **#227 rebase (A N/O landing)**  
-**main:** `8f44d9c` (B #228 merged)
-=======
-**Last updated:** 2026-07-15T05:00:00Z by Agent A (`-843d`) — **N2–O5 in PR**  
-**main:** `2183037`
->>>>>>> 40df67b (feat(N/O A): N3 auto-retrain hook, O1 conviction alerts, O4/O5 docs)
+**Last updated:** 2026-07-15T05:18:00Z — **Phase N/O COMPLETE** (#228 B + #227 A)  
+**main:** `92737a7`
 
 ## Ditto boot (read first)
 
@@ -21,7 +16,7 @@
 - Specs: `gameplan-N-O.md` · `phase-n-o-step0-spec.md`
 - Models: Composer 2.5 default; **Grok slow + medium** (escalate to **high** only if medium fails / unsatisfactory).
 - Old Phase O (`phase-o-design.md` / `signal_hub`) = **SUPERSEDED / COMPLETE — do not rebuild**.
-- **A start:** N2 (or N3/O1 in parallel). **B:** N4→N1→O2→O3 ✅ **#228 merged**.
+- **A:** N2→N3→O1→O4→O5 ✅ **#227 merged**. **B:** N4→N1→O2→O3 ✅ **#228 merged**. **Phase N/O code-complete.**
 
 ## Read order (agents + Ditto)
 1. **STATUS card** — `cursor-agents-communication/STATUS.md` (Ditto: start here)
@@ -82,7 +77,7 @@ Composer spawns Grok via subagent — starts slow + medium; no manual model pick
 
 ## Ready for next work
 
-**Phase N/O — Step 0 LOCKED. A/B Composer builds READY.** Grok = slow + medium (escalate high only if needed).
+**Phase N/O — COMPLETE.** All A+B slices merged (#227 + #228). Grok = slow + medium (escalate high only if needed).
 
 **Automated July 14 queue:** COMPLETE. **A2:** `smoke` required on `main`.
 
@@ -109,12 +104,12 @@ Recent merges on `main` @ `778ad13`:
 | **UI Phase 1** | ✅ merged #154 + #155 |
 | **UI Phase 2** | ✅ merged #157 (Grok sign-off: CONDITIONAL — see phase-3-grok-design.md) |
 | **J–M** | ✅ merged |
-| **N/O** | 🟢 Step 0 LOCKED — A/B Composer unblocked |
+| **N/O** | ✅ **COMPLETE** — #227 (A) + #228 (B) merged |
 
 ## N/O queue
 | Agent | Slices | Status |
 |-------|--------|--------|
-| **A** (`-843d`) | N2, N3, O1, O4, O5 | **#227** rebase → merge |
+| **A** (`-843d`) | N2, N3, O1, O4, O5 | ✅ **#227 merged** |
 | **B** (`-e78a`) | N4, N1, O2, O3 | ✅ **#228 merged** |
 
 Specs: `gameplan-N-O.md` + `phase-n-o-step0-spec.md`. Models: Composer 2.5; **Grok slow + medium** (escalate **high** only if FAIL/unsatisfactory).
