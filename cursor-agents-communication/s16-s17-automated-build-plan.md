@@ -5,7 +5,7 @@
 **Specs:** `gameplan-phase-16.md` · `gameplan-beyond-16.md`  
 **Prompts:** `s16-s17-start-prompts.md`
 
-**I am Agent A (`-843d`).** Agent B (`-e78a`) gets the B queue below.
+**One-agent mode (2026-07-15):** Human on **Pro+**. Run **one** Cloud Agent + Grok subagent. Agent A **retired**. Continue **B8→B10** only; skip U4/U5 unless human asks. See `token-budget-rules.md`.
 
 ---
 
@@ -24,7 +24,7 @@
 
 ## Automation contract (every slice)
 
-1. Branch: `cursor/<slice-slug>-42f7` (A) or `cursor/<slice-slug>-e78a` (B) off **latest `main`**
+1. Branch: `cursor/<slice-slug>-6f98` (one agent; B UI scope) off **latest `main`**
 2. Read this file + `board.md` + `STATUS.md` first; obey **WAIT FOR** gates
 3. Model: Composer 2.5 build · Grok slow+**medium** only if slice marks DESIGN — **HARD RULE:** Grok returns a short structured LOCK only; Composer writes any plan markdown and then builds (`model-guide.md`)
 4. Ponytail: minimal diff; no new deps unless listed; no `data/*.json` commits
