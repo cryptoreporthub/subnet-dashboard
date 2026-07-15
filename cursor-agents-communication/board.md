@@ -118,8 +118,8 @@ Recent merges on `main` @ `e8547b9`:
 | **J–M** | ✅ merged |
 | **N/O** | ✅ **COMPLETE** — #227 (A) + #228 (B) merged |
 | **P** | ✅ **COMPLETE** — code **#232** + verify **#237** (#233 closed, not merged) |
-| **§16** | 📝 **DRAFT** — Close the trust gap (`gameplan-phase-16.md`); not started |
-| **§17** | 📝 **DRAFT** — Beyond trust gap: signals / UI / features (`gameplan-beyond-16.md`); after §16 |
+| **§16** | 🟡 **READY FOR REVIEW** — auto plan `s16-s17-automated-build-plan.md`; Build after approve |
+| **§17** | 🟡 **READY FOR REVIEW** — after `GATE_S16`; B queue in auto plan |
 
 ## Phase P queue
 | Agent | Slices | Status |
@@ -127,27 +127,23 @@ Recent merges on `main` @ `e8547b9`:
 | **A** (`-843d`) | P1–P3 | ✅ **#232 merged** |
 | **B** (`-e78a`) | #233 duplicate | ❌ **#233 closed** — same scope landed in #232 |
 
-## §16 queue (DRAFT — do not build until approved)
-| Agent | Slices | Status |
-|-------|--------|--------|
-| **A** (`-843d`) | 16.1 → 16.2 → 16.3 | 📝 draft only |
-| **B** (`-e78a`) | Idle | — |
+## §16 / §17 execution (await human approve of auto plan)
+| Agent | Queue | Status |
+|-------|-------|--------|
+| **A** (`-843d`) | A1–A11: §16 → S1/S2 → F1–F6 | 🟡 review — starts A1 on approve |
+| **B** (`-e78a`) | B1–B10: S4→S3→U*→F UIs | 🟡 idle until `GATE_S16` |
+| **Human** | F7 DNS | anytime |
 
-## §17 queue (DRAFT — after §16 · optimal mix locked)
-| Track | Mix | Status |
-|-------|-----|--------|
-| **S** | Bands + magnitude + one enrichment badge | 📝 |
-| **U** | Single-job home + story strip + polish | 📝 |
-| **F** | Watchlist/alerts → paper portfolio → letter → chat/intel → domain | 📝 |
-
-Specs: `gameplan-phase-16.md` · `gameplan-beyond-16.md` (mixed recommendation). Models: Composer 2.5; **Grok slow + medium** for design.
+Specs: `s16-s17-automated-build-plan.md` · `s16-s17-start-prompts.md`. Models: Composer 2.5; Grok slow+medium where marked.
 
 ## Agent posture
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **Cursor** | **Idle** | §16 + §17 drafted; wait for approve before build |
-| **Ditto** | **Review** | Sign off / amend §16 (thin) and §17 (left-out buckets) |
+| **A** | **Waiting approve** | Will Build A1 when human says go |
+| **B** | **Idle** | Paste B prompt; waits `GATE_S16` |
+| **Ditto** | **Gate/spot-check** | Not day-to-day QB |
+
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
 

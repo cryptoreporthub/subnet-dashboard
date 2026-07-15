@@ -32,6 +32,6 @@
 
 ## Next
 
-- **§16 — Close the trust gap** (DRAFT): 16.1 outcomes → 16.2 gated `hybrid_score` → 16.3 re-measure. Spec: `gameplan-phase-16.md`.
-- **§17 — Beyond the trust gap** (DRAFT, **optimal mix**): bands+magnitude+badge · home+story+polish · watchlist→portfolio→letter→chat. Spec: `gameplan-beyond-16.md`. **After §16.**
+- **READY FOR REVIEW:** `s16-s17-automated-build-plan.md` + `s16-s17-start-prompts.md` — approve then Build A1.
+- Agent A (`-843d`): §16 → S1/S2 → F1–F6. Agent B (`-e78a`): idle until `GATE_S16`, then S4→S3→U*→F UIs.
 - Monitor `./scripts/verify_prod.sh` after deploys
