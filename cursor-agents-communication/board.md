@@ -27,15 +27,15 @@
 5. **Phase 3 Grok spec** — `cursor-agents-communication/phase-3-grok-design.md`
 6. **Phase 3 backend spec** — `cursor-agents-communication/phase-3-grok-backend-design.md`
 
-## Grok switches (required)
+## Grok switches (token-save — fast first)
 
 | Step | Model | When |
 |------|-------|------|
-| Design / audit | **Grok xhigh** (`grok-4.5-xhigh`) | Before Composer builds Phase 3+ visual/UX |
+| Design / audit | **Grok fast-xhigh** (`grok-4.5-fast-xhigh`) first | Before Composer builds Phase 3+ visual/UX — escalate to `grok-4.5-xhigh` only on FAIL/CONDITIONAL |
 | Implementation | **Composer** | After Grok spec locked |
-| Pre-merge sign-off | **Grok xhigh** | Before merge on visual/behavioral phases |
+| Pre-merge sign-off | **Grok fast-xhigh** first | Before merge on visual/behavioral phases — escalate only on FAIL/CONDITIONAL |
 
-Composer spawns Grok via subagent — no manual model picker needed. Batch tasks; scope files only.
+Composer spawns Grok via subagent — starts on `grok-4.5-fast-xhigh`; no manual model picker needed. Batch tasks; scope files only.
 
 ## Phase A — EXTREME audit (complete)
 
@@ -102,7 +102,7 @@ Recent merges on `main` @ `778ad13`:
 | **UI Phase 1** | ✅ merged #154 + #155 |
 | **UI Phase 2** | ✅ merged #157 (Grok sign-off: CONDITIONAL — see phase-3-grok-design.md) |
 | **J–M** | ✅ merged |
-| **N/O** | 🟡 APPROVED — not started |
+| **N/O** | 🟢 Step 0 LOCKED — A/B Composer unblocked |
 
 ## N/O queue
 | Agent | Slices | Status |
@@ -124,7 +124,7 @@ Full spec: `cursor-agents-communication/gameplan-N-O.md`. Models: Composer 2.5 d
 ## Rules
 - Board + master plan override memory.
 - Honest-empty > fake data.
-- **Grok xhigh** for Phase 3+ design and pre-merge sign-off per table above.
+- **Grok token-save (fast-xhigh first)** — `grok-4.5-fast-xhigh` for every Grok call; escalate to `grok-4.5-xhigh` only on FAIL/CONDITIONAL (Phase 3+ design, pre-merge sign-off, Step 0).
 
 ## References
 - `cursor-agents-communication/phase-3-grok-design.md`
