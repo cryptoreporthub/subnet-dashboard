@@ -1,11 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-15T05:18:00Z  
-**main:** `92737a7` — **Phase N/O COMPLETE**
+**Updated:** 2026-07-15T05:31:00Z  
+**main:** Phase N/O + **P** complete (#227 #228 #232)
 
 ## One-line
 
-**Phase N/O code-complete: Agent A #227 + Agent B #228 merged. Monitor Fly deploy.**
+**Phase P merged (#232). Prod flags on; monitor Fly deploy + `/api/backtest`.**
 
 ## Done (do not re-queue)
 
@@ -24,6 +24,7 @@
 | Grok slow+medium policy | **#225** |
 | Agent B N4/N1/O2/O3 | **#228** |
 | Agent A N2/N3/O1/O4/O5 | **#227** |
+| Phase P prod + N1 snapshot | **#232** |
 | A2 `smoke` on `main` | verified |
 | Stale open PRs closed | #101 · #110 · #112 · #129–#130 · #134 · #139 · #153 · #165–#166 · #184 |
 
@@ -45,7 +46,8 @@
 - **Prod flags:** `CALIBRATION_AUTO_RETRAIN=on`, `CONVICTION_ALERTS_ENABLED=on` in `fly.toml` (Phase P #TBD)
 - **Human-only:** O4 custom domain DNS at registrar (steps in `DEPLOY.md`)
 
-## Phase P — ACTIVE
-- **P1–P3** Agent A: prod flags + N1 council follow-through (`gameplan-phase-p.md`)
-- **P4** Human: custom domain DNS
-- **P5** Monitor: `/api/backtest` lift after prod picks accumulate
+## Phase P — COMPLETE (#232)
+- Prod flags on in `fly.toml`
+- `subnet_snapshot` + judge scores persisted on new predictions
+- **P4** Human: custom domain DNS (`DEPLOY.md`)
+- **P5** Monitor: `/api/backtest` after prod picks accumulate

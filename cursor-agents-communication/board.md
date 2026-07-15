@@ -105,12 +105,12 @@ Recent merges on `main` @ `778ad13`:
 | **UI Phase 2** | ✅ merged #157 (Grok sign-off: CONDITIONAL — see phase-3-grok-design.md) |
 | **J–M** | ✅ merged |
 | **N/O** | ✅ **COMPLETE** — #227 (A) + #228 (B) merged |
-| **P** | 🟢 **ACTIVE** — prod flags + N1 follow-through |
+| **P** | ✅ **COMPLETE** — #232 merged |
 
 ## N/O queue
 | Agent | Slices | Status |
 |-------|--------|--------|
-| **A** (`-843d`) | P1–P3 | **in PR** — prod flags + snapshot persist |
+| **A** (`-843d`) | P1–P3 | ✅ **#232 merged** |
 | **B** (`-e78a`) | — | idle / monitor backtest UI |
 
 Specs: `gameplan-N-O.md` + `phase-n-o-step0-spec.md`. Models: Composer 2.5; **Grok slow + medium** (escalate **high** only if FAIL/unsatisfactory).
