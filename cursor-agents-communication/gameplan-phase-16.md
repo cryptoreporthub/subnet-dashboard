@@ -1,8 +1,8 @@
 # Phase §16 — Close the trust gap
 
-**Status:** APPROVED scope 2026-07-15 · execution via `s16-s17-automated-build-plan.md`  
+**Status:** ✅ COMPLETE 2026-07-15 — #244 · #245 · #246 (`GATE_S16`)  
 **After:** Phase N/O (#227 + #228) · Phase P (#232 + #237)  
-**Companion:** `gameplan-beyond-16.md` (§17) · start prompts: `s16-s17-start-prompts.md`
+**Companion:** `gameplan-beyond-16.md` (§17) · `s16-s17-automated-build-plan.md`
 
 ## Why
 

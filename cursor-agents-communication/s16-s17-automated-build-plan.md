@@ -1,7 +1,7 @@
 # §16 + §17 — Automated Build Plan
 
-**Status:** READY FOR REVIEW 2026-07-15 · **no Build until human approves this file**  
-**main baseline:** `d835fa6` (#241 plan docs)  
+**Status:** ✅ APPROVED + IN PROGRESS 2026-07-15 · human approved · **`GATE_S16` CLEAR**  
+**main baseline:** `c4fe983` (#247 S1 bands; §16.1–16.3 done)  
 **Specs:** `gameplan-phase-16.md` · `gameplan-beyond-16.md`  
 **Prompts:** `s16-s17-start-prompts.md`
 
@@ -292,9 +292,10 @@
 
 ---
 
-## Review checklist (human — before first Build)
+## Review checklist
 
-- [ ] Approve this file as binding auto plan
-- [ ] Confirm Agent A = `-843d` starts A1; paste B prompt to Agent B
+- [x] Auto plan approved; Build started
+- [x] Agent A completed §16 (A1–A3) + S1 bands (A4/#247)
+- [x] `GATE_S16` clear — Agent B starts **B1**
 - [ ] F7 DNS stays human
-- [ ] Ditto = gate/spot-check only
+- [x] Ditto = gate/spot-check only
