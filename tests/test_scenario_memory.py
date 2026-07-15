@@ -104,6 +104,70 @@ def test_backfill_stamps_blank_scenarios_from_resolved_predictions(monkeypatch, 
     assert (updated.get("metadata") or {}).get("prediction_id") == "pred_test_1"
 
 
+def test_backfill_matches_name_netuid_when_regime_differs(monkeypatch, tmp_path):
+    """§16.1: do not leave original blank when regime heuristic disagrees."""
+    _setup_paths(monkeypatch, tmp_path)
+    pending = scenario_memory.add_scenario(
+        "Chutes",
+        {"netuid": 64, "direction": "up"},
+        outcome=None,
+        regime="bull",
+    )
+    # No scenario_id on prediction — old rows; actual_pct would classify_regime differently
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": [
+                {
+                    "id": "pred_regime_gap",
+                    "name": "Chutes",
+                    "netuid": 64,
+                    "correct": False,
+                    "actual_pct": -0.1,
+                    "predicted_pct": 1.0,
+                    "status": "resolved",
+                }
+            ],
+            "stats": {"total": 1, "correct": 0, "wrong": 1, "pending": 0},
+        }
+    )
+
+    result = backfill_scenario_outcomes_from_predictions()
+    assert result["updated"] == 1
+    assert result["pending_after"] == 0
+    snap = scenario_memory.get_memory_snapshot()["scenarios"]
+    assert len(snap) == 1  # no duplicate minted
+    assert snap[0]["id"] == pending["id"]
+    assert snap[0]["outcome"] == "wrong"
+
+
+def test_backfill_reports_unresolvable_without_matching_prediction(monkeypatch, tmp_path):
+    _setup_paths(monkeypatch, tmp_path)
+    orphan = scenario_memory.add_scenario(
+        "Orphan",
+        {"netuid": 99},
+        outcome=None,
+        regime="neutral",
+    )
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": [],
+            "stats": {"total": 0, "correct": 0, "wrong": 0, "pending": 0},
+        }
+    )
+
+    result = backfill_scenario_outcomes_from_predictions()
+    assert result["pending_after"] == 1
+    assert result["unresolvable_count"] == 1
+    assert result["unresolvable"][0]["scenario_id"] == orphan["id"]
+    assert result["unresolvable"][0]["reason"] == "no_matching_prediction"
+
+    stats = scenario_outcome_stats()
+    assert stats["unresolvable_count"] == 1
+    assert stats["outcomes_pending"] == 1
+
+
 def test_scenario_outcome_stats_reports_resolved_counts(monkeypatch, tmp_path):
     _setup_paths(monkeypatch, tmp_path)
     scenario_memory.add_scenario("A", {"netuid": 1}, outcome="correct")
@@ -113,6 +177,7 @@ def test_scenario_outcome_stats_reports_resolved_counts(monkeypatch, tmp_path):
     assert stats["scenario_count"] == 2
     assert stats["outcomes_resolved"] == 2
     assert stats["outcomes_pending"] == 0
+    assert stats["unresolvable_count"] == 0
     assert stats["last_outcome"] == "wrong"
 
 
