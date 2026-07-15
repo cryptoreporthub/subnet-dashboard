@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T04:25:00Z by Agent (`-6f98`) — **#225 merged; A/B build ready**  
-**main:** `9bca1c1`
+**Last updated:** 2026-07-15T05:02:00Z by Agent B (`-e78a`) — **#228 merged (B N/O complete)**  
+**main:** `174d8a0`
 
 ## Ditto boot (read first)
 
@@ -16,7 +16,7 @@
 - Specs: `gameplan-N-O.md` · `phase-n-o-step0-spec.md`
 - Models: Composer 2.5 default; **Grok slow + medium** (escalate to **high** only if medium fails / unsatisfactory).
 - Old Phase O (`phase-o-design.md` / `signal_hub`) = **SUPERSEDED / COMPLETE — do not rebuild**.
-- **A start:** N2 (or N3/O1 in parallel). **B:** N4→N1→O2→O3 on `cursor/phase-n-o-agent-b-4e98` (PR pending).
+- **A start:** N2 (or N3/O1 in parallel). **B:** N4→N1→O2→O3 ✅ **#228 merged**.
 
 ## Read order (agents + Ditto)
 1. **STATUS card** — `cursor-agents-communication/STATUS.md` (Ditto: start here)
