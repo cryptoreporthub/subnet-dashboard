@@ -96,14 +96,14 @@ Ditto-scoped. **Do not implement until approved.** Spec: `cursor-agents-communic
 
 Owner: Agent A. Order: 16.1 → 16.2 → 16.3.
 
-## §17 — Beyond the trust gap (DRAFT)
+## §17 — Beyond the trust gap (DRAFT — optimal mix)
 
-What Ditto left out of §16 so the trust pass stays small. **After §16.** Full spec: `cursor-agents-communication/gameplan-beyond-16.md`.
+What Ditto left out of §16. **After §16.** Spec: `cursor-agents-communication/gameplan-beyond-16.md`.
 
-| Track | Slices | Intent |
-|-------|--------|--------|
-| **§17.S Extra signals** | S1 signal-derived magnitude · S2 whale/rugger/indicator depth · S3 optional Discord/X | Real inputs, not decorative gauges |
-| **§17.U UI / experience** | U1 Phase-2 CONDITIONALs · U2 predictive framing · U3 progressive enhance · U4 launch surface | Polish + framing, not a cockpit rewrite |
-| **§17.F Big features** | F1 streaming chat · F2 live message-intel · F3 alert delivery · F4 custom domain (human) · F5 report depth | FastAPI unlocks + launch |
+| Track | Mix (not OR) | Intent |
+|-------|--------------|--------|
+| **S Signals** | Bands (UX) + signal-derived magnitude (math) + one enrichment badge | Polymarket clarity + real inputs + Nansen-style label |
+| **U UI** | Single-job home + story strip + polish/framing | Robinhood home + Stripe “why” + TradingView pro panels |
+| **F Features** | Watchlist/alerts → paper portfolio → weekly letter → streaming chat/intel → domain | Habit → accountability → brand → depth |
 
-Sequence: §16 → prefer **S1** before heavy U/F when new scores are shown · then U ∥ F.
+**Waves:** §16 → S-core → (U-home ∥ F-alerts) → (paper ∥ polish) → (letter ∥ chat/intel) · domain anytime.

@@ -133,14 +133,14 @@ Recent merges on `main` @ `e8547b9`:
 | **A** (`-843d`) | 16.1 → 16.2 → 16.3 | 📝 draft only |
 | **B** (`-e78a`) | Idle | — |
 
-## §17 queue (DRAFT — after §16)
-| Track | Owner | Status |
-|-------|-------|--------|
-| **S** Extra signals | A + B | 📝 `gameplan-beyond-16.md` |
-| **U** UI / experience | B | 📝 |
-| **F** Big features | A + B + Human (F4 DNS) | 📝 |
+## §17 queue (DRAFT — after §16 · optimal mix locked)
+| Track | Mix | Status |
+|-------|-----|--------|
+| **S** | Bands + magnitude + one enrichment badge | 📝 |
+| **U** | Single-job home + story strip + polish | 📝 |
+| **F** | Watchlist/alerts → paper portfolio → letter → chat/intel → domain | 📝 |
 
-Specs: `gameplan-phase-16.md` · `gameplan-beyond-16.md`. Models: Composer 2.5; **Grok slow + medium** for design.
+Specs: `gameplan-phase-16.md` · `gameplan-beyond-16.md` (mixed recommendation). Models: Composer 2.5; **Grok slow + medium** for design.
 
 ## Agent posture
 
