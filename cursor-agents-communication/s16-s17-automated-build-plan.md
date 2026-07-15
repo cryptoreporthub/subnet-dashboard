@@ -5,7 +5,7 @@
 **Specs:** `gameplan-phase-16.md` · `gameplan-beyond-16.md`  
 **Prompts:** `s16-s17-start-prompts.md`
 
-**One-agent mode (2026-07-15):** Human on **Pro+**. Run **one** Cloud Agent + Grok subagent. Agent A **retired**. Continue **B8→B10** only; skip U4/U5 unless human asks. See `token-budget-rules.md`.
+**One-agent mode (2026-07-15):** Human on **Pro+**. Run **one** Cloud Agent + Grok subagent. Agent A **retired**. Continue **B9→B12** per queue; skip U4 unless human asks. See `token-budget-rules.md`.
 
 ---
 
@@ -271,9 +271,23 @@
 | **Goal** | Consume streaming chat; `textContent` only |
 | **Files** | static/js chat |
 | **PR** | `§17.F5: streaming chat UI` |
-| **Next** | B11 optional |
+| **Next** | B11 |
 
-### B11 — U5 Launch surface (if F7 done)
+### B11 — F4b Daily recap (yesterday)
+
+| | |
+|--|--|
+| **WAIT FOR** | B9 weekly letter UI on main (reuse letter patterns) |
+| **Goal** | **Morning briefing** — recap **prior calendar day** (UTC default): picks made, resolutions (hit/miss), notable signals/alerts; honest empty if no data |
+| **Backend** | Extend `internal/letter/`: `build_daily_letter()` + `GET /api/letter/daily` (optional `?date=`; default yesterday). Reuse `daily_picks`, scenario outcomes, story-strip stats — **no fake narrative** |
+| **UI** | Template partial on home (or letter section): render daily markdown/HTML alongside weekly letter |
+| **Schedule** | Generated on read (no cron required v1); content always targets **yesterday** when called without `date` |
+| **AC** | Empty state honest; CONTRACT entry if new route; unit test like `test_letter.py` |
+| **PR** | `§17.F4b: daily recap — yesterday briefing` |
+| **Next** | B12 optional |
+| **NOT in B9** | B9 = weekly letter UI only — do not scope-creep daily into #268 |
+
+### B12 — U5 Launch surface (if F7 done)
 
 | | |
 |--|--|
@@ -287,7 +301,7 @@
 ## Done criteria (phase)
 
 - [ ] `GATE_S16` · `GATE_S_CORE` · `GATE_HABIT` · `GATE_ACCOUNT` all cleared on board
-- [ ] A1–A11 and B1–B10 merged (B11 optional)
+- [ ] A1–A11 and B1–B11 merged (B12 optional)
 - [ ] `./scripts/verify_prod.sh` green after last deploy
 - [ ] No fake bands/scores/badges
 
