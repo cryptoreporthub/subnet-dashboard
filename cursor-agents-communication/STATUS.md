@@ -1,33 +1,29 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-15T15:45:00Z  
-**main:** `e5827e9` (F4 #259 + U2 #258)
+**Updated:** 2026-07-15T16:10:00Z  
+**main:** `e167972` (F5 #260)
 
 ## One-line
 
-**GATE_ACCOUNT clear. A: F5 streaming chat; B: U2 done → F1/F2 UI / U3.**
+**A queue almost done: F6 message-intel in flight. B: post-U2 UI.**
 
 ## PR truth
 
 | PR | What | State |
 |----|------|-------|
+| **#260** | §17.F5 streaming chat | ✅ **merged** |
 | **#259** | §17.F4 weekly letter | ✅ **merged** |
 | **#258** | §17.U2 story strip (B) | ✅ **merged** |
 | **#257** | §17.F3 paper portfolio | ✅ **merged** |
-| **#256** | §17.F2 alert delivery | ✅ **merged** |
-| **#255** | §17.U1 single-job home | ✅ **merged** |
-| **#254** | §17.F1 watchlist | ✅ **merged** |
+| **#254–#256** | F1/F2/U1 | ✅ **merged** |
 
 ## Gates
 
 | Gate | Status |
 |------|--------|
-| **GATE_S16** | ✅ clear |
-| **GATE_S_CORE** | ✅ clear |
-| **GATE_HABIT** | ✅ clear |
-| **GATE_ACCOUNT** | ✅ clear |
+| **GATE_S16 / S_CORE / HABIT / ACCOUNT** | ✅ all clear |
 
 ## Next
 
-- **Agent A:** F5 streaming chat → F6 message-intel
-- **Agent B:** F1/F2 UI → U3 polish → F3 UI → F4 UI
+- **Agent A:** F6 message-intel → **A DONE**
+- **Agent B:** F1/F2 UI → U3 → F3 UI → F4/F5 UI

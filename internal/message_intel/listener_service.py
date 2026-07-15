@@ -1,4 +1,4 @@
-"""Background social listeners (Telegram) — Phase M."""
+"""Background social listeners (Telegram) — Phase M / §17.F6."""
 
 from __future__ import annotations
 
@@ -20,6 +20,47 @@ def _listener_enabled() -> bool:
     )
 
 
+def _telethon_available() -> bool:
+    try:
+        from message_intel.telegram_listener import HAS_TELETHON
+
+        return bool(HAS_TELETHON)
+    except Exception:
+        return False
+
+
+def _has_telegram_creds() -> bool:
+    return bool(os.environ.get("TELEGRAM_API_ID") and os.environ.get("TELEGRAM_API_HASH"))
+
+
+def listener_status() -> Dict[str, Any]:
+    """Honest listener health for APIs — no secrets, no fake 'live' without creds."""
+    enabled = _listener_enabled()
+    has_creds = _has_telegram_creds()
+    telethon = _telethon_available()
+    running = _listener is not None and bool(getattr(_listener, "_running", True))
+
+    if running:
+        reason = "running"
+    elif not enabled:
+        reason = "disabled"
+    elif not has_creds:
+        reason = "missing_telegram_creds"
+    elif not telethon:
+        reason = "telethon_unavailable"
+    else:
+        reason = "idle_not_started"
+
+    return {
+        "enabled": enabled,
+        "has_creds": has_creds,
+        "telethon_available": telethon,
+        "running": running,
+        "reason": reason,
+        "live": bool(running and has_creds),
+    }
+
+
 def _on_telegram_message(normalized: Dict[str, Any]) -> None:
     from internal.message_intel.engine import ingest_message
 
@@ -38,9 +79,7 @@ def start_message_intel_listeners() -> bool:
     if _listener is not None:
         return True
 
-    api_id = os.environ.get("TELEGRAM_API_ID")
-    api_hash = os.environ.get("TELEGRAM_API_HASH")
-    if not (api_id and api_hash):
+    if not _has_telegram_creds():
         logger.info("Telegram listener skipped — TELEGRAM_API_ID/HASH not set")
         return False
 
@@ -59,6 +98,8 @@ def start_message_intel_listeners() -> bool:
     started = _listener.start()
     if started:
         logger.info("Telegram message-intel listener started")
+    else:
+        _listener = None
     return started
 
 
