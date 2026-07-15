@@ -255,19 +255,28 @@ Agent B: alert UX + config. Agent A: trigger hooks on indicator/whale/pump signa
 
 ---
 
-## 11. Phase N — Calibration / retrain (after J stable)
+## 11. Phase N — Calibration / retrain (shipped on main)
 
-- Phase 13 pipeline: Retrain → Cert → Fire
-- `/api/calibration/status`
-- Scheduled job; must not break hot path
+- Retrain → Cert → Fire pipeline (`internal/calibration/`)
+- `GET /api/calibration/status` · `POST /api/calibration/retrain`
+- **N3:** env-gated post-resolver auto-retrain (`CALIBRATION_AUTO_RETRAIN`, default off)
+- **N2:** scenario outcome backfill on `/api/scenario-memory`
 
 ---
 
-## 12. Phase O — TAO Signal Hub (after L partial)
+## 12. Phase O — Alerts / Reports / Launch (2026-07-15)
 
-- Chart-led SignalTracker + anomaly guards
-- Wire outputs into council state-vector inputs
-- Integrate with Phase L alerts
+**Old O (Signal Hub)** — COMPLETE on main (`internal/signal_hub/`). Do not rebuild.
+
+**New O slices:**
+
+| Slice | Status | Notes |
+|-------|--------|-------|
+| **O1** | shipped | `/api/conviction-alerts/*` via `AlertEngine` (distinct from Phase L `/api/alerts`) |
+| **O4** | docs | `DEPLOY.md` custom domain + CDN; `fly.toml` env comments |
+| **O5** | docs | board/STATUS/master-plan sync |
+| **O2** | B | backtest UI after N4 |
+| **O3** | B | `/api/report/{netuid}` |
 
 ---
 

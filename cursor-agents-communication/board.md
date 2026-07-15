@@ -1,7 +1,12 @@
 # Subnet Dashboard Coordination Board
 
+<<<<<<< HEAD
 **Last updated:** 2026-07-15T05:15:00Z by Agent A (`-843d`) — **#227 rebase (A N/O landing)**  
 **main:** `8f44d9c` (B #228 merged)
+=======
+**Last updated:** 2026-07-15T05:00:00Z by Agent A (`-843d`) — **N2–O5 in PR**  
+**main:** `2183037`
+>>>>>>> 40df67b (feat(N/O A): N3 auto-retrain hook, O1 conviction alerts, O4/O5 docs)
 
 ## Ditto boot (read first)
 
