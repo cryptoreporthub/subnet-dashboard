@@ -1,7 +1,7 @@
 # Phase P — Production activation & N1 follow-through
 
 **Status:** COMPLETE 2026-07-15 · code **#232** merged · **#233 closed unmerged** (duplicate) · verify **#237**  
-**Precedes:** Ditto-defined roadmap slice (master plan §16)  
+**Precedes:** §16 Close the trust gap → then §17 Beyond (`gameplan-beyond-16.md`)  
 **Binding prior:** `phase-n-o-step0-spec.md` · `n1-oracle-tuning-design.md`
 
 ## Why Phase P
@@ -46,4 +46,4 @@ N/O shipped code on `main` (#227 + #228) but prod flags were off and N1 council 
 
 **P4:** DNS + `flyctl certs add dashboard.cryptoreporthub.com` — blocked on registrar + Fly auth (see `DEPLOY.md`).
 
-Agents idle / monitor until Ditto defines next roadmap slice.
+Agents idle / monitor until §16 is approved (`gameplan-phase-16.md`).

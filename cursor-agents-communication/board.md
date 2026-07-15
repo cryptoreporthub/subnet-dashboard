@@ -118,6 +118,8 @@ Recent merges on `main` @ `e8547b9`:
 | **J–M** | ✅ merged |
 | **N/O** | ✅ **COMPLETE** — #227 (A) + #228 (B) merged |
 | **P** | ✅ **COMPLETE** — code **#232** + verify **#237** (#233 closed, not merged) |
+| **§16** | 📝 **DRAFT** — Close the trust gap (`gameplan-phase-16.md`); not started |
+| **§17** | 📝 **DRAFT** — Beyond trust gap: signals / UI / features (`gameplan-beyond-16.md`); after §16 |
 
 ## Phase P queue
 | Agent | Slices | Status |
@@ -125,14 +127,27 @@ Recent merges on `main` @ `e8547b9`:
 | **A** (`-843d`) | P1–P3 | ✅ **#232 merged** |
 | **B** (`-e78a`) | #233 duplicate | ❌ **#233 closed** — same scope landed in #232 |
 
-Specs: `gameplan-N-O.md` + `phase-n-o-step0-spec.md`. Models: Composer 2.5; **Grok slow + medium** (escalate **high** only if FAIL/unsatisfactory).
+## §16 queue (DRAFT — do not build until approved)
+| Agent | Slices | Status |
+|-------|--------|--------|
+| **A** (`-843d`) | 16.1 → 16.2 → 16.3 | 📝 draft only |
+| **B** (`-e78a`) | Idle | — |
+
+## §17 queue (DRAFT — after §16 · optimal mix locked)
+| Track | Mix | Status |
+|-------|-----|--------|
+| **S** | Bands + magnitude + one enrichment badge | 📝 |
+| **U** | Single-job home + story strip + polish | 📝 |
+| **F** | Watchlist/alerts → paper portfolio → letter → chat/intel → domain | 📝 |
+
+Specs: `gameplan-phase-16.md` · `gameplan-beyond-16.md` (mixed recommendation). Models: Composer 2.5; **Grok slow + medium** for design.
 
 ## Agent posture
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **Cursor** | **Idle** | Queues + Fly fix complete; monitor only |
-| **Ditto** | **Monitor** | Read-only — CI, Fly health, `/api/data-freshness` |
+| **Cursor** | **Idle** | §16 + §17 drafted; wait for approve before build |
+| **Ditto** | **Review** | Sign off / amend §16 (thin) and §17 (left-out buckets) |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
 

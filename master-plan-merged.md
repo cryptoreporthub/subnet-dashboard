@@ -82,5 +82,28 @@ Phase L: Composer slices 1–2; **Grok design before** slices 3–4 (WebSocket, 
 - UI spec: `docs/premium-dashboard-redesign.md`
 - Board: `cursor-agents-communication/board.md`
 
-## Next roadmap slice (§16)
-_To be defined by Ditto (see `cursor-agents-communication/STATUS.md` → "## Next"). Not yet scoped._
+## Next roadmap slice (§16) — Close the trust gap (DRAFT)
+
+Ditto-scoped. **Do not implement until approved.** Spec: `cursor-agents-communication/gameplan-phase-16.md`.
+
+| Slice | What |
+|-------|------|
+| **16.1** | Fill outcome gaps (finish N2) |
+| **16.2** | Data-backed `hybrid_score` — or honest “not enough data yet” |
+| **16.3** | Re-measure win rate after calibration |
+
+**Purposely out of §16** → see **§17** below.
+
+Owner: Agent A. Order: 16.1 → 16.2 → 16.3.
+
+## §17 — Beyond the trust gap (DRAFT — optimal mix)
+
+What Ditto left out of §16. **After §16.** Spec: `cursor-agents-communication/gameplan-beyond-16.md`.
+
+| Track | Mix (not OR) | Intent |
+|-------|--------------|--------|
+| **S Signals** | Bands (UX) + signal-derived magnitude (math) + one enrichment badge | Polymarket clarity + real inputs + Nansen-style label |
+| **U UI** | Single-job home + story strip + polish/framing | Robinhood home + Stripe “why” + TradingView pro panels |
+| **F Features** | Watchlist/alerts → paper portfolio → weekly letter → streaming chat/intel → domain | Habit → accountability → brand → depth |
+
+**Waves:** §16 → S-core → (U-home ∥ F-alerts) → (paper ∥ polish) → (letter ∥ chat/intel) · domain anytime.

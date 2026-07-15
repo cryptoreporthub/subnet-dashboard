@@ -32,5 +32,6 @@
 
 ## Next
 
-- Ditto defines next roadmap slice
+- **§16 — Close the trust gap** (DRAFT): 16.1 outcomes → 16.2 gated `hybrid_score` → 16.3 re-measure. Spec: `gameplan-phase-16.md`.
+- **§17 — Beyond the trust gap** (DRAFT, **optimal mix**): bands+magnitude+badge · home+story+polish · watchlist→portfolio→letter→chat. Spec: `gameplan-beyond-16.md`. **After §16.**
 - Monitor `./scripts/verify_prod.sh` after deploys
