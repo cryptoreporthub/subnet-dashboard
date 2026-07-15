@@ -67,8 +67,43 @@
       {% endif %}
 
       <div class="home-job__cta" role="group" aria-label="Primary actions">
-        <a class="home-cta home-cta--primary" href="#section-alerts">Set alert</a>
+        {% set focus_netuid = sn.netuid if sn and sn.netuid is not none else none %}
+        {% set wl = habit_watchlist if habit_watchlist is mapping else {} %}
+        {% set pins = wl.netuids if wl.netuids is iterable and wl.netuids is not string else [] %}
+        {% set pinned = focus_netuid is not none and (focus_netuid|int) in pins %}
+        <button
+          type="button"
+          class="home-cta home-cta--primary"
+          id="habit-pin-btn"
+          data-netuid="{{ focus_netuid if focus_netuid is not none else '' }}"
+          data-pinned="{{ '1' if pinned else '0' }}"
+          {% if focus_netuid is none %}disabled aria-disabled="true"{% endif %}
+        >{% if pinned %}Unpin subnet{% else %}Pin to watchlist{% endif %}</button>
+        <button
+          type="button"
+          class="home-cta home-cta--ghost"
+          id="habit-alert-btn"
+          data-enabled="{{ '1' if habit_alerts.enabled else '0' }}"
+        >Run conviction check</button>
         <a class="home-cta home-cta--ghost" href="#pro-cockpit">Open Pro cockpit</a>
+      </div>
+      <div class="home-habit-status" id="home-habit-status" aria-live="polite">
+        <span class="home-habit-status__watch" id="habit-watchlist-summary">
+          Watchlist: {{ wl.count|default(pins|length) }} pinned
+        </span>
+        {% set alerts = habit_alerts if habit_alerts is mapping else {} %}
+        {% if alerts.enabled %}
+        <span class="home-habit-status__alerts" id="habit-alerts-summary">
+          Alerts on · {{ alerts.delivery_mode|default('dry_run') }}
+          {% if alerts.last_run and alerts.last_run.last_run_at %}
+          · last {{ alerts.last_run.last_run_at }}
+          {% endif %}
+        </span>
+        {% else %}
+        <span class="home-habit-status__alerts home-habit-status__alerts--off" id="habit-alerts-summary">
+          Conviction alerts disabled on this deploy
+        </span>
+        {% endif %}
       </div>
     </div>
   </div>
