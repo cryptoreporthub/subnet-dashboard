@@ -1,16 +1,17 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-15T16:10:00Z  
-**main:** `e167972` (F5 #260)
+**Updated:** 2026-07-15T16:25:00Z  
+**main:** `eb01e70` (F6 #261)
 
 ## One-line
 
-**A queue almost done: F6 message-intel in flight. B: post-U2 UI.**
+**Agent A §17 auto queue DONE (F1–F6). B continues UI. Human: F7 DNS anytime.**
 
 ## PR truth
 
 | PR | What | State |
 |----|------|-------|
+| **#261** | §17.F6 message-intel | ✅ **merged** |
 | **#260** | §17.F5 streaming chat | ✅ **merged** |
 | **#259** | §17.F4 weekly letter | ✅ **merged** |
 | **#258** | §17.U2 story strip (B) | ✅ **merged** |
@@ -25,5 +26,6 @@
 
 ## Next
 
-- **Agent A:** F6 message-intel → **A DONE**
+- **Agent A:** idle (A queue complete)
 - **Agent B:** F1/F2 UI → U3 → F3 UI → F4/F5 UI
+- **Human:** F7 custom domain
