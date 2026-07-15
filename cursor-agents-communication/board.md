@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T20:05:00Z — **§18 in progress**  
-**main:** `5dd106c`
+**Last updated:** 2026-07-15T20:10:00Z — **§18 H3–B1 merged**  
+**main:** `ce6d046`
 
 ## Ditto boot (read first)
 
@@ -28,7 +28,7 @@ Specs: `token-budget-rules.md` · `model-guide.md` · `s18-automated-build-plan.
 ## N/O (approved 2026-07-15)
 - **APPROVED** + **Step 0 LOCKED**
 - Models: **Composer 2.5-fast** build; **Grok slow + low/medium** subagent (escalate **high** only if medium fails).
-- **§17** ✅ **COMPLETE** (#267–#271, #274). **§18** in progress.
+- **§17** ✅ **COMPLETE** (#267–#271, #274). **§18** H3–B1 ✅ — C1 wait creds.
 
 ## Read order (agents + Ditto)
 1. **STATUS card** — `cursor-agents-communication/STATUS.md`
@@ -40,13 +40,13 @@ Specs: `token-budget-rules.md` · `model-guide.md` · `s18-automated-build-plan.
 
 ## Ready for next work
 
-**§18 (one agent):** H1→H3 hygiene · A1–A2 alerts · B1 report UI. **Human:** F7 DNS · Telegram creds for C1.
+**§18 (one agent):** H3–B1 ✅ (#276–#277). **Human:** Fly alert secrets (A1) · F7 DNS · Telegram API creds for C1.
 
 | PR | Role | State |
 |----|------|-------|
+| **#277** | §18.B1 O3 subnet report UI | ✅ **merged** |
+| **#276** | §18 H3+A1+A2 docs/verify | ✅ **merged** |
 | **#274** | §17.U4 home progressive enhance | ✅ **merged** |
-| **#271** | §17.F4b daily recap (B11) | ✅ **merged** |
-| **#265** | Token budget + `.cursorignore` (H1) | ✅ **merged** |
 
 **Health:** `GET /health` · `GET /api/message-intel/status` → 200 OK
 
@@ -56,7 +56,7 @@ Specs: `token-budget-rules.md` · `model-guide.md` · `s18-automated-build-plan.
 |-------|--------|
 | **N/O · P · §16** | ✅ complete |
 | **§17 product** | ✅ **complete** (#267–#271, #274) |
-| **§18** | 🟡 H1→B1 in progress |
+| **§18** | 🟡 H3–B1 ✅ · **C1 wait creds** |
 
 ## Agent posture
 
