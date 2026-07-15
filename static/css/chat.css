@@ -39,6 +39,11 @@
   margin-bottom: 3px;
 }
 
+.chat-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .chat-input {
   display: flex;
   gap: 10px;
