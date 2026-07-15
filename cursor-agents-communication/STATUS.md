@@ -1,11 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-15T05:15:00Z · Agent A `-843d`  
-**main:** `8f44d9c` (B #228 merged) · **A:** PR #227 rebasing
+**Updated:** 2026-07-15T05:18:00Z · Agent A `-843d`  
+**main:** `92737a7` (#227 + #228 merged)
 
 ## One-line
 
-**B N/O complete (#228). A landing N2+N3+O1+O4+O5 (#227 rebase → merge).**
+**Phase N/O COMPLETE on `main`. Monitor CI/Fly; optional prod flags in `DEPLOY.md`.**
 
 ## Done (do not re-queue)
 
@@ -23,21 +23,25 @@
 | Step 0 lock | **#223** |
 | Grok slow+medium policy | **#225** |
 | Agent B N4/N1/O2/O3 | **#228** |
+| Agent A N2/N3/O1/O4/O5 | **#227** |
 | A2 `smoke` on `main` | verified |
 | Stale open PRs closed | #101 · #110 · #112 · #129–#130 · #134 · #139 · #153 · #165–#166 · #184 |
 
 ## Ditto
 
-- **Do:** read `board.md`, watch CI/Fly health
-- **Do not:** re-open completed July 14 queue items; do not rebuild `signal_hub`
+- **Do:** monitor CI/Fly health, `/api/data-freshness`, `/api/backtest`
+- **Do not:** re-open N/O slices; do not rebuild `signal_hub`
 
 ## Cursor
 
-- **Active** — merge Agent A #227 onto `main` (last N/O code slice)
-- Git only; Ponytail minimal diff
-- Grok: slow + medium default; high only if medium fails / unsatisfactory
+- **Idle** — N/O code complete; no active agent slices
+- Optional follow-up: enable prod flags (`CALIBRATION_AUTO_RETRAIN`, `CONVICTION_ALERTS_ENABLED`), custom domain per `DEPLOY.md`
 
-## Phase N/O
-- **APPROVED (2026-07-15)** · **Step 0 LOCKED** — `phase-n-o-step0-spec.md`
-- **B** (`-e78a`): N4 → N1 → O2 → O3 ✅ **#228 merged**
-- **A** (`-843d`): N2 → N3 → O1 → O4 → O5 — **#227** (rebase + merge pending)
+## Phase N/O — COMPLETE
+
+| Agent | Slices | PR |
+|-------|--------|-----|
+| **A** (`-843d`) | N2, N3, O1, O4, O5 | **#227** ✅ |
+| **B** (`-e78a`) | N4, N1, O2, O3 | **#228** ✅ |
+
+Spec: `phase-n-o-step0-spec.md` · Plan: `gameplan-N-O.md`

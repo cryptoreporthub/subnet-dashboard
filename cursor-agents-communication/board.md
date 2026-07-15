@@ -1,8 +1,8 @@
 # Subnet Dashboard Coordination Board
 
 <<<<<<< HEAD
-**Last updated:** 2026-07-15T05:15:00Z by Agent A (`-843d`) — **#227 rebase (A N/O landing)**  
-**main:** `8f44d9c` (B #228 merged)
+**Last updated:** 2026-07-15T05:18:00Z by Agent A (`-843d`) — **Phase N/O COMPLETE**  
+**main:** `92737a7`
 =======
 **Last updated:** 2026-07-15T05:00:00Z by Agent A (`-843d`) — **N2–O5 in PR**  
 **main:** `2183037`
@@ -109,12 +109,12 @@ Recent merges on `main` @ `778ad13`:
 | **UI Phase 1** | ✅ merged #154 + #155 |
 | **UI Phase 2** | ✅ merged #157 (Grok sign-off: CONDITIONAL — see phase-3-grok-design.md) |
 | **J–M** | ✅ merged |
-| **N/O** | 🟢 Step 0 LOCKED — A/B Composer unblocked |
+| **N/O** | ✅ **COMPLETE** — A #227 + B #228 merged |
 
 ## N/O queue
 | Agent | Slices | Status |
 |-------|--------|--------|
-| **A** (`-843d`) | N2, N3, O1, O4, O5 | **#227** rebase → merge |
+| **A** (`-843d`) | N2, N3, O1, O4, O5 | ✅ **#227 merged** |
 | **B** (`-e78a`) | N4, N1, O2, O3 | ✅ **#228 merged** |
 
 Specs: `gameplan-N-O.md` + `phase-n-o-step0-spec.md`. Models: Composer 2.5; **Grok slow + medium** (escalate **high** only if FAIL/unsatisfactory).
@@ -123,7 +123,7 @@ Specs: `gameplan-N-O.md` + `phase-n-o-step0-spec.md`. Models: Composer 2.5; **Gr
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **Cursor** | **Idle** | Queues + Fly fix complete; monitor only |
+| **Cursor** | **Idle** | N/O complete — monitor CI/Fly only |
 | **Ditto** | **Monitor** | Read-only — CI, Fly health, `/api/data-freshness` |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
