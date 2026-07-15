@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T14:00:00Z — **S1+S2+S4 on main · waiting B2/S3 for GATE_S_CORE**  
-**main:** `f264931`
+**Last updated:** 2026-07-15T14:15:00Z — **`GATE_S_CORE` CLEAR · A:F1 · B:U1 · HARD RULE #253**  
+**main:** `2696e90`
 
 ## Ditto boot (read first)
 
@@ -135,8 +135,8 @@ Recent merges on `main` @ `c4fe983`:
 ## §16 / §17 execution
 | Agent | Queue | Status |
 |-------|--------|--------|
-| **A** (`-843d`) | §16 ✅ · S1 #247 ✅ · S2 #250 ✅ · **wait GATE_S_CORE** then F1 | idle-on-gate |
-| **B** (`-e78a`) | S4 #248 ✅ · **B2/S3 badge NEXT** → U1… | building |
+| **A** (`-843d`) | S-core ✅ · **F1 watchlist** → F2 | building |
+| **B** (`-e78a`) | S3 #252 ✅ · **U1 home NEXT** | building |
 | **Human** | F7 DNS | anytime |
 
 Specs: `s16-s17-automated-build-plan.md`. **GATE_S_CORE** = S1+S2+S3.
@@ -145,8 +145,8 @@ Specs: `s16-s17-automated-build-plan.md`. **GATE_S_CORE** = S1+S2+S3.
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **A** | **Waiting S3** | Magnitude + bands live; F1 after GATE_S_CORE |
-| **B** | **Build B2** | S3 whale enrichment badge |
+| **A** | **Building F1** | Watchlist API; then F2 alerts |
+| **B** | **Build U1** | Single-job home (bands + badge on main) |
 | **Ditto** | **Gate/spot-check** | Not day-to-day QB |
 
 
