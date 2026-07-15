@@ -2,6 +2,16 @@
 (function() {
   'use strict';
 
+  // Escape user-controlled strings before injecting into innerHTML.
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   // Create floating button
   var btn = document.createElement('div');
   btn.id = 'jc-trigger';
@@ -68,7 +78,7 @@ No judge data available yet. The background scheduler refreshes every 5 minutes.
 
         // Update stats
         stats.innerHTML = '**' + judges.length + '** subnets scored \u00b7 3 judges (Oracle, Echo, Pulse)' +
-          (data.source ? ' \u00b7 source: ' + data.source : '');
+          (data.source ? ' \u00b7 source: ' + esc(data.source) : '');
 
         // Build search box
         var html = '';
@@ -78,7 +88,7 @@ No judge data available yet. The background scheduler refreshes every 5 minutes.
 ' + '
 | # | Subnet | Oracle | Echo | Pulse | Consensus | Verdict |
 | --- | --- | --- | --- | --- | --- | --- |
-'; judges.forEach(function(j, idx) { var verdictColor = j.consensus && j.consensus.verdict === 'bullish' ? '#4caf50' : j.consensus && j.consensus.verdict === 'bearish' ? '#f44336' : '#888'; var score = j.consensus ? j.consensus.score.toFixed(3) : 'N/A'; var verdict = j.consensus ? j.consensus.verdict : 'N/A'; var agreement = j.consensus ? (j.consensus.agreement * 100).toFixed(0) + '%' : 'N/A'; var oracleDegr = j.oracle && j.oracle.degraded ? ' \u26a0' : ''; var echoDegr = j.echo && j.echo.degraded ? ' \u26a0' : ''; var pulseDegr = j.pulse && j.pulse.degraded ? ' \u26a0' : ''; html += '| ' + (idx + 1) + ' | ' + (j.name || 'SN' + j.netuid) + ' SN' + j.netuid + ' | ' + (j.oracle ? j.oracle.score.toFixed(3) : '-') + '' + oracleDegr + ' | ' + (j.echo ? j.echo.score.toFixed(3) : '-') + '' + echoDegr + ' | ' + (j.pulse ? j.pulse.score.toFixed(3) : '-') + '' + pulseDegr + ' | ' + score + ' ' + agreement + ' | ' + verdict + ' |
+'; judges.forEach(function(j, idx) { var verdictColor = j.consensus && j.consensus.verdict === 'bullish' ? '#4caf50' : j.consensus && j.consensus.verdict === 'bearish' ? '#f44336' : '#888'; var score = j.consensus ? j.consensus.score.toFixed(3) : 'N/A'; var verdict = j.consensus ? j.consensus.verdict : 'N/A'; var agreement = j.consensus ? (j.consensus.agreement * 100).toFixed(0) + '%' : 'N/A'; var oracleDegr = j.oracle && j.oracle.degraded ? ' \u26a0' : ''; var echoDegr = j.echo && j.echo.degraded ? ' \u26a0' : ''; var pulseDegr = j.pulse && j.pulse.degraded ? ' \u26a0' : ''; html += '| ' + (idx + 1) + ' | ' + esc(j.name || ('SN' + j.netuid)) + ' SN' + esc(j.netuid) + ' | ' + (j.oracle ? j.oracle.score.toFixed(3) : '-') + '' + oracleDegr + ' | ' + (j.echo ? j.echo.score.toFixed(3) : '-') + '' + echoDegr + ' | ' + (j.pulse ? j.pulse.score.toFixed(3) : '-') + '' + pulseDegr + ' | ' + score + ' ' + agreement + ' | ' + esc(verdict) + ' |
 '; }); html += '
 ';
         el.innerHTML = html;
