@@ -1,8 +1,8 @@
 # §17 — Beyond the trust gap (optimal mix)
 
-**Status:** DRAFT 2026-07-15 · **recommended mix locked** (not OR menus) · do not implement until §16 done + this approved  
+**Status:** APPROVED mix 2026-07-15 · execution via `s16-s17-automated-build-plan.md` (after `GATE_S16`)  
 **Depends on:** §16 Complete (`gameplan-phase-16.md`)  
-**Companion:** what Ditto left out of the trust-gap slice
+**Companion:** what Ditto left out of the trust-gap slice · `s16-s17-start-prompts.md`
 
 ## Design rule
 
