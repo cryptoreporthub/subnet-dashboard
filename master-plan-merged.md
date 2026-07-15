@@ -1,7 +1,7 @@
 # Subnet Dashboard Master Plan
 
-**Last updated:** 2026-07-13T01:45:00Z  
-**main:** `28e7ccd`
+**Last updated:** 2026-07-15T06:45:00Z  
+**main:** `e8547b9`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -20,7 +20,7 @@
 
 > **H-thin** (PR #104) partial shell on `main`. **H-full** complete (PR #120). Optional lane (PR #125).
 
-## Completion Snapshot (`main` @ `28e7ccd`)
+## Completion Snapshot (`main` @ `e8547b9`)
 | Phase | Status |
 |-------|--------|
 | J | ✅ merged (PR #105) |
@@ -31,8 +31,9 @@
 | Model guide | ✅ merged (PR #122) |
 | L | ✅ merged (PR #115, #133; UI #135) |
 | **M** | ✅ merged (PR #136) |
-| **N** | 🟡 APPROVED 2026-07-15 — Agent A (`-843d`) + Agent B (`-e78a`) split |
-| **O** | 🟡 APPROVED 2026-07-15 — Agent A (`-843d`) + Agent B (`-e78a`) split |
+| **N** | ✅ COMPLETE — Agent A #227 + Agent B #228 (2026-07-15) |
+| **O** | ✅ COMPLETE — Agent A #227 + Agent B #228 (2026-07-15) |
+| **P** | ✅ COMPLETE — prod flags on + N1 subnet_snapshot persistence (#232, #234) |
 
 ## Model selection (Composer vs Grok)
 **Canonical:** `cursor-agents-communication/model-guide.md`
@@ -56,10 +57,16 @@ Phase L: Composer slices 1–2; **Grok design before** slices 3–4 (WebSocket, 
 - Telegram listener, dedup, `GET /api/message-intel`, Jinja context.
 - Design: `cursor-agents-communication/phase-m-design.md`
 
-### N / O — approved (2026-07-15)
+### N / O — complete (2026-07-15)
 - Agent A (`-843d`) owns N2/N3/O1/O4/O5; Agent B (`-e78a`) owns N1/N4/O2/O3.
 - Full spec: `cursor-agents-communication/gameplan-N-O.md`.
 - Models: Composer 2.5 default build; **Grok slow + medium** default; escalate to **high** only if medium fails or is unsatisfactory (see `model-guide.md` + `gameplan-N-O.md` §5).
+- Status: ✅ COMPLETE (#227 + #228).
+
+### P — complete (Agent A, 2026-07-15)
+- Activated prod flags `CALIBRATION_AUTO_RETRAIN=on`, `CONVICTION_ALERTS_ENABLED=on` (fly.toml).
+- N1 council hardening: `subnet_snapshot` + `judge_scores_at_creation` persisted on new predictions; `hybrid_score()` stub in `internal/council/grading.py`.
+- Docs: `gameplan-phase-p.md`, `DEPLOY.md`, board/STATUS. Full spec: `cursor-agents-communication/gameplan-phase-p.md`.
 
 ## Sequencing Rules
 - No overlap: Agent A frontend vs Agent B backend paths.
@@ -73,3 +80,6 @@ Phase L: Composer slices 1–2; **Grok design before** slices 3–4 (WebSocket, 
 - Full history: `docs/master-plan-merged.md`
 - UI spec: `docs/premium-dashboard-redesign.md`
 - Board: `cursor-agents-communication/board.md`
+
+## Next roadmap slice (§16)
+_To be defined by Ditto (see `cursor-agents-communication/STATUS.md` → "## Next"). Not yet scoped._
