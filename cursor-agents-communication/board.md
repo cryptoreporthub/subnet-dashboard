@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T06:20:00Z — **Phase P code on main (#232); #233 closed unmerged**  
-**main:** `e8547b9`
+**Last updated:** 2026-07-15T13:50:00Z — **`GATE_S16` CLEAR · §16 done · S1 #247 · B starts B1**  
+**main:** `c4fe983`
 
 ## Ditto boot (read first)
 
@@ -77,20 +77,25 @@ Composer spawns Grok via subagent — starts slow + medium; no manual model pick
 
 ## Ready for next work
 
-**Phase P — COMPLETE (implementation #232, not #233).** P5 verified (#237). N/O complete (#227 + #228).
+**`GATE_S16` CLEAR.** §16 COMPLETE (#244–#246). §17.S1 bands #247 on main. **Agent B: start B1.** Agent A: A5.
 
 | PR | Role | State |
 |----|------|-------|
-| **#232** | Phase P code — prod flags + `subnet_snapshot` | ✅ **merged** |
-| **#233** | Agent B duplicate of #232 | ❌ **closed unmerged** (superseded by #232) |
-| **#237** | P5 prod verify + `scripts/verify_prod.sh` | ✅ **merged** |
+| **#247** | §17.S1 conviction bands | ✅ **merged** |
+| **#246** | §16.3 snapshot + GATE_S16 | ✅ **merged** |
+| **#245** | §16.2 hybrid_score | ✅ **merged** |
+| **#244** | §16.1 outcome backfill | ✅ **merged** |
+| **#243** | Auto plan + start prompts | ✅ **merged** |
 
-**Automated July 14 queue:** COMPLETE. **A2:** `smoke` required on `main`.
-
-Recent merges on `main` @ `e8547b9`:
+Recent merges on `main` @ `c4fe983`:
 
 | PR | Phase | Summary |
 |----|-------|---------|
+| **#247** | §17.S1 | conviction bands API |
+| **#246** | §16.3 | trust snapshot + GATE_S16 |
+| **#245** | §16.2 | gated hybrid_score |
+| **#244** | §16.1 | outcome backfill |
+| **#243** | Docs | auto plan + A/B prompts |
 | **#237** | P | P5 prod verified, domain prewire, `verify_prod.sh` |
 | **#234** | Docs | Phase P complete on board/STATUS |
 | **#232** | P | prod flags on + N1 subnet_snapshot persistence |
@@ -118,8 +123,8 @@ Recent merges on `main` @ `e8547b9`:
 | **J–M** | ✅ merged |
 | **N/O** | ✅ **COMPLETE** — #227 (A) + #228 (B) merged |
 | **P** | ✅ **COMPLETE** — code **#232** + verify **#237** (#233 closed, not merged) |
-| **§16** | ✅ **`GATE_S16` COMPLETE** — #244 · #245 · snapshot `docs/phase-16-trust-gap-snapshot.md` |
-| **§17** | 🟡 **IN PROGRESS** — A→A4; B may start B1 |
+| **§16** | ✅ **`GATE_S16` CLEAR** — #244 · #245 · #246 |
+| **§17** | 🟡 **IN PROGRESS** — S1 #247 merged; A→A5; **B → B1 now** |
 
 ## Phase P queue
 | Agent | Slices | Status |
@@ -129,20 +134,20 @@ Recent merges on `main` @ `e8547b9`:
 
 ## §16 / §17 execution
 | Agent | Queue | Status |
-|-------|-------|--------|
-| **A** (`-843d`) | §16 ✅ → **A4** S1 bands API next | building |
-| **B** (`-e78a`) | **B1** S4 unlocked (`GATE_S16`) | may start |
+|-------|--------|--------|
+| **A** (`-843d`) | §16 ✅ · S1 #247 ✅ · **next A5** magnitude | building |
+| **B** (`-e78a`) | **B1 NOW** (S4) → S3 → U* | **GATE_S16 clear — start** |
 | **Human** | F7 DNS | anytime |
 
-Specs: `s16-s17-automated-build-plan.md` · `s16-s17-start-prompts.md`. Snapshot: `docs/phase-16-trust-gap-snapshot.md`.
+Specs: `s16-s17-automated-build-plan.md` (approved) · `s16-s17-start-prompts.md`. Snapshot: `docs/phase-16-trust-gap-snapshot.md`.
 
 ## Agent posture
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **A** | **Building** | Next A4 (S1 bands) after §16.3 merge |
-| **B** | **GATE_S16 clear** | Start B1 when ready |
-| **Ditto** | **Gate/spot-check** | Spot-check 53.5% + hybrid_score field post-deploy |
+| **A** | **Building A5** | S1 bands on main (`conviction_band` on `/api/calibration/status`) |
+| **B** | **Start B1** | Pull latest `main` (`c4fe983`+); ignore any local stale DRAFT copy |
+| **Ditto** | **Gate/spot-check** | Not day-to-day QB |
 
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
