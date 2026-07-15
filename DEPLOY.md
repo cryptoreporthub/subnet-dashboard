@@ -61,6 +61,8 @@ curl -fsS https://dashboard.cryptoreporthub.com/health
 
 Human steps — the agent cannot access your registrar or Fly account without credentials.
 
+**Quick checklist:** `./scripts/f7-custom-domain.sh`
+
 ### CDN for static assets (recommended)
 
 Put **Cloudflare** (or similar) in front of the custom domain:
