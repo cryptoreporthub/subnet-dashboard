@@ -29,7 +29,7 @@
 
 ```bash
 flyctl secrets set CONVICTION_ALERT_DELIVERY=telegram \
-  TELEGRAM_BOT_TOKEN=<bot> TELEGRAM_CHAT_ID=<chat> --app subnet-dashboard
+  TELEGRAM_BOT_TOKEN=<bot> TELEGRAM_ALERT_CHAT_ID=<chat> --app subnet-dashboard
 ```
 
 Optional webhook: `CONVICTION_ALERT_DELIVERY=webhook` + `CONVICTION_ALERT_WEBHOOK_URL=...`

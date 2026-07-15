@@ -22,6 +22,10 @@ curl -fsS "$BASE/api/conviction-alerts/status" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
 print('enabled:', d.get('enabled'))
+print('delivery_mode:', d.get('delivery_mode'))
+lr=d.get('last_run') or {}
+if lr.get('delivery'):
+    print('last_delivery_mode:', (lr.get('delivery') or {}).get('mode'))
 "
 
 echo "== backtest (P5) =="
