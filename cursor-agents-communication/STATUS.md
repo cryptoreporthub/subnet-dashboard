@@ -1,11 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-15T04:25:00Z · Agent `-6f98`  
-**main:** `9bca1c1` (#225 merged)
+**Updated:** 2026-07-15T04:55:00Z · Agent B (`-e78a`)  
+**main:** `2183037` · **B branch:** `cursor/phase-n-o-agent-b-4e98`
 
 ## One-line
 
-**N/O READY. Step 0 LOCKED. A→N2, B→N4. Grok = slow + medium (escalate high only if needed).**
+**Agent B Phase N/O slices N4+N1+O2+O3 complete on PR branch. A may continue N2/N3/O1 in parallel.**
 
 ## Done (do not re-queue)
 

@@ -492,6 +492,50 @@
     if (vals[3]) vals[3].textContent = String(stats.total_records || 0);
   }
 
+  function pctLabel(rate) {
+    if (rate == null || isNaN(rate)) return '—';
+    return (Number(rate) * 100).toFixed(1) + '%';
+  }
+
+  function renderBacktest(payload) {
+    var root = document.getElementById('backtest-panel-root');
+    if (!root) return;
+    if (!payload || payload.status === 'empty') {
+      root.innerHTML = '<p class="empty">No gradeable resolved predictions yet — backtest populates after the resolver grades picks.</p>';
+      return;
+    }
+    if (payload.status === 'error') {
+      root.innerHTML = '<p class="empty">Backtest unavailable: ' + esc(payload.error || 'error') + '</p>';
+      return;
+    }
+    var judges = payload.judges || {};
+    var council = payload.council || {};
+    var html = '<div class="kpi-strip">' +
+      '<div class="kpi card"><div class="lbl">Council</div><div class="v">' + pctLabel(council.win_rate) + '</div>' +
+      '<div class="sub">n=' + (payload.sample_size || 0) + '</div></div>' +
+      '<div class="kpi card"><div class="lbl">Oracle</div><div class="v">' + pctLabel((judges.oracle || {}).win_rate) + '</div>' +
+      '<div class="sub">avg pnl ' + fmt((judges.oracle || {}).avg_pnl_pct) + '%</div></div>' +
+      '<div class="kpi card"><div class="lbl">Echo</div><div class="v">' + pctLabel((judges.echo || {}).win_rate) + '</div>' +
+      '<div class="sub">avg pnl ' + fmt((judges.echo || {}).avg_pnl_pct) + '%</div></div>' +
+      '<div class="kpi card"><div class="lbl">Pulse</div><div class="v">' + pctLabel((judges.pulse || {}).win_rate) + '</div>' +
+      '<div class="sub">avg pnl ' + fmt((judges.pulse || {}).avg_pnl_pct) + '%</div></div>' +
+      '</div>';
+    var history = payload.history || [];
+    if (history.length) {
+      html += '<table class="tbl mt-3"><thead><tr><th>Subnet</th><th>Pred</th><th>Actual</th><th>Council</th><th>Oracle</th></tr></thead><tbody>';
+      history.slice(0, 8).forEach(function (row) {
+        var o = (row.judges || {}).oracle || {};
+        html += '<tr><td>' + esc(row.name || ('SN' + row.netuid)) + '</td>' +
+          '<td class="mono">' + fmtSigned(row.predicted_pct) + '</td>' +
+          '<td class="mono">' + fmtSigned(row.actual_pct) + '</td>' +
+          '<td>' + (row.council_correct ? '<span class="pos">hit</span>' : '<span class="neg">miss</span>') + '</td>' +
+          '<td class="mono">' + fmt(o.score, 2) + '</td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+    root.innerHTML = html;
+  }
+
   function renderHero(subnets) {
     if (!subnets || !subnets.length) return;
     var gainers = 0;
@@ -820,6 +864,12 @@
       renderJudges(judgesRes.judges || []);
     } catch (e) {
       console.warn('[cockpit_hydrate] judges panel deferred load failed', e);
+    }
+    try {
+      var btRes = await fetchJsonTimeout('/api/backtest?limit=120', 12000);
+      renderBacktest(btRes);
+    } catch (e) {
+      console.warn('[cockpit_hydrate] backtest fetch failed', e);
     }
   }
 

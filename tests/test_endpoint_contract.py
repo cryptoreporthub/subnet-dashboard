@@ -125,6 +125,8 @@ CONTRACT = [
     ("GET", "/api/pump-analytics", None),
     ("GET", "/api/price-tracking/baselines", None),
     ("GET", "/api/price-tracking/outcomes", None),
+    ("GET", "/api/backtest", None),
+    ("GET", "/api/report/1", None),
     # Rotation tracker (slice 10a)
     ("GET", "/api/rotation-tracker", None),
     # Freshness + weights (slice 11)
