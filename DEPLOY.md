@@ -95,6 +95,59 @@ flyctl secrets set CONVICTION_ALERTS_ENABLED=on --app subnet-dashboard
 
 Both default **on** in `fly.toml` after Phase P merge. Override via `flyctl secrets set` if needed.
 
+### Conviction alert delivery (O1 / §18 A1)
+
+Evaluation (`CONVICTION_ALERTS_ENABLED=on`) creates deduped alerts in the store. **External delivery is off by default** (`CONVICTION_ALERT_DELIVERY` unset → `off`) so CI and cold deploys stay safe.
+
+| `CONVICTION_ALERT_DELIVERY` | Behavior |
+|-----------------------------|----------|
+| `off` (default) | Evaluate + persist only; no outbound calls |
+| `dry_run` | Log would-be deliveries in API response (`delivery.dry_run`) |
+| `webhook` | `POST` JSON to `CONVICTION_ALERT_WEBHOOK_URL` |
+| `telegram` | `sendMessage` via Bot API |
+
+Optional tuning:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `CONVICTION_ALERT_MIN` | `75` | Minimum confidence % to fire |
+| `CONVICTION_ALERT_WEBHOOK_URL` | — | Webhook target when `delivery=webhook` |
+| `TELEGRAM_BOT_TOKEN` | — | Bot token when `delivery=telegram` |
+| `TELEGRAM_ALERT_CHAT_ID` | — | Chat/channel id when `delivery=telegram` |
+
+**Human step — set Fly secrets** (replace placeholders; agent cannot guess tokens):
+
+```bash
+# Telegram
+flyctl secrets set \
+  CONVICTION_ALERT_DELIVERY=telegram \
+  TELEGRAM_BOT_TOKEN='<your-bot-token>' \
+  TELEGRAM_ALERT_CHAT_ID='<your-chat-id>' \
+  --app subnet-dashboard
+
+# Or webhook
+flyctl secrets set \
+  CONVICTION_ALERT_DELIVERY=webhook \
+  CONVICTION_ALERT_WEBHOOK_URL='https://example.com/hooks/alerts' \
+  --app subnet-dashboard
+```
+
+Redeploy is not required after `flyctl secrets set` — machines restart with new env.
+
+#### Dry-run test (§18 A2)
+
+Safe prod smoke without sending messages:
+
+```bash
+flyctl secrets set CONVICTION_ALERT_DELIVERY=dry_run --app subnet-dashboard
+curl -fsS -X POST https://subnet-dashboard.fly.dev/api/conviction-alerts/notify | python3 -m json.tool
+# Expect delivery.mode=dry_run and delivery.dry_run[] when candidates exist
+curl -fsS https://subnet-dashboard.fly.dev/api/conviction-alerts/status | python3 -m json.tool
+# Expect delivery_mode: dry_run
+```
+
+Revert to live delivery with `telegram` or `webhook` secrets above, or `CONVICTION_ALERT_DELIVERY=off` to disable outbound only.
+
 ---
 
 ## Environment reference
@@ -103,6 +156,7 @@ Both default **on** in `fly.toml` after Phase P merge. Override via `flyctl secr
 |----------|---------|---------|
 | `CALIBRATION_AUTO_RETRAIN` | **on** (fly.toml) | N3 post-resolver retrain hook |
 | `CONVICTION_ALERTS_ENABLED` | **on** (fly.toml) | O1 notify evaluation |
+| `CONVICTION_ALERT_DELIVERY` | **off** | Outbound delivery: off/dry_run/webhook/telegram |
 | `ALLOWED_ORIGINS` | fly.dev + cryptoreporthub.com | CORS allowlist |
 
 ---

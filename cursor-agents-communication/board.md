@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T19:40:00Z — **§18 in progress**  
-**main:** `0d0fe51`
+**Last updated:** 2026-07-15T20:05:00Z — **§18 in progress**  
+**main:** `5dd106c`
 
 ## Ditto boot (read first)
 
@@ -46,7 +46,7 @@ Specs: `token-budget-rules.md` · `model-guide.md` · `s18-automated-build-plan.
 |----|------|-------|
 | **#274** | §17.U4 home progressive enhance | ✅ **merged** |
 | **#271** | §17.F4b daily recap (B11) | ✅ **merged** |
-| **#265** | Token budget + `.cursorignore` (H1) | 🟡 **rebasing** |
+| **#265** | Token budget + `.cursorignore` (H1) | ✅ **merged** |
 
 **Health:** `GET /health` · `GET /api/message-intel/status` → 200 OK
 
