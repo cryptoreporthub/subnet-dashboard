@@ -143,8 +143,8 @@ Parallel OK: A(N2∥N3∥O1) while B(N4). Serialize when both touch CONTRACT/`se
 
 - [x] #221 on `main`
 - [x] This Step 0 spec written
-- [ ] This Step 0 PR merged to `main`
-- [ ] Board/STATUS show Step 0 LOCKED + A/B unblocked
+- [x] This Step 0 PR merged to `main`
+- [x] Board/STATUS show Step 0 LOCKED + A/B unblocked
 
 **A first PR candidates:** N2 backfill/tests  
 **B first PR candidates:** N4 `internal/analytics/backtest.py` + CONTRACT
