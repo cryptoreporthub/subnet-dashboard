@@ -128,12 +128,12 @@ You are Agent A (`-843d`) on cryptoreporthub/subnet-dashboard (single FastAPI fo
 Read first (git): cursor-agents-communication/gameplan-N-O.md, board.md, STATUS.md, model-guide.md, master-plan-merged.md, docs/sciweave-answers-phase-j.md.
 
 MODELS: Default build = Composer 2.5. GROK: every Grok call = slow + medium first. Escalate to high ONLY when medium fails or is unsatisfactory (N3 hot-path is a usual escalate candidate). Prefer Task subagent over switching the whole run.
-STEP 0: Both agents run ONE shared Grok slow-medium kickoff to lock N+O architecture + emit written spec; escalate that kickoff to high only if FAIL/unsatisfactory. Do NOT build before this.
+STEP 0: DONE — read `cursor-agents-communication/phase-n-o-step0-spec.md` (binding). Start building now.
 
-YOUR SLICES:
-- N2 Scenario-memory outcome wiring (Composer 2.5) — internal/learning/* ; close prediction↔actual loop; no blank outcomes.
-- N3 Calibration/retrain scheduler (Grok slow-medium design → Composer 2.5 wire; escalate high only if needed) — inventory internal/calibration/ first; safe hot-path; Grok slow-medium safety review before merge.
-- O1 Conviction-threshold alerts backend (Grok slow-medium design → Composer 2.5) — extend Phase L alerts or new path per Step 0; no duplicate /api/alerts collision.
+YOUR SLICES (start with N2):
+- N2 Scenario-memory outcome wiring (Composer 2.5) — FIRST — internal/learning/* ; backfill blank outcomes; ensure scenario_id on create; no blank outcomes in UI.
+- N3 Calibration/retrain scheduler (Grok slow-medium design → Composer 2.5 wire; escalate high only if needed) — inventory internal/calibration/ first; scheduler hook only; Grok slow-medium safety review before merge.
+- O1 Conviction-threshold alerts backend (Grok slow-medium design → Composer 2.5) — `/api/conviction-alerts/*` per Step 0; extend AlertEngine; do NOT duplicate `/api/alerts`.
 - O4 Custom domain + CDN (Composer 2.5) — fly.toml headers/cache + DEPLOY.md DNS. NO Fly volume (no token).
 - O5 Docs/handoff (Composer 2.5) — docs/, AGENTS.md, master-plan-merged.md, model-guide.md.
 
@@ -149,13 +149,13 @@ You are Agent B (`-e78a`) on cryptoreporthub/subnet-dashboard (single FastAPI fo
 Read first (git): cursor-agents-communication/gameplan-N-O.md, board.md, STATUS.md, model-guide.md, master-plan-merged.md, docs/sciweave-answers-phase-j.md.
 
 MODELS: Default build = Composer 2.5. GROK: every Grok call = slow + medium first. Escalate to high ONLY when medium fails or is unsatisfactory (N1 grader root-cause is a usual escalate candidate). Prefer Task subagent over switching the whole run.
-STEP 0: Both agents run ONE shared Grok slow-medium kickoff to lock N+O architecture + emit written spec; escalate that kickoff to high only if FAIL/unsatisfactory. Do NOT build before this.
+STEP 0: DONE — read `cursor-agents-communication/phase-n-o-step0-spec.md` (binding). Start building now. Order: N4 → N1 → O2 → O3.
 
-YOUR SLICES:
-- N1 Oracle/grader tuning (Grok slow-medium design → Composer 2.5 wire; escalate high only if needed) — internal/oracle/* ; council grader only via Step 0 allowlist; lift ~45.5% win rate; no threshold gaming.
-- N4 Backtest harness + analytics (Grok slow-medium design → Composer 2.5) — internal/analytics/* + new tests/test_backtest.py ; reproducible Oracle/Echo/Pulse backtest (build before N1 AC depends on it).
-- O2 Backtest history UI (Composer 2.5 build + Grok slow-medium sign-off) — templates/*, static/js/* ; real payloads or explicit empty; zero ### in rendered /; 12 Cockpit IDs untouched.
-- O3 Exportable per-subnet report (Composer 2.5) — internal/analytics/* builder + templates/* view + server.py guarded include_router (e.g. /api/report/<netuid>); contract test added.
+YOUR SLICES (start with N4):
+- N4 Backtest harness + analytics (Grok slow-medium design → Composer 2.5) — FIRST — internal/analytics/backtest.py + tests/test_backtest.py + GET /api/backtest; CONTRACT; reproducible Oracle/Echo/Pulse backtest.
+- N1 Oracle/grader tuning (Grok slow-medium design → Composer 2.5 wire; escalate high only if needed) — after N4 — internal/oracle/* + oracle_judge.py; council grader only via Step 0 allowlist (A lands grading.py/resolver.py); lift ~45.5% win rate; no threshold gaming.
+- O2 Backtest history UI (Composer 2.5 build + Grok slow-medium sign-off) — after N4 — templates/*, static/js/* ; real payloads or explicit empty; zero ### in rendered /; 12 Cockpit IDs untouched.
+- O3 Exportable per-subnet report (Composer 2.5) — internal/analytics/* builder + templates/* view + GET /api/report/{netuid}; contract test added.
 
 OWNERSHIP: you OWN internal/oracle/*, internal/analytics/*, internal/indicators/*, templates/*, static/* . NEVER touch internal/learning/*, internal/council/*, internal/judges/*, fly.toml, DEPLOY.md, docs/.
 
