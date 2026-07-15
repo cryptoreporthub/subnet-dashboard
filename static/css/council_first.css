@@ -584,6 +584,112 @@ button.home-cta {
   color: var(--stage-muted);
 }
 
+/* ---------- F4 weekly letter ---------- */
+.weekly-letter {
+  padding-top: 8px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid rgba(0, 255, 65, 0.12);
+}
+
+.weekly-letter__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.weekly-letter__title {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--stage-muted);
+  margin: 0;
+}
+
+.weekly-letter__meta {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: rgba(138, 154, 142, 0.9);
+}
+
+.weekly-letter__loading,
+.weekly-letter__empty {
+  margin: 0;
+  color: var(--stage-muted);
+  font-size: 0.92rem;
+  max-width: 40em;
+}
+
+.weekly-letter__digest {
+  display: grid;
+  gap: 14px;
+}
+
+.weekly-letter__block {
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(138, 154, 142, 0.28);
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.weekly-letter__block-title {
+  margin: 0 0 10px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--stage-accent);
+}
+
+.weekly-letter__lead {
+  margin: 0;
+  color: var(--stage-ink);
+  font-size: 0.98rem;
+  line-height: 1.45;
+}
+
+.weekly-letter__note {
+  margin: 8px 0 0;
+  color: var(--stage-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.weekly-letter__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.weekly-letter__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(138, 154, 142, 0.22);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.weekly-letter__item-name {
+  color: var(--stage-ink);
+  font-size: 0.95rem;
+}
+
+.weekly-letter__item-meta {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--stage-muted);
+}
+
 /* ---------- Pro drawer (council bench demoted) ---------- */
 .pro-drawer {
   border-top: 1px solid rgba(0, 255, 65, 0.12);
