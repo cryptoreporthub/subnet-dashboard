@@ -9,8 +9,10 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query
 
+from internal.analytics.backtest import run_backtest
 from internal.analytics.phase_b_hooks import refresh_agent_b_trails
 from internal.analytics.pump_summary import summarize_pump
+from internal.analytics.report import build_subnet_report
 from internal.analytics.scenario_state import load_scenario_snapshot
 from internal.analytics.scenario_summary import summarize_scenario
 
@@ -119,6 +121,39 @@ async def api_price_tracking_outcomes():
     except Exception as exc:
         logger.warning("price-tracking/outcomes unavailable: %s", exc)
         return {"status": "success", "meta": {"count": 0}, "outcomes": []}
+
+
+@analytics_router.get("/api/backtest")
+async def api_backtest(limit: int = Query(default=200, ge=1, le=500)):
+    """Replay resolved predictions — Oracle / Echo / Pulse win-rate + calibration."""
+    try:
+        return run_backtest(limit=limit)
+    except Exception as exc:
+        logger.warning("backtest failed: %s", exc)
+        return {
+            "status": "error",
+            "error": str(exc),
+            "sample_size": 0,
+            "council": {"wins": 0, "losses": 0, "win_rate": None},
+            "judges": {},
+            "history": [],
+        }
+
+
+@analytics_router.get("/api/report/{netuid}")
+async def api_subnet_report(netuid: int):
+    """Exportable per-subnet analysis (markdown + structured sections)."""
+    try:
+        return build_subnet_report(netuid)
+    except Exception as exc:
+        logger.warning("subnet report failed for SN%s: %s", netuid, exc)
+        return {
+            "status": "error",
+            "netuid": netuid,
+            "error": str(exc),
+            "markdown": f"# Subnet SN{netuid}\n\nReport generation failed.",
+            "sections": {},
+        }
 
 
 try:

@@ -16,7 +16,7 @@
 - Specs: `gameplan-N-O.md` · `phase-n-o-step0-spec.md`
 - Models: Composer 2.5 default; **Grok slow + medium** (escalate to **high** only if medium fails / unsatisfactory).
 - Old Phase O (`phase-o-design.md` / `signal_hub`) = **SUPERSEDED / COMPLETE — do not rebuild**.
-- **A start:** N2 (or N3/O1 in parallel). **B start:** N4 first.
+- **A start:** N2 (or N3/O1 in parallel). **B:** N4→N1→O2→O3 on `cursor/phase-n-o-agent-b-4e98` (PR pending).
 
 ## Read order (agents + Ditto)
 1. **STATUS card** — `cursor-agents-communication/STATUS.md` (Ditto: start here)
