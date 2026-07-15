@@ -15,7 +15,7 @@ READ FIRST (git): cursor-agents-communication/s16-s17-automated-build-plan.md, g
 
 YOU OWN: §16.1→16.3, then S1 bands API, S2 magnitude, F1–F6 engines/routes. Auto-continue your A queue when gates clear. Do NOT touch templates/* or static/* .
 
-MODELS: Composer 2.5 build. Grok slow+medium only where the auto plan marks DESIGN (16.2). Escalate high only if medium fails.
+MODELS: Composer 2.5 build. Grok slow+medium only where the auto plan marks DESIGN (16.2). Escalate high only if medium fails. HARD RULE: Grok returns a short structured LOCK only; Composer writes plan markdown and builds (`model-guide.md` / `grok-lock-composer-write-rule.md`).
 
 START: After human approves the auto plan, HIT BUILD at A1 (§16.1 outcome backfill). Follow automation contract: branch cursor/<slice>-42f7, pytest, PR, merge when CI green, update board/STATUS + Ditto STATUS memory with main=<sha>.
 

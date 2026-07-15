@@ -26,7 +26,7 @@
 
 1. Branch: `cursor/<slice-slug>-42f7` (A) or `cursor/<slice-slug>-e78a` (B) off **latest `main`**
 2. Read this file + `board.md` + `STATUS.md` first; obey **WAIT FOR** gates
-3. Model: Composer 2.5 build · Grok slow+**medium** only if slice marks DESIGN
+3. Model: Composer 2.5 build · Grok slow+**medium** only if slice marks DESIGN — **HARD RULE:** Grok returns a short structured LOCK only; Composer writes any plan markdown and then builds (`model-guide.md`)
 4. Ponytail: minimal diff; no new deps unless listed; no `data/*.json` commits
 5. Test: `.venv/bin/pytest` on listed tests + `tests/test_endpoint_contract.py` if routes change
 6. PR: push → ready for review → **merge when CI green** (user standing: auto-merge OK)
@@ -34,6 +34,7 @@
 8. **Auto-continue** to next slice in *your* queue when gate is clear — do not wait for chat
 9. Do **not** edit this plan file mid-build unless a gate fails and needs a one-line fix note
 10. Never revert #221/#223/#224/#225/#226/#227/#228/#232/#234/#237/#241 or Step 0
+11. **No Plan mode every slice** — use the approved auto-plan; Grok-lock only when DESIGN-marked or path ambiguous
 
 **Human-only (agents skip):** F7 custom domain.
 
