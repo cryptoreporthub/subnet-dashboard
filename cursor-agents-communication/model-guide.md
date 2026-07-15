@@ -19,6 +19,21 @@
 3. Do **not** default to `xhigh` or `fast-xhigh`. Use the fast variant only for light chores when able.
 4. Prefer a scoped read-only Grok **Task subagent** over switching the whole Cloud Agent run to Grok.
 
+**HARD RULE — Grok lock → Composer write (token-save on output) — user 2026-07-15:**
+1. When a slice needs design/thinking, **Grok slow+medium** does the reasoning and returns a **short structured LOCK only** (not a long markdown plan). Cap ~1 screen.
+2. **Composer** expands that lock into the plan file / PR body / board lines, then **builds**.
+3. Grok must **not** author long prose plans. Composer must **not** invent design details missing from the lock.
+4. Lock template (Grok output shape):
+   ```
+   VERDICT: PASS | CONDITIONAL | FAIL
+   DECISIONS: (3–7 bullets)
+   FILES: ...
+   AC: ...
+   RISKS / NON-GOALS: ...
+   ESCALATE_HIGH?: no | yes (why)
+   ```
+5. If an approved auto-plan already names the slice (e.g. `s16-s17-automated-build-plan.md`), **skip a new Grok lock** unless the plan marks DESIGN or the path is ambiguous — Composer builds from the locked plan.
+
 **Grok as reviewer:** Read-only pass — no edits unless findings require a follow-up Composer task. Save review conclusions to Ditto (`source: cursor-agents-communication`) or a PR comment.
 
 **Build caching (token discipline) — try during every slice:**
@@ -43,7 +58,7 @@ Full token rules: `docs/cursor-implementation-guide.md` § Grok Token-Saving Pre
 | Board/docs/merge chores | Pre-merge review of >500-line **behavioral** change |
 | | Second-opinion audit on merged work (§3) |
 
-**Workflow:** Grok slow-medium audit → Composer implements → Grok slow-medium sign-off. Escalate to **high** only if medium fails or is unsatisfactory.
+**Workflow:** Grok slow-medium **LOCK** (short) → Composer **writes plan/docs if needed** → Composer **implements** → Grok slow-medium sign-off only if behavioral risk. Escalate to **high** only if medium fails or is unsatisfactory.
 
 ---
 

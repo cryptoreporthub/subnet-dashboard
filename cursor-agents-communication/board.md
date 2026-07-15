@@ -156,6 +156,7 @@ Specs: `s16-s17-automated-build-plan.md`. **GATE_S_CORE** = S1+S2+S3.
 - Board + master plan override memory.
 - Honest-empty > fake data.
 - **Grok slow + medium default** — escalate to **high** only if medium fails or is unsatisfactory (Phase 3+ design, pre-merge sign-off, Step 0).
+- **HARD RULE — Grok lock → Composer write:** Grok returns a short structured LOCK only; Composer writes the plan markdown and builds. No long Grok prose plans; no Composer inventing missing design.
 - **Build caching** — read binding specs once per session; scope reads to owned paths; batch Grok; cite doc paths instead of re-pasting (`model-guide.md`).
 
 ## References
