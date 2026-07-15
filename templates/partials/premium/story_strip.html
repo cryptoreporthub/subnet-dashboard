@@ -1,0 +1,36 @@
+{# U2 — compact timeline of recent pick outcomes (§16) #}
+<section class="story-strip wrap-pad" id="section-story-strip" aria-labelledby="story-strip-title">
+  {% set strip = story_strip if story_strip is mapping else {} %}
+  {% set rows = strip.items if strip.items is iterable and strip.items is not string else [] %}
+  <div class="story-strip__head">
+    <h2 class="story-strip__title" id="story-strip-title">Recent calls</h2>
+    {% if strip.data_available and strip.stats is mapping %}
+    <p class="story-strip__meta">
+      {{ strip.stats.correct|default(0) }} right · {{ strip.stats.wrong|default(0) }} wrong
+    </p>
+    {% endif %}
+  </div>
+  {% if strip.data_available and rows %}
+  <ol class="story-strip__list">
+    {% for row in rows %}
+    <li class="story-strip__item story-strip__item--{{ row.outcome|default('pending') }}">
+      <span class="story-strip__verdict" aria-label="{{ row.outcome }}">{{ '✓' if row.outcome == 'correct' else '✗' }}</span>
+      <span class="story-strip__name">{{ row.name|default('SN' ~ row.netuid) }}</span>
+      {% if row.predicted_pct is not none and row.actual_pct is not none %}
+      <span class="story-strip__move">{{ '%+.1f'|format((row.predicted_pct|float)) }}% → {{ '%+.1f'|format((row.actual_pct|float)) }}%</span>
+      {% elif row.statement %}
+      <span class="story-strip__move">{{ row.statement|truncate(48, True) }}</span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="story-strip__empty">
+    {% if strip.reason == 'no_resolved_outcomes' %}
+      No graded pick outcomes yet — the strip fills as §16 resolution runs.
+    {% else %}
+      Pick story unavailable right now.
+    {% endif %}
+  </p>
+  {% endif %}
+</section>
