@@ -215,6 +215,124 @@
   color: var(--stage-muted);
 }
 
+/* ---------- U1 single-job home (hero viewport) ---------- */
+.home-job__signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.home-band,
+.home-enrichment {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 255, 65, 0.35);
+}
+
+.home-band--high { color: #00ff41; background: rgba(0, 255, 65, 0.08); }
+.home-band--medium { color: #c8ff6a; background: rgba(200, 255, 106, 0.06); }
+.home-band--low { color: #ffb347; background: rgba(255, 179, 71, 0.08); }
+.home-band--empty { color: var(--stage-muted); border-color: rgba(138, 154, 142, 0.35); }
+
+.home-enrichment--live { color: #7ee8ff; border-color: rgba(126, 232, 255, 0.4); }
+.home-enrichment--empty { color: var(--stage-muted); border-color: rgba(138, 154, 142, 0.35); }
+
+.home-job__why {
+  font-size: clamp(1.05rem, 2.2vw, 1.25rem);
+  line-height: 1.45;
+  color: var(--stage-ink);
+  margin: 0 0 28px;
+  max-width: 32em;
+}
+
+.home-job__cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.home-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 20px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+
+.home-cta--primary {
+  color: #021208;
+  background: var(--stage-accent);
+  border-color: var(--stage-accent);
+}
+
+.home-cta--ghost {
+  color: var(--stage-ink);
+  border-color: rgba(138, 154, 142, 0.45);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.home-cta:focus-visible {
+  outline: 2px solid var(--stage-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Pro drawer (council bench demoted) ---------- */
+.pro-drawer {
+  border-top: 1px solid rgba(0, 255, 65, 0.12);
+  margin-top: 0;
+}
+
+.pro-drawer__summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 18px var(--space-5, 24px);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--stage-muted);
+}
+
+.pro-drawer__summary::-webkit-details-marker { display: none; }
+
+.pro-drawer__summary::before {
+  content: "▸";
+  margin-right: 10px;
+  color: var(--stage-accent);
+}
+
+.pro-drawer[open] > .pro-drawer__summary::before { content: "▾"; }
+
+.pro-drawer__hint {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: none;
+  color: rgba(138, 154, 142, 0.85);
+}
+
+.pro-drawer__body.council-primary {
+  padding-top: 0;
+  padding-bottom: 32px;
+}
+
 /* ---------- Primary council band ---------- */
 .council-primary {
   padding-top: var(--space-6, 32px);

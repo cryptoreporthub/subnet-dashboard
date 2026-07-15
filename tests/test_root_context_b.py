@@ -14,6 +14,8 @@ def test_build_agent_b_root_context_keys():
         "whale_intelligence",
         "ruggers_watchlist",
         "enrichment_badge",
+        "conviction_band",
+        "daily_pick_stage",
         "oracle_snapshot",
         "price_tracking_baselines",
     ):

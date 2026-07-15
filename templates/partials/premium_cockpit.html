@@ -9,23 +9,29 @@
 {% set sig_sum = signal_summary if signal_summary is mapping else {} %}
 {% set top_signals = sig_list|sort(attribute='confidence', reverse=true)|list %}
 {% set sv_picks = simivision.top if simivision is mapping and simivision.top else [] %}
-{% set dpick = daily_pick if daily_pick is mapping else {} %}
+{% set dpick = daily_pick_stage if daily_pick_stage is mapping and daily_pick_stage else (daily_pick if daily_pick is mapping else {}) %}
 {% set dp_subnet = dpick.subnet if dpick.subnet is mapping else none %}
 
 {% include "partials/premium/header.html" %}
 {% include "partials/premium/council_stage.html" %}
 
-{# Primary council narrative — max 4 surfaces after the stage #}
-<div class="council-primary wrap-pad">
-  {% include "partials/premium/simivision_picks.html" %}
-  <div class="council-bench">
-    {% include "partials/premium/council.html" %}
-    {% include "partials/premium/judges.html" %}
+{# Primary council narrative — demoted to Pro drawer (U1) #}
+<details class="pro-drawer wrap-pad" id="pro-cockpit">
+  <summary class="pro-drawer__summary">
+    <span>Pro cockpit</span>
+    <span class="pro-drawer__hint">Council bench · SimiVision · KPI · backtest</span>
+  </summary>
+  <div class="pro-drawer__body council-primary">
+    {% include "partials/premium/simivision_picks.html" %}
+    <div class="council-bench">
+      {% include "partials/premium/council.html" %}
+      {% include "partials/premium/judges.html" %}
+    </div>
+    {% include "partials/premium/picks.html" %}
+    {% include "partials/premium/kpi.html" %}
+    {% include "partials/premium/backtest.html" %}
   </div>
-  {% include "partials/premium/picks.html" %}
-  {% include "partials/premium/kpi.html" %}
-  {% include "partials/premium/backtest.html" %}
-</div>
+</details>
 
 {# Market KPIs for demoted hero (honest registry snapshot) #}
 {% set mi_ns = namespace(chg_sum=0.0, apy_sum=0.0, apy_n=0, gainers=0, losers=0) %}

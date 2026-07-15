@@ -191,10 +191,26 @@ def _safe_enrichment_badge(pick_netuid: Optional[int] = None) -> Dict[str, Any]:
         return empty_whale_flow_badge("error")
 
 
+def _safe_conviction_band(daily_pick_payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    try:
+        from internal.council.conviction_bands import band_for_pick
+
+        pick = None
+        if isinstance(daily_pick_payload, dict):
+            pick = daily_pick_payload.get("pick") or daily_pick_payload.get("candidate")
+            if pick is None and daily_pick_payload.get("subnet") is not None:
+                pick = daily_pick_payload
+        return band_for_pick(pick if isinstance(pick, dict) else None)
+    except Exception as exc:
+        logger.warning("Could not compute conviction band for root: %s", exc)
+        return {"band": None, "reason": "error", "status": "ok"}
+
+
 def build_agent_b_root_context(
     subnets: Optional[List[Dict[str, Any]]] = None,
     data_source: str = "unknown",
     pick_netuid: Optional[int] = None,
+    daily_pick_payload: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Return template keys owned by Agent B for the homepage."""
     subnets = subnets if isinstance(subnets, list) else []
@@ -210,6 +226,8 @@ def build_agent_b_root_context(
         "whale_intelligence": _safe_whale_summary(),
         "ruggers_watchlist": _safe_ruggers_summary(),
         "enrichment_badge": _safe_enrichment_badge(pick_netuid),
+        "conviction_band": _safe_conviction_band(daily_pick_payload),
+        "daily_pick_stage": daily_pick_payload if isinstance(daily_pick_payload, dict) else {},
         "oracle_snapshot": _safe_oracle_snapshot(subnets, data_source),
         "price_tracking_baselines": _safe_price_baselines(),
     }
