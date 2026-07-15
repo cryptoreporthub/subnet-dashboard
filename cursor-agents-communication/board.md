@@ -87,10 +87,16 @@ Composer spawns Grok via subagent — starts slow + medium; no manual model pick
 
 **Automated July 14 queue:** COMPLETE. **A2:** `smoke` required on `main`.
 
-Recent merges on `main` @ `778ad13`:
+Recent merges on `main` @ `e8547b9`:
 
 | PR | Phase | Summary |
 |----|-------|---------|
+| **#237** | P | P5 prod verify + `scripts/verify_prod.sh` |
+| **#234** | Docs | Phase P complete on board/STATUS |
+| **#232** | P | prod flags on + N1 subnet_snapshot persistence |
+| **#228** | N/O (B) | N4 backtest, N1 oracle tune, O2 UI, O3 report |
+| **#227** | N/O (A) | N2–O5 (rebased on main) |
+| **#233** | Docs | closed — stale duplicate of #232 (do NOT merge) |
 | **#225** | Docs | Grok slow+medium default (not fast-first) |
 | **#223** | Docs | Step 0 architecture lock |
 | **#221** | Docs | N/O gameplan + pre-flight |
@@ -101,7 +107,7 @@ Recent merges on `main` @ `778ad13`:
 **Health:** `GET /health` · `GET /api/data-freshness` · `GET /api/signal-hub/status` · `GET /api/calibration/status` · `GET /api/message-intel` → 200 OK  
 **Fly:** machine `shared-cpu-1x:1024MB`, checks passing (was critical on 256MB).
 
-**Housekeeping done:** closed stale open PRs #101 #110 #112 #129 #130 #134 #139 #153 #165 #166 #184.
+**Housekeeping done:** closed stale open PRs #101 #110 #112 #129 #130 #134 #139 #153 #165 #166 #184 #233.
 
 ## Gate Status
 
