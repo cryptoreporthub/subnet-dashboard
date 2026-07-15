@@ -4,23 +4,25 @@ This guide is for Cursor (Composer + Grok) to pick up the visual/iterative UI ta
 
 ## Tool Assignment
 
-- **Composer 2.5** — structural multi-file work (splits, partials, htmx)
-- **Grok (xhigh)** — all visual/UX fixes, audits, architecture decisions, and pre-merge behavioral reviews
-- Composer auto-invokes Grok via subagent for design/audit tasks per `model-guide.md`
+- **Composer 2.5** — default build; prefer **`composer-2.5-fast`** pool for mechanical slices
+- **Grok slow + low/medium** — short design LOCKs / audits only (see `model-guide.md`)
+- Composer expands Grok LOCKs into plan markdown, then builds (`grok-lock-composer-write-rule.md`)
+- Obey `.cursorignore` + `token-budget-rules.md` for billing-cycle token budget
 
 ## Grok Token-Saving Precautions
 
-Grok at xhigh reasoning burns tokens fast. Follow these rules to avoid waste:
+Grok burns tokens on context + long output. Follow these rules:
 
-1. **Use slow mode** — Grok in slow mode is cheaper per token and produces better structured output for code tasks. Prefer slow mode unless you need a quick one-liner.
-2. **Cache the stable prefix** — put unchanged spec/architecture at the start of Grok prompts and slice-specific questions at the end; reuse the same prefix across calls in one build session when the provider can cache it.
-3. **Batch tasks** — Don't send Grok one tiny fix at a time. Group related visual fixes (e.g., G2+G5+G6) into a single Grok session if they touch nearby code.
-4. **Scope context** — Only pass the relevant file(s) or file sections to Grok. Don't load the entire repo into context unnecessarily.
-5. **Avoid re-runs** — Get it right the first time. Provide clear, specific prompts to avoid Grok iterating multiple times on the same fix.
-6. **Skip Grok for trivial changes** — If a fix is a one-line color swap or text change, just do it in Composer directly. Don't invoke Grok for trivial work.
-7. **Read binding docs once** — `board.md`, `STATUS.md`, locked step-0 specs; then cite paths instead of re-pasting bodies each turn.
+1. **Slow + low/medium** — never default to high/xhigh. Escalate high only after medium FAIL/unsatisfactory.
+2. **Short LOCK only** — Grok returns VERDICT/DECISIONS/FILES/AC (~1 screen); Composer writes the plan file.
+3. **Cache the stable prefix** — unchanged spec first, slice question last.
+4. **Batch** — one Grok pass per related group, not one-liner spam.
+5. **Scope context** — owned paths only; `.cursorignore` excludes `data/` and superseded designs.
+6. **Avoid re-runs** — clear AC first; no “try again” without new evidence.
+7. **Skip Grok for trivial changes** — Composer directly for one-line CSS/text/contract adds.
+8. **Read binding docs once** — `STATUS.md`, `board.md`, one plan path; cite instead of re-paste.
 
-> **Note:** Do NOT use Grok-fast for reviews or audits. Fast mode sacrifices reasoning depth for speed — exactly what you don't want when the task is catching subtle bugs and edge cases. Use full Grok (xhigh) for all Grok tasks. Save tokens through batching, context scoping, and skipping trivial work instead.
+> **Note:** Prefer **Composer 2.5-fast** for routine implementation. Do **not** use Plan mode every slice when an approved auto-plan exists.
 
 ## Phased Plan (Sequential — Most Tasks Cannot Run in Parallel)
 

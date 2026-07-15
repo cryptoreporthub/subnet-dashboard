@@ -9,17 +9,20 @@
 
 | Model | Cursor slug / setting | Best for |
 |-------|----------------------|----------|
-| **Composer** | default Cloud Agent | Scoped implementation, multi-file edits, PR workflow, templates/routes/CI |
-| **Grok slow + medium** | Grok 4.5 (slow, not fast) · thinking **medium** | **Default for every Grok call** — design, audits, Step 0, sign-offs |
-| **Grok slow + high** | Grok 4.5 (slow) · thinking **high** (`cursor-grok-4.5-high`) | Escalate when medium FAIL/CONDITIONAL or output not satisfactory |
+| **Composer 2.5 (fast pool)** | `composer-2.5-fast` | **Prefer for mechanical builds** — routes, tests, docs, board, UI wiring from a locked plan |
+| **Composer 2.5** | `composer-2.5` | Heavier multi-file builds when fast pool struggles |
+| **Grok slow + low** | Grok 4.5 slow · thinking **low** | Narrow audits / tiny locks when path is already clear |
+| **Grok slow + medium** | Grok 4.5 slow · thinking **medium** | Default design LOCK when plan marks DESIGN or path is ambiguous |
+| **Grok slow + high** | Grok 4.5 slow · thinking **high** | Escalate only after medium FAIL/CONDITIONAL or unsatisfactory |
 
-**Default build:** Composer for both agents unless a trigger in §4 or §5 applies.
+**Default build:** **Composer 2.5** (prefer **fast pool**) unless a trigger in §4 or §5 applies.
 
-**Grok thinking policy (mandatory) — user 2026-07-15:**
-1. Default = **slow Grok + medium thinking** (not fast, not high, not xhigh).
+**Grok thinking policy (mandatory) — user 2026-07-15; budget update same day:**
+1. Prefer **slow + low**, else **slow + medium**. Never default to high / xhigh / fast-xhigh.
 2. Escalate to **high** only when medium fails or the result is not satisfactory.
-3. Do **not** default to `xhigh` or `fast-xhigh`. Use the fast variant only for light chores when able.
+3. Do **not** open `xhigh` or `fast-xhigh` “just in case.” Fast Grok variant only for light chores when able.
 4. Prefer a scoped read-only Grok **Task subagent** over switching the whole Cloud Agent run to Grok.
+5. Obey `.cursorignore` / `token-budget-rules.md` — do not pull `data/*.json` or superseded design dumps into context.
 
 **HARD RULE — Grok lock → Composer write (token-save on output) — user 2026-07-15:**
 1. When a slice needs design/thinking, **Grok slow+medium** does the reasoning and returns a **short structured LOCK only** (not a long markdown plan). Cap ~1 screen.

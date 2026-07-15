@@ -5,3 +5,12 @@ __pycache__/
 *.db
 data/watchlist.json
 data/watchlist.json.tmp
+
+# Token-budget / local agent noise
+.cursorindexingignore.local
+*.db-shm
+*.db-wal
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage

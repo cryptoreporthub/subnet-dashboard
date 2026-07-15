@@ -1,0 +1,68 @@
+# Token / context budget — keep agents off bulky & irrelevant paths
+# (Cursor respects .cursorignore for chat context + indexing)
+
+# Runtime / secrets / local env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+
+# Live state JSON (huge; never needed for code edits)
+data/
+!data/.gitkeep
+
+# Build / deploy / VCS noise
+.git/
+node_modules/
+dist/
+build/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Binary / media
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.ico
+*.mp4
+*.webm
+*.pdf
+*.zip
+*.tar
+*.gz
+
+# Logs / artifacts / agent dumps
+*.log
+/tmp/
+/opt/cursor/
+.cursor/cache/
+
+# Historical / superseded design piles (cite from board instead of loading)
+cursor-agents-communication/phase-3-grok-design.md
+cursor-agents-communication/phase-3-grok-backend-design.md
+cursor-agents-communication/phase-h-subnet-grouping-audit.md
+cursor-agents-communication/phase-l-pr113-audit.md
+cursor-agents-communication/phase-l-slice3-ws-design.md
+cursor-agents-communication/phase-l-slice4-rules-design.md
+cursor-agents-communication/phase-m-design.md
+cursor-agents-communication/phase-n-design.md
+cursor-agents-communication/phase-n-safety-review.md
+cursor-agents-communication/phase-o-design.md
+cursor-agents-communication/automated-build-plan.md
+cursor-agents-communication/cursor-handoff-2026-07-14.md
+cursor-agents-communication/ditto-phase-l-handoff.md
+
+# Large docs rarely needed mid-slice
+docs/premium-dashboard-redesign.md
+docs/master-plan-merged.md
