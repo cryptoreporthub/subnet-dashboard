@@ -35,4 +35,4 @@
 ## Phase N/O
 - **APPROVED (2026-07-15)** — not started. Agents A/B idle until kickoff.
 - Spec: `cursor-agents-communication/gameplan-N-O.md`.
-- Models: Composer 2.5 default build; Cursor Grok (`grok-4.5-fast-xhigh` default, `grok-4.5-xhigh` for N3/N1).
+- Models: Composer 2.5 default; **Grok token-save** — every Grok call = `grok-4.5-fast-xhigh` first; escalate to `grok-4.5-xhigh` only after FAIL/CONDITIONAL.
