@@ -31,3 +31,10 @@ def test_index_u1_single_job_home():
     # Hero before Pro + market drawers
     assert html.index("home-job") < html.index('id="pro-cockpit"')
     assert html.index('id="pro-cockpit"') < html.index('id="market-drawer"')
+
+
+def test_index_canonical_meta():
+    with TestClient(app) as client:
+        html = client.get("/").text
+    assert 'rel="canonical"' in html
+    assert 'property="og:url"' in html

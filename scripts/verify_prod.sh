@@ -42,3 +42,9 @@ if hi:
 "
 
 echo "OK"
+
+if [ -n "${CUSTOM_DOMAIN:-}" ]; then
+  echo "== custom domain ($CUSTOM_DOMAIN) =="
+  curl -fsS "https://${CUSTOM_DOMAIN}/health"
+  echo
+fi
