@@ -3,7 +3,7 @@
   <div class="council-stage__atmosphere" aria-hidden="true"></div>
   <div class="council-stage__inner">
     <p class="council-stage__brand">Simi<span>Vision</span></p>
-    <p class="council-stage__eyebrow">Today’s subnet call</p>
+    <p class="council-stage__eyebrow">What we expect today</p>
     <h1 class="council-stage__title" id="council-stage-title">One job: know what to watch</h1>
 
     <div id="council-stage-body" class="council-stage__body home-job__body">
@@ -25,6 +25,7 @@
       {% endif %}
       {% set why_line = call_reasons|first if call_reasons else (dpick.reason|default('')) %}
 
+      {% set hybrid = hybrid_trust if hybrid_trust is mapping else {} %}
       <div class="home-job__signals">
         {% if band %}
         <span class="home-band home-band--{{ band }}">{{ band|upper }} conviction</span>
@@ -36,6 +37,15 @@
         {% elif badge.label %}
         <span class="home-enrichment home-enrichment--empty">{{ badge.label }} · no signal yet</span>
         {% endif %}
+        {% if hybrid.ready %}
+        <span class="home-hybrid home-hybrid--ready" title="{{ hybrid.formula|default('') }}">
+          Hybrid grading live · n={{ hybrid.n|default(0) }}
+        </span>
+        {% elif hybrid.message %}
+        <span class="home-hybrid home-hybrid--empty" title="n={{ hybrid.n|default(0) }}/{{ hybrid.min_sample|default(30) }}">
+          {{ hybrid.message|capitalize }}
+        </span>
+        {% endif %}
       </div>
 
       {% if audit_pick and sn %}
@@ -46,7 +56,7 @@
         <p class="council-call__name">{{ sn.name|default('SN' ~ sn.netuid) }}</p>
         <p class="council-call__meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}</p>
         {% if why_line %}
-        <p class="home-job__why">{{ why_line }}</p>
+        <p class="home-job__why">We expect: {{ why_line }}</p>
         {% endif %}
       </div>
       {% else %}

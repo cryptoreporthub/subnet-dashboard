@@ -46,3 +46,20 @@ def conviction_alerts_snapshot() -> Dict[str, Any]:
             "delivery_mode": "off",
             "last_run": {},
         }
+
+
+def hybrid_trust_snapshot() -> Dict[str, Any]:
+    try:
+        from internal.council.grading import hybrid_score_status
+
+        return {"status": "ok", **hybrid_score_status()}
+    except Exception as exc:
+        logger.warning("hybrid trust snapshot failed: %s", exc)
+        return {
+            "status": "error",
+            "ready": False,
+            "n": 0,
+            "min_sample": 30,
+            "reason": "error",
+            "message": "unavailable",
+        }
