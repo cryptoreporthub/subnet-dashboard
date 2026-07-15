@@ -1016,7 +1016,8 @@ def predicted_pct_from_score(
     sn: Dict[str, Any],
     pick_conf: float,
 ) -> float:
-    """Prefer signal-impact move; else confidence heuristic."""
+    """Prefer signal-impact move; else market momentum (not confidence×5)."""
+    _ = pick_conf  # retained for call-site compat; unused (§17.S2)
     si = (score_payload or {}).get("signal_impact") if isinstance(score_payload, dict) else None
     if isinstance(si, dict):
         raw = si.get("net_predicted_pct")
@@ -1025,11 +1026,21 @@ def predicted_pct_from_score(
                 return float(raw)
         except (TypeError, ValueError):
             pass
-    base = max(0.5, float(pick_conf or 0) * 5.0)
-    chg = float(sn.get("price_change_24h", 0) or 0)
-    if chg < -2:
-        return -base
-    return base
+    try:
+        chg = float(sn.get("price_change_24h", 0) or 0)
+    except (TypeError, ValueError):
+        chg = 0.0
+    if abs(chg) >= 0.5:
+        mag = max(0.5, abs(chg) * 0.5)
+        signed = mag if chg >= 0 else -mag
+    else:
+        signed = 1.0
+    try:
+        from internal.subnets.impact import scale_move_by_impact
+
+        return scale_move_by_impact(signed, sn)
+    except Exception:
+        return round(signed, 4)
 
 
 def attach_council_prediction(
