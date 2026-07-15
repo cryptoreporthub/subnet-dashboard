@@ -13,10 +13,8 @@ import os
 
 from internal.whales.service import WhaleIntelligenceService
 
-DEFAULT_CONFIG_PATH = "config/whales.json"
-DEFAULT_DATA_PATH = "data/whale_intelligence.json"
-LEGACY_CONFIG_PATH = "config/ruggers.json"
-LEGACY_DATA_PATH = "data/ruggers_watchlist.json"
+DEFAULT_CONFIG_PATH = os.environ.get("WHALES_CONFIG_PATH", "config/whales.json")
+DEFAULT_DATA_PATH = os.environ.get("WHALES_DATA_PATH", "data/whale_intelligence.json")
 
 
 class RuggerWatchlist:
@@ -24,17 +22,20 @@ class RuggerWatchlist:
 
     def __init__(
         self,
-        config_path: str = LEGACY_CONFIG_PATH,
-        data_path: str = LEGACY_DATA_PATH,
+        config_path: Optional[str] = None,
+        data_path: Optional[str] = None,
         service: Optional[WhaleIntelligenceService] = None,
     ):
         if service is not None:
             self._service = service
         else:
-            cfg = config_path if os.path.exists(config_path) else DEFAULT_CONFIG_PATH
+            cfg = config_path or os.environ.get("WHALES_CONFIG_PATH", "config/whales.json")
+            path = data_path or os.environ.get("WHALES_DATA_PATH", "data/whale_intelligence.json")
+            if not os.path.exists(cfg):
+                cfg = "config/whales.json"
             self._service = WhaleIntelligenceService(
                 config_path=cfg,
-                data_path=data_path,
+                data_path=path,
             )
 
     def record_event(
@@ -67,12 +68,17 @@ class RuggerWatchlist:
     def get_subnet_risk(self, netuid: int) -> Dict[str, Any]:
         flow = self._service.get_subnet_flow(netuid)
         ruggers = flow.get("by_classification", {}).get("ruggers", [])
-        return {
+        risk: Dict[str, Any] = {
             "netuid": int(netuid),
             "rugger_count": len(ruggers),
             "ruggers": ruggers,
-            "avoid_follow": flow.get("avoid_follow", False),
+            "data_available": flow.get("data_available", False),
+            "source": flow.get("source", "ledger"),
+            "reason": flow.get("reason"),
         }
+        if flow.get("data_available"):
+            risk["avoid_follow"] = flow.get("avoid_follow", False)
+        return risk
 
     def discount_score(self, netuid: int, base_score: float) -> Tuple[float, Dict[str, Any]]:
         return self._service.discount_score(netuid, base_score)
@@ -83,6 +89,9 @@ class RuggerWatchlist:
             "status": "success",
             "updated_at": s.get("updated_at"),
             "config": s.get("config"),
+            "data_available": s.get("data_available", False),
+            "source": s.get("source", "ledger"),
+            "reason": s.get("reason"),
             "stats": {
                 "total_wallets_tracked": s["stats"]["total_wallets_tracked"],
                 "rugger_count": s["stats"]["by_classification"].get("ruggers", 0),

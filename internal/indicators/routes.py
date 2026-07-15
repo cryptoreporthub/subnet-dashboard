@@ -25,13 +25,26 @@ indicators_router = APIRouter(tags=["indicators"])
 async def api_indicators():
     """Return the latest technical-indicator state from the indicator engine."""
     try:
+        state = IndicatorEngine().get_indicator_state()
+        per_subnet = state.get("per_subnet") or {}
+        has_data = bool(per_subnet)
         return {
             "status": "success",
-            "data": IndicatorEngine().get_indicator_state(),
+            "data_available": has_data,
+            "source": "indicator_engine" if has_data else "none",
+            "reason": None if has_data else "scheduler_never_ran",
+            "data": state,
         }
     except Exception as exc:
         logger.error("Error fetching indicator state: %s", exc)
-        return {"status": "error", "data": {}, "error": str(exc)}
+        return {
+            "status": "error",
+            "data_available": False,
+            "source": "none",
+            "reason": "error",
+            "data": {},
+            "error": str(exc),
+        }
 
 
 @indicators_router.get("/api/indicators-convergence")
@@ -49,22 +62,34 @@ async def api_indicators_convergence():
         rows: List[Dict[str, Any]] = []
         for sn in ranked[:6]:
             indicators = _compute_technical_indicators(sn)
+            degraded = bool(indicators.get("degraded"))
             hist = _get_price_history(sn.get("netuid"), sn)
             sparks = hist.get("closes") or []
             if hist.get("source") in ("synthetic", "unavailable") or len(sparks) < 2:
                 sparks = []
             else:
                 sparks = [float(c) for c in sparks[-24:]]
-            rows.append(
-                {
-                    "netuid": sn.get("netuid"),
-                    "name": sn.get("name"),
-                    "oversold": _detect_oversold_convergence(indicators),
-                    "overbought": _detect_overbought_convergence(indicators),
-                    "spark_closes": sparks,
-                }
-            )
-        return {"subnets": rows}
+            row: Dict[str, Any] = {
+                "netuid": sn.get("netuid"),
+                "name": sn.get("name"),
+                "degraded": degraded,
+                "spark_closes": sparks,
+            }
+            if degraded:
+                row["reason"] = indicators.get("history_source", "no_ohlcv")
+                row["oversold"] = {"convergent": False, "count": 0, "reason": "no_ohlcv"}
+                row["overbought"] = {"convergent": False, "count": 0, "reason": "no_ohlcv"}
+            else:
+                row["oversold"] = _detect_oversold_convergence(indicators)
+                row["overbought"] = _detect_overbought_convergence(indicators)
+            rows.append(row)
+        has_real = any(not r.get("degraded") for r in rows)
+        return {
+            "data_available": has_real,
+            "source": "indicator_engine" if has_real else "none",
+            "reason": None if has_real else "no_ohlcv",
+            "subnets": rows,
+        }
     except Exception as exc:
         logger.error("Error fetching indicators convergence: %s", exc)
         return {"subnets": [], "error": str(exc)}
