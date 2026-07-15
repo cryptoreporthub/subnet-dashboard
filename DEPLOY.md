@@ -203,6 +203,36 @@ curl -fsS https://subnet-dashboard.fly.dev/api/message-intel/status | python3 -m
 
 **Security:** never commit `*.session` files or API secrets. Rotate API hash at my.telegram.org if exposed.
 
+#### Mobile-only (no laptop)
+
+You do **not** need a desktop. Session file is created **on the Fly volume** in one SSH session; Telegram sends the login code to the same phone.
+
+1. **Secrets in browser** — [fly.io/apps/subnet-dashboard/secrets](https://fly.io/apps/subnet-dashboard/secrets)  
+   Add (do **not** enable listener yet):
+   - `TELEGRAM_API_ID` = your api id  
+   - `TELEGRAM_API_HASH` = your api hash  
+   - `TELEGRAM_PHONE` = E.164, e.g. `+14155551234`  
+   Leave `MESSAGE_INTEL_LISTENER` unset or `off` for now.
+
+2. **SSH from phone** — install `flyctl` once (Android: [Termux](https://termux.dev); iOS: [Blink](https://blink.sh) or [a-Shell](https://holzschu.github.io/a-Shell-docs/)), then:
+   ```bash
+   fly auth login   # opens browser on phone
+   fly ssh console --app subnet-dashboard
+   ```
+
+3. **Bootstrap inside the machine** (session writes to `/app/data` automatically):
+   ```bash
+   cd /app
+   python scripts/bootstrap_telegram_session.py
+   ```
+   When prompted, enter the code Telegram sends to your app. Type `exit` when you see `OK — session saved`.
+
+4. **Enable listener** — back in [Fly secrets](https://fly.io/apps/subnet-dashboard/secrets), add:
+   - `MESSAGE_INTEL_LISTENER` = `auto`  
+   Machine restarts; listener should show `running` at `/api/message-intel/status`.
+
+**No SSH app?** Skip live listener for now — `POST /api/message-intel/ingest` still accepts pushed messages (honest-empty until something ingests).
+
 ---
 
 ## Environment reference
