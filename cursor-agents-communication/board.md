@@ -118,8 +118,8 @@ Recent merges on `main` @ `e8547b9`:
 | **J–M** | ✅ merged |
 | **N/O** | ✅ **COMPLETE** — #227 (A) + #228 (B) merged |
 | **P** | ✅ **COMPLETE** — code **#232** + verify **#237** (#233 closed, not merged) |
-| **§16** | 🟡 **READY FOR REVIEW** — auto plan `s16-s17-automated-build-plan.md`; Build after approve |
-| **§17** | 🟡 **READY FOR REVIEW** — after `GATE_S16`; B queue in auto plan |
+| **§16** | ✅ **`GATE_S16` COMPLETE** — #244 · #245 · snapshot `docs/phase-16-trust-gap-snapshot.md` |
+| **§17** | 🟡 **IN PROGRESS** — A→A4; B may start B1 |
 
 ## Phase P queue
 | Agent | Slices | Status |
@@ -127,22 +127,22 @@ Recent merges on `main` @ `e8547b9`:
 | **A** (`-843d`) | P1–P3 | ✅ **#232 merged** |
 | **B** (`-e78a`) | #233 duplicate | ❌ **#233 closed** — same scope landed in #232 |
 
-## §16 / §17 execution (await human approve of auto plan)
+## §16 / §17 execution
 | Agent | Queue | Status |
 |-------|-------|--------|
-| **A** (`-843d`) | A1–A11: §16 → S1/S2 → F1–F6 | 🟡 review — starts A1 on approve |
-| **B** (`-e78a`) | B1–B10: S4→S3→U*→F UIs | 🟡 idle until `GATE_S16` |
+| **A** (`-843d`) | §16 ✅ → **A4** S1 bands API next | building |
+| **B** (`-e78a`) | **B1** S4 unlocked (`GATE_S16`) | may start |
 | **Human** | F7 DNS | anytime |
 
-Specs: `s16-s17-automated-build-plan.md` · `s16-s17-start-prompts.md`. Models: Composer 2.5; Grok slow+medium where marked.
+Specs: `s16-s17-automated-build-plan.md` · `s16-s17-start-prompts.md`. Snapshot: `docs/phase-16-trust-gap-snapshot.md`.
 
 ## Agent posture
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **A** | **Waiting approve** | Will Build A1 when human says go |
-| **B** | **Idle** | Paste B prompt; waits `GATE_S16` |
-| **Ditto** | **Gate/spot-check** | Not day-to-day QB |
+| **A** | **Building** | Next A4 (S1 bands) after §16.3 merge |
+| **B** | **GATE_S16 clear** | Start B1 when ready |
+| **Ditto** | **Gate/spot-check** | Spot-check 53.5% + hybrid_score field post-deploy |
 
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
