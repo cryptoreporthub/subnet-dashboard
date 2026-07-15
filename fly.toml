@@ -26,10 +26,10 @@ primary_region = "sea"
   # Keep prod boot light; Telegram needs a live session on the volume.
   MESSAGE_INTEL_LISTENER = "off"
   RESOLVER_REFRESH_MINUTES = "15"
-  # N3: post-resolver auto-retrain (default off; enable after sample >= 30)
-  # CALIBRATION_AUTO_RETRAIN = "off"
-  # O1: conviction-threshold notify (default off; opt-in)
-  # CONVICTION_ALERTS_ENABLED = "off"
+  # N3: post-resolver auto-retrain (enabled post-N/O; needs >=30 gradeable rows)
+  CALIBRATION_AUTO_RETRAIN = "on"
+  # O1: conviction-threshold notify (opt-in alerts via AlertEngine)
+  CONVICTION_ALERTS_ENABLED = "on"
 
 # Persistent volume for runtime/learning data (soul_map.json, predictions.json,
 # SQLite caches under /app/data). The machine already has this volume attached;

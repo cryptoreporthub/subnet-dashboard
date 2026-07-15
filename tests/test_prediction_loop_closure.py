@@ -59,6 +59,11 @@ def test_record_pick_prediction_persists_pending_row():
     assert data["predictions"][0]["netuid"] == 29
     assert data["predictions"][0]["horizon_type"] == "hour"
     assert data["predictions"][0]["status"] == "pending"
+    row = data["predictions"][0]
+    assert isinstance(row.get("subnet_snapshot"), dict)
+    assert row["subnet_snapshot"].get("price_change_24h") == 3.2
+    assert isinstance(row.get("weights_at_creation"), dict)
+    assert "quant" in row["weights_at_creation"]
 
 
 def test_record_pick_prediction_dedupes_same_horizon():

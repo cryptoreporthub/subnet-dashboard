@@ -80,7 +80,7 @@ flyctl secrets set CALIBRATION_AUTO_RETRAIN=on --app subnet-dashboard
 flyctl secrets set CONVICTION_ALERTS_ENABLED=on --app subnet-dashboard
 ```
 
-Both default **off** in `fly.toml` comments. Enable only after verifying sample size and webhook subscriptions.
+Both default **on** in `fly.toml` after Phase P merge. Override via `flyctl secrets set` if needed.
 
 ---
 
