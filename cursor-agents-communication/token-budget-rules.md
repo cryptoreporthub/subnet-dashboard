@@ -11,7 +11,7 @@
 | **Agents** | **One** primary Cloud Agent only — absorbs former Agent B UI queue |
 | **A (`-843d`)** | **Retired** — do not spawn a second Cloud Agent |
 | **Grok** | **Subagent** for short DESIGN locks — never run whole agent on Grok |
-| **Queue** | B9 → B10 → **B11 daily recap** (`s16-s17-automated-build-plan.md`) |
+| **Queue** | **§18** — `s18-automated-build-plan.md` (H1→B1) |
 | **Skip** | U4 · U5 unless human explicitly asks |
 
 ## Model pools (cheapest first)
@@ -55,9 +55,9 @@ Check [cursor.com/dashboard/usage](https://cursor.com/dashboard/usage) after hea
 ```
 ONE AGENT MODE (Pro+):
 - Single Cloud Agent only. Agent A retired — do not spawn a second agent.
-- Build with composer-2.5-fast on B9→B11. B9 = weekly letter UI only (no daily recap in #268).
+- Build with composer-2.5-fast per s18-automated-build-plan.md. Unattended queue H1→B1.
 - Grok: subagent only, slow + low/medium. High only after medium FAIL.
 - Short Grok LOCK → Composer writes + builds. Skip Grok when auto-plan locks the slice.
 - If usage dashboard shows On-Demand $ charges beyond included pool, STOP and tell me.
-- Read STATUS.md + board.md + s16-s17-automated-build-plan.md (B8–B10 only).
+- Read STATUS.md + s18-automated-build-plan.md only (cite §17 docs by path).
 ```
