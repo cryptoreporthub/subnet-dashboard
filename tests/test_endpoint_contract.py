@@ -157,6 +157,8 @@ CONTRACT = [
     ("GET", "/api/portfolio/status", None),
     # §17.F4 weekly letter
     ("GET", "/api/letter/weekly", None),
+    # §17.F4b daily recap
+    ("GET", "/api/letter/daily", None),
     # Phase O TAO Signal Hub
     ("GET", "/api/signal-hub/status", None),
     ("GET", "/api/signal-hub/signals", None),
