@@ -69,9 +69,10 @@ Full token rules: `docs/cursor-implementation-guide.md` § Grok Token-Saving Pre
 | **N** Accuracy & Calibration | A (N2/N3) + B (N1/N4) | Composer 2.5; Grok slow-**medium** design first | ✅ Step 0 + per-slice (escalate **high** only if needed) — **COMPLETE** |
 | **O** Alerts, Reports, Launch | A (O1/O4/O5) + B (O2/O3) | Composer 2.5; Grok slow-**medium** for O1/N4-related | ✅ Step 0; O2 medium sign-off — **COMPLETE** |
 | **P** Prod flags + N1 persist | A | Composer 2.5 | Optional — **COMPLETE** (#232/#237) |
-| **§16** Close the trust gap | A (16.1–16.3) | Composer 2.5; Grok slow-**medium** before coding `hybrid_score` | ✅ Formula/gate note — **DRAFT** (`gameplan-phase-16.md`) |
+| **§16** Close the trust gap | A (16.1–16.3) | Composer 2.5 | Optional — **DRAFT** (`gameplan-phase-16.md`) |
+| **§17** Beyond trust gap | A/B by track (S/U/F) | Composer 2.5; Grok slow-**medium** for S1 + UI | ✅ Before build — **DRAFT** (`gameplan-beyond-16.md`) |
 
-Full slice tables: §4 below, `gameplan-N-O.md`, `gameplan-phase-16.md`.
+Full slice tables: §4 below, `gameplan-N-O.md`, `gameplan-phase-16.md`, `gameplan-beyond-16.md`.
 
 ## 3. Past phases — Grok review checklist (second opinion)
 

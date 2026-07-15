@@ -119,6 +119,7 @@ Recent merges on `main` @ `e8547b9`:
 | **N/O** | ✅ **COMPLETE** — #227 (A) + #228 (B) merged |
 | **P** | ✅ **COMPLETE** — code **#232** + verify **#237** (#233 closed, not merged) |
 | **§16** | 📝 **DRAFT** — Close the trust gap (`gameplan-phase-16.md`); not started |
+| **§17** | 📝 **DRAFT** — Beyond trust gap: signals / UI / features (`gameplan-beyond-16.md`); after §16 |
 
 ## Phase P queue
 | Agent | Slices | Status |
@@ -129,17 +130,24 @@ Recent merges on `main` @ `e8547b9`:
 ## §16 queue (DRAFT — do not build until approved)
 | Agent | Slices | Status |
 |-------|--------|--------|
-| **A** (`-843d`) | 16.1 outcomes → 16.2 gated `hybrid_score` → 16.3 re-measure | 📝 draft only |
-| **B** (`-e78a`) | Idle (optional one-line honest-empty if an existing template already shows the score) | — |
+| **A** (`-843d`) | 16.1 → 16.2 → 16.3 | 📝 draft only |
+| **B** (`-e78a`) | Idle | — |
 
-Specs: `gameplan-phase-16.md`. Models: Composer 2.5; **Grok slow + medium** before coding the score formula.
+## §17 queue (DRAFT — after §16)
+| Track | Owner | Status |
+|-------|-------|--------|
+| **S** Extra signals | A + B | 📝 `gameplan-beyond-16.md` |
+| **U** UI / experience | B | 📝 |
+| **F** Big features | A + B + Human (F4 DNS) | 📝 |
+
+Specs: `gameplan-phase-16.md` · `gameplan-beyond-16.md`. Models: Composer 2.5; **Grok slow + medium** for design.
 
 ## Agent posture
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **Cursor** | **Idle** | §16 plan drafted; wait for approve before build |
-| **Ditto** | **Review** | Sign off `gameplan-phase-16.md` (or amend) |
+| **Cursor** | **Idle** | §16 + §17 drafted; wait for approve before build |
+| **Ditto** | **Review** | Sign off / amend §16 (thin) and §17 (left-out buckets) |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
 

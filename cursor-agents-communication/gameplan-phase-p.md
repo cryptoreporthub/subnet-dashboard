@@ -1,7 +1,7 @@
 # Phase P — Production activation & N1 follow-through
 
 **Status:** COMPLETE 2026-07-15 · code **#232** merged · **#233 closed unmerged** (duplicate) · verify **#237**  
-**Precedes:** §16 Close the trust gap — `gameplan-phase-16.md` (DRAFT until approved)  
+**Precedes:** §16 Close the trust gap → then §17 Beyond (`gameplan-beyond-16.md`)  
 **Binding prior:** `phase-n-o-step0-spec.md` · `n1-oracle-tuning-design.md`
 
 ## Why Phase P

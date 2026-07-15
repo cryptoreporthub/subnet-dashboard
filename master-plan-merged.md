@@ -84,12 +84,26 @@ Phase L: Composer slices 1–2; **Grok design before** slices 3–4 (WebSocket, 
 
 ## Next roadmap slice (§16) — Close the trust gap (DRAFT)
 
-**Do not implement until approved.** Full spec: `cursor-agents-communication/gameplan-phase-16.md`.
+Ditto-scoped. **Do not implement until approved.** Spec: `cursor-agents-communication/gameplan-phase-16.md`.
 
-| Slice | What | Out of scope |
-|-------|------|--------------|
-| **16.1** | Finish outcome backfill — every resolvable past pick gets right/wrong (N2 leftover) | New features |
-| **16.2** | Real data-backed `hybrid_score()`; if `n < min_sample` → honest “not enough data yet” | UI redesigns |
-| **16.3** | Re-run backtest / `verify_prod.sh`; report post-calibration win rate vs Phase P baseline | Extra signals |
+| Slice | What |
+|-------|------|
+| **16.1** | Fill outcome gaps (finish N2) |
+| **16.2** | Data-backed `hybrid_score` — or honest “not enough data yet” |
+| **16.3** | Re-measure win rate after calibration |
 
-Owner: Agent A (`-843d`). Sequential: 16.1 → 16.2 → 16.3.
+**Purposely out of §16** → see **§17** below.
+
+Owner: Agent A. Order: 16.1 → 16.2 → 16.3.
+
+## §17 — Beyond the trust gap (DRAFT)
+
+What Ditto left out of §16 so the trust pass stays small. **After §16.** Full spec: `cursor-agents-communication/gameplan-beyond-16.md`.
+
+| Track | Slices | Intent |
+|-------|--------|--------|
+| **§17.S Extra signals** | S1 signal-derived magnitude · S2 whale/rugger/indicator depth · S3 optional Discord/X | Real inputs, not decorative gauges |
+| **§17.U UI / experience** | U1 Phase-2 CONDITIONALs · U2 predictive framing · U3 progressive enhance · U4 launch surface | Polish + framing, not a cockpit rewrite |
+| **§17.F Big features** | F1 streaming chat · F2 live message-intel · F3 alert delivery · F4 custom domain (human) · F5 report depth | FastAPI unlocks + launch |
+
+Sequence: §16 → prefer **S1** before heavy U/F when new scores are shown · then U ∥ F.

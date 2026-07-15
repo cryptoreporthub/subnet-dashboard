@@ -32,5 +32,6 @@
 
 ## Next
 
-- **§16 — Close the trust gap** (DRAFT, not started): fill outcome gaps → gated `hybrid_score` → re-measure win rate. Spec: `gameplan-phase-16.md`. No new features / UI redesigns / extra signals.
+- **§16 — Close the trust gap** (DRAFT): 16.1 outcomes → 16.2 gated `hybrid_score` → 16.3 re-measure. Spec: `gameplan-phase-16.md`.
+- **§17 — Beyond the trust gap** (DRAFT): features / UI / extra signals Ditto left out of §16. Spec: `gameplan-beyond-16.md`. **After §16.**
 - Monitor `./scripts/verify_prod.sh` after deploys
