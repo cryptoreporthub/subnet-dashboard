@@ -5,7 +5,7 @@
 
 ## One-line
 
-**Phase N/O Step 0 LOCKED. A/B unblocked for Composer after Step 0 PR merges. Grok token-save on.**
+**Phase N/O Step 0 LOCKED. A/B unblocked. Grok = slow + medium default (escalate high only if needed).**
 
 ## Done (do not re-queue)
 
@@ -32,11 +32,11 @@
 
 - **Active** — Phase N/O after Step 0 merge
 - Git only; Ponytail minimal diff
-- Grok: always `grok-4.5-fast-xhigh` first
+- Grok: slow + medium default; high only if medium fails / unsatisfactory
 
 ## Phase N/O
 - **APPROVED (2026-07-15)** · **Step 0 LOCKED** — `phase-n-o-step0-spec.md`
 - Spec: `gameplan-N-O.md` + Step 0 decisions
-- Models: Composer 2.5 default; **Grok token-save** — `fast-xhigh` first; escalate `xhigh` only after FAIL/CONDITIONAL
+- Models: Composer 2.5 default; **Grok slow + medium** — escalate to **high** only if medium fails or is unsatisfactory
 - **A** (`-843d`): N2 → N3 → O1 → O4 → O5 (N2∥N3∥O1 OK)
 - **B** (`-e78a`): **N4 → N1 → O2 → O3** (strict)
