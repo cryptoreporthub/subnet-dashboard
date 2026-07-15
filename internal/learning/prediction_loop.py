@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 
 from internal.council.state_vector import build_prediction_statement
 from internal.council.weights import load_weights
-from internal.learning.predictions_store import append_prediction
+from internal.learning.predictions_store import append_prediction, has_pending_duplicate
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,24 @@ def _dominant_expert(expert_contributions: Optional[Dict[str, Any]]) -> str:
     if best_name not in ("quant", "hype", "dark_horse", "technical"):
         return "quant"
     return best_name
+
+
+def _subnet_snapshot(subnet: Dict[str, Any]) -> Dict[str, Any]:
+    """Persist market context at creation for N4 backtest replay (N1 follow-up)."""
+    return {
+        k: subnet.get(k)
+        for k in (
+            "netuid",
+            "name",
+            "price_change_24h",
+            "price",
+            "apy",
+            "emission",
+            "volume",
+            "social_mentions",
+        )
+        if subnet.get(k) is not None
+    }
 
 
 def _predicted_pct_from_pick(pick: Dict[str, Any], subnet: Dict[str, Any]) -> float:
@@ -86,6 +104,9 @@ def record_pick_prediction(
     except Exception:
         if int(netuid) <= 0:
             return None
+
+    if has_pending_duplicate(netuid, horizon_type):
+        return None
 
     ref_price = float(subnet.get("price", 0) or 0)
     if ref_price <= 0:
@@ -143,6 +164,7 @@ def record_pick_prediction(
     prediction["pick_source"] = "council"
     prediction["pick_score"] = pick.get("score")
     prediction["pick_confidence"] = pick.get("confidence", pick.get("final_confidence"))
+    prediction["subnet_snapshot"] = _subnet_snapshot(subnet)
     try:
         from internal.council.weights import load_impact_strength
         from internal.subnets.impact import impact_profile
@@ -163,9 +185,6 @@ def record_pick_prediction(
     scenario_id = _link_scenario_memory(prediction, subnet, market_context)
     if scenario_id:
         prediction["scenario_id"] = scenario_id
-
-    if not append_prediction(prediction):
-        return None
 
     expert_weights = load_weights()
     prediction["weights_at_creation"] = dict(expert_weights)
@@ -196,6 +215,9 @@ def record_pick_prediction(
         prediction["judge_scores_at_creation"] = judge_scores
     except Exception as exc:
         logger.warning("Judge on_prediction_created failed: %s", exc)
+
+    if not append_prediction(prediction):
+        return None
 
     _append_mindmap_trail(pick, prediction, horizon_type)
     _mirror_pick_to_soul_map(pick, prediction, horizon_type)

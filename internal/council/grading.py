@@ -37,6 +37,15 @@ def classify_outcome_direction_only(
     return "miss"
 
 
+def hybrid_score(
+    prediction: Dict[str, Any],
+    actual_pct: float,
+) -> Optional[float]:
+    """Deferred magnitude calibration (Phase N design) — returns None until signal-derived."""
+    _ = (prediction, actual_pct)
+    return None
+
+
 def compute_actual_pct(reference_price: float, resolved_price: float) -> float:
     if reference_price <= 0 or resolved_price <= 0:
         return 0.0
