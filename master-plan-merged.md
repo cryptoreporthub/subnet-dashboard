@@ -82,5 +82,14 @@ Phase L: Composer slices 1–2; **Grok design before** slices 3–4 (WebSocket, 
 - UI spec: `docs/premium-dashboard-redesign.md`
 - Board: `cursor-agents-communication/board.md`
 
-## Next roadmap slice (§16)
-_To be defined by Ditto (see `cursor-agents-communication/STATUS.md` → "## Next"). Not yet scoped._
+## Next roadmap slice (§16) — Close the trust gap (DRAFT)
+
+**Do not implement until approved.** Full spec: `cursor-agents-communication/gameplan-phase-16.md`.
+
+| Slice | What | Out of scope |
+|-------|------|--------------|
+| **16.1** | Finish outcome backfill — every resolvable past pick gets right/wrong (N2 leftover) | New features |
+| **16.2** | Real data-backed `hybrid_score()`; if `n < min_sample` → honest “not enough data yet” | UI redesigns |
+| **16.3** | Re-run backtest / `verify_prod.sh`; report post-calibration win rate vs Phase P baseline | Extra signals |
+
+Owner: Agent A (`-843d`). Sequential: 16.1 → 16.2 → 16.3.

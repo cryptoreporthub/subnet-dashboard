@@ -32,5 +32,5 @@
 
 ## Next
 
-- Ditto defines next roadmap slice
+- **§16 — Close the trust gap** (DRAFT, not started): fill outcome gaps → gated `hybrid_score` → re-measure win rate. Spec: `gameplan-phase-16.md`. No new features / UI redesigns / extra signals.
 - Monitor `./scripts/verify_prod.sh` after deploys
