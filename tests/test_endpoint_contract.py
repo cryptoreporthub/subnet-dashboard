@@ -146,6 +146,9 @@ CONTRACT = [
     # Phase N calibration / retrain
     ("GET", "/api/calibration/status", None),
     ("POST", "/api/calibration/retrain", {"dry_run": True, "async": False}),
+    # Phase O conviction-threshold alerts (O1)
+    ("GET", "/api/conviction-alerts/status", None),
+    ("POST", "/api/conviction-alerts/notify", {}),
     # Phase O TAO Signal Hub
     ("GET", "/api/signal-hub/status", None),
     ("GET", "/api/signal-hub/signals", None),

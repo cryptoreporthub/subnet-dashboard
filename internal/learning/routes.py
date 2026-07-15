@@ -43,16 +43,19 @@ def _subnets_for_tracker() -> list:
 
 def _scenario_memory_summary() -> Dict[str, Any]:
     try:
-        data = scenario_memory._load()
-        scenarios = data.get("scenarios", [])
-        return {
-            "scenario_count": len(scenarios),
-            "last_scenario": scenarios[-1].get("name") if scenarios else None,
-            "last_updated": data.get("meta", {}).get("last_updated"),
-        }
+        from internal.learning.scenario_outcomes import scenario_outcome_stats
+
+        return scenario_outcome_stats()
     except Exception as exc:
         logger.warning("Could not load scenario memory summary: %s", exc)
-        return {"scenario_count": 0, "last_scenario": None, "last_updated": None}
+        return {
+            "scenario_count": 0,
+            "outcomes_resolved": 0,
+            "outcomes_pending": 0,
+            "last_scenario": None,
+            "last_outcome": None,
+            "last_updated": None,
+        }
 
 
 def _rotation_summary() -> Dict[str, Any]:
@@ -187,6 +190,7 @@ async def api_mindmap_state():
 async def api_learning_stats():
     engine = LearningEngine()
     stats = engine.get_stats()
+    scenario = _scenario_memory_summary()
     return {
         "status": "success",
         "data": {
@@ -196,6 +200,7 @@ async def api_learning_stats():
             "pending": stats.get("pending", 0),
             "resolved": stats.get("resolved", 0),
             "last_updated": stats.get("last_updated") or _utcnow_z(),
+            "scenario_memory": scenario,
         },
     }
 
@@ -313,6 +318,9 @@ async def api_predictions_resolver_run():
 async def api_scenario_memory():
     """Return the full regime-aware scenario memory snapshot."""
     try:
+        from internal.learning.scenario_outcomes import backfill_scenario_outcomes_from_predictions
+
+        backfill_scenario_outcomes_from_predictions()
         return {"status": "ok", **scenario_memory.get_memory_snapshot()}
     except Exception as exc:
         logger.error("Error fetching scenario memory: %s", exc)

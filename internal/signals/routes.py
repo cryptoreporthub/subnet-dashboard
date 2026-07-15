@@ -25,6 +25,13 @@ try:
 except ImportError as _hub_exc:
     logger.warning("Signal hub routes unavailable: %s", _hub_exc)
 
+try:
+    from internal.conviction_alerts.routes import conviction_alerts_router
+
+    signals_router.include_router(conviction_alerts_router)
+except ImportError as _conviction_exc:
+    logger.warning("Conviction alert routes unavailable: %s", _conviction_exc)
+
 _store: Optional[SignalStore] = None
 _alerts: Optional[AlertEngine] = None
 

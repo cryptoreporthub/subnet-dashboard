@@ -1,11 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-15T05:02:00Z · Agent B (`-e78a`)  
-**main:** `174d8a0` (#228 merged)
+**Updated:** 2026-07-15T05:15:00Z · Agent A `-843d`  
+**main:** `8f44d9c` (B #228 merged) · **A:** PR #227 rebasing
 
 ## One-line
 
-**Agent B Phase N/O N4+N1+O2+O3 merged (#228). A continues N2/N3/O1/O4/O5.**
+**B N/O complete (#228). A landing N2+N3+O1+O4+O5 (#227 rebase → merge).**
 
 ## Done (do not re-queue)
 
@@ -28,19 +28,16 @@
 
 ## Ditto
 
-- **Do:** read `board.md`, watch CI/Fly health, relay A/B to Step 0 spec
+- **Do:** read `board.md`, watch CI/Fly health
 - **Do not:** re-open completed July 14 queue items; do not rebuild `signal_hub`
 
 ## Cursor
 
-- **Active** — Phase N/O after Step 0 merge
+- **Active** — merge Agent A #227 onto `main` (last N/O code slice)
 - Git only; Ponytail minimal diff
 - Grok: slow + medium default; high only if medium fails / unsatisfactory
 
 ## Phase N/O
 - **APPROVED (2026-07-15)** · **Step 0 LOCKED** — `phase-n-o-step0-spec.md`
-- Spec: `gameplan-N-O.md` + Step 0 decisions
-- Models: Composer 2.5 default; **Grok slow + medium** — escalate to **high** only if medium fails or is unsatisfactory
-- **A** (`-843d`): N2 → N3 → O1 → O4 → O5 (N2∥N3∥O1 OK)
-- **B** (`-e78a`): **N4 → N1 → O2 → O3** ✅ **#228 merged**
-- **A next:** N2 scenario outcomes · N3 calibration hook · O1 conviction alerts · O4 DNS docs · O5 doc refresh
+- **B** (`-e78a`): N4 → N1 → O2 → O3 ✅ **#228 merged**
+- **A** (`-843d`): N2 → N3 → O1 → O4 → O5 — **#227** (rebase + merge pending)

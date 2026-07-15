@@ -1,7 +1,12 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T05:02:00Z by Agent B (`-e78a`) — **#228 merged (B N/O complete)**  
-**main:** `174d8a0`
+<<<<<<< HEAD
+**Last updated:** 2026-07-15T05:15:00Z by Agent A (`-843d`) — **#227 rebase (A N/O landing)**  
+**main:** `8f44d9c` (B #228 merged)
+=======
+**Last updated:** 2026-07-15T05:00:00Z by Agent A (`-843d`) — **N2–O5 in PR**  
+**main:** `2183037`
+>>>>>>> 40df67b (feat(N/O A): N3 auto-retrain hook, O1 conviction alerts, O4/O5 docs)
 
 ## Ditto boot (read first)
 
@@ -109,8 +114,8 @@ Recent merges on `main` @ `778ad13`:
 ## N/O queue
 | Agent | Slices | Status |
 |-------|--------|--------|
-| **A** (`-843d`) | N2, N3, O1, O4, O5 | awaiting agent start |
-| **B** (`-e78a`) | N1, N4, O2, O3 | awaiting agent start |
+| **A** (`-843d`) | N2, N3, O1, O4, O5 | **#227** rebase → merge |
+| **B** (`-e78a`) | N4, N1, O2, O3 | ✅ **#228 merged** |
 
 Specs: `gameplan-N-O.md` + `phase-n-o-step0-spec.md`. Models: Composer 2.5; **Grok slow + medium** (escalate **high** only if FAIL/unsatisfactory).
 

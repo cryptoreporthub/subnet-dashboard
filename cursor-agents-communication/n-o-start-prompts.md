@@ -1,6 +1,29 @@
 # Phase N/O — Agent start prompts
 
-**Saved:** 2026-07-15 · **Binding spec:** `phase-n-o-step0-spec.md` (LOCKED)
+**Saved:** 2026-07-15 · **Binding spec:** `phase-n-o-step0-spec.md` (LOCKED)  
+**Grok policy:** slow + medium first (per PR #225); do NOT revert PR #221/#223/#224/#225/#226 or Step 0 spec.
+
+---
+
+## Agent A (`-843d`)
+
+You are Agent A (`-843d`) on cryptoreporthub/subnet-dashboard (single FastAPI foundation: `server.py`).
+
+Read first (git): `gameplan-N-O.md`, `board.md`, `STATUS.md`, `model-guide.md`, `master-plan-merged.md`, `phase-n-o-step0-spec.md`.
+
+**MODELS:** Default build = Composer 2.5. Grok = slow + medium first; escalate to **high** only if medium fails or is unsatisfactory (N3 hot-path is the usual escalate candidate).
+
+**SLICES:** N2 → N3 ∥ O1 → O4 → O5
+
+- **N2** Scenario outcome backfill — `internal/learning/scenario_outcomes.py`, `tests/test_scenario_memory.py`
+- **N3** Calibration post-resolver hook — `CALIBRATION_AUTO_RETRAIN`, `internal/calibration/scheduler.py`
+- **O1** Conviction alerts — `GET/POST /api/conviction-alerts/*` via `AlertEngine`
+- **O4** Custom domain + CDN — `fly.toml`, `DEPLOY.md`
+- **O5** Docs refresh — `AGENTS.md`, `master-plan-merged.md`, board/STATUS
+
+**OWNERSHIP:** `internal/learning/*`, `internal/council/*`, `internal/judges/*`, `internal/calibration/*`, `internal/conviction_alerts/*`, `fly.toml`, `DEPLOY.md`, `docs/`. Never touch `templates/*`, `static/*`, `internal/oracle/*`, `internal/analytics/*`, `internal/indicators/*`.
+
+**STATUS (2026-07-15):** Delivered in PR **#227** — rebase onto `main` after B **#228**, then merge.
 
 ---
 
@@ -8,27 +31,17 @@
 
 You are Agent B (`-e78a`) on cryptoreporthub/subnet-dashboard (single FastAPI foundation: `server.py`).
 
-Read first (git): `cursor-agents-communication/gameplan-N-O.md`, `board.md`, `STATUS.md`, `model-guide.md`, `master-plan-merged.md`, `docs/sciweave-answers-phase-j.md`.
+Read first (git): `gameplan-N-O.md`, `board.md`, `STATUS.md`, `model-guide.md`, `phase-n-o-step0-spec.md`.
 
-**MODELS:** Default build = Composer 2.5. GROK: every Grok call = slow + medium first. Escalate to high ONLY when medium fails or is unsatisfactory (N1 grader root-cause is a usual escalate candidate). Prefer Task subagent over switching the whole run.
+**MODELS:** Default build = Composer 2.5. Grok = slow + medium first; escalate to **high** only if medium fails or is unsatisfactory (N1 grader root-cause is the usual escalate candidate).
 
-**STEP 0:** DONE — read `cursor-agents-communication/phase-n-o-step0-spec.md` (binding). Start building now. Order: **N4 → N1 → O2 → O3**.
+**STRICT SEQUENCE:** N4 → N1 → O2 → O3
 
-### YOUR SLICES (start with N4)
+- **N4** Backtest — `internal/analytics/backtest.py`, `GET /api/backtest`
+- **N1** Oracle/grader tuning — `internal/oracle/*`, `oracle_judge.py`
+- **O2** Backtest history UI — `templates/*`, `static/js/*`
+- **O3** Per-subnet report — `GET /api/report/{netuid}`
 
-- **N4** Backtest harness + analytics (Grok slow-medium design → Composer 2.5) — FIRST — `internal/analytics/backtest.py` + `tests/test_backtest.py` + `GET /api/backtest`; CONTRACT; reproducible Oracle/Echo/Pulse backtest.
-- **N1** Oracle/grader tuning (Grok slow-medium design → Composer 2.5 wire; escalate high only if needed) — after N4 — `internal/oracle/*` + `oracle_judge.py`; council grader only via Step 0 allowlist (A lands `grading.py`/`resolver.py`); lift ~45.5% win rate; no threshold gaming.
-- **O2** Backtest history UI (Composer 2.5 build + Grok slow-medium sign-off) — after N4 — `templates/*`, `static/js/*`; real payloads or explicit empty; zero `###` in rendered `/`; 12 Cockpit IDs untouched.
-- **O3** Exportable per-subnet report (Composer 2.5) — `internal/analytics/*` builder + `templates/*` view + `GET /api/report/{netuid}`; contract test added.
+**OWNERSHIP:** `internal/oracle/*`, `internal/analytics/*`, `internal/indicators/*`, `templates/*`, `static/*`, `oracle_judge.py`. Never touch `internal/learning/*`, `internal/council/*` (except N1 allowlist via A), `fly.toml`, `DEPLOY.md`.
 
-**OWNERSHIP:** you OWN `internal/oracle/*`, `internal/analytics/*`, `internal/indicators/*`, `templates/*`, `static/*`. NEVER touch `internal/learning/*`, `internal/council/*`, `internal/judges/*` except `oracle_judge.py` (N1), `fly.toml`, `DEPLOY.md`, `docs/`.
-
-**CONSTRAINTS:** every new route → `tests/test_endpoint_contract.py` CONTRACT; honest-empty > decorative > 500; never fake accuracy/backtests; no `data/*.json` churn; single foundation. Conflict with A on `server.py` + contract test: rebase before merge, first merge wins.
-
-**VERIFY:** pytest (your phase + contract); mypy --strict best-effort. Update `board.md` + `STATUS.md` on PR open/merge. Report PR numbers + slices.
-
----
-
-## Agent A (`-843d`)
-
-See `gameplan-N-O.md` §8 Agent A block. Slices: N2 → N3 → O1 → O4 → O5.
+**STATUS (2026-07-15):** ✅ **#228 merged** on `main`.

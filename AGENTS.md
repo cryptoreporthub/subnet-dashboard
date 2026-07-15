@@ -96,6 +96,9 @@ Follow [`.cursor/rules/ponytail.mdc`](.cursor/rules/ponytail.mdc) ([Ponytail](ht
   reuse the volume. `flyctl` needs `FLY_API_TOKEN` (GitHub Actions secret); the
   cloud agent has no token, so volume creation (`fly volumes create`) must be done
   by a human / Ditto Code if a region/count mismatch ever arises.
+- **Custom domain + CDN:** see `DEPLOY.md` (O4). Env-gated optional flags:
+  `CALIBRATION_AUTO_RETRAIN` (N3 post-resolver hook),
+  `CONVICTION_ALERTS_ENABLED` (O1 `/api/conviction-alerts/*`).
 
 ### Not started by default (optional)
 - Background schedulers (`internal/scheduler.py`, `internal/indicators/`,

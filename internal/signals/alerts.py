@@ -330,6 +330,12 @@ class AlertEngine:
 
         return created
 
+    def evaluate_conviction_alerts(self) -> Dict[str, Any]:
+        """O1: scan council conviction sources; dedupe via existing alert store."""
+        from internal.conviction_alerts.evaluate import run_conviction_evaluation
+
+        return run_conviction_evaluation(self)
+
     def record_signal_changes(self, changed: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         created: List[Dict[str, Any]] = []
         for sig in changed:

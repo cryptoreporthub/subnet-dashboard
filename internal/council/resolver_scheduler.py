@@ -291,6 +291,16 @@ class PredictionResolverScheduler:
 
             result["ok"] = True
             result["stats"] = expired.get("stats", resolved.get("stats", {}))
+
+            # N3: optional env-gated auto-retrain after resolver (non-blocking).
+            try:
+                from internal.calibration.scheduler import maybe_trigger_auto_retrain
+
+                result["auto_retrain"] = maybe_trigger_auto_retrain(
+                    resolved_now=result.get("resolved_now", 0)
+                )
+            except Exception as exc:
+                result["auto_retrain"] = {"triggered": False, "error": str(exc)}
         except Exception as exc:
             result["error"] = str(exc)
 
