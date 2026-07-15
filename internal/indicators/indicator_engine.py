@@ -68,16 +68,18 @@ class IndicatorEngine:
 
     def __init__(
         self,
-        registry_path: str = REGISTRY_PATH,
-        soul_map_path: str = SOUL_MAP_PATH,
-        price_pairs_path: str = PRICE_PAIRS_PATH,
-        indicator_state_path: str = INDICATOR_STATE_PATH,
+        registry_path: Optional[str] = None,
+        soul_map_path: Optional[str] = None,
+        price_pairs_path: Optional[str] = None,
+        indicator_state_path: Optional[str] = None,
         signal_tracker=None,
     ):
-        self.registry_path = registry_path
-        self.soul_map_path = soul_map_path
-        self.price_pairs_path = price_pairs_path
-        self.indicator_state_path = indicator_state_path
+        self.registry_path = registry_path or os.environ.get("REGISTRY_PATH", "config/registry.json")
+        self.soul_map_path = soul_map_path or os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
+        self.price_pairs_path = price_pairs_path or os.environ.get("PRICE_PAIRS_PATH", "config/price_pairs.json")
+        self.indicator_state_path = indicator_state_path or os.environ.get(
+            "INDICATOR_STATE_PATH", "data/indicator_state.json"
+        )
         self.signal_tracker = signal_tracker
         self._last_per_subnet: Dict[str, Dict[str, Any]] = {}
 

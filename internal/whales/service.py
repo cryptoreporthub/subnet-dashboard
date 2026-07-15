@@ -69,11 +69,11 @@ class WhaleIntelligenceService:
 
     def __init__(
         self,
-        config_path: str = DEFAULT_CONFIG_PATH,
-        data_path: str = DEFAULT_DATA_PATH,
+        config_path: Optional[str] = None,
+        data_path: Optional[str] = None,
     ):
-        self.config_path = config_path
-        self.data_path = data_path
+        self.config_path = config_path or os.environ.get("WHALES_CONFIG_PATH", "config/whales.json")
+        self.data_path = data_path or os.environ.get("WHALES_DATA_PATH", "data/whale_intelligence.json")
         self.config = self._load_config()
         self.data = self._load_data()
 
@@ -437,6 +437,17 @@ class WhaleIntelligenceService:
             "total": len(rugger_alerts) + len(follow_alerts),
         }
 
+    def _ledger_has_data(self) -> bool:
+        return bool(self.data.get("events")) or bool(self.data.get("profiles"))
+
+    def _ledger_honesty(self) -> Dict[str, Any]:
+        has_data = self._ledger_has_data()
+        return {
+            "data_available": has_data,
+            "source": "ledger",
+            "reason": None if has_data else "no_events",
+        }
+
     def get_subnet_flow(self, netuid: int) -> Dict[str, Any]:
         open_positions = self.data.get("open_positions", {})
         profiles = self.data.get("profiles", {})
@@ -458,15 +469,18 @@ class WhaleIntelligenceService:
                 if cls in by_class:
                     by_class[cls].append(entry)
 
-        return {
+        flow: Dict[str, Any] = {
             "netuid": int(netuid),
             "open_positions": sum(len(v) for v in by_class.values()),
             "by_classification": by_class,
-            "avoid_follow": len(by_class.get("ruggers", [])) > 0,
-            "smart_money_present": bool(
-                by_class.get("alpha_whales") or by_class.get("early_movers") or by_class.get("conviction_holders")
-            ),
+            **self._ledger_honesty(),
         }
+        if flow["data_available"]:
+            flow["avoid_follow"] = len(by_class.get("ruggers", [])) > 0
+            flow["smart_money_present"] = bool(
+                by_class.get("alpha_whales") or by_class.get("early_movers") or by_class.get("conviction_holders")
+            )
+        return flow
 
     def discount_score(self, netuid: int, base_score: float) -> Tuple[float, Dict[str, Any]]:
         flow = self.get_subnet_flow(netuid)
@@ -497,6 +511,7 @@ class WhaleIntelligenceService:
             "updated_at": self.data.get("updated_at"),
             "dimensions": TRACKING_DIMENSIONS,
             "config": self.config,
+            **self._ledger_honesty(),
             "stats": {
                 "total_wallets_tracked": len(profiles),
                 "open_positions": len(self.data.get("open_positions", {})),
