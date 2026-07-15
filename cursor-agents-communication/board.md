@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T17:45:00Z — **ONE AGENT · B9 in flight**  
-**main:** `58925a7`
+**Last updated:** 2026-07-15T18:02:00Z — **B8–B11 UI tail complete**  
+**main:** `d638cac`
 
 ## Ditto boot (read first)
 
@@ -23,28 +23,30 @@
 | **Branches** | `cursor/<slug>-e78a` or `-6f98` | `cursor/<slug>-6f98` off latest `main` |
 | **Grok** | Whole-agent switch | **Subagent only** — slow + low/med |
 
-Specs: `token-budget-rules.md` · `model-guide.md` · `s16-s17-automated-build-plan.md` (B9→B11).
+Specs: `token-budget-rules.md` · `model-guide.md` · `s16-s17-automated-build-plan.md` (B12 optional).
 
 ## N/O (approved 2026-07-15)
 - **APPROVED** + **Step 0 LOCKED**
 - Models: **Composer 2.5-fast** build; **Grok slow + low/medium** subagent (escalate **high** only if medium fails).
-- **A:** N/O + §17 F1–F6 ✅ **DONE**. **B:** §17 UI tail in progress.
+- **A:** N/O + §17 F1–F6 ✅ **DONE**. **B:** §17 UI tail B8–B11 ✅ **DONE**.
 
 ## Read order (agents + Ditto)
 1. **STATUS card** — `cursor-agents-communication/STATUS.md`
 2. **This file** — `cursor-agents-communication/board.md`
 3. **Token budget** — `cursor-agents-communication/token-budget-rules.md`
 4. **Model guide** — `cursor-agents-communication/model-guide.md`
-5. **Build queue** — `cursor-agents-communication/s16-s17-automated-build-plan.md` (B9–B11)
+5. **Build queue** — `cursor-agents-communication/s16-s17-automated-build-plan.md`
 6. **Grok lock rule** — `cursor-agents-communication/grok-lock-composer-write-rule.md`
 
 ## Ready for next work
 
-**§17 UI (one agent):** B8 ✅ · **B9 weekly letter (#268)** → B10 chat UI → **B11 daily recap**. **Human:** F7 DNS.
+**§17 UI (one agent):** B8–B11 ✅ **complete** · **B12** U5 waits F7 DNS. **Human:** F7 DNS.
 
 | PR | Role | State |
 |----|------|-------|
-| **#268** | §17.F4 weekly letter UI (B9) | 🟡 **open** |
+| **#271** | §17.F4b daily recap (B11) | ✅ **merged** |
+| **#270** | §17.F5 streaming chat UI (B10) | ✅ **merged** |
+| **#268** | §17.F4 weekly letter UI (B9) | ✅ **merged** |
 | **#267** | §17.F3 paper portfolio UI (B8) | ✅ **merged** |
 
 **Health:** `GET /health` · `GET /api/message-intel/status` → 200 OK
@@ -55,13 +57,13 @@ Specs: `token-budget-rules.md` · `model-guide.md` · `s16-s17-automated-build-p
 |-------|--------|
 | **N/O · P · §16** | ✅ complete |
 | **§17 backends (A)** | ✅ F1–F6 on main |
-| **§17 UI (B)** | 🟡 B9 #268 · B10–B11 queued |
+| **§17 UI (B)** | ✅ **B8–B11 complete** · B12 optional (F7) |
 
 ## Agent posture
 
 | Role | Status | Notes |
 |------|--------|-------|
-| **Single agent** | **Active** | B9→B11; `composer-2.5-fast`; one slice per turn |
+| **Single agent** | **Idle / B12** | B12 U5 when F7 done |
 | **A (`-843d`)** | **Retired** | Do not spawn — saves Pro+ pool |
 | **Grok** | **Subagent** | DESIGN / sign-off only; short LOCK |
 | **Human** | **QB** | merge when green · F7 DNS · watch billing |
