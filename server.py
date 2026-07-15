@@ -441,7 +441,22 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
     try:
         from internal.analytics.root_context import build_agent_b_root_context
 
-        context.update(build_agent_b_root_context(subnets=subnets, data_source=source))
+        pick_netuid = None
+        try:
+            if _PICKS_ENGINE:
+                market_context = _market_context_with_weights(subnets)
+                pick_payload = get_or_create_today_pick(subnets, market_context)
+                pick_netuid = _pick_netuid_from_daily_payload(pick_payload)
+        except Exception:
+            pick_netuid = None
+
+        context.update(
+            build_agent_b_root_context(
+                subnets=subnets,
+                data_source=source,
+                pick_netuid=pick_netuid,
+            )
+        )
     except Exception as exc:
         logger.warning("Agent B root context unavailable: %s", exc)
 
@@ -1242,6 +1257,22 @@ def api_top_picks():
     }
 
 
+def _pick_netuid_from_daily_payload(payload: Any) -> Optional[int]:
+    if not isinstance(payload, dict):
+        return None
+    for key in ("pick", "candidate"):
+        block = payload.get(key)
+        if isinstance(block, dict):
+            subnet = block.get("subnet") if isinstance(block.get("subnet"), dict) else block
+            netuid = subnet.get("netuid") if isinstance(subnet, dict) else block.get("netuid")
+            if netuid is not None:
+                return int(netuid)
+        pred = block.get("prediction") if isinstance(block, dict) else None
+        if isinstance(pred, dict) and pred.get("netuid") is not None:
+            return int(pred["netuid"])
+    return None
+
+
 @app.get("/api/daily-pick")
 def api_daily_pick():
     """Today's audited daily pick from the Council engine."""
@@ -1251,7 +1282,16 @@ def api_daily_pick():
                 "action": "HOLD", "reason": "pick engine unavailable", "pick": None}
     market_context = _market_context_with_weights(subnets)
     try:
-        return get_or_create_today_pick(subnets, market_context)
+        result = get_or_create_today_pick(subnets, market_context)
+        if isinstance(result, dict):
+            from internal.whales.enrichment_badge import empty_whale_flow_badge, whale_flow_badge
+
+            netuid = _pick_netuid_from_daily_payload(result)
+            result = {
+                **result,
+                "enrichment_badge": whale_flow_badge(netuid) if netuid is not None else empty_whale_flow_badge(),
+            }
+        return result
     except Exception as e:
         logger.error("Error fetching daily pick: %s", e)
         return {"status": "error", "date": datetime.utcnow().date().isoformat(),

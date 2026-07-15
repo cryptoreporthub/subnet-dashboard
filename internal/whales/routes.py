@@ -7,6 +7,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from internal.whales.enrichment_badge import whale_flow_badge
 from internal.whales.scanner import scan_netuids, scan_subnet_delegations
 from internal.whales.service import TRACKING_DIMENSIONS, WhaleIntelligenceService
 
@@ -112,7 +113,12 @@ async def whales_alerts():
 
 @whales_router.get("/api/whales/subnet/{netuid}/flow")
 async def whales_subnet_flow(netuid: int):
-    return {"status": "success", **_get_service().get_subnet_flow(netuid)}
+    flow = _get_service().get_subnet_flow(netuid)
+    return {
+        "status": "success",
+        **flow,
+        "enrichment_badge": whale_flow_badge(netuid, flow=flow),
+    }
 
 
 @whales_router.post("/api/whales/events")

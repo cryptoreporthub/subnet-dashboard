@@ -177,9 +177,24 @@ def _safe_price_baselines() -> Dict[str, Any]:
         return {"status": "error", "error": str(exc), "baselines": []}
 
 
+def _safe_enrichment_badge(pick_netuid: Optional[int] = None) -> Dict[str, Any]:
+    try:
+        from internal.whales.enrichment_badge import empty_whale_flow_badge, whale_flow_badge
+
+        if pick_netuid is None:
+            return empty_whale_flow_badge("no_pick")
+        return whale_flow_badge(int(pick_netuid))
+    except Exception as exc:
+        logger.warning("Could not build enrichment badge for root: %s", exc)
+        from internal.whales.enrichment_badge import empty_whale_flow_badge
+
+        return empty_whale_flow_badge("error")
+
+
 def build_agent_b_root_context(
     subnets: Optional[List[Dict[str, Any]]] = None,
     data_source: str = "unknown",
+    pick_netuid: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Return template keys owned by Agent B for the homepage."""
     subnets = subnets if isinstance(subnets, list) else []
@@ -194,6 +209,7 @@ def build_agent_b_root_context(
         "indicator_state": _safe_indicator_state(),
         "whale_intelligence": _safe_whale_summary(),
         "ruggers_watchlist": _safe_ruggers_summary(),
+        "enrichment_badge": _safe_enrichment_badge(pick_netuid),
         "oracle_snapshot": _safe_oracle_snapshot(subnets, data_source),
         "price_tracking_baselines": _safe_price_baselines(),
     }

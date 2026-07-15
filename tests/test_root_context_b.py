@@ -13,6 +13,7 @@ def test_build_agent_b_root_context_keys():
         "indicator_state",
         "whale_intelligence",
         "ruggers_watchlist",
+        "enrichment_badge",
         "oracle_snapshot",
         "price_tracking_baselines",
     ):
