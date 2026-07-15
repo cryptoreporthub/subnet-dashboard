@@ -55,22 +55,77 @@ def _subnet_snapshot(subnet: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _predicted_pct_from_pick(pick: Dict[str, Any], subnet: Dict[str, Any]) -> float:
-    confidence = float(pick.get("confidence", pick.get("final_confidence", 0)) or 0)
-    change_24h = float(subnet.get("price_change_24h", 0) or 0)
-    base = max(0.5, confidence * 5.0)
-    if change_24h < -2:
-        pct = -base
-    elif change_24h > 2:
-        pct = base
+def _signal_impact_from_pick(pick: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    for key in ("signal_impact", "signals"):
+        raw = pick.get(key)
+        if isinstance(raw, dict) and (
+            raw.get("net_predicted_pct") is not None or raw.get("impacts")
+        ):
+            return raw
+    score = pick.get("score_payload") if isinstance(pick.get("score_payload"), dict) else None
+    if score and isinstance(score.get("signal_impact"), dict):
+        return score["signal_impact"]
+    return None
+
+
+def _predicted_pct_from_pick(pick: Dict[str, Any], subnet: Dict[str, Any]) -> tuple[float, str]:
+    """Signal-derived move for new predictions (§17.S2) — never confidence×5 proxy.
+
+    Returns ``(predicted_pct, magnitude_source)``.
+    """
+    si = _signal_impact_from_pick(pick)
+    if isinstance(si, dict):
+        raw = si.get("net_predicted_pct")
+        try:
+            if raw is not None and float(raw) != 0.0:
+                return float(raw), "signal_impact"
+        except (TypeError, ValueError):
+            pass
+        # Build net from impacts if present
+        impacts = si.get("impacts")
+        if isinstance(impacts, list) and impacts:
+            net = 0.0
+            for item in impacts:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    mag = abs(float(item.get("magnitude_pct") or 0))
+                except (TypeError, ValueError):
+                    continue
+                direction = str(item.get("direction") or "").lower()
+                if direction in {"bullish", "up"}:
+                    net += mag
+                elif direction in {"bearish", "down"}:
+                    net -= mag
+            if net != 0.0:
+                try:
+                    from internal.subnets.impact import scale_move_by_impact
+
+                    return scale_move_by_impact(net, subnet), "signal_impact"
+                except Exception:
+                    return round(net, 4), "signal_impact"
+
+    # Market momentum from subnet (price change + impact scale) — still not confidence
+    try:
+        change_24h = float(subnet.get("price_change_24h", 0) or 0)
+    except (TypeError, ValueError):
+        change_24h = 0.0
+    action = str(pick.get("action") or "long").lower()
+    direction = str(pick.get("direction") or "").lower()
+    if direction not in {"up", "down"}:
+        direction = "down" if action in {"short", "sell"} else "up"
+
+    if abs(change_24h) >= 0.5:
+        mag = max(0.5, abs(change_24h) * 0.5)
     else:
-        pct = base if pick.get("action", "long") != "short" else -base
+        mag = 1.0  # minimal market-based floor, not confidence-scaled
+    signed = mag if direction == "up" else -mag
     try:
         from internal.subnets.impact import scale_move_by_impact
 
-        return scale_move_by_impact(pct, subnet)
+        return scale_move_by_impact(signed, subnet), "market_momentum"
     except Exception:
-        return pct
+        return round(signed, 4), "market_momentum"
 
 
 def record_pick_prediction(
@@ -115,10 +170,14 @@ def record_pick_prediction(
     expert_contributions = pick.get("expert_contributions") or {}
     expert = _dominant_expert(expert_contributions)
     existing_pred = pick.get("prediction") if isinstance(pick.get("prediction"), dict) else None
+    magnitude_source = "preattached"
     if existing_pred and existing_pred.get("predicted_pct") is not None:
         predicted_pct = float(existing_pred["predicted_pct"])
+        magnitude_source = str(
+            existing_pred.get("magnitude_source") or "preattached"
+        )
     else:
-        predicted_pct = _predicted_pct_from_pick(pick, subnet)
+        predicted_pct, magnitude_source = _predicted_pct_from_pick(pick, subnet)
     horizon_hours = 1 if horizon_type == "hour" else 4
     if existing_pred and existing_pred.get("horizon_hours") is not None:
         try:
@@ -164,6 +223,7 @@ def record_pick_prediction(
     prediction["pick_source"] = "council"
     prediction["pick_score"] = pick.get("score")
     prediction["pick_confidence"] = pick.get("confidence", pick.get("final_confidence"))
+    prediction["magnitude_source"] = magnitude_source
     prediction["subnet_snapshot"] = _subnet_snapshot(subnet)
     try:
         from internal.council.weights import load_impact_strength
