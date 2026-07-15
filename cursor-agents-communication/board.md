@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T14:15:00Z — **`GATE_S_CORE` CLEAR · A:F1 · B:U1 · HARD RULE #253**  
-**main:** `2696e90`
+**Last updated:** 2026-07-15T15:05:00Z — **`GATE_HABIT` CLEAR · A:F3 · B:U2**  
+**main:** `a451bcc`
 
 ## Ditto boot (read first)
 
@@ -37,129 +37,66 @@
 
 Composer spawns Grok via subagent — starts slow + medium; no manual model picker needed. Batch tasks; scope files only.
 
-## Phase A — EXTREME audit (complete)
-
-| Task | Agent | Status | Notes |
-|------|-------|--------|-------|
-| **A1** cruft deletion | Ditto → Cursor | ✅ **merged** | #170 (superseded #165) |
-| **A3/A4 prompts** | Ditto → Cursor | ✅ **merged** | #170 (superseded #166) |
-| **Audit docs** | Ditto | ✅ **merged** | #167 |
-| **A3** CORS + X-Frame-Options (#11) | Cursor | ✅ **merged** | #168 |
-| **A4** Cockpit panel isolation (#8) | Cursor | ✅ **merged** | #168 |
-| **A2** CI smoke gate + branch protection | Cursor | ✅ **complete** | #172 + `smoke` required on `main` |
-
-## Active — Phase B (data truth)
-
-| Task | Agent | Status | Notes |
-|------|-------|--------|-------|
-| **B1** bittensor feed + `/api/data-freshness` | Cursor | ✅ **merged** | #174 feed + UI badge |
-| **B1 UI** freshness badge | Cursor | ✅ **merged** | #177 |
-| **B2** httpx + tenacity + aiocache | Cursor | ✅ **merged** | #179 — audit #4 |
-| **B4** prometheusrock metrics | Cursor | ✅ **merged** | #181 — audit #13 |
-| **B5** APY reconcile + candle gate | Cursor | ✅ **merged** | #182 |
-| **B6** slowapi rate-limit | Cursor | ✅ **merged** | #185 |
-
-## Active — Phase 4 (hydration scripts)
-
-| Task | Agent | Status | Notes |
-|------|-------|--------|-------|
-| **Phase 1–2** | B | ✅ **merged** | #154 · #155 · #157 |
-| **G3+G4** | B | ✅ **merged** | #159 |
-| **G9–G11** | B | ✅ **merged** | #161 — Grok sign-off PASS |
-| **C4** hydration binders | Cursor | ✅ **merged** | #186 |
-| **C5** APY/confidence fix | Cursor | ✅ **merged** | #187 |
-| **C6** conviction tiers | Cursor | ✅ **merged** | #189 |
-| **C1** uPlot sparklines | Cursor | ✅ **merged** | #190 |
-| **C2** SSE cockpit stream | Cursor | ✅ **merged** | #191 |
-| **C3** CSS/mobile/a11y | Cursor | ✅ **merged** | #192 |
-| **G7** Rajdhani section titles | Cursor | ✅ **merged** | #195 |
-| **G12** favicon + font cleanup | Cursor | ✅ **merged** | #195 |
-
 ## Ready for next work
 
-**`GATE_S16` CLEAR.** §16 COMPLETE (#244–#246). §17.S1 bands #247 on main. **Agent B: start B1.** Agent A: A5.
+**`GATE_HABIT` CLEAR** (F1 #254 + F2 #256 + U1 #255). **`GATE_S_CORE` / `GATE_S16` CLEAR.**  
+**Agent A:** F3 paper portfolio (this PR). **Agent B:** U2 story strip.
 
 | PR | Role | State |
 |----|------|-------|
+| **#256** | §17.F2 alert delivery | ✅ **merged** |
+| **#255** | §17.U1 single-job home | ✅ **merged** |
+| **#254** | §17.F1 watchlist | ✅ **merged** |
+| **#253** | Grok lock HARD RULE | ✅ **merged** |
+| **#252** | §17.S3 whale badge | ✅ **merged** |
+| **#250** | §17.S2 magnitude | ✅ **merged** |
+| **#248** | §17.S4 honest depth | ✅ **merged** |
 | **#247** | §17.S1 conviction bands | ✅ **merged** |
-| **#246** | §16.3 snapshot + GATE_S16 | ✅ **merged** |
-| **#245** | §16.2 hybrid_score | ✅ **merged** |
-| **#244** | §16.1 outcome backfill | ✅ **merged** |
-| **#243** | Auto plan + start prompts | ✅ **merged** |
+| **#244–#246** | §16 | ✅ **merged** |
 
-Recent merges on `main` @ `c4fe983`:
-
-| PR | Phase | Summary |
-|----|-------|---------|
-| **#247** | §17.S1 | conviction bands API |
-| **#246** | §16.3 | trust snapshot + GATE_S16 |
-| **#245** | §16.2 | gated hybrid_score |
-| **#244** | §16.1 | outcome backfill |
-| **#243** | Docs | auto plan + A/B prompts |
-| **#237** | P | P5 prod verified, domain prewire, `verify_prod.sh` |
-| **#234** | Docs | Phase P complete on board/STATUS |
-| **#232** | P | prod flags on + N1 subnet_snapshot persistence |
-| **#228** | N/O (B) | N4 backtest, N1 oracle tune, O2 UI, O3 report |
-| **#227** | N/O (A) | N2–O5 (rebased on main) |
-| **#233** | Docs | closed — stale duplicate of #232 (do NOT merge) |
-| **#225** | Docs | Grok slow+medium default (not fast-first) |
-| **#223** | Docs | Step 0 architecture lock |
-| **#221** | Docs | N/O gameplan + pre-flight |
-| **#218** | Ops | Fly 1GB + post-deploy restart/health gate |
-| **#217** | Social | Message-intel social sentiment |
-| **#215** | UI | Canvas radar replaces Chart.js CDN |
-
-**Health:** `GET /health` · `GET /api/data-freshness` · `GET /api/signal-hub/status` · `GET /api/calibration/status` · `GET /api/message-intel` → 200 OK  
-**Fly:** machine `shared-cpu-1x:1024MB`, checks passing (was critical on 256MB).
-
-**Housekeeping done:** closed stale open PRs #101 #110 #112 #129 #130 #134 #139 #153 #165 #166 #184 #233.
+**Health:** `GET /health` · `GET /api/data-freshness` · `GET /api/portfolio/status` · `GET /api/watchlist` → 200 OK  
+**Fly:** machine `shared-cpu-1x:1024MB`, checks passing.
 
 ## Gate Status
 
 | Phase | Status |
 |-------|--------|
 | **UI Phase 1** | ✅ merged #154 + #155 |
-| **UI Phase 2** | ✅ merged #157 (Grok sign-off: CONDITIONAL — see phase-3-grok-design.md) |
+| **UI Phase 2** | ✅ merged #157 |
 | **J–M** | ✅ merged |
-| **N/O** | ✅ **COMPLETE** — #227 (A) + #228 (B) merged |
-| **P** | ✅ **COMPLETE** — code **#232** + verify **#237** (#233 closed, not merged) |
+| **N/O** | ✅ **COMPLETE** — #227 (A) + #228 (B) |
+| **P** | ✅ **COMPLETE** — #232 + #237 |
 | **§16** | ✅ **`GATE_S16` CLEAR** — #244 · #245 · #246 |
-| **§17** | 🟡 **IN PROGRESS** — S1 #247 merged; A→A5; **B → B1 now** |
-
-## Phase P queue
-| Agent | Slices | Status |
-|-------|--------|--------|
-| **A** (`-843d`) | P1–P3 | ✅ **#232 merged** |
-| **B** (`-e78a`) | #233 duplicate | ❌ **#233 closed** — same scope landed in #232 |
+| **§17** | 🟡 **IN PROGRESS** — habit spine done; A→F3; B→U2 |
 
 ## §16 / §17 execution
 | Agent | Queue | Status |
 |-------|--------|--------|
-| **A** (`-843d`) | S-core ✅ · **F1 watchlist** → F2 | building |
-| **B** (`-e78a`) | S3 #252 ✅ · **U1 home NEXT** | building |
+| **A** (`-843d`) | F1+F2 ✅ · **F3 paper portfolio** → wait `GATE_ACCOUNT` → F4 | building |
+| **B** (`-e78a`) | U1 ✅ · **U2 story strip** → F1/F2 UI → U3 | next |
 | **Human** | F7 DNS | anytime |
 
-Specs: `s16-s17-automated-build-plan.md`. **GATE_S_CORE** = S1+S2+S3.
+Specs: `s16-s17-automated-build-plan.md`. **GATE_HABIT** = F1+F2+U1. **GATE_ACCOUNT** = F3 on main.
 
 ## Agent posture
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **A** | **Building F1** | Watchlist API; then F2 alerts |
-| **B** | **Build U1** | Single-job home (bands + badge on main) |
+| **A** | **Building F3** | Paper portfolio engine; then wait GATE_ACCOUNT for F4 |
+| **B** | **Build U2** | Story strip |
 | **Ditto** | **Gate/spot-check** | Not day-to-day QB |
-
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
 
 ## Rules
 - Board + master plan override memory.
 - Honest-empty > fake data.
-- **Grok slow + medium default** — escalate to **high** only if medium fails or is unsatisfactory (Phase 3+ design, pre-merge sign-off, Step 0).
-- **HARD RULE — Grok lock → Composer write:** Grok returns a short structured LOCK only; Composer writes the plan markdown and builds. No long Grok prose plans; no Composer inventing missing design.
-- **Build caching** — read binding specs once per session; scope reads to owned paths; batch Grok; cite doc paths instead of re-pasting (`model-guide.md`).
+- **Grok slow + medium default** — escalate to **high** only if medium fails or is unsatisfactory.
+- **HARD RULE — Grok lock → Composer write:** short LOCK only; Composer writes plan + builds. Skip Grok when auto plan already locks the slice.
+- **Build caching** — read binding specs once per session; scope reads to owned paths (`model-guide.md`).
 
 ## References
 - `cursor-agents-communication/phase-3-grok-design.md`
 - `docs/cursor-implementation-guide.md`
-- `docs/master-plan-merged.md`
+- `cursor-agents-communication/s16-s17-automated-build-plan.md`
+- `cursor-agents-communication/grok-lock-composer-write-rule.md`
