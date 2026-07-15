@@ -31,8 +31,8 @@
 | Model guide | ✅ merged (PR #122) |
 | L | ✅ merged (PR #115, #133; UI #135) |
 | **M** | ✅ merged (PR #136) |
-| **N** | ⏸ gated — user approval |
-| **O** | ⏸ gated — user approval |
+| **N** | 🟡 APPROVED 2026-07-15 — Agent A (`-843d`) + Agent B (`-e78a`) split |
+| **O** | 🟡 APPROVED 2026-07-15 — Agent A (`-843d`) + Agent B (`-e78a`) split |
 
 ## Model selection (Composer vs Grok)
 **Canonical:** `cursor-agents-communication/model-guide.md`
@@ -56,8 +56,10 @@ Phase L: Composer slices 1–2; **Grok design before** slices 3–4 (WebSocket, 
 - Telegram listener, dedup, `GET /api/message-intel`, Jinja context.
 - Design: `cursor-agents-communication/phase-m-design.md`
 
-### N / O — gated
-- Awaiting user approval + Ditto assignment plans.
+### N / O — approved (2026-07-15)
+- Agent A (`-843d`) owns N2/N3/O1/O4/O5; Agent B (`-e78a`) owns N1/N4/O2/O3.
+- Full spec: `cursor-agents-communication/gameplan-N-O.md`.
+- Models: Composer 2.5 default build; **Grok token-save** — every Grok call starts on `grok-4.5-fast-xhigh`; escalate to `grok-4.5-xhigh` only after FAIL/CONDITIONAL (see `model-guide.md` §0/§4 + `gameplan-N-O.md` §5).
 
 ## Sequencing Rules
 - No overlap: Agent A frontend vs Agent B backend paths.

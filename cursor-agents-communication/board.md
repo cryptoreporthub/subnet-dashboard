@@ -11,6 +11,11 @@ Automated queue **COMPLETE**. B2/A2/Phase K are **not** open. Ditto = monitor on
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
 
+## N/O (approved 2026-07-15)
+- **APPROVED**: Agent A (`-843d`) + Agent B (`-e78a`) split; full spec: `cursor-agents-communication/gameplan-N-O.md`.
+- Agents idle until kickoff (Step 0: joint **Grok-fast** design pass; escalate to xhigh only on FAIL/CONDITIONAL).
+- Models: Composer 2.5 default; **Grok token-save** — every Grok call starts on `grok-4.5-fast-xhigh`.
+
 ## Read order (agents + Ditto)
 1. **STATUS card** — `cursor-agents-communication/STATUS.md` (Ditto: start here)
 2. **This file** — `cursor-agents-communication/board.md`
@@ -101,7 +106,16 @@ Recent merges on `main` @ `d59782e`:
 |-------|--------|
 | **UI Phase 1** | ✅ merged #154 + #155 |
 | **UI Phase 2** | ✅ merged #157 (Grok sign-off: CONDITIONAL — see phase-3-grok-design.md) |
-| **J–O** | ✅ merged |
+| **J–M** | ✅ merged |
+| **N/O** | 🟡 APPROVED — not started |
+
+## N/O queue
+| Agent | Slices | Status |
+|-------|--------|--------|
+| **A** (`-843d`) | N2, N3, O1, O4, O5 | awaiting agent start |
+| **B** (`-e78a`) | N1, N4, O2, O3 | awaiting agent start |
+
+Full spec: `cursor-agents-communication/gameplan-N-O.md`. Models: Composer 2.5 default; **Grok token-save** (`grok-4.5-fast-xhigh` first; escalate `xhigh` only after FAIL/CONDITIONAL).
 
 ## Agent posture
 
