@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T02:45:00Z by Agent (`-6f98`) — **N/O Step 0 LOCKED; #221 merged**  
-**main:** `778ad13`
+**Last updated:** 2026-07-15T04:25:00Z by Agent (`-6f98`) — **#225 merged; A/B build ready**  
+**main:** `9bca1c1`
 
 ## Ditto boot (read first)
 
@@ -77,7 +77,7 @@ Composer spawns Grok via subagent — starts slow + medium; no manual model pick
 
 ## Ready for next work
 
-**Phase N/O — Step 0 LOCKED.** A/B Composer builds unblocked after Step 0 PR merges.
+**Phase N/O — Step 0 LOCKED. A/B Composer builds READY.** Grok = slow + medium (escalate high only if needed).
 
 **Automated July 14 queue:** COMPLETE. **A2:** `smoke` required on `main`.
 
@@ -85,7 +85,9 @@ Recent merges on `main` @ `778ad13`:
 
 | PR | Phase | Summary |
 |----|-------|---------|
-| **#221** | Docs | N/O gameplan + Grok token-save + pre-flight |
+| **#225** | Docs | Grok slow+medium default (not fast-first) |
+| **#223** | Docs | Step 0 architecture lock |
+| **#221** | Docs | N/O gameplan + pre-flight |
 | **#218** | Ops | Fly 1GB + post-deploy restart/health gate |
 | **#217** | Social | Message-intel social sentiment |
 | **#215** | UI | Canvas radar replaces Chart.js CDN |
@@ -102,7 +104,7 @@ Recent merges on `main` @ `778ad13`:
 | **UI Phase 1** | ✅ merged #154 + #155 |
 | **UI Phase 2** | ✅ merged #157 (Grok sign-off: CONDITIONAL — see phase-3-grok-design.md) |
 | **J–M** | ✅ merged |
-| **N/O** | 🟡 APPROVED — not started |
+| **N/O** | 🟢 Step 0 LOCKED — A/B Composer unblocked |
 
 ## N/O queue
 | Agent | Slices | Status |

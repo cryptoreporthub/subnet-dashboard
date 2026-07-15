@@ -1,11 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-15T02:45:00Z · Agent `-6f98`  
-**main:** `778ad13` (#221 merged)
+**Updated:** 2026-07-15T04:25:00Z · Agent `-6f98`  
+**main:** `9bca1c1` (#225 merged)
 
 ## One-line
 
-**Phase N/O Step 0 LOCKED. A/B unblocked. Grok = slow + medium default (escalate high only if needed).**
+**N/O READY. Step 0 LOCKED. A→N2, B→N4. Grok = slow + medium (escalate high only if needed).**
 
 ## Done (do not re-queue)
 
@@ -19,7 +19,9 @@
 | Canvas radar (Chart.js removed) | **#215** |
 | Social sentiment (message_intel) | **#217** |
 | Fly keep-warm / 1GB + health gate | **#218** |
-| N/O gameplan + token-save | **#221** |
+| N/O gameplan | **#221** |
+| Step 0 lock | **#223** |
+| Grok slow+medium policy | **#225** |
 | A2 `smoke` on `main` | verified |
 | Stale open PRs closed | #101 · #110 · #112 · #129–#130 · #134 · #139 · #153 · #165–#166 · #184 |
 
