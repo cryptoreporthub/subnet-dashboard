@@ -27,6 +27,16 @@ def test_index_home_habit_controls():
     assert 'id="habit-alert-btn"' in html
     assert "watchlist_alerts.js" in html
     assert "habit-watchlist-summary" in html
+    assert "home-hybrid" in html or "not enough data yet" in html.lower()
+
+
+def test_hybrid_trust_snapshot_shape():
+    from internal.analytics.home_habit import hybrid_trust_snapshot
+
+    snap = hybrid_trust_snapshot()
+    assert "ready" in snap
+    assert "n" in snap
+    assert snap.get("reason") in (None, "not_enough_data", "error")
 
 
 def test_pin_button_updates_watchlist(monkeypatch, tmp_path):

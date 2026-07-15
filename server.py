@@ -394,7 +394,11 @@ def _normalize_registry_subnet(sn: Dict[str, Any]) -> Dict[str, Any]:
 
 def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     """U1 hero keys for GET / (fast shell + hydrate)."""
-    from internal.analytics.home_habit import conviction_alerts_snapshot, watchlist_snapshot
+    from internal.analytics.home_habit import (
+        conviction_alerts_snapshot,
+        hybrid_trust_snapshot,
+        watchlist_snapshot,
+    )
     from internal.analytics.root_context import (
         _safe_conviction_band,
         _safe_enrichment_badge,
@@ -417,6 +421,7 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         "story_strip": _safe_story_strip(),
         "habit_watchlist": watchlist_snapshot(),
         "habit_alerts": conviction_alerts_snapshot(),
+        "hybrid_trust": hybrid_trust_snapshot(),
     }
 
 
