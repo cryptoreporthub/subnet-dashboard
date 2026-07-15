@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import os
-from typing import Any, Dict, Tuple
+from typing import Any, AsyncIterator, Dict, Tuple
 
 from datastore.learning_engine import LearningEngine
 
 logger = logging.getLogger(__name__)
+
+_CHUNK_SIZE = 48
+
+
+def sanitize_reply(text: str) -> str:
+    """XSS-safe reply text (escape HTML specials)."""
+    return html.escape(str(text or ""), quote=False)
 
 
 def _safe_load_json(directory: str, filename: str, default: Any = None) -> Any:
@@ -139,8 +147,15 @@ def build_chat_context() -> Dict[str, Any]:
     }
 
 
+def _display_model(llm_used: bool) -> str:
+    model_tag = os.environ.get("CHUTES_MODEL", "deepseek-ai/DeepSeek-V3.2-TEE")
+    if llm_used:
+        return f"chutes/{model_tag.split('/')[-1].lower()}"
+    return "local-fallback"
+
+
 async def handle_simivision_chat(message: str) -> Dict[str, str]:
-    """Run SimiVision chat and return ``{reply, model}``."""
+    """Run SimiVision chat and return ``{reply, model}`` (XSS-escaped reply)."""
     if not message.strip():
         return {"reply": "Please provide a question in the `message` field.", "model": ""}
 
@@ -148,12 +163,7 @@ async def handle_simivision_chat(message: str) -> Dict[str, str]:
         context = build_chat_context()
         prompt = build_simivision_prompt(message, context)
         reply, llm_used = call_llm(prompt, message, context)
-
-        model_tag = os.environ.get("CHUTES_MODEL", "deepseek-ai/DeepSeek-V3.2-TEE")
-        display_model = (
-            f"chutes/{model_tag.split('/')[-1].lower()}" if llm_used else "local-fallback"
-        )
-        return {"reply": reply, "model": display_model}
+        return {"reply": sanitize_reply(reply), "model": _display_model(llm_used)}
     except Exception as exc:
         logger.error("SimiVision chat failed: %s", exc, exc_info=True)
         return {
@@ -163,3 +173,18 @@ async def handle_simivision_chat(message: str) -> Dict[str, str]:
             ),
             "model": "",
         }
+
+
+async def iter_simivision_chat_chunks(message: str) -> AsyncIterator[str]:
+    """Yield XSS-safe reply chunks for streaming clients."""
+    result = await handle_simivision_chat(message)
+    reply = result.get("reply") or ""
+    model = result.get("model") or ""
+    yield f"event: meta\ndata: {json.dumps({'model': model})}\n\n"
+    if not reply:
+        yield "event: done\ndata: {}\n\n"
+        return
+    for i in range(0, len(reply), _CHUNK_SIZE):
+        chunk = reply[i : i + _CHUNK_SIZE]
+        yield f"event: chunk\ndata: {json.dumps({'text': chunk})}\n\n"
+    yield "event: done\ndata: {}\n\n"

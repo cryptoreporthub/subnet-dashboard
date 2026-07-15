@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T15:25:00Z — **`GATE_ACCOUNT` CLEAR · A:F4 · B:U2**  
-**main:** `2acb381`
+**Last updated:** 2026-07-15T15:45:00Z — **A:F5 · B: post-U2**  
+**main:** `e5827e9`
 
 ## Ditto boot (read first)
 
@@ -39,20 +39,21 @@ Composer spawns Grok via subagent — starts slow + medium; no manual model pick
 
 ## Ready for next work
 
-**`GATE_ACCOUNT` CLEAR** (F3 #257). **`GATE_HABIT` / `GATE_S_CORE` / `GATE_S16` CLEAR.**  
-**Agent A:** F4 weekly letter. **Agent B:** U2 story strip (F3 UI unblocked).
+**`GATE_ACCOUNT` CLEAR** (F3 #257). F4 #259 + U2 #258 on main.  
+**Agent A:** F5 streaming chat. **Agent B:** F1/F2 UI → U3 (F3 UI unblocked).
 
 | PR | Role | State |
 |----|------|-------|
+| **#259** | §17.F4 weekly letter | ✅ **merged** |
+| **#258** | §17.U2 story strip | ✅ **merged** |
 | **#257** | §17.F3 paper portfolio | ✅ **merged** |
 | **#256** | §17.F2 alert delivery | ✅ **merged** |
 | **#255** | §17.U1 single-job home | ✅ **merged** |
 | **#254** | §17.F1 watchlist | ✅ **merged** |
 | **#253** | Grok lock HARD RULE | ✅ **merged** |
-| **#252** | §17.S3 whale badge | ✅ **merged** |
 | **#244–#246** | §16 | ✅ **merged** |
 
-**Health:** `GET /health` · `GET /api/portfolio/status` · `GET /api/letter/weekly` · `GET /api/watchlist` → 200 OK  
+**Health:** `GET /health` · `GET /api/letter/weekly` · `POST /api/simivision/chat` → 200 OK  
 **Fly:** machine `shared-cpu-1x:1024MB`, checks passing.
 
 ## Gate Status
@@ -65,23 +66,23 @@ Composer spawns Grok via subagent — starts slow + medium; no manual model pick
 | **N/O** | ✅ **COMPLETE** — #227 (A) + #228 (B) |
 | **P** | ✅ **COMPLETE** — #232 + #237 |
 | **§16** | ✅ **`GATE_S16` CLEAR** — #244 · #245 · #246 |
-| **§17** | 🟡 **IN PROGRESS** — account gate clear; A→F4; B→U2 |
+| **§17** | 🟡 **IN PROGRESS** — A→F5; B post-U2 |
 
 ## §16 / §17 execution
 | Agent | Queue | Status |
 |-------|--------|--------|
-| **A** (`-843d`) | F3 ✅ · **F4 weekly letter** → F5 → F6 | building |
-| **B** (`-e78a`) | U1 ✅ · **U2 story strip** → F1/F2 UI → U3 → F3 UI | next |
+| **A** (`-843d`) | F4 ✅ · **F5 streaming chat** → F6 | building |
+| **B** (`-e78a`) | U2 ✅ · **F1/F2 UI** → U3 → F3 UI | next |
 | **Human** | F7 DNS | anytime |
 
-Specs: `s16-s17-automated-build-plan.md`. **GATE_ACCOUNT** = F3 on main ✅.
+Specs: `s16-s17-automated-build-plan.md`. All gates through ACCOUNT clear.
 
 ## Agent posture
 
 | Agent | Status | Notes |
 |-------|--------|-------|
-| **A** | **Building F4** | Weekly letter → F5 chat → F6 intel |
-| **B** | **Build U2** | Story strip; F3 UI unblocked |
+| **A** | **Building F5** | Streaming chat → F6 intel |
+| **B** | **Build F1/F2 UI** | After U2; F3 UI unblocked |
 | **Ditto** | **Gate/spot-check** | Not day-to-day QB |
 
 **Conflict surface:** `server.py` router includes + `tests/test_endpoint_contract.py`
