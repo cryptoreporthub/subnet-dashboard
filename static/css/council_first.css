@@ -690,6 +690,95 @@ button.home-cta {
   color: var(--stage-muted);
 }
 
+/* ---------- O3 subnet report ---------- */
+.scanner-row {
+  cursor: pointer;
+}
+.scanner-row:hover td {
+  background: rgba(0, 255, 65, 0.04);
+}
+.scanner-report-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(0, 255, 65, 0.35);
+}
+.scanner-report-link:hover {
+  color: var(--stage-accent, #00ff41);
+}
+.subnet-report {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(0, 255, 65, 0.12);
+}
+.subnet-report__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.subnet-report__title {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--stage-muted);
+}
+.subnet-report__close {
+  font-size: 11px;
+}
+.subnet-report__meta {
+  margin: 0 0 12px;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: rgba(138, 154, 142, 0.9);
+}
+.subnet-report__body {
+  max-height: 420px;
+  overflow: auto;
+}
+.subnet-report__empty {
+  margin: 0;
+  color: var(--stage-muted);
+  font-size: 0.92rem;
+}
+.subnet-report__digest {
+  display: grid;
+  gap: 10px;
+}
+.subnet-report__h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--stage-fg, #e8f5e9);
+}
+.subnet-report__h3 {
+  margin: 8px 0 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--stage-muted);
+}
+.subnet-report__p,
+.subnet-report__note {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: rgba(232, 245, 233, 0.92);
+}
+.subnet-report__note {
+  font-style: italic;
+  color: var(--stage-muted);
+}
+.subnet-report__list {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
 /* ---------- Pro drawer (council bench demoted) ---------- */
 .pro-drawer {
   border-top: 1px solid rgba(0, 255, 65, 0.12);

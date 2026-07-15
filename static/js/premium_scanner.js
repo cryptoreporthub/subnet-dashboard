@@ -72,9 +72,9 @@
       var id = item.netuid != null ? item.netuid : item.id;
       var status = String(item.status || 'unknown').toLowerCase();
       var badge = status === 'active' ? 'badge-buy' : (status === 'deprecated' ? 'badge-sell' : 'badge-watch');
-      return '<tr>' +
+      return '<tr class="scanner-row" data-netuid="' + esc(id) + '" tabindex="0" role="button" aria-label="Open report for ' + esc(item.name || 'SN' + id) + '">' +
         '<td>#' + esc(id) + '</td>' +
-        '<td class="text-primary">' + esc(item.name || 'Unnamed') + '</td>' +
+        '<td class="text-primary"><a href="#subnet-report-panel" class="scanner-report-link" data-netuid="' + esc(id) + '">' + esc(item.name || 'Unnamed') + '</a></td>' +
         '<td><span class="badge ' + badge + '">' + esc(status) + '</span></td>' +
         '<td>' + fmt(item.emission, 3) + '</td>' +
         '<td>' + fmt(apyOf(item), 2) + '%</td>' +
@@ -111,6 +111,28 @@
   }
   if (searchEl) searchEl.addEventListener('input', function () { state.search = searchEl.value; render(); });
   if (sortEl) sortEl.addEventListener('change', function () { state.sort = sortEl.value; render(); });
+
+  function openReport(netuid) {
+    document.dispatchEvent(new CustomEvent('subnet:report', { detail: { netuid: netuid } }));
+  }
+
+  tableEl.addEventListener('click', function (e) {
+    var link = e.target.closest('.scanner-report-link');
+    if (link) {
+      e.preventDefault();
+      openReport(link.getAttribute('data-netuid'));
+      return;
+    }
+    var row = e.target.closest('tr.scanner-row');
+    if (row) openReport(row.getAttribute('data-netuid'));
+  });
+  tableEl.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var row = e.target.closest('tr.scanner-row');
+    if (!row) return;
+    e.preventDefault();
+    openReport(row.getAttribute('data-netuid'));
+  });
 
   load();
 })();
