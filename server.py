@@ -392,7 +392,11 @@ def _normalize_registry_subnet(sn: Dict[str, Any]) -> Dict[str, Any]:
 
 def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     """U1 hero keys for GET / (fast shell + hydrate)."""
-    from internal.analytics.root_context import _safe_conviction_band, _safe_enrichment_badge
+    from internal.analytics.root_context import (
+        _safe_conviction_band,
+        _safe_enrichment_badge,
+        _safe_story_strip,
+    )
 
     pick_payload: Optional[Dict[str, Any]] = None
     pick_netuid: Optional[int] = None
@@ -407,6 +411,7 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         "daily_pick_stage": pick_payload if isinstance(pick_payload, dict) else {},
         "conviction_band": _safe_conviction_band(pick_payload),
         "enrichment_badge": _safe_enrichment_badge(pick_netuid),
+        "story_strip": _safe_story_strip(),
     }
 
 

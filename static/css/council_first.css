@@ -289,6 +289,100 @@
   outline-offset: 2px;
 }
 
+/* ---------- U2 story strip ---------- */
+.story-strip {
+  padding-top: 8px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid rgba(0, 255, 65, 0.12);
+}
+
+.story-strip__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.story-strip__title {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--stage-muted);
+  margin: 0;
+}
+
+.story-strip__meta {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: rgba(138, 154, 142, 0.9);
+}
+
+.story-strip__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.story-strip__item {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  display: grid;
+  gap: 4px;
+  min-width: 148px;
+  max-width: 220px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(138, 154, 142, 0.28);
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.story-strip__item--correct {
+  border-color: rgba(0, 255, 65, 0.35);
+}
+
+.story-strip__item--wrong {
+  border-color: rgba(255, 107, 107, 0.35);
+}
+
+.story-strip__verdict {
+  font-family: var(--font-mono, monospace);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.story-strip__item--correct .story-strip__verdict { color: #00ff41; }
+.story-strip__item--wrong .story-strip__verdict { color: #ff6b6b; }
+
+.story-strip__name {
+  font-size: 0.95rem;
+  color: var(--stage-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.story-strip__move {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--stage-muted);
+}
+
+.story-strip__empty {
+  margin: 0;
+  color: var(--stage-muted);
+  font-size: 0.92rem;
+  max-width: 40em;
+}
+
 /* ---------- Pro drawer (council bench demoted) ---------- */
 .pro-drawer {
   border-top: 1px solid rgba(0, 255, 65, 0.12);

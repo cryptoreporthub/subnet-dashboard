@@ -191,6 +191,21 @@ def _safe_enrichment_badge(pick_netuid: Optional[int] = None) -> Dict[str, Any]:
         return empty_whale_flow_badge("error")
 
 
+def _safe_story_strip(limit: int = 8) -> Dict[str, Any]:
+    try:
+        from internal.analytics.story_strip import build_story_strip
+
+        return build_story_strip(limit=limit)
+    except Exception as exc:
+        logger.warning("Could not build story strip for root: %s", exc)
+        return {
+            "data_available": False,
+            "reason": "error",
+            "items": [],
+            "stats": {"correct": 0, "wrong": 0},
+        }
+
+
 def _safe_conviction_band(daily_pick_payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     try:
         from internal.council.conviction_bands import band_for_pick
@@ -228,6 +243,7 @@ def build_agent_b_root_context(
         "enrichment_badge": _safe_enrichment_badge(pick_netuid),
         "conviction_band": _safe_conviction_band(daily_pick_payload),
         "daily_pick_stage": daily_pick_payload if isinstance(daily_pick_payload, dict) else {},
+        "story_strip": _safe_story_strip(),
         "oracle_snapshot": _safe_oracle_snapshot(subnets, data_source),
         "price_tracking_baselines": _safe_price_baselines(),
     }
