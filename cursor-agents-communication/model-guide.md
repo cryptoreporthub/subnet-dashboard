@@ -5,19 +5,19 @@
 
 ## Models
 
-| Model | Cursor slug | Best for |
-|-------|-------------|----------|
+| Model | Cursor slug / setting | Best for |
+|-------|----------------------|----------|
 | **Composer** | default Cloud Agent | Scoped implementation, multi-file edits, PR workflow, templates/routes/CI |
-| **Grok fast-xhigh** | `grok-4.5-fast-xhigh` | **Default for every Grok call** — design, audits, sign-offs, Step 0; token-efficient |
-| **Grok xhigh** | `grok-4.5-xhigh` | Escalate-only after fast FAIL/CONDITIONAL — high token cost |
+| **Grok slow + medium** | Grok 4.5 (slow, not fast) · thinking **medium** | **Default for every Grok call** — design, audits, Step 0, sign-offs |
+| **Grok slow + high** | Grok 4.5 (slow) · thinking **high** (`cursor-grok-4.5-high`) | Escalate when medium FAIL/CONDITIONAL or output not satisfactory |
 
-**Default:** Composer for both agents unless a trigger in §4 or §5 applies.
+**Default build:** Composer for both agents unless a trigger in §4 or §5 applies.
 
-**Grok token-save policy (mandatory):**
-1. Start **every** Grok call on **`grok-4.5-fast-xhigh`** (including Step 0, N3, N1, O sign-offs).
-2. Escalate to `grok-4.5-xhigh` **only** when that fast pass returns FAIL/CONDITIONAL with unresolved behavioral/hot-path risk.
-3. Prefer a scoped read-only Grok **Task subagent** over switching the whole Cloud Agent run to Grok.
-4. Do **not** open full xhigh “just in case,” and never for routine L/M/O polish, board/docs, or contract-test adds.
+**Grok thinking policy (mandatory) — user 2026-07-15:**
+1. Default = **slow Grok + medium thinking** (not fast, not high, not xhigh).
+2. Escalate to **high** only when medium fails or the result is not satisfactory.
+3. Do **not** default to `xhigh` or `fast-xhigh`. Use the fast variant only for light chores when able.
+4. Prefer a scoped read-only Grok **Task subagent** over switching the whole Cloud Agent run to Grok.
 
 **Grok as reviewer:** Read-only pass — no edits unless findings require a follow-up Composer task. Save review conclusions to Ditto (`source: cursor-agents-communication`) or a PR comment.
 
@@ -25,7 +25,7 @@
 
 ## 1. Rule of thumb
 
-| Stay on **Composer** | Switch to **Grok** (always start **fast-xhigh**) |
+| Stay on **Composer** | Switch to **Grok** (slow + **medium** first) |
 |----------------------|-------------------|
 | Spec is written; paths are owned | Ambiguous design or competing branches |
 | Templates, REST routes, contract tests | Temporal/logic bugs (grading, replay, live streams) |
@@ -33,7 +33,7 @@
 | Board/docs/merge chores | Pre-merge review of >500-line **behavioral** change |
 | | Second-opinion audit on merged work (§3) |
 
-**Workflow:** Grok-fast-xhigh audit → Composer implements → Grok-fast-xhigh sign-off. Escalate to full xhigh only after FAIL/CONDITIONAL.
+**Workflow:** Grok slow-medium audit → Composer implements → Grok slow-medium sign-off. Escalate to **high** only if medium fails or is unsatisfactory.
 
 ---
 
@@ -56,8 +56,8 @@
 
 | Phase | Owner | Build with | Grok kickoff? |
 |-------|-------|------------|---------------|
-| **N** Accuracy & Calibration | A (N2/N3) + B (N1/N4) | Composer 2.5; Grok-**fast** design first | ✅ Step 0 + per-slice (escalate xhigh only if needed) |
-| **O** Alerts, Reports, Launch | A (O1/O4/O5) + B (O2/O3) | Composer 2.5; Grok-**fast** for O1/N4-related | ✅ Step 0; O2 fast sign-off |
+| **N** Accuracy & Calibration | A (N2/N3) + B (N1/N4) | Composer 2.5; Grok slow-**medium** design first | ✅ Step 0 + per-slice (escalate **high** only if needed) |
+| **O** Alerts, Reports, Launch | A (O1/O4/O5) + B (O2/O3) | Composer 2.5; Grok slow-**medium** for O1/N4-related | ✅ Step 0; O2 medium sign-off |
 
 Full slice tables: §4 below and `cursor-agents-communication/gameplan-N-O.md`.
 
@@ -169,20 +169,20 @@ Run these as **read-only Grok-fast-xhigh or Grok-xhigh** passes when touching re
 
 | Step | Owner | Model |
 |------|-------|-------|
-| Step 0 joint kickoff | A + B | **Grok-fast** (escalate xhigh only if FAIL/CONDITIONAL) |
+| Step 0 joint kickoff | A + B | **Grok slow-medium** (escalate **high** only if FAIL/unsatisfactory) |
 | N2 scenario-memory outcome wiring | A | Composer 2.5 |
-| N3 retrain → cert → fire + scheduler | A | **Grok-fast** → Composer 2.5 (escalate xhigh only if needed) |
-| N1 oracle/grader tuning | B | **Grok-fast** → Composer 2.5 (escalate xhigh only if needed) |
-| N4 backtest harness + analytics | B | Grok-fast design → Composer 2.5 |
+| N3 retrain → cert → fire + scheduler | A | **Grok slow-medium** → Composer 2.5 (escalate high only if needed) |
+| N1 oracle/grader tuning | B | **Grok slow-medium** → Composer 2.5 (escalate high only if needed) |
+| N4 backtest harness + analytics | B | Grok slow-medium design → Composer 2.5 |
 
 ### Phase O (Agent A + B) — approved 2026-07-15
 
 | Step | Owner | Model |
 |------|-------|-------|
-| O1 conviction-threshold alerts (backend) | A | Grok-fast design → Composer 2.5 |
+| O1 conviction-threshold alerts (backend) | A | Grok slow-medium design → Composer 2.5 |
 | O4 custom domain + CDN | A | Composer 2.5 |
 | O5 docs/handoff | A | Composer 2.5 |
-| O2 backtest history UI | B | Composer 2.5 + Grok-fast sign-off |
+| O2 backtest history UI | B | Composer 2.5 + Grok slow-medium sign-off |
 | O3 exportable per-subnet report | B | Composer 2.5 |
 
 ### Agent A optional follow-ups
@@ -199,12 +199,12 @@ Run these as **read-only Grok-fast-xhigh or Grok-xhigh** passes when touching re
 Switch the **active** Cloud Agent (or spawn a Grok subagent) when:
 
 1. **“Why?” debugging** — accuracy, P&L, WebSocket, or alert logic still wrong after a Composer fix.
-2. **Competing branches** — multiple PRs for same phase (e.g. #113 vs #115, old H-full branches).
+2. **Competing branches** — multiple PRs for same phase.
 3. **New subsystem** — no pattern in repo for WebSocket, ingestion, or retrain.
 4. **Pre-merge behavioral review** — >500 lines touching resolver, signals, or grading.
 5. **Optimizer pass** — merged phase in §3; user asks “is this still correct?”
 
-**Always start that Grok pass on `grok-4.5-fast-xhigh`.** Escalate to full xhigh only after FAIL/CONDITIONAL.
+**Always start that Grok pass slow + medium.** Escalate to **high** only if medium fails or is unsatisfactory.
 
 **Do not switch** for: CSS polish, `test_endpoint_contract.py` route adds, board/docs, merge/rebase, Ditto STATUS posts.
 
@@ -213,20 +213,18 @@ Switch the **active** Cloud Agent (or spawn a Grok subagent) when:
 ## 6. How to invoke Grok in Cursor
 
 ### Cloud Agent model picker
-Prefer **`grok-4.5-fast-xhigh`** when manually starting a Grok run (token-efficient). Use `grok-4.5-xhigh` only after a fast pass returned FAIL/CONDITIONAL with unresolved risk.
+Default: **Grok 4.5 slow + medium thinking**. Escalate to **high** only after medium FAIL/CONDITIONAL or unsatisfactory output. Do not open xhigh or fast-xhigh by default; fast only for light chores when able.
 
 ### Agent auto-invokes Grok (no manual model switch required)
 
 When `model-guide.md` marks a step **Grok design first** or **Grok review before merge**, the active Composer agent spawns a **read-only Grok subagent** via the Task tool:
 
-| Task | Model | Why |
-|------|-------|-----|
-| Audits, sign-offs, Step 0, N3/N1 design, O2 review | **`grok-4.5-fast-xhigh`** | Token-efficient; **mandatory default** |
-| Escalate after FAIL/CONDITIONAL (N3 hot-path, N1 grader) | `grok-4.5-xhigh` | Only if fast pass insufficient |
+| Task | Setting | Why |
+|------|---------|-----|
+| Audits, sign-offs, Step 0, N3/N1 design, O2 review | **slow + medium** | Default |
+| Escalate after FAIL / unsatisfactory | **slow + high** | Only if medium insufficient |
 
-User does not need to change the Cloud Agent model picker unless they want the entire run on Grok.
-
-**Workflow:** Grok-fast subagent audit → Composer implements → Grok-fast sign-off before merge.
+**Workflow:** Grok slow-medium subagent → Composer implements → Grok slow-medium sign-off. Escalate high only if needed.
 
 ### Review prompt template (paste into Grok run)
 ```text
@@ -241,16 +239,16 @@ Output: PASS / CONDITIONAL / FAIL with file:line findings.
 
 ## 7. Quick reference — Agent A vs B
 
-| Agent | Composer default | Grok for build (always fast first) | Grok for review (past) |
+| Agent | Composer default | Grok for build (slow-medium first) | Grok for review (past) |
 |-------|------------------|------------------------------------|------------------------|
-| **A** | N2, O4, O5, wiring | Step 0, N3, O1 (fast; escalate rare) | **J**, H-full, K policy |
-| **B** | O2, O3, server glue | Step 0, N1, N4 (fast; escalate rare) | H-thin, L schema |
+| **A** | N2, O4, O5, wiring | Step 0, N3, O1 (medium; high rare) | **J**, H-full, K policy |
+| **B** | O2, O3, server glue | Step 0, N1, N4 (medium; high rare) | H-thin, L schema |
 
 ---
 
 ## References
 - `cursor-agents-communication/board.md` — current phase & ownership
-- `cursor-agents-communication/gameplan-N-O.md` — approved N/O plan + token-save policy
+- `cursor-agents-communication/gameplan-N-O.md` — approved N/O plan + Grok thinking policy
 - `master-plan-merged.md` — phase order
 - `docs/master-plan-merged.md` — J/R1–R6, contracts, M/N/O detail
 - `docs/sciweave-answers-phase-j.md` — Phase J grading constants (Grok review binding)

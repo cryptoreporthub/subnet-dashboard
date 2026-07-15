@@ -14,7 +14,7 @@
 ## N/O (approved 2026-07-15)
 - **APPROVED** + **Step 0 LOCKED** — Agent A (`-843d`) + Agent B (`-e78a`).
 - Specs: `gameplan-N-O.md` · `phase-n-o-step0-spec.md`
-- Models: Composer 2.5 default; **Grok token-save** (`grok-4.5-fast-xhigh` first).
+- Models: Composer 2.5 default; **Grok slow + medium** (escalate to **high** only if medium fails / unsatisfactory).
 - Old Phase O (`phase-o-design.md` / `signal_hub`) = **SUPERSEDED / COMPLETE — do not rebuild**.
 - **A start:** N2 (or N3/O1 in parallel). **B start:** N4 first.
 
@@ -27,15 +27,15 @@
 5. **Phase 3 Grok spec** — `cursor-agents-communication/phase-3-grok-design.md`
 6. **Phase 3 backend spec** — `cursor-agents-communication/phase-3-grok-backend-design.md`
 
-## Grok switches (required)
+## Grok switches (slow-medium default)
 
 | Step | Model | When |
 |------|-------|------|
-| Design / audit | **Grok xhigh** (`grok-4.5-xhigh`) | Before Composer builds Phase 3+ visual/UX |
+| Design / audit | **Grok slow + medium** | Before Composer builds Phase 3+ visual/UX — escalate to **high** only if FAIL/unsatisfactory |
 | Implementation | **Composer** | After Grok spec locked |
-| Pre-merge sign-off | **Grok xhigh** | Before merge on visual/behavioral phases |
+| Pre-merge sign-off | **Grok slow + medium** | Before merge on visual/behavioral phases — escalate to **high** only if FAIL/unsatisfactory |
 
-Composer spawns Grok via subagent — no manual model picker needed. Batch tasks; scope files only.
+Composer spawns Grok via subagent — starts slow + medium; no manual model picker needed. Batch tasks; scope files only.
 
 ## Phase A — EXTREME audit (complete)
 
@@ -110,7 +110,7 @@ Recent merges on `main` @ `778ad13`:
 | **A** (`-843d`) | N2, N3, O1, O4, O5 | awaiting agent start |
 | **B** (`-e78a`) | N1, N4, O2, O3 | awaiting agent start |
 
-Full spec: `cursor-agents-communication/gameplan-N-O.md`. Models: Composer 2.5 default; **Grok token-save** (`grok-4.5-fast-xhigh` first; escalate `xhigh` only after FAIL/CONDITIONAL).
+Specs: `gameplan-N-O.md` + `phase-n-o-step0-spec.md`. Models: Composer 2.5; **Grok slow + medium** (escalate **high** only if FAIL/unsatisfactory).
 
 ## Agent posture
 
@@ -124,7 +124,7 @@ Full spec: `cursor-agents-communication/gameplan-N-O.md`. Models: Composer 2.5 d
 ## Rules
 - Board + master plan override memory.
 - Honest-empty > fake data.
-- **Grok xhigh** for Phase 3+ design and pre-merge sign-off per table above.
+- **Grok slow + medium default** — escalate to **high** only if medium fails or is unsatisfactory (Phase 3+ design, pre-merge sign-off, Step 0).
 
 ## References
 - `cursor-agents-communication/phase-3-grok-design.md`

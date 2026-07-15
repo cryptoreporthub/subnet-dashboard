@@ -1,17 +1,17 @@
 # Phase N/O — Step 0 Architecture Spec
 
-**Status:** LOCKED 2026-07-15 · Agent `-6f98` (joint kickoff, Grok-fast / token-save)  
+**Status:** LOCKED 2026-07-15 · Agent `-6f98` (joint kickoff, Grok slow-medium)  
 **main at kickoff:** `778ad13` (#221 merged)  
 **Canonical plan:** `cursor-agents-communication/gameplan-N-O.md`  
-**Models:** Composer 2.5 build · every Grok call = `grok-4.5-fast-xhigh` first · escalate `xhigh` only after FAIL/CONDITIONAL
+**Models:** Composer 2.5 build · every Grok call = **slow + medium** · escalate to **high** only if medium fails or is unsatisfactory
 
-Composer 2.5 may begin slices **only after** this file is on `main`. Escalate to full xhigh was **not** required — all pre-flight items resolved below.
+Composer 2.5 may begin slices **only after** this file is on `main`. Escalate to **high** was **not** required — all pre-flight items resolved at medium.
 
 ---
 
 ## 0. Verdict
 
-**PASS — architecture locked.** No unresolved module-boundary or hot-path ambiguity requiring `grok-4.5-xhigh`.
+**PASS — architecture locked.** No unresolved module-boundary or hot-path ambiguity requiring escalate to **high**.
 
 ---
 
@@ -21,7 +21,7 @@ Composer 2.5 may begin slices **only after** this file is on `main`. Escalate to
 
 | Role | Does |
 |------|------|
-| **B** | Designs N1 (Grok-fast). Implements **only** `internal/oracle/*` + `internal/judges/oracle_judge.py` (oracle scoring inputs). Writes N1 design note with proposed grader/resolver diffs. |
+| **B** | Designs N1 (Grok slow-medium). Implements **only** `internal/oracle/*` + `internal/judges/oracle_judge.py` (oracle scoring inputs). Writes N1 design note with proposed grader/resolver diffs. |
 | **A** | Owns all `internal/council/*` edits. Implements B’s proposed grader/resolver changes from the design note. |
 
 **Allowlist (B may propose; A must land):**
@@ -114,7 +114,7 @@ Every new route → `tests/test_endpoint_contract.py` CONTRACT.
 
 1. **B: N4** backtest harness (unblocks N1 AC + O2)
 2. **A: N2** scenario outcome backfill/wiring (independent)
-3. **A: N3** calibration scheduler hook (independent; Grok-fast safety before merge)
+3. **A: N3** calibration scheduler hook (independent; Grok slow-medium safety before merge)
 4. **B: N1** oracle tuning (after N4)
 5. **A: O1** conviction alerts (independent of B after Step 0 route lock)
 6. **B: O2** backtest UI (after N4)
@@ -133,7 +133,7 @@ Parallel OK: A(N2∥N3∥O1) while B(N4). Serialize when both touch CONTRACT/`se
 4. SELL ALERT > HOT when both active  
 5. No `data/*.json` churn committed  
 6. Single foundation (`server.py` only)  
-7. Grok token-save: fast-xhigh first always  
+7. Grok: slow + medium default; escalate to high only if medium fails / unsatisfactory  
 
 ---
 
@@ -155,7 +155,7 @@ Parallel OK: A(N2∥N3∥O1) while B(N4). Serialize when both touch CONTRACT/`se
 
 | Item | Result |
 |------|--------|
-| Step 0 model | `grok-4.5-fast-xhigh` (no escalate) |
+| Step 0 model | Grok slow + medium (no escalate to high) |
 | Architecture | LOCKED |
 | Composer build | **UNBLOCKED** after this file merges |
-| Escalation to xhigh | Not required |
+| Escalation to high | Not required |
