@@ -1,6 +1,6 @@
 # §18 — Production depth (post-§17)
 
-**Status:** APPROVED 2026-07-15 · human QB  
+**Status:** COMPLETE 2026-07-16 · C1 listener verified live on Fly  
 **main baseline:** `8075bda` (#274 U4 merged · §17 complete)  
 **Models:** Composer 2.5-fast build · Grok subagent slow+low/med only if DESIGN
 
@@ -14,7 +14,7 @@
 | **A1** | Alert delivery docs + Fly wiring | `CONVICTION_ALERT_DELIVERY` telegram/webhook; `DEPLOY.md` secrets section | **Yes** — Fly secrets |
 | **A2** | Alert test path | Dry-run + status docs; `verify_prod.sh` conviction-alerts line | No |
 | **B1** | O3 report UI | Render `GET /api/report/{netuid}` — template/static + link from subnet row | No |
-| **C1** | Message-intel listener | `DEPLOY.md` + `bootstrap_telegram_session.py` + telethon | **Yes** — phone + session bootstrap + Fly secrets |
+| **C1** | Message-intel listener | ✅ live on Fly (human session bootstrap done) |
 
 **Skip unless asked:** F7 DNS · B12 · S5 Discord · weekly letter email
 

@@ -1,11 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-15T20:35:00Z  
-**main:** `4dab897` (#278 STATUS)
+**Updated:** 2026-07-16T00:20:00Z  
+**main:** `6b37876` (#279 C1) · prod listener **live**
 
 ## One-line
 
-**§18 C1 docs + telethon + bootstrap script in PR. Human: session bootstrap + `flyctl secrets set` (API id/hash received).**
+**§18 COMPLETE (H1–C1). Prod: message-intel listener running; store honest-empty until group traffic. Optional: A1 conviction alert delivery secrets.**
 
 ## §17 (done)
 
@@ -17,8 +17,10 @@ See **`s18-automated-build-plan.md`**.
 
 | Slice | State |
 |-------|--------|
-| **H1–B1** | ✅ #265–#277, #278 |
-| **A1** | ✅ docs — **human: Fly secrets** for conviction alert delivery |
-| **C1** | 🟡 PR — creds received; **human: phone + session bootstrap + Fly secrets** |
+| **H1–B1** | ✅ #265–#278 |
+| **C1** | ✅ **live on Fly** — `listener.reason=running`, `session=true` (#279, human bootstrap done) |
+| **A1** | ✅ docs — optional human: `CONVICTION_ALERT_DELIVERY` + bot/webhook secrets |
+
+**Prod check:** `GET /api/message-intel/status` → `live: true` · `verify_prod.sh` message-intel line green.
 
 **Billing watch:** On-Demand **$** beyond Pro+ → tell human.
