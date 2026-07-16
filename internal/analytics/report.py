@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from internal.analytics.backtest import evaluate_judges, run_backtest
+from internal.analytics.market_drivers import build_subnet_driver_card
 from internal.judges.subnet_judges import score_subnet
 
 
@@ -67,23 +68,46 @@ def build_subnet_report(netuid: int) -> Dict[str, Any]:
         pass
 
     history = _subnet_history(netuid)
+    drivers = build_subnet_driver_card(subnet)
+    decomp = drivers.get("decomposition") or {}
     price = subnet.get("price")
     chg = subnet.get("price_change_24h")
-    apy = subnet.get("apy")
-    if apy is not None and float(apy) <= 1:
-        apy = float(apy) * 100
+    apy = decomp.get("staking_yield_apy")
+    if apy is None:
+        raw_apy = subnet.get("apy")
+        if raw_apy is not None and float(raw_apy) <= 1:
+            apy = float(raw_apy) * 100
+        elif raw_apy is not None:
+            apy = float(raw_apy)
 
     lines = [
         f"# {name} (SN{netuid})",
         "",
-        "## Registry snapshot",
-        f"- Data source: {source}",
-        f"- Price: {price if price is not None else '—'}",
-        f"- 24h change: {chg if chg is not None else '—'}%",
-        f"- APY: {round(float(apy), 2) if apy is not None else '—'}%",
-        "",
-        "## Judge scores",
+        "## Market drivers",
+        f"- {drivers.get('headline', '—')}",
     ]
+    for w in drivers.get("why") or []:
+        lines.append(f"- {w}")
+    for warn in decomp.get("warnings") or []:
+        lines.append(f"- ⚠ {warn}")
+    lines.extend(
+        [
+            "",
+            "## Return decomposition (price ≠ staking yield)",
+            f"- Token price 7d: {decomp.get('price_change_7d', '—')}%",
+            f"- Staking yield APY: {round(float(apy), 2) if apy is not None else '—'}%",
+            f"- Wallet impact est. (7d): {decomp.get('wallet_impact_7d_estimate_pct', '—')}%",
+            f"- Dominant driver: {decomp.get('dominant_driver', '—')}",
+            "",
+            "## Registry snapshot",
+            f"- Data source: {source}",
+            f"- Price: {price if price is not None else '—'}",
+            f"- 24h change: {chg if chg is not None else '—'}%",
+            f"- APY (staking): {round(float(apy), 2) if apy is not None else '—'}%",
+            "",
+            "## Judge scores",
+        ]
+    )
     for lane in ("oracle", "echo", "pulse", "consensus"):
         block = judges.get(lane) if isinstance(judges, dict) else None
         if isinstance(block, dict):
@@ -118,6 +142,7 @@ def build_subnet_report(netuid: int) -> Dict[str, Any]:
             "registry": subnet,
             "judges": judges,
             "indicators": indicators or None,
+            "market_drivers": drivers,
             "backtest_history": history,
         },
     }

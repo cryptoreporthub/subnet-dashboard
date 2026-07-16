@@ -39,12 +39,14 @@ def _dominant_expert(expert_contributions: Optional[Dict[str, Any]]) -> str:
 
 def _subnet_snapshot(subnet: Dict[str, Any]) -> Dict[str, Any]:
     """Persist market context at creation for N4 backtest replay (N1 follow-up)."""
-    return {
+    snap = {
         k: subnet.get(k)
         for k in (
             "netuid",
             "name",
             "price_change_24h",
+            "price_change_7d",
+            "price_change_30d",
             "price",
             "apy",
             "emission",
@@ -53,6 +55,18 @@ def _subnet_snapshot(subnet: Dict[str, Any]) -> Dict[str, Any]:
         )
         if subnet.get(k) is not None
     }
+    try:
+        from internal.analytics.market_drivers import market_driver_tags
+        from internal.subnets.apy import subnet_apy_percent
+
+        tags = market_driver_tags(subnet)
+        snap.update(tags)
+        apy = subnet_apy_percent(subnet)
+        if apy is not None:
+            snap["staking_yield_apy"] = apy
+    except Exception:
+        pass
+    return snap
 
 
 def _signal_impact_from_pick(pick: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -325,6 +339,12 @@ def _link_scenario_memory(
 
         indicators = _compute_technical_indicators(subnet)
         tags = _scenario_tags(subnet, indicators, market_context or {})
+        try:
+            from internal.analytics.market_drivers import market_driver_tags
+
+            tags = {**tags, **market_driver_tags(subnet)}
+        except Exception:
+            pass
         created = scenario_memory.add_scenario(
             name=str(prediction.get("name") or subnet.get("name") or f"SN{prediction.get('netuid')}"),
             features={
