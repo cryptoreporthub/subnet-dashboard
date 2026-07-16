@@ -8,8 +8,8 @@
 
 | # | Slice | Goal | Stop human? |
 |---|-------|------|-------------|
-| **M1** | Message-intel feed UI | Render `GET /api/message-intel` in market drawer; honest-empty when listener live but quiet | No |
-| **M2** | Social panel wire | Prefer live intel rows in social cards when store has data | No |
+| **M1** | Message-intel feed UI | ✅ #282 | — |
+| **M2** | Social panel wire | `/api/message-intel/social` + client hydrate | No |
 | **F7** | Custom domain DNS | `dashboard.cryptoreporthub.com` per `DEPLOY.md` / `f7-custom-domain.sh` | **Yes** — registrar |
 | **B12** | U5 launch polish | Brand/meta polish on custom domain | **Yes** — after F7 |
 | **A1b** | Conviction delivery | `CONVICTION_ALERT_DELIVERY` + bot secrets (optional) | **Yes** — BotFather |

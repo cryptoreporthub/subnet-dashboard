@@ -3,6 +3,7 @@
   <div class="section-label">Social</div>
   <h2 class="section-title" id="social-title">Social Sentiment</h2>
   <p class="section-sub">Per-subnet mention volume and sentiment from message intel or registry fields.</p>
+  <div id="social-sentiment-root">
   {% set social_rows = social_sentiment if social_sentiment is defined and social_sentiment is iterable and social_sentiment is not string and social_sentiment|length > 0 else [] %}
   {% set social_has = sn_list|selectattr('social_mentions', 'defined')|list %}
   {% if social_rows %}
@@ -40,4 +41,5 @@
   {% else %}
   <div class="card card-muted"><p class="empty">Social sentiment warming up — message intel and mention feeds populate in Phase M.</p></div>
   {% endif %}
+  </div>
 </section>

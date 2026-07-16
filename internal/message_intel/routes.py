@@ -123,3 +123,19 @@ async def api_message_intel_patterns(limit: int = Query(default=20, ge=1, le=100
 async def api_message_intel_summary():
     """Panel summary endpoint (also folded into /api/mindmap/state)."""
     return {"status": "success", "summary": summarize_message_intel()}
+
+
+@message_intel_router.get("/api/message-intel/social")
+async def api_message_intel_social(limit: int = Query(default=6, ge=1, le=24)):
+    """Per-subnet sentiment rollup from message_intel store (honest-empty)."""
+    from internal.message_intel.context import build_social_sentiment_rows
+
+    subnets: List[Dict[str, Any]] = []
+    try:
+        from server import _get_subnets_with_source
+
+        subnets, _ = _get_subnets_with_source()
+    except Exception:
+        pass
+    rows = build_social_sentiment_rows(subnets, limit=limit)
+    return {"status": "success", "rows": rows, "empty": len(rows) == 0}

@@ -1,24 +1,24 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-16T01:30:00Z  
-**main:** `d4cb7bc` (#281 §18 complete)
+**Updated:** 2026-07-16T01:40:00Z  
+**main:** `c0d4e3f` (#282 M1)
 
 ## One-line
 
-**§19 IN PROGRESS — M1 message-intel feed UI. §18 done; C1 listener live on Fly. Human: F7 DNS when ready.**
+**§19 M2 social wire in PR. M1 done. Human: F7 DNS when ready.**
 
 ## §18 (done)
 
-H1–C1 merged (#265–#281). Prod listener `live: true`.
+H1–C1 merged. C1 listener live on Fly.
 
 ## §19 queue
 
-See **`s19-automated-build-plan.md`**: M1→M2 → (F7 human) → B12.
+See **`s19-automated-build-plan.md`**.
 
 | Slice | State |
 |-------|--------|
-| **M1** | Message-intel feed UI — in PR |
+| **M1** | ✅ #282 message-intel feed UI |
+| **M2** | Social rollup API + client hydrate — in PR |
 | **F7** | Custom domain — **human DNS** |
-| **A1b** | Conviction delivery — optional bot secrets |
 
 **Billing watch:** On-Demand **$** beyond Pro+ → tell human.

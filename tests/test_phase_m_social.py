@@ -211,5 +211,14 @@ def test_homepage_social_sentiment_from_message_intel(client):
     assert "SN7" in html or "Subnet 7" in html or "bullish" in html.lower()
 
 
+def test_api_message_intel_social_honest_empty(client):
+    resp = client.get("/api/message-intel/social")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "success"
+    assert body["empty"] is True
+    assert body["rows"] == []
+
+
 def test_health_ok(client):
     assert client.get("/health").text.strip() == "OK"
