@@ -1,85 +1,80 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-16T02:45:00Z — **§20 complete (#286)**  
-**main:** `6421f25`
+**Last updated:** 2026-07-16T09:15:00Z — **§21 complete (#288–#296)**  
+**main:** `310ded6`
 
 ## Ditto boot (read first)
 
 **`cursor-agents-communication/STATUS.md`** — one-page truth card.  
-**Step 0 spec:** `cursor-agents-communication/phase-n-o-step0-spec.md` (binding).
+**Product plan:** **`cursor-agents-communication/s21-living-brain-plan.md`** — §21 Living Brain (done).
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
 
-## Execution mode (active 2026-07-15)
+## Execution mode (active 2026-07-16)
 
-**Human upgraded to Cursor Pro+.** Run **one primary Cloud Agent** + **Grok subagent** for DESIGN locks only.
+**One primary Cloud Agent** + **Grok subagent** for DESIGN locks only.
 
-| | Old (dual agent) | Now |
-|--|------------------|-----|
-| **Agents** | A (`-843d`) + B (`-e78a`) parallel | **One agent** owns B UI tail |
-| **A** | Learning/council F1–F6 | **Retired / idle** — do not spawn |
-| **B scope** | templates/static UI | **Same** — absorbed by single agent |
-| **Branches** | `cursor/<slug>-e78a` or `-6f98` | `cursor/<slug>-6f98` off latest `main` |
-| **Grok** | Whole-agent switch | **Subagent only** — slow + low/med |
+| | Notes |
+|--|--------|
+| **Branches** | `cursor/<slug>-9ce0` off latest `main` |
+| **Models** | **Composer 2.5-fast** build; Grok slow + low/med for DESIGN |
+| **Grok** | Subagent only — short LOCK; Composer writes |
 
-Specs: `token-budget-rules.md` · `model-guide.md` · `s20-automated-build-plan.md`.
-
-## N/O (approved 2026-07-15)
-- **APPROVED** + **Step 0 LOCKED**
-- Models: **Composer 2.5-fast** build; **Grok slow + low/medium** subagent (escalate **high** only if medium fails).
-- **§17–§20** ✅ **COMPLETE** (§20 T1→T4 agent polish).
+Specs: `token-budget-rules.md` · `model-guide.md` · `s21-living-brain-plan.md`.
 
 ## Read order (agents + Ditto)
+
 1. **STATUS card** — `cursor-agents-communication/STATUS.md`
-2. **This file** — `cursor-agents-communication/board.md`
-3. **Token budget** — `cursor-agents-communication/token-budget-rules.md`
+2. **§21 plan** — `cursor-agents-communication/s21-living-brain-plan.md`
+3. **This file** — `cursor-agents-communication/board.md`
 4. **Model guide** — `cursor-agents-communication/model-guide.md`
-5. **Build queue** — `cursor-agents-communication/s20-automated-build-plan.md`
-6. **Grok lock rule** — `cursor-agents-communication/grok-lock-composer-write-rule.md`
-
-## Ready for next work
-
-**§20 (agent-only):** T1→T4 ✅ complete. **Skip:** F7 · B12 · A1b · S5.
-
-| PR | Role | State |
-|----|------|-------|
-| **§20** | T1–T4 polish | ✅ **#286 merged** |
-| **#285** | §20 plan on main | ✅ **merged** |
-
-**Health:** `GET /health` · `GET /api/message-intel/status` → listener live
+5. **Master plan** — `master-plan-merged.md` (phase history)
+6. **Token budget** — `cursor-agents-communication/token-budget-rules.md`
 
 ## Gate Status
 
 | Phase | Status |
 |-------|--------|
-| **N/O · P · §16** | ✅ complete |
-| **§17 product** | ✅ **complete** (#267–#271, #274) |
-| **§19** | ✅ **complete** (#282–#284) |
-| **§20** | ✅ **complete** (T1→T4) |
+| **§17–§20** | ✅ complete |
+| **§21 Living Brain** | ✅ **complete** (#288–#296) |
+| **RF-3 gate** | ✅ code fix #296 — unlocks on resolver tick |
+
+## §21 merged (reference)
+
+#288 market drivers · #289 S0 · #290 L1–L3/L9 · #291 L6 · #292 L10 · #293 L4/L5/L7/L13 · #294 L8/L12/L14-lite · #295 L11 · #296 RF-3 fix
+
+## Ready for next work
+
+| Item | Owner | State |
+|------|-------|-------|
+| **L14 full** | Agent | Visual share card (OG-style) |
+| **Fly deploy** | Human/CI | Picks up #296; resolver tick unlocks trust UI |
+| **§22** | Human | Not drafted yet |
+
+**Skip:** F7 DNS · A1b bot · S5 Discord/X
 
 ## Agent posture
 
 | Role | Status | Notes |
 |------|--------|-------|
-| **Single agent** | **Idle** | §20 done; await next queue |
-| **A (`-843d`)** | **Retired** | Do not spawn — saves Pro+ pool |
-| **Grok** | **Subagent** | DESIGN / sign-off only; short LOCK |
-| **Human** | **QB** | merge when green · F7 DNS · watch billing |
+| **Single agent** | **Active** | Post-§21 polish / L14 full |
+| **A (`-843d`)** | **Retired** | Do not spawn |
+| **Grok** | **Subagent** | DESIGN only |
+| **Human** | **QB** | merge when green · F7 DNS · billing |
 
-**Conflict surface:** `server.py` + `tests/test_endpoint_contract.py` only if routes change (unlikely for pure UI slices).
+**Conflict surface:** `server.py` + `tests/test_endpoint_contract.py` when adding routes.
 
 ## Rules
-- Board + STATUS override memory.
-- Honest-empty > fake data.
-- **One Cloud Agent** — no parallel agents.
-- **Grok slow + low/medium** — escalate **high** only if medium fails. Prefer **Composer 2.5-fast** for mechanical builds.
-- **HARD RULE — Grok lock → Composer write:** short LOCK only; Composer writes + builds.
-- **Token budget:** `.cursorignore` + `token-budget-rules.md` — no `data/*.json` in context.
-- **On-demand billing:** tell human if usage dashboard shows **On-Demand $** beyond included Pro+ pool.
+
+- Board + STATUS override stale memory artifacts.
+- Honest-empty > fake data (RF-2).
+- Trust banner / brain letter accuracy from `trust_banner` only.
+- **One Cloud Agent** — no parallel agents unless human says otherwise.
+- **Token budget:** no `data/*.json` in context or commits.
 
 ## References
-- `cursor-agents-communication/s18-automated-build-plan.md`
-- `cursor-agents-communication/token-budget-rules.md`
-- `cursor-agents-communication/grok-lock-composer-write-rule.md`
-- `cursor-agents-communication/model-guide.md`
+
+- `cursor-agents-communication/s21-living-brain-plan.md`
+- `cursor-agents-communication/s20-automated-build-plan.md` (historical)
+- `master-plan-merged.md`
