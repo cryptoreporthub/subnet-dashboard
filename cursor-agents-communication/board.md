@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-15T20:10:00Z — **§18 H3–B1 merged**  
-**main:** `ce6d046`
+**Last updated:** 2026-07-16T00:20:00Z — **§18 complete**  
+**main:** `6b37876` (+ #280 mobile DEPLOY)
 
 ## Ditto boot (read first)
 
@@ -28,7 +28,7 @@ Specs: `token-budget-rules.md` · `model-guide.md` · `s18-automated-build-plan.
 ## N/O (approved 2026-07-15)
 - **APPROVED** + **Step 0 LOCKED**
 - Models: **Composer 2.5-fast** build; **Grok slow + low/medium** subagent (escalate **high** only if medium fails).
-- **§17** ✅ **COMPLETE** (#267–#271, #274). **§18** H3–B1 ✅ — C1 wait creds.
+- **§17** ✅ **COMPLETE** (#267–#271, #274). **§18** ✅ **COMPLETE** (C1 listener live on Fly).
 
 ## Read order (agents + Ditto)
 1. **STATUS card** — `cursor-agents-communication/STATUS.md`
@@ -40,15 +40,15 @@ Specs: `token-budget-rules.md` · `model-guide.md` · `s18-automated-build-plan.
 
 ## Ready for next work
 
-**§18 (one agent):** H3–B1 ✅ (#276–#277). **Human:** Fly alert secrets (A1) · F7 DNS · Telegram API creds for C1.
+**§18 done.** Optional: A1 conviction delivery secrets · F7 DNS · B12/S5 when asked.
 
 | PR | Role | State |
 |----|------|-------|
-| **#277** | §18.B1 O3 subnet report UI | ✅ **merged** |
-| **#276** | §18 H3+A1+A2 docs/verify | ✅ **merged** |
-| **#274** | §17.U4 home progressive enhance | ✅ **merged** |
+| **#280** | C1 mobile DEPLOY playbook | ✅ **merged** |
+| **#279** | C1 message-intel telethon + bootstrap | ✅ **merged** |
+| **#277** | B1 O3 subnet report UI | ✅ **merged** |
 
-**Health:** `GET /health` · `GET /api/message-intel/status` → 200 OK
+**Health:** `GET /health` · `GET /api/message-intel/status` → **listener live**
 
 ## Gate Status
 
@@ -56,7 +56,7 @@ Specs: `token-budget-rules.md` · `model-guide.md` · `s18-automated-build-plan.
 |-------|--------|
 | **N/O · P · §16** | ✅ complete |
 | **§17 product** | ✅ **complete** (#267–#271, #274) |
-| **§18** | 🟡 H3–B1 ✅ · **C1 wait creds** |
+| **§18** | ✅ **complete** (C1 live) |
 
 ## Agent posture
 
