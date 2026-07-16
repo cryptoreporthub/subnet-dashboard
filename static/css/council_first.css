@@ -1073,3 +1073,92 @@ button.home-cta {
 @media (prefers-reduced-motion: reduce) {
   .hydrate-skeleton__line { animation: none; opacity: 0.5; }
 }
+
+/* §21 — market drivers UI */
+.driver-card {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 255, 65, 0.2);
+  background: rgba(0, 20, 10, 0.55);
+}
+
+.driver-card__headline {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--stage-accent, #00ff41);
+  margin: 0 0 8px;
+}
+
+.driver-card__line,
+.driver-card__why {
+  margin: 4px 0;
+  font-size: 13px;
+  color: var(--stage-ink, #e8f0e9);
+}
+
+.driver-card__hint {
+  color: var(--stage-muted, #8a9a8e);
+  font-size: 11px;
+}
+
+.driver-card__warn {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #f59e0b;
+}
+
+.whats-working {
+  margin: 24px auto 32px;
+}
+
+.whats-working__title {
+  font-size: 1.1rem;
+  margin: 0 0 4px;
+}
+
+.whats-working__sub {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--stage-muted, #8a9a8e);
+}
+
+.whats-working__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.whats-working__chip {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 255, 65, 0.25);
+  background: rgba(0, 255, 65, 0.06);
+  color: var(--stage-ink, #e8f0e9);
+}
+
+.whats-working__empty {
+  font-size: 13px;
+  color: var(--stage-muted, #8a9a8e);
+  margin: 0;
+}
+
+.story-strip__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.story-strip__tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--stage-muted, #8a9a8e);
+  text-transform: lowercase;
+}

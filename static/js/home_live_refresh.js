@@ -58,6 +58,25 @@
     return null;
   }
 
+  function contextTags(pred) {
+    var tags = [];
+    var snap = pred.subnet_snapshot || {};
+    if (snap.yield_trap) tags.push("yield trap");
+    var driver = snap.return_driver || snap.dominant_driver;
+    if (driver) tags.push(String(driver).replace(/_/g, " "));
+    if (snap.price_change_7d != null && Math.abs(Number(snap.price_change_7d)) >= 1) {
+      var v = Number(snap.price_change_7d);
+      tags.push("price " + (v > 0 ? "up" : "down") + " " + Math.abs(v).toFixed(0) + "% 7d");
+    }
+    var signals = pred.active_signals;
+    if (signals && signals.length) tags.push(String(signals[0]).replace(/_/g, " "));
+    var out = [];
+    tags.forEach(function (t) {
+      if (t && out.indexOf(t) < 0) out.push(t);
+    });
+    return out.slice(0, 3);
+  }
+
   function buildStoryStrip(resolved, limit) {
     limit = limit || 8;
     var items = [];
@@ -77,6 +96,7 @@
         actual_pct: pred.actual_pct,
         outcome: outcome,
         statement: pred.statement,
+        tags: contextTags(pred),
       });
     }
     var correct = items.filter(function (r) {
@@ -148,6 +168,9 @@
       pin.disabled = false;
       pin.removeAttribute("aria-disabled");
     }
+    try {
+      document.dispatchEvent(new CustomEvent("home-daily-call-updated"));
+    } catch (e) {}
   }
 
   function patchStoryStrip(strip) {
@@ -193,6 +216,13 @@
       } else if (row.statement) {
         html +=
           '<span class="story-strip__move">' + esc(String(row.statement).slice(0, 48)) + "</span>";
+      }
+      if (row.tags && row.tags.length) {
+        html += '<span class="story-strip__tags">';
+        row.tags.forEach(function (tag) {
+          html += '<span class="story-strip__tag">' + esc(tag) + "</span>";
+        });
+        html += "</span>";
       }
       html += "</li>";
     });
