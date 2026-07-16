@@ -265,8 +265,8 @@ def lookup_horizon_price(
     live_prices = live_prices or {}
     uid = prediction.get("netuid")
     live = float(live_prices.get(uid, 0) or 0)
-    # ponytail: widen live fallback to 60m — hour picks often miss 15m candle window
-    live_window_sec = max(CANDLE_LOOKUP_MINUTES * 60, 3600)
+    # ponytail: widen live fallback to 60m + 2m — hour picks miss 15m candles; +120s covers tick lag
+    live_window_sec = max(CANDLE_LOOKUP_MINUTES * 60, 3600) + 120
     if live > 0 and abs((now - resolve_at).total_seconds()) <= live_window_sec:
         meta = {
             "price_source": "live_oracle",

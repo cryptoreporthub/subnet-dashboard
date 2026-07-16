@@ -155,7 +155,7 @@ async def _lifespan(app: FastAPI):
     try:
         from internal.council.resolver_scheduler import start_prediction_resolver_scheduler
 
-        start_prediction_resolver_scheduler(immediate=False)
+        start_prediction_resolver_scheduler(immediate=True)
         logger.info("Prediction resolver scheduler started")
     except Exception as exc:
         logger.warning("Prediction resolver scheduler failed to start: %s", exc)

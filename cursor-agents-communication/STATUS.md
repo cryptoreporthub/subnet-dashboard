@@ -1,11 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-16T09:15:00Z  
-**main:** `310ded6` (#296 RF-3 gate fix)
+**Updated:** 2026-07-16T09:30:00Z  
+**main:** `46c0448` (#297 docs sync + L14 card)
 
 ## One-line
 
-**§21 Living Brain COMPLETE** — trust gate unblocks after resolver tick (`brain_ui_ready` when expired &lt;10%, n≥30, watchdog clear).
+**§22 Post-Trust** — resolver passes full subnet prices on each tick; boot runs immediate resolver tick.
 
 ## Done
 
@@ -15,7 +15,8 @@
 | **§18** | #275–#281, #277 |
 | **§19** | #282–#284 |
 | **§20** | #286 (T1–T4 letter export · verify_prod · report UX) |
-| **§21** | #288–#296 (Living Brain — see `s21-living-brain-plan.md`) |
+| **§21** | #288–#297 (Living Brain — see `s21-living-brain-plan.md`) |
+| **§22** | in progress — see `s22-post-trust-plan.md` |
 
 ## §21 summary (merged)
 
@@ -33,14 +34,15 @@
 
 ## Active plan
 
-**`cursor-agents-communication/s21-living-brain-plan.md`** — product spec (§21 done).
+**`cursor-agents-communication/s22-post-trust-plan.md`** — resolver throughput + share polish.
 
 ## Next queue
 
 | Slice | State |
 |-------|--------|
-| **L14 full** | Visual graded-call card | 🔄 this PR |
-| **Post-§21** | Await human direction · Fly deploy picks up #296 |
+| **S22-1** | Full subnet list to resolver | 🔄 this PR |
+| **S22-2** | Boot immediate resolver tick | 🔄 this PR |
+| **S22-3** | OG share images | ⏳ optional |
 
 ## Gate (RF-2 / RF-3)
 
