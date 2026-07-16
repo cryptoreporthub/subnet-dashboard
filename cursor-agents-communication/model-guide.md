@@ -9,13 +9,13 @@
 
 | Model | Cursor slug / setting | Best for |
 |-------|----------------------|----------|
-| **Composer 2.5 (fast pool)** | `composer-2.5-fast` | **Prefer for mechanical builds** — routes, tests, docs, board, UI wiring from a locked plan |
-| **Composer 2.5** | `composer-2.5` | Heavier multi-file builds when fast pool struggles |
+| **Composer 2.5 (fast pool)** | `composer-2.5-fast` | **Secondary** — mechanical builds (routes, tests, docs, board, UI wiring from a locked plan) only when the fast pool is clearly sufficient |
+| **Composer 2.5** | `composer-2.5` | **Default build** — preferred for all builds; Grok-locked plans, multi-file, and behavioral work |
 | **Grok slow + low** | Grok 4.5 slow · thinking **low** | Narrow audits / tiny locks when path is already clear |
 | **Grok slow + medium** | Grok 4.5 slow · thinking **medium** | Default design LOCK when plan marks DESIGN or path is ambiguous |
 | **Grok slow + high** | Grok 4.5 slow · thinking **high** | Escalate only after medium FAIL/CONDITIONAL or unsatisfactory |
 
-**Default build:** **Composer 2.5** (prefer **fast pool**) unless a trigger in §4 or §5 applies.
+**Default build:** **Composer 2.5 (slow, `composer-2.5`)** preferred; use **`composer-2.5-fast`** only for mechanical builds where the fast pool is clearly sufficient.
 
 **Grok thinking policy (mandatory) — user 2026-07-15; budget update same day:**
 1. Prefer **slow + low**, else **slow + medium**. Never default to high / xhigh / fast-xhigh.
@@ -210,78 +210,6 @@ Run these as **read-only Grok-fast-xhigh or Grok-xhigh** passes when touching re
 
 ### Phase O (Agent A + B) — approved 2026-07-15
 
-| Step | Owner | Model |
-|------|-------|-------|
-| O1 conviction-threshold alerts (backend) | A | Grok slow-medium design → Composer 2.5 |
-| O4 custom domain + CDN | A | Composer 2.5 |
-| O5 docs/handoff | A | Composer 2.5 |
-| O2 backtest history UI | B | Composer 2.5 + Grok slow-medium sign-off |
-| O3 exportable per-subnet report | B | Composer 2.5 |
+| Step | Owne
 
-### Agent A optional follow-ups
-
-| Task | Build | Grok review? |
-|------|-------|--------------|
-| PR #110 backend context builders | Composer | Light — Jinja context shape vs H-full partial |
-| L trigger hooks | Composer | Low |
-
----
-
-## 5. Mid-session switch triggers
-
-Switch the **active** Cloud Agent (or spawn a Grok subagent) when:
-
-1. **“Why?” debugging** — accuracy, P&L, WebSocket, or alert logic still wrong after a Composer fix.
-2. **Competing branches** — multiple PRs for same phase.
-3. **New subsystem** — no pattern in repo for WebSocket, ingestion, or retrain.
-4. **Pre-merge behavioral review** — >500 lines touching resolver, signals, or grading.
-5. **Optimizer pass** — merged phase in §3; user asks “is this still correct?”
-
-**Always start that Grok pass slow + medium.** Escalate to **high** only if medium fails or is unsatisfactory.
-
-**Do not switch** for: CSS polish, `test_endpoint_contract.py` route adds, board/docs, merge/rebase, Ditto STATUS posts.
-
----
-
-## 6. How to invoke Grok in Cursor
-
-### Cloud Agent model picker
-Default: **Grok 4.5 slow + medium thinking**. Escalate to **high** only after medium FAIL/CONDITIONAL or unsatisfactory output. Do not open xhigh or fast-xhigh by default; fast only for light chores when able.
-
-### Agent auto-invokes Grok (no manual model switch required)
-
-When `model-guide.md` marks a step **Grok design first** or **Grok review before merge**, the active Composer agent spawns a **read-only Grok subagent** via the Task tool:
-
-| Task | Setting | Why |
-|------|---------|-----|
-| Audits, sign-offs, Step 0, N3/N1 design, O2 review | **slow + medium** | Default |
-| Escalate after FAIL / unsatisfactory | **slow + high** | Only if medium insufficient |
-
-**Workflow:** Grok slow-medium subagent → Composer implements → Grok slow-medium sign-off. Escalate high only if needed.
-
-### Review prompt template (paste into Grok run)
-```text
-Read-only second opinion. Do not edit files.
-Phase:
-Paths:
-Verify:
-Output: PASS / CONDITIONAL / FAIL with file:line findings.
-```
-
----
-
-## 7. Quick reference — Agent A vs B
-
-| Agent | Composer default | Grok for build (slow-medium first) | Grok for review (past) |
-|-------|------------------|------------------------------------|------------------------|
-| **A** | N2, O4, O5, wiring | Step 0, N3, O1 (medium; high rare) | **J**, H-full, K policy |
-| **B** | O2, O3, server glue | Step 0, N1, N4 (medium; high rare) | H-thin, L schema |
-
----
-
-## References
-- `cursor-agents-communication/board.md` — current phase & ownership
-- `cursor-agents-communication/gameplan-N-O.md` — approved N/O plan + Grok thinking policy
-- `master-plan-merged.md` — phase order
-- `docs/master-plan-merged.md` — J/R1–R6, contracts, M/N/O detail
-- `docs/sciweave-answers-phase-j.md` — Phase J grading constants (Grok review binding)
+[read_links truncated 3153 chars from this runtime tool output. The full content is stored with the tool result.]
