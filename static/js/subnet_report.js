@@ -9,6 +9,8 @@
   var closeBtn = document.getElementById("subnet-report-close");
   if (!panel || !body) return;
 
+  var openNetuid = null;
+
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -63,15 +65,36 @@
     return out.join("");
   }
 
+  function setBusy(on) {
+    panel.setAttribute("aria-busy", on ? "true" : "false");
+  }
+
   function setLoading(netuid) {
+    openNetuid = netuid;
     panel.hidden = false;
+    setBusy(true);
     if (titleEl) titleEl.textContent = "Subnet SN" + netuid;
     if (metaEl) metaEl.textContent = "Loading report…";
-    body.innerHTML = '<p class="subnet-report__empty">Fetching /api/report/' + esc(netuid) + "…</p>";
+    body.innerHTML =
+      '<p class="subnet-report__empty" role="status">Fetching /api/report/' +
+      esc(netuid) +
+      "…</p>";
     panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    panel.focus();
+  }
+
+  function renderError(netuid, kind, detail) {
+    setBusy(false);
+    if (metaEl) metaEl.textContent = kind === "http" ? "HTTP error" : "unavailable";
+    var msg =
+      kind === "http"
+        ? "Report request failed (SN" + esc(netuid) + ") — " + esc(detail || "not found") + "."
+        : "Could not load report — network or API unreachable.";
+    body.innerHTML = '<p class="subnet-report__empty" role="alert">' + msg + "</p>";
   }
 
   function renderPayload(payload) {
+    setBusy(false);
     var netuid = payload.netuid;
     var name = payload.name || "SN" + netuid;
     if (titleEl) titleEl.textContent = name + " (SN" + netuid + ")";
@@ -79,8 +102,16 @@
     if (payload.source) meta.push("source: " + payload.source);
     if (payload.status) meta.push("status: " + payload.status);
     if (metaEl) metaEl.textContent = meta.join(" · ") || "Per-subnet analysis";
+    if (payload.status === "error") {
+      body.innerHTML =
+        '<p class="subnet-report__empty" role="alert">' +
+        esc(payload.error || "Report generation failed.") +
+        "</p>";
+      return;
+    }
     if (payload.markdown) {
-      body.innerHTML = '<article class="subnet-report__digest">' + renderMarkdown(payload.markdown) + "</article>";
+      body.innerHTML =
+        '<article class="subnet-report__digest">' + renderMarkdown(payload.markdown) + "</article>";
     } else if (payload.message) {
       body.innerHTML = '<p class="subnet-report__empty">' + esc(payload.message) + "</p>";
     } else {
@@ -94,21 +125,24 @@
     setLoading(id);
     fetch("/api/report/" + id)
       .then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
+        if (!r.ok) {
+          renderError(id, "http", "HTTP " + r.status);
+          return null;
+        }
         return r.json();
       })
-      .then(renderPayload)
+      .then(function (payload) {
+        if (payload) renderPayload(payload);
+      })
       .catch(function () {
-        if (metaEl) metaEl.textContent = "unavailable";
-        body.innerHTML =
-          '<p class="subnet-report__empty">Could not load report — API unreachable or SN' +
-          esc(id) +
-          " missing.</p>";
+        renderError(id, "network");
       });
   }
 
   function hide() {
     panel.hidden = true;
+    openNetuid = null;
+    setBusy(false);
   }
 
   document.addEventListener("subnet:report", function (e) {
@@ -117,6 +151,14 @@
   });
 
   if (closeBtn) closeBtn.addEventListener("click", hide);
+
+  document.addEventListener("keydown", function (e) {
+    if (panel.hidden || openNetuid == null) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      hide();
+    }
+  });
 
   window.SubnetReport = { show: show, hide: hide };
 })();

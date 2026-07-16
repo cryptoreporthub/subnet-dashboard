@@ -145,10 +145,19 @@
         weekEl.textContent = "Week of " + payload.week_of;
       }
       render(root, payload);
+      if (window.LetterExport && window.LetterExport.weekly) {
+        window.LetterExport.weekly.setMarkdown(
+          payload.markdown,
+          "weekly-letter-" + (payload.week_of || "export")
+        );
+      }
     } catch (e) {
       if (weekEl) weekEl.textContent = "SimiVision digest";
       root.innerHTML =
         '<p class="weekly-letter__empty">Could not load weekly letter — try again shortly.</p>';
+      if (window.LetterExport && window.LetterExport.weekly) {
+        window.LetterExport.weekly.setMarkdown("");
+      }
     }
   }
 

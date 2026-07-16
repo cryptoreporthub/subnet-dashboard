@@ -144,10 +144,19 @@
         dateEl.textContent = "Recap for " + payload.date + " (UTC)";
       }
       render(root, payload);
+      if (window.LetterExport && window.LetterExport.daily) {
+        window.LetterExport.daily.setMarkdown(
+          payload.markdown,
+          "daily-recap-" + (payload.date || "export")
+        );
+      }
     } catch (e) {
       if (dateEl) dateEl.textContent = "Morning briefing";
       root.innerHTML =
         '<p class="weekly-letter__empty">Could not load daily recap — try again shortly.</p>';
+      if (window.LetterExport && window.LetterExport.daily) {
+        window.LetterExport.daily.setMarkdown("");
+      }
     }
   }
 

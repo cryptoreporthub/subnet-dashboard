@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-16T01:30:00Z — **§19 M1 in progress**  
-**main:** `d4cb7bc`
+**Last updated:** 2026-07-16T03:00:00Z — **§20 T1→T4 complete**  
+**main:** `0e29e5d` → §20 PR pending merge
 
 ## Ditto boot (read first)
 
@@ -23,31 +23,31 @@
 | **Branches** | `cursor/<slug>-e78a` or `-6f98` | `cursor/<slug>-6f98` off latest `main` |
 | **Grok** | Whole-agent switch | **Subagent only** — slow + low/med |
 
-Specs: `token-budget-rules.md` · `model-guide.md` · `s18-automated-build-plan.md`.
+Specs: `token-budget-rules.md` · `model-guide.md` · `s20-automated-build-plan.md`.
 
 ## N/O (approved 2026-07-15)
 - **APPROVED** + **Step 0 LOCKED**
 - Models: **Composer 2.5-fast** build; **Grok slow + low/medium** subagent (escalate **high** only if medium fails).
-- **§17** ✅ **COMPLETE** (#267–#271, #274). **§18** ✅ **COMPLETE** (C1 listener live on Fly).
+- **§17–§20** ✅ **COMPLETE** (§20 T1→T4 agent polish).
 
 ## Read order (agents + Ditto)
 1. **STATUS card** — `cursor-agents-communication/STATUS.md`
 2. **This file** — `cursor-agents-communication/board.md`
 3. **Token budget** — `cursor-agents-communication/token-budget-rules.md`
 4. **Model guide** — `cursor-agents-communication/model-guide.md`
-5. **Build queue** — `cursor-agents-communication/s19-automated-build-plan.md` (active) · `s18-automated-build-plan.md` (done)
+5. **Build queue** — `cursor-agents-communication/s20-automated-build-plan.md`
 6. **Grok lock rule** — `cursor-agents-communication/grok-lock-composer-write-rule.md`
 
 ## Ready for next work
 
-**§19 active:** M1 message-intel UI → M2 social wire. **Human:** F7 DNS · optional A1b bot.
+**§20 (agent-only):** T1→T4 ✅ complete. **Skip:** F7 · B12 · A1b · S5.
 
 | PR | Role | State |
 |----|------|-------|
-| **M1** | §19 live Telegram feed UI | 🟡 in progress |
-| **#281** | §18 STATUS complete | ✅ **merged** |
+| **§20** | T1–T4 polish | 🟢 ready |
+| **#285** | §20 plan on main | ✅ **merged** |
 
-**Health:** `GET /health` · `GET /api/message-intel/status` → **listener live**
+**Health:** `GET /health` · `GET /api/message-intel/status` → listener live
 
 ## Gate Status
 
@@ -55,14 +55,14 @@ Specs: `token-budget-rules.md` · `model-guide.md` · `s18-automated-build-plan.
 |-------|--------|
 | **N/O · P · §16** | ✅ complete |
 | **§17 product** | ✅ **complete** (#267–#271, #274) |
-| **§18** | ✅ **complete** (C1 live) |
-| **§19** | 🟡 M1→M2 in progress |
+| **§19** | ✅ **complete** (#282–#284) |
+| **§20** | ✅ **complete** (T1→T4) |
 
 ## Agent posture
 
 | Role | Status | Notes |
 |------|--------|-------|
-| **Single agent** | **Active** | §18 H1→B1; `composer-2.5-fast` |
+| **Single agent** | **Idle** | §20 done; await next queue |
 | **A (`-843d`)** | **Retired** | Do not spawn — saves Pro+ pool |
 | **Grok** | **Subagent** | DESIGN / sign-off only; short LOCK |
 | **Human** | **QB** | merge when green · F7 DNS · watch billing |

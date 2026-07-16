@@ -1,11 +1,19 @@
 <!-- O3 subnet report panel (API: GET /api/report/{netuid}) -->
-<div id="subnet-report-panel" class="subnet-report" hidden aria-live="polite">
+<div
+  id="subnet-report-panel"
+  class="subnet-report"
+  hidden
+  role="region"
+  aria-labelledby="subnet-report-title"
+  aria-busy="false"
+  tabindex="-1"
+>
   <div class="subnet-report__head">
     <h3 class="subnet-report__title" id="subnet-report-title">Subnet report</h3>
     <button type="button" class="tab-btn subnet-report__close" id="subnet-report-close" aria-label="Close report">Close</button>
   </div>
   <p class="subnet-report__meta" id="subnet-report-meta"></p>
-  <div id="subnet-report-body" class="subnet-report__body">
+  <div id="subnet-report-body" class="subnet-report__body" aria-live="polite">
     <p class="subnet-report__empty">Select a subnet in the scanner to load its report.</p>
   </div>
 </div>
