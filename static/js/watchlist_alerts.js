@@ -87,11 +87,27 @@
       try {
         const out = await fetchJson("/api/conviction-alerts/notify", { method: "POST" });
         const created = out.created != null ? out.created : out.alerts_created;
-        setStatus(
+        const delivery = out.delivery || {};
+        const dry = delivery.dry_run || [];
+        let msg =
           "Alert check done" +
-            (created != null ? " · " + created + " created" : "") +
-            (out.reason ? " · " + out.reason : "")
-        );
+          (created != null ? " · " + created + " created" : "") +
+          (out.reason ? " · " + out.reason : "");
+        if (delivery.mode === "dry_run" && dry.length) {
+          msg +=
+            " · dry-run " +
+            dry.length +
+            ": " +
+            dry
+              .slice(0, 2)
+              .map(function (row) {
+                return row.message || row.dedupe_key || "alert";
+              })
+              .join("; ");
+        } else if (delivery.skipped_watchlist) {
+          msg += " · " + delivery.skipped_watchlist + " off-watchlist skipped";
+        }
+        setStatus(msg);
         const summary = $("habit-alerts-summary");
         if (summary && out.last_run_at) {
           summary.textContent = "Alerts on · last " + out.last_run_at;

@@ -41,7 +41,7 @@
 | L11 | Brain letter | #295 |
 | L12 | Time-capsule replay | #294 |
 | L13 | Chat presets | #293 |
-| L14 | Shareable graded call | #294 lite · **full visual card** 🔄 this PR |
+| L14 | Shareable graded call | #294 lite · #300 SVG · #301 PNG ✅ |
 
 ## Home stack (shipped)
 

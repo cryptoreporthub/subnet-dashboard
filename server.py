@@ -942,11 +942,9 @@ def health():
 # ---------------------------------------------------------------------------
 # SimiVision picks (ported from server_original.py onto the FastAPI foundation)
 #
-# NOTE: pick-generation is read-only here. The scenario-memory and pick-history
-# *recording* side-effects from the original _ordered_hour_picks are deferred to
-# their own slices (/api/scenario-memory, /api/pick-history) so this slice stays
-# atomic. Subnets come from the deduped taomarketcap source, so picks never
-# repeat a subnet ("Minos multiple times" was upstream duplication, now fixed).
+# NOTE: pick-generation is read-only here except hour-pick recording via
+# pick_history + learning loop (/api/pick-history). Scenario memory has its own slice.
+# Subnets come from the deduped taomarketcap source so picks never repeat a subnet.
 # ---------------------------------------------------------------------------
 
 # taomarketcap-shaped static fallback used when live/cached data is unavailable.
@@ -1051,12 +1049,23 @@ def _record_pick_in_learning_loop(
 
         subnet = _subnet_for_pick(subnets, pick)
         if subnet.get("price"):
-            record_pick_prediction(
+            stored = record_pick_prediction(
                 pick,
                 subnet,
                 horizon_type=horizon_type,
                 market_context=market_context,
             )
+            if stored and horizon_type == "hour":
+                try:
+                    from internal.council import pick_history
+
+                    pick_history.record_hour_pick(
+                        pick,
+                        subnet,
+                        prediction_id=stored.get("id"),
+                    )
+                except Exception as exc:
+                    logger.warning("pick_history record failed: %s", exc)
     except Exception as exc:
         logger.warning("Learning loop record failed (%s pick): %s", horizon_type, exc)
 
