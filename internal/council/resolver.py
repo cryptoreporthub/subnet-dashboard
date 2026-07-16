@@ -603,6 +603,22 @@ def expire_stale_predictions(
     }
 
 
+def _merge_regraded_resolved(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Re-sync rows regrade_expired_predictions updated on disk (RF-3 follow-up)."""
+    fresh = _load_json(PREDICTIONS_PATH, {}).get("resolved") or []
+    by_id = {
+        str(row.get("id")): row
+        for row in fresh
+        if isinstance(row, dict) and row.get("id")
+    }
+    if not by_id:
+        return resolved
+    return [
+        by_id[str(row.get("id"))] if row.get("id") and str(row.get("id")) in by_id else row
+        for row in resolved
+    ]
+
+
 def resolve_due_predictions(
     subnets: Optional[List[Dict[str, Any]]] = None,
     *,
@@ -621,6 +637,8 @@ def resolve_due_predictions(
 
     prices = fetch_prices(subnets)
     regraded_expired = regrade_expired_predictions(live_prices=prices)
+    if int(regraded_expired.get("regraded") or 0) > 0:
+        resolved = _merge_regraded_resolved(resolved)
     subnet_by_uid: Dict[Any, Dict[str, Any]] = {}
     if subnets:
         for sn in subnets:

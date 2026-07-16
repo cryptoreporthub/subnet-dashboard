@@ -95,6 +95,40 @@ def test_watchdog_flags_large_backlog():
     assert status["reason"] == "pending_count_exceeded"
 
 
+def test_watchdog_clear_within_post_resolve_grace():
+    from internal.council.watchdog import check_resolver_watchdog
+
+    resolve_at = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    now = resolve_at + timedelta(hours=1, minutes=30)
+    pending = [
+        {
+            "id": "grace-1",
+            "created_at": (resolve_at - timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
+            "resolve_at": resolve_at.isoformat().replace("+00:00", "Z"),
+            "horizon_hours": 1,
+        }
+    ]
+    status = check_resolver_watchdog(pending, now=now)
+    assert status["warning"] is False
+
+
+def test_watchdog_warns_when_pending_survives_grace():
+    from internal.council.watchdog import check_resolver_watchdog
+
+    resolve_at = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    now = resolve_at + timedelta(hours=2, minutes=5)
+    pending = [
+        {
+            "id": "stale-1",
+            "resolve_at": resolve_at.isoformat().replace("+00:00", "Z"),
+            "horizon_hours": 1,
+        }
+    ]
+    status = check_resolver_watchdog(pending, now=now)
+    assert status["warning"] is True
+    assert status["reason"] == "pending_past_grace"
+
+
 def test_ungradeable_stays_pending_until_grace():
     resolve_at = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
     now = resolve_at + timedelta(minutes=30)
