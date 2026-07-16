@@ -10,6 +10,10 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Query
 
 from internal.analytics.backtest import run_backtest
+from internal.analytics.market_drivers import (
+    build_driver_card_for_netuid,
+    learned_price_drivers,
+)
 from internal.analytics.phase_b_hooks import refresh_agent_b_trails
 from internal.analytics.pump_summary import summarize_pump
 from internal.analytics.report import build_subnet_report
@@ -138,6 +142,33 @@ async def api_backtest(limit: int = Query(default=200, ge=1, le=500)):
             "judges": {},
             "history": [],
         }
+
+
+@analytics_router.get("/api/market-drivers")
+async def api_market_drivers():
+    """What predicted token price moves — learned from resolved predictions + scenarios."""
+    try:
+        return {"status": "success", **learned_price_drivers()}
+    except Exception as exc:
+        logger.warning("market-drivers failed: %s", exc)
+        return {
+            "status": "error",
+            "error": str(exc),
+            "ready": False,
+            "top_price_signals": [],
+            "top_scenario_tags": [],
+        }
+
+
+@analytics_router.get("/api/market-drivers/{netuid}")
+async def api_market_drivers_subnet(netuid: int):
+    """Per-subnet driver card: price vs staking yield, grade, learned context."""
+    try:
+        payload = build_driver_card_for_netuid(netuid)
+        return payload
+    except Exception as exc:
+        logger.warning("market-drivers SN%s failed: %s", netuid, exc)
+        return {"status": "error", "netuid": netuid, "error": str(exc)}
 
 
 @analytics_router.get("/api/report/{netuid}")

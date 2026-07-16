@@ -70,6 +70,10 @@ def _trail_from_predictions() -> List[Dict[str, Any]]:
                         "prediction_id": pred.get("id"),
                         "actual_pct": pred.get("actual_pct"),
                         "correct": pred.get("correct"),
+                        "return_driver": (pred.get("subnet_snapshot") or {}).get("return_driver"),
+                        "yield_trap": (pred.get("subnet_snapshot") or {}).get("yield_trap"),
+                        "price_change_7d": (pred.get("subnet_snapshot") or {}).get("price_change_7d"),
+                        "active_signals": pred.get("active_signals"),
                     },
                 }
             )
