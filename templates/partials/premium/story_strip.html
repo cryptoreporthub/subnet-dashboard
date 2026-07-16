@@ -14,7 +14,7 @@
   {% if strip.data_available and rows %}
   <ol class="story-strip__list" id="story-strip-list">
     {% for row in rows %}
-    <li class="story-strip__item story-strip__item--{{ row.outcome|default('pending') }}">
+    <li class="story-strip__item story-strip__item--{{ row.outcome|default('pending') }}"{% if row.id %} data-prediction-id="{{ row.id }}" role="button" tabindex="0" title="Replay pick-time snapshot"{% endif %}>
       <span class="story-strip__verdict" aria-label="{{ row.outcome }}">{{ '✓' if row.outcome == 'correct' else '✗' }}</span>
       <span class="story-strip__name">{{ row.name|default('SN' ~ row.netuid) }}</span>
         {% if row.predicted_pct is not none and row.actual_pct is not none %}

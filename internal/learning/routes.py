@@ -208,6 +208,18 @@ async def api_mindmap_story_path():
         }
 
 
+@learning_router.get("/api/predictions/capsule/{prediction_id}")
+async def api_prediction_capsule(prediction_id: str):
+    """§21 L12 — time-capsule replay for a graded call."""
+    try:
+        from internal.learning.prediction_capsule import get_prediction_capsule
+
+        return get_prediction_capsule(prediction_id)
+    except Exception as exc:
+        logger.warning("prediction capsule failed: %s", exc)
+        return {"status": "error", "reason": str(exc)}
+
+
 @learning_router.get("/api/learning/stats")
 async def api_learning_stats():
     engine = LearningEngine()
