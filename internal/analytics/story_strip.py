@@ -64,9 +64,11 @@ def build_story_strip(limit: int = 8) -> Dict[str, Any]:
             if correct is None:
                 continue
             netuid = pred.get("netuid")
+            pid = pred.get("id")
             items.append(
                 {
-                    "id": pred.get("id"),
+                    "id": pid,
+                    "share_page_url": f"/share/call/{pid}" if pid else None,
                     "netuid": netuid,
                     "name": pred.get("name") or (f"SN{netuid}" if netuid is not None else "—"),
                     "predicted_pct": pred.get("predicted_pct"),

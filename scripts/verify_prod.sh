@@ -62,15 +62,11 @@ import json,sys
 d=json.load(sys.stdin)
 c=d.get('council',{})
 o=d.get('judges',{}).get('oracle',{})
+flt=o.get('filtered') or {}
 print('sample_size:', d.get('sample_size'))
 print('council win_rate:', c.get('win_rate'))
 print('oracle win_rate:', o.get('win_rate'))
-cal=o.get('calibration') or []
-hi=[b for b in cal if b.get('count',0)>0 and b.get('score_lo',0)>=0.55]
-if hi:
-    w=sum(b['count']*b['hit_rate'] for b in hi)
-    n=sum(b['count'] for b in hi)
-    print('oracle filtered>=0.55 hit_rate:', round(w/n,4), 'n=', n)
+print('oracle filtered win_rate:', flt.get('win_rate'), 'n=', flt.get('n'), 'min_score=', flt.get('min_score'))
 "
 
 echo "OK"

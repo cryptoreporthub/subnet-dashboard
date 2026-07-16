@@ -63,7 +63,9 @@ def test_build_story_strip_labels_outcomes(tmp_path, monkeypatch):
     assert strip["data_available"] is True
     assert len(strip["items"]) == 2
     assert strip["items"][0]["outcome"] == "wrong"
+    assert strip["items"][0]["share_page_url"] == "/share/call/a2"
     assert strip["items"][1]["outcome"] == "correct"
+    assert strip["items"][1]["share_page_url"] == "/share/call/a1"
     assert strip["stats"]["correct"] == 1
     assert strip["stats"]["wrong"] == 1
 
