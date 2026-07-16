@@ -366,6 +366,13 @@ def atomic_finalize_resolution(
     except Exception:
         pass
 
+    try:
+        from internal.council import pick_history
+
+        pick_history.finalize_from_prediction(prediction)
+    except Exception:
+        pass
+
     return prediction
 
 

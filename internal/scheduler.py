@@ -221,6 +221,12 @@ class AdversarialScheduler:
         }
         self._state_cache = summary
         try:
+            from internal.council.emission_monitor import snapshot_registry_emissions
+
+            emissions = snapshot_registry_emissions(registry, run_at=run_at)
+        except Exception:
+            emissions = {}
+        try:
             # Re-check the data directory before every write cycle: on Fly.io
             # the volume can be absent on a fresh machine and the module-load
             # makedirs may have run before the mount was ready.
@@ -233,6 +239,9 @@ class AdversarialScheduler:
             if os.path.exists(self.soul_map_path):
                 data = _load_json(self.soul_map_path) or {}
             data.setdefault("adversarial_scheduler", {})["last_cycle"] = summary
+            if emissions:
+                data.setdefault("emission_monitor", {})["last_emissions"] = emissions
+                data["emission_monitor"]["snapshot_at"] = run_at
             os.makedirs(os.path.dirname(self.soul_map_path) or ".", exist_ok=True)
             fd, temp_path = tempfile.mkstemp(suffix=".tmp")
             try:

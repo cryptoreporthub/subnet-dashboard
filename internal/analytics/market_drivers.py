@@ -37,11 +37,8 @@ def decompose_returns(sn: Dict[str, Any]) -> Dict[str, Any]:
         if weekly_yield is not None
         else round(chg7, 2)
     )
-    yield_trap = (
-        apy is not None
-        and apy >= YIELD_TRAP_APY_PCT
-        and chg7 <= YIELD_TRAP_PRICE_7D_PCT
-    )
+    trap_apy, trap_chg7 = _effective_yield_trap_thresholds()
+    yield_trap = apy is not None and apy >= trap_apy and chg7 <= trap_chg7
     dominant = _dominant_driver(chg7, chg24, apy, yield_trap)
     warnings: List[str] = []
     if yield_trap:
@@ -119,6 +116,35 @@ def _gradeable_resolved() -> List[Dict[str, Any]]:
             continue
         rows.append(pred)
     return rows
+
+
+def _effective_yield_trap_thresholds() -> Tuple[float, float]:
+    """Learn cutoffs from graded yield-trap-like picks when sample ≥ gate."""
+    rows = _gradeable_resolved()
+    apys: List[float] = []
+    chg7s: List[float] = []
+    for pred in rows:
+        snap = pred.get("subnet_snapshot") if isinstance(pred.get("subnet_snapshot"), dict) else {}
+        apy = snap.get("staking_yield_apy")
+        if apy is None:
+            apy = subnet_apy_percent(snap)
+        chg7 = snap.get("price_change_7d")
+        if chg7 is None:
+            chg7 = _f(snap.get("price_change_24h"))
+        else:
+            chg7 = _f(chg7)
+        if apy is None:
+            continue
+        if apy < YIELD_TRAP_APY_PCT * 0.8 or chg7 > YIELD_TRAP_PRICE_7D_PCT * 0.5:
+            continue
+        apys.append(float(apy))
+        chg7s.append(float(chg7))
+    if len(apys) < MIN_SCENARIO_SAMPLES:
+        return YIELD_TRAP_APY_PCT, YIELD_TRAP_PRICE_7D_PCT
+    apys.sort()
+    chg7s.sort()
+    mid = len(apys) // 2
+    return max(12.0, apys[mid]), min(-1.5, chg7s[mid])
 
 
 def _signal_bucket_stats(

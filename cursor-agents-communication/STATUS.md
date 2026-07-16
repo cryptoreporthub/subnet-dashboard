@@ -1,57 +1,31 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-16T18:10:00Z  
-**main:** `8275d28` (#300 §22 complete)
+**Updated:** 2026-07-16T18:25:00Z  
+**main:** `3037744` (#301 §23 PNG share)
 
 ## One-line
 
-**§23 Share PNG** — raster OG images for social crawlers + Save PNG / Copy link in time-capsule.
+**§24 Backlog batch** — pick history writes, emission deltas, adversarial judge, learned yield-trap cutoffs.
 
 ## Done
 
 | Phase | PRs |
 |-------|-----|
-| **§17** | #267–#271, #274 |
-| **§18** | #275–#281, #277 |
-| **§19** | #282–#284 |
-| **§20** | #286 (T1–T4 letter export · verify_prod · report UX) |
-| **§21** | #288–#297 (Living Brain — see `s21-living-brain-plan.md`) |
-| **§22** | #298, #300 (Post-Trust — see `s22-post-trust-plan.md`) |
-| **§23** | in progress — see `s23-share-png-plan.md` |
-
-## §21 summary (merged)
-
-| PR | Content |
-|----|---------|
-| **#288** | Market drivers API (yield_trap, decompose_returns) |
-| **#289** | S0 RF-2 trust_stats + RF-3 resolver/regrade |
-| **#290** | L1–L3 UI + L9 trail hygiene |
-| **#291** | L6 signal_weights in scoring |
-| **#292** | L10 watchdog KPI strip |
-| **#293** | L4 trust banner · L5 story path · L7 regime · L13 chat presets |
-| **#294** | L8 judge feedback · L12 time-capsule · L14 lite (clipboard) |
-| **#295** | L11 Brain letter |
-| **#296** | RF-3 regrade clobber fix + watchdog grace alignment |
+| **§17–§20** | #267–#286 |
+| **§21** | #288–#297 (Living Brain) |
+| **§22** | #298, #300 (Post-Trust) |
+| **§23** | #301 (PNG OG share) |
+| **§24** | in progress — `s24-backlog-batch-plan.md` |
 
 ## Active plan
 
-**`cursor-agents-communication/s22-post-trust-plan.md`** — resolver throughput + share polish.
-
-## Next queue
-
-| Slice | State |
-|-------|--------|
-| **S22-1** | Full subnet list to resolver | ✅ #298 |
-| **S22-2** | Boot immediate resolver tick | ✅ #298 |
-| **S22-3** | OG share images | ✅ #300 |
+**`cursor-agents-communication/s24-backlog-batch-plan.md`**
 
 ## Gate (RF-2 / RF-3)
 
-- Trust surfaces bind `/api/learning/stats` → `trust_banner` only — never hardcode accuracy.
-- After #296 + one resolver scheduler tick: `brain_ui_ready` can be `true` (expired &lt;10%, graded ≥30, watchdog clear).
+- Trust surfaces bind `/api/learning/stats` → `trust_banner` only.
+- Share cards show per-call graded stats — never global hardcoded accuracy.
 
 ## Deferred (human)
 
-F7 DNS · A1b bot · S5 Discord/X — **skipped**
-
-**Billing watch:** On-Demand **$** beyond Pro+ → tell human.
+F7 DNS · A1b bot · S5 Discord/X

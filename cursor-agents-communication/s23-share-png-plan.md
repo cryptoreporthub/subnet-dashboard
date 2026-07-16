@@ -1,6 +1,6 @@
 # §23 Share PNG — social crawler compatibility
 
-**Status:** in progress  
+**Status:** complete  
 **Updated:** 2026-07-16
 
 ## Goal
