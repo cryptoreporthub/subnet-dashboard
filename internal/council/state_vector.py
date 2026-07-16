@@ -773,7 +773,33 @@ def _compute_sell_signals(sn: Dict[str, Any], indicators: Dict[str, Any], conver
 # ---------------------------------------------------------------------------
 # Signal impact engine
 # ---------------------------------------------------------------------------
-def _compute_signal_impact(sn: Dict[str, Any], indicators: Dict[str, Any], hot: Dict[str, Any], sell: Dict[str, Any]) -> Dict[str, Any]:
+_SIGNAL_WEIGHT_ALIAS = {
+    "cci_extreme": "cci_divergence",
+    "williams_r_reversal": "williams_r",
+    "emission_change": "emission_momentum",
+    "mfi_divergence": "mfi_flow",
+}
+
+
+def _signal_weight_for_impact(
+    signal_type: str,
+    horizon_weights: Dict[str, float],
+) -> float:
+    key = _SIGNAL_WEIGHT_ALIAS.get(signal_type, signal_type)
+    try:
+        return float(horizon_weights.get(key, 1.0))
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def _compute_signal_impact(
+    sn: Dict[str, Any],
+    indicators: Dict[str, Any],
+    hot: Dict[str, Any],
+    sell: Dict[str, Any],
+    *,
+    horizon_type: str = "day",
+) -> Dict[str, Any]:
     impacts: List[Dict[str, Any]] = []
     chg = float(sn.get("price_change_24h", 0) or 0)
     apy = float(sn.get("apy", 0) or 0)
@@ -889,7 +915,18 @@ def _compute_signal_impact(sn: Dict[str, Any], indicators: Dict[str, Any], hot: 
     if len(impacts) < 6:
         _add("market_breadth", "bullish" if chg >= 0 else "bearish", 0.6, 24, 50, "Market breadth filler")
 
-    net = sum(i.get("magnitude_pct", 0) * (1 if i.get("direction") == "bullish" else -1) for i in impacts)
+    from internal.council.weights import load_signal_weights
+
+    signal_weights = load_signal_weights()
+    horizon_weights = signal_weights.get(horizon_type, signal_weights.get("day", {}))
+    net = 0.0
+    for impact in impacts:
+        direction = impact.get("direction")
+        sign = 1.0 if direction == "bullish" else -1.0 if direction == "bearish" else 0.0
+        mag = float(impact.get("magnitude_pct", 0) or 0)
+        w = _signal_weight_for_impact(str(impact.get("signal_type", "")), horizon_weights)
+        impact["learned_weight"] = round(w, 4)
+        net += mag * sign * w
     # Same absolute signals move thin names more than large caps (Chutes vs micro).
     try:
         from internal.subnets.impact import impact_profile, scale_move_by_impact
@@ -1555,7 +1592,7 @@ def score_subnet_for_hour(
     convergence = _detect_oversold_convergence(indicators)
     hot = _compute_hot_signals(sn, indicators, convergence)
     sell = _compute_sell_signals(sn, indicators, convergence)
-    signal_impact = _compute_signal_impact(sn, indicators, hot, sell)
+    signal_impact = _compute_signal_impact(sn, indicators, hot, sell, horizon_type="hour")
 
     experts = _expert_contributions(sn, indicators, signal_impact, hot, sell)
     try:
@@ -1627,7 +1664,7 @@ def score_subnet_for_day(
     convergence = _detect_oversold_convergence(indicators)
     hot = _compute_hot_signals(sn, indicators, convergence)
     sell = _compute_sell_signals(sn, indicators, convergence)
-    signal_impact = _compute_signal_impact(sn, indicators, hot, sell)
+    signal_impact = _compute_signal_impact(sn, indicators, hot, sell, horizon_type="day")
 
     experts = _expert_contributions(sn, indicators, signal_impact, hot, sell)
     try:
