@@ -271,10 +271,12 @@ class PredictionResolverScheduler:
 
             # 1. Grade predictions whose horizon has elapsed against the live
             #    price feed. This also nudges expert weights (learning loop).
+            #    Pass the full subnet list so fetch_prices covers every pending
+            #    netuid; round-robin batch above is telemetry/cursor only.
             #    ``resolve_due_predictions`` itself retires predictions that are
             #    past due with no price as ``expired`` (correct=None), so we
             #    count those here too.
-            resolved = resolver.resolve_due_predictions(batch)
+            resolved = resolver.resolve_due_predictions(subnets)
             result["resolved_now"] = len(resolved.get("resolved_now", []))
             expired_count = len(resolved.get("expired_now", []))
 

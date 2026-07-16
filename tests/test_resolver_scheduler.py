@@ -553,12 +553,12 @@ def test_scheduler_persists_round_robin_cursor(fresh_scheduler):
     assert sched_state["round_robin_cursor"] == batch_size % n
 
 
-def test_scheduler_passes_batch_not_full_list(monkeypatch, fresh_scheduler):
+def test_scheduler_passes_full_subnet_list_to_resolve(monkeypatch, fresh_scheduler):
     subnets = [{"netuid": i, "price": float(i)} for i in range(1, 51)]
     seen = {}
 
-    def _spy_resolve(batch):
-        seen["batch_len"] = len(batch)
+    def _spy_resolve(subnet_list):
+        seen["subnet_len"] = len(subnet_list)
         return {
             "resolved_now": [],
             "expired_now": [],
@@ -574,4 +574,4 @@ def test_scheduler_passes_batch_not_full_list(monkeypatch, fresh_scheduler):
     )
     sched.run_once()
 
-    assert seen["batch_len"] == 8
+    assert seen["subnet_len"] == 50
