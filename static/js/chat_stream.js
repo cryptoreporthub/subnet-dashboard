@@ -131,4 +131,16 @@
   input.addEventListener("keydown", function (e) {
     if (e.key === "Enter") send();
   });
+
+  var presets = document.getElementById("chatPresets");
+  if (presets) {
+    presets.addEventListener("click", function (e) {
+      var btnEl = e.target.closest(".chat-preset");
+      if (!btnEl) return;
+      var prompt = btnEl.getAttribute("data-prompt") || "";
+      if (!prompt) return;
+      input.value = prompt;
+      send();
+    });
+  }
 })();
