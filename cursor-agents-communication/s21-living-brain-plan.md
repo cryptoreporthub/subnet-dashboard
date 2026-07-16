@@ -24,7 +24,7 @@
 | **S1** | #288 merge + L1 driver card UI, L2 story tags, L3 what's-working chips | S0 | ✅ #290 merged |
 | **S2** | L4 trust banner UI, L5 mindmap story path | `trust_banner.ready` | 🔄 L4 honest-empty + L5 prep |
 | **S3** | L6 signal_weights in scoring, L9 trail dual-write + updated_at fix | parallel with S2 | L6 ✅ #291 · L9 ✅ #290 |
-| **S4** | L7–L8, L10–L14 | after S2 green | L10 ✅ #292 · L7/L13 ✅ #293 · L8/L12 ✅ #294 · L11 🔄 |
+| **S4** | L7–L8, L10–L14 | after S2 green | ✅ complete · RF-3 gate fix 🔄 |
 
 ## Wave A — Visible brain (blocked until S0 gate)
 
