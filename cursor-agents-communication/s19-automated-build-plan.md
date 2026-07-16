@@ -10,13 +10,13 @@
 |---|-------|------|-------------|
 | **M1** | Message-intel feed UI | ✅ #282 | — |
 | **M2** | Social panel wire | ✅ #283 | — |
-| **M3** | Intel live refresh | cockpit-tick refresh for feed + social | No |
-| **U5p** | Launch meta prep | OG/Twitter meta (works on fly.dev; F7 later) | No |
+| **M3** | Intel live refresh | ✅ #284 |
+| **U5p** | Launch meta prep | ✅ #284 |
 | **F7** | Custom domain DNS | deferred — human when ready | **Yes** |
 | **B12** | U5 launch polish | after F7 | **Yes** |
 | **A1b** | Conviction delivery | `CONVICTION_ALERT_DELIVERY` + bot secrets (optional) | **Yes** — BotFather |
 
-**Skip unless asked:** S5 Discord/X · weekly letter email · B12 before F7
+**Skip unless asked:** S5 Discord/X · Twitter API · weekly letter **email** · B12 · F7 DNS
 
 ## Contract
 
