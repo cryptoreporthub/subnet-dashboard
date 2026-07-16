@@ -17,10 +17,15 @@
     <li class="story-strip__item story-strip__item--{{ row.outcome|default('pending') }}">
       <span class="story-strip__verdict" aria-label="{{ row.outcome }}">{{ '✓' if row.outcome == 'correct' else '✗' }}</span>
       <span class="story-strip__name">{{ row.name|default('SN' ~ row.netuid) }}</span>
-      {% if row.predicted_pct is not none and row.actual_pct is not none %}
+        {% if row.predicted_pct is not none and row.actual_pct is not none %}
       <span class="story-strip__move">{{ '%+.1f'|format((row.predicted_pct|float)) }}% → {{ '%+.1f'|format((row.actual_pct|float)) }}%</span>
       {% elif row.statement %}
       <span class="story-strip__move">{{ row.statement|truncate(48, True) }}</span>
+      {% endif %}
+      {% if row.tags is iterable and row.tags is not string and row.tags %}
+      <span class="story-strip__tags">
+        {% for tag in row.tags %}<span class="story-strip__tag">{{ tag }}</span>{% endfor %}
+      </span>
       {% endif %}
     </li>
     {% endfor %}

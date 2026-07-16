@@ -415,20 +415,6 @@ def _mirror_pick_to_soul_map(
         if not isinstance(sms, dict):
             sms = {}
             data["soul_map_state"] = sms
-        sms.setdefault("learning_trail", [])
-        if isinstance(sms["learning_trail"], list):
-            sms["learning_trail"].append(
-                {
-                    "prediction_id": prediction.get("id"),
-                    "netuid": prediction.get("netuid"),
-                    "name": prediction.get("name"),
-                    "horizon_type": horizon_type,
-                    "statement": prediction.get("statement"),
-                    "expert": prediction.get("expert"),
-                    "created_at": prediction.get("created_at"),
-                }
-            )
-            sms["learning_trail"] = sms["learning_trail"][-200:]
         sms[f"last_{horizon_type}_pick"] = {
             "pick": pick,
             "prediction_id": prediction.get("id"),

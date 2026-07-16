@@ -93,6 +93,25 @@
     body.innerHTML = '<p class="subnet-report__empty" role="alert">' + msg + "</p>";
   }
 
+  function renderDriverSummary(d) {
+    if (!d || d.status === "error") return "";
+    var dec = d.decomposition || {};
+    var html =
+      '<div class="subnet-report__driver driver-card__inner">' +
+      "<h3 class=\"subnet-report__h3\">Market drivers</h3>" +
+      "<p class=\"driver-card__headline\">" +
+      esc(d.headline || "") +
+      "</p>";
+    (d.why || []).slice(0, 3).forEach(function (line) {
+      html += '<p class="driver-card__why">' + esc(line) + "</p>";
+    });
+    if (dec.yield_trap) {
+      html += '<p class="driver-card__warn">Yield trap flagged at pick time</p>';
+    }
+    html += "</div>";
+    return html;
+  }
+
   function renderPayload(payload) {
     setBusy(false);
     var netuid = payload.netuid;
@@ -109,9 +128,17 @@
         "</p>";
       return;
     }
+    var driverHtml = "";
+    var sections = payload.sections || {};
+    if (sections.market_drivers) {
+      driverHtml = renderDriverSummary(sections.market_drivers);
+    }
     if (payload.markdown) {
       body.innerHTML =
-        '<article class="subnet-report__digest">' + renderMarkdown(payload.markdown) + "</article>";
+        driverHtml +
+        '<article class="subnet-report__digest">' +
+        renderMarkdown(payload.markdown) +
+        "</article>";
     } else if (payload.message) {
       body.innerHTML = '<p class="subnet-report__empty">' + esc(payload.message) + "</p>";
     } else {

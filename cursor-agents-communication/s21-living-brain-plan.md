@@ -18,13 +18,13 @@
 
 ## Sprint order (revised)
 
-| Phase | Slices | Gate |
-|-------|--------|------|
-| **S0** | RF-2 trust_stats API, RF-3 resolver fixes, regrade pass | `brain_ui_ready` or documented waiver |
-| **S1** | #288 merge + L1 driver card UI, L2 story tags, L3 what's-working chips | S0 |
-| **S2** | L4 trust banner UI, L5 mindmap story path | `trust_banner.ready` |
-| **S3** | L6 signal_weights in scoring, L9 trail dual-write + updated_at fix | parallel with S2 |
-| **S4** | L7–L8, L10–L14 | after S2 green |
+| Phase | Slices | Gate | Status |
+|-------|--------|------|--------|
+| **S0** | RF-2 trust_stats API, RF-3 resolver fixes, regrade pass | `brain_ui_ready` or documented waiver | ✅ #289 merged |
+| **S1** | #288 merge + L1 driver card UI, L2 story tags, L3 what's-working chips | S0 | 🔄 #290 in progress |
+| **S2** | L4 trust banner UI, L5 mindmap story path | `trust_banner.ready` | queued |
+| **S3** | L6 signal_weights in scoring, L9 trail dual-write + updated_at fix | parallel with S2 | L9 in S1 |
+| **S4** | L7–L8, L10–L14 | after S2 green | queued |
 
 ## Wave A — Visible brain (blocked until S0 gate)
 

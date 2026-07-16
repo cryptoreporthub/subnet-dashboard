@@ -7,6 +7,7 @@ Mindmap-integrated Engine.
 
 import os
 import json
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from internal.file_utils import safe_write_json
@@ -136,7 +137,7 @@ class MindmapBridge:
             bool: True if the update was successful, False otherwise.
         """
         self.soul_map_state["last_selector_output"] = selector_output
-        self.soul_map_state["updated_at"] = "2026-06-10T20:00:00Z"
+        self.soul_map_state["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         self._save_to_disk()
         return True
 

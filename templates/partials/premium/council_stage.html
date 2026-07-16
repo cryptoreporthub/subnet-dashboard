@@ -80,6 +80,8 @@
       </div>
       {% endif %}
 
+      <div id="home-driver-card" class="driver-card" aria-live="polite" hidden></div>
+
       <div class="home-job__cta" role="group" aria-label="Primary actions">
         {% set focus_netuid = sn.netuid if sn and sn.netuid is not none else none %}
         {% set wl = habit_watchlist if habit_watchlist is mapping else {} %}
