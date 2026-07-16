@@ -1380,6 +1380,7 @@ button.home-cta {
 }
 
 .time-capsule-modal__copy,
+.time-capsule-modal__image,
 .time-capsule-modal__share {
   font-family: var(--font-mono, monospace);
   font-size: 11px;

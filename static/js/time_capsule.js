@@ -23,8 +23,9 @@
       '<h3 class="time-capsule-modal__title" id="time-capsule-title">Time capsule</h3>' +
       '<div class="time-capsule-modal__body" id="time-capsule-body"></div>' +
       '<div class="time-capsule-modal__actions">' +
-      '<button type="button" class="time-capsule-modal__copy" id="time-capsule-copy">Copy graded call</button>' +
-      '<button type="button" class="time-capsule-modal__share" id="time-capsule-share" hidden>Share</button>' +
+      '<button type="button" class="time-capsule-modal__copy" id="time-capsule-copy">Copy text</button>' +
+      '<button type="button" class="time-capsule-modal__image" id="time-capsule-image" hidden>Save image</button>' +
+      '<button type="button" class="time-capsule-modal__share" id="time-capsule-share" hidden>Share link</button>' +
       "</div></div>";
     document.body.appendChild(modal);
     modal.addEventListener("click", function (e) {
@@ -155,16 +156,60 @@
           navigator.clipboard.writeText(text).catch(function () {});
         }
       };
+      var imageBtn = document.getElementById("time-capsule-image");
+      if (imageBtn && payload.share_image_url) {
+        imageBtn.hidden = false;
+        imageBtn.onclick = function () {
+          var link = document.createElement("a");
+          link.href = payload.share_image_url;
+          link.download = "simivision-graded-call.svg";
+          link.rel = "noopener";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+        };
+      } else if (imageBtn) {
+        imageBtn.hidden = true;
+      }
       var shareBtn = document.getElementById("time-capsule-share");
       if (shareBtn && navigator.share) {
         shareBtn.hidden = false;
         shareBtn.onclick = function () {
-          navigator
-            .share({
-              title: "SimiVision graded call",
-              text: payload.share_text || "",
-            })
-            .catch(function () {});
+          var shareUrl = payload.share_page_url
+            ? window.location.origin + payload.share_page_url
+            : window.location.href;
+          var sharePayload = {
+            title: "SimiVision graded call",
+            text: payload.share_text || "",
+            url: shareUrl,
+          };
+          if (payload.share_image_url && navigator.canShare) {
+            fetch(payload.share_image_url)
+              .then(function (r) {
+                return r.ok ? r.blob() : null;
+              })
+              .then(function (blob) {
+                if (!blob) {
+                  return navigator.share(sharePayload);
+                }
+                var file = new File([blob], "simivision-graded-call.svg", {
+                  type: "image/svg+xml",
+                });
+                if (navigator.canShare({ files: [file] })) {
+                  return navigator.share({
+                    title: sharePayload.title,
+                    text: sharePayload.text,
+                    files: [file],
+                  });
+                }
+                return navigator.share(sharePayload);
+              })
+              .catch(function () {
+                navigator.share(sharePayload).catch(function () {});
+              });
+          } else {
+            navigator.share(sharePayload).catch(function () {});
+          }
         };
       } else if (shareBtn) {
         shareBtn.hidden = true;

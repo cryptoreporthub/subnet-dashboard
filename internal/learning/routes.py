@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import html
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Dict
 
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import HTMLResponse, Response
 
 from datastore.learning_engine import LearningEngine, create_feedback_router
 from internal.council import pick_history, resolver, rotation_tracker, scenario_memory
@@ -218,6 +221,81 @@ async def api_prediction_capsule(prediction_id: str):
     except Exception as exc:
         logger.warning("prediction capsule failed: %s", exc)
         return {"status": "error", "reason": str(exc)}
+
+
+@learning_router.get("/api/predictions/capsule/{prediction_id}/og.svg")
+async def api_prediction_capsule_og(prediction_id: str):
+    """§22 S22-3 — OG share card image for a graded call."""
+    from internal.learning.prediction_capsule import build_og_svg, get_prediction_capsule
+
+    data = get_prediction_capsule(prediction_id)
+    if data.get("status") != "success":
+        svg = build_og_svg(
+            {
+                "name": "Graded call",
+                "correct": None,
+                "statement": "Prediction not found or not yet graded.",
+            }
+        )
+    else:
+        svg = build_og_svg(data.get("prediction") or {})
+    return Response(
+        content=svg,
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
+@learning_router.get("/share/call/{prediction_id}", response_class=HTMLResponse)
+async def share_call_page(prediction_id: str, request: Request):
+    """§22 S22-3 — public share page with OG meta for social crawlers."""
+    from internal.learning.prediction_capsule import capsule_share_urls, get_prediction_capsule
+
+    data = get_prediction_capsule(prediction_id)
+    if data.get("status") != "success":
+        return HTMLResponse(
+            """<!DOCTYPE html><html><head><title>Graded call not found</title>
+            <meta name="robots" content="noindex"></head>
+            <body><p>Prediction not found.</p><p><a href="/">Open SimiVision</a></p></body></html>"""
+        )
+
+    pred = data.get("prediction") or {}
+    name = pred.get("name") or f"SN{pred.get('netuid', '?')}"
+    urls = capsule_share_urls(prediction_id)
+    base = os.environ.get("APP_BASE_URL", "").strip().rstrip("/") or str(request.base_url).rstrip("/")
+    image_url = f"{base}{urls['share_image_url']}"
+    page_url = f"{base}{urls['share_page_url']}"
+    title = f"SimiVision graded call — {name}"
+    desc = (pred.get("statement") or "Direction-graded subnet call from the SimiVision learning loop.")[:200]
+    esc = html.escape
+
+    return HTMLResponse(
+        f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{esc(title)}</title>
+  <meta name="description" content="{esc(desc)}">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="{esc(page_url)}">
+  <meta property="og:title" content="{esc(title)}">
+  <meta property="og:description" content="{esc(desc)}">
+  <meta property="og:image" content="{esc(image_url)}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{esc(title)}">
+  <meta name="twitter:description" content="{esc(desc)}">
+  <meta name="twitter:image" content="{esc(image_url)}">
+</head>
+<body style="margin:0;background:#0a0a0a;color:#e8f0e9;font-family:system-ui,sans-serif;">
+  <main style="max-width:720px;margin:0 auto;padding:24px;text-align:center;">
+    <img src="{esc(urls['share_image_url'])}" alt="{esc(title)}" style="max-width:100%;height:auto;border-radius:12px;">
+    <p style="margin-top:16px;color:#8a9a8e;">{esc(desc)}</p>
+    <p><a href="/" style="color:#00ff41;">Open SimiVision Council</a></p>
+  </main>
+</body>
+</html>"""
+    )
 
 
 @learning_router.get("/api/learning/stats")

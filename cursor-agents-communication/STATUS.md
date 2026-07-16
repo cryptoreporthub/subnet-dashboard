@@ -42,7 +42,7 @@
 |-------|--------|
 | **S22-1** | Full subnet list to resolver | ✅ #298 |
 | **S22-2** | Boot immediate resolver tick | ✅ #298 |
-| **S22-3** | OG share images | ⏳ optional |
+| **S22-3** | OG share images | ✅ #300 |
 
 ## Gate (RF-2 / RF-3)
 
