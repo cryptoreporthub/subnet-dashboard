@@ -1,7 +1,7 @@
 # §20 — Agent-only polish (no human gates)
 
-**Status:** APPROVED 2026-07-16  
-**main baseline:** `64b4d6d` (#284 §19 M3+U5p)  
+**Status:** COMPLETE 2026-07-16  
+**main baseline:** `0e29e5d` (#285 §20 plan)  
 **Models:** Composer 2.5-fast · Grok subagent DESIGN only if ambiguous
 
 ## Human gates — SKIP entire phase
@@ -17,10 +17,10 @@
 
 | # | Slice | Goal | Files |
 |---|-------|------|-------|
-| **T1** | Doc sync | STATUS + board: §18 ✅ §19 ✅ (#282–#284); §20 active | `cursor-agents-communication/*` |
-| **T2** | Letter export UI | Copy/download markdown for weekly + daily letter panels (no email/SMTP) | `static/js`, templates |
-| **T3** | verify_prod | Add checks: message-intel status, social summary, `/api/report/1` | `scripts/verify_prod.sh` |
-| **T4** | Report UX | Subnet report panel: loading/error states + keyboard a11y (build on #277) | `static/js/subnet_report.js` |
+| **T1** | Doc sync | ✅ STATUS + board: §18 ✅ §19 ✅ (#282–#284); §20 complete | `cursor-agents-communication/*` |
+| **T2** | Letter export UI | ✅ copy/download markdown for weekly + daily letter panels | `static/js/letter_export.js`, templates |
+| **T3** | verify_prod | ✅ message-intel status, social summary, `/api/report/1`; fixed backtest curl | `scripts/verify_prod.sh` |
+| **T4** | Report UX | ✅ loading/error states + keyboard a11y on subnet report | `static/js/subnet_report.js` |
 
 **Stop human only if:** CI fail · On-Demand $ beyond Pro+
 

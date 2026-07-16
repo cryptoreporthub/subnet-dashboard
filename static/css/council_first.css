@@ -600,6 +600,18 @@ button.home-cta {
   margin-bottom: 14px;
 }
 
+.weekly-letter__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+}
+
+.weekly-letter__actions .tab-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .weekly-letter__title {
   font-family: var(--font-mono, monospace);
   font-size: 12px;

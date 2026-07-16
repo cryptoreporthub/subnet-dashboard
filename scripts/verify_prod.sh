@@ -36,6 +36,7 @@ lr=d.get('listener') or {}
 print('has_creds:', lr.get('has_creds'))
 print('running:', lr.get('running'))
 print('reason:', lr.get('reason'))
+print('live:', lr.get('live'))
 print('empty:', d.get('empty'))
 "
 
@@ -47,7 +48,16 @@ print('rows:', len(d.get('rows') or []))
 print('empty:', d.get('empty'))
 "
 
+echo "== subnet report =="
+curl -fsS "$BASE/api/report/1" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print('status:', d.get('status'))
+print('has_markdown:', bool(d.get('markdown')))
+"
+
 echo "== backtest (P5) =="
+curl -fsS "$BASE/api/backtest" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
 c=d.get('council',{})
