@@ -779,6 +779,54 @@ button.home-cta {
   line-height: 1.45;
 }
 
+/* ---------- §19 message-intel feed ---------- */
+.message-intel__head {
+  margin-bottom: 10px;
+}
+.message-intel__feed {
+  max-height: 360px;
+  overflow: auto;
+}
+.message-intel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.message-intel__item {
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 255, 65, 0.1);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.15);
+}
+.message-intel__item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.message-intel__author {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--stage-muted);
+}
+.message-intel__content {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: rgba(232, 245, 233, 0.92);
+}
+.message-intel__time {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: rgba(138, 154, 142, 0.85);
+}
+
 /* ---------- Pro drawer (council bench demoted) ---------- */
 .pro-drawer {
   border-top: 1px solid rgba(0, 255, 65, 0.12);

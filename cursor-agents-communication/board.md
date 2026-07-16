@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-16T00:20:00Z — **§18 complete**  
-**main:** `6b37876` (+ #280 mobile DEPLOY)
+**Last updated:** 2026-07-16T01:30:00Z — **§19 M1 in progress**  
+**main:** `d4cb7bc`
 
 ## Ditto boot (read first)
 
@@ -35,18 +35,17 @@ Specs: `token-budget-rules.md` · `model-guide.md` · `s18-automated-build-plan.
 2. **This file** — `cursor-agents-communication/board.md`
 3. **Token budget** — `cursor-agents-communication/token-budget-rules.md`
 4. **Model guide** — `cursor-agents-communication/model-guide.md`
-5. **Build queue** — `cursor-agents-communication/s18-automated-build-plan.md`
+5. **Build queue** — `cursor-agents-communication/s19-automated-build-plan.md` (active) · `s18-automated-build-plan.md` (done)
 6. **Grok lock rule** — `cursor-agents-communication/grok-lock-composer-write-rule.md`
 
 ## Ready for next work
 
-**§18 done.** Optional: A1 conviction delivery secrets · F7 DNS · B12/S5 when asked.
+**§19 active:** M1 message-intel UI → M2 social wire. **Human:** F7 DNS · optional A1b bot.
 
 | PR | Role | State |
 |----|------|-------|
-| **#280** | C1 mobile DEPLOY playbook | ✅ **merged** |
-| **#279** | C1 message-intel telethon + bootstrap | ✅ **merged** |
-| **#277** | B1 O3 subnet report UI | ✅ **merged** |
+| **M1** | §19 live Telegram feed UI | 🟡 in progress |
+| **#281** | §18 STATUS complete | ✅ **merged** |
 
 **Health:** `GET /health` · `GET /api/message-intel/status` → **listener live**
 
@@ -57,6 +56,7 @@ Specs: `token-budget-rules.md` · `model-guide.md` · `s18-automated-build-plan.
 | **N/O · P · §16** | ✅ complete |
 | **§17 product** | ✅ **complete** (#267–#271, #274) |
 | **§18** | ✅ **complete** (C1 live) |
+| **§19** | 🟡 M1→M2 in progress |
 
 ## Agent posture
 

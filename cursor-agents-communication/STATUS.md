@@ -1,26 +1,24 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-16T00:20:00Z  
-**main:** `6b37876` (#279 C1) · prod listener **live**
+**Updated:** 2026-07-16T01:30:00Z  
+**main:** `d4cb7bc` (#281 §18 complete)
 
 ## One-line
 
-**§18 COMPLETE (H1–C1). Prod: message-intel listener running; store honest-empty until group traffic. Optional: A1 conviction alert delivery secrets.**
+**§19 IN PROGRESS — M1 message-intel feed UI. §18 done; C1 listener live on Fly. Human: F7 DNS when ready.**
 
-## §17 (done)
+## §18 (done)
 
-B8–B11 + U4 merged (#267–#271, #274). F7/B12 deferred.
+H1–C1 merged (#265–#281). Prod listener `live: true`.
 
-## §18 queue
+## §19 queue
 
-See **`s18-automated-build-plan.md`**.
+See **`s19-automated-build-plan.md`**: M1→M2 → (F7 human) → B12.
 
 | Slice | State |
 |-------|--------|
-| **H1–B1** | ✅ #265–#278 |
-| **C1** | ✅ **live on Fly** — `listener.reason=running`, `session=true` (#279, human bootstrap done) |
-| **A1** | ✅ docs — optional human: `CONVICTION_ALERT_DELIVERY` + bot/webhook secrets |
-
-**Prod check:** `GET /api/message-intel/status` → `live: true` · `verify_prod.sh` message-intel line green.
+| **M1** | Message-intel feed UI — in PR |
+| **F7** | Custom domain — **human DNS** |
+| **A1b** | Conviction delivery — optional bot secrets |
 
 **Billing watch:** On-Demand **$** beyond Pro+ → tell human.
