@@ -63,6 +63,7 @@ def test_run_backtest_counts_gradeable_rows():
     for judge in ("oracle", "echo", "pulse"):
         assert judge in result["judges"]
         assert result["judges"][judge]["win_rate"] is not None
+        assert "filtered" in result["judges"][judge]
         assert len(result["judges"][judge]["calibration"]) == 10
 
 

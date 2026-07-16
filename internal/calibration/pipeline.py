@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from internal.council.deduplication import mark_duplicates_in_resolved
-from internal.council.grading import direction_correct
+from internal.council.grading import direction_correct, hybrid_score, hybrid_score_status
 from internal.council.resolver import PREDICTIONS_PATH, _normalize_expert
 from internal.council.weights import DEFAULT_WEIGHTS, load_weights, save_weights
 
@@ -173,6 +173,22 @@ def _holdout_rows(rows: List[Dict[str, Any]], backtest_n: int) -> List[Dict[str,
     return ordered[-backtest_n:]
 
 
+def _cert_row_score(row: Dict[str, Any], actual_pct: float) -> float:
+    """J4 phase 2: hybrid score for signal_impact rows when gated; else direction-only."""
+    try:
+        actual = float(actual_pct)
+    except (TypeError, ValueError):
+        return 0.0
+    mag_src = str(row.get("magnitude_source") or "")
+    if mag_src == "signal_impact":
+        status = hybrid_score_status()
+        if status.get("ready"):
+            hs = hybrid_score(row, actual, sample_n=int(status.get("n") or 0))
+            if hs is not None:
+                return float(hs)
+    return 1.0 if direction_correct(row, actual) else 0.0
+
+
 def _weighted_accuracy(
     rows: List[Dict[str, Any]],
     weights: Dict[str, float],
@@ -189,8 +205,7 @@ def _weighted_accuracy(
             continue
         w = float(weights.get(expert, 1.0) or 1.0)
         den += w
-        if direction_correct(row, actual_pct):
-            num += w
+        num += w * _cert_row_score(row, actual_pct)
     if den <= 0:
         return None
     return round(num / den, 4)
@@ -226,6 +241,10 @@ def certify_weights(
     sanity_errors = _sanity_checks(proposed)
     proposed_accuracy = _weighted_accuracy(holdout, proposed)
     current_accuracy = _weighted_accuracy(holdout, current)
+    hybrid_status = hybrid_score_status()
+    signal_impact_n = sum(
+        1 for row in holdout if str(row.get("magnitude_source") or "") == "signal_impact"
+    )
 
     report: Dict[str, Any] = {
         "passed": False,
@@ -236,6 +255,9 @@ def certify_weights(
         "current_accuracy": current_accuracy,
         "sanity_errors": sanity_errors,
         "reason": None,
+        "scoring_mode": "hybrid" if hybrid_status.get("ready") and signal_impact_n else "direction",
+        "hybrid_ready": bool(hybrid_status.get("ready")),
+        "signal_impact_holdout": signal_impact_n,
     }
 
     if sanity_errors:

@@ -13,6 +13,7 @@ from internal.learning.predictions_store import load_predictions
 JUDGES = ("oracle", "echo", "pulse")
 _SKIP_OUTCOMES = frozenset({"duplicate", "expired", "ungradeable"})
 _CALIBRATION_BINS = 10
+_ORACLE_FILTER_SCORE = 0.55
 
 
 def _gradeable_rows(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -67,11 +68,14 @@ def _subnet_from_row(row: Dict[str, Any]) -> Dict[str, Any]:
     subnet = row.get("subnet_snapshot") if isinstance(row.get("subnet_snapshot"), dict) else {}
     return {
         "price_change_24h": subnet.get("price_change_24h", row.get("price_change_24h_at_creation")),
+        "price_change_7d": subnet.get("price_change_7d", row.get("price_change_7d_at_creation")),
         "price": subnet.get("price", row.get("reference_price")),
         "apy": subnet.get("apy", row.get("apy_at_creation")),
+        "staking_yield_apy": subnet.get("staking_yield_apy"),
         "emission": subnet.get("emission", row.get("emission_at_creation")),
         "volume": subnet.get("volume", row.get("volume_at_creation")),
         "social_mentions": subnet.get("social_mentions", row.get("social_mentions_at_creation")),
+        "yield_trap": subnet.get("yield_trap"),
     }
 
 
@@ -108,6 +112,29 @@ def _init_judge_stats() -> Dict[str, Any]:
 
 def _calibration_hit(row: Dict[str, Any], actual_pct: float) -> bool:
     return direction_correct(row, actual_pct)
+
+
+def _filtered_judge_win_rate(
+    history: List[Dict[str, Any]],
+    judge: str,
+    *,
+    min_score: float = _ORACLE_FILTER_SCORE,
+) -> Dict[str, Any]:
+    picks = [
+        h
+        for h in history
+        if isinstance(h.get("judges"), dict)
+        and isinstance(h["judges"].get(judge), dict)
+        and float(h["judges"][judge].get("score") or 0) >= min_score
+    ]
+    if not picks:
+        return {"n": 0, "win_rate": None, "min_score": min_score}
+    wins = sum(1 for h in picks if h["judges"][judge].get("win"))
+    return {
+        "n": len(picks),
+        "win_rate": round(wins / len(picks), 4),
+        "min_score": min_score,
+    }
 
 
 def run_backtest(
@@ -173,7 +200,7 @@ def run_backtest(
             score = float(judge_scores.get("score") or 0.5)
             bin_idx = min(_CALIBRATION_BINS - 1, max(0, int(score * _CALIBRATION_BINS)))
             stats["calibration"][bin_idx]["count"] += 1
-            if council_hit:
+            if win:
                 stats["calibration"][bin_idx]["hits"] += 1
 
             entry["judges"][name] = {
@@ -214,6 +241,7 @@ def run_backtest(
             "avg_pnl_pct": round(stats["total_pnl_pct"] / total, 4) if total else None,
             "total_pnl_pct": stats["total_pnl_pct"],
             "calibration": cal,
+            "filtered": _filtered_judge_win_rate(history, name),
         }
 
     return {
