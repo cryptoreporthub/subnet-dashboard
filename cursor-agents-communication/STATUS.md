@@ -1,11 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-16T09:38:00Z  
-**main:** `9b814ae` (#298 §22 resolver throughput)
+**Updated:** 2026-07-16T18:10:00Z  
+**main:** `8275d28` (#300 §22 complete)
 
 ## One-line
 
-**§22 Post-Trust** — resolver passes full subnet prices on each tick; boot runs immediate resolver tick.
+**§23 Share PNG** — raster OG images for social crawlers + Save PNG / Copy link in time-capsule.
 
 ## Done
 
@@ -16,7 +16,8 @@
 | **§19** | #282–#284 |
 | **§20** | #286 (T1–T4 letter export · verify_prod · report UX) |
 | **§21** | #288–#297 (Living Brain — see `s21-living-brain-plan.md`) |
-| **§22** | #298 (S22-1/2 — see `s22-post-trust-plan.md`) |
+| **§22** | #298, #300 (Post-Trust — see `s22-post-trust-plan.md`) |
+| **§23** | in progress — see `s23-share-png-plan.md` |
 
 ## §21 summary (merged)
 

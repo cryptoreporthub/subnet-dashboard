@@ -1,6 +1,7 @@
 """§21 L12 / §22 S22-3 — prediction time-capsule replay + OG share card."""
 
 from internal.learning.prediction_capsule import (
+    build_og_png,
     build_og_svg,
     build_share_card,
     capsule_share_urls,
@@ -50,6 +51,7 @@ def test_capsule_and_share_card(tmp_path, monkeypatch):
     assert "yield trap" in share.lower() or "Yield trap" in share
     urls = capsule_share_urls("pred_capsule_1")
     assert urls["share_image_url"].endswith("/pred_capsule_1/og.svg")
+    assert urls["share_image_png_url"].endswith("/pred_capsule_1/og.png")
     assert urls["share_page_url"] == "/share/call/pred_capsule_1"
     assert out["share_image_url"] == urls["share_image_url"]
 
@@ -71,6 +73,21 @@ def test_og_svg_contains_verdict_and_name():
     assert "HIT" in svg
     assert "yield trap" in svg
     assert "Expected +3.5%" in svg
+
+
+def test_og_png_magic_and_content():
+    png = build_og_png(
+        {
+            "name": "Taoshi",
+            "predicted_pct": 3.5,
+            "actual_pct": 2.1,
+            "correct": True,
+            "statement": "Token up",
+            "subnet_snapshot": {"yield_trap": True},
+        }
+    )
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+    assert len(png) > 5000
 
 
 def test_og_svg_route_and_share_page(tmp_path, monkeypatch):
@@ -102,11 +119,16 @@ def test_og_svg_route_and_share_page(tmp_path, monkeypatch):
     assert og.status_code == 200
     assert "image/svg+xml" in og.headers.get("content-type", "")
     assert "Gamma" in og.text
-    assert "HIT" in og.text
+
+    png = client.get("/api/predictions/capsule/pred_og_1/og.png")
+    assert png.status_code == 200
+    assert "image/png" in png.headers.get("content-type", "")
+    assert png.content[:8] == b"\x89PNG\r\n\x1a\n"
 
     page = client.get("/share/call/pred_og_1")
     assert page.status_code == 200
     assert 'property="og:image"' in page.text
+    assert "og.png" in page.text
     assert "Gamma" in page.text
 
     missing = client.get("/api/predictions/capsule/missing-id/og.svg")

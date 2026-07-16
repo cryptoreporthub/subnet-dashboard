@@ -246,6 +246,29 @@ async def api_prediction_capsule_og(prediction_id: str):
     )
 
 
+@learning_router.get("/api/predictions/capsule/{prediction_id}/og.png")
+async def api_prediction_capsule_og_png(prediction_id: str):
+    """§23 S23-1 — OG share card PNG for social crawlers."""
+    from internal.learning.prediction_capsule import build_og_png, get_prediction_capsule
+
+    data = get_prediction_capsule(prediction_id)
+    if data.get("status") != "success":
+        png = build_og_png(
+            {
+                "name": "Graded call",
+                "correct": None,
+                "statement": "Prediction not found or not yet graded.",
+            }
+        )
+    else:
+        png = build_og_png(data.get("prediction") or {})
+    return Response(
+        content=png,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
 @learning_router.get("/share/call/{prediction_id}", response_class=HTMLResponse)
 async def share_call_page(prediction_id: str, request: Request):
     """§22 S22-3 — public share page with OG meta for social crawlers."""
@@ -263,7 +286,7 @@ async def share_call_page(prediction_id: str, request: Request):
     name = pred.get("name") or f"SN{pred.get('netuid', '?')}"
     urls = capsule_share_urls(prediction_id)
     base = os.environ.get("APP_BASE_URL", "").strip().rstrip("/") or str(request.base_url).rstrip("/")
-    image_url = f"{base}{urls['share_image_url']}"
+    image_url = f"{base}{urls['share_image_png_url']}"
     page_url = f"{base}{urls['share_page_url']}"
     title = f"SimiVision graded call — {name}"
     desc = (pred.get("statement") or "Direction-graded subnet call from the SimiVision learning loop.")[:200]
@@ -289,7 +312,7 @@ async def share_call_page(prediction_id: str, request: Request):
 </head>
 <body style="margin:0;background:#0a0a0a;color:#e8f0e9;font-family:system-ui,sans-serif;">
   <main style="max-width:720px;margin:0 auto;padding:24px;text-align:center;">
-    <img src="{esc(urls['share_image_url'])}" alt="{esc(title)}" style="max-width:100%;height:auto;border-radius:12px;">
+    <img src="{esc(urls['share_image_png_url'])}" alt="{esc(title)}" style="max-width:100%;height:auto;border-radius:12px;">
     <p style="margin-top:16px;color:#8a9a8e;">{esc(desc)}</p>
     <p><a href="/" style="color:#00ff41;">Open SimiVision Council</a></p>
   </main>

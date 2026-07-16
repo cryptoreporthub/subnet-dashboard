@@ -24,7 +24,8 @@
       '<div class="time-capsule-modal__body" id="time-capsule-body"></div>' +
       '<div class="time-capsule-modal__actions">' +
       '<button type="button" class="time-capsule-modal__copy" id="time-capsule-copy">Copy text</button>' +
-      '<button type="button" class="time-capsule-modal__image" id="time-capsule-image" hidden>Save image</button>' +
+      '<button type="button" class="time-capsule-modal__link" id="time-capsule-link" hidden>Copy link</button>' +
+      '<button type="button" class="time-capsule-modal__image" id="time-capsule-image" hidden>Save PNG</button>' +
       '<button type="button" class="time-capsule-modal__share" id="time-capsule-share" hidden>Share link</button>' +
       "</div></div>";
     document.body.appendChild(modal);
@@ -157,12 +158,15 @@
         }
       };
       var imageBtn = document.getElementById("time-capsule-image");
-      if (imageBtn && payload.share_image_url) {
+      var imageUrl = payload.share_image_png_url || payload.share_image_url;
+      if (imageBtn && imageUrl) {
         imageBtn.hidden = false;
         imageBtn.onclick = function () {
           var link = document.createElement("a");
-          link.href = payload.share_image_url;
-          link.download = "simivision-graded-call.svg";
+          link.href = imageUrl;
+          link.download = payload.share_image_png_url
+            ? "simivision-graded-call.png"
+            : "simivision-graded-call.svg";
           link.rel = "noopener";
           document.body.appendChild(link);
           link.click();
@@ -170,6 +174,18 @@
         };
       } else if (imageBtn) {
         imageBtn.hidden = true;
+      }
+      var linkBtn = document.getElementById("time-capsule-link");
+      if (linkBtn && payload.share_page_url) {
+        linkBtn.hidden = false;
+        linkBtn.onclick = function () {
+          var url = window.location.origin + payload.share_page_url;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).catch(function () {});
+          }
+        };
+      } else if (linkBtn) {
+        linkBtn.hidden = true;
       }
       var shareBtn = document.getElementById("time-capsule-share");
       if (shareBtn && navigator.share) {
@@ -183,8 +199,9 @@
             text: payload.share_text || "",
             url: shareUrl,
           };
-          if (payload.share_image_url && navigator.canShare) {
-            fetch(payload.share_image_url)
+          var fileUrl = payload.share_image_png_url || payload.share_image_url;
+          if (fileUrl && navigator.canShare) {
+            fetch(fileUrl)
               .then(function (r) {
                 return r.ok ? r.blob() : null;
               })
@@ -192,9 +209,12 @@
                 if (!blob) {
                   return navigator.share(sharePayload);
                 }
-                var file = new File([blob], "simivision-graded-call.svg", {
-                  type: "image/svg+xml",
-                });
+                var isPng = Boolean(payload.share_image_png_url);
+                var file = new File(
+                  [blob],
+                  isPng ? "simivision-graded-call.png" : "simivision-graded-call.svg",
+                  { type: isPng ? "image/png" : "image/svg+xml" }
+                );
                 if (navigator.canShare({ files: [file] })) {
                   return navigator.share({
                     title: sharePayload.title,

@@ -1,6 +1,6 @@
 # §22 Post-Trust — resolver throughput + share polish
 
-**Status:** in progress  
+**Status:** complete  
 **Updated:** 2026-07-16
 
 ## Goal
