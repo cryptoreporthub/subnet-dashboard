@@ -90,6 +90,7 @@
       if (!outcome) continue;
       var netuid = pred.netuid;
       items.push({
+        id: pred.id,
         netuid: netuid,
         name: pred.name || (netuid != null ? "SN" + netuid : "—"),
         predicted_pct: pred.predicted_pct,
@@ -197,7 +198,13 @@
       html +=
         '<li class="story-strip__item story-strip__item--' +
         esc(row.outcome) +
-        '">' +
+        '"' +
+        (row.id
+          ? ' data-prediction-id="' +
+            esc(row.id) +
+            '" role="button" tabindex="0" title="Replay pick-time snapshot"'
+          : "") +
+        ">" +
         '<span class="story-strip__verdict" aria-label="' +
         esc(row.outcome) +
         '">' +
