@@ -74,6 +74,7 @@ CONTRACT = [
     ("GET", "/api/mindmap/summary", None),
     ("GET", "/api/message-intel", None),
     ("GET", "/api/message-intel/status", None),
+    ("GET", "/api/message-intel/social", None),
     ("GET", "/api/learning/stats", None),
     ("GET", "/api/learning-metrics", None),
     ("GET", "/api/predictions", None),
