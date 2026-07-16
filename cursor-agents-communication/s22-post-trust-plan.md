@@ -11,8 +11,8 @@ Keep the §21 trust surfaces honest (RF-2) and unblocked (RF-3) in production by
 
 | Slice | State | Content |
 |-------|-------|---------|
-| **S22-1** | 🔄 | Scheduler passes **full subnet list** to `resolve_due_predictions` (batch stays telemetry-only) |
-| **S22-2** | 🔄 | Boot `immediate=True` resolver tick so pending backlog clears on deploy |
+| **S22-1** | ✅ | Scheduler passes **full subnet list** to `resolve_due_predictions` (#298) |
+| **S22-2** | ✅ | Boot `immediate=True` resolver tick (#298) |
 | **S22-3** | ⏳ | OG image generation for graded-call share cards (optional) |
 
 ## RF gates (unchanged)

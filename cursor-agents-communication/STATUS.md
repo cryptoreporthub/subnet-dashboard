@@ -1,7 +1,7 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-16T09:30:00Z  
-**main:** `46c0448` (#297 docs sync + L14 card)
+**Updated:** 2026-07-16T09:38:00Z  
+**main:** `9b814ae` (#298 §22 resolver throughput)
 
 ## One-line
 
@@ -16,7 +16,7 @@
 | **§19** | #282–#284 |
 | **§20** | #286 (T1–T4 letter export · verify_prod · report UX) |
 | **§21** | #288–#297 (Living Brain — see `s21-living-brain-plan.md`) |
-| **§22** | in progress — see `s22-post-trust-plan.md` |
+| **§22** | #298 (S22-1/2 — see `s22-post-trust-plan.md`) |
 
 ## §21 summary (merged)
 
@@ -40,8 +40,8 @@
 
 | Slice | State |
 |-------|--------|
-| **S22-1** | Full subnet list to resolver | 🔄 this PR |
-| **S22-2** | Boot immediate resolver tick | 🔄 this PR |
+| **S22-1** | Full subnet list to resolver | ✅ #298 |
+| **S22-2** | Boot immediate resolver tick | ✅ #298 |
 | **S22-3** | OG share images | ⏳ optional |
 
 ## Gate (RF-2 / RF-3)

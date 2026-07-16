@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-16T09:15:00Z — **§21 complete (#288–#296)**  
-**main:** `310ded6`
+**Last updated:** 2026-07-16T09:38:00Z — **§21 complete · §22 S22-1/2 merged (#298)**  
+**main:** `9b814ae`
 
 ## Ditto boot (read first)
 
