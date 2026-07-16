@@ -13,7 +13,7 @@ Keep the §21 trust surfaces honest (RF-2) and unblocked (RF-3) in production by
 |-------|-------|---------|
 | **S22-1** | ✅ | Scheduler passes **full subnet list** to `resolve_due_predictions` (#298) |
 | **S22-2** | ✅ | Boot `immediate=True` resolver tick (#298) |
-| **S22-3** | ⏳ | OG image generation for graded-call share cards (optional) |
+| **S22-3** | ✅ | OG SVG share cards + `/share/call/{id}` page (#300) |
 
 ## RF gates (unchanged)
 
