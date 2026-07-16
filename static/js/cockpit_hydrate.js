@@ -480,16 +480,59 @@
 
   function renderKpi(stats) {
     if (!stats) return;
-    var acc = Math.round((Number(stats.accuracy) || 0) * 1000) / 10;
     var section = document.getElementById('section-kpi');
     if (!section) return;
     var strip = section.querySelector('.kpi-strip');
     if (!strip) return;
-    var vals = strip.querySelectorAll('.val');
-    if (vals[0]) vals[0].textContent = acc + '%';
-    if (vals[1]) vals[1].textContent = String(stats.pending || 0);
-    if (vals[2]) vals[2].textContent = String(stats.resolved || 0);
-    if (vals[3]) vals[3].textContent = String(stats.total_records || 0);
+
+    var tb = stats.trust_banner || {};
+    var accRaw = tb.accuracy != null ? tb.accuracy : stats.accuracy;
+    var acc = Math.round((Number(accRaw) || 0) * 1000) / 10;
+    var graded = tb.graded != null ? tb.graded : (Number(stats.correct || 0) + Number(stats.wrong || 0));
+    var expired = Number(stats.expired != null ? stats.expired : tb.expired || 0);
+    var expiredRate = stats.expired_rate != null ? stats.expired_rate : tb.expired_rate;
+    var expiredPct = expiredRate != null ? Math.round(Number(expiredRate) * 1000) / 10 : null;
+    var wd = stats.watchdog || tb.watchdog || {};
+    var ready = stats.brain_ui_ready != null ? stats.brain_ui_ready : tb.ready;
+
+    var accEl = document.getElementById('kpi-accuracy');
+    if (accEl) {
+      accEl.textContent = graded > 0 ? acc + '%' : '—';
+      accEl.className = 'val' + (acc >= 50 ? ' pos' : acc > 0 ? ' neg' : '');
+    }
+    var gradedEl = document.getElementById('kpi-graded');
+    if (gradedEl) {
+      gradedEl.textContent = (stats.correct || 0) + '✓ / ' + (stats.wrong || 0) + '✗ graded (n=' + graded + ')';
+    }
+    var expEl = document.getElementById('kpi-expired');
+    if (expEl) {
+      expEl.textContent = String(expired);
+      expEl.className = 'val' + (expiredPct != null && expiredPct >= 10 ? ' neg' : '');
+    }
+    var expRateEl = document.getElementById('kpi-expired-rate');
+    if (expRateEl) {
+      expRateEl.textContent = expiredPct != null ? expiredPct + '% of ledger' : 'resolver backlog';
+    }
+    var pendEl = document.getElementById('kpi-pending');
+    if (pendEl) pendEl.textContent = String(stats.pending || 0);
+    var intEl = document.getElementById('kpi-integrity');
+    if (intEl) {
+      intEl.textContent = ready ? 'Ready' : 'Blocked';
+      intEl.className = 'val' + (ready ? ' pos' : ' neg');
+      intEl.style.fontSize = '15px';
+    }
+    var wdEl = document.getElementById('kpi-watchdog');
+    if (wdEl) {
+      if (wd.warning) {
+        wdEl.textContent = wd.reason || 'watchdog warning';
+      } else if (tb.message) {
+        wdEl.textContent = tb.message;
+      } else if (ready) {
+        wdEl.textContent = 'trust surfaces unlocked';
+      } else {
+        wdEl.textContent = 'expired < 10% + n≥30 required';
+      }
+    }
   }
 
   function pctLabel(rate) {
