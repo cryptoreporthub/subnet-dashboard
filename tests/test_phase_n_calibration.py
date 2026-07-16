@@ -93,6 +93,24 @@ def test_cert_passes_when_proposed_better(isolate_paths):
     current = {k: 1.0 for k in proposed}
     cert = cal.certify_weights(proposed, rows, current=current)
     assert cert["passed"] is True
+    assert cert["scoring_mode"] == "direction"
+
+
+def test_cert_reports_hybrid_mode_when_gated(isolate_paths, monkeypatch):
+    from internal.council.grading import HYBRID_MIN_SAMPLE
+
+    rows = []
+    for i in range(HYBRID_MIN_SAMPLE):
+        row = _resolved_row("quant", True, idx=i)
+        row["magnitude_source"] = "signal_impact"
+        row["predicted_pct"] = 2.0
+        row["actual_pct"] = 2.0
+        rows.append(row)
+    proposed = cal.compute_proposed_weights(rows)
+    cert = cal.certify_weights(proposed, rows, current=proposed)
+    assert cert["hybrid_ready"] is True
+    assert cert["scoring_mode"] == "hybrid"
+    assert cert["signal_impact_holdout"] > 0
 
 
 def test_dedupe_rows_excluded_from_training(isolate_paths):

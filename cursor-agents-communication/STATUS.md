@@ -1,11 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-16T18:25:00Z  
-**main:** `3037744` (#301 §23 PNG share)
+**Updated:** 2026-07-16T21:55:00Z  
+**main:** `faa0598` (#302 §24)
 
 ## One-line
 
-**§24 Backlog batch** — pick history writes, emission deltas, adversarial judge, learned yield-trap cutoffs.
+**§25 N1 + J4** — Oracle tuning + hybrid cert scoring for signal_impact predictions.
 
 ## Done
 
@@ -15,11 +15,12 @@
 | **§21** | #288–#297 (Living Brain) |
 | **§22** | #298, #300 (Post-Trust) |
 | **§23** | #301 (PNG OG share) |
-| **§24** | in progress — `s24-backlog-batch-plan.md` |
+| **§24** | #302 (backlog batch) |
+| **§25** | in progress — `s25-calibration-oracle-plan.md` |
 
 ## Active plan
 
-**`cursor-agents-communication/s24-backlog-batch-plan.md`**
+**`cursor-agents-communication/s25-calibration-oracle-plan.md`**
 
 ## Gate (RF-2 / RF-3)
 
