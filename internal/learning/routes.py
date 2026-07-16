@@ -10,6 +10,7 @@ from fastapi import APIRouter, Query, Request
 
 from datastore.learning_engine import LearningEngine, create_feedback_router
 from internal.council import pick_history, resolver, rotation_tracker, scenario_memory
+from internal.council.watchdog import check_resolver_watchdog
 from internal.council.weights import load_impact_strength, load_weights
 from internal.council.resolver_scheduler import (
     get_prediction_resolver_scheduler,
@@ -191,16 +192,32 @@ async def api_learning_stats():
     engine = LearningEngine()
     stats = engine.get_stats()
     scenario = _scenario_memory_summary()
+    resolved_payload = resolver.get_resolved_predictions()
+    resolver_stats = resolved_payload.get("stats", {})
+    pending_rows = load_predictions().get("predictions", []) or []
+    watchdog = check_resolver_watchdog(pending_rows)
+    from internal.learning.trust_stats import build_trust_banner
+
+    trust_banner = build_trust_banner(resolver_stats, watchdog=watchdog)
     return {
         "status": "success",
         "data": {
             "expert_weights": stats.get("expert_weights", {}),
-            "total_records": stats.get("total_records", 0),
-            "accuracy": stats.get("accuracy", 0.0),
-            "pending": stats.get("pending", 0),
-            "resolved": stats.get("resolved", 0),
+            "total_records": resolver_stats.get("total", stats.get("total_records", 0)),
+            "accuracy": resolver_stats.get("accuracy", stats.get("accuracy", 0.0)),
+            "correct": resolver_stats.get("correct", 0),
+            "wrong": resolver_stats.get("wrong", 0),
+            "expired": resolver_stats.get("expired", 0),
+            "expired_rate": trust_banner.get("expired_rate"),
+            "duplicate": resolver_stats.get("duplicate", 0),
+            "pending": resolver_stats.get("pending", stats.get("pending", 0)),
+            "graded": trust_banner.get("graded"),
             "last_updated": stats.get("last_updated") or _utcnow_z(),
             "scenario_memory": scenario,
+            "watchdog": watchdog,
+            "trust_banner": trust_banner,
+            "integrity": trust_banner.get("integrity_gate"),
+            "brain_ui_ready": trust_banner.get("ready"),
         },
     }
 

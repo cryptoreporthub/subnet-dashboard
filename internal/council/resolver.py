@@ -265,7 +265,9 @@ def lookup_horizon_price(
     live_prices = live_prices or {}
     uid = prediction.get("netuid")
     live = float(live_prices.get(uid, 0) or 0)
-    if live > 0 and abs((now - resolve_at).total_seconds()) <= CANDLE_LOOKUP_MINUTES * 60:
+    # ponytail: widen live fallback to 60m — hour picks often miss 15m candle window
+    live_window_sec = max(CANDLE_LOOKUP_MINUTES * 60, 3600)
+    if live > 0 and abs((now - resolve_at).total_seconds()) <= live_window_sec:
         meta = {
             "price_source": "live_oracle",
             "price_lag_seconds": int(abs((now - resolve_at).total_seconds())),
@@ -618,6 +620,7 @@ def resolve_due_predictions(
     resolved.extend(duplicate_rows)
 
     prices = fetch_prices(subnets)
+    regraded_expired = regrade_expired_predictions(live_prices=prices)
     subnet_by_uid: Dict[Any, Dict[str, Any]] = {}
     if subnets:
         for sn in subnets:
@@ -688,10 +691,63 @@ def resolve_due_predictions(
         "resolved_now": resolved_now,
         "expired_now": expired_now,
         "duplicates_now": duplicate_rows,
+        "regraded_expired": regraded_expired,
         "resolved": resolved,
         "pending": still_pending,
         "stats": data["stats"],
         "watchdog": data["watchdog"],
+    }
+
+
+def regrade_expired_predictions(
+    *,
+    live_prices: Optional[Dict[Any, float]] = None,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    """Retry grading expired rows when price cache now has horizon candles (RF-3)."""
+    data = _load_json(
+        PREDICTIONS_PATH,
+        {"predictions": [], "resolved": [], "stats": {}},
+    )
+    resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
+    regraded: List[Dict[str, Any]] = []
+    attempted = 0
+
+    for idx, pred in enumerate(resolved):
+        if attempted >= limit:
+            break
+        if not isinstance(pred, dict) or pred.get("outcome") != "expired":
+            continue
+        resolve_at = _parse_resolve_at(pred)
+        if resolve_at is None:
+            continue
+        attempted += 1
+        copy = dict(pred)
+        copy["status"] = "pending"
+        copy.pop("outcome", None)
+        copy.pop("resolved_at", None)
+        attempt_now = resolve_at + timedelta(minutes=5)
+        result = resolve_prediction_at_horizon(
+            copy,
+            now=attempt_now,
+            live_prices=live_prices,
+        )
+        if result.get("outcome") in {"duplicate", "expired", "ungradeable"}:
+            continue
+        if result.get("actual_pct") is None:
+            continue
+        resolved[idx] = result
+        regraded.append(result)
+
+    if regraded:
+        data["resolved"] = resolved
+        data["stats"] = _compute_stats(data)
+        _save_json(PREDICTIONS_PATH, data)
+
+    return {
+        "attempted": attempted,
+        "regraded": len(regraded),
+        "stats": data.get("stats", _compute_stats(data)),
     }
 
 

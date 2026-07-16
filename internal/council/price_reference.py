@@ -121,7 +121,21 @@ def price_at_resolve_at(
 
     total_volume = sum(float(c.get("volume", 0) or 0) for c in window)
     if total_volume <= 0:
-        return "ungradeable", 0.0, meta
+        # ponytail: thin subnets often lack candle volume — median close still grades price
+        price = _median_price(window)
+        if price <= 0:
+            return "ungradeable", 0.0, meta
+        meta["price_source"] = "median_no_volume"
+        nearest = min(
+            (c for c in window if _parse_ts(c.get("timestamp"))),
+            key=lambda c: abs(_parse_ts(c.get("timestamp")).timestamp() - resolve_at.timestamp()),  # type: ignore
+            default=None,
+        )
+        if nearest:
+            ts = _parse_ts(nearest.get("timestamp"))
+            if ts:
+                meta["price_lag_seconds"] = int(abs(ts.timestamp() - resolve_at.timestamp()))
+        return "ok", float(price), meta
 
     price = _vwap_price(window)
     if price <= 0:
