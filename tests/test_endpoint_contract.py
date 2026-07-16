@@ -133,6 +133,7 @@ CONTRACT = [
     ("GET", "/api/mindmap/story-path", None),
     ("GET", "/api/predictions/capsule/test-id", None),
     ("GET", "/api/predictions/capsule/test-id/og.svg", None),
+    ("GET", "/api/predictions/capsule/test-id/og.png", None),
     ("GET", "/share/call/test-id", None),
     ("GET", "/api/report/1", None),
     # Rotation tracker (slice 10a)
