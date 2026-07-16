@@ -1390,3 +1390,41 @@ button.home-cta {
 .chat-preset:hover {
   border-color: rgba(0, 255, 65, 0.45);
 }
+
+/* §21 L11 — brain letter */
+.brain-letter {
+  margin: 8px auto 24px;
+}
+
+.brain-letter__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.brain-letter__step {
+  font-size: 13px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--stage-ink, #e8f0e9);
+}
+
+.brain-letter__step-label {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--stage-muted, #8a9a8e);
+  margin-right: 8px;
+}
+
+.weekly-letter__warn {
+  color: #f59e0b;
+  font-size: 13px;
+  margin: 6px 0;
+}
+
+.weekly-letter__disclaimer {
+  font-style: italic;
+  font-size: 12px;
+}
