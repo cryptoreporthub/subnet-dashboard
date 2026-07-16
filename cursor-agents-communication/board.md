@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-16T03:00:00Z — **§20 T1→T4 complete**  
-**main:** `0e29e5d` → §20 PR pending merge
+**Last updated:** 2026-07-16T02:45:00Z — **§20 complete (#286)**  
+**main:** `6421f25`
 
 ## Ditto boot (read first)
 
@@ -44,7 +44,7 @@ Specs: `token-budget-rules.md` · `model-guide.md` · `s20-automated-build-plan.
 
 | PR | Role | State |
 |----|------|-------|
-| **§20** | T1–T4 polish | 🟢 ready |
+| **§20** | T1–T4 polish | ✅ **#286 merged** |
 | **#285** | §20 plan on main | ✅ **merged** |
 
 **Health:** `GET /health` · `GET /api/message-intel/status` → listener live

@@ -1,7 +1,7 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-16T03:00:00Z  
-**main:** `0e29e5d` (#285 §20 plan) → §20 PR pending merge
+**Updated:** 2026-07-16T02:45:00Z  
+**main:** `6421f25` (#286 §20 T1–T4)
 
 ## One-line
 
@@ -14,7 +14,7 @@
 | **§17** | #267–#271, #274 |
 | **§18** | #275–#281, #277 |
 | **§19** | #282–#284 |
-| **§20** | T1–T4 (letter export · verify_prod · report UX) |
+| **§20** | #286 (T1–T4 letter export · verify_prod · report UX) |
 
 ## §20 queue
 
