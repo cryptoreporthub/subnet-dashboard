@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 DEFAULT_WEIGHTS = {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
 SOUL_MAP_PATH = os.path.join("data", "soul_map.json")
@@ -176,11 +176,64 @@ def apply_regime_adjustment(
     weights: Dict[str, float], regime: str
 ) -> Dict[str, float]:
     """Apply regime multipliers to a weight dict (does not normalize)."""
-    adj = REGIME_ADJUSTMENTS.get(regime, {})
+    adj = learned_regime_adjustment(regime)
     adjusted = {}
     for name, w in weights.items():
         adjusted[name] = w * adj.get(name, 1.0)
     return adjusted
+
+
+_MIN_REGIME_SAMPLES = 5
+_SKIP_OUTCOMES = frozenset({"duplicate", "expired", "ungradeable"})
+
+
+def _expert_hits_by_regime() -> Dict[str, Dict[str, List[bool]]]:
+    """Map regime → expert → graded correct flags from resolved predictions."""
+    out: Dict[str, Dict[str, List[bool]]] = {}
+    try:
+        from internal.learning.predictions_store import load_predictions
+
+        data = load_predictions()
+        for pred in data.get("resolved") or []:
+            if not isinstance(pred, dict):
+                continue
+            if pred.get("outcome") in _SKIP_OUTCOMES:
+                continue
+            correct = pred.get("correct")
+            if correct is None:
+                continue
+            expert = str(pred.get("expert") or "quant").lower()
+            if expert == "contrarian":
+                expert = "dark_horse"
+            snap = pred.get("subnet_snapshot") if isinstance(pred.get("subnet_snapshot"), dict) else {}
+            regime = detect_regime(snap) if snap else "chop"
+            out.setdefault(regime, {}).setdefault(expert, []).append(bool(correct))
+    except Exception:
+        pass
+    return out
+
+
+def learned_regime_adjustment(regime: str) -> Dict[str, float]:
+    """Blend static REGIME_ADJUSTMENTS with per-expert hit rates in this regime (§21 L7)."""
+    static = dict(REGIME_ADJUSTMENTS.get(regime, {}))
+    hits = _expert_hits_by_regime().get(regime, {})
+    acc: Dict[str, float] = {}
+    for name, rows in hits.items():
+        if len(rows) >= _MIN_REGIME_SAMPLES:
+            acc[name] = sum(rows) / len(rows)
+    if not acc:
+        return static
+    baseline = sum(acc.values()) / len(acc)
+    learned: Dict[str, float] = {}
+    for name in DEFAULT_WEIGHTS:
+        static_m = static.get(name, 1.0)
+        if name in acc:
+            # ponytail: ±10% cap on learned nudge vs static regime table
+            delta = max(-0.10, min(0.10, acc[name] - baseline))
+            learned[name] = round(static_m * (1.0 + delta), 4)
+        else:
+            learned[name] = static_m
+    return learned
 
 
 def effective_weights(

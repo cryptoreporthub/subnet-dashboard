@@ -26,6 +26,7 @@
       {% set why_line = call_reasons|first if call_reasons else (dpick.reason|default('')) %}
 
       {% set hybrid = hybrid_trust if hybrid_trust is mapping else {} %}
+      {% set tb = trust_banner if trust_banner is mapping else {} %}
       <div class="home-job__signals">
         {% if band %}
         <span class="home-band home-band--{{ band }}">{{ band|upper }} conviction</span>
@@ -45,6 +46,24 @@
         <span class="home-hybrid home-hybrid--empty" title="n={{ hybrid.n|default(0) }}/{{ hybrid.min_sample|default(30) }}">
           {{ hybrid.message|capitalize }}
         </span>
+        {% endif %}
+      </div>
+
+      <div
+        id="home-trust-banner"
+        class="trust-banner{% if tb.ready %} trust-banner--ready{% else %} trust-banner--blocked{% endif %}"
+        aria-live="polite"
+        data-source="/api/learning/stats"
+      >
+        {% if tb.ready and tb.headline %}
+        <p class="trust-banner__headline">{{ tb.headline }}</p>
+        {% elif tb.message %}
+        <p class="trust-banner__message">{{ tb.message }}</p>
+        {% else %}
+        <p class="trust-banner__message">Building graded track record — trust surfaces stay honest until sample clears.</p>
+        {% endif %}
+        {% if tb.note %}
+        <p class="trust-banner__note">{{ tb.note }}</p>
         {% endif %}
       </div>
 

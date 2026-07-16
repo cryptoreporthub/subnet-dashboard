@@ -1162,3 +1162,137 @@ button.home-cta {
   color: var(--stage-muted, #8a9a8e);
   text-transform: lowercase;
 }
+
+/* §21 L4 — trust banner (RF-2: API-bound only) */
+.trust-banner {
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(138, 154, 142, 0.35);
+  background: rgba(20, 24, 22, 0.6);
+}
+
+.trust-banner--ready {
+  border-color: rgba(0, 255, 65, 0.35);
+  background: rgba(0, 255, 65, 0.06);
+}
+
+.trust-banner--blocked {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.trust-banner__headline {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--stage-accent, #00ff41);
+}
+
+.trust-banner__message {
+  margin: 0;
+  font-size: 13px;
+  color: var(--stage-ink, #e8f0e9);
+}
+
+.trust-banner__note {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--stage-muted, #8a9a8e);
+}
+
+/* §21 L5 — story path chain */
+.story-path {
+  margin: 8px auto 24px;
+}
+
+.story-path__head {
+  margin-bottom: 12px;
+}
+
+.story-path__heading {
+  font-size: 1.1rem;
+  margin: 0 0 4px;
+}
+
+.story-path__sub {
+  margin: 0;
+  font-size: 13px;
+  color: var(--stage-muted, #8a9a8e);
+}
+
+.story-path__chain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.story-path__step {
+  display: grid;
+  grid-template-columns: minmax(110px, 140px) 1fr;
+  gap: 4px 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.story-path__step--pending {
+  border-color: rgba(245, 158, 11, 0.25);
+}
+
+.story-path__label {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--stage-muted, #8a9a8e);
+  grid-row: span 2;
+  align-self: center;
+}
+
+.story-path__step-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--stage-ink, #e8f0e9);
+}
+
+.story-path__detail {
+  font-size: 12px;
+  color: var(--stage-muted, #8a9a8e);
+  grid-column: 2;
+}
+
+.story-path__empty {
+  font-size: 13px;
+  color: var(--stage-muted, #8a9a8e);
+  padding: 12px;
+  margin: 0;
+}
+
+/* §21 L13 — chat preset chips */
+.chat-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.chat-preset {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 255, 65, 0.25);
+  background: rgba(0, 255, 65, 0.06);
+  color: var(--stage-ink, #e8f0e9);
+  cursor: pointer;
+}
+
+.chat-preset:hover {
+  border-color: rgba(0, 255, 65, 0.45);
+}

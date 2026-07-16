@@ -1,0 +1,30 @@
+{# §21 L5 — linear mindmap cause chain for today's pick #}
+<section class="story-path wrap-pad" id="section-story-path" aria-labelledby="story-path-title">
+  {% set sp = story_path if story_path is mapping else {} %}
+  {% set steps = sp.steps if sp.steps is iterable and sp.steps is not string else [] %}
+  <div class="story-path__head">
+    <h2 class="story-path__heading" id="story-path-title">How we got here</h2>
+    <p class="story-path__sub">Signals → judges → council pick → outcome → learning</p>
+  </div>
+  <ol class="story-path__chain" id="story-path-chain" aria-live="polite">
+    {% if sp.data_available and steps %}
+    {% for step in steps %}
+    <li class="story-path__step story-path__step--{{ step.status|default('done') }}">
+      <span class="story-path__label">{{ step.label|default('Step') }}</span>
+      <span class="story-path__step-title">{{ step.title|default('—') }}</span>
+      {% if step.detail %}
+      <span class="story-path__detail">{{ step.detail }}</span>
+      {% endif %}
+    </li>
+    {% endfor %}
+    {% else %}
+    <li class="story-path__empty" id="story-path-empty">
+      {% if sp.reason == 'no_pick' %}
+        No audited pick today — chain appears when council clears a call.
+      {% else %}
+        Story path warming up.
+      {% endif %}
+    </li>
+    {% endif %}
+  </ol>
+</section>

@@ -130,6 +130,7 @@ CONTRACT = [
     ("GET", "/api/backtest", None),
     ("GET", "/api/market-drivers", None),
     ("GET", "/api/market-drivers/1", None),
+    ("GET", "/api/mindmap/story-path", None),
     ("GET", "/api/report/1", None),
     # Rotation tracker (slice 10a)
     ("GET", "/api/rotation-tracker", None),

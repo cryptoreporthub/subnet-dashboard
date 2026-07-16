@@ -187,6 +187,27 @@ async def api_mindmap_state():
         return {"status": "error", "trail": [], "summaries": {}, "error": str(exc)}
 
 
+@learning_router.get("/api/mindmap/story-path")
+async def api_mindmap_story_path():
+    """§21 L5 — linear cause chain for today's council pick."""
+    try:
+        from internal.council.daily_pick_engine import get_or_create_today_pick
+        from internal.learning.story_path import build_story_path
+
+        subnets = _subnets_for_tracker()
+        payload = get_or_create_today_pick(subnets, {})
+        return {"status": "success", **build_story_path(payload)}
+    except Exception as exc:
+        logger.warning("mindmap story-path failed: %s", exc)
+        return {
+            "status": "error",
+            "data_available": False,
+            "reason": "error",
+            "steps": [],
+            "error": str(exc),
+        }
+
+
 @learning_router.get("/api/learning/stats")
 async def api_learning_stats():
     engine = LearningEngine()

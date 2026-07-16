@@ -206,6 +206,38 @@ def _safe_story_strip(limit: int = 8) -> Dict[str, Any]:
         }
 
 
+def _safe_trust_banner() -> Dict[str, Any]:
+    try:
+        from internal.council import resolver
+        from internal.council.watchdog import check_resolver_watchdog
+        from internal.learning.predictions_store import load_predictions
+        from internal.learning.trust_stats import build_trust_banner
+
+        resolved_stats = resolver.get_resolved_predictions().get("stats", {})
+        pending_rows = load_predictions().get("predictions", []) or []
+        watchdog = check_resolver_watchdog(pending_rows)
+        return build_trust_banner(resolved_stats, watchdog=watchdog)
+    except Exception as exc:
+        logger.warning("Could not build trust banner for root: %s", exc)
+        return {
+            "ready": False,
+            "headline": None,
+            "message": "Learning stats unavailable",
+            "graded": 0,
+            "source": "/api/learning/stats",
+        }
+
+
+def _safe_story_path(daily_pick_payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    try:
+        from internal.learning.story_path import build_story_path
+
+        return build_story_path(daily_pick_payload)
+    except Exception as exc:
+        logger.warning("Could not build story path for root: %s", exc)
+        return {"data_available": False, "reason": "error", "steps": []}
+
+
 def _safe_conviction_band(daily_pick_payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     try:
         from internal.council.conviction_bands import band_for_pick
@@ -244,6 +276,8 @@ def build_agent_b_root_context(
         "conviction_band": _safe_conviction_band(daily_pick_payload),
         "daily_pick_stage": daily_pick_payload if isinstance(daily_pick_payload, dict) else {},
         "story_strip": _safe_story_strip(),
+        "trust_banner": _safe_trust_banner(),
+        "story_path": _safe_story_path(daily_pick_payload),
         "oracle_snapshot": _safe_oracle_snapshot(subnets, data_source),
         "price_tracking_baselines": _safe_price_baselines(),
     }
