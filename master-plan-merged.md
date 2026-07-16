@@ -1,7 +1,7 @@
 # Subnet Dashboard Master Plan
 
-**Last updated:** 2026-07-15T06:45:00Z  
-**main:** `e8547b9`
+**Last updated:** 2026-07-16T09:15:00Z  
+**main:** `310ded6`
 
 ## Repo
 - `cryptoreporthub/subnet-dashboard`
@@ -81,6 +81,11 @@ Phase L: Composer slices 1–2; **Grok design before** slices 3–4 (WebSocket, 
 - Full history: `docs/master-plan-merged.md`
 - UI spec: `docs/premium-dashboard-redesign.md`
 - Board: `cursor-agents-communication/board.md`
+- **§21 Living Brain:** `cursor-agents-communication/s21-living-brain-plan.md` ✅ complete (#288–#296)
+
+## §21 — Living Brain (COMPLETE 2026-07-16)
+
+Council-first UX: market drivers, learning loop honesty, story path, brain letter. Spec: `cursor-agents-communication/s21-living-brain-plan.md`. Gate fix #296.
 
 ## Next roadmap slice (§16) — Close the trust gap (DRAFT)
 

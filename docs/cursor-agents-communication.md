@@ -44,9 +44,12 @@
 
 | Item | Value |
 |------|-------|
-| **main** | `23852d2` |
-| **Open PRs** | 10a (A), 10b (B) — parallel |
-| **Next** | merge whichever is ready; second rebases onto first if needed |
+| **main** | `310ded6` |
+| **Phase** | §21 Living Brain ✅ complete (#288–#296) |
+| **Plan** | `cursor-agents-communication/s21-living-brain-plan.md` |
+| **Next** | L14 full visual share card · §22 TBD |
+
+> Repo mirror may lag Ditto. Trust `cursor-agents-communication/STATUS.md` + `board.md` in git.
 
 ## Slice queue
 

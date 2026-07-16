@@ -24,6 +24,7 @@
       '<div class="time-capsule-modal__body" id="time-capsule-body"></div>' +
       '<div class="time-capsule-modal__actions">' +
       '<button type="button" class="time-capsule-modal__copy" id="time-capsule-copy">Copy graded call</button>' +
+      '<button type="button" class="time-capsule-modal__share" id="time-capsule-share" hidden>Share</button>' +
       "</div></div>";
     document.body.appendChild(modal);
     modal.addEventListener("click", function (e) {
@@ -34,6 +35,69 @@
 
   function closeModal() {
     if (modal) modal.hidden = true;
+  }
+
+  function renderGradedCallCard(payload) {
+    var cap = payload.capsule || {};
+    var pred = payload.prediction || {};
+    var snap = cap.subnet_snapshot || {};
+    var name = pred.name || cap.name || (pred.netuid != null ? "SN" + pred.netuid : "Subnet");
+    var verdict = cap.correct === true ? "HIT" : cap.correct === false ? "MISS" : "GRADED";
+    var verdictClass =
+      cap.correct === true ? "graded-call-card__verdict--hit" : "graded-call-card__verdict--miss";
+
+    var html =
+      '<article class="graded-call-card" id="graded-call-card" aria-label="Shareable graded call">' +
+      '<p class="graded-call-card__brand">SimiVision · graded call</p>' +
+      '<div class="graded-call-card__head">' +
+      '<h4 class="graded-call-card__name">' +
+      esc(name) +
+      "</h4>" +
+      '<span class="graded-call-card__verdict ' +
+      verdictClass +
+      '">' +
+      esc(verdict) +
+      "</span></div>";
+
+    if (cap.predicted_pct != null && cap.actual_pct != null) {
+      html +=
+        '<p class="graded-call-card__move">' +
+        '<span class="graded-call-card__k">Expected</span> ' +
+        Number(cap.predicted_pct).toFixed(1) +
+        "%" +
+        '<span class="graded-call-card__arrow">→</span>' +
+        '<span class="graded-call-card__k">Actual</span> ' +
+        Number(cap.actual_pct).toFixed(1) +
+        "%</p>";
+    }
+
+    if (cap.statement) {
+      html += '<p class="graded-call-card__stmt">' + esc(cap.statement) + "</p>";
+    }
+
+    html += '<div class="graded-call-card__tags">';
+    if (snap.yield_trap) {
+      html += '<span class="graded-call-card__tag graded-call-card__tag--warn">yield trap</span>';
+    }
+    if (snap.price_change_7d != null && Math.abs(Number(snap.price_change_7d)) >= 1) {
+      var v = Number(snap.price_change_7d);
+      html +=
+        '<span class="graded-call-card__tag">price 7d ' +
+        (v > 0 ? "+" : "") +
+        v.toFixed(0) +
+        "%</span>";
+    }
+    var driver = snap.return_driver || snap.dominant_driver;
+    if (driver) {
+      html +=
+        '<span class="graded-call-card__tag">' + esc(String(driver).replace(/_/g, " ")) + "</span>";
+    }
+    html += "</div>";
+
+    html +=
+      '<p class="graded-call-card__foot">Direction graded on token price — staking APY is income, not price.</p>' +
+      "</article>";
+    return html;
   }
 
   function renderCapsule(payload) {
@@ -49,17 +113,8 @@
     }
     var cap = payload.capsule || {};
     var snap = cap.subnet_snapshot || {};
-    var html = '<p class="time-capsule-modal__stmt">' + esc(cap.statement || "—") + "</p>";
-    if (cap.predicted_pct != null && cap.actual_pct != null) {
-      html +=
-        '<p class="time-capsule-modal__move">Expected ' +
-        Number(cap.predicted_pct).toFixed(1) +
-        "% → actual " +
-        Number(cap.actual_pct).toFixed(1) +
-        "% " +
-        (cap.correct ? "✓" : "✗") +
-        "</p>";
-    }
+    var html = renderGradedCallCard(payload);
+    html += '<div class="time-capsule-modal__details">';
     if (snap.staking_yield_apy != null) {
       html +=
         '<p class="time-capsule-modal__snap">Staking APY ' +
@@ -89,15 +144,31 @@
       });
       html += "</ul>";
     }
+    html += "</div>";
     body.innerHTML = html;
     if (copyBtn) {
       copyBtn.hidden = false;
+      copyBtn.textContent = "Copy text";
       copyBtn.onclick = function () {
         var text = payload.share_text || "";
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(text).catch(function () {});
         }
       };
+      var shareBtn = document.getElementById("time-capsule-share");
+      if (shareBtn && navigator.share) {
+        shareBtn.hidden = false;
+        shareBtn.onclick = function () {
+          navigator
+            .share({
+              title: "SimiVision graded call",
+              text: payload.share_text || "",
+            })
+            .catch(function () {});
+        };
+      } else if (shareBtn) {
+        shareBtn.hidden = true;
+      }
     }
     modal.hidden = false;
   }

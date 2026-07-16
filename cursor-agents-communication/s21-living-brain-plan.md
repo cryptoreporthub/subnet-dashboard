@@ -1,70 +1,58 @@
 # §21 Living Brain — Automated Build Plan
 
-**Status:** APPROVED 2026-07-16 (Ditto review incorporated)  
-**Baseline:** `main` post-§20 (#286)  
-**Prerequisite PRs:** #288 market drivers (merge first)
+**Status:** ✅ COMPLETE 2026-07-16 (`main` @ `310ded6`)  
+**Baseline:** `main` post-§20 (#286)
 
-## Ditto red flags — MUST FIX BEFORE VISIBLE BRAIN UI
+## Ditto red flags — resolved
 
 ### RF-2 — Trust banner inflates accuracy
-- **Issue:** Strategy doc showed "58% right" while live stats are ~44% (15/34 graded).
 - **Fix:** ✅ `internal/learning/trust_stats.py` + `/api/learning/stats` → `trust_banner`, `brain_ui_ready`.
-- **Rule:** Banner reads real resolver stats only. No hardcoded target numbers. Honest-empty when `graded < 30` or `expired_rate ≥ 10%`.
+- **Rule:** Banner reads real resolver stats only. Honest-empty when `graded < 30` or `expired_rate ≥ 10%`.
 
 ### RF-3 — Resolver / watchdog buried
-- **Issue:** ~27% predictions expire ungraded; learning story built on sand.
-- **Fix:** ✅ Promoted to **Sprint 0** (this PR): price lookup zero-volume median, 60m live fallback, `regrade_expired_predictions()`.
-- **Gate:** `brain_ui_ready` on `/api/learning/stats` must be `true` before shipping L1–L5 trust/brain panels.
+- **Fix:** ✅ S0 (#289) + gate fix (#296): regrade merge on save, watchdog aligns with resolve grace.
+- **Gate:** `brain_ui_ready` unlocks when graded ≥30, expired &lt;10%, watchdog clear.
 
-## Sprint order (revised)
+## Sprint order (final)
 
-| Phase | Slices | Gate | Status |
-|-------|--------|------|--------|
-| **S0** | RF-2 trust_stats API, RF-3 resolver fixes, regrade pass | `brain_ui_ready` or documented waiver | ✅ #289 merged |
-| **S1** | #288 merge + L1 driver card UI, L2 story tags, L3 what's-working chips | S0 | ✅ #290 merged |
-| **S2** | L4 trust banner UI, L5 mindmap story path | `trust_banner.ready` | 🔄 L4 honest-empty + L5 prep |
-| **S3** | L6 signal_weights in scoring, L9 trail dual-write + updated_at fix | parallel with S2 | L6 ✅ #291 · L9 ✅ #290 |
-| **S4** | L7–L8, L10–L14 | after S2 green | ✅ complete · RF-3 gate fix 🔄 |
+| Phase | Slices | PRs | Status |
+|-------|--------|-----|--------|
+| **S0** | RF-2 trust_stats, RF-3 resolver/regrade | #289 | ✅ |
+| **S1** | #288 + L1 driver card, L2 story tags, L3 chips | #288, #290 | ✅ |
+| **S2** | L4 trust banner, L5 mindmap story path | #293 | ✅ |
+| **S3** | L6 signal_weights, L9 trail hygiene | #291, #290 | ✅ |
+| **S4** | L7–L8, L10–L14 | #292–#296 | ✅ |
+| **Gate** | RF-3 regrade clobber + watchdog | #296 | ✅ |
 
-## Wave A — Visible brain (blocked until S0 gate)
+## Slice checklist
 
-| Slice | Goal |
-|-------|------|
-| L1 | Driver card on daily pick + subnet report (price vs yield) |
-| L2 | Story strip tags: yield_trap, price_momentum, signal |
-| L3 | "What's working" chips from `/api/market-drivers` |
-| L4 | Trust banner UI — **must bind `data.trust_banner` only** |
-| L5 | Mindmap story path (linear cause chain for today's pick) |
+| Slice | Goal | PR |
+|-------|------|-----|
+| L1 | Driver card (price vs yield) | #290 |
+| L2 | Story strip tags | #290 |
+| L3 | What's-working chips | #290 |
+| L4 | Trust banner UI (RF-2) | #293 |
+| L5 | Mindmap story path | #293 |
+| L6 | signal_weights in scoring | #291 |
+| L7 | Learned regime adjustments | #293 |
+| L8 | Judge feedback → confidence | #294 |
+| L9 | Trail dual-write fix | #290 |
+| L10 | Watchdog KPI strip | #292 |
+| L11 | Brain letter | #295 |
+| L12 | Time-capsule replay | #294 |
+| L13 | Chat presets | #293 |
+| L14 | Shareable graded call | #294 lite · **full visual card** 🔄 this PR |
 
-## Wave B — Smarter brain
+## Home stack (shipped)
 
-| Slice | Goal |
-|-------|------|
-| L6 | Apply signal_weights in state_vector scoring |
-| L7 | Regime accuracy → REGIME_ADJUSTMENTS |
-| L8 | Judge feedback into confidence |
-| L9 | Fix trail dual-write + soul_map updated_at hardcode |
-| L10 | Resolver watchdog surfaced in cockpit KPI |
+Council stage → trust banner → driver card → story strip → story path → brain letter → what's-working → Pro cockpit
 
-## Wave C — Trailblazing
-
-L11 Brain letter · L12 time-capsule replay · L13 chat presets · L14 shareable graded call card
-
-## Preserve (net-new value)
-
-- #288 market drivers (yield_trap, decompose_returns)
-- L9 trail hygiene
-- L12 time-capsule replay
-
-## Contract
+## Contract (historical)
 
 1. Branch `cursor/<slug>-9ce0`
 2. Ready PR · merge when CI green
-3. **Do not ship L4/L11 until RF-2 satisfied**
-4. **Do not ship L1–L5 until `brain_ui_ready` or expired_rate < 10%**
+3. Trust surfaces bind `trust_banner` only — never hardcode accuracy
 
-## One-line agent prompt
+## Next
 
-```
-§21 Sprint 0 first: RF-2/RF-3 (#289). Then merge #288. Run L1–L5 only when /api/learning/stats brain_ui_ready=true. Trust banner binds trust_banner object only — never hardcode accuracy. Composer 2.5-fast, ready PRs, auto-continue.
-```
+**§22** — await human queue after L14 visual card merges.
