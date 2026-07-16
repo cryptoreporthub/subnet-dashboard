@@ -50,5 +50,6 @@
   window.LetterExport = {
     weekly: wire("weekly-letter-copy", "weekly-letter-download", "weekly-letter"),
     daily: wire("daily-letter-copy", "daily-letter-download", "daily-recap"),
+    brain: wire("brain-letter-copy", "brain-letter-download", "brain-letter"),
   };
 })();
