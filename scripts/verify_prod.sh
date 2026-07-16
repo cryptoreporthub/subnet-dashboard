@@ -39,7 +39,15 @@ print('reason:', lr.get('reason'))
 print('empty:', d.get('empty'))
 "
 
-curl -fsS "$BASE/api/backtest" | python3 -c "
+echo "== message-intel social =="
+curl -fsS "$BASE/api/message-intel/social" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print('rows:', len(d.get('rows') or []))
+print('empty:', d.get('empty'))
+"
+
+echo "== backtest (P5) =="
 import json,sys
 d=json.load(sys.stdin)
 c=d.get('council',{})

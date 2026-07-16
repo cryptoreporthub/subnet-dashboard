@@ -113,6 +113,8 @@
     }
   }
 
+  document.addEventListener("home:cockpit-tick", hydrate);
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", hydrate);
   } else {

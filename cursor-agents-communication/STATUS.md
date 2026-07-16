@@ -1,15 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-16T01:40:00Z  
-**main:** `c0d4e3f` (#282 M1)
+**Updated:** 2026-07-16T01:50:00Z  
+**main:** `cb69209` (#283 M2)
 
 ## One-line
 
-**§19 M2 social wire in PR. M1 done. Human: F7 DNS when ready.**
-
-## §18 (done)
-
-H1–C1 merged. C1 listener live on Fly.
+**§19 M3+U5p in PR. F7 DNS deferred. Agent queue continues without custom domain.**
 
 ## §19 queue
 
@@ -17,8 +13,10 @@ See **`s19-automated-build-plan.md`**.
 
 | Slice | State |
 |-------|--------|
-| **M1** | ✅ #282 message-intel feed UI |
-| **M2** | Social rollup API + client hydrate — in PR |
-| **F7** | Custom domain — **human DNS** |
+| **M1–M2** | ✅ #282–#283 |
+| **M3** | Cockpit-tick refresh for intel feed + social |
+| **U5p** | OG/Twitter meta prep (fly.dev now, F7 later) |
+| **F7** | **deferred** — human DNS when ready |
+| **B12** | after F7 |
 
 **Billing watch:** On-Demand **$** beyond Pro+ → tell human.

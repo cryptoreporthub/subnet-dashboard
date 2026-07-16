@@ -63,8 +63,8 @@
     );
   }
 
-  async function hydrate() {
-    if (root.querySelector(".soc-card")) return;
+  async function hydrate(force) {
+    if (!force && root.querySelector(".soc-card")) return;
     try {
       var statusRes = await fetch("/api/message-intel/status");
       var status = statusRes.ok ? await statusRes.json() : null;
@@ -83,6 +83,10 @@
       }
     }
   }
+
+  document.addEventListener("home:cockpit-tick", function () {
+    hydrate(true);
+  });
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", hydrate);

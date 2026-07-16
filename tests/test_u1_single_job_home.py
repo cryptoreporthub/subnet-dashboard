@@ -41,3 +41,4 @@ def test_index_canonical_meta():
         html = client.get("/").text
     assert 'rel="canonical"' in html
     assert 'property="og:url"' in html
+    assert 'property="og:image"' in html
