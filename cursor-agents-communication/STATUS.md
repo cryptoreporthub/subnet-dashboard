@@ -1,7 +1,7 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-17T00:30:00Z  
-**main:** `4b51665` (#303 §25) · **#304** §26 pending merge
+**Updated:** 2026-07-17T00:32:00Z  
+**main:** `f64820e` (#304 §26)
 
 ## One-line
 
