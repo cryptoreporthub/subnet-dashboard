@@ -231,7 +231,7 @@ Honest-empty when Focus has no graded resolve: “No graded beat on this SN yet 
 - [ ] `nudge_expert(expert, correct)` shared by `resolver._nudge_weights` and `LearningEngine.record_feedback`
 - [ ] Phase N `run_calibration_pipeline` remains batch authority — no fourth weight path
 - [ ] Optional: EMA on per-expert rolling hit rate (α≈0.15) inside `nudge_expert` — only if unified + tested
-- [ ] Trail/UI emits weight change on resolve (brain bench can show “last nudge”)
+- [ ] Trail/UI emits weight change on resolve (**§27-3c Public Self-Update** surfaces “last nudge” on Focus)
 
 **Files (likely):** `internal/council/weights.py`, `internal/council/resolver.py`, `datastore/learning_engine.py`
 
