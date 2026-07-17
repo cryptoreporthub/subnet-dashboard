@@ -8,8 +8,10 @@
   "use strict";
 
   var REFRESH_MS = 60000;
+  var CACHE_TTL_MS = 60000;
   var SKIP = { duplicate: 1, expired: 1, ungradeable: 1 };
   var busy = false;
+  var lastRefreshAt = 0;
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -249,24 +251,49 @@
     }
   }
 
+  function cacheFresh() {
+    var cache = window.HomeHydrateCache;
+    return cache && cache.at && (Date.now() - cache.at) < CACHE_TTL_MS;
+  }
+
   async function refreshHomeHotPath() {
     if (busy || document.documentElement.dataset.hydrate !== "1") return;
     if (!document.querySelector("[data-home-live]")) return;
+    var now = Date.now();
+    if (now - lastRefreshAt < 5000) return;
     busy = true;
     try {
+      var cache = window.HomeHydrateCache;
+      if (cacheFresh() && cache.dailyPick && cache.subnets) {
+        patchHomeDailyCall(cache.dailyPick);
+        if (cache.resolved) {
+          patchStoryStrip(buildStoryStrip(cache.resolved));
+        }
+        patchHero(cache.subnets, cache.subnetsMeta || {});
+        lastRefreshAt = now;
+        return;
+      }
       var results = await Promise.allSettled([
         fetchJson("/api/daily-pick"),
         fetchJson("/api/predictions/resolved"),
-        fetchJson("/api/subnets"),
+        fetchJson("/api/subnets?fields=id,netuid,name,price_change_24h,apy,staking_data,total_stake,stake,emission,source,live,sources"),
       ]);
       if (results[0].status === "fulfilled") patchHomeDailyCall(results[0].value);
       if (results[1].status === "fulfilled") {
-        patchStoryStrip(buildStoryStrip(results[1].value.resolved || []));
+        var resolved = (results[1].value.resolved) || [];
+        patchStoryStrip(buildStoryStrip(resolved));
+        if (window.HomeHydrateCache) window.HomeHydrateCache.resolved = resolved;
       }
       if (results[2].status === "fulfilled") {
         var subPayload = results[2].value || {};
         patchHero(subPayload.subnets || [], subPayload.meta || {});
+        if (window.HomeHydrateCache) {
+          window.HomeHydrateCache.subnets = subPayload.subnets || [];
+          window.HomeHydrateCache.subnetsMeta = subPayload.meta || {};
+          window.HomeHydrateCache.at = Date.now();
+        }
       }
+      lastRefreshAt = now;
     } catch (e) {
       console.warn("[home_live_refresh] tick failed", e);
     } finally {

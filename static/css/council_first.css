@@ -2,7 +2,7 @@
 
 .council-first-theme {
   --stage-ink: #e8f0e9;
-  --stage-muted: #8a9a8e;
+  --stage-muted: #9fb0a3;
   --stage-accent: #00ff41;
   --stage-wash: #06140a;
 }
@@ -1600,6 +1600,66 @@ button.home-cta {
 .living-focus__weight-bar { height: 4px; border-radius: 2px; background: rgba(255,255,255,0.06); position: relative; overflow: hidden; }
 .living-focus__weight-bar::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--pct, 50) * 1%); background: rgba(0, 200, 255, 0.45); }
 .living-focus__empty, .living-focus__learn-empty { color: var(--stage-muted); font-size: 13px; }
+
+@media (max-width: 640px) {
+  .living-focus { padding: 12px 14px; }
+  .living-focus__judge { grid-template-columns: 56px 40px 1fr; font-size: 11px; }
+  .living-focus__switcher-row { flex-wrap: wrap; }
+  .living-focus__switch { min-width: 0; flex: 1 1 45%; }
+  .living-focus__chips { gap: 6px; }
+  .living-focus__learn-strip { font-size: 12px; }
+  .living-focus__weight-row { grid-template-columns: 56px 36px 1fr; }
+}
+
+.simi-scroll-row {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.simi-scroll-card {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  display: grid;
+  gap: 4px;
+  min-width: 148px;
+  max-width: 220px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(138, 154, 142, 0.28);
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.story-strip__list,
+.paper-portfolio__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
+.story-strip__item,
+.paper-portfolio__card {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  display: grid;
+  gap: 4px;
+  min-width: 148px;
+  max-width: 220px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(138, 154, 142, 0.28);
+  background: rgba(0, 0, 0, 0.28);
+}
 
 /* §27-3b — investigation tables */
 .inv-table { width: 100%; border-collapse: collapse; font-size: 12px; }

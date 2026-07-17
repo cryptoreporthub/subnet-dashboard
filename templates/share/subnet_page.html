@@ -6,6 +6,13 @@
     <p class="subnet-page__meta">SN{{ netuid }} · source {{ report.source|default('registry') }}</p>
   </header>
 
+  {% if not data_available %}
+  <div class="share-page__empty" role="status">
+    <p>{{ error_reason or 'Subnet report is thin or unavailable right now.' }}</p>
+    <p class="share-page__retry"><button type="button" class="btn-secondary" onclick="location.reload()">Retry</button></p>
+  </div>
+  {% else %}
+
   {% if drivers.headline %}
   <section class="subnet-page__drivers">
     <h2 class="subnet-page__section">Market drivers</h2>
@@ -45,5 +52,6 @@
   <p class="subnet-page__cta">
     <a href="/?focus={{ netuid }}#section-living-focus" class="btn-secondary">Open in Living Focus</a>
   </p>
+  {% endif %}
 </article>
 {% endblock %}

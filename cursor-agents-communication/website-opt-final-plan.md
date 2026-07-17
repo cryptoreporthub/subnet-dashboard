@@ -1,8 +1,8 @@
 # §31 — Website optimization FINAL plan (22 ideas)
 
-**Status:** ACTIVE · full queue (no optional skips)  
+**Status:** ✅ COMPLETE  
 **Updated:** 2026-07-17  
-**Baseline:** `main` @ `61bb3e7`  
+**Merged:** PR pending (`cursor/opt-s31-complete-c3fd`)  
 **Source:** Agent deep-dive (10) + Grok slow+low review (10) → merged  
 **Supersedes:** `website-opt-20-plan.md` (same IDs; optionals now in queue)
 
@@ -61,14 +61,14 @@
 | # | Slice | IDs | Branch slug | State |
 |---|-------|-----|-------------|-------|
 | **§31-0** | Final plan + board sync | — | `opt-final-plan-c3fd` | ✅ this PR |
-| **§31-1** | Homepage data bus | O1, O2 | `opt-home-data-bus-c3fd` | next |
-| **§31-2** | Wallet + fonts | O5, O4 | `opt-wallet-fonts-c3fd` | pending |
-| **§31-3** | Cache + search/learning memo | O7, O6, O20 | `opt-cache-memo-c3fd` | pending |
-| **§31-4** | Slim subnets + names + verify | O3, O8, O9 | `opt-slim-names-c3fd` | pending |
-| **§31-5** | Share OG + mobile + contrast | O10, O11, O14 | `opt-share-mobile-c3fd` | pending |
-| **§31-6** | Inv + narrative + palette a11y | O12, O13, O15 | `opt-inv-a11y-c3fd` | pending |
-| **§31-7** | Static TTL + JS bundle + merged index | O16, O17, O18 | `opt-static-bundle-c3fd` | pending |
-| **§31-8** | SQLite reuse + empty states + CSS | O19, O21, O22 | `opt-fetcher-polish-c3fd` | pending |
+| **§31-1** | Homepage data bus | O1, O2 | `opt-home-data-bus-c3fd` | ✅ |
+| **§31-2** | Wallet + fonts | O5, O4 | `opt-wallet-fonts-c3fd` | ✅ |
+| **§31-3** | Cache + search/learning memo | O7, O6, O20 | `opt-cache-memo-c3fd` | ✅ |
+| **§31-4** | Slim subnets + names + verify | O3, O8, O9 | `opt-slim-names-c3fd` | ✅ |
+| **§31-5** | Share OG + mobile + contrast | O10, O11, O14 | `opt-share-mobile-c3fd` | ✅ |
+| **§31-6** | Inv + narrative + palette a11y | O12, O13, O15 | `opt-inv-a11y-c3fd` | ✅ |
+| **§31-7** | Static TTL + JS bundle + merged index | O16, O17, O18 | `opt-static-bundle-c3fd` | ✅ |
+| **§31-8** | SQLite reuse + empty states + CSS | O19, O21, O22 | `opt-fetcher-polish-c3fd` | ✅ |
 
 **After §31-8:** website optimization complete. Board → idle unless user opens new phase.
 

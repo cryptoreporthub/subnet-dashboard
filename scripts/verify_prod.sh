@@ -86,6 +86,20 @@ print('meta.source:', meta.get('source'))
 print('meta.total:', meta.get('total'))
 assert meta.get('total', 0) > 0, 'subnet count must be > 0'
 "
+curl -fsS "$BASE/api/subnets?limit=5" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+subs=d.get('subnets') or []
+raw=json.dumps(subs)
+assert 'SNNone' not in raw, 'subnet names must not contain SNNone'
+if subs:
+    name=subs[0].get('name') or ''
+    assert name and name != 'SNNone', 'first subnet name must be non-empty'
+    print('sample_name:', name)
+"
+
+echo "== cockpit SSE once =="
+curl -fsS -o /dev/null -w "%{http_code}\n" "$BASE/api/cockpit/stream?once=1"
 
 echo "== shareable subnet page =="
 curl -fsS "$BASE/subnet/1" | head -c 200 >/dev/null

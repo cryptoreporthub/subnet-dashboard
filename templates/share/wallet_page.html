@@ -6,6 +6,12 @@
     <p class="wallet-page__addr"><code>{{ wallet }}</code></p>
   </header>
 
+  {% if not data_available %}
+  <div class="share-page__empty" role="status">
+    <p>{{ error_reason or 'Wallet flow data is unavailable right now.' }}</p>
+    <p class="share-page__retry"><button type="button" class="btn-secondary" onclick="location.reload()">Retry</button></p>
+  </div>
+  {% else %}
   {% if profile %}
   <section class="wallet-page__profile">
     <h2 class="wallet-page__section">Whale profile</h2>
@@ -78,6 +84,7 @@
   </section>
   {% endif %}
 
+  {% endif %}
   <p class="wallet-page__cta">
     <a href="/?wallet={{ wallet }}#section-investigation" class="btn-secondary">Open in investigation desk</a>
   </p>

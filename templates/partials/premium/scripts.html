@@ -1,5 +1,3 @@
-<script src="/static/vendor/uplot/uPlot.iife.min.js" defer></script>
-<script src="/static/js/uplot_charts.js" defer></script>
 <script type="application/json" id="subnet-group-data">{{ {
   'roster': sn_list[:24] if sn_list else [],
   'indicators': ti_rows,
@@ -8,26 +6,7 @@
   'trail': mindmap_trail[:20] if mindmap_trail else [],
   'predictions': predictions[:12] if predictions else []
 }|tojson }}</script>
-<script src="/static/js/data_freshness.js" defer></script>
-<script src="/static/js/conviction_tiers.js" defer></script>
-<script src="/static/js/premium_signals.js" defer></script>
 <script src="/static/js/cockpit_hydrate.js" defer></script>
 <script src="/static/js/home_live_refresh.js" defer></script>
-<script src="/static/js/market_drivers_ui.js" defer></script>
-<script src="/static/js/trust_banner_ui.js" defer></script>
-<script src="/static/js/story_path_ui.js" defer></script>
 <script src="/static/js/living_focus.js" defer></script>
-<script src="/static/js/time_capsule.js" defer></script>
-<script src="/static/js/brain_letter.js" defer></script>
-<script src="/static/js/watchlist_alerts.js" defer></script>
-<script src="/static/js/paper_portfolio.js" defer></script>
-<script src="/static/js/letter_export.js" defer></script>
-<script src="/static/js/weekly_letter.js" defer></script>
-<script src="/static/js/daily_recap.js" defer></script>
-<script src="/static/js/subnet_grouping.js" defer></script>
-<script src="/static/js/premium_scanner.js" defer></script>
-<script src="/static/js/investigation_panel.js" defer></script>
-<script src="/static/js/premium_judges.js" defer></script>
-<script src="/static/js/subnet_report.js" defer></script>
-<script src="/static/js/message_intel_feed.js" defer></script>
-<script src="/static/js/social_sentiment.js" defer></script>
+<script src="/static/js/home_deferred.js" defer></script>

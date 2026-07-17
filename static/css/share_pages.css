@@ -5,13 +5,13 @@
 .share-page__main { max-width: 820px; margin: 0 auto; padding: 24px 20px 48px; }
 
 .subnet-page__title, .wallet-page__title { margin: 0 0 8px; font-size: 1.75rem; }
-.subnet-page__meta, .wallet-page__meta { color: #8a9a8e; font-size: 13px; }
+.subnet-page__meta, .wallet-page__meta { color: var(--stage-muted, #9fb0a3); font-size: 13px; }
 .subnet-page__section, .wallet-page__section { font-size: 1rem; margin: 24px 0 8px; color: #00ff41; }
 .subnet-page__headline { font-size: 1.1rem; margin: 0 0 8px; }
 .subnet-page__why { font-size: 13px; color: #b8c4bc; margin: 4px 0; }
 .subnet-page__judge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 12px 0; }
 .subnet-page__judge { padding: 12px; border: 1px solid rgba(0,255,65,0.15); border-radius: 8px; text-align: center; }
-.subnet-page__judge-name { display: block; font-size: 11px; color: #8a9a8e; text-transform: uppercase; }
+.subnet-page__judge-name { display: block; font-size: 11px; color: var(--stage-muted, #9fb0a3); text-transform: uppercase; }
 .subnet-page__judge-score { font-size: 1.25rem; font-weight: 600; }
 .subnet-page__consensus { font-size: 13px; margin-top: 8px; }
 .subnet-page__body { font-size: 14px; line-height: 1.5; }
@@ -24,7 +24,9 @@
 .subnet-link:hover, .living-focus__link:hover { text-decoration: underline; }
 
 .wallet-page__addr code { font-size: 12px; word-break: break-all; }
-.wallet-page__empty { color: #8a9a8e; font-size: 13px; }
+.wallet-page__empty { color: var(--stage-muted, #9fb0a3); font-size: 13px; }
+.share-page__empty { color: var(--stage-muted, #9fb0a3); font-size: 14px; padding: 16px; border: 1px dashed rgba(159,176,163,0.35); border-radius: 8px; }
+.share-page__retry { margin-top: 10px; }
 
 .wallet-page__rug-flags { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
 .wallet-page__rug { font-size: 11px; padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(138,154,142,0.35); text-decoration: none; color: inherit; }

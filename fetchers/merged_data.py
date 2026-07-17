@@ -7,32 +7,34 @@ Caches merged result in SQLite with 2-min TTL.
 import json
 import logging
 import os
-import sqlite3
 import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
+from fetchers._sqlite import db_conn
+
 logger = logging.getLogger(__name__)
 MERGED_DB_PATH = os.environ.get("MERGED_DB_PATH", "data/merged_cache.db")
 MERGED_CACHE_TTL = timedelta(minutes=2)
+_merged_by_netuid: Dict[int, Dict[str, Any]] = {}
+_merged_index_at: float = 0.0
 
 
 def _init_db():
-    os.makedirs(os.path.dirname(MERGED_DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(MERGED_DB_PATH)
-    c = conn.cursor()
-    c.execute("""CREATE TABLE IF NOT EXISTS merged_cache (
-        key TEXT PRIMARY KEY, data TEXT, last_updated TIMESTAMP)""")
-    conn.commit()
-    conn.close()
+    os.makedirs(os.path.dirname(MERGED_DB_PATH) or ".", exist_ok=True)
+    with db_conn(MERGED_DB_PATH) as conn:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS merged_cache (
+        key TEXT PRIMARY KEY, data TEXT, last_updated TIMESTAMP)"""
+        )
+        conn.commit()
 
 
 def _get_cached(key):
-    conn = sqlite3.connect(MERGED_DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT data, last_updated FROM merged_cache WHERE key = ?", (key,))
-    row = c.fetchone()
-    conn.close()
+    with db_conn(MERGED_DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT data, last_updated FROM merged_cache WHERE key = ?", (key,))
+        row = c.fetchone()
     if row:
         data_str, last_updated = row
         updated = datetime.fromisoformat(last_updated)
@@ -42,12 +44,27 @@ def _get_cached(key):
 
 
 def _set_cache(key, data):
-    conn = sqlite3.connect(MERGED_DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO merged_cache (key, data, last_updated) VALUES (?, ?, ?)",
-              (key, json.dumps(data), datetime.now().isoformat()))
-    conn.commit()
-    conn.close()
+    global _merged_by_netuid, _merged_index_at
+    with db_conn(MERGED_DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute(
+            "INSERT OR REPLACE INTO merged_cache (key, data, last_updated) VALUES (?, ?, ?)",
+            (key, json.dumps(data), datetime.now().isoformat()),
+        )
+        conn.commit()
+    if key == "all_merged" and isinstance(data, dict):
+        subnets = data.get("subnets") or []
+        _merged_by_netuid = {int(s["netuid"]): s for s in subnets if s.get("netuid") is not None}
+        _merged_index_at = time.time()
+
+
+def _refresh_index_from_cache() -> None:
+    global _merged_by_netuid, _merged_index_at
+    cached = _get_cached("all_merged")
+    if cached:
+        subnets = cached.get("subnets") or []
+        _merged_by_netuid = {int(s["netuid"]): s for s in subnets if s.get("netuid") is not None}
+        _merged_index_at = time.time()
 
 
 def _merge_subnet(bm, ts, tmc):
@@ -237,9 +254,17 @@ def get_merged_subnet_data():
 
 
 def get_merged_subnet(netuid):
-    for s in get_merged_subnet_data():
-        if s.get("netuid") == netuid:
-            return s
-    return None
+    global _merged_by_netuid, _merged_index_at
+    if not _merged_by_netuid or (time.time() - _merged_index_at) > MERGED_CACHE_TTL.total_seconds():
+        _refresh_index_from_cache()
+    try:
+        n = int(netuid)
+    except (TypeError, ValueError):
+        return None
+    hit = _merged_by_netuid.get(n)
+    if hit is not None:
+        return hit
+    get_merged_subnet_data()
+    return _merged_by_netuid.get(n)
 
 _init_db()

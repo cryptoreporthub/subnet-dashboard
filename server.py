@@ -316,7 +316,17 @@ if os.path.isdir(_static_dir):
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")
 
 # Paths that get a short public cache to keep the dashboard snappy on Fly.io.
-_CACHE_PATHS = ("/api/registry", "/api/summary", "/api/stats")
+_CACHE_PATHS = {
+    "/api/registry": 30,
+    "/api/summary": 30,
+    "/api/stats": 30,
+    "/api/subnets": 300,
+    "/api/council": 120,
+    "/api/judges": 120,
+    "/api/search": 60,
+    "/api/learning-metrics": 60,
+    "/api/learning/stats": 60,
+}
 
 
 def load_data(filename):
@@ -421,10 +431,20 @@ async def add_cors_headers(request: Request, call_next):
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     response.headers["X-Frame-Options"] = "SAMEORIGIN"
-    if request.url.path in _CACHE_PATHS:
-        response.headers["Cache-Control"] = "public, max-age=30"
-    elif request.url.path.startswith("/static/"):
-        response.headers["Cache-Control"] = "public, max-age=3600"
+    path = request.url.path
+    cache_ttl = _CACHE_PATHS.get(path)
+    if cache_ttl is None:
+        for prefix, ttl in _CACHE_PATHS.items():
+            if path.startswith(prefix + "/") or path == prefix:
+                cache_ttl = ttl
+                break
+    if cache_ttl is not None:
+        response.headers["Cache-Control"] = f"public, max-age={cache_ttl}"
+    elif path.startswith("/static/"):
+        if path.endswith((".js", ".css")):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "public, max-age=3600"
     return response
 
 
@@ -693,6 +713,8 @@ async def list_subnets(request: Request):
 
 
 def _list_subnets_sync(request: Request):
+    from internal.subnet_names import enrich_subnet_row
+
     # Prefer live on-chain feed (blockmachine) with TMC overlay; fall back to registry.
     source_rows = _load_subnets_source()
     feed_meta = _subnet_feed_meta(source_rows)
@@ -701,7 +723,7 @@ def _list_subnets_sync(request: Request):
         item = _tag_subnet_row(s, feed_meta)
         item.setdefault("id", s.get("netuid", 0))
         item.setdefault("netuid", item.get("id"))
-        items.append(item)
+        items.append(enrich_subnet_row(item))
 
     params = request.query_params
     status_filter = params.get("status")
@@ -739,6 +761,15 @@ def _list_subnets_sync(request: Request):
         items = items[offset:]
     if limit > 0:
         items = items[:limit]
+
+    fields_param = params.get("fields")
+    if fields_param:
+        allowed = {f.strip() for f in fields_param.split(",") if f.strip()}
+        if allowed:
+            items = [
+                {k: v for k, v in row.items() if k in allowed or k in ("id", "netuid")}
+                for row in items
+            ]
 
     return {
         "status": "success",

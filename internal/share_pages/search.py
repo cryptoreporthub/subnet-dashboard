@@ -3,15 +3,40 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List
+import time
+from typing import Any, Dict, List, Tuple
 
 _SS58_RE = re.compile(r"^[1-9A-HJ-NP-Za-km-z]{40,}$")
+_PREDICTIONS_MEMO: Dict[str, Any] = {"at": 0.0, "data": None}
+_PREDICTIONS_TTL = 60.0
+_SEARCH_MEMO: Dict[Tuple[str, int], Tuple[float, List[Dict[str, Any]]]] = {}
+
+
+def _predictions_data() -> Dict[str, Any]:
+    now = time.time()
+    if now - float(_PREDICTIONS_MEMO.get("at") or 0) < _PREDICTIONS_TTL:
+        cached = _PREDICTIONS_MEMO.get("data")
+        if isinstance(cached, dict):
+            return cached
+    from internal.learning.predictions_store import load_predictions
+
+    data = load_predictions()
+    _PREDICTIONS_MEMO["at"] = now
+    _PREDICTIONS_MEMO["data"] = data
+    return data
 
 
 def global_search(query: str, limit: int = 8) -> List[Dict[str, Any]]:
     q = (query or "").strip()
     if not q:
         return []
+
+    memo_key = (q.lower(), limit)
+    now = time.time()
+    cached = _SEARCH_MEMO.get(memo_key)
+    if cached and now - cached[0] < _PREDICTIONS_TTL:
+        return list(cached[1])
+
     out: List[Dict[str, Any]] = []
     seen = set()
 
@@ -57,29 +82,30 @@ def global_search(query: str, limit: int = 8) -> List[Dict[str, Any]]:
     except Exception:
         pass
 
-    try:
-        from internal.learning.predictions_store import load_predictions
+    if len(q) >= 8:
+        try:
+            data = _predictions_data()
+            for bucket in ("resolved", "predictions"):
+                for pred in data.get(bucket) or []:
+                    if not isinstance(pred, dict):
+                        continue
+                    pid = str(pred.get("id") or "")
+                    if not pid:
+                        continue
+                    if ql in pid.lower():
+                        netuid = pred.get("netuid")
+                        name = pred.get("name") or (f"SN{netuid}" if netuid is not None else "Graded call")
+                        add(
+                            {
+                                "type": "pick",
+                                "label": f"{name} · {pid[:12]}…",
+                                "url": f"/share/call/{pid}",
+                                "hint": "graded call",
+                            }
+                        )
+        except Exception:
+            pass
 
-        data = load_predictions()
-        for bucket in ("resolved", "predictions"):
-            for pred in data.get(bucket) or []:
-                if not isinstance(pred, dict):
-                    continue
-                pid = str(pred.get("id") or "")
-                if not pid:
-                    continue
-                if ql in pid.lower():
-                    netuid = pred.get("netuid")
-                    name = pred.get("name") or (f"SN{netuid}" if netuid is not None else "Graded call")
-                    add(
-                        {
-                            "type": "pick",
-                            "label": f"{name} · {pid[:12]}…",
-                            "url": f"/share/call/{pid}",
-                            "hint": "graded call",
-                        }
-                    )
-    except Exception:
-        pass
-
-    return out[:limit]
+    result = out[:limit]
+    _SEARCH_MEMO[memo_key] = (now, result)
+    return result

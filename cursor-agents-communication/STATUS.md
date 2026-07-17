@@ -1,18 +1,17 @@
 # STATUS
 
-**Updated:** 2026-07-17T19:30:00Z  
-**main:** `61bb3e7`  
-**active plan:** `website-opt-final-plan.md` (22 ideas · §31-0…§31-8)
+**Updated:** 2026-07-17T20:45:00Z  
+**active plan:** `website-opt-final-plan.md` — **§31 complete**  
+**branch:** `cursor/opt-s31-complete-c3fd`
 
 ## Done
 
-- §27–§30 Living Brain + §29 polish (#312–#316)
-- Deep dive + Grok review → draft plan (#317)
-- **Final plan** with optionals O16–O22 in queue (§31-7/§31-8)
+- §31-1…§31-8 all slices implemented (22 ideas O1–O22)
+- Contract + subnet_names + living_brain tests green (123)
 
 ## Next
 
-**§31-1** — Homepage data bus (O1 fetch storm + O2 SSE/interval dedupe)
+Merge PR → board idle unless user opens new phase.
 
 ## Skipped
 

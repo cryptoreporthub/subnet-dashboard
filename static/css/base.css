@@ -1,5 +1,5 @@
 /* SimiVision / DEGEN PROTOCOL — base tokens, reset, typography */
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+/* Fonts loaded via <link> in templates (§31-2 O4) — no blocking @import here */
 
 :root {
   /* Backgrounds — deep obsidian */
