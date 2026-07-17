@@ -53,10 +53,20 @@ def _set_cache(key, data):
 def _merge_subnet(bm, ts, tmc):
     netuid = (bm or ts or tmc or {}).get("netuid", 0)
     name = (
-        tmc.get("name") if tmc and tmc.get("name") and tmc["name"] != "Unknown"
-        else bm.get("name") if bm and bm.get("name")
-        else f"SN{netuid}"
+        (bm.get("name") if bm and bm.get("name") and not str(bm.get("name", "")).startswith("SN") else None)
+        or (ts.get("name") if ts and ts.get("name") else None)
+        or f"SN{netuid}"
     )
+    try:
+        from internal.subnet_names import resolve_subnet_name
+        name = resolve_subnet_name(
+            int(netuid),
+            tmc_name=tmc.get("name") if tmc else None,
+            use_taostats=False,
+        )
+    except Exception:
+        if tmc and tmc.get("name") and str(tmc.get("name")).lower() not in ("unknown", "deprecated", ""):
+            name = tmc["name"]
     symbol = tmc.get("symbol", "") if tmc else ""
     price = (
         bm.get("price") if bm and bm.get("price")

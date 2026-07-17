@@ -49,40 +49,10 @@
       replaceTextAll('+0.00%', fmtSigned(avgChange) + '%');
       replaceText('0 gainers', gainers.length + ' gainers');
 
-      // ── Fix duplicate "Ralph SN40" picks — replace with unique subnets ──
+      // ── Market snapshot (stats only — names come from canonical /api/subnets) ──
       var byEmission = subnets.slice().sort(function (a, b) {
         return (b.emission || 0) - (a.emission || 0);
       });
-
-      // Replace ALL occurrences of duplicate subnet names with unique ones
-      var duplicateNames = ['Ralph', 'greevils', 'Minos'];
-      var pickPool = byEmission.slice();
-
-      for (var di = 0; di < duplicateNames.length; di++) {
-        var dupName = duplicateNames[di];
-        var replacementIdx = 0;
-        var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
-        while (walker.nextNode()) {
-          var node = walker.currentNode;
-          if (node.textContent && node.textContent.indexOf(dupName) !== -1 && replacementIdx < pickPool.length) {
-            var replacement = pickPool[replacementIdx % pickPool.length];
-            // Skip if the replacement is the same subnet
-            if ((replacement.name || '') === dupName) {
-              replacementIdx++;
-              if (replacementIdx < pickPool.length) replacement = pickPool[replacementIdx];
-            }
-            node.textContent = node.textContent.split(dupName).join(replacement.name || ('SN' + replacement.netuid));
-            // Also fix the SN number
-            var snMatch = node.textContent.match(/SN(d+)/);
-            if (snMatch) {
-              node.textContent = node.textContent.split('SN' + snMatch[1]).join('SN' + replacement.netuid);
-            }
-            replacementIdx++;
-          }
-        }
-      }
-
-      // ── Fix +0.00% prices with real data ──
       var priceIdx = 0;
       var walker2 = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
       while (walker2.nextNode()) {

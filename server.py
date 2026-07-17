@@ -89,6 +89,15 @@ except Exception as _health_exc:  # pragma: no cover - defensive import guard
     _HEALTH_ROUTES = False
 
 try:
+    from internal.investigation import investigation_router
+
+    _INVESTIGATION_ROUTES = True
+except Exception as _investigation_exc:  # pragma: no cover
+    logger.warning("Investigation routes unavailable: %s", _investigation_exc)
+    investigation_router = None  # type: ignore[assignment,misc]
+    _INVESTIGATION_ROUTES = False
+
+try:
     from internal.cockpit import cockpit_router
 
     _COCKPIT_ROUTES = cockpit_router is not None
@@ -152,6 +161,20 @@ except Exception:
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     """Boot background learning-loop workers so predictions resolve headlessly."""
+    try:
+        from internal.freshness import start_background_sync
+
+        start_background_sync(immediate=True)
+        logger.info("Registry freshness background sync started")
+    except Exception as exc:
+        logger.warning("Registry freshness sync failed to start: %s", exc)
+    try:
+        from internal.live_subnets import get_live_subnets
+
+        get_live_subnets()
+        logger.info("Live subnets sync scheduled")
+    except Exception as exc:
+        logger.warning("Live subnets sync failed to start: %s", exc)
     try:
         from internal.council.resolver_scheduler import start_prediction_resolver_scheduler
 
@@ -241,6 +264,8 @@ if _MINDMAP_GRAPH_ROUTES:
     app.include_router(mindmap_graph_router)
 if _SIGNALS_ROUTES:
     app.include_router(signals_router)
+if _INVESTIGATION_ROUTES:
+    app.include_router(investigation_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
@@ -294,13 +319,19 @@ def _load_subnets_source():
     """Return subnets for /api/subnets: live TaoMarketCap when available, else committed registry."""
     try:
         from fetchers.taomarketcap import get_all_subnets
+        from internal.subnet_names import enrich_subnet_rows
 
         live = get_all_subnets()
         if live:
-            return live
+            return enrich_subnet_rows(live)
     except Exception:
         pass
-    return list(load_data("config/registry.json").values())
+    try:
+        from internal.subnet_names import enrich_subnet_rows
+
+        return enrich_subnet_rows(list(load_data("config/registry.json").values()))
+    except Exception:
+        return list(load_data("config/registry.json").values())
 
 
 def _consensus_map():
@@ -382,14 +413,19 @@ def _cap_subnets_for_scoring(
 
 
 def _normalize_registry_subnet(sn: Dict[str, Any]) -> Dict[str, Any]:
-    """Registry rows use ``id``; ensure ``netuid`` for templates and JS."""
+    """Registry rows use ``id``; ensure ``netuid`` and canonical name."""
     row = dict(sn)
     if row.get("netuid") is None and row.get("id") is not None:
         row["netuid"] = row["id"]
-    name = str(row.get("name") or "")
-    if name.lower() in ("deprecated", "unknown", "none", ""):
-        row["name"] = f"SN{row.get('netuid', row.get('id', '?'))}"
-    return row
+    try:
+        from internal.subnet_names import enrich_subnet_row
+
+        return enrich_subnet_row(row, use_taostats=False)
+    except Exception:
+        name = str(row.get("name") or "")
+        if name.lower() in ("deprecated", "unknown", "none", ""):
+            row["name"] = f"SN{row.get('netuid', row.get('id', '?'))}"
+        return row
 
 
 def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -567,12 +603,13 @@ def daily_rotation():
 
 @app.get("/api/registry")
 def get_registry():
+    from internal.subnet_names import enrich_subnet_row
+
     data = load_data("config/registry.json")
     consensus = _consensus_map()
-    # Enrich each entry with consensus data (additive, backward-compatible).
     enriched = {}
     for key, value in data.items():
-        item = dict(value)
+        item = enrich_subnet_row(dict(value), use_taostats=False)
         subnet_id = item.get("id", int(key))
         item.setdefault("id", subnet_id)
         item.setdefault("netuid", subnet_id)
@@ -645,11 +682,23 @@ def _list_subnets_sync(request: Request):
 
 @app.get("/api/subnet/{subnet_id}")
 def get_subnet(subnet_id: int):
+    from internal.subnet_names import enrich_subnet_row
+
     data = load_data("config/registry.json")
     subnet_data = data.get(str(subnet_id))
     if subnet_data is None:
         return JSONResponse(status_code=404, content={"error": "Subnet not found"})
-    return {"subnet_id": subnet_id, "data": subnet_data}
+    merged = enrich_subnet_row(dict(subnet_data), use_taostats=False)
+    try:
+        live_rows = _load_subnets_source()
+        for row in live_rows:
+            if int(row.get("netuid", row.get("id", -1))) == subnet_id:
+                merged.update({k: v for k, v in row.items() if v not in (None, "")})
+                merged = enrich_subnet_row(merged, use_taostats=False)
+                break
+    except Exception:
+        pass
+    return {"subnet_id": subnet_id, "data": merged}
 
 
 @app.get("/api/summary")
@@ -964,10 +1013,11 @@ _STATIC_SUBNETS = [
 def _get_subnets_with_source():
     """Return (subnets, source) for picks — tradable only (excludes Root)."""
     from internal.subnets.tradable import tradable_subnets
+    from internal.subnet_names import enrich_subnet_rows
 
     if _PICKS_ENGINE:
         try:
-            subnets = get_all_subnets()
+            subnets = enrich_subnet_rows(get_all_subnets())
             if subnets:
                 tradable = tradable_subnets(subnets)
                 if tradable:

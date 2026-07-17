@@ -368,12 +368,16 @@ async def api_learning_metrics():
 @learning_router.get("/api/predictions")
 async def api_predictions():
     try:
+        from internal.subnet_names import refresh_stored_names
+
         data = load_predictions()
         update_stats(data)
         save_predictions(data)
+        predictions = refresh_stored_names(data.get("predictions", []))
+        resolved = refresh_stored_names(data.get("resolved", []))
         return {
-            "predictions": data.get("predictions", []),
-            "resolved": data.get("resolved", []),
+            "predictions": predictions,
+            "resolved": resolved,
             "stats": data.get("stats", {}),
         }
     except Exception as exc:

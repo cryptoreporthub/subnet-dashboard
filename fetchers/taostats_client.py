@@ -105,16 +105,9 @@ def get_subnet_metrics(netuid):
         return None
     _rate_limit()
     try:
-        url = f"{TAOSTATS_API_BASE}/dtao/pool/latest/v1"
-        headers = {"Authorization": f"Bearer {TAOSTATS_API_KEY}", "Accept": "application/json"}
-        resp = requests.get(url, params={"netuid": netuid}, headers=headers, timeout=15)
-        if resp.status_code == 429:
-            logger.warning("TaoStats rate limited on netuid %d", netuid)
+        data = _api_get("/dtao/pool/latest/v1", {"netuid": netuid})
+        if not data:
             return None
-        if resp.status_code != 200:
-            logger.debug("TaoStats API returned %d for netuid %d", resp.status_code, netuid)
-            return None
-        data = resp.json()
         if isinstance(data, dict):
             records = data.get("data", data.get("results", [data]))
         elif isinstance(data, list):
@@ -176,5 +169,91 @@ def get_cached_metrics(netuid):
 
 def is_available():
     return bool(TAOSTATS_API_KEY)
+
+
+def _api_get(path: str, params: Optional[Dict[str, Any]] = None) -> Optional[Any]:
+    """Shared GET for TaoStats REST (api/v1 prefix)."""
+    if not TAOSTATS_API_KEY:
+        return None
+    _rate_limit()
+    try:
+        base = TAOSTATS_API_BASE.rstrip("/")
+        if not base.endswith("/api/v1"):
+            base = f"{base}/api/v1"
+        url = f"{base}{path}"
+        headers = {"Authorization": f"Bearer {TAOSTATS_API_KEY}", "Accept": "application/json"}
+        resp = requests.get(url, params=params, headers=headers, timeout=20)
+        if resp.status_code == 429:
+            logger.warning("TaoStats rate limited on %s", path)
+            return None
+        if resp.status_code != 200:
+            logger.debug("TaoStats %s returned %d", path, resp.status_code)
+            return None
+        return resp.json()
+    except Exception as exc:
+        logger.debug("TaoStats GET %s failed: %s", path, exc)
+        return None
+
+
+def get_subnet_identity(netuid: int) -> Optional[Any]:
+    return _api_get(f"/subnets/{netuid}/identity")
+
+
+def get_subnet_owner(netuid: int) -> Optional[Any]:
+    return _api_get(f"/subnets/{netuid}/owner")
+
+
+def get_delegation_events(
+    *,
+    netuid: Optional[int] = None,
+    nominator: Optional[str] = None,
+    action: str = "all",
+    limit: int = 50,
+) -> Optional[Any]:
+    params: Dict[str, Any] = {"limit": limit, "action": action}
+    if netuid is not None:
+        params["netuid"] = netuid
+    if nominator:
+        params["nominator"] = nominator
+    return _api_get("/delegation/v1", params)
+
+
+def get_transfers(
+    *,
+    from_wallet: Optional[str] = None,
+    to_wallet: Optional[str] = None,
+    limit: int = 50,
+) -> Optional[Any]:
+    params: Dict[str, Any] = {"limit": limit}
+    if from_wallet:
+        params["from"] = from_wallet
+    if to_wallet:
+        params["to"] = to_wallet
+    return _api_get("/transfer/v1", params)
+
+
+def get_account(wallet: str) -> Optional[Any]:
+    return _api_get(f"/account/{wallet}")
+
+
+def get_subnet_delegation_flow(netuid: int, limit: int = 50) -> Optional[Any]:
+    return _api_get(f"/subnets/{netuid}/delegations", {"limit": limit})
+
+
+def get_dtao_pool_latest(netuid: int) -> Optional[Any]:
+    return _api_get("/dtao/pool/latest/v1", {"netuid": netuid})
+
+
+def get_subnet_registration_cost(netuid: int) -> Optional[Any]:
+    return _api_get(f"/subnets/{netuid}/registration")
+
+
+def get_tao_price() -> Optional[Any]:
+    return _api_get("/tao/price")
+
+
+def get_tao_price_history(limit: int = 168) -> Optional[Any]:
+    return _api_get("/tao/price/history", {"limit": limit})
+
 
 _init_db()

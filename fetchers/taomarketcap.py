@@ -223,6 +223,13 @@ def _overlay_market_fields(base: List[Dict], market: List[Dict]) -> List[Dict]:
                 ):
                     if m.get(f) is not None:
                         merged[f] = m[f]
+                # Names: canonical resolver (taostat/registry beats TMC)
+                try:
+                    from internal.subnet_names import enrich_subnet_row
+                    merged = enrich_subnet_row(merged, tmc_name=m.get("name"))
+                except Exception:
+                    if m.get("name") and not merged.get("name"):
+                        merged["name"] = m["name"]
                 if not merged.get("source"):
                     merged["source"] = "taomarketcap"
                 merged["market_live"] = True
