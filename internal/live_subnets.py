@@ -132,6 +132,11 @@ def _merge_into_registry(live: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             merged["live"] = False
         if merged.get("netuid") is None and n is not None:
             merged["netuid"] = n
+        try:
+            from internal.subnet_names import enrich_subnet_row
+            merged = enrich_subnet_row(merged)
+        except Exception:
+            pass
         out.append(merged)
     for n, lv in by_netuid.items():
         if n not in seen:

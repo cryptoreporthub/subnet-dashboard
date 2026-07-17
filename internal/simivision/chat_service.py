@@ -6,7 +6,7 @@ import html
 import json
 import logging
 import os
-from typing import Any, AsyncIterator, Dict, Tuple
+from typing import Any, AsyncIterator, Dict, Optional, Tuple
 
 from datastore.learning_engine import LearningEngine
 
@@ -30,7 +30,7 @@ def _safe_load_json(directory: str, filename: str, default: Any = None) -> Any:
 
 
 def build_simivision_prompt(message: str, context: Dict[str, Any]) -> str:
-    """Fuse user message with live SimiVision + soul_map context."""
+    """Fuse user message with live SimiVision + soul_map + on-chain investigation context."""
     top = context.get("simivision_picks", [])
     picks_str = "; ".join(
         f"#{p.get('rank')} {p.get('name')} (SN{p.get('netuid')}) "
@@ -41,15 +41,44 @@ def build_simivision_prompt(message: str, context: Dict[str, Any]) -> str:
     ) or "No picks available"
     weights = context.get("expert_weights", {})
     weights_str = ", ".join(f"{k}={v}" for k, v in weights.items()) or "none"
+    investigation = context.get("investigation")
+    inv_block = ""
+    if investigation:
+        inv_block = f"\nOn-chain investigation data (cite wallets/amounts from this):\n{json.dumps(investigation, default=str)[:6000]}\n"
     return (
-        "You are SimiVision, an AI analyst for Bittensor subnets. "
-        "Use the live subnet snapshot and the Council's learned expert weights below.\n\n"
+        "You are SimiVision, an AI analyst for Bittensor subnets with on-chain investigation. "
+        "When investigation data is present, answer wallet/sell/transfer questions from those facts. "
+        "Say clearly when owner status cannot be confirmed from sells alone.\n\n"
         f"User question: {message}\n\n"
         f"Top SimiVision picks: {picks_str}\n"
         f"Source: {context.get('source', 'unknown')}\n"
         f"Council expert weights (self-learning loop): {weights_str}\n"
-        "Answer concisely and tie the reasoning back to the picks and expert weights."
+        f"{inv_block}"
+        "Answer concisely and tie the reasoning back to the picks and expert weights when relevant."
     )
+
+
+def _maybe_investigation_context(message: str) -> Optional[Dict[str, Any]]:
+    import re
+
+    q = (message or "").lower()
+    if not any(tok in q for tok in ("wallet", "sell", "selling", "undelegate", "transfer", "owner", "coldkey", "sn", "subnet")):
+        return None
+    netuid = None
+    m = re.search(r"\b(?:sn|subnet)\s*(\d+)\b", message, re.I)
+    if m:
+        netuid = int(m.group(1))
+    wallet = None
+    wm = re.search(r"\b(5[A-HJ-NP-Za-km-z1-9]{47,48})\b", message)
+    if wm:
+        wallet = wm.group(1)
+    try:
+        from internal.investigation.service import build_investigation_report
+
+        return build_investigation_report(message, netuid=netuid, wallet=wallet)
+    except Exception as exc:
+        logger.debug("investigation context skipped: %s", exc)
+        return None
 
 
 def call_llm(prompt: str, message: str, context: Dict[str, Any]) -> Tuple[str, bool]:
@@ -161,6 +190,9 @@ async def handle_simivision_chat(message: str) -> Dict[str, str]:
 
     try:
         context = build_chat_context()
+        inv = _maybe_investigation_context(message)
+        if inv:
+            context["investigation"] = inv
         prompt = build_simivision_prompt(message, context)
         reply, llm_used = call_llm(prompt, message, context)
         return {"reply": sanitize_reply(reply), "model": _display_model(llm_used)}

@@ -61,6 +61,11 @@ CONTRACT = [
         },
     ),
     ("POST", "/api/whales/scan", {"netuids": [1], "top_n": 1}),
+    # On-chain investigation
+    ("GET", "/api/investigate/subnet/82/sellers", None),
+    ("GET", "/api/investigate/wallet/5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", None),
+    ("GET", "/api/investigate/subnet/82/owner-check?wallets=5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", None),
+    ("POST", "/api/investigate/ask", {"question": "Who is selling subnet 82?"}),
     # Council / judges (slice 4)
     ("GET", "/api/judges", None),
     ("GET", "/api/judges/1", None),

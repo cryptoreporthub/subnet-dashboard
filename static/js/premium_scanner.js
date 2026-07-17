@@ -85,13 +85,23 @@
   }
 
   function load() {
-    fetch('/api/registry').then(function (r) { return r.json(); }).then(function (data) {
-      state.rows = Object.keys(data).map(function (key) {
-        var item = Object.assign({}, data[key]);
-        item.id = item.id != null ? item.id : Number(key);
-        item.netuid = item.netuid != null ? item.netuid : item.id;
-        return item;
-      });
+    fetch('/api/subnets').then(function (r) { return r.json(); }).then(function (data) {
+      var list = Array.isArray(data.subnets) ? data.subnets : data;
+      if (Array.isArray(list)) {
+        state.rows = list.map(function (item) {
+          var row = Object.assign({}, item);
+          row.id = row.id != null ? row.id : row.netuid;
+          row.netuid = row.netuid != null ? row.netuid : row.id;
+          return row;
+        });
+      } else {
+        state.rows = Object.keys(list).map(function (key) {
+          var item = Object.assign({}, list[key]);
+          item.id = item.id != null ? item.id : Number(key);
+          item.netuid = item.netuid != null ? item.netuid : item.id;
+          return item;
+        });
+      }
       render();
     }).catch(function () {
       tableEl.innerHTML = '<p class="empty">Scanner warming up — registry API unreachable on this deploy.</p>';
