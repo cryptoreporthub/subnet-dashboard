@@ -122,6 +122,67 @@
     });
   }
 
+  function renderAskResult(payload, out) {
+    if (!out) return;
+    if (payload.error || payload.status === 'error') {
+      out.innerHTML = '<p class="inv-banner">' + esc(payload.error || payload.message || 'Ask API unavailable.') + '</p>';
+      return;
+    }
+    var answer = payload.answer || payload.summary || payload.report || payload.markdown;
+    if (!answer && payload.sections) {
+      answer = JSON.stringify(payload.sections, null, 2);
+    }
+    out.innerHTML = '<div class="inv-ask-result"><pre>' + esc(answer || 'No answer returned.') + '</pre></div>';
+  }
+
+  function runOwnerCheck(netuid) {
+    var out = document.getElementById('inv-sellers-out');
+    var n = netuid != null ? netuid : focusNetuid();
+    if (out) out.innerHTML = '<p class="inv-loading">Running owner check…</p>';
+    return fetch('/api/investigate/subnet/' + encodeURIComponent(n) + '/sellers?limit=10')
+      .then(function (r) { return r.json(); })
+      .then(function (sellersPayload) {
+        var rows = sellersPayload.sellers || sellersPayload.rows || sellersPayload.data || [];
+        var wallets = rows.slice(0, 5).map(function (row) {
+          return row.wallet || row.ss58 || row.coldkey;
+        }).filter(Boolean);
+        if (!wallets.length) {
+          if (out) out.innerHTML = '<p class="inv-empty">No seller wallets to check.</p>';
+          return;
+        }
+        var q = '/api/investigate/subnet/' + encodeURIComponent(n) + '/owner-check?wallets=' +
+          encodeURIComponent(wallets.join(','));
+        return fetch(q).then(function (r) { return r.json(); }).then(function (d) {
+          if (!out) return;
+          var matches = d.matches || d.results || d.owners || [];
+          if (Array.isArray(matches) && matches.length) {
+            out.innerHTML = '<p class="inv-banner">Owner overlap: ' + esc(JSON.stringify(matches)) + '</p>';
+          } else {
+            out.innerHTML = '<p class="inv-empty">No owner overlap in top sellers (or data unavailable).</p>';
+          }
+        });
+      })
+      .catch(function () {
+        if (out) out.innerHTML = '<p class="inv-banner">Owner check failed.</p>';
+      });
+  }
+
+  function runAsk(netuid, question) {
+    var out = document.getElementById('inv-sellers-out');
+    var n = netuid != null ? Number(netuid) : Number(focusNetuid());
+    if (out) out.innerHTML = '<p class="inv-loading">Asking investigation desk…</p>';
+    return fetch('/api/investigate/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ question: question, netuid: n }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { renderAskResult(d, out); })
+      .catch(function () {
+        if (out) out.innerHTML = '<p class="inv-banner">Investigation ask unavailable.</p>';
+      });
+  }
+
   document.querySelectorAll('.inv-preset').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var action = btn.getAttribute('data-action') || 'chat';
@@ -129,6 +190,17 @@
       var nm = focusName();
       if (action === 'sellers') {
         runSellers(n);
+        return;
+      }
+      if (action === 'owner-check') {
+        runOwnerCheck(n);
+        return;
+      }
+      if (action === 'ask') {
+        var q = (btn.getAttribute('data-prompt') || 'Summarize seller risk for this subnet.')
+          .replace(/\{name\}/g, nm)
+          .replace(/\{netuid\}/g, String(n));
+        runAsk(n, q);
         return;
       }
       if (action === 'wallet') {
@@ -186,5 +258,5 @@
       });
   }
 
-  window.InvestigationPanel = { runSellers: runSellers, focusNetuid: focusNetuid };
+  window.InvestigationPanel = { runSellers: runSellers, focusNetuid: focusNetuid, runOwnerCheck: runOwnerCheck, runAsk: runAsk };
 })();

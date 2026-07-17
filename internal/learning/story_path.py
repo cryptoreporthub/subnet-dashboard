@@ -190,9 +190,9 @@ def build_story_path(daily_pick_payload: Optional[Dict[str, Any]] = None) -> Dic
     if payload is None:
         try:
             from internal.council.daily_pick_engine import get_or_create_today_pick
-            from fetchers.taomarketcap import get_all_subnets
+            from internal.subnets.feed import load_pick_subnets
 
-            subnets = get_all_subnets() or []
+            subnets = load_pick_subnets()
             payload = get_or_create_today_pick(subnets, {})
         except Exception as exc:
             logger.warning("story path daily pick load failed: %s", exc)

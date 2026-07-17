@@ -26,6 +26,12 @@
 .wallet-page__addr code { font-size: 12px; word-break: break-all; }
 .wallet-page__empty { color: #8a9a8e; font-size: 13px; }
 
+.wallet-page__rug-flags { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.wallet-page__rug { font-size: 11px; padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(138,154,142,0.35); text-decoration: none; color: inherit; }
+.wallet-page__rug--high { border-color: rgba(255,100,80,0.6); color: #ff8a7a; }
+.wallet-page__rug--medium { border-color: rgba(255,179,71,0.5); color: #ffb347; }
+.wallet-page__rug--low { border-color: rgba(138,154,142,0.35); color: #8a9a8e; }
+
 /* §28-4 — money-flow bars */
 .flow-graph { display: grid; gap: 8px; margin-top: 12px; }
 .flow-graph__row { display: grid; grid-template-columns: 56px 1fr 72px; align-items: center; gap: 10px; text-decoration: none; color: inherit; font-size: 12px; }

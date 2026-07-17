@@ -117,6 +117,33 @@ def _wallet_subnet_exposure(flow_rows: List[Dict[str, Any]]) -> List[Dict[str, A
     ]
 
 
+def _wallet_rug_flags(exposure: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Rug risk for top exposure subnets (§29-5)."""
+    flags: List[Dict[str, Any]] = []
+    try:
+        from internal.ruggers.watchlist import RuggerWatchlist
+
+        watch = RuggerWatchlist()
+        for row in (exposure or [])[:3]:
+            netuid = row.get("netuid")
+            if netuid is None:
+                continue
+            risk = watch.get_subnet_risk(int(netuid))
+            level = risk.get("risk_level")
+            if not level:
+                continue
+            flags.append(
+                {
+                    "netuid": int(netuid),
+                    "risk_level": level,
+                    "rugger_count": risk.get("rugger_count", 0),
+                }
+            )
+    except Exception as exc:
+        logger.debug("wallet rug flags failed: %s", exc)
+    return flags
+
+
 @share_router.get("/wallet/{wallet}")
 async def wallet_share_page(request: Request, wallet: str):
     """§28-2 — routable wallet explorer page."""
@@ -127,6 +154,7 @@ async def wallet_share_page(request: Request, wallet: str):
     flow_rows = _wallet_flow_rows(wallet)
     profile = _wallet_profile(wallet)
     exposure = _wallet_subnet_exposure(flow_rows)
+    rug_flags = _wallet_rug_flags(exposure)
     base = _public_base(request)
     page_url = f"{base}/wallet/{html.escape(wallet)}"
     short = wallet[:10] + "…" + wallet[-4:] if len(wallet) > 16 else wallet
@@ -143,6 +171,7 @@ async def wallet_share_page(request: Request, wallet: str):
             "flow_rows": flow_rows[:30],
             "profile": profile,
             "exposure": exposure,
+            "rug_flags": rug_flags,
             "page_title": title,
             "page_description": desc,
             "page_url": page_url,

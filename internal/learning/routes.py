@@ -37,9 +37,9 @@ def _utcnow_z() -> str:
 
 def _subnets_for_tracker() -> list:
     try:
-        from fetchers.taomarketcap import get_all_subnets
+        from internal.subnets.feed import load_pick_subnets
 
-        return get_all_subnets() or []
+        return load_pick_subnets()
     except Exception as exc:
         logger.warning("Subnet list for council trackers failed: %s", exc)
         return []
@@ -402,9 +402,9 @@ async def api_predictions_resolved(resolve: bool = Query(default=False)):
     """Return resolved predictions. Read-only unless ``resolve=true``."""
     try:
         if resolve:
-            from fetchers.taomarketcap import get_all_subnets
+            from internal.subnets.feed import load_pick_subnets
 
-            subnets = get_all_subnets() or []
+            subnets = load_pick_subnets()
             result = resolver.resolve_due_predictions(subnets)
         else:
             result = resolver.get_resolved_predictions()

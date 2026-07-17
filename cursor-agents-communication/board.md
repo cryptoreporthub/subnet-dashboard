@@ -1,34 +1,34 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-17T17:00:00Z — **§30 Living Brain automation**  
-**main:** `6c9b057` · §27/§28 complete · §30 PR in flight
+**Last updated:** 2026-07-17T17:35:00Z — **§29 polish automation**  
+**main:** `27f7c61` · §30 merged (#314) · §29 polish in flight
 
 ## Ditto boot (read first)
 
 1. **`cursor-agents-communication/STATUS.md`**
-2. **`cursor-agents-communication/master-automated-gameplan.md`** (active queue)
-3. **`cursor-agents-communication/living-brain-audit.md`** (spec)
+2. **`cursor-agents-communication/master-automated-gameplan.md`**
+3. **`cursor-agents-communication/post-s29-automated-build-plan.md`**
 
 ## Gate Status
 
 | Phase | Status |
 |-------|--------|
-| **§17–§28** | ✅ complete |
-| **§30** | 🟡 **Living Brain closure** — automated queue |
+| **§17–§30** | ✅ complete on main |
+| **§29 polish** | 🟡 **automated build** — wallet / inv / picks / judges |
 
-## Active queue (`master-automated-gameplan.md`)
+## Active queue
 
 | # | Slice | State |
 |---|-------|-------|
-| §30-0 | Docs + board | in PR |
-| §30-1…§30-10 | Living Brain fixes | in PR |
-| §29-1, §29-3 | Polish | in PR |
+| §29-5 | Wallet rug flags | PR |
+| §29-6 | Investigation ask presets | PR |
+| §29-7 | Pick subnet feed | PR |
+| §29-8 | Pro drawer judges lazy load | PR |
+| §29-9 | Test debt | PR |
 
-**Then:** §29-5–10 deferred unless user asks.
+**Defer:** §29-10 flow graph · H1–H6
 
 ## Rules
 
 - Board + STATUS override stale memory artifacts.
 - Honest-empty > fake data (RF-2).
-- One slice per agent turn · token-save per plan.
-- `nudge_expert` is the online weight authority.

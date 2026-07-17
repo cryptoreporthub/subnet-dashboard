@@ -34,9 +34,10 @@ MASTER AUTOMATION:
 | **§29-1** | verify_prod shareable routes | backlog | this PR |
 | **§29-3** | Name integrity guard | B1–B4 | this PR |
 | **§29-4** | Living Focus weight lean UI | T1 | merged into §30-1 |
-| **§29-9a** | Living brain tests | — | this PR |
+| **§29-9a** | Living brain tests | — | ✅ main #314 |
+| **§29-5…§29-9** | Polish queue | wallet, inv, picks, judges | in PR |
 
-**Defer:** §29-5–8, §29-9b, §29-10, H1–H6, D1–D7, LB-10/13/17.
+**Defer:** §29-10, H1–H6, D1–D7, LB-10/13/17.
 
 ## References
 

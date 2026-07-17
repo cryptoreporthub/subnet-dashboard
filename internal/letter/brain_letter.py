@@ -42,9 +42,9 @@ def _trust_block() -> Dict[str, Any]:
 def _today_pick_block() -> Dict[str, Any]:
     try:
         from internal.council.daily_pick_engine import get_or_create_today_pick
-        from fetchers.taomarketcap import get_all_subnets
+        from internal.subnets.feed import load_pick_subnets
 
-        payload = get_or_create_today_pick(get_all_subnets() or [], {})
+        payload = get_or_create_today_pick(load_pick_subnets(), {})
     except Exception:
         payload = {}
 

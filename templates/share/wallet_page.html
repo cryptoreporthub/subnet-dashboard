@@ -16,6 +16,15 @@
   {% if exposure %}
   <section class="wallet-page__graph" id="wallet-flow-graph" aria-label="Subnet exposure">
     <h2 class="wallet-page__section">Money flow by subnet</h2>
+    {% if rug_flags %}
+    <div class="wallet-page__rug-flags" aria-label="Rug risk on top exposure">
+      {% for flag in rug_flags %}
+      <a class="wallet-page__rug wallet-page__rug--{{ flag.risk_level }}" href="/subnet/{{ flag.netuid }}" title="SN{{ flag.netuid }} rug risk">
+        SN{{ flag.netuid }} · {{ flag.risk_level }} risk{% if flag.rugger_count %} ({{ flag.rugger_count }} ruggers){% endif %}
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
     <div class="flow-graph">
       {% for row in exposure %}
       <a class="flow-graph__row" href="/subnet/{{ row.netuid }}" title="SN{{ row.netuid }}">
