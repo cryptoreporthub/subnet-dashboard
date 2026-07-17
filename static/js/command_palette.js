@@ -24,8 +24,8 @@
     palette.innerHTML =
       '<div class="cmd-palette__backdrop" data-close="1"></div>' +
       '<div class="cmd-palette__panel" role="dialog" aria-modal="true" aria-label="Search">' +
-      '<input type="search" class="cmd-palette__input" id="cmd-palette-input" placeholder="Subnet, wallet, or pick id…" autocomplete="off" />' +
-      '<ul class="cmd-palette__list" id="cmd-palette-list"></ul>' +
+      '<input type="search" class="cmd-palette__input" id="cmd-palette-input" role="combobox" aria-expanded="false" aria-controls="cmd-palette-list" aria-autocomplete="list" placeholder="Subnet, wallet, or pick id…" autocomplete="off" />' +
+      '<ul class="cmd-palette__list" id="cmd-palette-list" role="listbox"></ul>' +
       '</div>';
     document.body.appendChild(palette);
     input = document.getElementById('cmd-palette-input');
@@ -52,10 +52,14 @@
       return;
     }
     list.innerHTML = results.map(function (r, i) {
-      return '<li class="cmd-palette__item' + (i === activeIdx ? ' cmd-palette__item--active' : '') + '" data-url="' + esc(r.url) + '" role="option">' +
+      var active = i === activeIdx;
+      return '<li class="cmd-palette__item' + (active ? ' cmd-palette__item--active' : '') + '" id="cmd-palette-opt-' + i + '" data-url="' + esc(r.url) + '" role="option" aria-selected="' + (active ? 'true' : 'false') + '">' +
         '<span>' + esc(r.label) + '</span>' +
         '<span class="cmd-palette__hint">' + esc(r.hint || r.type) + '</span></li>';
     }).join('');
+    if (input) {
+      input.setAttribute('aria-activedescendant', results.length ? 'cmd-palette-opt-' + activeIdx : '');
+    }
   }
 
   function search(q) {
@@ -109,6 +113,7 @@
   function open() {
     ensurePalette();
     palette.hidden = false;
+    if (input) input.setAttribute('aria-expanded', 'true');
     input.value = '';
     results = [];
     render();
@@ -117,6 +122,10 @@
 
   function close() {
     if (palette) palette.hidden = true;
+    if (input) {
+      input.setAttribute('aria-expanded', 'false');
+      input.removeAttribute('aria-activedescendant');
+    }
   }
 
   document.addEventListener('keydown', function (e) {

@@ -22,25 +22,26 @@ MAX_PAGES = 5
 FETCH_DEADLINE_SEC = 25
 
 def init_db():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=10)
-    c = conn.cursor()
-    c.execute(
-        """CREATE TABLE IF NOT EXISTS subnets_cache (
+    os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
+    from fetchers._sqlite import db_conn
+
+    with db_conn(DB_PATH) as conn:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS subnets_cache (
         key TEXT PRIMARY KEY,
         data TEXT,
         last_updated TIMESTAMP
     )"""
-    )
-    conn.commit()
-    conn.close()
+        )
+        conn.commit()
 
 def get_cached(key: str) -> Optional[Dict]:
-    conn = sqlite3.connect(DB_PATH, timeout=10)
-    c = conn.cursor()
-    c.execute("SELECT data, last_updated FROM subnets_cache WHERE key = ?", (key,))
-    row = c.fetchone()
-    conn.close()
+    from fetchers._sqlite import db_conn
+
+    with db_conn(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT data, last_updated FROM subnets_cache WHERE key = ?", (key,))
+        row = c.fetchone()
     if row:
         data_str, last_updated = row
         updated = datetime.fromisoformat(last_updated)
@@ -49,14 +50,15 @@ def get_cached(key: str) -> Optional[Dict]:
     return None
 
 def set_cache(key: str, data: Dict):
-    conn = sqlite3.connect(DB_PATH, timeout=10)
-    c = conn.cursor()
-    c.execute(
-        "INSERT OR REPLACE INTO subnets_cache (key, data, last_updated) VALUES (?, ?, ?)",
-        (key, json.dumps(data), datetime.now().isoformat()),
-    )
-    conn.commit()
-    conn.close()
+    from fetchers._sqlite import db_conn
+
+    with db_conn(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute(
+            "INSERT OR REPLACE INTO subnets_cache (key, data, last_updated) VALUES (?, ?, ?)",
+            (key, json.dumps(data), datetime.now().isoformat()),
+        )
+        conn.commit()
 
 def _parse_subnet_row(row: dict) -> Dict:
     """Normalise a raw API row into our standard subnet dict."""

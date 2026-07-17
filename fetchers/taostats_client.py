@@ -30,17 +30,63 @@ _call_timestamps: List[float] = []
 
 
 def _init_db():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("""CREATE TABLE IF NOT EXISTS taostats_cache (
+    os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
+    from fetchers._sqlite import db_conn
+
+    with db_conn(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("""CREATE TABLE IF NOT EXISTS taostats_cache (
         netuid INTEGER PRIMARY KEY, data TEXT, last_updated TIMESTAMP)""")
-    c.execute("""CREATE TABLE IF NOT EXISTS rotation_state (
+        c.execute("""CREATE TABLE IF NOT EXISTS rotation_state (
         id INTEGER PRIMARY KEY DEFAULT 0, last_offset INTEGER DEFAULT 0,
         last_rotation TIMESTAMP, CONSTRAINT single_row CHECK (id = 0))""")
-    c.execute("INSERT OR IGNORE INTO rotation_state (id, last_offset, last_rotation) VALUES (0, 0, '2025-01-01T00:00:00Z')")
-    conn.commit()
-    conn.close()
+        c.execute("INSERT OR IGNORE INTO rotation_state (id, last_offset, last_rotation) VALUES (0, 0, '2025-01-01T00:00:00Z')")
+        conn.commit()
+
+
+def _get_cached(netuid):
+    from fetchers._sqlite import db_conn
+
+    with db_conn(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT data, last_updated FROM taostats_cache WHERE netuid = ?", (netuid,))
+        row = c.fetchone()
+    if row:
+        data_str, last_updated = row
+        updated = datetime.fromisoformat(last_updated)
+        if datetime.now() - updated < CACHE_TTL:
+            return json.loads(data_str)
+    return None
+
+
+def _set_cache(netuid, data):
+    from fetchers._sqlite import db_conn
+
+    with db_conn(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("INSERT OR REPLACE INTO taostats_cache (netuid, data, last_updated) VALUES (?, ?, ?)",
+                  (netuid, json.dumps(data), datetime.now().isoformat()))
+        conn.commit()
+
+
+def _get_rotation_offset():
+    from fetchers._sqlite import db_conn
+
+    with db_conn(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT last_offset FROM rotation_state WHERE id = 0")
+        row = c.fetchone()
+    return row[0] if row else 0
+
+
+def _set_rotation_offset(offset):
+    from fetchers._sqlite import db_conn
+
+    with db_conn(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("UPDATE rotation_state SET last_offset = ?, last_rotation = ? WHERE id = 0",
+                  (offset, datetime.now().isoformat()))
+        conn.commit()
 
 
 def _rate_limit():
@@ -53,47 +99,6 @@ def _rate_limit():
             logger.debug("TaoStats rate limit: waiting %.1fs", wait)
             time.sleep(wait)
     _call_timestamps.append(time.time())
-
-
-def _get_cached(netuid):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT data, last_updated FROM taostats_cache WHERE netuid = ?", (netuid,))
-    row = c.fetchone()
-    conn.close()
-    if row:
-        data_str, last_updated = row
-        updated = datetime.fromisoformat(last_updated)
-        if datetime.now() - updated < CACHE_TTL:
-            return json.loads(data_str)
-    return None
-
-
-def _set_cache(netuid, data):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO taostats_cache (netuid, data, last_updated) VALUES (?, ?, ?)",
-              (netuid, json.dumps(data), datetime.now().isoformat()))
-    conn.commit()
-    conn.close()
-
-
-def _get_rotation_offset():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT last_offset FROM rotation_state WHERE id = 0")
-    row = c.fetchone()
-    conn.close()
-    return row[0] if row else 0
-
-
-def _set_rotation_offset(offset):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("UPDATE rotation_state SET last_offset = ?, last_rotation = ? WHERE id = 0",
-              (offset, datetime.now().isoformat()))
-    conn.commit()
-    conn.close()
 
 
 def get_subnet_metrics(netuid):

@@ -277,6 +277,16 @@ def investigate_owner_check(netuid: int, wallets: List[str]) -> Dict[str, Any]:
         owner = owner_payload.get("owner") or owner_payload.get("coldkey")
 
     normalized = [w.strip() for w in wallets if w and w.strip()]
+    if not normalized:
+        sellers = investigate_subnet_sellers(netuid, limit=10)
+        rows = sellers.get("top_sellers") or sellers.get("sellers") or []
+        normalized = [
+            str(r.get("wallet") or r.get("ss58") or r.get("coldkey") or "")
+            for r in rows[:5]
+            if isinstance(r, dict)
+        ]
+        normalized = [w.strip() for w in normalized if w.strip()]
+
     matches = [w for w in normalized if owner and w == owner]
 
     sellers = investigate_subnet_sellers(netuid, limit=50)

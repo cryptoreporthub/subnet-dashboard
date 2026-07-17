@@ -139,28 +139,25 @@
     var out = document.getElementById('inv-sellers-out');
     var n = netuid != null ? netuid : focusNetuid();
     if (out) out.innerHTML = '<p class="inv-loading">Running owner check…</p>';
-    return fetch('/api/investigate/subnet/' + encodeURIComponent(n) + '/sellers?limit=10')
+    return fetch('/api/investigate/subnet/' + encodeURIComponent(n) + '/owner-check')
       .then(function (r) { return r.json(); })
-      .then(function (sellersPayload) {
-        var rows = sellersPayload.sellers || sellersPayload.rows || sellersPayload.data || [];
-        var wallets = rows.slice(0, 5).map(function (row) {
-          return row.wallet || row.ss58 || row.coldkey;
-        }).filter(Boolean);
-        if (!wallets.length) {
-          if (out) out.innerHTML = '<p class="inv-empty">No seller wallets to check.</p>';
+      .then(function (d) {
+        if (!out) return;
+        if (d.error || d.status === 'error' || d.status === 'unavailable') {
+          out.innerHTML = '<p class="inv-banner">' + esc(d.message || d.error || 'Owner check unavailable.') + '</p>';
           return;
         }
-        var q = '/api/investigate/subnet/' + encodeURIComponent(n) + '/owner-check?wallets=' +
-          encodeURIComponent(wallets.join(','));
-        return fetch(q).then(function (r) { return r.json(); }).then(function (d) {
-          if (!out) return;
-          var matches = d.matches || d.results || d.owners || [];
-          if (Array.isArray(matches) && matches.length) {
-            out.innerHTML = '<p class="inv-banner">Owner overlap: ' + esc(JSON.stringify(matches)) + '</p>';
-          } else {
-            out.innerHTML = '<p class="inv-empty">No owner overlap in top sellers (or data unavailable).</p>';
-          }
-        });
+        var matches = d.owner_matches || [];
+        var suspects = d.suspects_among_sellers || [];
+        if (matches.length) {
+          out.innerHTML = '<p class="inv-banner">Owner match among sellers: ' + esc(matches.join(', ')) + '</p>';
+        } else if (suspects.length) {
+          out.innerHTML = '<p class="inv-banner">Suspect wallets among sellers: ' + esc(suspects.join(', ')) + '</p>';
+        } else if (d.owner) {
+          out.innerHTML = '<p class="inv-empty">Owner ' + esc(String(d.owner).slice(0, 16)) + '… not in top sellers.</p>';
+        } else {
+          out.innerHTML = '<p class="inv-empty">No owner overlap in top sellers (or data unavailable).</p>';
+        }
       })
       .catch(function () {
         if (out) out.innerHTML = '<p class="inv-banner">Owner check failed.</p>';

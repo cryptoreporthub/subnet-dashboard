@@ -14,9 +14,7 @@
 
 {% include "partials/premium/header.html" %}
 {% include "partials/premium/council_stage.html" %}
-{% include "partials/premium/story_strip.html" %}
 {% include "partials/premium/living_focus.html" %}
-{% include "partials/premium/story_path.html" %}
 {% include "partials/premium/brain_letter.html" %}
 <section class="whats-working wrap-pad" id="section-whats-working" aria-labelledby="whats-working-title">
   <h2 class="whats-working__title" id="whats-working-title">What&apos;s working</h2>
@@ -34,6 +32,8 @@
     <span class="pro-drawer__hint">Council bench · SimiVision · KPI · backtest</span>
   </summary>
   <div class="pro-drawer__body council-primary">
+    {% include "partials/premium/story_strip.html" %}
+    {% include "partials/premium/story_path.html" %}
     {% include "partials/premium/simivision_picks.html" %}
     <div class="council-bench">
       {% include "partials/premium/council.html" %}

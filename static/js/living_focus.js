@@ -344,6 +344,20 @@
     });
   }
 
+  var CACHE_TTL_MS = 60000;
+
+  function cacheFresh(cache) {
+    return cache && cache.at && (Date.now() - cache.at) < CACHE_TTL_MS;
+  }
+
+  function dailyPickPromise() {
+    var cache = window.HomeHydrateCache;
+    if (cacheFresh(cache) && cache.dailyPick) {
+      return Promise.resolve(cache.dailyPick);
+    }
+    return fetchJson('/api/daily-pick', 8000).catch(function () { return {}; });
+  }
+
   function refreshFocus() {
     if (focusNetuid == null) return Promise.resolve();
     var action = 'HOLD';
@@ -354,7 +368,7 @@
       fetchJson('/api/judges/' + focusNetuid, 15000),
       fetchJson('/api/calibration/status', 8000).catch(function () { return {}; }),
       trailPromise,
-      fetchJson('/api/daily-pick', 8000).catch(function () { return {}; }),
+      dailyPickPromise(),
     ]).then(function (res) {
       var judges = res[0];
       var cal = res[1];
@@ -383,19 +397,9 @@
     return { dp: dp, top: top, n: n };
   }
 
-  function init() {
-    var cache = window.HomeHydrateCache;
-    var cached = bootstrapFromCache(cache);
-    if (cached && cached.n != null) {
-      var sn = (cached.dp.pick && cached.dp.pick.subnet) || (cached.dp.candidate && cached.dp.candidate.subnet) || cached.top[0] || {};
-      setFocus(cached.n, subnetName(sn, cached.n));
-      renderSwitcher(cached.top);
-      scrollToFocus();
-      return refreshFocus();
-    }
-
+  function coldBootstrap() {
     Promise.all([
-      fetchJson('/api/daily-pick', 12000),
+      dailyPickPromise(),
       fetchJson('/api/simivision', 12000).catch(function () { return {}; }),
     ]).then(function (res) {
       var dp = res[0] || {};
@@ -421,17 +425,42 @@
     });
   }
 
-  document.addEventListener('home:hydrate-cache', function (ev) {
-    if (focusNetuid != null) return;
-    var detail = ev && ev.detail;
-    var cached = bootstrapFromCache(detail);
-    if (!cached || cached.n == null) return;
-    var sn = (cached.dp.pick && cached.dp.pick.subnet) || (cached.dp.candidate && cached.dp.candidate.subnet) || cached.top[0] || {};
-    setFocus(cached.n, subnetName(sn, cached.n));
-    renderSwitcher(cached.top);
-    scrollToFocus();
-    refreshFocus();
-  });
+  function init() {
+    var cache = window.HomeHydrateCache;
+    var cached = bootstrapFromCache(cache);
+    if (cached && cached.n != null) {
+      var sn = (cached.dp.pick && cached.dp.pick.subnet) || (cached.dp.candidate && cached.dp.candidate.subnet) || cached.top[0] || {};
+      setFocus(cached.n, subnetName(sn, cached.n));
+      renderSwitcher(cached.top);
+      scrollToFocus();
+      return refreshFocus();
+    }
+
+    var waited = false;
+    var timer = setTimeout(function () {
+      if (waited || focusNetuid != null) return;
+      waited = true;
+      coldBootstrap();
+    }, 2000);
+
+    document.addEventListener('home:hydrate-cache', function onCache(ev) {
+      if (waited || focusNetuid != null) return;
+      waited = true;
+      clearTimeout(timer);
+      document.removeEventListener('home:hydrate-cache', onCache);
+      var detail = ev && ev.detail;
+      var boot = bootstrapFromCache(detail);
+      if (!boot || boot.n == null) {
+        coldBootstrap();
+        return;
+      }
+      var sn = (boot.dp.pick && boot.dp.pick.subnet) || (boot.dp.candidate && boot.dp.candidate.subnet) || boot.top[0] || {};
+      setFocus(boot.n, subnetName(sn, boot.n));
+      renderSwitcher(boot.top);
+      scrollToFocus();
+      refreshFocus();
+    });
+  }
 
   var proveBtn = document.getElementById('living-focus-prove-btn');
   if (proveBtn) {

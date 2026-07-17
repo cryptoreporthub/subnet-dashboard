@@ -18,7 +18,7 @@ REMOTE_REGISTRY_URL = os.environ.get(
     "REMOTE_REGISTRY_URL",
     "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json",
 )
-_BAD_NAMES = frozenset({"", "unknown", "deprecated", "none", "unnamed"})
+_BAD_NAMES = frozenset({"", "unknown", "deprecated", "none", "unnamed", "snnone"})
 _CACHE_TTL_SECONDS = int(os.environ.get("SUBNET_NAMES_CACHE_TTL", "300"))
 
 _lock = threading.Lock()
@@ -132,7 +132,9 @@ def resolve_subnet_name(
             return str(lname).strip()
 
     if tmc_name and not _is_bad_name(tmc_name):
-        return str(tmc_name).strip()
+        cleaned = str(tmc_name).strip()
+        if cleaned.lower() != "snnone" and not cleaned.startswith("SNNone"):
+            return cleaned
 
     return f"SN{n}"
 

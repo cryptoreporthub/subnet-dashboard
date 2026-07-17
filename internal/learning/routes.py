@@ -5,8 +5,10 @@ from __future__ import annotations
 import html
 import logging
 import os
+import threading
+import time
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, Response
@@ -29,6 +31,45 @@ learning_router.include_router(create_feedback_router())
 
 _LEARNING_DELTA_CORRECT = 0.02
 _LEARNING_DELTA_WRONG = -0.03
+_LEARNING_SNAPSHOT_TTL = 30.0
+_learning_snapshot_lock = threading.Lock()
+_learning_snapshot_cache: Dict[str, Any] = {"at": 0.0, "data": None}
+
+
+def _learning_snapshot() -> Dict[str, Any]:
+    """Shared ≤30s snapshot for stats / metrics / mindmap (§31-3 O20)."""
+    now = time.time()
+    with _learning_snapshot_lock:
+        if now - float(_learning_snapshot_cache.get("at") or 0) < _LEARNING_SNAPSHOT_TTL:
+            cached = _learning_snapshot_cache.get("data")
+            if isinstance(cached, dict):
+                return cached
+
+    engine = LearningEngine()
+    stats = engine.get_stats()
+    resolved_payload = resolver.get_resolved_predictions()
+    resolver_stats = resolved_payload.get("stats", {})
+    pending_rows = load_predictions().get("predictions", []) or []
+    watchdog = check_resolver_watchdog(pending_rows)
+    from internal.learning.trust_stats import build_trust_banner
+
+    trust_banner = build_trust_banner(resolver_stats, watchdog=watchdog)
+    recent = resolved_payload.get("resolved", [])[-10:]
+    snapshot = {
+        "engine_stats": stats,
+        "resolver_stats": resolver_stats,
+        "resolved_payload": resolved_payload,
+        "pending_rows": pending_rows,
+        "watchdog": watchdog,
+        "trust_banner": trust_banner,
+        "recent": recent,
+        "scenario": _scenario_memory_summary(),
+        "expert_weights": stats.get("expert_weights", {}),
+    }
+    with _learning_snapshot_lock:
+        _learning_snapshot_cache["at"] = now
+        _learning_snapshot_cache["data"] = snapshot
+    return snapshot
 
 
 def _utcnow_z() -> str:
@@ -75,16 +116,12 @@ def _rotation_summary() -> Dict[str, Any]:
 
 
 def _compute_learning_metrics() -> Dict[str, Any]:
-    engine = LearningEngine()
-    stats = engine.get_stats()
-    resolved = resolver.get_resolved_predictions()
-    resolver_stats = resolved.get("stats", {})
-    pending_rows = load_predictions().get("predictions", []) or []
-    watchdog = check_resolver_watchdog(pending_rows)
-    from internal.learning.trust_stats import build_trust_banner
-
-    trust_banner = build_trust_banner(resolver_stats, watchdog=watchdog)
-    recent = resolved.get("resolved", [])[-10:]
+    snap = _learning_snapshot()
+    stats = snap["engine_stats"]
+    resolver_stats = snap["resolver_stats"]
+    watchdog = snap["watchdog"]
+    trust_banner = snap["trust_banner"]
+    recent = snap["recent"]
     return {
         "expert_weights": stats.get("expert_weights", {}),
         "total_records": stats.get("total_records", 0),
@@ -132,10 +169,10 @@ async def api_mindmap_summary():
         logger.warning("SimiVision snapshot unavailable for mindmap: %s", exc)
         simivision = {"meta": {"count": 0, "updated_at": _utcnow_z()}}
 
-    engine = LearningEngine()
-    stats = engine.get_stats()
-    expert_weights = stats.get("expert_weights", {})
-    resolved = resolver.get_resolved_predictions()
+    snap = _learning_snapshot()
+    stats = snap["engine_stats"]
+    expert_weights = snap["expert_weights"]
+    resolved = snap["resolved_payload"]
     return {
         "status": "success",
         "data": {
@@ -160,7 +197,7 @@ async def api_mindmap_summary():
                 "pending": resolved.get("stats", {}).get("pending", 0),
                 "accuracy": resolved.get("stats", {}).get("accuracy", 0.0),
             },
-            "scenario_memory": _scenario_memory_summary(),
+            "scenario_memory": snap["scenario"],
             "rotation_tracker": _rotation_summary(),
             "learning_status": {
                 "enabled": True,
@@ -335,16 +372,12 @@ async def share_call_page(prediction_id: str, request: Request):
 
 @learning_router.get("/api/learning/stats")
 async def api_learning_stats():
-    engine = LearningEngine()
-    stats = engine.get_stats()
-    scenario = _scenario_memory_summary()
-    resolved_payload = resolver.get_resolved_predictions()
-    resolver_stats = resolved_payload.get("stats", {})
-    pending_rows = load_predictions().get("predictions", []) or []
-    watchdog = check_resolver_watchdog(pending_rows)
-    from internal.learning.trust_stats import build_trust_banner
-
-    trust_banner = build_trust_banner(resolver_stats, watchdog=watchdog)
+    snap = _learning_snapshot()
+    stats = snap["engine_stats"]
+    scenario = snap["scenario"]
+    resolver_stats = snap["resolver_stats"]
+    watchdog = snap["watchdog"]
+    trust_banner = snap["trust_banner"]
     return {
         "status": "success",
         "data": {

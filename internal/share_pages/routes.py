@@ -46,6 +46,8 @@ async def subnet_share_page(request: Request, netuid: int):
     page_url = f"{base}/subnet/{netuid}"
     title = f"{name} (SN{netuid}) — SimiVision"
     desc = (drivers.get("headline") or f"Council analysis and market drivers for Bittensor subnet {netuid}.")[:200]
+    og_image = f"{base}/static/favicon.svg"
+    data_available = bool(report) and (bool(drivers) or bool(judges) or bool(report.get("markdown")))
 
     return templates.TemplateResponse(
         request,
@@ -58,15 +60,21 @@ async def subnet_share_page(request: Request, netuid: int):
             "consensus": consensus or {},
             "drivers": drivers,
             "digest_html": markdown_subset_html(report.get("markdown") or ""),
+            "data_available": data_available,
+            "error_reason": None if data_available else "Subnet report data unavailable",
             "page_title": title,
             "page_description": desc,
             "page_url": page_url,
+            "og_image_url": og_image,
             "public_base_url": base,
         },
     )
 
 
-def _wallet_flow_rows(wallet: str) -> List[Dict[str, Any]]:
+def _wallet_flow_rows(wallet: str, activity: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
+    if activity and activity.get("status") == "success":
+        rows = activity.get("delegation_events") or []
+        return rows if isinstance(rows, list) else []
     try:
         from internal.investigation.service import investigate_wallet
 
@@ -150,16 +158,18 @@ async def wallet_share_page(request: Request, wallet: str):
     from internal.investigation.service import investigate_wallet
 
     wallet = wallet.strip()
-    activity = investigate_wallet(wallet, limit=30)
-    flow_rows = _wallet_flow_rows(wallet)
+    activity = investigate_wallet(wallet, limit=40)
+    flow_rows = _wallet_flow_rows(wallet, activity)
     profile = _wallet_profile(wallet)
     exposure = _wallet_subnet_exposure(flow_rows)
     rug_flags = _wallet_rug_flags(exposure)
+    data_ok = activity.get("status") == "success"
     base = _public_base(request)
     page_url = f"{base}/wallet/{html.escape(wallet)}"
     short = wallet[:10] + "…" + wallet[-4:] if len(wallet) > 16 else wallet
     title = f"Wallet {short} — SimiVision"
     desc = f"On-chain wallet flows and subnet exposure for {short}."
+    og_image = f"{base}/static/favicon.svg"
 
     return templates.TemplateResponse(
         request,
@@ -172,9 +182,12 @@ async def wallet_share_page(request: Request, wallet: str):
             "profile": profile,
             "exposure": exposure,
             "rug_flags": rug_flags,
+            "data_available": data_ok and bool(flow_rows or exposure),
+            "error_reason": None if data_ok else activity.get("message", "TaoStats unavailable"),
             "page_title": title,
             "page_description": desc,
             "page_url": page_url,
+            "og_image_url": og_image,
             "public_base_url": base,
         },
     )

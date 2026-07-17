@@ -27,7 +27,7 @@
 
   function subnetName(sn) {
     var name = sn.name || '';
-    if (!name || /^(deprecated|unknown|none)$/i.test(name)) {
+    if (!name || /^(deprecated|unknown|none|snnone)$/i.test(name) || /^snnone/i.test(name)) {
       return 'SN' + subnetNetuid(sn);
     }
     return name;
@@ -861,6 +861,8 @@
     };
   }
 
+  var SUBNET_FIELDS = 'id,netuid,name,price_change_24h,apy,staking_data,total_stake,stake,emission,source,live,sources';
+
   async function run() {
     if (document.documentElement.dataset.hydrate !== '1') return;
     showHydrateSkeletons();
@@ -875,7 +877,7 @@
       fetchJsonTimeout('/api/daily-pick', 15000),
       fetchJsonTimeout('/api/mindmap/trail?limit=20', 12000),
       learningPromise,
-      fetchJsonTimeout('/api/subnets', 15000),
+      fetchJsonTimeout('/api/subnets?fields=' + encodeURIComponent(SUBNET_FIELDS), 15000),
       fetchJsonTimeout('/api/signals?refresh=false', 15000),
       alertsPromise,
       fetchJsonTimeout('/api/cockpit/sections', 20000),
@@ -957,6 +959,8 @@
       dailyPick: results[2].status === 'fulfilled' ? results[2].value : null,
       simivision: results[0].status === 'fulfilled' ? results[0].value : null,
       trail: trail,
+      subnets: subnets,
+      subnetsMeta: results[5].status === 'fulfilled' ? ((results[5].value || {}).meta || {}) : {},
       at: Date.now(),
     };
     document.dispatchEvent(new CustomEvent('home:hydrate-cache', {
