@@ -133,12 +133,30 @@
         el.innerHTML = skeletonHtml(3);
       }
     });
-    document.querySelectorAll('.empty').forEach(function (el) {
-      if (el.closest('#section-daily-pick, .council-stage')) return;
-      if (!el.querySelector('.hydrate-skeleton')) {
-        el.innerHTML = skeletonHtml(2);
+  }
+
+  function normalizeLearningStats(payload) {
+    if (!payload) return null;
+    if (payload.data && typeof payload.data === 'object') return payload.data;
+    if (payload.trust_banner) return payload;
+    return null;
+  }
+
+  async function loadLearningStats() {
+    if (window.SimiLearning && window.SimiLearning.stats) {
+      return window.SimiLearning.stats;
+    }
+    try {
+      var payload = await fetchJsonTimeout('/api/learning/stats', 8000);
+      return normalizeLearningStats(payload);
+    } catch (e) {
+      try {
+        var metrics = await fetchJsonTimeout('/api/learning-metrics', 8000);
+        return normalizeLearningStats(metrics);
+      } catch (e2) {
+        return null;
       }
-    });
+    }
   }
 
   function fetchJsonTimeout(url, ms) {
@@ -830,17 +848,22 @@
     if (document.documentElement.dataset.hydrate !== '1') return;
     showHydrateSkeletons();
 
+    var learningPromise = loadLearningStats();
+    var signalsSummaryPromise = fetchJsonTimeout('/api/signals/summary', 8000).catch(function () { return null; });
+    var alertsPromise = fetchJsonTimeout('/api/alerts?refresh_checks=false', 8000).catch(function () { return null; });
+
     var results = await Promise.allSettled([
       fetchJsonTimeout('/api/simivision', 12000),
       fetchJsonTimeout('/api/top-picks', 25000),
       fetchJsonTimeout('/api/daily-pick', 15000),
       fetchJsonTimeout('/api/mindmap/trail?limit=20', 12000),
-      fetchJsonTimeout('/api/learning/stats', 8000),
+      learningPromise,
       fetchJsonTimeout('/api/subnets', 15000),
       fetchJsonTimeout('/api/signals?refresh=false', 15000),
-      fetchJsonTimeout('/api/alerts?refresh_checks=false', 8000),
+      alertsPromise,
       fetchJsonTimeout('/api/cockpit/sections', 20000),
       fetchJsonTimeout('/api/indicators-convergence', 12000),
+      signalsSummaryPromise,
     ]);
 
     var hourPicks = [];
@@ -873,10 +896,13 @@
       trail = results[3].value.trail || [];
       renderTrail(trail);
     }
-    if (results[4].status === 'fulfilled') {
-      var stats = results[4].value.data || {};
+    if (results[4].status === 'fulfilled' && results[4].value) {
+      var stats = results[4].value;
       renderKpi(stats);
       renderCouncilWeights(stats.expert_weights || {});
+      if (stats.trust_banner && window.SimiTrustBanner && window.SimiTrustBanner.render) {
+        window.SimiTrustBanner.render(stats.trust_banner);
+      }
     }
     if (results[5].status === 'fulfilled') {
       subnets = results[5].value.subnets || [];
@@ -888,10 +914,18 @@
     if (results[9].status === 'fulfilled') {
       renderIndicators((results[9].value.subnets) || []);
     }
-    if (results[6].status === 'fulfilled') {
-      var sigPayload = results[6].value;
+    if (results[6].status === 'fulfilled' || results[7].status === 'fulfilled' || results[10].status === 'fulfilled') {
+      var sigPayload = results[6].status === 'fulfilled' ? results[6].value : {};
       var alertsPayload = results[7].status === 'fulfilled' ? results[7].value : {};
-      renderSignals(sigPayload.signals || [], (alertsPayload.alerts) || []);
+      var summaryPayload = results[10].status === 'fulfilled' ? results[10].value : null;
+      if (summaryPayload && summaryPayload.total_subnets != null && typeof window.__renderSignalSummary === 'function') {
+        window.__renderSignalSummary(summaryPayload);
+      }
+      if (typeof window.__applySignalsPayload === 'function') {
+        window.__applySignalsPayload(sigPayload.signals || [], (alertsPayload.alerts) || []);
+      } else {
+        renderSignals(sigPayload.signals || [], (alertsPayload.alerts) || []);
+      }
     }
     if (results[8].status === 'fulfilled') {
       renderCockpitSections(results[8].value.sections || []);

@@ -78,15 +78,27 @@ def _compute_learning_metrics() -> Dict[str, Any]:
     engine = LearningEngine()
     stats = engine.get_stats()
     resolved = resolver.get_resolved_predictions()
+    resolver_stats = resolved.get("stats", {})
+    pending_rows = load_predictions().get("predictions", []) or []
+    watchdog = check_resolver_watchdog(pending_rows)
+    from internal.learning.trust_stats import build_trust_banner
+
+    trust_banner = build_trust_banner(resolver_stats, watchdog=watchdog)
     recent = resolved.get("resolved", [])[-10:]
     return {
         "expert_weights": stats.get("expert_weights", {}),
         "total_records": stats.get("total_records", 0),
         "predictions_pending": stats.get("pending", 0),
         "predictions_resolved": stats.get("resolved", 0),
-        "correct": resolved.get("stats", {}).get("correct", 0),
-        "wrong": resolved.get("stats", {}).get("wrong", 0),
-        "accuracy": stats.get("accuracy", 0.0),
+        "correct": resolver_stats.get("correct", 0),
+        "wrong": resolver_stats.get("wrong", 0),
+        "accuracy": resolver_stats.get("accuracy", stats.get("accuracy", 0.0)),
+        "expired": resolver_stats.get("expired", 0),
+        "expired_rate": trust_banner.get("expired_rate"),
+        "graded": trust_banner.get("graded"),
+        "trust_banner": trust_banner,
+        "watchdog": watchdog,
+        "brain_ui_ready": trust_banner.get("ready"),
         "deltas": {"correct": _LEARNING_DELTA_CORRECT, "wrong": _LEARNING_DELTA_WRONG},
         "impact_strength": {
             "value": load_impact_strength(),
