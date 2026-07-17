@@ -98,6 +98,15 @@ except Exception as _investigation_exc:  # pragma: no cover
     _INVESTIGATION_ROUTES = False
 
 try:
+    from internal.share_pages.routes import share_router
+
+    _SHARE_ROUTES = True
+except Exception as _share_exc:  # pragma: no cover
+    logger.warning("Share page routes unavailable: %s", _share_exc)
+    share_router = None  # type: ignore[assignment,misc]
+    _SHARE_ROUTES = False
+
+try:
     from internal.cockpit import cockpit_router
 
     _COCKPIT_ROUTES = cockpit_router is not None
@@ -266,6 +275,8 @@ if _SIGNALS_ROUTES:
     app.include_router(signals_router)
 if _INVESTIGATION_ROUTES:
     app.include_router(investigation_router)
+if _SHARE_ROUTES:
+    app.include_router(share_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))

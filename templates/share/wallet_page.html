@@ -1,0 +1,64 @@
+{% extends "share/base_share.html" %}
+{% block content %}
+<article class="wallet-page">
+  <header class="wallet-page__head">
+    <h1 class="wallet-page__title">Wallet</h1>
+    <p class="wallet-page__addr"><code>{{ wallet }}</code></p>
+  </header>
+
+  {% if profile %}
+  <section class="wallet-page__profile">
+    <h2 class="wallet-page__section">Whale profile</h2>
+    <p>Score: {{ profile.score|default('—') }} · Tier: {{ profile.tier|default('—') }}</p>
+  </section>
+  {% endif %}
+
+  {% if exposure %}
+  <section class="wallet-page__graph" id="wallet-flow-graph" aria-label="Subnet exposure">
+    <h2 class="wallet-page__section">Money flow by subnet</h2>
+    <div class="flow-graph">
+      {% for row in exposure %}
+      <a class="flow-graph__row" href="/subnet/{{ row.netuid }}" title="SN{{ row.netuid }}">
+        <span class="flow-graph__label">SN{{ row.netuid }}</span>
+        <span class="flow-graph__bar" style="--w: {{ row.pct }}%"></span>
+        <span class="flow-graph__amt">{{ row.amount_tao }} TAO</span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% else %}
+  <p class="wallet-page__empty">No subnet flow data yet — TaoStats may be unavailable.</p>
+  {% endif %}
+
+  {% if flow_rows %}
+  <section class="wallet-page__flows">
+    <h2 class="wallet-page__section">Recent flows</h2>
+    <table class="inv-table">
+      <thead><tr><th>Dir</th><th>Subnet</th><th>TAO</th><th>Time</th><th>Tx</th></tr></thead>
+      <tbody>
+        {% for row in flow_rows %}
+        <tr>
+          <td>{{ row.side|default(row.direction)|default('—') }}</td>
+          <td>{% if row.netuid %}<a href="/subnet/{{ row.netuid }}">SN{{ row.netuid }}</a>{% else %}—{% endif %}</td>
+          <td>{{ row.amount_tao|default(row.amount)|default('—') }}</td>
+          <td>{{ row.timestamp|default('—') }}</td>
+          <td>{% if row.tx_hash %}<a href="https://taostats.io/hash/{{ row.tx_hash }}" rel="noopener" target="_blank">{{ row.tx_hash[:10] }}…</a>{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  {% if activity and activity.delegation_events %}
+  <section class="wallet-page__activity">
+    <h2 class="wallet-page__section">Activity</h2>
+    <p class="wallet-page__meta">{{ activity.delegation_events|length }} delegation event(s) indexed</p>
+  </section>
+  {% endif %}
+
+  <p class="wallet-page__cta">
+    <a href="/?wallet={{ wallet }}#section-investigation" class="btn-secondary">Open in investigation desk</a>
+  </p>
+</article>
+{% endblock %}

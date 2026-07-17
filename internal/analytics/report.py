@@ -2,11 +2,56 @@
 
 from __future__ import annotations
 
+import html
+import re
 from typing import Any, Dict, List, Optional
 
 from internal.analytics.backtest import evaluate_judges, run_backtest
 from internal.analytics.market_drivers import build_subnet_driver_card
 from internal.judges.subnet_judges import score_subnet
+
+
+def markdown_subset_html(md: str) -> str:
+    """XSS-safe markdown subset (headings, lists, emphasis) for share pages."""
+    lines = str(md or "").split("\n")
+    out: List[str] = []
+    in_list = False
+
+    def close_list() -> None:
+        nonlocal in_list
+        if in_list:
+            out.append("</ul>")
+            in_list = False
+
+    def inline(text: str) -> str:
+        t = html.escape(text)
+        t = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", t)
+        t = re.sub(r"_([^_]+)_", r"<em>\1</em>", t)
+        return t
+
+    for line in lines:
+        if line.startswith("# "):
+            close_list()
+            out.append(f'<h2 class="subnet-page__h2">{inline(line[2:])}</h2>')
+        elif line.startswith("## "):
+            close_list()
+            out.append(f'<h3 class="subnet-page__h3">{inline(line[3:])}</h3>')
+        elif line.startswith("- "):
+            if not in_list:
+                out.append('<ul class="subnet-page__list">')
+                in_list = True
+            out.append(f"<li>{inline(line[2:])}</li>")
+        elif line.strip().startswith("_") and line.strip().endswith("_"):
+            close_list()
+            note = line.strip().strip("_")
+            out.append(f'<p class="subnet-page__note">{inline(note)}</p>')
+        elif not line.strip():
+            close_list()
+        else:
+            close_list()
+            out.append(f'<p class="subnet-page__p">{inline(line)}</p>')
+    close_list()
+    return "".join(out)
 
 
 def _find_subnet(subnets: List[Dict[str, Any]], netuid: int) -> Optional[Dict[str, Any]]:

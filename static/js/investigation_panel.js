@@ -50,7 +50,10 @@
     var html = '<table class="inv-table"><thead><tr><th>Wallet</th><th>Side</th><th>TAO</th><th>Time</th><th>Tx</th></tr></thead><tbody>';
     rows.slice(0, 25).forEach(function (row) {
       var wallet = row.wallet || row.ss58 || row.coldkey || '—';
-      html += '<tr><td><code>' + esc(String(wallet).slice(0, 12)) + '…</code></td>' +
+      var walletCell = wallet !== '—'
+        ? '<a href="/wallet/' + encodeURIComponent(wallet) + '"><code>' + esc(String(wallet).slice(0, 12)) + '…</code></a>'
+        : '—';
+      html += '<tr><td>' + walletCell + '</td>' +
         '<td>' + esc(row.side || row.type || '—') + '</td>' +
         '<td>' + esc(row.amount != null ? row.amount : row.tao != null ? row.tao : '—') + '</td>' +
         '<td>' + esc(row.time || row.timestamp || '—') + '</td>' +

@@ -83,7 +83,7 @@
     }
   var html =
       '<header class="living-focus__header">' +
-      '<h3 class="living-focus__name">' + esc(focusName) + ' <span class="living-focus__sn">SN' + focusNetuid + '</span></h3>' +
+      '<h3 class="living-focus__name"><a href="/subnet/' + focusNetuid + '" class="living-focus__link">' + esc(focusName) + '</a> <span class="living-focus__sn">SN' + focusNetuid + '</span></h3>' +
       '<span class="living-focus__action badge-' + (action === 'LONG' ? 'buy' : action === 'SHORT' ? 'sell' : 'watch') + '">' + esc(action || 'HOLD') + '</span>' +
       '</header>';
     if (contested) {

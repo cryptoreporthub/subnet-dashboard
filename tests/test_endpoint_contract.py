@@ -141,6 +141,9 @@ CONTRACT = [
     ("GET", "/api/predictions/capsule/test-id/og.svg", None),
     ("GET", "/api/predictions/capsule/test-id/og.png", None),
     ("GET", "/share/call/test-id", None),
+    ("GET", "/subnet/1", None),
+    ("GET", "/wallet/5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", None),
+    ("GET", "/api/search?q=1", None),
     ("GET", "/api/report/1", None),
     # Rotation tracker (slice 10a)
     ("GET", "/api/rotation-tracker", None),
