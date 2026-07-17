@@ -24,11 +24,11 @@
 | # | Slice | Branch | PR | State |
 |---|-------|--------|-----|-------|
 | **§27-1** | Trust shell | `cursor/s27-1-trust-shell-c3fd` | #310 | 🟡 open |
-| **§27-2** | Data pipeline | `cursor/s27-2-data-pipeline-c3fd` | — | ⏳ next |
-| **§27-3a** | Living Focus | `cursor/s27-3a-living-focus-c3fd` | — | pending |
-| **§27-3b** | Prove it | `cursor/s27-3b-prove-it-c3fd` | — | pending |
-| **§27-3c** | Public Self-Update | `cursor/s27-3c-self-update-c3fd` | — | pending |
-| **§27-4** | Learning hygiene | `cursor/s27-4-learning-hygiene-c3fd` | — | pending |
+| **§27-2** | Data pipeline | `cursor/s27-automation-c3fd` | — | 🟡 in branch |
+| **§27-3a** | Living Focus | `cursor/s27-automation-c3fd` | — | 🟡 in branch |
+| **§27-3b** | Prove it | `cursor/s27-automation-c3fd` | — | 🟡 in branch |
+| **§27-3c** | Public Self-Update | `cursor/s27-automation-c3fd` | — | 🟡 in branch |
+| **§27-4** | Learning hygiene | `cursor/s27-automation-c3fd` | — | 🟡 in branch |
 
 **After §27:** §28 shareable product (`s28-shareable-product-plan.md`) — human gate “product feels finished.”
 

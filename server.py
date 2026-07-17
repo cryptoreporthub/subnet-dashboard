@@ -315,8 +315,57 @@ def load_data(filename):
     return {}
 
 
+def _subnet_feed_meta(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Infer primary feed source for /api/subnets meta (§27-2)."""
+    if not rows:
+        return {"source": "registry", "sources": ["registry"]}
+    live_bm = sum(
+        1
+        for r in rows
+        if r.get("live") or str(r.get("source") or "").lower() == "blockmachine"
+    )
+    if live_bm > 0:
+        sources = ["blockmachine"]
+        if any(
+            isinstance(r.get("sources"), list) and "taostats" in r["sources"] for r in rows
+        ):
+            sources.append("taostats")
+        if any(
+            isinstance(r.get("sources"), list) and "taomarketcap" in r["sources"] for r in rows
+        ) or live_bm < len(rows):
+            sources.append("taomarketcap")
+        return {"source": "blockmachine", "sources": sources}
+    tmc = sum(
+        1
+        for r in rows
+        if str(r.get("source") or "").lower() == "taomarketcap"
+        or (
+            isinstance(r.get("sources"), list) and "taomarketcap" in r["sources"]
+        )
+    )
+    if tmc > len(rows) // 2:
+        return {"source": "taomarketcap", "sources": ["taomarketcap", "registry"]}
+    return {"source": "registry", "sources": ["registry"]}
+
+
+def _tag_subnet_row(row: Dict[str, Any], feed_meta: Dict[str, Any]) -> Dict[str, Any]:
+    """Attach honest source labels to a subnet row."""
+    item = dict(row)
+    primary = str(item.get("source") or feed_meta.get("source") or "registry").lower()
+    if item.get("live") and primary != "blockmachine":
+        primary = "blockmachine"
+    item["source"] = primary
+    sources = item.get("sources")
+    if not isinstance(sources, list) or not sources:
+        if primary == "blockmachine":
+            item["sources"] = list(feed_meta.get("sources") or ["blockmachine"])
+        else:
+            item["sources"] = [primary]
+    return item
+
+
 def _load_subnets_source():
-    """Return subnets for /api/subnets: live TaoMarketCap when available, else committed registry."""
+    """Return subnets for /api/subnets: live chain feed when available, else registry."""
     try:
         from fetchers.taomarketcap import get_all_subnets
         from internal.subnet_names import enrich_subnet_rows
@@ -633,11 +682,12 @@ async def list_subnets(request: Request):
 
 
 def _list_subnets_sync(request: Request):
-    # Prefer LIVE TaoMarketCap data (real 24h/7d/30d); fall back to the committed registry.
-    source = _load_subnets_source()
+    # Prefer live on-chain feed (blockmachine) with TMC overlay; fall back to registry.
+    source_rows = _load_subnets_source()
+    feed_meta = _subnet_feed_meta(source_rows)
     items = []
-    for s in source:
-        item = dict(s)
+    for s in source_rows:
+        item = _tag_subnet_row(s, feed_meta)
         item.setdefault("id", s.get("netuid", 0))
         item.setdefault("netuid", item.get("id"))
         items.append(item)
@@ -679,7 +729,17 @@ def _list_subnets_sync(request: Request):
     if limit > 0:
         items = items[:limit]
 
-    return {"status": "success", "meta": {"total": total, "limit": limit, "offset": offset}, "subnets": items}
+    return {
+        "status": "success",
+        "meta": {
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "source": feed_meta.get("source", "registry"),
+            "sources": feed_meta.get("sources", ["registry"]),
+        },
+        "subnets": items,
+    }
 
 
 @app.get("/api/subnet/{subnet_id}")

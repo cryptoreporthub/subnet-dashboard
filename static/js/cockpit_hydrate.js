@@ -597,7 +597,22 @@
     root.innerHTML = html;
   }
 
-  function renderHero(subnets) {
+  function formatDataSourceLabel(meta, subnets) {
+    var primary = (meta && meta.source) || '';
+    if (!primary && subnets && subnets.length) {
+      var live = subnets.filter(function (sn) {
+        return sn.live || String(sn.source || '').toLowerCase() === 'blockmachine';
+      }).length;
+      primary = live > 0 ? 'blockmachine' : (subnets[0].source || 'registry');
+    }
+    primary = String(primary || 'registry').toLowerCase();
+    if (primary === 'blockmachine') return 'BLOCKMACHINE';
+    if (primary === 'taomarketcap') return 'TAOMARKETCAP';
+    if (primary === 'taostats') return 'TAOSTATS';
+    return primary.toUpperCase();
+  }
+
+  function renderHero(subnets, meta) {
     if (!subnets || !subnets.length) return;
     var gainers = 0;
     var losers = 0;
@@ -615,6 +630,8 @@
         apyN += 1;
       }
     });
+    var sourceLabel = formatDataSourceLabel(meta, subnets);
+    var sourceSub = sourceLabel === 'BLOCKMACHINE' ? 'on-chain feed' : 'live feed';
     replaceEmptyIn(
       'section-hero',
       '<div class="kpi-grid" style="grid-template-columns: repeat(6, 1fr);">' +
@@ -622,11 +639,11 @@
       '<div class="sub">' + gainers + ' gainers / ' + losers + ' losers</div></div>' +
       '<div class="kpi-cell"><div class="k">Avg 24h</div><div class="v">' + fmtSigned(chgSum / subnets.length) + '</div><div class="sub">24h change</div></div>' +
       '<div class="kpi-cell"><div class="k">Avg APY</div><div class="v">' + (apyN ? fmt(apySum / apyN, 2) : '—') + '%</div><div class="sub">stake yield</div></div>' +
-      '<div class="kpi-cell"><div class="k">Data</div><div class="v" style="font-size:15px;">TAOMARKETCAP</div><div class="sub">live feed</div></div>' +
+      '<div class="kpi-cell"><div class="k">Data</div><div class="v" style="font-size:15px;">' + sourceLabel + '</div><div class="sub">' + sourceSub + '</div></div>' +
       '</div>'
     );
     document.querySelectorAll('.src-tag b').forEach(function (el) {
-      el.textContent = 'TAOMARKETCAP';
+      el.textContent = sourceLabel;
     });
   }
 
@@ -905,8 +922,9 @@
       }
     }
     if (results[5].status === 'fulfilled') {
-      subnets = results[5].value.subnets || [];
-      renderHero(subnets);
+      var subPayload = results[5].value || {};
+      subnets = subPayload.subnets || [];
+      renderHero(subnets, subPayload.meta || {});
       renderStaking(subnets);
       renderUndervalued(subnets);
       renderRadar(subnets);
@@ -936,13 +954,8 @@
     console.log('[cockpit_hydrate] panels updated from APIs');
     connectCockpitStream();
 
-    // Defer heavy judge scoring so /health stays responsive on single-worker Fly.
-    try {
-      var judgesRes = await fetchJsonTimeout('/api/judges', 30000);
-      renderJudges(judgesRes.judges || []);
-    } catch (e) {
-      console.warn('[cockpit_hydrate] judges panel deferred load failed', e);
-    }
+    // §27-3a: league-table /api/judges demoted off home hydrate — Living Focus uses /api/judges/{focus}.
+    // Pro drawer judges panel loads via premium_judges.js when opened.
     try {
       var btRes = await fetchJsonTimeout('/api/backtest?limit=120', 12000);
       renderBacktest(btRes);

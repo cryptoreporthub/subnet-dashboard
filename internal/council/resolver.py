@@ -169,25 +169,19 @@ def _nudge_weights(correct: bool, expert: Optional[str]) -> None:
     if _in_replay_mode() or not expert:
         return
 
-    delta = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
-    weights = load_weights()
-    if expert not in weights:
-        return
+    from internal.council.weights import load_weights, nudge_expert
 
-    before = float(weights[expert])
-    weights[expert] = max(
-        _LEARNING_MIN_WEIGHT,
-        min(_LEARNING_MAX_WEIGHT, weights[expert] + delta),
-    )
-    weights[expert] = round(weights[expert], 4)
-    save_weights(weights)
+    before = float(load_weights().get(expert, 1.0))
+    after = nudge_expert(expert, bool(correct))
+    if after is None:
+        return
     try:
         from internal.learning.trail_bus import emit_weight_change
 
         emit_weight_change(
             expert,
             before=before,
-            after=float(weights[expert]),
+            after=float(after),
             reason="prediction_resolve",
             correct=correct,
         )

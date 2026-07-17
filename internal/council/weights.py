@@ -154,6 +154,28 @@ def save_weights(weights: Dict[str, float], path: str = SOUL_MAP_PATH) -> None:
     _save_raw(data, path)
 
 
+def nudge_expert(
+    expert: Optional[str],
+    correct: bool,
+    path: str = SOUL_MAP_PATH,
+) -> Optional[float]:
+    """Single nudge path for resolver + feedback (§27-4). Returns new weight."""
+    if not expert:
+        return None
+    weights = load_weights(path)
+    if expert not in weights:
+        return None
+    delta = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
+    before = float(weights[expert])
+    after = round(
+        max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta)),
+        4,
+    )
+    weights[expert] = after
+    save_weights(weights, path)
+    return after
+
+
 def detect_regime(market_data: Optional[Dict[str, Any]] = None) -> str:
     """Classify the market regime from aggregate market intelligence."""
     market_data = market_data or {}

@@ -75,14 +75,9 @@ class LearningEngine:
 
         expert = self._normalize_recommendation(recommendation)
         if expert:
-            weights = load_weights(self.soul_map_path)
-            delta = 0.02 if correct else -0.03
-            weights[expert] = max(
-                0.1,
-                min(2.0, weights.get(expert, 1.0) + delta),
-            )
-            weights[expert] = round(weights[expert], 4)
-            save_weights(weights, self.soul_map_path)
+            from internal.council.weights import nudge_expert
+
+            nudge_expert(expert, correct, self.soul_map_path)
 
         try:
             scenario_memory.add_scenario(
