@@ -54,12 +54,24 @@ def _learning_summary() -> Dict[str, Any]:
         stats = snap.get("engine_stats") or {}
         resolver_stats = snap.get("resolver_stats") or {}
         trust = snap.get("trust_banner") or {}
+        graded = int(
+            trust.get("graded")
+            or resolver_stats.get("graded")
+            or stats.get("graded")
+            or stats.get("resolved")
+            or 0
+        )
         return {
-            "graded": int(stats.get("graded") or resolver_stats.get("graded") or 0),
-            "pending": int(stats.get("pending") or resolver_stats.get("pending") or 0),
-            "accuracy": stats.get("accuracy"),
+            "graded": graded,
+            "pending": int(
+                trust.get("pending")
+                or stats.get("pending")
+                or resolver_stats.get("pending")
+                or 0
+            ),
+            "accuracy": trust.get("accuracy") or stats.get("accuracy"),
             "trust_ready": trust.get("ready"),
-            "trust_label": trust.get("label"),
+            "trust_label": trust.get("label") or trust.get("headline"),
         }
     except Exception:
         return {"graded": 0, "pending": 0, "accuracy": None, "trust_ready": None}
@@ -102,15 +114,7 @@ def build_readiness_report() -> Dict[str, Any]:
     if daily.get("action") == "HOLD" and not daily.get("published"):
         issues.append("daily_pick_hold_no_published_long")
 
-    # HOLD below audit gate is honest product behavior, not an outage.
-    thin_ui = any(
-        i in issues
-        for i in (
-            "subnet_feed_empty",
-            "subnet_feed_registry_only",
-            "live_subnets_cache_empty",
-        )
-    )
+    thin_ui = feed.get("likely_total", 0) <= 0 or feed.get("effective_source") == "none"
 
     ready = not any(
         i in issues

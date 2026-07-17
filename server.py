@@ -686,7 +686,7 @@ def _list_subnets_sync(request: Request):
         item = _tag_subnet_row(s, feed_meta)
         item.setdefault("id", s.get("netuid", 0))
         item.setdefault("netuid", item.get("id"))
-        items.append(enrich_subnet_row(item))
+        items.append(enrich_subnet_row(item, use_taostats=False))
 
     params = request.query_params
     status_filter = params.get("status")
