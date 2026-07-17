@@ -44,6 +44,17 @@
   </section>
   {% endif %}
 
+  {% if why_not and why_not.verdict != 'published' and why_not.blockers %}
+  <section class="subnet-page__why-not" aria-label="Why not today's pick">
+    <h2 class="subnet-page__section">Council gate</h2>
+    <ul class="subnet-page__why-list">
+      {% for line in why_not.blockers[:4] %}
+      <li>{{ line }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   <section class="subnet-page__digest">
     <h2 class="subnet-page__section">Full report</h2>
     <div class="subnet-page__body">{{ digest_html|safe }}</div>

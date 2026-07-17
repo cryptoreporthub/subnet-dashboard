@@ -39,12 +39,70 @@ def _trust_block() -> Dict[str, Any]:
         }
 
 
+def _judge_citation_block(netuid: Optional[int], subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    if netuid is None:
+        return {}
+    try:
+        from internal.judges.subnet_judges import score_subnet
+
+        row = None
+        if subnets:
+            for sn in subnets:
+                n = sn.get("netuid", sn.get("id"))
+                if n is not None and int(n) == int(netuid):
+                    row = sn
+                    break
+        if row is None:
+            from internal.subnets.feed import load_pick_subnets
+
+            for sn in load_pick_subnets():
+                n = sn.get("netuid", sn.get("id"))
+                if n is not None and int(n) == int(netuid):
+                    row = sn
+                    break
+        if row is None:
+            return {}
+        judges = score_subnet(int(netuid), row)
+        consensus = judges.get("consensus") or {}
+        citations = []
+        for lane in ("oracle", "echo", "pulse"):
+            block = judges.get(lane) or {}
+            if block.get("score") is None:
+                continue
+            citations.append(
+                {
+                    "source": f"judge:{lane}",
+                    "label": lane.title(),
+                    "score": round(float(block.get("score") or 0), 3),
+                }
+            )
+        dissent = None
+        if consensus.get("contested") or (
+            consensus.get("agreement") is not None and float(consensus["agreement"]) < 0.5
+        ):
+            ordered = sorted(citations, key=lambda c: c["score"])
+            if len(ordered) >= 2 and ordered[-1]["score"] - ordered[0]["score"] >= 0.08:
+                dissent = (
+                    f"{ordered[0]['label']} most bearish ({ordered[0]['score']:.2f}) · "
+                    f"{ordered[-1]['label']} most bullish ({ordered[-1]['score']:.2f})"
+                )
+        return {
+            "citations": citations,
+            "consensus": consensus,
+            "dissent": dissent,
+        }
+    except Exception:
+        return {}
+
+
 def _today_pick_block() -> Dict[str, Any]:
+    subnets = None
     try:
         from internal.council.daily_pick_engine import get_or_create_today_pick
         from internal.subnets.feed import load_pick_subnets
 
-        payload = get_or_create_today_pick(load_pick_subnets(), {})
+        subnets = load_pick_subnets()
+        payload = get_or_create_today_pick(subnets, {})
     except Exception:
         payload = {}
 
@@ -64,6 +122,10 @@ def _today_pick_block() -> Dict[str, Any]:
 
     reasons = (block or {}).get("reasons") if isinstance(block, dict) else []
     why = reasons[0] if reasons else payload.get("reason")
+    judge_block = _judge_citation_block(
+        int(netuid) if netuid is not None else None,
+        subnets,
+    )
     return {
         "date": payload.get("date") or _today_utc(),
         "action": str(payload.get("action") or "HOLD").upper(),
@@ -73,6 +135,8 @@ def _today_pick_block() -> Dict[str, Any]:
         "symbol": subnet.get("symbol"),
         "why": why,
         "driver_card": driver if isinstance(driver, dict) else None,
+        "judge_citations": judge_block.get("citations") or [],
+        "dissent": judge_block.get("dissent"),
     }
 
 
@@ -105,6 +169,8 @@ def _render_markdown(
     lines = [f"# SimiVision Brain letter — {date}", ""]
 
     lines.append("## Today we watch")
+    if pick.get("dissent"):
+        lines.append(f"- **Council split:** {pick['dissent']}")
     if pick.get("published") and pick.get("name"):
         act = pick.get("action") or "HOLD"
         if act == "LONG":
@@ -136,6 +202,11 @@ def _render_markdown(
             lines.append("- **Yield trap** — high APY but token falling")
         for why in (card.get("why") or [])[:2]:
             lines.append(f"- {why}")
+    cites = pick.get("judge_citations") or []
+    if cites:
+        lines.append("- Judges (live):")
+        for row in cites[:3]:
+            lines.append(f"  - {row.get('label')}: score {row.get('score')}")
     lines.append("")
 
     lines.append("## What the brain learned")

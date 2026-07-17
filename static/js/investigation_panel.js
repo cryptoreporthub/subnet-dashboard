@@ -256,4 +256,32 @@
   }
 
   window.InvestigationPanel = { runSellers: runSellers, focusNetuid: focusNetuid, runOwnerCheck: runOwnerCheck, runAsk: runAsk };
+
+  function parseWalletParam() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var w = (params.get('wallet') || '').trim();
+      return w || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function bootstrapWalletFromUrl() {
+    var wallet = parseWalletParam();
+    if (!wallet) return;
+    var inv = document.getElementById('inv-wallet');
+    if (inv) inv.value = wallet;
+    var drawer = document.getElementById('market-drawer');
+    if (drawer && !drawer.open) drawer.setAttribute('open', 'open');
+    var section = document.getElementById('section-investigation');
+    if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (walletBtn) walletBtn.click();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootstrapWalletFromUrl);
+  } else {
+    bootstrapWalletFromUrl();
+  }
 })();
