@@ -1504,6 +1504,20 @@ def api_daily_pick():
                 "action": "HOLD", "reason": str(e), "pick": None}
 
 
+@app.get("/api/pick-explain/{netuid}")
+def api_pick_explain(netuid: int):
+    """§32 — why this subnet was or was not today's council pick."""
+    subnets, _ = _get_subnets_with_source()
+    market_context = _market_context_with_weights(subnets)
+    try:
+        from internal.council.pick_explain import explain_subnet
+
+        return explain_subnet(netuid, subnets, market_context)
+    except Exception as exc:
+        logger.error("pick-explain failed for SN%d: %s", netuid, exc)
+        return {"status": "error", "netuid": netuid, "error": str(exc)}
+
+
 @app.get("/api/top-pick/day")
 def api_top_pick_day():
     """Top pick for the current day, with a safe highest-emission fallback."""

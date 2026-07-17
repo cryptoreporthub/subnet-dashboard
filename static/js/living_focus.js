@@ -134,7 +134,40 @@
     );
   }
 
-  function renderJudges(data, action, weights) {
+  function dissentSummary(data) {
+    var lanes = [
+      { key: 'oracle', label: 'Oracle' },
+      { key: 'echo', label: 'Echo' },
+      { key: 'pulse', label: 'Pulse' },
+    ];
+    var scores = lanes.map(function (l) {
+      return { label: l.label, score: Number((data[l.key] || {}).score) || 0 };
+    }).sort(function (a, b) { return a.score - b.score; });
+    if (scores.length < 2) return null;
+    var lo = scores[0];
+    var hi = scores[scores.length - 1];
+    if (hi.score - lo.score < 0.08) return null;
+    return lo.label + ' most bearish (' + lo.score.toFixed(2) + ') · ' +
+      hi.label + ' most bullish (' + hi.score.toFixed(2) + ')';
+  }
+
+  function renderWhyNot(explain) {
+    if (!explain || explain.verdict === 'published' || !explain.blockers || !explain.blockers.length) {
+      return '';
+    }
+    var label = explain.verdict === 'gated_candidate' ? 'Why no audited long' : 'Why not today\'s pick';
+    var items = explain.blockers.slice(0, 4).map(function (b) {
+      return '<li>' + esc(b) + '</li>';
+    }).join('');
+    return (
+      '<div class="living-focus__why-not" role="status">' +
+      '<p class="living-focus__why-not-title">' + esc(label) + '</p>' +
+      '<ul class="living-focus__why-not-list">' + items + '</ul>' +
+      '</div>'
+    );
+  }
+
+  function renderJudges(data, action, weights, explain) {
     if (!bodyEl) return;
     if (!data || data.error) {
       bodyEl.innerHTML = '<p class="living-focus__empty">Focus judges unavailable.</p>';
@@ -143,18 +176,24 @@
     var consensus = data.consensus || {};
     var contested = !!consensus.contested || (consensus.agreement != null && consensus.agreement < 0.5);
     var split = contested ? ' · Council split' : '';
+    var dissent = dissentSummary(data);
     if (subEl) {
       subEl.textContent = (audited ? 'Audited pick' : 'Candidate only') + split;
     }
-    var html =
+    var html = '';
+    if (contested) {
+      html += '<p class="living-focus__contention">Council split — judges disagree on this subnet.</p>';
+      if (dissent) {
+        html += '<p class="living-focus__contention living-focus__contention--detail">' + esc(dissent) + '</p>';
+      }
+    }
+    html +=
       '<header class="living-focus__header">' +
       '<h3 class="living-focus__name"><a href="/subnet/' + focusNetuid + '" class="living-focus__link">' + esc(focusName) + '</a> <span class="living-focus__sn">SN' + focusNetuid + '</span></h3>' +
       '<span class="living-focus__action badge-' + (action === 'LONG' ? 'buy' : action === 'SHORT' ? 'sell' : 'watch') + '">' + esc(action || 'HOLD') + '</span>' +
       '</header>';
-    if (contested) {
-      html += '<p class="living-focus__contention">Council split — judges disagree on this subnet.</p>';
-    }
-    html += '<div class="living-focus__judges">' +
+    html += renderWhyNot(explain);
+    html += '<motion.div class="living-focus__judges">' +
       judgeBar('Oracle', (data.oracle || {}).score, contested) +
       judgeBar('Echo', (data.echo || {}).score, contested) +
       judgeBar('Pulse', (data.pulse || {}).score, contested) +
@@ -369,14 +408,16 @@
       fetchJson('/api/calibration/status', 8000).catch(function () { return {}; }),
       trailPromise,
       dailyPickPromise(),
+      fetchJson('/api/pick-explain/' + focusNetuid, 10000).catch(function () { return {}; }),
     ]).then(function (res) {
       var judges = res[0];
       var cal = res[1];
       var trail = (res[2] && res[2].trail) || [];
       var dp = res[3] || {};
+      var explain = res[4] || {};
       action = String(dp.action || 'HOLD').toUpperCase();
       var weights = calibrationWeights(cal);
-      renderJudges(judges, action, weights);
+      renderJudges(judges, action, weights, explain);
       renderLearnStrip(trail, weights);
       return loadChips();
     });

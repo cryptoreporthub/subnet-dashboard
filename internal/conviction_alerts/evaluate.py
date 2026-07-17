@@ -135,6 +135,58 @@ def get_conviction_config() -> Dict[str, Any]:
     }
 
 
+def _pending_by_netuid() -> Dict[int, List[Dict[str, Any]]]:
+    data = _load_json(os.environ.get("PREDICTIONS_PATH", "data/predictions.json"))
+    if not isinstance(data, dict):
+        return {}
+    out: Dict[int, List[Dict[str, Any]]] = {}
+    for pred in data.get("predictions") or []:
+        if not isinstance(pred, dict):
+            continue
+        if pred.get("status") not in (None, "pending"):
+            continue
+        n = pred.get("netuid")
+        if n is None:
+            continue
+        out.setdefault(int(n), []).append(pred)
+    return out
+
+
+def _evaluate_pre_resolution_whale(engine: "AlertEngine") -> List[Dict[str, Any]]:
+    """Join pending predictions with rugger risk on the same netuid (§32)."""
+    pending = _pending_by_netuid()
+    if not pending:
+        return []
+    created: List[Dict[str, Any]] = []
+    try:
+        from internal.ruggers.watchlist import RuggerWatchlist
+
+        watch = RuggerWatchlist()
+    except Exception:
+        return []
+    for netuid, preds in pending.items():
+        risk = watch.get_subnet_risk(int(netuid)) or {}
+        level = str(risk.get("risk_level") or "").lower()
+        if level not in ("high", "medium"):
+            continue
+        pred = preds[0] if preds else {}
+        pid = pred.get("id") or netuid
+        alert = engine._append_alert(
+            {
+                "alert_type": "pre_resolution_whale",
+                "severity": "warning" if level == "high" else "info",
+                "message": f"SN{netuid}: open pick + {level} rug risk before resolution",
+                "details": {"netuid": netuid, "risk_level": level, "prediction_id": pid},
+                "dedupe_key": f"pre_res_whale_{netuid}_{pid}",
+                "subnet_id": int(netuid),
+                "threshold_type": "rug_risk",
+            }
+        )
+        if alert:
+            created.append(alert)
+    return created
+
+
 def run_conviction_evaluation(engine: "AlertEngine") -> Dict[str, Any]:
     """Evaluate conviction thresholds and create deduped alerts."""
     run_at = _utcnow_z()
@@ -185,6 +237,13 @@ def run_conviction_evaluation(engine: "AlertEngine") -> Dict[str, Any]:
 
     result["created"] = created
     result["created_count"] = len(created)
+
+    pre_res = _evaluate_pre_resolution_whale(engine)
+    if pre_res:
+        result["pre_resolution_whale"] = pre_res
+        result["created"].extend(pre_res)
+        result["created_count"] = len(result["created"])
+
     try:
         from internal.conviction_alerts.delivery import deliver_alerts
 

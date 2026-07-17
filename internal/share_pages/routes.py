@@ -42,6 +42,14 @@ async def subnet_share_page(request: Request, netuid: int):
     judges = (report.get("sections") or {}).get("judges") or {}
     drivers = (report.get("sections") or {}).get("market_drivers") or {}
     consensus = judges.get("consensus") if isinstance(judges, dict) else {}
+    why_not = None
+    try:
+        from internal.council.pick_explain import explain_subnet
+        from internal.subnets.feed import load_pick_subnets
+
+        why_not = explain_subnet(netuid, load_pick_subnets(), {})
+    except Exception as exc:
+        logger.debug("pick explain for share page failed: %s", exc)
     base = _public_base(request)
     page_url = f"{base}/subnet/{netuid}"
     title = f"{name} (SN{netuid}) — SimiVision"
@@ -62,6 +70,7 @@ async def subnet_share_page(request: Request, netuid: int):
             "digest_html": markdown_subset_html(report.get("markdown") or ""),
             "data_available": data_available,
             "error_reason": None if data_available else "Subnet report data unavailable",
+            "why_not": why_not,
             "page_title": title,
             "page_description": desc,
             "page_url": page_url,

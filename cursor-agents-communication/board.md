@@ -1,26 +1,16 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-17T20:45:00Z  
-**main:** pending merge · **§31 COMPLETE** on `cursor/opt-s31-complete-c3fd`
+**Last updated:** 2026-07-17T21:05:00Z  
+**main:** `b16f939` · **§32 trust product in PR**
 
-## Ditto boot
+## Active
 
-1. **`cursor-agents-communication/STATUS.md`**
-2. **`cursor-agents-communication/website-opt-final-plan.md`**
+**§32** — `s32-trust-product-plan.md` (why-not, dissent, cited letter, wallet link, pre-res alerts)
 
-## Gate Status
+## Done
 
-| Phase | Status |
-|-------|--------|
-| **§17–§30 + §29** | ✅ complete |
-| **§31 website opt** | ✅ **§31-1…§31-8 shipped** (PR pending) |
+- §27–§31 complete (#312–#319)
 
 ## Skipped
 
-- H1 custom domain
-- H2–H6 human infra · D1–D7 deferred features
-
-## Rules
-
-- Board + STATUS override stale memory.
-- RF-2 · Grok only on AC fail.
+- H1 custom domain · H2–H6 human infra · D1–D7 deferred

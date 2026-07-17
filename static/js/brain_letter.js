@@ -50,6 +50,16 @@
         "</strong> · no audited long yet</p>";
     }
     if (pick.why) html += '<p class="weekly-letter__note">' + esc(pick.why) + "</p>";
+    if (pick.dissent) {
+      html += '<p class="weekly-letter__note"><strong>Council split:</strong> ' + esc(pick.dissent) + "</p>";
+    }
+    if (pick.judge_citations && pick.judge_citations.length) {
+      html += '<ul class="weekly-letter__list">';
+      pick.judge_citations.forEach(function (c) {
+        html += "<li>" + esc(c.label || c.source) + ": score " + esc(c.score) + "</li>";
+      });
+      html += "</ul>";
+    }
 
     var card = pick.driver_card || {};
     if (card.status === "success") {
