@@ -78,6 +78,15 @@ class RuggerWatchlist:
         }
         if flow.get("data_available"):
             risk["avoid_follow"] = flow.get("avoid_follow", False)
+            count = len(ruggers)
+            if flow.get("avoid_follow") or count >= 3:
+                risk["risk_level"] = "high"
+            elif count >= 1:
+                risk["risk_level"] = "medium"
+            else:
+                risk["risk_level"] = "low"
+        else:
+            risk["risk_level"] = None
         return risk
 
     def discount_score(self, netuid: int, base_score: float) -> Tuple[float, Dict[str, Any]]:

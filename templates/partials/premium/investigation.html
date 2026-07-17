@@ -22,7 +22,9 @@
       <div class="inv-presets">
         <button type="button" class="btn-secondary inv-preset" data-action="sellers" data-prompt="Who is selling {name} (SN{netuid})?">Sellers: focus SN</button>
         <button type="button" class="btn-secondary inv-preset" data-action="wallet" data-prompt="Trace wallet activity for the address I provide on {name}.">Trace wallet</button>
-        <button type="button" class="btn-secondary inv-preset" data-action="chat" data-prompt="Is the subnet owner among recent sellers on SN{netuid}?">Owner vs sellers</button>
+        <button type="button" class="btn-secondary inv-preset" data-action="owner-check">Owner vs sellers (API)</button>
+        <button type="button" class="btn-secondary inv-preset" data-action="ask" data-prompt="Summarize seller risk and owner overlap for {name} (SN{netuid}).">Ask investigation desk</button>
+        <button type="button" class="btn-secondary inv-preset" data-action="chat" data-prompt="Is the subnet owner among recent sellers on SN{netuid}?">Owner vs sellers (chat)</button>
       </div>
     </div>
 

@@ -33,3 +33,9 @@ def get_council_subnet_feed() -> Tuple[List[Dict[str, Any]], str]:
         logger.warning("merged feed unavailable: %s", exc)
 
     return [], "none"
+
+
+def load_pick_subnets() -> List[Dict[str, Any]]:
+    """Subnet rows for daily pick / story paths (§29-7)."""
+    rows, _source = get_council_subnet_feed()
+    return rows

@@ -1,20 +1,19 @@
 # STATUS
 
-**Updated:** 2026-07-17T17:00:00Z  
-**main:** `6c9b057` (§27+§28 merged #312)  
-**active:** `cursor/s30-living-brain-c3fd` — §30 Living Brain closure + §29 polish  
-**plan:** `cursor-agents-communication/master-automated-gameplan.md`
+**Updated:** 2026-07-17T17:35:00Z  
+**main:** `27f7c61` (§30 Living Brain merged #314)  
+**active:** `cursor/post-s29-polish-c3fd` — §29-5…§29-9 polish  
+**plan:** `cursor-agents-communication/post-s29-automated-build-plan.md`
 
-## Shipped on main
+## Shipped on main (#314)
 
-- §27 trust shell + Living Focus + nudge_expert
-- §28 shareable `/subnet/{id}`, `/wallet/{ss58}`, command palette
+- Living Brain closure LB-1…LB-16
+- Master automated gameplan + audit docs
 
 ## In flight
 
-- LB-1…LB-16 fixes (calibration weights, trail, scoring memory, RF-2, shared feed)
-- verify_prod shareable smoke + name integrity guard
-
-## Deferred
-
-- H1–H6 human gates · §29-5–10 thin polish · D1–D7
+- Wallet rug flags on share page
+- Investigation owner-check + ask presets
+- Pick paths via `load_pick_subnets()`
+- Pro drawer lazy judges panel
+- simivision_engine test debt cleanup

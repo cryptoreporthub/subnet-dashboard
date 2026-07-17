@@ -96,9 +96,9 @@ def _mindmap_summary() -> Dict[str, Any]:
 
     rot = {}
     try:
-        from fetchers.taomarketcap import get_all_subnets
+        from internal.subnets.feed import load_pick_subnets
 
-        rot = rotation_tracker.get_rotation_summary(get_all_subnets() or [])
+        rot = rotation_tracker.get_rotation_summary(load_pick_subnets())
     except Exception:
         rot = {"patterns": [], "volatility_clusters": {}}
 
