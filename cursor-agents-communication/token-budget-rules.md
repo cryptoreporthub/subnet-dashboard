@@ -11,8 +11,8 @@
 | **Agents** | **One** primary Cloud Agent only |
 | **A (`-843d`)** | **Retired** — do not spawn a second Cloud Agent |
 | **Grok** | **Subagent** for short DESIGN locks — never run whole agent on Grok |
-| **Queue** | **§18** — `s18-automated-build-plan.md` (H1→B1) |
-| **Skip** | C1 until creds · F7/B12 unless human asks |
+| **Queue** | **§27** — `s27-trust-and-brain-plan.md` (§27-1→§27-4); §28 deferred |
+| **Skip** | C1 until creds · F7/B12 unless human asks · Redis · full Bittensor SDK |
 
 ## Model pools (cheapest first)
 
