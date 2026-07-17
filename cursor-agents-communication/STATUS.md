@@ -5,7 +5,7 @@
 
 ## One-line
 
-**§27 active** — trust shell + data truth + brain visible (Tier 3). §28 shareable product deferred.
+**§27 active** — trust shell + data truth + Living Focus (Tier 3 reframed). §28 deferred.
 
 ## Done
 

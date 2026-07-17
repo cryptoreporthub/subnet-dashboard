@@ -23,7 +23,7 @@
 |---|-------|------|
 | **§27-1** | Trust shell | Real hydrate, honest LIVE, single trust number |
 | **§27-2** | Data pipeline | `merged_data` / chain on `/api/subnets` + honest source labels |
-| **§27-3** | Brain visible (Tier 3) | Brain bench, Labs, investigation tables |
+| **§27-3** | Living Focus (Tier 3) | Focus Object · contested judges · Prove it (no Labs strip) |
 | **§27-4** | Learning hygiene | Unified `nudge_expert`; optional EMA; no Redis |
 
 **Then:** §28 shareable product (subnet/wallet pages, search) — human said Tier 2 after finished feel.

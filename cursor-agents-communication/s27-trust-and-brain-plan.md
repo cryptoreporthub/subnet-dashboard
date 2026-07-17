@@ -57,95 +57,118 @@
 
 ---
 
-## §27-3 — Brain visible / Tier 3
+## §27-3 — Living Focus (Tier 3 true potential)
 
-Builds on §27-1 (honest-empty). **Three PRs:** §27-3a → §27-3b → §27-3c.
+**Grok LOCK (2026-07-17):** CONDITIONAL on prior “unbury APIs into cards” plan — **reframed**.
 
-**IA note:** Selectively **reverses §17 U1 demotion** for the reasoning layer only — hero stays single-job; bench is “why this call,” not card sprawl.
+### The unlock (not more sections)
 
-### Cross-cutting: name integrity
+Tier 3 is **one Focus Object** that the whole brain reorients around — not a Labs strip + peek + bench as three new dumps.
 
-- Every displayed subnet name: `enrich_subnet_row` / `resolve_subnet_name` at API boundary — **never hardcoded examples in templates**
-- Hero netuid from `/api/daily-pick` (`pick.subnet.netuid` ?? `candidate.subnet.netuid`) — never assume SN1/Apex
-- **Blocking:** fix `/api/simivision` top rows returning `SNNone` / null names before conviction peek ships
-- Unresolved names (e.g. SN82 → `SN82`) show honestly; track resolver gaps separately
+| Concept | Meaning |
+|---------|---------|
+| **Focus** | `data-focus-netuid` — defaults to daily-pick (`pick` ?? `candidate`); user can switch |
+| **Alive beat** | Judge **contention** — Oracle/Echo/Pulse disagree (`consensus.contested` / low `agreement`) |
+| **Prove it** | One-tap from focus → sellers table for that SN (investigation as evidence, not debug JSON) |
+| **Memory** | Time-capsule CTA when focus has a graded call — don’t rebuild trail UI |
 
-### §27-3a — Brain bench (judges ↔ hero + weights)
+**ONE hero interaction:** Focus a netuid → watch three judges contest it → one-tap “Who sold SN{n}?” proves the call.
 
-**Problem:** Story path step 2 says “Judges” but shows expert_contributions; `#section-judges` shows Oracle/Echo/Pulse for 12 unrelated subnets inside collapsed Pro drawer.
+**Kill:** Labs 3-card strip. Fold scenario/regime, ruggers risk, latest autopsy into **≤3 chrome chips** on the bench (honest-empty).
 
-**Placement:** New `#section-brain-bench` after story-strip, before story-path.
+**IA note:** Selectively reverses §17 U1 demotion for the *argument* layer only — hero stays single-job; Focus is “why this call / prove it,” not card sprawl.
 
-**Hydrate (fast path — do not call `/api/judges` league table on home):**
+### Cross-cutting: name + focus integrity
+
+- Every name: `enrich_subnet_row` / `resolve_subnet_name` — **never hardcoded** subnet examples in templates/docs demos
+- Focus default: `/api/daily-pick` → `pick.subnet.netuid` ?? `candidate.subnet.netuid`
+- Shared state: one tiny `focus_netuid` helper in hydrate JS — bench, chrome chips, inv default, switcher all read it
+- **Blocking:** fix `/api/simivision` `SNNone` / null names before Focus switcher ships
+- Unresolved names show as `SN{n}` honestly
+
+### NON-GOALS (protect focus)
+
+- No Redis / new deps / Flask / league-table `/api/judges` on home
+- No §28 shareable pages in this phase
+- No Pro/Market redesign beyond demoting league judges off home hydrate
+- No accuracy / win-rate copy outside `trust_banner` (RF-2) — contested = **disagreement**, not “we’re right”
+- No fourth weight path (§27-4 owns nudge)
+
+---
+
+### §27-3a — Living Focus (merge prior 3a+3b)
+
+**One PR.** Bench + contested drama + Focus switcher + chrome chips.
+
+**Placement:** `#section-living-focus` after story-strip, before story-path.
+
+**Hydrate (fast — never 50-subnet `/api/judges` on home):**
 
 ```
-GET /api/daily-pick          → hero_netuid, audited vs candidate-only
-GET /api/judges/{hero_netuid} → oracle, echo, pulse, consensus
-GET /api/calibration/status  → weights (quant/hype/dark_horse/technical)
+GET /api/daily-pick                 → default focus + audited vs candidate-only
+GET /api/judges/{focus}             → oracle, echo, pulse, consensus (contested!)
+GET /api/calibration/status         → weights; lean = who drives *this* call
+GET /api/simivision                 → top 3 as Focus switcher (enriched names)
+GET /api/ruggers/subnet/{focus}     → optional amber risk chip
+GET /api/scenario-memory (summary)  → optional regime chip
+GET /api/postmortems (newest 1)     → optional autopsy chip
 ```
 
-**UI:** Three judge cells + four weight bars + consensus line. Candidate-only day: banner “Candidate · council audit pending” when `pick` is null but `candidate` exists.
+**UI hierarchy (drama first):**
 
-**Story path:** Rename step 2 label `2 · Judges` → `2 · Council experts` in `story_path.py`. Optional step 2b from `/api/judges/{netuid}`.
+1. **Header** — Focus name · SN · LONG/HOLD · audited vs “candidate only”
+2. **Contention** — three judges with scores; if `contested` or agreement low → highlight split (“Council split”)
+3. **Who drives** — top expert lean from weights / expert_contributions; bars secondary
+4. **Chrome chips** (≤3, honest-empty) — regime · rug risk on focus · latest miss
+5. **Focus switcher** — tap SimiVision top-3 → reorient entire Living Focus without reload
+6. **CTA row** — “Prove it: who sold SN{n}?” (scrolls/opens investigation with focus prefilled) · optional “Replay” time-capsule if graded
 
-**AC:**
-
-- [ ] Bench visible without opening Pro drawer
-- [ ] Scores match `/api/judges/{hero_netuid}`; weights match calibration (±0.001)
-- [ ] `cockpit_hydrate.js` league-table judges demoted to Pro-only (or remove home fetch)
-- [ ] New `brain_bench.js` — single-netuid fetch (~200ms), not 50-subnet `/api/judges`
-
-**Files:** `brain_bench.html`, `brain_bench.js`, `premium_cockpit.html`, `story_path.py`, `story_path.html`, `cockpit_hydrate.js`, `council_first.css`
-
-### §27-3b — Conviction peek + Labs strip
-
-**2A — Conviction peek** (`#section-conviction-peek`): top 3 from `/api/simivision` with enriched names, recommendation, conviction, call_line. Link “Open full board → #pro-cockpit”. Click row → re-hydrate brain bench for that netuid (compare mode).
-
-**2B — Labs strip** (`#section-labs`), three cards, honest-empty:
-
-| Card | APIs | Shows |
-|------|------|--------|
-| Market memory | `/api/scenario-memory`, `/api/rotation-tracker` | Regime, scenario count, top vol cluster |
-| Risk watch | `/api/ruggers/summary`, `/api/ruggers/subnet/{hero_netuid}` | Alerts, watchlist size, hero SN risk |
-| Autopsy | `/api/postmortems`, `/api/pump-analytics` | Latest postmortem one-liner, pump phase count |
-
-**Cross-wire:** If ruggers elevates hero subnet → amber chip on brain bench header.
+**Story path:** step 2 → `2 · Council experts`; optional 2b from `/api/judges/{focus}`.
 
 **AC:**
 
-- [ ] Simivision peek shows real names (not `SNNone`)
-- [ ] Labs cards honest-empty when APIs inactive
-- [ ] Hero netuid shared via `data-hero-netuid` on brain bench (used by Labs + investigation)
+- [ ] Focus SN = daily-pick default; switcher changes bench + chrome + inv default without reload
+- [ ] Contested/agreement visible when judges disagree; scores match `/api/judges/{focus}` (±0.001)
+- [ ] No Labs card strip — ≤3 chrome chips, honest-empty when APIs dark
+- [ ] Switcher rows never show SNNone/null names
+- [ ] League-table `/api/judges` demoted off home hydrate (`brain_bench.js` / focus helper only)
+- [ ] RF-2: no win-rate/accuracy copy outside trust_banner
 
-**Files:** `conviction_peek.html`, `labs_strip.html`, `labs_hydrate.js`, simivision route (name enrichment), `premium_cockpit.html`
+**Files:** `living_focus.html`, `living_focus.js` (or `focus_netuid` + `brain_bench.js`), `premium_cockpit.html`, `story_path.py`, `cockpit_hydrate.js`, simivision name enrichment, `council_first.css`
 
-### §27-3c — Investigation desk
+**Risk:** PR size — ship chrome chips thin; defer time-capsule CTA if needed.
 
-**Problem:** `investigation_panel.js` dumps JSON to `<pre>`; presets only fill `#chatInput`.
+---
 
-**Modes:**
+### §27-3b — Prove it (investigation desk)
 
-1. **Sellers table** — `GET /api/investigate/subnet/{netuid}/sellers` (columns: wallet, side, TAO, time, tx link)
-2. **Wallet trace** — `GET /api/investigate/wallet/{ss58}/flow` (summary chips + table)
-3. **Presets → API** — `POST /api/investigate/ask`; owner-check `GET .../owner-check?wallets=` from top sellers
+**Problem:** Best APIs render as `<pre>` JSON; presets only fill chat.
 
-Default `inv-netuid` = hero netuid (not hardcoded 82). Preset labels dynamic: “Who sold SN{n} {name}?”
+**Modes (focus-coupled):**
 
-Chat secondary (“explain this table”), not primary.
+1. **Sellers table** — `GET /api/investigate/subnet/{focus}/sellers` (wallet, side, TAO, time, tx)
+2. **Wallet trace** — `GET /api/investigate/wallet/{ss58}/flow`
+3. **Presets → API** — `POST /api/investigate/ask`; owner-check from top sellers
+
+Default netuid = Focus. Preset labels dynamic from Focus name. Chat explains the table — not primary.
 
 **AC:**
 
-- [ ] Tables not `<pre>` JSON; explorer links when `tx_hash` present
-- [ ] Presets invoke APIs directly
-- [ ] `TAOSTATS_API_KEY` missing → one honest banner, not fake loading
+- [ ] Tables + explorer links; not JSON dumps
+- [ ] Living Focus “Prove it” CTA prefills + runs sellers for Focus SN
+- [ ] Missing TaoStats → one honest banner
+- [ ] RF-2 honored
 
-**Files:** `investigation_panel.js`, `investigation.html`, optional `service.py` column normalization
+**Files:** `investigation_panel.js`, `investigation.html`, optional `service.py` column normalize
 
-### §27-3 summary AC
+---
 
-- [ ] Pro drawer default-open on desktop OR summary shows live counts
-- [ ] Market drawer unchanged (tools); investigation stays there but upgraded
-- [ ] No accuracy claims unless `trust_banner.ready` (RF-2)
+### §27-3 summary AC (true potential unlocked)
+
+- [ ] User can Focus → see judge split → Prove it → sellers table in one continuous flow
+- [ ] Switching Focus reorients bench + chips + inv default (no page reload)
+- [ ] Contested council is the emotional beat — not score cells alone
+- [ ] No Labs strip; no accuracy theater outside trust_banner
 
 ---
 
