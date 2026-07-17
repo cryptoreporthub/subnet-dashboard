@@ -439,6 +439,7 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         _safe_conviction_band,
         _safe_enrichment_badge,
         _safe_story_strip,
+        _safe_trust_banner,
     )
 
     pick_payload: Optional[Dict[str, Any]] = None
@@ -458,6 +459,7 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         "habit_watchlist": watchlist_snapshot(),
         "habit_alerts": conviction_alerts_snapshot(),
         "hybrid_trust": hybrid_trust_snapshot(),
+        "trust_banner": _safe_trust_banner(),
     }
 
 

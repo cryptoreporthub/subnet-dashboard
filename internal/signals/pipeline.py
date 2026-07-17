@@ -24,22 +24,24 @@ def _utcnow_z() -> str:
 def load_subnets() -> List[Dict[str, Any]]:
     try:
         from fetchers.taomarketcap import get_all_subnets
+        from internal.subnet_names import enrich_subnet_rows
 
-        live = get_all_subnets()
+        live = enrich_subnet_rows(get_all_subnets())
         if live:
-            deduped: Dict[Any, Dict[str, Any]] = {}
-            for sn in live:
-                deduped.setdefault(sn.get("netuid"), sn)
-            return list(deduped.values())
+            priced = sum(
+                1 for sn in live[:30]
+                if sn.get("price") not in (None, "", 0)
+                or sn.get("price_change_24h") not in (None, "", 0)
+            )
+            if priced >= max(1, min(5, len(live) // 10)):
+                deduped: Dict[Any, Dict[str, Any]] = {}
+                for sn in live:
+                    deduped.setdefault(sn.get("netuid"), sn)
+                return list(deduped.values())
+            logger.warning("Live subnet rows lack price deltas — signal pipeline paused")
     except Exception as exc:
         logger.warning("Live subnet fetch failed: %s", exc)
-    try:
-        with open(REGISTRY_PATH, "r", encoding="utf-8") as fh:
-            data = json.load(fh)
-        return [dict(v, netuid=v.get("id", int(k))) for k, v in data.items()]
-    except Exception as exc:
-        logger.warning("Registry load failed: %s", exc)
-        return []
+    return []
 
 
 def _market_context() -> Dict[str, Any]:
@@ -165,6 +167,20 @@ def build_signal(sn: Dict[str, Any], market_context: Optional[Dict[str, Any]] = 
 
 def generate_signals(persist: bool = True) -> Dict[str, Any]:
     subnets = [sn for sn in load_subnets() if (sn.get("netuid") or sn.get("id")) is not None]
+    if not subnets:
+        return {
+            "status": "paused",
+            "meta": {
+                "count": 0,
+                "appended": 0,
+                "changed": 0,
+                "generated_at": _utcnow_z(),
+                "reason": "live_price_feed_unavailable",
+                "message": "Signal pipeline paused — live price feed unavailable (not scoring on stale registry zeros).",
+            },
+            "signals": [],
+            "changed_signals": [],
+        }
     ctx = _market_context()
     signals = [build_signal(sn, ctx) for sn in subnets]
     changed: List[Dict[str, Any]] = []
