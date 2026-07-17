@@ -5,7 +5,7 @@
 
 ## One-line
 
-**§27 active** — trust shell + data truth + Living Focus (Tier 3 reframed). §28 deferred.
+**§27 active** — trust shell + data truth + Living Focus + **Public Self-Update** (trailblazer unlock). §28 deferred.
 
 ## Done
 

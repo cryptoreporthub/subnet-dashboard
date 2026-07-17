@@ -27,7 +27,7 @@
 |---|-------|------|-------------|
 | **§27-1** | **Trust shell** | Kill loading theater: hydrate signals, alerts, KPI from real APIs; honest LIVE/STALE from `/api/data-freshness`; single trust number (banner = KPI = learning-metrics) | No |
 | **§27-2** | **Data pipeline** | Route `/api/subnets` + hydrate source labels through merged/live path; fix `cockpit_hydrate.js` hardcoded TAOMARKETCAP when chain is primary | No |
-| **§27-3** | **Brain visible (Tier 3)** | Judges↔hero netuid; open brain bench (weights + 3 judges); conviction peek; Labs 3 cards; investigation ask UX (tables not `<pre>`) | No |
+| **§27-3** | **Living Focus + Public Self-Update** | Focus · Contest · Prove it · **Watch us update** (trailblazer unlock) | No |
 | **§27-4** | **Learning hygiene** | Single `nudge_expert()` for resolver + `/api/feedback`; optional EMA only if batch calibration (§25) is too slow between retrains — **no Redis** | No |
 
 **Skip unless asked:** Redis / Layer-Two cache · full Bittensor Python SDK · metagraph reads without a product feature
@@ -163,12 +163,66 @@ Default netuid = Focus. Preset labels dynamic from Focus name. Chat explains the
 
 ---
 
+### §27-3c — Public Self-Update (the trailblazer unlock)
+
+**Grok LOCK (2026-07-17, second pass):** The moat beyond Living Focus.
+
+**Name:** Public Self-Update  
+**Fourth beat:** Focus → Contest → Prove it → **Watch us update**
+
+TaoStats explores. Nansen labels. TradingView charts. Polymarket markets conviction.  
+**None of them show a learning council that ate a miss (or banked a hit) and moved its weights in public.**
+
+**Hero moment (~10s):** You land on Focus and see the last graded beat on this SN — RIGHT/WRONG → which expert moved → weight delta — then Replay/Share that confession.
+
+**UI (thin — one Focus strip, not a trail rebuild):**
+
+```
+┌─ Last learn (Focus SN{n}) ────────────────────────────────────────┐
+│  MISS · expected +2.1% → actual −1.4%                             │
+│  technical 1.18 → 1.16 (−0.02) · weight_change from resolve       │
+│  [Replay time capsule]  [Share graded call]                       │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+Honest-empty when Focus has no graded resolve: “No graded beat on this SN yet — appears after resolver tick.”
+
+**APIs only (no new backends):**
+
+| Need | Source |
+|------|--------|
+| Last grade on Focus | pick-history / predictions resolved by `focus_netuid`, or story-strip row |
+| Expert nudge delta | `/api/mindmap/trail` `weight_change`, or postmortem |
+| Current weights | `/api/calibration/status` |
+| Replay / Share | `/api/predictions/capsule/{id}` + existing OG share |
+
+**Sits on Living Focus:** same `focus_netuid`; switcher reloads learn beat; Prove it = evidence, Self-Update = accountability.
+
+**§27-4 relationship:** 3c *surfaces* trail emits; `nudge_expert` hygiene stays in §27-4 — no fourth weight path.
+
+**AC:**
+
+- [ ] Focus with graded history shows last grade + expert nudge delta
+- [ ] Before→after (or last nudge) matches trail + calibration (±ε)
+- [ ] Replay + Share wire to existing time-capsule / OG share for that call
+- [ ] Switch Focus clears/reloads learn beat; honest-empty when none
+- [ ] RF-2: no win-rate copy outside `trust_banner`
+
+**NON-GOALS:** Global accuracy theater · rebuilt trail/league UI · live WebSocket nudge spam · Redis · Labs strip revival · §28 pages
+
+**Risks:** Prod resolver quiet → empty learn beat · scope creep into full trail rebuild
+
+**Files:** extend Living Focus with Last-learn strip; reuse `time_capsule.js`; thin trail filter by focus
+
+---
+
 ### §27-3 summary AC (true potential unlocked)
 
 - [ ] User can Focus → see judge split → Prove it → sellers table in one continuous flow
 - [ ] Switching Focus reorients bench + chips + inv default (no page reload)
 - [ ] Contested council is the emotional beat — not score cells alone
 - [ ] No Labs strip; no accuracy theater outside trust_banner
+- [ ] **Public Self-Update:** Focus shows last grade → expert nudge → before/after → Replay/Share (honest-empty when none)
 
 ---
 
