@@ -35,8 +35,8 @@
         return r.ok ? r.json() : null;
       })
       .then(function (payload) {
-        var data = payload && payload.data;
-        if (data && data.trust_banner) renderTrustBanner(data.trust_banner);
+        var tb = (payload && payload.data && payload.data.trust_banner) || (payload && payload.trust_banner);
+        if (tb) renderTrustBanner(tb);
       })
       .catch(function () {});
   }

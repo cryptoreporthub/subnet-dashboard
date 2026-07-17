@@ -134,6 +134,21 @@ flyctl secrets set \
 
 Redeploy is not required after `flyctl secrets set` — machines restart with new env.
 
+#### TaoStats on-chain investigation (PR #306)
+
+Required for `/api/investigate/*`, wallet tracing, and SimiVision on-chain chat. Free key: [taostats.io/pro/api-keys](https://taostats.io/pro/api-keys) (Google or GitHub sign-in both work).
+
+```bash
+flyctl secrets set TAOSTATS_API_KEY='<your-taostats-api-key>' --app subnet-dashboard
+```
+
+Verify:
+
+```bash
+curl -fsS 'https://subnet-dashboard.fly.dev/api/investigate/subnet/82/sellers?limit=5' | python3 -m json.tool
+# Expect "status": "success" (not "unavailable")
+```
+
 #### Dry-run test (§18 A2)
 
 Safe prod smoke without sending messages:
