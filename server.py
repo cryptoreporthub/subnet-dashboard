@@ -1013,10 +1013,11 @@ _STATIC_SUBNETS = [
 def _get_subnets_with_source():
     """Return (subnets, source) for picks — tradable only (excludes Root)."""
     from internal.subnets.tradable import tradable_subnets
+    from internal.subnet_names import enrich_subnet_rows
 
     if _PICKS_ENGINE:
         try:
-            subnets = get_all_subnets()
+            subnets = enrich_subnet_rows(get_all_subnets())
             if subnets:
                 tradable = tradable_subnets(subnets)
                 if tradable:

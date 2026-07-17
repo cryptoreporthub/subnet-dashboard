@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import json
 import logging
-from typing import Any, Dict, List, Optional
+import os
+import sqlite3
+import time
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+CACHE_DB = os.environ.get("INVESTIGATION_CACHE_DB", "data/investigation_cache.db")
+CACHE_TTL_SECONDS = int(os.environ.get("INVESTIGATION_CACHE_TTL", "180"))
 
 _SELL_TOKENS = ("unstake", "sell", "remove", "undelegate", "out", "withdraw")
 _BUY_TOKENS = ("stake", "buy", "add", "delegate", "in", "deposit")
@@ -68,7 +75,68 @@ def _normalize_event(row: Dict[str, Any], netuid: Optional[int] = None) -> Dict[
     }
 
 
+def _init_cache_db() -> None:
+    os.makedirs(os.path.dirname(CACHE_DB) or ".", exist_ok=True)
+    conn = sqlite3.connect(CACHE_DB)
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS investigation_cache (
+            cache_key TEXT PRIMARY KEY,
+            payload TEXT NOT NULL,
+            cached_at REAL NOT NULL
+        )"""
+    )
+    conn.commit()
+    conn.close()
+
+
+def _cache_get(key: str) -> Optional[Dict[str, Any]]:
+    try:
+        conn = sqlite3.connect(CACHE_DB)
+        row = conn.execute(
+            "SELECT payload, cached_at FROM investigation_cache WHERE cache_key = ?", (key,)
+        ).fetchone()
+        conn.close()
+        if not row:
+            return None
+        payload, cached_at = row
+        if time.time() - float(cached_at) > CACHE_TTL_SECONDS:
+            return None
+        return json.loads(payload)
+    except Exception:
+        return None
+
+
+def _cache_set(key: str, data: Dict[str, Any]) -> None:
+    try:
+        _init_cache_db()
+        conn = sqlite3.connect(CACHE_DB)
+        conn.execute(
+            "INSERT OR REPLACE INTO investigation_cache (cache_key, payload, cached_at) VALUES (?, ?, ?)",
+            (key, json.dumps(data), time.time()),
+        )
+        conn.commit()
+        conn.close()
+    except Exception as exc:
+        logger.debug("investigation cache write failed: %s", exc)
+
+
+def _cached(key: str, fn: Callable[[], Dict[str, Any]]) -> Dict[str, Any]:
+    hit = _cache_get(key)
+    if hit is not None:
+        hit["cached"] = True
+        return hit
+    result = fn()
+    if isinstance(result, dict) and result.get("status") == "success":
+        result["cached"] = False
+        _cache_set(key, result)
+    return result
+
+
 def investigate_subnet_sellers(netuid: int, *, limit: int = 50) -> Dict[str, Any]:
+    return _cached(f"sellers:{netuid}:{limit}", lambda: _investigate_subnet_sellers(netuid, limit=limit))
+
+
+def _investigate_subnet_sellers(netuid: int, *, limit: int = 50) -> Dict[str, Any]:
     from fetchers.taostats_client import get_delegation_events, get_subnet_delegation_flow, is_available
 
     if not is_available():
@@ -113,6 +181,10 @@ def investigate_subnet_sellers(netuid: int, *, limit: int = 50) -> Dict[str, Any
 
 
 def investigate_wallet(wallet: str, *, limit: int = 50) -> Dict[str, Any]:
+    return _cached(f"wallet:{wallet}:{limit}", lambda: _investigate_wallet(wallet, limit=limit))
+
+
+def _investigate_wallet(wallet: str, *, limit: int = 50) -> Dict[str, Any]:
     from fetchers.taostats_client import get_account, get_delegation_events, get_transfers, is_available
 
     if not is_available():
@@ -138,6 +210,54 @@ def investigate_wallet(wallet: str, *, limit: int = 50) -> Dict[str, Any]:
         "transfers_in": transfers_in[:limit],
         "sell_total_tao": round(sum(e["amount_tao"] for e in sells), 6),
         "buy_total_tao": round(sum(e["amount_tao"] for e in buys), 6),
+    }
+
+
+def trace_wallet_flow(
+    wallet: str,
+    *,
+    counterparty: Optional[str] = None,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    key = f"flow:{wallet}:{counterparty or ''}:{limit}"
+    return _cached(key, lambda: _trace_wallet_flow(wallet, counterparty=counterparty, limit=limit))
+
+
+def _trace_wallet_flow(
+    wallet: str,
+    *,
+    counterparty: Optional[str] = None,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    base = _investigate_wallet(wallet, limit=limit)
+    if base.get("status") != "success":
+        return base
+
+    transfer_links: List[Dict[str, Any]] = []
+    for row in base.get("transfers_out") or []:
+        dest = row.get("to") or row.get("destination") or row.get("transfer_address")
+        if isinstance(dest, str):
+            transfer_links.append({"from": wallet, "to": dest, "row": row})
+
+    delegation_transfers = [
+        e for e in base.get("delegation_events") or []
+        if e.get("is_transfer") or e.get("transfer_address")
+    ]
+
+    counterparty_activity = None
+    if counterparty:
+        counterparty_activity = _investigate_wallet(counterparty, limit=limit)
+        transfer_links = [t for t in transfer_links if t.get("to") == counterparty]
+
+    return {
+        "status": "success",
+        "wallet": wallet,
+        "counterparty": counterparty,
+        "transfer_links": transfer_links[:limit],
+        "delegation_transfers": delegation_transfers[:limit],
+        "counterparty_activity": counterparty_activity,
+        "sell_total_tao": base.get("sell_total_tao"),
+        "buy_total_tao": base.get("buy_total_tao"),
     }
 
 
@@ -195,5 +315,7 @@ def build_investigation_report(question: str, *, netuid: Optional[int] = None, w
 
     if wallet:
         parts["sections"].append({"type": "wallet_activity", "data": investigate_wallet(wallet)})
+        if "transfer" in q or "flow" in q or "trace" in q:
+            parts["sections"].append({"type": "wallet_flow", "data": trace_wallet_flow(wallet)})
 
     return parts

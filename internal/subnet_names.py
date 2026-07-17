@@ -168,3 +168,32 @@ def enrich_subnet_rows_live(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         enrich_subnet_row(r, local=local, remote=remote, use_taostats=True)
         for r in (rows or [])
     ]
+
+
+def name_for_netuid(netuid: Any, *, use_taostats: bool = False) -> str:
+    try:
+        return resolve_subnet_name(int(netuid), use_taostats=use_taostats)
+    except (TypeError, ValueError):
+        return "SN?"
+
+
+def refresh_stored_names(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Re-resolve ``name`` from netuid on read for persisted predictions/signals/trail rows."""
+    out: List[Dict[str, Any]] = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            out.append(row)
+            continue
+        item = dict(row)
+        netuid = item.get("netuid")
+        if netuid is None:
+            netuid = item.get("subnet_id") or item.get("id")
+        if netuid is not None:
+            item["name"] = name_for_netuid(netuid, use_taostats=False)
+        subnet = item.get("subnet")
+        if isinstance(subnet, dict) and subnet.get("netuid") is not None:
+            sub = dict(subnet)
+            sub["name"] = name_for_netuid(sub["netuid"], use_taostats=False)
+            item["subnet"] = sub
+        out.append(item)
+    return out

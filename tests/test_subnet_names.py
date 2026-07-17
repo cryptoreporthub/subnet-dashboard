@@ -18,6 +18,20 @@ def test_resolve_prefers_remote_over_tmc():
     assert name == "Chunking"
 
 
+def test_sn40_not_ralph():
+    """SN40 must not display TaoMarketCap's stale 'Ralph' label."""
+    name = resolve_subnet_name(40, tmc_name="Ralph", use_taostats=False)
+    assert name != "Ralph"
+    assert name == "Chunking" or name == "SN40"
+
+
+def test_refresh_stored_names():
+    from internal.subnet_names import refresh_stored_names
+
+    rows = refresh_stored_names([{"netuid": 40, "name": "Ralph"}])
+    assert rows[0]["name"] != "Ralph"
+
+
 def test_resolve_bad_name_falls_back_to_sn():
     name = resolve_subnet_name(63, local={"63": {"name": "Unknown"}}, remote={}, use_taostats=False)
     assert name == "SN63"

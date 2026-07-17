@@ -12,6 +12,7 @@ from internal.investigation.service import (
     investigate_owner_check,
     investigate_subnet_sellers,
     investigate_wallet,
+    trace_wallet_flow,
 )
 
 investigation_router = APIRouter(tags=["investigation"])
@@ -33,6 +34,18 @@ async def api_subnet_sellers(netuid: int, days: int = Query(7, ge=1, le=90), lim
 @investigation_router.get("/api/investigate/wallet/{wallet}")
 async def api_wallet_activity(wallet: str, days: int = Query(30, ge=1, le=365), limit: int = Query(50, ge=1, le=200)):
     result = investigate_wallet(wallet, limit=limit)
+    result["days_requested"] = days
+    return result
+
+
+@investigation_router.get("/api/investigate/wallet/{wallet}/flow")
+async def api_wallet_flow(
+    wallet: str,
+    counterparty: Optional[str] = Query(None, description="Optional second wallet to trace against"),
+    days: int = Query(30, ge=1, le=365),
+    limit: int = Query(50, ge=1, le=200),
+):
+    result = trace_wallet_flow(wallet, counterparty=counterparty, limit=limit)
     result["days_requested"] = days
     return result
 

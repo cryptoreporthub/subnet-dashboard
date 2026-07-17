@@ -42,12 +42,25 @@
         return;
       }
       out.textContent = 'Loading…';
-      fetch('/api/investigate/wallet/' + encodeURIComponent(wallet) + '?limit=30')
+      fetch('/api/investigate/wallet/' + encodeURIComponent(wallet) + '/flow?limit=30')
         .then(function (r) { return r.json(); })
         .then(function (d) { out.textContent = fmtOut(d); })
         .catch(function () { out.textContent = 'Investigation API unavailable.'; });
     });
   }
+
+  document.querySelectorAll('.inv-preset').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var chatInput = document.getElementById('chatInput');
+      var prompt = btn.getAttribute('data-prompt') || '';
+      if (chatInput && prompt) {
+        chatInput.value = prompt;
+        chatInput.focus();
+        var drawer = document.getElementById('market-drawer');
+        if (drawer && !drawer.open) drawer.setAttribute('open', 'open');
+      }
+    });
+  });
 
   if (boardsEl) {
     fetch('/api/whales/leaderboards?limit=8')

@@ -110,6 +110,12 @@ async def api_signals(
         store = _get_store()
         signals = store.query(subnet_id=subnet_id, since=since)
         meta = {"count": len(signals), "appended": 0, "cached": True}
+    try:
+        from internal.subnet_names import refresh_stored_names
+
+        signals = refresh_stored_names(signals)
+    except Exception:
+        pass
     if refresh and subnet_id is not None:
         signals = [s for s in signals if s.get("subnet_id") == subnet_id]
     elif refresh and since:
