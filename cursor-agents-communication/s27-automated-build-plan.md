@@ -1,8 +1,7 @@
 # §27 — Automated build plan (unattended queue)
 
-**Status:** IN PROGRESS  
+**Status:** COMPLETE — PR #311 (§27) + `cursor/s28-shareable-c3fd` (§28)  
 **Updated:** 2026-07-17  
-**Baseline:** `main` post-#307 · §27-1 in PR #310  
 **Models:** Composer 2.5 / 2.5-fast build · Grok subagent slow+low **only** if AC fails  
 **Spec:** `s27-trust-and-brain-plan.md` (LOCKED — do not re-plan)
 

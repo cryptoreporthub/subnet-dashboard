@@ -1,9 +1,8 @@
 # §28 — Automated build plan (shareable product)
 
-**Status:** IN PROGRESS  
+**Status:** COMPLETE (PR pending)  
 **Updated:** 2026-07-17  
-**Branch:** `cursor/s28-shareable-c3fd`  
-**Baseline:** §27 automation branch (`cursor/s27-automation-c3fd` / PR #311)
+**Branch:** `cursor/s28-shareable-c3fd` (stacks §27 + §28)
 
 ## Queue
 
