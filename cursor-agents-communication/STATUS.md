@@ -1,21 +1,18 @@
 # STATUS
 
-**Updated:** 2026-07-17T19:15:00Z  
-**main:** `a93f760`  
-**next:** §31 website optimization (`website-opt-20-plan.md`)
+**Updated:** 2026-07-17T19:30:00Z  
+**main:** `61bb3e7`  
+**active plan:** `website-opt-final-plan.md` (22 ideas · §31-0…§31-8)
 
 ## Done
 
 - §27–§30 Living Brain + §29 polish (#312–#316)
-- Deep dive + Grok review → 22-idea plan locked
+- Deep dive + Grok review → draft plan (#317)
+- **Final plan** with optionals O16–O22 in queue (§31-7/§31-8)
 
-## Next (Tier 1)
+## Next
 
-1. O1+O2 homepage fetch storm / SSE dual refresh
-2. O5 wallet single investigate
-3. O4 Google Fonts unblock
-4. O3 slim `/api/subnets`
-5. O7/O6 cache headers + search memo
+**§31-1** — Homepage data bus (O1 fetch storm + O2 SSE/interval dedupe)
 
 ## Skipped
 
