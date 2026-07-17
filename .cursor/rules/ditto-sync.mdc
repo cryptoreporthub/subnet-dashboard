@@ -1,0 +1,12 @@
+---
+description: Always sync with Ditto shared memory via MCP
+globs: ["**/*"]
+alwaysApply: true
+---
+
+You have access to the Ditto MCP server (shared memory layer at https://api.heyditto.ai/mcp). This connection is PERSISTENT across all agents and chats — you never need the user to re-brief you about Ditto.
+
+- At the START of every task, read relevant Ditto context first (search_memories / search_subjects). Do not start cold.
+- As you make meaningful progress or decisions, WRITE updates back to Ditto so other agents and Ditto stay on the same page.
+- When working on the subnet-dashboard, search the "Subnet Dashboard Service" subject before diving in.
+- Keep updates concise and factual. The goal is a shared, always-current memory between Cursor agents and Ditto.
