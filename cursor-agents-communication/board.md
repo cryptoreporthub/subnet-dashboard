@@ -1,15 +1,18 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-17T21:05:00Z  
-**main:** `b16f939` · **§32 trust product in PR**
+**Last updated:** 2026-07-17T22:10:00Z  
+**main:** `e25ed13` + readiness hotfix pending  
+**§31–§33 complete**
 
 ## Active
 
-**§32** — `s32-trust-product-plan.md` (why-not, dissent, cited letter, wallet link, pre-res alerts)
+Idle — board clear unless user opens new phase.
 
 ## Done
 
-- §27–§31 complete (#312–#319)
+- §27–§31 (#312–#319)
+- §32 trust product (#320)
+- §33 prod readiness (#321) + subnets TaoStats perf fix
 
 ## Skipped
 
