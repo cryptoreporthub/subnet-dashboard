@@ -1,4 +1,4 @@
-/** §27-3a–c — Living Focus + Public Self-Update */
+/** §27-3a–c + §30 Living Focus + Public Self-Update */
 (function () {
   'use strict';
 
@@ -13,6 +13,7 @@
   var focusNetuid = null;
   var focusName = '';
   var audited = false;
+  var cachedTrail = null;
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -34,6 +35,45 @@
     return fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl.signal })
       .then(function (r) { return r.json(); })
       .finally(function () { clearTimeout(t); });
+  }
+
+  function parseFocusParam() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var raw = params.get('focus') || params.get('netuid');
+      if (raw == null || raw === '') return null;
+      var n = Number(raw);
+      return isNaN(n) ? null : n;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function scrollToFocus() {
+    if (parseFocusParam() == null) return;
+    root.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function calibrationWeights(cal) {
+    if (!cal || typeof cal !== 'object') return {};
+    return cal.weights
+      || (cal.calibration && cal.calibration.expert_weights)
+      || cal.expert_weights
+      || {};
+  }
+
+  function trailMatchesFocus(ev) {
+    if (!ev) return false;
+    if (ev.netuid != null && Number(ev.netuid) !== focusNetuid) return false;
+    if (ev.event_type === 'prediction_resolved' || ev.event_type === 'weight_change') {
+      if (ev.netuid == null) {
+        var pl = ev.payload || ev;
+        if (!pl || pl.netuid == null || Number(pl.netuid) !== focusNetuid) return false;
+      }
+      return true;
+    }
+    var payload = ev.payload || ev;
+    return !!(payload && payload.netuid != null && Number(payload.netuid) === focusNetuid);
   }
 
   function pickFocusNetuid(dailyPick) {
@@ -69,7 +109,32 @@
     );
   }
 
-  function renderJudges(data, action) {
+  function renderWeightLean(weights) {
+    var entries = Object.keys(weights || {}).map(function (k) {
+      return { name: k, w: Number(weights[k]) || 0 };
+    }).sort(function (a, b) { return b.w - a.w; });
+    if (!entries.length) return '';
+    var top = entries[0];
+    var maxW = Math.max.apply(null, entries.map(function (e) { return e.w; }).concat([0.1]));
+    var rows = entries.slice(0, 4).map(function (e) {
+      var pct = Math.min(100, (e.w / maxW) * 100);
+      return (
+        '<div class="living-focus__weight-row">' +
+        '<span class="living-focus__weight-name">' + esc(e.name) + '</span>' +
+        '<span class="living-focus__weight-val">' + e.w.toFixed(2) + '</span>' +
+        '<span class="living-focus__weight-bar" style="--pct:' + pct + '%"></span>' +
+        '</div>'
+      );
+    }).join('');
+    return (
+      '<div class="living-focus__weights" aria-label="Council weight lean">' +
+      '<p class="living-focus__weights-label">Who drives picks · <strong>' + esc(top.name) + '</strong> leads</p>' +
+      rows +
+      '</div>'
+    );
+  }
+
+  function renderJudges(data, action, weights) {
     if (!bodyEl) return;
     if (!data || data.error) {
       bodyEl.innerHTML = '<p class="living-focus__empty">Focus judges unavailable.</p>';
@@ -81,7 +146,7 @@
     if (subEl) {
       subEl.textContent = (audited ? 'Audited pick' : 'Candidate only') + split;
     }
-  var html =
+    var html =
       '<header class="living-focus__header">' +
       '<h3 class="living-focus__name"><a href="/subnet/' + focusNetuid + '" class="living-focus__link">' + esc(focusName) + '</a> <span class="living-focus__sn">SN' + focusNetuid + '</span></h3>' +
       '<span class="living-focus__action badge-' + (action === 'LONG' ? 'buy' : action === 'SHORT' ? 'sell' : 'watch') + '">' + esc(action || 'HOLD') + '</span>' +
@@ -94,6 +159,7 @@
       judgeBar('Echo', (data.echo || {}).score, contested) +
       judgeBar('Pulse', (data.pulse || {}).score, contested) +
       '</div>';
+    html += renderWeightLean(weights);
     if (consensus.verdict) {
       html += '<p class="living-focus__verdict">Consensus: <strong>' + esc(consensus.verdict) + '</strong>' +
         (consensus.agreement != null ? ' · agreement ' + Number(consensus.agreement).toFixed(2) : '') +
@@ -150,17 +216,9 @@
     if (!learnEl) return;
     var row = null;
     (trail || []).some(function (ev) {
-      if (!ev || ev.netuid != null && Number(ev.netuid) !== focusNetuid) return false;
-      if (ev.event_type === 'prediction_resolved' || ev.event_type === 'weight_change') {
-        row = ev;
-        return true;
-      }
-      var payload = ev.payload || ev;
-      if (payload && payload.netuid != null && Number(payload.netuid) === focusNetuid) {
-        row = ev;
-        return true;
-      }
-      return false;
+      if (!trailMatchesFocus(ev)) return false;
+      row = ev;
+      return true;
     });
     if (!row) {
       learnEl.hidden = false;
@@ -170,7 +228,7 @@
     var payload = row.payload || row;
     var correct = payload.correct;
     var grade = correct === true ? 'HIT' : correct === false ? 'MISS' : 'GRADED';
-    var expert = payload.expert || payload.signal || '';
+    var expert = payload.expert || payload.signal || payload.dial || '';
     var before = payload.before;
     var after = payload.after;
     var delta = before != null && after != null ? (Number(after) - Number(before)).toFixed(2) : '';
@@ -179,7 +237,8 @@
     if (payload.predicted_pct != null && payload.actual_pct != null) {
       move = ' · expected ' + Number(payload.predicted_pct).toFixed(1) + '% → actual ' + Number(payload.actual_pct).toFixed(1) + '%';
     }
-    var w = weights && expert ? weights[expert] : null;
+    var dial = expert && expert.indexOf(':') >= 0 ? expert.split(':').pop() : expert;
+    var w = weights && dial ? weights[dial] : (weights && expert ? weights[expert] : null);
     var html =
       '<div class="living-focus__learn-strip">' +
       '<h4 class="living-focus__learn-title">Last learn (Focus SN' + focusNetuid + ')</h4>' +
@@ -219,28 +278,67 @@
     });
   }
 
+  function scenarioForFocus(scen) {
+    if (!scen || focusNetuid == null) return null;
+    var scenarios = scen.scenarios || [];
+  var match = null;
+    scenarios.forEach(function (s) {
+      if (!s || match) return;
+      var features = s.features || {};
+      var n = features.netuid != null ? Number(features.netuid) : (features.subnet_id != null ? Number(features.subnet_id) : null);
+      if (n === focusNetuid) match = s;
+    });
+    if (match) return match;
+    if (scen.regime) return { regime: scen.regime };
+    if (scen.stats && scen.stats.dominant_regime) return { regime: scen.stats.dominant_regime };
+    return null;
+  }
+
+  function postmortemForFocus(pm) {
+    if (!pm || focusNetuid == null) return null;
+    var posts = pm.postmortems;
+    if (Array.isArray(posts)) {
+      for (var i = 0; i < posts.length; i++) {
+        var p = posts[i];
+        var pred = (p && p.prediction) || {};
+        if (pred.netuid != null && Number(pred.netuid) === focusNetuid) return p;
+      }
+      return posts[0] || null;
+    }
+    if (posts && typeof posts === 'object') {
+      var keys = Object.keys(posts);
+      for (var j = 0; j < keys.length; j++) {
+        var list = posts[keys[j]] || [];
+        for (var k = 0; k < list.length; k++) {
+          var item = list[k];
+          var pr = (item && item.prediction) || {};
+          if (pr.netuid != null && Number(pr.netuid) === focusNetuid) return item;
+        }
+      }
+    }
+    return null;
+  }
+
   function loadChips() {
     var chips = [];
     return Promise.all([
       fetchJson('/api/scenario-memory', 8000).catch(function () { return null; }),
       fetchJson('/api/ruggers/subnet/' + focusNetuid, 8000).catch(function () { return null; }),
-      fetchJson('/api/postmortems?limit=1', 8000).catch(function () { return null; }),
+      fetchJson('/api/postmortems?limit=20', 8000).catch(function () { return null; }),
     ]).then(function (res) {
-      var scen = res[0];
+      var scen = scenarioForFocus(res[0]);
       if (scen && scen.regime) {
         chips.push({ label: 'Regime: ' + scen.regime, tone: 'neutral' });
-      } else if (scen && scen.stats && scen.stats.dominant_regime) {
-        chips.push({ label: 'Regime: ' + scen.stats.dominant_regime, tone: 'neutral' });
+      } else if (scen && scen.outcome) {
+        chips.push({ label: 'Scenario: ' + scen.outcome, tone: scen.outcome === 'correct' ? 'neutral' : 'warn' });
       }
       var rug = res[1];
       if (rug && rug.risk_level) {
         chips.push({ label: 'Rug risk: ' + rug.risk_level, tone: rug.risk_level === 'high' ? 'warn' : 'neutral' });
       }
-      var pm = res[2];
-      var posts = (pm && pm.postmortems) || [];
-      if (posts.length) {
-        var p = posts[0];
-        chips.push({ label: 'Autopsy: ' + (p.judge || p.title || 'latest'), tone: 'muted' });
+      var pm = postmortemForFocus(res[2]);
+      if (pm) {
+        chips.push({ label: 'Autopsy: ' + (pm.judge || pm.title || 'focus SN'), tone: 'muted' });
       }
       renderChips(chips);
     });
@@ -249,10 +347,13 @@
   function refreshFocus() {
     if (focusNetuid == null) return Promise.resolve();
     var action = 'HOLD';
+    var trailPromise = cachedTrail
+      ? Promise.resolve({ trail: cachedTrail })
+      : fetchJson('/api/mindmap/trail?limit=40', 10000).catch(function () { return { trail: [] }; });
     return Promise.all([
       fetchJson('/api/judges/' + focusNetuid, 15000),
       fetchJson('/api/calibration/status', 8000).catch(function () { return {}; }),
-      fetchJson('/api/mindmap/trail?limit=40', 10000).catch(function () { return { trail: [] }; }),
+      trailPromise,
       fetchJson('/api/daily-pick', 8000).catch(function () { return {}; }),
     ]).then(function (res) {
       var judges = res[0];
@@ -260,14 +361,39 @@
       var trail = (res[2] && res[2].trail) || [];
       var dp = res[3] || {};
       action = String(dp.action || 'HOLD').toUpperCase();
-      renderJudges(judges, action);
-      var weights = (cal.calibration && cal.calibration.expert_weights) || cal.expert_weights || {};
+      var weights = calibrationWeights(cal);
+      renderJudges(judges, action, weights);
       renderLearnStrip(trail, weights);
       return loadChips();
     });
   }
 
+  function bootstrapFromCache(cache) {
+    if (!cache) return null;
+    var dp = cache.dailyPick || {};
+    var simi = cache.simivision || {};
+    var top = (simi.data && simi.data.top) || simi.top || [];
+    var paramFocus = parseFocusParam();
+    var n = paramFocus != null ? paramFocus : pickFocusNetuid(dp);
+    if (n == null && top.length && top[0].netuid != null) {
+      n = Number(top[0].netuid);
+      audited = false;
+    }
+    if (cache.trail) cachedTrail = cache.trail;
+    return { dp: dp, top: top, n: n };
+  }
+
   function init() {
+    var cache = window.HomeHydrateCache;
+    var cached = bootstrapFromCache(cache);
+    if (cached && cached.n != null) {
+      var sn = (cached.dp.pick && cached.dp.pick.subnet) || (cached.dp.candidate && cached.dp.candidate.subnet) || cached.top[0] || {};
+      setFocus(cached.n, subnetName(sn, cached.n));
+      renderSwitcher(cached.top);
+      scrollToFocus();
+      return refreshFocus();
+    }
+
     Promise.all([
       fetchJson('/api/daily-pick', 12000),
       fetchJson('/api/simivision', 12000).catch(function () { return {}; }),
@@ -275,7 +401,8 @@
       var dp = res[0] || {};
       var simi = res[1] || {};
       var top = (simi.data && simi.data.top) || simi.top || [];
-      var n = pickFocusNetuid(dp);
+      var paramFocus = parseFocusParam();
+      var n = paramFocus != null ? paramFocus : pickFocusNetuid(dp);
       if (n == null && top.length && top[0].netuid != null) {
         n = Number(top[0].netuid);
         audited = false;
@@ -287,11 +414,24 @@
       var sn = (dp.pick && dp.pick.subnet) || (dp.candidate && dp.candidate.subnet) || top[0] || {};
       setFocus(n, subnetName(sn, n));
       renderSwitcher(top);
+      scrollToFocus();
       return refreshFocus();
     }).catch(function () {
       if (bodyEl) bodyEl.innerHTML = '<p class="living-focus__empty">Living Focus unavailable.</p>';
     });
   }
+
+  document.addEventListener('home:hydrate-cache', function (ev) {
+    if (focusNetuid != null) return;
+    var detail = ev && ev.detail;
+    var cached = bootstrapFromCache(detail);
+    if (!cached || cached.n == null) return;
+    var sn = (cached.dp.pick && cached.dp.pick.subnet) || (cached.dp.candidate && cached.dp.candidate.subnet) || cached.top[0] || {};
+    setFocus(cached.n, subnetName(sn, cached.n));
+    renderSwitcher(cached.top);
+    scrollToFocus();
+    refreshFocus();
+  });
 
   var proveBtn = document.getElementById('living-focus-prove-btn');
   if (proveBtn) {
@@ -313,6 +453,8 @@
     get netuid() { return focusNetuid; },
     refresh: refreshFocus,
     setFocus: setFocus,
+    calibrationWeights: calibrationWeights,
+    trailMatchesFocus: trailMatchesFocus,
   };
 
   if (document.readyState === 'loading') {

@@ -23,10 +23,9 @@ def _utcnow_z() -> str:
 
 def load_subnets() -> List[Dict[str, Any]]:
     try:
-        from fetchers.taomarketcap import get_all_subnets
-        from internal.subnet_names import enrich_subnet_rows
+        from internal.subnets.feed import get_council_subnet_feed
 
-        live = enrich_subnet_rows(get_all_subnets())
+        live, _source = get_council_subnet_feed()
         if live:
             priced = sum(
                 1 for sn in live[:30]

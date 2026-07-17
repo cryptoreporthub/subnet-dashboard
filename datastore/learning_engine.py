@@ -74,10 +74,27 @@ class LearningEngine:
         correct = bool(actual_performance.get("correct_prediction", False))
 
         expert = self._normalize_recommendation(recommendation)
+        before = None
+        after = None
         if expert:
-            from internal.council.weights import nudge_expert
+            from internal.council.weights import load_weights, nudge_expert
 
-            nudge_expert(expert, correct, self.soul_map_path)
+            before = float(load_weights(self.soul_map_path).get(expert, 1.0))
+            after = nudge_expert(expert, correct, self.soul_map_path)
+            if after is not None:
+                try:
+                    from internal.learning.trail_bus import emit_weight_change
+
+                    emit_weight_change(
+                        expert,
+                        before=before,
+                        after=float(after),
+                        reason="feedback",
+                        correct=correct,
+                        extra={"subnet_id": subnet_id, "recommendation": recommendation},
+                    )
+                except Exception:
+                    pass
 
         try:
             scenario_memory.add_scenario(

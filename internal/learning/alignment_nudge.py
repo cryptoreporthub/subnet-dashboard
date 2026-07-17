@@ -5,12 +5,11 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from internal.council.weights import SOUL_MAP_PATH, load_weights, save_weights
+from internal.council import weights as council_weights
 from internal.learning.trail_bus import emit_disposition_shift, emit_weight_change
 
 logger = logging.getLogger(__name__)
 
-_ALIGNMENT_DELTA = 0.01
 _MIN = 0.1
 _MAX = 2.0
 
@@ -35,12 +34,17 @@ def apply_alignment_nudge(feedback: Dict[str, Any]) -> Dict[str, Any]:
     status = str(feedback.get("status", "partially_aligned"))
     expert = _expert_for_alignment_status(status)
 
-    weights_before = load_weights(SOUL_MAP_PATH)
+    weights_before = council_weights.load_weights(council_weights.SOUL_MAP_PATH)
     before = float(weights_before.get(expert, 1.0))
-    delta = _ALIGNMENT_DELTA if alignment >= 0.5 else -_ALIGNMENT_DELTA
-    after = round(max(_MIN, min(_MAX, before + delta)), 4)
-    weights_before[expert] = after
-    save_weights(weights_before, SOUL_MAP_PATH)
+    after = None
+    try:
+        after = council_weights.nudge_expert(
+            expert, alignment >= 0.5, council_weights.SOUL_MAP_PATH
+        )
+    except Exception:
+        after = None
+    if after is None:
+        return {"applied": False, "reason": "nudge failed", "expert": expert}
 
     emit_weight_change(
         expert,

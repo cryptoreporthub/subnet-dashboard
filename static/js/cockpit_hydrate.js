@@ -504,7 +504,7 @@
     if (!strip) return;
 
     var tb = stats.trust_banner || {};
-    var accRaw = tb.accuracy != null ? tb.accuracy : stats.accuracy;
+    var accRaw = tb.accuracy != null ? tb.accuracy : null;
     var acc = Math.round((Number(accRaw) || 0) * 1000) / 10;
     var graded = tb.graded != null ? tb.graded : (Number(stats.correct || 0) + Number(stats.wrong || 0));
     var expired = Number(stats.expired != null ? stats.expired : tb.expired || 0);
@@ -952,6 +952,17 @@
     updateGroupData(hourPicks, dayPicks, trail, subnets);
     paintCharts();
     console.log('[cockpit_hydrate] panels updated from APIs');
+
+    window.HomeHydrateCache = {
+      dailyPick: results[2].status === 'fulfilled' ? results[2].value : null,
+      simivision: results[0].status === 'fulfilled' ? results[0].value : null,
+      trail: trail,
+      at: Date.now(),
+    };
+    document.dispatchEvent(new CustomEvent('home:hydrate-cache', {
+      detail: window.HomeHydrateCache,
+    }));
+
     connectCockpitStream();
 
     // §27-3a: league-table /api/judges demoted off home hydrate — Living Focus uses /api/judges/{focus}.
