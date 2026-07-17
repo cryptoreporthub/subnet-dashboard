@@ -1,35 +1,35 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-17T16:22:00Z — **Post-§28 · §29 queue active**  
+**Last updated:** 2026-07-17T16:40:00Z — **Living Brain audit · §30 queue**  
 **main:** `6c9b057` · §27 + §28 merged (#312)
 
 ## Ditto boot (read first)
 
-1. **`cursor-agents-communication/STATUS.md`**
-2. **`cursor-agents-communication/post-s29-automated-build-plan.md`** (active queue)
-3. **`cursor-agents-communication/post-s28-backlog.md`** (full checklist)
+1. **`STATUS.md`**
+2. **`living-brain-audit.md`** (integration verdict)
+3. **`post-s30-living-brain-plan.md`** (active closure queue)
+4. **`post-s28-backlog.md`** + **`post-s29-automated-build-plan.md`** (polish)
 
 ## Gate Status
 
 | Phase | Status |
 |-------|--------|
 | **§17–§28** | ✅ complete |
-| **§29** | ⏳ **post-ship polish** — automated queue |
+| **§29** | ⏳ post-ship polish (name integrity, focus deeplink, …) |
+| **§30** | 🔴 **Living Brain closure** — memory must improve next pick |
 
-## Active queue (`post-s29-automated-build-plan.md`)
+## Priority
 
-| # | Slice | State |
-|---|-------|-------|
-| §29-0 | Board + STATUS sync | next |
-| §29-1 | Prod verify extensions | pending |
-| §29-2 | `?focus=` deep link | pending |
-| §29-3 | Name integrity | pending |
-| §29-4–8 | Polish + tests | pending |
+1. **§30-1** Living Focus bugs (calibration shape, learn filter, `?focus=`)
+2. **§30-3–5** Trail + weight path hygiene
+3. **§30-6–7** Dispositions + scenarios → scoring (capped)
+4. Interleave §29 polish as capacity allows
 
-**Human (not automated):** F7 domain · Telegram bot · Discord/X · email letter — see backlog H1–H6.
+**Human (not automated):** F7 · Telegram · Discord · email — backlog H1–H6.
 
 ## Rules
 
-- Board + STATUS override stale memory artifacts.
+- Board + STATUS override stale memory.
 - Honest-empty > fake data (RF-2).
-- One slice per agent turn · no `data/*.json` commits.
+- Online weights: `nudge_expert` only (calibration = batch).
+- One slice per turn · no `data/*.json` commits.

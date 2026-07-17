@@ -2,7 +2,8 @@
 
 **Updated:** 2026-07-17  
 **Baseline:** `main` post-#312 (`6c9b057`) — §27 + §28 merged  
-**Automation queue:** `post-s29-automated-build-plan.md`
+**Automation queues:** `post-s29-automated-build-plan.md` (polish) · `post-s30-living-brain-plan.md` (memory→advice)  
+**Living Brain audit:** `living-brain-audit.md`
 
 ---
 

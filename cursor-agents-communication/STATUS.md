@@ -1,24 +1,25 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-17T16:22:00Z  
+**Updated:** 2026-07-17T16:40:00Z  
 **main:** `6c9b057`
 
 ## One-line
 
-**§27 + §28 merged (#312)** — post-ship §29 automation queue for polish + name integrity.
+**Living Brain audit done** — closed weight→pick loop works; dispositions/scenarios/trail gaps block “learns everything.” §30 closure queue ready.
 
 ## Active plan
 
-**`post-s29-automated-build-plan.md`** — §29-0 → §29-10 (agent-only; human items excluded).
+1. **`post-s30-living-brain-plan.md`** — connect memory → better advice  
+2. **`post-s29-automated-build-plan.md`** — polish / name integrity  
+
+## Audit
+
+**`living-brain-audit.md`** — what works, LB-1…LB-17 gaps, optimization target.
 
 ## Done
 
-§17–§28 · trust shell · Living Focus · shareable `/subnet` + `/wallet` · search palette
+§17–§28 · trust shell · Living Focus shell · shareable pages · `nudge_expert`
 
-## Human-only (not in agent queue)
+## Human-only
 
-F7 custom domain · A1b Telegram alerts · S5 Discord · C1 listener creds · B12 email · Fly volume
-
-## Backlog reference
-
-**`post-s28-backlog.md`** — full checklist with deferred + debt items
+F7 domain · Telegram bot · Discord · listener creds · email · Fly volume
