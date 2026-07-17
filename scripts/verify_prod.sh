@@ -87,6 +87,16 @@ print('meta.total:', meta.get('total'))
 assert meta.get('total', 0) > 0, 'subnet count must be > 0'
 "
 
+echo "== shareable subnet page =="
+curl -fsS "$BASE/subnet/1" | head -c 200 >/dev/null
+echo "subnet page OK"
+
+echo "== search API =="
+curl -fsS "$BASE/api/search?q=1" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print('results:', len(d.get('results') or d.get('matches') or []))
+"
 
 echo "OK"
 

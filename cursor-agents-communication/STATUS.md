@@ -1,27 +1,20 @@
-# STATUS — subnet-dashboard (Ditto boot card)
+# STATUS
 
-**Updated:** 2026-07-17T14:45:00Z  
-**main:** `0fd96fe`
+**Updated:** 2026-07-17T17:00:00Z  
+**main:** `6c9b057` (§27+§28 merged #312)  
+**active:** `cursor/s30-living-brain-c3fd` — §30 Living Brain closure + §29 polish  
+**plan:** `cursor-agents-communication/master-automated-gameplan.md`
 
-## One-line
+## Shipped on main
 
-**§27 automated build active** — unattended queue through §27-4; §28 deferred.
+- §27 trust shell + Living Focus + nudge_expert
+- §28 shareable `/subnet/{id}`, `/wallet/{ss58}`, command palette
 
-## Active plan
+## In flight
 
-**`s27-automated-build-plan.md`** — sequential §27-1 → §27-4, auto-continue on CI green.
-
-| Slice | PR / state |
-|-------|------------|
-| §27-1 Trust shell | #310 open |
-| §27-2 Data pipeline | building |
-| §27-3a–c Living Focus + Prove it + Self-Update | queued |
-| §27-4 Learning hygiene | queued |
-
-## Done
-
-§17–§26 complete · #306/#307 subnet names + investigation
+- LB-1…LB-16 fixes (calibration weights, trail, scoring memory, RF-2, shared feed)
+- verify_prod shareable smoke + name integrity guard
 
 ## Deferred
 
-§28 shareable product · F7 DNS · A1b bot · S5 Discord
+- H1–H6 human gates · §29-5–10 thin polish · D1–D7

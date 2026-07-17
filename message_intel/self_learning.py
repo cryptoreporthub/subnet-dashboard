@@ -200,30 +200,25 @@ class SelfLearning:
         if not patterns:
             return
 
-        # Load canonical weights from soul_map.json
-        weights = load_weights()
+        from internal.council.weights import nudge_expert
 
         for p in patterns:
             success = p.get("success_rate", 0.5)
             desc = p.get("pattern_description", "")
 
+            expert = None
             if "substance" in desc.lower() or "specific subnet" in desc.lower():
-                weights["quant"] = min(2.0, weights.get("quant", 1.0) + (success - 0.5) * 0.1)
-            if "hype" in desc.lower():
-                weights["hype"] = min(2.0, weights.get("hype", 1.0) + (success - 0.5) * 0.08)
-            if "noise" in desc.lower() and success < 0.5:
-                # Noise patterns boost dark_horse (inverse strategy benefits when hype fails)
-                weights["dark_horse"] = min(2.0, weights.get("dark_horse", 1.0) + 0.05)
+                expert = "quant"
+            elif "hype" in desc.lower():
+                expert = "hype"
+            elif "noise" in desc.lower() and success < 0.5:
+                expert = "dark_horse"
 
-        # Normalize weights to sum to 1.0
-        total = sum(weights.values())
-        if total > 0:
-            for k in weights:
-                weights[k] = round(weights[k] / total, 4)
+            if expert:
+                # ponytail: route through nudge_expert; no renormalize-to-1.0
+                nudge_expert(expert, success >= 0.5)
 
-        # Persist to soul_map.json via canonical path
-        save_weights(weights)
-        logger.info("Adjusted and persisted council weights: %s", weights)
+        logger.info("Adjusted council weights via nudge_expert from %d patterns", len(patterns))
 
     def start_background_learning(self, interval: int = 600) -> None:
         if self._running:

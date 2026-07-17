@@ -69,23 +69,16 @@ def _get_merged_data():
 
 
 def _get_subnets_for_scoring() -> tuple[List[Dict[str, Any]], str]:
-    """Return deduped subnets for judge scoring.
-
-    Prefer cached TaoMarketCap data first — it is fast and already deduped.
-    Fall back to the merged pipeline only when TMC has nothing.
-    """
+    """Return deduped subnets for judge scoring via shared council feed (§30-10)."""
     try:
-        from fetchers.taomarketcap import get_all_subnets
+        from internal.subnets.feed import get_council_subnet_feed
 
-        subnets = _deduplicate_subnets(get_all_subnets())
+        subnets, source = get_council_subnet_feed()
+        subnets = _deduplicate_subnets(subnets)
         if subnets:
-            return subnets, "taomarketcap"
+            return subnets, source
     except Exception as e:
-        logger.warning("TMC subnet fetch failed: %s", e)
-
-    merged, source = _get_merged_data()
-    if merged:
-        return merged, source
+        logger.warning("Council subnet feed failed: %s", e)
     return [], "none"
 
 

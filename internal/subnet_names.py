@@ -145,7 +145,10 @@ def enrich_subnet_row(row: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
         return out
     out["netuid"] = netuid
     tmc_name = kwargs.get("tmc_name", out.get("name"))
-    out["name"] = resolve_subnet_name(netuid, tmc_name=tmc_name, **kwargs)
+    resolved = resolve_subnet_name(netuid, tmc_name=tmc_name, **kwargs)
+    if str(resolved).lower() in {"snnone", "none"} or resolved.startswith("SNNone"):
+        resolved = f"SN{netuid}"
+    out["name"] = resolved
     if not out.get("symbol"):
         out["symbol"] = str(out["name"])[:6].upper() if out["name"] else f"SN{netuid}"
     return out

@@ -315,15 +315,30 @@ def nudge_signal_weight(
     signal_name: str,
     correct: bool,
     path: str = SOUL_MAP_PATH,
-) -> None:
+) -> Optional[float]:
     """Nudge a single signal weight up (correct) or down (wrong), clamped to [0.1, 2.0]."""
     signal_weights = load_signal_weights(path)
     horizon_weights = signal_weights.setdefault(horizon_type, {})
     delta = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
     current = horizon_weights.get(signal_name, 1.0)
+    before = float(current)
     new_val = max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, current + delta))
     horizon_weights[signal_name] = round(new_val, 4)
     save_signal_weights(signal_weights, path)
+    try:
+        from internal.learning.trail_bus import emit_weight_change
+
+        emit_weight_change(
+            f"{horizon_type}:{signal_name}",
+            before=before,
+            after=float(new_val),
+            reason="signal_resolve",
+            correct=correct,
+            extra={"horizon_type": horizon_type, "signal_name": signal_name},
+        )
+    except Exception:
+        pass
+    return float(new_val)
 
 
 def load_impact_strength(path: Optional[str] = None) -> float:

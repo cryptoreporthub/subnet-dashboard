@@ -1628,7 +1628,18 @@ def score_subnet_for_hour(
     except Exception:
         mom_scale = 1.0
     momentum_boost = max(-0.10, min(0.10, (chg24 / 100.0) * mom_scale))
-    total = round((weighted + momentum_boost) * 100, 2)
+    try:
+        from internal.council.memory_scoring import (
+            disposition_score_adjustment,
+            scenario_outcome_adjustment,
+        )
+
+        memory_adj = disposition_score_adjustment(sn) + scenario_outcome_adjustment(
+            sn, market_context
+        )
+    except Exception:
+        memory_adj = 0.0
+    total = round((weighted + momentum_boost) * 100 + memory_adj, 2)
     total = min(100.0, max(0.0, total))
 
     confidence = _compute_confidence(sn, indicators, experts)
@@ -1710,7 +1721,18 @@ def score_subnet_for_day(
     flow_boost = max(-0.05, min(0.08, relative_flow(sn) * 0.15)) * strength
     # Large caps stay eligible but score dampens vs mid/small for the same signals.
     size_tilt = max(-0.06, min(0.06, (impact_sensitivity(sn) - 1.0) * 0.04)) * strength
-    total = round((weighted + value_boost + flow_boost + size_tilt) * 100, 2)
+    try:
+        from internal.council.memory_scoring import (
+            disposition_score_adjustment,
+            scenario_outcome_adjustment,
+        )
+
+        memory_adj = disposition_score_adjustment(sn) + scenario_outcome_adjustment(
+            sn, market_context
+        )
+    except Exception:
+        memory_adj = 0.0
+    total = round((weighted + value_boost + flow_boost + size_tilt) * 100 + memory_adj, 2)
     total = min(100.0, max(0.0, total))
 
     confidence = _compute_confidence(sn, indicators, experts)
