@@ -37,8 +37,9 @@
     var hold = Number(summary.hold_tao_pnl_pct) || 0;
     var excess = Number(summary.excess_vs_hold_tao_pct);
     if (isNaN(excess)) excess = total - hold;
+    var extreme = Math.abs(total) > 200 || Math.abs(excess) > 200;
 
-    return (
+    var html =
       '<div class="paper-portfolio__compare" role="group" aria-label="P&amp;L vs hold TAO">' +
       '<div class="paper-portfolio__kpi">' +
       '<span class="paper-portfolio__lbl">Council P&amp;L</span>' +
@@ -69,8 +70,12 @@
       String(summary.total_closed || 0) +
       " closed" +
       (summary.open_positions ? " · " + summary.open_positions + " open" : "") +
-      "</p>"
-    );
+      "</p>";
+    if (extreme) {
+      html +=
+        '<p class="paper-portfolio__note">Sum of direction-graded paper % moves — not compounded dollar P&amp;L.</p>';
+    }
+    return html;
   }
 
   function renderPositions(closed, open) {

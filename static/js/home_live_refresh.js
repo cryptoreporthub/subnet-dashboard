@@ -243,9 +243,9 @@
     body.innerHTML = html;
   }
 
-  function patchHero(subnets) {
+  function patchHero(subnets, meta) {
     if (window.__cockpitHome && typeof window.__cockpitHome.renderHero === "function") {
-      window.__cockpitHome.renderHero(subnets);
+      window.__cockpitHome.renderHero(subnets, meta);
     }
   }
 
@@ -264,7 +264,8 @@
         patchStoryStrip(buildStoryStrip(results[1].value.resolved || []));
       }
       if (results[2].status === "fulfilled") {
-        patchHero((results[2].value && results[2].value.subnets) || []);
+        var subPayload = results[2].value || {};
+        patchHero(subPayload.subnets || [], subPayload.meta || {});
       }
     } catch (e) {
       console.warn("[home_live_refresh] tick failed", e);

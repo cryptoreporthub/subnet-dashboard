@@ -2,6 +2,8 @@
 (function () {
   "use strict";
 
+  window.SimiLearning = window.SimiLearning || { stats: null, trust_banner: null };
+
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -29,14 +31,42 @@
     host.innerHTML = html;
   }
 
+  function cacheStats(stats, tb) {
+    window.SimiLearning.stats = stats || null;
+    window.SimiLearning.trust_banner = tb || null;
+  }
+
+  function applyPayload(payload) {
+    if (!payload) return;
+    var stats = payload.data || payload;
+    var tb = stats.trust_banner;
+    if (!tb && payload.trust_banner) {
+      tb = payload.trust_banner;
+      stats = Object.assign({}, stats, { trust_banner: tb });
+    }
+    if (tb) {
+      cacheStats(stats, tb);
+      renderTrustBanner(tb);
+    }
+  }
+
+  function fetchJson(url) {
+    return fetch(url).then(function (r) {
+      return r.ok ? r.json() : null;
+    });
+  }
+
   function loadTrustBanner() {
-    fetch("/api/learning/stats")
-      .then(function (r) {
-        return r.ok ? r.json() : null;
-      })
+    fetchJson("/api/learning/stats")
       .then(function (payload) {
-        var tb = (payload && payload.data && payload.data.trust_banner) || (payload && payload.trust_banner);
-        if (tb) renderTrustBanner(tb);
+        if (payload) {
+          applyPayload(payload);
+          return;
+        }
+        return fetchJson("/api/learning-metrics");
+      })
+      .then(function (fallback) {
+        if (fallback) applyPayload(fallback);
       })
       .catch(function () {});
   }

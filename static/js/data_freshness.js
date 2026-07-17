@@ -1,8 +1,9 @@
-/** B1 UI — poll GET /api/data-freshness and update the header badge (audit #1). */
+/** B1 UI — poll GET /api/data-freshness; sync header badge + LIVE pill (§27-1). */
 (function () {
   'use strict';
 
   var BADGE_ID = 'dataFreshnessBadge';
+  var PILL_ID = 'liveFeedPill';
 
   function formatAge(seconds) {
     if (seconds == null || seconds < 0) return null;
@@ -18,8 +19,39 @@
     el.setAttribute('title', 'On-chain subnet feed freshness (/api/data-freshness)');
   }
 
+  function applyLivePill(state) {
+    var el = document.getElementById(PILL_ID);
+    if (!el) return;
+    var label = 'LIVE';
+    var cls = 'live-pill live-pill--live';
+    if (state === 'stale') {
+      label = 'STALE';
+      cls = 'live-pill live-pill--stale';
+    } else if (state === 'snapshot' || state === 'warming') {
+      label = 'SNAPSHOT';
+      cls = 'live-pill live-pill--snapshot';
+    } else if (state === 'unknown') {
+      label = 'OFFLINE';
+      cls = 'live-pill live-pill--offline';
+    }
+    el.className = cls;
+    el.innerHTML = '<span class="live-dot" aria-hidden="true"></span>' + label;
+  }
+
+  function feedState(payload) {
+    if (!payload || typeof payload !== 'object') return 'unknown';
+    if (payload.ci_or_test || !payload.sync_enabled) return 'snapshot';
+    if (!payload.last_sync) return 'warming';
+    if (payload.stale) return 'stale';
+    return 'live';
+  }
+
   function render(payload) {
     var el = document.getElementById(BADGE_ID);
+    var state = feedState(payload);
+
+    applyLivePill(state);
+
     if (!el) return;
 
     if (!payload || typeof payload !== 'object') {

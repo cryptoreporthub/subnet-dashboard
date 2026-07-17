@@ -95,8 +95,8 @@ def _judge_step(pick: Dict[str, Any]) -> Dict[str, Any]:
         detail = f"{label} led ({top_val:.2f})"
         if others:
             detail += f" · also {others}"
-        return _step("judges", "2 · Judges", f"Council blend → {label}", detail)
-    return _step("judges", "2 · Judges", "Four-expert council", "Quant · Hype · Dark horse · Technical")
+        return _step("judges", "2 · Council experts", f"Council blend → {label}", detail)
+    return _step("judges", "2 · Council experts", "Four-expert council", "Quant · Hype · Dark horse · Technical")
 
 
 def _council_step(payload: Dict[str, Any], pick: Dict[str, Any], subnet: Dict[str, Any]) -> Dict[str, Any]:

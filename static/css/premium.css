@@ -86,6 +86,30 @@ header.top {
   color: var(--accent-bright);
   box-shadow: 0 0 14px rgba(0, 255, 65, 0.25);
 }
+.live-pill--stale {
+  background: rgba(255, 140, 0, 0.08);
+  border-color: rgba(255, 140, 0, 0.45);
+  color: #ffb347;
+  box-shadow: none;
+}
+.live-pill--snapshot {
+  background: rgba(120, 140, 160, 0.12);
+  border-color: rgba(140, 160, 180, 0.35);
+  color: #9eb0c0;
+  box-shadow: none;
+}
+.live-pill--offline {
+  background: rgba(255, 80, 80, 0.08);
+  border-color: rgba(255, 80, 80, 0.35);
+  color: #ff8a8a;
+  box-shadow: none;
+}
+.live-pill--stale .live-dot,
+.live-pill--snapshot .live-dot,
+.live-pill--offline .live-dot {
+  background: currentColor;
+  box-shadow: none;
+}
 .live-dot {
   background: var(--accent-primary);
   box-shadow: 0 0 10px var(--accent-glow), 0 0 20px var(--accent-glow);

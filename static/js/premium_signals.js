@@ -128,6 +128,41 @@
   }
 
   window.__applySignalsPayload = applyPayload;
+  window.__renderSignalSummary = renderSummary;
+
+  function bootstrapFromApi() {
+    Promise.all([
+      fetch('/api/signals/summary', { headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; }),
+      fetch('/api/alerts?refresh_checks=false', { headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; }),
+      fetch('/api/signals?refresh=false', { headers: { Accept: 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; }),
+    ])
+      .then(function (results) {
+        var summary = results[0];
+        var alertsPayload = results[1];
+        var signalsPayload = results[2];
+        if (summary && summary.total_subnets != null) {
+          renderSummary(summary);
+        } else if (signalsPayload && signalsPayload.signals) {
+          renderSummary(summarizeSignals(signalsPayload.signals));
+        }
+        if (signalsPayload && signalsPayload.signals) {
+          renderSignals(signalsPayload.signals);
+        }
+        if (alertsPayload) {
+          renderAlerts(alertsPayload.alerts || []);
+        }
+      })
+      .catch(function () {});
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootstrapFromApi);
+  } else {
+    bootstrapFromApi();
+  }
 
   function setWsStatus(label) {
     if (wsStatus) wsStatus.textContent = label;

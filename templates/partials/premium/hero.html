@@ -22,12 +22,12 @@
     </div>
     <div class="kpi-cell">
       <div class="k">Top Gainer</div>
-      <div class="v kpi-v-sm">{{ mi_top_gainer.name|default('—') if mi_top_gainer else '—' }}</div>
+      <div class="v kpi-v-sm">{% if mi_top_gainer %}<a href="/subnet/{{ mi_top_gainer.netuid|default(mi_top_gainer.id) }}" class="subnet-link">{{ mi_top_gainer.name|default('—') }}</a>{% else %}—{% endif %}</div>
       <div class="sub">{% if mi_top_gainer %}{{ "%+.2f"|format((mi_top_gainer.price_change_24h|default(0))|float) }}% · 24h{% else %}—{% endif %}</div>
     </div>
     <div class="kpi-cell">
       <div class="k">Top Loser</div>
-      <div class="v kpi-v-sm">{{ mi_top_loser.name|default('—') if mi_top_loser else '—' }}</div>
+      <div class="v kpi-v-sm">{% if mi_top_loser %}<a href="/subnet/{{ mi_top_loser.netuid|default(mi_top_loser.id) }}" class="subnet-link">{{ mi_top_loser.name|default('—') }}</a>{% else %}—{% endif %}</div>
       <div class="sub">{% if mi_top_loser %}{{ "%+.2f"|format((mi_top_loser.price_change_24h|default(0))|float) }}% · 24h{% else %}—{% endif %}</div>
     </div>
     <div class="kpi-cell">

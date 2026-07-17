@@ -133,12 +133,30 @@
         el.innerHTML = skeletonHtml(3);
       }
     });
-    document.querySelectorAll('.empty').forEach(function (el) {
-      if (el.closest('#section-daily-pick, .council-stage')) return;
-      if (!el.querySelector('.hydrate-skeleton')) {
-        el.innerHTML = skeletonHtml(2);
+  }
+
+  function normalizeLearningStats(payload) {
+    if (!payload) return null;
+    if (payload.data && typeof payload.data === 'object') return payload.data;
+    if (payload.trust_banner) return payload;
+    return null;
+  }
+
+  async function loadLearningStats() {
+    if (window.SimiLearning && window.SimiLearning.stats) {
+      return window.SimiLearning.stats;
+    }
+    try {
+      var payload = await fetchJsonTimeout('/api/learning/stats', 8000);
+      return normalizeLearningStats(payload);
+    } catch (e) {
+      try {
+        var metrics = await fetchJsonTimeout('/api/learning-metrics', 8000);
+        return normalizeLearningStats(metrics);
+      } catch (e2) {
+        return null;
       }
-    });
+    }
   }
 
   function fetchJsonTimeout(url, ms) {
@@ -579,7 +597,22 @@
     root.innerHTML = html;
   }
 
-  function renderHero(subnets) {
+  function formatDataSourceLabel(meta, subnets) {
+    var primary = (meta && meta.source) || '';
+    if (!primary && subnets && subnets.length) {
+      var live = subnets.filter(function (sn) {
+        return sn.live || String(sn.source || '').toLowerCase() === 'blockmachine';
+      }).length;
+      primary = live > 0 ? 'blockmachine' : (subnets[0].source || 'registry');
+    }
+    primary = String(primary || 'registry').toLowerCase();
+    if (primary === 'blockmachine') return 'BLOCKMACHINE';
+    if (primary === 'taomarketcap') return 'TAOMARKETCAP';
+    if (primary === 'taostats') return 'TAOSTATS';
+    return primary.toUpperCase();
+  }
+
+  function renderHero(subnets, meta) {
     if (!subnets || !subnets.length) return;
     var gainers = 0;
     var losers = 0;
@@ -597,6 +630,8 @@
         apyN += 1;
       }
     });
+    var sourceLabel = formatDataSourceLabel(meta, subnets);
+    var sourceSub = sourceLabel === 'BLOCKMACHINE' ? 'on-chain feed' : 'live feed';
     replaceEmptyIn(
       'section-hero',
       '<div class="kpi-grid" style="grid-template-columns: repeat(6, 1fr);">' +
@@ -604,11 +639,11 @@
       '<div class="sub">' + gainers + ' gainers / ' + losers + ' losers</div></div>' +
       '<div class="kpi-cell"><div class="k">Avg 24h</div><div class="v">' + fmtSigned(chgSum / subnets.length) + '</div><div class="sub">24h change</div></div>' +
       '<div class="kpi-cell"><div class="k">Avg APY</div><div class="v">' + (apyN ? fmt(apySum / apyN, 2) : '—') + '%</div><div class="sub">stake yield</div></div>' +
-      '<div class="kpi-cell"><div class="k">Data</div><div class="v" style="font-size:15px;">TAOMARKETCAP</div><div class="sub">live feed</div></div>' +
+      '<div class="kpi-cell"><div class="k">Data</div><div class="v" style="font-size:15px;">' + sourceLabel + '</div><div class="sub">' + sourceSub + '</div></div>' +
       '</div>'
     );
     document.querySelectorAll('.src-tag b').forEach(function (el) {
-      el.textContent = 'TAOMARKETCAP';
+      el.textContent = sourceLabel;
     });
   }
 
@@ -830,17 +865,22 @@
     if (document.documentElement.dataset.hydrate !== '1') return;
     showHydrateSkeletons();
 
+    var learningPromise = loadLearningStats();
+    var signalsSummaryPromise = fetchJsonTimeout('/api/signals/summary', 8000).catch(function () { return null; });
+    var alertsPromise = fetchJsonTimeout('/api/alerts?refresh_checks=false', 8000).catch(function () { return null; });
+
     var results = await Promise.allSettled([
       fetchJsonTimeout('/api/simivision', 12000),
       fetchJsonTimeout('/api/top-picks', 25000),
       fetchJsonTimeout('/api/daily-pick', 15000),
       fetchJsonTimeout('/api/mindmap/trail?limit=20', 12000),
-      fetchJsonTimeout('/api/learning/stats', 8000),
+      learningPromise,
       fetchJsonTimeout('/api/subnets', 15000),
       fetchJsonTimeout('/api/signals?refresh=false', 15000),
-      fetchJsonTimeout('/api/alerts?refresh_checks=false', 8000),
+      alertsPromise,
       fetchJsonTimeout('/api/cockpit/sections', 20000),
       fetchJsonTimeout('/api/indicators-convergence', 12000),
+      signalsSummaryPromise,
     ]);
 
     var hourPicks = [];
@@ -873,14 +913,18 @@
       trail = results[3].value.trail || [];
       renderTrail(trail);
     }
-    if (results[4].status === 'fulfilled') {
-      var stats = results[4].value.data || {};
+    if (results[4].status === 'fulfilled' && results[4].value) {
+      var stats = results[4].value;
       renderKpi(stats);
       renderCouncilWeights(stats.expert_weights || {});
+      if (stats.trust_banner && window.SimiTrustBanner && window.SimiTrustBanner.render) {
+        window.SimiTrustBanner.render(stats.trust_banner);
+      }
     }
     if (results[5].status === 'fulfilled') {
-      subnets = results[5].value.subnets || [];
-      renderHero(subnets);
+      var subPayload = results[5].value || {};
+      subnets = subPayload.subnets || [];
+      renderHero(subnets, subPayload.meta || {});
       renderStaking(subnets);
       renderUndervalued(subnets);
       renderRadar(subnets);
@@ -888,10 +932,18 @@
     if (results[9].status === 'fulfilled') {
       renderIndicators((results[9].value.subnets) || []);
     }
-    if (results[6].status === 'fulfilled') {
-      var sigPayload = results[6].value;
+    if (results[6].status === 'fulfilled' || results[7].status === 'fulfilled' || results[10].status === 'fulfilled') {
+      var sigPayload = results[6].status === 'fulfilled' ? results[6].value : {};
       var alertsPayload = results[7].status === 'fulfilled' ? results[7].value : {};
-      renderSignals(sigPayload.signals || [], (alertsPayload.alerts) || []);
+      var summaryPayload = results[10].status === 'fulfilled' ? results[10].value : null;
+      if (summaryPayload && summaryPayload.total_subnets != null && typeof window.__renderSignalSummary === 'function') {
+        window.__renderSignalSummary(summaryPayload);
+      }
+      if (typeof window.__applySignalsPayload === 'function') {
+        window.__applySignalsPayload(sigPayload.signals || [], (alertsPayload.alerts) || []);
+      } else {
+        renderSignals(sigPayload.signals || [], (alertsPayload.alerts) || []);
+      }
     }
     if (results[8].status === 'fulfilled') {
       renderCockpitSections(results[8].value.sections || []);
@@ -902,13 +954,8 @@
     console.log('[cockpit_hydrate] panels updated from APIs');
     connectCockpitStream();
 
-    // Defer heavy judge scoring so /health stays responsive on single-worker Fly.
-    try {
-      var judgesRes = await fetchJsonTimeout('/api/judges', 30000);
-      renderJudges(judgesRes.judges || []);
-    } catch (e) {
-      console.warn('[cockpit_hydrate] judges panel deferred load failed', e);
-    }
+    // §27-3a: league-table /api/judges demoted off home hydrate — Living Focus uses /api/judges/{focus}.
+    // Pro drawer judges panel loads via premium_judges.js when opened.
     try {
       var btRes = await fetchJsonTimeout('/api/backtest?limit=120', 12000);
       renderBacktest(btRes);

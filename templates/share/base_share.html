@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ page_title }}</title>
+  <meta name="description" content="{{ page_description }}">
+  <link rel="canonical" href="{{ page_url }}">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="{{ page_url }}">
+  <meta property="og:title" content="{{ page_title }}">
+  <meta property="og:description" content="{{ page_description }}">
+  <meta name="twitter:card" content="summary">
+  <meta name="theme-color" content="#0a0f0c">
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="/static/css/council_first.css">
+  <link rel="stylesheet" href="/static/css/share_pages.css">
+</head>
+<body class="share-page council-first-theme">
+  <header class="share-page__header">
+    <a href="/" class="share-page__home">← SimiVision Council</a>
+  </header>
+  <main class="share-page__main">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

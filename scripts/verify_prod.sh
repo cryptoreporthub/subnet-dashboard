@@ -69,6 +69,25 @@ print('oracle win_rate:', o.get('win_rate'))
 print('oracle filtered win_rate:', flt.get('win_rate'), 'n=', flt.get('n'), 'min_score=', flt.get('min_score'))
 "
 
+echo "== data freshness + subnets =="
+curl -fsS "$BASE/api/data-freshness" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print('source:', d.get('source'))
+print('subnet_count:', d.get('subnet_count'))
+print('stale:', d.get('stale'))
+"
+curl -fsS "$BASE/api/subnets?limit=1" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+meta=d.get('meta') or {}
+subs=d.get('subnets') or []
+print('meta.source:', meta.get('source'))
+print('meta.total:', meta.get('total'))
+assert meta.get('total', 0) > 0, 'subnet count must be > 0'
+"
+
+
 echo "OK"
 
 if [ -n "${CUSTOM_DOMAIN:-}" ]; then

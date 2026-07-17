@@ -1,0 +1,49 @@
+{% extends "share/base_share.html" %}
+{% block content %}
+<article class="subnet-page">
+  <header class="subnet-page__head">
+    <h1 class="subnet-page__title">{{ name }}</h1>
+    <p class="subnet-page__meta">SN{{ netuid }} · source {{ report.source|default('registry') }}</p>
+  </header>
+
+  {% if drivers.headline %}
+  <section class="subnet-page__drivers">
+    <h2 class="subnet-page__section">Market drivers</h2>
+    <p class="subnet-page__headline">{{ drivers.headline }}</p>
+    {% for line in drivers.why or [] %}
+    <p class="subnet-page__why">{{ line }}</p>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if judges %}
+  <section class="subnet-page__judges">
+    <h2 class="subnet-page__section">Council judges</h2>
+    <div class="subnet-page__judge-grid">
+      {% for lane in ['oracle', 'echo', 'pulse'] %}
+      {% set j = judges.get(lane) or {} %}
+      <div class="subnet-page__judge">
+        <span class="subnet-page__judge-name">{{ lane|title }}</span>
+        <span class="subnet-page__judge-score">{{ j.score|default('—') }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% if consensus %}
+    <p class="subnet-page__consensus">
+      Consensus: <strong>{{ consensus.verdict|default('neutral') }}</strong>
+      {% if consensus.contested %} · <em>Council split</em>{% endif %}
+    </p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <section class="subnet-page__digest">
+    <h2 class="subnet-page__section">Full report</h2>
+    <div class="subnet-page__body">{{ digest_html|safe }}</div>
+  </section>
+
+  <p class="subnet-page__cta">
+    <a href="/?focus={{ netuid }}#section-living-focus" class="btn-secondary">Open in Living Focus</a>
+  </p>
+</article>
+{% endblock %}

@@ -7,22 +7,22 @@
       <h3>Subnet sellers</h3>
       <label>Netuid <input type="number" id="inv-netuid" min="0" max="256" value="82" class="inv-input" /></label>
       <button type="button" id="inv-sellers-btn" class="btn-secondary">Top sellers</button>
-      <pre id="inv-sellers-out" class="inv-out" aria-live="polite">—</pre>
+      <div id="inv-sellers-out" class="inv-out" aria-live="polite">—</div>
     </div>
 
     <div class="investigation-card">
       <h3>Wallet lookup</h3>
       <label>Coldkey <input type="text" id="inv-wallet" placeholder="5H6h1PUD…" class="inv-input inv-wallet" /></label>
       <button type="button" id="inv-wallet-btn" class="btn-secondary">Trace wallet</button>
-      <pre id="inv-wallet-out" class="inv-out" aria-live="polite">—</pre>
+      <div id="inv-wallet-out" class="inv-out" aria-live="polite">—</div>
     </div>
 
     <div class="investigation-card">
       <h3>Chat presets</h3>
       <div class="inv-presets">
-        <button type="button" class="btn-secondary inv-preset" data-prompt="Who is selling subnet 82? Is it multiple wallets?">SN82 sellers</button>
-        <button type="button" class="btn-secondary inv-preset" data-prompt="Trace wallet activity and transfers for the address I provide.">Trace wallet</button>
-        <button type="button" class="btn-secondary inv-preset" data-prompt="Is the subnet owner among the recent sellers on this subnet?">Owner vs sellers</button>
+        <button type="button" class="btn-secondary inv-preset" data-action="sellers" data-prompt="Who is selling {name} (SN{netuid})?">Sellers: focus SN</button>
+        <button type="button" class="btn-secondary inv-preset" data-action="wallet" data-prompt="Trace wallet activity for the address I provide on {name}.">Trace wallet</button>
+        <button type="button" class="btn-secondary inv-preset" data-action="chat" data-prompt="Is the subnet owner among recent sellers on SN{netuid}?">Owner vs sellers</button>
       </div>
     </div>
 

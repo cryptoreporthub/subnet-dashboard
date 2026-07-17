@@ -1,33 +1,36 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-17T00:32:00Z — **§17–§26 complete**  
-**main:** `f64820e`
+**Last updated:** 2026-07-17T14:45:00Z — **§27 automation active**  
+**main:** `0fd96fe` · §27-1 PR #310 open
 
 ## Ditto boot (read first)
 
 1. **`cursor-agents-communication/STATUS.md`**
-2. **`cursor-agents-communication/s26-post-merge-hygiene-plan.md`** (done)
-3. This file
+2. **`cursor-agents-communication/s27-automated-build-plan.md`** (active queue)
+3. **`cursor-agents-communication/s27-trust-and-brain-plan.md`** (spec)
 
 ## Gate Status
 
 | Phase | Status |
 |-------|--------|
 | **§17–§26** | ✅ complete |
+| **§27** | 🟡 **automated build** — unattended queue |
 
-## Ready for next work
+## Active queue (`s27-automated-build-plan.md`)
 
-| Item | State |
-|------|--------|
-| **Merge #304** | CI → merge §26 hygiene |
-| **Fly deploy** | Human/CI — picks up #298–#304 |
-| **Prod resolver tick** | Human — clears `brain_ui_ready` expired backlog |
-| **F7 custom domain** | Human DNS |
+| # | Slice | State |
+|---|-------|-------|
+| §27-1 | Trust shell | PR #310 |
+| §27-2 | Data pipeline | next |
+| §27-3a | Living Focus | pending |
+| §27-3b | Prove it | pending |
+| §27-3c | Public Self-Update | pending |
+| §27-4 | Learning hygiene | pending |
 
-**Skip:** A1b bot · S5 Discord/X (need creds)
+**Then:** §28 deferred until product feels finished.
 
 ## Rules
 
 - Board + STATUS override stale memory artifacts.
 - Honest-empty > fake data (RF-2).
-- Trust banner from `trust_banner` only.
+- One slice per agent turn · token-save per plan.

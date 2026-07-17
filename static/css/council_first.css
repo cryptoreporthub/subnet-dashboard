@@ -1564,3 +1564,40 @@ button.home-cta {
   font-style: italic;
   font-size: 12px;
 }
+
+/* §27-3 — Living Focus */
+.living-focus {
+  margin: 24px 0;
+  border: 1px solid rgba(0, 255, 65, 0.15);
+  border-radius: 12px;
+  padding: 16px 20px;
+  background: rgba(0, 20, 10, 0.35);
+}
+.living-focus__title { font-size: 1.25rem; margin: 0 0 4px; }
+.living-focus__sub { font-size: 13px; color: var(--stage-muted, #8a9a8e); margin: 0 0 12px; }
+.living-focus__header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.living-focus__name { margin: 0; font-size: 1.1rem; }
+.living-focus__sn { font-size: 0.85em; color: var(--stage-muted); }
+.living-focus__contention { color: #ffb347; font-size: 13px; margin: 0 0 10px; }
+.living-focus__judges { display: grid; gap: 8px; margin: 12px 0; }
+.living-focus__judge { display: grid; grid-template-columns: 72px 48px 1fr; align-items: center; gap: 8px; font-size: 12px; }
+.living-focus__judge--contested .living-focus__judge-score { color: #ffb347; }
+.living-focus__judge-bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.08); position: relative; overflow: hidden; }
+.living-focus__judge-bar::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--pct, 50) * 1%); background: rgba(0, 255, 65, 0.55); }
+.living-focus__chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.living-focus__chip { font-size: 11px; padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(138,154,142,0.35); }
+.living-focus__chip--warn { border-color: rgba(255,179,71,0.5); color: #ffb347; }
+.living-focus__switcher { margin-top: 14px; }
+.living-focus__switcher-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.living-focus__switch { font-size: 12px; padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(0,255,65,0.25); background: transparent; color: inherit; cursor: pointer; }
+.living-focus__switch--active { background: rgba(0,255,65,0.12); }
+.living-focus__cta { margin-top: 12px; }
+.living-focus__learn-strip { margin-top: 14px; padding: 12px; border-radius: 8px; border: 1px dashed rgba(0,255,65,0.25); font-size: 13px; }
+.living-focus__learn-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.living-focus__empty, .living-focus__learn-empty { color: var(--stage-muted); font-size: 13px; }
+
+/* §27-3b — investigation tables */
+.inv-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.inv-table th, .inv-table td { padding: 6px 8px; border-bottom: 1px solid rgba(138,154,142,0.2); text-align: left; }
+.inv-banner, .inv-empty, .inv-loading { font-size: 13px; color: var(--stage-muted); margin: 0; }
+.inv-out { max-height: 280px; overflow: auto; font-size: 12px; }
