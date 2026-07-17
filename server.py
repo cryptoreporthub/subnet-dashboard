@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import asyncio
+import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -185,6 +186,17 @@ async def _lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("Live subnets sync failed to start: %s", exc)
     try:
+        from internal.subnets.feed import warm_subnet_feed
+
+        threading.Thread(
+            target=warm_subnet_feed,
+            daemon=True,
+            name="subnet-feed-warmup",
+        ).start()
+        logger.info("Subnet feed warmup thread started")
+    except Exception as exc:
+        logger.warning("Subnet feed warmup failed to start: %s", exc)
+    try:
         from internal.council.resolver_scheduler import start_prediction_resolver_scheduler
 
         start_prediction_resolver_scheduler(immediate=True)
@@ -336,37 +348,7 @@ def load_data(filename):
     return {}
 
 
-def _subnet_feed_meta(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Infer primary feed source for /api/subnets meta (§27-2)."""
-    if not rows:
-        return {"source": "registry", "sources": ["registry"]}
-    live_bm = sum(
-        1
-        for r in rows
-        if r.get("live") or str(r.get("source") or "").lower() == "blockmachine"
-    )
-    if live_bm > 0:
-        sources = ["blockmachine"]
-        if any(
-            isinstance(r.get("sources"), list) and "taostats" in r["sources"] for r in rows
-        ):
-            sources.append("taostats")
-        if any(
-            isinstance(r.get("sources"), list) and "taomarketcap" in r["sources"] for r in rows
-        ) or live_bm < len(rows):
-            sources.append("taomarketcap")
-        return {"source": "blockmachine", "sources": sources}
-    tmc = sum(
-        1
-        for r in rows
-        if str(r.get("source") or "").lower() == "taomarketcap"
-        or (
-            isinstance(r.get("sources"), list) and "taomarketcap" in r["sources"]
-        )
-    )
-    if tmc > len(rows) // 2:
-        return {"source": "taomarketcap", "sources": ["taomarketcap", "registry"]}
-    return {"source": "registry", "sources": ["registry"]}
+from internal.subnets.feed import load_subnets_source, subnet_feed_meta as _subnet_feed_meta
 
 
 def _tag_subnet_row(row: Dict[str, Any], feed_meta: Dict[str, Any]) -> Dict[str, Any]:
@@ -383,25 +365,6 @@ def _tag_subnet_row(row: Dict[str, Any], feed_meta: Dict[str, Any]) -> Dict[str,
         else:
             item["sources"] = [primary]
     return item
-
-
-def _load_subnets_source():
-    """Return subnets for /api/subnets: live chain feed when available, else registry."""
-    try:
-        from fetchers.taomarketcap import get_all_subnets
-        from internal.subnet_names import enrich_subnet_rows
-
-        live = get_all_subnets()
-        if live:
-            return enrich_subnet_rows(live)
-    except Exception:
-        pass
-    try:
-        from internal.subnet_names import enrich_subnet_rows
-
-        return enrich_subnet_rows(list(load_data("config/registry.json").values()))
-    except Exception:
-        return list(load_data("config/registry.json").values())
 
 
 def _consensus_map():
@@ -716,7 +679,7 @@ def _list_subnets_sync(request: Request):
     from internal.subnet_names import enrich_subnet_row
 
     # Prefer live on-chain feed (blockmachine) with TMC overlay; fall back to registry.
-    source_rows = _load_subnets_source()
+    source_rows = load_subnets_source()
     feed_meta = _subnet_feed_meta(source_rows)
     items = []
     for s in source_rows:
@@ -794,7 +757,7 @@ def get_subnet(subnet_id: int):
         return JSONResponse(status_code=404, content={"error": "Subnet not found"})
     merged = enrich_subnet_row(dict(subnet_data), use_taostats=False)
     try:
-        live_rows = _load_subnets_source()
+        live_rows = load_subnets_source()
         for row in live_rows:
             if int(row.get("netuid", row.get("id", -1))) == subnet_id:
                 merged.update({k: v for k, v in row.items() if v not in (None, "")})

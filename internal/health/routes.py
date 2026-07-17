@@ -19,3 +19,11 @@ async def api_data_freshness():
 async def api_health_check():
     """JSON health probe mirroring plain-text ``/health``."""
     return {"status": "ok"}
+
+
+@health_router.get("/api/ops/readiness")
+async def api_ops_readiness():
+    """Single prod readiness probe: volume, scheduler, feed, creds (§33)."""
+    from internal.ops.readiness import build_readiness_report
+
+    return build_readiness_report()

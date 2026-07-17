@@ -74,10 +74,31 @@ curl -fsS "$BASE/api/data-freshness" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
 print('source:', d.get('source'))
+print('effective_source:', d.get('effective_source'))
 print('subnet_count:', d.get('subnet_count'))
+print('effective_total:', d.get('effective_total'))
 print('stale:', d.get('stale'))
 "
-curl -fsS "$BASE/api/subnets?limit=1" | python3 -c "
+
+echo "== ops readiness =="
+curl -fsS "$BASE/api/ops/readiness" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print('ready:', d.get('ready'))
+print('thin_ui_likely:', d.get('thin_ui_likely'))
+print('issues:', d.get('issues'))
+lr=d.get('learning') or {}
+print('graded:', lr.get('graded'))
+rs=d.get('resolver') or {}
+print('resolver_running:', rs.get('running'))
+sf=d.get('subnet_feed') or {}
+print('effective_source:', sf.get('effective_source'))
+print('likely_total:', sf.get('likely_total'))
+assert lr.get('graded', 0) > 0, 'graded picks must be > 0 on prod volume'
+assert sf.get('likely_total', 0) > 0, 'subnet feed must have rows'
+"
+
+curl -fsS --max-time 90 "$BASE/api/subnets?limit=1" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
 meta=d.get('meta') or {}
