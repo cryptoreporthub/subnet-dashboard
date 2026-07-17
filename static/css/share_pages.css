@@ -32,6 +32,13 @@
 .wallet-page__rug--medium { border-color: rgba(255,179,71,0.5); color: #ffb347; }
 .wallet-page__rug--low { border-color: rgba(138,154,142,0.35); color: #8a9a8e; }
 
+/* §29-10 — wallet→subnet flow SVG */
+.flow-svg { width: 100%; max-width: 360px; height: auto; margin: 0 0 12px; display: block; }
+.flow-svg__node { fill: rgba(0,255,65,0.2); stroke: rgba(0,255,65,0.55); stroke-width: 1.5; }
+.flow-svg__node--wallet { fill: rgba(0,200,255,0.15); stroke: rgba(0,200,255,0.5); }
+.flow-svg__edge { stroke: rgba(0,255,65,0.35); stroke-width: 2; }
+.flow-svg__label { fill: #8a9a8e; font-size: 10px; font-family: system-ui, sans-serif; }
+
 /* §28-4 — money-flow bars */
 .flow-graph { display: grid; gap: 8px; margin-top: 12px; }
 .flow-graph__row { display: grid; grid-template-columns: 56px 1fr 72px; align-items: center; gap: 10px; text-decoration: none; color: inherit; font-size: 12px; }

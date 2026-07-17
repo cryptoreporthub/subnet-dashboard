@@ -1,19 +1,19 @@
 # STATUS
 
-**Updated:** 2026-07-17T17:35:00Z  
-**main:** `27f7c61` (§30 Living Brain merged #314)  
-**active:** `cursor/post-s29-polish-c3fd` — §29-5…§29-9 polish  
-**plan:** `cursor-agents-communication/post-s29-automated-build-plan.md`
+**Updated:** 2026-07-17T18:30:00Z  
+**main:** `252161c`  
+**automation:** ✅ complete (#312 → #315)
 
-## Shipped on main (#314)
+## Shipped
 
-- Living Brain closure LB-1…LB-16
-- Master automated gameplan + audit docs
+- §27–§28: trust shell, shareable pages, command palette
+- §30: Living Brain (weights, trail, memory scoring, RF-2, shared feed)
+- §29: wallet rug flags, inv presets, pick feed, lazy pro judges, tests
 
-## In flight
+## Skipped
 
-- Wallet rug flags on share page
-- Investigation owner-check + ask presets
-- Pick paths via `load_pick_subnets()`
-- Pro drawer lazy judges panel
-- simivision_engine test debt cleanup
+- H1 custom domain (per user)
+
+## Open PRs closed
+
+- #313, #309 superseded
