@@ -1,27 +1,25 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-17T14:45:00Z  
-**main:** `0fd96fe`
+**Updated:** 2026-07-17T16:40:00Z  
+**main:** `6c9b057`
 
 ## One-line
 
-**§27 automated build active** — unattended queue through §27-4; §28 deferred.
+**Living Brain audit done** — closed weight→pick loop works; dispositions/scenarios/trail gaps block “learns everything.” §30 closure queue ready.
 
 ## Active plan
 
-**`s27-automated-build-plan.md`** — sequential §27-1 → §27-4, auto-continue on CI green.
+1. **`post-s30-living-brain-plan.md`** — connect memory → better advice  
+2. **`post-s29-automated-build-plan.md`** — polish / name integrity  
 
-| Slice | PR / state |
-|-------|------------|
-| §27-1 Trust shell | #310 open |
-| §27-2 Data pipeline | building |
-| §27-3a–c Living Focus + Prove it + Self-Update | queued |
-| §27-4 Learning hygiene | queued |
+## Audit
+
+**`living-brain-audit.md`** — what works, LB-1…LB-17 gaps, optimization target.
 
 ## Done
 
-§17–§26 complete · #306/#307 subnet names + investigation
+§17–§28 · trust shell · Living Focus shell · shareable pages · `nudge_expert`
 
-## Deferred
+## Human-only
 
-§28 shareable product · F7 DNS · A1b bot · S5 Discord
+F7 domain · Telegram bot · Discord · listener creds · email · Fly volume
