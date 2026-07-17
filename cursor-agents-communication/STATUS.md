@@ -2,7 +2,7 @@
 
 **Updated:** 2026-07-17T22:10:00Z  
 **active plan:** `s33-prod-readiness-plan.md` — **§33 complete**  
-**main:** `e25ed13` (hotfix PR pending)
+**main:** `930b8b9` — **all green on prod**
 
 ## Done
 
@@ -13,8 +13,7 @@
 
 ## Hotfix
 
-- Readiness `graded` used wrong engine field → trust_banner
-- `/api/subnets` re-enriched with `use_taostats=True` per row → 35s+ timeout on Fly
+- #322 merged: readiness graded + /api/subnets TaoStats storm — **verify_prod.sh OK on prod**
 
 ## Skipped
 

@@ -1,8 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-17T22:10:00Z  
-**main:** `e25ed13` + readiness hotfix pending  
-**§31–§33 complete**
+**Last updated:** 2026-07-17T22:16:00Z  
+**main:** `930b8b9` · **§31–§33 complete**
 
 ## Active
 
