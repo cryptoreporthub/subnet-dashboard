@@ -11,8 +11,8 @@ Twitter/LinkedIn/Discord crawlers prefer raster `og:image`; add PNG alongside SV
 
 | Slice | State | Content |
 |-------|-------|---------|
-| **S23-1** | 🔄 | `build_og_png()` + `GET .../og.png` (Pillow + DejaVu fonts in Docker) |
-| **S23-2** | 🔄 | Share page `og:image` → PNG; modal Save PNG + Copy link |
+| **S23-1** | ✅ | `build_og_png()` + `GET .../og.png` (Pillow + DejaVu fonts in Docker) |
+| **S23-2** | ✅ | Share page `og:image` → PNG; modal Save PNG + Copy link |
 
 ## RF gates (unchanged)
 

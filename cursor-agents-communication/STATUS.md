@@ -1,11 +1,11 @@
 # STATUS — subnet-dashboard (Ditto boot card)
 
-**Updated:** 2026-07-16T23:05:00Z  
-**main:** `4b51665` (#303 §25)
+**Updated:** 2026-07-17T00:30:00Z  
+**main:** `4b51665` (#303 §25) · **#304** §26 pending merge
 
 ## One-line
 
-**§21–§25 complete** — Living Brain, Post-Trust, PNG share, backlog batch, oracle tuning + hybrid cert scoring.
+**§21–§26 complete** — Living Brain through post-merge hygiene (docs, verify_prod, story-strip share).
 
 ## Done
 
@@ -17,10 +17,11 @@
 | **§23** | #301 (PNG OG share) |
 | **§24** | #302 (backlog batch) |
 | **§25** | #303 (N1 oracle + J4 hybrid cert) |
+| **§26** | #304 (post-merge hygiene) |
 
 ## Active plan
 
-**`cursor-agents-communication/s26-post-merge-hygiene-plan.md`** — doc sync, verify_prod filtered line, story-strip share links.
+None — queue clear. Next work needs human gates (F7 DNS, A1b bot, S5 Discord/X) or a new phase plan.
 
 ## Gate (RF-2 / RF-3)
 

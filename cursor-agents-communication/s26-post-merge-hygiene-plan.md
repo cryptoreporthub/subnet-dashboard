@@ -1,6 +1,6 @@
 # §26 Post-merge hygiene
 
-**Status:** in progress  
+**Status:** complete  
 **Updated:** 2026-07-16
 
 ## Slices

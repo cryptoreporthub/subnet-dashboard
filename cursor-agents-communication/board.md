@@ -1,27 +1,26 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-16T23:05:00Z — **§21–§25 complete · §26 hygiene in flight**  
-**main:** `4b51665`
+**Last updated:** 2026-07-17T00:30:00Z — **§17–§26 complete**  
+**main:** `4b51665` · **#304** pending merge
 
 ## Ditto boot (read first)
 
 1. **`cursor-agents-communication/STATUS.md`**
-2. **`cursor-agents-communication/s26-post-merge-hygiene-plan.md`**
-3. **`cursor-agents-communication/s25-calibration-oracle-plan.md`** (done)
-4. This file
+2. **`cursor-agents-communication/s26-post-merge-hygiene-plan.md`** (done)
+3. This file
 
 ## Gate Status
 
 | Phase | Status |
 |-------|--------|
-| **§17–§25** | ✅ complete |
-| **§26 Hygiene** | 🔄 doc sync + verify_prod + story-strip share |
+| **§17–§26** | ✅ complete |
 
 ## Ready for next work
 
 | Item | State |
 |------|--------|
-| **Fly deploy** | Human/CI — picks up #298–#303 |
+| **Merge #304** | CI → merge §26 hygiene |
+| **Fly deploy** | Human/CI — picks up #298–#304 |
 | **Prod resolver tick** | Human — clears `brain_ui_ready` expired backlog |
 | **F7 custom domain** | Human DNS |
 
