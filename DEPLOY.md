@@ -17,7 +17,8 @@ CI (`main` push) runs Deploy Guard (contract tests + static checks) then deploys
 | Endpoint | Expected |
 |----------|----------|
 | `GET /health` | `OK` |
-| `GET /api/data-freshness` | 200, `is_stale` fields |
+| `GET /api/data-freshness` | 200, `stale` + `effective_source` fields |
+| `GET /api/ops/readiness` | 200, `ready`, `issues`, resolver + feed probes |
 | `GET /api/calibration/status` | 200, weights + thresholds |
 | `GET /api/conviction-alerts/status` | 200, `enabled: true` (after Phase P) |
 | `GET /api/signal-hub/status` | 200 |
@@ -34,6 +35,28 @@ Runtime state lives on the Fly volume `data_volume` → `/app/data` (`soul_map.j
 ./scripts/verify_prod.sh
 # or: APP_BASE_URL=https://subnet-dashboard.fly.dev ./scripts/verify_prod.sh
 ```
+
+### Production looks thin (troubleshooting)
+
+Symptom: homepage feels empty, trust banner shows STALE, or daily pick is HOLD with no published LONG.
+
+**This is often honest product state, not a deploy failure.** Check one endpoint:
+
+```bash
+curl -fsS https://subnet-dashboard.fly.dev/api/ops/readiness | python3 -m json.tool
+```
+
+| Signal | Healthy | Thin but honest | Ops action |
+|--------|---------|-----------------|------------|
+| `learning.graded` | > 0 | 0 | Volume missing — confirm Fly `data_volume` mount at `/app/data` |
+| `resolver.running` | true | false | Resolver should boot in `server.py` lifespan; check `GET /api/predictions/resolver` |
+| `subnet_feed.effective_source` | blockmachine or taomarketcap | registry | Wait for blockmachine sync (~5 min) or TMC cache; machine needs 1GB (`fly.toml`) |
+| `daily_pick.action` | LONG + published | HOLD + candidate | Audit gate blocked pick — not a feed outage |
+| `taostats.configured` | true | false | `flyctl secrets set TAOSTATS_API_KEY=...` (investigation + richer names) |
+
+`/api/data-freshness` reports the **blockmachine cache file** (`data/live_subnets.json`). `/api/ops/readiness` also reports the **effective feed** (TMC SQLite cache + registry) so STALE badge + working subnets can coexist during warm-up.
+
+If `GET /api/subnets` times out, the app falls back to registry after `SUBNETS_LOAD_TIMEOUT_SECONDS` (default 25). Boot also runs a background subnet-feed warmup thread.
 
 ---
 

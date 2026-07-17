@@ -273,4 +273,14 @@ def live_data_freshness() -> Dict[str, Any]:
                 info["stale"] = age > MAX_STALE_SECONDS
     except Exception as exc:
         logger.debug("freshness read failed: %s", exc)
+    try:
+        from internal.subnets.feed import probe_feed_layers
+
+        probe = probe_feed_layers()
+        info["effective_source"] = probe.get("effective_source")
+        info["effective_total"] = probe.get("likely_total")
+        info["registry_count"] = probe.get("registry_count")
+        info["tmc_cache_count"] = (probe.get("tmc_cache") or {}).get("count", 0)
+    except Exception as exc:
+        logger.debug("effective feed probe failed: %s", exc)
     return info
