@@ -243,8 +243,11 @@
   }
 
   function renderDailyPick(payload) {
-    var host = document.getElementById('council-stage-body');
+    // §34-1: patch call host only — never wipe trust banner / CTAs in #council-stage-body
     if (!payload) return;
+    var host = document.getElementById('home-daily-call');
+    if (!host) host = document.getElementById('council-stage-body');
+    if (!host) return;
 
     var act = String(payload.action || 'HOLD').toUpperCase();
     if (act === 'LONG') act = 'BUY';
@@ -257,53 +260,32 @@
     var fc = confTier(finalConf != null ? finalConf : 0);
     var audit = (active && active.audit) || {};
     var concerns = (audit.concerns || []).slice(0, 4);
-    var patterns = (payload.rotation_summary && payload.rotation_summary.patterns) || [];
-    var topPat = patterns[0];
-    var regime = payload.regime ? String(payload.regime).toUpperCase() + ' REGIME' : '';
-
-    function actionBadges(mainAct, audited) {
-      var html =
-        '<div class="council-call__action">' +
-        '<span class="badge ' + recBadge(mainAct) + '">' + esc(mainAct) + '</span>';
-      if (audited && audit.approved) html += '<span class="hero-audit">AUDIT PASSED</span>';
-      if (audited && audit.approved === false) html += '<span class="hero-audit flagged">AUDIT FLAGGED</span>';
-      if (regime) html += '<span class="council-call__regime">' + esc(regime) + '</span>';
-      return html + '</div>';
-    }
+    var why =
+      (pick && pick.reasons && pick.reasons[0]) ||
+      (cand && cand.reasons && cand.reasons[0]) ||
+      payload.reason ||
+      '';
 
     var html;
     if (pick && (sn.name != null || sn.netuid != null)) {
-      var pred = pick.prediction || {};
-      var hz = pred.horizon_hours != null ? pred.horizon_hours : 4;
-      var predLine = pred.statement
-        ? (esc(pred.statement.charAt(0).toUpperCase() + pred.statement.slice(1)) +
-          (finalConf != null ? ' · <strong class="accent-bright">' + fc.conf + '% confidence</strong>' : ''))
-        : ('Council call' +
-          (finalConf != null ? ' at <strong class="accent-bright">' + fc.conf + '% confidence</strong>' : '') +
-          ' · resolve within ' + hz + ' hours');
       var reasons = (pick.reasons || []).slice(0, 3);
-      var impact = pick.impact || {};
       html =
-        '<div class="council-call">' +
-        actionBadges(act, true) +
+        '<div class="council-call home-job__call">' +
+        '<div class="council-call__action">' +
+        '<span class="badge ' + recBadge(act) + '">' + esc(act) + '</span>' +
+        (audit.approved ? '<span class="hero-audit">AUDIT PASSED</span>' : '') +
+        '</div>' +
         '<p class="council-call__name">' + esc(sn.name || pickName(pick)) + '</p>' +
         '<p class="council-call__meta">SN' + esc(sn.netuid != null ? sn.netuid : pickNetuid(pick)) +
-        ' · ' + esc(hz) + 'h resolve horizon</p>' +
-        '<p class="council-call__prediction">' + predLine +
-        (pick.score != null ? ' · score <b>' + fmt(pick.score, 1) + '</b>' : '') +
+        (sn.symbol ? ' · ' + esc(sn.symbol) : '') +
+        (finalConf != null ? ' · ' + fc.conf + '% confidence' : '') +
         '</p>' +
-        (reasons.length
+        (why ? '<p class="home-job__why">We expect: ' + esc(why) + '</p>' : '') +
+        (reasons.length > 1
           ? '<ul class="council-call__reasons">' +
-            reasons.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') +
+            reasons.slice(1).map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') +
             '</ul>'
           : '') +
-        (impact.summary
-          ? '<p class="council-call__impact">' + esc(impact.summary) + '</p>'
-          : '') +
-        '<div class="council-call__conviction">' +
-        '<div class="conviction-bar"><div class="conviction-fill ' + fc.tier + '" style="width:' + fc.conf + '%;"></div></div>' +
-        '<span class="council-call__conf ' + fc.tier + '">' + fc.conf + '</span></div>' +
-        (payload.reason ? '<p class="council-call__note">' + esc(payload.reason) + '</p>' : '') +
         (concerns.length
           ? '<ul class="council-call__concerns">' +
             concerns.map(function (c) { return '<li>' + esc(c) + '</li>'; }).join('') +
@@ -312,53 +294,23 @@
         '</div>';
     } else {
       html =
-        '<div class="council-call council-call--hold">' +
-        actionBadges('HOLD', false) +
-        '<p class="council-call__name">No audited long call</p>' +
-        '<p class="council-call__prediction">Council stance is <strong>HOLD</strong>' +
-        (payload.reason ? ' — ' + esc(payload.reason) : ' until a candidate clears the 45% audit gate.') +
-        '</p>';
+        '<div class="council-call council-call--hold home-job__call">' +
+        '<div class="council-call__action"><span class="badge badge-hold">HOLD</span></div>';
       if (sn.name != null || sn.netuid != null) {
-        var candPred = (cand && cand.prediction) || {};
-        var candReasons = ((cand && cand.reasons) || []).slice(0, 3);
-        var candImpact = (cand && cand.impact) || {};
         html +=
-          '<p class="council-call__candidate">Leading candidate under review: <strong>' +
-          esc(sn.name || ('SN' + sn.netuid)) +
-          '</strong>' +
-          (sn.netuid != null ? ' (SN' + esc(sn.netuid) + ')' : '') +
-          (finalConf != null ? ' · ' + fc.conf + '% confidence' : '') +
-          ' <span class="council-call__candidate-tag">not published</span></p>';
-        if (candPred.statement) {
-          html +=
-            '<p class="council-call__prediction council-call__prediction--candidate">Would-be call: ' +
-            esc(candPred.statement.charAt(0).toUpperCase() + candPred.statement.slice(1)) +
-            (candPred.horizon_hours != null ? ' · ' + esc(candPred.horizon_hours) + 'h horizon' : '') +
-            '</p>';
-        }
-        if (candReasons.length) {
-          html +=
-            '<ul class="council-call__reasons">' +
-            candReasons.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') +
-            '</ul>';
-        }
-        if (candImpact.summary) {
-          html += '<p class="council-call__impact">' + esc(candImpact.summary) + '</p>';
-        }
-        html +=
-          '<div class="council-call__conviction">' +
-          '<div class="conviction-bar"><div class="conviction-fill ' + fc.tier + '" style="width:' + fc.conf + '%;"></div></div>' +
-          '<span class="council-call__conf ' + fc.tier + '">' + fc.conf + '</span></div>';
-      }
-      if (topPat) {
-        html +=
-          '<p class="council-call__note">Rotation lens: ' +
-          esc(topPat.description || topPat.pattern || '') +
-          (topPat.confidence != null
-            ? ' (' + Math.round(Number(topPat.confidence) * 100) + '% pattern confidence)'
-            : '') +
+          '<p class="council-call__name">' + esc(sn.name || ('SN' + sn.netuid)) + '</p>' +
+          '<p class="council-call__meta">SN' + esc(sn.netuid) +
+          (sn.symbol ? ' · ' + esc(sn.symbol) : '') +
+          ' · candidate only' +
+          (finalConf != null ? ' · ' + fc.conf + '%' : '') +
           '</p>';
+      } else {
+        html += '<p class="council-call__name">No audited long call</p>';
       }
+      html +=
+        '<p class="home-job__why">' +
+        esc(why || 'Council waits until confidence clears the audit gate.') +
+        '</p>';
       if (concerns.length) {
         html +=
           '<ul class="council-call__concerns">' +
@@ -368,8 +320,17 @@
       html += '</div>';
     }
 
-    if (host) host.innerHTML = html;
-    else replaceEmptyIn('section-daily-pick', html);
+    host.innerHTML = html;
+
+    var pin = document.getElementById('habit-pin-btn');
+    if (pin && sn.netuid != null) {
+      pin.dataset.netuid = String(sn.netuid);
+      pin.disabled = false;
+      pin.removeAttribute('aria-disabled');
+    }
+    try {
+      document.dispatchEvent(new CustomEvent('home-daily-call-updated'));
+    } catch (e) {}
   }
 
   function renderPickCards(picks) {
@@ -867,36 +828,53 @@
     if (document.documentElement.dataset.hydrate !== '1') return;
     showHydrateSkeletons();
 
-    var learningPromise = loadLearningStats();
-    var signalsSummaryPromise = fetchJsonTimeout('/api/signals/summary', 8000).catch(function () { return null; });
-    var alertsPromise = fetchJsonTimeout('/api/alerts?refresh_checks=false', 8000).catch(function () { return null; });
+    // §34-1: paint critical panels first — don't wait for slow secondary APIs
+    var critical = await Promise.allSettled([
+      fetchJsonTimeout('/api/daily-pick', 15000),
+      loadLearningStats(),
+      fetchJsonTimeout('/api/simivision', 12000),
+      fetchJsonTimeout('/api/subnets?fields=' + encodeURIComponent(SUBNET_FIELDS), 15000),
+    ]);
+
+    if (critical[0].status === 'fulfilled') renderDailyPick(critical[0].value);
+    if (critical[1].status === 'fulfilled' && critical[1].value) {
+      var stats = critical[1].value;
+      renderKpi(stats);
+      renderCouncilWeights(stats.expert_weights || {});
+      if (stats.trust_banner && window.SimiTrustBanner && window.SimiTrustBanner.render) {
+        window.SimiTrustBanner.render(stats.trust_banner);
+      }
+    }
+    if (critical[2].status === 'fulfilled') {
+      renderSimivision((critical[2].value.data || {}).top || []);
+    }
+    var subnets = [];
+    if (critical[3].status === 'fulfilled') {
+      var subPayload = critical[3].value || {};
+      subnets = subPayload.subnets || [];
+      renderHero(subnets, subPayload.meta || {});
+      renderStaking(subnets);
+      renderUndervalued(subnets);
+      renderRadar(subnets);
+    }
 
     var results = await Promise.allSettled([
-      fetchJsonTimeout('/api/simivision', 12000),
       fetchJsonTimeout('/api/top-picks', 25000),
-      fetchJsonTimeout('/api/daily-pick', 15000),
       fetchJsonTimeout('/api/mindmap/trail?limit=20', 12000),
-      learningPromise,
-      fetchJsonTimeout('/api/subnets?fields=' + encodeURIComponent(SUBNET_FIELDS), 15000),
       fetchJsonTimeout('/api/signals?refresh=false', 15000),
-      alertsPromise,
+      fetchJsonTimeout('/api/alerts?refresh_checks=false', 8000).catch(function () { return null; }),
       fetchJsonTimeout('/api/cockpit/sections', 20000),
       fetchJsonTimeout('/api/indicators-convergence', 12000),
-      signalsSummaryPromise,
+      fetchJsonTimeout('/api/signals/summary', 8000).catch(function () { return null; }),
     ]);
 
     var hourPicks = [];
     var dayPicks = [];
     var trail = [];
-    var subnets = [];
 
     if (results[0].status === 'fulfilled') {
-      renderSimivision((results[0].value.data || {}).top || []);
-    }
-
-    if (results[1].status === 'fulfilled') {
-      hourPicks = results[1].value.hour_picks || [];
-      dayPicks = results[1].value.day_picks || [];
+      hourPicks = results[0].value.hour_picks || [];
+      dayPicks = results[0].value.day_picks || [];
     } else {
       try {
         var hourRes = await fetchJsonTimeout('/api/top-pick/hour', 15000);
@@ -907,37 +885,19 @@
         console.warn('[cockpit_hydrate] pick fallback failed', e);
       }
     }
-
-    if (results[2].status === 'fulfilled') renderDailyPick(results[2].value);
     renderHourDayPicks(hourPicks, dayPicks);
 
-    if (results[3].status === 'fulfilled') {
-      trail = results[3].value.trail || [];
+    if (results[1].status === 'fulfilled') {
+      trail = results[1].value.trail || [];
       renderTrail(trail);
     }
-    if (results[4].status === 'fulfilled' && results[4].value) {
-      var stats = results[4].value;
-      renderKpi(stats);
-      renderCouncilWeights(stats.expert_weights || {});
-      if (stats.trust_banner && window.SimiTrustBanner && window.SimiTrustBanner.render) {
-        window.SimiTrustBanner.render(stats.trust_banner);
-      }
-    }
     if (results[5].status === 'fulfilled') {
-      var subPayload = results[5].value || {};
-      subnets = subPayload.subnets || [];
-      renderHero(subnets, subPayload.meta || {});
-      renderStaking(subnets);
-      renderUndervalued(subnets);
-      renderRadar(subnets);
+      renderIndicators((results[5].value.subnets) || []);
     }
-    if (results[9].status === 'fulfilled') {
-      renderIndicators((results[9].value.subnets) || []);
-    }
-    if (results[6].status === 'fulfilled' || results[7].status === 'fulfilled' || results[10].status === 'fulfilled') {
-      var sigPayload = results[6].status === 'fulfilled' ? results[6].value : {};
-      var alertsPayload = results[7].status === 'fulfilled' ? results[7].value : {};
-      var summaryPayload = results[10].status === 'fulfilled' ? results[10].value : null;
+    if (results[2].status === 'fulfilled' || results[3].status === 'fulfilled' || results[6].status === 'fulfilled') {
+      var sigPayload = results[2].status === 'fulfilled' ? results[2].value : {};
+      var alertsPayload = results[3].status === 'fulfilled' ? results[3].value : {};
+      var summaryPayload = results[6].status === 'fulfilled' ? results[6].value : null;
       if (summaryPayload && summaryPayload.total_subnets != null && typeof window.__renderSignalSummary === 'function') {
         window.__renderSignalSummary(summaryPayload);
       }
@@ -947,8 +907,8 @@
         renderSignals(sigPayload.signals || [], (alertsPayload.alerts) || []);
       }
     }
-    if (results[8].status === 'fulfilled') {
-      renderCockpitSections(results[8].value.sections || []);
+    if (results[4].status === 'fulfilled') {
+      renderCockpitSections(results[4].value.sections || []);
     }
 
     updateGroupData(hourPicks, dayPicks, trail, subnets);
@@ -956,11 +916,11 @@
     console.log('[cockpit_hydrate] panels updated from APIs');
 
     window.HomeHydrateCache = {
-      dailyPick: results[2].status === 'fulfilled' ? results[2].value : null,
-      simivision: results[0].status === 'fulfilled' ? results[0].value : null,
+      dailyPick: critical[0].status === 'fulfilled' ? critical[0].value : null,
+      simivision: critical[2].status === 'fulfilled' ? critical[2].value : null,
       trail: trail,
       subnets: subnets,
-      subnetsMeta: results[5].status === 'fulfilled' ? ((results[5].value || {}).meta || {}) : {},
+      subnetsMeta: critical[3].status === 'fulfilled' ? ((critical[3].value || {}).meta || {}) : {},
       at: Date.now(),
     };
     document.dispatchEvent(new CustomEvent('home:hydrate-cache', {
@@ -969,8 +929,6 @@
 
     connectCockpitStream();
 
-    // §27-3a: league-table /api/judges demoted off home hydrate — Living Focus uses /api/judges/{focus}.
-    // Pro drawer judges panel loads via premium_judges.js when opened.
     try {
       var btRes = await fetchJsonTimeout('/api/backtest?limit=120', 12000);
       renderBacktest(btRes);
