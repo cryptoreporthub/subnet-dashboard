@@ -255,6 +255,15 @@
     if (!list || list.dataset.capsuleBound === "1") return;
     list.dataset.capsuleBound = "1";
     list.addEventListener("click", function (e) {
+      var shareBtn = e.target.closest(".story-strip__share");
+      if (shareBtn) {
+        e.stopPropagation();
+        var path = shareBtn.getAttribute("data-share-url");
+        if (path && navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(window.location.origin + path).catch(function () {});
+        }
+        return;
+      }
       var item = e.target.closest("[data-prediction-id]");
       if (!item) return;
       openCapsule(item.getAttribute("data-prediction-id"));

@@ -27,6 +27,9 @@
         {% for tag in row.tags %}<span class="story-strip__tag">{{ tag }}</span>{% endfor %}
       </span>
       {% endif %}
+      {% if row.share_page_url %}
+      <button type="button" class="story-strip__share" data-share-url="{{ row.share_page_url }}" aria-label="Copy share link" title="Copy share link">Copy link</button>
+      {% endif %}
     </li>
     {% endfor %}
   </ol>

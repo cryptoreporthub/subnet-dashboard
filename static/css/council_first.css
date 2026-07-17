@@ -1301,6 +1301,23 @@ button.home-cta {
   background: rgba(0, 255, 65, 0.06);
 }
 
+.story-strip__share {
+  justify-self: start;
+  margin-top: 2px;
+  padding: 2px 6px;
+  border: 1px solid rgba(138, 154, 142, 0.35);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--stage-muted);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.story-strip__share:hover {
+  color: var(--stage-ink);
+  border-color: rgba(0, 255, 65, 0.45);
+}
+
 /* §21 L12 — time-capsule modal */
 .time-capsule-modal {
   position: fixed;

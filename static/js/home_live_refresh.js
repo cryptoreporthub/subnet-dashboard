@@ -231,6 +231,12 @@
         });
         html += "</span>";
       }
+      if (row.share_page_url) {
+        html +=
+          '<button type="button" class="story-strip__share" data-share-url="' +
+          esc(row.share_page_url) +
+          '" aria-label="Copy share link" title="Copy share link">Copy link</button>';
+      }
       html += "</li>";
     });
     html += "</ol>";
