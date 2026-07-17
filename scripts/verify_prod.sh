@@ -98,6 +98,11 @@ d=json.load(sys.stdin)
 print('results:', len(d.get('results') or d.get('matches') or []))
 "
 
+echo "== shareable wallet page =="
+WALLET_FIXTURE="${WALLET_FIXTURE:-5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY}"
+curl -fsS "$BASE/wallet/$WALLET_FIXTURE" | head -c 200 >/dev/null
+echo "wallet page OK"
+
 echo "OK"
 
 if [ -n "${CUSTOM_DOMAIN:-}" ]; then

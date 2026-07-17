@@ -25,6 +25,18 @@
       {% endfor %}
     </div>
     {% endif %}
+    {% if exposure|length >= 1 %}
+    <svg class="flow-svg" viewBox="0 0 360 100" role="img" aria-label="Wallet to top subnet flows">
+      <circle cx="28" cy="50" r="14" class="flow-svg__node flow-svg__node--wallet"/>
+      <text x="28" y="78" class="flow-svg__label" text-anchor="middle">Wallet</text>
+      {% for row in exposure[:3] %}
+      {% set x = 120 + loop.index0 * 100 %}
+      <line x1="42" y1="50" x2="{{ x - 16 }}" y2="50" class="flow-svg__edge"/>
+      <circle cx="{{ x }}" cy="50" r="12" class="flow-svg__node"/>
+      <text x="{{ x }}" y="78" class="flow-svg__label" text-anchor="middle">SN{{ row.netuid }}</text>
+      {% endfor %}
+    </svg>
+    {% endif %}
     <div class="flow-graph">
       {% for row in exposure %}
       <a class="flow-graph__row" href="/subnet/{{ row.netuid }}" title="SN{{ row.netuid }}">
