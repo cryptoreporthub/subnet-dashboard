@@ -2,7 +2,7 @@
 <section class="row" id="section-radar" aria-labelledby="radar-title">
   <div class="section-label">Radar</div>
   <h2 class="section-title" id="radar-title">Undervalued Overlay Radar</h2>
-  <p class="section-sub">Five-axis radar comparing yield, momentum, emission, social, and composite undervalued score.</p>
+  <p class="section-sub">Five-axis radar comparing yield, momentum, emission, social, and composite undervalued score. <span class="heuristic-tag">Heuristic · /api/subnets</span></p>
   {% set radar_rows = sn_list|sort(attribute='emission', reverse=true)|list %}
   {% if radar_rows|length >= 3 %}
   {% set top3 = radar_rows[:3] %}

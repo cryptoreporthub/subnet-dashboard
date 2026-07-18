@@ -1,5 +1,5 @@
 {# U2 — compact timeline of recent pick outcomes (§16) #}
-<section class="story-strip wrap-pad" id="section-story-strip" aria-labelledby="story-strip-title">
+<section class="story-strip story-strip--prominent wrap-pad" id="section-story-strip" aria-labelledby="story-strip-title">
   {% set strip = story_strip if story_strip is mapping else {} %}
   {% set rows = strip.items if strip.items is iterable and strip.items is not string else [] %}
   <div class="story-strip__head">

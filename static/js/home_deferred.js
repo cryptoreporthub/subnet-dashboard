@@ -37,6 +37,10 @@
 
   function loadScript(src) {
     if (loaded[src]) return loaded[src];
+    if (document.querySelector('script[src="' + src + '"]')) {
+      loaded[src] = Promise.resolve();
+      return loaded[src];
+    }
     loaded[src] = new Promise(function (resolve, reject) {
       var el = document.createElement('script');
       el.src = src;

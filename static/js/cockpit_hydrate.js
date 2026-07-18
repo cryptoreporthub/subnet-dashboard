@@ -331,6 +331,34 @@
     try {
       document.dispatchEvent(new CustomEvent('home-daily-call-updated'));
     } catch (e) {}
+    renderStageWhyNot(sn.netuid, act);
+  }
+
+  function renderStageWhyNot(netuid, action) {
+    var panel = document.getElementById('home-stage-why-not');
+    if (!panel) return;
+    if (netuid == null || String(action || '').toUpperCase() === 'LONG' || String(action || '').toUpperCase() === 'BUY') {
+      panel.hidden = true;
+      panel.innerHTML = '';
+      return;
+    }
+    fetchJsonTimeout('/api/pick-explain/' + encodeURIComponent(netuid), 10000)
+      .then(function (explain) {
+        if (!explain || !explain.blockers || !explain.blockers.length) {
+          panel.hidden = true;
+          panel.innerHTML = '';
+          return;
+        }
+        panel.hidden = false;
+        panel.innerHTML =
+          '<p class="home-stage-why-not__title">Why no audited long</p>' +
+          '<ul class="home-stage-why-not__list">' +
+          explain.blockers.slice(0, 4).map(function (b) { return '<li>' + esc(b) + '</li>'; }).join('') +
+          '</ul>';
+      })
+      .catch(function () {
+        panel.hidden = true;
+      });
   }
 
   function renderPickCards(picks) {
@@ -442,6 +470,8 @@
     var normalized = normalizeWeights(weights);
     var keys = CANONICAL_EXPERTS.filter(function (k) { return normalized[k] != null; });
     if (!keys.length) return;
+    var ranked = keys.slice().sort(function (a, b) { return (normalized[b] || 0) - (normalized[a] || 0); });
+    var top = ranked[0];
     var maxW = Math.max.apply(null, keys.map(function (k) { return normalized[k]; })) || 1;
     var cards = keys.map(function (name) {
       var w = Number(normalized[name]) || 0;
@@ -454,7 +484,10 @@
         '<span class="bias neu">LEARNED</span></div>'
       );
     }).join('');
-    replaceSectionContent('section-council', '<div class="council-grid">' + cards + '</div>', '.council-grid, .card-muted');
+    var lean = top
+      ? '<p class="council-lean">Leaning <strong>' + esc(expertLabel(top)) + '</strong> · weight ' + fmt(normalized[top], 3) + '</p>'
+      : '';
+    replaceSectionContent('section-council', lean + '<div class="council-grid">' + cards + '</div>', '.council-grid, .card-muted');
   }
 
   function renderKpi(stats) {
@@ -532,7 +565,19 @@
     }
     var judges = payload.judges || {};
     var council = payload.council || {};
-    var html = '<div class="kpi-strip">' +
+    var councilRate = council.win_rate;
+    var sample = payload.sample_size || 0;
+    var html = '';
+    if (councilRate != null && sample > 0) {
+      var pct = Math.round(Number(councilRate) * 1000) / 10;
+      html +=
+        '<div class="backtest-meter card" role="status">' +
+        '<div class="backtest-meter__label">Council win rate</div>' +
+        '<div class="backtest-meter__val">' + pct + '%</div>' +
+        '<div class="backtest-meter__bar"><div class="backtest-meter__fill" style="width:' + Math.min(pct, 100) + '%;"></div></div>' +
+        '<div class="backtest-meter__sub">n=' + sample + ' graded predictions</div></div>';
+    }
+    html += '<div class="kpi-strip">' +
       '<div class="kpi card"><div class="lbl">Council</div><div class="v">' + pctLabel(council.win_rate) + '</div>' +
       '<div class="sub">n=' + (payload.sample_size || 0) + '</div></div>' +
       '<div class="kpi card"><div class="lbl">Oracle</div><div class="v">' + pctLabel((judges.oracle || {}).win_rate) + '</div>' +
@@ -805,6 +850,7 @@
 
   function connectCockpitStream() {
     if (cockpitStream || typeof EventSource === 'undefined') return;
+    if (!document.querySelector('.cockpit-card[data-section-id]')) return;
     cockpitStream = new EventSource('/api/cockpit/stream');
     cockpitStream.addEventListener('cockpit.sections', function (ev) {
       try {
