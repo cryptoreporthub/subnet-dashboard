@@ -87,10 +87,10 @@
   }
 
   function loadWorkingChips() {
-    fetch("/api/market-drivers")
-      .then(function (r) {
-        return r.ok ? r.json() : null;
-      })
+    var fetchJson = window.apiFetchJson || function (url) {
+      return fetch(url).then(function (r) { return r.ok ? r.json() : null; });
+    };
+    fetchJson("/api/market-drivers", 12000)
       .then(function (payload) {
         if (payload && payload.status === "success") {
           renderWorkingChips(payload);

@@ -564,8 +564,9 @@ def _public_base_url(request: Request) -> str:
 def _degraded_index_context(request: Request) -> Dict[str, Any]:
     """Fast shell — registry subnets + local learning state; hydrate upgrades live APIs."""
     from internal.learning.dashboard_context import fast_shell_dashboard_context
+    from internal.subnet_names import enrich_subnet_rows
 
-    subnets = [_normalize_registry_subnet(s) for s in load_data("config/registry.json").values()]
+    subnets = enrich_subnet_rows(list(load_data("config/registry.json").values()))
     shell_learning = fast_shell_dashboard_context()
     simivision_data = _safe_simivision_payload(
         subnets=subnets, source="registry-fallback"

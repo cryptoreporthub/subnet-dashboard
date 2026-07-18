@@ -144,10 +144,14 @@
   async function hydrate() {
     var root = $("paper-portfolio-root");
     if (!root) return;
+    var fetchJson = window.apiFetchJson || function (url) {
+      return fetch(url).then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      });
+    };
     try {
-      var resp = await fetch("/api/portfolio/status");
-      if (!resp.ok) throw new Error("HTTP " + resp.status);
-      render(root, await resp.json());
+      render(root, await fetchJson("/api/portfolio/status", 12000));
     } catch (e) {
       root.innerHTML =
         '<p class="paper-portfolio__empty">Could not load paper portfolio — try again shortly.</p>';

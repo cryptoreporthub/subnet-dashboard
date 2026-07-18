@@ -53,14 +53,6 @@ def _judge_citation_block(netuid: Optional[int], subnets: Optional[List[Dict[str
                     row = sn
                     break
         if row is None:
-            from internal.subnets.feed import load_pick_subnets
-
-            for sn in load_pick_subnets():
-                n = sn.get("netuid", sn.get("id"))
-                if n is not None and int(n) == int(netuid):
-                    row = sn
-                    break
-        if row is None:
             return {}
         judges = score_subnet(int(netuid), row)
         consensus = judges.get("consensus") or {}
@@ -96,13 +88,22 @@ def _judge_citation_block(netuid: Optional[int], subnets: Optional[List[Dict[str
 
 
 def _today_pick_block() -> Dict[str, Any]:
-    subnets = None
+    """File-backed daily pick — avoid live subnet feed + pick engine on letter API."""
+    payload: Dict[str, Any] = {}
+    subnets: Optional[List[Dict[str, Any]]] = None
     try:
-        from internal.council.daily_pick_engine import get_or_create_today_pick
-        from internal.subnets.feed import load_pick_subnets
+        from server import load_data, _normalize_registry_subnet
 
-        subnets = load_pick_subnets()
-        payload = get_or_create_today_pick(subnets, {})
+        subnets = [
+            _normalize_registry_subnet(s) for s in load_data("config/registry.json").values()
+        ]
+        records = load_data("data/daily_picks.json")
+        today = _today_utc()
+        if isinstance(records, list):
+            for rec in reversed(records):
+                if isinstance(rec, dict) and str(rec.get("date") or "")[:10] == today:
+                    payload = rec
+                    break
     except Exception:
         payload = {}
 

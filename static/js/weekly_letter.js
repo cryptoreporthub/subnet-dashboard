@@ -137,10 +137,14 @@
     var root = $("weekly-letter-root");
     var weekEl = $("weekly-letter-week");
     if (!root) return;
+    var fetchJson = window.apiFetchJson || function (url) {
+      return fetch(url).then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      });
+    };
     try {
-      var resp = await fetch("/api/letter/weekly");
-      if (!resp.ok) throw new Error("HTTP " + resp.status);
-      var payload = await resp.json();
+      var payload = await fetchJson("/api/letter/weekly", 15000);
       if (weekEl && payload.week_of) {
         weekEl.textContent = "Week of " + payload.week_of;
       }
