@@ -1,13 +1,13 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-18T18:45:00Z  
-**main:** `c9ba5cb` · **K3-5 in progress**
+**Last updated:** 2026-07-18T18:52:00Z  
+**main:** `c9ba5cb` · **K3-5 PR open**
 
 ## Active
 
-**K3-5** — Mobile polish + outlets (Grok UX LOCK → Composer implement)
-- Grok LOCK pending → branch `cursor/k3-5-polish-e7f9`
-- Scope: onboarding activation, alert badge dots, backtest methodology surfacing, SN118 chip, 390px QA
+**K3-5** — Mobile polish + outlets (Grok LOCK → Composer implement)
+- Branch: `cursor/k3-5-polish-e7f9`
+- Done: 3-step tour, alert dot on habit-alert-btn, backtest methodology open, trust banner 390px, SN118 footer chip
 
 ## Done (K3 sprint)
 
@@ -15,4 +15,4 @@
 
 ## Next
 
-- Final phone QA on fly.dev after K3-5 merge
+- Merge K3-5 PR → final phone QA on fly.dev
