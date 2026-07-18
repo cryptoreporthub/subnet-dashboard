@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 import server
 from internal.subnet_names import refresh_daily_pick_names
@@ -71,7 +71,10 @@ def test_refresh_daily_pick_names_candidate_and_horizon():
 
 
 def test_council_stage_hold_candidate_renders_full_hero():
-    env = Environment(loader=FileSystemLoader("templates"))
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
     tmpl = env.get_template("partials/premium/council_stage.html")
     payload = refresh_daily_pick_names(_hold_candidate_payload())
     html = tmpl.render(
