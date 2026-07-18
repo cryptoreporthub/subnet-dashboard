@@ -68,12 +68,34 @@ jobs:
           fi
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Pre-deploy cleanup (free data_volume after failed process-group migration)
+        continue-on-error: true
+        run: |
+          APP=subnet-dashboard
+          flyctl scale count worker=0 --app "$APP" --yes 2>/dev/null || true
+          started=$(flyctl machines list -a "$APP" --json | python3 -c "
+          import json,sys
+          print(sum(1 for m in json.load(sys.stdin) if m.get('state')=='started'))
+          " 2>/dev/null || echo 0)
+          if [ "$started" = "0" ]; then
+            echo "No started machines — destroying orphans to release data_volume"
+            for id in $(flyctl machines list -a "$APP" --json | python3 -c "
+          import json,sys
+          for m in json.load(sys.stdin):
+              print(m.get('id',''))
+          " 2>/dev/null); do
+              [ -n "$id" ] || continue
+              flyctl machine destroy "$id" -a "$APP" --force || true
+            done
+          fi
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - run: flyctl deploy --remote-only --no-cache --yes
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Scale to one web machine (worker colocated on web; shared volume)
+      - name: Scale to one machine (avoid split-brain on volume)
         continue-on-error: true
-        run: flyctl scale count web=1 worker=0 --app subnet-dashboard --yes
+        run: flyctl scale count 1 --app subnet-dashboard --yes
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       # flyctl treats "stopped" as a good post-deploy state; a started machine
