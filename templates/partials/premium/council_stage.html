@@ -283,7 +283,7 @@
                   {% else %}
                     <div class="k3-orb-score"><span class="digit-ones">—</span></div>
                   {% endif %}
-                  <div class="k3-orb-label">conviction</div>
+                  <div class="k3-orb-label" id="k3-orb-label">conviction</div>
                 </div>
               </div>
               {% if temporal_badge %}
@@ -302,6 +302,7 @@
                 {% endfor %}
               </div>
               <script type="application/json" id="k3-horizon-views-data">{{ hv | tojson }}</script>
+              <script type="application/json" id="k3-watchlist-pins">{{ pins | tojson }}</script>
               <p id="k3-horizon-note" class="k3-horizon-note" hidden></p>
               {% endif %}
               <div class="k3-claim-name" id="k3-claim-name">{{ sn.name|default('SN' ~ sn.netuid) }}</div>
@@ -340,7 +341,7 @@
                 </svg>
                 <div class="k3-orb-center">
                   <div class="k3-orb-score"><span class="digit-ones">—</span></div>
-                  <div class="k3-orb-label">conviction</div>
+                  <div class="k3-orb-label" id="k3-orb-label">conviction</div>
                 </div>
               </div>
               <div id="k3-temporal-badge" class="k3-temporal-badge k3-temporal-badge--empty" aria-live="polite">Resolve window not set · graded when this pick closes</div>
@@ -367,7 +368,7 @@
           <span>Evidence</span><span class="k3-layer-icon">▸</span>
         </button>
         <div class="k3-layer-body">
-          <div class="k3-layer-title">Why {{ sn.name|default('this subnet') if sn else 'this subnet' }} is the call</div>
+          <div class="k3-layer-title" id="k3-evidence-title">Why {{ sn.name|default('this subnet') if sn else 'this subnet' }} is the call</div>
           {% if signals and signals|length > 0 %}
             {% for sig in signals[:5] %}
             <div class="k3-signal"><span class="k3-signal-name">{{ sig.name|default(sig.label|default('Signal')) }}</span><span class="k3-signal-value">{{ sig.value|default(sig.score|default('—')) }}</span></div>
@@ -627,6 +628,47 @@ function k3SetActionBadge(action) {
   badge.textContent = act === 'LONG' ? 'BUY' : act === 'SHORT' ? 'SELL' : act;
 }
 
+function k3WatchlistPins() {
+  var raw = document.getElementById('k3-watchlist-pins');
+  if (!raw) return [];
+  try {
+    var pins = JSON.parse(raw.textContent || '[]');
+    return Array.isArray(pins) ? pins : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function k3SyncFocusNetuid(netuid, subnetName) {
+  var pinBtn = document.getElementById('habit-pin-btn');
+  var pins = k3WatchlistPins().map(Number).filter(Boolean);
+  var nuid = parseInt(netuid, 10);
+  if (pinBtn) {
+    if (!nuid) {
+      pinBtn.disabled = true;
+      pinBtn.setAttribute('aria-disabled', 'true');
+      pinBtn.dataset.netuid = '';
+    } else {
+      pinBtn.disabled = false;
+      pinBtn.removeAttribute('aria-disabled');
+      pinBtn.dataset.netuid = String(nuid);
+      var pinned = pins.indexOf(nuid) >= 0;
+      pinBtn.dataset.pinned = pinned ? '1' : '0';
+      pinBtn.textContent = pinned ? 'Unpin subnet' : 'Pin to watchlist';
+    }
+  }
+  if (nuid) {
+    var url = new URL(window.location.href);
+    url.searchParams.set('netuid', String(nuid));
+    window.history.replaceState({}, '', url.toString());
+  }
+  var evidenceTitle = document.getElementById('k3-evidence-title');
+  if (evidenceTitle) {
+    var label = subnetName || ('SN' + nuid);
+    evidenceTitle.textContent = 'Why ' + label + ' is the call';
+  }
+}
+
 function k3SwitchHorizon(chipId) {
   var raw = document.getElementById('k3-horizon-views-data');
   if (!raw) return;
@@ -647,8 +689,11 @@ function k3SwitchHorizon(chipId) {
   if (metaEl) {
     metaEl.textContent = 'SN' + sn.netuid + (sn.symbol ? ' · ' + sn.symbol : '');
   }
+  k3SyncFocusNetuid(sn.netuid, sn.name);
   k3RenderConviction(view.conviction);
   k3SetActionBadge(view.action);
+  var orbLabel = document.getElementById('k3-orb-label');
+  if (orbLabel) orbLabel.textContent = view.lens === 'trend' ? 'trend lens' : 'conviction';
   var note = document.getElementById('k3-horizon-note');
   if (note) {
     if (view.lens === 'trend' && view.note) {

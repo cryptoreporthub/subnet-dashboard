@@ -177,14 +177,17 @@ async def api_mindmap_summary():
     dpick_block: Dict[str, Any] = {"shortlist": []}
     try:
         from internal.council.daily_pick_engine import get_or_create_today_pick
-        from internal.learning.dpick_shortlist import build_deliberation_shortlist
+        from internal.learning.dpick_shortlist import (
+            build_deliberation_shortlist,
+            shortlist_cards_for_template,
+        )
 
         subnets = _subnets_for_tracker()
         market_context = _market_context_with_weights(subnets)
         daily_payload = get_or_create_today_pick(subnets, market_context)
         deliberation = build_deliberation_shortlist(subnets, market_context, daily_payload)
-        alts = deliberation.get("alternatives") or []
-        dpick_block = {"shortlist": deliberation if len(alts) >= 2 else []}
+        cards = shortlist_cards_for_template(deliberation)
+        dpick_block = {"shortlist": cards if len(cards) >= 2 else []}
     except Exception as exc:
         logger.warning("mindmap summary dpick.shortlist failed: %s", exc)
         dpick_block = {"shortlist": []}

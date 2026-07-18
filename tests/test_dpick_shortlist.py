@@ -85,10 +85,10 @@ def test_mindmap_summary_includes_dpick_shortlist():
     dpick = data.get("dpick") or {}
     assert "shortlist" in dpick
     shortlist = dpick["shortlist"]
+    assert isinstance(shortlist, list)
     if shortlist:
-        assert isinstance(shortlist, dict)
-        alts = shortlist.get("alternatives") or []
-        assert isinstance(alts, list)
-        for alt in alts:
+        for alt in shortlist:
             assert isinstance(alt.get("netuid"), int)
             assert isinstance(alt.get("conviction"), int)
+            assert "role" in alt
+            assert "stance" in alt
