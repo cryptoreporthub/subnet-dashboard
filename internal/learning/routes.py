@@ -10,7 +10,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response
 
 from datastore.learning_engine import LearningEngine, create_feedback_router
@@ -616,6 +616,35 @@ async def api_council_weights():
             "data": {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0},
             "error": str(exc),
         }
+
+
+@learning_router.get("/api/formula-lineage")
+async def api_formula_lineage_catalog():
+    """Cited formula sources, adaptations, and live learning-loop state per lane."""
+    try:
+        from internal.council.formula_lineage import build_all_lineage
+
+        return build_all_lineage()
+    except Exception as exc:
+        logger.warning("formula-lineage catalog failed: %s", exc)
+        return {"status": "error", "error": str(exc), "lanes": []}
+
+
+@learning_router.get("/api/formula-lineage/{lane_id}")
+async def api_formula_lineage_lane(lane_id: str):
+    """Single lane lineage card (council expert or judge)."""
+    try:
+        from internal.council.formula_lineage import build_lane_lineage
+
+        lane = build_lane_lineage(lane_id.lower().strip())
+        if lane is None:
+            raise HTTPException(status_code=404, detail="unknown lane")
+        return {"status": "ok", "lane": lane}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("formula-lineage lane failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @learning_router.get("/api/weights")

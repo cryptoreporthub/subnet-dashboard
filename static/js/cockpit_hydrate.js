@@ -718,6 +718,47 @@
     root.innerHTML = html;
   }
 
+  function renderFormulaLineage(catalog) {
+    var root = document.getElementById('formula-lineage-root');
+    if (!root) return;
+    if (!catalog || catalog.status !== 'ok' || !(catalog.lanes || []).length) {
+      root.innerHTML = '';
+      return;
+    }
+    var html = '<details class="formula-lineage card" open>' +
+      '<summary>Formula lineage — sources, tweaks &amp; learning loop</summary>' +
+      '<p class="formula-lineage__intro">' + esc(catalog.summary || '') + '</p>';
+    catalog.lanes.forEach(function (lane) {
+      var formula = lane.current_formula || {};
+      var loop = lane.learning_loop || {};
+      var insp = (lane.inspiration || []).map(function (s) {
+        return '<li><a href="' + esc(s.url) + '" target="_blank" rel="noopener noreferrer">' +
+          esc(s.citation) + '</a>' +
+          (s.relationship ? ' <span class="formula-lineage__rel">(' + esc(s.relationship) + ')</span>' : '') +
+          (s.note ? '<span class="formula-lineage__note">' + esc(s.note) + '</span>' : '') +
+          '</li>';
+      }).join('');
+      var adap = (lane.adaptations || []).map(function (a) {
+        return '<li>' + esc(a) + '</li>';
+      }).join('');
+      var weight = loop.current_weight != null ? loop.current_weight : '—';
+      var acc = loop.accuracy != null ? pctLabel(loop.accuracy) : '—';
+      html += '<article class="formula-lineage__lane" id="lineage-' + esc(lane.id) + '">' +
+        '<h4 class="formula-lineage__lane-title">' + esc(lane.label) + '</h4>' +
+        '<code class="formula-lineage__expr">' + esc(formula.expression || '') + '</code>' +
+        '<p class="formula-lineage__impl">' + esc(formula.summary || '') + '</p>' +
+        '<p class="formula-lineage__live"><strong>Live weight</strong> ' + weight +
+        ' · <strong>graded accuracy</strong> ' + acc +
+        (loop.graded_n ? ' (n=' + loop.graded_n + ')' : '') + '</p>' +
+        '<p class="formula-lineage__loop-note">' + esc(loop.stagnant_source_note || '') + '</p>' +
+        '<h5 class="formula-lineage__sub">Inspiration</h5><ul>' + insp + '</ul>' +
+        '<h5 class="formula-lineage__sub">Our adaptations</h5><ul>' + adap + '</ul>' +
+        '</article>';
+    });
+    html += '</details>';
+    root.innerHTML = html;
+  }
+
   function formatDataSourceLabel(meta, subnets) {
     var primary = (meta && meta.source) || '';
     if (!primary && subnets && subnets.length) {
@@ -1125,8 +1166,12 @@
       connectCockpitStream();
 
       try {
-        var btRes = await fetchJsonRetry('/api/backtest?limit=120', 18000, 1);
-        renderBacktest(btRes);
+        var pair = await Promise.all([
+          fetchJsonRetry('/api/backtest?limit=120', 18000, 1),
+          fetchJsonRetry('/api/formula-lineage', 12000, 1),
+        ]);
+        renderBacktest(pair[0]);
+        renderFormulaLineage(pair[1]);
       } catch (e) {
         console.warn('[cockpit_hydrate] backtest fetch failed', e);
         var btRoot = document.getElementById('backtest-panel-root');
