@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Dict, List, Optional
 
 from datastore.learning_engine import LearningEngine
@@ -11,6 +12,9 @@ from internal.council.weights import load_weights
 from internal.learning.predictions_store import load_predictions, update_stats
 
 logger = logging.getLogger(__name__)
+
+_FAST_SHELL_CACHE: Dict[str, Any] = {"at": 0.0, "data": None}
+_FAST_SHELL_TTL = 30.0
 
 
 def _mindmap_trail_panel() -> List[Dict[str, Any]]:
@@ -28,7 +32,13 @@ def fast_shell_dashboard_context() -> Dict[str, Any]:
 
     Avoids empty Pro drawer when client-side API hydration times out (Fly cold
     start, wedged event loop, or slow subnet feed). All reads are file-backed.
+    Cached ≤30s so GET / never rebuilds on every request.
     """
+    now = time.time()
+    cached = _FAST_SHELL_CACHE.get("data")
+    if isinstance(cached, dict) and now - float(_FAST_SHELL_CACHE.get("at") or 0) < _FAST_SHELL_TTL:
+        return cached
+
     ctx = default_learning_dashboard_context()
     try:
         weights = load_weights() or {}
@@ -61,6 +71,8 @@ def fast_shell_dashboard_context() -> Dict[str, Any]:
         }
     except Exception as exc:
         logger.warning("fast shell learning metrics failed: %s", exc)
+    _FAST_SHELL_CACHE["at"] = now
+    _FAST_SHELL_CACHE["data"] = ctx
     return ctx
 
 
