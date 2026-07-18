@@ -493,7 +493,9 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
                 from internal.learning.dpick_horizon import attach_horizon_views_to_daily_pick
                 from internal.learning.dpick_shortlist import attach_shortlist_to_daily_pick
                 from internal.learning.dpick_temporal import attach_temporal_to_daily_pick
+                from internal.subnet_names import refresh_daily_pick_names
 
+                pick_payload = refresh_daily_pick_names(pick_payload)
                 pick_payload = attach_shortlist_to_daily_pick(
                     pick_payload, subnets, market_context
                 )

@@ -182,6 +182,48 @@ def name_for_netuid(netuid: Any, *, use_taostats: bool = False) -> str:
         return "SN?"
 
 
+def canonical_subnet_display(sn: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Return netuid/name/symbol with canonical name resolution (picks, horizon, shortlist)."""
+    if not isinstance(sn, dict):
+        return None
+    netuid = sn.get("netuid")
+    if netuid is None:
+        netuid = sn.get("id")
+    if netuid is None:
+        return None
+    try:
+        row = enrich_subnet_row(
+            {"netuid": int(netuid), "name": sn.get("name"), "symbol": sn.get("symbol")},
+            use_taostats=False,
+        )
+    except Exception:
+        row = {"netuid": int(netuid), "name": name_for_netuid(netuid), "symbol": sn.get("symbol")}
+    return {
+        "netuid": row.get("netuid"),
+        "name": row.get("name"),
+        "symbol": row.get("symbol"),
+    }
+
+
+def refresh_daily_pick_names(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Re-resolve pick/candidate subnet names from netuid (stale TMC/cache labels)."""
+    base = dict(payload) if isinstance(payload, dict) else {}
+    for key in ("pick", "candidate"):
+        block = base.get(key)
+        if not isinstance(block, dict):
+            continue
+        sn = block.get("subnet")
+        if not isinstance(sn, dict):
+            continue
+        canon = canonical_subnet_display(sn)
+        if not canon:
+            continue
+        updated = dict(block)
+        updated["subnet"] = {**sn, **canon}
+        base[key] = updated
+    return base
+
+
 def refresh_stored_names(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Re-resolve ``name`` from netuid on read for persisted predictions/signals/trail rows."""
     out: List[Dict[str, Any]] = []

@@ -32,6 +32,33 @@ def test_refresh_stored_names():
     assert rows[0]["name"] != "Ralph"
 
 
+def test_refresh_daily_pick_names():
+    from internal.subnet_names import refresh_daily_pick_names
+
+    payload = {
+        "pick": {
+            "subnet": {"netuid": 40, "name": "Ralph"},
+            "final_confidence": 0.7,
+        }
+    }
+    out = refresh_daily_pick_names(payload)
+    assert out["pick"]["subnet"]["name"] != "Ralph"
+
+
+def test_dpick_shortlist_uses_canonical_names():
+    from internal.learning.dpick_shortlist import build_deliberation_shortlist
+
+    subnets = [
+        {"netuid": 40, "name": "Ralph", "emission": 100},
+        {"netuid": 41, "name": "Stale", "emission": 90},
+    ]
+    daily = {"pick": {"subnet": {"netuid": 40, "name": "Ralph"}, "final_confidence": 0.8, "audit": {}}}
+    out = build_deliberation_shortlist(subnets, {}, daily)
+    assert out["picked"]["name"] != "Ralph"
+    if out["alternatives"]:
+        assert out["alternatives"][0]["name"] != "Stale" or out["alternatives"][0]["netuid"] != 41
+
+
 def test_resolve_bad_name_falls_back_to_sn():
     name = resolve_subnet_name(63, local={"63": {"name": "Unknown"}}, remote={}, use_taostats=False)
     assert name == "SN63"
