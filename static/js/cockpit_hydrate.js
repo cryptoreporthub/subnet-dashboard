@@ -603,21 +603,27 @@
       var pct = Math.round(Number(councilRate) * 1000) / 10;
       html +=
         '<div class="backtest-meter card" role="status">' +
-        '<div class="backtest-meter__label">Council win rate</div>' +
+        '<div class="backtest-meter__label">Council direction rate</div>' +
         '<div class="backtest-meter__val">' + pct + '%</div>' +
         '<div class="backtest-meter__bar"><div class="backtest-meter__fill" style="width:' + Math.min(pct, 100) + '%;"></div></div>' +
         '<div class="backtest-meter__sub">n=' + sample + ' graded predictions</div></div>';
     }
     html += '<div class="kpi-strip">' +
       '<div class="kpi card"><div class="lbl">Council</div><div class="v">' + pctLabel(council.win_rate) + '</div>' +
-      '<div class="sub">n=' + (payload.sample_size || 0) + '</div></div>' +
-      '<div class="kpi card"><div class="lbl">Oracle</div><div class="v">' + pctLabel((judges.oracle || {}).win_rate) + '</div>' +
-      '<div class="sub">avg pnl ' + fmt((judges.oracle || {}).avg_pnl_pct) + '%</div></div>' +
-      '<div class="kpi card"><div class="lbl">Echo</div><div class="v">' + pctLabel((judges.echo || {}).win_rate) + '</div>' +
-      '<div class="sub">avg pnl ' + fmt((judges.echo || {}).avg_pnl_pct) + '%</div></div>' +
-      '<div class="kpi card"><div class="lbl">Pulse</div><div class="v">' + pctLabel((judges.pulse || {}).win_rate) + '</div>' +
-      '<div class="sub">avg pnl ' + fmt((judges.pulse || {}).avg_pnl_pct) + '%</div></div>' +
-      '</div>';
+      '<div class="sub">n=' + (payload.sample_size || 0) + ' graded</div></div>';
+    ['oracle', 'echo', 'pulse'].forEach(function (name) {
+      var judge = judges[name] || {};
+      var filtered = judge.filtered || {};
+      var rate = filtered.win_rate != null ? filtered.win_rate : judge.win_rate;
+      var n = filtered.n != null ? filtered.n : judge.endorsed_n;
+      var th = filtered.min_score != null ? filtered.min_score : judge.threshold;
+      var label = name.charAt(0).toUpperCase() + name.slice(1);
+      html += '<div class="kpi card"><div class="lbl">' + label + '</div><div class="v">' + pctLabel(rate) + '</div>' +
+        '<div class="sub">n=' + (n != null ? n : '—') +
+        (th != null ? ' · score ≥' + th : '') +
+        ' · avg pnl ' + fmt(judge.avg_pnl_pct) + '%</div></div>';
+    });
+    html += '</div>';
     var history = payload.history || [];
     if (history.length) {
       html += '<table class="tbl mt-3"><thead><tr><th>Subnet</th><th>Pred</th><th>Actual</th><th>Council</th><th>Oracle</th></tr></thead><tbody>';

@@ -45,10 +45,16 @@ def evaluate(
     target = "bullish" if pred_direction == "up" else "bearish" if pred_direction == "down" else "neutral"
 
     agreement = counts.get(target, 0) / total if total else 0.0
+    if str(prediction.get("signal_source") or "").lower().startswith("council"):
+        agreement = 0.1
+    elif total == 1 and str(impacts[0].get("signal") or "").startswith("council"):
+        agreement = 0.55
     dominant = signal_impact.get("net_direction", "neutral")
     dominant_match = 1.0 if dominant == target else 0.4
 
-    expert = prediction.get("expert", "technical")
+    expert = str(prediction.get("expert") or "technical").lower()
+    if expert == "contrarian":
+        expert = "dark_horse"
     weight = float(expert_weights.get(expert, 1.0) or 1.0)
     weight_factor = _clamp(weight / 1.5)
 

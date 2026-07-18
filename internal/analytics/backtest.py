@@ -13,7 +13,15 @@ from internal.learning.predictions_store import load_predictions
 JUDGES = ("oracle", "echo", "pulse")
 _SKIP_OUTCOMES = frozenset({"duplicate", "expired", "ungradeable"})
 _CALIBRATION_BINS = 10
-_ORACLE_FILTER_SCORE = 0.55
+_JUDGE_THRESHOLDS: Dict[str, float] = {
+    "oracle": 0.55,
+    "echo": 0.5,
+    "pulse": 0.55,
+}
+
+
+def _judge_threshold(judge: str) -> float:
+    return _JUDGE_THRESHOLDS.get(judge, 0.55)
 
 
 def _gradeable_rows(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -48,11 +56,12 @@ def _signal_impact_from_row(row: Dict[str, Any]) -> Dict[str, Any]:
             }
         )
     elif pred_pct != 0:
+        sig = str(row.get("signal_source") or "predicted_move").lower().replace(" ", "_")
         impacts.append(
             {
                 "direction": "bullish" if direction == "up" else "bearish",
                 "magnitude_pct": mag,
-                "signal": "predicted_move",
+                "signal": sig,
             }
         )
     net_dir = impacts[0]["direction"] if impacts else "neutral"
@@ -118,8 +127,10 @@ def _filtered_judge_win_rate(
     history: List[Dict[str, Any]],
     judge: str,
     *,
-    min_score: float = _ORACLE_FILTER_SCORE,
+    min_score: Optional[float] = None,
 ) -> Dict[str, Any]:
+    """Hit-rate on picks the judge endorses (score at or above threshold)."""
+    min_score = _judge_threshold(judge) if min_score is None else min_score
     picks = [
         h
         for h in history
@@ -129,7 +140,7 @@ def _filtered_judge_win_rate(
     ]
     if not picks:
         return {"n": 0, "win_rate": None, "min_score": min_score}
-    wins = sum(1 for h in picks if h["judges"][judge].get("win"))
+    wins = sum(1 for h in picks if h.get("council_correct"))
     return {
         "n": len(picks),
         "win_rate": round(wins / len(picks), 4),
@@ -189,25 +200,28 @@ def run_backtest(
                 actual_pct,
                 name,
             )
-            win = pnl > 0
+            score = float(judge_scores.get("score") or 0.5)
+            endorsed = score >= _judge_threshold(name)
+            judge_hit = council_hit if endorsed else not council_hit
             stats = judges[name]
-            if win:
+            if judge_hit:
                 stats["wins"] += 1
             else:
                 stats["losses"] += 1
             stats["total_pnl_pct"] = round(stats["total_pnl_pct"] + pnl, 4)
 
-            score = float(judge_scores.get("score") or 0.5)
             bin_idx = min(_CALIBRATION_BINS - 1, max(0, int(score * _CALIBRATION_BINS)))
             stats["calibration"][bin_idx]["count"] += 1
-            if win:
+            if council_hit:
                 stats["calibration"][bin_idx]["hits"] += 1
 
             entry["judges"][name] = {
                 "score": judge_scores.get("score"),
                 "confidence": judge_scores.get("confidence"),
                 "pnl_pct": pnl,
-                "win": win,
+                "win": judge_hit,
+                "endorsed": endorsed,
+                "council_correct": council_hit,
             }
 
         history.append(entry)
@@ -222,6 +236,7 @@ def run_backtest(
     for name in JUDGES:
         stats = judges[name]
         total = stats["wins"] + stats["losses"]
+        filtered = _filtered_judge_win_rate(history, name)
         cal = []
         for bucket in stats["calibration"]:
             count = bucket["count"]
@@ -237,11 +252,14 @@ def run_backtest(
         judge_blocks[name] = {
             "wins": stats["wins"],
             "losses": stats["losses"],
-            "win_rate": round(stats["wins"] / total, 4) if total else None,
+            "win_rate": filtered["win_rate"],
+            "endorsed_n": filtered["n"],
+            "threshold": filtered["min_score"],
+            "direction_win_rate": round(stats["wins"] / total, 4) if total else None,
             "avg_pnl_pct": round(stats["total_pnl_pct"] / total, 4) if total else None,
             "total_pnl_pct": stats["total_pnl_pct"],
             "calibration": cal,
-            "filtered": _filtered_judge_win_rate(history, name),
+            "filtered": filtered,
         }
 
     return {
