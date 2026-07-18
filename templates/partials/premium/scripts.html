@@ -1,3 +1,23 @@
+<script>
+(function (g) {
+  if (g.apiFetchJson) return;
+  g.apiFetchJson = function fetchJson(url, ms) {
+    ms = ms == null ? 12000 : ms;
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, ms);
+    return fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl.signal })
+      .then(function (r) {
+        clearTimeout(timer);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .catch(function (err) {
+        clearTimeout(timer);
+        throw err;
+      });
+  };
+})(window);
+</script>
 <script type="application/json" id="subnet-group-data">{{ {
   'roster': sn_list[:24] if sn_list else [],
   'indicators': ti_rows,
