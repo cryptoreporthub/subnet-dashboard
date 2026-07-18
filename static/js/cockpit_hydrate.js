@@ -908,29 +908,25 @@
     showHydrateSkeletons();
 
     try {
-      // Paint each critical panel as its fetch resolves — don't block on slow siblings.
+      var stats = await loadLearningStats();
+      if (!stats) {
+        markSectionFailed('section-kpi', 'Learning stats unavailable — retry when the API responds.');
+        markSectionFailed('section-council', 'Council weights unavailable — retry when the API responds.');
+      } else {
+        renderKpi(stats);
+        renderCouncilWeights(stats.expert_weights || {});
+        if (stats.trust_banner && window.SimiTrustBanner && window.SimiTrustBanner.render) {
+          window.SimiTrustBanner.render(stats.trust_banner);
+        }
+      }
+
       fetchJsonRetry('/api/daily-pick', 18000, 1)
         .then(function (payload) { renderDailyPick(payload); })
         .catch(function () {
           console.warn('[cockpit_hydrate] daily-pick fetch failed');
         });
 
-      loadLearningStats()
-        .then(function (stats) {
-          if (!stats) {
-            markSectionFailed('section-kpi', 'Learning stats unavailable — retry when the API responds.');
-            markSectionFailed('section-council', 'Council weights unavailable — retry when the API responds.');
-            return;
-          }
-          renderKpi(stats);
-          renderCouncilWeights(stats.expert_weights || {});
-          if (stats.trust_banner && window.SimiTrustBanner && window.SimiTrustBanner.render) {
-            window.SimiTrustBanner.render(stats.trust_banner);
-          }
-        })
-        .catch(function () {
-          markSectionFailed('section-kpi', 'Learning stats unavailable — retry when the API responds.');
-        });
+      await pause(800);
 
       fetchJsonRetry('/api/simivision', 20000, 1)
         .then(function (payload) {
@@ -944,6 +940,7 @@
       var subnets = [];
       var subnetsMeta = {};
       try {
+        await pause(400);
         var subPayload = await fetchJsonRetry(
           '/api/subnets?fields=' + encodeURIComponent(SUBNET_FIELDS),
           20000,

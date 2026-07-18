@@ -627,15 +627,17 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
 
 def _minimal_index_context(request: Request) -> Dict[str, Any]:
     """Emergency shell when homepage build exceeds HOMEPAGE_BUILD_TIMEOUT."""
-    from internal.learning.dashboard_context import default_learning_dashboard_context
+    from internal.learning.dashboard_context import fast_shell_dashboard_context
 
+    shell_learning = fast_shell_dashboard_context()
+    trust_banner = (shell_learning.get("learning_metrics") or {}).get("trust_banner") or {}
     return {
         "request": request,
         "public_base_url": _public_base_url(request),
         "subnets": [],
         "data_source": "timeout-fallback",
         "degraded": True,
-        **default_learning_dashboard_context(),
+        **shell_learning,
         "simivision": {"top": [], "meta": {"count": 0, "source": "timeout-fallback"}},
         "signals": [],
         "alerts": [],
@@ -647,7 +649,7 @@ def _minimal_index_context(request: Request) -> Dict[str, Any]:
             "buy_sell_ratio": 0.0,
             "avg_confidence": 0.0,
         },
-        **_fast_home_hero_context(),
+        **_fast_home_hero_context(trust_banner),
     }
 
 
@@ -742,8 +744,15 @@ def index(request: Request):
         try:
             ctx = fut.result(timeout=HOMEPAGE_BUILD_TIMEOUT)
         except concurrent.futures.TimeoutError:
-            logger.error("homepage build exceeded %ss — serving minimal shell", HOMEPAGE_BUILD_TIMEOUT)
-            ctx = _minimal_index_context(request)
+            logger.error("homepage build exceeded %ss — serving cached or minimal shell", HOMEPAGE_BUILD_TIMEOUT)
+            cached = _DEGRADED_INDEX_CACHE.get("ctx")
+            if isinstance(cached, dict):
+                ctx = dict(cached)
+                ctx["request"] = request
+                ctx["public_base_url"] = _public_base_url(request)
+                ctx["data_source"] = "timeout-cached-shell"
+            else:
+                ctx = _minimal_index_context(request)
     return templates.TemplateResponse(request, "index.html", ctx)
 
 

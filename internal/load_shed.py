@@ -12,8 +12,23 @@ from starlette.responses import PlainTextResponse, Response
 
 _BYPASS_PATHS = frozenset({"/health", "/api/health", "/metrics"})
 _BYPASS_PREFIXES = ("/static/",)
-_ACQUIRE_TIMEOUT = float(os.environ.get("LOAD_SHED_ACQUIRE_SECONDS", "0.25"))
-_MAX_IN_FLIGHT = max(1, int(os.environ.get("MAX_IN_FLIGHT_REQUESTS", "4")))
+# Above-fold hydrate reads — never 503 these while GET / holds a slot.
+_LIGHT_API_PREFIXES = (
+    "/api/learning/",
+    "/api/learning-metrics",
+    "/api/data-freshness",
+    "/api/ops/",
+    "/api/letter/",
+    "/api/portfolio/",
+    "/api/market-drivers",
+    "/api/daily-pick",
+    "/api/simivision",
+    "/api/mindmap/story-path",
+    "/api/cockpit/sections",
+    "/api/indicators-convergence",
+)
+_ACQUIRE_TIMEOUT = float(os.environ.get("LOAD_SHED_ACQUIRE_SECONDS", "2.0"))
+_MAX_IN_FLIGHT = max(1, int(os.environ.get("MAX_IN_FLIGHT_REQUESTS", "12")))
 
 _semaphore: asyncio.Semaphore | None = None
 
@@ -28,7 +43,12 @@ def _get_semaphore() -> asyncio.Semaphore:
 def bypass_path(path: str) -> bool:
     if path in _BYPASS_PATHS:
         return True
-    return path.startswith(_BYPASS_PREFIXES)
+    if path.startswith(_BYPASS_PREFIXES):
+        return True
+    for prefix in _LIGHT_API_PREFIXES:
+        if path == prefix.rstrip("/") or path.startswith(prefix):
+            return True
+    return False
 
 
 class LoadShedMiddleware(BaseHTTPMiddleware):

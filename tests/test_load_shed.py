@@ -7,8 +7,11 @@ def test_bypass_paths():
     assert bypass_path("/health")
     assert bypass_path("/api/health")
     assert bypass_path("/static/js/app.js")
+    assert bypass_path("/api/letter/brain")
+    assert bypass_path("/api/learning/stats")
+    assert bypass_path("/api/data-freshness")
     assert not bypass_path("/")
-    assert not bypass_path("/api/daily-pick")
+    assert not bypass_path("/api/top-picks")
 
 
 def test_load_shed_middleware_class():
