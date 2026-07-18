@@ -318,6 +318,67 @@ def _record_scenario_outcome(
         pass
 
 
+def _snapshot_is_thin(snap: Any) -> bool:
+    if not isinstance(snap, dict) or not snap:
+        return True
+    if snap.get("price") in (None, ""):
+        return True
+    if snap.get("price_change_24h") is None and snap.get("price_change_7d") is None:
+        return True
+    return False
+
+
+def _lookup_subnet_row(netuid: Any) -> Optional[Dict[str, Any]]:
+    if netuid is None:
+        return None
+    try:
+        from internal.subnets.feed import get_council_subnet_feed
+
+        rows, _source = get_council_subnet_feed()
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if row.get("netuid") == netuid or str(row.get("netuid")) == str(netuid):
+                return row
+    except Exception:
+        pass
+    return None
+
+
+def _ensure_subnet_snapshot(
+    prediction: Dict[str, Any],
+    *,
+    subnet_row: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """Backfill subnet_snapshot at resolve when creation-time context was missing."""
+    from internal.learning.prediction_loop import _subnet_snapshot
+
+    existing = prediction.get("subnet_snapshot")
+    if not _snapshot_is_thin(existing):
+        return False
+
+    row = subnet_row if isinstance(subnet_row, dict) else _lookup_subnet_row(prediction.get("netuid"))
+    if not row:
+        return False
+
+    fresh = _subnet_snapshot(row)
+    if fresh.get("price") in (None, "") and prediction.get("reference_price") not in (None, ""):
+        fresh["price"] = prediction.get("reference_price")
+
+    if not isinstance(existing, dict) or not existing:
+        prediction["subnet_snapshot"] = fresh
+        prediction["subnet_snapshot_source"] = "resolve_backfill"
+        return True
+
+    merged = dict(existing)
+    for key, value in fresh.items():
+        if merged.get(key) in (None, "") and value not in (None, ""):
+            merged[key] = value
+    prediction["subnet_snapshot"] = merged
+    prediction["subnet_snapshot_source"] = "resolve_merge"
+    return True
+
+
 def atomic_finalize_resolution(
     prediction: Dict[str, Any],
     *,
@@ -387,6 +448,7 @@ def resolve_prediction(
         if expert:
             prediction["expert"] = expert
             _nudge_weights(bool(correct), expert)
+        _ensure_subnet_snapshot(prediction)
         # Impact dial before finalize so prediction_resolved trail includes after value.
         _nudge_impact_strength(prediction, bool(correct))
         atomic_finalize_resolution(
@@ -429,6 +491,7 @@ def resolve_prediction_at_horizon(
     now: Optional[datetime] = None,
     live_prices: Optional[Dict[Any, float]] = None,
     grace_multiple: float = _EXPIRY_GRACE_MULTIPLE,
+    subnet_row: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Grade at ``resolve_at`` price; expire late rows; never use stale live price."""
     now = now or datetime.now(timezone.utc)
@@ -465,6 +528,7 @@ def resolve_prediction_at_horizon(
         prediction["expert"] = expert
         _nudge_weights(bool(correct), expert)
 
+    _ensure_subnet_snapshot(prediction, subnet_row=subnet_row)
     # Impact dial before finalize so prediction_resolved trail includes after value.
     _nudge_impact_strength(prediction, bool(correct))
     atomic_finalize_resolution(
@@ -672,7 +736,9 @@ def resolve_due_predictions(
             if signals.get("volume"):
                 pred["_volume_signal"] = signals["volume"]
             before_status = pred.get("status")
-            resolve_prediction_at_horizon(pred, now=now, live_prices=prices)
+            resolve_prediction_at_horizon(
+                pred, now=now, live_prices=prices, subnet_row=subnet_by_uid.get(uid)
+            )
             pred.pop("_rsi_signal", None)
             pred.pop("_volume_signal", None)
             if pred.get("status") == "pending" and before_status == "pending":

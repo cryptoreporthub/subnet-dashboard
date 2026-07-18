@@ -312,6 +312,34 @@ def _overlap_health(
             }
         )
 
+    try:
+        from internal.subnets.feed import probe_feed_layers
+
+        probe = probe_feed_layers()
+        eff = probe.get("effective_source")
+        live = probe.get("live_cache") or {}
+        if eff and eff != "blockmachine":
+            notes.append(
+                {
+                    "level": "info",
+                    "text": (
+                        f"Subnet feed is on {eff} ({probe.get('likely_total', 0)} subnets). "
+                        "Judge replay uses ledger snapshots; resolver backfills missing ones at grade time."
+                    ),
+                }
+            )
+        elif live.get("subnet_count", 0) == 0 and eff == "blockmachine":
+            notes.append(
+                {
+                    "level": "warning",
+                    "text": (
+                        "Blockmachine cache is empty — live feed may be on TMC fallback until sync completes."
+                    ),
+                }
+            )
+    except Exception:
+        pass
+
     return {"status": status, "notes": notes}
 
 
