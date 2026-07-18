@@ -41,3 +41,13 @@ def test_simivision_payload_exposes_call_line():
     top = payload["data"]["top"][0]
     assert top.get("reasons")
     assert top.get("call_line") == top["reasons"][0]
+
+
+def test_simivision_skips_root_and_deprecated():
+    rows = [
+        {"netuid": 0, "name": "Root", "emission": 99, "volume": 1e9, "apy": 25, "status": "active"},
+        {"netuid": 3, "name": "Templar", "emission": 1, "volume": 100, "apy": 20, "status": "deprecated"},
+        {"netuid": 51, "name": "Compute", "emission": 8, "volume": 5000, "apy": 17, "status": "active"},
+    ]
+    top = _safe_simivision_payload(rows, source="test")["data"]["top"]
+    assert [t["netuid"] for t in top] == [51]

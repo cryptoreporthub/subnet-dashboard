@@ -49,3 +49,13 @@ def test_homepage_includes_above_fold_scripts():
         "market_drivers_ui.js",
     ):
         assert src in html, f"missing {src}"
+    assert "apiFetchJson" in html, "missing inline fetch timeout bootstrap"
+
+
+def test_homepage_shell_cache_speeds_repeat():
+    client.get("/")
+    t0 = time.time()
+    resp = client.get("/")
+    elapsed = time.time() - t0
+    assert resp.status_code == 200
+    assert elapsed < 1.5, f"cached homepage took {elapsed:.1f}s"

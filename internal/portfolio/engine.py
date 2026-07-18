@@ -6,11 +6,13 @@ P&L is alpha % vs holding TAO (benchmark always 0). Uses §16 direction grading.
 
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, List, Optional
 
 from internal.council.grading import direction_correct, prediction_direction
 
 _SKIP_OUTCOMES = frozenset({"duplicate", "expired", "ungradeable"})
+_DISPLAY_LIMIT = max(10, int(os.environ.get("PORTFOLIO_DISPLAY_LIMIT", "48")))
 
 
 def _gradeable_resolved(rows: List[Any]) -> List[Dict[str, Any]]:
@@ -100,6 +102,6 @@ def build_portfolio_status(
             "excess_vs_hold_tao_pct": total_pnl,
             "grading": "direction_only_s16",
         },
-        "closed_positions": closed,
-        "open_positions": open_positions,
+        "closed_positions": closed[-_DISPLAY_LIMIT:],
+        "open_positions": open_positions[:_DISPLAY_LIMIT],
     }

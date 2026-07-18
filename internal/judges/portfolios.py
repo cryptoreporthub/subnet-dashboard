@@ -221,9 +221,8 @@ def get_portfolio(judge_name: str) -> Dict[str, Any]:
     return judge
 
 def all_portfolios() -> Dict[str, Any]:
-    """Return every judge portfolio keyed by judge name."""
+    """Return every judge portfolio keyed by judge name (read-only)."""
     data = _load()
     for name in ("oracle", "echo", "pulse"):
         _recompute_summary(_get_judge(data, name))
-    _save(data)
     return data
