@@ -73,3 +73,5 @@ def test_home_renders_horizon_chips():
     with TestClient(app) as client:
         html = client.get("/").text
     assert "k3-horizon-chips" in html or "k3-horizon-chip" in html
+    assert "k3-watchlist-pins" in html
+    assert "k3-evidence-title" in html
