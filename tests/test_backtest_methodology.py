@@ -94,3 +94,7 @@ def test_backtest_includes_methodology_coverage_and_risk_coverage():
         assert active
         assert active[0]["coverage_pct"] is not None
         assert block["calibration"][0].get("score_mid") is not None
+
+    overlap = result["endorsement_overlap"]
+    assert overlap["sample_size"] == result["sample_size"]
+    assert len(overlap["pairs"]) == 3

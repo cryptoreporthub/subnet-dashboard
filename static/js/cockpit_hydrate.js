@@ -641,6 +641,50 @@
       '</details>';
   }
 
+  function renderEndorsementOverlap(overlap) {
+    if (!overlap || !overlap.sample_size) return '';
+    var uni = overlap.unanimous || {};
+    var html = '<details class="backtest-overlap card" open>' +
+      '<summary>Do the judges agree on the same picks?</summary>' +
+      '<p class="backtest-overlap__intro">Overlap uses the same endorsement rules as the hit-rate KPIs above (score ≥ τ).</p>';
+
+    if (uni.n != null && overlap.sample_size) {
+      var uniHit = uni.hit_rate != null ? pctLabel(uni.hit_rate) : '—';
+      html += '<p class="backtest-overlap__unanimous"><strong>All three said yes:</strong> ' +
+        uni.n + '/' + overlap.sample_size +
+        (uni.pct != null ? ' (' + uni.pct + '%)' : '') +
+        ' · hit rate when unanimous: ' + uniHit + '</p>';
+    }
+
+    html += '<table class="tbl tbl--compact backtest-overlap__table"><thead><tr>' +
+      '<th>Pair</th><th>Both endorse</th><th>% of sample</th><th>When A says yes, B also</th></tr></thead><tbody>';
+    (overlap.pairs || []).forEach(function (row) {
+      var ab = row.pct_of_a != null ? (row.pct_of_a + '% of ' + esc((overlap.judges[row.a] || {}).label || row.a)) : '—';
+      html += '<tr><td>' + esc(row.label || '') + '</td>' +
+        '<td class="mono">' + (row.both_n != null ? row.both_n : '—') + '</td>' +
+        '<td class="mono">' + (row.both_pct != null ? row.both_pct + '%' : '—') + '</td>' +
+        '<td class="mono">' + ab + '</td></tr>';
+    });
+    html += '</tbody></table>';
+
+    if (overlap.snapshot_missing_pct != null) {
+      html += '<p class="backtest-overlap__meta">Subnet snapshots missing on ' +
+        overlap.snapshot_missing_pct + '% of picks in this window.</p>';
+    }
+
+    var notes = (overlap.health && overlap.health.notes) || [];
+    if (notes.length) {
+      html += '<ul class="backtest-overlap__notes">';
+      notes.forEach(function (note) {
+        var cls = note.level === 'warning' ? ' backtest-overlap__note--warning' : '';
+        html += '<li class="backtest-overlap__note' + cls + '">' + esc(note.text || '') + '</li>';
+      });
+      html += '</ul>';
+    }
+    html += '</details>';
+    return html;
+  }
+
   function renderBacktest(payload) {
     var root = document.getElementById('backtest-panel-root');
     if (!root) return;
@@ -685,6 +729,8 @@
         ' · avg pnl ' + fmt(judge.avg_pnl_pct) + '%</div></div>';
     });
     html += '</div>';
+
+    html += renderEndorsementOverlap(payload.endorsement_overlap);
 
     html += '<div class="backtest-panels">';
     ['oracle', 'echo', 'pulse'].forEach(function (name) {

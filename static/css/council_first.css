@@ -1696,6 +1696,14 @@ button.home-cta {
 .backtest-method__refs-list li { margin-bottom: 8px; }
 .backtest-method__topic { display: block; font-size: 11px; color: var(--stage-muted); margin-top: 2px; }
 
+.backtest-overlap { margin: 12px 0; padding: 12px 14px; }
+.backtest-overlap__intro { font-size: 12px; color: var(--stage-muted); margin: 8px 0 10px; }
+.backtest-overlap__unanimous { font-size: 13px; margin: 0 0 10px; }
+.backtest-overlap__table { margin-bottom: 8px; }
+.backtest-overlap__meta { font-size: 11px; color: var(--stage-muted); margin: 8px 0 0; }
+.backtest-overlap__notes { margin: 8px 0 0; padding-left: 18px; font-size: 12px; color: var(--stage-muted); }
+.backtest-overlap__note--warning { color: #fcd34d; }
+
 .formula-lineage-root { margin-top: 12px; }
 .formula-lineage { padding: 12px 14px; }
 .formula-lineage__intro { font-size: 13px; color: var(--stage-muted); margin: 8px 0 12px; }

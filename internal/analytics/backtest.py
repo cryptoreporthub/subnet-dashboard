@@ -166,6 +166,155 @@ def _with_coverage(filtered: Dict[str, Any], sample_size: int) -> Dict[str, Any]
     return out
 
 
+_JUDGE_LABELS: Dict[str, str] = {
+    "oracle": "Oracle",
+    "echo": "Echo",
+    "pulse": "Pulse",
+}
+_PAIR_KEYS = (("oracle", "echo"), ("oracle", "pulse"), ("echo", "pulse"))
+
+
+def _is_endorsed(entry: Dict[str, Any], judge: str) -> bool:
+    judges = entry.get("judges") if isinstance(entry.get("judges"), dict) else {}
+    block = judges.get(judge) if isinstance(judges.get(judge), dict) else {}
+    if "endorsed" in block:
+        return bool(block.get("endorsed"))
+    return float(block.get("score") or 0) >= _judge_threshold(judge)
+
+
+def _endorsement_overlap(history: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """How often judges endorse the same picks — uses the same τ gates as hit-rate."""
+    n = len(history)
+    if n == 0:
+        return {
+            "sample_size": 0,
+            "judges": {},
+            "pairs": [],
+            "unanimous": {"n": 0, "pct": None, "hit_rate": None},
+            "snapshot_missing_pct": None,
+            "health": {"status": "empty", "notes": []},
+        }
+
+    endorsed: Dict[str, List[bool]] = {j: [] for j in JUDGES}
+    unanimous_rows: List[Dict[str, Any]] = []
+    snapshot_missing = 0
+
+    for entry in history:
+        if not entry.get("has_subnet_snapshot"):
+            snapshot_missing += 1
+        flags = {j: _is_endorsed(entry, j) for j in JUDGES}
+        for j in JUDGES:
+            endorsed[j].append(flags[j])
+        if all(flags.values()):
+            unanimous_rows.append(entry)
+
+    judge_summary = {}
+    for j in JUDGES:
+        count = sum(endorsed[j])
+        judge_summary[j] = {
+            "label": _JUDGE_LABELS[j],
+            "endorsed_n": count,
+            "coverage_pct": round(100.0 * count / n, 1) if n else None,
+            "threshold": _judge_threshold(j),
+        }
+
+    pairs: List[Dict[str, Any]] = []
+    for a, b in _PAIR_KEYS:
+        both = sum(1 for i in range(n) if endorsed[a][i] and endorsed[b][i])
+        either = sum(1 for i in range(n) if endorsed[a][i] or endorsed[b][i])
+        a_n = judge_summary[a]["endorsed_n"]
+        b_n = judge_summary[b]["endorsed_n"]
+        pairs.append(
+            {
+                "a": a,
+                "b": b,
+                "label": f"{_JUDGE_LABELS[a]} ∩ {_JUDGE_LABELS[b]}",
+                "both_n": both,
+                "both_pct": round(100.0 * both / n, 1),
+                "jaccard_pct": round(100.0 * both / either, 1) if either else None,
+                "pct_of_a": round(100.0 * both / a_n, 1) if a_n else None,
+                "pct_of_b": round(100.0 * both / b_n, 1) if b_n else None,
+            }
+        )
+
+    uni_n = len(unanimous_rows)
+    uni_hits = sum(1 for row in unanimous_rows if row.get("council_correct"))
+    snapshot_missing_pct = round(100.0 * snapshot_missing / n, 1)
+
+    overlap = {
+        "sample_size": n,
+        "judges": judge_summary,
+        "pairs": pairs,
+        "unanimous": {
+            "n": uni_n,
+            "pct": round(100.0 * uni_n / n, 1) if n else None,
+            "hit_rate": round(uni_hits / uni_n, 4) if uni_n else None,
+        },
+        "snapshot_missing_pct": snapshot_missing_pct,
+        "health": _overlap_health(judge_summary, pairs, snapshot_missing_pct),
+    }
+    return overlap
+
+
+def _overlap_health(
+    judges: Dict[str, Dict[str, Any]],
+    pairs: List[Dict[str, Any]],
+    snapshot_missing_pct: float,
+) -> Dict[str, Any]:
+    notes: List[Dict[str, str]] = []
+    status = "ok"
+
+    oracle_cov = float(judges.get("oracle", {}).get("coverage_pct") or 0)
+    pulse_cov = float(judges.get("pulse", {}).get("coverage_pct") or 0)
+    oe = next((p for p in pairs if p["a"] == "oracle" and p["b"] == "echo"), {})
+    oe_share = float(oe.get("pct_of_a") or 0)
+
+    if snapshot_missing_pct >= 80 and oracle_cov >= 95:
+        notes.append(
+            {
+                "level": "warning",
+                "text": (
+                    f"{snapshot_missing_pct:.0f}% of picks lack subnet snapshots — "
+                    "Oracle may be endorsing almost everything from signal-source boosts alone."
+                ),
+            }
+        )
+        status = "warning"
+    elif oe_share >= 95 and oracle_cov >= 90:
+        notes.append(
+            {
+                "level": "warning",
+                "text": (
+                    "Oracle and Echo are endorsing nearly the same picks. "
+                    "That can be normal on clean alerts, or a sign the gates are too loose."
+                ),
+            }
+        )
+        status = "warning"
+    elif pulse_cov <= 15 and pulse_cov > 0:
+        notes.append(
+            {
+                "level": "info",
+                "text": (
+                    "Pulse is very selective — low overlap with Oracle/Echo is expected "
+                    "(momentum gate, not evidence gate)."
+                ),
+            }
+        )
+    else:
+        notes.append(
+            {
+                "level": "info",
+                "text": (
+                    "Some overlap is healthy on strong picks. "
+                    "Pulse should usually endorse the fewest; Oracle and Echo may agree often."
+                ),
+            }
+        )
+
+    return {"status": status, "notes": notes}
+
+
 def _risk_coverage_curve(
     history: List[Dict[str, Any]],
     judge: str,
@@ -247,6 +396,7 @@ def run_backtest(
             },
             "history": [],
             "methodology": build_methodology_payload(),
+            "endorsement_overlap": _endorsement_overlap([]),
         }
 
     judges = {name: _init_judge_stats() for name in JUDGES}
@@ -269,6 +419,8 @@ def run_backtest(
             "actual_pct": actual_pct,
             "council_correct": council_hit,
             "signal_source": row.get("signal_source"),
+            "has_subnet_snapshot": isinstance(row.get("subnet_snapshot"), dict)
+            and row["subnet_snapshot"].get("price") not in (None, ""),
             "judges": {},
         }
 
@@ -358,6 +510,7 @@ def run_backtest(
         "judges": judge_blocks,
         "history": list(reversed(history[-24:])),
         "methodology": build_methodology_payload(),
+        "endorsement_overlap": _endorsement_overlap(history),
     }
 
 

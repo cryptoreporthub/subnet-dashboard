@@ -94,6 +94,18 @@ def test_run_backtest_counts_gradeable_rows():
         assert len(result["judges"][judge]["calibration"]) == 10
 
 
+def test_endorsement_overlap_on_fixture():
+    result = run_backtest(data=_FIXTURE)
+    overlap = result["endorsement_overlap"]
+    assert overlap["sample_size"] == result["sample_size"]
+    assert len(overlap["pairs"]) == 3
+    assert "unanimous" in overlap
+    assert overlap["health"]["status"] in ("ok", "warning", "empty")
+    for judge in ("oracle", "echo", "pulse"):
+        assert judge in overlap["judges"]
+        assert overlap["judges"][judge]["endorsed_n"] <= overlap["sample_size"]
+
+
 def test_judge_filtered_rates_can_differ_from_council():
     result = run_backtest(data=_FIXTURE)
     council_rate = result["council"]["win_rate"]
@@ -113,6 +125,7 @@ def test_run_backtest_empty():
     result = run_backtest(data={"predictions": [], "resolved": [], "stats": {}})
     assert result["status"] == "empty"
     assert result["sample_size"] == 0
+    assert result["endorsement_overlap"]["sample_size"] == 0
 
 
 def test_evaluate_judges_scores_bounded():

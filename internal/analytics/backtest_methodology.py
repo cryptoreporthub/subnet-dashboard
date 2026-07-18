@@ -96,6 +96,18 @@ METRICS: List[Dict[str, Any]] = [
         "source_ids": ["murphy_1973"],
     },
     {
+        "id": "endorsement_overlap",
+        "label": "Judge endorsement overlap",
+        "formula": "both_n / n; pct_of_a = both_n / endorsed_a",
+        "definition": (
+            "Share of graded picks where two judges (or all three) endorse at their "
+            "τ thresholds. High Oracle∩Echo overlap can be healthy on clean alerts; "
+            "near-100% with thin snapshot data may mean gates are not differentiating."
+        ),
+        "coverage": "Computed on the full backtest window (not the 24-row history slice).",
+        "source_ids": ["el_yaniv_2010", "chow_1957"],
+    },
+    {
         "id": "avg_pnl_pct",
         "label": "Average paper P&L %",
         "formula": "mean(pnl_pct) over endorsed window",
