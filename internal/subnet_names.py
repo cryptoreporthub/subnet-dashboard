@@ -221,6 +221,21 @@ def refresh_daily_pick_names(payload: Optional[Dict[str, Any]]) -> Dict[str, Any
         updated = dict(block)
         updated["subnet"] = {**sn, **canon}
         base[key] = updated
+
+    hv = base.get("horizon_views")
+    if isinstance(hv, dict) and isinstance(hv.get("views"), dict):
+        views = dict(hv["views"])
+        for chip_id, view in views.items():
+            if not isinstance(view, dict):
+                continue
+            sn = view.get("subnet")
+            if not isinstance(sn, dict):
+                continue
+            canon = canonical_subnet_display(sn)
+            if not canon:
+                continue
+            views[chip_id] = {**view, "subnet": {**sn, **canon}}
+        base["horizon_views"] = {**hv, "views": views}
     return base
 
 
