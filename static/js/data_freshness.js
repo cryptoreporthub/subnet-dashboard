@@ -115,7 +115,7 @@
       })
       .then(render)
       .catch(function () {
-        render(null);
+        render({ sync_enabled: true, effective_source: 'registry-fallback', effective_total: 0, subnet_count: 0 });
       });
   }
 

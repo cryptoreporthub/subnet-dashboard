@@ -32,8 +32,9 @@ primary_region = "sea"
   SUBNETS_LOAD_TIMEOUT_SECONDS = "12"
   # Defer live feed + subnet warmup so /health wins first minute after deploy.
   BOOT_DEFER_SECONDS = "45"
-  MAX_IN_FLIGHT_REQUESTS = "4"
-  HOMEPAGE_BUILD_TIMEOUT = "12"
+  MAX_IN_FLIGHT_REQUESTS = "12"
+  LOAD_SHED_ACQUIRE_SECONDS = "2"
+  HOMEPAGE_BUILD_TIMEOUT = "20"
   HOMEPAGE_SHELL_CACHE_SECONDS = "45"
   # N3: post-resolver auto-retrain (enabled post-N/O; needs >=30 gradeable rows)
   CALIBRATION_AUTO_RETRAIN = "on"
