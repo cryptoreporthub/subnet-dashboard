@@ -30,9 +30,10 @@ echo "=== volumes after recover ==="
 flyctl volumes list -a "$APP" || true
 
 unattached=$(flyctl volumes list -a "$APP" --json 2>/dev/null | python3 -c "
-import json,sys
+import json,sys,os
+region=os.environ.get('FLY_PRIMARY_REGION','sjc')
 vols=json.load(sys.stdin)
-print(sum(1 for v in vols if v.get('name')=='data_volume' and not v.get('attached_machine_id')))
+print(sum(1 for v in vols if v.get('name')=='data_volume' and v.get('region')==region and not v.get('attached_machine_id')))
 " 2>/dev/null || echo 0)
 
 echo "unattached data_volume: $unattached"

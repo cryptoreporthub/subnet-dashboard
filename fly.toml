@@ -2,7 +2,7 @@
 # Redeploy trigger — 2026-07-14: post-deploy start + health gate (machine left stopped)
 
 app = "subnet-dashboard"
-primary_region = "sea"
+primary_region = "sjc"
 
 [build]
   dockerfile = "Dockerfile"

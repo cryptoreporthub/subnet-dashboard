@@ -57,8 +57,9 @@ jobs:
           REGION=${REGION:-sea}
           COUNT=$(flyctl volumes list -a subnet-dashboard --json 2>/dev/null | python3 -c "
           import json,sys
+          region='${REGION}'
           rows=json.load(sys.stdin)
-          print(sum(1 for v in rows if v.get('name')=='data_volume'))
+          print(sum(1 for v in rows if v.get('name')=='data_volume' and v.get('region')==region))
           " 2>/dev/null || echo 0)
           if [ "$COUNT" -lt 1 ]; then
             echo "Creating data_volume in $REGION"
@@ -73,6 +74,7 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_APP: subnet-dashboard
+          FLY_PRIMARY_REGION: sjc
       - run: flyctl deploy --remote-only --no-cache --yes
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
