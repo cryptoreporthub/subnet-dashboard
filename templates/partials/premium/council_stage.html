@@ -177,6 +177,16 @@
       .k3-empty { text-align: center; padding: 32px 16px; color: var(--k3-muted); max-width: 32em; margin: 0 auto; }
       .k3-empty-icon { font-size: 24px; margin-bottom: 8px; opacity: 0.5; }
       .k3-empty-text { font-size: 13px; line-height: 1.5; }
+      {# ---- K3-2: Council considered (deliberation flow) ---- #}
+      .k3-deliberation { margin-top: 16px; }
+      .k3-considered-list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+      .k3-considered-list::-webkit-scrollbar { display: none; }
+      .k3-considered-card { min-width: 120px; background: var(--k3-surface); border-radius: 8px; padding: 10px 12px; flex-shrink: 0; -webkit-tap-highlight-color: transparent; cursor: pointer; }
+      .k3-considered-card:active { background: #111420; }
+      .k3-considered-rank { font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; color: var(--k3-muted); letter-spacing: 0.06em; }
+      .k3-considered-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .k3-considered-meta { font-size: 10px; color: var(--k3-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      @media (max-width: 360px) { .k3-considered-card { min-width: 100px; } }
       @media (max-width: 400px) { .k3-orb { width: 132px; height: 132px; } .k3-orb-score { font-size: 36px; } .k3-claim-name { font-size: 24px; } .k3-claim { min-height: 280px; padding: 16px 12px 12px; } }
       @media (max-width: 360px) { .k3-orb { width: 116px; height: 116px; } .k3-orb-score { font-size: 30px; } .k3-claim-name { font-size: 20px; } .k3-claim-stats { gap: 10px; } .k3-stat { min-width: 50px; } .k3-stat-value { font-size: 14px; } }
       @media (min-width: 768px) { .k3-dossier { max-width: 480px; margin: 0 auto; } .k3-claim { min-height: 360px; } }
@@ -280,8 +290,43 @@
             {% for reason in call_reasons[:5] %}
             <div class="k3-signal"><span class="k3-signal-name">{{ reason }}</span></div>
             {% endfor %}
-          {% else %}
-            <div class="k3-empty"><div class="k3-empty-icon">📡</div><div class="k3-empty-text">Awaiting additional evidence. Signals will surface as council deliberation progresses.</div></div>
+          {% endif %}
+
+          {# ---- Deliberation: Council considered (K3-2) ---- #}
+          {% set tb = dpick.tie_break if dpick.tie_break is mapping else {} %}
+          {% set _dyp = dyp if dyp is iterable and dyp is not string else [] %}
+          {% set _has_runner = tb.runner_up is mapping %}
+          {% set _alt_picks = _dyp|rejectattr('netuid', 'equalto', focus_netuid)|list if _dyp else [] %}
+          {% set _has_alt = _alt_picks|length > 0 %}
+          {% set _has_deliberation = _has_runner or _has_alt %}
+
+          {% if _has_deliberation %}
+          <div class="k3-deliberation">
+            <div class="k3-layer-title">Council considered</div>
+            <div class="k3-considered-list" role="list">
+              {% if _has_runner %}
+              <div class="k3-considered-card" data-netuid="{{ tb.runner_up.netuid }}" role="listitem" tabindex="0">
+                <div class="k3-considered-rank">runner-up</div>
+                <div class="k3-considered-name">{{ tb.runner_up.name|default('SN' ~ tb.runner_up.netuid) }}</div>
+                <div class="k3-considered-meta">SN{{ tb.runner_up.netuid }} · {{ (tb.reasons|default([]))[0]|default('') }}</div>
+              </div>
+              {% endif %}
+              {% for pick in _alt_picks %}
+                {% if loop.index <= 4 %}
+                <div class="k3-considered-card" data-netuid="{{ pick.netuid }}" role="listitem" tabindex="0">
+                  <div class="k3-considered-rank">#{{ loop.index }}</div>
+                  <div class="k3-considered-name">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
+                  <div class="k3-considered-meta">SN{{ pick.netuid }} · score {{ "%.1f"|format((pick.score|default(0))|float) }}</div>
+                </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
+          {# -- Empty when neither signals nor deliberation -- #}
+          {% if not (signals and signals|length > 0) and not (call_reasons and call_reasons|length > 0) and not _has_deliberation %}
+          <div class="k3-empty"><div class="k3-empty-icon">◈</div><div class="k3-empty-text">Council deliberation data warming up.</div></div>
           {% endif %}
         </div>
       </div>
@@ -389,4 +434,38 @@ function k3Toggle(id) {
   var btn = el.querySelector('.k3-layer-header');
   if (btn) btn.setAttribute('aria-expanded', el.classList.contains('open'));
 }
+
+{# ---- K3-2: Cross-subnet deliberation — tap a considered card to switch context ---- #}
+function k3Toast(msg) {
+  try {
+    var t = document.createElement('div');
+    t.textContent = msg;
+    t.setAttribute('role', 'status');
+    t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111420;color:#e2e8f0;font:12px/1.4 "JetBrains Mono",monospace;padding:8px 14px;border-radius:8px;border:1px solid #1a1d24;z-index:9999;max-width:90vw;box-shadow:0 4px 16px rgba(0,0,0,.5);';
+    document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 2200);
+  } catch (e) {}
+}
+
+function k3FocusSubnet(netuid) {
+  if (netuid == null) return;
+  // Reuse existing live-refresh mechanism if a hook is exposed.
+  if (typeof window.__k3FocusSubnet === 'function') {
+    window.__k3FocusSubnet(netuid);
+    return;
+  }
+  if (window.HomeLiveRefresh && typeof window.HomeLiveRefresh.focusSubnet === 'function') {
+    window.HomeLiveRefresh.focusSubnet(netuid);
+    return;
+  }
+  // No live-refresh API hooked up — surface intent without a page reload.
+  k3Toast('Switching to SN' + netuid);
+}
+
+document.querySelectorAll('.k3-considered-card').forEach(function (c) {
+  c.addEventListener('click', function () { k3FocusSubnet(c.dataset.netuid); });
+  c.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); k3FocusSubnet(c.dataset.netuid); }
+  });
+});
 </script>
