@@ -515,18 +515,21 @@ def _public_base_url(request: Request) -> str:
 
 
 def _degraded_index_context(request: Request) -> Dict[str, Any]:
-    """Fast shell when full dashboard context exceeds HOMEPAGE_BUILD_TIMEOUT."""
-    from internal.learning.dashboard_context import default_learning_dashboard_context
+    """Fast shell — registry subnets + local learning state; hydrate upgrades live APIs."""
+    from internal.learning.dashboard_context import fast_shell_dashboard_context
 
     subnets = [_normalize_registry_subnet(s) for s in load_data("config/registry.json").values()]
+    simivision_data = _safe_simivision_payload(
+        subnets=subnets, source="registry-fallback"
+    ).get("data", {"top": [], "meta": {"count": len(subnets), "source": "registry-fallback"}})
     ctx = {
         "request": request,
         "public_base_url": _public_base_url(request),
         "subnets": subnets,
         "data_source": "registry-fallback",
         "degraded": True,
-        **default_learning_dashboard_context(),
-        "simivision": {"top": [], "meta": {"count": len(subnets), "source": "registry-fallback"}},
+        **fast_shell_dashboard_context(),
+        "simivision": simivision_data,
         "signals": [],
         "alerts": [],
         "signal_summary": {

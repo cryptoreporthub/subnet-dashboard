@@ -23,6 +23,47 @@ def _mindmap_trail_panel() -> List[Dict[str, Any]]:
         return []
 
 
+def fast_shell_dashboard_context() -> Dict[str, Any]:
+    """Local-only learning/council keys for the degraded homepage shell.
+
+    Avoids empty Pro drawer when client-side API hydration times out (Fly cold
+    start, wedged event loop, or slow subnet feed). All reads are file-backed.
+    """
+    ctx = default_learning_dashboard_context()
+    try:
+        weights = load_weights() or {}
+        ctx["expert_weights"] = weights
+        ctx["council_weights"] = _council_weights_list(weights)
+    except Exception as exc:
+        logger.warning("fast shell weights failed: %s", exc)
+    try:
+        from internal.learning.routes import _learning_snapshot
+
+        snap = _learning_snapshot()
+        engine_stats = snap["engine_stats"]
+        resolver_stats = snap["resolver_stats"]
+        trust_banner = snap["trust_banner"]
+        ctx["learning_metrics"] = {
+            "expert_weights": engine_stats.get("expert_weights", {}),
+            "total_records": resolver_stats.get("total", engine_stats.get("total_records", 0)),
+            "predictions_pending": resolver_stats.get("pending", engine_stats.get("pending", 0)),
+            "predictions_resolved": resolver_stats.get("total", 0),
+            "correct": resolver_stats.get("correct", 0),
+            "wrong": resolver_stats.get("wrong", 0),
+            "accuracy": resolver_stats.get("accuracy", engine_stats.get("accuracy", 0.0)),
+            "expired": resolver_stats.get("expired", 0),
+            "expired_rate": trust_banner.get("expired_rate"),
+            "graded": trust_banner.get("graded"),
+            "trust_banner": trust_banner,
+            "watchdog": snap.get("watchdog"),
+            "brain_ui_ready": trust_banner.get("ready"),
+            "last_updated": engine_stats.get("last_updated"),
+        }
+    except Exception as exc:
+        logger.warning("fast shell learning metrics failed: %s", exc)
+    return ctx
+
+
 def default_learning_dashboard_context() -> Dict[str, Any]:
     """Safe fallbacks when learning/council sections fail to load."""
     return {

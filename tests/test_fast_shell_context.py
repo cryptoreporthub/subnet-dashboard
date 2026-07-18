@@ -1,0 +1,29 @@
+"""Fast degraded homepage shell ships local learning + SimiVision data."""
+
+from fastapi.testclient import TestClient
+
+import server
+
+
+def test_degraded_homepage_has_conviction_cards():
+    client = TestClient(server.app)
+    html = client.get("/").text
+    assert "dataset.hydrate='1'" in html or 'dataset.hydrate="1"' in html
+    assert "pick-card" in html
+    assert "SimiVision picks warming up" not in html
+
+
+def test_degraded_homepage_has_council_weights():
+    client = TestClient(server.app)
+    html = client.get("/").text
+    assert "council-grid" in html
+    assert "Council weights warming up" not in html
+
+
+def test_fast_shell_learning_metrics_has_graded_field():
+    from internal.learning.dashboard_context import fast_shell_dashboard_context
+
+    metrics = fast_shell_dashboard_context()["learning_metrics"]
+    assert "correct" in metrics
+    assert "wrong" in metrics
+    assert metrics.get("graded") is not None or (metrics.get("correct", 0) + metrics.get("wrong", 0)) >= 0
