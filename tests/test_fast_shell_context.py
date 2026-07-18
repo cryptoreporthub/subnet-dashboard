@@ -37,3 +37,15 @@ def test_homepage_responds_quickly():
     elapsed = time.time() - t0
     assert resp.status_code == 200
     assert elapsed < 5.0, f"homepage took {elapsed:.1f}s"
+
+
+def test_homepage_includes_above_fold_scripts():
+    html = client.get("/").text
+    for src in (
+        "api_fetch.js",
+        "brain_letter.js",
+        "paper_portfolio.js",
+        "weekly_letter.js",
+        "market_drivers_ui.js",
+    ):
+        assert src in html, f"missing {src}"

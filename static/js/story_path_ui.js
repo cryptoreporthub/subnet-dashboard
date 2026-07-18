@@ -39,12 +39,14 @@
   }
 
   function loadStoryPath() {
-    fetch("/api/mindmap/story-path")
-      .then(function (r) {
-        return r.ok ? r.json() : null;
-      })
+    var fetchJson = window.apiFetchJson || function (url) {
+      return fetch(url).then(function (r) { return r.ok ? r.json() : null; });
+    };
+    fetchJson("/api/mindmap/story-path", 12000)
       .then(renderStoryPath)
-      .catch(function () {});
+      .catch(function () {
+        renderStoryPath({ data_available: false, reason: "error" });
+      });
   }
 
   if (document.readyState === "loading") {

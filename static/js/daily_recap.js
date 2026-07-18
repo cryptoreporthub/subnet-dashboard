@@ -136,10 +136,14 @@
     var root = $("daily-recap-root");
     var dateEl = $("daily-recap-date");
     if (!root) return;
+    var fetchJson = window.apiFetchJson || function (url) {
+      return fetch(url).then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      });
+    };
     try {
-      var resp = await fetch("/api/letter/daily");
-      if (!resp.ok) throw new Error("HTTP " + resp.status);
-      var payload = await resp.json();
+      var payload = await fetchJson("/api/letter/daily", 15000);
       if (dateEl && payload.date) {
         dateEl.textContent = "Recap for " + payload.date + " (UTC)";
       }
