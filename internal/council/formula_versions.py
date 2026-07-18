@@ -10,9 +10,11 @@ from internal.council.human_narrative import calibration_version_story
 from internal.council.weights import _load_raw, _save_raw
 
 _DEFAULT_COUNCIL_VERSION = "1.0"
-# ponytail: max ~1 minor bump / 7d + 1pp holdout gain — avoids v12 in two weeks of daily retrains
-_MIN_DAYS_BETWEEN_BUMPS = 7
-_MIN_HOLDOUT_IMPROVEMENT = 0.01
+# ponytail: ~2 council minor bumps/month max — 14d cooldown, 2pp gain, 40+ holdout picks
+_MIN_DAYS_BETWEEN_BUMPS = 14
+_MIN_HOLDOUT_IMPROVEMENT = 0.02
+_MIN_HOLDOUT_SIZE_FOR_BUMP = 40
+_FIRST_BUMP_IMPROVEMENT = 0.015  # maiden 1.0→1.1 only needs 1.5pp
 
 
 def _utcnow_z() -> str:
@@ -59,6 +61,46 @@ def _holdout_improvement(cert: Dict[str, Any]) -> Optional[float]:
         return None
 
 
+def _last_version_bump(council: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    for entry in reversed(council.get("history") or []):
+        if entry.get("version_bumped"):
+            return entry
+    return None
+
+
+def _required_improvement(council: Dict[str, Any]) -> float:
+    """First real bump from 1.0 is slightly easier; after that, full bar."""
+    if _last_version_bump(council) is None:
+        return _FIRST_BUMP_IMPROVEMENT
+    return _MIN_HOLDOUT_IMPROVEMENT
+
+
+def _bump_block_reason(
+    council: Dict[str, Any],
+    *,
+    cert: Dict[str, Any],
+    forced: bool,
+    beat_previous: Optional[bool],
+) -> Optional[str]:
+    if forced:
+        return "forced"
+    if not cert.get("passed") or beat_previous is False:
+        return "cert_not_passed"
+    holdout_size = cert.get("holdout_size")
+    if holdout_size is not None and int(holdout_size) < _MIN_HOLDOUT_SIZE_FOR_BUMP:
+        return "holdout_too_small"
+    improvement = _holdout_improvement(cert)
+    required = _required_improvement(council)
+    if improvement is not None and improvement < required:
+        return "improvement_too_small"
+    last = _last_version_bump(council)
+    if last:
+        days = _days_since(str(last.get("fired_at") or ""))
+        if days is not None and days < _MIN_DAYS_BETWEEN_BUMPS:
+            return "cooldown"
+    return None
+
+
 def _should_bump_minor(
     council: Dict[str, Any],
     *,
@@ -66,20 +108,19 @@ def _should_bump_minor(
     forced: bool,
     beat_previous: Optional[bool],
 ) -> bool:
-    if forced or not cert.get("passed") or beat_previous is False:
-        return False
-    improvement = _holdout_improvement(cert)
-    if improvement is not None and improvement < _MIN_HOLDOUT_IMPROVEMENT:
-        return False
-    for entry in reversed(council.get("history") or []):
-        if not entry.get("version_bumped"):
-            continue
-        last_at = entry.get("fired_at")
-        days = _days_since(last_at) if last_at else None
-        if days is not None and days < _MIN_DAYS_BETWEEN_BUMPS:
-            return False
-        break
-    return True
+    return _bump_block_reason(
+        council, cert=cert, forced=forced, beat_previous=beat_previous
+    ) is None
+
+
+def version_bump_policy() -> Dict[str, Any]:
+    """Public knobs — surfaced in lineage UI so users know why versions tick slowly."""
+    return {
+        "min_days_between_bumps": _MIN_DAYS_BETWEEN_BUMPS,
+        "min_holdout_improvement_pp": round(_MIN_HOLDOUT_IMPROVEMENT * 100, 1),
+        "first_bump_improvement_pp": round(_FIRST_BUMP_IMPROVEMENT * 100, 1),
+        "min_holdout_size": _MIN_HOLDOUT_SIZE_FOR_BUMP,
+    }
 
 
 def load_formula_versions(path: str = "data/soul_map.json") -> Dict[str, Any]:
@@ -100,6 +141,7 @@ def load_formula_versions(path: str = "data/soul_map.json") -> Dict[str, Any]:
             "note": "Code-level scoring version (crash-tail blend).",
         },
     )
+    versions["bump_policy"] = version_bump_policy()
     return versions
 
 
@@ -130,12 +172,16 @@ def record_calibration_version(
     version_bumped = _should_bump_minor(
         council, cert=cert, forced=forced, beat_previous=beat_previous
     )
+    bump_block_reason = None if version_bumped else _bump_block_reason(
+        council, cert=cert, forced=forced, beat_previous=beat_previous
+    )
     next_version = _bump_minor(prev_version) if version_bumped else prev_version
 
     entry = {
         "version": next_version,
         "previous_version": prev_version,
         "version_bumped": version_bumped,
+        "bump_block_reason": bump_block_reason,
         "fired_at": _utcnow_z(),
         "holdout_proposed_accuracy": proposed_acc,
         "holdout_previous_accuracy": current_acc,
@@ -157,6 +203,7 @@ def record_calibration_version(
             beat_previous,
             forced,
             version_bumped=version_bumped,
+            bump_block_reason=bump_block_reason,
         ),
     }
     history: List[Dict[str, Any]] = list(council.get("history") or [])

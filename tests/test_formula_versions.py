@@ -25,7 +25,7 @@ def test_record_calibration_version_bumps_on_meaningful_beat(tmp_path, monkeypat
     soul = _soul(tmp_path)
     monkeypatch.chdir(tmp_path)
 
-    cert = {"passed": True, "proposed_accuracy": 0.62, "current_accuracy": 0.55}
+    cert = {"passed": True, "proposed_accuracy": 0.62, "current_accuracy": 0.55, "holdout_size": 50}
     before = {"quant": 0.3, "hype": 0.25, "dark_horse": 0.2, "technical": 0.25}
     after = {"quant": 0.28, "hype": 0.27, "dark_horse": 0.22, "technical": 0.23}
 
@@ -46,7 +46,7 @@ def test_small_improvement_does_not_bump_version(tmp_path, monkeypatch):
     soul = _soul(tmp_path)
     monkeypatch.chdir(tmp_path)
 
-    cert = {"passed": True, "proposed_accuracy": 0.551, "current_accuracy": 0.55}
+    cert = {"passed": True, "proposed_accuracy": 0.565, "current_accuracy": 0.55, "holdout_size": 50}
     entry = record_calibration_version(
         cert=cert,
         weights_before={"quant": 0.3, "hype": 0.25, "dark_horse": 0.2, "technical": 0.25},
@@ -56,10 +56,10 @@ def test_small_improvement_does_not_bump_version(tmp_path, monkeypatch):
 
     assert entry["version"] == "1.2"
     assert entry["version_bumped"] is False
-    assert "still on v1.2" in entry["story"].lower()
+    assert "2 pts" in entry["story"] or "still on v1.2" in entry["story"].lower()
 
 
-def test_cooldown_blocks_second_bump_within_seven_days(tmp_path, monkeypatch):
+def test_cooldown_blocks_second_bump_within_fourteen_days(tmp_path, monkeypatch):
     recent = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat().replace("+00:00", "Z")
     history = [
         {
@@ -73,7 +73,7 @@ def test_cooldown_blocks_second_bump_within_seven_days(tmp_path, monkeypatch):
     soul = _soul(tmp_path, current="1.3", history=history)
     monkeypatch.chdir(tmp_path)
 
-    cert = {"passed": True, "proposed_accuracy": 0.68, "current_accuracy": 0.55}
+    cert = {"passed": True, "proposed_accuracy": 0.68, "current_accuracy": 0.55, "holdout_size": 50}
     entry = record_calibration_version(
         cert=cert,
         weights_before={"quant": 0.3, "hype": 0.25, "dark_horse": 0.2, "technical": 0.25},
@@ -81,5 +81,21 @@ def test_cooldown_blocks_second_bump_within_seven_days(tmp_path, monkeypatch):
         soul_map_path=str(soul),
     )
 
-    assert entry["version"] == "1.3"
     assert entry["version_bumped"] is False
+    assert entry["bump_block_reason"] == "cooldown"
+
+
+def test_holdout_too_small_blocks_bump(tmp_path, monkeypatch):
+    soul = _soul(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    cert = {"passed": True, "proposed_accuracy": 0.62, "current_accuracy": 0.55, "holdout_size": 25}
+    entry = record_calibration_version(
+        cert=cert,
+        weights_before={"quant": 0.3, "hype": 0.25, "dark_horse": 0.2, "technical": 0.25},
+        weights_after={"quant": 0.28, "hype": 0.27, "dark_horse": 0.22, "technical": 0.23},
+        soul_map_path=str(soul),
+    )
+
+    assert entry["version"] == "1.2"
+    assert entry["bump_block_reason"] == "holdout_too_small"

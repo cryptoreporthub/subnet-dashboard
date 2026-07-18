@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from internal.council.dark_horse_crash import FORMULA_VERSION as DARK_HORSE_FORMULA_VERSION
+from internal.council.formula_versions import version_bump_policy
 from internal.council.human_narrative import (
     dark_horse_formula_summary,
     lineage_catalog_summary,
@@ -257,6 +258,7 @@ def _learning_loop_state(lane_id: str, soul_map_path: str = SOUL_MAP_PATH) -> Di
         "last_weight_update": adv.get("last_weight_update"),
         "calibration_last_retrain": cal.get("last_retrain_at"),
         "calibration_status": cal.get("last_cert_status"),
+        "version_policy": version_bump_policy(),
         "stagnant_source_note": lineage_loop_note(),
     }
     if lane_id == "dark_horse":

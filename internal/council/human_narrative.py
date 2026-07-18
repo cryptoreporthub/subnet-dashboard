@@ -22,6 +22,7 @@ def calibration_version_story(
     beat_previous: Optional[bool],
     forced: bool = False,
     version_bumped: bool = True,
+    bump_block_reason: Optional[str] = None,
 ) -> str:
     """One-liner when council weights version bumps on calibration fire."""
     if forced:
@@ -30,10 +31,24 @@ def calibration_version_story(
             f"Holdout check was skipped."
         )
     if not version_bumped and beat_previous is True and proposed_acc is not None:
+        if bump_block_reason == "cooldown":
+            return (
+                f"Still on v{prev_version}. Holdout looks good ({_pct(proposed_acc)}), "
+                f"but we wait at least two weeks between version bumps."
+            )
+        if bump_block_reason == "improvement_too_small":
+            return (
+                f"Still on v{prev_version}. Holdout improved to {_pct(proposed_acc)}, "
+                f"but we need a bigger step up (+2 pts) before calling it a new version."
+            )
+        if bump_block_reason == "holdout_too_small":
+            return (
+                f"Still on v{prev_version}. Early days — not enough graded picks yet "
+                f"to stamp a new version."
+            )
         return (
             f"Still on v{prev_version}. Holdout looks good ({_pct(proposed_acc)}), "
-            f"but we only tick the version when the gain is meaningful and at least "
-            f"a week has passed since the last bump."
+            f"but the bar for a new version is higher than a routine refresh."
         )
     if version_bumped and beat_previous is True and proposed_acc is not None and current_acc is not None:
         return (
@@ -57,9 +72,9 @@ def lineage_catalog_summary() -> str:
 
 def lineage_loop_note() -> str:
     return (
-        "The research papers stay frozen in time. What moves is us: each graded pick "
-        "nudges weights, and when calibration fires a new version has to beat the last "
-        "one on holdout — or the swap does not ship."
+        "The research papers never change. What does: live weights, tuned from graded picks. "
+        "A new council version only ships when holdout beats the last one by 2+ points, "
+        "on 40+ picks, and at least two weeks have passed — so v1.3 actually means something."
     )
 
 

@@ -14,9 +14,18 @@ def test_calibration_version_story_beat():
     assert "beat" in story.lower()
 
 
-def test_calibration_version_story_no_bump():
-    story = calibration_version_story("1.2", "1.2", 0.56, 0.55, True, version_bumped=False)
-    assert "still on v1.2" in story.lower()
+def test_calibration_version_story_cooldown():
+    story = calibration_version_story(
+        "1.2", "1.2", 0.58, 0.55, True, version_bumped=False, bump_block_reason="cooldown"
+    )
+    assert "two weeks" in story.lower()
+
+
+def test_calibration_version_story_small_gain():
+    story = calibration_version_story(
+        "1.2", "1.2", 0.56, 0.55, True, version_bumped=False, bump_block_reason="improvement_too_small"
+    )
+    assert "2 pts" in story
 
 
 def test_origin_story_readable():
