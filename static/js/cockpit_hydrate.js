@@ -633,7 +633,7 @@
         (links ? '<p class="backtest-method__refs">Sources: ' + links + '</p>' : '') +
         '</div>';
     }).join('');
-    return '<details class="backtest-method card">' +
+    return '<details class="backtest-method card" open>' +
       '<summary>Methodology &amp; sources (selective classification / meta-labeling)</summary>' +
       '<p class="backtest-method__summary">' + esc(methodology.summary || '') + '</p>' +
       '<div class="backtest-method__grid">' + metricHtml + '</div>' +
