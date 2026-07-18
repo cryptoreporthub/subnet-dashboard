@@ -160,6 +160,29 @@ def _dedupe_events(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
+def _refresh_trail_names(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Re-resolve display names from netuid at read time (plan §1.6)."""
+    from internal.subnet_names import name_for_netuid
+
+    out: List[Dict[str, Any]] = []
+    for row in events or []:
+        if not isinstance(row, dict):
+            continue
+        item = dict(row)
+        netuid = item.get("netuid")
+        if netuid is None:
+            evidence = item.get("evidence")
+            if isinstance(evidence, dict):
+                netuid = evidence.get("netuid")
+        if netuid is not None:
+            try:
+                item["subnet"] = name_for_netuid(int(netuid), use_taostats=False)
+            except (TypeError, ValueError):
+                pass
+        out.append(item)
+    return out
+
+
 def collect_trail_events(limit: int = 100) -> List[Dict[str, Any]]:
     """Merge persisted trail rows with derived prediction/scenario events."""
     merged: List[Dict[str, Any]] = []
@@ -169,7 +192,7 @@ def collect_trail_events(limit: int = 100) -> List[Dict[str, Any]]:
     merged = _dedupe_events(merged)
     if not merged:
         merged = _trail_from_weight_snapshot()
-    return merged[:limit]
+    return _refresh_trail_names(merged[:limit])
 
 
 def event_type_counts(events: List[Dict[str, Any]]) -> Dict[str, int]:

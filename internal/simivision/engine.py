@@ -3,7 +3,7 @@ SimiVision Signal Engine — Legendary Edition
 
 Builds the rich signal object required by the SimiVision Legendary Edition:
 - netuid
-- name (canonical, read directly from registry.json)
+- name (canonical via internal.subnet_names resolver)
 - rank
 - conviction (0-100)
 - rationale
@@ -215,12 +215,21 @@ def _build_rationale(decision, registry_item, conviction, status):
         parts.append("overvalued")
     return " ".join(parts)
 
+def _canonical_subnet_name(netuid: int, registry_item: Dict[str, Any]) -> str:
+    try:
+        from internal.subnet_names import name_for_netuid
+
+        return name_for_netuid(netuid, use_taostats=False)
+    except Exception:
+        return registry_item.get("name", f"SN{netuid}")
+
+
 def _build_signal(netuid, decision, registry_item, last_convictions):
     conviction, indicator_phrases = _compute_conviction(decision, registry_item)
     delta_symbol, delta_value = _compute_delta(netuid, conviction, last_convictions)
     rationale = _build_rationale(decision, registry_item, conviction, "Operative")
     status = "Operative" if conviction >= 50 else "Dimmed" if conviction >= 25 else "Hibernating"
-    return {"netuid": netuid, "name": registry_item.get("name", f"Subnet {netuid}"), "rank": registry_item.get("emission_rank"), "conviction": conviction, "rationale": rationale, "delta": delta_symbol, "delta_value": delta_value, "freshness": _human_freshness(registry_item.get("updated_at")), "source": registry_item.get("source", "taomarketcap"), "status": status, "indicator_signals": indicator_phrases}
+    return {"netuid": netuid, "name": _canonical_subnet_name(netuid, registry_item), "rank": registry_item.get("emission_rank"), "conviction": conviction, "rationale": rationale, "delta": delta_symbol, "delta_value": delta_value, "freshness": _human_freshness(registry_item.get("updated_at")), "source": registry_item.get("source", "taomarketcap"), "status": status, "indicator_signals": indicator_phrases}
 
 def generate_signals(registry=None, top_n=10, soul_map_path=SOUL_MAP_PATH):
     if registry is None:

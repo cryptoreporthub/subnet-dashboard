@@ -33,3 +33,20 @@ def test_trace_wallet_flow_structure():
     assert result["status"] == "success"
     assert result["counterparty"] == "5B"
     assert len(result["transfer_links"]) == 1
+
+
+def test_chat_investigation_tools_registry():
+    from internal.simivision import chat_service
+
+    tools = chat_service._register_investigation_tools()
+    assert "get_subnet_sellers" in tools
+    assert "get_wallet_activity" in tools
+    assert "trace_transfers" in tools
+    assert "get_subnet_owner" in tools
+
+    chat_service.INVESTIGATION_TOOLS = {
+        "get_subnet_sellers": lambda netuid, days=7: {"status": "success", "netuid": netuid},
+    }
+    out = chat_service.invoke_investigation_tool("get_subnet_sellers", netuid=82)
+    assert out.get("status") == "success"
+    assert out.get("netuid") == 82
