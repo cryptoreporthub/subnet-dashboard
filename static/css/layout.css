@@ -134,6 +134,27 @@ header.top {
   color: var(--signal-sell, #f43f5e);
 }
 
+.ops-readiness-badge {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+}
+
+.ops-readiness--ready {
+  color: var(--accent-bright);
+}
+
+.ops-readiness--degraded,
+.ops-readiness--warming {
+  color: var(--signal-hold, #f5a623);
+}
+
+.ops-readiness--unknown {
+  color: var(--signal-sell, #f43f5e);
+}
+
 .live-pill {
   display: inline-flex;
   align-items: center;

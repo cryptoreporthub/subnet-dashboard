@@ -10,6 +10,7 @@
     <div class="src-tag">
       DATA SOURCE: <b>{{ data_source|default('cache')|upper }}</b>
       <span class="data-freshness-badge data-freshness-warming" id="dataFreshnessBadge" role="status" aria-live="polite" aria-atomic="true">Chain feed: loading…</span>
+      <span class="ops-readiness-badge ops-readiness--warming" id="opsReadinessBadge" role="status" aria-live="polite" title="Production readiness">Ops…</span>
     </div>
     <div class="header-actions">
       <button type="button" class="cmd-palette-trigger" id="cmd-palette-trigger" title="Search (Ctrl+K)">Search</button>

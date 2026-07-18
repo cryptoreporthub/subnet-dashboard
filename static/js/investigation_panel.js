@@ -5,7 +5,10 @@
   var sellersBtn = document.getElementById('inv-sellers-btn');
   var walletBtn = document.getElementById('inv-wallet-btn');
   var boardsEl = document.getElementById('whale-leaderboards');
-  if (!sellersBtn && !boardsEl) return;
+  var whaleSummaryEl = document.getElementById('inv-whale-summary');
+  var ruggerStripEl = document.getElementById('inv-rugger-strip');
+  var signalsLoaded = false;
+  if (!sellersBtn && !boardsEl && !whaleSummaryEl) return;
 
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
@@ -229,6 +232,8 @@
     document.querySelectorAll('.inv-preset[data-action="sellers"]').forEach(function (btn) {
       btn.textContent = 'Sellers: ' + focusName();
     });
+    signalsLoaded = false;
+    if (ruggerStripEl) loadSignalStrips();
   });
 
   if (boardsEl) {
@@ -257,6 +262,108 @@
 
   window.InvestigationPanel = { runSellers: runSellers, focusNetuid: focusNetuid, runOwnerCheck: runOwnerCheck, runAsk: runAsk };
 
+  function renderWhaleSummary(summary, alerts) {
+    if (!whaleSummaryEl) return;
+    var body = whaleSummaryEl.querySelector('.investigation-signal-card__body');
+    if (!body) body = whaleSummaryEl;
+    if (!summary || summary.status !== 'success') {
+      body.innerHTML = '<p class="inv-empty">Whale summary unavailable.</p>';
+      return;
+    }
+    if (!summary.data_available) {
+      var lever = summary.reason === 'no_events'
+        ? 'Ledger empty — set <code>TAOSTATS_API_KEY</code> and run a whale scan.'
+        : esc(summary.reason || 'no whale events yet');
+      body.innerHTML = '<p class="inv-empty">' + lever + '</p>';
+      return;
+    }
+    var stats = summary.stats || {};
+    var alertCount = (alerts && alerts.total) || 0;
+    var rugAlerts = (alerts && alerts.rugger_alerts) || [];
+    var html =
+      '<p><strong>' + esc(String(stats.total_events || 0)) + '</strong> events · ' +
+      esc(String(stats.total_wallets_tracked || 0)) + ' wallets tracked</p>';
+    if (alertCount) {
+      html += '<p class="inv-alert-count">' + alertCount + ' active alert' + (alertCount === 1 ? '' : 's') + '</p>';
+      if (rugAlerts.length) {
+        html += '<ul class="inv-alert-list">';
+        rugAlerts.slice(0, 3).forEach(function (a) {
+          html += '<li>SN' + esc(a.netuid) + ' · exit ~' + esc(a.estimated_exit_in_hours) + 'h</li>';
+        });
+        html += '</ul>';
+      }
+    } else {
+      html += '<p class="inv-muted">No active whale alerts.</p>';
+    }
+    body.innerHTML = html;
+  }
+
+  function renderRuggerSummary(summary) {
+    if (!ruggerStripEl) return;
+    var body = ruggerStripEl.querySelector('.investigation-signal-card__body');
+    if (!body) body = ruggerStripEl;
+    if (!summary || summary.status !== 'success') {
+      body.innerHTML = '<p class="inv-empty">Rugger summary unavailable.</p>';
+      return;
+    }
+    if (!summary.data_available) {
+      body.innerHTML = '<p class="inv-empty">No rugger events — same ledger as whales; ingest via TaoStats scan.</p>';
+      return;
+    }
+    var stats = summary.stats || {};
+    var count = stats.rugger_count || 0;
+    var html =
+      '<p><strong>' + esc(String(count)) + '</strong> ruggers flagged · ' +
+      esc(String(stats.total_flips || 0)) + ' flips tracked</p>';
+    var focus = focusNetuid();
+    fetch('/api/ruggers/subnet/' + encodeURIComponent(focus))
+      .then(function (r) { return r.json(); })
+      .then(function (risk) {
+        if (risk && risk.risk_level) {
+          html += '<p class="inv-rug-focus">Focus SN' + esc(focus) + ': <strong>' + esc(risk.risk_level) + '</strong>';
+          if (risk.summary || risk.reason) html += ' · ' + esc(risk.summary || risk.reason);
+          html += '</p>';
+        }
+        body.innerHTML = html;
+      })
+      .catch(function () {
+        body.innerHTML = html;
+      });
+  }
+
+  function loadSignalStrips() {
+    if (signalsLoaded) return Promise.resolve();
+    signalsLoaded = true;
+    return Promise.all([
+      fetch('/api/whales/summary').then(function (r) { return r.json(); }).catch(function () { return null; }),
+      fetch('/api/whales/alerts').then(function (r) { return r.json(); }).catch(function () { return null; }),
+      fetch('/api/ruggers/summary').then(function (r) { return r.json(); }).catch(function () { return null; }),
+    ]).then(function (res) {
+      renderWhaleSummary(res[0], res[1]);
+      renderRuggerSummary(res[2]);
+    });
+  }
+
+  function onMarketDrawerOpen() {
+    loadSignalStrips().then(function () {
+      if (sellersBtn && document.getElementById('inv-sellers-out')) {
+        var out = document.getElementById('inv-sellers-out');
+        if (out && (out.textContent === '—' || out.querySelector('.inv-loading'))) {
+          runSellers(focusNetuid());
+        }
+      }
+    });
+  }
+
+  var marketDrawer = document.getElementById('market-drawer');
+  if (marketDrawer) {
+    marketDrawer.addEventListener('toggle', function () {
+      if (marketDrawer.open) onMarketDrawerOpen();
+    });
+    if (marketDrawer.open) onMarketDrawerOpen();
+  } else {
+    loadSignalStrips();
+  }
   function parseWalletParam() {
     try {
       var params = new URLSearchParams(window.location.search);

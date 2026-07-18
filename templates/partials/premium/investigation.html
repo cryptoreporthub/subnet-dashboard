@@ -2,6 +2,17 @@
   <h2 class="section-title" id="investigation-title">On-chain investigation</h2>
   <p class="section-sub">Wallet flows, subnet sellers, whale leaderboards — TaoStats-backed when API key is set.</p>
 
+  <div class="investigation-signals" id="inv-signals-strip">
+    <div class="investigation-signal-card" id="inv-whale-summary" aria-live="polite">
+      <h3 class="investigation-signal-card__title">Whale desk</h3>
+      <p class="investigation-signal-card__body">Loading whale summary…</p>
+    </div>
+    <div class="investigation-signal-card" id="inv-rugger-strip" aria-live="polite">
+      <h3 class="investigation-signal-card__title">Rug watch</h3>
+      <p class="investigation-signal-card__body">Loading rugger summary…</p>
+    </div>
+  </div>
+
   <div class="investigation-grid">
     <div class="investigation-card">
       <h3>Subnet sellers</h3>
@@ -30,7 +41,7 @@
 
     <div class="investigation-card investigation-card--wide">
       <h3>Whale leaderboards</h3>
-      <div id="whale-leaderboards" class="whale-boards" aria-live="polite">Loading…</div>
+      <div id="whale-leaderboards" class="whale-boards" aria-live="polite">Open drawer loads whale boards…</div>
     </div>
   </div>
 </section>

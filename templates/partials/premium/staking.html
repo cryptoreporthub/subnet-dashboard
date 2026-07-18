@@ -2,7 +2,7 @@
 <section class="row" id="section-staking" aria-labelledby="staking-title">
   <div class="section-label">Staking / Yield</div>
   <h2 class="section-title" id="staking-title">Staking APY Leaders</h2>
-  <p class="section-sub">Top subnets by stake yield — ranked from live registry economics.</p>
+  <p class="section-sub">Top subnets by stake yield — ranked from live registry economics. <span class="heuristic-tag">Heuristic · /api/subnets</span></p>
   {% set staking_rows = sn_list|sort(attribute='emission', reverse=true)|list %}
   {% if degraded %}
   <div class="card card-muted"><p class="empty">Loading staking APY leaders from live feed…</p></div>

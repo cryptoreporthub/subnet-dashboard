@@ -6,7 +6,7 @@ import html
 import json
 import logging
 import os
-from typing import Any, AsyncIterator, Dict, Optional, Tuple
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 from datastore.learning_engine import LearningEngine
 
@@ -44,7 +44,11 @@ def build_simivision_prompt(message: str, context: Dict[str, Any]) -> str:
     investigation = context.get("investigation")
     inv_block = ""
     if investigation:
-        inv_block = f"\nOn-chain investigation data (cite wallets/amounts from this):\n{json.dumps(investigation, default=str)[:6000]}\n"
+        payload = investigation.get("report") if isinstance(investigation, dict) and "report" in investigation else investigation
+        tools = investigation.get("tools") if isinstance(investigation, dict) else None
+        inv_block = f"\nOn-chain investigation data (cite wallets/amounts from this):\n{json.dumps(payload, default=str)[:5000]}\n"
+        if tools:
+            inv_block += f"Tool results:\n{json.dumps(tools, default=str)[:2000]}\n"
     return (
         "You are SimiVision, an AI analyst for Bittensor subnets with on-chain investigation. "
         "When investigation data is present, answer wallet/sell/transfer questions from those facts. "
@@ -73,12 +77,85 @@ def _maybe_investigation_context(message: str) -> Optional[Dict[str, Any]]:
     if wm:
         wallet = wm.group(1)
     try:
-        from internal.investigation.service import build_investigation_report
-
-        return build_investigation_report(message, netuid=netuid, wallet=wallet)
+        return build_investigation_context(message, netuid=netuid, wallet=wallet)
     except Exception as exc:
         logger.debug("investigation context skipped: %s", exc)
         return None
+
+
+# §Plan Phase 3.3 — composable on-chain tools for chat / API
+INVESTIGATION_TOOLS: Dict[str, Any] = {}
+
+
+def _register_investigation_tools() -> Dict[str, Any]:
+    from internal.investigation.service import (
+        investigate_owner_check,
+        investigate_subnet_sellers,
+        investigate_wallet,
+        trace_wallet_flow,
+    )
+
+    return {
+        "get_subnet_sellers": lambda netuid, days=7: investigate_subnet_sellers(int(netuid), limit=50),
+        "get_wallet_activity": lambda wallet, days=30: investigate_wallet(wallet, limit=50),
+        "trace_transfers": lambda from_wallet, to_wallet=None, days=30: trace_wallet_flow(
+            from_wallet, counterparty=to_wallet, limit=50
+        ),
+        "get_subnet_owner": lambda netuid: investigate_owner_check(int(netuid), []),
+    }
+
+
+def invoke_investigation_tool(name: str, **kwargs: Any) -> Dict[str, Any]:
+    """Invoke a named investigation tool (TaoStats-backed)."""
+    global INVESTIGATION_TOOLS
+    if not INVESTIGATION_TOOLS:
+        INVESTIGATION_TOOLS = _register_investigation_tools()
+    fn = INVESTIGATION_TOOLS.get(name)
+    if not fn:
+        return {"status": "error", "error": f"unknown tool: {name}"}
+    try:
+        result = fn(**kwargs)
+        return result if isinstance(result, dict) else {"status": "success", "data": result}
+    except Exception as exc:
+        logger.warning("investigation tool %s failed: %s", name, exc)
+        return {"status": "error", "error": str(exc)}
+
+
+def build_investigation_context(
+    message: str,
+    *,
+    netuid: Optional[int] = None,
+    wallet: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Structured tool results for chat prompts (plan §3.3)."""
+    from internal.investigation.service import build_investigation_report
+
+    report = build_investigation_report(message, netuid=netuid, wallet=wallet)
+    tools_used: List[Dict[str, Any]] = []
+    q = (message or "").lower()
+
+    if netuid is not None or "subnet" in q or "sn" in q or "sell" in q:
+        n = netuid
+        if n is None:
+            import re
+
+            m = re.search(r"\b(?:sn|subnet)\s*(\d+)\b", message, re.I)
+            if m:
+                n = int(m.group(1))
+        if n is not None:
+            tools_used.append({"tool": "get_subnet_sellers", "result": invoke_investigation_tool("get_subnet_sellers", netuid=n)})
+            if wallet or "owner" in q:
+                from internal.investigation.service import investigate_owner_check
+
+                wallets = [wallet] if wallet else []
+                tools_used.append({"tool": "get_subnet_owner", "result": investigate_owner_check(n, wallets)})
+
+    if wallet:
+        tools_used.append({"tool": "get_wallet_activity", "result": invoke_investigation_tool("get_wallet_activity", wallet=wallet)})
+        if "transfer" in q or "flow" in q or "trace" in q:
+            tools_used.append({"tool": "trace_transfers", "result": invoke_investigation_tool("trace_transfers", from_wallet=wallet)})
+
+    return {"report": report, "tools": tools_used}
 
 
 def call_llm(prompt: str, message: str, context: Dict[str, Any]) -> Tuple[str, bool]:

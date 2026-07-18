@@ -56,3 +56,10 @@ def test_registry_and_subnets_names_agree():
         nuid = int(item.get("netuid", item.get("id", key)))
         if nuid in by_netuid:
             assert by_netuid[nuid] == item.get("name"), f"SN{nuid} name mismatch"
+
+
+def test_mindmap_trail_refreshes_stored_names():
+    from internal.learning.mindmap_aggregator import _refresh_trail_names
+
+    rows = _refresh_trail_names([{"netuid": 40, "subnet": "Ralph", "event_type": "signal_triggered"}])
+    assert rows[0]["subnet"] != "Ralph"

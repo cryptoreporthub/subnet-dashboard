@@ -1,19 +1,18 @@
 # STATUS
 
-**Updated:** 2026-07-17T22:10:00Z  
-**active plan:** `s33-prod-readiness-plan.md` — **§33 complete**  
-**main:** `930b8b9` — **all green on prod**
+**Updated:** 2026-07-17T23:45:00Z  
+**active plan:** `s34-frontend-catchup-plan.md` — **§34 ACTIVE**  
+**main:** `4f43eaa`
+
+## Next
+
+Start **§34-1** — stop empty theater (council hydrate wipe, HOLD product, eager brain letter / what’s-working, ops readiness strip).
 
 ## Done
 
-- §33 ops: `/api/ops/readiness`, feed warmup, subnet load timeout, DEPLOY troubleshooting
-- §32 trust product merged (#320)
-- §31 website opt merged (#319)
-- Prod post-deploy: TMC 129 subnets, TaoStats configured, resolver running, graded 453 on volume
-
-## Hotfix
-
-- #322 merged: readiness graded + /api/subnets TaoStats storm — **verify_prod.sh OK on prod**
+- §33 ops readiness + hotfix — prod `verify_prod.sh` green
+- §32 trust product
+- §31 website opt
 
 ## Skipped
 

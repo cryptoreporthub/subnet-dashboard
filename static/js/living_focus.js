@@ -7,6 +7,9 @@
 
   var bodyEl = document.getElementById('living-focus-body');
   var learnEl = document.getElementById('living-focus-learn');
+  var evidenceEl = document.getElementById('living-focus-evidence');
+  var trailTeaserEl = document.getElementById('living-focus-trail-teaser');
+  var shareLinkEl = document.getElementById('living-focus-share-link');
   var switcherEl = document.getElementById('living-focus-switcher');
   var ctaEl = document.getElementById('living-focus-cta');
   var subEl = document.getElementById('living-focus-sub');
@@ -96,6 +99,10 @@
     var inv = document.getElementById('inv-netuid');
     if (inv) inv.value = String(focusNetuid);
     document.dispatchEvent(new CustomEvent('living-focus:change', { detail: { netuid: focusNetuid, name: focusName } }));
+    if (shareLinkEl) {
+      shareLinkEl.href = '/subnet/' + focusNetuid;
+      shareLinkEl.hidden = false;
+    }
   }
 
   function judgeBar(label, score, contested) {
@@ -193,7 +200,7 @@
       '<span class="living-focus__action badge-' + (action === 'LONG' ? 'buy' : action === 'SHORT' ? 'sell' : 'watch') + '">' + esc(action || 'HOLD') + '</span>' +
       '</header>';
     html += renderWhyNot(explain);
-    html += '<motion.div class="living-focus__judges">' +
+    html += '<div class="living-focus__judges">' +
       judgeBar('Oracle', (data.oracle || {}).score, contested) +
       judgeBar('Echo', (data.echo || {}).score, contested) +
       judgeBar('Pulse', (data.pulse || {}).score, contested) +
@@ -208,24 +215,60 @@
     if (ctaEl) ctaEl.hidden = false;
   }
 
-  function renderChips(chips) {
-    var chipRow = document.getElementById('living-focus-chips');
-    if (!chipRow) {
-      chipRow = document.createElement('div');
-      chipRow.id = 'living-focus-chips';
-      chipRow.className = 'living-focus__chips';
-      if (bodyEl) bodyEl.appendChild(chipRow);
-    }
-    var items = (chips || []).filter(Boolean).slice(0, 3);
+  function renderEvidenceRows(rows) {
+    if (!evidenceEl) return;
+    var items = (rows || []).filter(Boolean);
     if (!items.length) {
-      chipRow.innerHTML = '';
-      chipRow.hidden = true;
+      evidenceEl.hidden = true;
+      evidenceEl.innerHTML = '';
       return;
     }
-    chipRow.hidden = false;
-    chipRow.innerHTML = items.map(function (c) {
-      return '<span class="living-focus__chip living-focus__chip--' + esc(c.tone || 'neutral') + '">' + esc(c.label) + '</span>';
-    }).join('');
+    evidenceEl.hidden = false;
+    evidenceEl.innerHTML =
+      '<h4 class="living-focus__evidence-title">Evidence desk</h4>' +
+      '<ul class="living-focus__evidence-list">' +
+      items.map(function (row) {
+        return (
+          '<li class="living-focus__evidence-row living-focus__evidence-row--' + esc(row.tone || 'neutral') + '">' +
+          '<span class="living-focus__evidence-label">' + esc(row.label) + '</span>' +
+          '<span class="living-focus__evidence-detail">' + esc(row.detail || '') + '</span>' +
+          '</li>'
+        );
+      }).join('') +
+      '</ul>';
+  }
+
+  function renderTrailTeaser(trail) {
+    if (!trailTeaserEl) return;
+    var rows = (trail || []).filter(trailMatchesFocus).slice(0, 3);
+    if (!rows.length) {
+      trailTeaserEl.hidden = true;
+      trailTeaserEl.innerHTML = '';
+      return;
+    }
+    trailTeaserEl.hidden = false;
+    var html =
+      '<h4 class="living-focus__trail-title">Recent brain events</h4>' +
+      '<ol class="living-focus__trail-list">';
+    rows.forEach(function (ev) {
+      var payload = ev.payload || ev;
+      var label = ev.event_type || payload.event_type || 'event';
+      var note = payload.statement || payload.reason || payload.expert || '';
+      html +=
+        '<li><span class="living-focus__trail-type">' + esc(label) + '</span>' +
+        (note ? ' · ' + esc(String(note).slice(0, 72)) : '') +
+        '</li>';
+    });
+    html += '</ol><p class="living-focus__trail-link"><a href="#section-trail">Full learning trail →</a></p>';
+    trailTeaserEl.innerHTML = html;
+  }
+
+  function renderChips(chips) {
+    renderEvidenceRows(
+      (chips || []).map(function (c) {
+        return { label: c.label, detail: c.detail || '', tone: c.tone || 'neutral' };
+      })
+    );
   }
 
   function renderSwitcher(top) {
@@ -320,7 +363,7 @@
   function scenarioForFocus(scen) {
     if (!scen || focusNetuid == null) return null;
     var scenarios = scen.scenarios || [];
-  var match = null;
+    var match = null;
     scenarios.forEach(function (s) {
       if (!s || match) return;
       var features = s.features || {};
@@ -367,17 +410,21 @@
     ]).then(function (res) {
       var scen = scenarioForFocus(res[0]);
       if (scen && scen.regime) {
-        chips.push({ label: 'Regime: ' + scen.regime, tone: 'neutral' });
+        chips.push({ label: 'Scenario memory', detail: 'Regime: ' + scen.regime, tone: 'neutral' });
       } else if (scen && scen.outcome) {
-        chips.push({ label: 'Scenario: ' + scen.outcome, tone: scen.outcome === 'correct' ? 'neutral' : 'warn' });
+        chips.push({ label: 'Scenario memory', detail: 'Outcome: ' + scen.outcome, tone: scen.outcome === 'correct' ? 'neutral' : 'warn' });
+      } else if (scen && scen.name) {
+        chips.push({ label: 'Scenario memory', detail: String(scen.name), tone: 'neutral' });
       }
       var rug = res[1];
       if (rug && rug.risk_level) {
-        chips.push({ label: 'Rug risk: ' + rug.risk_level, tone: rug.risk_level === 'high' ? 'warn' : 'neutral' });
+        var rugDetail = rug.summary || rug.reason || ('Level ' + rug.risk_level);
+        chips.push({ label: 'Rug watch', detail: rugDetail, tone: rug.risk_level === 'high' ? 'warn' : 'neutral' });
       }
       var pm = postmortemForFocus(res[2]);
       if (pm) {
-        chips.push({ label: 'Autopsy: ' + (pm.judge || pm.title || 'focus SN'), tone: 'muted' });
+        var lesson = pm.lesson || pm.summary || pm.verdict || 'graded autopsy on file';
+        chips.push({ label: 'Autopsy', detail: String(lesson).slice(0, 120), tone: 'muted' });
       }
       renderChips(chips);
     });
@@ -419,6 +466,7 @@
       var weights = calibrationWeights(cal);
       renderJudges(judges, action, weights, explain);
       renderLearnStrip(trail, weights);
+      renderTrailTeaser(trail);
       return loadChips();
     });
   }

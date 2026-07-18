@@ -1,17 +1,18 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-17T22:16:00Z  
-**main:** `930b8b9` · **§31–§33 complete**
+**Last updated:** 2026-07-17T23:45:00Z  
+**main:** `4f43eaa` · **§34 front-door catch-up ACTIVE**
 
 ## Active
 
-Idle — board clear unless user opens new phase.
+**§34** — `s34-frontend-catchup-plan.md`  
+Backend goldmine → visible product. Start **§34-1** (hydrate wipe, HOLD as product, readiness strip, eager above-fold).
 
 ## Done
 
 - §27–§31 (#312–#319)
 - §32 trust product (#320)
-- §33 prod readiness (#321) + subnets TaoStats perf fix
+- §33 prod readiness (#321–#323)
 
 ## Skipped
 

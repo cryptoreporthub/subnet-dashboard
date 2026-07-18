@@ -41,6 +41,14 @@
   function feedState(payload) {
     if (!payload || typeof payload !== 'object') return 'unknown';
     if (payload.ci_or_test || !payload.sync_enabled) return 'snapshot';
+    // Prefer effective feed (TMC / registry) over empty blockmachine cache
+    var eff = payload.effective_source;
+    var total = payload.effective_total != null ? payload.effective_total : payload.subnet_count;
+    if (eff && eff !== 'none' && total > 0) {
+      if (eff === 'blockmachine' && !payload.stale) return 'live';
+      if (eff === 'blockmachine' && payload.stale) return 'stale';
+      return 'snapshot'; // taomarketcap / registry — honest live economics
+    }
     if (!payload.last_sync) return 'warming';
     if (payload.stale) return 'stale';
     return 'live';
@@ -70,7 +78,17 @@
     }
 
     var age = formatAge(payload.age_seconds);
-    var count = payload.subnet_count || 0;
+    var eff = payload.effective_source || 'blockmachine';
+    var count =
+      payload.effective_total != null
+        ? payload.effective_total
+        : payload.subnet_count || 0;
+
+    // Blockmachine cache empty but TMC/registry serving — show real feed, not "loading"
+    if ((!payload.last_sync || payload.subnet_count === 0) && count > 0 && eff !== 'blockmachine') {
+      applyBadge(el, 'snapshot', eff + ' · ' + count + ' subnets');
+      return;
+    }
 
     if (!payload.last_sync) {
       applyBadge(el, 'warming', 'Chain feed: warming up');
@@ -78,7 +96,11 @@
     }
 
     if (payload.stale) {
-      applyBadge(el, 'stale', 'Stale · ' + (age || 'unknown') + ' · ' + count + ' subnets');
+      applyBadge(
+        el,
+        'stale',
+        'Stale chain · ' + (age || 'unknown') + (count ? ' · feed ' + count + ' SN' : '')
+      );
       return;
     }
 
