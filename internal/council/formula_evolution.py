@@ -139,6 +139,8 @@ def _version_episodes(lane_id: str) -> List[Dict[str, Any]]:
         after = (entry.get("weights_after") or {}).get(lane_id)
         if before is None and after is None:
             continue
+        if not entry.get("version_bumped"):
+            continue
         day = _parse_day(entry.get("fired_at"))
         episodes.append(
             {

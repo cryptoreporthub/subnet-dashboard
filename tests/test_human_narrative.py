@@ -8,10 +8,15 @@ from internal.council.human_narrative import (
 
 
 def test_calibration_version_story_beat():
-    story = calibration_version_story("1.2", "1.3", 0.62, 0.55, True)
+    story = calibration_version_story("1.2", "1.3", 0.62, 0.55, True, version_bumped=True)
     assert "1.3" in story
     assert "1.2" in story
     assert "beat" in story.lower()
+
+
+def test_calibration_version_story_no_bump():
+    story = calibration_version_story("1.2", "1.2", 0.56, 0.55, True, version_bumped=False)
+    assert "still on v1.2" in story.lower()
 
 
 def test_origin_story_readable():

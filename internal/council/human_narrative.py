@@ -21,24 +21,31 @@ def calibration_version_story(
     current_acc: Optional[float],
     beat_previous: Optional[bool],
     forced: bool = False,
+    version_bumped: bool = True,
 ) -> str:
     """One-liner when council weights version bumps on calibration fire."""
     if forced:
         return (
-            f"We shipped council weights v{next_version} on an admin override — "
-            f"the usual holdout check was skipped."
+            f"Admin override — weights updated, still on council v{prev_version}. "
+            f"Holdout check was skipped."
         )
-    if beat_previous is True and proposed_acc is not None and current_acc is not None:
+    if not version_bumped and beat_previous is True and proposed_acc is not None:
+        return (
+            f"Still on v{prev_version}. Holdout looks good ({_pct(proposed_acc)}), "
+            f"but we only tick the version when the gain is meaningful and at least "
+            f"a week has passed since the last bump."
+        )
+    if version_bumped and beat_previous is True and proposed_acc is not None and current_acc is not None:
         return (
             f"v{next_version} beat v{prev_version} on holdout "
             f"({_pct(proposed_acc)} vs {_pct(current_acc)}). New weights are live."
         )
     if beat_previous is False and proposed_acc is not None and current_acc is not None:
         return (
-            f"v{next_version} did not beat v{prev_version} on holdout "
-            f"({_pct(proposed_acc)} vs {_pct(current_acc)}). We kept the old weights."
+            f"v{prev_version} held — holdout did not improve "
+            f"({_pct(proposed_acc)} vs {_pct(current_acc)})."
         )
-    return f"Council weights moved to v{next_version} after calibration."
+    return f"Council weights refreshed on v{prev_version} after calibration."
 
 
 def lineage_catalog_summary() -> str:
