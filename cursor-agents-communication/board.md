@@ -1,36 +1,31 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-18T00:38:00Z  
-**main:** `4ab6b2e` · **post-§34 + subnet-names plan complete**
+**Last updated:** 2026-07-18T18:15:00Z  
+**main:** `6bbf75b` · **K3 Phase 1 in progress**
 
 ## Active
 
-**Phase A (prod stability — one machine)** — verify on live `/` after #333:
-- `/health` < 2s · hydrate fills or fails visibly in ~30s · KPI not 0%
-- See `docs/fly-web-worker-split.md` § Load-separation map
+**K3 Phase 1 (Cursor)** — locked slice order:
+1. **K3-2 merge** — PR #346 squash-merged → `6bbf75b` ✅
+2. **K3-2b data wire** — `dpick.shortlist` via `/api/mindmap/summary` + `daily_pick_stage` (branch `cursor/k3-2b-shortlist-e7f9`) 🔶 in progress
+3. **USER PHONE SIGN-OFF** — blocked until K3-2b on fly.dev
+4. **K3-3** — story-path promotion (NOT started; Cursor parked)
 
-**Phase B (next slice)** — Fly **web + worker** split (#2): `docs/fly-web-worker-split.md`
-- Same image, two processes; background jobs off the HTTP path
-- Implementation: `internal/worker.py` + `RUN_MODE` + `fly.toml` `[processes]`
+Plan of record: `docs/K3-Master-Architecture-V2.md` (V1 superseded).
 
-**Housekeeping / optional**
-- **E1** test debt (`post-s28-backlog.md`) — broader pytest green
-- **H1** custom domain — human DNS (`DEPLOY.md`)
-- Prod human pass — §34 success metric on live `/`
+## Done (this sprint)
 
-## Done
+- K3-1 dossier (council_stage v5) on main
+- K3-2 deliberation UI merged (#346)
+- K3 Master Architecture V2 + Cursor prompt pack on main (#347 docs)
 
-- §34 front-door catch-up (#324/#325) — hydrate, evidence desk, whale/rug desk, Pro story
-- Subnet names + on-chain investigation plan (#306, #325) — canonical names, investigate APIs, chat tools
-- §27–§33 (#312–#323)
-- §31 website opt · §32 trust product · §33 prod readiness
+## Prod snapshot
 
-## Prod snapshot (verify_prod @ 2026-07-18)
+- Deploy pending after K3-2b merge to main
+- Deliberation layer: honest-empty until shortlist wired
 
-- `ready: true` · graded **453** · feed **129** subnets (TMC) · resolver on
-- HOLD daily pick (honest audit gate) · `live_subnets_cache_empty` known ops note
-- Names: no `SNNone` in `/api/subnets` sample
+## Skipped / gated
 
-## Skipped
-
-- H1 custom domain (until human) · H2–H6 human infra · D1–D7 deferred
+- K3-3 lifecycle — gated on phone sign-off
+- K3-4 temporal ring — after K3-3
+- K3-5 polish — after K3-4

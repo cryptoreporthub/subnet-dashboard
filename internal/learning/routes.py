@@ -162,7 +162,7 @@ def _compute_learning_metrics() -> Dict[str, Any]:
 async def api_mindmap_summary():
     """Mindmap summary wired to expert weights and resolver stats."""
     try:
-        from server import _safe_simivision_payload
+        from server import _market_context_with_weights, _safe_simivision_payload
 
         simivision = _safe_simivision_payload()["data"]
     except Exception as exc:
@@ -173,6 +173,22 @@ async def api_mindmap_summary():
     stats = snap["engine_stats"]
     expert_weights = snap["expert_weights"]
     resolved = snap["resolved_payload"]
+
+    dpick_block: Dict[str, Any] = {"shortlist": []}
+    try:
+        from internal.council.daily_pick_engine import get_or_create_today_pick
+        from internal.learning.dpick_shortlist import build_deliberation_shortlist
+
+        subnets = _subnets_for_tracker()
+        market_context = _market_context_with_weights(subnets)
+        daily_payload = get_or_create_today_pick(subnets, market_context)
+        deliberation = build_deliberation_shortlist(subnets, market_context, daily_payload)
+        alts = deliberation.get("alternatives") or []
+        dpick_block = {"shortlist": deliberation if len(alts) >= 2 else []}
+    except Exception as exc:
+        logger.warning("mindmap summary dpick.shortlist failed: %s", exc)
+        dpick_block = {"shortlist": []}
+
     return {
         "status": "success",
         "data": {
@@ -205,6 +221,7 @@ async def api_mindmap_summary():
                 "last_updated": stats.get("last_updated")
                 or simivision.get("meta", {}).get("updated_at"),
             },
+            "dpick": dpick_block,
         },
     }
 
