@@ -91,6 +91,28 @@
 
 ## Section 3: K2.7 Gap → Slice Mapping (V2 Corrected)
 
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ K2.7 GAP AUDIT → K3 SLICE RESOLUTION (V2)                       │
+├──────────────────────────────────────────────────────────────────┤
+│ GAP #1: Mindmap→Deliberation unlock missing                     │
+│   → K3-1: v5 Intelligence Dossier (✅ MERGED PR #344)            │
+├──────────────────────────────────────────────────────────────────┤
+│ GAP #2: Council lifecycle path unclear                          │
+│   → K3-3: Promote /api/mindmap/story-path + story_path.html      │
+│     (NO new /api/lifecycle route)                                │
+│   → STATUS: 🔶 SCOPED — reconcile existing infra first           │
+├──────────────────────────────────────────────────────────────────┤
+│ GAP #3: Insufficient temporal confidence / timeless signals      │
+│   → K3-4: Conviction Ring + Temporal Horizon                     │
+│   → STATUS: 🔶 SCOPED, merged with ring concept                  │
+├──────────────────────────────────────────────────────────────────┤
+│ BONUS GAP: Mobile polish / onboarding / trust clarity             │
+│   → K3-5: Final hardening + onboarding + outlets                 │
+│   → STATUS: 🔶 SCOPED, always-last slice                         │
+└──────────────────────────────────────────────────────────────────┘
+```
+
 ### Reality Check: What V1 Got Wrong
 
 **1. K3-2 status** — V1 said "✅ Shipped PR #346 merged." **WRONG.** PR #346 is OPEN (draft, not merged). **No deliberation layer on main.** Status corrected to 🔶.
@@ -113,9 +135,9 @@
 
 ### 4A: K3-2b dpick.shortlist Data Contract
 
-**Rationale:** K3-2 deliberation layer in `council_stage.html` reads `dpick.shortlist` but the source API doesn't exist yet.
+**Rationale:** K3-2 deliberation layer in `council_stage.html` reads `dpick.shortlist` but the source API doesn't exist yet. This slice wires it.
 
-**Source API:** Extend `/api/mindmap/summary` OR add `/api/deliberation/shortlist`.
+**Source API:** Extend `/api/mindmap/summary` OR add `/api/deliberation/shortlist` — whichever is less engineering. Default: extend mindmap summary.
 
 **Payload shape:**
 ```json
@@ -137,82 +159,251 @@
 **Files to touch:**
 - `server.py` or `internal/learning/dashboard_context.py` — extend context with `dpick.shortlist`
 - Backend: extend `/api/mindmap/summary` or add `/api/deliberation/shortlist`
-- `templates/partials/premium/council_stage.html` — already reads `dpick.shortlist`, needs data
+- `templates/partials/premium/council_stage.html` — already reads `dpick.shortlist`, just needs real data
 
-**Honest-empty:** "Council deliberation in progress. Alternative subnets being evaluated."
+**Honest-empty:** When shortlist API returns 404 or empty → show "Council deliberation in progress. Alternative subnets being evaluated." + K3-2's existing warming-up card.
 
 ### 4B: K3-3 Council Lifecycle Path (Story Path Promotion)
 
-**Key decision:** Do NOT invent `/api/lifecycle`. Promote existing `/api/mindmap/story-path` + `story_path.html` from Tier 3 to Tier 1/2.
+**Key decision:** Do NOT invent `/api/lifecycle`. Instead promote existing `/api/mindmap/story-path` + `story_path.html` from Tier 3 Pro drawer to Tier 1/2 surface.
 
 **Existing infrastructure:**
-- `/api/mindmap/story-path` — returns lifecycle data
-- `story_path.html` — renders narrative timeline (buried in Pro drawer, "warming up")
-- `story_strip.html` — complementary timeline strip
+- `/api/mindmap/story-path` — returns lifecycle data (current stage, stages with timestamps, evidence)
+- `story_path.html` — renders the narrative timeline (currently buried in Pro drawer, "warming up")
+- `story_strip.html` — complementary timeline strip component
 
 **Promotion plan:**
-1. Move story_path into dossier's Outcome/Learning layers
-2. Hook into existing `/api/mindmap/story-path` — if 404, honest-empty
-3. Add stage indicators (formation → validation → resolution → graded)
-4. Surface story_strip as compact timeline below hero pick
+1. Move `story_path` narrative from Tier 3 drill-down to the dossier's Outcome/Learning layers
+2. Hook into existing `/api/mindmap/story-path` — if 404, show honest-empty fallback
+3. Add stage indicators (formation → validation → resolution → graded) with timestamped transitions
+4. Surface `story_strip` as compact timeline below hero pick
+
+**Payload shape (extension to EXISTING API, not new):**
+```json
+{
+  "current_stage": "validation",
+  "stage_history": [
+    {"stage": "formation", "entered_at": "2026-07-15T08:00:00Z", "evidence": "RSI breakout + volume spike", "confidence": 0.62},
+    {"stage": "validation", "entered_at": "2026-07-16T14:00:00Z", "evidence": "Council consensus reached", "confidence": 0.78}
+  ],
+  "next_stage": "resolution",
+  "expected_resolution": "2026-07-19T00:00:00Z",
+  "grading_preview": "pending"
+}
+```
 
 **Files to touch:**
-- `templates/partials/premium/council_stage.html` — integrate story_path
-- `templates/partials/premium/story_path.html` — polish for Tier 1
-- `internal/mindmap/` — extend existing `/api/mindmap/story-path`
+- `templates/partials/premium/council_stage.html` — integrate story_path into dossier Outcome/Learning layers
+- `story_path.html` — may need UI polish for Tier 1 real estate
+- `internal/mindmap/` — extend the existing `/api/mindmap/story-path` with richer lifecycle fields
 
 **Honest-empty:** "This pick is still forming. Council convened at {timestamp}."
+
+### 4C: K3-4 Temporal Confidence / Ring
+
+**Payload shape (extension of existing prediction data):**
+```json
+{
+  "confidence": 0.81,
+  "confidence_magnitude": "strong",
+  "time_horizon": "24h",
+  "resolve_at": "2026-07-19T00:00:00Z",
+  "decay_curve": [
+    {"t": "-24h", "confidence": 0.81},
+    {"t": "-12h", "confidence": 0.74},
+    {"t": "now", "confidence": 0.68},
+    {"t": "+12h", "confidence": 0.55}
+  ],
+  "temporal_badge": "LIVE • 14h remaining",
+  "grade_on_resolve": true
+}
+```
+
+**API source:** Extend existing `/api/predictions` or `/api/learning/stats`. No new route.
+
+**UI contract:** Conic-gradient ring (already shipped in v5) extended with time-remaining text and optional mini-timeline.
+
+### 4D: K3-5 Outlets (Alerts / Backtest / Onboarding / Polish)
+
+**Alerts badge dot (minimal):**
+```json
+{
+  "alert_count": 3,
+  "categories": ["price_spike", "conviction_decay", "new_pick"],
+  "last_alert_at": "2026-07-18T15:00:00Z"
+}
+```
+
+**Backtest panel (upgrade existing):**
+```json
+{
+  "methodology": "Monte Carlo walk-forward, 100 trials",
+  "calibration": 0.67,
+  "hit_rate": 0.48,
+  "endorsed_count": 12,
+  "sources": ["TaoStats", "Blockmachine", "TaoMarketCap"]
+}
+```
 
 ---
 
 ## Section 5: Slice Queue (Corrected Order)
 
 ### Phase 1: K3-2 Merge → K3-2b Data Wire
-**Goal:** Merge PR #346 to main, then wire dpick.shortlist data source.
+
+**Goal:** K3-2 deliberation layer (already coded on `cursor/k3-2-deliberation-e7f9`) must be merged to main, then dpick.shortlist data source wired.
 
 **Done-when:**
 - [ ] PR #346 merged to main (draft → ready → merge)
-- [ ] dpick.shortlist populated with 3-8 alternative subnets
+- [ ] `/api/deliberation/shortlist` or extended `/api/mindmap/summary` returns real data
+- [ ] dpick.shortlist populated in council_stage.html with 3-8 alternative subnets
 - [ ] "Tap to switch" subnet context works end-to-end
 - [ ] Honest-empty fallback renders when data thin
 
-### Phase 2: Phone Sign-Off
-**Phone Checklist (390px iPhone):**
-- [ ] Dossier renders: orb + Claim + Evidence + Council + Deliberation
-- [ ] Tap between subnets — context switches without reload
-- [ ] Shortlist shows real alternatives (not "warming up")
-- [ ] Ring/badge readable without pinch-zoom
-- [ ] No horizontal scroll, scroll feels smooth
+**Files to touch:**
+- `templates/partials/premium/council_stage.html` — deliberation layer exists, needs data
+- `server.py` or `internal/learning/dashboard_context.py` — wire dpick.shortlist
+- Backend: extend `/api/mindmap/summary` OR add `/api/deliberation/shortlist`
 
-### Phase 3: K3-3 Council Lifecycle Path
-**Goal:** Promote existing `/api/mindmap/story-path` + `story_path.html` to Tier 1/2.
+### Phase 2: Phone Sign-Off
+
+**Phone Checklist (390px iPhone):**
+- [ ] Open subnet-dashboard.fly.dev → hard refresh
+- [ ] Dossier renders: orb + Claim + Evidence + Council + Deliberation visible
+- [ ] Tap between subnets in shortlist — context switches without full reload
+- [ ] Shortlist cards show real alternatives (not "warming up")
+- [ ] Ring/badge readable without pinch-zoom
+- [ ] No horizontal scroll
+- [ ] Trust banner shows numbers (not "brain is loading")
+- [ ] All "honest empty" states show explanatory text (not "Warming Up")
+- [ ] Scroll feels smooth, no jank
+
+### Phase 3: K3-3 Council Lifecycle Path (Story Path Promotion)
+
+**Goal:** Promote existing `/api/mindmap/story-path` + `story_path.html` from Tier 3 Pro drawer to Tier 1/2.
+
+**Done-when:**
+- [ ] Lifecycle data renders inside dossier Outcome/Learning layers
+- [ ] Users can see stage transitions with timestamps and evidence snippets
+- [ ] "Resolve at" countdown visible for active picks
+- [ ] Honest-empty fallback when `/api/mindmap/story-path` returns 404
+- [ ] Contract tests green (no 500s on missing data)
+
+**Files to touch:**
+- `templates/partials/premium/council_stage.html` — integrate story_path into dossier
+- `templates/partials/premium/story_path.html` — may need UI polish for promoted real estate
+- `internal/mindmap/` — extend existing `/api/mindmap/story-path` with richer fields
+- `templates/partials/premium/story_strip.html` — compact timeline below hero
+
+**APIs needed:** EXTEND existing `/api/mindmap/story-path`. NO new `/api/lifecycle`.
 
 ### Phase 4: K3-4 Conviction Ring + Temporal Horizon
+
 **Goal:** Every confidence badge feels time-bound and alive.
 
-### Phase 5: K3-5 Mobile Polish + Trust + Onboarding + Outlets
+**Done-when:**
+- [ ] Every pick card shows time-horizon selector (24h / 7d / 30d)
+- [ ] Temporal decay curve visible (mini sparkline or segmented ring)
+- [ ] "Resolve at" countdown prominently displayed
+- [ ] Ring color adapts to temporal state
+- [ ] Mobile ring readable at 390px
+
+**Files to touch:**
+- `templates/partials/premium/council_stage.html` — v5 ring extension
+- Styles inline in council_stage.html (no separate ring.css)
+- `server.py` — extend prediction payload with decay/resolve timing
+- Frontend JS for horizon switching (Vanilla JS)
+
+### Phase 5: K3-5 Mobile Polish + Trust Hardening + Onboarding + Outlets
+
 **Goal:** The dashboard feels finished.
+
+**Done-when:**
+- [ ] Trust banner integrity verified across all screen sizes
+- [ ] Onboarding tour (3-step) for first-time visitors via `onboarding_tour.js`
+- [ ] Alert badge dots on sections with new activity
+- [ ] Backtest panel upgraded with cited methodology UI
+- [ ] SN118 Ditto badges trivially added
+- [ ] Final QA pass: all animations smooth, all empty states honest
+
+**Files to touch:**
+- `templates/partials/premium/premium_cockpit.html` (onboarding overlay)
+- `templates/partials/premium/council_stage.html` (alert dots, final polish)
+- `static/js/onboarding_tour.js` (activate existing file)
+- `server.py` — ensure all endpoints return consistent shapes
+
+---
+
+## Section 6: Competitive Positioning
+
+| Competitor | Their Strength | Our Counter | Slice |
+|------------|---------------|-------------|-------|
+| **Subnet Radar** | Free, 34-pillar Alpha Score, 8 instruments, staking sim, GitHub tracking, Telegram alerts | **Transparent council logic + living temporal confidence.** They give scores; we show *why* and *when it expires*. | K3-3, K3-4 |
+| **AlphaGap** | aGap Score, AI GitHub→English feed, TAO Oracle chat, wallet tracking, $49-$99 tiers | **Graded accountability** (every pick resolves publicly) + **council dissent visibility** | K3-3, K3-5 |
+| **TaoStats** | On-chain data, block explorer | **Narrative and actionable** vs. raw tables | Data source |
+| **TaoFlute** | Grafana for validators | Not our user | Never |
+| **SubnetAIQ** | AI subnet summaries | **Dissent + temporal decay + outcome grading** via SimiVision council | K3-1, K3-2, K3-3 |
+
+### Deliberate Non-Goals
+- ❌ Staking simulator / portfolio auto-rebalance
+- ❌ 8-radar instrument panel
+- ❌ Validator/Grafana metrics
+- ❌ Raw block explorer
+- ❌ Payment gating
+
+---
+
+## Section 7: Open Questions (Max 5)
+
+1. **K3-2b approach**: Extend `/api/mindmap/summary` or add `/api/deliberation/shortlist`? Default: extend mindmap summary (less new surface area).
+2. **story_path promotion depth**: Full dossier integration (absorb Outcome/Learning layers) or just a standalone narrative card below hero? Default: dossier integration.
+3. **Temporal ring placement**: Inline in dossier (default) or floating sticky header?
+4. **Onboarding_tour.js**: Activate as 3-step tour (default) or skip for now and just do trust banner hardening?
+5. **Time capsules for K3-5**: Wire `time_capsules` backend to a resolve-at calendar view, or defer?
 
 ---
 
 ## Section 9: Gap-Check Handoff Block FOR CURSOR (V2 Corrected)
 
+### Pre-Build Repo Verification Checklist
+- [ ] `git clone https://github.com/cryptoreporthub/subnet-dashboard` — verify main HEAD matches deployed fly.dev
+- [ ] Check `templates/partials/premium/council_stage.html` — confirm v5 orb + dossier layers from PR #344 exist
+- [ ] Check `templates/partials/premium/premium_cockpit.html` — confirm section layout
+- [ ] Check `templates/partials/premium/story_path.html` — confirm existing lifecycle template
+- [ ] Check `templates/partials/premium/story_strip.html` — confirm existing timeline strip
+- [ ] Check `static/js/onboarding_tour.js` — confirm file exists for K3-5 activation
+- [ ] Run `python -m pytest` against repo — note any failing tests before adding new ones
+- [ ] Verify `/api/council` returns enriched data with judge scores
+- [ ] Verify `/api/learning/stats` returns live numbers (not zeros)
+- [ ] Verify `/api/mindmap/story-path` returns lifecycle data (or 4xx — means we enhance it)
+- [ ] Verify `/api/subnets` returns ~129 entries with names and prices
+
 ### Plan vs. Repo Delta
 
-| Plan Assumption | Repo Reality | Risk | Fix In |
-|----------------|-------------|------|--------|
-| v5 dossier on main | PR #344 merged ✅ | Low | — |
+| Plan Assumption | Repo Reality Check | Risk | Fix In |
+|----------------|-------------------|------|--------|
+| v5 dossier exists on main | PR #344 merged ✅ | Low | — |
 | K3-2 deliberation on main | PR #346 **OPEN DRFT** ❌ | **HIGH** | K3-2 merge |
-| dpick.shortlist data source | **NOT WIRED** | **HIGH** | K3-2b |
-| Lifecycle API | `/api/mindmap/story-path` exists | Low-Med | K3-3 extend |
-| story_path.html in Pro drawer | ✅ Exists, "warming up" | Low | K3-3 |
-| Paper portfolio user-facing | ✅ Already live | Low | — |
-| Investigation/whale desk | ✅ Shipped (P0-2) | Low | — |
+| dpick.shortlist data source | **NOT WIRED** — depends on mindmap extension | **HIGH** | K3-2b |
+| Lifecycle API exists | `/api/mindmap/story-path` exists but may be thin | Low-Medium | K3-3 extend |
+| story_path.html in Pro drawer | ✅ Exists but "warming up" | Low | K3-3 promotion |
+| Paper portfolio user-facing | ✅ Already live (Tier 2) | Low | — |
+| Investigation/whale desk | ✅ Shipped (P0-2, branch s35) | Low | — |
 | Onboarding_tour.js | ✅ Exists, not activated | Low | K3-5 |
-| Time capsules backend | ✅ L12 described | Med | K3-4/K3-5 |
-| Hydrate UX | ✅ Live (PR #187, #205) | Low | — |
-| dossier.css, ring.css | ❌ **DO NOT EXIST** — inline styles | Low | Use inline |
-| File path: council_stage.html | `templates/partials/premium/council_stage.html` | Low | Corrected |
+| Time capsules backend | ✅ L12 described, not frontend-wired | Medium | K3-4/K3-5 |
+| Hydrate UX | ✅ Live (cockpit_hydrate.js, PR #187, #205) | Low | — |
+| CSS files (dossier.css, ring.css) | ❌ **DO NOT EXIST** — styles inline in council_stage.html | Low | Use inline styles |
+| File path: council_stage.html | Real path: `templates/partials/premium/council_stage.html` | Low | Correct in V2 |
+
+### Slice Readiness Gates
+
+| Slice | Backend Ready? | Frontend Ready? | Blockers |
+|-------|---------------|-----------------|----------|
+| K3-2 merge | ✅ Code exists on branch | ✅ Needed on main | PR #346 open → merge |
+| K3-2b data | 🔶 Needs mindmap extension or new endpoint | ✅ deliberation layer reads dpick.shortlist | Data source API |
+| K3-3 | 🔶 `/api/mindmap/story-path` exists but may need enrichment | 🔶 story_path.html needs Tier 1 polish | Backend enrichment + UI |
+| K3-4 | 🔶 Needs decay calc from prediction data | ✅ v5 ring exists | Decay curve math |
+| K3-5 | ✅ Most APIs exist (alerts partial) | 🔶 Needs onboarding + polish activation | None major |
 
 ### Corrected Slice Order
 ```
@@ -220,33 +411,45 @@ K3-2 merge → K3-2b data wire → phone sign-off → K3-3 → K3-4 → K3-5
 ```
 
 ### Cursor First Action
-1. Merge PR #346 (k3-2-deliberation-e7f9) → main via squash
-2. Wire dpick.shortlist data source (extend mindmap summary or new shortlist endpoint)
-3. Report back for phone sign-off before proceeding to K3-3
+1. Run Section 9 checklist against live repo
+2. Merge PR #346 (k3-2-deliberation-e7f9) → main via squash
+3. Wire dpick.shortlist data source (extend mindmap summary or new shortlist endpoint)
+4. Report back for phone sign-off before proceeding to K3-3
 
 ---
 
 ## Appendix: Existing Layout (from K3-0 Reconciliation)
 
 ```
-TIER 1 — First viewport:
+TIER 1 — First viewport (council-first):
   |-- header.html
-  |-- council_stage.html — K3-1 dossier (v5 orb + Claim/Evidence/Deliberation/Council/Outcome/Learning)
-  |-- living_focus.html (absorbed by dossier)
-  |-- brain_letter.html (absorbed by dossier)
+  |-- council_stage.html — hero: band + HOLD/call + why + CTAs (K3-1 dossier lives here)
+  |     |-- v5 orb + Claim layer (expanded)
+  |     |-- Evidence layer (collapsed)
+  |     |-- Deliberation layer (K3-2, awaiting data)
+  |     |-- Council layer (collapsed)
+  |     |-- Outcome layer (collapsed) ← K3-3 lifecycle
+  |     |-- Learning layer (collapsed) ← K3-3 lifecycle
+  |-- living_focus.html — council contention (absorbed by dossier)
+  |-- brain_letter.html — today's narrative (absorbed by dossier)
 
 TIER 2 — Accountability strip:
   |-- "What's working" (inline)
   |-- paper_portfolio (user-facing, live)
-  |-- weekly_letter / daily_recap
+  |-- weekly_letter (via /api/letter/weekly)
+  |-- daily_recap (via /api/letter/daily)
 
 TIER 3 — Pro cockpit drawer:
-  |-- story_path + story_strip ← K3-3 promote to Tier 1/2
-  |-- simivision_picks / council / judges / picks / kpi / backtest
+  |-- story_path + story_strip — "How we got here" ← K3-3 promote to Tier 1/2
+  |-- simivision_picks — Conviction board (static scores, no ring ← K3-4 ring)
+  |-- council — expert weights
+  |-- judges / picks / kpi / backtest
 
-TIER 4 — Market drawer (non-goal):
-  |-- investigation / signals / alerts / staking / indicators / undervalued / radar
-  |-- subnet_groups / mindmap / trail / message_intel / social / chat
+TIER 4 — Market drawer (non-goal, stays as-is):
+  |-- hero / scanner / investigation / signals / alerts
+  |-- staking / indicators / undervalued / radar
+  |-- subnet_groups / mindmap (empty graph) / trail
+  |-- message_intel / social / chat
 ```
 
-*V2 — All 5 Cursor gap-check fixes applied. All missed archaeology added. Ready for user sign-off.*
+*V2 document generated by Ditto K3 via memory archaeology + Cursor gap-check reconciliation. All 5 blocking issues fixed. All missed archaeology added. Corrected slice order established. Ready for user sign-off.*
