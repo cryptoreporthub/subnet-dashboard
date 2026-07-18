@@ -1,18 +1,18 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-18T18:52:00Z  
-**main:** `c9ba5cb` · **K3-5 PR open**
+**Last updated:** 2026-07-18T20:15:00Z  
+**main:** `d17de4a` · **K3-6 PR open**
 
 ## Active
 
-**K3-5** — Mobile polish + outlets (Grok LOCK → Composer implement)
-- Branch: `cursor/k3-5-polish-e7f9`
-- Done: 3-step tour, alert dot on habit-alert-btn, backtest methodology open, trust banner 390px, SN118 footer chip
+**K3-6** — Horizon selector (K3 spec + Grok honesty merge)
+- Branch: `cursor/k3-6-horizon-selector-e7f9`
+- Chips: Now (hour pick) · 24h (day pick) · 7d (trend lens, not graded)
 
 ## Done (K3 sprint)
 
-- K3-1 dossier · K3-2 deliberation · K3-2b shortlist · K3-3 lifecycle · K3-4 temporal ring (`c9ba5cb`, PR #350)
+- K3-1 … K3-5 on main (`d17de4a`)
 
 ## Next
 
-- Merge K3-5 PR → final phone QA on fly.dev
+- Merge K3-6 → phone QA
