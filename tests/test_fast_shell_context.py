@@ -49,3 +49,4 @@ def test_homepage_includes_above_fold_scripts():
         "market_drivers_ui.js",
     ):
         assert src in html, f"missing {src}"
+    assert "apiFetchJson" in html, "missing inline fetch timeout bootstrap"
