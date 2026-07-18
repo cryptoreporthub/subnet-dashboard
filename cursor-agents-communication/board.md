@@ -5,7 +5,15 @@
 
 ## Active
 
-**Housekeeping / optional next** — pick one:
+**Phase A (prod stability — one machine)** — verify on live `/` after #333:
+- `/health` < 2s · hydrate fills or fails visibly in ~30s · KPI not 0%
+- See `docs/fly-web-worker-split.md` § Load-separation map
+
+**Phase B (next slice)** — Fly **web + worker** split (#2): `docs/fly-web-worker-split.md`
+- Same image, two processes; background jobs off the HTTP path
+- Implementation: `internal/worker.py` + `RUN_MODE` + `fly.toml` `[processes]`
+
+**Housekeeping / optional**
 - **E1** test debt (`post-s28-backlog.md`) — broader pytest green
 - **H1** custom domain — human DNS (`DEPLOY.md`)
 - Prod human pass — §34 success metric on live `/`

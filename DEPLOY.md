@@ -56,7 +56,14 @@ curl -fsS https://subnet-dashboard.fly.dev/api/ops/readiness | python3 -m json.t
 
 `/api/data-freshness` reports the **blockmachine cache file** (`data/live_subnets.json`). `/api/ops/readiness` also reports the **effective feed** (TMC SQLite cache + registry) so STALE badge + working subnets can coexist during warm-up.
 
-If `GET /api/subnets` times out, the app falls back to registry after `SUBNETS_LOAD_TIMEOUT_SECONDS` (default 25). Boot also runs a background subnet-feed warmup thread.
+If `GET /api/subnets` times out, the app falls back to registry after `SUBNETS_LOAD_TIMEOUT_SECONDS` (default 12). Boot also runs a background subnet-feed warmup thread (deferred `BOOT_DEFER_SECONDS`, default 45).
+
+### Load separation (Phase A → B)
+
+| Phase | What | Doc |
+|-------|------|-----|
+| **A (now)** | One machine — fast shell, load shed, hydrate stagger (#332–#333) | troubleshooting above |
+| **B (next)** | Web + worker processes — resolver/feed off HTTP path | [`docs/fly-web-worker-split.md`](docs/fly-web-worker-split.md) |
 
 ---
 
