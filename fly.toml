@@ -26,6 +26,10 @@ primary_region = "sea"
   # Keep prod boot light; Telegram needs a live session on the volume.
   MESSAGE_INTEL_LISTENER = "off"
   RESOLVER_REFRESH_MINUTES = "15"
+  # Defer heavy resolver tick on boot — immediate=True wedges single-worker Fly.
+  RESOLVER_BOOT_IMMEDIATE = "off"
+  BOOT_BACKGROUND_SYNC_IMMEDIATE = "off"
+  SUBNETS_LOAD_TIMEOUT_SECONDS = "12"
   # N3: post-resolver auto-retrain (enabled post-N/O; needs >=30 gradeable rows)
   CALIBRATION_AUTO_RETRAIN = "on"
   # O1: conviction-threshold notify (opt-in alerts via AlertEngine)
