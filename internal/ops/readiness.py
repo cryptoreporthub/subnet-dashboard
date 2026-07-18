@@ -125,10 +125,13 @@ def build_readiness_report() -> Dict[str, Any]:
         )
     )
 
+    from internal.run_mode import worker_mode_label
+
     return {
         "status": "ready" if ready else "degraded",
         "checked_at": _utcnow_z(),
         "ready": ready,
+        "worker_mode": worker_mode_label(),
         "thin_ui_likely": thin_ui,
         "issues": issues,
         "learning": learning,

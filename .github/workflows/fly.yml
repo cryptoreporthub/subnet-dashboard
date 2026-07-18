@@ -71,9 +71,9 @@ jobs:
       - run: flyctl deploy --remote-only --no-cache --yes
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Scale to one machine (avoid split-brain on volume)
+      - name: Scale to one web machine (worker colocated on web; shared volume)
         continue-on-error: true
-        run: flyctl scale count 1 --app subnet-dashboard --yes
+        run: flyctl scale count web=1 worker=0 --app subnet-dashboard --yes
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       # flyctl treats "stopped" as a good post-deploy state; a started machine
