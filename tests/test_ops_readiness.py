@@ -18,6 +18,7 @@ def test_ops_readiness_contract():
     assert "subnet_feed" in body
     assert "daily_pick" in body
     assert "next_levers" in body
+    assert body.get("worker_mode") in ("web", "worker", "combined")
 
 
 def test_data_freshness_effective_fields():

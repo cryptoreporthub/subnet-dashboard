@@ -63,7 +63,7 @@ If `GET /api/subnets` times out, the app falls back to registry after `SUBNETS_L
 | Phase | What | Doc |
 |-------|------|-----|
 | **A (now)** | One machine — fast shell, load shed, hydrate stagger (#332–#333) | troubleshooting above |
-| **B (next)** | Web + worker processes — resolver/feed off HTTP path | [`docs/fly-web-worker-split.md`](docs/fly-web-worker-split.md) |
+| **B (now)** | Web + worker processes — background off HTTP path | [`docs/fly-web-worker-split.md`](docs/fly-web-worker-split.md) |
 
 ---
 

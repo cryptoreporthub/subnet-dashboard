@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import asyncio
-import threading
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -169,92 +168,24 @@ except Exception:
         return load_weights()
 
 
-BOOT_DEFER_SECONDS = int(os.environ.get("BOOT_DEFER_SECONDS", "45"))
-
-
-def _defer_boot(name: str, target, delay: Optional[int] = None) -> None:
-    """ponytail: delay heavy boot threads so /health wins the first minute on Fly."""
-    wait = BOOT_DEFER_SECONDS if delay is None else delay
-
-    def _run() -> None:
-        if wait > 0:
-            time.sleep(wait)
-        try:
-            target()
-        except Exception as exc:
-            logger.warning("%s boot task failed: %s", name, exc)
-
-    threading.Thread(target=_run, daemon=True, name=name).start()
-
-
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    """Boot background learning-loop workers so predictions resolve headlessly."""
-    try:
-        from internal.freshness import start_background_sync
+    """Boot background workers on web only when BACKGROUND_ON_WEB=on (legacy/combined)."""
+    from internal.run_mode import background_on_web, is_worker_mode
 
-        boot_sync = os.environ.get("BOOT_BACKGROUND_SYNC_IMMEDIATE", "off").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-            "on",
-        )
-        start_background_sync(immediate=boot_sync)
-        logger.info("Registry freshness background sync started")
-    except Exception as exc:
-        logger.warning("Registry freshness sync failed to start: %s", exc)
-    try:
-        from internal.live_subnets import get_live_subnets
+    if is_worker_mode():
+        yield
+        return
 
-        _defer_boot("live-subnets-boot", get_live_subnets)
-        logger.info("Live subnets sync scheduled (deferred %ss)", BOOT_DEFER_SECONDS)
-    except Exception as exc:
-        logger.warning("Live subnets sync failed to start: %s", exc)
-    try:
-        from internal.subnets.feed import warm_subnet_feed
+    if background_on_web():
+        from internal.background_boot import start_background_workers, stop_background_workers
 
-        _defer_boot("subnet-feed-warmup", warm_subnet_feed)
-        logger.info("Subnet feed warmup deferred %ss", BOOT_DEFER_SECONDS)
-    except Exception as exc:
-        logger.warning("Subnet feed warmup failed to start: %s", exc)
-    try:
-        from internal.council.resolver_scheduler import start_prediction_resolver_scheduler
-
-        resolver_immediate = os.environ.get("RESOLVER_BOOT_IMMEDIATE", "off").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-            "on",
-        )
-        start_prediction_resolver_scheduler(immediate=resolver_immediate)
-        logger.info("Prediction resolver scheduler started")
-    except Exception as exc:
-        logger.warning("Prediction resolver scheduler failed to start: %s", exc)
-    try:
-        from internal.message_intel.listener_service import start_message_intel_listeners
-
-        start_message_intel_listeners()
-    except Exception as exc:
-        logger.warning("Message-intel listeners failed to start: %s", exc)
+        start_background_workers()
     yield
-    try:
-        from internal.message_intel.listener_service import stop_message_intel_listeners
+    if background_on_web():
+        from internal.background_boot import stop_background_workers
 
-        stop_message_intel_listeners()
-    except Exception:
-        pass
-    try:
-        from internal.council.resolver_scheduler import stop_prediction_resolver_scheduler
-
-        stop_prediction_resolver_scheduler()
-    except Exception:
-        pass
-    try:
-        from internal.job_scheduler import shutdown_background_scheduler
-
-        shutdown_background_scheduler()
-    except Exception:
-        pass
+        stop_background_workers()
     try:
         from internal.http_client import close_async_client
 
