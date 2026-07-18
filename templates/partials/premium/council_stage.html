@@ -181,6 +181,21 @@
       @media (max-width: 360px) { .k3-orb { width: 116px; height: 116px; } .k3-orb-score { font-size: 30px; } .k3-claim-name { font-size: 20px; } .k3-claim-stats { gap: 10px; } .k3-stat { min-width: 50px; } .k3-stat-value { font-size: 14px; } }
       @media (min-width: 768px) { .k3-dossier { max-width: 480px; margin: 0 auto; } .k3-claim { min-height: 360px; } }
       @media (prefers-reduced-motion: reduce) { .k3-orb-bg, .k3-orb-glow, .k3-claim-name, .k3-orb .ring-fill { animation: none !important; } .k3-orb .ring-fill { stroke-dashoffset: var(--ring-offset, 389.56); } }
+      {# ---- K3-2: Council considered (deliberation flow) ---- #}
+      .k3-deliberation { margin-top: 16px; }
+      .k3-considered-list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+      .k3-considered-list::-webkit-scrollbar { display: none; }
+      .k3-considered-card { min-width: 120px; background: var(--k3-surface); border-radius: 8px; padding: 10px 12px; flex-shrink: 0; -webkit-tap-highlight-color: transparent; cursor: pointer; transition: background 0.15s; border: 1px solid #1a1d24; }
+      .k3-considered-card:active { background: #111420; }
+      .k3-considered-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--k3-accent); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: #fff; margin-bottom: 6px; }
+      .k3-considered-name { font-size: 11px; font-weight: 600; color: var(--k3-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .k3-considered-role { font-size: 10px; color: var(--k3-muted); margin: 2px 0 4px; }
+      .k3-considered-confidence { font-size: 12px; font-weight: 700; }
+      .k3-considered-stance { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px; }
+      .k3-considered-stance--long { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+      .k3-considered-stance--short { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+      .k3-considered-stance--hold { background: rgba(234, 179, 8, 0.15); color: #eab308; }
+      .k3-layer-subtitle { font-size: 12px; color: var(--k3-muted); margin: 0 0 12px; }
       </style>
 
       {# ---- CLAIM LAYER (inside home-daily-call for live-refresh) ---- #}
@@ -282,6 +297,44 @@
             {% endfor %}
           {% else %}
             <div class="k3-empty"><div class="k3-empty-icon">📡</div><div class="k3-empty-text">Awaiting additional evidence. Signals will surface as council deliberation progresses.</div></div>
+          {% endif %}
+        </div>
+      </div>
+
+      {# ---- K3-2: Council considered (deliberation flow) ---- #}
+      <div class="k3-layer" id="k3-layer-deliberation">
+        <button class="k3-layer-header" onclick="k3Toggle('k3-layer-deliberation')" aria-expanded="false">
+          <span>Deliberation</span><span class="k3-layer-icon">▸</span>
+        </button>
+        <div class="k3-layer-body">
+          <p class="k3-layer-subtitle">Alternatives the council weighed</p>
+          {% set alternatives = dpick.shortlist if dpick.shortlist is iterable and dpick.shortlist is not string else [] %}
+          {% if alternatives and alternatives|length > 0 %}
+          <div class="k3-deliberation">
+            <div class="k3-considered-list">
+              {% for alt in alternatives[:8] %}
+              <div class="k3-considered-card" data-netuid="{{ alt.netuid }}" onclick="switchToSubnet('{{ alt.netuid }}')">
+                <div class="k3-considered-avatar">{{ alt.name|default('SN')|first|upper }}</div>
+                <div class="k3-considered-name">{{ alt.name|default('SN' ~ alt.netuid) }}</div>
+                {% if alt.role %}
+                <div class="k3-considered-role">{{ alt.role }}</div>
+                {% endif %}
+                {% if alt.conviction is defined %}
+                <div class="k3-considered-confidence">{{ '%.0f'|format(alt.conviction|float) }}%</div>
+                {% endif %}
+                {% set stance = alt.stance|default('HOLD')|upper %}
+                <span class="k3-considered-stance k3-considered-stance--{{ stance|lower }}">
+                  {% if stance == 'LONG' %}BUY{% elif stance == 'SHORT' %}SELL{% else %}HOLD{% endif %}
+                </span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% else %}
+          <div class="k3-empty">
+            <div class="k3-empty-icon">⚖️</div>
+            <div class="k3-empty-text">Council deliberation data warming up. Alternative subnet shortlist will appear here as the council weighs multiple candidates.</div>
+          </div>
           {% endif %}
         </div>
       </div>
@@ -388,5 +441,12 @@ function k3Toggle(id) {
   el.classList.toggle('open');
   var btn = el.querySelector('.k3-layer-header');
   if (btn) btn.setAttribute('aria-expanded', el.classList.contains('open'));
+}
+
+// K3-2: Deliberation — switch context to alternative subnet
+function switchToSubnet(netuid) {
+  var url = new URL(window.location.href);
+  url.searchParams.set('netuid', netuid);
+  window.location.href = url.toString();
 }
 </script>
