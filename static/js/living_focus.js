@@ -92,6 +92,10 @@
     if (netuid == null) return;
     focusNetuid = Number(netuid);
     focusName = name || ('SN' + focusNetuid);
+    if (bodyEl) {
+      bodyEl.innerHTML =
+        '<p class="living-focus__empty">Loading judges for ' + esc(focusName) + ' (SN' + esc(focusNetuid) + ')…</p>';
+    }
     root.setAttribute('data-focus-netuid', String(focusNetuid));
     window.LivingFocus = window.LivingFocus || {};
     window.LivingFocus.netuid = focusNetuid;
@@ -468,6 +472,11 @@
       renderLearnStrip(trail, weights);
       renderTrailTeaser(trail);
       return loadChips();
+    }).catch(function () {
+      if (bodyEl) {
+        bodyEl.innerHTML =
+          '<p class="living-focus__empty">Focus judges unavailable — server busy, try again shortly.</p>';
+      }
     });
   }
 

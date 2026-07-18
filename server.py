@@ -1298,8 +1298,18 @@ def _safe_simivision_payload(
     if subnets is None:
         subnets, source = _get_subnets_with_source()
     source = source or "unknown"
+
+    def _simivision_eligible(sn: Dict[str, Any]) -> bool:
+        nu = sn.get("netuid", sn.get("id"))
+        try:
+            if nu is not None and int(nu) == 0:
+                return False
+        except (TypeError, ValueError):
+            pass
+        return str(sn.get("status") or "active").lower() != "deprecated"
+
     ranked = sorted(
-        subnets,
+        [s for s in subnets if _simivision_eligible(s)],
         key=lambda s: (
             subnet_volume(s),
             float(s.get("market_cap", 0) or 0),
