@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 
 # ponytail: deterministic by lane + version minor — same bump always same joke
 _ALIASES: Dict[str, List[str]] = {
@@ -64,6 +64,76 @@ _ALIASES: Dict[str, List[str]] = {
     ],
 }
 
+# Short canonical paper / source title → twisted sequel per version bump
+_PAPER_SOURCES: Dict[str, str] = {
+    "quant": "Advances in Financial Machine Learning",
+    "hype": "Delegation Dynamics",
+    "dark_horse": "Forecasting Crashes with a Smile",
+    "technical": "Technical Analysis of the Financial Markets",
+    "oracle": "Meta-Labeling",
+    "echo": "On Optimum Character Recognition",
+    "pulse": "Returns to Buying Winners and Selling Losers",
+}
+
+_PAPER_TWISTS: Dict[str, List[str]] = {
+    "quant": [
+        "Advances in Subnet Machine Learning",
+        "Advances in Emission Machine Learning",
+        "Advances in Financial Machine Guessing",
+        "Retreats in Financial Machine Learning",
+        "Advances in Yield-Curve Reading",
+        "Advances in APY Machine Learning",
+    ],
+    "hype": [
+        "Delegation Dynamics for the Rest of Us",
+        "Stake Movement as a Lifestyle",
+        "On-Chain Vibes: A Field Guide",
+        "Hopium Flows in Bittensor",
+        "Capital Rotation Theory (TAO Edition)",
+        "The Delegator's Lament",
+    ],
+    "dark_horse": [
+        "Forecasting Crashes with a Wince",
+        "Forecasting Crashes with a Shrug",
+        "Forecasting Crashes with a Frown",
+        "Forecasting Crashes with Subnet Emissions",
+        "Forecasting Crashes with a Smirk",
+        "Forecasting Crashes with a Grimace",
+    ],
+    "technical": [
+        "Technical Analysis of the Subnet Markets",
+        "Technical Analysis of the Candlestick Goblin",
+        "RSI and the Art of Hoping",
+        "Chart Reading for Subnets",
+        "Stochastic Reversals and Other Party Tricks",
+        "MACD Crosses We Believed In",
+    ],
+    "oracle": [
+        "Meta-Labeling for Subnet Picks",
+        "Selective Classification (Now With Receipts)",
+        "On Rejecting Bad Ideas Politely",
+        "Truth-Telling Under Uncertainty",
+        "The Gatekeeper's Guide to Evidence",
+        "Meta-Models and Other Trust Issues",
+    ],
+    "echo": [
+        "On Rejecting When Everyone Disagrees",
+        "Consensus Without the Group Chat",
+        "When to Say 'Probably Not'",
+        "Resonance Detection for Committees",
+        "Agreement Theory (Subnet Chorus Edition)",
+        "The Echo Chamber Strikes Back (Productive Edition)",
+    ],
+    "pulse": [
+        "Returns to Buying Winners (Subnet Remix)",
+        "Momentum Until It Isn't",
+        "Trends: A Love Story",
+        "Price Persistence for Impatient Investors",
+        "Riding Waves You're Not Sure About",
+        "Momentum Factor (24h Edition)",
+    ],
+}
+
 
 def _minor_index(version: str) -> int:
     parts = str(version or "1.0").strip().lstrip("v").split(".")
@@ -78,3 +148,26 @@ def version_nickname(lane_id: str, version: str, original_label: str) -> str:
     if not aliases:
         return f"{original_label} (Deluxe)"
     return aliases[_minor_index(version) % len(aliases)]
+
+
+def version_paper_twist(lane_id: str, version: str) -> Optional[str]:
+    """Twist on the lane's cited research title, if we have one."""
+    lane = lane_id.lower().strip()
+    twists = _PAPER_TWISTS.get(lane)
+    if not twists or lane not in _PAPER_SOURCES:
+        return None
+    return twists[_minor_index(version) % len(twists)]
+
+
+def paper_source_title(lane_id: str) -> Optional[str]:
+    return _PAPER_SOURCES.get(lane_id.lower().strip())
+
+
+def version_promotion(lane_id: str, version: str, original_label: str) -> Dict[str, Any]:
+    """Lane nickname + optional paper-title twist for hybrid promotion episodes."""
+    lane = lane_id.lower().strip()
+    return {
+        "nickname": version_nickname(lane, version, original_label),
+        "paper_title": paper_source_title(lane),
+        "paper_twist": version_paper_twist(lane, version),
+    }

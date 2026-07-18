@@ -184,8 +184,21 @@ def episode_kind_label(kind: str) -> str:
     }.get(kind, kind.replace("_", " ").title())
 
 
-def version_nickname_story(original_label: str, nickname: str, version: str) -> str:
-    return (
+def version_nickname_story(
+    original_label: str,
+    nickname: str,
+    version: str,
+    *,
+    paper_title: Optional[str] = None,
+    paper_twist: Optional[str] = None,
+) -> str:
+    base = (
         f"v{version} earned a new title: {nickname}. "
         f"(HR paperwork still says {original_label} — don't tell the auditors.)"
     )
+    if paper_title and paper_twist:
+        return (
+            f"{base} Working paper update — a twist on \"{paper_title}\": "
+            f"now titled \"{paper_twist}\"."
+        )
+    return base

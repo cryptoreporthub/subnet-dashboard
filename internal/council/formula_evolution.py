@@ -22,7 +22,7 @@ from internal.council.human_narrative import (
     version_nickname_story,
     weight_nudge_story,
 )
-from internal.council.lane_aliases import version_nickname
+from internal.council.lane_aliases import version_promotion
 from internal.council.resolver import _normalize_expert
 from internal.council.weights import DEFAULT_WEIGHTS, _load_raw, load_weights
 
@@ -334,7 +334,7 @@ def build_evolution_trail(lane_id: str) -> Optional[Dict[str, Any]]:
                 ),
             }
         )
-        nick = version_nickname(lane_id, str(ver.get("version") or ""), label)
+        promo = version_promotion(lane_id, str(ver.get("version") or ""), label)
         episodes.append(
             {
                 "episode_id": f"nickname_{ver.get('version')}_{day}",
@@ -343,9 +343,17 @@ def build_evolution_trail(lane_id: str) -> Optional[Dict[str, Any]]:
                 "to": day,
                 "version": ver.get("version"),
                 "original_name": label,
-                "nickname": nick,
+                "nickname": promo["nickname"],
+                "paper_title": promo.get("paper_title"),
+                "paper_twist": promo.get("paper_twist"),
                 "trigger_subnets": [],
-                "narrative": version_nickname_story(label, nick, str(ver.get("version") or "")),
+                "narrative": version_nickname_story(
+                    label,
+                    promo["nickname"],
+                    str(ver.get("version") or ""),
+                    paper_title=promo.get("paper_title"),
+                    paper_twist=promo.get("paper_twist"),
+                ),
             }
         )
 

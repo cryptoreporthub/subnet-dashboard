@@ -800,6 +800,13 @@
       if (ep.nickname) {
         html += '<p class="formula-evolution__nickname">「 ' + esc(ep.nickname) + ' 」</p>';
       }
+      if (ep.paper_twist) {
+        html += '<p class="formula-evolution__paper-twist">';
+        if (ep.paper_title) {
+          html += 'Twist on <em>' + esc(ep.paper_title) + '</em>: ';
+        }
+        html += '「 ' + esc(ep.paper_twist) + ' 」</p>';
+      }
       if (ep.formula_expression) {
         html += '<code class="formula-evolution__expr">' + esc(ep.formula_expression) + '</code>';
       }
