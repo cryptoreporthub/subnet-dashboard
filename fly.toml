@@ -24,7 +24,7 @@ primary_region = "sjc"
 
 [env]
   RUN_MODE = "web"
-  BACKGROUND_ON_WEB = "off"
+  BACKGROUND_ON_WEB = "on"
   # Keep prod boot light; Telegram needs a live session on the volume.
   MESSAGE_INTEL_LISTENER = "off"
   RESOLVER_REFRESH_MINUTES = "15"

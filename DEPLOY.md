@@ -63,7 +63,7 @@ If `GET /api/subnets` times out, the app falls back to registry after `SUBNETS_L
 | Phase | What | Doc |
 |-------|------|-----|
 | **A (now)** | One machine — fast shell, load shed, hydrate stagger (#332–#333) | troubleshooting above |
-| **B (now)** | Colocated worker subprocess — background off HTTP path (Dockerfile CMD) | [`docs/fly-web-worker-split.md`](docs/fly-web-worker-split.md) |
+| **B (now)** | Colocated worker deferred on 1GB — single process + load shed; `internal.worker` for future split | [`docs/fly-web-worker-split.md`](docs/fly-web-worker-split.md) |
 
 ---
 

@@ -1,5 +1,5 @@
 #!/bin/sh
-# v1: colocate worker on web machine (shared data_volume; CI scales to 1 machine).
-set -e
-RUN_MODE=worker python -m internal.worker &
-exec env RUN_MODE=web BACKGROUND_ON_WEB=off uvicorn server:app --host 0.0.0.0 --port 8080
+# Single process on 1GB Fly — uvicorn + background in one process (BACKGROUND_ON_WEB=on).
+# ponytail: colocated worker subprocess OOMs 1GB (2× CPython + pandas/live_subnets).
+# internal.worker remains for future 2GB / separate-machine split.
+exec uvicorn server:app --host 0.0.0.0 --port 8080
