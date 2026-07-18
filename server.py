@@ -490,6 +490,7 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
             pick_payload = get_or_create_today_pick(subnets, market_context)
             pick_netuid = _pick_netuid_from_daily_payload(pick_payload)
             if isinstance(pick_payload, dict):
+                from internal.learning.dpick_horizon import attach_horizon_views_to_daily_pick
                 from internal.learning.dpick_shortlist import attach_shortlist_to_daily_pick
                 from internal.learning.dpick_temporal import attach_temporal_to_daily_pick
 
@@ -497,6 +498,9 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
                     pick_payload, subnets, market_context
                 )
                 pick_payload = attach_temporal_to_daily_pick(pick_payload)
+                pick_payload = attach_horizon_views_to_daily_pick(
+                    pick_payload, subnets, market_context
+                )
     except Exception as exc:
         logger.warning("home hero context failed: %s", exc)
     return {
