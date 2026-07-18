@@ -471,6 +471,36 @@ def _normalize_registry_subnet(sn: Dict[str, Any]) -> Dict[str, Any]:
         return row
 
 
+def _fast_home_hero_context(trust_banner: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Cheap hero keys for degraded GET / — no pick engine or resolver replay."""
+    from internal.analytics.home_habit import (
+        conviction_alerts_snapshot,
+        watchlist_snapshot,
+    )
+
+    tb = trust_banner if isinstance(trust_banner, dict) else {}
+    return {
+        "daily_pick_stage": {},
+        "conviction_band": {"band": None, "reason": "hydrate", "status": "ok"},
+        "enrichment_badge": {"status": "pending"},
+        "story_strip": {
+            "data_available": False,
+            "reason": "hydrate",
+            "items": [],
+            "stats": {"correct": 0, "wrong": 0},
+        },
+        "habit_watchlist": watchlist_snapshot(),
+        "habit_alerts": conviction_alerts_snapshot(),
+        "hybrid_trust": {
+            "status": "ok",
+            "ready": bool(tb.get("ready")),
+            "n": tb.get("graded") or 0,
+            "min_sample": 30,
+        },
+        "trust_banner": tb,
+    }
+
+
 def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     """U1 hero keys for GET / (fast shell + hydrate)."""
     from internal.analytics.home_habit import (
@@ -519,16 +549,18 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
     from internal.learning.dashboard_context import fast_shell_dashboard_context
 
     subnets = [_normalize_registry_subnet(s) for s in load_data("config/registry.json").values()]
+    shell_learning = fast_shell_dashboard_context()
     simivision_data = _safe_simivision_payload(
         subnets=subnets, source="registry-fallback"
     ).get("data", {"top": [], "meta": {"count": len(subnets), "source": "registry-fallback"}})
+    trust_banner = (shell_learning.get("learning_metrics") or {}).get("trust_banner") or {}
     ctx = {
         "request": request,
         "public_base_url": _public_base_url(request),
         "subnets": subnets,
         "data_source": "registry-fallback",
         "degraded": True,
-        **fast_shell_dashboard_context(),
+        **shell_learning,
         "simivision": simivision_data,
         "signals": [],
         "alerts": [],
@@ -541,8 +573,34 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
             "avg_confidence": 0.0,
         },
     }
-    ctx.update(_home_hero_context(subnets))
+    ctx.update(_fast_home_hero_context(trust_banner))
     return ctx
+
+
+def _minimal_index_context(request: Request) -> Dict[str, Any]:
+    """Emergency shell when homepage build exceeds HOMEPAGE_BUILD_TIMEOUT."""
+    from internal.learning.dashboard_context import default_learning_dashboard_context
+
+    return {
+        "request": request,
+        "public_base_url": _public_base_url(request),
+        "subnets": [],
+        "data_source": "timeout-fallback",
+        "degraded": True,
+        **default_learning_dashboard_context(),
+        "simivision": {"top": [], "meta": {"count": 0, "source": "timeout-fallback"}},
+        "signals": [],
+        "alerts": [],
+        "signal_summary": {
+            "total_subnets": 0,
+            "buy_count": 0,
+            "sell_count": 0,
+            "neutral_count": 0,
+            "buy_sell_ratio": 0.0,
+            "avg_confidence": 0.0,
+        },
+        **_fast_home_hero_context(),
+    }
 
 
 def _build_index_context(request: Request) -> Dict[str, Any]:
@@ -629,7 +687,16 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
 @app.get("/")
 def index(request: Request):
     # ponytail: always serve the fast registry shell; cockpit_hydrate.js fills panels via APIs
-    return templates.TemplateResponse(request, "index.html", _degraded_index_context(request))
+    import concurrent.futures
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        fut = pool.submit(_degraded_index_context, request)
+        try:
+            ctx = fut.result(timeout=HOMEPAGE_BUILD_TIMEOUT)
+        except concurrent.futures.TimeoutError:
+            logger.error("homepage build exceeded %ss — serving minimal shell", HOMEPAGE_BUILD_TIMEOUT)
+            ctx = _minimal_index_context(request)
+    return templates.TemplateResponse(request, "index.html", ctx)
 
 
 @app.get("/api/daily-rotation")
