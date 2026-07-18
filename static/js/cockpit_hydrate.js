@@ -718,6 +718,18 @@
     root.innerHTML = html;
   }
 
+  function episodeKindLabel(kind) {
+    var map = {
+      origin: 'Starting point',
+      subnet_divergence: 'Reality check',
+      weight_nudge: 'Dial adjustment',
+      calibration: 'Calibration',
+      version_upgrade: 'Version upgrade',
+      current: 'Today'
+    };
+    return map[kind] || String(kind || '').replace(/_/g, ' ');
+  }
+
   function renderFormulaLineage(catalog) {
     var root = document.getElementById('formula-lineage-root');
     if (!root) return;
@@ -726,7 +738,7 @@
       return;
     }
     var html = '<details class="formula-lineage card" open>' +
-      '<summary>Formula lineage — sources, tweaks &amp; learning loop</summary>' +
+      '<summary>Where each voice comes from</summary>' +
       '<p class="formula-lineage__intro">' + esc(catalog.summary || '') + '</p>';
     catalog.lanes.forEach(function (lane) {
       var formula = lane.current_formula || {};
@@ -743,16 +755,19 @@
       }).join('');
       var weight = loop.current_weight != null ? loop.current_weight : '—';
       var acc = loop.accuracy != null ? pctLabel(loop.accuracy) : '—';
+      var councilVer = loop.council_weights_version ? (' · council v' + loop.council_weights_version) : '';
+      var scoreVer = loop.scoring_version ? (' · scoring v' + loop.scoring_version) : '';
       html += '<article class="formula-lineage__lane" id="lineage-' + esc(lane.id) + '">' +
         '<h4 class="formula-lineage__lane-title">' + esc(lane.label) + '</h4>' +
         '<code class="formula-lineage__expr">' + esc(formula.expression || '') + '</code>' +
         '<p class="formula-lineage__impl">' + esc(formula.summary || '') + '</p>' +
         '<p class="formula-lineage__live"><strong>Live weight</strong> ' + weight +
-        ' · <strong>graded accuracy</strong> ' + acc +
-        (loop.graded_n ? ' (n=' + loop.graded_n + ')' : '') + '</p>' +
+        ' · <strong>hit rate</strong> ' + acc +
+        (loop.graded_n ? ' (' + loop.graded_n + ' picks)' : '') +
+        councilVer + scoreVer + '</p>' +
         '<p class="formula-lineage__loop-note">' + esc(loop.stagnant_source_note || '') + '</p>' +
-        '<h5 class="formula-lineage__sub">Inspiration</h5><ul>' + insp + '</ul>' +
-        '<h5 class="formula-lineage__sub">Our adaptations</h5><ul>' + adap + '</ul>' +
+        '<h5 class="formula-lineage__sub">Where the idea came from</h5><ul>' + insp + '</ul>' +
+        '<h5 class="formula-lineage__sub">What we changed</h5><ul>' + adap + '</ul>' +
         '</article>';
     });
     html += '</details>';
@@ -767,14 +782,18 @@
       return;
     }
     var html = '<details class="formula-evolution card" open>' +
-      '<summary>Evolution trail — ' + esc(trail.label || trail.lane_id) + '</summary>' +
+      '<summary>The story so far — ' + esc(trail.label || trail.lane_id) + '</summary>' +
       '<p class="formula-evolution__intro">' + esc(trail.summary || '') + '</p>' +
       '<ol class="formula-evolution__timeline">';
     trail.trail.forEach(function (ep) {
       var range = (ep.from && ep.to && ep.from !== ep.to) ? (ep.from + ' → ' + ep.to) : (ep.from || ep.to || '');
-      var div = ep.divergence_pct != null ? (' · Δ ' + ep.divergence_pct + '%') : '';
+      var div = ep.divergence_pct != null ? (' · shift ' + ep.divergence_pct + '%') : '';
+      var kindLabel = episodeKindLabel(ep.kind);
+      if (ep.version) {
+        kindLabel += ' v' + ep.version;
+      }
       html += '<li class="formula-evolution__episode formula-evolution__episode--' + esc(ep.kind || 'event') + '">' +
-        '<div class="formula-evolution__meta"><span class="formula-evolution__kind">' + esc(ep.kind || '') + '</span>' +
+        '<div class="formula-evolution__meta"><span class="formula-evolution__kind">' + esc(kindLabel) + '</span>' +
         '<span class="formula-evolution__range">' + esc(range) + div + '</span></div>' +
         '<p class="formula-evolution__narrative">' + esc(ep.narrative || '') + '</p>';
       if (ep.formula_expression) {

@@ -12,6 +12,12 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from internal.council.dark_horse_crash import FORMULA_VERSION as DARK_HORSE_FORMULA_VERSION
+from internal.council.human_narrative import (
+    dark_horse_formula_summary,
+    lineage_catalog_summary,
+    lineage_loop_note,
+)
 from internal.council.weights import DEFAULT_WEIGHTS, SOUL_MAP_PATH, _load_raw, load_weights
 
 LANE_IDS = (
@@ -69,12 +75,16 @@ _REGISTRY: Dict[str, Dict[str, Any]] = {
         "label": "Dark Horse",
         "lane_type": "council_expert",
         "current_formula": {
-            "expression": "0.4×pool_score + 0.3×supply_score + 0.3×pe_score",
-            "implementation": "internal/council/state_vector.py::_compute_dark_horse_score",
-            "summary": (
-                "On-chain flow composite: TAO pool depth, supply contraction, "
-                "price/emission undervaluation — contrarian / hidden-value lane."
+            "expression": (
+                "0.30×crash_opportunity + 0.22×pool + 0.22×supply + 0.26×pe "
+                f"(scoring v{DARK_HORSE_FORMULA_VERSION})"
             ),
+            "implementation": (
+                "internal/council/state_vector.py::_compute_dark_horse_score + "
+                "internal/council/dark_horse_crash.py"
+            ),
+            "summary": dark_horse_formula_summary(),
+            "version": DARK_HORSE_FORMULA_VERSION,
         },
         "inspiration": [
             {
@@ -97,8 +107,9 @@ _REGISTRY: Dict[str, Dict[str, Any]] = {
             },
         ],
         "adaptations": [
-            "Replaced option-implied crash bounds with TAO pool ratio, supply change, and price/emission ratio (data we have on subnets).",
-            "Blend weights 40/30/30 tuned for on-chain Bittensor fields vs Martin-Shi equity options inputs.",
+            "Added downside-tail crash_opportunity from price drawdown + recovery setup (Martin-Shi inspired).",
+            "Replaced option-implied crash bounds with TAO pool ratio, supply change, and price/emission ratio.",
+            "Blend 30/22/22/26 tuned for subnet fields vs Martin-Shi equity options inputs.",
             "Renamed legacy contrarian expert → dark_horse; weights learned via resolver nudges + calibration.",
         ],
     },
@@ -229,6 +240,9 @@ def _learning_loop_state(lane_id: str, soul_map_path: str = SOUL_MAP_PATH) -> Di
     data = _load_raw(soul_map_path)
     adv = data.get("adversarial_state") if isinstance(data.get("adversarial_state"), dict) else {}
     cal = adv.get("calibration") if isinstance(adv.get("calibration"), dict) else {}
+    formula_versions = adv.get("formula_versions") if isinstance(adv.get("formula_versions"), dict) else {}
+    council_versions = formula_versions.get("council_weights") if isinstance(formula_versions.get("council_weights"), dict) else {}
+    dh_versions = formula_versions.get("dark_horse_scoring") if isinstance(formula_versions.get("dark_horse_scoring"), dict) else {}
 
     loop: Dict[str, Any] = {
         "feeds": [
@@ -238,15 +252,15 @@ def _learning_loop_state(lane_id: str, soul_map_path: str = SOUL_MAP_PATH) -> Di
             "internal/calibration/pipeline.py → retrain → cert → fire (when enabled)",
         ],
         "current_weight": weights.get(lane_id) if lane_id in DEFAULT_WEIGHTS else None,
+        "council_weights_version": council_versions.get("current"),
+        "last_version_upgrade": (council_versions.get("history") or [])[-1] if council_versions.get("history") else None,
         "last_weight_update": adv.get("last_weight_update"),
         "calibration_last_retrain": cal.get("last_retrain_at"),
         "calibration_status": cal.get("last_cert_status"),
-        "stagnant_source_note": (
-            "Original papers are fixed; our live weights, signal_weights, and "
-            "calibration history adapt from graded picks — each cert-fired version "
-            "should beat the prior snapshot on holdout or cert blocks the swap."
-        ),
+        "stagnant_source_note": lineage_loop_note(),
     }
+    if lane_id == "dark_horse":
+        loop["scoring_version"] = dh_versions.get("current") or DARK_HORSE_FORMULA_VERSION
     if lane_id in DEFAULT_WEIGHTS:
         loop.update(_expert_stats(lane_id))
     return loop
@@ -279,10 +293,7 @@ def build_all_lineage(*, soul_map_path: str = SOUL_MAP_PATH) -> Dict[str, Any]:
     lanes = [build_lane_lineage(lid, soul_map_path=soul_map_path) for lid in LANE_IDS]
     return {
         "status": "ok",
-        "summary": (
-            "Each lane cites its intellectual source, documents our adaptations, "
-            "and reports live learning-loop state from soul_map + predictions."
-        ),
+        "summary": lineage_catalog_summary(),
         "lanes": [lane for lane in lanes if lane],
         "updated_at": _utcnow_z(),
     }

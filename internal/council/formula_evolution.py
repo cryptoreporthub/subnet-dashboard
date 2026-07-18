@@ -13,6 +13,14 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from internal.council.formula_lineage import LANE_IDS, build_lane_lineage
+from internal.council.human_narrative import (
+    calibration_episode_story,
+    current_state_story,
+    evolution_trail_summary,
+    origin_story,
+    subnet_window_story,
+    weight_nudge_story,
+)
 from internal.council.resolver import _normalize_expert
 from internal.council.weights import DEFAULT_WEIGHTS, _load_raw, load_weights
 
@@ -114,6 +122,39 @@ def _calibration_episodes() -> List[Dict[str, Any]]:
     return episodes
 
 
+def _version_episodes(lane_id: str) -> List[Dict[str, Any]]:
+    """Council weight version bumps from formula_versions history."""
+    try:
+        from internal.council.formula_versions import load_formula_versions
+
+        versions = load_formula_versions()
+    except Exception:
+        return []
+    council = versions.get("council_weights") if isinstance(versions.get("council_weights"), dict) else {}
+    episodes: List[Dict[str, Any]] = []
+    for entry in council.get("history") or []:
+        if not isinstance(entry, dict):
+            continue
+        before = (entry.get("weights_before") or {}).get(lane_id)
+        after = (entry.get("weights_after") or {}).get(lane_id)
+        if before is None and after is None:
+            continue
+        day = _parse_day(entry.get("fired_at"))
+        episodes.append(
+            {
+                "time": entry.get("fired_at"),
+                "day": day,
+                "version": entry.get("version"),
+                "previous_version": entry.get("previous_version"),
+                "beat_previous": entry.get("beat_previous"),
+                "story": entry.get("story"),
+                "before": before,
+                "after": after,
+            }
+        )
+    return episodes
+
+
 def _subnet_trigger_row(pred: Dict[str, Any]) -> Dict[str, Any]:
     pred_pct = pred.get("predicted_pct")
     actual_pct = pred.get("actual_pct")
@@ -157,42 +198,6 @@ def _divergence_pct(before: Optional[float], after: Optional[float]) -> Optional
     return round(abs(a - b) / abs(b) * 100.0, 1)
 
 
-def _narrative_subnet_window(
-    lane_label: str,
-    day: str,
-    acc: Optional[float],
-    acc_delta: Optional[float],
-    triggers: List[Dict[str, Any]],
-) -> str:
-    names = ", ".join(t["name"] for t in triggers[:3] if t.get("name"))
-    acc_txt = f"{acc * 100:.0f}%" if acc is not None else "n/a"
-    if acc_delta is not None and abs(acc_delta) >= _SIGNIFICANT_ACC_SWING:
-        swing = f"accuracy swung {acc_delta * 100:+.0f}pp"
-    else:
-        swing = "graded picks accumulated"
-    return (
-        f"On {day}, {lane_label} resolved {len(triggers)} picks ({swing}; window hit-rate {acc_txt}). "
-        f"Main subnets: {names or 'unknown'}."
-    )
-
-
-def _narrative_weight(
-    lane_label: str,
-    day: Optional[str],
-    before: float,
-    after: float,
-    reason: Optional[str],
-    subnet: Optional[str],
-) -> str:
-    pct = _divergence_pct(before, after)
-    sub = f" after {subnet}" if subnet else ""
-    why = f" ({reason})" if reason else ""
-    return (
-        f"{lane_label} weight moved {before:.3f} → {after:.3f}"
-        f"{f' (~{pct:.0f}% change)' if pct is not None else ''}{sub}{why}."
-    )
-
-
 def build_evolution_trail(lane_id: str) -> Optional[Dict[str, Any]]:
     """Chronological episodes: origin → divergences → current state."""
     lane = build_lane_lineage(lane_id)
@@ -205,6 +210,7 @@ def build_evolution_trail(lane_id: str) -> Optional[Dict[str, Any]]:
     preds = _lane_predictions(lane_id)
     weight_events = _weight_events(lane_id)
     cal_events = _calibration_episodes()
+    version_events = _version_episodes(lane_id)
 
     episodes: List[Dict[str, Any]] = []
 
@@ -223,10 +229,11 @@ def build_evolution_trail(lane_id: str) -> Optional[Dict[str, Any]]:
             "weight_before": DEFAULT_WEIGHTS.get(lane_id, 1.0),
             "weight_after": DEFAULT_WEIGHTS.get(lane_id, 1.0),
             "trigger_subnets": [],
-            "narrative": (
-                f"{label} launched from cited research ({inspiration.get('citation', 'see lineage')}). "
-                f"Baseline formula: {formula.get('expression', 'n/a')}. "
-                f"Initial council weight {DEFAULT_WEIGHTS.get(lane_id, 1.0):.2f}."
+            "narrative": origin_story(
+                label,
+                inspiration.get("citation", ""),
+                formula.get("expression", ""),
+                DEFAULT_WEIGHTS.get(lane_id, 1.0),
             ),
         }
     )
@@ -253,7 +260,9 @@ def build_evolution_trail(lane_id: str) -> Optional[Dict[str, Any]]:
                 "accuracy_delta_pp": round(acc_delta * 100, 1) if acc_delta is not None else None,
                 "formula_expression": formula.get("expression"),
                 "trigger_subnets": triggers,
-                "narrative": _narrative_subnet_window(label, day, acc, acc_delta, triggers),
+                "narrative": subnet_window_story(
+                    label, day, acc, acc_delta, triggers, len(bucket)
+                ),
             }
         )
 
@@ -281,8 +290,36 @@ def build_evolution_trail(lane_id: str) -> Optional[Dict[str, Any]]:
                     if ev.get("subnet") or ev.get("netuid")
                     else []
                 ),
-                "narrative": _narrative_weight(
+                "narrative": weight_nudge_story(
                     label, day, before, after, ev.get("reason"), ev.get("subnet")
+                ),
+            }
+        )
+
+    for ver in version_events:
+        try:
+            before = float(ver.get("before"))
+            after = float(ver.get("after"))
+        except (TypeError, ValueError):
+            continue
+        day = ver.get("day")
+        episodes.append(
+            {
+                "episode_id": f"version_{ver.get('version')}_{day}",
+                "kind": "version_upgrade",
+                "from": day,
+                "to": day,
+                "version": ver.get("version"),
+                "previous_version": ver.get("previous_version"),
+                "beat_previous": ver.get("beat_previous"),
+                "divergence_pct": _divergence_pct(before, after),
+                "weight_before": before,
+                "weight_after": after,
+                "formula_expression": formula.get("expression"),
+                "trigger_subnets": [],
+                "narrative": ver.get("story")
+                or calibration_episode_story(
+                    label, "fired", after, version=ver.get("version")
                 ),
             }
         )
@@ -306,9 +343,8 @@ def build_evolution_trail(lane_id: str) -> Optional[Dict[str, Any]]:
                 "calibration_status": status,
                 "formula_expression": formula.get("expression"),
                 "trigger_subnets": [],
-                "narrative": (
-                    f"Calibration {status or 'event'} proposed {label} weight "
-                    f"{proposed_w} (cert: {(cal.get('cert') or {}).get('reason', 'n/a')})."
+                "narrative": calibration_episode_story(
+                    label, status, proposed_w
                 ),
             }
         )
@@ -316,6 +352,7 @@ def build_evolution_trail(lane_id: str) -> Optional[Dict[str, Any]]:
     weights = load_weights()
     current_w = weights.get(lane_id) if lane_id in DEFAULT_WEIGHTS else None
     loop = lane.get("learning_loop") or {}
+    scoring_version = loop.get("scoring_version")
     episodes.append(
         {
             "episode_id": "current",
@@ -330,13 +367,16 @@ def build_evolution_trail(lane_id: str) -> Optional[Dict[str, Any]]:
             "formula_expression": formula.get("expression"),
             "trigger_subnets": [],
             "narrative": (
-                f"Today {label} weight is {current_w:.3f} "
-                f"({loop.get('graded_n', 0)} graded picks, "
-                f"{loop.get('accuracy', 0) * 100:.0f}% lane accuracy). "
-                f"Formula unchanged at code level; learning loop adapts weights and gates."
-            )
-            if current_w is not None and loop.get("graded_n")
-            else f"Current {label} state — see learning loop metrics.",
+                current_state_story(
+                    label,
+                    current_w,
+                    int(loop.get("graded_n") or 0),
+                    loop.get("accuracy"),
+                    scoring_version,
+                )
+                if current_w is not None and loop.get("graded_n")
+                else f"{label} is warming up — not enough graded picks yet."
+            ),
         }
     )
 
@@ -349,10 +389,7 @@ def build_evolution_trail(lane_id: str) -> Optional[Dict[str, Any]]:
         "label": label,
         "episode_count": len(ordered),
         "trail": ordered,
-        "summary": (
-            f"{len(ordered)} episodes from first graded pick to today — "
-            "subnet outcomes, weight nudges, and calibration proposals."
-        ),
+        "summary": evolution_trail_summary(len(ordered), label),
         "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
 

@@ -382,6 +382,19 @@ def run_calibration_pipeline(
             }
 
         fired = fire_weights(proposed, soul_map_path=soul_map_path)
+        version_entry = None
+        try:
+            from internal.council.formula_versions import record_calibration_version
+
+            version_entry = record_calibration_version(
+                cert=cert,
+                weights_before=backup,
+                weights_after=fired,
+                soul_map_path=soul_map_path,
+                forced=allow_force,
+            )
+        except Exception:
+            pass
         event = {
             "at": started_at,
             "status": "fired",
@@ -402,7 +415,7 @@ def run_calibration_pipeline(
             soul_map_path=soul_map_path,
         )
         _emit_retrain_trail(before=backup, after=fired, cert=cert, fired=True)
-        return {
+        result = {
             "status": "fired",
             "started_at": started_at,
             "fired_at": _utcnow_z(),
@@ -411,6 +424,9 @@ def run_calibration_pipeline(
             "cert": cert,
             "forced": allow_force,
         }
+        if version_entry:
+            result["formula_version"] = version_entry
+        return result
     except FireError as exc:
         _save_calibration_state(
             {
