@@ -59,7 +59,7 @@ def _remote_registry() -> Dict[str, Any]:
             if isinstance(cached, dict):
                 return cached
     try:
-        resp = requests.get(REMOTE_REGISTRY_URL, timeout=20)
+        resp = requests.get(REMOTE_REGISTRY_URL, timeout=4)
         resp.raise_for_status()
         data = resp.json()
         if isinstance(data, dict):

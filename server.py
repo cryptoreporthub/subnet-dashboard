@@ -3,6 +3,7 @@ import logging
 import os
 import asyncio
 import threading
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -168,6 +169,24 @@ except Exception:
         return load_weights()
 
 
+BOOT_DEFER_SECONDS = int(os.environ.get("BOOT_DEFER_SECONDS", "45"))
+
+
+def _defer_boot(name: str, target, delay: Optional[int] = None) -> None:
+    """ponytail: delay heavy boot threads so /health wins the first minute on Fly."""
+    wait = BOOT_DEFER_SECONDS if delay is None else delay
+
+    def _run() -> None:
+        if wait > 0:
+            time.sleep(wait)
+        try:
+            target()
+        except Exception as exc:
+            logger.warning("%s boot task failed: %s", name, exc)
+
+    threading.Thread(target=_run, daemon=True, name=name).start()
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     """Boot background learning-loop workers so predictions resolve headlessly."""
@@ -187,24 +206,15 @@ async def _lifespan(app: FastAPI):
     try:
         from internal.live_subnets import get_live_subnets
 
-        # Non-blocking: schedules background sync only; never fetch chain on boot.
-        threading.Thread(
-            target=get_live_subnets,
-            daemon=True,
-            name="live-subnets-boot",
-        ).start()
-        logger.info("Live subnets sync scheduled")
+        _defer_boot("live-subnets-boot", get_live_subnets)
+        logger.info("Live subnets sync scheduled (deferred %ss)", BOOT_DEFER_SECONDS)
     except Exception as exc:
         logger.warning("Live subnets sync failed to start: %s", exc)
     try:
         from internal.subnets.feed import warm_subnet_feed
 
-        threading.Thread(
-            target=warm_subnet_feed,
-            daemon=True,
-            name="subnet-feed-warmup",
-        ).start()
-        logger.info("Subnet feed warmup thread started")
+        _defer_boot("subnet-feed-warmup", warm_subnet_feed)
+        logger.info("Subnet feed warmup deferred %ss", BOOT_DEFER_SECONDS)
     except Exception as exc:
         logger.warning("Subnet feed warmup failed to start: %s", exc)
     try:
@@ -254,6 +264,13 @@ async def _lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Subnet Dashboard", lifespan=_lifespan)
+
+try:
+    from internal.load_shed import mount_load_shed
+
+    mount_load_shed(app)
+except Exception as _load_shed_exc:  # pragma: no cover
+    logger.warning("Load shed middleware unavailable: %s", _load_shed_exc)
 
 _ENABLE_METRICS = os.environ.get("ENABLE_METRICS", "1").strip().lower() not in ("0", "false", "no")
 if _ENABLE_METRICS:
@@ -428,8 +445,10 @@ async def add_cors_headers(request: Request, call_next):
     return response
 
 
-HOMEPAGE_BUILD_TIMEOUT = int(os.environ.get("HOMEPAGE_BUILD_TIMEOUT", "20"))
+HOMEPAGE_BUILD_TIMEOUT = int(os.environ.get("HOMEPAGE_BUILD_TIMEOUT", "12"))
+HOMEPAGE_SHELL_CACHE_SECONDS = float(os.environ.get("HOMEPAGE_SHELL_CACHE_SECONDS", "45"))
 TOP_SCORING_UNIVERSE = int(os.environ.get("TOP_SCORING_UNIVERSE", "40"))
+_DEGRADED_INDEX_CACHE: Dict[str, Any] = {"at": 0.0, "ctx": None}
 
 
 def _cap_subnets_for_scoring(
@@ -563,6 +582,14 @@ def _public_base_url(request: Request) -> str:
 
 def _degraded_index_context(request: Request) -> Dict[str, Any]:
     """Fast shell — registry subnets + local learning state; hydrate upgrades live APIs."""
+    now = time.time()
+    cached = _DEGRADED_INDEX_CACHE.get("ctx")
+    if isinstance(cached, dict) and now - float(_DEGRADED_INDEX_CACHE.get("at") or 0) < HOMEPAGE_SHELL_CACHE_SECONDS:
+        ctx = dict(cached)
+        ctx["request"] = request
+        ctx["public_base_url"] = _public_base_url(request)
+        return ctx
+
     from internal.learning.dashboard_context import fast_shell_dashboard_context
     from internal.subnet_names import enrich_subnet_rows
 
@@ -592,6 +619,9 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
         },
     }
     ctx.update(_fast_home_hero_context(trust_banner))
+    stash = {k: v for k, v in ctx.items() if k != "request"}
+    _DEGRADED_INDEX_CACHE["at"] = now
+    _DEGRADED_INDEX_CACHE["ctx"] = stash
     return ctx
 
 
@@ -1298,8 +1328,18 @@ def _safe_simivision_payload(
     if subnets is None:
         subnets, source = _get_subnets_with_source()
     source = source or "unknown"
+
+    def _simivision_eligible(sn: Dict[str, Any]) -> bool:
+        nu = sn.get("netuid", sn.get("id"))
+        try:
+            if nu is not None and int(nu) == 0:
+                return False
+        except (TypeError, ValueError):
+            pass
+        return str(sn.get("status") or "active").lower() != "deprecated"
+
     ranked = sorted(
-        subnets,
+        [s for s in subnets if _simivision_eligible(s)],
         key=lambda s: (
             subnet_volume(s),
             float(s.get("market_cap", 0) or 0),
