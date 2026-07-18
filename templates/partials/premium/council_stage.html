@@ -59,6 +59,10 @@
       {% set cal_n = hybrid.n|default(0) %}
       {% set cal_acc = hybrid.accuracy|default(0) %}
 
+      {# K3-3: Council lifecycle (promoted story path) #}
+      {% set sp = story_path if story_path is mapping else {} %}
+      {% set lifecycle_steps = sp.steps if sp.steps is iterable and sp.steps is not string else [] %}
+
       {# Watchlist state #}
       {% set focus_netuid = sn.netuid if sn and sn.netuid is not none else none %}
       {% set wl = habit_watchlist if habit_watchlist is mapping else {} %}
@@ -196,6 +200,13 @@
       .k3-considered-stance--short { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
       .k3-considered-stance--hold { background: rgba(234, 179, 8, 0.15); color: #eab308; }
       .k3-layer-subtitle { font-size: 12px; color: var(--k3-muted); margin: 0 0 12px; }
+      .k3-lifecycle { margin-top: 12px; }
+      .k3-lifecycle-chain { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+      .k3-lifecycle-step { padding: 10px 12px; border-radius: 8px; background: var(--k3-surface); border: 1px solid #1a1d24; }
+      .k3-lifecycle-step--pending { opacity: 0.85; border-style: dashed; }
+      .k3-lifecycle-label { display: block; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+      .k3-lifecycle-title { display: block; font-size: 13px; font-weight: 600; color: var(--k3-text); }
+      .k3-lifecycle-detail { display: block; font-size: 11px; color: var(--k3-muted); margin-top: 4px; line-height: 1.4; }
       </style>
 
       {# ---- CLAIM LAYER (inside home-daily-call for live-refresh) ---- #}
@@ -370,6 +381,30 @@
               {% else %}First resolution pending. This pick will be graded against {{ horizon }} price movement once the window closes.{% endif %}
             </div>
           </div>
+          {% if resolves_in %}
+          <p class="k3-layer-subtitle" style="margin-top: 12px;">Resolve window · {{ resolves_in }} remaining · graded against {{ horizon }} movement</p>
+          {% endif %}
+          <div class="k3-lifecycle" id="k3-lifecycle-outcome">
+            <div class="k3-layer-title">Council lifecycle</div>
+            {% if sp.data_available and lifecycle_steps and lifecycle_steps|length > 0 %}
+            <ol class="k3-lifecycle-chain" aria-label="Pick lifecycle path">
+              {% for step in lifecycle_steps[:4] %}
+              <li class="k3-lifecycle-step k3-lifecycle-step--{{ step.status|default('done') }}">
+                <span class="k3-lifecycle-label">{{ step.label|default('Step') }}</span>
+                <span class="k3-lifecycle-title">{{ step.title|default('—') }}</span>
+                {% if step.detail %}<span class="k3-lifecycle-detail">{{ step.detail }}</span>{% endif %}
+              </li>
+              {% endfor %}
+            </ol>
+            {% else %}
+            <div class="k3-empty" style="padding: 16px 0;">
+              <div class="k3-empty-text" style="font-size: 12px;">
+                {% if sp.reason == 'no_pick' %}This pick is still forming. Council lifecycle appears when the audit gate clears a call.
+                {% else %}Lifecycle path warming up. Signal → deliberation → outcome chain will surface as grading matures.{% endif %}
+              </div>
+            </div>
+            {% endif %}
+          </div>
         </div>
       </div>
 
@@ -384,7 +419,18 @@
             <div class="k3-learning-stat"><div class="k3-learning-value">{{ cal_n }}</div><div class="k3-learning-label">graded picks</div></div>
             <div class="k3-learning-stat"><div class="k3-learning-value">{{ '%.1f'|format(cal_acc|float) }}%</div><div class="k3-learning-label">accuracy</div></div>
           </div>
-          <div class="k3-empty" style="padding: 8px 0;"><div class="k3-empty-text" style="font-size: 12px;">Post-resolution learning adjusts council weights based on graded outcomes. Accuracy improves as sample size grows.</div></div>
+          <div class="k3-lifecycle" id="k3-lifecycle-learning">
+            {% if sp.data_available and lifecycle_steps|length > 4 %}
+            {% set learn_step = lifecycle_steps[4] %}
+            <div class="k3-lifecycle-step k3-lifecycle-step--{{ learn_step.status|default('pending') }}">
+              <span class="k3-lifecycle-label">{{ learn_step.label|default('5 · Weight nudge') }}</span>
+              <span class="k3-lifecycle-title">{{ learn_step.title|default('Learning loop') }}</span>
+              {% if learn_step.detail %}<span class="k3-lifecycle-detail">{{ learn_step.detail }}</span>{% endif %}
+            </div>
+            {% else %}
+            <div class="k3-empty" style="padding: 8px 0;"><div class="k3-empty-text" style="font-size: 12px;">Post-resolution learning adjusts council weights based on graded outcomes. Accuracy improves as sample size grows.</div></div>
+            {% endif %}
+          </div>
         </div>
       </div>
 
