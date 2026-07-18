@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from internal.council.state_vector import score_subnet_for_day
+from internal.subnet_names import name_for_netuid
 from internal.subnets.tradable import tradable_subnets
 
 logger = logging.getLogger(__name__)
@@ -153,7 +154,7 @@ def build_deliberation_shortlist(
         alternatives.append(
             {
                 "netuid": nu,
-                "name": sn.get("name") or f"SN{nu}",
+                "name": name_for_netuid(nu) if nu is not None else "SN?",
                 "conviction": conv,
                 "why_not": _why_not(pick_block or {}, row["score"], rank),
                 "rank": rank,
@@ -168,7 +169,7 @@ def build_deliberation_shortlist(
     if picked_nu is not None:
         picked = {
             "netuid": pick_sn.get("netuid", picked_nu),
-            "name": pick_sn.get("name") or f"SN{picked_nu}",
+            "name": name_for_netuid(picked_nu),
             "conviction": pick_conv,
         }
     return {

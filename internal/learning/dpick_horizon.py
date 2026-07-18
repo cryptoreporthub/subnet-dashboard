@@ -86,13 +86,9 @@ def _trend_lens_confidence(base_pct: int, pct_7d: Optional[float], action: str) 
 
 
 def _view_subnet(sn: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    if not isinstance(sn, dict) or sn.get("netuid") is None:
-        return None
-    return {
-        "netuid": sn.get("netuid"),
-        "name": sn.get("name") or f"SN{sn.get('netuid')}",
-        "symbol": sn.get("symbol"),
-    }
+    from internal.subnet_names import canonical_subnet_display
+
+    return canonical_subnet_display(sn)
 
 
 def _council_view(
