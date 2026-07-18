@@ -45,6 +45,25 @@ def test_refresh_daily_pick_names():
     assert out["pick"]["subnet"]["name"] != "Ralph"
 
 
+def test_refresh_daily_pick_names_candidate():
+    from internal.subnet_names import refresh_daily_pick_names
+
+    payload = {
+        "candidate": {
+            "subnet": {"netuid": 40, "name": "Ralph"},
+            "final_confidence": 0.28,
+        },
+        "horizon_views": {
+            "views": {
+                "24h": {"subnet": {"netuid": 40, "name": "Ralph"}, "conviction": 28},
+            }
+        },
+    }
+    out = refresh_daily_pick_names(payload)
+    assert out["candidate"]["subnet"]["name"] != "Ralph"
+    assert out["horizon_views"]["views"]["24h"]["subnet"]["name"] != "Ralph"
+
+
 def test_dpick_shortlist_uses_canonical_names():
     from internal.learning.dpick_shortlist import build_deliberation_shortlist
 

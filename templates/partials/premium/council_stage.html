@@ -35,9 +35,15 @@
       {% set hybrid = hybrid_trust if hybrid_trust is mapping else {} %}
       {% set tb = trust_banner if trust_banner is mapping else {} %}
 
-      {# Conviction % for orb ring #}
-      {% set conviction = conf_src.conviction if conf_src and conf_src.conviction else 0 %}
-      {% set conviction_pct = conviction|int %}
+      {# Conviction % for orb ring (picks use final_confidence 0–1) #}
+      {% set conviction_raw = conf_src.final_confidence if conf_src and conf_src.final_confidence is not none else (conf_src.confidence if conf_src and conf_src.confidence is not none else (conf_src.conviction if conf_src and conf_src.conviction is not none else none)) %}
+      {% if conviction_raw is not none and conviction_raw|float <= 1.0 and conviction_raw|float >= 0.0 %}
+        {% set conviction_pct = (conviction_raw|float * 100)|round|int %}
+      {% elif conviction_raw is not none %}
+        {% set conviction_pct = conviction_raw|int %}
+      {% else %}
+        {% set conviction_pct = 0 %}
+      {% endif %}
       {% set ring_circ = 389.56 %}
       {% set ring_offset = ring_circ - (ring_circ * conviction_pct / 100) %}
 
@@ -249,10 +255,11 @@
       .k3-lifecycle-label { display: block; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
       .k3-lifecycle-title { display: block; font-size: 13px; font-weight: 600; color: var(--k3-text); }
       .k3-lifecycle-detail { display: block; font-size: 11px; color: var(--k3-muted); margin-top: 4px; line-height: 1.4; }
+      .k3-candidate-gate { font-size: 11px; color: #eab308; margin: 8px 0 0; letter-spacing: 0.02em; }
       </style>
 
       {# ---- CLAIM LAYER (inside home-daily-call for live-refresh) ---- #}
-      {% if audit_pick and sn %}
+      {% if sn %}
       <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
         <div class="k3-dossier" id="k3-dossier">
           <div class="k3-layer open" id="k3-layer-claim">
@@ -298,7 +305,10 @@
               <p id="k3-horizon-note" class="k3-horizon-note" hidden></p>
               {% endif %}
               <div class="k3-claim-name" id="k3-claim-name">{{ sn.name|default('SN' ~ sn.netuid) }}</div>
-              <div class="k3-claim-meta" id="k3-claim-meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}</div>
+              <div class="k3-claim-meta" id="k3-claim-meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}{% if not audit_pick and cand %} · candidate{% endif %}</div>
+              {% if not audit_pick and cand %}
+              <p class="k3-candidate-gate" id="k3-candidate-gate">Candidate · audit gate not cleared</p>
+              {% endif %}
               {% if act == 'LONG' %}<div class="k3-badge buy" id="k3-action-badge">BUY</div>
               {% elif act == 'SHORT' %}<div class="k3-badge sell" id="k3-action-badge">SELL</div>
               {% else %}<div class="k3-badge hold" id="k3-action-badge">{{ act }}</div>{% endif %}
