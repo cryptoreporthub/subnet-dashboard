@@ -1634,6 +1634,159 @@ button.home-cta {
 .backtest-meter__fill { height: 100%; background: linear-gradient(90deg, #00ff41, #22d3ee); border-radius: 4px; }
 .backtest-meter__sub { font-size: 12px; color: var(--stage-muted); }
 
+.backtest-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+.backtest-panel { padding: 12px 14px; }
+.backtest-panel__title { margin: 0 0 4px; font-size: 14px; }
+.backtest-panel__subtitle { margin: 12px 0 4px; font-size: 12px; color: var(--stage-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.backtest-panel__hint { margin: 0 0 8px; font-size: 11px; color: var(--stage-muted); }
+
+.backtest-cal__chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  min-height: 88px;
+  padding: 8px 4px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+.backtest-cal__bar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  height: 80px;
+}
+.backtest-cal__bar-fill {
+  width: 100%;
+  max-width: 28px;
+  background: linear-gradient(180deg, #22d3ee, #00ff41);
+  border-radius: 3px 3px 0 0;
+  min-height: 4px;
+}
+.backtest-cal__bar-label { font-size: 9px; color: var(--stage-muted); margin-top: 4px; }
+.backtest-cal__empty { font-size: 12px; color: var(--stage-muted); margin: 0; }
+
+.tbl--compact th, .tbl--compact td { padding: 4px 8px; font-size: 11px; }
+.backtest-rc { margin-top: 4px; }
+
+.backtest-method { margin-top: 12px; padding: 12px 14px; }
+.backtest-method__summary { font-size: 13px; color: var(--stage-muted); margin: 8px 0 12px; }
+.backtest-method__grid { display: grid; gap: 10px; }
+.backtest-method__metric { font-size: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px; }
+.backtest-method__metric p { margin: 4px 0; color: var(--stage-muted); }
+.backtest-method__formula {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.25);
+  color: #a7f3d0;
+}
+.backtest-method__cov { font-size: 11px; font-style: italic; }
+.backtest-method__refs, .backtest-method__refs a { font-size: 11px; }
+.backtest-method__h { margin: 12px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--stage-muted); }
+.backtest-method__refs-list { margin: 0; padding-left: 18px; font-size: 12px; }
+.backtest-method__refs-list li { margin-bottom: 8px; }
+.backtest-method__topic { display: block; font-size: 11px; color: var(--stage-muted); margin-top: 2px; }
+
+.backtest-overlap { margin: 12px 0; padding: 12px 14px; }
+.backtest-overlap__intro { font-size: 12px; color: var(--stage-muted); margin: 8px 0 10px; }
+.backtest-overlap__unanimous { font-size: 13px; margin: 0 0 10px; }
+.backtest-overlap__table { margin-bottom: 8px; }
+.backtest-overlap__meta { font-size: 11px; color: var(--stage-muted); margin: 8px 0 0; }
+.backtest-overlap__notes { margin: 8px 0 0; padding-left: 18px; font-size: 12px; color: var(--stage-muted); }
+.backtest-overlap__note--warning { color: #fcd34d; }
+
+.formula-lineage-root { margin-top: 12px; }
+.formula-lineage { padding: 12px 14px; }
+.formula-lineage__intro { font-size: 13px; color: var(--stage-muted); margin: 8px 0 12px; }
+.formula-lineage__lane {
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding: 12px 0;
+}
+.formula-lineage__lane-title { margin: 0 0 6px; font-size: 15px; color: #00ff41; }
+.formula-lineage__expr {
+  display: block;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.25);
+  color: #a7f3d0;
+  margin-bottom: 6px;
+}
+.formula-lineage__impl, .formula-lineage__live, .formula-lineage__loop-note {
+  font-size: 12px;
+  color: var(--stage-muted);
+  margin: 4px 0;
+}
+.formula-lineage__sub {
+  margin: 10px 0 4px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--stage-muted);
+}
+.formula-lineage__rel { font-size: 10px; color: var(--stage-muted); }
+.formula-lineage__note { display: block; font-size: 11px; color: var(--stage-muted); margin-top: 2px; }
+.formula-lineage__lane ul { margin: 0; padding-left: 18px; font-size: 12px; }
+.formula-lineage__lane li { margin-bottom: 6px; }
+
+.formula-evolution-root { margin-top: 12px; }
+.formula-evolution { padding: 12px 14px; }
+.formula-evolution__intro { font-size: 13px; color: var(--stage-muted); margin: 8px 0 12px; }
+.formula-evolution__timeline { margin: 0; padding-left: 20px; }
+.formula-evolution__episode { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.formula-evolution__meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; font-size: 11px; }
+.formula-evolution__kind {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #22d3ee;
+}
+.formula-evolution__range { color: var(--stage-muted); }
+.formula-evolution__narrative { font-size: 13px; margin: 0 0 6px; line-height: 1.45; }
+.formula-evolution__expr {
+  display: block;
+  font-size: 11px;
+  padding: 4px 6px;
+  margin: 4px 0;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.2);
+  color: #a7f3d0;
+}
+.formula-evolution__subnets { margin: 6px 0; padding-left: 18px; font-size: 12px; color: var(--stage-muted); }
+.formula-evolution__weight { font-size: 12px; color: var(--stage-muted); margin: 4px 0 0; }
+.formula-evolution__episode--version_nickname {
+  border-bottom-style: dashed;
+  opacity: 0.92;
+}
+.formula-evolution__episode--version_nickname .formula-evolution__kind {
+  color: #fcd34d;
+}
+.formula-evolution__nickname {
+  font-size: 15px;
+  font-style: italic;
+  color: #fde68a;
+  margin: 4px 0 8px;
+  letter-spacing: 0.02em;
+}
+.formula-evolution__paper-twist {
+  font-size: 12px;
+  color: #a5b4fc;
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+.formula-evolution__paper-twist em {
+  font-style: normal;
+  color: #c4b5fd;
+}
+
 .story-strip--prominent { margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid rgba(0,255,65,0.15); }
 
 .heuristic-tag { display: inline-block; margin-left: 6px; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(138,154,142,0.35); color: var(--stage-muted); }

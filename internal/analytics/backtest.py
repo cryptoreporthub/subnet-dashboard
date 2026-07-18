@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
+from internal.analytics.backtest_methodology import build_methodology_payload
 from internal.council.grading import direction_correct
 from internal.judges import echo_judge, oracle_judge, pulse_judge
 from internal.judges.portfolios import _compute_pnl
@@ -13,7 +14,16 @@ from internal.learning.predictions_store import load_predictions
 JUDGES = ("oracle", "echo", "pulse")
 _SKIP_OUTCOMES = frozenset({"duplicate", "expired", "ungradeable"})
 _CALIBRATION_BINS = 10
-_ORACLE_FILTER_SCORE = 0.55
+_RISK_COVERAGE_THRESHOLDS = (0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9)
+_JUDGE_THRESHOLDS: Dict[str, float] = {
+    "oracle": 0.55,
+    "echo": 0.5,
+    "pulse": 0.55,
+}
+
+
+def _judge_threshold(judge: str) -> float:
+    return _JUDGE_THRESHOLDS.get(judge, 0.55)
 
 
 def _gradeable_rows(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -48,11 +58,12 @@ def _signal_impact_from_row(row: Dict[str, Any]) -> Dict[str, Any]:
             }
         )
     elif pred_pct != 0:
+        sig = str(row.get("signal_source") or "predicted_move").lower().replace(" ", "_")
         impacts.append(
             {
                 "direction": "bullish" if direction == "up" else "bearish",
                 "magnitude_pct": mag,
-                "signal": "predicted_move",
+                "signal": sig,
             }
         )
     net_dir = impacts[0]["direction"] if impacts else "neutral"
@@ -118,8 +129,10 @@ def _filtered_judge_win_rate(
     history: List[Dict[str, Any]],
     judge: str,
     *,
-    min_score: float = _ORACLE_FILTER_SCORE,
+    min_score: Optional[float] = None,
 ) -> Dict[str, Any]:
+    """Hit-rate on picks the judge endorses (score at or above threshold)."""
+    min_score = _judge_threshold(judge) if min_score is None else min_score
     picks = [
         h
         for h in history
@@ -128,13 +141,252 @@ def _filtered_judge_win_rate(
         and float(h["judges"][judge].get("score") or 0) >= min_score
     ]
     if not picks:
-        return {"n": 0, "win_rate": None, "min_score": min_score}
-    wins = sum(1 for h in picks if h["judges"][judge].get("win"))
+        return {
+            "n": 0,
+            "win_rate": None,
+            "min_score": min_score,
+            "coverage": None,
+            "coverage_pct": None,
+        }
+    wins = sum(1 for h in picks if h.get("council_correct"))
     return {
         "n": len(picks),
         "win_rate": round(wins / len(picks), 4),
         "min_score": min_score,
+        "coverage": None,
+        "coverage_pct": None,
     }
+
+
+def _with_coverage(filtered: Dict[str, Any], sample_size: int) -> Dict[str, Any]:
+    out = dict(filtered)
+    if sample_size > 0 and out.get("n") is not None:
+        out["coverage"] = round(float(out["n"]) / sample_size, 4)
+        out["coverage_pct"] = round(100.0 * float(out["n"]) / sample_size, 1)
+    return out
+
+
+_JUDGE_LABELS: Dict[str, str] = {
+    "oracle": "Oracle",
+    "echo": "Echo",
+    "pulse": "Pulse",
+}
+_PAIR_KEYS = (("oracle", "echo"), ("oracle", "pulse"), ("echo", "pulse"))
+
+
+def _is_endorsed(entry: Dict[str, Any], judge: str) -> bool:
+    judges = entry.get("judges") if isinstance(entry.get("judges"), dict) else {}
+    block = judges.get(judge) if isinstance(judges.get(judge), dict) else {}
+    if "endorsed" in block:
+        return bool(block.get("endorsed"))
+    return float(block.get("score") or 0) >= _judge_threshold(judge)
+
+
+def _endorsement_overlap(history: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """How often judges endorse the same picks — uses the same τ gates as hit-rate."""
+    n = len(history)
+    if n == 0:
+        return {
+            "sample_size": 0,
+            "judges": {},
+            "pairs": [],
+            "unanimous": {"n": 0, "pct": None, "hit_rate": None},
+            "snapshot_missing_pct": None,
+            "health": {"status": "empty", "notes": []},
+        }
+
+    endorsed: Dict[str, List[bool]] = {j: [] for j in JUDGES}
+    unanimous_rows: List[Dict[str, Any]] = []
+    snapshot_missing = 0
+
+    for entry in history:
+        if not entry.get("has_subnet_snapshot"):
+            snapshot_missing += 1
+        flags = {j: _is_endorsed(entry, j) for j in JUDGES}
+        for j in JUDGES:
+            endorsed[j].append(flags[j])
+        if all(flags.values()):
+            unanimous_rows.append(entry)
+
+    judge_summary = {}
+    for j in JUDGES:
+        count = sum(endorsed[j])
+        judge_summary[j] = {
+            "label": _JUDGE_LABELS[j],
+            "endorsed_n": count,
+            "coverage_pct": round(100.0 * count / n, 1) if n else None,
+            "threshold": _judge_threshold(j),
+        }
+
+    pairs: List[Dict[str, Any]] = []
+    for a, b in _PAIR_KEYS:
+        both = sum(1 for i in range(n) if endorsed[a][i] and endorsed[b][i])
+        either = sum(1 for i in range(n) if endorsed[a][i] or endorsed[b][i])
+        a_n = judge_summary[a]["endorsed_n"]
+        b_n = judge_summary[b]["endorsed_n"]
+        pairs.append(
+            {
+                "a": a,
+                "b": b,
+                "label": f"{_JUDGE_LABELS[a]} ∩ {_JUDGE_LABELS[b]}",
+                "both_n": both,
+                "both_pct": round(100.0 * both / n, 1),
+                "jaccard_pct": round(100.0 * both / either, 1) if either else None,
+                "pct_of_a": round(100.0 * both / a_n, 1) if a_n else None,
+                "pct_of_b": round(100.0 * both / b_n, 1) if b_n else None,
+            }
+        )
+
+    uni_n = len(unanimous_rows)
+    uni_hits = sum(1 for row in unanimous_rows if row.get("council_correct"))
+    snapshot_missing_pct = round(100.0 * snapshot_missing / n, 1)
+
+    overlap = {
+        "sample_size": n,
+        "judges": judge_summary,
+        "pairs": pairs,
+        "unanimous": {
+            "n": uni_n,
+            "pct": round(100.0 * uni_n / n, 1) if n else None,
+            "hit_rate": round(uni_hits / uni_n, 4) if uni_n else None,
+        },
+        "snapshot_missing_pct": snapshot_missing_pct,
+        "health": _overlap_health(judge_summary, pairs, snapshot_missing_pct),
+    }
+    return overlap
+
+
+def _overlap_health(
+    judges: Dict[str, Dict[str, Any]],
+    pairs: List[Dict[str, Any]],
+    snapshot_missing_pct: float,
+) -> Dict[str, Any]:
+    notes: List[Dict[str, str]] = []
+    status = "ok"
+
+    oracle_cov = float(judges.get("oracle", {}).get("coverage_pct") or 0)
+    pulse_cov = float(judges.get("pulse", {}).get("coverage_pct") or 0)
+    oe = next((p for p in pairs if p["a"] == "oracle" and p["b"] == "echo"), {})
+    oe_share = float(oe.get("pct_of_a") or 0)
+
+    if snapshot_missing_pct >= 80 and oracle_cov >= 95:
+        notes.append(
+            {
+                "level": "warning",
+                "text": (
+                    f"{snapshot_missing_pct:.0f}% of picks lack subnet snapshots — "
+                    "Oracle may be endorsing almost everything from signal-source boosts alone."
+                ),
+            }
+        )
+        status = "warning"
+    elif oe_share >= 95 and oracle_cov >= 90:
+        notes.append(
+            {
+                "level": "warning",
+                "text": (
+                    "Oracle and Echo are endorsing nearly the same picks. "
+                    "That can be normal on clean alerts, or a sign the gates are too loose."
+                ),
+            }
+        )
+        status = "warning"
+    elif pulse_cov <= 15 and pulse_cov > 0:
+        notes.append(
+            {
+                "level": "info",
+                "text": (
+                    "Pulse is very selective — low overlap with Oracle/Echo is expected "
+                    "(momentum gate, not evidence gate)."
+                ),
+            }
+        )
+    else:
+        notes.append(
+            {
+                "level": "info",
+                "text": (
+                    "Some overlap is healthy on strong picks. "
+                    "Pulse should usually endorse the fewest; Oracle and Echo may agree often."
+                ),
+            }
+        )
+
+    try:
+        from internal.subnets.feed import probe_feed_layers
+
+        probe = probe_feed_layers()
+        eff = probe.get("effective_source")
+        live = probe.get("live_cache") or {}
+        if eff and eff != "blockmachine":
+            notes.append(
+                {
+                    "level": "info",
+                    "text": (
+                        f"Subnet feed is on {eff} ({probe.get('likely_total', 0)} subnets). "
+                        "Judge replay uses ledger snapshots; resolver backfills missing ones at grade time."
+                    ),
+                }
+            )
+        elif live.get("subnet_count", 0) == 0 and eff == "blockmachine":
+            notes.append(
+                {
+                    "level": "warning",
+                    "text": (
+                        "Blockmachine cache is empty — live feed may be on TMC fallback until sync completes."
+                    ),
+                }
+            )
+    except Exception:
+        pass
+
+    return {"status": status, "notes": notes}
+
+
+def _risk_coverage_curve(
+    history: List[Dict[str, Any]],
+    judge: str,
+    *,
+    sample_size: int,
+) -> List[Dict[str, Any]]:
+    """Selective risk vs coverage at score thresholds (El-Yaniv & Wiener 2010)."""
+    if sample_size <= 0:
+        return []
+    points: List[Dict[str, Any]] = []
+    for threshold in _RISK_COVERAGE_THRESHOLDS:
+        picks = [
+            h
+            for h in history
+            if isinstance(h.get("judges"), dict)
+            and isinstance(h["judges"].get(judge), dict)
+            and float(h["judges"][judge].get("score") or 0) >= threshold
+        ]
+        n = len(picks)
+        if n == 0:
+            points.append(
+                {
+                    "threshold": threshold,
+                    "n": 0,
+                    "coverage": 0.0,
+                    "coverage_pct": 0.0,
+                    "hit_rate": None,
+                    "risk": None,
+                }
+            )
+            continue
+        hits = sum(1 for h in picks if h.get("council_correct"))
+        hit_rate = hits / n
+        points.append(
+            {
+                "threshold": threshold,
+                "n": n,
+                "coverage": round(n / sample_size, 4),
+                "coverage_pct": round(100.0 * n / sample_size, 1),
+                "hit_rate": round(hit_rate, 4),
+                "risk": round(1.0 - hit_rate, 4),
+            }
+        )
+    return points
 
 
 def run_backtest(
@@ -153,9 +405,26 @@ def run_backtest(
             "status": "empty",
             "message": "No gradeable resolved predictions for backtest replay.",
             "sample_size": 0,
-            "council": {"wins": 0, "losses": 0, "win_rate": None},
-            "judges": {name: {**_init_judge_stats(), "win_rate": None, "avg_pnl_pct": None} for name in JUDGES},
+            "council": {
+                "wins": 0,
+                "losses": 0,
+                "win_rate": None,
+                "coverage": None,
+                "coverage_pct": None,
+            },
+            "judges": {
+                name: {
+                    **_init_judge_stats(),
+                    "win_rate": None,
+                    "avg_pnl_pct": None,
+                    "coverage": None,
+                    "coverage_pct": None,
+                }
+                for name in JUDGES
+            },
             "history": [],
+            "methodology": build_methodology_payload(),
+            "endorsement_overlap": _endorsement_overlap([]),
         }
 
     judges = {name: _init_judge_stats() for name in JUDGES}
@@ -178,6 +447,8 @@ def run_backtest(
             "actual_pct": actual_pct,
             "council_correct": council_hit,
             "signal_source": row.get("signal_source"),
+            "has_subnet_snapshot": isinstance(row.get("subnet_snapshot"), dict)
+            and row["subnet_snapshot"].get("price") not in (None, ""),
             "judges": {},
         }
 
@@ -189,25 +460,28 @@ def run_backtest(
                 actual_pct,
                 name,
             )
-            win = pnl > 0
+            score = float(judge_scores.get("score") or 0.5)
+            endorsed = score >= _judge_threshold(name)
+            judge_hit = council_hit if endorsed else not council_hit
             stats = judges[name]
-            if win:
+            if judge_hit:
                 stats["wins"] += 1
             else:
                 stats["losses"] += 1
             stats["total_pnl_pct"] = round(stats["total_pnl_pct"] + pnl, 4)
 
-            score = float(judge_scores.get("score") or 0.5)
             bin_idx = min(_CALIBRATION_BINS - 1, max(0, int(score * _CALIBRATION_BINS)))
             stats["calibration"][bin_idx]["count"] += 1
-            if win:
+            if council_hit:
                 stats["calibration"][bin_idx]["hits"] += 1
 
             entry["judges"][name] = {
                 "score": judge_scores.get("score"),
                 "confidence": judge_scores.get("confidence"),
                 "pnl_pct": pnl,
-                "win": win,
+                "win": judge_hit,
+                "endorsed": endorsed,
+                "council_correct": council_hit,
             }
 
         history.append(entry)
@@ -217,19 +491,25 @@ def run_backtest(
         "wins": council_wins,
         "losses": n - council_wins,
         "win_rate": round(council_wins / n, 4),
+        "coverage": 1.0,
+        "coverage_pct": 100.0,
+        "metric_id": "council_direction_rate",
     }
     judge_blocks: Dict[str, Any] = {}
     for name in JUDGES:
         stats = judges[name]
         total = stats["wins"] + stats["losses"]
+        filtered = _with_coverage(_filtered_judge_win_rate(history, name), n)
         cal = []
         for bucket in stats["calibration"]:
             count = bucket["count"]
+            midpoint = round((bucket["bin"] + 0.5) / _CALIBRATION_BINS, 2)
             cal.append(
                 {
                     "bin": bucket["bin"],
                     "score_lo": round(bucket["bin"] / _CALIBRATION_BINS, 2),
                     "score_hi": round((bucket["bin"] + 1) / _CALIBRATION_BINS, 2),
+                    "score_mid": midpoint,
                     "count": count,
                     "hit_rate": round(bucket["hits"] / count, 4) if count else None,
                 }
@@ -237,11 +517,18 @@ def run_backtest(
         judge_blocks[name] = {
             "wins": stats["wins"],
             "losses": stats["losses"],
-            "win_rate": round(stats["wins"] / total, 4) if total else None,
+            "win_rate": filtered["win_rate"],
+            "endorsed_n": filtered["n"],
+            "coverage": filtered.get("coverage"),
+            "coverage_pct": filtered.get("coverage_pct"),
+            "threshold": filtered["min_score"],
+            "metric_id": "selective_hit_rate",
+            "direction_win_rate": round(stats["wins"] / total, 4) if total else None,
             "avg_pnl_pct": round(stats["total_pnl_pct"] / total, 4) if total else None,
             "total_pnl_pct": stats["total_pnl_pct"],
             "calibration": cal,
-            "filtered": _filtered_judge_win_rate(history, name),
+            "filtered": filtered,
+            "risk_coverage": _risk_coverage_curve(history, name, sample_size=n),
         }
 
     return {
@@ -250,6 +537,8 @@ def run_backtest(
         "council": council_block,
         "judges": judge_blocks,
         "history": list(reversed(history[-24:])),
+        "methodology": build_methodology_payload(),
+        "endorsement_overlap": _endorsement_overlap(history),
     }
 
 

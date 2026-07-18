@@ -97,7 +97,9 @@
   function normalizeWeights(weights) {
     var w = Object.assign({}, weights || {});
     if (w.contrarian != null) {
-      w.dark_horse = Math.max(Number(w.dark_horse) || 0, Number(w.contrarian) || 0);
+      if (w.dark_horse == null) {
+        w.dark_horse = Number(w.contrarian) || 0;
+      }
       delete w.contrarian;
     }
     var out = {};
@@ -581,6 +583,108 @@
     return (Number(rate) * 100).toFixed(1) + '%';
   }
 
+  function renderCalibrationChart(judgeName, bins) {
+    if (!bins || !bins.length) return '';
+    var active = bins.filter(function (b) { return (b.count || 0) > 0; });
+    if (!active.length) {
+      return '<p class="backtest-cal__empty">No score bins with samples yet.</p>';
+    }
+    var bars = active.map(function (b) {
+      var hr = b.hit_rate != null ? Number(b.hit_rate) : 0;
+      var pct = Math.round(hr * 1000) / 10;
+      var h = Math.max(4, Math.min(100, pct));
+      var mid = b.score_mid != null ? b.score_mid : ((Number(b.score_lo) + Number(b.score_hi)) / 2);
+      return '<div class="backtest-cal__bar" title="score ' + mid + ' · n=' + b.count + ' · hit ' + pct + '%">' +
+        '<div class="backtest-cal__bar-fill" style="height:' + h + '%;"></div>' +
+        '<div class="backtest-cal__bar-label">' + mid + '</div></div>';
+    }).join('');
+    return '<div class="backtest-cal__chart" role="img" aria-label="' + esc(judgeName) + ' calibration reliability diagram">' +
+      bars + '</div>';
+  }
+
+  function renderRiskCoverageTable(points) {
+    if (!points || !points.length) return '';
+    var rows = points.filter(function (p) { return (p.n || 0) > 0; }).slice(0, 6);
+    if (!rows.length) return '';
+    var body = rows.map(function (p) {
+      return '<tr><td class="mono">≥' + p.threshold + '</td><td class="mono">' + pctLabel(p.hit_rate) + '</td>' +
+        '<td class="mono">' + (p.coverage_pct != null ? p.coverage_pct + '%' : '—') + '</td><td class="mono">' + p.n + '</td></tr>';
+    }).join('');
+    return '<table class="tbl tbl--compact backtest-rc"><thead><tr><th>τ</th><th>Hit</th><th>Coverage</th><th>n</th></tr></thead><tbody>' +
+      body + '</tbody></table>';
+  }
+
+  function renderMethodology(methodology) {
+    if (!methodology) return '';
+    var sources = methodology.sources || [];
+    var metrics = methodology.metrics || [];
+    var srcHtml = sources.map(function (s) {
+      return '<li><a href="' + esc(s.url) + '" target="_blank" rel="noopener noreferrer">' + esc(s.citation) + '</a>' +
+        '<span class="backtest-method__topic">' + esc(s.topic || '') + '</span></li>';
+    }).join('');
+    var metricHtml = metrics.map(function (m) {
+      var links = (m.sources || []).map(function (s) {
+        return '<a href="' + esc(s.url) + '" target="_blank" rel="noopener noreferrer">' + esc(s.id || 'source') + '</a>';
+      }).join(', ');
+      return '<div class="backtest-method__metric"><strong>' + esc(m.label) + '</strong>' +
+        '<code class="backtest-method__formula">' + esc(m.formula) + '</code>' +
+        '<p>' + esc(m.definition) + '</p>' +
+        (m.coverage ? '<p class="backtest-method__cov">' + esc(m.coverage) + '</p>' : '') +
+        (links ? '<p class="backtest-method__refs">Sources: ' + links + '</p>' : '') +
+        '</div>';
+    }).join('');
+    return '<details class="backtest-method card">' +
+      '<summary>Methodology &amp; sources (selective classification / meta-labeling)</summary>' +
+      '<p class="backtest-method__summary">' + esc(methodology.summary || '') + '</p>' +
+      '<div class="backtest-method__grid">' + metricHtml + '</div>' +
+      '<h4 class="backtest-method__h">References</h4><ul class="backtest-method__refs-list">' + srcHtml + '</ul>' +
+      '</details>';
+  }
+
+  function renderEndorsementOverlap(overlap) {
+    if (!overlap || !overlap.sample_size) return '';
+    var uni = overlap.unanimous || {};
+    var html = '<details class="backtest-overlap card" open>' +
+      '<summary>Do the judges agree on the same picks?</summary>' +
+      '<p class="backtest-overlap__intro">Overlap uses the same endorsement rules as the hit-rate KPIs above (score ≥ τ).</p>';
+
+    if (uni.n != null && overlap.sample_size) {
+      var uniHit = uni.hit_rate != null ? pctLabel(uni.hit_rate) : '—';
+      html += '<p class="backtest-overlap__unanimous"><strong>All three said yes:</strong> ' +
+        uni.n + '/' + overlap.sample_size +
+        (uni.pct != null ? ' (' + uni.pct + '%)' : '') +
+        ' · hit rate when unanimous: ' + uniHit + '</p>';
+    }
+
+    html += '<table class="tbl tbl--compact backtest-overlap__table"><thead><tr>' +
+      '<th>Pair</th><th>Both endorse</th><th>% of sample</th><th>When A says yes, B also</th></tr></thead><tbody>';
+    (overlap.pairs || []).forEach(function (row) {
+      var ab = row.pct_of_a != null ? (row.pct_of_a + '% of ' + esc((overlap.judges[row.a] || {}).label || row.a)) : '—';
+      html += '<tr><td>' + esc(row.label || '') + '</td>' +
+        '<td class="mono">' + (row.both_n != null ? row.both_n : '—') + '</td>' +
+        '<td class="mono">' + (row.both_pct != null ? row.both_pct + '%' : '—') + '</td>' +
+        '<td class="mono">' + ab + '</td></tr>';
+    });
+    html += '</tbody></table>';
+
+    if (overlap.snapshot_missing_pct != null) {
+      html += '<p class="backtest-overlap__meta">Subnet snapshots missing on ' +
+        overlap.snapshot_missing_pct + '% of picks in this window.</p>';
+    }
+
+    var notes = (overlap.health && overlap.health.notes) || [];
+    if (notes.length) {
+      html += '<ul class="backtest-overlap__notes">';
+      notes.forEach(function (note) {
+        var cls = note.level === 'warning' ? ' backtest-overlap__note--warning' : '';
+        html += '<li class="backtest-overlap__note' + cls + '">' + esc(note.text || '') + '</li>';
+      });
+      html += '</ul>';
+    }
+    html += '</details>';
+    return html;
+  }
+
   function renderBacktest(payload) {
     var root = document.getElementById('backtest-panel-root');
     if (!root) return;
@@ -601,21 +705,49 @@
       var pct = Math.round(Number(councilRate) * 1000) / 10;
       html +=
         '<div class="backtest-meter card" role="status">' +
-        '<div class="backtest-meter__label">Council win rate</div>' +
+        '<div class="backtest-meter__label">Council direction rate</div>' +
         '<div class="backtest-meter__val">' + pct + '%</div>' +
         '<div class="backtest-meter__bar"><div class="backtest-meter__fill" style="width:' + Math.min(pct, 100) + '%;"></div></div>' +
-        '<div class="backtest-meter__sub">n=' + sample + ' graded predictions</div></div>';
+        '<div class="backtest-meter__sub">n=' + sample + ' graded · coverage 100%</div></div>';
     }
     html += '<div class="kpi-strip">' +
       '<div class="kpi card"><div class="lbl">Council</div><div class="v">' + pctLabel(council.win_rate) + '</div>' +
-      '<div class="sub">n=' + (payload.sample_size || 0) + '</div></div>' +
-      '<div class="kpi card"><div class="lbl">Oracle</div><div class="v">' + pctLabel((judges.oracle || {}).win_rate) + '</div>' +
-      '<div class="sub">avg pnl ' + fmt((judges.oracle || {}).avg_pnl_pct) + '%</div></div>' +
-      '<div class="kpi card"><div class="lbl">Echo</div><div class="v">' + pctLabel((judges.echo || {}).win_rate) + '</div>' +
-      '<div class="sub">avg pnl ' + fmt((judges.echo || {}).avg_pnl_pct) + '%</div></div>' +
-      '<div class="kpi card"><div class="lbl">Pulse</div><div class="v">' + pctLabel((judges.pulse || {}).win_rate) + '</div>' +
-      '<div class="sub">avg pnl ' + fmt((judges.pulse || {}).avg_pnl_pct) + '%</div></div>' +
-      '</div>';
+      '<div class="sub">n=' + (payload.sample_size || 0) + ' · coverage ' +
+      (council.coverage_pct != null ? council.coverage_pct + '%' : '100%') + '</div></div>';
+    ['oracle', 'echo', 'pulse'].forEach(function (name) {
+      var judge = judges[name] || {};
+      var filtered = judge.filtered || {};
+      var rate = filtered.win_rate != null ? filtered.win_rate : judge.win_rate;
+      var n = filtered.n != null ? filtered.n : judge.endorsed_n;
+      var cov = judge.coverage_pct != null ? judge.coverage_pct : filtered.coverage_pct;
+      var th = filtered.min_score != null ? filtered.min_score : judge.threshold;
+      var label = name.charAt(0).toUpperCase() + name.slice(1);
+      html += '<div class="kpi card"><div class="lbl">' + label + '</div><div class="v">' + pctLabel(rate) + '</div>' +
+        '<div class="sub">n=' + (n != null ? n : '—') +
+        (cov != null ? ' · coverage ' + cov + '%' : '') +
+        (th != null ? ' · τ≥' + th : '') +
+        ' · avg pnl ' + fmt(judge.avg_pnl_pct) + '%</div></div>';
+    });
+    html += '</div>';
+
+    html += renderEndorsementOverlap(payload.endorsement_overlap);
+
+    html += '<div class="backtest-panels">';
+    ['oracle', 'echo', 'pulse'].forEach(function (name) {
+      var judge = judges[name] || {};
+      var label = name.charAt(0).toUpperCase() + name.slice(1);
+      html += '<div class="backtest-panel card">' +
+        '<h3 class="backtest-panel__title">' + label + ' calibration</h3>' +
+        '<p class="backtest-panel__hint">Reliability diagram — observed hit-rate per score bin (Murphy 1973)</p>' +
+        renderCalibrationChart(name, judge.calibration) +
+        '<h4 class="backtest-panel__subtitle">Risk–coverage (τ)</h4>' +
+        '<p class="backtest-panel__hint">Hit-rate and coverage at score thresholds (El-Yaniv &amp; Wiener 2010)</p>' +
+        renderRiskCoverageTable(judge.risk_coverage) +
+        '</div>';
+    });
+    html += '</div>';
+
+    html += renderMethodology(payload.methodology);
     var history = payload.history || [];
     if (history.length) {
       html += '<table class="tbl mt-3"><thead><tr><th>Subnet</th><th>Pred</th><th>Actual</th><th>Council</th><th>Oracle</th></tr></thead><tbody>';
@@ -629,6 +761,119 @@
       });
       html += '</tbody></table>';
     }
+    root.innerHTML = html;
+  }
+
+  function episodeKindLabel(kind) {
+    var map = {
+      origin: 'Starting point',
+      subnet_divergence: 'Reality check',
+      weight_nudge: 'Dial adjustment',
+      calibration: 'Calibration',
+      version_upgrade: 'Version upgrade',
+      version_nickname: 'Unofficial promotion',
+      current: 'Today'
+    };
+    return map[kind] || String(kind || '').replace(/_/g, ' ');
+  }
+
+  function renderFormulaLineage(catalog) {
+    var root = document.getElementById('formula-lineage-root');
+    if (!root) return;
+    if (!catalog || catalog.status !== 'ok' || !(catalog.lanes || []).length) {
+      root.innerHTML = '';
+      return;
+    }
+    var html = '<details class="formula-lineage card" open>' +
+      '<summary>Where each voice comes from</summary>' +
+      '<p class="formula-lineage__intro">' + esc(catalog.summary || '') + '</p>';
+    catalog.lanes.forEach(function (lane) {
+      var formula = lane.current_formula || {};
+      var loop = lane.learning_loop || {};
+      var insp = (lane.inspiration || []).map(function (s) {
+        return '<li><a href="' + esc(s.url) + '" target="_blank" rel="noopener noreferrer">' +
+          esc(s.citation) + '</a>' +
+          (s.relationship ? ' <span class="formula-lineage__rel">(' + esc(s.relationship) + ')</span>' : '') +
+          (s.note ? '<span class="formula-lineage__note">' + esc(s.note) + '</span>' : '') +
+          '</li>';
+      }).join('');
+      var adap = (lane.adaptations || []).map(function (a) {
+        return '<li>' + esc(a) + '</li>';
+      }).join('');
+      var weight = loop.current_weight != null ? loop.current_weight : '—';
+      var acc = loop.accuracy != null ? pctLabel(loop.accuracy) : '—';
+      var councilVer = loop.council_weights_version ? (' · council v' + loop.council_weights_version) : '';
+      var scoreVer = loop.scoring_version ? (' · scoring v' + loop.scoring_version) : '';
+      html += '<article class="formula-lineage__lane" id="lineage-' + esc(lane.id) + '">' +
+        '<h4 class="formula-lineage__lane-title">' + esc(lane.label) + '</h4>' +
+        '<code class="formula-lineage__expr">' + esc(formula.expression || '') + '</code>' +
+        '<p class="formula-lineage__impl">' + esc(formula.summary || '') + '</p>' +
+        '<p class="formula-lineage__live"><strong>Live weight</strong> ' + weight +
+        ' · <strong>hit rate</strong> ' + acc +
+        (loop.graded_n ? ' (' + loop.graded_n + ' picks)' : '') +
+        councilVer + scoreVer + '</p>' +
+        '<p class="formula-lineage__loop-note">' + esc(loop.stagnant_source_note || '') + '</p>' +
+        '<h5 class="formula-lineage__sub">Where the idea came from</h5><ul>' + insp + '</ul>' +
+        '<h5 class="formula-lineage__sub">What we changed</h5><ul>' + adap + '</ul>' +
+        '</article>';
+    });
+    html += '</details>';
+    root.innerHTML = html;
+  }
+
+  function renderEvolutionTrail(trail) {
+    var root = document.getElementById('formula-evolution-root');
+    if (!root) return;
+    if (!trail || trail.status !== 'ok' || !(trail.trail || []).length) {
+      root.innerHTML = '';
+      return;
+    }
+    var html = '<details class="formula-evolution card" open>' +
+      '<summary>The story so far — ' + esc(trail.label || trail.lane_id) + '</summary>' +
+      '<p class="formula-evolution__intro">' + esc(trail.summary || '') + '</p>' +
+      '<ol class="formula-evolution__timeline">';
+    trail.trail.forEach(function (ep) {
+      var range = (ep.from && ep.to && ep.from !== ep.to) ? (ep.from + ' → ' + ep.to) : (ep.from || ep.to || '');
+      var div = ep.divergence_pct != null ? (' · shift ' + ep.divergence_pct + '%') : '';
+      var kindLabel = episodeKindLabel(ep.kind);
+      if (ep.version) {
+        kindLabel += ' v' + ep.version;
+      }
+      html += '<li class="formula-evolution__episode formula-evolution__episode--' + esc(ep.kind || 'event') + '">' +
+        '<div class="formula-evolution__meta"><span class="formula-evolution__kind">' + esc(kindLabel) + '</span>' +
+        '<span class="formula-evolution__range">' + esc(range) + div + '</span></div>' +
+        '<p class="formula-evolution__narrative">' + esc(ep.narrative || '') + '</p>';
+      if (ep.nickname) {
+        html += '<p class="formula-evolution__nickname">「 ' + esc(ep.nickname) + ' 」</p>';
+      }
+      if (ep.paper_twist) {
+        html += '<p class="formula-evolution__paper-twist">';
+        if (ep.paper_title) {
+          html += 'Twist on <em>' + esc(ep.paper_title) + '</em>: ';
+        }
+        html += '「 ' + esc(ep.paper_twist) + ' 」</p>';
+      }
+      if (ep.formula_expression) {
+        html += '<code class="formula-evolution__expr">' + esc(ep.formula_expression) + '</code>';
+      }
+      if ((ep.trigger_subnets || []).length) {
+        html += '<ul class="formula-evolution__subnets">';
+        ep.trigger_subnets.forEach(function (sn) {
+          var pred = sn.predicted_pct != null ? fmtSigned(sn.predicted_pct) : '—';
+          var act = sn.actual_pct != null ? fmtSigned(sn.actual_pct) : '—';
+          html += '<li><strong>' + esc(sn.name || ('SN' + sn.netuid)) + '</strong> expected ' +
+            esc(sn.expected_direction || '?') + ' (' + pred + ') · actual ' + act +
+            (sn.correct === false ? ' <span class="neg">miss</span>' : '') +
+            (sn.correct === true ? ' <span class="pos">hit</span>' : '') + '</li>';
+        });
+        html += '</ul>';
+      }
+      if (ep.weight_before != null && ep.weight_after != null) {
+        html += '<p class="formula-evolution__weight">Weight ' + ep.weight_before + ' → ' + ep.weight_after + '</p>';
+      }
+      html += '</li>';
+    });
+    html += '</ol></details>';
     root.innerHTML = html;
   }
 
@@ -1039,8 +1284,14 @@
       connectCockpitStream();
 
       try {
-        var btRes = await fetchJsonRetry('/api/backtest?limit=120', 18000, 1);
-        renderBacktest(btRes);
+        var trio = await Promise.all([
+          fetchJsonRetry('/api/backtest?limit=120', 18000, 1),
+          fetchJsonRetry('/api/formula-lineage', 12000, 1),
+          fetchJsonRetry('/api/formula-lineage/dark_horse/evolution', 12000, 1),
+        ]);
+        renderBacktest(trio[0]);
+        renderFormulaLineage(trio[1]);
+        renderEvolutionTrail(trio[2]);
       } catch (e) {
         console.warn('[cockpit_hydrate] backtest fetch failed', e);
         var btRoot = document.getElementById('backtest-panel-root');

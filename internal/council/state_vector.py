@@ -1296,15 +1296,15 @@ def _compute_hype_score(sn: Dict[str, Any]) -> float:
 
 
 def _compute_dark_horse_score(sn: Dict[str, Any]) -> float:
-    """Compute Dark Horse expert score from on-chain flow signals.
+    """Compute Dark Horse expert score — crash-tail + on-chain flow.
 
-    The Dark Horse uses signals that are uncorrelated with price charts:
-    - TAO pool depth: rising TAO in subnet pool = conviction
-    - Supply contraction: circulating supply dropping relative to market cap = accumulation
-    - Price/emission ratio: how much price per unit emission (undervaluation)
-
+    Martin & Shi (2024) crash-probability framing via downside-tail proxies,
+    blended with TAO pool depth, supply contraction, and price/emission ratio.
     Falls back to 0.5 (neutral) when data is unavailable.
     """
+    from internal.council.dark_horse_crash import dark_horse_crash_score
+
+    crash_score = dark_horse_crash_score(sn)
     # TAO pool depth — ratio of subnet TAO pool to total stake
     tao_pool = float(sn.get("tao_pool", 0) or 0)
     total_stake = float(sn.get("total_stake", 0) or 1)
@@ -1349,8 +1349,13 @@ def _compute_dark_horse_score(sn: Dict[str, Any]) -> float:
     else:
         pe_score = 0.5
 
-    # Weighted combination
-    dark_horse_score = pool_score * 0.4 + supply_score * 0.3 + pe_score * 0.3
+    # Crash-tail blend (v1.2.0): stress/recovery + on-chain conviction
+    dark_horse_score = (
+        crash_score * 0.30
+        + pool_score * 0.22
+        + supply_score * 0.22
+        + pe_score * 0.26
+    )
     return round(dark_horse_score, 4)
 
 

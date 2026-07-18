@@ -64,9 +64,11 @@ c=d.get('council',{})
 o=d.get('judges',{}).get('oracle',{})
 flt=o.get('filtered') or {}
 print('sample_size:', d.get('sample_size'))
-print('council win_rate:', c.get('win_rate'))
-print('oracle win_rate:', o.get('win_rate'))
-print('oracle filtered win_rate:', flt.get('win_rate'), 'n=', flt.get('n'), 'min_score=', flt.get('min_score'))
+print('council win_rate:', c.get('win_rate'), 'coverage_pct:', c.get('coverage_pct'))
+print('oracle win_rate:', o.get('win_rate'), 'coverage_pct:', o.get('coverage_pct'), 'endorsed_n:', o.get('endorsed_n'))
+flt=o.get('filtered') or {}
+print('oracle filtered win_rate:', flt.get('win_rate'), 'n=', flt.get('n'), 'coverage_pct=', flt.get('coverage_pct'), 'min_score=', flt.get('min_score'))
+print('methodology version:', (d.get('methodology') or {}).get('version'))
 "
 
 echo "== data freshness + subnets =="

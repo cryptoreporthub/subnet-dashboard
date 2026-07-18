@@ -31,6 +31,33 @@ def _source_alignment(prediction: Dict[str, Any], predicted_pct: float) -> float
     return 0.5
 
 
+def _signal_source_adjustment(prediction: Dict[str, Any]) -> float:
+    """Spread scores when subnet snapshots are missing from the ledger."""
+    source = str(prediction.get("signal_source") or "").lower().replace(" ", "_")
+    if source in ("hot", "buy"):
+        return 0.12
+    if source in ("sell_alert", "sell"):
+        return 0.12
+    if source.startswith("council"):
+        return -0.1
+    if any(
+        token in source
+        for token in (
+            "rsi",
+            "macd",
+            "momentum",
+            "stochastic",
+            "mfi",
+            "cci",
+            "bollinger",
+            "keltner",
+            "williams",
+        )
+    ):
+        return 0.06
+    return 0.0
+
+
 def _direction_alignment(
     predicted_pct: float,
     subnet: Dict[str, Any],
@@ -96,7 +123,13 @@ def evaluate(
         completeness += 0.1
     completeness = min(completeness, 1.0)
 
-    score = _clamp(0.28 + 0.34 * signal_score + 0.24 * direction_match + 0.14 * completeness)
+    score = _clamp(
+        0.28
+        + 0.34 * signal_score
+        + 0.24 * direction_match
+        + 0.14 * completeness
+        + _signal_source_adjustment(prediction)
+    )
     confidence = _clamp(0.42 + 0.34 * completeness + 0.24 * signal_score)
     return {"score": round(score, 4), "confidence": round(confidence, 4)}
 
