@@ -78,6 +78,28 @@
   function initAlerts() {
     const btn = $("habit-alert-btn");
     if (!btn) return;
+
+    function setAlertDot(show) {
+      if (show) btn.classList.add("habit-alert-btn--dot");
+      else btn.classList.remove("habit-alert-btn--dot");
+    }
+
+    async function refreshAlertDot() {
+      if (btn.dataset.enabled !== "1") {
+        setAlertDot(false);
+        return;
+      }
+      try {
+        const st = await fetchJson("/api/conviction-alerts/status");
+        const last = (st.last_run && st.last_run.created) || 0;
+        setAlertDot(Number(last) > 0);
+      } catch (e) {
+        setAlertDot(false);
+      }
+    }
+
+    refreshAlertDot();
+
     btn.addEventListener("click", async function () {
       if (btn.dataset.enabled !== "1") {
         setStatus("Conviction alerts disabled — enable CONVICTION_ALERTS_ENABLED on deploy");
@@ -112,6 +134,7 @@
         if (summary && out.last_run_at) {
           summary.textContent = "Alerts on · last " + out.last_run_at;
         }
+        refreshAlertDot();
       } catch (e) {
         setStatus("Conviction alert check failed");
       } finally {

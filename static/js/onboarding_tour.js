@@ -36,14 +36,6 @@
             side: 'top',
           },
         },
-        {
-          element: '#market-drawer',
-          popover: {
-            title: 'Market & tools',
-            description: 'Scanner, signals, staking, and analytics — expand when you want the full market view.',
-            side: 'top',
-          },
-        },
       ],
       onDestroyed: function () {
         try { localStorage.setItem(STORAGE_KEY, '1'); } catch (e) { /* ignore */ }

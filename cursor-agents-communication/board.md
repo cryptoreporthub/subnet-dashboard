@@ -1,18 +1,18 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-18T18:35:00Z  
-**main:** `92bb7e4` · **K3-4 in progress**
+**Last updated:** 2026-07-18T18:45:00Z  
+**main:** `c9ba5cb` · **K3-5 in progress**
 
 ## Active
 
-**K3-4** — Temporal ring + badge (Grok UX LOCK → Composer implement)
-- Branch: `cursor/k3-4-temporal-ring-e7f9`
-- Grok LOCK: inline ring states, badge under orb, 60s countdown, honest-empty, horizon selector deferred to K3-5
+**K3-5** — Mobile polish + outlets (Grok UX LOCK → Composer implement)
+- Grok LOCK pending → branch `cursor/k3-5-polish-e7f9`
+- Scope: onboarding activation, alert badge dots, backtest methodology surfacing, SN118 chip, 390px QA
 
 ## Done (K3 sprint)
 
-- K3-1 dossier · K3-2 deliberation · K3-2b shortlist · K3-3 lifecycle (`92bb7e4`)
+- K3-1 dossier · K3-2 deliberation · K3-2b shortlist · K3-3 lifecycle · K3-4 temporal ring (`c9ba5cb`, PR #350)
 
 ## Next
 
-- K3-5 polish after K3-4 merge
+- Final phone QA on fly.dev after K3-5 merge

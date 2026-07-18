@@ -196,6 +196,27 @@
       @media (max-width: 360px) { .k3-orb { width: 116px; height: 116px; } .k3-orb-score { font-size: 30px; } .k3-claim-name { font-size: 20px; } .k3-claim-stats { gap: 10px; } .k3-stat { min-width: 50px; } .k3-stat-value { font-size: 14px; } }
       @media (min-width: 768px) { .k3-dossier { max-width: 480px; margin: 0 auto; } .k3-claim { min-height: 360px; } }
       @media (prefers-reduced-motion: reduce) { .k3-orb-bg, .k3-orb-glow, .k3-claim-name, .k3-orb .ring-fill { animation: none !important; } .k3-orb .ring-fill { stroke-dashoffset: var(--ring-offset, 389.56); } }
+      {# ---- K3-5: trust banner + alert dot polish ---- #}
+      #home-trust-banner { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
+      @media (max-width: 420px) {
+        #home-trust-banner { margin-left: 0; margin-right: 0; padding: 8px 10px; }
+        #home-trust-banner .trust-banner__headline,
+        #home-trust-banner .trust-banner__message,
+        #home-trust-banner .trust-banner__note { font-size: 11px; line-height: 1.35; }
+        .home-job__cta { flex-wrap: wrap; gap: 8px; }
+      }
+      #habit-alert-btn { position: relative; }
+      #habit-alert-btn.habit-alert-btn--dot::after {
+        content: '';
+        position: absolute;
+        top: 6px;
+        right: 8px;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #39ff14;
+        box-shadow: 0 0 6px rgba(57, 255, 20, 0.6);
+      }
       {# ---- K3-2: Council considered (deliberation flow) ---- #}
       .k3-deliberation { margin-top: 16px; }
       .k3-considered-list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
