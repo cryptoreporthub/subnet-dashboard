@@ -38,8 +38,15 @@ def test_subnet_apy_registry_top_level_fraction():
     assert subnet_apy_percent(sn) == 25.0
 
 
-def test_normalize_merges_contrarian_into_dark_horse():
-    raw = {"quant": 0.2, "hype": 0.2, "contrarian": 0.5, "dark_horse": 0.3, "technical": 0.1}
+def test_normalize_prefers_dark_horse_over_stale_contrarian():
+    raw = {"quant": 0.2, "hype": 0.2, "contrarian": 1.08, "dark_horse": 0.14, "technical": 0.1}
+    out = normalize_council_weights(raw)
+    assert "contrarian" not in out
+    assert out["dark_horse"] == 0.14
+
+
+def test_normalize_merges_contrarian_when_dark_horse_missing():
+    raw = {"quant": 0.2, "hype": 0.2, "contrarian": 0.5, "technical": 0.1}
     out = normalize_council_weights(raw)
     assert "contrarian" not in out
     assert out["dark_horse"] == 0.5

@@ -29,6 +29,18 @@ def _default_data() -> Dict[str, Any]:
     }
 
 
+def _migrate_expert_labels(data: Dict[str, Any]) -> bool:
+    """Rename legacy contrarian expert labels to dark_horse."""
+    changed = False
+    for bucket in ("predictions", "resolved"):
+        for pred in data.get(bucket, []) or []:
+            expert = pred.get("expert")
+            if isinstance(expert, str) and expert.lower().strip() == "contrarian":
+                pred["expert"] = "dark_horse"
+                changed = True
+    return changed
+
+
 def _migrate_phases(data: Dict[str, Any]) -> bool:
     changed = False
     for bucket in ("predictions", "resolved"):
@@ -51,7 +63,8 @@ def load_predictions() -> Dict[str, Any]:
     data.setdefault("predictions", [])
     data.setdefault("resolved", [])
     data.setdefault("stats", _default_data()["stats"])
-    if _migrate_phases(data):
+    changed = _migrate_phases(data) or _migrate_expert_labels(data)
+    if changed:
         save_predictions(data)
     return data
 

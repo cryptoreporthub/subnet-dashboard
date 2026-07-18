@@ -100,7 +100,12 @@ def _save_raw(data: Dict[str, Any], path: str = SOUL_MAP_PATH) -> None:
 
 
 def normalize_council_weights(raw: Dict[str, float]) -> Dict[str, float]:
-    """Merge legacy ``contrarian`` into ``dark_horse``; return canonical experts only."""
+    """Merge legacy ``contrarian`` into ``dark_horse``; return canonical experts only.
+
+    When both keys exist, prefer ``dark_horse`` (the actively nudged slot). The old
+    ``max(contrarian, dark_horse)`` merge pinned stale high contrarian values and
+    masked downward learning on dark_horse.
+    """
     merged: Dict[str, float] = {}
     contrarian = 0.0
     for key, val in (raw or {}).items():
@@ -115,8 +120,8 @@ def normalize_council_weights(raw: Dict[str, float]) -> Dict[str, float]:
         if name in ("darkhorse", "dark_horse"):
             name = "dark_horse"
         merged[name] = fval
-    if contrarian:
-        merged["dark_horse"] = max(merged.get("dark_horse", 0.0), contrarian)
+    if contrarian and "dark_horse" not in merged:
+        merged["dark_horse"] = contrarian
     out = dict(DEFAULT_WEIGHTS)
     for name in DEFAULT_WEIGHTS:
         if name in merged:
@@ -124,9 +129,83 @@ def normalize_council_weights(raw: Dict[str, float]) -> Dict[str, float]:
     return out
 
 
+def _raw_has_legacy_contrarian(data: Dict[str, Any]) -> bool:
+    """True when soul_map still stores a separate contrarian weight key."""
+    for slot in (
+        (data.get("adversarial_state") or {}).get("council_weights"),
+        data.get("expert_weights"),
+        (data.get("soul_map_state") or {}).get("expert_weights"),
+    ):
+        if not isinstance(slot, dict):
+            continue
+        if any(str(k).lower().strip() == "contrarian" for k in slot):
+            return True
+    return False
+
+
+def replay_weights_from_predictions(
+    predictions_path: Optional[str] = None,
+) -> Dict[str, float]:
+    """Rebuild council weights by replaying graded prediction nudges from defaults."""
+    from internal.council.resolver import _normalize_expert
+
+    path = predictions_path or os.path.join("data", "predictions.json")
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except Exception:
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+
+    weights = dict(DEFAULT_WEIGHTS)
+    rows = [
+        row
+        for row in (data.get("resolved") or [])
+        if isinstance(row, dict)
+        and row.get("correct") is not None
+        and row.get("outcome") not in _SKIP_OUTCOMES
+        and _normalize_expert(row) in weights
+    ]
+    rows.sort(key=lambda row: str(row.get("resolved_at") or row.get("created_at") or ""))
+
+    for row in rows:
+        expert = _normalize_expert(row)
+        if not expert:
+            continue
+        delta = _LEARNING_DELTA_CORRECT if row.get("correct") else _LEARNING_DELTA_WRONG
+        weights[expert] = round(
+            max(
+                _LEARNING_MIN_WEIGHT,
+                min(_LEARNING_MAX_WEIGHT, float(weights[expert]) + delta),
+            ),
+            4,
+        )
+    return weights
+
+
+def repair_stale_contrarian_weights(
+    path: str = SOUL_MAP_PATH,
+    predictions_path: Optional[str] = None,
+) -> bool:
+    """Drop legacy contrarian slot and replay learned weights from the ledger."""
+    data = _load_raw(path)
+    if not _raw_has_legacy_contrarian(data):
+        return False
+    if predictions_path is None:
+        base = os.path.dirname(path) or "data"
+        predictions_path = os.path.join(base, "predictions.json")
+    weights = replay_weights_from_predictions(predictions_path)
+    save_weights(weights, path)
+    return True
+
+
 def load_weights(path: str = SOUL_MAP_PATH) -> Dict[str, float]:
     """Read learned weights from soul_map.json, defaulting to DEFAULT_WEIGHTS."""
-    data = _load_raw(path)
+    if repair_stale_contrarian_weights(path):
+        data = _load_raw(path)
+    else:
+        data = _load_raw(path)
     adv = data.get("adversarial_state")
     if isinstance(adv, dict) and isinstance(adv.get("council_weights"), dict):
         return normalize_council_weights(adv["council_weights"])

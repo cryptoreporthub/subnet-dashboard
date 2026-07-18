@@ -97,7 +97,9 @@
   function normalizeWeights(weights) {
     var w = Object.assign({}, weights || {});
     if (w.contrarian != null) {
-      w.dark_horse = Math.max(Number(w.dark_horse) || 0, Number(w.contrarian) || 0);
+      if (w.dark_horse == null) {
+        w.dark_horse = Number(w.contrarian) || 0;
+      }
       delete w.contrarian;
     }
     var out = {};
