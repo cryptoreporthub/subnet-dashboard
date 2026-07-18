@@ -1754,6 +1754,20 @@ button.home-cta {
 }
 .formula-evolution__subnets { margin: 6px 0; padding-left: 18px; font-size: 12px; color: var(--stage-muted); }
 .formula-evolution__weight { font-size: 12px; color: var(--stage-muted); margin: 4px 0 0; }
+.formula-evolution__episode--version_nickname {
+  border-bottom-style: dashed;
+  opacity: 0.92;
+}
+.formula-evolution__episode--version_nickname .formula-evolution__kind {
+  color: #fcd34d;
+}
+.formula-evolution__nickname {
+  font-size: 15px;
+  font-style: italic;
+  color: #fde68a;
+  margin: 4px 0 8px;
+  letter-spacing: 0.02em;
+}
 
 .story-strip--prominent { margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid rgba(0,255,65,0.15); }
 

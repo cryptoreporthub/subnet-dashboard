@@ -179,5 +179,13 @@ def episode_kind_label(kind: str) -> str:
         "weight_nudge": "Dial adjustment",
         "calibration": "Calibration",
         "version_upgrade": "Version upgrade",
+        "version_nickname": "Unofficial promotion",
         "current": "Today",
     }.get(kind, kind.replace("_", " ").title())
+
+
+def version_nickname_story(original_label: str, nickname: str, version: str) -> str:
+    return (
+        f"v{version} earned a new title: {nickname}. "
+        f"(HR paperwork still says {original_label} — don't tell the auditors.)"
+    )

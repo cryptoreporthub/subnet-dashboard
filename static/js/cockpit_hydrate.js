@@ -725,6 +725,7 @@
       weight_nudge: 'Dial adjustment',
       calibration: 'Calibration',
       version_upgrade: 'Version upgrade',
+      version_nickname: 'Unofficial promotion',
       current: 'Today'
     };
     return map[kind] || String(kind || '').replace(/_/g, ' ');
@@ -796,6 +797,9 @@
         '<div class="formula-evolution__meta"><span class="formula-evolution__kind">' + esc(kindLabel) + '</span>' +
         '<span class="formula-evolution__range">' + esc(range) + div + '</span></div>' +
         '<p class="formula-evolution__narrative">' + esc(ep.narrative || '') + '</p>';
+      if (ep.nickname) {
+        html += '<p class="formula-evolution__nickname">「 ' + esc(ep.nickname) + ' 」</p>';
+      }
       if (ep.formula_expression) {
         html += '<code class="formula-evolution__expr">' + esc(ep.formula_expression) + '</code>';
       }

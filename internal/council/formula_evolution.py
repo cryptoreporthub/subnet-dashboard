@@ -19,14 +19,23 @@ from internal.council.human_narrative import (
     evolution_trail_summary,
     origin_story,
     subnet_window_story,
+    version_nickname_story,
     weight_nudge_story,
 )
+from internal.council.lane_aliases import version_nickname
 from internal.council.resolver import _normalize_expert
 from internal.council.weights import DEFAULT_WEIGHTS, _load_raw, load_weights
 
 _MIN_WINDOW_RESOLVES = 2
 _SIGNIFICANT_ACC_SWING = 0.12
 _SIGNIFICANT_WEIGHT_DELTA = 0.04
+_EPISODE_SORT = {
+    "subnet_divergence": 10,
+    "weight_nudge": 20,
+    "calibration": 30,
+    "version_upgrade": 40,
+    "version_nickname": 41,
+}
 
 
 def _parse_day(ts: Optional[str]) -> Optional[str]:
@@ -325,6 +334,20 @@ def build_evolution_trail(lane_id: str) -> Optional[Dict[str, Any]]:
                 ),
             }
         )
+        nick = version_nickname(lane_id, str(ver.get("version") or ""), label)
+        episodes.append(
+            {
+                "episode_id": f"nickname_{ver.get('version')}_{day}",
+                "kind": "version_nickname",
+                "from": day,
+                "to": day,
+                "version": ver.get("version"),
+                "original_name": label,
+                "nickname": nick,
+                "trigger_subnets": [],
+                "narrative": version_nickname_story(label, nick, str(ver.get("version") or "")),
+            }
+        )
 
     for cal in cal_events:
         proposed = cal.get("proposed_weights") if isinstance(cal.get("proposed_weights"), dict) else {}
@@ -383,7 +406,13 @@ def build_evolution_trail(lane_id: str) -> Optional[Dict[str, Any]]:
     )
 
     middle = [e for e in episodes if e["kind"] not in ("origin", "current")]
-    middle.sort(key=lambda e: str(e.get("from") or ""))
+    middle.sort(
+        key=lambda e: (
+            str(e.get("from") or ""),
+            _EPISODE_SORT.get(str(e.get("kind") or ""), 50),
+            str(e.get("episode_id") or ""),
+        )
+    )
     ordered = [episodes[0]] + middle + [episodes[-1]]
 
     return {
