@@ -1,147 +1,764 @@
-{# U1 single-job home — pick + band + one-line why + CTA in first viewport #}
-<section class="council-stage home-job" id="section-daily-pick" aria-labelledby="council-stage-title" data-home-live="1">
-  <div class="council-stage__atmosphere" aria-hidden="true"></div>
-  <div class="council-stage__inner">
-    <p class="council-stage__brand">Simi<span>Vision</span></p>
-    <p class="council-stage__eyebrow">What we expect today</p>
-    <h1 class="council-stage__title" id="council-stage-title">One job: know what to watch</h1>
+{# ============================================================
+   K3-1: Mobile-First Intelligence Dossier
+   council_stage.html → v5 Claim layer → peelable dossier stack
+   Mobile-first 390px · Existing Jinja context · Honest-empty
+   ============================================================ #}
 
-    <div id="council-stage-body" class="council-stage__body home-job__body">
-      {% set act = (dpick.action|default('HOLD'))|string|upper %}
-      {% set audit_pick = dpick.pick if dpick.pick is mapping else none %}
-      {% set cand = dpick.candidate if dpick.candidate is mapping else none %}
-      {% set sn = none %}
-      {% if audit_pick and audit_pick.subnet is mapping %}{% set sn = audit_pick.subnet %}{% endif %}
-      {% if sn is none and cand and cand.subnet is mapping %}{% set sn = cand.subnet %}{% endif %}
-      {% set conf_src = audit_pick if audit_pick else cand %}
-      {% set band_obj = conviction_band if conviction_band is mapping else {} %}
-      {% set band = band_obj.band %}
-      {% set badge = enrichment_badge if enrichment_badge is mapping else {} %}
-      {% set call_reasons = [] %}
-      {% if audit_pick and audit_pick.reasons is iterable and audit_pick.reasons is not string %}
-        {% set call_reasons = audit_pick.reasons %}
-      {% elif cand and cand.reasons is iterable and cand.reasons is not string %}
-        {% set call_reasons = cand.reasons %}
-      {% endif %}
-      {% set why_line = call_reasons|first if call_reasons else (dpick.reason|default('')) %}
+{# ---- Data extraction (existing context only) ---- #}
+{% set act = (dpick.action|default('HOLD'))|string|upper %}
+{% set audit_pick = dpick.pick if dpick.pick is mapping else none %}
+{% set cand = dpick.candidate if dpick.candidate is mapping else none %}
+{% set sn = none %}
+{% if audit_pick and audit_pick.subnet is mapping %}{% set sn = audit_pick.subnet %}{% endif %}
+{% if sn is none and cand and cand.subnet is mapping %}{% set sn = cand.subnet %}{% endif %}
+{% set conf_src = audit_pick if audit_pick else cand %}
+{% set band_obj = conviction_band if conviction_band is mapping else {} %}
+{% set band = band_obj.band %}
+{% set badge = enrichment_badge if enrichment_badge is mapping else {} %}
+{% set call_reasons = [] %}
+{% if audit_pick and audit_pick.reasons is iterable and audit_pick.reasons is not string %}
+  {% set call_reasons = audit_pick.reasons %}
+{% elif cand and cand.reasons is iterable and cand.reasons is not string %}
+  {% set call_reasons = cand.reasons %}
+{% endif %}
+{% set why_line = call_reasons|first if call_reasons else (dpick.reason|default('')) %}
+{% set hybrid = hybrid_trust if hybrid_trust is mapping else {} %}
+{% set tb = trust_banner if trust_banner is mapping else {} %}
 
-      {% set hybrid = hybrid_trust if hybrid_trust is mapping else {} %}
-      {% set tb = trust_banner if trust_banner is mapping else {} %}
-      <div class="home-job__signals">
-        {% if band %}
-        <span class="home-band home-band--{{ band }}">{{ band|upper }} conviction</span>
-        {% elif band_obj.reason %}
-        <span class="home-band home-band--empty" title="{{ band_obj.reason }}">Band pending</span>
-        {% endif %}
-        {% if badge.status == 'live' %}
-        <span class="home-enrichment home-enrichment--live">{{ badge.label }}</span>
-        {% elif badge.label %}
-        <span class="home-enrichment home-enrichment--empty">{{ badge.label }} · no signal yet</span>
-        {% endif %}
-        {% if hybrid.ready %}
-        <span class="home-hybrid home-hybrid--ready" title="{{ hybrid.formula|default('') }}">
-          Hybrid grading live · n={{ hybrid.n|default(0) }}
-        </span>
-        {% elif hybrid.message %}
-        <span class="home-hybrid home-hybrid--empty" title="n={{ hybrid.n|default(0) }}/{{ hybrid.min_sample|default(30) }}">
-          {{ hybrid.message|capitalize }}
-        </span>
-        {% endif %}
-      </div>
+{# Conviction % for orb ring #}
+{% set conviction = conf_src.conviction if conf_src and conf_src.conviction else 0 %}
+{% set conviction_pct = conviction|int %}
+{% set ring_circ = 389.56 %}
+{% set ring_offset = ring_circ - (ring_circ * conviction_pct / 100) %}
 
-      <div
-        id="home-trust-banner"
-        class="trust-banner{% if tb.ready %} trust-banner--ready{% else %} trust-banner--blocked{% endif %}"
-        aria-live="polite"
-        data-source="/api/learning/stats"
-      >
-        {% if tb.ready and tb.headline %}
-        <p class="trust-banner__headline">{{ tb.headline }}</p>
-        {% elif tb.message %}
-        <p class="trust-banner__message">{{ tb.message }}</p>
-        {% else %}
-        <p class="trust-banner__message">Building graded track record — trust surfaces stay honest until sample clears.</p>
-        {% endif %}
-        {% if tb.note %}
-        <p class="trust-banner__note">{{ tb.note }}</p>
-        {% endif %}
-      </div>
+{# Temporal / resolution #}
+{% set resolves_in = dpick.resolves_in if dpick.resolves_in else none %}
+{% set horizon = dpick.horizon|default('24h') %}
 
-      {% if audit_pick and sn %}
-      <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
-      <div class="council-call home-job__call">
-        <div class="council-call__action">
-          <span class="badge {% if act == 'BUY' or act == 'LONG' %}badge-buy{% elif act == 'SELL' or act == 'SHORT' %}badge-sell{% else %}badge-hold{% endif %}">{{ 'BUY' if act == 'LONG' else act }}</span>
-        </div>
-        <p class="council-call__name">{{ sn.name|default('SN' ~ sn.netuid) }}</p>
-        <p class="council-call__meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}</p>
-        {% if why_line %}
-        <p class="home-job__why">We expect: {{ why_line }}</p>
-        {% endif %}
-      </div>
-      </div>
-      {% else %}
-      <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
-      <div class="council-call council-call--hold home-job__call">
-        <div class="council-call__action">
-          <span class="badge badge-hold">HOLD</span>
-        </div>
-        {% if sn %}
-        <p class="council-call__name">{{ sn.name|default('SN' ~ sn.netuid) }}</p>
-        <p class="council-call__meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %} · candidate only</p>
-        {% else %}
-        <p class="council-call__name">No audited long call</p>
-        {% endif %}
-        <p class="home-job__why">
-          {% if why_line %}{{ why_line }}{% else %}Council waits until confidence clears the audit gate.{% endif %}
-        </p>
-      </div>
-      </div>
-      {% endif %}
+{# Signals for evidence layer #}
+{% set signals = dpick.signals if dpick.signals is iterable and dpick.signals is not string else [] %}
 
-      <div id="home-stage-why-not" class="home-stage-why-not" hidden aria-live="polite"></div>
+{# Judge weights for council layer #}
+{% set judges = dpick.judges if dpick.judges is iterable and dpick.judges is not string else [] %}
 
-      <div id="home-driver-card" class="driver-card" aria-live="polite" hidden></div>
+{# Outcome / resolution status #}
+{% set outcome_status = dpick.outcome_status if dpick.outcome_status else 'pending' %}
+{% set outcome_note = dpick.outcome_note if dpick.outcome_note else '' %}
 
-      <div class="home-job__cta" role="group" aria-label="Primary actions">
-        {% set focus_netuid = sn.netuid if sn and sn.netuid is not none else none %}
-        {% set wl = habit_watchlist if habit_watchlist is mapping else {} %}
-        {% set pins = wl.netuids if wl.netuids is iterable and wl.netuids is not string else [] %}
-        {% set pinned = focus_netuid is not none and (focus_netuid|int) in pins %}
-        <button
-          type="button"
-          class="home-cta home-cta--primary"
-          id="habit-pin-btn"
-          data-netuid="{{ focus_netuid if focus_netuid is not none else '' }}"
-          data-pinned="{{ '1' if pinned else '0' }}"
-          {% if focus_netuid is none %}disabled aria-disabled="true"{% endif %}
-        >{% if pinned %}Unpin subnet{% else %}Pin to watchlist{% endif %}</button>
-        <button
-          type="button"
-          class="home-cta home-cta--ghost"
-          id="habit-alert-btn"
-          data-enabled="{{ '1' if habit_alerts.enabled else '0' }}"
-        >Run conviction check</button>
-        <a class="home-cta home-cta--ghost" href="#pro-cockpit">Open Pro cockpit</a>
-      </div>
-      <div class="home-habit-status" id="home-habit-status" aria-live="polite">
-        <span class="home-habit-status__watch" id="habit-watchlist-summary">
-          Watchlist: {{ wl.count|default(pins|length) }} pinned
-        </span>
-        {% set alerts = habit_alerts if habit_alerts is mapping else {} %}
-        {% if alerts.enabled %}
-        <span class="home-habit-status__alerts" id="habit-alerts-summary">
-          Alerts on · {{ alerts.delivery_mode|default('dry_run') }}
-          {% if alerts.last_run and alerts.last_run.last_run_at %}
-          · last {{ alerts.last_run.last_run_at }}
+{# Learning / calibration #}
+{% set cal_n = hybrid.n|default(0) %}
+{% set cal_acc = hybrid.accuracy|default(0) %}
+
+{# Watchlist state #}
+{% set focus_netuid = sn.netuid if sn and sn.netuid is not none else none %}
+{% set wl = habit_watchlist if habit_watchlist is mapping else {} %}
+{% set pins = wl.netuids if wl.netuids is iterable and wl.netuids is not string else [] %}
+{% set pinned = focus_netuid is not none and (focus_netuid|int) in pins %}
+
+{# ============================================================
+   STYLES — v5 orb + dossier layers (mobile-first 390px)
+   ============================================================ #}
+<style>
+/* ---- v5 palette ---- */
+:root {
+  --k3-bg: #000;
+  --k3-surface: #0a0c10;
+  --k3-accent: #00ff41;
+  --k3-green: #39ff14;
+  --k3-blue: #00d4ff;
+  --k3-pink: #ff69b4;
+  --k3-orange: #ffa500;
+  --k3-text: #e2e8f0;
+  --k3-muted: #64748b;
+  --k3-font-body: 'Rajdhani', sans-serif;
+  --k3-font-mono: 'JetBrains Mono', monospace;
+}
+
+/* ---- Dossier container ---- */
+.k3-dossier {
+  font-family: var(--k3-font-body);
+  color: var(--k3-text);
+  background: var(--k3-bg);
+  padding: 0;
+  margin: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* ---- Claim layer (hero) ---- */
+.k3-claim {
+  position: relative;
+  padding: 24px 16px 16px;
+  text-align: center;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Orb background glow */
+.k3-orb-bg {
+  position: absolute;
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  background: conic-gradient(var(--k3-green), var(--k3-blue), var(--k3-green));
+  animation: k3-spin 25s linear infinite;
+  opacity: 0.15;
+  filter: blur(40px);
+  z-index: 0;
+}
+.k3-orb-glow {
+  position: absolute;
+  width: 160px; height: 160px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--k3-green) 0%, transparent 70%),
+              radial-gradient(circle at 60% 40%, var(--k3-blue) 0%, transparent 60%);
+  animation: k3-pulse 4s ease-in-out infinite;
+  opacity: 0.2;
+  filter: blur(30px);
+  z-index: 0;
+}
+@keyframes k3-spin { to { transform: rotate(360deg); } }
+@keyframes k3-pulse { 0%,100% { opacity: 0.15; } 50% { opacity: 0.25; } }
+
+/* Orb SVG ring */
+.k3-orb {
+  position: relative;
+  width: 148px; height: 148px;
+  z-index: 1;
+  margin-bottom: 12px;
+}
+.k3-orb svg {
+  width: 100%; height: 100%;
+  transform: rotate(-90deg);
+}
+.k3-orb .ring-track {
+  fill: none;
+  stroke: var(--k3-surface);
+  stroke-width: 9;
+}
+.k3-orb .ring-fill {
+  fill: none;
+  stroke: url(#k3-gradient);
+  stroke-width: 9;
+  stroke-linecap: round;
+  stroke-dasharray: 389.56;
+  stroke-dashoffset: 389.56;
+  animation: k3-ring-fill 1.2s ease-out forwards;
+}
+@keyframes k3-ring-fill {
+  to { stroke-dashoffset: var(--ring-offset, 389.56); }
+}
+
+/* Orb center text */
+.k3-orb-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+.k3-orb-score {
+  font-family: var(--k3-font-mono);
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+}
+.k3-orb-score .digit-tens { color: var(--k3-green); text-shadow: 0 0 12px var(--k3-green); }
+.k3-orb-score .digit-ones { color: var(--k3-blue); text-shadow: 0 0 12px var(--k3-blue); }
+.k3-orb-label {
+  font-family: var(--k3-font-mono);
+  font-size: 10px;
+  color: var(--k3-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-top: 4px;
+}
+
+/* Subnet name — rainbow gradient */
+.k3-claim-name {
+  font-size: 28px;
+  font-weight: 700;
+  background: linear-gradient(90deg, var(--k3-green), var(--k3-blue), var(--k3-pink), var(--k3-orange));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: k3-shimmer 3s ease-in-out infinite;
+  margin: 8px 0 4px;
+  z-index: 1;
+}
+@keyframes k3-shimmer {
+  0%,100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* Subnet meta */
+.k3-claim-meta {
+  font-family: var(--k3-font-mono);
+  font-size: 12px;
+  color: var(--k3-muted);
+  margin-bottom: 8px;
+  z-index: 1;
+}
+
+/* BUY/HOLD badge */
+.k3-badge {
+  display: inline-block;
+  padding: 4px 16px;
+  border-radius: 4px;
+  font-family: var(--k3-font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+  z-index: 1;
+}
+.k3-badge.buy { background: var(--k3-green); color: #000; }
+.k3-badge.hold { background: var(--k3-blue); color: #000; }
+.k3-badge.sell { background: var(--k3-pink); color: #000; }
+.k3-badge.none { background: var(--k3-surface); color: var(--k3-muted); border: 1px solid var(--k3-muted); }
+
+/* Claim stats row */
+.k3-claim-stats {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  z-index: 1;
+}
+.k3-stat {
+  text-align: center;
+  min-width: 60px;
+}
+.k3-stat-value {
+  font-family: var(--k3-font-mono);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--k3-text);
+}
+.k3-stat-label {
+  font-family: var(--k3-font-mono);
+  font-size: 9px;
+  color: var(--k3-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* Temporal chip */
+.k3-temporal {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: var(--k3-surface);
+  border: 1px solid var(--k3-muted);
+  font-family: var(--k3-font-mono);
+  font-size: 11px;
+  color: var(--k3-muted);
+  z-index: 1;
+}
+
+/* Why line */
+.k3-why {
+  font-size: 14px;
+  color: var(--k3-text);
+  margin-top: 12px;
+  max-width: 320px;
+  line-height: 1.4;
+  z-index: 1;
+}
+
+/* Trust banner */
+.k3-trust {
+  font-family: var(--k3-font-mono);
+  font-size: 10px;
+  color: var(--k3-muted);
+  margin-top: 8px;
+  z-index: 1;
+}
+
+/* ---- Dossier layers ---- */
+.k3-layer {
+  border-top: 1px solid #1a1d24;
+  margin-top: 0;
+}
+.k3-layer-header {
+  width: 100%;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: var(--k3-surface);
+  border: none;
+  color: var(--k3-text);
+  font-family: var(--k3-font-body);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.k3-layer-header:active { background: #111420; }
+.k3-layer-icon {
+  font-family: var(--k3-font-mono);
+  font-size: 12px;
+  color: var(--k3-muted);
+  transition: transform 0.2s ease;
+}
+.k3-layer.open .k3-layer-icon { transform: rotate(90deg); }
+.k3-layer-body {
+  display: none;
+  padding: 16px;
+  background: var(--k3-bg);
+}
+.k3-layer.open .k3-layer-body { display: block; }
+
+/* Layer content */
+.k3-layer-title {
+  font-family: var(--k3-font-mono);
+  font-size: 10px;
+  color: var(--k3-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+}
+
+/* Signal rows (evidence) */
+.k3-signal {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #1a1d24;
+}
+.k3-signal:last-child { border-bottom: none; }
+.k3-signal-name { font-size: 14px; font-weight: 500; }
+.k3-signal-value {
+  font-family: var(--k3-font-mono);
+  font-size: 12px;
+  color: var(--k3-accent);
+}
+
+/* Judge rows (council) */
+.k3-judge {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #1a1d24;
+}
+.k3-judge:last-child { border-bottom: none; }
+.k3-judge-name { font-size: 14px; font-weight: 500; }
+.k3-judge-weight {
+  font-family: var(--k3-font-mono);
+  font-size: 12px;
+  color: var(--k3-blue);
+}
+.k3-judge-delta {
+  font-family: var(--k3-font-mono);
+  font-size: 10px;
+  margin-left: 8px;
+}
+.k3-judge-delta.up { color: var(--k3-green); }
+.k3-judge-delta.down { color: var(--k3-pink); }
+.k3-judge-delta.flat { color: var(--k3-muted); }
+
+/* Outcome */
+.k3-outcome-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--k3-surface);
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+.k3-outcome-icon {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+.k3-outcome-icon.pending { background: var(--k3-blue); color: #000; }
+.k3-outcome-icon.resolved { background: var(--k3-green); color: #000; }
+.k3-outcome-text { font-size: 13px; line-height: 1.4; }
+
+/* Learning */
+.k3-learning-stats {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.k3-learning-stat {
+  text-align: center;
+}
+.k3-learning-value {
+  font-family: var(--k3-font-mono);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--k3-accent);
+}
+.k3-learning-label {
+  font-family: var(--k3-font-mono);
+  font-size: 9px;
+  color: var(--k3-muted);
+  text-transform: uppercase;
+}
+
+/* Honest-empty state */
+.k3-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--k3-muted);
+  max-width: 32em;
+  margin: 0 auto;
+}
+.k3-empty-icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+.k3-empty-text {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Actions row */
+.k3-actions {
+  display: flex;
+  gap: 8px;
+  padding: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.k3-btn {
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-family: var(--k3-font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--k3-muted);
+  background: var(--k3-surface);
+  color: var(--k3-text);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+.k3-btn:active { background: #1a1d24; }
+
+/* Watchlist bar */
+.k3-watchlist {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: var(--k3-surface);
+  border-top: 1px solid #1a1d24;
+  font-family: var(--k3-font-mono);
+  font-size: 11px;
+  color: var(--k3-muted);
+}
+
+/* ---- Breakpoints ---- */
+@media (max-width: 400px) {
+  .k3-orb { width: 132px; height: 132px; }
+  .k3-orb-score { font-size: 36px; }
+  .k3-claim-name { font-size: 24px; }
+  .k3-claim { min-height: 280px; padding: 16px 12px 12px; }
+}
+@media (max-width: 360px) {
+  .k3-orb { width: 116px; height: 116px; }
+  .k3-orb-score { font-size: 30px; }
+  .k3-claim-name { font-size: 20px; }
+  .k3-claim-stats { gap: 10px; }
+  .k3-stat { min-width: 50px; }
+  .k3-stat-value { font-size: 14px; }
+}
+
+/* Desktop */
+@media (min-width: 768px) {
+  .k3-dossier { max-width: 480px; margin: 0 auto; }
+  .k3-claim { min-height: 360px; }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .k3-orb-bg, .k3-orb-glow, .k3-claim-name,
+  .k3-orb .ring-fill { animation: none !important; }
+  .k3-orb .ring-fill { stroke-dashoffset: var(--ring-offset, 389.56); }
+}
+</style>
+
+{# ============================================================
+   DOSSIER MARKUP
+   ============================================================ #}
+<div class="k3-dossier" id="k3-dossier">
+
+  {# ---- CLAIM LAYER (expanded by default) ---- #}
+  <div class="k3-layer open" id="k3-layer-claim">
+    <div class="k3-claim">
+      <div class="k3-orb-bg"></div>
+      <div class="k3-orb-glow"></div>
+
+      {# v5 Orb #}
+      <div class="k3-orb">
+        <svg viewBox="0 0 148 148">
+          <defs>
+            <linearGradient id="k3-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#39ff14"/>
+              <stop offset="33%" stop-color="#00d4ff"/>
+              <stop offset="66%" stop-color="#ff69b4"/>
+              <stop offset="100%" stop-color="#ffa500"/>
+            </linearGradient>
+          </defs>
+          <circle class="ring-track" cx="74" cy="74" r="62"/>
+          <circle class="ring-fill" cx="74" cy="74" r="62"
+                  style="--ring-offset: {{ ring_offset }}"/>
+        </svg>
+        <div class="k3-orb-center">
+          {% if conviction_pct > 0 %}
+            {% set tens = (conviction_pct // 10) %}
+            {% set ones = conviction_pct % 10 %}
+            <div class="k3-orb-score">
+              {% if tens > 0 %}<span class="digit-tens">{{ tens }}</span>{% endif %}
+              <span class="digit-ones">{{ ones }}</span>
+            </div>
+          {% else %}
+            <div class="k3-orb-score"><span class="digit-ones">—</span></div>
           {% endif %}
-        </span>
+          <div class="k3-orb-label">conviction</div>
+        </div>
+      </div>
+
+      {# Subnet name #}
+      {% if sn %}
+        <div class="k3-claim-name">{{ sn.name|default('SN' ~ sn.netuid) }}</div>
+        <div class="k3-claim-meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}</div>
+      {% else %}
+        <div class="k3-claim-name">No audited call</div>
+        <div class="k3-claim-meta">Council waits for audit gate</div>
+      {% endif %}
+
+      {# Badge #}
+      {% if audit_pick and sn %}
+        {% if act == 'LONG' %}
+          <div class="k3-badge buy">BUY</div>
+        {% elif act == 'SHORT' %}
+          <div class="k3-badge sell">SELL</div>
         {% else %}
-        <span class="home-habit-status__alerts home-habit-status__alerts--off" id="habit-alerts-summary">
-          Conviction alerts disabled on this deploy
-        </span>
+          <div class="k3-badge hold">{{ act }}</div>
         {% endif %}
+      {% else %}
+        <div class="k3-badge none">HOLD</div>
+      {% endif %}
+
+      {# Claim stats #}
+      {% if sn %}
+      <div class="k3-claim-stats">
+        {% if sn.price %}
+        <div class="k3-stat">
+          <div class="k3-stat-value">{{ '%.4f'|format(sn.price|float) }}</div>
+          <div class="k3-stat-label">alpha</div>
+        </div>
+        {% endif %}
+        {% if sn.change_1h is defined %}
+        <div class="k3-stat">
+          <div class="k3-stat-value">{{ '%.1f'|format(sn.change_1h|float) }}%</div>
+          <div class="k3-stat-label">1h</div>
+        </div>
+        {% endif %}
+        {% if sn.change_24h is defined %}
+        <div class="k3-stat">
+          <div class="k3-stat-value">{{ '%.1f'|format(sn.change_24h|float) }}%</div>
+          <div class="k3-stat-label">24h</div>
+        </div>
+        {% endif %}
+        {% if sn.halving_days %}
+        <div class="k3-stat">
+          <div class="k3-stat-value">{{ sn.halving_days }}</div>
+          <div class="k3-stat-label">halving</div>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {# Temporal chip #}
+      {% if resolves_in %}
+      <div class="k3-temporal">Resolves in {{ resolves_in }} · Graded against {{ horizon }} price movement</div>
+      {% endif %}
+
+      {# Why line #}
+      {% if why_line %}
+      <div class="k3-why">We expect: {{ why_line }}</div>
+      {% endif %}
+
+      {# Trust banner #}
+      {% if tb.ready and tb.headline %}
+        <div class="k3-trust">{{ tb.headline }}</div>
+      {% elif tb.message %}
+        <div class="k3-trust">{{ tb.message }}</div>
+      {% else %}
+        <div class="k3-trust">Building graded track record</div>
+      {% endif %}
+
+      {# Hybrid grading status #}
+      {% if hybrid.ready %}
+        <div class="k3-trust">Hybrid grading live · n={{ cal_n }}</div>
+      {% elif hybrid.message %}
+        <div class="k3-trust">{{ hybrid.message|capitalize }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ---- EVIDENCE LAYER ---- #}
+  <div class="k3-layer" id="k3-layer-evidence">
+    <button class="k3-layer-header" onclick="k3Toggle('k3-layer-evidence')">
+      <span>Evidence</span>
+      <span class="k3-layer-icon">▸</span>
+    </button>
+    <div class="k3-layer-body">
+      <div class="k3-layer-title">Why {{ sn.name|default('this subnet') if sn else 'this subnet' }} is the call</div>
+      {% if signals and signals|length > 0 %}
+        {% for sig in signals[:5] %}
+        <div class="k3-signal">
+          <span class="k3-signal-name">{{ sig.name|default(sig.label|default('Signal')) }}</span>
+          <span class="k3-signal-value">{{ sig.value|default(sig.score|default('—')) }}</span>
+        </div>
+        {% endfor %}
+      {% elif call_reasons and call_reasons|length > 0 %}
+        {% for reason in call_reasons[:5] %}
+        <div class="k3-signal">
+          <span class="k3-signal-name">{{ reason }}</span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="k3-empty">
+          <div class="k3-empty-icon">📡</div>
+          <div class="k3-empty-text">Awaiting additional evidence. Signals will surface as council deliberation progresses.</div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ---- COUNCIL LAYER ---- #}
+  <div class="k3-layer" id="k3-layer-council">
+    <button class="k3-layer-header" onclick="k3Toggle('k3-layer-council')">
+      <span>Council</span>
+      <span class="k3-layer-icon">▸</span>
+    </button>
+    <div class="k3-layer-body">
+      <div class="k3-layer-title">Judge weights &amp; deltas</div>
+      {% if judges and judges|length > 0 %}
+        {% for j in judges[:6] %}
+        <div class="k3-judge">
+          <span class="k3-judge-name">{{ j.name|default('Judge') }}</span>
+          <span>
+            <span class="k3-judge-weight">{{ '%.2f'|format(j.weight|float) if j.weight else '—' }}</span>
+            {% if j.delta is defined %}
+              {% set d = j.delta|float %}
+              {% if d > 0.01 %}<span class="k3-judge-delta up">+{{ '%.2f'|format(d) }}</span>
+              {% elif d < -0.01 %}<span class="k3-judge-delta down">{{ '%.2f'|format(d) }}</span>
+              {% else %}<span class="k3-judge-delta flat">0.00</span>{% endif %}
+            {% endif %}
+          </span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="k3-empty">
+          <div class="k3-empty-icon">⚖️</div>
+          <div class="k3-empty-text">Weight evolution pending. Council deliberation data will surface as grading matures.</div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ---- OUTCOME LAYER ---- #}
+  <div class="k3-layer" id="k3-layer-outcome">
+    <button class="k3-layer-header" onclick="k3Toggle('k3-layer-outcome')">
+      <span>Outcome</span>
+      <span class="k3-layer-icon">▸</span>
+    </button>
+    <div class="k3-layer-body">
+      <div class="k3-layer-title">Resolution &amp; grading</div>
+      <div class="k3-outcome-status">
+        {% if outcome_status == 'resolved' %}
+          <div class="k3-outcome-icon resolved">✓</div>
+        {% else %}
+          <div class="k3-outcome-icon pending">⏳</div>
+        {% endif %}
+        <div class="k3-outcome-text">
+          {% if outcome_status == 'resolved' %}
+            Resolved. {{ outcome_note if outcome_note else 'Graded against ' ~ horizon ~ ' price movement.' }}
+          {% else %}
+            First resolution pending. This pick will be graded against {{ horizon }} price movement once the window closes.
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>
-</section>
+
+  {# ---- LEARNING LAYER ---- #}
+  <div class="k3-layer" id="k3-layer-learning">
+    <button class="k3-layer-header" onclick="k3Toggle('k3-layer-learning')">
+      <span>Learning</span>
+      <span class="k3-layer-icon">▸</span>
+    </button>
+    <div class="k3-layer-body">
+      <div class="k3-layer-title">System calibration</div>
+      <div class="k3-learning-stats">
+        <div class="k3-learning-stat">
+          <div class="k3-learning-value">{{ cal_n }}</div>
+          <div class="k3-learning-label">graded picks</div>
+        </div>
+        <div class="k3-learning-stat">
+          <div class="k3-learning-value">{{ '%.1f'|format(cal_acc|float) }}%</div>
+          <div class="k3-learning-label">accuracy</div>
+        </div>
+      </div>
+      <div class="k3-empty" style="padding: 8px 0;">
+        <div class="k3-empty-text" style="font-size: 12px;">
+          Post-resolution learning adjusts council weights based on graded outcomes. Accuracy improves as sample size grows.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ---- ACTIONS ---- #}
+  <div class="k3-actions">
+    {% if pinned %}
+      <a class="k3-btn" href="#">Unpin subnet</a>
+    {% else %}
+      <a class="k3-btn" href="#">Pin to watchlist</a>
+    {% endif %}
+    <a class="k3-btn" href="#pro-cockpit">Open Pro cockpit</a>
+  </div>
+
+  {# ---- WATCHLIST BAR ---- #}
+  <div class="k3-watchlist">
+    <span>Watchlist: {{ wl.count|default(pins|length) }} pinned</span>
+    {% set alerts = habit_alerts if habit_alerts is mapping else {} %}
+    {% if alerts.enabled %}
+      <span>Alerts on · {{ alerts.delivery_mode|default('dry_run') }}</span>
+    {% else %}
+      <span>Alerts disabled</span>
+    {% endif %}
+  </div>
+
+</div>
+
+{# ---- Peel interaction JS ---- #}
+<script>
+function k3Toggle(id) {
+  var el = document.getElementById(id);
+  if (el) el.classList.toggle('open');
+}
+</script>
