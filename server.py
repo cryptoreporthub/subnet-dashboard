@@ -491,10 +491,12 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
             pick_netuid = _pick_netuid_from_daily_payload(pick_payload)
             if isinstance(pick_payload, dict):
                 from internal.learning.dpick_shortlist import attach_shortlist_to_daily_pick
+                from internal.learning.dpick_temporal import attach_temporal_to_daily_pick
 
                 pick_payload = attach_shortlist_to_daily_pick(
                     pick_payload, subnets, market_context
                 )
+                pick_payload = attach_temporal_to_daily_pick(pick_payload)
     except Exception as exc:
         logger.warning("home hero context failed: %s", exc)
     return {

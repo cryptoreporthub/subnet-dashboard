@@ -42,18 +42,20 @@
       {% set ring_offset = ring_circ - (ring_circ * conviction_pct / 100) %}
 
       {# Temporal / resolution #}
+      {% set outcome_status = dpick.outcome_status if dpick.outcome_status else 'pending' %}
+      {% set outcome_note = dpick.outcome_note if dpick.outcome_note else '' %}
       {% set resolves_in = dpick.resolves_in if dpick.resolves_in else none %}
-      {% set horizon = dpick.horizon|default('24h') %}
+      {% set horizon = dpick.time_horizon|default(dpick.horizon|default('24h')) %}
+      {% set resolve_at_iso = dpick.resolve_at if dpick.resolve_at else none %}
+      {% set temporal_badge = dpick.temporal_badge if dpick.temporal_badge else none %}
+      {% set ring_state = dpick.ring_state|default('fresh') %}
+      {% if outcome_status == 'resolved' %}{% set ring_state = 'resolved' %}{% endif %}
 
       {# Signals for evidence layer #}
       {% set signals = dpick.signals if dpick.signals is iterable and dpick.signals is not string else [] %}
 
       {# Judge weights for council layer #}
       {% set judges = dpick.judges if dpick.judges is iterable and dpick.judges is not string else [] %}
-
-      {# Outcome / resolution status #}
-      {% set outcome_status = dpick.outcome_status if dpick.outcome_status else 'pending' %}
-      {% set outcome_note = dpick.outcome_note if dpick.outcome_note else '' %}
 
       {# Learning / calibration #}
       {% set cal_n = hybrid.n|default(0) %}
@@ -128,6 +130,15 @@
       .k3-orb svg { width: 100%; height: 100%; transform: rotate(-90deg); }
       .k3-orb .ring-track { fill: none; stroke: var(--k3-surface); stroke-width: 9; }
       .k3-orb .ring-fill { fill: none; stroke: url(#k3-gradient); stroke-width: 9; stroke-linecap: round; stroke-dasharray: 389.56; stroke-dashoffset: 389.56; animation: k3-ring-fill 1.2s ease-out forwards; }
+      .k3-orb.k3-ring--fresh .ring-fill { stroke: #39ff14; }
+      .k3-orb.k3-ring--aging .ring-fill { stroke: #00d4ff; }
+      .k3-orb.k3-ring--expiring .ring-fill { stroke: #ffa500; }
+      .k3-orb.k3-ring--resolved .ring-fill { stroke: #64748b; animation: none; }
+      .k3-temporal-badge { display: inline-block; margin: 4px 0 8px; padding: 4px 12px; border-radius: 12px; background: var(--k3-surface); border: 1px solid #1a1d24; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--k3-muted); z-index: 1; }
+      .k3-temporal-badge--live { color: var(--k3-green); border-color: rgba(57, 255, 20, 0.35); }
+      .k3-temporal-badge--resolved { color: var(--k3-muted); }
+      .k3-temporal-badge--empty { font-size: 10px; max-width: 280px; line-height: 1.4; }
+      .k3-temporal-grade { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); margin: -4px 0 8px; z-index: 1; }
       @keyframes k3-ring-fill { to { stroke-dashoffset: var(--ring-offset, 389.56); } }
       .k3-orb-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 2; }
       .k3-orb-score { font-family: 'JetBrains Mono', monospace; font-size: 42px; font-weight: 700; line-height: 1; display: flex; }
@@ -217,7 +228,7 @@
             <div class="k3-claim">
               <div class="k3-orb-bg"></div>
               <div class="k3-orb-glow"></div>
-              <div class="k3-orb">
+              <div class="k3-orb k3-ring--{{ ring_state }}"{% if resolve_at_iso %} data-resolve-at="{{ resolve_at_iso }}"{% endif %}>
                 <svg viewBox="0 0 148 148">
                   <defs><linearGradient id="k3-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#39ff14"/><stop offset="33%" stop-color="#00d4ff"/><stop offset="66%" stop-color="#ff69b4"/><stop offset="100%" stop-color="#ffa500"/></linearGradient></defs>
                   <circle class="ring-track" cx="74" cy="74" r="62"/>
@@ -237,6 +248,12 @@
                   <div class="k3-orb-label">conviction</div>
                 </div>
               </div>
+              {% if temporal_badge %}
+              <div id="k3-temporal-badge" class="k3-temporal-badge{% if ring_state == 'resolved' %} k3-temporal-badge--resolved{% else %} k3-temporal-badge--live{% endif %}"{% if resolve_at_iso %} data-resolve-at="{{ resolve_at_iso }}"{% endif %} aria-live="polite">{{ temporal_badge }}</div>
+              {% if dpick.grade_on_resolve and ring_state != 'resolved' %}<div class="k3-temporal-grade">Graded on resolve · {{ horizon }} window</div>{% endif %}
+              {% else %}
+              <div id="k3-temporal-badge" class="k3-temporal-badge k3-temporal-badge--empty" aria-live="polite">Resolve window not set · graded when this pick closes</div>
+              {% endif %}
               <div class="k3-claim-name">{{ sn.name|default('SN' ~ sn.netuid) }}</div>
               <div class="k3-claim-meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}</div>
               {% if act == 'LONG' %}<div class="k3-badge buy">BUY</div>
@@ -250,7 +267,6 @@
                 {% if sn.halving_days %}<div class="k3-stat"><div class="k3-stat-value">{{ sn.halving_days }}</div><div class="k3-stat-label">halving</div></div>{% endif %}
               </div>
               {% endif %}
-              {% if resolves_in %}<div class="k3-temporal">Resolves in {{ resolves_in }} · Graded against {{ horizon }} price movement</div>{% endif %}
               {% if why_line %}<p class="home-job__why">We expect: {{ why_line }}</p>{% endif %}
             </div>
           </div>
@@ -263,7 +279,7 @@
             <div class="k3-claim">
               <div class="k3-orb-bg"></div>
               <div class="k3-orb-glow"></div>
-              <div class="k3-orb">
+              <div class="k3-orb k3-ring--{{ ring_state }}">
                 <svg viewBox="0 0 148 148">
                   <defs><linearGradient id="k3-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#39ff14"/><stop offset="33%" stop-color="#00d4ff"/><stop offset="66%" stop-color="#ff69b4"/><stop offset="100%" stop-color="#ffa500"/></linearGradient></defs>
                   <circle class="ring-track" cx="74" cy="74" r="62"/>
@@ -274,6 +290,7 @@
                   <div class="k3-orb-label">conviction</div>
                 </div>
               </div>
+              <div id="k3-temporal-badge" class="k3-temporal-badge k3-temporal-badge--empty" aria-live="polite">Resolve window not set · graded when this pick closes</div>
               {% if sn %}
                 <div class="k3-claim-name">{{ sn.name|default('SN' ~ sn.netuid) }}</div>
                 <div class="k3-claim-meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %} · candidate only</div>
@@ -494,5 +511,39 @@ function switchToSubnet(netuid) {
   var url = new URL(window.location.href);
   url.searchParams.set('netuid', netuid);
   window.location.href = url.toString();
+}
+
+// K3-4: Temporal badge countdown (60s tick; static when reduced-motion)
+function k3FormatRemaining(ms) {
+  if (ms <= 0) return '0m';
+  var totalMin = Math.floor(ms / 60000);
+  var hours = Math.floor(totalMin / 60);
+  var minutes = totalMin % 60;
+  if (hours && minutes) return hours + 'h ' + minutes + 'm';
+  if (hours) return hours + 'h';
+  return minutes + 'm';
+}
+
+function k3TemporalTick() {
+  var badge = document.getElementById('k3-temporal-badge');
+  if (!badge || !badge.getAttribute('data-resolve-at')) return;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var resolveAt = Date.parse(badge.getAttribute('data-resolve-at'));
+  if (!resolveAt) return;
+  var remaining = resolveAt - Date.now();
+  if (remaining <= 0) {
+    badge.textContent = 'RESOLVED · graded on close';
+    badge.classList.remove('k3-temporal-badge--live');
+    badge.classList.add('k3-temporal-badge--resolved');
+    var orb = document.querySelector('.k3-orb[data-resolve-at]');
+    if (orb) orb.className = orb.className.replace(/k3-ring--\w+/g, '').trim() + ' k3-ring--resolved';
+    return;
+  }
+  badge.textContent = 'LIVE · ' + k3FormatRemaining(remaining) + ' remaining';
+}
+
+if (!window.__k3TemporalInterval) {
+  k3TemporalTick();
+  window.__k3TemporalInterval = setInterval(k3TemporalTick, 60000);
 }
 </script>
