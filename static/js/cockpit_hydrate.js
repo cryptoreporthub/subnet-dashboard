@@ -583,6 +583,64 @@
     return (Number(rate) * 100).toFixed(1) + '%';
   }
 
+  function renderCalibrationChart(judgeName, bins) {
+    if (!bins || !bins.length) return '';
+    var active = bins.filter(function (b) { return (b.count || 0) > 0; });
+    if (!active.length) {
+      return '<p class="backtest-cal__empty">No score bins with samples yet.</p>';
+    }
+    var bars = active.map(function (b) {
+      var hr = b.hit_rate != null ? Number(b.hit_rate) : 0;
+      var pct = Math.round(hr * 1000) / 10;
+      var h = Math.max(4, Math.min(100, pct));
+      var mid = b.score_mid != null ? b.score_mid : ((Number(b.score_lo) + Number(b.score_hi)) / 2);
+      return '<div class="backtest-cal__bar" title="score ' + mid + ' · n=' + b.count + ' · hit ' + pct + '%">' +
+        '<div class="backtest-cal__bar-fill" style="height:' + h + '%;"></div>' +
+        '<div class="backtest-cal__bar-label">' + mid + '</div></div>';
+    }).join('');
+    return '<div class="backtest-cal__chart" role="img" aria-label="' + esc(judgeName) + ' calibration reliability diagram">' +
+      bars + '</div>';
+  }
+
+  function renderRiskCoverageTable(points) {
+    if (!points || !points.length) return '';
+    var rows = points.filter(function (p) { return (p.n || 0) > 0; }).slice(0, 6);
+    if (!rows.length) return '';
+    var body = rows.map(function (p) {
+      return '<tr><td class="mono">≥' + p.threshold + '</td><td class="mono">' + pctLabel(p.hit_rate) + '</td>' +
+        '<td class="mono">' + (p.coverage_pct != null ? p.coverage_pct + '%' : '—') + '</td><td class="mono">' + p.n + '</td></tr>';
+    }).join('');
+    return '<table class="tbl tbl--compact backtest-rc"><thead><tr><th>τ</th><th>Hit</th><th>Coverage</th><th>n</th></tr></thead><tbody>' +
+      body + '</tbody></table>';
+  }
+
+  function renderMethodology(methodology) {
+    if (!methodology) return '';
+    var sources = methodology.sources || [];
+    var metrics = methodology.metrics || [];
+    var srcHtml = sources.map(function (s) {
+      return '<li><a href="' + esc(s.url) + '" target="_blank" rel="noopener noreferrer">' + esc(s.citation) + '</a>' +
+        '<span class="backtest-method__topic">' + esc(s.topic || '') + '</span></li>';
+    }).join('');
+    var metricHtml = metrics.map(function (m) {
+      var links = (m.sources || []).map(function (s) {
+        return '<a href="' + esc(s.url) + '" target="_blank" rel="noopener noreferrer">' + esc(s.id || 'source') + '</a>';
+      }).join(', ');
+      return '<div class="backtest-method__metric"><strong>' + esc(m.label) + '</strong>' +
+        '<code class="backtest-method__formula">' + esc(m.formula) + '</code>' +
+        '<p>' + esc(m.definition) + '</p>' +
+        (m.coverage ? '<p class="backtest-method__cov">' + esc(m.coverage) + '</p>' : '') +
+        (links ? '<p class="backtest-method__refs">Sources: ' + links + '</p>' : '') +
+        '</div>';
+    }).join('');
+    return '<details class="backtest-method card">' +
+      '<summary>Methodology &amp; sources (selective classification / meta-labeling)</summary>' +
+      '<p class="backtest-method__summary">' + esc(methodology.summary || '') + '</p>' +
+      '<div class="backtest-method__grid">' + metricHtml + '</div>' +
+      '<h4 class="backtest-method__h">References</h4><ul class="backtest-method__refs-list">' + srcHtml + '</ul>' +
+      '</details>';
+  }
+
   function renderBacktest(payload) {
     var root = document.getElementById('backtest-panel-root');
     if (!root) return;
@@ -606,24 +664,44 @@
         '<div class="backtest-meter__label">Council direction rate</div>' +
         '<div class="backtest-meter__val">' + pct + '%</div>' +
         '<div class="backtest-meter__bar"><div class="backtest-meter__fill" style="width:' + Math.min(pct, 100) + '%;"></div></div>' +
-        '<div class="backtest-meter__sub">n=' + sample + ' graded predictions</div></div>';
+        '<div class="backtest-meter__sub">n=' + sample + ' graded · coverage 100%</div></div>';
     }
     html += '<div class="kpi-strip">' +
       '<div class="kpi card"><div class="lbl">Council</div><div class="v">' + pctLabel(council.win_rate) + '</div>' +
-      '<div class="sub">n=' + (payload.sample_size || 0) + ' graded</div></div>';
+      '<div class="sub">n=' + (payload.sample_size || 0) + ' · coverage ' +
+      (council.coverage_pct != null ? council.coverage_pct + '%' : '100%') + '</div></div>';
     ['oracle', 'echo', 'pulse'].forEach(function (name) {
       var judge = judges[name] || {};
       var filtered = judge.filtered || {};
       var rate = filtered.win_rate != null ? filtered.win_rate : judge.win_rate;
       var n = filtered.n != null ? filtered.n : judge.endorsed_n;
+      var cov = judge.coverage_pct != null ? judge.coverage_pct : filtered.coverage_pct;
       var th = filtered.min_score != null ? filtered.min_score : judge.threshold;
       var label = name.charAt(0).toUpperCase() + name.slice(1);
       html += '<div class="kpi card"><div class="lbl">' + label + '</div><div class="v">' + pctLabel(rate) + '</div>' +
         '<div class="sub">n=' + (n != null ? n : '—') +
-        (th != null ? ' · score ≥' + th : '') +
+        (cov != null ? ' · coverage ' + cov + '%' : '') +
+        (th != null ? ' · τ≥' + th : '') +
         ' · avg pnl ' + fmt(judge.avg_pnl_pct) + '%</div></div>';
     });
     html += '</div>';
+
+    html += '<div class="backtest-panels">';
+    ['oracle', 'echo', 'pulse'].forEach(function (name) {
+      var judge = judges[name] || {};
+      var label = name.charAt(0).toUpperCase() + name.slice(1);
+      html += '<div class="backtest-panel card">' +
+        '<h3 class="backtest-panel__title">' + label + ' calibration</h3>' +
+        '<p class="backtest-panel__hint">Reliability diagram — observed hit-rate per score bin (Murphy 1973)</p>' +
+        renderCalibrationChart(name, judge.calibration) +
+        '<h4 class="backtest-panel__subtitle">Risk–coverage (τ)</h4>' +
+        '<p class="backtest-panel__hint">Hit-rate and coverage at score thresholds (El-Yaniv &amp; Wiener 2010)</p>' +
+        renderRiskCoverageTable(judge.risk_coverage) +
+        '</div>';
+    });
+    html += '</div>';
+
+    html += renderMethodology(payload.methodology);
     var history = payload.history || [];
     if (history.length) {
       html += '<table class="tbl mt-3"><thead><tr><th>Subnet</th><th>Pred</th><th>Actual</th><th>Council</th><th>Oracle</th></tr></thead><tbody>';

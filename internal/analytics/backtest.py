@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
+from internal.analytics.backtest_methodology import build_methodology_payload
 from internal.council.grading import direction_correct
 from internal.judges import echo_judge, oracle_judge, pulse_judge
 from internal.judges.portfolios import _compute_pnl
@@ -13,6 +14,7 @@ from internal.learning.predictions_store import load_predictions
 JUDGES = ("oracle", "echo", "pulse")
 _SKIP_OUTCOMES = frozenset({"duplicate", "expired", "ungradeable"})
 _CALIBRATION_BINS = 10
+_RISK_COVERAGE_THRESHOLDS = (0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9)
 _JUDGE_THRESHOLDS: Dict[str, float] = {
     "oracle": 0.55,
     "echo": 0.5,
@@ -139,13 +141,75 @@ def _filtered_judge_win_rate(
         and float(h["judges"][judge].get("score") or 0) >= min_score
     ]
     if not picks:
-        return {"n": 0, "win_rate": None, "min_score": min_score}
+        return {
+            "n": 0,
+            "win_rate": None,
+            "min_score": min_score,
+            "coverage": None,
+            "coverage_pct": None,
+        }
     wins = sum(1 for h in picks if h.get("council_correct"))
     return {
         "n": len(picks),
         "win_rate": round(wins / len(picks), 4),
         "min_score": min_score,
+        "coverage": None,
+        "coverage_pct": None,
     }
+
+
+def _with_coverage(filtered: Dict[str, Any], sample_size: int) -> Dict[str, Any]:
+    out = dict(filtered)
+    if sample_size > 0 and out.get("n") is not None:
+        out["coverage"] = round(float(out["n"]) / sample_size, 4)
+        out["coverage_pct"] = round(100.0 * float(out["n"]) / sample_size, 1)
+    return out
+
+
+def _risk_coverage_curve(
+    history: List[Dict[str, Any]],
+    judge: str,
+    *,
+    sample_size: int,
+) -> List[Dict[str, Any]]:
+    """Selective risk vs coverage at score thresholds (El-Yaniv & Wiener 2010)."""
+    if sample_size <= 0:
+        return []
+    points: List[Dict[str, Any]] = []
+    for threshold in _RISK_COVERAGE_THRESHOLDS:
+        picks = [
+            h
+            for h in history
+            if isinstance(h.get("judges"), dict)
+            and isinstance(h["judges"].get(judge), dict)
+            and float(h["judges"][judge].get("score") or 0) >= threshold
+        ]
+        n = len(picks)
+        if n == 0:
+            points.append(
+                {
+                    "threshold": threshold,
+                    "n": 0,
+                    "coverage": 0.0,
+                    "coverage_pct": 0.0,
+                    "hit_rate": None,
+                    "risk": None,
+                }
+            )
+            continue
+        hits = sum(1 for h in picks if h.get("council_correct"))
+        hit_rate = hits / n
+        points.append(
+            {
+                "threshold": threshold,
+                "n": n,
+                "coverage": round(n / sample_size, 4),
+                "coverage_pct": round(100.0 * n / sample_size, 1),
+                "hit_rate": round(hit_rate, 4),
+                "risk": round(1.0 - hit_rate, 4),
+            }
+        )
+    return points
 
 
 def run_backtest(
@@ -164,9 +228,25 @@ def run_backtest(
             "status": "empty",
             "message": "No gradeable resolved predictions for backtest replay.",
             "sample_size": 0,
-            "council": {"wins": 0, "losses": 0, "win_rate": None},
-            "judges": {name: {**_init_judge_stats(), "win_rate": None, "avg_pnl_pct": None} for name in JUDGES},
+            "council": {
+                "wins": 0,
+                "losses": 0,
+                "win_rate": None,
+                "coverage": None,
+                "coverage_pct": None,
+            },
+            "judges": {
+                name: {
+                    **_init_judge_stats(),
+                    "win_rate": None,
+                    "avg_pnl_pct": None,
+                    "coverage": None,
+                    "coverage_pct": None,
+                }
+                for name in JUDGES
+            },
             "history": [],
+            "methodology": build_methodology_payload(),
         }
 
     judges = {name: _init_judge_stats() for name in JUDGES}
@@ -231,20 +311,25 @@ def run_backtest(
         "wins": council_wins,
         "losses": n - council_wins,
         "win_rate": round(council_wins / n, 4),
+        "coverage": 1.0,
+        "coverage_pct": 100.0,
+        "metric_id": "council_direction_rate",
     }
     judge_blocks: Dict[str, Any] = {}
     for name in JUDGES:
         stats = judges[name]
         total = stats["wins"] + stats["losses"]
-        filtered = _filtered_judge_win_rate(history, name)
+        filtered = _with_coverage(_filtered_judge_win_rate(history, name), n)
         cal = []
         for bucket in stats["calibration"]:
             count = bucket["count"]
+            midpoint = round((bucket["bin"] + 0.5) / _CALIBRATION_BINS, 2)
             cal.append(
                 {
                     "bin": bucket["bin"],
                     "score_lo": round(bucket["bin"] / _CALIBRATION_BINS, 2),
                     "score_hi": round((bucket["bin"] + 1) / _CALIBRATION_BINS, 2),
+                    "score_mid": midpoint,
                     "count": count,
                     "hit_rate": round(bucket["hits"] / count, 4) if count else None,
                 }
@@ -254,12 +339,16 @@ def run_backtest(
             "losses": stats["losses"],
             "win_rate": filtered["win_rate"],
             "endorsed_n": filtered["n"],
+            "coverage": filtered.get("coverage"),
+            "coverage_pct": filtered.get("coverage_pct"),
             "threshold": filtered["min_score"],
+            "metric_id": "selective_hit_rate",
             "direction_win_rate": round(stats["wins"] / total, 4) if total else None,
             "avg_pnl_pct": round(stats["total_pnl_pct"] / total, 4) if total else None,
             "total_pnl_pct": stats["total_pnl_pct"],
             "calibration": cal,
             "filtered": filtered,
+            "risk_coverage": _risk_coverage_curve(history, name, sample_size=n),
         }
 
     return {
@@ -268,6 +357,7 @@ def run_backtest(
         "council": council_block,
         "judges": judge_blocks,
         "history": list(reversed(history[-24:])),
+        "methodology": build_methodology_payload(),
     }
 
 

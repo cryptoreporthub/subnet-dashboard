@@ -129,6 +129,10 @@ def test_api_backtest_route(client):
     body = resp.json()
     assert body.get("status") in ("success", "empty", "error")
     assert "judges" in body or body.get("status") == "error"
+    if body.get("status") == "success":
+        assert "methodology" in body
+        assert body["methodology"].get("sources")
+        assert body["council"].get("coverage_pct") == 100.0
 
 
 def test_api_report_route(client):
