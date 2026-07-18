@@ -2,7 +2,7 @@
 
 ## Fly.io (production)
 
-App: `subnet-dashboard` · region: `sea` · machine: `shared-cpu-1x` / 1GB
+App: `subnet-dashboard` · region: `sjc` (data_volume lives here) · machine: `shared-cpu-1x` / 1GB
 
 ### Deploy
 
