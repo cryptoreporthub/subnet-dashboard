@@ -759,6 +759,48 @@
     root.innerHTML = html;
   }
 
+  function renderEvolutionTrail(trail) {
+    var root = document.getElementById('formula-evolution-root');
+    if (!root) return;
+    if (!trail || trail.status !== 'ok' || !(trail.trail || []).length) {
+      root.innerHTML = '';
+      return;
+    }
+    var html = '<details class="formula-evolution card" open>' +
+      '<summary>Evolution trail — ' + esc(trail.label || trail.lane_id) + '</summary>' +
+      '<p class="formula-evolution__intro">' + esc(trail.summary || '') + '</p>' +
+      '<ol class="formula-evolution__timeline">';
+    trail.trail.forEach(function (ep) {
+      var range = (ep.from && ep.to && ep.from !== ep.to) ? (ep.from + ' → ' + ep.to) : (ep.from || ep.to || '');
+      var div = ep.divergence_pct != null ? (' · Δ ' + ep.divergence_pct + '%') : '';
+      html += '<li class="formula-evolution__episode formula-evolution__episode--' + esc(ep.kind || 'event') + '">' +
+        '<div class="formula-evolution__meta"><span class="formula-evolution__kind">' + esc(ep.kind || '') + '</span>' +
+        '<span class="formula-evolution__range">' + esc(range) + div + '</span></div>' +
+        '<p class="formula-evolution__narrative">' + esc(ep.narrative || '') + '</p>';
+      if (ep.formula_expression) {
+        html += '<code class="formula-evolution__expr">' + esc(ep.formula_expression) + '</code>';
+      }
+      if ((ep.trigger_subnets || []).length) {
+        html += '<ul class="formula-evolution__subnets">';
+        ep.trigger_subnets.forEach(function (sn) {
+          var pred = sn.predicted_pct != null ? fmtSigned(sn.predicted_pct) : '—';
+          var act = sn.actual_pct != null ? fmtSigned(sn.actual_pct) : '—';
+          html += '<li><strong>' + esc(sn.name || ('SN' + sn.netuid)) + '</strong> expected ' +
+            esc(sn.expected_direction || '?') + ' (' + pred + ') · actual ' + act +
+            (sn.correct === false ? ' <span class="neg">miss</span>' : '') +
+            (sn.correct === true ? ' <span class="pos">hit</span>' : '') + '</li>';
+        });
+        html += '</ul>';
+      }
+      if (ep.weight_before != null && ep.weight_after != null) {
+        html += '<p class="formula-evolution__weight">Weight ' + ep.weight_before + ' → ' + ep.weight_after + '</p>';
+      }
+      html += '</li>';
+    });
+    html += '</ol></details>';
+    root.innerHTML = html;
+  }
+
   function formatDataSourceLabel(meta, subnets) {
     var primary = (meta && meta.source) || '';
     if (!primary && subnets && subnets.length) {
@@ -1166,12 +1208,14 @@
       connectCockpitStream();
 
       try {
-        var pair = await Promise.all([
+        var trio = await Promise.all([
           fetchJsonRetry('/api/backtest?limit=120', 18000, 1),
           fetchJsonRetry('/api/formula-lineage', 12000, 1),
+          fetchJsonRetry('/api/formula-lineage/dark_horse/evolution', 12000, 1),
         ]);
-        renderBacktest(pair[0]);
-        renderFormulaLineage(pair[1]);
+        renderBacktest(trio[0]);
+        renderFormulaLineage(trio[1]);
+        renderEvolutionTrail(trio[2]);
       } catch (e) {
         console.warn('[cockpit_hydrate] backtest fetch failed', e);
         var btRoot = document.getElementById('backtest-panel-root');

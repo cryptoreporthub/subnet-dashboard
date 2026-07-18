@@ -647,6 +647,23 @@ async def api_formula_lineage_lane(lane_id: str):
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@learning_router.get("/api/formula-lineage/{lane_id}/evolution")
+async def api_formula_evolution_trail(lane_id: str):
+    """Time-bounded evolution trail: subnets → learning loop → weight/formula state."""
+    try:
+        from internal.council.formula_evolution import build_evolution_trail
+
+        trail = build_evolution_trail(lane_id.lower().strip())
+        if trail is None:
+            raise HTTPException(status_code=404, detail="unknown lane")
+        return {"status": "ok", **trail}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("formula evolution trail failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @learning_router.get("/api/weights")
 async def api_weights():
     """Return learning stats including expert weights."""

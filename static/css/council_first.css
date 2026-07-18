@@ -1730,6 +1730,31 @@ button.home-cta {
 .formula-lineage__lane ul { margin: 0; padding-left: 18px; font-size: 12px; }
 .formula-lineage__lane li { margin-bottom: 6px; }
 
+.formula-evolution-root { margin-top: 12px; }
+.formula-evolution { padding: 12px 14px; }
+.formula-evolution__intro { font-size: 13px; color: var(--stage-muted); margin: 8px 0 12px; }
+.formula-evolution__timeline { margin: 0; padding-left: 20px; }
+.formula-evolution__episode { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.formula-evolution__meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; font-size: 11px; }
+.formula-evolution__kind {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #22d3ee;
+}
+.formula-evolution__range { color: var(--stage-muted); }
+.formula-evolution__narrative { font-size: 13px; margin: 0 0 6px; line-height: 1.45; }
+.formula-evolution__expr {
+  display: block;
+  font-size: 11px;
+  padding: 4px 6px;
+  margin: 4px 0;
+  border-radius: 4px;
+  background: rgba(0,0,0,0.2);
+  color: #a7f3d0;
+}
+.formula-evolution__subnets { margin: 6px 0; padding-left: 18px; font-size: 12px; color: var(--stage-muted); }
+.formula-evolution__weight { font-size: 12px; color: var(--stage-muted); margin: 4px 0 0; }
+
 .story-strip--prominent { margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid rgba(0,255,65,0.15); }
 
 .heuristic-tag { display: inline-block; margin-left: 6px; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(138,154,142,0.35); color: var(--stage-muted); }

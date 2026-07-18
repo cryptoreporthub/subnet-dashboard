@@ -138,6 +138,7 @@ CONTRACT = [
     ("GET", "/api/backtest", None),
     ("GET", "/api/formula-lineage", None),
     ("GET", "/api/formula-lineage/dark_horse", None),
+    ("GET", "/api/formula-lineage/dark_horse/evolution", None),
     ("GET", "/api/market-drivers", None),
     ("GET", "/api/market-drivers/1", None),
     ("GET", "/api/mindmap/story-path", None),
