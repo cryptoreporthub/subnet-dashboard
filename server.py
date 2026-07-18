@@ -174,14 +174,25 @@ async def _lifespan(app: FastAPI):
     try:
         from internal.freshness import start_background_sync
 
-        start_background_sync(immediate=True)
+        boot_sync = os.environ.get("BOOT_BACKGROUND_SYNC_IMMEDIATE", "off").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        start_background_sync(immediate=boot_sync)
         logger.info("Registry freshness background sync started")
     except Exception as exc:
         logger.warning("Registry freshness sync failed to start: %s", exc)
     try:
         from internal.live_subnets import get_live_subnets
 
-        get_live_subnets()
+        # Non-blocking: schedules background sync only; never fetch chain on boot.
+        threading.Thread(
+            target=get_live_subnets,
+            daemon=True,
+            name="live-subnets-boot",
+        ).start()
         logger.info("Live subnets sync scheduled")
     except Exception as exc:
         logger.warning("Live subnets sync failed to start: %s", exc)
@@ -199,7 +210,13 @@ async def _lifespan(app: FastAPI):
     try:
         from internal.council.resolver_scheduler import start_prediction_resolver_scheduler
 
-        start_prediction_resolver_scheduler(immediate=True)
+        resolver_immediate = os.environ.get("RESOLVER_BOOT_IMMEDIATE", "off").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        start_prediction_resolver_scheduler(immediate=resolver_immediate)
         logger.info("Prediction resolver scheduler started")
     except Exception as exc:
         logger.warning("Prediction resolver scheduler failed to start: %s", exc)
@@ -1150,26 +1167,17 @@ _STATIC_SUBNETS = [
 def _get_subnets_with_source():
     """Return (subnets, source) for picks — tradable only (excludes Root)."""
     from internal.subnets.tradable import tradable_subnets
-    from internal.subnet_names import enrich_subnet_rows
 
-    if _PICKS_ENGINE:
-        try:
-            subnets = enrich_subnet_rows(get_all_subnets())
-            if subnets:
-                tradable = tradable_subnets(subnets)
-                if tradable:
-                    # Honest label: registry-only snapshots used to claim "taomarketcap".
-                    priced = sum(
-                        1 for s in tradable[:20]
-                        if s.get("price") is not None and s.get("price") != ""
-                    )
-                    if priced >= max(1, min(10, len(tradable) // 2)):
-                        src = "taomarketcap" if any(s.get("market_live") or s.get("source") == "taomarketcap" for s in tradable[:20]) else "live"
-                    else:
-                        src = "registry-snapshot"
-                    return tradable, src
-        except Exception as exc:
-            logger.warning("Error fetching from taomarketcap: %s", exc)
+    try:
+        from internal.subnets.feed import get_council_subnet_feed
+
+        subnets, src = get_council_subnet_feed()
+        tradable = tradable_subnets(subnets)
+        if tradable:
+            return tradable, src
+    except Exception as exc:
+        logger.warning("council subnet feed failed: %s", exc)
+
     return tradable_subnets([dict(s) for s in _STATIC_SUBNETS]), "static-fallback"
 
 

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
 import json
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 from datastore.learning_engine import LearningEngine
@@ -13,6 +15,8 @@ from datastore.learning_engine import LearningEngine
 logger = logging.getLogger(__name__)
 
 _CHUNK_SIZE = 48
+_CHAT_TIMEOUT_SEC = float(os.environ.get("SIMIVISION_CHAT_TIMEOUT_SECONDS", "25"))
+_INVESTIGATION_TIMEOUT_SEC = float(os.environ.get("SIMIVISION_INVESTIGATION_TIMEOUT_SECONDS", "8"))
 
 
 def sanitize_reply(text: str) -> str:
@@ -77,7 +81,12 @@ def _maybe_investigation_context(message: str) -> Optional[Dict[str, Any]]:
     if wm:
         wallet = wm.group(1)
     try:
-        return build_investigation_context(message, netuid=netuid, wallet=wallet)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            fut = pool.submit(build_investigation_context, message, netuid=netuid, wallet=wallet)
+            return fut.result(timeout=_INVESTIGATION_TIMEOUT_SEC)
+    except FuturesTimeoutError:
+        logger.warning("investigation context timed out after %.0fs", _INVESTIGATION_TIMEOUT_SEC)
+        return None
     except Exception as exc:
         logger.debug("investigation context skipped: %s", exc)
         return None
@@ -221,11 +230,14 @@ def call_llm(prompt: str, message: str, context: Dict[str, Any]) -> Tuple[str, b
 
 
 def build_chat_context() -> Dict[str, Any]:
-    """Assemble subnet + learning context for chat (mirrors server_original)."""
-    from server import _get_subnets_with_source, _safe_simivision_payload
+    """Assemble subnet + learning context for chat (file-backed; no live feed wait)."""
+    from server import _normalize_registry_subnet, _safe_simivision_payload, load_data
 
-    subnets, source = _get_subnets_with_source()
-    simivision = _safe_simivision_payload()["data"]
+    subnets = [
+        _normalize_registry_subnet(s) for s in load_data("config/registry.json").values()
+    ]
+    source = "registry-fallback"
+    simivision = _safe_simivision_payload(subnets=subnets, source=source)["data"]
 
     engine = LearningEngine()
     soul_map = engine.load_soul_map()
@@ -260,19 +272,36 @@ def _display_model(llm_used: bool) -> str:
     return "local-fallback"
 
 
-async def handle_simivision_chat(message: str) -> Dict[str, str]:
-    """Run SimiVision chat and return ``{reply, model}`` (XSS-escaped reply)."""
+def _run_chat_sync(message: str) -> Dict[str, str]:
+    """Blocking chat path — run in a worker thread with a hard timeout."""
     if not message.strip():
         return {"reply": "Please provide a question in the `message` field.", "model": ""}
 
+    context = build_chat_context()
+    inv = _maybe_investigation_context(message)
+    if inv:
+        context["investigation"] = inv
+    prompt = build_simivision_prompt(message, context)
+    reply, llm_used = call_llm(prompt, message, context)
+    return {"reply": sanitize_reply(reply), "model": _display_model(llm_used)}
+
+
+async def handle_simivision_chat(message: str) -> Dict[str, str]:
+    """Run SimiVision chat and return ``{reply, model}`` (XSS-escaped reply)."""
     try:
-        context = build_chat_context()
-        inv = _maybe_investigation_context(message)
-        if inv:
-            context["investigation"] = inv
-        prompt = build_simivision_prompt(message, context)
-        reply, llm_used = call_llm(prompt, message, context)
-        return {"reply": sanitize_reply(reply), "model": _display_model(llm_used)}
+        return await asyncio.wait_for(
+            asyncio.to_thread(_run_chat_sync, message),
+            timeout=_CHAT_TIMEOUT_SEC,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("SimiVision chat timed out after %.0fs", _CHAT_TIMEOUT_SEC)
+        return {
+            "reply": (
+                "SimiVision is busy right now — the server is catching up on live data. "
+                "Try again in a moment."
+            ),
+            "model": "",
+        }
     except Exception as exc:
         logger.error("SimiVision chat failed: %s", exc, exc_info=True)
         return {

@@ -897,6 +897,10 @@
     };
   }
 
+  function pause(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+
   var SUBNET_FIELDS = 'id,netuid,name,price_change_24h,apy,staking_data,total_stake,stake,emission,source,live,sources';
 
   async function run() {
@@ -955,48 +959,53 @@
         console.warn('[cockpit_hydrate] subnets fetch failed', e);
       }
 
-      var results = await Promise.allSettled([
-        fetchJsonRetry('/api/top-picks', 30000, 1),
-        fetchJsonRetry('/api/mindmap/trail?limit=20', 15000, 1),
-        fetchJsonRetry('/api/signals?refresh=false', 18000, 1),
-        fetchJsonRetry('/api/alerts?refresh_checks=false', 12000, 1).catch(function () { return null; }),
-        fetchJsonRetry('/api/cockpit/sections', 25000, 1),
-        fetchJsonRetry('/api/indicators-convergence', 15000, 1),
-        fetchJsonRetry('/api/signals/summary', 12000, 1).catch(function () { return null; }),
-      ]);
-
       var hourPicks = [];
       var dayPicks = [];
       var trail = [];
 
-      if (results[0].status === 'fulfilled') {
-        var pickPayload = safePayload(results[0].value);
+      try {
+        var pickPayload = safePayload(await fetchJsonRetry('/api/top-picks', 30000, 1));
         hourPicks = pickPayload.hour_picks || [];
         dayPicks = pickPayload.day_picks || [];
-      } else {
+      } catch (e) {
         try {
           var hourRes = await fetchJsonRetry('/api/top-pick/hour', 18000, 1);
           hourPicks = safePayload(hourRes).picks || [];
           var dayRes = await fetchJsonRetry('/api/top-pick/day', 18000, 1);
           dayPicks = safePayload(dayRes).picks || [];
-        } catch (e) {
-          console.warn('[cockpit_hydrate] pick fallback failed', e);
+        } catch (e2) {
+          console.warn('[cockpit_hydrate] pick fallback failed', e2);
           markSectionFailed('section-picks', 'Horizon picks timed out — council scores will load when the API responds.');
         }
       }
       renderHourDayPicks(hourPicks, dayPicks);
 
-      if (results[1].status === 'fulfilled') {
-        trail = safePayload(results[1].value).trail || [];
+      await pause(250);
+      try {
+        var trailPayload = await fetchJsonRetry('/api/mindmap/trail?limit=20', 15000, 1);
+        trail = safePayload(trailPayload).trail || [];
         renderTrail(trail);
+      } catch (e) {
+        console.warn('[cockpit_hydrate] trail fetch failed', e);
       }
-      if (results[5].status === 'fulfilled') {
-        renderIndicators(safePayload(results[5].value).subnets || []);
+
+      await pause(250);
+      try {
+        var indPayload = await fetchJsonRetry('/api/indicators-convergence', 15000, 1);
+        renderIndicators(safePayload(indPayload).subnets || []);
+      } catch (e) {
+        console.warn('[cockpit_hydrate] indicators fetch failed', e);
       }
-      if (results[2].status === 'fulfilled' || results[3].status === 'fulfilled' || results[6].status === 'fulfilled') {
-        var sigPayload = results[2].status === 'fulfilled' ? safePayload(results[2].value) : {};
-        var alertsPayload = results[3].status === 'fulfilled' ? safePayload(results[3].value) : {};
-        var summaryPayload = results[6].status === 'fulfilled' ? results[6].value : null;
+
+      var results = await Promise.allSettled([
+        fetchJsonRetry('/api/signals?refresh=false', 15000, 1),
+        fetchJsonRetry('/api/alerts?refresh_checks=false', 12000, 1).catch(function () { return null; }),
+        fetchJsonRetry('/api/signals/summary', 12000, 1).catch(function () { return null; }),
+      ]);
+      if (results[0].status === 'fulfilled' || results[1].status === 'fulfilled' || results[2].status === 'fulfilled') {
+        var sigPayload = results[0].status === 'fulfilled' ? safePayload(results[0].value) : {};
+        var alertsPayload = results[1].status === 'fulfilled' ? safePayload(results[1].value) : {};
+        var summaryPayload = results[2].status === 'fulfilled' ? results[2].value : null;
         if (summaryPayload && summaryPayload.total_subnets != null && typeof window.__renderSignalSummary === 'function') {
           window.__renderSignalSummary(summaryPayload);
         }
@@ -1006,8 +1015,12 @@
           renderSignals(sigPayload.signals || [], (alertsPayload.alerts) || []);
         }
       }
-      if (results[4].status === 'fulfilled') {
-        renderCockpitSections(safePayload(results[4].value).sections || []);
+
+      try {
+        var sectionsPayload = await fetchJsonRetry('/api/cockpit/sections', 20000, 1);
+        renderCockpitSections(safePayload(sectionsPayload).sections || []);
+      } catch (e) {
+        console.warn('[cockpit_hydrate] cockpit sections fetch failed', e);
       }
 
       updateGroupData(hourPicks, dayPicks, trail, subnets);
