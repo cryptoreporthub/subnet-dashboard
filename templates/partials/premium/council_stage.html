@@ -140,7 +140,7 @@
       .k3-why { font-size: 14px; color: var(--k3-text); margin-top: 12px; max-width: 320px; line-height: 1.4; z-index: 1; }
       .k3-trust { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-muted); margin-top: 8px; z-index: 1; }
       .k3-layer { border-top: 1px solid #1a1d24; margin-top: 0; }
-      .k3-layer-header { width: 100%; min-height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: var(--k3-surface); border: none; color: var(--k3-text); font-size: 16px; font-weight: 600; cursor: pointer; text-align: left; -webkit-tap-highlight-color: transparent; }
+      .k3-layer-header { width: 100%; min-height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: var(--k3-surface); border: none; color: var(--k3-text); font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; -webkit-tap-highlight-color: transparent; letter-spacing: 0.08em; text-transform: uppercase; }
       .k3-layer-header:active { background: #111420; }
       .k3-layer-icon { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--k3-muted); transition: transform 0.2s ease; }
       .k3-layer.open .k3-layer-icon { transform: rotate(90deg); }
@@ -202,14 +202,23 @@
         min-height: 36px; padding: 6px 14px; border-radius: 18px; border: 1px solid #1a1d24;
         background: var(--k3-surface); color: var(--k3-muted); font-family: 'JetBrains Mono', monospace;
         font-size: 11px; font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent;
+        text-transform: uppercase; letter-spacing: 0.06em;
       }
       .k3-horizon-chip--active { color: var(--k3-green); border-color: rgba(57, 255, 20, 0.45); background: rgba(57, 255, 20, 0.08); }
       .k3-horizon-stage { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--k3-blue); margin: 6px 12px 4px; z-index: 1; text-align: center; line-height: 1.45; }
       .k3-horizon-stage[hidden] { display: none; }
       .k3-horizon-note { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-orange); margin: 0 0 8px; z-index: 1; text-align: center; }
       .k3-horizon-note[hidden] { display: none; }
-      {# ---- K3-2: Council considered (deliberation flow) ---- #}
-      .k3-deliberation { margin-top: 16px; }
+      {# ---- K3-2: Weighed against (near-miss rows) ---- #}
+      .k3-deliberation { margin-top: 4px; }
+      .k3-weighed-list { display: flex; flex-direction: column; gap: 0; }
+      .k3-weighed-row { padding: 12px 0; border-bottom: 1px solid #1a1d24; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+      .k3-weighed-row:last-child { border-bottom: none; }
+      .k3-weighed-row:active { opacity: 0.85; }
+      .k3-weighed-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+      .k3-weighed-name { font-size: 15px; font-weight: 600; color: var(--k3-text); }
+      .k3-weighed-pct { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: var(--k3-green); flex-shrink: 0; }
+      .k3-weighed-why { font-size: 13px; line-height: 1.45; color: var(--k3-muted); margin: 0; }
       .k3-considered-list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
       .k3-considered-list::-webkit-scrollbar { display: none; }
       .k3-considered-card { min-width: 120px; background: var(--k3-surface); border-radius: 8px; padding: 10px 12px; flex-shrink: 0; -webkit-tap-highlight-color: transparent; cursor: pointer; transition: background 0.15s; border: 1px solid #1a1d24; }
@@ -239,6 +248,12 @@
       .k3-brief-thesis { font-size: 14px; line-height: 1.5; color: var(--k3-text); margin: 0 0 8px; text-align: center; }
       .k3-brief-vs { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.45; color: var(--k3-muted); margin: 0 0 8px; text-align: center; }
       .k3-brief-trigger { font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.45; color: var(--k3-blue); margin: 0 0 12px; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(0, 212, 255, 0.25); background: rgba(0, 212, 255, 0.06); text-align: left; }
+      .k3-brief-trigger__kicker { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: var(--k3-green); margin-bottom: 4px; }
+      .council-stage__trust-whisper { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-muted); margin: -4px 0 8px; letter-spacing: 0.04em; }
+      .k3-track-footnote { font-size: 12px; line-height: 1.5; color: var(--k3-muted); margin: 12px 0 0; text-align: center; }
+      .k3-track-window { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--k3-surface); border: 1px solid #1a1d24; }
+      .k3-track-window__label { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+      .k3-track-window__value { font-size: 13px; font-weight: 600; color: var(--k3-text); }
       .k3-claim--hold .k3-orb .ring-fill { stroke: var(--k3-blue); }
       .k3-pump-chip { display: inline-block; margin: 4px 0 8px; padding: 4px 10px; border-radius: 12px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; z-index: 1; max-width: 320px; line-height: 1.35; }
       .k3-pump-chip--stirring { color: #ffa500; border: 1px solid rgba(255, 165, 0, 0.35); background: rgba(255, 165, 0, 0.08); }
@@ -248,6 +263,10 @@
       .home-job__signals--demoted .home-band,
       .home-job__signals--demoted .home-enrichment { font-size: 10px; }
       </style>
+
+      {% if tb.ready and cal_n|int > 0 %}
+      <p class="council-stage__trust-whisper" id="council-trust-whisper">{{ cal_n }} graded · {{ cal_acc }}% dir.</p>
+      {% endif %}
 
       {# ---- CLAIM LAYER (inside home-daily-call for live-refresh) ---- #}
       {% if sn %}
@@ -263,7 +282,7 @@
                 {% endif %}
                 {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
                 {% if brief.vs %}<p class="k3-brief-vs k3-also-weighed" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
-                {% if brief.trigger %}<p class="k3-brief-trigger" id="k3-brief-trigger">{{ brief.trigger }}</p>{% endif %}
+                {% if brief.trigger %}<p class="k3-brief-trigger" id="k3-brief-trigger"><span class="k3-brief-trigger__kicker">FLIP</span>{{ brief.trigger|replace('Flip to LONG when ', 'Long when ', 1) }}</p>{% endif %}
               </div>
               <div class="k3-orb-bg"></div>
               <div class="k3-orb-glow"></div>
@@ -420,36 +439,28 @@
             <div class="k3-signal"><span class="k3-signal-name">{{ reason }}</span></div>
             {% endfor %}
           {% else %}
-            <div class="k3-empty"><div class="k3-empty-icon">📡</div><div class="k3-empty-text">Awaiting additional evidence. Signals will surface as council deliberation progresses.</div></div>
+            <div class="k3-empty"><div class="k3-empty-icon">📡</div><div class="k3-empty-text">No signals on this call yet.</div></div>
           {% endif %}
         </div>
       </div>
 
-      {# ---- K3-2: Council considered (deliberation flow) ---- #}
+      {# ---- WEIGHED AGAINST LAYER ---- #}
       <div class="k3-layer" id="k3-layer-deliberation">
         <button class="k3-layer-header" onclick="k3Toggle('k3-layer-deliberation')" aria-expanded="false">
-          <span>Deliberation</span><span class="k3-layer-icon">▸</span>
+          <span>Weighed against</span><span class="k3-layer-icon">▸</span>
         </button>
         <div class="k3-layer-body">
-          <p class="k3-layer-subtitle">Alternatives the council weighed</p>
           {% set alternatives = dpick.shortlist if dpick.shortlist is iterable and dpick.shortlist is not string else [] %}
           {% if alternatives and alternatives|length > 0 %}
           <div class="k3-deliberation">
-            <div class="k3-considered-list">
+            <div class="k3-weighed-list">
               {% for alt in alternatives[:8] %}
-              <div class="k3-considered-card" data-netuid="{{ alt.netuid }}" onclick="switchToSubnet('{{ alt.netuid }}')">
-                <div class="k3-considered-avatar">{{ alt.name|default('SN')|first|upper }}</div>
-                <div class="k3-considered-name">{{ alt.name|default('SN' ~ alt.netuid) }}</div>
-                {% if alt.role %}
-                <div class="k3-considered-role">{{ alt.role }}</div>
-                {% endif %}
-                {% if alt.conviction is defined %}
-                <div class="k3-considered-confidence">{{ '%.0f'|format(alt.conviction|float) }}%</div>
-                {% endif %}
-                {% set stance = alt.stance|default('HOLD')|upper %}
-                <span class="k3-considered-stance k3-considered-stance--{{ stance|lower }}">
-                  {% if stance == 'LONG' %}BUY{% elif stance == 'SHORT' %}SELL{% else %}HOLD{% endif %}
-                </span>
+              <div class="k3-weighed-row" data-netuid="{{ alt.netuid }}" onclick="switchToSubnet('{{ alt.netuid }}')" role="button" tabindex="0">
+                <div class="k3-weighed-top">
+                  <span class="k3-weighed-name">{{ alt.name|default('SN' ~ alt.netuid) }}</span>
+                  {% if alt.conviction is defined %}<span class="k3-weighed-pct">{{ '%.0f'|format(alt.conviction|float) }}%</span>{% endif %}
+                </div>
+                {% if alt.role %}<p class="k3-weighed-why">{{ alt.role }}</p>{% endif %}
               </div>
               {% endfor %}
             </div>
@@ -457,16 +468,16 @@
           {% else %}
           <div class="k3-empty">
             <div class="k3-empty-icon">⚖️</div>
-            <div class="k3-empty-text">Council deliberation data warming up. Alternative subnet shortlist will appear here as the council weighs multiple candidates.</div>
+            <div class="k3-empty-text">No alternatives scored today.</div>
           </div>
           {% endif %}
         </div>
       </div>
 
-      {# ---- COUNCIL LAYER ---- #}
+      {# ---- COUNCIL VOTES LAYER ---- #}
       <div class="k3-layer" id="k3-layer-council">
         <button class="k3-layer-header" onclick="k3Toggle('k3-layer-council')" aria-expanded="false">
-          <span>Council</span><span class="k3-layer-icon">▸</span>
+          <span>Council votes</span><span class="k3-layer-icon">▸</span>
         </button>
         <div class="k3-layer-body">
           <div class="k3-layer-title">Judge weights &amp; deltas</div>
@@ -521,18 +532,31 @@
         </div>
       </div>
 
-      {# ---- LEARNING LAYER ---- #}
+      {# ---- TRACK RECORD LAYER ---- #}
       <div class="k3-layer" id="k3-layer-learning">
         <button class="k3-layer-header" onclick="k3Toggle('k3-layer-learning')" aria-expanded="false">
-          <span>Learning</span><span class="k3-layer-icon">▸</span>
+          <span>Track record</span><span class="k3-layer-icon">▸</span>
         </button>
         <div class="k3-layer-body">
-          <div class="k3-layer-title">System calibration</div>
           <div class="k3-learning-stats">
-            <div class="k3-learning-stat"><div class="k3-learning-value">{{ cal_n }}</div><div class="k3-learning-label">graded picks</div></div>
-            <div class="k3-learning-stat"><div class="k3-learning-value">{{ '%.1f'|format(cal_acc|float) }}%</div><div class="k3-learning-label">accuracy</div></div>
+            <div class="k3-learning-stat"><div class="k3-learning-value">{{ cal_n }}</div><div class="k3-learning-label">graded calls</div></div>
+            <div class="k3-learning-stat"><div class="k3-learning-value">{{ '%.0f'|format(cal_acc|float) }}%</div><div class="k3-learning-label">directional accuracy</div></div>
           </div>
-          <div class="k3-lifecycle" id="k3-lifecycle-learning">
+          {% if outcome_status == 'resolved' or resolves_in %}
+          <div class="k3-track-window">
+            <div class="k3-track-window__label">Last window</div>
+            <div class="k3-track-window__value">
+              {% if outcome_status == 'resolved' %}{{ outcome_note if outcome_note else 'Graded · ' ~ horizon ~ ' movement' }}
+              {% else %}Pending · {{ resolves_in }} left · graded on {{ horizon }} close{% endif %}
+            </div>
+          </div>
+          {% endif %}
+          {% if cal_n|int > 0 %}
+          <p class="k3-track-footnote">We keep score on every call. {{ cal_acc }}% directional accuracy across {{ cal_n }} graded windows — published, not curated.</p>
+          {% else %}
+          <p class="k3-track-footnote">Graded outcomes will appear here as picks resolve. Published, not curated.</p>
+          {% endif %}
+          <div class="k3-lifecycle" id="k3-lifecycle-learning" hidden>
             {% if sp.data_available and lifecycle_steps|length > 4 %}
             {% set learn_step = lifecycle_steps[4] %}
             <div class="k3-lifecycle-step k3-lifecycle-step--{{ learn_step.status|default('pending') }}">

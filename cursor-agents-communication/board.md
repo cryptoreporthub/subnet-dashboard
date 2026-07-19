@@ -1,12 +1,13 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-19T11:15:00Z  
-**main:** `62ed58a` · **K3 + §35 complete** · stale PRs consolidated
+**Last updated:** 2026-07-19T15:15:00Z  
+**main:** `db5d460` · **K3 horizon stage + dossier labels** in flight
 
 ## Next slice queue
 
-1. **Telegram** — H4 session bootstrap + `MESSAGE_INTEL_LISTENER=on` + feed honesty
-2. Phone QA 390px — `/preview/k3-hold`, `/preview/k3-pump-alert`, live home
+1. **K3-9 pump desk** — 9a ledger (`pump_calls.json`) then 9b vertical UI (Grok on pump)
+2. **Telegram** — H4 session bootstrap + `MESSAGE_INTEL_LISTENER=on` + feed honesty
+3. Phone QA 390px — `/preview/k3-hold`, `/preview/k3-pump-alert`, live home
 
 ## Stale PRs (superseded — close on GitHub)
 
@@ -26,7 +27,8 @@
 - **Post-audit P2** (#356): horizon chip sync, mindmap shortlist SSR shape
 - **K3-7 hero copy + IA** (#361): `dpick_copy` brief, hydration safeguard, `/preview/k3-hold`
 - **K3-7b pump chip** (#362): STIRRING/ACCUMULATING lead-gated chip on dossier
-- **K3-8 Pump Alert lane** (#364): PUMPING separate from dossier · `/api/pump-alerts` · `/preview/k3-pump-alert`
+- **K3-8b lead scanner** (#370): predictive pump voice
+- **Horizon stage line** (#372): Now/24h/7d toggles show subnet + stage
 
 ## Shipped on main
 
