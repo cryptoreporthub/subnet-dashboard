@@ -90,7 +90,9 @@ def test_council_stage_hold_candidate_renders_full_hero():
     )
     assert "k3-horizon-chips" in html
     assert "k3-call-headline" in html
-    assert "HOLD ·" in html
+    assert "k3-call-verb" in html
+    assert "k3-call-target-name" in html
+    assert "Low conviction." in html
     assert "FLIP" in html
     assert "Long when" in html
     assert "k3-pump-chip" in html
@@ -125,4 +127,6 @@ def test_home_hold_candidate_via_hero_patch():
 
     assert "k3-horizon-chips" in html
     assert "k3-call-headline" in html
-    assert "HOLD ·" in html
+    assert "k3-call-verb" in html
+    assert "k3-call-target-name" in html
+    assert "Low conviction." in html

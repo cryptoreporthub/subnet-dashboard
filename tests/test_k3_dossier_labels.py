@@ -16,6 +16,8 @@ def test_k3_hold_preview_has_dossier_labels():
     assert "Council votes" in html
     assert "Track record" in html
     assert "k3-weighed-row" in html
+    assert "k3-call-stack" in html
+    assert "Low conviction." in html
     assert "FLIP" in html
     assert "graded calls" in html
     assert "published, not curated" in html.lower()

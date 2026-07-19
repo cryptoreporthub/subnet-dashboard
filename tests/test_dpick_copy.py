@@ -34,8 +34,11 @@ def _hold_candidate_payload() -> dict:
 def test_hold_candidate_trader_voice():
     brief = build_dpick_brief(_hold_candidate_payload())
     assert brief["move"] == "HOLD · SN99"
-    assert "closest long" in brief["thesis"].lower()
-    assert "rich vs peers" in brief["thesis"].lower()
+    assert "closest long on the desk" in brief["thesis"].lower()
+    assert "half a size short" in brief["thesis"].lower()
+    assert brief["verb"] == "HOLD"
+    assert brief["target"] == "SN99"
+    assert brief["conviction_note"] == "Low conviction."
     assert brief["trigger"].startswith("Flip to LONG when conviction ≥ 45%")
     assert "valuation" in brief["trigger"].lower() or "45%" in brief["trigger"]
     assert "Beat SN64" in brief["vs"]
