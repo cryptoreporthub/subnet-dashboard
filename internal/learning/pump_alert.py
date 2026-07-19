@@ -12,6 +12,41 @@ _EMPTY_MESSAGE = (
 )
 _MAX_PUMPING = 5
 _MAX_COOLING = 2
+_BAD_NAME = re.compile(r"^(unknown|deprecated|none|snnone|unnamed)$", re.I)
+
+
+def _resolve_name(
+    ladder_entry: Dict[str, Any],
+    subnet_row: Optional[Dict[str, Any]],
+) -> str:
+    netuid = ladder_entry.get("netuid")
+    try:
+        netuid_int = int(netuid) if netuid is not None else None
+    except (TypeError, ValueError):
+        netuid_int = None
+
+    candidates: List[str] = []
+    for src in (subnet_row, ladder_entry):
+        if not isinstance(src, dict):
+            continue
+        raw = src.get("name") or src.get("subnet_name")
+        if raw and not _BAD_NAME.match(str(raw).strip()):
+            candidates.append(str(raw).strip())
+
+    if candidates:
+        return candidates[0]
+
+    if netuid_int is not None:
+        try:
+            from internal.subnet_names import resolve_subnet_name
+
+            resolved = resolve_subnet_name(netuid_int, tmc_name=ladder_entry.get("name"))
+            if resolved and not _BAD_NAME.match(resolved):
+                return resolved
+        except Exception:
+            pass
+        return f"SN{netuid_int}"
+    return "subnet"
 
 
 def _subnet_row(netuid: int, subnets: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -56,23 +91,44 @@ def _move_line(name: str, netuid: Any, phase: str) -> str:
 
 def _row_copy(
     phase: str,
+    name: str,
     buy_ratio: Optional[float],
     volume_intensity: Optional[float],
+    score: Optional[float],
+    netuid_int: Optional[int],
 ) -> Dict[str, str]:
-    lead = ""
-    if buy_ratio is not None and volume_intensity is not None:
-        lead = f" Flow {buy_ratio:.0%} buy · vol {volume_intensity:.0%}."
+    seed = (netuid_int or 0) % 3
     if phase == "PUMPING":
-        return {
-            "thesis": (
-                "Ladder says PUMPING — buy flow and volume already aligned. "
-                "This is motion, not the early heat chip." + lead
-            ),
-            "trigger": "Late if you chase; watch for COOLING before adding.",
-            "badge": "PUMPING",
-        }
+        if buy_ratio is not None and volume_intensity is not None:
+            variants = [
+                (
+                    f"{name} is already moving — {buy_ratio:.0%} buy flow, "
+                    f"volume at {volume_intensity:.0%} of recent pace."
+                ),
+                (
+                    f"Full PUMPING on {name}: participation heavy "
+                    f"({buy_ratio:.0%} buys, vol {volume_intensity:.0%})."
+                ),
+                (
+                    f"{name} cleared the ladder — flow and volume aligned "
+                    f"({buy_ratio:.0%} / {volume_intensity:.0%}), not early heat."
+                ),
+            ]
+            thesis = variants[seed]
+        else:
+            thesis = f"{name} is in PUMPING — motion confirmed on the ladder, not the dossier warm-up chip."
+        if score is not None and score >= 0.75:
+            trigger = "Strong score — still late if you chase; wait for COOLING before sizing up."
+        else:
+            trigger = "Late if you chase; watch for COOLING before adding."
+        return {"thesis": thesis, "trigger": trigger, "badge": "PUMPING"}
+
+    if buy_ratio is not None:
+        thesis = f"Heat rolling off {name} — ladder COOLING with {buy_ratio:.0%} buy flow left."
+    else:
+        thesis = f"Heat rolling off {name} — ladder in COOLING."
     return {
-        "thesis": "Heat rolling off — ladder in COOLING." + lead,
+        "thesis": thesis,
         "trigger": "Don't treat as a fresh pump entry.",
         "badge": "FADING",
     }
@@ -88,13 +144,20 @@ def build_alert_row(
         netuid_int = int(netuid) if netuid is not None else None
     except (TypeError, ValueError):
         netuid_int = None
-    name = str(ladder_entry.get("name") or (f"SN{netuid_int}" if netuid_int is not None else "subnet"))
+    name = _resolve_name(ladder_entry, subnet_row)
     leads = _lead_signals(subnet_row, ladder_entry)
-    copy = _row_copy(phase, leads["buy_ratio"], leads["volume_intensity"])
     try:
         score = float(ladder_entry.get("composite_score") or 0.0)
     except (TypeError, ValueError):
         score = None
+    copy = _row_copy(
+        phase,
+        name,
+        leads["buy_ratio"],
+        leads["volume_intensity"],
+        score,
+        netuid_int,
+    )
     row = {
         "netuid": netuid_int,
         "name": name,

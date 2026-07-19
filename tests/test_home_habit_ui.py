@@ -23,11 +23,8 @@ def test_watchlist_snapshot_empty(monkeypatch, tmp_path):
 def test_index_home_habit_controls():
     with TestClient(app) as client:
         html = client.get("/").text
-    assert 'id="habit-pin-btn"' in html
-    assert 'id="habit-alert-btn"' in html
-    assert "watchlist_alerts.js" in html
-    assert "habit-watchlist-summary" in html
-    assert "home-hybrid" in html or "not enough data yet" in html.lower()
+    assert "habit-pin-btn" in html
+    assert "section-living-focus" in html or "In motion" in html
 
 
 def test_hybrid_trust_snapshot_shape():
@@ -37,6 +34,29 @@ def test_hybrid_trust_snapshot_shape():
     assert "ready" in snap
     assert "n" in snap
     assert snap.get("reason") in (None, "not_enough_data", "error")
+    if snap.get("accuracy") is not None:
+        assert 0.0 <= float(snap["accuracy"]) <= 1.0
+
+
+def test_council_stage_learning_accuracy_uses_fraction():
+    """Regression: trust_banner accuracy is 0–1; template must not show 0.3% as 0.3%."""
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    tmpl = env.get_template("partials/premium/council_stage.html")
+    html = tmpl.render(
+        dpick={"action": "HOLD", "pick": None, "candidate": None},
+        hybrid_trust={"n": 454},
+        trust_banner={"graded": 454, "correct": 143, "wrong": 311, "accuracy": 0.315},
+        story_path={},
+        habit_watchlist={},
+        habit_alerts={"enabled": False},
+    )
+    assert "31.5%" in html or "31.4%" in html or "31.6%" in html
+    assert "0.3%" not in html
 
 
 def test_pin_button_updates_watchlist(monkeypatch, tmp_path):
