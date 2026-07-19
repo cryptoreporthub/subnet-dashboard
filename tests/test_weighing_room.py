@@ -1,10 +1,19 @@
 """Weighing Room shaping — Conviction Board LOCK self-check."""
 
 from internal.simivision.weighing_room import (
+    _near_call_strip,
     deliberation_state,
     proximity_to_call,
     shape_weighing_board,
 )
+
+
+def test_near_call_strip_uses_lock_clock_not_speculation():
+    assert "tonight" not in _near_call_strip("momentum holds").lower()
+    with_clock = _near_call_strip("split judges align", resolves_in="10h 42m")
+    assert "10h 42m" in with_clock
+    assert "Near the call bar" in with_clock
+    assert "tonight" not in with_clock.lower()
 
 
 def test_proximity_and_states():

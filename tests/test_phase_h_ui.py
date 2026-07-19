@@ -102,8 +102,10 @@ def test_index_council_first_shell():
     # Brand is hero-level in the stage
     assert "council-stage__brand" in html
     pos_stage = html.index("council-stage")
+    pos_weighing = html.index('id="section-simivision-picks"')
     pos_drawer = html.index('id="market-drawer"')
-    assert pos_stage < pos_drawer
+    assert pos_stage < pos_weighing < pos_drawer
+    assert 'href="#section-simivision-picks">Weighing</a>' in html
     assert 'class="top-nav"' in html
     assert "/static/js/onboarding_tour.js" in html
 
@@ -312,6 +314,7 @@ def test_h_full_simivision_picks_or_honest_empty():
     html = client.get("/").text
     assert 'id="section-simivision-picks"' in html
     assert "Council is weighing" in html
+    assert "not today" in html.lower()
     assert "Conviction board" not in html or "Council is weighing" in html
     # SSR shell may be empty; hydrate fills — require honest empty or weighing rows
     assert "wr-row" in html or "warming up" in html or "on the table" in html
