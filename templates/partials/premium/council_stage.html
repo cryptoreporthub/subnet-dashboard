@@ -204,6 +204,8 @@
         font-size: 11px; font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent;
       }
       .k3-horizon-chip--active { color: var(--k3-green); border-color: rgba(57, 255, 20, 0.45); background: rgba(57, 255, 20, 0.08); }
+      .k3-horizon-stage { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--k3-blue); margin: 6px 12px 4px; z-index: 1; text-align: center; line-height: 1.45; }
+      .k3-horizon-stage[hidden] { display: none; }
       .k3-horizon-note { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-orange); margin: 0 0 8px; z-index: 1; text-align: center; }
       .k3-horizon-note[hidden] { display: none; }
       {# ---- K3-2: Council considered (deliberation flow) ---- #}
@@ -300,13 +302,18 @@
               {% endif %}
               {% set hv = dpick.horizon_views if dpick.horizon_views is mapping else {} %}
               {% set hv_chips = hv.chips if hv.chips is iterable and hv.chips is not string else [] %}
+              {% set hv_default = hv.default|default('24h') %}
+              {% set hv_active = hv.views[hv_default] if hv.views is mapping and hv.views[hv_default] is mapping else {} %}
               {% if hv_chips|length >= 2 %}
               <div class="k3-horizon-chips" id="k3-horizon-chips" role="tablist" aria-label="Time horizon">
                 {% for chip in hv_chips %}
                 {% set chip_view = hv.views[chip] if hv.views is mapping and hv.views[chip] is mapping else {} %}
-                <button type="button" class="k3-horizon-chip{% if chip == hv.default|default('24h') %} k3-horizon-chip--active{% endif %}" role="tab" data-horizon="{{ chip }}" aria-selected="{{ 'true' if chip == hv.default|default('24h') else 'false' }}">{{ chip_view.label|default(chip) }}</button>
+                {% set chip_sn = chip_view.subnet if chip_view.subnet is mapping else {} %}
+                {% set chip_name = chip_sn.name|default('SN' ~ chip_sn.netuid) if chip_sn.netuid is not none else '—' %}
+                <button type="button" class="k3-horizon-chip{% if chip == hv_default %} k3-horizon-chip--active{% endif %}" role="tab" data-horizon="{{ chip }}" aria-selected="{{ 'true' if chip == hv_default else 'false' }}" aria-label="{{ chip_view.label|default(chip) }} — {{ chip_name }}">{{ chip_view.label|default(chip) }}</button>
                 {% endfor %}
               </div>
+              <p id="k3-horizon-stage" class="k3-horizon-stage" aria-live="polite">{{ hv_active.stage_line|default('') }}</p>
               <script type="application/json" id="k3-horizon-views-data">{{ hv | tojson }}</script>
               <script type="application/json" id="k3-watchlist-pins">{{ pins | tojson }}</script>
               <p id="k3-horizon-note" class="k3-horizon-note" hidden></p>
@@ -704,6 +711,22 @@ function k3SyncFocusNetuid(netuid, subnetName) {
   }
 }
 
+function k3HeadlineForView(view) {
+  var sn = (view && view.subnet) || {};
+  var name = sn.name || (sn.netuid != null ? 'SN' + sn.netuid : '—');
+  var act = String((view && view.action) || 'HOLD').toUpperCase();
+  if (act === 'LONG' || act === 'BUY') return 'LONG · ' + name;
+  if (act === 'SHORT' || act === 'SELL') return 'REDUCE · ' + name;
+  return 'HOLD · ' + name;
+}
+
+function k3HeadlineTone(action) {
+  var act = String(action || 'HOLD').toUpperCase();
+  if (act === 'LONG' || act === 'BUY') return 'go';
+  if (act === 'SHORT' || act === 'SELL') return 'caution';
+  return 'hold';
+}
+
 function k3SwitchHorizon(chipId) {
   var raw = document.getElementById('k3-horizon-views-data');
   if (!raw) return;
@@ -718,9 +741,12 @@ function k3SwitchHorizon(chipId) {
     btn.setAttribute('aria-selected', on ? 'true' : 'false');
   });
   var sn = view.subnet || {};
-  var nameEl = document.getElementById('k3-claim-name');
+  var headline = document.getElementById('k3-call-headline');
+  if (headline) {
+    headline.textContent = k3HeadlineForView(view);
+    headline.className = 'k3-call-headline k3-call-headline--' + k3HeadlineTone(view.action);
+  }
   var metaEl = document.getElementById('k3-claim-meta');
-  if (nameEl) nameEl.textContent = sn.name || ('SN' + sn.netuid);
   if (metaEl) {
     metaEl.textContent = 'SN' + sn.netuid + (sn.symbol ? ' · ' + sn.symbol : '');
   }
@@ -729,6 +755,16 @@ function k3SwitchHorizon(chipId) {
   k3SetActionBadge(view.action);
   var orbLabel = document.getElementById('k3-orb-label');
   if (orbLabel) orbLabel.textContent = view.lens === 'trend' ? 'trend lens' : 'conviction';
+  var stage = document.getElementById('k3-horizon-stage');
+  if (stage) {
+    if (view.stage_line) {
+      stage.textContent = view.stage_line;
+      stage.hidden = false;
+    } else {
+      stage.textContent = '';
+      stage.hidden = true;
+    }
+  }
   var note = document.getElementById('k3-horizon-note');
   if (note) {
     if (view.lens === 'trend' && view.note) {
