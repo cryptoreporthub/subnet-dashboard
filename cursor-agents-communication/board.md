@@ -1,12 +1,21 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-19T10:35:00Z  
-**main:** `d272267` · **K3-8 MERGED** (#364)
+**Last updated:** 2026-07-19T11:15:00Z  
+**main:** `62ed58a` · **K3 + §35 complete** · stale PRs consolidated
 
 ## Next slice queue
 
 1. **Telegram** — H4 session bootstrap + `MESSAGE_INTEL_LISTENER=on` + feed honesty
 2. Phone QA 390px — `/preview/k3-hold`, `/preview/k3-pump-alert`, live home
+
+## Stale PRs (superseded — close on GitHub)
+
+| PR | Reason |
+|----|--------|
+| #359, #360 | K3-7 shipped (#361); lock docs archived in repo |
+| #331 | Above-fold + apiFetchJson already on main |
+| #340 | Dark horse repair in `weights.py`; test added in cleanup PR |
+| #313, #309 | §27–§30 docs already on main |
 
 ## Done (K3 sprint)
 
