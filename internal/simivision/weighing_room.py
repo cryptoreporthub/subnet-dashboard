@@ -58,12 +58,14 @@ def _human_updated_ago(updated_at: Optional[str]) -> str:
     return f"updated {age // 86400}d ago"
 
 
-def _near_call_strip(reason: str) -> str:
-    base = (reason or "momentum holds into close").strip()
+def _near_call_strip(reason: str, *, resolves_in: Optional[str] = None) -> str:
+    base = (reason or "conviction holds near the bar").strip()
     if len(base) > 70:
         base = base[:67].rstrip() + "…"
-    lead = base[:1].lower() + base[1:] if base else "momentum holds into close"
-    return f"Call likely tonight if {lead}"
+    lead = base[:1].lower() + base[1:] if base else "conviction holds near the bar"
+    if resolves_in:
+        return f"Near the call bar while {lead} · {resolves_in} to lock"
+    return f"Near the call bar while {lead}"
 
 
 def _delta_for(netuid: Any, conviction: int, last: Dict[str, Any]) -> int:
@@ -174,7 +176,11 @@ def shape_weighing_board(
                 "reason": reason,
                 "why_not": why_not,
                 "trigger": trigger,
-                "near_call_strip": _near_call_strip(str(reason)) if state == "NEAR-CALL" else None,
+                "near_call_strip": (
+                    _near_call_strip(str(reason), resolves_in=resolves_in)
+                    if state == "NEAR-CALL"
+                    else None
+                ),
                 "closest_to_call": False,
                 "band": "near" if state == "NEAR-CALL" else "watching",
             }
