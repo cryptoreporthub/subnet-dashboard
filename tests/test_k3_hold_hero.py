@@ -91,7 +91,8 @@ def test_council_stage_hold_candidate_renders_full_hero():
     assert "k3-horizon-chips" in html
     assert "k3-call-headline" in html
     assert "HOLD ·" in html
-    assert "Flip to LONG" in html
+    assert "FLIP" in html
+    assert "Long when" in html
     assert "k3-pump-chip" in html
     assert "council scan" not in html.lower()
     orb_html = html.split('id="k3-orb-score"')[1].split("</div>")[0]
