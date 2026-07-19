@@ -7,10 +7,22 @@ App: `subnet-dashboard` · region: `sjc` (data_volume lives here) · machine: `s
 ### Deploy
 
 ```bash
-flyctl deploy --app subnet-dashboard --remote-only
+flyctl deploy --app subnet-dashboard --remote-only --region sjc
 ```
 
-CI (`main` push) runs Deploy Guard (contract tests + static checks) then deploys automatically when green.
+If CI fails with `insufficient resources to create new machine with existing volume`, prod has **zero machines** (TLS error in browser). Recovery:
+
+```bash
+flyctl machines list -a subnet-dashboard          # expect none
+flyctl volumes list -a subnet-dashboard           # data_volume in sjc, unattached
+./scripts/fly_volume_recover.sh                     # or re-run Fly Deploy workflow
+flyctl deploy --app subnet-dashboard --region sjc --remote-only --ha=false
+curl -fsS https://subnet-dashboard.fly.dev/health  # OK
+```
+
+Or: [Actions → Fly Deploy → Run workflow](https://github.com/cryptoreporthub/subnet-dashboard/actions/workflows/fly.yml) (after merging deploy-fix PR).
+
+CI (`main` push) runs Deploy Guard then deploys automatically when green.
 
 ### Post-deploy verification
 
