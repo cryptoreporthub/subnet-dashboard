@@ -695,7 +695,13 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
         logger.warning("Cockpit sections unavailable: %s", exc)
 
     try:
-        context["simivision"] = _safe_simivision_payload(subnets=subnets, source=source).get("data", {})
+        context["simivision"] = _safe_simivision_payload(
+            subnets=subnets,
+            source=source,
+            daily_pick=context.get("daily_pick_stage")
+            if isinstance(context.get("daily_pick_stage"), dict)
+            else None,
+        ).get("data", {})
     except Exception as exc:
         logger.warning("SimiVision context unavailable: %s", exc)
         context["simivision"] = {"top": [], "meta": {"count": 0}}
@@ -1354,9 +1360,11 @@ def _highest_emission_pick(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
 def _safe_simivision_payload(
     subnets: Optional[List[Dict[str, Any]]] = None,
     source: Optional[str] = None,
+    daily_pick: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """SimiVision panel: top-3 subnets by emission / APY / volume (distinct subnets)."""
+    """SimiVision Weighing Room: pool by liquidity, shape as deliberation board."""
     from internal.council.state_vector import pick_reasons
+    from internal.simivision.weighing_room import CANDIDATE_POOL, shape_weighing_board
     from internal.subnets.apy import subnet_apy_percent
     from internal.subnets.tradable import subnet_volume
 
@@ -1383,14 +1391,15 @@ def _safe_simivision_payload(
         ),
         reverse=True,
     )
-    top = []
-    for idx, sn in enumerate(ranked[:3], start=1):
+    pool = ranked[:CANDIDATE_POOL]
+    raw_top = []
+    for idx, sn in enumerate(pool, start=1):
         apy_val = subnet_apy_percent(sn)
         if apy_val is None:
             apy_val = float(sn.get("apy", 0) or 0)
         chg = float(sn.get("price_change_24h", 0) or 0)
         reasons = pick_reasons(sn)
-        top.append({
+        raw_top.append({
             "rank": idx,
             "netuid": sn.get("netuid"),
             "name": sn.get("name"),
@@ -1399,22 +1408,25 @@ def _safe_simivision_payload(
             "price_change_24h": chg,
             "volume": subnet_volume(sn),
             "conviction": min(95, 72 + int(abs(chg)) + int(float(apy_val or 0) / 4)),
+            # Kept for API contract; UI uses deliberation_state instead.
             "recommendation": "BUY" if idx == 1 else ("HOLD" if idx == 2 else "WATCH"),
             "reasons": reasons,
-            # Call-quality line for UI (not a raw 24h scoreboard invent).
             "call_line": (reasons[0] if reasons else None),
         })
-    return {
-        "status": "success",
-        "data": {
-            "top": top,
-            "meta": {
-                "count": len(subnets),
-                "source": source,
-                "updated_at": datetime.utcnow().isoformat() + "Z",
-            },
-        },
+    updated_at = datetime.utcnow().isoformat() + "Z"
+    top, weigh_meta = shape_weighing_board(
+        raw_top,
+        pool_count=len(subnets),
+        daily_pick=daily_pick,
+        updated_at=updated_at,
+    )
+    meta = {
+        "count": len(subnets),
+        "source": source,
+        "updated_at": updated_at,
+        **weigh_meta,
     }
+    return {"status": "success", "data": {"top": top, "meta": meta}}
 
 
 def _build_hour_pick_payload(sn: Dict[str, Any], score: Dict[str, Any]) -> Dict[str, Any]:
@@ -1532,8 +1544,17 @@ def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[st
 
 @app.get("/api/simivision")
 def api_simivision():
-    """SimiVision intelligence panel — top ranked subnets (distinct)."""
-    return _safe_simivision_payload()
+    """SimiVision Weighing Room — deliberation board (Daily Call excluded)."""
+    daily_pick: Optional[Dict[str, Any]] = None
+    try:
+        subnets, _ = _get_subnets_with_source()
+        if _PICKS_ENGINE:
+            market_context = _market_context_with_weights(subnets)
+            daily_pick = get_or_create_today_pick(subnets, market_context)
+    except Exception as exc:
+        logger.warning("simivision daily-pick context skipped: %s", exc)
+        daily_pick = None
+    return _safe_simivision_payload(daily_pick=daily_pick)
 
 
 @app.get("/api/top-picks")

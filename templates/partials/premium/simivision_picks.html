@@ -1,40 +1,50 @@
-<!-- SimiVision spotlight picks -->
-<section class="row" id="section-simivision-picks" aria-labelledby="simivision-picks-title">
-  <div class="section-label">Council ranking</div>
-  <h2 class="section-title" id="simivision-picks-title">Conviction board</h2>
-  <p class="section-sub">Next names the council is weighing — predicted stance, not a 24h scoreboard.</p>
+<!-- Council is weighing — Conviction Board (Weighing Room) -->
+{% set wr_meta = simivision.meta if simivision is mapping and simivision.meta is mapping else {} %}
+{% set gap_tick = wr_meta.gap_tick_pct if wr_meta.gap_tick_pct is not none else none %}
+<section class="row weighing-room" id="section-simivision-picks" aria-labelledby="simivision-picks-title"
+  data-gap-tick="{{ gap_tick if gap_tick is not none else '' }}">
+  <div class="section-label">
+    Council is weighing
+    <span class="wr-updated" id="wr-updated">· {{ wr_meta.updated_ago|default('updated recently') }}</span>
+  </div>
+  <h2 class="section-title" id="simivision-picks-title">Council is weighing</h2>
+  <p class="section-sub">Names still on the table — sorted by proximity to a call, not a scoreboard.</p>
+  {% if wr_meta.quiet_label %}
+  <p class="wr-quiet" id="wr-quiet">{{ wr_meta.quiet_label }}</p>
+  {% else %}
+  <p class="wr-quiet" id="wr-quiet" hidden></p>
+  {% endif %}
+  {% if wr_meta.handoff %}
+  <p class="wr-handoff" id="wr-handoff">{{ wr_meta.handoff }}</p>
+  {% else %}
+  <p class="wr-handoff" id="wr-handoff" hidden></p>
+  {% endif %}
+
   {% if sv_picks %}
-  <div class="picks">
-    {% for pick in sv_picks %}
-    {% set conv = (pick.conviction|default(0))|int %}
-    {# conviction tiers: canonical cutoffs 75 / 55 / 35 (see static/js/conviction_tiers.js) #}
-    {% set tier = 'tier-cyan' if conv > 75 else ('tier-lime' if conv > 55 else ('tier-gold' if conv > 35 else 'tier-red')) %}
-    {% set rec = (pick.recommendation|default('WATCH'))|string|upper %}
-    <div class="pick-card">
-      <div class="pick-rank">#{{ pick.rank|default(loop.index) }}</div>
-      <div class="pick-name pick-name-lg">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
-      <div class="pick-meta">SN{{ pick.netuid }} · {{ "%.2f"|format((pick.emission|default(0))|float) }} TAO/day · {{ "%.1f"|format((pick.apy|default(0))|float) }}% APY</div>
-      <div class="pick-row">
-        <div class="conviction-wrap">
-          <div class="conviction-lbl">Conviction</div>
-          <div class="conviction-bar"><div class="conviction-fill {{ tier }}" style="width: {{ conv }}%;"></div></div>
-          <div class="pred-line">{% if pick.call_line %}{{ pick.call_line }}{% elif pick.reasons and pick.reasons[0] %}{{ pick.reasons[0] }}{% else %}{{ "%+.2f"|format((pick.price_change_24h|default(0))|float) }}% 24h{% endif %}</div>
-        </div>
-        <div class="conv-ring {{ tier }}" style="--ring-pct: {{ conv }};">
-          <svg viewBox="0 0 46 46" aria-hidden="true">
-            <circle class="conv-ring-bg" cx="23" cy="23" r="20"></circle>
-            <circle class="conv-ring-fg" cx="23" cy="23" r="20"></circle>
-          </svg>
-          <div class="conv-ring-val">{{ conv }}</div>
-        </div>
-      </div>
-      <div class="tags">
-        <span class="badge {% if rec == 'BUY' %}badge-buy{% elif rec == 'SELL' %}badge-sell{% elif rec == 'HOLD' %}badge-hold{% else %}badge-watch{% endif %}">{{ rec }}</span>
-      </div>
+  <div class="wr-body" id="weighing-room-body">
+    {% set near_count = sv_picks|selectattr('deliberation_state', 'equalto', 'NEAR-CALL')|list|length %}
+    {% if near_count %}
+    <div class="wr-band" data-band="near">
+      <div class="wr-band__label">Near a call</div>
+      {% for pick in sv_picks if pick.deliberation_state == 'NEAR-CALL' %}
+      {% include "partials/premium/weighing_row.html" %}
+      {% endfor %}
     </div>
-    {% endfor %}
+    {% endif %}
+    {% set watch_count = sv_picks|rejectattr('deliberation_state', 'equalto', 'NEAR-CALL')|list|length %}
+    {% if watch_count %}
+    <div class="wr-band" data-band="watching">
+      <div class="wr-band__label">Watching</div>
+      {% for pick in sv_picks if pick.deliberation_state != 'NEAR-CALL' %}
+      {% include "partials/premium/weighing_row.html" %}
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
   {% else %}
-  <div class="card card-muted"><p class="empty">SimiVision picks warming up — conviction cards appear once subnet registry economics load.</p></div>
+  <div class="card card-muted wr-empty" id="weighing-room-body">
+    <p class="empty">No other names on the table right now — council is quiet beyond today's call.</p>
+  </div>
   {% endif %}
+  <p class="wr-footer">These may become tomorrow&apos;s call. Or fade.</p>
 </section>

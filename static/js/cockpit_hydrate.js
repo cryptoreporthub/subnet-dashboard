@@ -6,6 +6,7 @@
   var registryByNetuid = {};
   var lastDailyPickPayload = null;
   var lastSimivisionTop = null;
+  var lastSimivisionMeta = null;
   var lastHourPicks = [];
   var lastDayPicks = [];
 
@@ -61,7 +62,7 @@
 
   function refreshRegistryDependentPanels() {
     if (lastDailyPickPayload) renderDailyPick(lastDailyPickPayload);
-    if (lastSimivisionTop) renderSimivision(lastSimivisionTop);
+    if (lastSimivisionTop) renderSimivision(lastSimivisionTop, lastSimivisionMeta || {});
     if (lastHourPicks.length || lastDayPicks.length) {
       renderHourDayPicks(lastHourPicks, lastDayPicks);
     }
@@ -292,32 +293,171 @@
     return pick.netuid != null ? pick.netuid : sn.netuid;
   }
 
-  function renderSimivision(top) {
+  function renderWeighingRow(pick, gapTick) {
+    var t = confTier(pick.conviction || 0);
+    var state = String(pick.deliberation_state || 'WEIGHING').toUpperCase();
+    var stateSlug = state.toLowerCase().replace(/_/g, '-');
+    var delta = parseInt(pick.conviction_delta, 10) || 0;
+    var reason = pick.reason || pick.call_line || 'Council still weighing this name.';
+    var name = pickName(pick);
+    var nu = pickNetuid(pick);
+    var deltaHtml =
+      delta > 0
+        ? '<p class="wr-delta wr-delta--up">▲ +' + delta + '</p>'
+        : delta < 0
+          ? '<p class="wr-delta wr-delta--down">▼ ' + delta + '</p>'
+          : '<p class="wr-delta wr-delta--flat">· steady</p>';
+    var stitch = pick.closest_to_call
+      ? '<p class="wr-stitch">≈ today&apos;s call</p>'
+      : '';
+    var strip = pick.near_call_strip
+      ? '<div class="wr-near-strip">' + esc(pick.near_call_strip) + '</div>'
+      : '';
+    var gapStyle =
+      gapTick != null && gapTick !== ''
+        ? ' --gap-tick:' + Number(gapTick) + ';'
+        : '';
+    var gapEl =
+      gapTick != null && gapTick !== ''
+        ? '<span class="conv-ring-gap-tick" style="--gap-tick:' +
+          Number(gapTick) +
+          ';" aria-hidden="true"></span>'
+        : '';
+    return (
+      '<article class="wr-row wr-row--' +
+      esc(stateSlug) +
+      (pick.closest_to_call ? ' wr-row--stitch' : '') +
+      '" data-netuid="' +
+      esc(nu) +
+      '" data-state="' +
+      esc(state) +
+      '">' +
+      '<button type="button" class="wr-row__face" aria-expanded="false" aria-controls="wr-peel-' +
+      esc(nu) +
+      '">' +
+      '<span class="wr-chip wr-chip--' +
+      esc(stateSlug) +
+      '">' +
+      esc(state) +
+      '</span>' +
+      '<div class="wr-row__main"><div class="wr-name">' +
+      esc(name) +
+      ' <span class="wr-netuid">SN' +
+      esc(nu) +
+      '</span></div>' +
+      stitch +
+      '<p class="wr-reason">' +
+      esc(reason) +
+      '</p>' +
+      deltaHtml +
+      '</div>' +
+      '<div class="conv-ring ' +
+      t.tier +
+      '" style="--ring-pct:' +
+      t.conf +
+      ';' +
+      gapStyle +
+      '">' +
+      '<svg viewBox="0 0 46 46" aria-hidden="true">' +
+      '<circle class="conv-ring-bg" cx="23" cy="23" r="20"></circle>' +
+      '<circle class="conv-ring-fg" cx="23" cy="23" r="20"></circle></svg>' +
+      gapEl +
+      '<div class="conv-ring-val">' +
+      t.conf +
+      '</div></div>' +
+      '<span class="wr-chevron" aria-hidden="true">›</span></button>' +
+      strip +
+      '<div class="wr-peel" id="wr-peel-' +
+      esc(nu) +
+      '" hidden>' +
+      '<div class="wr-peel__block"><div class="wr-peel__label">Why not the call</div><p>' +
+      esc(pick.why_not || "Has not crossed today's call threshold.") +
+      '</p></div>' +
+      '<div class="wr-peel__block"><div class="wr-peel__label">What would make it the call</div><p>' +
+      esc(pick.trigger || 'Council alignment above the Daily Call bar.') +
+      '</p></div>' +
+      '<div class="wr-peel__grid">' +
+      '<div><div class="wr-peel__label">Proximity</div><div class="wr-peel__val">' +
+      esc(pick.proximity != null ? pick.proximity : 0) +
+      '</div></div>' +
+      '<div><div class="wr-peel__label">Conviction</div><div class="wr-peel__val">' +
+      t.conf +
+      '%</div></div>' +
+      '<div><div class="wr-peel__label">TAO/day</div><div class="wr-peel__val">' +
+      fmt(pick.emission, 2) +
+      '</div></div>' +
+      '<div><div class="wr-peel__label">APY</div><div class="wr-peel__val">' +
+      (apyPercent(pick) != null ? fmt(apyPercent(pick), 1) : '—') +
+      '%</div></div></div>' +
+      '<p class="wr-peel__note">Judge split &amp; track record live with council grading on this name.</p>' +
+      '</div></article>'
+    );
+  }
+
+  function renderSimivision(top, meta) {
+    meta = meta || {};
     if (!top || !top.length) return;
     lastSimivisionTop = top;
-    var cards = top.map(function (pick, idx) {
-      var t = confTier(pick.conviction || 0);
-      var rec = String(pick.recommendation || 'WATCH').toUpperCase();
-      var apyVal = apyPercent(pick);
-      var apy = apyVal != null ? fmt(apyVal, 1) : '—';
-      var callLine =
-        pick.call_line ||
-        (pick.reasons && pick.reasons[0]) ||
-        (fmtSigned(pick.price_change_24h) + ' 24h');
-      return (
-        '<div class="pick-card">' +
-        '<div class="pick-rank">#' + esc(pick.rank || idx + 1) + '</div>' +
-        '<div class="pick-name pick-name-lg">' + esc(pickName(pick)) + '</div>' +
-        '<div class="pick-meta">SN' + esc(pick.netuid) + ' · ' + fmt(pick.emission, 2) + ' TAO/day · ' + apy + '% APY</div>' +
-        '<div class="pick-row"><div class="conviction-wrap">' +
-        '<div class="conviction-lbl">Conviction</div>' +
-        '<div class="conviction-bar"><div class="conviction-fill ' + t.tier + '" style="width:' + t.conf + '%;"></div></div>' +
-        '<div class="pred-line">' + esc(callLine) + '</div></div>' +
-        '<div class="conv-ring ' + t.tier + '" style="--ring-pct:' + t.conf + ';"><div class="conv-ring-val">' + t.conf + '</div></div></div>' +
-        '<div class="tags" style="margin-top:12px;"><span class="badge ' + recBadge(rec) + '">' + esc(rec) + '</span></div></div>'
-      );
-    }).join('');
-    replaceEmptyIn('section-simivision-picks', '<div class="picks">' + cards + '</div>');
+    lastSimivisionMeta = meta;
+    var section = document.getElementById('section-simivision-picks');
+    if (!section) return;
+    section.classList.add('weighing-room');
+
+    var updated = document.getElementById('wr-updated');
+    if (updated && meta.updated_ago) {
+      updated.textContent = '· ' + meta.updated_ago;
+    }
+    var quiet = document.getElementById('wr-quiet');
+    if (quiet) {
+      if (meta.quiet_label) {
+        quiet.hidden = false;
+        quiet.textContent = meta.quiet_label;
+      } else {
+        quiet.hidden = true;
+      }
+    }
+    var handoff = document.getElementById('wr-handoff');
+    if (handoff) {
+      if (meta.handoff) {
+        handoff.hidden = false;
+        handoff.textContent = meta.handoff;
+      } else {
+        handoff.hidden = true;
+      }
+    }
+
+    var gapTick = meta.gap_tick_pct != null ? meta.gap_tick_pct : meta.call_conviction;
+    if (gapTick != null) section.setAttribute('data-gap-tick', String(gapTick));
+
+    var near = [];
+    var watch = [];
+    top.forEach(function (pick) {
+      if (String(pick.deliberation_state || '').toUpperCase() === 'NEAR-CALL') near.push(pick);
+      else watch.push(pick);
+    });
+    var html = '';
+    if (near.length) {
+      html +=
+        '<div class="wr-band" data-band="near"><div class="wr-band__label">Near a call</div>' +
+        near.map(function (p) { return renderWeighingRow(p, gapTick); }).join('') +
+        '</div>';
+    }
+    if (watch.length) {
+      html +=
+        '<div class="wr-band" data-band="watching"><div class="wr-band__label">Watching</div>' +
+        watch.map(function (p) { return renderWeighingRow(p, gapTick); }).join('') +
+        '</div>';
+    }
+    var body = document.getElementById('weighing-room-body');
+    if (body) {
+      body.className = 'wr-body';
+      body.id = 'weighing-room-body';
+      body.innerHTML = html;
+    } else {
+      replaceEmptyIn('section-simivision-picks', '<div class="wr-body" id="weighing-room-body">' + html + '</div>');
+    }
+    if (section.dataset) section.dataset.wrBound = '';
+    document.dispatchEvent(new CustomEvent('weighing-room-updated'));
   }
 
   function setText(id, value) {
@@ -1389,8 +1529,9 @@
 
       fetchJsonRetry('/api/simivision', 20000, 1)
         .then(function (payload) {
-          var top = safePayload(safePayload(payload).data).top || [];
-          renderSimivision(top);
+          var data = safePayload(safePayload(payload).data);
+          var top = data.top || [];
+          renderSimivision(top, data.meta || {});
         })
         .catch(function () {
           console.warn('[cockpit_hydrate] simivision fetch failed');
