@@ -5,6 +5,9 @@ Scores every subnet on the 1h horizon, picks the top candidate, and runs
 it through the RedTeam audit layer before returning a final payload.
 """
 
+import copy
+import os
+import time
 from typing import Any, Dict, List, Optional
 
 from internal.council.state_vector import (
@@ -21,6 +24,15 @@ try:
 except Exception:
     def effective_weights(market_data=None, path=None):
         return {"quant": 0.30, "hype": 0.25, "dark_horse": 0.20, "technical": 0.25}
+
+
+_PICK_CACHE: Dict[str, Any] = {"key": None, "ts": 0.0, "payload": None}
+_PICK_CACHE_TTL = int(os.environ.get("HOURLY_PICK_CACHE_TTL", "60"))
+
+
+def clear_hourly_pick_cache() -> None:
+    """Test helper — drop cached hourly pick."""
+    _PICK_CACHE.update(key=None, ts=0.0, payload=None)
 
 
 def _weights_for_context(market_context: Dict[str, Any]) -> Dict[str, float]:
@@ -41,8 +53,19 @@ def select_hourly_pick(
     market_context.setdefault("weights", _weights_for_context(market_context))
     subnets = tradable_subnets(subnets)
 
+    from internal.council.score_cache import universe_cache_key
+
+    cache_key = universe_cache_key(subnets, market_context)
+    now = time.time()
+    if (
+        _PICK_CACHE["key"] == cache_key
+        and now - float(_PICK_CACHE["ts"]) < _PICK_CACHE_TTL
+        and isinstance(_PICK_CACHE.get("payload"), dict)
+    ):
+        return copy.deepcopy(_PICK_CACHE["payload"])
+
     if not subnets:
-        return {
+        empty = {
             "subnet": None,
             "score": 0.0,
             "confidence": 0.0,
@@ -61,6 +84,8 @@ def select_hourly_pick(
             "signal_contributions": None,
             "active_signals": [],
         }
+        _PICK_CACHE.update(key=cache_key, ts=now, payload=copy.deepcopy(empty))
+        return empty
 
     scored = []
     for sn in subnets:
@@ -97,7 +122,7 @@ def select_hourly_pick(
         impact = None
     reasons = pick_reasons(candidate, learning["signal_impact"])
 
-    return {
+    result = {
         "subnet": {
             "netuid": candidate.get("netuid"),
             "name": candidate.get("name"),
@@ -118,6 +143,8 @@ def select_hourly_pick(
         "signal_contributions": learning["signal_contributions"],
         "active_signals": learning["active_signals"],
     }
+    _PICK_CACHE.update(key=cache_key, ts=now, payload=copy.deepcopy(result))
+    return result
 
 
 def _apply_tie_break(

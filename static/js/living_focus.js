@@ -25,8 +25,11 @@
   }
 
   function subnetName(sn, netuid) {
+    if (typeof window !== 'undefined' && window.SubnetNameRegistry && window.SubnetNameRegistry.resolve) {
+      return window.SubnetNameRegistry.resolve(sn, netuid);
+    }
     var n = sn && (sn.name || sn.subnet_name);
-    if (!n || String(n).toLowerCase() === 'none' || /^snnone$/i.test(String(n))) {
+    if (!n || String(n).toLowerCase() === 'none' || /^snnone$/i.test(String(n)) || /^sn\d+$/i.test(String(n).trim())) {
       return 'SN' + netuid;
     }
     return String(n);
@@ -547,6 +550,9 @@
       clearTimeout(timer);
       document.removeEventListener('home:hydrate-cache', onCache);
       var detail = ev && ev.detail;
+      if (detail && detail.subnets && window.SubnetNameRegistry && window.SubnetNameRegistry.index) {
+        window.SubnetNameRegistry.index(detail.subnets);
+      }
       var boot = bootstrapFromCache(detail);
       if (!boot || boot.n == null) {
         coldBootstrap();
