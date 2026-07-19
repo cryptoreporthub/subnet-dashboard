@@ -9,8 +9,8 @@
   <div class="council-stage__atmosphere" aria-hidden="true"></div>
   <div class="council-stage__inner">
     <p class="council-stage__brand">Simi<span>Vision</span></p>
-    <p class="council-stage__eyebrow">What we expect today</p>
-    <h1 class="council-stage__title" id="council-stage-title">One job: know what to watch</h1>
+    <p class="council-stage__eyebrow">Today's council verdict</p>
+    <h1 class="council-stage__title" id="council-stage-title">Your move, not another subnet list</h1>
 
     <div id="council-stage-body" class="council-stage__body home-job__body">
 
@@ -32,6 +32,7 @@
         {% set call_reasons = cand.reasons %}
       {% endif %}
       {% set why_line = call_reasons|first if call_reasons else (dpick.reason|default('')) %}
+      {% set brief = dpick.brief if dpick.brief is mapping else {} %}
       {% set hybrid = hybrid_trust if hybrid_trust is mapping else {} %}
       {% set tb = trust_banner if trust_banner is mapping else {} %}
 
@@ -256,6 +257,12 @@
       .k3-lifecycle-title { display: block; font-size: 13px; font-weight: 600; color: var(--k3-text); }
       .k3-lifecycle-detail { display: block; font-size: 11px; color: var(--k3-muted); margin-top: 4px; line-height: 1.4; }
       .k3-candidate-gate { font-size: 11px; color: #eab308; margin: 8px 0 0; letter-spacing: 0.02em; }
+      .k3-brief { text-align: left; width: 100%; max-width: 340px; margin: 10px auto 4px; padding: 12px 14px; border-radius: 10px; border: 1px solid #1a1d24; background: rgba(10, 12, 16, 0.92); z-index: 1; }
+      .k3-brief-move { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; margin: 0 0 8px; color: var(--k3-green); }
+      .k3-brief-move--wait { color: #eab308; }
+      .k3-brief-move--caution { color: #ff6b6b; }
+      .k3-brief-thesis { font-size: 13px; line-height: 1.5; color: var(--k3-text); margin: 0; }
+      .k3-brief-vs { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.45; color: var(--k3-muted); margin: 8px 0 0; padding-top: 8px; border-top: 1px solid #1a1d24; }
       </style>
 
       {# ---- CLAIM LAYER (inside home-daily-call for live-refresh) ---- #}
@@ -305,10 +312,19 @@
               <script type="application/json" id="k3-watchlist-pins">{{ pins | tojson }}</script>
               <p id="k3-horizon-note" class="k3-horizon-note" hidden></p>
               {% endif %}
+              {% if brief.move or brief.thesis %}
+              <div class="k3-brief" id="k3-brief">
+                {% if brief.move %}<p class="k3-brief-move k3-brief-move--{{ brief.tone|default('neutral') }}" id="k3-brief-move">{{ brief.move }}</p>{% endif %}
+                {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
+                {% if brief.vs %}<p class="k3-brief-vs" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
+              </div>
+              {% elif why_line %}
+              <p class="home-job__why">{{ why_line }}</p>
+              {% endif %}
               <div class="k3-claim-name" id="k3-claim-name">{{ sn.name|default('SN' ~ sn.netuid) }}</div>
-              <div class="k3-claim-meta" id="k3-claim-meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}{% if not audit_pick and cand %} · candidate{% endif %}</div>
-              {% if not audit_pick and cand %}
-              <p class="k3-candidate-gate" id="k3-candidate-gate">Candidate · audit gate not cleared</p>
+              <div class="k3-claim-meta" id="k3-claim-meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}{% if not audit_pick and cand %} · top candidate{% endif %}</div>
+              {% if not audit_pick and cand and not brief.move %}
+              <p class="k3-candidate-gate" id="k3-candidate-gate">Not sized in — audit gate not cleared</p>
               {% endif %}
               {% if act == 'LONG' %}<div class="k3-badge buy" id="k3-action-badge">BUY</div>
               {% elif act == 'SHORT' %}<div class="k3-badge sell" id="k3-action-badge">SELL</div>
@@ -321,7 +337,6 @@
                 {% if sn.halving_days %}<div class="k3-stat"><div class="k3-stat-value">{{ sn.halving_days }}</div><div class="k3-stat-label">halving</div></div>{% endif %}
               </div>
               {% endif %}
-              {% if why_line %}<p class="home-job__why">We expect: {{ why_line }}</p>{% endif %}
             </div>
           </div>
         </div>
@@ -368,7 +383,7 @@
           <span>Evidence</span><span class="k3-layer-icon">▸</span>
         </button>
         <div class="k3-layer-body">
-          <div class="k3-layer-title" id="k3-evidence-title">Why {{ sn.name|default('this subnet') if sn else 'this subnet' }} is the call</div>
+          <div class="k3-layer-title" id="k3-evidence-title">What triggered this call</div>
           {% if signals and signals|length > 0 %}
             {% for sig in signals[:5] %}
             <div class="k3-signal"><span class="k3-signal-name">{{ sig.name|default(sig.label|default('Signal')) }}</span><span class="k3-signal-value">{{ sig.value|default(sig.score|default('—')) }}</span></div>
@@ -378,7 +393,7 @@
             <div class="k3-signal"><span class="k3-signal-name">{{ reason }}</span></div>
             {% endfor %}
           {% else %}
-            <div class="k3-empty"><div class="k3-empty-icon">📡</div><div class="k3-empty-text">Awaiting additional evidence. Signals will surface as council deliberation progresses.</div></div>
+            <div class="k3-empty"><div class="k3-empty-icon">📡</div><div class="k3-empty-text">No live signal stack yet — council needs more tape before listing drivers.</div></div>
           {% endif %}
         </div>
       </div>
@@ -389,7 +404,7 @@
           <span>Deliberation</span><span class="k3-layer-icon">▸</span>
         </button>
         <div class="k3-layer-body">
-          <p class="k3-layer-subtitle">Alternatives the council weighed</p>
+          <p class="k3-layer-subtitle">Why these lost today</p>
           {% set alternatives = dpick.shortlist if dpick.shortlist is iterable and dpick.shortlist is not string else [] %}
           {% if alternatives and alternatives|length > 0 %}
           <div class="k3-deliberation">
@@ -400,6 +415,8 @@
                 <div class="k3-considered-name">{{ alt.name|default('SN' ~ alt.netuid) }}</div>
                 {% if alt.role %}
                 <div class="k3-considered-role">{{ alt.role }}</div>
+                {% elif alt.conviction is defined %}
+                <div class="k3-considered-role">Lower council rank</div>
                 {% endif %}
                 {% if alt.conviction is defined %}
                 <div class="k3-considered-confidence">{{ '%.0f'|format(alt.conviction|float) }}%</div>
@@ -415,7 +432,7 @@
           {% else %}
           <div class="k3-empty">
             <div class="k3-empty-icon">⚖️</div>
-            <div class="k3-empty-text">Council deliberation data warming up. Alternative subnet shortlist will appear here as the council weighs multiple candidates.</div>
+            <div class="k3-empty-text">Runner-up list fills in once the council finishes scanning tradable subnets.</div>
           </div>
           {% endif %}
         </div>

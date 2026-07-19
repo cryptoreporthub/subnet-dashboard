@@ -1,7 +1,11 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-19T00:45:00Z  
-**main:** `f41c87c` · **K3 frontend unlock COMPLETE** · post-audit polish
+**Last updated:** 2026-07-19T05:10:00Z  
+**main:** `c06924a` · **K3-7 COPY IA** — Vision READY, await human sign-off
+
+## Active slice
+
+**K3-7 Hero copy & IA** — K3 vision in `k3-7-k3-vision.md` (pointer: `k3-7-copy-ia-lock.md`). Supersedes PR #360 audit-note copy. **Next: human sign-off → Composer implements** (not before).
 
 ## Done (K3 sprint)
 
@@ -24,4 +28,4 @@ Horizon chips (Now / 24h / 7d), temporal ring, deliberation shortlist, lifecycle
 
 ## Next slice queue
 
-None gated — K3 Phase 1 + post-audit checklist complete after deferred P2 merges.
+K3-7 copy implementation (Grok lock) → hydrate P0 (keep dossier on live `/`) → merge preview route.

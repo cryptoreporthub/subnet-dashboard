@@ -468,6 +468,27 @@ def _fast_home_hero_context(trust_banner: Optional[Dict[str, Any]] = None) -> Di
     }
 
 
+def _enrich_daily_pick_payload(
+    pick_payload: Optional[Dict[str, Any]],
+    subnets: List[Dict[str, Any]],
+    market_context: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Names, shortlist, temporal, horizon, and action brief for SSR + /api/daily-pick."""
+    if not isinstance(pick_payload, dict):
+        return {}
+    from internal.learning.dpick_copy import attach_brief_to_daily_pick
+    from internal.learning.dpick_horizon import attach_horizon_views_to_daily_pick
+    from internal.learning.dpick_shortlist import attach_shortlist_to_daily_pick
+    from internal.learning.dpick_temporal import attach_temporal_to_daily_pick
+    from internal.subnet_names import refresh_daily_pick_names
+
+    out = refresh_daily_pick_names(pick_payload)
+    out = attach_shortlist_to_daily_pick(out, subnets, market_context)
+    out = attach_temporal_to_daily_pick(out)
+    out = attach_horizon_views_to_daily_pick(out, subnets, market_context)
+    return attach_brief_to_daily_pick(out)
+
+
 def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     """U1 hero keys for GET / (fast shell + hydrate)."""
     from internal.analytics.home_habit import (
@@ -490,17 +511,7 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
             pick_payload = get_or_create_today_pick(subnets, market_context)
             pick_netuid = _pick_netuid_from_daily_payload(pick_payload)
             if isinstance(pick_payload, dict):
-                from internal.learning.dpick_horizon import attach_horizon_views_to_daily_pick
-                from internal.learning.dpick_shortlist import attach_shortlist_to_daily_pick
-                from internal.learning.dpick_temporal import attach_temporal_to_daily_pick
-                from internal.subnet_names import refresh_daily_pick_names
-
-                pick_payload = refresh_daily_pick_names(pick_payload)
-                pick_payload = attach_shortlist_to_daily_pick(
-                    pick_payload, subnets, market_context
-                )
-                pick_payload = attach_temporal_to_daily_pick(pick_payload)
-                pick_payload = attach_horizon_views_to_daily_pick(
+                pick_payload = _enrich_daily_pick_payload(
                     pick_payload, subnets, market_context
                 )
     except Exception as exc:
@@ -1528,6 +1539,7 @@ def api_daily_pick():
         if isinstance(result, dict):
             from internal.whales.enrichment_badge import empty_whale_flow_badge, whale_flow_badge
 
+            result = _enrich_daily_pick_payload(result, subnets, market_context)
             netuid = _pick_netuid_from_daily_payload(result)
             result = {
                 **result,
