@@ -138,6 +138,10 @@ def build_k3_hold_preview_context(request: Request) -> Dict[str, Any]:
         "hybrid_trust": {"ready": True, "n": 443, "accuracy": 0.314},
         "trust_banner": {
             "ready": True,
+            "graded": 443,
+            "correct": 139,
+            "wrong": 304,
+            "accuracy": 0.314,
             "headline": "Last 443 graded: 31% directionally right",
             "note": "Accuracy is direction-only on graded token price outcomes — excludes expired/duplicate.",
         },

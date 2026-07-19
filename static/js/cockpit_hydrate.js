@@ -406,6 +406,11 @@
     if (!host || !payload) return;
     var alerts = payload.alerts || [];
     var count = Number(payload.count) || 0;
+    var countEl = document.getElementById('pump-alert-count');
+    if (countEl) {
+      countEl.textContent = count > 0 ? count + ' pumping' : '';
+      countEl.style.display = count > 0 ? '' : 'none';
+    }
     if (!count) {
       host.innerHTML =
         '<p class="pump-alert__empty" id="pump-alert-empty">' +
@@ -416,28 +421,37 @@
         '</p>';
       return;
     }
-    var html = '<ul class="pump-alert__list" id="pump-alert-list">';
+    var html = '<div class="pump-alert__lane" id="pump-alert-list" role="list">';
     alerts.forEach(function (row) {
       var phase = String(row.phase || '').toLowerCase();
       var badge = String(row.badge || '').toLowerCase();
+      var label = String(row.move || '').replace(/^IN PLAY · /, '').replace(/^FADING · /, '');
       html +=
-        '<li class="pump-alert__row pump-alert__row--' +
+        '<article class="pump-alert__card pump-alert__card--' +
         esc(phase) +
-        '" data-netuid="' +
+        '" role="listitem" data-netuid="' +
         esc(row.netuid) +
         '">' +
-        '<div class="pump-alert__row-head">' +
-        '<span class="pump-alert__move">' +
-        esc(row.move || '') +
-        '</span>' +
+        '<div class="pump-alert__card-top">' +
+        '<a class="pump-alert__name" href="/subnet/' +
+        esc(row.netuid) +
+        '">' +
+        esc(label) +
+        '</a>' +
         '<span class="pump-alert__badge pump-alert__badge--' +
         esc(badge) +
         '">' +
         esc(row.badge || '') +
         '</span></div>';
       if (row.score != null) {
+        var pct = Math.min(100, Math.round(Number(row.score) * 100));
         html +=
-          '<span class="pump-alert__score">' + esc(Number(row.score).toFixed(2)) + '</span>';
+          '<div class="pump-alert__meter" aria-hidden="true"><span class="pump-alert__meter-fill" style="width:' +
+          pct +
+          '%"></span></div>' +
+          '<span class="pump-alert__score">ladder ' +
+          esc(Number(row.score).toFixed(2)) +
+          '</span>';
       }
       html +=
         '<p class="pump-alert__thesis">' +
@@ -445,9 +459,9 @@
         '</p>' +
         '<p class="pump-alert__trigger">' +
         esc(row.trigger || '') +
-        '</p></li>';
+        '</p></article>';
     });
-    html += '</ul>';
+    html += '</div>';
     host.innerHTML = html;
   }
 

@@ -463,6 +463,9 @@ def _fast_home_hero_context(trust_banner: Optional[Dict[str, Any]] = None) -> Di
             "ready": bool(tb.get("ready")),
             "n": tb.get("graded") or 0,
             "min_sample": 30,
+            "accuracy": tb.get("accuracy"),
+            "correct": tb.get("correct"),
+            "wrong": tb.get("wrong"),
         },
         "trust_banner": tb,
     }
@@ -518,6 +521,14 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
                 )
     except Exception as exc:
         logger.warning("home hero context failed: %s", exc)
+    story_path: Dict[str, Any] = {}
+    try:
+        from internal.learning.story_path import build_story_path
+
+        if isinstance(pick_payload, dict) and pick_payload:
+            story_path = build_story_path(pick_payload)
+    except Exception as exc:
+        logger.warning("story path context failed: %s", exc)
     return {
         "daily_pick_stage": pick_payload if isinstance(pick_payload, dict) else {},
         "conviction_band": _safe_conviction_band(pick_payload),
@@ -527,6 +538,7 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         "habit_alerts": conviction_alerts_snapshot(),
         "hybrid_trust": hybrid_trust_snapshot(),
         "trust_banner": _safe_trust_banner(),
+        "story_path": story_path,
     }
 
 

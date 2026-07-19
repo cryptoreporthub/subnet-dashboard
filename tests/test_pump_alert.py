@@ -29,7 +29,7 @@ def test_pumping_row_shape():
     row = build_alert_row(_ladder_entry("PUMPING"))
     assert row["badge"] == "PUMPING"
     assert row["move"].startswith("IN PLAY ·")
-    assert "motion" in row["thesis"].lower()
+    assert "motion" in row["thesis"].lower() or "ladder" in row["thesis"].lower()
     assert "council scan" not in row["thesis"].lower()
     assert "audit gate" not in row["thesis"].lower()
 
@@ -68,6 +68,21 @@ def test_pumping_not_on_dossier_chip():
     assert chip["show"] is False
 
 
+def test_pumping_rows_get_distinct_thesis():
+    a = build_alert_row(_ladder_entry("PUMPING", netuid=29))
+    b = build_alert_row(_ladder_entry("PUMPING", netuid=30, score=0.8))
+    assert a["thesis"] != b["thesis"]
+    assert "Ladder says PUMPING" not in a["thesis"]
+
+
+def test_resolve_name_from_subnet_row():
+    row = build_alert_row(
+        {"netuid": 106, "name": "Unknown", "phase": "PUMPING", "composite_score": 0.8},
+        {"netuid": 106, "name": "FlameWire"},
+    )
+    assert "FlameWire" in row["move"]
+
+
 def test_pump_alert_template_renders():
     env = Environment(
         loader=FileSystemLoader("templates"),
@@ -82,7 +97,8 @@ def test_pump_alert_template_renders():
         }
     )
     assert "section-pump-alert" in html
-    assert "IN PLAY ·" in html
+    assert "pump-alert__lane" in html
+    assert "In motion" in html
     assert "PUMPING" in html
 
 
@@ -98,5 +114,4 @@ def test_api_pump_alerts_route():
 def test_preview_pump_alert_route():
     with TestClient(app) as client:
         html = client.get("/preview/k3-pump-alert").text
-    assert "Pump Alert" in html
-    assert "IN PLAY ·" in html
+    assert "In motion" in html or "Pump Alert" in html

@@ -11,6 +11,12 @@
 {% set sv_picks = simivision.top if simivision is mapping and simivision.top else [] %}
 {% set dpick = daily_pick_stage if daily_pick_stage is mapping and daily_pick_stage else (daily_pick if daily_pick is mapping else {}) %}
 {% set dp_subnet = dpick.subnet if dpick.subnet is mapping else none %}
+{% if dp_subnet is none and dpick.pick is mapping and dpick.pick.subnet is mapping %}
+  {% set dp_subnet = dpick.pick.subnet %}
+{% elif dp_subnet is none and dpick.candidate is mapping and dpick.candidate.subnet is mapping %}
+  {% set dp_subnet = dpick.candidate.subnet %}
+{% endif %}
+{% set focus_netuid = dp_subnet.netuid if dp_subnet and dp_subnet.netuid is not none else none %}
 
 {% include "partials/premium/header.html" %}
 {% include "partials/premium/council_stage.html" %}

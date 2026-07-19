@@ -63,9 +63,17 @@
       {# Judge weights for council layer #}
       {% set judges = dpick.judges if dpick.judges is iterable and dpick.judges is not string else [] %}
 
-      {# Learning / calibration #}
-      {% set cal_n = hybrid.n|default(0) %}
-      {% set cal_acc = hybrid.accuracy|default(0) %}
+      {# Learning / calibration — trust_banner holds accuracy (0–1); hybrid_trust only has graded n #}
+      {% set cal_n = tb.graded|default(hybrid.n|default(0)) %}
+      {% if tb.accuracy is defined and tb.accuracy is not none %}
+        {% set cal_acc = (tb.accuracy|float * 100)|round(1) %}
+      {% elif cal_n|int > 0 and tb.correct is defined and tb.correct is not none %}
+        {% set cal_acc = ((tb.correct|float / cal_n|float) * 100)|round(1) %}
+      {% elif hybrid.accuracy is defined and hybrid.accuracy is not none %}
+        {% set cal_acc = (hybrid.accuracy|float * 100)|round(1) %}
+      {% else %}
+        {% set cal_acc = 0 %}
+      {% endif %}
 
       {# K3-3: Council lifecycle (promoted story path) #}
       {% set sp = story_path if story_path is mapping else {} %}

@@ -50,9 +50,19 @@ def conviction_alerts_snapshot() -> Dict[str, Any]:
 
 def hybrid_trust_snapshot() -> Dict[str, Any]:
     try:
+        from internal.analytics.root_context import _safe_trust_banner
         from internal.council.grading import hybrid_score_status
 
-        return {"status": "ok", **hybrid_score_status()}
+        snap: Dict[str, Any] = {"status": "ok", **hybrid_score_status()}
+        tb = _safe_trust_banner()
+        if isinstance(tb, dict):
+            if tb.get("accuracy") is not None:
+                snap["accuracy"] = tb.get("accuracy")
+            if tb.get("graded") is not None:
+                snap["graded"] = tb.get("graded")
+            snap["correct"] = tb.get("correct")
+            snap["wrong"] = tb.get("wrong")
+        return snap
     except Exception as exc:
         logger.warning("hybrid trust snapshot failed: %s", exc)
         return {
