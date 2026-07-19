@@ -116,6 +116,10 @@
   function patchHomeDailyCall(payload) {
     var host = document.getElementById("home-daily-call");
     if (!host || !payload) return;
+    if (document.getElementById("k3-dossier") && window.__cockpitHome && typeof window.__cockpitHome.renderDailyPick === "function") {
+      window.__cockpitHome.renderDailyPick(payload);
+      return;
+    }
     var pick = payload.pick;
     var cand = payload.candidate;
     var sn = (pick && pick.subnet) || (cand && cand.subnet) || {};
