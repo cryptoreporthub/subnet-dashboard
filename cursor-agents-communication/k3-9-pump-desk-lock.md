@@ -1,164 +1,158 @@
-# K3-9 Pump Desk LOCK — Council-owned, predictive, graded
+# K3-9 Pump Desk LOCK — Simple, graded, complete
 
-**Status:** LOCKED 2026-07-19 · Grok COPY/PRODUCT  
+**Status:** REVISED 2026-07-19 · Grok COPY/PRODUCT (spitball softened — do not force council)  
 **Supersedes presentation of:** K3-8 / K3-8b horizontal scroll as primary UI  
-**Keeps:** Lead-first phases (STIRRING/ACCUMULATING → PUMPING chase-risk → COOLING exit)  
-**North star:** Not a crypto % ticker. Multi-name **desk** with **who called it**, **projected move**, **graded outcome**.
+**Keeps:** Lead-first phases · projected % · HIT / FAKE / MISS grades  
+**North star:** Feel **whole and complete**. Presentation is the gap (~50%); backend is rich (~85%). Never rush a half-section. Never make users squint.
 
 ---
 
-## VERDICT: PASS (product direction)
+## VERDICT: PASS (direction) — with soft authority
 
-Horizontal cards are a warm-up. The product is a **Pump Desk**: ranked board of live lead/confirmed names, each a **council-stamped call** with projection + later grade.
+Council/judges **own the Daily Call**. They do **not** have to own the pump desk.  
+If a “who called it” layer helps, use **simple personas** — not a second scoring stack.
+
+Human spitball → keep the juice, drop the force:
+- Multi-name desk ✓  
+- Projection + track record ✓  
+- Pump fake grading ✓  
+- Council as required authority ✗ (optional later, only if it stays obvious)
 
 ---
 
-## 1. Problem
+## 0. Completeness bar (whole product)
+
+A section ships when it is complete from every angle we can name:
+
+| Angle | Pump desk must answer |
+|-------|------------------------|
+| **What** | Which names, early vs chase vs exit |
+| **Why now** | One trader sentence (flow before price) |
+| **How much** | Projected % + horizon |
+| **How it went** | Hit / fake / miss when resolved |
+| **Trust** | Honest-empty; no fake accuracy strip |
+| **Eyes** | Vertical board, large type, one job per row — no squint |
+
+If any angle is missing, the section is **not done** — polish before adding features.
+
+**Site-wide note:** Rich backend data should fund *spectacular simplicity* per section (dossier, lead desk, Living Focus, letter) — not more panels. Presentation debt is the real workstream after K3 Phase 1.
+
+---
+
+## 1. Problem → wanted
 
 | Today | Wanted |
 |-------|--------|
-| Scroll of status cards | Multi-subnet board (usually >1 active) |
-| Ladder phase = UI truth | Ladder = **sensor**; council/judges = **authority** |
-| No projected % | SciWeave-style `predicted_pct` at watch entry |
-| No accountability | Hit projected / died early (**pump fake**) graded |
-| Looks like every % feed | Predictive desk with track record |
+| Carousel of status cards | Calm **vertical board** (usually >1 name) |
+| Phase = whole story | Phase + **projected move** + later **grade** |
+| No memory | Desk remembers what it watched |
+| Feels rushed / lagging | Feels like a finished product surface |
 
 ---
 
-## 2. Architecture (reuse, don't invent)
+## 2. Architecture (thin)
 
 ```
-Pump ladder (sensor)          Council / judges (authority)         Ledger (accountability)
-STIRRING / ACCUMULATING  →    score + stamp call               →   pump_calls.json
-PUMPING / COOLING        →    update status / exit             →   resolve → grade
-                              predicted_pct_from_score             hit | fake | miss
-                              (SciWeave hybrid when ready)
+Ladder (sensor)  →  Stamp call (desk)  →  Ledger  →  Grade
+STIRRING / ACC   →  entry + projected% →  pump_calls.json → HIT | FAKE | MISS
+PUMPING / COOL   →  status update      →  resolve at horizon
 ```
 
-| Piece | Existing | Role |
-|-------|----------|------|
-| Ladder phases | `internal/pump/*` | Detection only — when to consider a name |
-| Lead gate | `buy_ratio ≥ 0.55`, `vol ≥ 0.22` | Same as K3-7b / K3-8b |
-| Projection | `predicted_pct_from_score` / `attach_council_prediction` | % move + horizon at stamp |
-| Judges | Oracle / Echo / Pulse | Optional dissent line on row |
-| Expert weights | Quant / Hype / Dark Horse / Technical | Who drove the stamp |
-| Grading | SciWeave `direction` + `magnitude_calibration` + hybrid | Outcome score when sample ≥ 30 |
-| Predictions store | `data/predictions.json` | Prefer extend with `kind: pump_call` OR thin `data/pump_calls.json` |
+| Piece | Role |
+|-------|------|
+| Ladder + lead gate | When a name enters the desk |
+| Projection | Reuse `predicted_pct` helpers **or** a simple phase→% table if council path is noisy — pick whichever is clearer in UI |
+| Personas (optional) | Light attribution only — see §3 |
+| SciWeave hybrid | Desk accuracy strip when sample enough — same honesty rules as trust banner |
+| `data/pump_calls.json` | Thin ledger (do not collide with daily predictions) |
 
-**Decision:** Thin dedicated `data/pump_calls.json` first (clear schema, no resolver collision). Later merge into predictions if one ledger wins.
+**Do not invent** a parallel judge council for pumps. One brain on the site is enough.
 
 ---
 
-## 3. Call lifecycle
+## 3. Optional: simple personas (not a scoring system)
 
-1. **WATCH** — first lead-qualified STIRRING/ACCUMULATING tick  
-   - Stamp: `entry_price`, `predicted_pct`, `horizon_hours` (default **4h** for pump desk), `expert`, optional judge scores  
-   - UI: still early — entry window open  
-2. **BUILDING** — ACCUMULATING while call open  
-3. **CONFIRMED** — ladder hits PUMPING (chase risk; call still open for grading)  
-4. **RESOLVE** at horizon or early exit:  
-   - `actual_pct` from entry → resolve price  
-   - Classify outcome (below)  
-5. **CLOSE** — COOLING or timeout with no hit
+If we want “someone” on the call for personality + accountability **without** Oracle/Echo/Pulse complexity:
+
+| Persona | Vibe | When stamped |
+|---------|------|--------------|
+| **Alpha Chaser** | Early heat / STIRRING | Lead entry |
+| **Beta Maxxer** | Building / ACCUMULATING | Lead entry |
+| **Karma Chaser** | Confirmed / chase-risk watch | PUMPING update |
+| **Fade Watch** | Exit / COOLING | Exit stamp |
+
+Rules:
+- Names are **labels**, not models. One persona per open call, set at stamp from phase.
+- Track record per persona is a **later** polish (9d+), not required for 9a–9b.
+- Ban: nested scores, 3-judge lines on every pump row, weight jargon in this lane.
 
 ---
 
-## 4. Thresholds & outcomes (pump fake)
-
-Defaults (env-overridable later):
+## 4. Thresholds (unchanged spitball juice)
 
 | Knob | Default | Meaning |
 |------|---------|---------|
-| `PUMP_HIT_RATIO` | **0.60** | `actual ≥ 0.60 × predicted` → **HIT** (achieved projected pump) |
-| `PUMP_FAKE_FLOOR` | **+1.5%** | Must clear this from entry before counting as a real move attempt |
-| `PUMP_FAKE_CEILING` | **0.40 × predicted** | Peaked above floor but never reached 40% of projected → **FAKE** |
-| `PUMP_MISS` | else | Never cleared floor, or wrong direction |
+| Hit ratio | **0.60** | `actual ≥ 0.60 × predicted` → **HIT** |
+| Fake floor | **+1.5%** | Must clear before counting a real attempt |
+| Fake ceiling | **0.40 × predicted** | Cleared floor but never got to 40% of projected → **FAKE** |
+| Else | | **MISS** |
 
-Examples (`predicted = +6%`):
-
-| Path | Grade |
-|------|-------|
-| Peak +6.2% within horizon | **HIT** |
-| Peak +4.0% (≥ 60% of 6) | **HIT** |
-| Peak +2.0% then died (cleared 1.5%, < 40% of 6 = 2.4%) | borderline — if peak < 2.4% → **FAKE**; if ≥ 2.4% but < 3.6% → still FAKE under ceiling rule; use HIT ratio for success only |
-| Peak +1.2% then dump | **MISS** (never cleared 1.5% floor) |
-| Peak +2.0% then dump (floor cleared, < 2.4% of projected) | **FAKE** |
-
-**Copy (trader):**
+Copy:
 - HIT → `Hit · +X% of +Y% projected`
 - FAKE → `Pump fake · peaked +X% vs +Y% projected`
-- MISS → `Miss · never cleared the +1.5% watch bar`
+- MISS → `Miss · never cleared +1.5%`
 
-Lane accuracy strip (when ≥ 10 resolved pump calls):  
-`Last N desk calls: H% hit · F% fake · M% miss`
+Strip (n ≥ 10): `Last N: H% hit · F% fake · M% miss`
 
 ---
 
-## 5. Presentation (replace horizontal scroll)
+## 5. Presentation
 
-**Primary UI: vertical ranked board** (390px-first), not carousel.
+**Vertical ranked board** — 390px first, readable at arm’s length.
 
 ```
-Lead desk                          Last 24 graded: 41% hit · 28% fake
-─────────────────────────────────────────────────────────────────────
-BUILDING  Apex SN99     +6.0% proj · 4h     Quant leads · Oracle 0.72
-          Flow ahead of price · entry open
-          [meter] watch→building→…          since 14:02
+Lead desk                    Last 24: 41% hit · 28% fake
+────────────────────────────────────────────────────────
+BUILDING  Apex · SN99        +6% · 4h     Beta Maxxer
+          Flow ahead of price — entry open
 
-EARLY     Sub42 SN42    +3.5% proj · 4h     Hype leads
-          Buy pressure building
+EARLY     Sub42 · SN42       +3.5% · 4h   Alpha Chaser
+          Buy pressure before price runs
 
-CONFIRMED Coldint SN29  +5.0% proj · chase  Dark Horse · Pulse dissent
-          Live — rotate, don't chase
+CONFIRMED Coldint · SN29     chase        Karma Chaser
+          Live — rotate, don’t chase
 
-EXIT      …             FAKE · peaked +1.8% vs +6%
+FAKE      …                  peaked +1.8% vs +6%
 ```
 
-Rules:
-- Cap **8** open rows (LEAD first, then CONFIRMED, then EXIT/graded teaser max 2)
-- One row = one call (not a pretty card stack)
-- Tap → `/subnet/{id}` or Living Focus
-- No hero competition with Daily Call dossier
+- Cap **8** rows; LEAD first; graded teasers max 2 at bottom  
+- One job per row; large name; % is second beat  
+- No carousel; no pink audit chrome; no “Tier 3 Scanner” jargon in the title — prefer **Lead desk** or **Pump desk**
 
 ---
 
-## 6. Accountability fields (per row)
-
-| Field | Source |
-|-------|--------|
-| `netuid`, `name` | Registry resolve |
-| `status` | watch / building / confirmed / exit / graded |
-| `predicted_pct`, `horizon_hours` | Council attach at stamp |
-| `entry_price`, `stamped_at` | Ledger |
-| `expert` | Dominant council expert |
-| `judge_line` | Optional `Oracle 0.7 · Echo 0.4 · Pulse 0.6` |
-| `actual_pct`, `peak_pct`, `outcome` | On resolve |
-| `thesis` / `trigger` | K3-8b voice (lead vs chase) |
-
----
-
-## 7. Slice queue (implement in order)
+## 6. Slice queue
 
 | Slice | Deliverable |
 |-------|-------------|
-| **K3-9a** | `pump_calls` ledger + stamp on lead entry + resolve/grade helpers + tests |
-| **K3-9b** | Vertical desk UI replacing carousel; wire SSR + hydrate + preview |
-| **K3-9c** | Attach real `predicted_pct` via council score path; accuracy strip |
-| **K3-9d** | Judge line + weight nudge on HIT/FAKE (learning loop) |
+| **K3-9a** | Ledger + stamp + resolve/grade + tests (no UI rewrite yet) |
+| **K3-9b** | Vertical desk UI — presentation bar: readable, calm, complete empty states |
+| **K3-9c** | Real projected % + accuracy strip |
+| **K3-9d** | Optional personas + per-persona hit rate (only if still feels simple) |
 
-Do **not** ship 9d before 9a–9c have live stamps on prod.
+Skip 9d if personas clutter. Completeness > cleverness.
 
 ---
 
-## 8. Explicit non-goals
+## 7. Non-goals
 
-- Replacing Daily Call / dossier
-- Showing PUMPING as "buy now"
-- Fake accuracy before min sample
-- New ML model — reuse SciWeave + existing score → `predicted_pct`
+- Forcing council/judges into this lane  
+- A sophisticated second recommendation engine  
+- Replacing Daily Call  
+- Shipping presentation-incomplete “MVP chrome”
 
 ---
 
 ## VERDICT: PASS
 
-Next Composer action: **K3-9a** only unless human expands scope.
+Next: **K3-9a** ledger when human greenlights — or a **presentation audit** pass across home sections first if that is the higher priority (backend 85% / UI 50%).
