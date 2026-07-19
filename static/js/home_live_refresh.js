@@ -116,8 +116,11 @@
   function patchHomeDailyCall(payload) {
     var host = document.getElementById("home-daily-call");
     if (!host || !payload) return;
-    if (document.getElementById("k3-dossier") && window.__cockpitHome && typeof window.__cockpitHome.renderDailyPick === "function") {
-      window.__cockpitHome.renderDailyPick(payload);
+    // K3-7 P0: never wipe SSR dossier — patch fields only or no-op
+    if (document.getElementById("k3-dossier")) {
+      if (window.__cockpitHome && typeof window.__cockpitHome.renderDailyPick === "function") {
+        window.__cockpitHome.renderDailyPick(payload);
+      }
       return;
     }
     var pick = payload.pick;

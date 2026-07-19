@@ -99,6 +99,18 @@ def test_council_stage_hold_candidate_renders_full_hero():
     assert "—" not in orb_html
 
 
+def test_home_live_refresh_never_wipes_k3_dossier():
+    src = open("static/js/home_live_refresh.js", encoding="utf-8").read()
+    assert "never wipe SSR dossier" in src
+    idx = src.index("function patchHomeDailyCall")
+    end = src.index("function patchStoryStrip", idx)
+    body = src[idx:end]
+    dossier_guard = body.index("k3-dossier")
+    early_return = body.index("return;", dossier_guard)
+    inner_html = body.index("host.innerHTML")
+    assert dossier_guard < early_return < inner_html
+
+
 def test_home_hold_candidate_via_hero_patch():
     payload = attach_brief_to_daily_pick(refresh_daily_pick_names(_hold_candidate_payload()))
 
