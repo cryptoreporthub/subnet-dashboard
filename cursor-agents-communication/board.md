@@ -1,16 +1,12 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-19T10:00:00Z  
-**main:** `b4433a1` · **K3-8 in PR** (#364)
-
-## In flight
-
-- **K3-8 Pump Alert lane** (#364) — Grok LOCK `k3-8-pump-alert-lock.md` · `/preview/k3-pump-alert`
+**Last updated:** 2026-07-19T10:35:00Z  
+**main:** `d272267` · **K3-8 MERGED** (#364)
 
 ## Next slice queue
 
-1. Merge **K3-8** (#364) + phone QA
-2. **Telegram** — H4 session bootstrap + `MESSAGE_INTEL_LISTENER=on` + feed
+1. **Telegram** — H4 session bootstrap + `MESSAGE_INTEL_LISTENER=on` + feed honesty
+2. Phone QA 390px — `/preview/k3-hold`, `/preview/k3-pump-alert`, live home
 
 ## Done (K3 sprint)
 
@@ -21,10 +17,11 @@
 - **Post-audit P2** (#356): horizon chip sync, mindmap shortlist SSR shape
 - **K3-7 hero copy + IA** (#361): `dpick_copy` brief, hydration safeguard, `/preview/k3-hold`
 - **K3-7b pump chip** (#362): STIRRING/ACCUMULATING lead-gated chip on dossier
+- **K3-8 Pump Alert lane** (#364): PUMPING separate from dossier · `/api/pump-alerts` · `/preview/k3-pump-alert`
 
 ## Shipped on main
 
-Trader hero (move/thesis/vs/trigger), cool HOLD styling, also-weighed line, hydrate patch-by-ID, pump chip (EARLY HEAT / HEAT BUILDING), preview route for 390px sign-off.
+Trader hero (move/thesis/vs/trigger), cool HOLD styling, also-weighed line, hydrate patch-by-ID, pump chip (EARLY HEAT / HEAT BUILDING), Pump Alert lane (IN PLAY / FADING), preview routes for 390px sign-off.
 
 ## Human follow-up (optional)
 
@@ -32,6 +29,3 @@ Trader hero (move/thesis/vs/trigger), cool HOLD styling, also-weighed line, hydr
 - Deferred: decay sparkline, 30d chip, time_capsules calendar UI, Now→Session rename
 - Env: `CONVICTION_ALERTS_ENABLED` for alert dot on habit button
 
-## Next slice queue
-
-None gated — K3 Phase 1 + K3-7/7b complete. K3-8 Pump Alert PR open.
