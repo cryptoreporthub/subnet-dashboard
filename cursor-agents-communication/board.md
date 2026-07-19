@@ -5,8 +5,10 @@
 
 ## Next slice queue
 
-1. **Telegram** — H4 session bootstrap + `MESSAGE_INTEL_LISTENER=on` + feed honesty
-2. Phone QA 390px — `/preview/k3-hold`, `/preview/k3-pump-alert`, live home
+1. **Presentation completeness** — backend ~85% / UI ~50%; each section must feel whole (see K3-9 LOCK)
+2. **K3-9 Pump desk** — `k3-9-pump-desk-lock.md` (ledger → vertical desk → grades; personas optional, no forced council)
+3. **Telegram** — H4 session bootstrap + `MESSAGE_INTEL_LISTENER=on` + feed honesty
+4. Phone QA 390px — `/preview/k3-hold`, `/preview/k3-pump-alert`, live home
 
 ## Stale PRs (superseded — close on GitHub)
 
