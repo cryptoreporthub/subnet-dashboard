@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 import server
+from internal.learning.dpick_copy import attach_brief_to_daily_pick
 from internal.subnet_names import refresh_daily_pick_names
 
 
@@ -76,7 +77,7 @@ def test_council_stage_hold_candidate_renders_full_hero():
         autoescape=select_autoescape(["html", "xml"]),
     )
     tmpl = env.get_template("partials/premium/council_stage.html")
-    payload = refresh_daily_pick_names(_hold_candidate_payload())
+    payload = attach_brief_to_daily_pick(refresh_daily_pick_names(_hold_candidate_payload()))
     html = tmpl.render(
         dpick=payload,
         conviction_band={"band": None},
@@ -88,15 +89,15 @@ def test_council_stage_hold_candidate_renders_full_hero():
         story_path={},
     )
     assert "k3-horizon-chips" in html
-    assert "k3-candidate-gate" in html
-    assert "audit gate not cleared" in html
+    assert "k3-brief" in html
+    assert "WAIT" in html
     orb_html = html.split('id="k3-orb-score"')[1].split("</div>")[0]
     assert "digit-tens" in orb_html or "digit-ones" in orb_html
     assert "—" not in orb_html
 
 
 def test_home_hold_candidate_via_hero_patch():
-    payload = refresh_daily_pick_names(_hold_candidate_payload())
+    payload = attach_brief_to_daily_pick(refresh_daily_pick_names(_hold_candidate_payload()))
 
     def fake_fast(trust_banner=None):
         return _minimal_hero_ctx(payload)
@@ -107,5 +108,5 @@ def test_home_hold_candidate_via_hero_patch():
             html = client.get("/").text
 
     assert "k3-horizon-chips" in html
-    assert "k3-candidate-gate" in html
-    assert "audit gate not cleared" in html
+    assert "k3-brief" in html
+    assert "WAIT" in html

@@ -345,6 +345,12 @@
       payload.reason ||
       '';
 
+    var brief = payload.brief || {};
+    var moveLine = brief.move || '';
+    var thesisLine = brief.thesis || why || '';
+    var vsLine = brief.vs || '';
+    var briefTone = brief.tone || 'neutral';
+
     var html;
     if (pick && (sn.name != null || sn.netuid != null)) {
       var reasons = (pick.reasons || []).slice(0, 3);
@@ -359,7 +365,17 @@
         (sn.symbol ? ' · ' + esc(sn.symbol) : '') +
         (finalConf != null ? ' · ' + fc.conf + '% confidence' : '') +
         '</p>' +
-        (why ? '<p class="home-job__why">We expect: ' + esc(why) + '</p>' : '') +
+        (moveLine || thesisLine
+          ? '<div class="k3-brief">' +
+            (moveLine
+              ? '<p class="k3-brief-move k3-brief-move--' + esc(briefTone) + '">' + esc(moveLine) + '</p>'
+              : '') +
+            (thesisLine ? '<p class="k3-brief-thesis">' + esc(thesisLine) + '</p>' : '') +
+            (vsLine ? '<p class="k3-brief-vs">' + esc(vsLine) + '</p>' : '') +
+            '</div>'
+          : why
+            ? '<p class="home-job__why">' + esc(why) + '</p>'
+            : '') +
         (reasons.length > 1
           ? '<ul class="council-call__reasons">' +
             reasons.slice(1).map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') +
@@ -380,16 +396,31 @@
           '<p class="council-call__name">' + esc(resolveSubnetDisplayName(sn, sn.netuid)) + '</p>' +
           '<p class="council-call__meta">SN' + esc(sn.netuid) +
           (sn.symbol ? ' · ' + esc(sn.symbol) : '') +
-          ' · candidate only' +
+          ' · top candidate' +
           (finalConf != null ? ' · ' + fc.conf + '%' : '') +
           '</p>';
       } else {
         html += '<p class="council-call__name">No audited long call</p>';
       }
-      html +=
-        '<p class="home-job__why">' +
-        esc(why || 'Council waits until confidence clears the audit gate.') +
-        '</p>';
+      if (moveLine || thesisLine) {
+        html += '<div class="k3-brief">';
+        if (moveLine) {
+          html +=
+            '<p class="k3-brief-move k3-brief-move--' + esc(briefTone) + '">' + esc(moveLine) + '</p>';
+        }
+        if (thesisLine) {
+          html += '<p class="k3-brief-thesis">' + esc(thesisLine) + '</p>';
+        }
+        if (vsLine) {
+          html += '<p class="k3-brief-vs">' + esc(vsLine) + '</p>';
+        }
+        html += '</div>';
+      } else {
+        html +=
+          '<p class="home-job__why">' +
+          esc(why || 'Council waits until confidence clears the audit gate.') +
+          '</p>';
+      }
       if (concerns.length) {
         html +=
           '<ul class="council-call__concerns">' +
