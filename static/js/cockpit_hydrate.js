@@ -401,6 +401,56 @@
     return true;
   }
 
+  function renderPumpAlerts(payload) {
+    var host = document.getElementById('pump-alert-body');
+    if (!host || !payload) return;
+    var alerts = payload.alerts || [];
+    var count = Number(payload.count) || 0;
+    if (!count) {
+      host.innerHTML =
+        '<p class="pump-alert__empty" id="pump-alert-empty">' +
+        esc(
+          payload.empty_message ||
+            'No names in PUMPING right now. Early heat stays on the dossier chip when the lead is warming.'
+        ) +
+        '</p>';
+      return;
+    }
+    var html = '<ul class="pump-alert__list" id="pump-alert-list">';
+    alerts.forEach(function (row) {
+      var phase = String(row.phase || '').toLowerCase();
+      var badge = String(row.badge || '').toLowerCase();
+      html +=
+        '<li class="pump-alert__row pump-alert__row--' +
+        esc(phase) +
+        '" data-netuid="' +
+        esc(row.netuid) +
+        '">' +
+        '<div class="pump-alert__row-head">' +
+        '<span class="pump-alert__move">' +
+        esc(row.move || '') +
+        '</span>' +
+        '<span class="pump-alert__badge pump-alert__badge--' +
+        esc(badge) +
+        '">' +
+        esc(row.badge || '') +
+        '</span></div>';
+      if (row.score != null) {
+        html +=
+          '<span class="pump-alert__score">' + esc(Number(row.score).toFixed(2)) + '</span>';
+      }
+      html +=
+        '<p class="pump-alert__thesis">' +
+        esc(row.thesis || '') +
+        '</p>' +
+        '<p class="pump-alert__trigger">' +
+        esc(row.trigger || '') +
+        '</p></li>';
+    });
+    html += '</ul>';
+    host.innerHTML = html;
+  }
+
   function renderDailyPick(payload) {
     // §34-1 / K3-7: patch K3 dossier fields — never wipe #k3-dossier via innerHTML
     if (!payload) return;
@@ -1304,6 +1354,12 @@
           console.warn('[cockpit_hydrate] daily-pick fetch failed');
         });
 
+      fetchJsonRetry('/api/pump-alerts', 12000, 1)
+        .then(function (payload) { renderPumpAlerts(payload); })
+        .catch(function () {
+          console.warn('[cockpit_hydrate] pump-alerts fetch failed');
+        });
+
       await pause(800);
 
       fetchJsonRetry('/api/simivision', 20000, 1)
@@ -1444,5 +1500,9 @@
     run();
   }
 
-  window.__cockpitHome = { renderHero: renderHero, renderDailyPick: renderDailyPick };
+  window.__cockpitHome = {
+    renderHero: renderHero,
+    renderDailyPick: renderDailyPick,
+    renderPumpAlerts: renderPumpAlerts,
+  };
 })();

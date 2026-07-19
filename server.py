@@ -538,6 +538,26 @@ def _public_base_url(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
+def _pump_alerts_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
+    try:
+        from internal.learning.pump_alert import build_pump_alerts
+
+        return {"pump_alerts": build_pump_alerts(subnets)}
+    except Exception as exc:
+        logger.warning("pump alerts context failed: %s", exc)
+        return {
+            "pump_alerts": {
+                "status": "unavailable",
+                "count": 0,
+                "alerts": [],
+                "empty_message": (
+                    "No names in PUMPING right now. Early heat stays on the dossier chip when the lead is warming."
+                ),
+                "error": str(exc),
+            }
+        }
+
+
 def _degraded_index_context(request: Request) -> Dict[str, Any]:
     """Fast shell — registry subnets + local learning state; hydrate upgrades live APIs."""
     now = time.time()
@@ -577,6 +597,7 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
         },
     }
     ctx.update(_fast_home_hero_context(trust_banner))
+    ctx.update(_pump_alerts_context(subnets))
     stash = {k: v for k, v in ctx.items() if k != "request"}
     _DEGRADED_INDEX_CACHE["at"] = now
     _DEGRADED_INDEX_CACHE["ctx"] = stash
@@ -608,6 +629,7 @@ def _minimal_index_context(request: Request) -> Dict[str, Any]:
             "avg_confidence": 0.0,
         },
         **_fast_home_hero_context(trust_banner),
+        **_pump_alerts_context([]),
     }
 
 
@@ -688,6 +710,8 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
         context.update(build_signal_hub_context())
     except Exception as exc:
         logger.warning("Signal hub context unavailable: %s", exc)
+
+    context.update(_pump_alerts_context(subnets))
 
     return context
 
@@ -1149,6 +1173,27 @@ async def preview_k3_hold(request: Request):
         "preview/k3_hold.html",
         build_k3_hold_preview_context(request),
     )
+
+
+@app.get("/preview/k3-pump-alert")
+async def preview_k3_pump_alert(request: Request):
+    """SSR preview for K3-8 Pump Alert lane — hydrate off for phone sign-off."""
+    from internal.preview.k3_pump_alert import build_k3_pump_alert_preview_context
+
+    return templates.TemplateResponse(
+        "preview/k3_pump_alert.html",
+        build_k3_pump_alert_preview_context(request),
+    )
+
+
+@app.get("/api/pump-alerts")
+async def api_pump_alerts():
+    from internal.subnet_names import enrich_subnet_rows
+
+    subnets = enrich_subnet_rows(list(load_data("config/registry.json").values()))
+    from internal.learning.pump_alert import build_pump_alerts
+
+    return build_pump_alerts(subnets)
 
 
 # ---------------------------------------------------------------------------
