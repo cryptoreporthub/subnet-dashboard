@@ -1,7 +1,16 @@
 # Subnet Dashboard Coordination Board
 
 **Last updated:** 2026-07-19T10:00:00Z  
-**main:** `b4433a1` · **K3-7 + K3-7b MERGED** (#361, #362) · **K3-8 LOCK ready**
+**main:** `b4433a1` · **K3-8 in PR** (#364)
+
+## In flight
+
+- **K3-8 Pump Alert lane** (#364) — Grok LOCK `k3-8-pump-alert-lock.md` · `/preview/k3-pump-alert`
+
+## Next slice queue
+
+1. Merge **K3-8** (#364) + phone QA
+2. **Telegram** — H4 session bootstrap + `MESSAGE_INTEL_LISTENER=on` + feed
 
 ## Done (K3 sprint)
 
@@ -25,4 +34,4 @@ Trader hero (move/thesis/vs/trigger), cool HOLD styling, also-weighed line, hydr
 
 ## Next slice queue
 
-None gated — K3 Phase 1 + K3-7/7b complete.
+None gated — K3 Phase 1 + K3-7/7b complete. K3-8 Pump Alert PR open.
