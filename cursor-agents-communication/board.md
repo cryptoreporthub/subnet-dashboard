@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-19T08:05:00Z  
-**main:** `9028a84` · **K3-7 + K3-7b MERGED** (#361, #362)
+**Last updated:** 2026-07-19T10:00:00Z  
+**main:** `b4433a1` · **K3-7 + K3-7b MERGED** (#361, #362) · **K3-8 LOCK ready**
 
 ## Done (K3 sprint)
 
