@@ -55,6 +55,7 @@ CONTRACT = [
     ("GET", "/api/whales/wallet/5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", None),
     ("GET", "/api/whales/alerts", None),
     ("GET", "/api/whales/subnet/1/flow", None),
+    ("GET", "/api/whales/flow-signals", None),
     (
         "POST",
         "/api/whales/events",

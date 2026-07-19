@@ -173,3 +173,41 @@ def test_all_leaderboards(whale_paths):
     svc = WhaleIntelligenceService(config_path=config, data_path=data)
     boards = svc.get_all_leaderboards(limit=10)
     assert set(boards.keys()) == set(TRACKING_DIMENSIONS)
+
+
+def test_detect_flow_signals_honest_empty(whale_paths):
+    config, data = whale_paths
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    payload = svc.detect_flow_signals()
+    assert payload["data_available"] is False
+    assert payload["signals"] == []
+
+
+def test_detect_flow_signals_accumulation_flip(whale_paths):
+    from datetime import datetime, timedelta, timezone
+
+    config, data = whale_paths
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    now = datetime.now(timezone.utc)
+    wallet = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+    svc.record_event(
+        wallet,
+        64,
+        "sell",
+        120.0,
+        timestamp=(now - timedelta(hours=36)).isoformat(),
+        subnet_name="Chutes",
+    )
+    svc.record_event(
+        wallet,
+        64,
+        "buy",
+        200.0,
+        timestamp=(now - timedelta(hours=6)).isoformat(),
+        subnet_name="Chutes",
+    )
+
+    payload = svc.detect_flow_signals(hours=24)
+    assert payload["data_available"] is True
+    flips = [s for s in payload["signals"] if s.get("kind") == "flow_flip"]
+    assert any(s["netuid"] == 64 and s["flip_direction"] == "accumulation" for s in flips)

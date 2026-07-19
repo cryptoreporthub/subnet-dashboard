@@ -121,6 +121,13 @@ async def whales_subnet_flow(netuid: int):
     }
 
 
+@whales_router.get("/api/whales/flow-signals")
+async def whales_flow_signals(hours: int = Query(24, ge=1, le=168), limit: int = Query(50, ge=1, le=200)):
+    payload = _get_service().detect_flow_signals(hours=hours)
+    signals = payload.get("signals") or []
+    return {**payload, "count": len(signals), "signals": signals[:limit]}
+
+
 @whales_router.post("/api/whales/events")
 async def whales_record_event(event: WhaleEventIn):
     return _get_service().record_event(

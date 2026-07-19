@@ -482,6 +482,147 @@ class WhaleIntelligenceService:
             )
         return flow
 
+    def detect_flow_signals(self, hours: int = 24) -> Dict[str, Any]:
+        """Per-subnet flow flips and volume surges from the event ledger."""
+        honesty = self._ledger_honesty()
+        if not honesty["data_available"]:
+            return {
+                "status": "success",
+                **honesty,
+                "hours": hours,
+                "signals": [],
+                "summary": {
+                    "accumulation": 0,
+                    "distribution": 0,
+                    "flips": 0,
+                    "surges": 0,
+                    "total_net_flow_tao": 0.0,
+                },
+            }
+
+        now = datetime.now(timezone.utc)
+        cur_start = now - timedelta(hours=hours)
+        prev_start = now - timedelta(hours=hours * 2)
+        min_notional = float(self.config.get("min_tao_notional", 50.0))
+
+        # ponytail: O(events) scan — fine for ledger scale; upgrade path: pre-aggregate windows
+        cur: Dict[int, Dict[str, float]] = {}
+        prev: Dict[int, Dict[str, float]] = {}
+        names: Dict[int, str] = {}
+
+        for ev in self.data.get("events") or []:
+            ts = _parse_iso(ev.get("timestamp"))
+            if not ts:
+                continue
+            nuid = ev.get("netuid")
+            if nuid is None:
+                continue
+            nuid = int(nuid)
+            amt = float(ev.get("amount_tao") or 0)
+            if amt < min_notional:
+                continue
+            side = (ev.get("side") or "").lower()
+            signed = amt if side == "buy" else -amt if side == "sell" else 0.0
+            if not signed:
+                continue
+            if ev.get("subnet_name"):
+                names[nuid] = str(ev["subnet_name"])
+
+            if ts >= cur_start:
+                bucket = cur.setdefault(nuid, {"net": 0.0, "vol": 0.0, "buys": 0, "sells": 0})
+                bucket["net"] += signed
+                bucket["vol"] += amt
+                if side == "buy":
+                    bucket["buys"] += 1
+                else:
+                    bucket["sells"] += 1
+            elif ts >= prev_start:
+                bucket = prev.setdefault(nuid, {"net": 0.0, "vol": 0.0, "buys": 0, "sells": 0})
+                bucket["net"] += signed
+                bucket["vol"] += amt
+
+        all_netuids = set(cur) | set(prev)
+        signals: List[Dict[str, Any]] = []
+        acc_count = dist_count = flip_count = surge_count = 0
+        total_net = 0.0
+
+        for nuid in all_netuids:
+            c = cur.get(nuid, {"net": 0.0, "vol": 0.0, "buys": 0, "sells": 0})
+            p = prev.get(nuid, {"net": 0.0, "vol": 0.0})
+            net = round(c["net"], 4)
+            total_net += net
+            prev_net = round(p["net"], 4)
+            vol = round(c["vol"], 4)
+            prev_vol = round(p["vol"], 4)
+
+            flip_dir = None
+            if prev_net < 0 <= net or prev_net <= 0 < net:
+                flip_dir = "accumulation"
+                flip_count += 1
+            elif prev_net > 0 >= net or prev_net >= 0 > net:
+                flip_dir = "distribution"
+                flip_count += 1
+
+            surge = prev_vol > 0 and vol >= prev_vol * 2 and vol >= min_notional * 2
+            if surge:
+                surge_count += 1
+
+            if net > 0:
+                acc_count += 1
+            elif net < 0:
+                dist_count += 1
+
+            if flip_dir is None and not surge and abs(net) < min_notional:
+                continue
+
+            flow = self.get_subnet_flow(nuid)
+            strength = min(100, int(abs(net) / max(min_notional, 1) * 10 + (20 if flip_dir else 0) + (15 if surge else 0)))
+
+            sig: Dict[str, Any] = {
+                "netuid": nuid,
+                "subnet_name": names.get(nuid),
+                "net_flow_tao": net,
+                "prev_net_flow_tao": prev_net,
+                "volume_tao": vol,
+                "buy_wallets": c.get("buys", 0),
+                "sell_wallets": c.get("sells", 0),
+                "strength": strength,
+                "rugger_count": len(flow.get("by_classification", {}).get("ruggers", [])),
+                "avoid_follow": flow.get("avoid_follow", False),
+            }
+            if flip_dir:
+                sig["kind"] = "flow_flip"
+                sig["flip_direction"] = flip_dir
+                sig["label"] = (
+                    f"24h flow flipped green · +{net}τ"
+                    if flip_dir == "accumulation"
+                    else f"24h flow flipped red · {net}τ"
+                )
+            elif surge:
+                sig["kind"] = "volume_surge"
+                sig["label"] = f"Volume surge · {vol}τ"
+            else:
+                sig["kind"] = "net_flow"
+                sig["label"] = f"Net {'buying' if net > 0 else 'selling'} · {net:+}τ"
+
+            signals.append(sig)
+
+        signals.sort(key=lambda s: s.get("strength", 0), reverse=True)
+        return {
+            "status": "success",
+            "data_available": True,
+            "source": "ledger",
+            "hours": hours,
+            "signals": signals,
+            "summary": {
+                "accumulation": acc_count,
+                "distribution": dist_count,
+                "flips": flip_count,
+                "surges": surge_count,
+                "total_net_flow_tao": round(total_net, 4),
+            },
+        }
+
     def discount_score(self, netuid: int, base_score: float) -> Tuple[float, Dict[str, Any]]:
         flow = self.get_subnet_flow(netuid)
         ruggers = flow.get("by_classification", {}).get("ruggers", [])

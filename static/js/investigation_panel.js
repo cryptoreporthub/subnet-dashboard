@@ -7,6 +7,7 @@
   var boardsEl = document.getElementById('whale-leaderboards');
   var whaleSummaryEl = document.getElementById('inv-whale-summary');
   var ruggerStripEl = document.getElementById('inv-rugger-strip');
+  var flowStripEl = document.getElementById('inv-flow-strip');
   var signalsLoaded = false;
   if (!sellersBtn && !boardsEl && !whaleSummaryEl) return;
 
@@ -331,6 +332,43 @@
       });
   }
 
+  function renderFlowSignals(payload) {
+    if (!flowStripEl) return;
+    var body = flowStripEl.querySelector('.investigation-signal-card__body');
+    if (!body) body = flowStripEl;
+    if (!payload || payload.status !== 'success') {
+      body.innerHTML = '<p class="inv-empty">Flow signals unavailable.</p>';
+      return;
+    }
+    if (!payload.data_available) {
+      body.innerHTML = '<p class="inv-empty">No flow events — run a whale scan or ingest delegation events.</p>';
+      return;
+    }
+    var summary = payload.summary || {};
+    var signals = (payload.signals || []).filter(function (s) {
+      return s.kind === 'flow_flip' || s.kind === 'volume_surge';
+    });
+    var html =
+      '<p><strong>' + esc(String(summary.flips || 0)) + '</strong> flips · ' +
+      esc(String(summary.surges || 0)) + ' surges · net ' +
+      esc(String(summary.total_net_flow_tao != null ? summary.total_net_flow_tao : '0')) + 'τ</p>';
+    if (!signals.length) {
+      html += '<p class="inv-muted">No flips or surges in the last ' + esc(String(payload.hours || 24)) + 'h.</p>';
+      body.innerHTML = html;
+      return;
+    }
+    html += '<ul class="inv-flow-list">';
+    signals.slice(0, 4).forEach(function (s) {
+      var dir = s.flip_direction === 'accumulation' ? 'flow-green' : 'flow-red';
+      var name = s.subnet_name ? esc(s.subnet_name) : 'SN' + esc(s.netuid);
+      var rug = s.avoid_follow ? ' · rugger' : '';
+      html += '<li class="' + dir + '"><a href="/subnet/' + esc(s.netuid) + '">' + name + '</a> · ' +
+        esc(s.label || s.kind) + rug + '</li>';
+    });
+    html += '</ul>';
+    body.innerHTML = html;
+  }
+
   function loadSignalStrips() {
     if (signalsLoaded) return Promise.resolve();
     signalsLoaded = true;
@@ -338,9 +376,11 @@
       fetch('/api/whales/summary').then(function (r) { return r.json(); }).catch(function () { return null; }),
       fetch('/api/whales/alerts').then(function (r) { return r.json(); }).catch(function () { return null; }),
       fetch('/api/ruggers/summary').then(function (r) { return r.json(); }).catch(function () { return null; }),
+      fetch('/api/whales/flow-signals?limit=12').then(function (r) { return r.json(); }).catch(function () { return null; }),
     ]).then(function (res) {
       renderWhaleSummary(res[0], res[1]);
       renderRuggerSummary(res[2]);
+      renderFlowSignals(res[3]);
     });
   }
 

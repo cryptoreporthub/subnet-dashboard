@@ -31,6 +31,16 @@ def whale_flow_badge_from_flow(flow: Dict[str, Any]) -> Dict[str, Any]:
             "netuid": netuid,
         }
 
+    flip = flow.get("flow_flip") if isinstance(flow.get("flow_flip"), dict) else None
+    if flip and flip.get("flip_direction") == "accumulation" and not flow.get("avoid_follow"):
+        return {
+            "kind": _BADGE_KIND,
+            "label": "Flow flip · accumulation",
+            "status": "live",
+            "netuid": netuid,
+            "flow_flip": True,
+        }
+
     open_pos = int(flow.get("open_positions") or 0)
     if flow.get("avoid_follow"):
         return {
@@ -65,6 +75,13 @@ def whale_flow_badge_from_flow(flow: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _flow_flip_for_netuid(signals_payload: Dict[str, Any], netuid: int) -> Optional[Dict[str, Any]]:
+    for sig in signals_payload.get("signals") or []:
+        if int(sig.get("netuid", -1)) == int(netuid) and sig.get("kind") == "flow_flip":
+            return sig
+    return None
+
+
 def whale_flow_badge(
     netuid: int,
     *,
@@ -76,4 +93,8 @@ def whale_flow_badge(
     payload = flow if flow is not None else svc.get_subnet_flow(int(netuid))
     if "netuid" not in payload:
         payload = {**payload, "netuid": int(netuid)}
+    if payload.get("data_available") and "flow_flip" not in payload:
+        flip = _flow_flip_for_netuid(svc.detect_flow_signals(), int(netuid))
+        if flip:
+            payload = {**payload, "flow_flip": flip}
     return whale_flow_badge_from_flow(payload)
