@@ -332,6 +332,20 @@
     el.textContent = String(value);
   }
 
+  function setTriggerHtml(text) {
+    var el = document.getElementById('k3-brief-trigger');
+    if (!el) return;
+    if (!text) {
+      el.hidden = true;
+      el.innerHTML = '';
+      return;
+    }
+    var body = String(text).replace(/^Flip to LONG when /, 'Long when ');
+    el.hidden = false;
+    el.innerHTML =
+      '<span class="k3-brief-trigger__kicker">FLIP</span>' + body;
+  }
+
   function patchK3DossierFromPayload(payload) {
     if (!payload || !document.getElementById('k3-dossier')) return false;
     var brief = payload.brief || {};
@@ -343,16 +357,32 @@
     var finalConf = confSrc.final_confidence != null ? confSrc.final_confidence : confSrc.confidence;
     var fc = confTier(finalConf != null ? finalConf : 0);
 
-    if (brief.move) {
-      setText('k3-call-headline', brief.move);
-      var headline = document.getElementById('k3-call-headline');
-      if (headline) {
-        headline.className = 'k3-call-headline k3-call-headline--' + (brief.tone || 'neutral');
+    if (brief.verb) {
+      setText('k3-call-verb', brief.verb);
+      var verbEl = document.getElementById('k3-call-verb');
+      if (verbEl) verbEl.className = 'k3-call-verb k3-call-verb--' + (brief.tone || 'neutral');
+    }
+    if (brief.target) setText('k3-call-target-name', brief.target);
+    var pctEl = document.getElementById('k3-call-pct');
+    if (pctEl) {
+      var pct = brief.conviction_pct != null ? parseInt(brief.conviction_pct, 10) : fc.conf;
+      if (pct > 0) {
+        pctEl.textContent = pct + '%';
+        pctEl.hidden = false;
+      } else {
+        pctEl.hidden = true;
       }
     }
+    if (brief.conviction_note) {
+      setText('k3-call-conviction-note', brief.conviction_note);
+    } else {
+      var noteEl = document.getElementById('k3-call-conviction-note');
+      if (noteEl) noteEl.hidden = true;
+    }
+    if (brief.move) setText('k3-call-headline', brief.move);
     setText('k3-brief-thesis', brief.thesis || '');
     setText('k3-brief-vs', brief.vs || '');
-    setText('k3-brief-trigger', brief.trigger || '');
+    setTriggerHtml(brief.trigger || '');
 
     var pump = payload.pump_chip || {};
     var pumpChip = document.getElementById('k3-pump-chip');

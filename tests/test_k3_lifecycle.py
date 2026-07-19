@@ -9,8 +9,8 @@ def test_home_renders_k3_lifecycle_layers():
     with TestClient(app) as client:
         html = client.get("/").text
     assert "k3-lifecycle-outcome" in html
-    assert "k3-lifecycle-learning" in html
     assert "Council lifecycle" in html
+    assert "k3-layer-outcome" not in html
 
 
 def test_mindmap_story_path_returns_steps():

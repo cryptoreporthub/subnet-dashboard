@@ -174,6 +174,10 @@ def build_dpick_brief(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Return move / thesis / vs / trigger for council_stage hero."""
     empty: Dict[str, Any] = {
         "move": "",
+        "verb": "",
+        "target": "",
+        "conviction_pct": 0,
+        "conviction_note": "",
         "thesis": "",
         "vs": "",
         "trigger": "",
@@ -198,6 +202,7 @@ def build_dpick_brief(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
     if audit_pick:
         label = _subnet_label(block if isinstance(block, dict) else None)
+        target = _short_name(block if isinstance(block, dict) else None)
         move = f"LONG · {label}"
         thesis = (
             "Judges aligned on 24h mean-reversion with room left in the move. "
@@ -205,16 +210,22 @@ def build_dpick_brief(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         )
         trigger = ""
         tone = "go"
+        verb = "LONG"
+        conviction_note = ""
     elif cand and act == "HOLD":
         label = _short_name(block if isinstance(block, dict) else None)
+        target = label
         move = f"HOLD · {label}"
         thesis = (
-            "Closest long on the 24h desk — but conviction is still short of a sized long. "
-            "Price looks rich vs peers; no sized long until that gap closes."
+            "Closest long on the desk — but still half a size short of the bar. "
+            "Price looks rich vs peers."
         )
         trigger = _trigger_line(conviction, concerns, audit_pick=False)
         tone = "hold"
+        verb = "HOLD"
+        conviction_note = "Low conviction." if conviction < _AUDIT_GATE_PCT else ""
     elif act == "HOLD":
+        target = "no long"
         move = "HOLD · no long"
         thesis = (
             "Nothing on the shortlist clears conviction and risk together. "
@@ -224,12 +235,15 @@ def build_dpick_brief(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
             vs = (
                 vs
                 or f"{len(shortlist)} names reviewed — all failed liquidity or valuation. "
-                "Details in Deliberation."
+                "Details in Weighed against."
             )
         trigger = ""
         tone = "neutral"
+        verb = "HOLD"
+        conviction_note = ""
     elif act in ("LONG", "BUY"):
         label = _subnet_label(block if isinstance(block, dict) else None)
+        target = _short_name(block if isinstance(block, dict) else None)
         move = f"LONG · {label}"
         thesis = (
             "Judges aligned on 24h setup with room left in the move. "
@@ -237,21 +251,33 @@ def build_dpick_brief(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         )
         trigger = ""
         tone = "go"
+        verb = "LONG"
+        conviction_note = ""
     elif act in ("SHORT", "SELL"):
         label = _subnet_label(block if isinstance(block, dict) else None)
+        target = _short_name(block if isinstance(block, dict) else None)
         move = f"REDUCE · {label}"
         thesis = "Council lean is defensive on this name for the 24h window."
         trigger = ""
         tone = "caution"
+        verb = "REDUCE"
+        conviction_note = ""
     else:
         label = _short_name(block if isinstance(block, dict) else None)
+        target = label
         move = f"HOLD · {label}"
         thesis = "Council is tracking this name — no sized call yet."
         trigger = _trigger_line(conviction, concerns, audit_pick=False)
         tone = "neutral"
+        verb = "HOLD"
+        conviction_note = ""
 
     return {
         "move": move,
+        "verb": verb,
+        "target": target,
+        "conviction_pct": conviction,
+        "conviction_note": conviction_note,
         "thesis": thesis,
         "vs": vs,
         "trigger": trigger,

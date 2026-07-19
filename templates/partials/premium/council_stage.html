@@ -149,7 +149,7 @@
       .k3-layer-title { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; }
       .k3-signal { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #1a1d24; }
       .k3-signal:last-child { border-bottom: none; }
-      .k3-signal-name { font-size: 14px; font-weight: 500; }
+      .k3-signal-name { font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
       .k3-signal-value { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--k3-accent); }
       .k3-judge { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #1a1d24; }
       .k3-judge:last-child { border-bottom: none; }
@@ -241,9 +241,19 @@
       .k3-lifecycle-detail { display: block; font-size: 11px; color: var(--k3-muted); margin-top: 4px; line-height: 1.4; }
       .k3-candidate-gate { font-size: 11px; color: var(--k3-blue); margin: 8px 0 0; letter-spacing: 0.02em; opacity: 0.85; }
       .k3-call-lead { width: 100%; max-width: 340px; margin: 0 auto 12px; text-align: center; z-index: 2; position: relative; }
-      .k3-call-headline { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; letter-spacing: 0.04em; margin: 0 0 10px; color: var(--k3-text); line-height: 1.25; }
-      .k3-call-headline--hold { color: var(--k3-blue); text-shadow: 0 0 12px rgba(0, 212, 255, 0.25); }
-      .k3-call-headline--go { color: var(--k3-green); text-shadow: 0 0 12px rgba(57, 255, 20, 0.2); }
+      .k3-call-stack { margin: 0 0 10px; }
+      .k3-call-verb { font-family: 'JetBrains Mono', monospace; font-size: 30px; font-weight: 700; letter-spacing: 0.12em; margin: 0; line-height: 1.1; }
+      .k3-call-verb--hold { color: var(--k3-blue); text-shadow: 0 0 12px rgba(0, 212, 255, 0.25); }
+      .k3-call-verb--go { color: var(--k3-green); text-shadow: 0 0 12px rgba(57, 255, 20, 0.2); }
+      .k3-call-verb--caution { color: var(--k3-pink); }
+      .k3-call-target { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 600; margin: 6px 0 0; color: var(--k3-text); line-height: 1.2; }
+      .k3-call-pct { color: var(--k3-green); margin-left: 10px; font-weight: 700; }
+      .k3-call-conviction-note { font-size: 12px; color: var(--k3-muted); margin: 6px 0 0; letter-spacing: 0.02em; }
+      .k3-call-headline { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+      .k3-orb--compact { width: 108px; height: 108px; margin: 12px auto 4px; }
+      .k3-orb--compact .k3-orb-score { font-size: 28px; }
+      .k3-orb--compact .k3-orb-label { font-size: 9px; }
+      .k3-claim { min-height: 280px; }
       .k3-brief { text-align: left; width: 100%; max-width: 340px; margin: 0 auto 8px; padding: 0; z-index: 1; }
       .k3-brief-thesis { font-size: 14px; line-height: 1.5; color: var(--k3-text); margin: 0 0 8px; text-align: center; }
       .k3-brief-vs { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.45; color: var(--k3-muted); margin: 0 0 8px; text-align: center; }
@@ -275,36 +285,17 @@
           <div class="k3-layer open" id="k3-layer-claim">
             <div class="k3-claim{% if not audit_pick and act == 'HOLD' %} k3-claim--hold{% endif %}">
               <div class="k3-call-lead">
-                {% if brief.move %}
-                <h2 class="k3-call-headline k3-call-headline--{{ brief.tone|default('neutral') }}" id="k3-call-headline">{{ brief.move }}</h2>
-                {% else %}
-                <h2 class="k3-call-headline k3-call-headline--{{ 'go' if act == 'LONG' else 'hold' }}" id="k3-call-headline">{% if act == 'LONG' %}LONG{% else %}HOLD{% endif %} · {{ sn.name|default('SN' ~ sn.netuid) }}</h2>
-                {% endif %}
+                <div class="k3-call-stack" id="k3-call-stack">
+                  <p class="k3-call-verb k3-call-verb--{{ brief.tone|default('neutral') }}" id="k3-call-verb">{{ brief.verb|default(act) }}</p>
+                  <p class="k3-call-target" id="k3-call-target">
+                    <span id="k3-call-target-name">{{ brief.target|default(sn.name|default('SN' ~ sn.netuid)) }}</span>{% if conviction_pct > 0 %}<span class="k3-call-pct" id="k3-call-pct">{{ conviction_pct }}%</span>{% else %}<span class="k3-call-pct" id="k3-call-pct" hidden></span>{% endif %}
+                  </p>
+                  {% if brief.conviction_note %}<p class="k3-call-conviction-note" id="k3-call-conviction-note">{{ brief.conviction_note }}</p>{% else %}<p class="k3-call-conviction-note" id="k3-call-conviction-note" hidden></p>{% endif %}
+                </div>
+                <h2 class="k3-call-headline" id="k3-call-headline">{{ brief.move|default(act ~ ' · ' ~ sn.name|default('SN' ~ sn.netuid)) }}</h2>
                 {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
                 {% if brief.vs %}<p class="k3-brief-vs k3-also-weighed" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
                 {% if brief.trigger %}<p class="k3-brief-trigger" id="k3-brief-trigger"><span class="k3-brief-trigger__kicker">FLIP</span>{{ brief.trigger|replace('Flip to LONG when ', 'Long when ', 1) }}</p>{% endif %}
-              </div>
-              <div class="k3-orb-bg"></div>
-              <div class="k3-orb-glow"></div>
-              <div class="k3-orb k3-ring--{{ ring_state }}"{% if resolve_at_iso %} data-resolve-at="{{ resolve_at_iso }}"{% endif %}>
-                <svg viewBox="0 0 148 148">
-                  <defs><linearGradient id="k3-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#39ff14"/><stop offset="33%" stop-color="#00d4ff"/><stop offset="66%" stop-color="#ff69b4"/><stop offset="100%" stop-color="#ffa500"/></linearGradient></defs>
-                  <circle class="ring-track" cx="74" cy="74" r="62"/>
-                  <circle class="ring-fill" cx="74" cy="74" r="62" style="--ring-offset: {{ ring_offset }}"/>
-                </svg>
-                <div class="k3-orb-center">
-                  {% if conviction_pct > 0 %}
-                    {% set tens = (conviction_pct // 10) %}
-                    {% set ones = conviction_pct % 10 %}
-                    <div class="k3-orb-score" id="k3-orb-score">
-                      {% if tens > 0 %}<span class="digit-tens">{{ tens }}</span>{% endif %}
-                      <span class="digit-ones">{{ ones }}</span>
-                    </div>
-                  {% else %}
-                    <div class="k3-orb-score"><span class="digit-ones">—</span></div>
-                  {% endif %}
-                  <div class="k3-orb-label" id="k3-orb-label">conviction</div>
-                </div>
               </div>
               {% if temporal_badge %}
               <div id="k3-temporal-badge" class="k3-temporal-badge{% if ring_state == 'resolved' %} k3-temporal-badge--resolved{% else %} k3-temporal-badge--live{% endif %}"{% if resolve_at_iso %} data-resolve-at="{{ resolve_at_iso }}"{% endif %} aria-live="polite">{{ temporal_badge }}</div>
@@ -337,6 +328,28 @@
               <script type="application/json" id="k3-watchlist-pins">{{ pins | tojson }}</script>
               <p id="k3-horizon-note" class="k3-horizon-note" hidden></p>
               {% endif %}
+              <div class="k3-orb-bg"></div>
+              <div class="k3-orb-glow"></div>
+              <div class="k3-orb k3-orb--compact k3-ring--{{ ring_state }}"{% if resolve_at_iso %} data-resolve-at="{{ resolve_at_iso }}"{% endif %}>
+                <svg viewBox="0 0 148 148">
+                  <defs><linearGradient id="k3-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#39ff14"/><stop offset="33%" stop-color="#00d4ff"/><stop offset="66%" stop-color="#ff69b4"/><stop offset="100%" stop-color="#ffa500"/></linearGradient></defs>
+                  <circle class="ring-track" cx="74" cy="74" r="62"/>
+                  <circle class="ring-fill" cx="74" cy="74" r="62" style="--ring-offset: {{ ring_offset }}"/>
+                </svg>
+                <div class="k3-orb-center">
+                  {% if conviction_pct > 0 %}
+                    {% set tens = (conviction_pct // 10) %}
+                    {% set ones = conviction_pct % 10 %}
+                    <div class="k3-orb-score" id="k3-orb-score">
+                      {% if tens > 0 %}<span class="digit-tens">{{ tens }}</span>{% endif %}
+                      <span class="digit-ones">{{ ones }}</span>
+                    </div>
+                  {% else %}
+                    <div class="k3-orb-score"><span class="digit-ones">—</span></div>
+                  {% endif %}
+                  <div class="k3-orb-label" id="k3-orb-label">conviction</div>
+                </div>
+              </div>
               <div class="k3-claim-meta" id="k3-claim-meta" hidden>SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}</div>
               {% if act == 'LONG' %}<div class="k3-badge buy" id="k3-action-badge" hidden>BUY</div>
               {% elif act == 'SHORT' %}<div class="k3-badge sell" id="k3-action-badge" hidden>SELL</div>
@@ -394,17 +407,18 @@
           <div class="k3-layer open" id="k3-layer-claim">
             <div class="k3-claim k3-claim--hold">
               <div class="k3-call-lead">
-                {% if brief.move %}
-                <h2 class="k3-call-headline k3-call-headline--{{ brief.tone|default('neutral') }}" id="k3-call-headline">{{ brief.move }}</h2>
-                {% else %}
-                <h2 class="k3-call-headline k3-call-headline--hold" id="k3-call-headline">HOLD · no long</h2>
-                {% endif %}
+                <div class="k3-call-stack" id="k3-call-stack">
+                  <p class="k3-call-verb k3-call-verb--hold" id="k3-call-verb">HOLD</p>
+                  <p class="k3-call-target" id="k3-call-target"><span id="k3-call-target-name">no long</span><span class="k3-call-pct" id="k3-call-pct" hidden></span></p>
+                  <p class="k3-call-conviction-note" id="k3-call-conviction-note" hidden></p>
+                </div>
+                <h2 class="k3-call-headline" id="k3-call-headline">{{ brief.move|default('HOLD · no long') }}</h2>
                 {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
                 {% if brief.vs %}<p class="k3-brief-vs" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
               </div>
               <div class="k3-orb-bg"></div>
               <div class="k3-orb-glow"></div>
-              <div class="k3-orb k3-ring--{{ ring_state }}">
+              <div class="k3-orb k3-orb--compact k3-ring--{{ ring_state }}">
                 <svg viewBox="0 0 148 148">
                   <defs><linearGradient id="k3-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#39ff14"/><stop offset="33%" stop-color="#00d4ff"/><stop offset="66%" stop-color="#ff69b4"/><stop offset="100%" stop-color="#ffa500"/></linearGradient></defs>
                   <circle class="ring-track" cx="74" cy="74" r="62"/>
@@ -491,48 +505,7 @@
         </div>
       </div>
 
-      {# ---- OUTCOME LAYER ---- #}
-      <div class="k3-layer" id="k3-layer-outcome">
-        <button class="k3-layer-header" onclick="k3Toggle('k3-layer-outcome')" aria-expanded="false">
-          <span>Outcome</span><span class="k3-layer-icon">▸</span>
-        </button>
-        <div class="k3-layer-body">
-          <div class="k3-layer-title">Resolution &amp; grading</div>
-          <div class="k3-outcome-status">
-            {% if outcome_status == 'resolved' %}<div class="k3-outcome-icon resolved">✓</div>{% else %}<div class="k3-outcome-icon pending">⏳</div>{% endif %}
-            <div class="k3-outcome-text">
-              {% if outcome_status == 'resolved' %}Resolved. {{ outcome_note if outcome_note else 'Graded against ' ~ horizon ~ ' price movement.' }}
-              {% else %}First resolution pending. This pick will be graded against {{ horizon }} price movement once the window closes.{% endif %}
-            </div>
-          </div>
-          {% if resolves_in %}
-          <p class="k3-layer-subtitle" style="margin-top: 12px;">Resolve window · {{ resolves_in }} remaining · graded against {{ horizon }} movement</p>
-          {% endif %}
-          <div class="k3-lifecycle" id="k3-lifecycle-outcome">
-            <div class="k3-layer-title">Council lifecycle</div>
-            {% if sp.data_available and lifecycle_steps and lifecycle_steps|length > 0 %}
-            <ol class="k3-lifecycle-chain" aria-label="Pick lifecycle path">
-              {% for step in lifecycle_steps[:4] %}
-              <li class="k3-lifecycle-step k3-lifecycle-step--{{ step.status|default('done') }}">
-                <span class="k3-lifecycle-label">{{ step.label|default('Step') }}</span>
-                <span class="k3-lifecycle-title">{{ step.title|default('—') }}</span>
-                {% if step.detail %}<span class="k3-lifecycle-detail">{{ step.detail }}</span>{% endif %}
-              </li>
-              {% endfor %}
-            </ol>
-            {% else %}
-            <div class="k3-empty" style="padding: 16px 0;">
-              <div class="k3-empty-text" style="font-size: 12px;">
-                {% if sp.reason == 'no_pick' %}This pick is still forming. Council lifecycle appears when conviction clears a sized call.
-                {% else %}Lifecycle path warming up. Signal → deliberation → outcome chain will surface as grading matures.{% endif %}
-              </div>
-            </div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-
-      {# ---- TRACK RECORD LAYER ---- #}
+      {# ---- TRACK RECORD LAYER (includes resolution + lifecycle) ---- #}
       <div class="k3-layer" id="k3-layer-learning">
         <button class="k3-layer-header" onclick="k3Toggle('k3-layer-learning')" aria-expanded="false">
           <span>Track record</span><span class="k3-layer-icon">▸</span>
@@ -544,30 +517,36 @@
           </div>
           {% if outcome_status == 'resolved' or resolves_in %}
           <div class="k3-track-window">
-            <div class="k3-track-window__label">Last window</div>
+            <div class="k3-track-window__label">This window</div>
             <div class="k3-track-window__value">
               {% if outcome_status == 'resolved' %}{{ outcome_note if outcome_note else 'Graded · ' ~ horizon ~ ' movement' }}
               {% else %}Pending · {{ resolves_in }} left · graded on {{ horizon }} close{% endif %}
             </div>
           </div>
           {% endif %}
+          <div class="k3-lifecycle" id="k3-lifecycle-outcome">
+            <div class="k3-layer-title">Council lifecycle</div>
+            {% if sp.data_available and lifecycle_steps and lifecycle_steps|length > 0 %}
+            <ol class="k3-lifecycle-chain" aria-label="Pick lifecycle path">
+              {% for step in lifecycle_steps[:5] %}
+              <li class="k3-lifecycle-step k3-lifecycle-step--{{ step.status|default('done') }}">
+                <span class="k3-lifecycle-label">{{ step.label|default('Step') }}</span>
+                <span class="k3-lifecycle-title">{{ step.title|default('—') }}</span>
+                {% if step.detail %}<span class="k3-lifecycle-detail">{{ step.detail }}</span>{% endif %}
+              </li>
+              {% endfor %}
+            </ol>
+            {% else %}
+            <div class="k3-empty" style="padding: 12px 0;">
+              <div class="k3-empty-text" style="font-size: 12px;">Lifecycle path appears when a sized call is published and graded.</div>
+            </div>
+            {% endif %}
+          </div>
           {% if cal_n|int > 0 %}
           <p class="k3-track-footnote">We keep score on every call. {{ cal_acc }}% directional accuracy across {{ cal_n }} graded windows — published, not curated.</p>
           {% else %}
           <p class="k3-track-footnote">Graded outcomes will appear here as picks resolve. Published, not curated.</p>
           {% endif %}
-          <div class="k3-lifecycle" id="k3-lifecycle-learning" hidden>
-            {% if sp.data_available and lifecycle_steps|length > 4 %}
-            {% set learn_step = lifecycle_steps[4] %}
-            <div class="k3-lifecycle-step k3-lifecycle-step--{{ learn_step.status|default('pending') }}">
-              <span class="k3-lifecycle-label">{{ learn_step.label|default('5 · Weight nudge') }}</span>
-              <span class="k3-lifecycle-title">{{ learn_step.title|default('Learning loop') }}</span>
-              {% if learn_step.detail %}<span class="k3-lifecycle-detail">{{ learn_step.detail }}</span>{% endif %}
-            </div>
-            {% else %}
-            <div class="k3-empty" style="padding: 8px 0;"><div class="k3-empty-text" style="font-size: 12px;">Post-resolution learning adjusts council weights based on graded outcomes. Accuracy improves as sample size grows.</div></div>
-            {% endif %}
-          </div>
         </div>
       </div>
 
@@ -735,6 +714,44 @@ function k3SyncFocusNetuid(netuid, subnetName) {
   }
 }
 
+function k3ApplyCallStack(view) {
+  var sn = (view && view.subnet) || {};
+  var name = sn.name || (sn.netuid != null ? 'SN' + sn.netuid : '—');
+  var act = String((view && view.action) || 'HOLD').toUpperCase();
+  var verb = act === 'LONG' || act === 'BUY' ? 'LONG' : act === 'SHORT' || act === 'SELL' ? 'REDUCE' : 'HOLD';
+  var tone = k3HeadlineTone(view.action);
+  var pct = Math.max(0, Math.min(100, parseInt(view.conviction, 10) || 0));
+  var verbEl = document.getElementById('k3-call-verb');
+  if (verbEl) {
+    verbEl.textContent = verb;
+    verbEl.className = 'k3-call-verb k3-call-verb--' + tone;
+  }
+  var targetName = document.getElementById('k3-call-target-name');
+  if (targetName) targetName.textContent = name;
+  var pctEl = document.getElementById('k3-call-pct');
+  if (pctEl) {
+    if (pct > 0) {
+      pctEl.textContent = pct + '%';
+      pctEl.hidden = false;
+    } else {
+      pctEl.textContent = '';
+      pctEl.hidden = true;
+    }
+  }
+  var noteEl = document.getElementById('k3-call-conviction-note');
+  if (noteEl) {
+    if (verb === 'HOLD' && pct > 0 && pct < 45) {
+      noteEl.textContent = 'Low conviction.';
+      noteEl.hidden = false;
+    } else {
+      noteEl.textContent = '';
+      noteEl.hidden = true;
+    }
+  }
+  var headline = document.getElementById('k3-call-headline');
+  if (headline) headline.textContent = k3HeadlineForView(view);
+}
+
 function k3HeadlineForView(view) {
   var sn = (view && view.subnet) || {};
   var name = sn.name || (sn.netuid != null ? 'SN' + sn.netuid : '—');
@@ -765,11 +782,7 @@ function k3SwitchHorizon(chipId) {
     btn.setAttribute('aria-selected', on ? 'true' : 'false');
   });
   var sn = view.subnet || {};
-  var headline = document.getElementById('k3-call-headline');
-  if (headline) {
-    headline.textContent = k3HeadlineForView(view);
-    headline.className = 'k3-call-headline k3-call-headline--' + k3HeadlineTone(view.action);
-  }
+  k3ApplyCallStack(view);
   var metaEl = document.getElementById('k3-claim-meta');
   if (metaEl) {
     metaEl.textContent = 'SN' + sn.netuid + (sn.symbol ? ' · ' + sn.symbol : '');
