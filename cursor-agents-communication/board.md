@@ -1,7 +1,11 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-19T00:45:00Z  
-**main:** `f41c87c` · **K3 frontend unlock COMPLETE** · post-audit polish
+**Last updated:** 2026-07-19T05:05:00Z  
+**main:** `c06924a` · **K3-7 COPY IA** — Grok LOCK ready, Composer build next
+
+## Active slice
+
+**K3-7 Hero copy & IA** — Grok PASS lock in `k3-7-copy-ia-lock.md`. Supersedes Composer draft PR #360 (user: subpar). Next: Composer implements lock → phone sign-off.
 
 ## Done (K3 sprint)
 
@@ -24,4 +28,4 @@ Horizon chips (Now / 24h / 7d), temporal ring, deliberation shortlist, lifecycle
 
 ## Next slice queue
 
-None gated — K3 Phase 1 + post-audit checklist complete after deferred P2 merges.
+K3-7 copy implementation (Grok lock) → hydrate P0 (keep dossier on live `/`) → merge preview route.
