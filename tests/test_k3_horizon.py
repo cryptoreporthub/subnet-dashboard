@@ -34,6 +34,10 @@ def test_build_horizon_views_three_chips():
     assert out["chips"] == ["now", "24h", "7d"]
     assert out["views"]["now"]["subnet"]["netuid"] == 82
     assert out["views"]["24h"]["subnet"]["netuid"] == 14
+    assert out["views"]["now"]["stage_title"] == "Hour pick"
+    assert "MinoS" in out["views"]["now"]["stage_line"]
+    assert out["views"]["24h"]["stage_line"].startswith("24h call ·")
+    assert "LONG candidate" in out["views"]["24h"]["stage_line"]
     assert out["views"]["7d"]["lens"] == "trend"
     assert out["views"]["7d"]["note"] == "Trend lens — not graded"
     assert out["views"]["7d"]["conviction"] >= 70
@@ -73,5 +77,6 @@ def test_home_renders_horizon_chips():
     with TestClient(app) as client:
         html = client.get("/").text
     assert "k3-horizon-chips" in html or "k3-horizon-chip" in html
+    assert "k3-horizon-stage" in html
     assert "k3-watchlist-pins" in html
     assert "k3-evidence-title" in html

@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 _CHIP_LABELS = {"now": "Now", "24h": "24h", "7d": "7d"}
+_STAGE_TITLES = {"now": "Hour pick", "24h": "24h call", "7d": "7d trend"}
 
 
 def _conviction_pct(raw: Any) -> int:
@@ -91,6 +92,37 @@ def _view_subnet(sn: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     return canonical_subnet_display(sn)
 
 
+def _subnet_display_name(sn: Optional[Dict[str, Any]]) -> str:
+    if not isinstance(sn, dict):
+        return "—"
+    name = str(sn.get("name") or "").strip()
+    netuid = sn.get("netuid")
+    if name and not name.upper().startswith("SN") and netuid is not None:
+        return name
+    if name:
+        return name
+    if netuid is not None:
+        return f"SN{netuid}"
+    return "—"
+
+
+def _stage_line(chip_id: str, sn: Optional[Dict[str, Any]], action: str, conviction: int) -> str:
+    """Human line: stage + subnet + stance for horizon chip toggles."""
+    title = _STAGE_TITLES.get(chip_id, chip_id)
+    name = _subnet_display_name(sn)
+    act = (action or "HOLD").upper()
+    if act in ("LONG", "BUY"):
+        stance = "LONG candidate"
+    elif act in ("SHORT", "SELL"):
+        stance = "REDUCE lean"
+    else:
+        stance = "HOLD candidate"
+    pct = f" · {conviction}% conviction" if conviction > 0 else ""
+    if chip_id == "7d":
+        return f"{title} · {name}{pct} · not graded"
+    return f"{title} · {name}{pct} · {stance}"
+
+
 def _council_view(
     chip_id: str,
     *,
@@ -102,13 +134,16 @@ def _council_view(
     if not view_sn:
         return None
     conviction = _conviction_from_payload(payload)
+    action = _action_from_payload(payload)
     return {
         "id": chip_id,
         "label": _CHIP_LABELS.get(chip_id, chip_id),
+        "stage_title": _STAGE_TITLES.get(chip_id, chip_id),
+        "stage_line": _stage_line(chip_id, view_sn, action, conviction),
         "lens": lens,
         "subnet": view_sn,
         "conviction": conviction,
-        "action": _action_from_payload(payload),
+        "action": action,
         "note": None,
     }
 
@@ -145,9 +180,12 @@ def build_horizon_views(
         base = int(day_view.get("conviction") or 0)
         trend_conf = _trend_lens_confidence(base, pct_7d, str(day_view.get("action") or "HOLD"))
         if trend_conf is not None:
+            action_7d = str(day_view.get("action") or "HOLD")
             views["7d"] = {
                 "id": "7d",
                 "label": "7d",
+                "stage_title": _STAGE_TITLES["7d"],
+                "stage_line": _stage_line("7d", sn, action_7d, trend_conf),
                 "lens": "trend",
                 "subnet": dict(sn),
                 "conviction": trend_conf,
