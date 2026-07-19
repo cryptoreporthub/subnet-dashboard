@@ -320,10 +320,68 @@
     replaceEmptyIn('section-simivision-picks', '<div class="picks">' + cards + '</div>');
   }
 
+  function setText(id, value) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (value == null || value === '') {
+      el.hidden = true;
+      el.textContent = '';
+      return;
+    }
+    el.hidden = false;
+    el.textContent = String(value);
+  }
+
+  function patchK3DossierFromPayload(payload) {
+    if (!payload || !document.getElementById('k3-dossier')) return false;
+    var brief = payload.brief || {};
+    var pick = payload.pick;
+    var cand = payload.candidate;
+    var active = pick || cand;
+    var sn = (active && active.subnet) || {};
+    var confSrc = active || payload;
+    var finalConf = confSrc.final_confidence != null ? confSrc.final_confidence : confSrc.confidence;
+    var fc = confTier(finalConf != null ? finalConf : 0);
+
+    if (brief.move) {
+      setText('k3-call-headline', brief.move);
+      var headline = document.getElementById('k3-call-headline');
+      if (headline) {
+        headline.className = 'k3-call-headline k3-call-headline--' + (brief.tone || 'neutral');
+      }
+    }
+    setText('k3-brief-thesis', brief.thesis || '');
+    setText('k3-brief-vs', brief.vs || '');
+    setText('k3-brief-trigger', brief.trigger || '');
+
+    var orb = document.getElementById('k3-orb-score');
+    if (orb && fc.conf != null) {
+      var tens = Math.floor(fc.conf / 10);
+      var ones = fc.conf % 10;
+      orb.innerHTML =
+        (tens > 0 ? '<span class="digit-tens">' + tens + '</span>' : '') +
+        '<span class="digit-ones">' + ones + '</span>';
+    }
+
+    var pin = document.getElementById('habit-pin-btn');
+    if (pin && sn.netuid != null) {
+      pin.dataset.netuid = String(sn.netuid);
+      pin.disabled = false;
+      pin.removeAttribute('aria-disabled');
+    }
+    try {
+      document.dispatchEvent(new CustomEvent('home-daily-call-updated'));
+    } catch (e) {}
+    renderStageWhyNot(sn.netuid, payload.action || 'HOLD');
+    return true;
+  }
+
   function renderDailyPick(payload) {
-    // §34-1: patch call host only — never wipe trust banner / CTAs in #council-stage-body
+    // §34-1 / K3-7: patch K3 dossier fields — never wipe #k3-dossier via innerHTML
     if (!payload) return;
     lastDailyPickPayload = payload;
+    if (patchK3DossierFromPayload(payload)) return;
+
     var host = document.getElementById('home-daily-call');
     if (!host) host = document.getElementById('council-stage-body');
     if (!host) return;
@@ -1361,5 +1419,5 @@
     run();
   }
 
-  window.__cockpitHome = { renderHero: renderHero };
+  window.__cockpitHome = { renderHero: renderHero, renderDailyPick: renderDailyPick };
 })();
