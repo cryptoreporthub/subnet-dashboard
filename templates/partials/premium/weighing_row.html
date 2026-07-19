@@ -1,0 +1,75 @@
+{# Single Weighing Room row — expects pick (+ gap_tick from parent). #}
+{% set conv = (pick.conviction|default(0))|int %}
+{# conviction tiers: canonical cutoffs 75 / 55 / 35 (see static/js/conviction_tiers.js) #}
+{% set tier = 'tier-cyan' if conv > 75 else ('tier-lime' if conv > 55 else ('tier-gold' if conv > 35 else 'tier-red')) %}
+{% set state = (pick.deliberation_state|default('WEIGHING'))|string|upper %}
+{% set state_slug = state|lower|replace('_', '-') %}
+{% set delta = (pick.conviction_delta|default(0))|int %}
+{% set reason = pick.reason|default(pick.call_line)|default('Council still weighing this name.') %}
+<article class="wr-row wr-row--{{ state_slug }}{% if pick.closest_to_call %} wr-row--stitch{% endif %}"
+  data-netuid="{{ pick.netuid }}"
+  data-state="{{ state }}">
+  <button type="button" class="wr-row__face" aria-expanded="false" aria-controls="wr-peel-{{ pick.netuid }}">
+    <span class="wr-chip wr-chip--{{ state_slug }}">{{ state }}</span>
+    <div class="wr-row__main">
+      <div class="wr-name">
+        {{ pick.name|default('SN' ~ pick.netuid) }}
+        <span class="wr-netuid">SN{{ pick.netuid }}</span>
+      </div>
+      {% if pick.closest_to_call %}
+      <p class="wr-stitch">≈ today&apos;s call</p>
+      {% endif %}
+      <p class="wr-reason">{{ reason }}</p>
+      {% if delta > 0 %}
+      <p class="wr-delta wr-delta--up">▲ +{{ delta }}</p>
+      {% elif delta < 0 %}
+      <p class="wr-delta wr-delta--down">▼ {{ delta }}</p>
+      {% else %}
+      <p class="wr-delta wr-delta--flat">· steady</p>
+      {% endif %}
+    </div>
+    <div class="conv-ring {{ tier }}" style="--ring-pct: {{ conv }};{% if gap_tick is not none %} --gap-tick: {{ gap_tick }};{% endif %}">
+      <svg viewBox="0 0 46 46" aria-hidden="true">
+        <circle class="conv-ring-bg" cx="23" cy="23" r="20"></circle>
+        <circle class="conv-ring-fg" cx="23" cy="23" r="20"></circle>
+      </svg>
+      {% if gap_tick is not none %}
+      <span class="conv-ring-gap-tick" style="--gap-tick: {{ gap_tick }};" aria-hidden="true"></span>
+      {% endif %}
+      <div class="conv-ring-val">{{ conv }}</div>
+    </div>
+    <span class="wr-chevron" aria-hidden="true">›</span>
+  </button>
+  {% if pick.near_call_strip %}
+  <div class="wr-near-strip">{{ pick.near_call_strip }}</div>
+  {% endif %}
+  <div class="wr-peel" id="wr-peel-{{ pick.netuid }}" hidden>
+    <div class="wr-peel__block">
+      <div class="wr-peel__label">Why not the call</div>
+      <p>{{ pick.why_not|default("Has not crossed today's call threshold.") }}</p>
+    </div>
+    <div class="wr-peel__block">
+      <div class="wr-peel__label">What would make it the call</div>
+      <p>{{ pick.trigger|default('Council alignment above the Daily Call bar.') }}</p>
+    </div>
+    <div class="wr-peel__grid">
+      <div>
+        <div class="wr-peel__label">Proximity</div>
+        <div class="wr-peel__val">{{ pick.proximity|default(0) }}</div>
+      </div>
+      <div>
+        <div class="wr-peel__label">Conviction</div>
+        <div class="wr-peel__val">{{ conv }}%</div>
+      </div>
+      <div>
+        <div class="wr-peel__label">TAO/day</div>
+        <div class="wr-peel__val">{{ "%.2f"|format((pick.emission|default(0))|float) }}</div>
+      </div>
+      <div>
+        <div class="wr-peel__label">APY</div>
+        <div class="wr-peel__val">{{ "%.1f"|format((pick.apy|default(0))|float) }}%</div>
+      </div>
+    </div>
+    <p class="wr-peel__note">Judge split &amp; track record live with council grading on this name.</p>
+  </div>
+</article>

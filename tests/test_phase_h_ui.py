@@ -311,9 +311,12 @@ def test_h_full_simivision_picks_or_honest_empty():
     client = TestClient(app)
     html = client.get("/").text
     assert 'id="section-simivision-picks"' in html
-    assert "Conviction board" in html or "Council ranking" in html
-    # SSR shell is often empty; hydrate fills picks — only require honest empty or cards
-    assert "pick-card" in html or "warming up" in html
+    assert "Council is weighing" in html
+    assert "Conviction board" not in html or "Council is weighing" in html
+    # SSR shell may be empty; hydrate fills — require honest empty or weighing rows
+    assert "wr-row" in html or "warming up" in html or "on the table" in html
+    assert "These may become tomorrow" in html
+    assert "pick-rank" not in html or "wr-row" in html
 
 
 def test_h_full_daily_pick_hero_or_honest_empty():
@@ -386,13 +389,17 @@ def test_c6_conviction_tiers_script_on_index():
 
 
 def test_c6_simivision_picks_template_uses_canonical_cutoffs():
-    src = open("templates/partials/premium/simivision_picks.html", encoding="utf-8").read()
+    src = open("templates/partials/premium/weighing_row.html", encoding="utf-8").read()
     assert "conv > 75" in src
     assert "conv > 55" in src
     assert "conv > 35" in src
     assert "conv > 80" not in src
     assert "conv > 60" not in src
     assert "conv > 40" not in src
+    assert "pick-rank" not in src
+    assert "deliberation_state" in open(
+        "templates/partials/premium/simivision_picks.html", encoding="utf-8"
+    ).read() or "NEAR-CALL" in src
 
 
 def test_c3_freshness_badge_has_aria_live():

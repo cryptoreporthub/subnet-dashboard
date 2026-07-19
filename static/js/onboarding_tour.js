@@ -23,8 +23,8 @@
         {
           element: '#section-simivision-picks',
           popover: {
-            title: 'SimiVision picks',
-            description: 'Ranked subnet intelligence from volume, momentum, and council scoring.',
+            title: 'Council is weighing',
+            description: 'Names still on the table — how close each is to becoming the call, not a ranked scoreboard.',
             side: 'top',
           },
         },

@@ -916,8 +916,7 @@ footer.status {
 }
 
 /* Important sections — orange → pink gradient borders */
-#section-daily-pick .hero-card,
-#section-simivision-picks .pick-card {
+#section-daily-pick .hero-card {
   border-width: var(--border-width-important);
   background-image: var(--card-panel-shine), var(--card-panel-fill), var(--important-border-gradient);
   background-origin: border-box;
@@ -925,9 +924,16 @@ footer.status {
   box-shadow: var(--shadow-card), var(--shadow-important);
 }
 
-#section-simivision-picks .pick-card::before {
-  height: 4px;
-  background: linear-gradient(90deg, #ff7a1a, #ff2bd6);
+/* Weighing Room — no rainbow/scoreboard chrome (LOCK) */
+#section-simivision-picks.weighing-room .wr-row,
+#section-simivision-picks .wr-row {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(8, 10, 16, 0.92);
+  box-shadow: none;
+  background-image: none;
+}
+#section-simivision-picks .wr-row::before {
+  display: none;
 }
 
 #section-daily-pick .hero-card::after {
@@ -966,4 +972,223 @@ footer.status {
 
 #section-council .expert.card-soft {
   border-width: var(--border-width);
+}
+
+/* ---------- Weighing Room (Conviction Board LOCK) ---------- */
+.weighing-room {
+  margin: 12px 0 20px;
+  padding: 0 12px;
+}
+.weighing-room .section-label {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+  color: rgba(233, 247, 239, 0.45);
+}
+.weighing-room .wr-updated {
+  font-weight: 400;
+  color: rgba(233, 247, 239, 0.35);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.weighing-room .section-title {
+  font-size: 20px;
+  margin: 4px 0 6px;
+}
+.weighing-room .section-sub {
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(233, 247, 239, 0.55);
+  margin: 0 0 10px;
+  max-width: 36em;
+}
+.wr-quiet,
+.wr-handoff {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: rgba(233, 247, 239, 0.45);
+  margin: 0 0 6px;
+}
+.wr-handoff { color: rgba(0, 212, 255, 0.75); }
+.wr-body { display: flex; flex-direction: column; gap: 14px; }
+.wr-band__label {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(233, 247, 239, 0.4);
+  margin: 0 0 8px;
+}
+.wr-band { display: flex; flex-direction: column; gap: 8px; }
+.wr-row {
+  border-radius: 12px;
+  overflow: hidden;
+  transition: opacity 0.2s ease;
+}
+.wr-row--fading { opacity: 0.62; }
+.wr-row__face {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.wr-chip {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 7px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(233, 247, 239, 0.7);
+  white-space: nowrap;
+}
+.wr-chip--near-call {
+  color: #39ff14;
+  border-color: rgba(57, 255, 20, 0.45);
+  background: rgba(57, 255, 20, 0.08);
+  animation: wr-near-pulse 2.2s ease-in-out infinite;
+}
+.wr-chip--weighing {
+  color: rgba(233, 247, 239, 0.65);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.wr-chip--fading {
+  color: rgba(255, 105, 180, 0.85);
+  border-color: rgba(255, 105, 180, 0.35);
+  background: rgba(255, 105, 180, 0.06);
+}
+@keyframes wr-near-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(57, 255, 20, 0); }
+  50% { box-shadow: 0 0 0 3px rgba(57, 255, 20, 0.12); }
+}
+.wr-row__main { min-width: 0; }
+.wr-name {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--txt, #e9f7ef);
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.wr-netuid {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(233, 247, 239, 0.4);
+}
+.wr-stitch {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: #39ff14;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.wr-reason {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: rgba(233, 247, 239, 0.62);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.wr-delta {
+  margin: 4px 0 0;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+}
+.wr-delta--up { color: #39ff14; }
+.wr-delta--down { color: #ff6980; }
+.wr-delta--flat { color: rgba(233, 247, 239, 0.35); }
+.wr-chevron {
+  font-size: 18px;
+  color: rgba(233, 247, 239, 0.35);
+  transition: transform 0.2s ease;
+}
+.wr-row.is-open .wr-chevron { transform: rotate(90deg); }
+.wr-near-strip {
+  margin: 0 12px 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #39ff14;
+  background: rgba(57, 255, 20, 0.07);
+  border: 1px solid rgba(57, 255, 20, 0.22);
+}
+.wr-peel {
+  padding: 0 12px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.wr-row.is-open .wr-peel { display: block; }
+.wr-peel[hidden] { display: none !important; }
+.wr-peel__block { margin-top: 10px; }
+.wr-peel__block p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(233, 247, 239, 0.7);
+}
+.wr-peel__label {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(233, 247, 239, 0.4);
+}
+.wr-peel__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+.wr-peel__val {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  margin-top: 2px;
+  color: var(--txt, #e9f7ef);
+}
+.wr-peel__note {
+  margin: 12px 0 0;
+  font-size: 11px;
+  color: rgba(233, 247, 239, 0.4);
+}
+.wr-footer {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: rgba(233, 247, 239, 0.42);
+  font-style: italic;
+}
+.conv-ring-gap-tick {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform: rotate(calc(var(--gap-tick, 0) * 3.6deg));
+}
+.conv-ring-gap-tick::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 2px;
+  height: 7px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.35);
+}
+.weighing-room .conv-ring { width: 44px; height: 44px; }
+@media (max-width: 420px) {
+  .wr-row__face { padding: 10px; gap: 8px; }
+  .weighing-room .conv-ring { width: 40px; height: 40px; }
 }
