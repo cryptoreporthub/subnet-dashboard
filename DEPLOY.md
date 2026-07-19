@@ -7,7 +7,7 @@ App: `subnet-dashboard` · region: `sjc` (data_volume lives here) · machine: `s
 ### Deploy
 
 ```bash
-flyctl deploy --app subnet-dashboard --remote-only --region sjc
+flyctl deploy --app subnet-dashboard --remote-only --regions sjc --ha=false
 ```
 
 If CI fails with `insufficient resources to create new machine with existing volume`, prod has **zero machines** (TLS error in browser). Recovery:
@@ -16,7 +16,7 @@ If CI fails with `insufficient resources to create new machine with existing vol
 flyctl machines list -a subnet-dashboard          # expect none
 flyctl volumes list -a subnet-dashboard           # data_volume in sjc, unattached
 ./scripts/fly_volume_recover.sh                     # or re-run Fly Deploy workflow
-flyctl deploy --app subnet-dashboard --region sjc --remote-only --ha=false
+flyctl deploy --app subnet-dashboard --regions sjc --remote-only --ha=false
 curl -fsS https://subnet-dashboard.fly.dev/health  # OK
 ```
 
