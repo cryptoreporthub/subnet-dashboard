@@ -78,6 +78,7 @@
       {% set pinned = focus_netuid is not none and (focus_netuid|int) in pins %}
 
       {% set brief = dpick.brief if dpick.brief is mapping else {} %}
+      {% set pump_chip = dpick.pump_chip if dpick.pump_chip is mapping else {} %}
 
       {# ============================================================
          K3 DOSSIER — inside #home-daily-call for live-refresh compat
@@ -229,6 +230,10 @@
       .k3-brief-vs { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.45; color: var(--k3-muted); margin: 0 0 8px; text-align: center; }
       .k3-brief-trigger { font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.45; color: var(--k3-blue); margin: 0 0 12px; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(0, 212, 255, 0.25); background: rgba(0, 212, 255, 0.06); text-align: left; }
       .k3-claim--hold .k3-orb .ring-fill { stroke: var(--k3-blue); }
+      .k3-pump-chip { display: inline-block; margin: 4px 0 8px; padding: 4px 10px; border-radius: 12px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; z-index: 1; max-width: 320px; line-height: 1.35; }
+      .k3-pump-chip--stirring { color: #ffa500; border: 1px solid rgba(255, 165, 0, 0.35); background: rgba(255, 165, 0, 0.08); }
+      .k3-pump-chip--accumulating { color: var(--k3-pink); border: 1px solid rgba(255, 105, 180, 0.35); background: rgba(255, 105, 180, 0.08); }
+      .k3-pump-trigger { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.4; color: var(--k3-muted); margin: -4px auto 10px; max-width: 320px; text-align: left; z-index: 1; }
       .home-job__signals--demoted { margin-top: 12px; opacity: 0.88; }
       .home-job__signals--demoted .home-band,
       .home-job__signals--demoted .home-enrichment { font-size: 10px; }
@@ -277,6 +282,13 @@
               {% if dpick.grade_on_resolve and ring_state != 'resolved' %}<div class="k3-temporal-grade">Graded on resolve · {{ horizon }} window</div>{% endif %}
               {% else %}
               <div id="k3-temporal-badge" class="k3-temporal-badge k3-temporal-badge--empty" aria-live="polite">Resolve window not set · graded when this pick closes</div>
+              {% endif %}
+              {% if pump_chip.show %}
+              <div id="k3-pump-chip" class="k3-pump-chip k3-pump-chip--{{ pump_chip.tier|lower }}" aria-label="Pump ladder context">{{ pump_chip.label }}</div>
+              {% if pump_chip.trigger %}<p id="k3-pump-trigger" class="k3-pump-trigger">{{ pump_chip.trigger }}</p>{% endif %}
+              {% else %}
+              <div id="k3-pump-chip" class="k3-pump-chip" hidden></div>
+              <p id="k3-pump-trigger" class="k3-pump-trigger" hidden></p>
               {% endif %}
               {% set hv = dpick.horizon_views if dpick.horizon_views is mapping else {} %}
               {% set hv_chips = hv.chips if hv.chips is iterable and hv.chips is not string else [] %}

@@ -354,6 +354,31 @@
     setText('k3-brief-vs', brief.vs || '');
     setText('k3-brief-trigger', brief.trigger || '');
 
+    var pump = payload.pump_chip || {};
+    var pumpChip = document.getElementById('k3-pump-chip');
+    var pumpTrigger = document.getElementById('k3-pump-trigger');
+    if (pumpChip) {
+      if (pump.show) {
+        pumpChip.hidden = false;
+        pumpChip.textContent = pump.label || pump.tier || '';
+        pumpChip.className =
+          'k3-pump-chip k3-pump-chip--' + String(pump.tier || '').toLowerCase();
+      } else {
+        pumpChip.hidden = true;
+        pumpChip.textContent = '';
+        pumpChip.className = 'k3-pump-chip';
+      }
+    }
+    if (pumpTrigger) {
+      if (pump.show && pump.trigger) {
+        pumpTrigger.hidden = false;
+        pumpTrigger.textContent = pump.trigger;
+      } else {
+        pumpTrigger.hidden = true;
+        pumpTrigger.textContent = '';
+      }
+    }
+
     var orb = document.getElementById('k3-orb-score');
     if (orb && fc.conf != null) {
       var tens = Math.floor(fc.conf / 10);

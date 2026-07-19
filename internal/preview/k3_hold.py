@@ -15,11 +15,12 @@ def _utcnow_z() -> str:
 def build_k3_hold_preview_context(request: Request) -> Dict[str, Any]:
     """Full SSR context for /preview/k3-hold — target K3 dossier + action brief."""
     from internal.learning.dpick_copy import attach_brief_to_daily_pick
+    from internal.learning.dpick_pump import attach_pump_chip_to_daily_pick
     from internal.subnet_names import enrich_subnet_rows, refresh_daily_pick_names
 
     subnets: List[Dict[str, Any]] = enrich_subnet_rows(
         [
-            {"netuid": 99, "name": "SN99", "emission": 0.95, "price_change_24h": -5.2, "price_change_7d": -44.2},
+            {"netuid": 99, "name": "SN99", "emission": 0.95, "price_change_24h": -5.2, "price_change_7d": -44.2, "volume": 52000, "buy_volume_24h": 7800, "sell_volume_24h": 2200},
             {"netuid": 14, "name": "TaoHash", "emission": 2.1, "price_change_24h": 1.1},
             {"netuid": 40, "name": "Chunking", "emission": 1.8, "price_change_24h": 0.5},
             {"netuid": 82, "name": "MinoS", "emission": 1.2, "price_change_24h": 2.0},
@@ -110,6 +111,21 @@ def build_k3_hold_preview_context(request: Request) -> Dict[str, Any]:
         }
     )
     daily = attach_brief_to_daily_pick(daily)
+    daily = attach_pump_chip_to_daily_pick(
+        daily,
+        subnets,
+    )
+    if not daily.get("pump_chip", {}).get("show"):
+        from internal.learning.dpick_pump import build_pump_chip
+
+        daily["pump_chip"] = build_pump_chip(
+            99,
+            next(s for s in subnets if s.get("netuid") == 99),
+            ladder_entry={
+                "phase": "STIRRING",
+                "signal_snapshot": {"buy_ratio": 0.78, "volume_intensity": 0.42},
+            },
+        )
 
     return {
         "request": request,
