@@ -29,6 +29,13 @@ def _universe_key(subnets: List[Dict[str, Any]], market_context: Optional[Dict[s
     ).hexdigest()
 
 
+def universe_cache_key(
+    subnets: List[Dict[str, Any]], market_context: Optional[Dict[str, Any]]
+) -> str:
+    """Public cache key for subnet universe + market context (hour/day pick caches)."""
+    return _universe_key(subnets, market_context)
+
+
 def score_universe(
     subnets: List[Dict[str, Any]],
     market_context: Optional[Dict[str, Any]],

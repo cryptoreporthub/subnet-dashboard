@@ -32,3 +32,12 @@ def test_k3_5_alert_dot_hook():
     body = Path("static/js/watchlist_alerts.js").read_text(encoding="utf-8")
     assert "habit-alert-btn--dot" in body
     assert "/api/conviction-alerts/status" in body
+
+
+def test_hydrate_registry_name_resolution():
+    hydrate = Path("static/js/cockpit_hydrate.js").read_text(encoding="utf-8")
+    living = Path("static/js/living_focus.js").read_text(encoding="utf-8")
+    assert "SubnetNameRegistry" in hydrate
+    assert "indexRegistry" in hydrate
+    assert "isBadSubnetName" in hydrate
+    assert "SubnetNameRegistry.resolve" in living

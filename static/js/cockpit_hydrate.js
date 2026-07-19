@@ -3,6 +3,11 @@
   'use strict';
 
   var CANONICAL_EXPERTS = ['quant', 'hype', 'dark_horse', 'technical'];
+  var registryByNetuid = {};
+  var lastDailyPickPayload = null;
+  var lastSimivisionTop = null;
+  var lastHourPicks = [];
+  var lastDayPicks = [];
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -25,11 +30,52 @@
     return sn.netuid != null ? sn.netuid : sn.id;
   }
 
-  function subnetName(sn) {
-    var name = sn.name || '';
-    if (!name || /^(deprecated|unknown|none|snnone)$/i.test(name) || /^snnone/i.test(name)) {
-      return 'SN' + subnetNetuid(sn);
+  function isBadSubnetName(name) {
+    if (!name) return true;
+    var s = String(name).trim();
+    return /^(deprecated|unknown|none|snnone)$/i.test(s) || /^snnone/i.test(s) || /^sn\d+$/i.test(s);
+  }
+
+  function indexRegistry(subnets) {
+    registryByNetuid = {};
+    (subnets || []).forEach(function (sn) {
+      var nu = subnetNetuid(sn);
+      if (nu != null) registryByNetuid[Number(nu)] = sn;
+    });
+    if (typeof window !== 'undefined') {
+      window.SubnetNameRegistry = {
+        byNetuid: registryByNetuid,
+        index: indexRegistry,
+        resolve: resolveSubnetDisplayName,
+      };
     }
+    refreshRegistryDependentPanels();
+  }
+
+  function resolveSubnetDisplayName(sn, netuid) {
+    var nu = netuid != null ? netuid : subnetNetuid(sn || {});
+    var row = registryByNetuid[Number(nu)];
+    if (row) return subnetName(row);
+    return subnetName(Object.assign({}, sn || {}, { netuid: nu }));
+  }
+
+  function refreshRegistryDependentPanels() {
+    if (lastDailyPickPayload) renderDailyPick(lastDailyPickPayload);
+    if (lastSimivisionTop) renderSimivision(lastSimivisionTop);
+    if (lastHourPicks.length || lastDayPicks.length) {
+      renderHourDayPicks(lastHourPicks, lastDayPicks);
+    }
+  }
+
+  function subnetName(sn) {
+    var nu = subnetNetuid(sn);
+    var row = registryByNetuid[Number(nu)];
+    if (row) {
+      var regName = row.name || '';
+      if (!isBadSubnetName(regName)) return regName;
+    }
+    var name = sn.name || '';
+    if (isBadSubnetName(name)) return 'SN' + nu;
     return name;
   }
 
@@ -238,7 +284,7 @@
 
   function pickName(pick) {
     var sn = pick.subnet || {};
-    return pick.name || sn.name || ('SN' + (pick.netuid || sn.netuid || '?'));
+    return resolveSubnetDisplayName(sn, pick.netuid != null ? pick.netuid : sn.netuid);
   }
 
   function pickNetuid(pick) {
@@ -248,6 +294,7 @@
 
   function renderSimivision(top) {
     if (!top || !top.length) return;
+    lastSimivisionTop = top;
     var cards = top.map(function (pick, idx) {
       var t = confTier(pick.conviction || 0);
       var rec = String(pick.recommendation || 'WATCH').toUpperCase();
@@ -260,7 +307,7 @@
       return (
         '<div class="pick-card">' +
         '<div class="pick-rank">#' + esc(pick.rank || idx + 1) + '</div>' +
-        '<div class="pick-name pick-name-lg">' + esc(pick.name || 'SN' + pick.netuid) + '</div>' +
+        '<div class="pick-name pick-name-lg">' + esc(pickName(pick)) + '</div>' +
         '<div class="pick-meta">SN' + esc(pick.netuid) + ' · ' + fmt(pick.emission, 2) + ' TAO/day · ' + apy + '% APY</div>' +
         '<div class="pick-row"><div class="conviction-wrap">' +
         '<div class="conviction-lbl">Conviction</div>' +
@@ -276,6 +323,7 @@
   function renderDailyPick(payload) {
     // §34-1: patch call host only — never wipe trust banner / CTAs in #council-stage-body
     if (!payload) return;
+    lastDailyPickPayload = payload;
     var host = document.getElementById('home-daily-call');
     if (!host) host = document.getElementById('council-stage-body');
     if (!host) return;
@@ -306,7 +354,7 @@
         '<span class="badge ' + recBadge(act) + '">' + esc(act) + '</span>' +
         (audit.approved ? '<span class="hero-audit">AUDIT PASSED</span>' : '') +
         '</div>' +
-        '<p class="council-call__name">' + esc(sn.name || pickName(pick)) + '</p>' +
+        '<p class="council-call__name">' + esc(resolveSubnetDisplayName(sn, sn.netuid)) + '</p>' +
         '<p class="council-call__meta">SN' + esc(sn.netuid != null ? sn.netuid : pickNetuid(pick)) +
         (sn.symbol ? ' · ' + esc(sn.symbol) : '') +
         (finalConf != null ? ' · ' + fc.conf + '% confidence' : '') +
@@ -329,7 +377,7 @@
         '<div class="council-call__action"><span class="badge badge-hold">HOLD</span></div>';
       if (sn.name != null || sn.netuid != null) {
         html +=
-          '<p class="council-call__name">' + esc(sn.name || ('SN' + sn.netuid)) + '</p>' +
+          '<p class="council-call__name">' + esc(resolveSubnetDisplayName(sn, sn.netuid)) + '</p>' +
           '<p class="council-call__meta">SN' + esc(sn.netuid) +
           (sn.symbol ? ' · ' + esc(sn.symbol) : '') +
           ' · candidate only' +
@@ -405,6 +453,8 @@
   }
 
   function renderHourDayPicks(hourPicks, dayPicks) {
+    lastHourPicks = hourPicks || [];
+    lastDayPicks = dayPicks || [];
     if (!(hourPicks && hourPicks.length) && !(dayPicks && dayPicks.length)) return;
     var html =
       '<div class="two-col">' +
@@ -1193,6 +1243,7 @@
         );
         subnets = subPayload.subnets || [];
         subnetsMeta = subPayload.meta || {};
+        indexRegistry(subnets);
         renderHero(subnets, subnetsMeta);
         renderStaking(subnets);
         renderUndervalued(subnets);
