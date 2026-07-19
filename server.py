@@ -473,11 +473,12 @@ def _enrich_daily_pick_payload(
     subnets: List[Dict[str, Any]],
     market_context: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Names, shortlist, temporal, horizon, and K3-7 brief for SSR + /api/daily-pick."""
+    """Names, shortlist, temporal, horizon, K3-7 brief, and K3-7b pump chip."""
     if not isinstance(pick_payload, dict):
         return {}
     from internal.learning.dpick_copy import attach_brief_to_daily_pick
     from internal.learning.dpick_horizon import attach_horizon_views_to_daily_pick
+    from internal.learning.dpick_pump import attach_pump_chip_to_daily_pick
     from internal.learning.dpick_shortlist import attach_shortlist_to_daily_pick
     from internal.learning.dpick_temporal import attach_temporal_to_daily_pick
     from internal.subnet_names import refresh_daily_pick_names
@@ -486,7 +487,8 @@ def _enrich_daily_pick_payload(
     out = attach_shortlist_to_daily_pick(out, subnets, market_context)
     out = attach_temporal_to_daily_pick(out)
     out = attach_horizon_views_to_daily_pick(out, subnets, market_context)
-    return attach_brief_to_daily_pick(out)
+    out = attach_brief_to_daily_pick(out)
+    return attach_pump_chip_to_daily_pick(out, subnets)
 
 
 def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
