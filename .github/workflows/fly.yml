@@ -80,8 +80,8 @@ jobs:
         run: |
           set -e
           for attempt in 1 2 3; do
-            echo "=== flyctl deploy attempt $attempt/3 (region=sjc) ==="
-            if flyctl deploy --remote-only --no-cache --yes --region sjc --ha=false; then
+            echo "=== flyctl deploy attempt $attempt/3 (regions=sjc) ==="
+            if flyctl deploy --remote-only --no-cache --yes --regions sjc --ha=false; then
               exit 0
             fi
             echo "deploy attempt $attempt failed — waiting 30s before retry"
