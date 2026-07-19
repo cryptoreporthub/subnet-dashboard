@@ -1127,6 +1127,16 @@ def health():
     return PlainTextResponse("OK")
 
 
+@app.get("/preview/k3-hold")
+def preview_k3_hold(request: Request):
+    """SSR preview of K3 dossier (HOLD + candidate) — hydrate off; for design QA."""
+    from internal.preview.k3_hold import build_k3_hold_preview_context
+
+    return templates.TemplateResponse(
+        request, "preview/k3_hold.html", build_k3_hold_preview_context(request)
+    )
+
+
 # ---------------------------------------------------------------------------
 # SimiVision picks (ported from server_original.py onto the FastAPI foundation)
 #
