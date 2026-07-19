@@ -1,43 +1,46 @@
-{# K3-8 — Pump Alert lane: compact in-motion scanner (separate from dossier) #}
+{# K3-8b — Lead scanner: flow before price (predictive lane) #}
 {% set pa = pump_alerts if pump_alerts is mapping else {} %}
 {% set pa_rows = pa.alerts if pa.alerts is iterable and pa.alerts is not string else [] %}
+{% set pa_early = pa.early_count|default(0)|int %}
+{% set pa_confirmed = pa.confirmed_count|default(0)|int %}
 {% set pa_count = pa.count|default(0)|int %}
 
 <section class="pump-alert wrap-pad" id="section-pump-alert" aria-labelledby="pump-alert-title" data-home-live="1">
   <div class="pump-alert__head">
     <div class="pump-alert__head-row">
       <div>
-        <p class="pump-alert__eyebrow">Tier 3 · Scanner</p>
-        <h2 class="pump-alert__title" id="pump-alert-title">In motion</h2>
+        <p class="pump-alert__eyebrow">Tier 3 · Predictive</p>
+        <h2 class="pump-alert__title" id="pump-alert-title">Lead scanner</h2>
       </div>
       {% if pa_count > 0 %}
-      <span class="pump-alert__count" id="pump-alert-count">{{ pa_count }} pumping</span>
+      <span class="pump-alert__count" id="pump-alert-count">{{ pa_early }} lead · {{ pa_confirmed }} live</span>
       {% endif %}
     </div>
-    <p class="pump-alert__sub">Names the ladder already flagged — not the 24h Daily Call.</p>
+    <p class="pump-alert__sub">Flow before price — early names first, confirmed moves flagged as chase risk.</p>
   </div>
   <div class="pump-alert__body" id="pump-alert-body" aria-live="polite">
     {% if pa_count > 0 %}
     <div class="pump-alert__lane" id="pump-alert-list" role="list">
       {% for row in pa_rows %}
-      <article class="pump-alert__card pump-alert__card--{{ row.phase|lower }}" role="listitem" data-netuid="{{ row.netuid }}">
+      {% if row.timing == 'lead' or row.timing == 'confirmed' or row.timing == 'exit' %}
+      <article class="pump-alert__card pump-alert__card--{{ row.timing }} pump-alert__card--{{ row.phase|lower }}" role="listitem" data-netuid="{{ row.netuid }}" data-timing="{{ row.timing }}">
         <div class="pump-alert__card-top">
-          <a class="pump-alert__name" href="/subnet/{{ row.netuid }}">{{ row.move|replace('IN PLAY · ', '')|replace('FADING · ', '') }}</a>
-          <span class="pump-alert__badge pump-alert__badge--{{ row.badge|lower }}">{{ row.badge }}</span>
+          <a class="pump-alert__name" href="/subnet/{{ row.netuid }}">{{ row.name }}{% if row.netuid is not none %} <span class="pump-alert__sn">SN{{ row.netuid }}</span>{% endif %}</a>
+          <span class="pump-alert__badge pump-alert__badge--{{ row.badge|lower|replace(' ', '-') }}">{{ row.badge }}</span>
         </div>
         {% if row.score is not none %}
         <div class="pump-alert__meter" aria-hidden="true">
           <span class="pump-alert__meter-fill" style="width: {{ [(row.score|float * 100)|round(0), 100]|min }}%"></span>
         </div>
-        <span class="pump-alert__score">ladder {{ '%.2f'|format(row.score|float) }}</span>
         {% endif %}
         <p class="pump-alert__thesis">{{ row.thesis }}</p>
         <p class="pump-alert__trigger">{{ row.trigger }}</p>
       </article>
+      {% endif %}
       {% endfor %}
     </div>
     {% else %}
-    <p class="pump-alert__empty" id="pump-alert-empty">{{ pa.empty_message|default('No names in PUMPING right now. Early heat stays on the dossier chip when the lead is warming.') }}</p>
+    <p class="pump-alert__empty" id="pump-alert-empty">{{ pa.empty_message|default('No lead or confirmed motion right now. Early heat on today\'s pick stays on the dossier chip when flow warms.') }}</p>
     {% endif %}
   </div>
 </section>
@@ -47,22 +50,27 @@
   .pump-alert__head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
   .pump-alert__eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: #64748b; margin: 0 0 4px; }
   .pump-alert__title { font-size: 17px; font-weight: 700; margin: 0; color: #e2e8f0; }
-  .pump-alert__count { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; color: #ff69b4; border: 1px solid rgba(255, 105, 180, 0.35); border-radius: 999px; padding: 4px 10px; white-space: nowrap; margin-top: 2px; }
+  .pump-alert__count { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; color: #7dd3fc; border: 1px solid rgba(125, 211, 252, 0.35); border-radius: 999px; padding: 4px 10px; white-space: nowrap; margin-top: 2px; }
   .pump-alert__sub { font-size: 12px; color: #64748b; margin: 0 0 12px; line-height: 1.4; }
   .pump-alert__lane { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
   .pump-alert__card { flex: 0 0 min(88vw, 300px); scroll-snap-align: start; padding: 12px; border-radius: 12px; background: linear-gradient(160deg, #0d1016 0%, #0a0c10 100%); border: 1px solid #1a1d24; min-height: 44px; }
-  .pump-alert__card--pumping { border-color: rgba(255, 105, 180, 0.28); box-shadow: inset 0 1px 0 rgba(255, 105, 180, 0.08); }
-  .pump-alert__card--cooling { border-color: rgba(100, 116, 139, 0.28); opacity: 0.94; }
+  .pump-alert__card--lead { border-color: rgba(125, 211, 252, 0.35); box-shadow: inset 0 1px 0 rgba(125, 211, 252, 0.1); }
+  .pump-alert__card--confirmed { border-color: rgba(255, 105, 180, 0.28); }
+  .pump-alert__card--exit { border-color: rgba(100, 116, 139, 0.35); opacity: 0.94; }
   .pump-alert__card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
-  .pump-alert__name { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; color: #f8fafc; line-height: 1.3; text-decoration: none; }
-  .pump-alert__card--pumping .pump-alert__name { color: #ffb6d9; }
+  .pump-alert__name { font-size: 13px; font-weight: 700; color: #f8fafc; line-height: 1.3; text-decoration: none; }
+  .pump-alert__card--lead .pump-alert__name { color: #bae6fd; }
+  .pump-alert__card--confirmed .pump-alert__name { color: #ffb6d9; }
+  .pump-alert__sn { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #64748b; font-weight: 500; }
   .pump-alert__badge { font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.1em; padding: 3px 7px; border-radius: 6px; flex-shrink: 0; text-transform: uppercase; }
-  .pump-alert__badge--pumping { color: #ff69b4; border: 1px solid rgba(255, 105, 180, 0.4); background: rgba(255, 105, 180, 0.1); }
+  .pump-alert__badge--early { color: #7dd3fc; border: 1px solid rgba(125, 211, 252, 0.4); background: rgba(125, 211, 252, 0.1); }
+  .pump-alert__badge--building { color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.08); }
+  .pump-alert__badge--chase-risk { color: #ff69b4; border: 1px solid rgba(255, 105, 180, 0.4); background: rgba(255, 105, 180, 0.08); }
   .pump-alert__badge--fading { color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.35); }
-  .pump-alert__meter { height: 3px; border-radius: 999px; background: #1a1d24; overflow: hidden; margin-bottom: 6px; }
-  .pump-alert__meter-fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #ff69b4, #f472b6); }
-  .pump-alert__card--cooling .pump-alert__meter-fill { background: #64748b; }
-  .pump-alert__score { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #64748b; display: block; margin-bottom: 6px; letter-spacing: 0.04em; }
+  .pump-alert__meter { height: 3px; border-radius: 999px; background: #1a1d24; overflow: hidden; margin-bottom: 8px; }
+  .pump-alert__meter-fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #7dd3fc, #38bdf8); }
+  .pump-alert__card--confirmed .pump-alert__meter-fill { background: linear-gradient(90deg, #ff69b4, #f472b6); }
+  .pump-alert__card--exit .pump-alert__meter-fill { background: #64748b; }
   .pump-alert__thesis { font-size: 13px; line-height: 1.45; color: #e2e8f0; margin: 0 0 6px; }
   .pump-alert__trigger { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.4; color: #64748b; margin: 0; }
   .pump-alert__empty { font-size: 13px; line-height: 1.5; color: #64748b; margin: 0; padding: 12px; border-radius: 10px; background: #0a0c10; border: 1px dashed #1a1d24; }

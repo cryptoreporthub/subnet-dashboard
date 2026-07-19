@@ -1,17 +1,22 @@
-"""K3-8 Pump Alert lane — PUMPING / COOLING rows separate from dossier."""
+"""K3-8b Pump lane — predictive lead scanner (flow before price)."""
 
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from internal.learning.dpick_copy import hero_copy_is_clean
 
 _EMPTY_MESSAGE = (
-    "No names in PUMPING right now. Early heat stays on the dossier chip when the lead is warming."
+    "No lead or confirmed motion right now. Early heat on today's pick stays on the "
+    "dossier chip when flow warms."
 )
-_MAX_PUMPING = 5
+_MAX_EARLY = 5
+_MAX_PUMPING = 3
 _MAX_COOLING = 2
+_LEAD_BUY_RATIO_MIN = 0.55
+_LEAD_VOLUME_INTENSITY_MIN = 0.22
+_EARLY_PHASES = frozenset({"STIRRING", "ACCUMULATING"})
 _BAD_NAME = re.compile(r"^(unknown|deprecated|none|snnone|unnamed)$", re.I)
 
 
@@ -79,14 +84,23 @@ def _lead_signals(
     return {"buy_ratio": buy_ratio, "volume_intensity": volume_intensity}
 
 
-def _move_line(name: str, netuid: Any, phase: str) -> str:
-    label = str(name or f"SN{netuid}").strip()
-    prefix = "IN PLAY" if phase == "PUMPING" else "FADING"
-    if re.match(r"^SN\d+$", label, re.I):
-        return f"{prefix} · {label}"
-    if netuid is not None:
-        return f"{prefix} · {label} (SN{netuid})"
-    return f"{prefix} · {label}"
+def _lead_qualifies(buy_ratio: Optional[float], volume_intensity: Optional[float]) -> bool:
+    if buy_ratio is None or volume_intensity is None:
+        return False
+    return buy_ratio >= _LEAD_BUY_RATIO_MIN and volume_intensity >= _LEAD_VOLUME_INTENSITY_MIN
+
+
+def _display_label(name: str, netuid: Optional[int]) -> str:
+    label = str(name or "").strip()
+    if netuid is not None and not re.search(rf"\(SN{netuid}\)", label, re.I):
+        if re.match(r"^SN\d+$", label, re.I):
+            return label
+        return f"{label} (SN{netuid})"
+    return label or (f"SN{netuid}" if netuid is not None else "subnet")
+
+
+def _move_line(prefix: str, name: str, netuid: Optional[int]) -> str:
+    return f"{prefix} · {_display_label(name, netuid)}"
 
 
 def _row_copy(
@@ -94,43 +108,53 @@ def _row_copy(
     name: str,
     buy_ratio: Optional[float],
     volume_intensity: Optional[float],
-    score: Optional[float],
     netuid_int: Optional[int],
 ) -> Dict[str, str]:
-    seed = (netuid_int or 0) % 3
+    if phase == "STIRRING":
+        br = buy_ratio if buy_ratio is not None else 0.5
+        vi = volume_intensity if volume_intensity is not None else 0.0
+        return {
+            "move": _move_line("WATCH", name, netuid_int),
+            "badge": "EARLY",
+            "timing": "lead",
+            "thesis": (
+                f"Buy pressure building before price runs — {br:.0%} buy flow, "
+                f"volume still warming ({vi:.0%})."
+            ),
+            "trigger": "Entry window open — small size now or wait for BUILDING confirmation.",
+        }
+    if phase == "ACCUMULATING":
+        br = buy_ratio if buy_ratio is not None else 0.5
+        vi = volume_intensity if volume_intensity is not None else 0.0
+        return {
+            "move": _move_line("BUILDING", name, netuid_int),
+            "badge": "BUILDING",
+            "timing": "lead",
+            "thesis": (
+                f"Flow and volume aligning ahead of price — {br:.0%} buys, vol {vi:.0%}."
+            ),
+            "trigger": "Best risk/reward band — chase only if you miss this window.",
+        }
     if phase == "PUMPING":
-        if buy_ratio is not None and volume_intensity is not None:
-            variants = [
-                (
-                    f"{name} is already moving — {buy_ratio:.0%} buy flow, "
-                    f"volume at {volume_intensity:.0%} of recent pace."
-                ),
-                (
-                    f"Full PUMPING on {name}: participation heavy "
-                    f"({buy_ratio:.0%} buys, vol {volume_intensity:.0%})."
-                ),
-                (
-                    f"{name} cleared the ladder — flow and volume aligned "
-                    f"({buy_ratio:.0%} / {volume_intensity:.0%}), not early heat."
-                ),
-            ]
-            thesis = variants[seed]
-        else:
-            thesis = f"{name} is in PUMPING — motion confirmed on the ladder, not the dossier warm-up chip."
-        if score is not None and score >= 0.75:
-            trigger = "Strong score — still late if you chase; wait for COOLING before sizing up."
-        else:
-            trigger = "Late if you chase; watch for COOLING before adding."
-        return {"thesis": thesis, "trigger": trigger, "badge": "PUMPING"}
-
-    if buy_ratio is not None:
-        thesis = f"Heat rolling off {name} — ladder COOLING with {buy_ratio:.0%} buy flow left."
-    else:
-        thesis = f"Heat rolling off {name} — ladder in COOLING."
+        return {
+            "move": _move_line("CONFIRMED", name, netuid_int),
+            "badge": "CHASE RISK",
+            "timing": "confirmed",
+            "thesis": (
+                "Move is live — you are not early. Use for exit sizing and rotation, "
+                "not fresh entry."
+            ),
+            "trigger": "Do not chase; trim on EXIT WATCH or rotate to BUILDING names.",
+        }
+    br = buy_ratio if buy_ratio is not None else 0.5
     return {
-        "thesis": thesis,
-        "trigger": "Don't treat as a fresh pump entry.",
+        "move": _move_line("EXIT WATCH", name, netuid_int),
         "badge": "FADING",
+        "timing": "exit",
+        "thesis": (
+            f"Buyers stepping away while price may still look hot — {br:.0%} buy flow left."
+        ),
+        "trigger": "Reduce exposure; lead is shifting to names still BUILDING.",
     }
 
 
@@ -150,20 +174,14 @@ def build_alert_row(
         score = float(ladder_entry.get("composite_score") or 0.0)
     except (TypeError, ValueError):
         score = None
-    copy = _row_copy(
-        phase,
-        name,
-        leads["buy_ratio"],
-        leads["volume_intensity"],
-        score,
-        netuid_int,
-    )
+    copy = _row_copy(phase, name, leads["buy_ratio"], leads["volume_intensity"], netuid_int)
     row = {
         "netuid": netuid_int,
         "name": name,
         "phase": phase,
+        "timing": copy["timing"],
         "score": round(score, 2) if score is not None else None,
-        "move": _move_line(name, netuid_int, phase),
+        "move": copy["move"],
         "thesis": copy["thesis"],
         "trigger": copy["trigger"],
         "badge": copy["badge"],
@@ -174,8 +192,16 @@ def build_alert_row(
     return row
 
 
+def _sort_bucket(
+    entries: List[Tuple[float, Dict[str, Any], Optional[Dict[str, Any]]]],
+    limit: int,
+) -> List[Dict[str, Any]]:
+    entries.sort(key=lambda t: t[0], reverse=True)
+    return [build_alert_row(entry, row) for _, entry, row in entries[:limit]]
+
+
 def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
-    """Return Pump Alert lane payload for SSR + GET /api/pump-alerts."""
+    """Return predictive pump lane payload for SSR + GET /api/pump-alerts."""
     rows = subnets if isinstance(subnets, list) else []
     try:
         from internal.pump.state import load_state
@@ -185,44 +211,51 @@ def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[st
         return {
             "status": "unavailable",
             "count": 0,
+            "early_count": 0,
+            "confirmed_count": 0,
             "alerts": [],
             "empty_message": _EMPTY_MESSAGE,
             "error": str(exc),
         }
 
-    pumping: List[Dict[str, Any]] = []
-    cooling: List[Dict[str, Any]] = []
+    early: List[Tuple[float, Dict[str, Any], Optional[Dict[str, Any]]]] = []
+    pumping: List[Tuple[float, Dict[str, Any], Optional[Dict[str, Any]]]] = []
+    cooling: List[Tuple[float, Dict[str, Any], Optional[Dict[str, Any]]]] = []
+
     for entry in (state.get("subnets") or {}).values():
         if not isinstance(entry, dict):
             continue
         phase = str(entry.get("phase") or "").upper()
         netuid = entry.get("netuid")
-        row = _subnet_row(int(netuid), rows) if netuid is not None else None
-        if phase == "PUMPING":
-            pumping.append((float(entry.get("composite_score") or 0.0), entry, row))
+        subnet = _subnet_row(int(netuid), rows) if netuid is not None else None
+        score = float(entry.get("composite_score") or 0.0)
+        if phase in _EARLY_PHASES:
+            leads = _lead_signals(subnet, entry)
+            if _lead_qualifies(leads["buy_ratio"], leads["volume_intensity"]):
+                early.append((score, entry, subnet))
+        elif phase == "PUMPING":
+            pumping.append((score, entry, subnet))
         elif phase == "COOLING":
-            cooling.append((float(entry.get("composite_score") or 0.0), entry, row))
+            cooling.append((score, entry, subnet))
 
-    pumping.sort(key=lambda t: t[0], reverse=True)
-    cooling.sort(key=lambda t: t[0], reverse=True)
-    alerts = [
-        build_alert_row(entry, row)
-        for _, entry, row in pumping[:_MAX_PUMPING]
-    ] + [
-        build_alert_row(entry, row)
-        for _, entry, row in cooling[:_MAX_COOLING]
-    ]
+    alerts = _sort_bucket(early, _MAX_EARLY) + _sort_bucket(pumping, _MAX_PUMPING) + _sort_bucket(
+        cooling, _MAX_COOLING
+    )
 
     for alert in alerts:
         brief = {"move": alert["move"], "thesis": alert["thesis"]}
         if not hero_copy_is_clean(brief):
             alert["thesis"] = alert["thesis"].replace("audit gate", "bar")
 
-    count = len([a for a in alerts if a.get("phase") == "PUMPING"])
+    early_count = sum(1 for a in alerts if a.get("timing") == "lead")
+    confirmed_count = sum(1 for a in alerts if a.get("timing") == "confirmed")
+    count = early_count + confirmed_count
     status = "success" if count else "empty"
     return {
         "status": status,
         "count": count,
+        "early_count": early_count,
+        "confirmed_count": confirmed_count,
         "alerts": alerts,
         "empty_message": _EMPTY_MESSAGE,
         "error": None,
