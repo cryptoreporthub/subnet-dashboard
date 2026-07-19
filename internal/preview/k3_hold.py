@@ -35,7 +35,7 @@ def build_k3_hold_preview_context(request: Request) -> Dict[str, Any]:
             "status": "ok",
             "date": datetime.now(timezone.utc).date().isoformat(),
             "action": "HOLD",
-            "reason": "Confidence 23% below 45% audit gate — no long call published",
+            "reason": "Conviction 23% — below the 45% bar for a sized 24h long",
             "pick": None,
             "candidate": {
                 "subnet": {"netuid": 99, "name": "SN99", "symbol": "T99"},
@@ -117,7 +117,7 @@ def build_k3_hold_preview_context(request: Request) -> Dict[str, Any]:
         "subnets": subnets,
         "data_source": "preview-mock",
         "daily_pick_stage": daily,
-        "conviction_band": {"band": "low", "reason": "Below audit gate", "status": "ok"},
+        "conviction_band": {"band": "low", "reason": "Below sized-long bar", "status": "ok"},
         "enrichment_badge": {"status": "pending", "label": "Whale flow"},
         "hybrid_trust": {"ready": True, "n": 443, "accuracy": 0.314},
         "trust_banner": {

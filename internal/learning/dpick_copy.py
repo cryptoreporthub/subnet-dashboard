@@ -209,7 +209,7 @@ def build_dpick_brief(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         label = _short_name(block if isinstance(block, dict) else None)
         move = f"HOLD · {label}"
         thesis = (
-            "Closest long on the 24h desk — but conviction is still half a size. "
+            "Closest long on the 24h desk — but conviction is still short of a sized long. "
             "Price looks rich vs peers; no sized long until that gap closes."
         )
         trigger = _trigger_line(conviction, concerns, audit_pick=False)
