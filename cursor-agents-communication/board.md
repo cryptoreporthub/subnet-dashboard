@@ -25,4 +25,4 @@ Trader hero (move/thesis/vs/trigger), cool HOLD styling, also-weighed line, hydr
 
 ## Next slice queue
 
-None gated — K3 Phase 1 + K3-7/7b complete.
+- **K3-8 Pump Alert lane** — COPY/PRODUCT LOCKED → `cursor-agents-communication/k3-8-pump-alert-lock.md` (Composer build). GATE: none.
