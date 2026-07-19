@@ -60,6 +60,21 @@ def test_badge_live_rugger_activity():
     assert badge["label"] == "Rugger activity"
 
 
+def test_badge_flow_flip_accumulation():
+    flow = {
+        "netuid": 64,
+        "data_available": True,
+        "open_positions": 1,
+        "smart_money_present": False,
+        "avoid_follow": False,
+        "flow_flip": {"flip_direction": "accumulation", "kind": "flow_flip"},
+    }
+    badge = whale_flow_badge_from_flow(flow)
+    assert badge["status"] == "live"
+    assert badge["label"] == "Flow flip · accumulation"
+    assert badge.get("flow_flip") is True
+
+
 def test_whale_flow_badge_with_service(tmp_path):
     data = tmp_path / "intel.json"
     data.write_text(
