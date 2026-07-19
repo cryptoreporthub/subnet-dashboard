@@ -1,24 +1,20 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-18T23:22:00Z  
-**main:** `70e9d30` · **K3 frontend unlock COMPLETE** · P0+P1 shipped (#355)
+**Last updated:** 2026-07-19T00:45:00Z  
+**main:** `f41c87c` · **K3 frontend unlock COMPLETE** · post-audit polish
 
 ## Done (K3 sprint)
 
 - K3-1 dossier · K3-2 deliberation · K3-2b shortlist · K3-3 lifecycle
 - K3-4 temporal ring (#350) · K3-5 polish (#351) · K3-6 horizon selector (#352)
 - Subnet canonical names fix (#353)
-- **Post-audit P0+P1** (#355): HOLD+candidate full hero, `final_confidence` orb, horizon name refresh
+- **Post-audit P0+P1** (#355): HOLD+candidate full hero, `final_confidence` orb
+- **Post-audit P2** (#356): horizon chip sync, mindmap shortlist SSR shape
+- **P2 deferred** (PR pending): hourly pick TTL cache, hydrate registry names
 
 ## Shipped on main
 
-Horizon chips (Now / 24h / 7d), temporal ring, deliberation shortlist, lifecycle layers, onboarding tour, SN118 footer chip, canonical subnet names on hero, candidate HOLD dossier.
-
-## Post-K3 P2 (in progress)
-
-- Horizon chip sync: pin button, URL `netuid`, evidence title, 7d orb label
-- Mindmap `/api/mindmap/summary` shortlist → SSR card shape
-- Deferred: hourly pick cache on homepage, cockpit_hydrate name resolution
+Horizon chips (Now / 24h / 7d), temporal ring, deliberation shortlist, lifecycle layers, onboarding tour, SN118 footer chip, canonical subnet names on hero, candidate HOLD dossier, horizon chip pin/URL sync.
 
 ## Human follow-up (optional)
 
@@ -28,4 +24,4 @@ Horizon chips (Now / 24h / 7d), temporal ring, deliberation shortlist, lifecycle
 
 ## Next slice queue
 
-None gated — K3 Phase 1 complete. P2 polish ongoing.
+None gated — K3 Phase 1 + post-audit checklist complete after deferred P2 merges.
