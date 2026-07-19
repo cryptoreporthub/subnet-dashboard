@@ -1,11 +1,9 @@
-"""K3-8 — Pump Alert lane tests."""
+"""K3-8b — predictive lead scanner tests."""
 
 from __future__ import annotations
 
-import json
 from unittest.mock import patch
 
-import pytest
 from fastapi.testclient import TestClient
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -25,54 +23,66 @@ def _ladder_entry(phase: str, netuid: int = 29, score: float = 0.71) -> dict:
     }
 
 
-def test_pumping_row_shape():
+def test_stirring_lead_row_predictive():
+    row = build_alert_row(_ladder_entry("STIRRING", score=0.28))
+    assert row["badge"] == "EARLY"
+    assert row["timing"] == "lead"
+    assert "before price" in row["thesis"].lower()
+    assert "ladder" not in row["thesis"].lower()
+
+
+def test_accumulating_lead_row():
+    row = build_alert_row(_ladder_entry("ACCUMULATING", score=0.48))
+    assert row["badge"] == "BUILDING"
+    assert row["timing"] == "lead"
+    assert "ahead of price" in row["thesis"].lower()
+
+
+def test_pumping_row_chase_risk_not_entry():
     row = build_alert_row(_ladder_entry("PUMPING"))
-    assert row["badge"] == "PUMPING"
-    assert row["move"].startswith("IN PLAY ·")
-    assert "motion" in row["thesis"].lower() or "ladder" in row["thesis"].lower()
-    assert "council scan" not in row["thesis"].lower()
-    assert "audit gate" not in row["thesis"].lower()
+    assert row["badge"] == "CHASE RISK"
+    assert row["timing"] == "confirmed"
+    assert "not early" in row["thesis"].lower()
+    assert "do not chase" in row["trigger"].lower() or "not chase" in row["trigger"].lower()
 
 
-def test_cooling_row_fading():
+def test_cooling_row_exit_watch():
     row = build_alert_row(_ladder_entry("COOLING", netuid=14, score=0.4))
     assert row["badge"] == "FADING"
-    assert row["move"].startswith("FADING ·")
+    assert row["timing"] == "exit"
+    assert row["move"].startswith("EXIT WATCH ·")
 
 
-def test_build_pump_alerts_empty():
-    ladder = {"subnets": {"29": _ladder_entry("STIRRING")}}
-    with patch("internal.pump.state.load_state", return_value=ladder):
-        out = build_pump_alerts([])
-    assert out["count"] == 0
-    assert out["status"] == "empty"
-    assert "dossier chip" in out["empty_message"]
-
-
-def test_build_pump_alerts_pumping_only_counts_primary():
+def test_build_pump_alerts_includes_lead_before_confirmed():
     ladder = {
         "subnets": {
             "29": _ladder_entry("PUMPING"),
+            "42": _ladder_entry("ACCUMULATING", netuid=42, score=0.48),
             "14": _ladder_entry("COOLING", netuid=14, score=0.3),
         }
     }
     with patch("internal.pump.state.load_state", return_value=ladder):
         out = build_pump_alerts([])
-    assert out["count"] == 1
-    assert len(out["alerts"]) == 2
-    assert out["alerts"][0]["phase"] == "PUMPING"
+    assert out["early_count"] == 1
+    assert out["confirmed_count"] == 1
+    assert out["count"] == 2
+    assert out["alerts"][0]["timing"] == "lead"
+    assert out["alerts"][1]["timing"] == "confirmed"
+
+
+def test_stirring_without_lead_signals_excluded():
+    entry = _ladder_entry("STIRRING", score=0.25)
+    entry["signal_snapshot"] = {"buy_ratio": 0.4, "volume_intensity": 0.1}
+    ladder = {"subnets": {"29": entry}}
+    with patch("internal.pump.state.load_state", return_value=ladder):
+        out = build_pump_alerts([])
+    assert out["count"] == 0
+    assert out["status"] == "empty"
 
 
 def test_pumping_not_on_dossier_chip():
     chip = build_pump_chip(29, None, ladder_entry=_ladder_entry("PUMPING"))
     assert chip["show"] is False
-
-
-def test_pumping_rows_get_distinct_thesis():
-    a = build_alert_row(_ladder_entry("PUMPING", netuid=29))
-    b = build_alert_row(_ladder_entry("PUMPING", netuid=30, score=0.8))
-    assert a["thesis"] != b["thesis"]
-    assert "Ladder says PUMPING" not in a["thesis"]
 
 
 def test_resolve_name_from_subnet_row():
@@ -83,7 +93,7 @@ def test_resolve_name_from_subnet_row():
     assert "FlameWire" in row["move"]
 
 
-def test_pump_alert_template_renders():
+def test_pump_alert_template_renders_lead_scanner():
     env = Environment(
         loader=FileSystemLoader("templates"),
         autoescape=select_autoescape(["html", "xml"]),
@@ -91,15 +101,20 @@ def test_pump_alert_template_renders():
     tmpl = env.get_template("partials/premium/pump_alert.html")
     html = tmpl.render(
         pump_alerts={
-            "count": 1,
-            "empty_message": "No names in PUMPING right now.",
-            "alerts": [build_alert_row(_ladder_entry("PUMPING"))],
+            "count": 2,
+            "early_count": 1,
+            "confirmed_count": 1,
+            "empty_message": "No lead.",
+            "alerts": [
+                build_alert_row(_ladder_entry("ACCUMULATING", netuid=42, score=0.48)),
+                build_alert_row(_ladder_entry("PUMPING")),
+            ],
         }
     )
-    assert "section-pump-alert" in html
-    assert "pump-alert__lane" in html
-    assert "In motion" in html
-    assert "PUMPING" in html
+    assert "Lead scanner" in html
+    assert "BUILDING" in html
+    assert "CHASE RISK" in html
+    assert "chase risk" in html.lower()
 
 
 def test_api_pump_alerts_route():
@@ -107,11 +122,12 @@ def test_api_pump_alerts_route():
     with patch("internal.pump.state.load_state", return_value=ladder):
         with TestClient(app) as client:
             body = client.get("/api/pump-alerts").json()
-    assert body["count"] == 1
-    assert body["alerts"][0]["phase"] == "PUMPING"
+    assert body["confirmed_count"] == 1
+    assert body["alerts"][0]["badge"] == "CHASE RISK"
 
 
 def test_preview_pump_alert_route():
     with TestClient(app) as client:
         html = client.get("/preview/k3-pump-alert").text
-    assert "In motion" in html or "Pump Alert" in html
+    assert "Lead scanner" in html
+    assert "BUILDING" in html

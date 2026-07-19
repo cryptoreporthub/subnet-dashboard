@@ -405,10 +405,16 @@
     var host = document.getElementById('pump-alert-body');
     if (!host || !payload) return;
     var alerts = payload.alerts || [];
-    var count = Number(payload.count) || 0;
+    var earlyCount = Number(payload.early_count);
+    var confirmedCount = Number(payload.confirmed_count);
+    if (!earlyCount && !confirmedCount) {
+      earlyCount = alerts.filter(function (r) { return r.timing === 'lead'; }).length;
+      confirmedCount = alerts.filter(function (r) { return r.timing === 'confirmed'; }).length;
+    }
+    var count = Number(payload.count) || earlyCount + confirmedCount;
     var countEl = document.getElementById('pump-alert-count');
     if (countEl) {
-      countEl.textContent = count > 0 ? count + ' pumping' : '';
+      countEl.textContent = count > 0 ? earlyCount + ' lead · ' + confirmedCount + ' live' : '';
       countEl.style.display = count > 0 ? '' : 'none';
     }
     if (!count) {
@@ -416,27 +422,35 @@
         '<p class="pump-alert__empty" id="pump-alert-empty">' +
         esc(
           payload.empty_message ||
-            'No names in PUMPING right now. Early heat stays on the dossier chip when the lead is warming.'
+            "No lead or confirmed motion right now. Early heat on today's pick stays on the dossier chip when flow warms."
         ) +
         '</p>';
       return;
     }
     var html = '<div class="pump-alert__lane" id="pump-alert-list" role="list">';
     alerts.forEach(function (row) {
+      if (row.timing !== 'lead' && row.timing !== 'confirmed' && row.timing !== 'exit') return;
+      var timing = String(row.timing || 'confirmed');
       var phase = String(row.phase || '').toLowerCase();
-      var badge = String(row.badge || '').toLowerCase();
-      var label = String(row.move || '').replace(/^IN PLAY · /, '').replace(/^FADING · /, '');
+      var badge = String(row.badge || '').toLowerCase().replace(/\s+/g, '-');
+      var name = esc(row.name || '');
+      var sn = row.netuid != null ? ' <span class="pump-alert__sn">SN' + esc(row.netuid) + '</span>' : '';
       html +=
         '<article class="pump-alert__card pump-alert__card--' +
+        esc(timing) +
+        ' pump-alert__card--' +
         esc(phase) +
         '" role="listitem" data-netuid="' +
         esc(row.netuid) +
+        '" data-timing="' +
+        esc(timing) +
         '">' +
         '<div class="pump-alert__card-top">' +
         '<a class="pump-alert__name" href="/subnet/' +
         esc(row.netuid) +
         '">' +
-        esc(label) +
+        name +
+        sn +
         '</a>' +
         '<span class="pump-alert__badge pump-alert__badge--' +
         esc(badge) +
@@ -448,10 +462,7 @@
         html +=
           '<div class="pump-alert__meter" aria-hidden="true"><span class="pump-alert__meter-fill" style="width:' +
           pct +
-          '%"></span></div>' +
-          '<span class="pump-alert__score">ladder ' +
-          esc(Number(row.score).toFixed(2)) +
-          '</span>';
+          '%"></span></div>';
       }
       html +=
         '<p class="pump-alert__thesis">' +
