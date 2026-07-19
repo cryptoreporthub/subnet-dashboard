@@ -1,11 +1,11 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-19T05:05:00Z  
-**main:** `c06924a` · **K3-7 COPY IA** — Grok LOCK ready, Composer build next
+**Last updated:** 2026-07-19T05:10:00Z  
+**main:** `c06924a` · **K3-7 COPY IA** — Vision READY, await human sign-off
 
 ## Active slice
 
-**K3-7 Hero copy & IA** — Grok PASS lock in `k3-7-copy-ia-lock.md`. Supersedes Composer draft PR #360 (user: subpar). Next: Composer implements lock → phone sign-off.
+**K3-7 Hero copy & IA** — K3 vision in `k3-7-k3-vision.md` (pointer: `k3-7-copy-ia-lock.md`). Supersedes PR #360 audit-note copy. **Next: human sign-off → Composer implements** (not before).
 
 ## Done (K3 sprint)
 
