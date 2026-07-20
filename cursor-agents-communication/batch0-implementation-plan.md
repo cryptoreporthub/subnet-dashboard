@@ -1,6 +1,6 @@
 # Batch 0 — Implementation plan (DO NOT EXECUTE YET)
 
-**Status:** PLAN READY — awaiting human “execute”  
+**Status:** SUPERSEDED by `batch0-final-merged-plan.md` (Grok B0 × Ditto VA audit merge). Keep this file for file-level history; **execute from the final plan.**  
 **LOCK:** `cursor-agents-communication/batch0-brain-presentation-lock.md` **v2.1**  
 **Branch (docs):** `cursor/batch0-brain-presentation-lock-e7f9` / PR #378  
 **When executing:** new branch `cursor/batch0-brain-presentation-impl-e7f9` off latest `main` (rebase if #378 merged)  
