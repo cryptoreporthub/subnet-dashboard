@@ -12,7 +12,8 @@ client = TestClient(app)
 def test_degraded_homepage_has_conviction_cards():
     html = client.get("/").text
     assert "dataset.hydrate='1'" in html or 'dataset.hydrate="1"' in html
-    assert "pick-card" in html
+    # pick-card only renders when hour/day picks exist; section always ships
+    assert 'id="section-picks"' in html or "section-picks" in html
     assert "SimiVision picks warming up" not in html
 
 
@@ -29,6 +30,24 @@ def test_fast_shell_learning_metrics_has_graded_field():
     assert "correct" in metrics
     assert "wrong" in metrics
     assert metrics.get("graded") is not None or (metrics.get("correct", 0) + metrics.get("wrong", 0)) >= 0
+
+
+def test_minimal_index_context_skips_letter_build(monkeypatch):
+    """Timeout fallback must stay instant — never call build_brain_letter."""
+    import server as srv
+
+    def _boom(*_a, **_k):
+        raise AssertionError("build_brain_letter must not run on minimal shell")
+
+    monkeypatch.setattr("internal.letter.brain_letter.build_brain_letter", _boom)
+
+    class _R:
+        base_url = "http://test"
+
+    ctx = srv._minimal_index_context(_R())
+    assert ctx["data_source"] == "timeout-fallback"
+    assert ctx["brain_letter"]["empty"] is True
+    assert ctx["brain_letter"]["status"] == "quiet"
 
 
 def test_homepage_responds_quickly():
@@ -50,6 +69,26 @@ def test_homepage_includes_above_fold_scripts():
     ):
         assert src in html, f"missing {src}"
     assert "apiFetchJson" in html, "missing inline fetch timeout bootstrap"
+
+
+def test_homepage_batch0_brain_presentation():
+    html = client.get("/").text
+    assert "section-proof-band" in html
+    assert "What the loop learned" in html
+    assert "Focus · Contest · Prove it · Watch us update" in html
+    assert "Loading focus from council" not in html
+    assert "section-story-strip" in html
+    # story strip should be in proof band, not only inside pro drawer
+    proof_pos = html.find("section-proof-band")
+    pro_pos = html.find('id="pro-cockpit"')
+    strip_pos = html.find("section-story-strip")
+    assert proof_pos >= 0 and strip_pos >= 0
+    assert strip_pos > proof_pos
+    assert strip_pos < pro_pos or pro_pos < 0
+    assert html.count('id="section-story-strip"') == 1
+    assert "Morning brief · graded memory" in html
+    assert "Resolver integrity" in html
+    assert "brain UI gate" not in html.lower()
 
 
 def test_homepage_shell_cache_speeds_repeat():

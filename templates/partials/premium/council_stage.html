@@ -524,7 +524,7 @@
             <div class="k3-empty" style="padding: 16px 0;">
               <div class="k3-empty-text" style="font-size: 12px;">
                 {% if sp.reason == 'no_pick' %}This pick is still forming. Council lifecycle appears when conviction clears a sized call.
-                {% else %}Lifecycle path warming up. Signal → deliberation → outcome chain will surface as grading matures.{% endif %}
+                {% else %}Building lifecycle chain — signal → deliberation → outcome surfaces as grading matures.{% endif %}
               </div>
             </div>
             {% endif %}
@@ -553,6 +553,7 @@
           {% endif %}
           {% if cal_n|int > 0 %}
           <p class="k3-track-footnote">We keep score on every call. {{ cal_acc }}% directional accuracy across {{ cal_n }} graded windows — published, not curated.</p>
+          <p class="k3-weight-nudge" id="k3-weight-nudge-line" hidden></p>
           {% else %}
           <p class="k3-track-footnote">Graded outcomes will appear here as picks resolve. Published, not curated.</p>
           {% endif %}

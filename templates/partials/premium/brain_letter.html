@@ -1,14 +1,74 @@
 {# §21 L11 — Brain letter (today's living narrative) #}
-<section class="brain-letter wrap-pad" id="section-brain-letter" aria-labelledby="brain-letter-title">
+{% set bl = brain_letter if brain_letter is mapping else {} %}
+{% set bl_ok = bl.status == 'ok' and not bl.empty %}
+<section class="brain-letter wrap-pad" id="section-brain-letter" aria-labelledby="brain-letter-title" data-brain-state="{{ 'live' if bl_ok else 'quiet' }}"{% if bl_ok %} data-ssr="1"{% endif %}>
   <div class="brain-letter__head weekly-letter__head">
     <h2 class="brain-letter__title weekly-letter__title" id="brain-letter-title">Brain letter</h2>
-    <p class="brain-letter__meta weekly-letter__meta" id="brain-letter-date">Today&apos;s narrative · loading…</p>
+    <p class="brain-letter__meta weekly-letter__meta" id="brain-letter-date">Morning brief · graded memory{% if bl.date %} · {{ bl.date }}{% endif %}</p>
     <div class="weekly-letter__actions">
       <button type="button" class="tab-btn" id="brain-letter-copy" disabled>Copy markdown</button>
       <button type="button" class="tab-btn" id="brain-letter-download" disabled>Download</button>
     </div>
   </div>
   <div id="brain-letter-root" class="brain-letter__body weekly-letter__body" aria-live="polite">
-    <p class="weekly-letter__loading">Loading brain letter from graded history…</p>
+    {% if bl_ok %}
+    {% set pick = bl.pick if bl.pick is mapping else {} %}
+    {% set tb = bl.trust_banner if bl.trust_banner is mapping else {} %}
+    {% set working = bl.working if bl.working is mapping else {} %}
+    <article class="weekly-letter__digest brain-letter__digest">
+      <section class="weekly-letter__block" aria-labelledby="brain-letter-learned">
+        <h3 class="weekly-letter__block-title" id="brain-letter-learned">What changed since yesterday</h3>
+        {% if tb.ready and tb.headline %}
+        <p class="weekly-letter__lead">{{ tb.headline }}</p>
+        {% elif tb.message %}
+        <p class="weekly-letter__note">{{ tb.message }}</p>
+        {% else %}
+        <p class="weekly-letter__note">Not enough graded picks to quote accuracy yet.</p>
+        {% endif %}
+        {% set signals = working.top_price_signals if working.top_price_signals is iterable and working.top_price_signals is not string else [] %}
+        {% if signals %}
+        <ul class="weekly-letter__list">
+          {% for row in signals[:3] %}
+          <li class="weekly-letter__item">
+            <span class="weekly-letter__item-name">{{ row.signal|default(row.tag|default('signal')) }}</span>
+            <span class="weekly-letter__item-meta">{% if row.hit_rate is not none %}{{ (row.hit_rate * 100)|round(0) }}% hit{% else %}—{% endif %} · n={{ row.n|default(0) }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="weekly-letter__note">Signal rankings fill in as more picks grade on token price.</p>
+        {% endif %}
+        {% if working.disclaimer %}<p class="weekly-letter__note weekly-letter__disclaimer">{{ working.disclaimer }}</p>{% endif %}
+      </section>
+      <section class="weekly-letter__block" aria-labelledby="brain-letter-today">
+        <h3 class="weekly-letter__block-title" id="brain-letter-today">Today</h3>
+        {% if pick.published and pick.name %}
+        {% set act = pick.action|default('HOLD') %}
+        <p class="weekly-letter__lead"><strong>{% if act == 'LONG' %}BUY{% else %}{{ act }}{% endif %} {{ pick.name }}{% if pick.netuid is not none %} (SN{{ pick.netuid }}){% endif %}</strong></p>
+        {% elif pick.name %}
+        <p class="weekly-letter__lead">Candidate: <strong>{{ pick.name }}</strong> · no audited long yet</p>
+        {% else %}
+        <p class="weekly-letter__note">Council on HOLD — confidence hasn&apos;t cleared a sized long.</p>
+        {% endif %}
+        {% if pick.why %}<p class="weekly-letter__note">{{ pick.why }}</p>{% endif %}
+        {% if pick.dissent %}<p class="weekly-letter__note"><strong>Council split:</strong> {{ pick.dissent }}</p>{% endif %}
+      </section>
+      <section class="weekly-letter__block" aria-labelledby="brain-letter-next">
+        <h3 class="weekly-letter__block-title" id="brain-letter-next">Next</h3>
+        <p class="weekly-letter__lead">{{ bl.outlook|default('No sized call this window — watching the desk into resolve.') }}</p>
+      </section>
+      <section class="weekly-letter__block" aria-labelledby="brain-letter-integrity">
+        <h3 class="weekly-letter__block-title" id="brain-letter-integrity">Integrity</h3>
+        {% set wd = bl.watchdog if bl.watchdog is mapping else {} %}
+        {% if wd.warning %}<p class="weekly-letter__warn">{{ wd.reason|default('Resolver watchdog warning') }}</p>{% endif %}
+        {% if tb.expired is not none and tb.expired_rate is not none %}
+        <p class="weekly-letter__note">Expired backlog: {{ tb.expired }} ({{ (tb.expired_rate * 100)|round(0) }}% of ledger)</p>
+        {% endif %}
+        <p class="weekly-letter__note">Trust surfaces: <strong>{% if bl.brain_ui_ready %}ready{% else %}blocked{% endif %}</strong></p>
+      </section>
+    </article>
+    {% else %}
+    <p class="weekly-letter__empty">Brief writes after the first graded windows land.</p>
+    {% endif %}
   </div>
 </section>

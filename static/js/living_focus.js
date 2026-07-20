@@ -13,15 +13,47 @@
   var switcherEl = document.getElementById('living-focus-switcher');
   var ctaEl = document.getElementById('living-focus-cta');
   var subEl = document.getElementById('living-focus-sub');
+  var statusChipEl = document.getElementById('living-focus-status-chip');
   var focusNetuid = null;
   var focusName = '';
   var audited = false;
   var cachedTrail = null;
+  var lastLearnHtml = '';
+  var lastWeightNudge = '';
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
     });
+  }
+
+  function setBrainState(state) {
+    if (root) root.setAttribute('data-brain-state', state || 'building');
+  }
+
+  function skeletonHtml(quietText) {
+    return (
+      '<div class="living-focus__skeleton" aria-hidden="true">' +
+      '<p class="living-focus__judges-caption">Judges (Oracle / Echo / Pulse)</p>' +
+      '<div class="living-focus__judges living-focus__judges--skeleton">' +
+      '<div class="living-focus__judge"><span class="living-focus__judge-label">Oracle</span><span class="living-focus__judge-bar"></span></div>' +
+      '<div class="living-focus__judge"><span class="living-focus__judge-label">Echo</span><span class="living-focus__judge-bar"></span></div>' +
+      '<div class="living-focus__judge"><span class="living-focus__judge-label">Pulse</span><span class="living-focus__judge-bar"></span></div>' +
+      '</div>' +
+      '<p class="living-focus__quiet">' + esc(quietText || 'Building focus…') + '</p>' +
+      '</div>'
+    );
+  }
+
+  function updateStatusChip() {
+    if (!statusChipEl) return;
+    if (!focusNetuid) {
+      statusChipEl.hidden = true;
+      statusChipEl.textContent = '';
+      return;
+    }
+    statusChipEl.hidden = false;
+    statusChipEl.textContent = audited ? 'Audited pick' : 'Candidate only';
   }
 
   function subnetName(sn, netuid) {
@@ -95,10 +127,9 @@
     if (netuid == null) return;
     focusNetuid = Number(netuid);
     focusName = name || ('SN' + focusNetuid);
-    if (bodyEl) {
-      bodyEl.innerHTML =
-        '<p class="living-focus__empty">Loading judges for ' + esc(focusName) + ' (SN' + esc(focusNetuid) + ')…</p>';
-    }
+    if (bodyEl) bodyEl.innerHTML = skeletonHtml('Building focus…');
+    setBrainState('building');
+    updateStatusChip();
     root.setAttribute('data-focus-netuid', String(focusNetuid));
     window.LivingFocus = window.LivingFocus || {};
     window.LivingFocus.netuid = focusNetuid;
@@ -123,7 +154,30 @@
     );
   }
 
-  function renderWeightLean(weights) {
+  function weightNudgeFromTrail(trail, weights) {
+    var row = null;
+    (trail || []).some(function (ev) {
+      if (!trailMatchesFocus(ev)) return false;
+      row = ev;
+      return true;
+    });
+    if (!row) return '';
+    var payload = row.payload || row;
+    var expert = payload.expert || payload.signal || payload.dial || '';
+    var before = payload.before;
+    var after = payload.after;
+    if (expert == null || before == null) return '';
+    var delta = before != null && after != null ? (Number(after) - Number(before)).toFixed(2) : '';
+    var dial = expert && expert.indexOf(':') >= 0 ? expert.split(':').pop() : expert;
+    return (
+      esc(expert) + ' weight ' +
+      Number(before).toFixed(2) + ' → ' +
+      (after != null ? Number(after).toFixed(2) : (weights && dial && weights[dial] != null ? Number(weights[dial]).toFixed(2) : '?')) +
+      (delta ? ' (' + (Number(delta) >= 0 ? '+' : '') + delta + ')' : '')
+    );
+  }
+
+  function renderWeightLean(weights, nudgeLine) {
     var entries = Object.keys(weights || {}).map(function (k) {
       return { name: k, w: Number(weights[k]) || 0 };
     }).sort(function (a, b) { return b.w - a.w; });
@@ -140,10 +194,14 @@
         '</div>'
       );
     }).join('');
+    var nudge = nudgeLine
+      ? '<p class="living-focus__weight-nudge">' + nudgeLine + '</p>'
+      : '';
     return (
-      '<div class="living-focus__weights" aria-label="Council weight lean">' +
-      '<p class="living-focus__weights-label">Who drives picks · <strong>' + esc(top.name) + '</strong> leads</p>' +
+      '<div class="living-focus__weights" aria-label="Council weights">' +
+      '<p class="living-focus__weights-label">Council weights · Who drives picks · <strong>' + esc(top.name) + '</strong> leads</p>' +
       rows +
+      nudge +
       '</div>'
     );
   }
@@ -181,19 +239,102 @@
     );
   }
 
-  function renderJudges(data, action, weights, explain) {
+  function buildLearnStripHtml(trail, weights) {
+    var row = null;
+    (trail || []).some(function (ev) {
+      if (!trailMatchesFocus(ev)) return false;
+      row = ev;
+      return true;
+    });
+    if (!row) {
+      return (
+        '<div class="living-focus__learn-strip living-focus__learn-strip--empty">' +
+        '<h4 class="living-focus__learn-title">Last learn</h4>' +
+        '<p class="living-focus__learn-empty">No graded beat on this SN yet — appears after this call resolves.</p>' +
+        '</div>'
+      );
+    }
+    var payload = row.payload || row;
+    var correct = payload.correct;
+    var grade = correct === true ? 'HIT' : correct === false ? 'MISS' : 'GRADED';
+    var expert = payload.expert || payload.signal || payload.dial || '';
+    var before = payload.before;
+    var after = payload.after;
+    var delta = before != null && after != null ? (Number(after) - Number(before)).toFixed(2) : '';
+    var predId = payload.prediction_id || row.prediction_id || row.id;
+    var move = '';
+    if (payload.predicted_pct != null && payload.actual_pct != null) {
+      move = ' · expected ' + Number(payload.predicted_pct).toFixed(1) + '% → actual ' + Number(payload.actual_pct).toFixed(1) + '%';
+    }
+    var dial = expert && expert.indexOf(':') >= 0 ? expert.split(':').pop() : expert;
+    var w = weights && dial ? weights[dial] : (weights && expert ? weights[expert] : null);
+    var html =
+      '<div class="living-focus__learn-strip">' +
+      '<h4 class="living-focus__learn-title">Last learn (Focus SN' + focusNetuid + ')</h4>' +
+      '<p class="living-focus__learn-grade">' + esc(grade) + move + '</p>';
+    if (expert && (before != null || w != null)) {
+      html += '<p class="living-focus__learn-nudge">' + esc(expert) + ' ' +
+        (before != null ? Number(before).toFixed(2) : '?') + ' → ' +
+        (after != null ? Number(after).toFixed(2) : (w != null ? Number(w).toFixed(2) : '?')) +
+        (delta ? ' (' + (Number(delta) >= 0 ? '+' : '') + delta + ')' : '') +
+        '</p>';
+    }
+    html += '<div class="living-focus__learn-actions">';
+    if (predId) {
+      html += '<button type="button" class="btn-secondary living-focus__replay" data-prediction-id="' + esc(predId) + '">Replay time capsule</button>';
+    }
+    if (payload.share_page_url) {
+      html += '<button type="button" class="btn-secondary living-focus__share" data-share-url="' + esc(payload.share_page_url) + '">Share graded call</button>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function bindLearnActions(container) {
+    if (!container) return;
+    container.querySelectorAll('.living-focus__replay').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-prediction-id');
+        if (id && window.SimiTimeCapsule && window.SimiTimeCapsule.open) {
+          window.SimiTimeCapsule.open(id);
+        }
+      });
+    });
+    container.querySelectorAll('.living-focus__share').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var path = btn.getAttribute('data-share-url');
+        if (path && navigator.clipboard) {
+          navigator.clipboard.writeText(window.location.origin + path).catch(function () {});
+        }
+      });
+    });
+  }
+
+  function renderLearnStrip(trail, weights) {
+    lastLearnHtml = buildLearnStripHtml(trail, weights);
+    lastWeightNudge = weightNudgeFromTrail(trail, weights);
+    if (learnEl) {
+      learnEl.hidden = true;
+      learnEl.innerHTML = '';
+    }
+  }
+
+  function renderJudges(data, action, weights, explain, trail) {
     if (!bodyEl) return;
     if (!data || data.error) {
-      bodyEl.innerHTML = '<p class="living-focus__empty">Focus judges unavailable.</p>';
+      setBrainState('quiet');
+      bodyEl.innerHTML = '<p class="living-focus__empty">Judges quiet — last try failed.</p>';
       return;
     }
+    setBrainState('live');
     var consensus = data.consensus || {};
     var contested = !!consensus.contested || (consensus.agreement != null && consensus.agreement < 0.5);
-    var split = contested ? ' · Council split' : '';
     var dissent = dissentSummary(data);
-    if (subEl) {
-      subEl.textContent = (audited ? 'Audited pick' : 'Candidate only') + split;
-    }
+    var learnHtml = buildLearnStripHtml(trail, weights);
+    lastLearnHtml = learnHtml;
+    lastWeightNudge = weightNudgeFromTrail(trail, weights);
+    var nudgePlain = lastWeightNudge ? esc(lastWeightNudge) : '';
+
     var html = '';
     if (contested) {
       html += '<p class="living-focus__contention">Council split — judges disagree on this subnet.</p>';
@@ -201,24 +342,28 @@
         html += '<p class="living-focus__contention living-focus__contention--detail">' + esc(dissent) + '</p>';
       }
     }
-    html +=
-      '<header class="living-focus__header">' +
-      '<h3 class="living-focus__name"><a href="/subnet/' + focusNetuid + '" class="living-focus__link">' + esc(focusName) + '</a> <span class="living-focus__sn">SN' + focusNetuid + '</span></h3>' +
-      '<span class="living-focus__action badge-' + (action === 'LONG' ? 'buy' : action === 'SHORT' ? 'sell' : 'watch') + '">' + esc(action || 'HOLD') + '</span>' +
-      '</header>';
-    html += renderWhyNot(explain);
+    html += '<p class="living-focus__judges-caption">Judges (Oracle / Echo / Pulse)</p>';
     html += '<div class="living-focus__judges">' +
       judgeBar('Oracle', (data.oracle || {}).score, contested) +
       judgeBar('Echo', (data.echo || {}).score, contested) +
       judgeBar('Pulse', (data.pulse || {}).score, contested) +
       '</div>';
-    html += renderWeightLean(weights);
+    html += learnHtml;
+    html += (
+      '<header class="living-focus__header">' +
+      '<h3 class="living-focus__name"><a href="/subnet/' + focusNetuid + '" class="living-focus__link">' + esc(focusName) + '</a> <span class="living-focus__sn">SN' + focusNetuid + '</span></h3>' +
+      '<span class="living-focus__action badge-' + (action === 'LONG' ? 'buy' : action === 'SHORT' ? 'sell' : 'watch') + '">' + esc(action || 'HOLD') + '</span>' +
+      '</header>'
+    );
+    html += renderWhyNot(explain);
+    html += renderWeightLean(weights, nudgePlain);
     if (consensus.verdict) {
       html += '<p class="living-focus__verdict">Consensus: <strong>' + esc(consensus.verdict) + '</strong>' +
         (consensus.agreement != null ? ' · agreement ' + Number(consensus.agreement).toFixed(2) : '') +
         '</p>';
     }
     bodyEl.innerHTML = html;
+    bindLearnActions(bodyEl);
     if (ctaEl) ctaEl.hidden = false;
   }
 
@@ -297,72 +442,6 @@
         var n = Number(btn.getAttribute('data-netuid'));
         setFocus(n, btn.getAttribute('data-name') || ('SN' + n));
         refreshFocus();
-      });
-    });
-  }
-
-  function renderLearnStrip(trail, weights) {
-    if (!learnEl) return;
-    var row = null;
-    (trail || []).some(function (ev) {
-      if (!trailMatchesFocus(ev)) return false;
-      row = ev;
-      return true;
-    });
-    if (!row) {
-      learnEl.hidden = false;
-      learnEl.innerHTML = '<p class="living-focus__learn-empty">No graded beat on this SN yet — appears after resolver tick.</p>';
-      return;
-    }
-    var payload = row.payload || row;
-    var correct = payload.correct;
-    var grade = correct === true ? 'HIT' : correct === false ? 'MISS' : 'GRADED';
-    var expert = payload.expert || payload.signal || payload.dial || '';
-    var before = payload.before;
-    var after = payload.after;
-    var delta = before != null && after != null ? (Number(after) - Number(before)).toFixed(2) : '';
-    var predId = payload.prediction_id || row.prediction_id || row.id;
-    var move = '';
-    if (payload.predicted_pct != null && payload.actual_pct != null) {
-      move = ' · expected ' + Number(payload.predicted_pct).toFixed(1) + '% → actual ' + Number(payload.actual_pct).toFixed(1) + '%';
-    }
-    var dial = expert && expert.indexOf(':') >= 0 ? expert.split(':').pop() : expert;
-    var w = weights && dial ? weights[dial] : (weights && expert ? weights[expert] : null);
-    var html =
-      '<div class="living-focus__learn-strip">' +
-      '<h4 class="living-focus__learn-title">Last learn (Focus SN' + focusNetuid + ')</h4>' +
-      '<p class="living-focus__learn-grade">' + esc(grade) + move + '</p>';
-    if (expert && (before != null || w != null)) {
-      html += '<p class="living-focus__learn-nudge">' + esc(expert) + ' ' +
-        (before != null ? Number(before).toFixed(2) : '?') + ' → ' +
-        (after != null ? Number(after).toFixed(2) : (w != null ? Number(w).toFixed(2) : '?')) +
-        (delta ? ' (' + (Number(delta) >= 0 ? '+' : '') + delta + ')' : '') +
-        '</p>';
-    }
-    html += '<div class="living-focus__learn-actions">';
-    if (predId) {
-      html += '<button type="button" class="btn-secondary living-focus__replay" data-prediction-id="' + esc(predId) + '">Replay time capsule</button>';
-    }
-    if (payload.share_page_url) {
-      html += '<button type="button" class="btn-secondary living-focus__share" data-share-url="' + esc(payload.share_page_url) + '">Share graded call</button>';
-    }
-    html += '</div></div>';
-    learnEl.hidden = false;
-    learnEl.innerHTML = html;
-    learnEl.querySelectorAll('.living-focus__replay').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var id = btn.getAttribute('data-prediction-id');
-        if (id && window.SimiTimeCapsule && window.SimiTimeCapsule.open) {
-          window.SimiTimeCapsule.open(id);
-        }
-      });
-    });
-    learnEl.querySelectorAll('.living-focus__share').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var path = btn.getAttribute('data-share-url');
-        if (path && navigator.clipboard) {
-          navigator.clipboard.writeText(window.location.origin + path).catch(function () {});
-        }
       });
     });
   }
@@ -471,14 +550,14 @@
       var explain = res[4] || {};
       action = String(dp.action || 'HOLD').toUpperCase();
       var weights = calibrationWeights(cal);
-      renderJudges(judges, action, weights, explain);
+      renderJudges(judges, action, weights, explain, trail);
       renderLearnStrip(trail, weights);
       renderTrailTeaser(trail);
       return loadChips();
     }).catch(function () {
+      setBrainState('quiet');
       if (bodyEl) {
-        bodyEl.innerHTML =
-          '<p class="living-focus__empty">Focus judges unavailable — server busy, try again shortly.</p>';
+        bodyEl.innerHTML = '<p class="living-focus__empty">Judges quiet — last try failed.</p>';
       }
     });
   }
@@ -513,6 +592,7 @@
         audited = false;
       }
       if (n == null) {
+        setBrainState('quiet');
         if (bodyEl) bodyEl.innerHTML = '<p class="living-focus__empty">No focus subnet today — council has not cleared a pick.</p>';
         return;
       }
@@ -522,11 +602,13 @@
       scrollToFocus();
       return refreshFocus();
     }).catch(function () {
-      if (bodyEl) bodyEl.innerHTML = '<p class="living-focus__empty">Living Focus unavailable.</p>';
+      setBrainState('quiet');
+      if (bodyEl) bodyEl.innerHTML = '<p class="living-focus__empty">Judges quiet — last try failed.</p>';
     });
   }
 
   function init() {
+    if (subEl) subEl.textContent = 'Focus · Contest · Prove it · Watch us update';
     var cache = window.HomeHydrateCache;
     var cached = bootstrapFromCache(cache);
     if (cached && cached.n != null) {

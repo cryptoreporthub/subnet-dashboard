@@ -1,13 +1,14 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-19T15:15:00Z  
-**main:** `db5d460` · **K3 horizon stage + dossier labels** in flight
+**Last updated:** 2026-07-20T22:30:00Z  
+**main:** `5302aaa` · **Batch 0 brain presentation** in flight (PR #382)
 
 ## Next slice queue
 
-1. **K3-9 pump desk** — 9a ledger (`pump_calls.json`) then 9b vertical UI (Grok on pump)
-2. **Telegram** — H4 session bootstrap + `MESSAGE_INTEL_LISTENER=on` + feed honesty
-3. Phone QA 390px — `/preview/k3-hold`, `/preview/k3-pump-alert`, live home
+1. **Batch 0** — B0-0→B0-d execute (`cursor/batch0-brain-presentation-impl-4a9d` / #382) — audit Rank‑1 first
+2. Phone QA 390px — Batch 0 Learning presence ≥4 gate
+3. **K3-9 pump desk** — 9a ledger then 9b UI (Rank‑3; after Batch 0 sign-off)
+4. **Telegram** — H4 session bootstrap + feed honesty
 
 ## Stale PRs (superseded — close on GitHub)
 
