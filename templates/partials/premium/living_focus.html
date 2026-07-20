@@ -1,11 +1,20 @@
 {# §27-3a — Living Focus: one netuid the brain orients around #}
-<section class="living-focus wrap-pad" id="section-living-focus" aria-labelledby="living-focus-title" data-focus-netuid="{{ focus_netuid if focus_netuid is not none else '' }}">
+<section class="living-focus wrap-pad" id="section-living-focus" aria-labelledby="living-focus-title" data-brain-state="building" data-focus-netuid="{{ focus_netuid if focus_netuid is not none else '' }}">
   <div class="living-focus__head">
     <h2 class="living-focus__title" id="living-focus-title">Living Focus</h2>
-    <p class="living-focus__sub" id="living-focus-sub">Council contention on today&apos;s pick</p>
+    <p class="living-focus__sub" id="living-focus-sub">Focus · Contest · Prove it · Watch us update</p>
+    <p class="living-focus__status-chip" id="living-focus-status-chip" hidden></p>
   </div>
   <div class="living-focus__body" id="living-focus-body" aria-live="polite">
-    <p class="living-focus__empty" id="living-focus-empty">Loading focus from council…</p>
+    <div class="living-focus__skeleton" aria-hidden="true">
+      <p class="living-focus__judges-caption">Judges (Oracle / Echo / Pulse)</p>
+      <div class="living-focus__judges living-focus__judges--skeleton">
+        <div class="living-focus__judge"><span class="living-focus__judge-label">Oracle</span><span class="living-focus__judge-bar"></span></div>
+        <div class="living-focus__judge"><span class="living-focus__judge-label">Echo</span><span class="living-focus__judge-bar"></span></div>
+        <div class="living-focus__judge"><span class="living-focus__judge-label">Pulse</span><span class="living-focus__judge-bar"></span></div>
+      </div>
+      <p class="living-focus__quiet">Building focus…</p>
+    </div>
   </div>
   <div class="living-focus__learn" id="living-focus-learn" hidden aria-live="polite"></div>
   <div class="living-focus__evidence" id="living-focus-evidence" hidden aria-live="polite"></div>

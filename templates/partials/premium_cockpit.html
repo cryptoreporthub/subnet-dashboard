@@ -17,6 +17,15 @@
   {% set dp_subnet = dpick.candidate.subnet %}
 {% endif %}
 {% set focus_netuid = dp_subnet.netuid if dp_subnet and dp_subnet.netuid is not none else none %}
+{% set tb = trust_banner if trust_banner is mapping else {} %}
+{% set cal_n = tb.graded|default(0) %}
+{% if tb.accuracy is not none and cal_n|int > 0 %}
+  {% set cal_acc = (tb.accuracy|float * 100)|round(1) %}
+{% elif cal_n|int > 0 and tb.correct is defined and tb.correct is not none %}
+  {% set cal_acc = ((tb.correct|float / cal_n|float) * 100)|round(1) %}
+{% else %}
+  {% set cal_acc = none %}
+{% endif %}
 
 {% include "partials/premium/header.html" %}
 {% include "partials/premium/council_stage.html" %}
@@ -25,16 +34,33 @@
 {% include "partials/premium/pump_alert.html" %}
 {% include "partials/premium/living_focus.html" %}
 {% include "partials/premium/brain_letter.html" %}
-<section class="whats-working wrap-pad" id="section-whats-working" aria-labelledby="whats-working-title">
-  <h2 class="whats-working__title" id="whats-working-title">What&apos;s working</h2>
-  <p class="whats-working__sub">Signals that predicted token price — learned from graded picks.</p>
-  <div id="whats-working-chips" class="whats-working__chips" aria-live="polite">
-    <p class="whats-working__empty">Loading price-signal rankings…</p>
+
+<section id="section-proof-band" class="proof-band wrap-pad" aria-labelledby="proof-band-title" data-brain-state="{{ 'live' if cal_n|int > 0 else 'building' }}">
+  <h2 id="proof-band-title" class="proof-band__title">What the loop learned</h2>
+  <div class="proof-band__score-hero" id="proof-band-score-hero">
+    {% if cal_n|int > 0 and cal_acc is not none %}
+    <div class="proof-band__pct">{{ cal_acc|round(0) }}%</div>
+    <p class="proof-band__meta">{{ cal_n }} graded · published, not curated</p>
+    {% else %}
+    <p class="proof-band__quiet">Building graded history — scores appear after calls resolve.</p>
+    {% endif %}
   </div>
+  <div class="whats-working" id="section-whats-working" aria-labelledby="whats-working-title">
+    <h3 class="whats-working__title" id="whats-working-title">What&apos;s working</h3>
+    <p class="whats-working__sub">Signals that predicted token price — learned from graded picks.</p>
+    <div id="whats-working-chips" class="whats-working__chips" aria-live="polite" data-brain-state="building">
+      <p class="whats-working__empty">Quiet — signal rankings fill in as picks grade.</p>
+    </div>
+  </div>
+  {% include "partials/premium/story_strip.html" %}
+  {% include "partials/premium/paper_portfolio.html" %}
 </section>
-{% include "partials/premium/paper_portfolio.html" %}
-{% include "partials/premium/weekly_letter.html" %}
-{% include "partials/premium/daily_recap.html" %}
+
+<details class="letters-drawer wrap-pad" id="letters-drawer">
+  <summary>Letters · weekly &amp; daily</summary>
+  {% include "partials/premium/weekly_letter.html" %}
+  {% include "partials/premium/daily_recap.html" %}
+</details>
 
 {# Primary council narrative — demoted to Pro drawer (U1) #}
 <details class="pro-drawer wrap-pad" id="pro-cockpit">
@@ -43,7 +69,6 @@
     <span class="pro-drawer__hint">Council bench · KPI · backtest</span>
   </summary>
   <div class="pro-drawer__body council-primary">
-    {% include "partials/premium/story_strip.html" %}
     {% include "partials/premium/story_path.html" %}
     <div class="council-bench">
       {% include "partials/premium/council.html" %}

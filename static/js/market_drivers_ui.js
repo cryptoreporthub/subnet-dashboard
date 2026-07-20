@@ -67,10 +67,12 @@
     var host = document.getElementById("whats-working-chips");
     if (!host) return;
     if (!payload || !payload.top_price_signals || !payload.top_price_signals.length) {
+      host.setAttribute("data-brain-state", "quiet");
       host.innerHTML =
         '<p class="whats-working__empty">Not enough graded picks yet to rank price signals.</p>';
       return;
     }
+    host.setAttribute("data-brain-state", "live");
     var html = "";
     payload.top_price_signals.slice(0, 5).forEach(function (row) {
       var pct = Math.round((row.hit_rate || 0) * 100);
@@ -100,7 +102,10 @@
       })
       .catch(function () {
         var host = document.getElementById("whats-working-chips");
-        if (host) host.innerHTML = '<p class="whats-working__empty">Signal learning unavailable.</p>';
+        if (host) {
+          host.setAttribute("data-brain-state", "quiet");
+          host.innerHTML = '<p class="whats-working__empty">Quiet — signal rankings unavailable. Last try failed.</p>';
+        }
       });
   }
 

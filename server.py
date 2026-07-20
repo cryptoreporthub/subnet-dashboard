@@ -438,6 +438,17 @@ def _normalize_registry_subnet(sn: Dict[str, Any]) -> Dict[str, Any]:
         return row
 
 
+def _safe_brain_letter_context() -> Dict[str, Any]:
+    """File-backed brain letter for SSR — omit on failure."""
+    try:
+        from internal.letter.brain_letter import build_brain_letter
+
+        return {"brain_letter": build_brain_letter()}
+    except Exception as exc:
+        logger.warning("brain letter context failed: %s", exc)
+        return {"brain_letter": {"status": "quiet", "empty": True}}
+
+
 def _fast_home_hero_context(trust_banner: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Cheap hero keys for degraded GET / — no pick engine or resolver replay."""
     from internal.analytics.home_habit import (
@@ -529,7 +540,7 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
             story_path = build_story_path(pick_payload)
     except Exception as exc:
         logger.warning("story path context failed: %s", exc)
-    return {
+    hero = {
         "daily_pick_stage": pick_payload if isinstance(pick_payload, dict) else {},
         "conviction_band": _safe_conviction_band(pick_payload),
         "enrichment_badge": _safe_enrichment_badge(pick_netuid),
@@ -540,6 +551,8 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         "trust_banner": _safe_trust_banner(),
         "story_path": story_path,
     }
+    hero.update(_safe_brain_letter_context())
+    return hero
 
 
 def _public_base_url(request: Request) -> str:
@@ -609,6 +622,7 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
         },
     }
     ctx.update(_fast_home_hero_context(trust_banner))
+    ctx.update(_safe_brain_letter_context())
     ctx.update(_pump_alerts_context(subnets))
     stash = {k: v for k, v in ctx.items() if k != "request"}
     _DEGRADED_INDEX_CACHE["at"] = now
@@ -641,6 +655,7 @@ def _minimal_index_context(request: Request) -> Dict[str, Any]:
             "avg_confidence": 0.0,
         },
         **_fast_home_hero_context(trust_banner),
+        **_safe_brain_letter_context(),
         **_pump_alerts_context([]),
     }
 

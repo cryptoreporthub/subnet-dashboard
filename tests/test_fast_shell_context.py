@@ -52,6 +52,26 @@ def test_homepage_includes_above_fold_scripts():
     assert "apiFetchJson" in html, "missing inline fetch timeout bootstrap"
 
 
+def test_homepage_batch0_brain_presentation():
+    html = client.get("/").text
+    assert "section-proof-band" in html
+    assert "What the loop learned" in html
+    assert "Focus · Contest · Prove it · Watch us update" in html
+    assert "Loading focus from council" not in html
+    assert "section-story-strip" in html
+    # story strip should be in proof band, not only inside pro drawer
+    proof_pos = html.find("section-proof-band")
+    pro_pos = html.find('id="pro-cockpit"')
+    strip_pos = html.find("section-story-strip")
+    assert proof_pos >= 0 and strip_pos >= 0
+    assert strip_pos > proof_pos
+    assert strip_pos < pro_pos or pro_pos < 0
+    assert html.count('id="section-story-strip"') == 1
+    assert "Morning brief · graded memory" in html
+    assert "Resolver integrity" in html
+    assert "brain UI gate" not in html.lower()
+
+
 def test_homepage_shell_cache_speeds_repeat():
     client.get("/")
     t0 = time.time()

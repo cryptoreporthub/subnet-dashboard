@@ -87,6 +87,42 @@ def _judge_citation_block(netuid: Optional[int], subnets: Optional[List[Dict[str
         return {}
 
 
+def _outlook_sentence(pick: Dict[str, Any]) -> str:
+    """One forward sentence (≤140 chars) timed to resolve window."""
+    action = str(pick.get("action") or "HOLD").upper()
+    published = bool(pick.get("published"))
+    name = pick.get("name")
+    resolves_in = pick.get("resolves_in")
+    horizon = str(pick.get("horizon") or pick.get("time_horizon") or "24h")
+    trigger = str(pick.get("trigger") or "").strip()
+    thesis = str(pick.get("thesis") or "").strip()
+
+    window = f"the next {resolves_in}" if resolves_in else f"the {horizon} window"
+
+    if not name and not published:
+        return "No sized call this window — watching the desk into resolve."
+
+    if action in ("LONG", "BUY") and published:
+        gist = thesis.split(".")[0] if thesis else "follow-through on the setup"
+        sentence = f"Into {window} we expect {gist.lower()} while liquidity holds."
+        return sentence[:140]
+
+    if action == "HOLD" and name and not published:
+        gate = trigger or "conviction clears a sized long"
+        sentence = f"Over {window} we stay flat unless {gate.rstrip('.')}."
+        return sentence[:140]
+
+    if action == "HOLD":
+        return "No sized call this window — watching the desk into resolve."
+
+    if action in ("SHORT", "SELL", "REDUCE"):
+        sentence = f"Over {window} we watch for defensive follow-through on {name or 'this name'}."
+        return sentence[:140]
+
+    sentence = f"Over {window} we watch {name or 'the desk'} into resolve."
+    return sentence[:140]
+
+
 def _today_pick_block() -> Dict[str, Any]:
     """File-backed daily pick — avoid live subnet feed + pick engine on letter API."""
     payload: Dict[str, Any] = {}
@@ -107,8 +143,17 @@ def _today_pick_block() -> Dict[str, Any]:
     except Exception:
         payload = {}
 
-    pick = payload.get("pick") if isinstance(payload.get("pick"), dict) else None
-    cand = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else None
+    enriched = dict(payload) if isinstance(payload, dict) else {}
+    try:
+        from internal.learning.dpick_copy import attach_brief_to_daily_pick
+        from internal.learning.dpick_temporal import attach_temporal_to_daily_pick
+
+        enriched = attach_brief_to_daily_pick(attach_temporal_to_daily_pick(enriched))
+    except Exception:
+        pass
+
+    pick = enriched.get("pick") if isinstance(enriched.get("pick"), dict) else None
+    cand = enriched.get("candidate") if isinstance(enriched.get("candidate"), dict) else None
     block = pick or cand
     subnet = (block or {}).get("subnet") if isinstance((block or {}).get("subnet"), dict) else {}
     netuid = subnet.get("netuid")
@@ -122,14 +167,27 @@ def _today_pick_block() -> Dict[str, Any]:
             driver = None
 
     reasons = (block or {}).get("reasons") if isinstance(block, dict) else []
-    why = reasons[0] if reasons else payload.get("reason")
+    why = reasons[0] if reasons else enriched.get("reason")
+    brief = enriched.get("brief") if isinstance(enriched.get("brief"), dict) else {}
     judge_block = _judge_citation_block(
         int(netuid) if netuid is not None else None,
         subnets,
     )
-    return {
-        "date": payload.get("date") or _today_utc(),
-        "action": str(payload.get("action") or "HOLD").upper(),
+    conviction = None
+    if isinstance(block, dict):
+        for key in ("final_confidence", "confidence", "conviction"):
+            if block.get(key) is not None:
+                try:
+                    conviction = float(block[key])
+                    if conviction > 1:
+                        conviction = conviction / 100.0
+                    break
+                except (TypeError, ValueError):
+                    pass
+
+    row = {
+        "date": enriched.get("date") or _today_utc(),
+        "action": str(enriched.get("action") or "HOLD").upper(),
         "published": pick is not None,
         "netuid": netuid,
         "name": subnet.get("name"),
@@ -138,7 +196,14 @@ def _today_pick_block() -> Dict[str, Any]:
         "driver_card": driver if isinstance(driver, dict) else None,
         "judge_citations": judge_block.get("citations") or [],
         "dissent": judge_block.get("dissent"),
+        "resolves_in": enriched.get("resolves_in"),
+        "horizon": enriched.get("time_horizon") or enriched.get("horizon") or "24h",
+        "thesis": brief.get("thesis"),
+        "trigger": brief.get("trigger"),
+        "final_confidence": conviction,
     }
+    row["outlook"] = _outlook_sentence(row)
+    return row
 
 
 def _working_block() -> Dict[str, Any]:
@@ -159,58 +224,21 @@ def _story_block() -> Dict[str, Any]:
         return {"data_available": False, "steps": []}
 
 
+def _hold_copy() -> str:
+    return "Council on HOLD — confidence hasn't cleared a sized long."
+
+
 def _render_markdown(
     *,
     date: str,
     pick: Dict[str, Any],
     trust: Dict[str, Any],
     working: Dict[str, Any],
-    story: Dict[str, Any],
+    outlook: str,
 ) -> str:
     lines = [f"# SimiVision Brain letter — {date}", ""]
 
-    lines.append("## Today we watch")
-    if pick.get("dissent"):
-        lines.append(f"- **Council split:** {pick['dissent']}")
-    if pick.get("published") and pick.get("name"):
-        act = pick.get("action") or "HOLD"
-        if act == "LONG":
-            act = "BUY"
-        label = pick.get("name")
-        if pick.get("netuid") is not None:
-            label = f"SN{pick['netuid']} {label}"
-        lines.append(f"- **{act} {label}**")
-        if pick.get("why"):
-            lines.append(f"- {pick['why']}")
-    elif pick.get("name"):
-        lines.append(f"- Candidate: **{pick['name']}** (no audited long yet)")
-        if pick.get("why"):
-            lines.append(f"- {pick['why']}")
-    else:
-        lines.append("- Council on HOLD — waiting for audit gate.")
-
-    card = pick.get("driver_card") or {}
-    if card.get("status") == "success":
-        dec = card.get("decomposition") or {}
-        if dec.get("staking_yield_apy") is not None:
-            lines.append(
-                f"- Staking APY {float(dec['staking_yield_apy']):.1f}% "
-                "(income — not token price)"
-            )
-        if dec.get("price_change_7d") is not None:
-            lines.append(f"- Token price 7d: {float(dec['price_change_7d']):+.1f}%")
-        if dec.get("yield_trap"):
-            lines.append("- **Yield trap** — high APY but token falling")
-        for why in (card.get("why") or [])[:2]:
-            lines.append(f"- {why}")
-    cites = pick.get("judge_citations") or []
-    if cites:
-        lines.append("- Judges (live):")
-        for row in cites[:3]:
-            lines.append(f"  - {row.get('label')}: score {row.get('score')}")
-    lines.append("")
-
-    lines.append("## What the brain learned")
+    lines.append("## What changed since yesterday")
     banner = trust.get("trust_banner") or {}
     if banner.get("ready") and banner.get("headline"):
         lines.append(f"- {banner['headline']}")
@@ -233,6 +261,51 @@ def _render_markdown(
         lines.append(f"- _{working['disclaimer']}_")
     lines.append("")
 
+    lines.append("## Today")
+    if pick.get("dissent"):
+        lines.append(f"- **Council split:** {pick['dissent']}")
+    if pick.get("published") and pick.get("name"):
+        act = pick.get("action") or "HOLD"
+        if act == "LONG":
+            act = "BUY"
+        label = pick.get("name")
+        if pick.get("netuid") is not None:
+            label = f"SN{pick['netuid']} {label}"
+        lines.append(f"- **{act} {label}**")
+        if pick.get("why"):
+            lines.append(f"- {pick['why']}")
+    elif pick.get("name"):
+        lines.append(f"- Candidate: **{pick['name']}** (no audited long yet)")
+        if pick.get("why"):
+            lines.append(f"- {pick['why']}")
+    else:
+        lines.append(f"- {_hold_copy()}")
+
+    card = pick.get("driver_card") or {}
+    if card.get("status") == "success":
+        dec = card.get("decomposition") or {}
+        if dec.get("staking_yield_apy") is not None:
+            lines.append(
+                f"- Staking APY {float(dec['staking_yield_apy']):.1f}% "
+                "(income — not token price)"
+            )
+        if dec.get("price_change_7d") is not None:
+            lines.append(f"- Token price 7d: {float(dec['price_change_7d']):+.1f}%")
+        if dec.get("yield_trap"):
+            lines.append("- **Yield trap** — high APY but token falling")
+        for why in (card.get("why") or [])[:2]:
+            lines.append(f"- {why}")
+    cites = pick.get("judge_citations") or []
+    if cites:
+        lines.append("- Judges (live):")
+        for row in cites[:3]:
+            lines.append(f"  - {row.get('label')}: score {row.get('score')}")
+    lines.append("")
+
+    lines.append("## Next")
+    lines.append(f"- {outlook}")
+    lines.append("")
+
     lines.append("## Integrity")
     wd = trust.get("watchdog") or {}
     if wd.get("warning"):
@@ -249,15 +322,6 @@ def _render_markdown(
         lines.append("- Trust surfaces: **blocked** until sample + resolver gates clear")
     lines.append("")
 
-    steps = story.get("steps") or []
-    if steps:
-        lines.append("## How we got here")
-        for step in steps:
-            label = step.get("label") or ""
-            title = step.get("title") or ""
-            lines.append(f"- {label} {title}".strip())
-        lines.append("")
-
     return "\n".join(lines)
 
 
@@ -269,6 +333,7 @@ def build_brain_letter() -> Dict[str, Any]:
     working = _working_block()
     story = _story_block()
     banner = trust.get("trust_banner") or {}
+    outlook = pick.get("outlook") or _outlook_sentence(pick)
 
     empty = (
         not pick.get("name")
@@ -282,7 +347,7 @@ def build_brain_letter() -> Dict[str, Any]:
         pick=pick,
         trust=trust,
         working=working,
-        story=story,
+        outlook=outlook,
     )
 
     return {
@@ -290,6 +355,7 @@ def build_brain_letter() -> Dict[str, Any]:
         "empty": empty,
         "date": date,
         "pick": pick,
+        "outlook": outlook,
         "trust_banner": banner,
         "brain_ui_ready": trust.get("brain_ui_ready"),
         "watchdog": trust.get("watchdog"),
