@@ -119,12 +119,32 @@ Daily Call (decision)
 | Section framing | Title stays **Brain letter**; meta: **`Morning brief · graded memory`** (not “Today's narrative · loading…”) |
 | Block order (rewrite) | 1) **What changed since yesterday** (learned / weight nudge / signal hits) — lead with learning  
 2) **Today’s call in one breath** (short — link/scroll to dossier, don’t rebuild hero)  
-3) **Integrity** (resolver / expired — trader English)  
-4) Drop or collapse **How we got here** (Outcome peel + Pro story path own the chain) |
+3) **Outlook** — one forward sentence (required; see below)  
+4) **Integrity** (resolver / expired — trader English)  
+5) Drop or collapse **How we got here** (Outcome peel + Pro story path own the chain) |
 | Voice | Kill “audit gate” / “waiting for audit gate” → HOLD language matching K3-7 |
 | Empty | `Brief writes after the first graded windows land.` |
 
-**Relationship to dossier:** Dossier is the live instrument; letter is the **artifact you’d forward**. Learning leads; call is a short citation.
+**Relationship to dossier:** Dossier is the live instrument; letter is the **artifact you’d forward**. Learning leads; call is a short citation; **Outlook** makes the forward pick explicit in prose.
+
+### Outlook — the forward sentence (new, required)
+
+**Clarification:** Today’s Daily Call *is* forward picking — a stance for a resolve window (hours → 24h). What was missing is saying that in plain English once, so the letter doesn’t feel like a recap of the past.
+
+**Owns:** one sentence answering *“What do we think happens next?”*
+
+| Field | Spec |
+|-------|------|
+| Label | `Next` or `Outlook` (prefer **`Next`** — short) |
+| Length | One sentence (≤ ~140 chars). Not a second thesis paragraph. |
+| Time anchor | Use real clock when available: `resolves_in` / resolve window (`4h`, `tonight’s close`, `24h window`) — never invent “tonight” if the clock says otherwise |
+| Content by stance | **HOLD + candidate:** what must clear before a sized long, timed to the window — e.g. `Over the next 4h we stay flat unless conviction clears 45% and valuation drag eases.`  
+| | **LONG:** what we expect by grade — e.g. `Into the next 24h we expect follow-through on the mean-reversion while liquidity holds.`  
+| | **No name / quiet desk:** `No sized call this window — watching the desk into resolve.` |
+| Source | Compose from existing brief fields (`thesis`/`trigger`/`resolves_in`/`horizon`) — prefer a dedicated `outlook` string from letter builder so hydrate + markdown export stay in sync |
+| Must not | Restate full FLIP box; duplicate Track record %; invent price targets |
+
+**Also whisper on dossier (optional, same batch if cheap):** if claim already has FLIP + `LIVE · Nh remaining`, Outlook in the letter is enough. Do **not** add a third forward block on Living Focus.
 
 ### Proof band — compose, don’t landfill
 
@@ -170,6 +190,7 @@ Daily Call (decision)
 | Living Focus SSR | Skeleton or `Focus opens when judges score this subnet.` — never eternal “Loading focus from council…” |
 | Brain letter meta | `Morning brief · graded memory` |
 | Brain letter HOLD | Match K3-7 trader voice — no audit-gate phrasing |
+| Brain letter Outlook | One timed forward sentence — see Outlook LOCK (e.g. `Over the next 4h we stay flat unless…`) |
 | Track record empty nudge | `After resolve, judge weights nudge from this window.` |
 | KPI | `brain UI gate` → `Resolver integrity` |
 | Story path empty (Pro) | `No audited pick yet — the chain fills when today's call is live.` |
@@ -196,9 +217,11 @@ Banned in Tier‑1: `warming up`, `brain UI gate`, `§16`, `audit gate` as drama
 4. Optional preview fixture `/preview/k3-living-focus` for 390px sign-off  
 
 ### B0-b — Brain letter product pass (elevate)
-1. Reorder blocks: learned → today (short) → integrity; drop/collapse story-path block  
-2. Meta + empty + HOLD copy hygiene  
-3. Keep copy/download  
+1. Reorder blocks: learned → today (short) → **Outlook/Next** → integrity; drop/collapse story-path block  
+2. Add `outlook` (or `next`) one-liner in `build_brain_letter()` from call stance + `resolves_in` / horizon + trigger gist  
+3. Render + markdown export include the Outlook sentence  
+4. Meta + empty + HOLD copy hygiene  
+5. Keep copy/download  
 
 ### B0-c — Track record peel + proof band
 1. Unhide / show weight-nudge line on Track record  
