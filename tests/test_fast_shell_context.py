@@ -12,7 +12,8 @@ client = TestClient(app)
 def test_degraded_homepage_has_conviction_cards():
     html = client.get("/").text
     assert "dataset.hydrate='1'" in html or 'dataset.hydrate="1"' in html
-    assert "pick-card" in html
+    # pick-card only renders when hour/day picks exist; section always ships
+    assert 'id="section-picks"' in html or "section-picks" in html
     assert "SimiVision picks warming up" not in html
 
 

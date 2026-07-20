@@ -1,6 +1,6 @@
 # Batch 0 — FINAL merged implementation plan
 
-**Status:** FINAL PLAN — awaiting human execute (no product code yet)  
+**Status:** EXECUTING on `cursor/batch0-brain-presentation-impl-4a9d` (PR #382)  
 **Sources merged:** Grok B0 plan (`batch0-implementation-plan.md`) × Ditto Visual Update Audit (VA-00…VA-14)  
 **LOCK canon:** `batch0-brain-presentation-lock.md` v2.1 (still binds)  
 **When executing:** branch `cursor/batch0-brain-presentation-impl-e7f9` off latest `main`
