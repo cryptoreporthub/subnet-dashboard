@@ -50,6 +50,27 @@ def test_minimal_index_context_skips_letter_build(monkeypatch):
     assert ctx["brain_letter"]["status"] == "quiet"
 
 
+def test_homepage_timeout_does_not_block_on_hung_builder(monkeypatch):
+    """Regression: with-pool shutdown(wait=True) re-hung GET / after TimeoutError → blank phone."""
+    import server as srv
+
+    def _hang(_request):
+        time.sleep(60)
+        return {}
+
+    monkeypatch.setattr(srv, "_degraded_index_context", _hang)
+    monkeypatch.setattr(srv, "HOMEPAGE_BUILD_TIMEOUT", 1)
+    srv._DEGRADED_INDEX_CACHE["ctx"] = None
+    srv._DEGRADED_INDEX_CACHE["at"] = 0.0
+
+    t0 = time.time()
+    resp = client.get("/")
+    elapsed = time.time() - t0
+    assert resp.status_code == 200
+    assert elapsed < 8.0, f"homepage hung {elapsed:.1f}s waiting on builder shutdown"
+    assert "dataset.hydrate" in resp.text or "council-first" in resp.text
+
+
 def test_homepage_responds_quickly():
     t0 = time.time()
     resp = client.get("/")
