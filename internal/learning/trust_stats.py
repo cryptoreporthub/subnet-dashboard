@@ -51,6 +51,16 @@ def build_trust_banner(
         message = None
         headline = f"Last {graded} graded: {pct}% directionally right"
 
+    streak = None
+    streak_whisper = None
+    try:
+        from internal.learning.streaks import compute_streaks
+
+        streak = compute_streaks()
+        streak_whisper = streak.get("whisper")
+    except Exception:
+        streak = None
+
     return {
         "ready": integrity_ok and not watchdog_warn,
         "headline": headline,
@@ -74,4 +84,6 @@ def build_trust_banner(
         "watchdog": watchdog,
         "source": "/api/learning/stats",
         "note": "Accuracy is direction-only on graded token price outcomes — excludes expired/duplicate.",
+        "streak": streak,
+        "streak_whisper": streak_whisper,
     }

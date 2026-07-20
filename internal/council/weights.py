@@ -200,8 +200,9 @@ def repair_stale_contrarian_weights(
     return True
 
 
-def load_weights(path: str = SOUL_MAP_PATH) -> Dict[str, float]:
+def load_weights(path: Optional[str] = None) -> Dict[str, float]:
     """Read learned weights from soul_map.json, defaulting to DEFAULT_WEIGHTS."""
+    path = path or SOUL_MAP_PATH
     if repair_stale_contrarian_weights(path):
         data = _load_raw(path)
     else:
@@ -217,9 +218,10 @@ def load_weights(path: str = SOUL_MAP_PATH) -> Dict[str, float]:
     return dict(DEFAULT_WEIGHTS)
 
 
-def save_weights(weights: Dict[str, float], path: str = SOUL_MAP_PATH) -> None:
+def save_weights(weights: Dict[str, float], path: Optional[str] = None) -> None:
     """Persist weights to adversarial_state.council_weights (canonical slot)
     AND mirror to root expert_weights for legacy compatibility."""
+    path = path or SOUL_MAP_PATH
     data = _load_raw(path)
     adv = data.setdefault("adversarial_state", {})
     if not isinstance(adv, dict):
@@ -236,15 +238,23 @@ def save_weights(weights: Dict[str, float], path: str = SOUL_MAP_PATH) -> None:
 def nudge_expert(
     expert: Optional[str],
     correct: bool,
-    path: str = SOUL_MAP_PATH,
+    path: Optional[str] = None,
+    *,
+    delta_correct: Optional[float] = None,
+    delta_wrong: Optional[float] = None,
 ) -> Optional[float]:
     """Single nudge path for resolver + feedback (§27-4). Returns new weight."""
     if not expert:
         return None
+    path = path or SOUL_MAP_PATH
     weights = load_weights(path)
     if expert not in weights:
         return None
-    delta = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
+    delta = (
+        (delta_correct if delta_correct is not None else _LEARNING_DELTA_CORRECT)
+        if correct
+        else (delta_wrong if delta_wrong is not None else _LEARNING_DELTA_WRONG)
+    )
     before = float(weights[expert])
     after = round(
         max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta)),
