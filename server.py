@@ -438,15 +438,31 @@ def _normalize_registry_subnet(sn: Dict[str, Any]) -> Dict[str, Any]:
         return row
 
 
-def _safe_brain_letter_context() -> Dict[str, Any]:
-    """File-backed brain letter for SSR — omit on failure."""
+def _quiet_brain_letter_stub() -> Dict[str, Any]:
+    """Instant Quiet SSR — hydrate fills via /api/letter/brain."""
+    return {
+        "brain_letter": {
+            "status": "quiet",
+            "empty": True,
+            "date": None,
+            "outlook": "No sized call this window — watching the desk into resolve.",
+        }
+    }
+
+
+def _safe_brain_letter_context(*, timeout_s: float = 1.5) -> Dict[str, Any]:
+    """Timeboxed letter SSR — never block GET / past timeout_s."""
+    import concurrent.futures
+
     try:
         from internal.letter.brain_letter import build_brain_letter
 
-        return {"brain_letter": build_brain_letter()}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            fut = pool.submit(build_brain_letter)
+            return {"brain_letter": fut.result(timeout=timeout_s)}
     except Exception as exc:
-        logger.warning("brain letter context failed: %s", exc)
-        return {"brain_letter": {"status": "quiet", "empty": True}}
+        logger.warning("brain letter context skipped: %s", exc)
+        return _quiet_brain_letter_stub()
 
 
 def _fast_home_hero_context(trust_banner: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -622,7 +638,8 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
         },
     }
     ctx.update(_fast_home_hero_context(trust_banner))
-    ctx.update(_safe_brain_letter_context())
+    # Timeboxed — letter hydrate is the backstop if SSR misses
+    ctx.update(_safe_brain_letter_context(timeout_s=1.5))
     ctx.update(_pump_alerts_context(subnets))
     stash = {k: v for k, v in ctx.items() if k != "request"}
     _DEGRADED_INDEX_CACHE["at"] = now
@@ -631,7 +648,11 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
 
 
 def _minimal_index_context(request: Request) -> Dict[str, Any]:
-    """Emergency shell when homepage build exceeds HOMEPAGE_BUILD_TIMEOUT."""
+    """Emergency shell when homepage build exceeds HOMEPAGE_BUILD_TIMEOUT.
+
+    Must stay instant — no letter build, no pump scan. Blank-screen root cause
+    on Fly is 0-byte proxy timeout when this path also hangs.
+    """
     from internal.learning.dashboard_context import fast_shell_dashboard_context
 
     shell_learning = fast_shell_dashboard_context()
@@ -655,8 +676,13 @@ def _minimal_index_context(request: Request) -> Dict[str, Any]:
             "avg_confidence": 0.0,
         },
         **_fast_home_hero_context(trust_banner),
-        **_safe_brain_letter_context(),
-        **_pump_alerts_context([]),
+        **_quiet_brain_letter_stub(),
+        "pump_alerts": {
+            "status": "quiet",
+            "count": 0,
+            "alerts": [],
+            "empty_message": "Pump desk quiet — retry after hydrate.",
+        },
     }
 
 
@@ -752,18 +778,30 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
 
 @app.get("/")
 def index(request: Request):
-    # ponytail: always serve the fast registry shell; cockpit_hydrate.js fills panels via APIs
+    # ponytail: cache-first shell so Fly edge never sees a 0-byte hang on cold build
     import concurrent.futures
+
+    now = time.time()
+    cached = _DEGRADED_INDEX_CACHE.get("ctx")
+    if isinstance(cached, dict) and now - float(_DEGRADED_INDEX_CACHE.get("at") or 0) < HOMEPAGE_SHELL_CACHE_SECONDS:
+        ctx = dict(cached)
+        ctx["request"] = request
+        ctx["public_base_url"] = _public_base_url(request)
+        return templates.TemplateResponse(request, "index.html", ctx)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         fut = pool.submit(_degraded_index_context, request)
         try:
             ctx = fut.result(timeout=HOMEPAGE_BUILD_TIMEOUT)
         except concurrent.futures.TimeoutError:
-            logger.error("homepage build exceeded %ss — serving cached or minimal shell", HOMEPAGE_BUILD_TIMEOUT)
-            cached = _DEGRADED_INDEX_CACHE.get("ctx")
-            if isinstance(cached, dict):
-                ctx = dict(cached)
+            logger.error(
+                "homepage build exceeded %ss — serving cached or minimal shell",
+                HOMEPAGE_BUILD_TIMEOUT,
+            )
+            # Prefer stale cache over a second expensive build
+            stale = _DEGRADED_INDEX_CACHE.get("ctx")
+            if isinstance(stale, dict):
+                ctx = dict(stale)
                 ctx["request"] = request
                 ctx["public_base_url"] = _public_base_url(request)
                 ctx["data_source"] = "timeout-cached-shell"

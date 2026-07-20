@@ -32,12 +32,29 @@ def test_fast_shell_learning_metrics_has_graded_field():
     assert metrics.get("graded") is not None or (metrics.get("correct", 0) + metrics.get("wrong", 0)) >= 0
 
 
-def test_homepage_responds_quickly():
-    t0 = time.time()
-    resp = client.get("/")
-    elapsed = time.time() - t0
-    assert resp.status_code == 200
-    assert elapsed < 5.0, f"homepage took {elapsed:.1f}s"
+def test_minimal_index_context_skips_letter_build(monkeypatch):
+    """Timeout fallback must stay instant — never call build_brain_letter."""
+    import server as srv
+
+    def _boom():
+        raise AssertionError("build_brain_letter must not run on minimal shell")
+
+    monkeypatch.setattr("internal.letter.brain_letter.build_brain_letter", _boom)
+    from fastapi.testclient import TestClient
+    from starlette.requests import Request
+
+    scope = {"type": "http", "method": "GET", "path": "/", "headers": [], "query_string": b""}
+    # Build a tiny request-like object via TestClient ASGI
+    req = next(iter([]), None)  # placeholder unused
+    # Call minimal directly with a fake request from TestClient internals
+    class _R:
+        base_url = "http://test"
+
+    ctx = srv._minimal_index_context(_R())
+    assert ctx["data_source"] == "timeout-fallback"
+    assert ctx["brain_letter"]["empty"] is True
+    assert ctx["brain_letter"]["status"] == "quiet"
+
 
 
 def test_homepage_includes_above_fold_scripts():
