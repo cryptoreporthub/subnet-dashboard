@@ -1,0 +1,21 @@
+{# Caution Cells — rare downside posture; never on Daily Call face. #}
+{% set wr_meta = simivision.meta if simivision is mapping and simivision.meta is mapping else {} %}
+{% set caution = wr_meta.caution_cells if wr_meta.caution_cells is iterable and wr_meta.caution_cells is not string else [] %}
+{% if caution and caution|length > 0 %}
+<section class="row caution-cells" id="section-caution-cells" aria-label="Caution cells">
+  <div class="section-label">Caution</div>
+  <ul class="caution-cells__list" id="caution-cells-list">
+    {% for cell in caution[:3] %}
+    <li class="caution-cell" data-netuid="{{ cell.netuid }}">
+      <span class="caution-cell__tag">{{ cell.label|default('CAUTION') }}</span>
+      <span class="caution-cell__line">{{ cell.line|default(cell.name) }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% else %}
+<section class="row caution-cells" id="section-caution-cells" aria-label="Caution cells" hidden>
+  <div class="section-label">Caution</div>
+  <ul class="caution-cells__list" id="caution-cells-list"></ul>
+</section>
+{% endif %}

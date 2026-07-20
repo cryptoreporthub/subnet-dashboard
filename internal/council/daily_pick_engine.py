@@ -118,6 +118,12 @@ def get_or_create_today_pick(
         }
         records.append(payload)
         _save(records)
+        try:
+            from internal.learning.prediction_loop import record_hold_decision
+
+            record_hold_decision(reason="No subnets available", horizon_type="day")
+        except Exception:
+            pass
         return payload
 
     pick = select_daily_pick(subnets, market_context)
@@ -167,6 +173,17 @@ def get_or_create_today_pick(
                     horizon_type="day",
                     market_context=market_context,
                 )
+        except Exception:
+            pass
+    elif action == "HOLD":
+        try:
+            from internal.learning.prediction_loop import record_hold_decision
+
+            record_hold_decision(
+                candidate=candidate,
+                reason=reason,
+                horizon_type="day",
+            )
         except Exception:
             pass
 
