@@ -113,7 +113,7 @@ Think **roles**, not sections:
 | Role | Surface | One job (trader question) |
 |------|---------|---------------------------|
 | **Decision** | Daily Call dossier | What do I do today? |
-| **Microscope** | Living Focus | Who’s fighting over *this* name — and what did we learn last time we graded it? |
+| **Microscope** (§27 Living Focus) | Living Focus | Focus → Contest → Prove it → Watch us update — on *this* name |
 | **Briefing** | Brain letter | What’s the one readable story I’d send a friend / open tomorrow morning? |
 | **Proof** | What’s working + story strip + paper | Does this system actually get smarter? |
 | **Depth** | Pro story path / mindmap / trail | Show me the full chain / graph |
