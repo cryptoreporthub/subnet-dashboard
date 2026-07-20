@@ -1,7 +1,8 @@
 # Batch 0 LOCK — Brain presentation architecture
 
-**Status:** REVISED draft for human sign-off (2026-07-20)  
+**Status:** PLAN READY — human approved LOCK direction; **implementation plan written; DO NOT EXECUTE until human says execute**  
 **Revision:** v2.1 — keep & elevate Living Focus + Brain letter; **Ditto-verified** against §27 / soul-map / living-brain canon  
+**Implementation plan:** `cursor-agents-communication/batch0-implementation-plan.md`  
 **Batch:** 0 — Brain / mindmap / learning loop presentation  
 **Priority:** Rank 1 moat (see `docs/presentation-audit.md`)  
 **Viewport:** 390px primary  
@@ -417,4 +418,7 @@ Banned in Tier‑1: `warming up`, `brain UI gate`, `§16`, `audit gate` as drama
 - [ ] Then Composer implements  
 
 **Suggested reply to unlock build:**  
-`LOCK signed v2 — keep LF + brain letter; implement B0-a through B0-d`
+`Execute B0-a through B0-d`
+
+**Plan-only reply (current):**  
+`Plan approved — do not execute yet`
