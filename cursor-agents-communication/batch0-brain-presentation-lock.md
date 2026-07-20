@@ -173,16 +173,115 @@ Daily Call (decision)
 
 ### Narrative LOCK
 
-> **“Here’s what we called, how it grades, and how the council changes when we’re wrong.”**
+> **“Here’s what we called, what we expect next, how it grades, and how the council changes when we’re wrong.”**
 
-- Dossier = called  
+- Dossier = called (+ FLIP when HOLD)  
+- **Outlook (Brain letter)** = what we expect in this window / next few hours  
 - Living Focus = how judges split + last grade on this name  
-- Brain letter = the story of what changed  
 - Proof band = the public scoreboard  
 
 ---
 
-## COPY LOCK
+## System integration — Living Focus × Brain letter × loop × soul map × mindmap
+
+### The machine (what the moat actually is)
+
+```text
+SOUL MAP ……………………… long-term memory
+  council/expert weights · signal weights · dispositions · learning_trail
+
+LEARNING LOOP ……………… metabolism
+  daily call → predictions.json → resolve → nudge weights → trail events
+       ↑_________________________________________________________|
+
+MINDMAP ……………………… how memory becomes visible
+  story-path (this call’s chain) · trail (event log) · graph (nodes/edges)
+
+SURFACES …………………… how a trader meets the machine
+  Daily Call · Living Focus · Brain letter · Proof band · Pro/Market depth
+```
+
+Soul map is not a page. It is the **state the loop writes**. Mindmap is not a rival product. It is the **lens** on that state. Living Focus and Brain letter are two **lenses with different questions**.
+
+### Two products, one brain
+
+| | **Living Focus** (microscope) | **Brain letter** (briefing) |
+|--|-------------------------------|-----------------------------|
+| **Question** | What’s true *about this name right now* — and what did we learn last time we graded it? | What’s the *story of the day* — past learning, today’s stance, **what we expect next**? |
+| **Mode** | Interactive · switchable · live | Readable · exportable · calm |
+| **Time** | Now + last beat on this SN | Yesterday → today → next window |
+| **Soul map** | **Expert weight lean** (“Who drives picks”) + last trail nudge on focus SN | Aggregate trust / learned signals — not the weight bars |
+| **Mindmap** | Trail teaser + link to full trail; evidence chips | Story-path collapsed (deep chain stays Pro); Outlook is the forward beat |
+| **Learning loop** | Last HIT/MISS + weight delta for focus SN (resolver trail) | Graded accuracy + “what changed” + Outlook timed to resolve |
+| **Judges** | Oracle/Echo/Pulse bars + dissent (contention theater) | Short citations only if needed in “today in one breath” |
+| **Must not** | Rebuild Daily Call thesis / FLIP / Outlook | Rebuild judge bars / weight lean / switcher |
+
+**Complement rule:** After the Daily Call, a trader who wants to *interrogate* scrolls to Living Focus; a trader who wants to *carry the day in their head* (or forward it) reads the Brain letter. Same underlying loop — different verbs.
+
+### How a day flows through the stack
+
+```text
+1. Soul-map weights shape Daily Call (effective_weights → pick engine)
+2. Call publishes → predictions.json (learning loop opens a graded window)
+3. Dossier shows stance + Outlook clock (LIVE · Nh) + FLIP when HOLD
+4. Living Focus opens on that netuid:
+     judges split · soul-map weight lean · last learn from trail
+5. Brain letter composes:
+     what changed (trust + signals) · call citation · Outlook · integrity
+6. Resolve fires → resolver nudges soul-map weights → trail event
+7. Living Focus learn strip updates · Proof band / story strip update
+8. Mindmap trail + story-path step 5 (“weight nudge”) reflect the same write
+```
+
+If step 6 happens and steps 4/5/7 don’t show it, the moat is invisible. Batch 0 is about making steps 4–8 *feel* connected without three UIs saying the same paragraph.
+
+### Integration LOCK (presentation + existing APIs)
+
+No new foundation APIs required for Batch 0 — wire presentation to what’s already there:
+
+| Beat | Source that exists today | Show in |
+|------|--------------------------|---------|
+| Expert weight lean | `/api/calibration/status` ← soul_map `council_weights` | **Living Focus only** |
+| Last learn / weight nudge on SN | `/api/mindmap/trail` (prediction_resolved / weight_change) | **Living Focus** learn strip; whisper one line in Track record peel |
+| Graded accuracy | `trust_banner` / `/api/learning/stats` | Trust whisper + Brain letter “what changed” — **once each role**, not thrice |
+| Signal rankings | `learned_price_drivers` / `/api/market-drivers` | Proof band What’s working; Brain letter may cite top 1–2, not rebuild the chip strip |
+| Story chain this call | `build_story_path` / `/api/mindmap/story-path` | Outcome peel (slim) + Pro deep view — **not** a fourth copy in the letter |
+| Outlook | Compose from brief + `resolves_in` / horizon | **Brain letter Next** (required); dossier keeps FLIP + live clock |
+| Full graph / dispositions | `/api/mindmap/graph` + soul_map dispositions | Market drawer — LF trail link is the handoff |
+| Right/wrong timeline | `story_strip` ← resolved predictions | Proof band (promote) |
+
+### Honest dual-judge note (don’t confuse the trader)
+
+Two real layers exist:
+
+1. **Lane judges** — Oracle / Echo / Pulse (Living Focus bars)  
+2. **Council experts** — quant / hype / dark_horse / technical (soul-map weights, LF “Who drives picks”)
+
+**Presentation rule:** Label them differently forever.  
+- Bars = `Judges`  
+- Weight lean = `Council weights` or `Who drives picks` (soul map)  
+Never imply they are the same meter. Brain letter should not invent a third blend.
+
+### Cross-links (product glue, small UI)
+
+1. Brain letter “today in one breath” → scroll/link `#section-daily-pick`  
+2. Living Focus trail teaser → `#section-trail` (Market) — keep  
+3. Living Focus learn strip “Share graded call” → `/share/call/{id}` — keep  
+4. Brain letter Outlook may end with `Graded in {resolves_in}.` pointing at the same clock as the dossier  
+5. Proof band story strip ↔ same resolved rows that feed LF learn history  
+
+### What “integrated” looks like when it works
+
+A trader can answer without opening Pro:
+
+1. **What are we doing this window?** → Daily Call + Outlook  
+2. **Who disagrees on this name, and who’s been winning in the soul map?** → Living Focus  
+3. **What did the loop learn, and what should I remember tomorrow?** → Brain letter  
+4. **Is the system actually getting smarter?** → Proof band (signals + strip)  
+5. **Show me the event log / graph** → Mindmap trail / graph (depth)
+
+That is Living Focus and Brain letter as a whole — two faces of one learning machine, not two leftover sections.
+
 
 | Where | After |
 |-------|-------|
