@@ -1,17 +1,26 @@
 # Batch 0 LOCK — Brain presentation architecture
 
-**Status:** DRAFT for human sign-off (2026-07-19)  
+**Status:** REVISED draft for human sign-off (2026-07-20)  
+**Revision:** v2 — **keep & elevate** Living Focus + Brain letter (do **not** demote/remove)  
 **Batch:** 0 — Brain / mindmap / learning loop presentation  
 **Priority:** Rank 1 moat (see `docs/presentation-audit.md`)  
 **Viewport:** 390px primary  
-**Evidence:** SSR inventory + `/preview/k3-hold` screenshots (`batch0-k3-hold-hero.png`, `batch0-k3-track-record.png`)  
-**Out of scope:** Engine/logic, Daily Call hero stack redesign, Weighing/Pump polish (Rank 3), Council/judges Batch 1
+**Evidence:** SSR inventory + `/preview/k3-hold` screenshots; `living_focus.js` / `brain_letter.js` capability audit  
+**Out of scope:** Engine/logic, Daily Call hero stack redesign, Weighing/Pump polish (Rank 3), full Council/judges Batch 1
+
+---
+
+## Human correction (locked)
+
+> Living Focus and Brain letter are **concepts we want**. The job is not to hide them — it is to make these abstract ideas **feel like a great product**: clear unique jobs, no zombie loading, no restating the Daily Call.
+
+Demote-to-Pro was the wrong fix for overlap. Overlap is fixed by **differentiation**, not deletion.
 
 ---
 
 ## Verdict (one line)
 
-The brain **exists in pieces** but **does not read as one living loop**. Tier‑1 scrolls past competing “today’s narrative” sections that mostly show loading zombies, while the real graded proof is a quiet whisper + a collapsed peel + a buried Pro drawer.
+The brain **exists in pieces** but **does not read as one living loop**. Living Focus and Brain letter already contain the right DNA (judge contention, last learn beat, narrative digest) — they fail because they **re-narrate today’s call** instead of owning a sharper job.
 
 ---
 
@@ -20,10 +29,10 @@ The brain **exists in pieces** but **does not read as one living loop**. Tier‑
 | Axis | Score | Note |
 |------|-------|------|
 | 5-second clarity | 4 | Call is clear on hero |
-| Hierarchy | 2 | Brain proof quiet; Living Focus / Brain letter compete |
-| Voice | 3 | Track record footnote OK; “brain UI gate” / warming copy weak |
+| Hierarchy | 2 | LF / letter compete with dossier instead of extending it |
+| Voice | 3 | Track record OK; “brain UI gate” / warming copy weak |
 | Calm authority | 4 | HOLD hero calm |
-| Motion & feedback | 2 | Home hydrate → loading zombies on LF / letter / what’s working |
+| Motion & feedback | 2 | Home hydrate → loading zombies |
 | Honest-empty | 2 | Multiple “Loading…” shells feel broken |
 | **Learning presence** | **2** | Moat not obvious as a spine — buried / duplicated |
 
@@ -31,152 +40,190 @@ The brain **exists in pieces** but **does not read as one living loop**. Tier‑
 
 ---
 
-## FINDINGS (ranked)
+## How abstract concepts become product
 
-1. **Three “today’s brain” surfaces compete after the call**  
-   Living Focus + Brain letter + dossier peels all narrate the same day. K3 docs said LF / brain letter were “absorbed by dossier” — they still ship as full Tier‑1 sections with loading empty states.
+Think **roles**, not sections:
 
-2. **Learning peel is stats-only; weight-nudge step is hidden**  
-   `#k3-layer-learning` shows graded n + accuracy (good) but `#k3-lifecycle-learning` is `hidden`. The *loop* (call → grade → weight update) never appears on the default path.
+| Role | Surface | One job (trader question) |
+|------|---------|---------------------------|
+| **Decision** | Daily Call dossier | What do I do today? |
+| **Microscope** | Living Focus | Who’s fighting over *this* name — and what did we learn last time we graded it? |
+| **Briefing** | Brain letter | What’s the one readable story I’d send a friend / open tomorrow morning? |
+| **Proof** | What’s working + story strip + paper | Does this system actually get smarter? |
+| **Depth** | Pro story path / mindmap / trail | Show me the full chain / graph |
 
-3. **Cause chain rendered three times**  
-   Outcome peel `#k3-lifecycle-outcome` · Pro `#section-story-path` · Brain letter “How we got here” — same story-path shape, three UIs.
-
-4. **Proof band is a landfill of digests**  
-   What’s working → Paper portfolio → Weekly letter → Daily recap — four sequential “prove it” sections, all loading-first. No single composed proof strip.
-
-5. **Mindmap graph / trail live in Market drawer**  
-   Correct demotion for interactive graph; Living Focus trail teaser linking to Market is fine. Do **not** promote the empty Interactive Graph to Tier‑1.
-
-6. **Trust whisper is the strongest brain beat above the fold**  
-   `443 graded · 31.4% dir.` works. Trust banner below claim repeats similar info — OK as peel-adjacent, but don’t add a third accuracy block.
+If two surfaces answer the **same** question, one must change its answer — not leave the page.
 
 ---
 
-## IA LOCK (Tier placement)
+## FINDINGS (ranked)
 
-### Tier‑1 — always in the council story (spine attachments)
+1. **Living Focus already has a better job than “second dossier”**  
+   Code already supports: judge score bars, contention/dissent, weight lean, focus switcher, last HIT/MISS + weight nudge, evidence desk, trail teaser, prove-it CTA.  
+   Failure mode: header/sub still read as “council contention on today’s pick” (= dossier), and body starts as `Loading focus from council…`.
+
+2. **Brain letter already has a better job than “third dossier”**  
+   Blocks: Today we watch · What the brain learned · Integrity · How we got here + copy/download.  
+   Failure mode: “Today we watch” restates the claim; story path duplicates Outcome peel; loading shell feels broken; voice still says “audit gate”.
+
+3. **Track record peel is stats-only; weight-nudge step is hidden**  
+   The *loop* beat that Living Focus already renders (`Last learn`) never appears on the default dossier path.
+
+4. **Proof band is a landfill of digests**  
+   What’s working → Paper → Weekly → Daily — four “prove it” strips. Weekly/daily should nest; What’s working + story strip should lead.
+
+5. **Mindmap graph stays demoted**  
+   Empty Interactive Graph is not Tier‑1. Trail teaser from Living Focus → Market trail is the right handoff.
+
+---
+
+## IA LOCK v2 — keep, differentiate, compose
+
+### Scroll story (Tier‑1 / 2)
+
+```text
+Daily Call (decision)
+  → Weighing / Pump (ribs — unchanged this batch)
+  → Living Focus (microscope — KEEP, reframe)
+  → Brain letter (briefing — KEEP, reframe)
+  → Proof band: What’s working + Story strip + Paper
+  → Letters drawer: Weekly + Daily (collapse)
+  → Pro / Market (depth)
+```
+
+### Living Focus — KEEP as **Microscope**
+
+**Owns:** judge disagreement on the focused subnet · switch focus across shortlist · last graded beat on *this* SN · prove-it / share / trail teaser.
+
+**Must not own:** restating move/thesis/FLIP (that’s the dossier).
+
+| Change | Spec |
+|--------|------|
+| Title / sub | `Living Focus` → keep name; sub becomes **`Judge split on the name in focus`** (not “Council contention on today’s pick”) |
+| Lead visual | Judge bars + contention line first (already in JS) — make this the hero of the section |
+| Learn strip | Promote: **`Last learn`** HIT/MISS + weight nudge is the brain beat — always visible when data exists; honest-empty: `No graded beat on this SN yet — appears after this call resolves.` |
+| Switcher | Keep — this is the product magic (focus ≠ only today’s call) |
+| Evidence / trail / prove-it | Keep as secondary rows under learn strip |
+| SSR empty | Never leave “Loading…” as the calm state — skeleton matching judge bars, then hydrate |
+
+**Relationship to dossier:** Dossier decides; Focus *interrogates* the name (and lets you switch). Opening Focus should feel like zooming in, not reading the call twice.
+
+### Brain letter — KEEP as **Briefing**
+
+**Owns:** one shareable narrative artifact for the day (copy/download stay).
+
+**Must not own:** interactive decision UI, duplicate story-path chrome, third accuracy scoreboard.
+
+| Change | Spec |
+|--------|------|
+| Section framing | Title stays **Brain letter**; meta: **`Morning brief · graded memory`** (not “Today's narrative · loading…”) |
+| Block order (rewrite) | 1) **What changed since yesterday** (learned / weight nudge / signal hits) — lead with learning  
+2) **Today’s call in one breath** (short — link/scroll to dossier, don’t rebuild hero)  
+3) **Integrity** (resolver / expired — trader English)  
+4) Drop or collapse **How we got here** (Outcome peel + Pro story path own the chain) |
+| Voice | Kill “audit gate” / “waiting for audit gate” → HOLD language matching K3-7 |
+| Empty | `Brief writes after the first graded windows land.` |
+
+**Relationship to dossier:** Dossier is the live instrument; letter is the **artifact you’d forward**. Learning leads; call is a short citation.
+
+### Proof band — compose, don’t landfill
 
 | Surface | Decision |
 |---------|----------|
-| Daily Call dossier | **Keep** — claim leads |
-| Trust whisper (`443 graded · x% dir.`) | **Keep** — primary Learning presence above fold |
-| Outcome peel lifecycle (≤4 steps) | **Keep** — spine beat for *this* call |
-| Track record peel | **Keep + enrich** — show last graded beat + one weight-nudge line (unhide learning step when data exists) |
-| Weighing Room / Pump | Unchanged this batch (ribs; Rank 3 later) |
+| What’s working | **Keep** — lead chips (“signals that predicted price”) |
+| Story strip | **Promote from Pro** into proof band — visible graded right/wrong timeline |
+| Paper portfolio | **Keep** |
+| Weekly + Daily | **Collapse** into Letters `<details>` under the band |
 
-### Tier‑2 — one “Proof” band (accountability)
-
-Compose a single band after Pump (or after Weighing — keep current order relative to call):
+### Dossier spine attachments (still required)
 
 | Surface | Decision |
 |---------|----------|
-| What’s working | **Keep** as lead chip strip of the proof band |
-| Paper portfolio | **Keep** inside proof band |
-| Story strip (recent right/wrong) | **Promote from Pro** into proof band (compact horizontal / list) — this is the visible graded timeline |
-| Weekly letter + Daily recap | **Demote into a single “Letters” `<details>`** under the proof band (or into Pro) — stop three digests in a row |
+| Trust whisper | **Keep** |
+| Outcome peel lifecycle | **Keep** slim chain for *this* call |
+| Track record peel | **Enrich** — unhide weight-nudge / show last learn one-liner (can share payload shape with Living Focus learn strip) |
 
-### Tier‑3 — Pro / Market (depth)
+### Pro / Market
 
 | Surface | Decision |
 |---------|----------|
-| Living Focus | **Demote to Pro** (or collapse into Outcome/Track peels). Stops competing with dossier. |
-| Brain letter | **Demote to Letters `<details>` or Pro** — dossier already owns today’s narrative |
-| Story path (full chain UI) | **Stay Pro** as deep view; Tier‑1 keeps the slim Outcome lifecycle only |
-| Council / Judges / KPI / Backtest | Stay Pro (Batch 1 may promote judge disagreement cues into peels) |
-| Mindmap graph + Trail | Stay Market drawer |
+| Full story path UI | Stay Pro (deep chain) |
+| Living Focus / Brain letter | **Stay on main scroll** |
+| Mindmap + Trail | Stay Market; LF trail teaser links in |
 
-### Narrative LOCK (trader sentence)
+### Narrative LOCK
 
 > **“Here’s what we called, how it grades, and how the council changes when we’re wrong.”**
 
-Every Tier‑1/2 brain surface must serve that sentence. If it doesn’t, demote or delete from main scroll.
-
-### Handoff rules (ribs → spine)
-
-- **Weighing Room** footer may keep “These may become tomorrow’s call” — add whisper only if space: “Graded when the daily call locks.”  
-- **Pump** stays predictive heat — **no** learning stats on pump cards.  
-- **Track record peel** is the only place for accuracy % + weight nudge on the dossier.  
-- **Proof band** owns multi-call history (story strip + what’s working). Do not restate full accuracy block there if whisper already showed it — show *what improved* / *which signals worked*.
+- Dossier = called  
+- Living Focus = how judges split + last grade on this name  
+- Brain letter = the story of what changed  
+- Proof band = the public scoreboard  
 
 ---
 
 ## COPY LOCK
 
-| Where | Before → After |
-|-------|----------------|
-| Track record peel empty lifecycle | Unhide when step exists; else one line: `After resolve, judge weights nudge from this window.` (not “warming up”) |
-| Living Focus (until demoted) | If still visible briefly: never “Loading focus from council…” as final — prefer `Focus builds after the first council tick.` |
-| Brain letter loading | `Today's letter appears after graded history is ready.` |
-| What’s working empty | Keep honest: `Not enough graded picks yet to rank price signals.` |
-| KPI “brain UI gate” | Rename to trader English: `Integrity` or `Resolver integrity` — never “brain UI gate” |
+| Where | After |
+|-------|-------|
+| Living Focus sub | `Judge split on the name in focus` |
+| Living Focus SSR | Skeleton or `Focus opens when judges score this subnet.` — never eternal “Loading focus from council…” |
+| Brain letter meta | `Morning brief · graded memory` |
+| Brain letter HOLD | Match K3-7 trader voice — no audit-gate phrasing |
+| Track record empty nudge | `After resolve, judge weights nudge from this window.` |
+| KPI | `brain UI gate` → `Resolver integrity` |
 | Story path empty (Pro) | `No audited pick yet — the chain fills when today's call is live.` |
 
-Banned in Tier‑1 brain copy: `warming up`, `brain UI gate`, `§16`, internal slice jargon.
+Banned in Tier‑1: `warming up`, `brain UI gate`, `§16`, `audit gate` as drama.
 
 ---
 
-## VISUAL LOCK (minimal — after IA)
+## VISUAL LOCK (minimal)
 
-1. Proof band shares section-label pattern with Weighing (`Council is weighing` style) — e.g. **`The brain keeps score`** or **`What the loop learned`**.  
-2. Story strip in Tier‑2: compact right/wrong rows — not a second hero.  
-3. Track record peel: stats row stays; add one **last HIT/MISS + weight delta** line when available (reuse living-focus learn payload shape if present).  
-4. No new neon / no new card chrome — reuse dossier + weighing tokens.
+1. Living Focus: judge bars + contention = section hero; learn strip directly under; switcher sticky/secondary.  
+2. Brain letter: read like a short letter (prose), not a mini-dashboard of duplicate peels.  
+3. Proof band section label e.g. **`What the loop learned`**.  
+4. Reuse existing tokens — no new neon system.
 
 ---
 
-## IMPLEMENTATION SLICES (Composer, after sign-off)
+## IMPLEMENTATION SLICES (after sign-off)
 
-Ordered for smallest safe diffs:
+### B0-a — Living Focus product pass (elevate)
+1. Reframe title/sub + SSR honest-empty / skeleton  
+2. Ensure learn strip + contention lead the render order in `living_focus.js`  
+3. Soften overlap: remove any re-stated thesis/FLIP if present; keep action badge + name only as context  
+4. Optional preview fixture `/preview/k3-living-focus` for 390px sign-off  
 
-### B0-a — Demote competitors (IA)
-1. Move `living_focus.html` include into `#pro-cockpit` (after story_path or before judges).  
-2. Move `brain_letter.html` into a Letters `<details>` with weekly + daily, **or** into Pro. Prefer Letters details under proof band.  
-3. Keep `#section-*` ids for hydrate/onboarding; update onboarding tour if it targets Living Focus.  
-4. Tests: `test_phase_h_ui` / contract — sections still present; assert order: daily-pick → … → whats-working before letters details.
+### B0-b — Brain letter product pass (elevate)
+1. Reorder blocks: learned → today (short) → integrity; drop/collapse story-path block  
+2. Meta + empty + HOLD copy hygiene  
+3. Keep copy/download  
 
-### B0-b — Promote story strip into proof band
-1. Include `story_strip.html` on main scroll immediately above or below `#section-whats-working`.  
-2. Remove duplicate include from Pro **or** leave a “Open full strip” link in Pro that scrolls to it (prefer single include on main).  
-3. Soften strip chrome to match proof band (section-label + title).
+### B0-c — Track record peel + proof band
+1. Unhide / show weight-nudge line on Track record  
+2. Promote story strip into proof band; single include  
+3. Collapse weekly + daily into Letters `<details>`  
 
-### B0-c — Track record peel: show the loop
-1. Unhide `#k3-lifecycle-learning` when learning step data exists.  
-2. When no step: show static one-liner from COPY LOCK (not hidden empty).  
-3. Optional: one “Last graded” HIT/MISS line from existing trust/learning payloads — no new API if data already on page.
-
-### B0-d — Letters collapse + copy hygiene
-1. Wrap weekly + daily (+ brain letter if not Pro) in `<details class="letters-drawer">`.  
-2. Rename KPI sub “brain UI gate” → `Resolver integrity`.  
-3. Replace remaining Tier‑1 “warming up” strings listed in COPY LOCK.
+### B0-d — Copy hygiene + QA
+1. KPI rename; kill remaining warming-up on these surfaces  
+2. Onboarding tour: add Living Focus + Brain letter steps with new job descriptions  
+3. Phone QA 390px  
 
 ### Explicitly NOT in Batch 0
+- Remove Living Focus or Brain letter  
 - Redesign Daily Call claim stack  
-- Weighing Room / Pump visual polish  
-- Interactive mindmap promotion  
-- New `/api/lifecycle`  
-- Batch 1 judge theater redesign  
-
----
-
-## Preview / QA
-
-| Check | Route |
-|-------|-------|
-| Hero + trust whisper + peels | `/preview/k3-hold` |
-| Proof band order + letters drawer | `/` 390px after hydrate |
-| Pro still has story path + demoted LF | `/` → open Pro cockpit |
-| No loading zombie as final empty | Force empty API / honest-empty copy |
-
-Phone QA checklist: Learning presence ≥4 — trader can answer “does this thing learn?” without opening Pro.
+- Weighing / Pump polish  
+- Promote empty mindmap graph  
 
 ---
 
 ## Sign-off
 
-- [ ] Human approves IA LOCK (demote LF + brain letter; promote story strip; letters drawer)  
-- [ ] Human approves COPY LOCK  
+- [ ] Human approves **keep & differentiate** (not demote) for Living Focus + Brain letter  
+- [ ] Human approves Microscope vs Briefing job split  
 - [ ] Human approves slice order B0-a → B0-d  
-- [ ] Then Composer implements on branch `cursor/batch0-brain-presentation-*-e7f9`
+- [ ] Then Composer implements  
 
-**Suggested reply to unlock build:** `LOCK signed — implement B0-a through B0-d`
+**Suggested reply to unlock build:**  
+`LOCK signed v2 — keep LF + brain letter; implement B0-a through B0-d`

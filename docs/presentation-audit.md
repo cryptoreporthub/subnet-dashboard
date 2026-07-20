@@ -211,7 +211,7 @@ and the LOCK says so. Prefer re-ranking what’s loud over new shells.
 
 | Date | Batch | Axes (min) | Notes | LOCK signed? |
 |------|-------|------------|-------|--------------|
-| 2026-07-19 | 0 Brain | Learning presence **2** | Draft LOCK: `cursor-agents-communication/batch0-brain-presentation-lock.md` — demote LF/brain letter; promote story strip; enrich Track record peel | Pending |
+| 2026-07-20 | 0 Brain | Learning presence **2** | LOCK **v2**: keep & elevate Living Focus (microscope) + Brain letter (briefing); do not demote. Proof band + Track record enrich. File: `batch0-brain-presentation-lock.md` | Pending |
 | — | 1 Council | — | After 0 | — |
 | — | 2 Desks | — | After 0–1 | — |
 
