@@ -1,16 +1,82 @@
 # Batch 0 LOCK — Brain presentation architecture
 
 **Status:** REVISED draft for human sign-off (2026-07-20)  
-**Revision:** v2 — **keep & elevate** Living Focus + Brain letter (do **not** demote/remove)  
+**Revision:** v2.1 — keep & elevate Living Focus + Brain letter; **Ditto-verified** against §27 / soul-map / living-brain canon  
 **Batch:** 0 — Brain / mindmap / learning loop presentation  
 **Priority:** Rank 1 moat (see `docs/presentation-audit.md`)  
 **Viewport:** 390px primary  
-**Evidence:** SSR inventory + `/preview/k3-hold` screenshots; `living_focus.js` / `brain_letter.js` capability audit  
-**Out of scope:** Engine/logic, Daily Call hero stack redesign, Weighing/Pump polish (Rank 3), full Council/judges Batch 1
+**Evidence:** SSR inventory + `/preview/k3-hold` screenshots; `living_focus.js` / `brain_letter.py`; Ditto cross-check (below)  
+**Out of scope:** Engine/logic, Daily Call hero stack redesign, Weighing/Pump polish (Rank 3), full Council/judges Batch 1  
+**Concept rule:** Upgrade presentation of **existing** concepts. Do not invent a parallel product that replaces §27 Living Focus or L11 Brain letter.
 
 ---
 
-## Human correction (locked)
+## Ditto cross-verification (concept guardrails)
+
+Checked against live Ditto + repo plans (`s27-trust-and-brain-plan.md`, `living-brain-audit.md`, `s21-living-brain-plan.md`, memories `f586a6f0`, `583ad444`, `224eab39`, `4f640fc2` / `2505c536`, `fe110c0d`).
+
+### Canonical concepts (do not drift)
+
+| Concept | Canon source | Meaning we must keep |
+|---------|--------------|----------------------|
+| **Soul map** | Ditto `f586a6f0` | Central **memory** — expert weights, dispositions, performance. Everything should read/write it; no decorative dead-ends. |
+| **Mindmap** | Ditto `224eab39`, `583ad444`, locked brief | **Trail + how-we-thought** (and section summaries) — *not* an Obsidian/force-directed graph as the primary paradigm. Graph may exist as depth. |
+| **Learning loop** | Ditto `583ad444`, living-brain audit | Real closed loop: resolve → `nudge_expert` → soul_map weights → next pick. Moat is making that **visible and honest**, not claiming “smartest.” |
+| **Living Focus** | §27-3 Grok LOCK | **One Focus Object:** Focus → Contest → Prove it → **Watch us update** (Public Self-Update). Not a second dossier. |
+| **Brain letter** | §21 L11 + locked brief outcome #3 | **Daily briefing clarity** — trust + narrative on phone; exportable artifact. |
+| **Intelligence dossier** | K3-1 locked brief | Vertical peel for *today’s call* (claim→…→learning). Already the Daily Call. LF/letter **extend** it; they don’t replace it. |
+
+### ALIGNED with canon (keep)
+
+- Keep Living Focus + Brain letter on main scroll (elevate, don’t demote) — matches “Living Focus: presentation could be better” gap, not “remove.”  
+- LF owns judge contention + weight lean + last learn + prove-it + switcher — matches §27-3a/3b/3c.  
+- Trail teaser → full trail; graph stays Market depth — matches “not Obsidian.”  
+- Soul map weights shown on LF (“Who drives picks”); accuracy stays on trust banner / letter (RF-2).  
+- Closed loop made visible via last-learn strip — matches “Public Self-Update” moat.  
+- Honesty over hype — show graded truth; don’t dress static heuristics as “the Brain” (`583ad444`).
+
+### UPGRADES (allowed — still the same concept)
+
+| Upgrade | Why it’s still on-concept |
+|---------|---------------------------|
+| Brain letter **Outlook / Next** one-liner | Extends daily briefing with temporal accountability (locked brief core insight) — forward pick in prose, not a new instrument |
+| Sharper LF/letter job split (microscope vs briefing) | Presentation fix for overlap; §27 Focus Object + L11 letter remain the products |
+| Promote story strip into proof band | Surfaces graded timeline (mindmap/trail family) without rebuilding trail UI |
+| Enrich Track record peel with weight-nudge whisper | Same Public Self-Update beat, also attached to dossier spine |
+| Collapse weekly/daily into Letters drawer | IA hygiene; Brain letter stays the living daily brief |
+
+### DIVERGENCE risks — GUARD against
+
+| Risk | Correction |
+|------|------------|
+| Renaming Living Focus into a generic “microscope” product | Keep name **Living Focus**; “microscope” is job metaphor only. Restore four-beat copy: Focus · Contest · Prove it · Watch us update |
+| Turning Brain letter into a second interactive dossier | Letter stays prose + Outlook + export — no judge bars / switcher |
+| Solving mindmap by polishing `#section-mindmap` graph | Forbidden by locked brief — trail + dossier/peels + LF self-update *are* the paradigm |
+| Putting win-rate theater on Living Focus | RF-2: accuracy only via trust_banner / letter “what changed” — LF shows **last beat on this SN**, not global % |
+| Inventing new APIs / fourth weight path | Use existing trail / calibration / daily-pick / letter APIs; §27-4 owns nudge hygiene |
+| Claiming “trailblazing intelligence” while accuracy is weak | Brand = honest self-improving loop that *shows* its score (`583ad444`) |
+
+### Living Focus — restore §27 beat language
+
+**Owns (unchanged from §27):** Focus a netuid → watch three judges contest it → Prove it → **Watch us update** (last HIT/MISS + weight delta).
+
+| UI hierarchy (canon) | Batch 0 presentation pass |
+|----------------------|---------------------------|
+| 1. Header — name · SN · action | Keep; don’t restate full thesis/FLIP |
+| 2. Contention — Oracle/Echo/Pulse | Lead visual (already §27) |
+| 3. Who drives — soul-map expert lean | Keep labeled **Council weights** / Who drives picks |
+| 4. Chrome chips ≤3 | Keep thin |
+| 5. Focus switcher | Keep — product magic |
+| 6. CTA — Prove it · Replay/Share | Keep |
+| 7. Last learn strip | **Elevate** — this is Public Self-Update |
+
+**Sub copy:** prefer **`Focus · Contest · Prove it · Watch us update`** (or short: `Judge split · last learn on this name`) — not a vague “microscope” eyebrow that loses §27.
+
+### Brain letter — stay L11 briefing
+
+Lead with what changed → short call citation → **Outlook** → integrity.  
+Do not absorb Living Focus beats. Do not rebuild story-path UI (Outcome peel + Pro own the chain).
+
 
 > Living Focus and Brain letter are **concepts we want**. The job is not to hide them — it is to make these abstract ideas **feel like a great product**: clear unique jobs, no zombie loading, no restating the Daily Call.
 
@@ -99,7 +165,7 @@ Daily Call (decision)
 
 | Change | Spec |
 |--------|------|
-| Title / sub | `Living Focus` → keep name; sub becomes **`Judge split on the name in focus`** (not “Council contention on today’s pick”) |
+| Title / sub | Keep name **Living Focus**. Sub: **`Focus · Contest · Prove it · Watch us update`** (§27 canon) — not “Council contention on today’s pick” |
 | Lead visual | Judge bars + contention line first (already in JS) — make this the hero of the section |
 | Learn strip | Promote: **`Last learn`** HIT/MISS + weight nudge is the brain beat — always visible when data exists; honest-empty: `No graded beat on this SN yet — appears after this call resolves.` |
 | Switcher | Keep — this is the product magic (focus ≠ only today’s call) |
@@ -177,8 +243,11 @@ Daily Call (decision)
 
 - Dossier = called (+ FLIP when HOLD)  
 - **Outlook (Brain letter)** = what we expect in this window / next few hours  
-- Living Focus = how judges split + last grade on this name  
+- Living Focus = how judges split + soul-map weight lean + last grade on this name  
+- Brain letter = what changed + call citation + Outlook (exportable)  
 - Proof band = the public scoreboard  
+- Mindmap trail/graph = depth on the same writes  
+- Soul map = memory underneath (not a page)  
 
 ---
 
@@ -285,7 +354,7 @@ That is Living Focus and Brain letter as a whole — two faces of one learning m
 
 | Where | After |
 |-------|-------|
-| Living Focus sub | `Judge split on the name in focus` |
+| Living Focus sub | `Focus · Contest · Prove it · Watch us update` |
 | Living Focus SSR | Skeleton or `Focus opens when judges score this subnet.` — never eternal “Loading focus from council…” |
 | Brain letter meta | `Morning brief · graded memory` |
 | Brain letter HOLD | Match K3-7 trader voice — no audit-gate phrasing |
