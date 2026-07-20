@@ -701,6 +701,7 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
             daily_pick=context.get("daily_pick_stage")
             if isinstance(context.get("daily_pick_stage"), dict)
             else None,
+            market_context=market_context,
         ).get("data", {})
     except Exception as exc:
         logger.warning("SimiVision context unavailable: %s", exc)
@@ -1361,68 +1362,35 @@ def _safe_simivision_payload(
     subnets: Optional[List[Dict[str, Any]]] = None,
     source: Optional[str] = None,
     daily_pick: Optional[Dict[str, Any]] = None,
+    market_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """SimiVision Weighing Room: pool by liquidity, shape as deliberation board."""
-    from internal.council.state_vector import pick_reasons
-    from internal.simivision.weighing_room import CANDIDATE_POOL, shape_weighing_board
-    from internal.subnets.apy import subnet_apy_percent
-    from internal.subnets.tradable import subnet_volume
+    """SimiVision Weighing Room — council shortlist alternatives, shaped for UI."""
+    from internal.simivision.weighing_room import (
+        build_weighing_candidates_from_shortlist,
+        shape_weighing_board,
+    )
 
     if subnets is None:
         subnets, source = _get_subnets_with_source()
     source = source or "unknown"
+    if market_context is None:
+        market_context = _market_context_with_weights(subnets)
 
-    def _simivision_eligible(sn: Dict[str, Any]) -> bool:
-        nu = sn.get("netuid", sn.get("id"))
-        try:
-            if nu is not None and int(nu) == 0:
-                return False
-        except (TypeError, ValueError):
-            pass
-        return str(sn.get("status") or "active").lower() != "deprecated"
-
-    ranked = sorted(
-        [s for s in subnets if _simivision_eligible(s)],
-        key=lambda s: (
-            subnet_volume(s),
-            float(s.get("market_cap", 0) or 0),
-            float(s.get("emission", 0) or 0),
-            float(subnet_apy_percent(s) or s.get("apy") or 0),
-        ),
-        reverse=True,
+    raw_top, total_considered = build_weighing_candidates_from_shortlist(
+        subnets, daily_pick, market_context
     )
-    pool = ranked[:CANDIDATE_POOL]
-    raw_top = []
-    for idx, sn in enumerate(pool, start=1):
-        apy_val = subnet_apy_percent(sn)
-        if apy_val is None:
-            apy_val = float(sn.get("apy", 0) or 0)
-        chg = float(sn.get("price_change_24h", 0) or 0)
-        reasons = pick_reasons(sn)
-        raw_top.append({
-            "rank": idx,
-            "netuid": sn.get("netuid"),
-            "name": sn.get("name"),
-            "emission": sn.get("emission", 0),
-            "apy": apy_val,
-            "price_change_24h": chg,
-            "volume": subnet_volume(sn),
-            "conviction": min(95, 72 + int(abs(chg)) + int(float(apy_val or 0) / 4)),
-            # Kept for API contract; UI uses deliberation_state instead.
-            "recommendation": "BUY" if idx == 1 else ("HOLD" if idx == 2 else "WATCH"),
-            "reasons": reasons,
-            "call_line": (reasons[0] if reasons else None),
-        })
+    board_source = "council-shortlist" if raw_top else "council-shortlist-empty"
     updated_at = datetime.utcnow().isoformat() + "Z"
     top, weigh_meta = shape_weighing_board(
         raw_top,
-        pool_count=len(subnets),
+        pool_count=total_considered,
+        total_considered=total_considered,
         daily_pick=daily_pick,
         updated_at=updated_at,
     )
     meta = {
         "count": len(subnets),
-        "source": source,
+        "source": board_source,
         "updated_at": updated_at,
         **weigh_meta,
     }
@@ -1545,16 +1513,20 @@ def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[st
 @app.get("/api/simivision")
 def api_simivision():
     """SimiVision Weighing Room — deliberation board (Daily Call excluded)."""
+    subnets, _ = _get_subnets_with_source()
     daily_pick: Optional[Dict[str, Any]] = None
+    market_context: Optional[Dict[str, Any]] = None
     try:
-        subnets, _ = _get_subnets_with_source()
         if _PICKS_ENGINE:
             market_context = _market_context_with_weights(subnets)
             daily_pick = get_or_create_today_pick(subnets, market_context)
     except Exception as exc:
         logger.warning("simivision daily-pick context skipped: %s", exc)
-        daily_pick = None
-    return _safe_simivision_payload(daily_pick=daily_pick)
+    return _safe_simivision_payload(
+        subnets=subnets,
+        daily_pick=daily_pick,
+        market_context=market_context,
+    )
 
 
 @app.get("/api/top-picks")

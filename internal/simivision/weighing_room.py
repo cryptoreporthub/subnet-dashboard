@@ -13,7 +13,56 @@ from typing import Any, Dict, List, Optional, Tuple
 NEAR_CALL_MIN_PROXIMITY = 82
 FADING_MAX_PROXIMITY = 48
 MAX_ROWS = 5
-CANDIDATE_POOL = 12
+
+
+def build_weighing_candidates_from_shortlist(
+    subnets: List[Dict[str, Any]],
+    daily_pick: Optional[Dict[str, Any]] = None,
+    market_context: Optional[Dict[str, Any]] = None,
+) -> Tuple[List[Dict[str, Any]], int]:
+    """Build raw Weighing Room rows from council deliberation alternatives."""
+    from internal.learning.dpick_shortlist import build_deliberation_shortlist
+    from internal.subnets.apy import subnet_apy_percent
+    from internal.subnets.tradable import subnet_volume
+
+    deliberation = build_deliberation_shortlist(
+        subnets, market_context or {}, daily_pick
+    )
+    alternatives = deliberation.get("alternatives") or []
+    total_considered = int(deliberation.get("total_considered") or 0)
+    if len(alternatives) < 2:
+        return [], total_considered
+
+    by_netuid: Dict[int, Dict[str, Any]] = {}
+    for sn in subnets:
+        try:
+            by_netuid[int(sn.get("netuid", sn.get("id")))] = sn
+        except (TypeError, ValueError):
+            continue
+
+    raw_top: List[Dict[str, Any]] = []
+    for alt in alternatives:
+        if not isinstance(alt, dict):
+            continue
+        nu = alt.get("netuid")
+        sn = by_netuid.get(int(nu)) if nu is not None else {}
+        apy_val = subnet_apy_percent(sn) if sn else None
+        if apy_val is None and sn:
+            apy_val = float(sn.get("apy", 0) or 0)
+        raw_top.append(
+            {
+                "netuid": nu,
+                "name": alt.get("name"),
+                "conviction": alt.get("conviction", 0),
+                "why_not": alt.get("why_not"),
+                "emission": sn.get("emission", 0) if sn else 0,
+                "apy": apy_val or 0,
+                "volume": subnet_volume(sn) if sn else 0,
+                # ponytail: API contract field; UI uses deliberation_state
+                "recommendation": "WATCH",
+            }
+        )
+    return raw_top, total_considered
 
 
 def conviction_pct(raw: Any) -> int:
@@ -133,6 +182,7 @@ def shape_weighing_board(
     top: List[Dict[str, Any]],
     *,
     pool_count: int,
+    total_considered: Optional[int] = None,
     daily_pick: Optional[Dict[str, Any]] = None,
     updated_at: Optional[str] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
@@ -155,12 +205,16 @@ def shape_weighing_board(
         state = deliberation_state(prox, delta)
         reasons = raw.get("reasons") if isinstance(raw.get("reasons"), list) else []
         reason = (
-            raw.get("call_line")
+            raw.get("reason")
+            or raw.get("why_not")
+            or raw.get("call_line")
             or (str(reasons[0]) if reasons else None)
             or "Council still weighing this name."
         )
         why_not = (
-            str(reasons[1]) if len(reasons) > 1 else "Has not crossed today's call threshold."
+            raw.get("why_not")
+            or (str(reasons[1]) if len(reasons) > 1 else None)
+            or "Has not crossed today's call threshold."
         )
         trigger = (
             "Would become the call when conviction clears the Daily Call bar "
@@ -200,7 +254,8 @@ def shape_weighing_board(
 
     excluded = 1 if call_netuid is not None else 0
     on_table = len(rows)
-    quiet = max(0, int(pool_count or 0) - on_table - excluded)
+    considered = total_considered if total_considered is not None else pool_count
+    quiet = max(0, int(considered or 0) - on_table - excluded)
     handoff = None
     if resolves_in:
         handoff = f"Next call locks in {resolves_in} · table freezes then"
