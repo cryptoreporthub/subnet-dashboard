@@ -189,6 +189,78 @@ def _nudge_weights(correct: bool, expert: Optional[str]) -> None:
         pass
 
 
+# Metabolism map only — not UI nesting. Leading auditor at pick-time soft-nudges
+# the experts that auditor role traditionally covers.
+_JUDGE_AUDIT_EXPERTS = {
+    "oracle": ("quant", "technical"),
+    "echo": ("dark_horse",),
+    "pulse": ("hype",),
+}
+_JUDGE_AUDIT_DELTA_OK = 0.01
+_JUDGE_AUDIT_DELTA_BAD = -0.015
+
+
+def _leading_judge_name(scores_at_creation: Any) -> Optional[str]:
+    if not isinstance(scores_at_creation, dict):
+        return None
+    best_name = None
+    best_val = float("-inf")
+    for name in ("oracle", "echo", "pulse"):
+        block = scores_at_creation.get(name)
+        raw = None
+        if isinstance(block, dict):
+            raw = block.get("score", block.get("confidence"))
+        elif isinstance(block, (int, float)):
+            raw = block
+        if raw is None:
+            continue
+        try:
+            val = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if val > best_val:
+            best_val = val
+            best_name = name
+    return best_name
+
+
+def _nudge_weights_from_judge_audit(prediction: Dict[str, Any], correct: bool) -> None:
+    """Half-strength weight nudge from leading Oracle/Echo/Pulse score at creation."""
+    if _in_replay_mode():
+        return
+    leading = _leading_judge_name(prediction.get("judge_scores_at_creation"))
+    if not leading:
+        return
+    experts = _JUDGE_AUDIT_EXPERTS.get(leading) or ()
+    if not experts:
+        return
+    from internal.council.weights import load_weights, nudge_expert
+
+    for expert in experts:
+        before = float(load_weights().get(expert, 1.0))
+        after = nudge_expert(
+            expert,
+            bool(correct),
+            delta_correct=_JUDGE_AUDIT_DELTA_OK,
+            delta_wrong=_JUDGE_AUDIT_DELTA_BAD,
+        )
+        if after is None:
+            continue
+        try:
+            from internal.learning.trail_bus import emit_weight_change
+
+            emit_weight_change(
+                expert,
+                before=before,
+                after=float(after),
+                reason="judge_audit_resolve",
+                correct=correct,
+                extra={"leading_judge": leading},
+            )
+        except Exception:
+            pass
+
+
 def _parse_resolve_at(prediction: Dict[str, Any]) -> Optional[datetime]:
     try:
         return datetime.fromisoformat(
@@ -448,6 +520,7 @@ def resolve_prediction(
         if expert:
             prediction["expert"] = expert
             _nudge_weights(bool(correct), expert)
+        _nudge_weights_from_judge_audit(prediction, bool(correct))
         _ensure_subnet_snapshot(prediction)
         # Impact dial before finalize so prediction_resolved trail includes after value.
         _nudge_impact_strength(prediction, bool(correct))
@@ -527,6 +600,7 @@ def resolve_prediction_at_horizon(
     if expert:
         prediction["expert"] = expert
         _nudge_weights(bool(correct), expert)
+    _nudge_weights_from_judge_audit(prediction, bool(correct))
 
     _ensure_subnet_snapshot(prediction, subnet_row=subnet_row)
     # Impact dial before finalize so prediction_resolved trail includes after value.

@@ -999,6 +999,12 @@
         wdEl.textContent = 'expired < 10% + n≥30 required';
       }
     }
+    var trustWhisper = document.getElementById('council-trust-whisper');
+    if (trustWhisper && graded > 0) {
+      var line = graded + ' graded · ' + acc + '% dir.';
+      if (tb.streak_whisper) line += ' · ' + tb.streak_whisper;
+      trustWhisper.textContent = line;
+    }
   }
 
   function pctLabel(rate) {

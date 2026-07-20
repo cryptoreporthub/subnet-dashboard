@@ -265,7 +265,7 @@
       </style>
 
       {% if tb.ready and cal_n|int > 0 %}
-      <p class="council-stage__trust-whisper" id="council-trust-whisper">{{ cal_n }} graded · {{ cal_acc }}% dir.</p>
+      <p class="council-stage__trust-whisper" id="council-trust-whisper">{{ cal_n }} graded · {{ cal_acc }}% dir.{% if tb.streak_whisper %} · {{ tb.streak_whisper }}{% endif %}</p>
       {% endif %}
 
       {# ---- CLAIM LAYER (inside home-daily-call for live-refresh) ---- #}
