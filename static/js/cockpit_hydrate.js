@@ -506,6 +506,33 @@
     }
     if (section.dataset) section.dataset.wrBound = '';
     document.dispatchEvent(new CustomEvent('weighing-room-updated'));
+    renderCautionCells(meta.caution_cells || []);
+  }
+
+  function renderCautionCells(cells) {
+    var section = document.getElementById('section-caution-cells');
+    var list = document.getElementById('caution-cells-list');
+    if (!section || !list) return;
+    if (!cells || !cells.length) {
+      section.hidden = true;
+      list.innerHTML = '';
+      return;
+    }
+    section.hidden = false;
+    list.innerHTML = cells
+      .slice(0, 3)
+      .map(function (cell) {
+        return (
+          '<li class="caution-cell" data-netuid="' +
+          esc(cell.netuid) +
+          '"><span class="caution-cell__tag">' +
+          esc(cell.label || 'CAUTION') +
+          '</span><span class="caution-cell__line">' +
+          esc(cell.line || cell.name || '') +
+          '</span></li>'
+        );
+      })
+      .join('');
   }
 
   function setText(id, value) {

@@ -1388,10 +1388,35 @@ def _safe_simivision_payload(
         daily_pick=daily_pick,
         updated_at=updated_at,
     )
+    caution_cells: List[Dict[str, Any]] = []
+    try:
+        from internal.simivision.caution_cells import build_caution_cells
+
+        fading = {
+            int(r["netuid"])
+            for r in top
+            if isinstance(r, dict)
+            and r.get("deliberation_state") == "FADING"
+            and r.get("netuid") is not None
+        }
+        market_context = None
+        try:
+            market_context = _market_context_with_weights(subnets)
+        except Exception:
+            market_context = {}
+        caution_cells = build_caution_cells(
+            subnets,
+            daily_pick=daily_pick,
+            market_context=market_context,
+            fading_netuids=fading,
+        )
+    except Exception as exc:
+        logger.warning("caution_cells build failed: %s", exc)
     meta = {
         "count": len(subnets),
         "source": board_source,
         "updated_at": updated_at,
+        "caution_cells": caution_cells,
         **weigh_meta,
     }
     return {"status": "success", "data": {"top": top, "meta": meta}}

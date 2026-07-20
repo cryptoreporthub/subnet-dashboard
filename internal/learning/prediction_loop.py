@@ -423,3 +423,70 @@ def _mirror_pick_to_soul_map(
         _save_raw(data)
     except Exception as exc:
         logger.warning("Soul-map pick mirror failed: %s", exc)
+
+
+def record_hold_decision(
+    *,
+    candidate: Optional[Dict[str, Any]] = None,
+    reason: Optional[str] = None,
+    horizon_type: str = "day",
+) -> None:
+    """HOLD still writes the brain — trail + soul-map, no gradeable prediction.
+
+    Confidence gate / empty market must not leave the learning loop silent.
+    """
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    cand = candidate if isinstance(candidate, dict) else {}
+    sn = cand.get("subnet") if isinstance(cand.get("subnet"), dict) else {}
+    name = sn.get("name") or cand.get("name")
+    netuid = sn.get("netuid") if sn else cand.get("netuid")
+    try:
+        conv = float(cand.get("final_confidence", cand.get("confidence", 0)) or 0)
+    except (TypeError, ValueError):
+        conv = 0.0
+    if 0.0 < conv <= 1.0:
+        conv_pct = round(conv * 100.0, 1)
+    else:
+        conv_pct = round(conv, 1)
+
+    try:
+        from internal.learning.trail_events import emit_trail_event
+
+        emit_trail_event(
+            "conviction_update",
+            subnet=name,
+            netuid=netuid,
+            evidence={
+                "action": "HOLD",
+                "reason": reason or "No long call published",
+                "conviction": conv_pct,
+                "horizon_type": horizon_type,
+                "gate": "confidence_below_0.45" if cand else "no_subnets",
+            },
+            signal="council_hold",
+            decision="HOLD",
+            prediction=reason,
+        )
+    except Exception as exc:
+        logger.warning("HOLD trail emit failed: %s", exc)
+
+    try:
+        from internal.council.weights import _load_raw, _save_raw
+
+        data = _load_raw()
+        sms = data.setdefault("soul_map_state", {})
+        if not isinstance(sms, dict):
+            sms = {}
+            data["soul_map_state"] = sms
+        entry = {
+            "action": "HOLD",
+            "pick": None,
+            "candidate": cand or None,
+            "reason": reason,
+            "updated_at": now,
+        }
+        sms[f"last_{horizon_type}_pick"] = entry
+        sms[f"last_{horizon_type}_hold"] = entry
+        _save_raw(data)
+    except Exception as exc:
+        logger.warning("HOLD soul-map mirror failed: %s", exc)
