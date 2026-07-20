@@ -1,8 +1,8 @@
 """Conviction Board — Weighing Room presentation fields.
 
 Shapes simivision ``top`` rows into deliberation cards: proximity sort,
-NEAR-CALL / WEIGHING / FADING states, Daily Call exclusion, and v1.1 meta
-(gap tick, quiet-table count, handoff clock).
+NEAR-CALL / WEIGHING / FADING states, Daily Call exclusion, mud bands,
+peel receipts, stitch gap whisper, and spine meta.
 """
 
 from __future__ import annotations
@@ -13,6 +13,28 @@ from typing import Any, Dict, List, Optional, Tuple
 NEAR_CALL_MIN_PROXIMITY = 82
 FADING_MAX_PROXIMITY = 48
 MAX_ROWS = 5
+
+_EXPERT_DISPLAY = {
+    "quant": "Quant",
+    "hype": "Hype",
+    "dark_horse": "Dark Horse",
+    "technical": "Technical",
+}
+_SKIP_OUTCOMES = frozenset({"duplicate", "expired", "ungradeable"})
+
+_TRIGGER_BY_STATE = {
+    "NEAR-CALL": "Clears the bar if conviction holds above today's call level.",
+    "WEIGHING": "Needs council alignment and conviction lift past the Daily Call bar.",
+    "FADING": "Would need conviction recovery and expert re-alignment.",
+}
+
+_MUD_BY_STATE = {
+    "NEAR-CALL": ("out", "Out the mud"),
+    "WEIGHING": ("in", "In the mud"),
+    "FADING": ("buried", "Buried"),
+}
+
+SPINE_WHISPER = "Graded on close · weights update after resolve"
 
 
 def build_weighing_candidates_from_shortlist(
@@ -55,6 +77,7 @@ def build_weighing_candidates_from_shortlist(
                 "name": alt.get("name"),
                 "conviction": alt.get("conviction", 0),
                 "why_not": alt.get("why_not"),
+                "expert_contributions": alt.get("expert_contributions") or {},
                 "emission": sn.get("emission", 0) if sn else 0,
                 "apy": apy_val or 0,
                 "volume": subnet_volume(sn) if sn else 0,
@@ -88,6 +111,144 @@ def deliberation_state(proximity: int, delta: int) -> str:
     if delta <= -3 or proximity < FADING_MAX_PROXIMITY:
         return "FADING"
     return "WEIGHING"
+
+
+def expert_split_line(expert_contributions: Any) -> Optional[str]:
+    """Council expert blend for peel — Quant/Hype/Dark Horse/Technical only."""
+    if not isinstance(expert_contributions, dict):
+        return None
+    ranked: List[Tuple[str, float]] = []
+    for key, label in _EXPERT_DISPLAY.items():
+        raw = expert_contributions.get(key)
+        if raw is None:
+            continue
+        try:
+            ranked.append((label, float(raw)))
+        except (TypeError, ValueError):
+            continue
+    if not ranked:
+        return None
+    ranked.sort(key=lambda x: x[1], reverse=True)
+    lead_label, lead_val = ranked[0]
+    rest = " / ".join(f"{lab} {val:.2f}" for lab, val in ranked[1:3])
+    if rest:
+        return f"Judge split · {lead_label} leads · {lead_val:.2f} / {rest}"
+    return f"Judge split · {lead_label} leads · {lead_val:.2f}"
+
+
+def gap_whisper(pick_conv: int, call_conv: Optional[int]) -> Optional[str]:
+    """Absolute distance whisper for the stitch row."""
+    if call_conv is None:
+        return None
+    gap = abs(int(pick_conv) - int(call_conv))
+    if gap == 0:
+        return "At the call bar"
+    above = int(pick_conv) > int(call_conv)
+    if gap >= 9:
+        return "Still clear of the call bar" if above else "Still short of the call bar"
+    if above:
+        return f"{gap} pts above the call bar"
+    if gap <= 3:
+        return f"{gap} pts below today's call"
+    return f"{gap} pts from the call bar"
+
+
+def trigger_for_state(state: str) -> str:
+    return _TRIGGER_BY_STATE.get(state, _TRIGGER_BY_STATE["WEIGHING"])
+
+
+def mud_band_for_state(state: str) -> Tuple[str, str]:
+    return _MUD_BY_STATE.get(state, _MUD_BY_STATE["WEIGHING"])
+
+
+def subnet_graded_snippet(netuid: Any) -> str:
+    """Honest per-SN track line from predictions ledger."""
+    if netuid is None:
+        return "No graded call on this SN yet."
+    try:
+        nu = int(netuid)
+    except (TypeError, ValueError):
+        return "No graded call on this SN yet."
+    try:
+        from internal.learning.predictions_store import load_predictions
+
+        data = load_predictions()
+    except Exception:
+        return "No graded call on this SN yet."
+
+    pending = data.get("predictions") or []
+    for pred in pending:
+        if not isinstance(pred, dict):
+            continue
+        try:
+            if int(pred.get("netuid")) != nu:
+                continue
+        except (TypeError, ValueError):
+            continue
+        if pred.get("status") != "pending":
+            continue
+        left = pred.get("resolves_in") or ""
+        if left:
+            return f"Called · pending grade · {left} left"
+        return "Called · pending grade"
+
+    hits = 0
+    misses = 0
+    last: Optional[Dict[str, Any]] = None
+    for pred in data.get("resolved") or []:
+        if not isinstance(pred, dict):
+            continue
+        if pred.get("outcome") in _SKIP_OUTCOMES:
+            continue
+        try:
+            if int(pred.get("netuid")) != nu:
+                continue
+        except (TypeError, ValueError):
+            continue
+        correct = pred.get("correct")
+        if correct is True:
+            hits += 1
+            last = pred
+        elif correct is False:
+            misses += 1
+            last = pred
+
+    n = hits + misses
+    if n == 0 or last is None:
+        return "No graded call on this SN yet."
+
+    verdict = "Hit" if last.get("correct") is True else "Miss"
+    horizon = last.get("horizon_type") or last.get("horizon") or "24h"
+    if horizon == "day":
+        horizon = "24h"
+    elif horizon == "hour":
+        horizon = "1h"
+    move = ""
+    actual = last.get("actual_pct")
+    if actual is not None:
+        try:
+            move = f" · {float(actual):+.1f}% vs {horizon}"
+        except (TypeError, ValueError):
+            move = f" · vs {horizon}"
+    else:
+        move = f" · vs {horizon}"
+    line = f"Last call on this SN · {verdict}{move}"
+    if n >= 2:
+        line += f" · {hits}✓ / {misses}✗ (n={n})"
+    return line
+
+
+def peel_horizon_line(
+    *,
+    horizon: Optional[str],
+    resolves_in: Optional[str],
+) -> Optional[str]:
+    if not horizon and not resolves_in:
+        return None
+    hz = horizon or "24h"
+    if resolves_in:
+        return f"If this became the call · graded on {hz} movement · locks in {resolves_in}"
+    return f"If this became the call · graded on {hz} movement"
 
 
 def _human_updated_ago(updated_at: Optional[str]) -> str:
@@ -146,10 +307,12 @@ def _persist_convictions(map_: Dict[str, Any]) -> None:
         pass
 
 
-def _call_context(daily_pick: Optional[Dict[str, Any]]) -> Tuple[Optional[int], Optional[int], Optional[str]]:
-    """Return (netuid, conviction_pct, resolves_in) from daily pick payload."""
+def _call_context(
+    daily_pick: Optional[Dict[str, Any]],
+) -> Tuple[Optional[int], Optional[int], Optional[str], Optional[str]]:
+    """Return (netuid, conviction_pct, resolves_in, horizon) from daily pick."""
     if not isinstance(daily_pick, dict):
-        return None, None, None
+        return None, None, None, None
     block = None
     for key in ("pick", "candidate"):
         cand = daily_pick.get(key)
@@ -175,7 +338,10 @@ def _call_context(daily_pick: Optional[Dict[str, Any]]) -> Tuple[Optional[int], 
     resolves_in = daily_pick.get("resolves_in")
     if resolves_in is not None:
         resolves_in = str(resolves_in)
-    return netuid, conv if conv and conv > 0 else None, resolves_in
+    horizon = daily_pick.get("time_horizon") or daily_pick.get("horizon") or "24h"
+    if horizon is not None:
+        horizon = str(horizon)
+    return netuid, conv if conv and conv > 0 else None, resolves_in, horizon
 
 
 def shape_weighing_board(
@@ -187,8 +353,9 @@ def shape_weighing_board(
     updated_at: Optional[str] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Filter/sort/annotate rows + meta for the Weighing Room UI."""
-    call_netuid, call_conv, resolves_in = _call_context(daily_pick)
+    call_netuid, call_conv, resolves_in, horizon = _call_context(daily_pick)
     last = _load_last_convictions()
+    horizon_line = peel_horizon_line(horizon=horizon, resolves_in=resolves_in)
     rows: List[Dict[str, Any]] = []
     for raw in top or []:
         if not isinstance(raw, dict):
@@ -203,6 +370,7 @@ def shape_weighing_board(
         delta = _delta_for(nu, conv, last)
         prox = proximity_to_call(conv, call_conv)
         state = deliberation_state(prox, delta)
+        mud_slug, mud_label = mud_band_for_state(state)
         reasons = raw.get("reasons") if isinstance(raw.get("reasons"), list) else []
         reason = (
             raw.get("reason")
@@ -216,10 +384,7 @@ def shape_weighing_board(
             or (str(reasons[1]) if len(reasons) > 1 else None)
             or "Has not crossed today's call threshold."
         )
-        trigger = (
-            "Would become the call when conviction clears the Daily Call bar "
-            "and council aligns."
-        )
+        split = expert_split_line(raw.get("expert_contributions"))
         row = dict(raw)
         row.update(
             {
@@ -229,21 +394,37 @@ def shape_weighing_board(
                 "deliberation_state": state,
                 "reason": reason,
                 "why_not": why_not,
-                "trigger": trigger,
+                "trigger": trigger_for_state(state),
+                "expert_split": split,
+                "track_record": subnet_graded_snippet(nu),
+                "horizon_line": horizon_line,
                 "near_call_strip": (
                     _near_call_strip(str(reason), resolves_in=resolves_in)
                     if state == "NEAR-CALL"
                     else None
                 ),
                 "closest_to_call": False,
-                "band": "near" if state == "NEAR-CALL" else "watching",
+                "gap_whisper": None,
+                "gap_pts": None,
+                "stitch_border": False,
+                "mud_band": mud_slug,
+                "mud_label": mud_label,
+                "band": mud_slug,
             }
         )
         rows.append(row)
 
     rows.sort(key=lambda r: (-int(r.get("proximity") or 0), -int(r.get("conviction") or 0)))
     rows = rows[:MAX_ROWS]
-    if rows:
+    if rows and call_conv is not None:
+        top_row = rows[0]
+        top_row["closest_to_call"] = True
+        whisper = gap_whisper(int(top_row.get("conviction") or 0), call_conv)
+        top_row["gap_whisper"] = whisper
+        top_row["gap_pts"] = abs(int(top_row.get("conviction") or 0) - int(call_conv))
+        # Green border only when stitch is not FADING
+        top_row["stitch_border"] = top_row.get("deliberation_state") != "FADING"
+    elif rows:
         rows[0]["closest_to_call"] = True
 
     persist_map = {str(r["netuid"]): r["conviction"] for r in rows if r.get("netuid") is not None}
@@ -269,5 +450,7 @@ def shape_weighing_board(
         "quiet_label": f"{on_table} on table · {quiet} quiet",
         "handoff": handoff,
         "gap_tick_pct": call_conv,
+        "spine_whisper": SPINE_WHISPER,
+        "horizon": horizon,
     }
     return rows, meta

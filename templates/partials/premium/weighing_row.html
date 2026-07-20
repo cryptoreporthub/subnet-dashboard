@@ -6,18 +6,25 @@
 {% set state_slug = state|lower|replace('_', '-') %}
 {% set delta = (pick.conviction_delta|default(0))|int %}
 {% set reason = pick.reason|default(pick.call_line)|default('Council still weighing this name.') %}
-<article class="wr-row wr-row--{{ state_slug }}{% if pick.closest_to_call %} wr-row--stitch{% endif %}"
+{% set stitch_border = pick.stitch_border|default(false) %}
+<article class="wr-row wr-row--{{ state_slug }}{% if pick.closest_to_call %} wr-row--stitch{% endif %}{% if stitch_border %} wr-row--stitch-border{% endif %}"
   data-netuid="{{ pick.netuid }}"
   data-state="{{ state }}">
   <button type="button" class="wr-row__face" aria-expanded="false" aria-controls="wr-peel-{{ pick.netuid }}">
     <span class="wr-chip wr-chip--{{ state_slug }}">{{ state }}</span>
     <div class="wr-row__main">
       <div class="wr-name">
-        {{ pick.name|default('SN' ~ pick.netuid) }}
+        <a class="wr-name__link" href="?netuid={{ pick.netuid }}" data-wr-netuid="{{ pick.netuid }}"
+          onclick="event.preventDefault();event.stopPropagation();if(typeof switchToSubnet==='function'){switchToSubnet('{{ pick.netuid }}');}else{window.location.search='netuid={{ pick.netuid }}';}">
+          {{ pick.name|default('SN' ~ pick.netuid) }}
+        </a>
         <span class="wr-netuid">SN{{ pick.netuid }}</span>
       </div>
       {% if pick.closest_to_call %}
       <p class="wr-stitch">≈ today&apos;s call</p>
+      {% endif %}
+      {% if pick.gap_whisper %}
+      <p class="wr-gap-whisper">{{ pick.gap_whisper }}</p>
       {% endif %}
       <p class="wr-reason">{{ reason }}</p>
       {% if delta > 0 %}
@@ -52,6 +59,24 @@
       <div class="wr-peel__label">What would make it the call</div>
       <p>{{ pick.trigger|default('Council alignment above the Daily Call bar.') }}</p>
     </div>
+    {% if pick.expert_split %}
+    <div class="wr-peel__block">
+      <div class="wr-peel__label">Council experts</div>
+      <p class="wr-peel__split">{{ pick.expert_split }}</p>
+    </div>
+    {% endif %}
+    {% if pick.track_record %}
+    <div class="wr-peel__block">
+      <div class="wr-peel__label">Track record</div>
+      <p>{{ pick.track_record }}</p>
+    </div>
+    {% endif %}
+    {% if pick.horizon_line %}
+    <div class="wr-peel__block">
+      <div class="wr-peel__label">Horizon</div>
+      <p>{{ pick.horizon_line }}</p>
+    </div>
+    {% endif %}
     <div class="wr-peel__grid">
       <div>
         <div class="wr-peel__label">Proximity</div>
@@ -70,6 +95,5 @@
         <div class="wr-peel__val">{{ "%.1f"|format((pick.apy|default(0))|float) }}%</div>
       </div>
     </div>
-    <p class="wr-peel__note">Judge split &amp; track record live with council grading on this name.</p>
   </div>
 </article>

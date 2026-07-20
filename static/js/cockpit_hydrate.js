@@ -310,9 +310,13 @@
     var stitch = pick.closest_to_call
       ? '<p class="wr-stitch">≈ today&apos;s call</p>'
       : '';
+    var gapWhisper = pick.gap_whisper
+      ? '<p class="wr-gap-whisper">' + esc(pick.gap_whisper) + '</p>'
+      : '';
     var strip = pick.near_call_strip
       ? '<div class="wr-near-strip">' + esc(pick.near_call_strip) + '</div>'
       : '';
+    var stitchBorder = pick.stitch_border ? ' wr-row--stitch-border' : '';
     var gapStyle =
       gapTick != null && gapTick !== ''
         ? ' --gap-tick:' + Number(gapTick) + ';'
@@ -323,10 +327,39 @@
           Number(gapTick) +
           ';" aria-hidden="true"></span>'
         : '';
+    var peelExtra = '';
+    if (pick.expert_split) {
+      peelExtra +=
+        '<div class="wr-peel__block"><div class="wr-peel__label">Council experts</div>' +
+        '<p class="wr-peel__split">' +
+        esc(pick.expert_split) +
+        '</p></div>';
+    }
+    if (pick.track_record) {
+      peelExtra +=
+        '<div class="wr-peel__block"><div class="wr-peel__label">Track record</div><p>' +
+        esc(pick.track_record) +
+        '</p></div>';
+    }
+    if (pick.horizon_line) {
+      peelExtra +=
+        '<div class="wr-peel__block"><div class="wr-peel__label">Horizon</div><p>' +
+        esc(pick.horizon_line) +
+        '</p></div>';
+    }
+    var nameLink =
+      '<a class="wr-name__link" href="?netuid=' +
+      esc(nu) +
+      '" data-wr-netuid="' +
+      esc(nu) +
+      '">' +
+      esc(name) +
+      '</a>';
     return (
       '<article class="wr-row wr-row--' +
       esc(stateSlug) +
       (pick.closest_to_call ? ' wr-row--stitch' : '') +
+      stitchBorder +
       '" data-netuid="' +
       esc(nu) +
       '" data-state="' +
@@ -341,11 +374,12 @@
       esc(state) +
       '</span>' +
       '<div class="wr-row__main"><div class="wr-name">' +
-      esc(name) +
+      nameLink +
       ' <span class="wr-netuid">SN' +
       esc(nu) +
       '</span></div>' +
       stitch +
+      gapWhisper +
       '<p class="wr-reason">' +
       esc(reason) +
       '</p>' +
@@ -376,6 +410,7 @@
       '<div class="wr-peel__block"><div class="wr-peel__label">What would make it the call</div><p>' +
       esc(pick.trigger || 'Council alignment above the Daily Call bar.') +
       '</p></div>' +
+      peelExtra +
       '<div class="wr-peel__grid">' +
       '<div><div class="wr-peel__label">Proximity</div><div class="wr-peel__val">' +
       esc(pick.proximity != null ? pick.proximity : 0) +
@@ -389,7 +424,6 @@
       '<div><div class="wr-peel__label">APY</div><div class="wr-peel__val">' +
       (apyPercent(pick) != null ? fmt(apyPercent(pick), 1) : '—') +
       '%</div></div></div>' +
-      '<p class="wr-peel__note">Judge split &amp; track record live with council grading on this name.</p>' +
       '</div></article>'
     );
   }
@@ -429,23 +463,37 @@
     var gapTick = meta.gap_tick_pct != null ? meta.gap_tick_pct : meta.call_conviction;
     if (gapTick != null) section.setAttribute('data-gap-tick', String(gapTick));
 
+    var spine = document.getElementById('wr-spine');
+    if (spine && meta.spine_whisper) {
+      spine.textContent = meta.spine_whisper;
+    }
+
     var near = [];
-    var watch = [];
+    var weighing = [];
+    var fading = [];
     top.forEach(function (pick) {
-      if (String(pick.deliberation_state || '').toUpperCase() === 'NEAR-CALL') near.push(pick);
-      else watch.push(pick);
+      var st = String(pick.deliberation_state || '').toUpperCase();
+      if (st === 'NEAR-CALL') near.push(pick);
+      else if (st === 'FADING') fading.push(pick);
+      else weighing.push(pick);
     });
     var html = '';
     if (near.length) {
       html +=
-        '<div class="wr-band" data-band="near"><div class="wr-band__label">Near a call</div>' +
+        '<div class="wr-band" data-band="out"><div class="wr-band__label wr-band__label--out">Out the mud</div>' +
         near.map(function (p) { return renderWeighingRow(p, gapTick); }).join('') +
         '</div>';
     }
-    if (watch.length) {
+    if (weighing.length) {
       html +=
-        '<div class="wr-band" data-band="watching"><div class="wr-band__label">Watching</div>' +
-        watch.map(function (p) { return renderWeighingRow(p, gapTick); }).join('') +
+        '<div class="wr-band" data-band="in"><div class="wr-band__label wr-band__label--in">In the mud</div>' +
+        weighing.map(function (p) { return renderWeighingRow(p, gapTick); }).join('') +
+        '</div>';
+    }
+    if (fading.length) {
+      html +=
+        '<div class="wr-band" data-band="buried"><div class="wr-band__label wr-band__label--buried">Buried</div>' +
+        fading.map(function (p) { return renderWeighingRow(p, gapTick); }).join('') +
         '</div>';
     }
     var body = document.getElementById('weighing-room-body');

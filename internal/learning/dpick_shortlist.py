@@ -151,12 +151,20 @@ def build_deliberation_shortlist(
         conv = _conviction_pct(
             row["score"].get("confidence", row["score"].get("total_score", 0))
         )
+        ec = row["score"].get("expert_contributions") or {}
+        # Strip nested metadata — peel only needs the four expert scores
+        expert_scores = {
+            k: ec.get(k)
+            for k in ("quant", "hype", "dark_horse", "technical")
+            if ec.get(k) is not None
+        }
         alternatives.append(
             {
                 "netuid": nu,
                 "name": name_for_netuid(nu) if nu is not None else "SN?",
                 "conviction": conv,
                 "why_not": _why_not(pick_block or {}, row["score"], rank),
+                "expert_contributions": expert_scores,
                 "rank": rank,
             }
         )
