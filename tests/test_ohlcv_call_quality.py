@@ -24,11 +24,11 @@ def test_cap_prefers_priced_over_cold_emission():
     assert capped[0]["netuid"] == 2
 
 
-def test_simivision_payload_exposes_call_line():
+def test_simivision_payload_exposes_council_reason():
     rows = [
         {
-            "netuid": 10,
-            "name": "A",
+            "netuid": 1,
+            "name": "Alpha",
             "emission": 1,
             "apy": 20,
             "volume": 9_000,
@@ -36,18 +36,48 @@ def test_simivision_payload_exposes_call_line():
             "price_change_24h": 6.0,
             "market_cap": 1e6,
         },
+        {
+            "netuid": 2,
+            "name": "Beta",
+            "emission": 1,
+            "apy": 18,
+            "volume": 8_000,
+            "price": 0.9,
+            "price_change_24h": 4.0,
+            "market_cap": 9e5,
+        },
+        {
+            "netuid": 3,
+            "name": "Gamma",
+            "emission": 1,
+            "apy": 16,
+            "volume": 7_000,
+            "price": 0.8,
+            "price_change_24h": 2.0,
+            "market_cap": 8e5,
+        },
     ]
-    payload = _safe_simivision_payload(rows, source="test")
-    top = payload["data"]["top"][0]
-    assert top.get("reasons")
-    assert top.get("call_line") == top["reasons"][0]
+    daily = {
+        "pick": {
+            "subnet": {"netuid": 1, "name": "Alpha"},
+            "final_confidence": 0.78,
+            "expert_contributions": {"quant": 0.4, "hype": 0.2},
+            "audit": {"concerns": []},
+        }
+    }
+    payload = _safe_simivision_payload(rows, source="test", daily_pick=daily, market_context={})
+    top = payload["data"]["top"]
+    assert top
+    assert top[0].get("reason")
+    assert payload["data"]["meta"]["source"] == "council-shortlist"
+    assert all(t["netuid"] != 1 for t in top)
 
 
-def test_simivision_skips_root_and_deprecated():
+def test_simivision_honest_empty_when_shortlist_thin():
     rows = [
         {"netuid": 0, "name": "Root", "emission": 99, "volume": 1e9, "apy": 25, "status": "active"},
         {"netuid": 3, "name": "Templar", "emission": 1, "volume": 100, "apy": 20, "status": "deprecated"},
         {"netuid": 51, "name": "Compute", "emission": 8, "volume": 5000, "apy": 17, "status": "active"},
     ]
     top = _safe_simivision_payload(rows, source="test")["data"]["top"]
-    assert [t["netuid"] for t in top] == [51]
+    assert top == []
