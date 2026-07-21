@@ -70,24 +70,33 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_PRIMARY_REGION: sjc
-      - name: Free data_volume (destroy all machines when prod is down)
-        run: ./scripts/fly_volume_recover.sh
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FLY_APP: subnet-dashboard
-          FLY_PRIMARY_REGION: sjc
       - name: Deploy to Fly (region sjc, single machine)
         run: |
           set -e
-          for attempt in 1 2 3; do
-            echo "=== flyctl deploy attempt $attempt/3 (regions=sjc) ==="
-            if flyctl deploy --remote-only --no-cache --yes --regions sjc --ha=false; then
+          deploy_once() {
+            flyctl deploy --remote-only --no-cache --yes --regions sjc --ha=false
+          }
+          # ponytail: never destroy healthy machines up front — a failed recreate
+          # leaves zero candidates and the edge shows a TLS error in browsers.
+          for attempt in 1 2 3 4 5; do
+            echo "=== flyctl deploy attempt $attempt/5 (regions=sjc) ==="
+            if deploy_once; then
               exit 0
             fi
-            echo "deploy attempt $attempt failed — waiting 30s before retry"
-            sleep 30
+            echo "deploy attempt $attempt failed — waiting 60s before retry"
+            sleep 60
           done
-          echo "GUARD FAIL: flyctl deploy failed after 3 attempts"
+          echo "=== deploy still failing — run volume recover then retry ==="
+          ./scripts/fly_volume_recover.sh
+          for attempt in 1 3; do
+            echo "=== post-recover deploy attempt $attempt/3 ==="
+            if deploy_once; then
+              exit 0
+            fi
+            echo "post-recover attempt $attempt failed — waiting 90s"
+            sleep 90
+          done
+          echo "GUARD FAIL: flyctl deploy failed after volume recover"
           exit 1
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
