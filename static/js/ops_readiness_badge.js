@@ -25,8 +25,17 @@
     var resOk = resolver.running ? 'resolver on' : 'resolver off';
     var ready = payload.ready;
     var alertCount = (whaleAlerts && whaleAlerts.total) || 0;
+    var webSnapshot = payload.worker_mode === 'web' && !resolver.running;
+    if (webSnapshot && !ready) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
     el.className =
       'ops-readiness-badge ' + (ready ? 'ops-readiness--ready' : 'ops-readiness--degraded');
+    if (webSnapshot) {
+      resOk = 'snapshot mode';
+    }
     var line =
       graded + ' graded · ' + source + (total ? ' · ' + total + ' SN' : '') + ' · ' + resOk;
     if (alertCount > 0) {
@@ -54,7 +63,7 @@
     ])
       .then(function (res) { render(res[0], res[1]); })
       .catch(function () {
-        render(null, null);
+        el.hidden = true;
       });
   }
 

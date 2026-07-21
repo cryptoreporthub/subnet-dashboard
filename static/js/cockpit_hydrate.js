@@ -547,6 +547,90 @@
     el.textContent = String(value);
   }
 
+  function friendlySourceLabel(raw, meta) {
+    var feed = meta && meta.source ? String(meta.source) : '';
+    if (feed && feed !== 'none') {
+      return feed.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+    }
+    var s = String(raw || '').toLowerCase();
+    if (s.indexOf('timeout') >= 0 || s.indexOf('fallback') >= 0) {
+      return 'Snapshot';
+    }
+    if (!s || s === 'cache') return 'Live';
+    return s.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  }
+
+  function renderFooterStatus(opts) {
+    opts = opts || {};
+    var label = friendlySourceLabel(opts.dataSource, opts.meta);
+    var sourceEl = document.getElementById('footer-source-label');
+    var headerEl = document.getElementById('headerDataSource');
+    if (sourceEl) sourceEl.textContent = label;
+    if (headerEl) headerEl.textContent = label;
+    function setMetric(name, value) {
+      var wrap = document.querySelector('[data-footer-metric="' + name + '"]');
+      var el = document.getElementById('footer-' + name + '-count');
+      if (!wrap || !el) return;
+      var n = Number(value) || 0;
+      if (n > 0) {
+        el.textContent = String(n);
+        wrap.hidden = false;
+      }
+    }
+    if (opts.subnets != null) setMetric('subnets', opts.subnets);
+    if (opts.trail != null) setMetric('trail', opts.trail);
+    if (opts.predictions != null) setMetric('predictions', opts.predictions);
+  }
+
+  function patchK3ConvictionRing(confPct) {
+    if (confPct == null || isNaN(confPct)) return;
+    var ring = document.querySelector('#k3-dossier .ring-fill');
+    if (ring) {
+      var circ = 389.56;
+      var pct = Math.max(0, Math.min(100, Number(confPct)));
+      ring.style.setProperty('--ring-offset', String(circ - (circ * pct / 100)));
+    }
+    var fc = confTier(confPct > 1 ? confPct / 100 : confPct);
+    var orb = document.getElementById('k3-orb-score');
+    if (orb && fc.conf != null) {
+      var tens = Math.floor(fc.conf / 10);
+      var ones = fc.conf % 10;
+      orb.innerHTML =
+        (tens > 0 ? '<span class="digit-tens">' + tens + '</span>' : '') +
+        '<span class="digit-ones">' + ones + '</span>';
+    }
+  }
+
+  function patchK3Evidence(payload) {
+    var layer = document.getElementById('k3-layer-evidence');
+    if (!layer || !payload) return;
+    var body = layer.querySelector('.k3-layer-body');
+    if (!body) return;
+    var pick = payload.pick || payload.candidate;
+    var active = pick || {};
+    var audit = active.audit || {};
+    var title = document.getElementById('k3-evidence-title');
+    var sn = active.subnet || {};
+    if (title && (sn.name || sn.netuid != null)) {
+      title.textContent = 'Why ' + resolveSubnetDisplayName(sn, sn.netuid) + ' is on the desk';
+    }
+    var items = [];
+    (active.reasons || []).forEach(function (r) { if (r) items.push(String(r)); });
+    (audit.concerns || []).forEach(function (c) { if (c) items.push(String(c)); });
+    if (payload.reason) items.unshift(String(payload.reason));
+    var unique = [];
+    items.forEach(function (line) {
+      if (unique.indexOf(line) < 0) unique.push(line);
+    });
+    if (!unique.length) return;
+    var titleHtml = title ? title.outerHTML : '';
+    var html = titleHtml;
+    unique.slice(0, 5).forEach(function (line) {
+      html += '<div class="k3-signal"><span class="k3-signal-name">' + esc(line) + '</span></div>';
+    });
+    body.innerHTML = html;
+  }
+
   function patchK3DossierFromPayload(payload) {
     if (!payload || !document.getElementById('k3-dossier')) return false;
     var brief = payload.brief || {};
@@ -602,6 +686,7 @@
         (tens > 0 ? '<span class="digit-tens">' + tens + '</span>' : '') +
         '<span class="digit-ones">' + ones + '</span>';
     }
+    patchK3ConvictionRing(fc.conf);
 
     var pin = document.getElementById('habit-pin-btn');
     if (pin && sn.netuid != null) {
@@ -613,6 +698,7 @@
       document.dispatchEvent(new CustomEvent('home-daily-call-updated'));
     } catch (e) {}
     renderStageWhyNot(sn.netuid, payload.action || 'HOLD');
+    patchK3Evidence(payload);
     return true;
   }
 
@@ -1595,9 +1681,22 @@
       }
 
       fetchJsonRetry('/api/daily-pick', 18000, 1)
-        .then(function (payload) { renderDailyPick(payload); })
+        .then(function (payload) {
+          renderDailyPick(payload);
+          if (window.HomeHydrateCache) window.HomeHydrateCache.dailyPick = payload;
+        })
         .catch(function () {
           console.warn('[cockpit_hydrate] daily-pick fetch failed');
+        });
+
+      fetchJsonRetry('/api/story-strip', 12000, 1)
+        .then(function (strip) {
+          if (window.HomeLiveRefresh && window.HomeLiveRefresh.patchStoryStrip) {
+            window.HomeLiveRefresh.patchStoryStrip(strip);
+          }
+        })
+        .catch(function () {
+          console.warn('[cockpit_hydrate] story-strip fetch failed');
         });
 
       fetchJsonRetry('/api/pump-alerts', 12000, 1)
@@ -1704,11 +1803,18 @@
 
       updateGroupData(hourPicks, dayPicks, trail, subnets);
       paintCharts();
+      renderFooterStatus({
+        dataSource: subnetsMeta.source,
+        meta: subnetsMeta,
+        subnets: subnets.length,
+        trail: trail.length,
+        predictions: stats && stats.total_records != null ? stats.total_records : null,
+      });
       console.log('[cockpit_hydrate] panels updated from APIs');
 
       window.HomeHydrateCache = {
-        dailyPick: null,
-        simivision: null,
+        dailyPick: lastDailyPickPayload,
+        simivision: lastSimivisionTop ? { top: lastSimivisionTop, meta: lastSimivisionMeta } : null,
         trail: trail,
         subnets: subnets,
         subnetsMeta: subnetsMeta,

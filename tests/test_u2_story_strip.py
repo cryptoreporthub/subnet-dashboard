@@ -24,6 +24,47 @@ def test_build_story_strip_honest_empty(tmp_path, monkeypatch):
     assert strip["items"] == []
 
 
+def test_story_strip_filters_test_fixtures(tmp_path, monkeypatch):
+    preds = tmp_path / "predictions.json"
+    preds.write_text(
+        json.dumps(
+            {
+                "predictions": [],
+                "resolved": [
+                    {
+                        "id": "t1",
+                        "netuid": 1,
+                        "name": "LOL",
+                        "outcome": "correct",
+                        "actual_pct": 1.0,
+                        "correct": True,
+                        "predicted_pct": 2.0,
+                        "statement": "TEST_CASE fixture",
+                        "tags": ["TEST_CASE"],
+                    },
+                    {
+                        "id": "r1",
+                        "netuid": 76,
+                        "name": "Real",
+                        "outcome": "correct",
+                        "actual_pct": 2.0,
+                        "correct": True,
+                        "predicted_pct": 3.0,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    import internal.learning.predictions_store as ps
+
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(preds))
+    strip = build_story_strip(limit=5)
+    assert strip["data_available"] is True
+    assert len(strip["items"]) == 1
+    assert strip["items"][0]["name"] == "Real"
+
+
 def test_build_story_strip_labels_outcomes(tmp_path, monkeypatch):
     preds = tmp_path / "predictions.json"
     preds.write_text(
@@ -71,7 +112,9 @@ def test_build_story_strip_labels_outcomes(tmp_path, monkeypatch):
 
 
 def test_index_renders_story_strip_section():
-    with TestClient(app) as client:
-        html = client.get("/").text
+    import server as srv
+
+    srv._warm_homepage_cache(None)
+    html = srv._HOMEPAGE_HTML_CACHE.get("html") or ""
     assert 'id="section-story-strip"' in html
     assert "story-strip" in html
