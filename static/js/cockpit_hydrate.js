@@ -593,6 +593,64 @@
     }
   }
 
+  function patchK3WeighedAgainst(shortlist) {
+    var layer = document.getElementById('k3-layer-deliberation');
+    if (!layer || !shortlist || !shortlist.length) return;
+    var body = layer.querySelector('.k3-layer-body');
+    if (!body || (body.querySelector('.k3-weighed-list') && !body.querySelector('.k3-empty'))) return;
+    var rows = shortlist.slice(0, 8).map(function (alt) {
+      var nu = alt.netuid;
+      var name = alt.name || resolveSubnetDisplayName(alt, nu);
+      var pct =
+        alt.conviction != null
+          ? '<span class="k3-weighed-pct">' + esc(String(Math.round(Number(alt.conviction)))) + '%</span>'
+          : '';
+      var role = alt.role ? '<p class="k3-weighed-why">' + esc(alt.role) + '</p>' : '';
+      return (
+        '<div class="k3-weighed-row" data-netuid="' + esc(nu) + '" onclick="switchToSubnet(\'' + esc(nu) + '\')" role="button" tabindex="0">' +
+        '<div class="k3-weighed-top"><span class="k3-weighed-name">' + esc(name) + '</span>' + pct + '</div>' +
+        role +
+        '</div>'
+      );
+    }).join('');
+    body.innerHTML =
+      '<div class="k3-deliberation"><div class="k3-weighed-list">' + rows + '</div></div>';
+  }
+
+  function patchK3CouncilVotes(weights) {
+    var layer = document.getElementById('k3-layer-council');
+    if (!layer) return;
+    var normalized = normalizeWeights(weights);
+    var keys = CANONICAL_EXPERTS.filter(function (k) { return normalized[k] != null; });
+    if (!keys.length) return;
+    var body = layer.querySelector('.k3-layer-body');
+    if (!body || (body.querySelector('.k3-judge') && !body.querySelector('.k3-empty'))) return;
+    var html = '<div class="k3-layer-title">Judge weights &amp; deltas</div>';
+    keys.forEach(function (name) {
+      var w = Number(normalized[name]) || 0;
+      html +=
+        '<div class="k3-judge"><span class="k3-judge-name">' + esc(expertLabel(name)) + '</span>' +
+        '<span><span class="k3-judge-weight">' + fmt(w, 2) + '</span>' +
+        '<span class="k3-judge-delta flat">—</span></span></div>';
+    });
+    body.innerHTML = html;
+  }
+
+  function patchDataFreshnessFromSubnetMeta(subnets, meta) {
+    if (!subnets || !subnets.length) return;
+    var el = document.getElementById('dataFreshnessBadge');
+    if (!el) return;
+    var source = String((meta && meta.source) || subnets[0].source || 'registry').toLowerCase();
+    var label = source.replace(/_/g, ' ') + ' · ' + subnets.length + ' subnets';
+    el.className = 'data-freshness-badge data-freshness-snapshot';
+    el.textContent = label;
+    var pill = document.getElementById('liveFeedPill');
+    if (pill) {
+      pill.className = 'live-pill live-pill--snapshot';
+      pill.innerHTML = '<span class="live-dot" aria-hidden="true"></span>SNAPSHOT';
+    }
+  }
+
   function patchK3Evidence(payload) {
     var layer = document.getElementById('k3-layer-evidence');
     if (!layer || !payload) return;
@@ -691,6 +749,7 @@
     } catch (e) {}
     renderStageWhyNot(sn.netuid, payload.action || 'HOLD');
     patchK3Evidence(payload);
+    patchK3WeighedAgainst(payload.shortlist || []);
     return true;
   }
 
@@ -1020,6 +1079,7 @@
       ? '<p class="council-lean">Leaning <strong>' + esc(expertLabel(top)) + '</strong> · weight ' + fmt(normalized[top], 3) + '</p>'
       : '';
     replaceSectionContent('section-council', lean + '<div class="council-grid">' + cards + '</div>', '.council-grid, .card-muted');
+    patchK3CouncilVotes(weights);
   }
 
   function renderKpi(stats) {
@@ -1432,6 +1492,7 @@
     document.querySelectorAll('.src-tag b').forEach(function (el) {
       el.textContent = sourceLabel;
     });
+    patchDataFreshnessFromSubnetMeta(subnets, meta);
   }
 
   function renderJudges(judges) {
