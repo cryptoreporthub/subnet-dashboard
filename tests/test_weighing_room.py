@@ -19,7 +19,8 @@ def test_near_call_strip_uses_lock_clock_not_speculation():
     assert "tonight" not in _near_call_strip("momentum holds").lower()
     with_clock = _near_call_strip("split judges align", resolves_in="10h 42m")
     assert "10h 42m" in with_clock
-    assert "Near the call bar" in with_clock
+    assert "Call likely if" in with_clock
+    assert "locks in" in with_clock
     assert "tonight" not in with_clock.lower()
 
 
@@ -41,6 +42,8 @@ def test_expert_split_uses_council_labels_not_oracle():
     assert "Pulse" not in line
     assert expert_split_line({}) is None
     assert expert_split_line(None) is None
+    split = expert_split_line({"quant": 0.41, "hype": 0.38, "technical": 0.31})
+    assert split and "dissent" in split
 
 
 def test_gap_whisper_absolute_distance():
@@ -141,7 +144,8 @@ def test_shape_excludes_daily_call_and_sorts_by_proximity():
     # stitch + gap whisper
     assert rows[0]["gap_whisper"]
     assert rows[0]["stitch_border"] is True
-    assert rows[0]["mud_band"] in ("out", "in", "buried")
+    assert rows[0]["mud_band"] in ("near", "watching")
+    assert rows[0]["band_label"] in ("NEAR A CALL", "WATCHING")
     # peel receipts
     assert "Quant leads" in (rows[0].get("expert_split") or "")
     assert rows[0].get("track_record")
@@ -162,7 +166,8 @@ def test_fading_stitch_no_green_border():
     assert rows[0]["closest_to_call"] is True
     assert rows[0]["deliberation_state"] == "FADING"
     assert rows[0]["stitch_border"] is False
-    assert rows[0]["mud_label"] == "Buried"
+    assert rows[0]["mud_label"] == "WATCHING"
+    assert rows[0]["band"] == "watching"
 
 
 def _sample_subnets():

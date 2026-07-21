@@ -28,10 +28,10 @@ _TRIGGER_BY_STATE = {
     "FADING": "Would need conviction recovery and expert re-alignment.",
 }
 
-_MUD_BY_STATE = {
-    "NEAR-CALL": ("out", "Out the mud"),
-    "WEIGHING": ("in", "In the mud"),
-    "FADING": ("buried", "Buried"),
+_BAND_BY_STATE = {
+    "NEAR-CALL": ("near", "NEAR A CALL"),
+    "WEIGHING": ("watching", "WATCHING"),
+    "FADING": ("watching", "WATCHING"),
 }
 
 SPINE_WHISPER = "Graded on close · weights update after resolve"
@@ -130,10 +130,13 @@ def expert_split_line(expert_contributions: Any) -> Optional[str]:
         return None
     ranked.sort(key=lambda x: x[1], reverse=True)
     lead_label, lead_val = ranked[0]
+    dissent = ""
+    if len(ranked) >= 2 and (lead_val - ranked[1][1]) < 0.08:
+        dissent = " · dissent"
     rest = " / ".join(f"{lab} {val:.2f}" for lab, val in ranked[1:3])
     if rest:
-        return f"Judge split · {lead_label} leads · {lead_val:.2f} / {rest}"
-    return f"Judge split · {lead_label} leads · {lead_val:.2f}"
+        return f"Judge split · {lead_label} leads · {lead_val:.2f}{dissent} / {rest}"
+    return f"Judge split · {lead_label} leads · {lead_val:.2f}{dissent}"
 
 
 def gap_whisper(pick_conv: int, call_conv: Optional[int]) -> Optional[str]:
@@ -157,8 +160,13 @@ def trigger_for_state(state: str) -> str:
     return _TRIGGER_BY_STATE.get(state, _TRIGGER_BY_STATE["WEIGHING"])
 
 
+def band_for_state(state: str) -> Tuple[str, str]:
+    return _BAND_BY_STATE.get(state, _BAND_BY_STATE["WEIGHING"])
+
+
 def mud_band_for_state(state: str) -> Tuple[str, str]:
-    return _MUD_BY_STATE.get(state, _MUD_BY_STATE["WEIGHING"])
+    """Backward-compatible alias for band_for_state."""
+    return band_for_state(state)
 
 
 def subnet_graded_snippet(netuid: Any) -> str:
@@ -269,13 +277,13 @@ def _human_updated_ago(updated_at: Optional[str]) -> str:
 
 
 def _near_call_strip(reason: str, *, resolves_in: Optional[str] = None) -> str:
-    base = (reason or "conviction holds near the bar").strip()
-    if len(base) > 70:
-        base = base[:67].rstrip() + "…"
-    lead = base[:1].lower() + base[1:] if base else "conviction holds near the bar"
+    base = (reason or "conviction holds").strip()
+    if len(base) > 64:
+        base = base[:61].rstrip() + "…"
+    lead = base[:1].lower() + base[1:] if base else "conviction holds"
     if resolves_in:
-        return f"Near the call bar while {lead} · {resolves_in} to lock"
-    return f"Near the call bar while {lead}"
+        return f"Call likely if {lead} · locks in {resolves_in}"
+    return f"Call likely if {lead}"
 
 
 def _delta_for(netuid: Any, conviction: int, last: Dict[str, Any]) -> int:
@@ -370,7 +378,7 @@ def shape_weighing_board(
         delta = _delta_for(nu, conv, last)
         prox = proximity_to_call(conv, call_conv)
         state = deliberation_state(prox, delta)
-        mud_slug, mud_label = mud_band_for_state(state)
+        band_slug, band_label = band_for_state(state)
         reasons = raw.get("reasons") if isinstance(raw.get("reasons"), list) else []
         reason = (
             raw.get("reason")
@@ -407,9 +415,10 @@ def shape_weighing_board(
                 "gap_whisper": None,
                 "gap_pts": None,
                 "stitch_border": False,
-                "mud_band": mud_slug,
-                "mud_label": mud_label,
-                "band": mud_slug,
+                "band": band_slug,
+                "band_label": band_label,
+                "mud_band": band_slug,
+                "mud_label": band_label,
             }
         )
         rows.append(row)

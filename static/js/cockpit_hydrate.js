@@ -469,31 +469,23 @@
     }
 
     var near = [];
-    var weighing = [];
-    var fading = [];
+    var watching = [];
     top.forEach(function (pick) {
       var st = String(pick.deliberation_state || '').toUpperCase();
       if (st === 'NEAR-CALL') near.push(pick);
-      else if (st === 'FADING') fading.push(pick);
-      else weighing.push(pick);
+      else watching.push(pick);
     });
     var html = '';
     if (near.length) {
       html +=
-        '<div class="wr-band" data-band="out"><div class="wr-band__label wr-band__label--out">Out the mud</div>' +
+        '<div class="wr-band" data-band="near"><div class="wr-band__label wr-band__label--near">NEAR A CALL</div>' +
         near.map(function (p) { return renderWeighingRow(p, gapTick); }).join('') +
         '</div>';
     }
-    if (weighing.length) {
+    if (watching.length) {
       html +=
-        '<div class="wr-band" data-band="in"><div class="wr-band__label wr-band__label--in">In the mud</div>' +
-        weighing.map(function (p) { return renderWeighingRow(p, gapTick); }).join('') +
-        '</div>';
-    }
-    if (fading.length) {
-      html +=
-        '<div class="wr-band" data-band="buried"><div class="wr-band__label wr-band__label--buried">Buried</div>' +
-        fading.map(function (p) { return renderWeighingRow(p, gapTick); }).join('') +
+        '<div class="wr-band" data-band="watching"><div class="wr-band__label wr-band__label--watching">WATCHING</div>' +
+        watching.map(function (p) { return renderWeighingRow(p, gapTick); }).join('') +
         '</div>';
     }
     var body = document.getElementById('weighing-room-body');

@@ -8,7 +8,7 @@
     <span class="wr-updated" id="wr-updated">· {{ wr_meta.updated_ago|default('updated recently') }}</span>
   </div>
   <h2 class="section-title" id="simivision-picks-title">Council is weighing</h2>
-  <p class="section-sub">Other names council is tracking — not today&apos;s pick. Sorted by proximity to the call bar, not a scoreboard.</p>
+  <p class="section-sub">Names still on the table — sorted by proximity to a call, not a scoreboard.</p>
   <p class="wr-spine" id="wr-spine">{{ wr_meta.spine_whisper|default('Graded on close · weights update after resolve') }}</p>
   {% if wr_meta.quiet_label %}
   <p class="wr-quiet" id="wr-quiet">{{ wr_meta.quiet_label }}</p>
@@ -25,27 +25,18 @@
   <div class="wr-body" id="weighing-room-body">
     {% set near_count = sv_picks|selectattr('deliberation_state', 'equalto', 'NEAR-CALL')|list|length %}
     {% if near_count %}
-    <div class="wr-band" data-band="out">
-      <div class="wr-band__label wr-band__label--out">Out the mud</div>
+    <div class="wr-band" data-band="near">
+      <div class="wr-band__label wr-band__label--near">NEAR A CALL</div>
       {% for pick in sv_picks if pick.deliberation_state == 'NEAR-CALL' %}
       {% include "partials/premium/weighing_row.html" %}
       {% endfor %}
     </div>
     {% endif %}
-    {% set weigh_count = sv_picks|selectattr('deliberation_state', 'equalto', 'WEIGHING')|list|length %}
-    {% if weigh_count %}
-    <div class="wr-band" data-band="in">
-      <div class="wr-band__label wr-band__label--in">In the mud</div>
-      {% for pick in sv_picks if pick.deliberation_state == 'WEIGHING' %}
-      {% include "partials/premium/weighing_row.html" %}
-      {% endfor %}
-    </div>
-    {% endif %}
-    {% set fade_count = sv_picks|selectattr('deliberation_state', 'equalto', 'FADING')|list|length %}
-    {% if fade_count %}
-    <div class="wr-band" data-band="buried">
-      <div class="wr-band__label wr-band__label--buried">Buried</div>
-      {% for pick in sv_picks if pick.deliberation_state == 'FADING' %}
+    {% set watch_count = sv_picks|selectattr('deliberation_state', 'equalto', 'WEIGHING')|list|length + sv_picks|selectattr('deliberation_state', 'equalto', 'FADING')|list|length %}
+    {% if watch_count %}
+    <div class="wr-band" data-band="watching">
+      <div class="wr-band__label wr-band__label--watching">WATCHING</div>
+      {% for pick in sv_picks if pick.deliberation_state in ['WEIGHING', 'FADING'] %}
       {% include "partials/premium/weighing_row.html" %}
       {% endfor %}
     </div>
