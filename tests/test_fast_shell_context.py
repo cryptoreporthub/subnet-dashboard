@@ -51,7 +51,7 @@ def test_minimal_index_context_skips_letter_build(monkeypatch):
 
 
 def test_homepage_timeout_does_not_block_on_hung_builder(monkeypatch):
-    """Regression: with-pool shutdown(wait=True) re-hung GET / after TimeoutError → blank phone."""
+    """Regression: sync index + hung builder wedged Fly → 0-byte blank phone."""
     import server as srv
 
     def _hang(_request):
@@ -59,18 +59,41 @@ def test_homepage_timeout_does_not_block_on_hung_builder(monkeypatch):
         return {}
 
     monkeypatch.setattr(srv, "_degraded_index_context", _hang)
-    monkeypatch.setattr(srv, "HOMEPAGE_BUILD_TIMEOUT", 1)
     srv._DEGRADED_INDEX_CACHE["ctx"] = None
     srv._DEGRADED_INDEX_CACHE["at"] = 0.0
     srv._HOMEPAGE_HTML_CACHE["html"] = None
     srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
+    srv._HOMEPAGE_WARMING = False
 
     t0 = time.time()
     resp = client.get("/")
     elapsed = time.time() - t0
     assert resp.status_code == 200
-    assert elapsed < 8.0, f"homepage hung {elapsed:.1f}s waiting on builder shutdown"
+    assert elapsed < 3.0, f"homepage hung {elapsed:.1f}s on cache miss"
     assert "dataset.hydrate" in resp.text or "council-first" in resp.text
+
+
+def test_homepage_cache_miss_returns_emergency_instantly(monkeypatch):
+    """Cold cache must paint immediately — background warm must not block GET /."""
+    import server as srv
+
+    def _slow_render(_request):
+        time.sleep(30)
+        return "<html>slow</html>"
+
+    monkeypatch.setattr(srv, "_render_index_html", _slow_render)
+    srv._HOMEPAGE_HTML_CACHE["html"] = None
+    srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
+    srv._HOMEPAGE_WARMING = False
+    if not srv._EMERGENCY_HOME_HTML:
+        srv._prime_emergency_home_html()
+
+    t0 = time.time()
+    resp = client.get("/")
+    elapsed = time.time() - t0
+    assert resp.status_code == 200
+    assert elapsed < 2.0, f"cache miss blocked {elapsed:.1f}s"
+    assert resp.text == srv._EMERGENCY_HOME_HTML
 
 
 def test_homepage_html_byte_cache_is_fast():
@@ -80,7 +103,7 @@ def test_homepage_html_byte_cache_is_fast():
     srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
     srv._DEGRADED_INDEX_CACHE["ctx"] = None
     srv._DEGRADED_INDEX_CACHE["at"] = 0.0
-    client.get("/")
+    srv._warm_homepage_cache(None)
     t0 = time.time()
     resp = client.get("/")
     elapsed = time.time() - t0

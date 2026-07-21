@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import asyncio
+import threading
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -176,6 +177,14 @@ async def _lifespan(app: FastAPI):
     if is_worker_mode():
         yield
         return
+
+    # Pre-render emergency GET / bytes before traffic — Fly 0-byte wedge when sync
+    # index blocks the Starlette thread pool and the proxy times out (~36s).
+    try:
+        await asyncio.to_thread(_prime_emergency_home_html)
+        asyncio.create_task(asyncio.to_thread(_warm_homepage_cache, None))
+    except Exception as exc:
+        logger.warning("homepage emergency prime failed: %s", exc)
 
     if background_on_web():
         from internal.background_boot import start_background_workers, stop_background_workers
@@ -381,6 +390,62 @@ HOMEPAGE_SHELL_CACHE_SECONDS = float(os.environ.get("HOMEPAGE_SHELL_CACHE_SECOND
 TOP_SCORING_UNIVERSE = int(os.environ.get("TOP_SCORING_UNIVERSE", "40"))
 _DEGRADED_INDEX_CACHE: Dict[str, Any] = {"at": 0.0, "ctx": None}
 _HOMEPAGE_HTML_CACHE: Dict[str, Any] = {"at": 0.0, "html": None}
+_EMERGENCY_HOME_HTML: str = ""
+_HOMEPAGE_WARM_LOCK = threading.Lock()
+_HOMEPAGE_WARMING = False
+
+
+class _HomepageStubRequest:
+    """Minimal Request stand-in for offline homepage renders."""
+
+    @property
+    def base_url(self):
+        from starlette.datastructures import URL
+
+        explicit = os.environ.get("APP_BASE_URL", "").strip().rstrip("/")
+        return URL((explicit or "http://localhost") + "/")
+
+
+def _prime_emergency_home_html() -> str:
+    """One-time render of the minimal shell — served instantly on cache miss."""
+    global _EMERGENCY_HOME_HTML
+    if _EMERGENCY_HOME_HTML:
+        return _EMERGENCY_HOME_HTML
+    ctx = _minimal_index_context(_HomepageStubRequest())
+    _EMERGENCY_HOME_HTML = templates.get_template("index.html").render(ctx)
+    return _EMERGENCY_HOME_HTML
+
+
+def _render_index_html(request: Request) -> str:
+    ctx = _degraded_index_context(request)
+    return templates.get_template("index.html").render(ctx)
+
+
+def _warm_homepage_cache(request: Optional[Request] = None) -> None:
+    """Build degraded homepage HTML off the request hot path."""
+    global _HOMEPAGE_WARMING
+    now = time.time()
+    cached_html = _HOMEPAGE_HTML_CACHE.get("html")
+    if (
+        isinstance(cached_html, str)
+        and cached_html
+        and now - float(_HOMEPAGE_HTML_CACHE.get("at") or 0) < HOMEPAGE_SHELL_CACHE_SECONDS
+    ):
+        return
+    with _HOMEPAGE_WARM_LOCK:
+        if _HOMEPAGE_WARMING:
+            return
+        _HOMEPAGE_WARMING = True
+    try:
+        req: Any = request if request is not None else _HomepageStubRequest()
+        html = _render_index_html(req)
+        _HOMEPAGE_HTML_CACHE["html"] = html
+        _HOMEPAGE_HTML_CACHE["at"] = time.time()
+    except Exception as exc:
+        logger.warning("homepage cache warm failed: %s", exc)
+    finally:
+        with _HOMEPAGE_WARM_LOCK:
+            _HOMEPAGE_WARMING = False
 
 
 def _cap_subnets_for_scoring(
@@ -788,12 +853,19 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
     return context
 
 
-@app.get("/")
-def index(request: Request):
-    # Serve cached HTML bytes when possible — Jinja under BACKGROUND load was ~20s
-    # on Fly (white phone) even after ctx cache. Never wait=True on hung builders.
-    import concurrent.futures
+def _schedule_homepage_warm(request: Optional[Request] = None) -> None:
+    """Fire-and-forget warm — must not block GET / (TestClient runs BackgroundTasks inline)."""
+    threading.Thread(
+        target=_warm_homepage_cache,
+        args=(request,),
+        daemon=True,
+        name="homepage-warm",
+    ).start()
 
+
+@app.get("/")
+async def index(request: Request):
+    """Instant shell on cache miss — never block the Starlette thread pool on Jinja."""
     from fastapi.responses import HTMLResponse
 
     now = time.time()
@@ -805,37 +877,12 @@ def index(request: Request):
     ):
         return HTMLResponse(cached_html)
 
-    cached = _DEGRADED_INDEX_CACHE.get("ctx")
-    if isinstance(cached, dict) and now - float(_DEGRADED_INDEX_CACHE.get("at") or 0) < HOMEPAGE_SHELL_CACHE_SECONDS:
-        ctx = dict(cached)
-        ctx["request"] = request
-        ctx["public_base_url"] = _public_base_url(request)
-    else:
-        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-        try:
-            fut = pool.submit(_degraded_index_context, request)
-            try:
-                ctx = fut.result(timeout=HOMEPAGE_BUILD_TIMEOUT)
-            except concurrent.futures.TimeoutError:
-                logger.error(
-                    "homepage build exceeded %ss — serving cached or minimal shell",
-                    HOMEPAGE_BUILD_TIMEOUT,
-                )
-                stale = _DEGRADED_INDEX_CACHE.get("ctx")
-                if isinstance(stale, dict):
-                    ctx = dict(stale)
-                    ctx["request"] = request
-                    ctx["public_base_url"] = _public_base_url(request)
-                    ctx["data_source"] = "timeout-cached-shell"
-                else:
-                    ctx = _minimal_index_context(request)
-        finally:
-            pool.shutdown(wait=False, cancel_futures=True)
-
-    html = templates.get_template("index.html").render(ctx)
-    _HOMEPAGE_HTML_CACHE["html"] = html
-    _HOMEPAGE_HTML_CACHE["at"] = time.time()
-    return HTMLResponse(html)
+    _schedule_homepage_warm(request)
+    html = _EMERGENCY_HOME_HTML or _prime_emergency_home_html()
+    return HTMLResponse(
+        html,
+        headers={"Cache-Control": "no-store, max-age=0"},
+    )
 
 
 @app.get("/api/daily-rotation")
@@ -1260,7 +1307,8 @@ async def post_feedback(request: Request):
 
 
 @app.get("/health")
-def health():
+async def health():
+    # Must stay async — sync /health queues behind wedged thread-pool workers on Fly.
     return PlainTextResponse("OK")
 
 
