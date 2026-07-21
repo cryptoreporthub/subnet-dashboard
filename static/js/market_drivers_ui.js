@@ -102,10 +102,11 @@
       })
       .catch(function () {
         var host = document.getElementById("whats-working-chips");
-        if (host) {
-          host.setAttribute("data-brain-state", "quiet");
-          host.innerHTML = '<p class="whats-working__empty">Quiet — signal rankings unavailable. Last try failed.</p>';
-        }
+        if (!host) return;
+        if (host.querySelector(".whats-working__chip")) return;
+        host.setAttribute("data-brain-state", "quiet");
+        host.innerHTML =
+          '<p class="whats-working__empty">Quiet — signal rankings unavailable. Will retry after priority hydrate.</p>';
       });
   }
 
@@ -125,10 +126,12 @@
     loadDriverCard(currentNetuid());
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", refresh);
-  } else {
-    refresh();
+  if (document.documentElement.dataset.hydrate !== "1") {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", refresh);
+    } else {
+      refresh();
+    }
   }
 
   document.addEventListener("home-daily-call-updated", function () {

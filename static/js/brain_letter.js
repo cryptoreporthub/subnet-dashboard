@@ -12,6 +12,19 @@
     });
   }
 
+  function gradedCountFromDom() {
+    var el = document.getElementById("kpi-graded");
+    if (!el) return 0;
+    var m = String(el.textContent || "").match(/n=(\d+)/);
+    return m ? parseInt(m[1], 10) : 0;
+  }
+
+  function hasSsrDigest(root, section) {
+    if (root && root.querySelector(".weekly-letter__digest")) return true;
+    if (section && section.getAttribute("data-ssr") === "1") return true;
+    return gradedCountFromDom() > 0;
+  }
+
   function block(title, id, body) {
     return (
       '<section class="weekly-letter__block" aria-labelledby="' +
@@ -68,6 +81,8 @@
       html += '<p class="weekly-letter__lead">' + esc(tb.headline) + "</p>";
     } else if (tb.message) {
       html += '<p class="weekly-letter__note">' + esc(tb.message) + "</p>";
+    } else if (gradedCountFromDom() > 0) {
+      html += '<p class="weekly-letter__note">Graded memory is on disk — letter refresh will catch up.</p>';
     } else {
       html += '<p class="weekly-letter__note">Not enough graded picks to quote accuracy yet.</p>';
     }
@@ -80,7 +95,7 @@
         html +=
           '<li class="weekly-letter__item"><span class="weekly-letter__item-name">' +
           esc(row.signal || row.tag || "signal") +
-          "</span><span class=\"weekly-letter__item-meta\">" +
+          '</span><span class="weekly-letter__item-meta">' +
           pct +
           "% hit · n=" +
           esc(row.n) +
@@ -98,7 +113,11 @@
   }
 
   function renderOutlook(outlook) {
-    return '<p class="weekly-letter__lead">' + esc(outlook || "No sized call this window — watching the desk into resolve.") + "</p>";
+    var text = outlook || "No sized call this window — watching the desk into resolve.";
+    if (/over the next\s+0m/i.test(text)) {
+      text = "Resolve window not set — flat until the pick locks.";
+    }
+    return '<p class="weekly-letter__lead">' + esc(text) + "</p>";
   }
 
   function renderIntegrity(tb, ready, watchdog) {
@@ -129,8 +148,14 @@
   function render(root, payload) {
     if (!root) return;
     if (!payload || payload.status !== "ok") {
-      if (!root.querySelector(".weekly-letter__digest") && !root.querySelector(".weekly-letter__empty")) {
-        root.innerHTML = '<p class="weekly-letter__empty">Brief writes after the first graded windows land.</p>';
+      if (!hasSsrDigest(root, document.getElementById("section-brain-letter"))) {
+        var graded = gradedCountFromDom();
+        root.innerHTML =
+          graded > 0
+            ? '<p class="weekly-letter__empty">Letter refresh delayed — ' +
+              graded +
+              " picks graded on disk; retrying API.</p>"
+            : '<p class="weekly-letter__empty">Brief writes after the first graded windows land.</p>';
       }
       return;
     }
@@ -149,49 +174,62 @@
     if (section) section.setAttribute("data-brain-state", payload.empty ? "quiet" : "live");
   }
 
-  async function hydrate() {
+  async function hydrate(payload) {
     var root = $("brain-letter-root");
     var dateEl = $("brain-letter-date");
     var section = $("section-brain-letter");
     if (!root) return;
-    var hadSsr = section && section.getAttribute("data-ssr") === "1";
-    var fetchJson = window.apiFetchJson || function (url) {
-      return fetch(url).then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      });
-    };
+    var hadSsr = hasSsrDigest(root, section);
     try {
-      var payload = await fetchJson("/api/letter/brain", 15000);
-      if (dateEl) {
-        dateEl.textContent = "Morning brief · graded memory" + (payload.date ? " · " + payload.date : "");
+      var data = payload;
+      if (!data) {
+        if (window.apiFetchJsonRetry) {
+          data = await window.apiFetchJsonRetry("/api/letter/brain", 25000, 2);
+        } else if (window.apiFetchJson) {
+          data = await window.apiFetchJson("/api/letter/brain", 25000);
+        } else {
+          var r = await fetch("/api/letter/brain", { headers: { Accept: "application/json" } });
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          data = await r.json();
+        }
       }
-      render(root, payload);
+      if (dateEl) {
+        dateEl.textContent = "Morning brief · graded memory" + (data.date ? " · " + data.date : "");
+      }
+      render(root, data);
       if (section) section.setAttribute("data-ssr", "1");
       if (window.LetterExport && window.LetterExport.brain) {
         window.LetterExport.brain.setMarkdown(
-          payload.markdown,
-          "brain-letter-" + (payload.date || "export")
+          data.markdown,
+          "brain-letter-" + (data.date || "export")
         );
       }
     } catch (e) {
       if (dateEl && !hadSsr) dateEl.textContent = "Morning brief · graded memory";
-      if (!hadSsr && !root.querySelector(".weekly-letter__digest")) {
+      if (!hasSsrDigest(root, section)) {
+        var graded = gradedCountFromDom();
         root.innerHTML =
-          '<p class="weekly-letter__empty">Brief writes after the first graded windows land.</p>';
+          graded > 0
+            ? '<p class="weekly-letter__empty">Letter refresh delayed — ' +
+              graded +
+              " picks graded on disk; retrying API.</p>"
+            : '<p class="weekly-letter__empty">Brief writes after the first graded windows land.</p>';
       }
-      if (section) section.setAttribute("data-brain-state", "quiet");
-      if (window.LetterExport && window.LetterExport.brain) {
+      if (section) section.setAttribute("data-brain-state", hadSsr ? "live" : "quiet");
+      if (window.LetterExport && window.LetterExport.brain && !hadSsr) {
         window.LetterExport.brain.setMarkdown("");
       }
     }
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", hydrate);
-  } else {
-    hydrate();
-  }
+  window.BrainLetter = { hydrate: hydrate, render: render };
 
-  document.addEventListener("home-daily-call-updated", hydrate);
+  if (document.documentElement.dataset.hydrate !== "1") {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", function () { hydrate(); });
+    } else {
+      hydrate();
+    }
+    document.addEventListener("home-daily-call-updated", hydrate);
+  }
 })();
