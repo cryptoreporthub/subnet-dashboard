@@ -580,11 +580,15 @@ def _enrich_daily_pick_payload_lite(
         return {}
     from internal.learning.dpick_copy import attach_brief_to_daily_pick
     from internal.learning.dpick_pump import attach_pump_chip_to_daily_pick
+    from internal.learning.dpick_shortlist import attach_shortlist_to_daily_pick
     from internal.learning.dpick_temporal import attach_temporal_to_daily_pick
     from internal.subnet_names import refresh_daily_pick_names
+    from internal.subnets.feed import registry_subnet_rows
 
     out = refresh_daily_pick_names(pick_payload)
     out = attach_temporal_to_daily_pick(out)
+    # ponytail: cap registry scan — full roster shortlist is ~13s; top-40 is <1s on Fly
+    out = attach_shortlist_to_daily_pick(out, registry_subnet_rows()[:40])
     out = attach_brief_to_daily_pick(out)
     if "shortlist" not in out:
         out["shortlist"] = []

@@ -100,6 +100,26 @@ def test_council_stage_hold_candidate_renders_full_hero():
     assert "—" not in orb_html
 
 
+def test_council_stage_hold_shell_orb_has_patch_target():
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    tmpl = env.get_template("partials/premium/council_stage.html")
+    html = tmpl.render(
+        dpick={"action": "HOLD", "brief": {"move": "HOLD · no long", "tone": "hold"}},
+        conviction_band={"band": None},
+        enrichment_badge={},
+        hybrid_trust={},
+        trust_banner={},
+        habit_watchlist={"netuids": []},
+        habit_alerts={"enabled": False},
+        story_path={},
+    )
+    assert 'id="k3-orb-score"' in html
+    assert "HOLD · no long" in html
+
+
 def test_home_live_refresh_never_wipes_k3_dossier():
     src = open("static/js/home_live_refresh.js", encoding="utf-8").read()
     assert "never wipe SSR dossier" in src
