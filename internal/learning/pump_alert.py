@@ -17,6 +17,8 @@ _MAX_COOLING = 2
 _LEAD_BUY_RATIO_MIN = 0.55
 _LEAD_VOLUME_INTENSITY_MIN = 0.22
 _EARLY_PHASES = frozenset({"STIRRING", "ACCUMULATING"})
+# ponytail: score band only — upgrade path is time-in-phase from ladder state
+_PUMPING_JUST_STARTED_MAX = 0.72
 _BAD_NAME = re.compile(r"^(unknown|deprecated|none|snnone|unnamed)$", re.I)
 
 
@@ -109,19 +111,21 @@ def _row_copy(
     buy_ratio: Optional[float],
     volume_intensity: Optional[float],
     netuid_int: Optional[int],
+    *,
+    score: Optional[float] = None,
 ) -> Dict[str, str]:
     if phase == "STIRRING":
         br = buy_ratio if buy_ratio is not None else 0.5
         vi = volume_intensity if volume_intensity is not None else 0.0
         return {
             "move": _move_line("WATCH", name, netuid_int),
-            "badge": "EARLY",
+            "badge": "WARMING UP",
             "timing": "lead",
             "thesis": (
-                f"Buy pressure building before price runs — {br:.0%} buy flow, "
-                f"volume still warming ({vi:.0%})."
+                f"Pump warming up — buy pressure building before price runs "
+                f"({br:.0%} flow, vol {vi:.0%}). Watch for 2%+ in the next hour if flow holds."
             ),
-            "trigger": "Entry window open — small size now or wait for BUILDING confirmation.",
+            "trigger": "Early heads-up — small watch size or wait for BUILDING confirmation.",
         }
     if phase == "ACCUMULATING":
         br = buy_ratio if buy_ratio is not None else 0.5
@@ -131,11 +135,23 @@ def _row_copy(
             "badge": "BUILDING",
             "timing": "lead",
             "thesis": (
-                f"Flow and volume aligning ahead of price — {br:.0%} buys, vol {vi:.0%}."
+                f"Flow and volume aligning — high chance of 2%+ soon if buyers hold "
+                f"({br:.0%} buys, vol {vi:.0%})."
             ),
-            "trigger": "Best risk/reward band — chase only if you miss this window.",
+            "trigger": "Best entry band — act before JUST STARTED or you only get a partial move.",
         }
     if phase == "PUMPING":
+        if score is not None and score < _PUMPING_JUST_STARTED_MAX:
+            return {
+                "move": _move_line("LIVE", name, netuid_int),
+                "badge": "JUST STARTED",
+                "timing": "confirmed",
+                "thesis": (
+                    "Move just confirmed — you missed the first leg but entry still has room; "
+                    "size down, profit potential remains."
+                ),
+                "trigger": "Not early, not chase — smaller position or wait for the next BUILDING name.",
+            }
         return {
             "move": _move_line("CONFIRMED", name, netuid_int),
             "badge": "CHASE RISK",
@@ -174,7 +190,14 @@ def build_alert_row(
         score = float(ladder_entry.get("composite_score") or 0.0)
     except (TypeError, ValueError):
         score = None
-    copy = _row_copy(phase, name, leads["buy_ratio"], leads["volume_intensity"], netuid_int)
+    copy = _row_copy(
+        phase,
+        name,
+        leads["buy_ratio"],
+        leads["volume_intensity"],
+        netuid_int,
+        score=score,
+    )
     row = {
         "netuid": netuid_int,
         "name": name,

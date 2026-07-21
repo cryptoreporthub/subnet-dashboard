@@ -72,14 +72,14 @@ def _chip_copy(phase: str, buy_ratio: float, volume_intensity: float) -> Dict[st
         return {
             "label": "HEAT BUILDING",
             "trigger": (
-                "Buy flow and volume aligned — ladder heating before price chase. "
+                "Flow aligning — high chance of 2%+ soon if buyers hold. "
                 f"Flow {buy_ratio:.0%} buy · vol {volume_intensity:.0%}."
             ),
         }
     return {
-        "label": "EARLY HEAT",
+        "label": "WARMING UP",
         "trigger": (
-            "Early buy pressure building — volume still warming, not a chase signal. "
+            "Pump warming up before price runs — watch for 2%+ in the next hour. "
             f"Flow {buy_ratio:.0%} buy · vol {volume_intensity:.0%}."
         ),
     }

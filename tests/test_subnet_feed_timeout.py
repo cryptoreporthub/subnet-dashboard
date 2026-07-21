@@ -27,10 +27,12 @@ def test_daily_pick_read_path_skips_live_feed(monkeypatch):
 
     import server as srv
 
-    def _boom():
-        raise AssertionError("live subnet feed must not run for cached daily pick")
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("subnet hydrate must not run for lite daily-pick read")
 
-    monkeypatch.setattr(srv, "_get_subnets_with_source", lambda **_: _boom())
+    monkeypatch.setattr(srv, "_get_subnets_hydrate", _boom)
+    monkeypatch.setattr(srv, "_get_subnets_with_source", _boom)
+    monkeypatch.setattr(srv, "_enrich_daily_pick_payload", _boom)
 
     client = TestClient(srv.app)
     resp = client.get("/api/daily-pick")
@@ -38,3 +40,4 @@ def test_daily_pick_read_path_skips_live_feed(monkeypatch):
     body = resp.json()
     assert body.get("date")
     assert "action" in body
+    assert body.get("brief") or body.get("pick") or body.get("candidate")

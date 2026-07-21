@@ -25,9 +25,10 @@ def _ladder_entry(phase: str, netuid: int = 29, score: float = 0.71) -> dict:
 
 def test_stirring_lead_row_predictive():
     row = build_alert_row(_ladder_entry("STIRRING", score=0.28))
-    assert row["badge"] == "EARLY"
+    assert row["badge"] == "WARMING UP"
     assert row["timing"] == "lead"
-    assert "before price" in row["thesis"].lower()
+    assert "warming up" in row["thesis"].lower()
+    assert "2%+" in row["thesis"]
     assert "ladder" not in row["thesis"].lower()
 
 
@@ -35,11 +36,19 @@ def test_accumulating_lead_row():
     row = build_alert_row(_ladder_entry("ACCUMULATING", score=0.48))
     assert row["badge"] == "BUILDING"
     assert row["timing"] == "lead"
-    assert "ahead of price" in row["thesis"].lower()
+    assert "2%+" in row["thesis"]
+
+
+def test_pumping_just_started_row():
+    row = build_alert_row(_ladder_entry("PUMPING", score=0.66))
+    assert row["badge"] == "JUST STARTED"
+    assert row["timing"] == "confirmed"
+    assert "just confirmed" in row["thesis"].lower()
+    assert "profit" in row["thesis"].lower()
 
 
 def test_pumping_row_chase_risk_not_entry():
-    row = build_alert_row(_ladder_entry("PUMPING"))
+    row = build_alert_row(_ladder_entry("PUMPING", score=0.81))
     assert row["badge"] == "CHASE RISK"
     assert row["timing"] == "confirmed"
     assert "not early" in row["thesis"].lower()
@@ -107,7 +116,7 @@ def test_pump_alert_template_renders_lead_scanner():
             "empty_message": "No lead.",
             "alerts": [
                 build_alert_row(_ladder_entry("ACCUMULATING", netuid=42, score=0.48)),
-                build_alert_row(_ladder_entry("PUMPING")),
+                build_alert_row(_ladder_entry("PUMPING", score=0.81)),
             ],
         }
     )
@@ -118,7 +127,7 @@ def test_pump_alert_template_renders_lead_scanner():
 
 
 def test_api_pump_alerts_route():
-    ladder = {"subnets": {"29": _ladder_entry("PUMPING")}}
+    ladder = {"subnets": {"29": _ladder_entry("PUMPING", score=0.81)}}
     with patch("internal.pump.state.load_state", return_value=ladder):
         with TestClient(app) as client:
             body = client.get("/api/pump-alerts").json()

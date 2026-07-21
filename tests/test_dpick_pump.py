@@ -36,8 +36,8 @@ def test_stirring_shows_with_lead_signals():
     chip = build_pump_chip(99, _subnet(), ladder_entry=_ladder("STIRRING"))
     assert chip["show"] is True
     assert chip["tier"] == "STIRRING"
-    assert chip["label"] == "EARLY HEAT"
-    assert "buy pressure" in chip["trigger"].lower()
+    assert chip["label"] == "WARMING UP"
+    assert "warming up" in chip["trigger"].lower()
 
 
 def test_accumulating_higher_tier():
