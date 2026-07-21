@@ -95,11 +95,10 @@ def get_or_create_today_pick(
                 and subnets
                 and existing.get("candidate") is None
             ):
-                try:
-                    existing = dict(existing)
-                    existing["candidate"] = select_daily_pick(subnets, market_context)
-                except Exception:
-                    pass
+                # ponytail: never run select_daily_pick on the read path — it wedges
+                # single-worker Fly (/api/daily-pick 0-byte timeouts). Candidate is
+                # optional display sugar; dossier hydrates without it.
+                return existing
             return existing
         # Stale Root-era cache: fall through and regenerate.
 

@@ -380,6 +380,7 @@ HOMEPAGE_BUILD_TIMEOUT = int(os.environ.get("HOMEPAGE_BUILD_TIMEOUT", "12"))
 HOMEPAGE_SHELL_CACHE_SECONDS = float(os.environ.get("HOMEPAGE_SHELL_CACHE_SECONDS", "45"))
 TOP_SCORING_UNIVERSE = int(os.environ.get("TOP_SCORING_UNIVERSE", "40"))
 _DEGRADED_INDEX_CACHE: Dict[str, Any] = {"at": 0.0, "ctx": None}
+_HOMEPAGE_HTML_CACHE: Dict[str, Any] = {"at": 0.0, "html": None}
 
 
 def _cap_subnets_for_scoring(
@@ -616,15 +617,18 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
     from internal.subnet_names import enrich_subnet_rows
 
     subnets = enrich_subnet_rows(list(load_data("config/registry.json").values()))
+    # Market drawer is demoted — don't Jinja-loop 128 rows on the hot path.
+    # Hydrate + Market drawer APIs fill scanner/staking after first paint.
+    shell_subnets = _cap_subnets_for_scoring(subnets, limit=min(24, TOP_SCORING_UNIVERSE))
     shell_learning = fast_shell_dashboard_context()
     simivision_data = _safe_simivision_payload(
-        subnets=subnets, source="registry-fallback"
-    ).get("data", {"top": [], "meta": {"count": len(subnets), "source": "registry-fallback"}})
+        subnets=shell_subnets, source="registry-fallback"
+    ).get("data", {"top": [], "meta": {"count": len(shell_subnets), "source": "registry-fallback"}})
     trust_banner = (shell_learning.get("learning_metrics") or {}).get("trust_banner") or {}
     ctx = {
         "request": request,
         "public_base_url": _public_base_url(request),
-        "subnets": subnets,
+        "subnets": [],  # empty market SSR — hydrate owns the warehouse
         "data_source": "registry-fallback",
         "degraded": True,
         **shell_learning,
@@ -786,39 +790,52 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
 
 @app.get("/")
 def index(request: Request):
-    # ponytail: cache-first shell; on timeout never wait=True on the hung builder
-    # (with ThreadPoolExecutor: exits shutdown(wait=True) and re-hangs GET / → blank phone)
+    # Serve cached HTML bytes when possible — Jinja under BACKGROUND load was ~20s
+    # on Fly (white phone) even after ctx cache. Never wait=True on hung builders.
     import concurrent.futures
 
+    from fastapi.responses import HTMLResponse
+
     now = time.time()
+    cached_html = _HOMEPAGE_HTML_CACHE.get("html")
+    if (
+        isinstance(cached_html, str)
+        and cached_html
+        and now - float(_HOMEPAGE_HTML_CACHE.get("at") or 0) < HOMEPAGE_SHELL_CACHE_SECONDS
+    ):
+        return HTMLResponse(cached_html)
+
     cached = _DEGRADED_INDEX_CACHE.get("ctx")
     if isinstance(cached, dict) and now - float(_DEGRADED_INDEX_CACHE.get("at") or 0) < HOMEPAGE_SHELL_CACHE_SECONDS:
         ctx = dict(cached)
         ctx["request"] = request
         ctx["public_base_url"] = _public_base_url(request)
-        return templates.TemplateResponse(request, "index.html", ctx)
-
-    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-    try:
-        fut = pool.submit(_degraded_index_context, request)
+    else:
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         try:
-            ctx = fut.result(timeout=HOMEPAGE_BUILD_TIMEOUT)
-        except concurrent.futures.TimeoutError:
-            logger.error(
-                "homepage build exceeded %ss — serving cached or minimal shell",
-                HOMEPAGE_BUILD_TIMEOUT,
-            )
-            stale = _DEGRADED_INDEX_CACHE.get("ctx")
-            if isinstance(stale, dict):
-                ctx = dict(stale)
-                ctx["request"] = request
-                ctx["public_base_url"] = _public_base_url(request)
-                ctx["data_source"] = "timeout-cached-shell"
-            else:
-                ctx = _minimal_index_context(request)
-    finally:
-        pool.shutdown(wait=False, cancel_futures=True)
-    return templates.TemplateResponse(request, "index.html", ctx)
+            fut = pool.submit(_degraded_index_context, request)
+            try:
+                ctx = fut.result(timeout=HOMEPAGE_BUILD_TIMEOUT)
+            except concurrent.futures.TimeoutError:
+                logger.error(
+                    "homepage build exceeded %ss — serving cached or minimal shell",
+                    HOMEPAGE_BUILD_TIMEOUT,
+                )
+                stale = _DEGRADED_INDEX_CACHE.get("ctx")
+                if isinstance(stale, dict):
+                    ctx = dict(stale)
+                    ctx["request"] = request
+                    ctx["public_base_url"] = _public_base_url(request)
+                    ctx["data_source"] = "timeout-cached-shell"
+                else:
+                    ctx = _minimal_index_context(request)
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
+
+    html = templates.get_template("index.html").render(ctx)
+    _HOMEPAGE_HTML_CACHE["html"] = html
+    _HOMEPAGE_HTML_CACHE["at"] = time.time()
+    return HTMLResponse(html)
 
 
 @app.get("/api/daily-rotation")
