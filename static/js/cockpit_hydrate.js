@@ -581,6 +581,10 @@
     if (opts.predictions != null) setMetric('predictions', opts.predictions);
   }
 
+  function k3OrbScoreEl() {
+    return document.getElementById('k3-orb-score') || document.querySelector('#k3-dossier .k3-orb-score');
+  }
+
   function patchK3ConvictionRing(confPct) {
     if (confPct == null || isNaN(confPct)) return;
     var ring = document.querySelector('#k3-dossier .ring-fill');
@@ -590,7 +594,7 @@
       ring.style.setProperty('--ring-offset', String(circ - (circ * pct / 100)));
     }
     var fc = confTier(confPct > 1 ? confPct / 100 : confPct);
-    var orb = document.getElementById('k3-orb-score');
+    var orb = k3OrbScoreEl();
     if (orb && fc.conf != null) {
       var tens = Math.floor(fc.conf / 10);
       var ones = fc.conf % 10;
@@ -735,7 +739,7 @@
       }
     }
 
-    var orb = document.getElementById('k3-orb-score');
+    var orb = k3OrbScoreEl();
     if (orb && fc.conf != null) {
       var tens = Math.floor(fc.conf / 10);
       var ones = fc.conf % 10;
