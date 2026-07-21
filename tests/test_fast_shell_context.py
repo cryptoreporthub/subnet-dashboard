@@ -62,6 +62,8 @@ def test_homepage_timeout_does_not_block_on_hung_builder(monkeypatch):
     monkeypatch.setattr(srv, "HOMEPAGE_BUILD_TIMEOUT", 1)
     srv._DEGRADED_INDEX_CACHE["ctx"] = None
     srv._DEGRADED_INDEX_CACHE["at"] = 0.0
+    srv._HOMEPAGE_HTML_CACHE["html"] = None
+    srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
 
     t0 = time.time()
     resp = client.get("/")
@@ -69,6 +71,22 @@ def test_homepage_timeout_does_not_block_on_hung_builder(monkeypatch):
     assert resp.status_code == 200
     assert elapsed < 8.0, f"homepage hung {elapsed:.1f}s waiting on builder shutdown"
     assert "dataset.hydrate" in resp.text or "council-first" in resp.text
+
+
+def test_homepage_html_byte_cache_is_fast():
+    import server as srv
+
+    srv._HOMEPAGE_HTML_CACHE["html"] = None
+    srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
+    srv._DEGRADED_INDEX_CACHE["ctx"] = None
+    srv._DEGRADED_INDEX_CACHE["at"] = 0.0
+    client.get("/")
+    t0 = time.time()
+    resp = client.get("/")
+    elapsed = time.time() - t0
+    assert resp.status_code == 200
+    assert elapsed < 0.5, f"HTML cache miss felt like {elapsed:.2f}s"
+    assert "What the loop learned" in resp.text
 
 
 def test_homepage_responds_quickly():
