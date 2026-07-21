@@ -58,6 +58,11 @@ def _registry_rows() -> List[Dict[str, Any]]:
     return []
 
 
+def registry_subnet_rows() -> List[Dict[str, Any]]:
+    """Instant local subnet rows — no outbound network (hydrate / timeout fallback)."""
+    return _registry_rows()
+
+
 def _load_subnets_inner() -> List[Dict[str, Any]]:
     """Load subnet rows from live/TMC feeds (may hit network)."""
     from fetchers.taomarketcap import get_all_subnets
@@ -74,7 +79,8 @@ def load_subnets_source(timeout: float | None = None) -> List[Dict[str, Any]]:
     limit = SUBNETS_LOAD_TIMEOUT if timeout is None else timeout
     if limit <= 0:
         return _load_subnets_inner()
-    with ThreadPoolExecutor(max_workers=1) as pool:
+    pool = ThreadPoolExecutor(max_workers=1)
+    try:
         fut = pool.submit(_load_subnets_inner)
         try:
             return fut.result(timeout=limit)
@@ -85,6 +91,9 @@ def load_subnets_source(timeout: float | None = None) -> List[Dict[str, Any]]:
             )
         except Exception as exc:
             logger.warning("subnet feed load failed: %s; using registry fallback", exc)
+    finally:
+        # wait=False: timed-out live fetch must not wedge hydrate APIs (Fly 1-worker).
+        pool.shutdown(wait=False, cancel_futures=True)
     try:
         from internal.subnet_names import enrich_subnet_rows
 
@@ -145,10 +154,10 @@ def probe_feed_layers() -> Dict[str, Any]:
     }
 
 
-def get_council_subnet_feed() -> Tuple[List[Dict[str, Any]], str]:
+def get_council_subnet_feed(timeout: float | None = None) -> Tuple[List[Dict[str, Any]], str]:
     """Return enriched subnets + source label for pick and judge paths."""
     try:
-        rows = load_subnets_source()
+        rows = load_subnets_source(timeout=timeout)
         if rows:
             meta = subnet_feed_meta(rows)
             return rows, str(meta.get("source") or "taomarketcap")
