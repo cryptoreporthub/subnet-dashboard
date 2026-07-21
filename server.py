@@ -572,6 +572,28 @@ def _fast_home_hero_context(trust_banner: Optional[Dict[str, Any]] = None) -> Di
     }
 
 
+def _enrich_daily_pick_payload_lite(
+    pick_payload: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Fast read path for GET /api/daily-pick — no subnet scoring or live feeds."""
+    if not isinstance(pick_payload, dict):
+        return {}
+    from internal.learning.dpick_copy import attach_brief_to_daily_pick
+    from internal.learning.dpick_pump import attach_pump_chip_to_daily_pick
+    from internal.learning.dpick_temporal import attach_temporal_to_daily_pick
+    from internal.subnet_names import refresh_daily_pick_names
+
+    out = refresh_daily_pick_names(pick_payload)
+    out = attach_temporal_to_daily_pick(out)
+    out = attach_brief_to_daily_pick(out)
+    if "shortlist" not in out:
+        out["shortlist"] = []
+    if not isinstance(out.get("horizon_views"), dict):
+        out["horizon_views"] = {"default": "24h", "anchor": "24h", "chips": [], "views": {}}
+        out["horizon_active"] = "24h"
+    return attach_pump_chip_to_daily_pick(out, [])
+
+
 def _enrich_daily_pick_payload(
     pick_payload: Optional[Dict[str, Any]],
     subnets: List[Dict[str, Any]],
@@ -1788,7 +1810,7 @@ def _pick_netuid_from_daily_payload(payload: Any) -> Optional[int]:
 
 
 @app.get("/api/daily-pick")
-def api_daily_pick():
+def api_daily_pick(full: bool = False):
     """Today's audited daily pick from the Council engine."""
     from internal.council.daily_pick_engine import _find_today, _load
     from internal.whales.enrichment_badge import empty_whale_flow_badge, whale_flow_badge
@@ -1796,16 +1818,21 @@ def api_daily_pick():
     existing = _find_today(_load())
     if existing is not None:
         result = dict(existing)
-        try:
-            subnets, _ = _get_subnets_hydrate()
-            market_context = _market_context_with_weights(subnets)
-            result = _enrich_daily_pick_payload(result, subnets, market_context)
-        except Exception as exc:
-            logger.warning("daily-pick lite enrich skipped: %s", exc)
-        netuid = _pick_netuid_from_daily_payload(result)
-        result["enrichment_badge"] = (
-            whale_flow_badge(netuid) if netuid is not None else empty_whale_flow_badge()
-        )
+        if full:
+            try:
+                subnets, _ = _get_subnets_hydrate()
+                market_context = _market_context_with_weights(subnets)
+                result = _enrich_daily_pick_payload(result, subnets, market_context)
+            except Exception as exc:
+                logger.warning("daily-pick full enrich skipped: %s", exc)
+                result = _enrich_daily_pick_payload_lite(result)
+            netuid = _pick_netuid_from_daily_payload(result)
+            result["enrichment_badge"] = (
+                whale_flow_badge(netuid) if netuid is not None else empty_whale_flow_badge()
+            )
+        else:
+            result = _enrich_daily_pick_payload_lite(result)
+            result["enrichment_badge"] = empty_whale_flow_badge("lite_read")
         return result
 
     subnets, _ = _get_subnets_hydrate()
