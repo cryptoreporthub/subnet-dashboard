@@ -314,7 +314,7 @@ def test_h_full_simivision_picks_or_honest_empty():
     html = client.get("/").text
     assert 'id="section-simivision-picks"' in html
     assert "Council is weighing" in html
-    assert "not today" in html.lower()
+    assert "Names still on the table" in html
     assert "Conviction board" not in html or "Council is weighing" in html
     # SSR shell may be empty; hydrate fills — require honest empty or weighing rows
     assert "wr-row" in html or "warming up" in html or "on the table" in html
