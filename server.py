@@ -178,13 +178,18 @@ async def _lifespan(app: FastAPI):
         yield
         return
 
-    # Pre-render emergency GET / bytes before traffic — Fly 0-byte wedge when sync
-    # index blocks the Starlette thread pool and the proxy times out (~36s).
-    try:
-        await asyncio.to_thread(_prime_emergency_home_html)
-        asyncio.create_task(asyncio.to_thread(_warm_homepage_cache, None))
-    except Exception as exc:
-        logger.warning("homepage emergency prime failed: %s", exc)
+    # Never block lifespan on Jinja — Fly health checks fail and edge returns 0 bytes.
+    if not is_worker_mode():
+        threading.Thread(
+            target=_prime_emergency_home_html,
+            daemon=True,
+            name="emergency-prime",
+        ).start()
+        threading.Thread(
+            target=lambda: _warm_homepage_cache(None),
+            daemon=True,
+            name="homepage-warm-boot",
+        ).start()
 
     if background_on_web():
         from internal.background_boot import start_background_workers, stop_background_workers
@@ -851,6 +856,21 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
     context.update(_pump_alerts_context(subnets))
 
     return context
+
+
+def _bailout_homepage_html() -> Optional[str]:
+    """HTML bytes for ASGI bailout — cache, then Jinja emergency, else hardcoded."""
+    now = time.time()
+    cached_html = _HOMEPAGE_HTML_CACHE.get("html")
+    if (
+        isinstance(cached_html, str)
+        and cached_html
+        and now - float(_HOMEPAGE_HTML_CACHE.get("at") or 0) < HOMEPAGE_SHELL_CACHE_SECONDS
+    ):
+        return cached_html
+    if _EMERGENCY_HOME_HTML:
+        return _EMERGENCY_HOME_HTML
+    return None
 
 
 def _schedule_homepage_warm(request: Optional[Request] = None) -> None:
@@ -1816,6 +1836,15 @@ def api_top_pick_hour():
     if not picks:
         picks = [_highest_emission_pick(subnets)]
     return {"picks": picks}
+
+
+from internal.instant_bailout import wrap_instant_bailout
+
+app = wrap_instant_bailout(
+    app,
+    get_homepage_html=_bailout_homepage_html,
+    schedule_warm=lambda: _schedule_homepage_warm(None),
+)
 
 
 if __name__ == "__main__":

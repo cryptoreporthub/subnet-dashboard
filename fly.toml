@@ -38,6 +38,7 @@ primary_region = "sjc"
   LOAD_SHED_ACQUIRE_SECONDS = "2"
   HOMEPAGE_BUILD_TIMEOUT = "8"
   HOMEPAGE_SHELL_CACHE_SECONDS = "60"
+  ENABLE_METRICS = "0"
   # Web process: keep CPU for GET / + hydrate; resolver/retrain belongs on worker.
   CALIBRATION_AUTO_RETRAIN = "off"
   CONVICTION_ALERTS_ENABLED = "off"
