@@ -454,15 +454,18 @@ def _safe_brain_letter_context(*, timeout_s: float = 1.5) -> Dict[str, Any]:
     """Timeboxed letter SSR — never block GET / past timeout_s."""
     import concurrent.futures
 
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     try:
         from internal.letter.brain_letter import build_brain_letter
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            fut = pool.submit(build_brain_letter)
-            return {"brain_letter": fut.result(timeout=timeout_s)}
+        fut = pool.submit(build_brain_letter)
+        return {"brain_letter": fut.result(timeout=timeout_s)}
     except Exception as exc:
         logger.warning("brain letter context skipped: %s", exc)
         return _quiet_brain_letter_stub()
+    finally:
+        # wait=False: timed-out builder must not hold the request open
+        pool.shutdown(wait=False, cancel_futures=True)
 
 
 def _fast_home_hero_context(trust_banner: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -638,9 +641,14 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
         },
     }
     ctx.update(_fast_home_hero_context(trust_banner))
-    # Timeboxed — letter hydrate is the backstop if SSR misses
-    ctx.update(_safe_brain_letter_context(timeout_s=1.5))
-    ctx.update(_pump_alerts_context(subnets))
+    # Letter + pump hydrate client-side — keep cold shell off the hang path
+    ctx.update(_quiet_brain_letter_stub())
+    ctx["pump_alerts"] = {
+        "status": "quiet",
+        "count": 0,
+        "alerts": [],
+        "empty_message": "Pump desk loads after hydrate.",
+    }
     stash = {k: v for k, v in ctx.items() if k != "request"}
     _DEGRADED_INDEX_CACHE["at"] = now
     _DEGRADED_INDEX_CACHE["ctx"] = stash
@@ -778,7 +786,8 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
 
 @app.get("/")
 def index(request: Request):
-    # ponytail: cache-first shell so Fly edge never sees a 0-byte hang on cold build
+    # ponytail: cache-first shell; on timeout never wait=True on the hung builder
+    # (with ThreadPoolExecutor: exits shutdown(wait=True) and re-hangs GET / → blank phone)
     import concurrent.futures
 
     now = time.time()
@@ -789,7 +798,8 @@ def index(request: Request):
         ctx["public_base_url"] = _public_base_url(request)
         return templates.TemplateResponse(request, "index.html", ctx)
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    try:
         fut = pool.submit(_degraded_index_context, request)
         try:
             ctx = fut.result(timeout=HOMEPAGE_BUILD_TIMEOUT)
@@ -798,7 +808,6 @@ def index(request: Request):
                 "homepage build exceeded %ss — serving cached or minimal shell",
                 HOMEPAGE_BUILD_TIMEOUT,
             )
-            # Prefer stale cache over a second expensive build
             stale = _DEGRADED_INDEX_CACHE.get("ctx")
             if isinstance(stale, dict):
                 ctx = dict(stale)
@@ -807,6 +816,8 @@ def index(request: Request):
                 ctx["data_source"] = "timeout-cached-shell"
             else:
                 ctx = _minimal_index_context(request)
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
     return templates.TemplateResponse(request, "index.html", ctx)
 
 
