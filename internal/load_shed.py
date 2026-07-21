@@ -17,6 +17,7 @@ _BYPASS_PREFIXES = ("/static/",)
 _LIGHT_API_PREFIXES = (
     "/api/learning/",
     "/api/learning-metrics",
+    "/api/story-strip",
     "/api/data-freshness",
     "/api/ops/",
     "/api/letter/",

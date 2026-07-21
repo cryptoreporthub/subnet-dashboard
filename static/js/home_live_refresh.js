@@ -79,6 +79,18 @@
     return out.slice(0, 3);
   }
 
+  function isTestFixture(pred) {
+    var tags = pred.tags;
+    if (tags && tags.length) {
+      for (var i = 0; i < tags.length; i++) {
+        var t = String(tags[i]).toUpperCase();
+        if (t === "TEST_CASE" || t === "TEST" || t === "FIXTURE") return true;
+      }
+    }
+    var stmt = String(pred.statement || "").toUpperCase();
+    return stmt.indexOf("TEST_CASE") >= 0;
+  }
+
   function buildStoryStrip(resolved, limit) {
     limit = limit || 8;
     var items = [];
@@ -87,6 +99,7 @@
       var pred = rows[i];
       if (!pred || typeof pred !== "object") continue;
       if (SKIP[pred.outcome]) continue;
+      if (isTestFixture(pred)) continue;
       if (pred.actual_pct == null) continue;
       var outcome = outcomeFromPred(pred);
       if (!outcome) continue;
@@ -99,7 +112,10 @@
         actual_pct: pred.actual_pct,
         outcome: outcome,
         statement: pred.statement,
-        tags: contextTags(pred),
+        tags: contextTags(pred).filter(function (t) {
+          var u = String(t).toUpperCase();
+          return u !== "TEST_CASE" && u !== "TEST" && u !== "FIXTURE";
+        }),
       });
     }
     var correct = items.filter(function (r) {
@@ -320,4 +336,10 @@
   } else {
     bindCockpitTick();
   }
+
+  window.HomeLiveRefresh = {
+    patchStoryStrip: patchStoryStrip,
+    patchHomeDailyCall: patchHomeDailyCall,
+    buildStoryStrip: buildStoryStrip,
+  };
 })();

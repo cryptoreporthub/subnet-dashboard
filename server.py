@@ -699,7 +699,7 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
         "request": request,
         "public_base_url": _public_base_url(request),
         "subnets": [],  # empty market SSR — hydrate owns the warehouse
-        "data_source": "registry-fallback",
+        "data_source": "snapshot",
         "degraded": True,
         **shell_learning,
         "simivision": simivision_data,
@@ -743,7 +743,7 @@ def _minimal_index_context(request: Request) -> Dict[str, Any]:
         "request": request,
         "public_base_url": _public_base_url(request),
         "subnets": [],
-        "data_source": "timeout-fallback",
+        "data_source": "snapshot",
         "degraded": True,
         **shell_learning,
         "simivision": {"top": [], "meta": {"count": 0, "source": "timeout-fallback"}},
@@ -1796,6 +1796,12 @@ def api_daily_pick():
     existing = _find_today(_load())
     if existing is not None:
         result = dict(existing)
+        try:
+            subnets, _ = _get_subnets_hydrate()
+            market_context = _market_context_with_weights(subnets)
+            result = _enrich_daily_pick_payload(result, subnets, market_context)
+        except Exception as exc:
+            logger.warning("daily-pick lite enrich skipped: %s", exc)
         netuid = _pick_netuid_from_daily_payload(result)
         result["enrichment_badge"] = (
             whale_flow_badge(netuid) if netuid is not None else empty_whale_flow_badge()

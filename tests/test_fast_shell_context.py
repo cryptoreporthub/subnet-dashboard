@@ -54,7 +54,7 @@ def test_minimal_index_context_skips_letter_build(monkeypatch):
         base_url = "http://test"
 
     ctx = srv._minimal_index_context(_R())
-    assert ctx["data_source"] == "timeout-fallback"
+    assert ctx["data_source"] == "snapshot"
     assert ctx["brain_letter"]["empty"] is True
     assert ctx["brain_letter"]["status"] == "quiet"
 

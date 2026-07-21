@@ -10,6 +10,22 @@ logger = logging.getLogger(__name__)
 _SKIP = frozenset({"duplicate", "expired", "ungradeable"})
 
 
+def _is_test_fixture(pred: Dict[str, Any]) -> bool:
+    """Hide dev/CI rows from the public story strip."""
+    tags = pred.get("tags")
+    if isinstance(tags, list):
+        for tag in tags:
+            if str(tag).upper() in ("TEST_CASE", "TEST", "FIXTURE"):
+                return True
+    statement = str(pred.get("statement") or "")
+    if "TEST_CASE" in statement.upper():
+        return True
+    name = str(pred.get("name") or "")
+    if name.upper() in ("LOL",) and "TEST" in statement.upper():
+        return True
+    return False
+
+
 def _context_tags(pred: Dict[str, Any]) -> List[str]:
     """Plain tags from pick-time snapshot — price vs yield context (§21 L2)."""
     tags: List[str] = []
@@ -52,6 +68,8 @@ def build_story_strip(limit: int = 8) -> Dict[str, Any]:
                 continue
             if pred.get("outcome") in _SKIP:
                 continue
+            if _is_test_fixture(pred):
+                continue
             actual = pred.get("actual_pct")
             if actual is None:
                 continue
@@ -76,7 +94,11 @@ def build_story_strip(limit: int = 8) -> Dict[str, Any]:
                     "outcome": "correct" if correct else "wrong",
                     "resolved_at": pred.get("resolved_at") or pred.get("created_at"),
                     "statement": pred.get("statement"),
-                    "tags": _context_tags(pred),
+                    "tags": [
+                        t
+                        for t in _context_tags(pred)
+                        if str(t).upper() not in ("TEST_CASE", "TEST", "FIXTURE")
+                    ],
                 }
             )
             if len(items) >= int(limit):

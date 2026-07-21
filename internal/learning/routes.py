@@ -259,6 +259,14 @@ async def api_mindmap_state():
         return {"status": "error", "trail": [], "summaries": {}, "error": str(exc)}
 
 
+@learning_router.get("/api/story-strip")
+async def api_story_strip(limit: int = Query(default=8, ge=1, le=20)):
+    """Compact recent call outcomes for proof-band hydrate."""
+    from internal.analytics.story_strip import build_story_strip
+
+    return build_story_strip(limit=limit)
+
+
 @learning_router.get("/api/mindmap/story-path")
 async def api_mindmap_story_path():
     """§21 L5 — linear cause chain for today's council pick."""
