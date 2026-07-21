@@ -178,13 +178,18 @@ async def _lifespan(app: FastAPI):
         yield
         return
 
-    # Pre-render emergency GET / bytes before traffic — Fly 0-byte wedge when sync
-    # index blocks the Starlette thread pool and the proxy times out (~36s).
-    try:
-        await asyncio.to_thread(_prime_emergency_home_html)
-        asyncio.create_task(asyncio.to_thread(_warm_homepage_cache, None))
-    except Exception as exc:
-        logger.warning("homepage emergency prime failed: %s", exc)
+    # Never block lifespan on Jinja — Fly health checks fail and edge returns 0 bytes.
+    if not is_worker_mode():
+        threading.Thread(
+            target=_prime_emergency_home_html,
+            daemon=True,
+            name="emergency-prime",
+        ).start()
+        threading.Thread(
+            target=lambda: _warm_homepage_cache(None),
+            daemon=True,
+            name="homepage-warm-boot",
+        ).start()
 
     if background_on_web():
         from internal.background_boot import start_background_workers, stop_background_workers
@@ -853,6 +858,21 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
     return context
 
 
+def _bailout_homepage_html() -> Optional[str]:
+    """HTML bytes for ASGI bailout — cache, then Jinja emergency, else hardcoded."""
+    now = time.time()
+    cached_html = _HOMEPAGE_HTML_CACHE.get("html")
+    if (
+        isinstance(cached_html, str)
+        and cached_html
+        and now - float(_HOMEPAGE_HTML_CACHE.get("at") or 0) < HOMEPAGE_SHELL_CACHE_SECONDS
+    ):
+        return cached_html
+    if _EMERGENCY_HOME_HTML:
+        return _EMERGENCY_HOME_HTML
+    return None
+
+
 def _schedule_homepage_warm(request: Optional[Request] = None) -> None:
     """Fire-and-forget warm — must not block GET / (TestClient runs BackgroundTasks inline)."""
     threading.Thread(
@@ -1366,20 +1386,33 @@ _STATIC_SUBNETS = [
 ]
 
 
-def _get_subnets_with_source():
+def _get_subnets_with_source(*, timeout: float | None = None):
     """Return (subnets, source) for picks — tradable only (excludes Root)."""
     from internal.subnets.tradable import tradable_subnets
 
     try:
         from internal.subnets.feed import get_council_subnet_feed
 
-        subnets, src = get_council_subnet_feed()
+        subnets, src = get_council_subnet_feed(timeout=timeout)
         tradable = tradable_subnets(subnets)
         if tradable:
             return tradable, src
     except Exception as exc:
         logger.warning("council subnet feed failed: %s", exc)
 
+    return tradable_subnets([dict(s) for s in _STATIC_SUBNETS]), "static-fallback"
+
+
+def _get_subnets_hydrate():
+    """Registry-only rows for client hydrate — never blocks on live feeds."""
+    from internal.subnet_names import enrich_subnet_rows
+    from internal.subnets.feed import registry_subnet_rows
+    from internal.subnets.tradable import tradable_subnets
+
+    rows = enrich_subnet_rows(registry_subnet_rows())
+    tradable = tradable_subnets(rows)
+    if tradable:
+        return tradable, "registry-fallback"
     return tradable_subnets([dict(s) for s in _STATIC_SUBNETS]), "static-fallback"
 
 
@@ -1667,17 +1700,25 @@ def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[st
 @app.get("/api/simivision")
 def api_simivision():
     """SimiVision Weighing Room — deliberation board (Daily Call excluded)."""
-    subnets, _ = _get_subnets_with_source()
+    hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
+    subnets, source = _get_subnets_with_source(timeout=hydrate_timeout)
+    if not subnets:
+        subnets, source = _get_subnets_hydrate()
+    subnets = _cap_subnets_for_scoring(subnets)
     daily_pick: Optional[Dict[str, Any]] = None
     market_context: Optional[Dict[str, Any]] = None
     try:
         if _PICKS_ENGINE:
             market_context = _market_context_with_weights(subnets)
-            daily_pick = get_or_create_today_pick(subnets, market_context)
+            from internal.council.daily_pick_engine import _find_today, _load
+
+            existing = _find_today(_load())
+            daily_pick = existing if existing is not None else None
     except Exception as exc:
         logger.warning("simivision daily-pick context skipped: %s", exc)
     return _safe_simivision_payload(
         subnets=subnets,
+        source=source,
         daily_pick=daily_pick,
         market_context=market_context,
     )
@@ -1688,7 +1729,10 @@ def api_top_picks():
     """Top 3 subnets by short-horizon (hour) and 24h (day) Council scores."""
     from internal.council.score_cache import score_universe
 
-    subnets, _ = _get_subnets_with_source()
+    hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
+    subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
+    if not subnets:
+        subnets, _ = _get_subnets_hydrate()
     subnets = _cap_subnets_for_scoring(subnets)
     if not _PICKS_ENGINE:
         return {"hour_picks": [], "day_picks": [], "error": "pick engine unavailable"}
@@ -1746,27 +1790,49 @@ def _pick_netuid_from_daily_payload(payload: Any) -> Optional[int]:
 @app.get("/api/daily-pick")
 def api_daily_pick():
     """Today's audited daily pick from the Council engine."""
-    subnets, _ = _get_subnets_with_source()
+    from internal.council.daily_pick_engine import _find_today, _load
+    from internal.whales.enrichment_badge import empty_whale_flow_badge, whale_flow_badge
+
+    existing = _find_today(_load())
+    if existing is not None:
+        result = dict(existing)
+        netuid = _pick_netuid_from_daily_payload(result)
+        result["enrichment_badge"] = (
+            whale_flow_badge(netuid) if netuid is not None else empty_whale_flow_badge()
+        )
+        return result
+
+    subnets, _ = _get_subnets_hydrate()
     if not _PICKS_ENGINE:
-        return {"status": "error", "date": datetime.utcnow().date().isoformat(),
-                "action": "HOLD", "reason": "pick engine unavailable", "pick": None}
+        return {
+            "status": "error",
+            "date": datetime.utcnow().date().isoformat(),
+            "action": "HOLD",
+            "reason": "pick engine unavailable",
+            "pick": None,
+        }
     market_context = _market_context_with_weights(subnets)
     try:
         result = get_or_create_today_pick(subnets, market_context)
         if isinstance(result, dict):
-            from internal.whales.enrichment_badge import empty_whale_flow_badge, whale_flow_badge
-
             netuid = _pick_netuid_from_daily_payload(result)
             result = _enrich_daily_pick_payload(result, subnets, market_context)
             result = {
                 **result,
-                "enrichment_badge": whale_flow_badge(netuid) if netuid is not None else empty_whale_flow_badge(),
+                "enrichment_badge": (
+                    whale_flow_badge(netuid) if netuid is not None else empty_whale_flow_badge()
+                ),
             }
         return result
     except Exception as e:
         logger.error("Error fetching daily pick: %s", e)
-        return {"status": "error", "date": datetime.utcnow().date().isoformat(),
-                "action": "HOLD", "reason": str(e), "pick": None}
+        return {
+            "status": "error",
+            "date": datetime.utcnow().date().isoformat(),
+            "action": "HOLD",
+            "reason": str(e),
+            "pick": None,
+        }
 
 
 @app.get("/api/pick-explain/{netuid}")
@@ -1816,6 +1882,15 @@ def api_top_pick_hour():
     if not picks:
         picks = [_highest_emission_pick(subnets)]
     return {"picks": picks}
+
+
+from internal.instant_bailout import wrap_instant_bailout
+
+app = wrap_instant_bailout(
+    app,
+    get_homepage_html=_bailout_homepage_html,
+    schedule_warm=lambda: _schedule_homepage_warm(None),
+)
 
 
 if __name__ == "__main__":

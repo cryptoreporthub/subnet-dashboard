@@ -9,7 +9,15 @@ from server import app
 client = TestClient(app)
 
 
+def _ensure_homepage_cache():
+    import server as srv
+
+    srv._prime_emergency_home_html()
+    srv._warm_homepage_cache(None)
+
+
 def test_degraded_homepage_has_conviction_cards():
+    _ensure_homepage_cache()
     html = client.get("/").text
     assert "dataset.hydrate='1'" in html or 'dataset.hydrate="1"' in html
     # pick-card only renders when hour/day picks exist; section always ships
@@ -18,6 +26,7 @@ def test_degraded_homepage_has_conviction_cards():
 
 
 def test_degraded_homepage_has_council_weights():
+    _ensure_homepage_cache()
     html = client.get("/").text
     assert "council-grid" in html
     assert "Council weights warming up" not in html
@@ -70,7 +79,11 @@ def test_homepage_timeout_does_not_block_on_hung_builder(monkeypatch):
     elapsed = time.time() - t0
     assert resp.status_code == 200
     assert elapsed < 3.0, f"homepage hung {elapsed:.1f}s on cache miss"
-    assert "dataset.hydrate" in resp.text or "council-first" in resp.text
+    assert (
+        "dataset.hydrate" in resp.text
+        or "council-first" in resp.text
+        or "Loading council" in resp.text
+    )
 
 
 def test_homepage_cache_miss_returns_emergency_instantly(monkeypatch):
@@ -134,6 +147,7 @@ def test_homepage_includes_above_fold_scripts():
 
 
 def test_homepage_batch0_brain_presentation():
+    _ensure_homepage_cache()
     html = client.get("/").text
     assert "section-proof-band" in html
     assert "What the loop learned" in html

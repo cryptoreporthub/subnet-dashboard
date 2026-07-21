@@ -31,13 +31,15 @@ primary_region = "sjc"
   # Defer heavy resolver tick on boot — immediate=True wedges single-worker Fly.
   RESOLVER_BOOT_IMMEDIATE = "off"
   BOOT_BACKGROUND_SYNC_IMMEDIATE = "off"
-  SUBNETS_LOAD_TIMEOUT_SECONDS = "12"
+  SUBNETS_LOAD_TIMEOUT_SECONDS = "6"
+  HYDRATE_SUBNETS_TIMEOUT_SECONDS = "4"
   # Defer live feed + subnet warmup so /health wins the first minute after deploy.
   BOOT_DEFER_SECONDS = "45"
   MAX_IN_FLIGHT_REQUESTS = "12"
   LOAD_SHED_ACQUIRE_SECONDS = "2"
   HOMEPAGE_BUILD_TIMEOUT = "8"
   HOMEPAGE_SHELL_CACHE_SECONDS = "60"
+  ENABLE_METRICS = "0"
   # Web process: keep CPU for GET / + hydrate; resolver/retrain belongs on worker.
   CALIBRATION_AUTO_RETRAIN = "off"
   CONVICTION_ALERTS_ENABLED = "off"
