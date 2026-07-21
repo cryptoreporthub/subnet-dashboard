@@ -24,4 +24,23 @@
   }
 
   global.apiFetchJson = fetchJson;
+
+  function fetchJsonRetry(url, ms, retries) {
+    retries = retries == null ? 1 : retries;
+    var lastErr;
+    var attempt = 0;
+    function tryOnce() {
+      return fetchJson(url, ms + attempt * 4000);
+    }
+    return (function loop() {
+      return tryOnce().catch(function (err) {
+        lastErr = err;
+        if (attempt >= retries) throw lastErr;
+        attempt += 1;
+        return loop();
+      });
+    })();
+  }
+
+  global.apiFetchJsonRetry = fetchJsonRetry;
 })(typeof window !== 'undefined' ? window : this);

@@ -127,8 +127,10 @@
   function render(root, payload) {
     if (!root) return;
     if (!payload || payload.status !== "ok") {
-      root.innerHTML =
-        '<p class="paper-portfolio__empty">Paper portfolio unavailable right now.</p>';
+      if (!root.querySelector(".paper-portfolio__compare")) {
+        root.innerHTML =
+          '<p class="paper-portfolio__empty">Paper portfolio unavailable right now.</p>';
+      }
       return;
     }
     if (payload.empty) {
@@ -141,26 +143,38 @@
       renderPositions(payload.closed_positions, payload.open_positions);
   }
 
-  async function hydrate() {
+  async function hydrate(payload) {
     var root = $("paper-portfolio-root");
     if (!root) return;
-    var fetchJson = window.apiFetchJson || function (url) {
-      return fetch(url).then(function (r) {
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      });
-    };
     try {
-      render(root, await fetchJson("/api/portfolio/status", 12000));
+      var data = payload;
+      if (!data) {
+        if (window.apiFetchJsonRetry) {
+          data = await window.apiFetchJsonRetry("/api/portfolio/status", 25000, 2);
+        } else if (window.apiFetchJson) {
+          data = await window.apiFetchJson("/api/portfolio/status", 25000);
+        } else {
+          var r = await fetch("/api/portfolio/status", { headers: { Accept: "application/json" } });
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          data = await r.json();
+        }
+      }
+      render(root, data);
     } catch (e) {
-      root.innerHTML =
-        '<p class="paper-portfolio__empty">Could not load paper portfolio — try again shortly.</p>';
+      if (!root.querySelector(".paper-portfolio__compare")) {
+        root.innerHTML =
+          '<p class="paper-portfolio__empty">Could not load paper portfolio — retrying after priority hydrate.</p>';
+      }
     }
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", hydrate);
-  } else {
-    hydrate();
+  window.PaperPortfolio = { hydrate: hydrate, render: render };
+
+  if (document.documentElement.dataset.hydrate !== "1") {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", function () { hydrate(); });
+    } else {
+      hydrate();
+    }
   }
 })();
