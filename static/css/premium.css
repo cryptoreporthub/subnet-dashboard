@@ -1026,12 +1026,20 @@ footer.status {
   color: rgba(233, 247, 239, 0.4);
   margin: 0 0 8px;
 }
-.wr-band__label--out {
+.wr-band__label--near {
   color: rgba(57, 255, 20, 0.72);
 }
-.wr-band__label--in {
+.wr-band__label--watching {
   color: rgba(255, 184, 77, 0.75);
 }
+.wr-band__label--out,
+.wr-band__label--in,
+.wr-band__label--buried {
+  /* legacy aliases — same as LOCK bands */
+  color: rgba(233, 247, 239, 0.4);
+}
+.wr-band__label--out { color: rgba(57, 255, 20, 0.72); }
+.wr-band__label--in { color: rgba(255, 184, 77, 0.75); }
 .wr-band__label--buried {
   color: rgba(140, 60, 80, 0.85);
   opacity: 0.85;
@@ -1270,6 +1278,20 @@ footer.status {
 }
 .weighing-room .conv-ring { width: 44px; height: 44px; }
 @media (max-width: 420px) {
-  .wr-row__face { padding: 10px; gap: 8px; }
-  .weighing-room .conv-ring { width: 40px; height: 40px; }
+  .weighing-room .section-sub { font-size: 12px; }
+  .wr-row__face {
+    padding: 10px;
+    gap: 8px;
+    grid-template-columns: auto 1fr auto auto;
+    align-items: start;
+  }
+  .weighing-room .conv-ring {
+    width: 40px;
+    height: 40px;
+    margin-top: 2px;
+  }
+  .wr-chip { align-self: start; margin-top: 2px; }
+  .wr-chevron { align-self: center; }
+  .wr-reason { -webkit-line-clamp: 3; }
+  .wr-near-strip { margin: 0 10px 10px; font-size: 11px; }
 }
