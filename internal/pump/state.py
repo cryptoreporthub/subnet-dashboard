@@ -145,6 +145,20 @@ def transition_subnet(
         entry["phase"] = new_phase
         entry["since"] = _now_z()
         entry["last_transition"] = _now_z()
+        try:
+            from internal.learning.pump_lead_ledger import record_pump_lead_at_phase_entry
+
+            sig = classification.get("signals") if isinstance(classification.get("signals"), dict) else signals
+            record_pump_lead_at_phase_entry(
+                netuid=netuid,
+                name=entry.get("name"),
+                phase=new_phase,
+                composite_score=score,
+                reference_price=float(sig.get("price") or signals.get("price") or 0),
+                signal_snapshot=entry.get("signal_snapshot"),
+            )
+        except Exception as exc:
+            logger.debug("pump_lead ledger skipped SN%s: %s", netuid, exc)
 
     entry["name"] = signals.get("name") or entry.get("name")
     entry["composite_score"] = score
