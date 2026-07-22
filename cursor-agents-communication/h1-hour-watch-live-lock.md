@@ -367,12 +367,14 @@ Writer: `cockpit_hydrate.js` on initial hydrate **and** on each `cockpit.picks` 
 
 ## 13. Human sign-off
 
+**Approved 2026-07-22** — plan locked; execute gated on G0 + Wave 1 exit + B0-0.
+
 ```text
-H1 LOCK approved — do not execute yet
+H1 LOCK approved — do not execute yet   ← DONE
 ```
 
 ```text
-Execute H1 — hour watch live bus
+Execute H1 — hour watch live bus        ← when gates clear
 ```
 
 ---
