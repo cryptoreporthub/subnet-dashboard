@@ -539,16 +539,31 @@ def _safe_brain_letter_context(*, timeout_s: float = 1.5) -> Dict[str, Any]:
         pool.shutdown(wait=False, cancel_futures=True)
 
 
+def _read_shell_daily_pick() -> Dict[str, Any]:
+    """Lite pick from local JSON — instant SSR, no scoring or live feeds."""
+    try:
+        from internal.council.daily_pick_engine import _find_today, _load
+
+        existing = _find_today(_load())
+        if existing is None:
+            return {}
+        return _enrich_daily_pick_payload_lite(dict(existing))
+    except Exception as exc:
+        logger.warning("shell daily pick read failed: %s", exc)
+        return {}
+
+
 def _fast_home_hero_context(trust_banner: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Cheap hero keys for degraded GET / — no pick engine or resolver replay."""
+    """Cheap hero keys for degraded GET / — local pick read, hydrate upgrades live."""
     from internal.analytics.home_habit import (
         conviction_alerts_snapshot,
         watchlist_snapshot,
     )
 
     tb = trust_banner if isinstance(trust_banner, dict) else {}
+    pick_payload = _read_shell_daily_pick()
     return {
-        "daily_pick_stage": {},
+        "daily_pick_stage": pick_payload,
         "conviction_band": {"band": None, "reason": "hydrate", "status": "ok"},
         "enrichment_badge": {"status": "pending"},
         "story_strip": {
