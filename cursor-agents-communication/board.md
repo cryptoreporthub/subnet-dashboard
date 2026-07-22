@@ -1,13 +1,13 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-22T07:10:00Z  
-**main:** `de1854f` · Pump desk self-learning (#397) shipped
+**Last updated:** 2026-07-22T15:35:00Z  
+**main:** `cdd3806` · #402 names/deltas + #403 H1 LOCK merged
 
 ## Next slice queue
 
-1. **G0** — Phone QA 390px after #397 deploy (trust line + hydrate speed)
-2. **Wave 1 pump** — P1 triad · P2 hit-rate proof UI · P3 size cliff (`gameplan-pump-site-undeniable.md`)
-3. **H1** — Hour watch live bus (`h1-hour-watch-live-lock.md`) — after G0 + Wave 1 exit + B0-0; `cockpit.picks` SSE + Now rib
+1. **G0** — Phone QA 390px on prod (automated `verify_prod.sh` ✅ · daily-pick ~0.18s ✅ · triad on pump cards ✅ · **human 390px pass still open**)
+2. **Wave 1 exit** — mark complete after G0 (P1–P3 code on main; pump trust line honest-empty until lead grades land)
+3. **H1** — Hour watch live bus (`h1-hour-watch-live-lock.md`) — **LOCK on main**; execute after G0 + Wave 1 exit + B0-0
 4. **Wave 2** — P4 push alerts · P5 lead-wallet/founder chips
 5. **Wave 3** — Site section upgrades S1→S8 (3 ACs each)
 6. **Telegram** — H4 session bootstrap + feed honesty (may share P4)
