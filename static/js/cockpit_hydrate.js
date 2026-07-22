@@ -665,7 +665,13 @@
     if (!layer || !shortlist || !shortlist.length) return;
     var body = layer.querySelector('.k3-layer-body');
     if (!body || (body.querySelector('.k3-weighed-list') && !body.querySelector('.k3-empty'))) return;
-    var rows = shortlist.slice(0, 8).map(function (alt) {
+    var gate = 45;
+    var sorted = shortlist.slice().sort(function (a, b) {
+      var da = Math.abs(gate - Number(a.conviction || 0));
+      var db = Math.abs(gate - Number(b.conviction || 0));
+      return da - db;
+    });
+    var rows = sorted.slice(0, 8).map(function (alt) {
       var nu = alt.netuid;
       var name = alt.name || resolveSubnetDisplayName(alt, nu);
       var pct =
@@ -673,8 +679,9 @@
           ? '<span class="k3-weighed-pct">' + esc(String(Math.round(Number(alt.conviction)))) + '%</span>'
           : '';
       var role = alt.role ? '<p class="k3-weighed-why">' + esc(alt.role) + '</p>' : '';
+      var compareHint = alt.netuid != null ? ' title="Tap for subnet · flow 24h in dossier"' : '';
       return (
-        '<div class="k3-weighed-row" data-netuid="' + esc(nu) + '" onclick="switchToSubnet(\'' + esc(nu) + '\')" role="button" tabindex="0">' +
+        '<div class="k3-weighed-row" data-netuid="' + esc(nu) + '" onclick="switchToSubnet(\'' + esc(nu) + '\')" role="button" tabindex="0"' + compareHint + '>' +
         '<div class="k3-weighed-top"><span class="k3-weighed-name">' + esc(name) + '</span>' + pct + '</div>' +
         role +
         '</div>'
@@ -692,6 +699,30 @@
     if (d > 0.001) return '<span class="k3-judge-delta up">+' + fmt(d, 2) + '</span>';
     if (d < -0.001) return '<span class="k3-judge-delta down">' + fmt(d, 2) + '</span>';
     return '<span class="k3-judge-delta flat">0.00</span>';
+  }
+
+  function renderWeightNudgeLine(deltas) {
+    var el = document.getElementById('k3-weight-nudge-line');
+    if (!el) return;
+    var deltaMap = deltas && typeof deltas === 'object' ? deltas : {};
+    var ranked = CANONICAL_EXPERTS.map(function (name) {
+      var d = Number(deltaMap[name]);
+      return { name: name, delta: isNaN(d) ? 0 : d };
+    }).filter(function (row) {
+      return Math.abs(row.delta) > 0.001;
+    }).sort(function (a, b) {
+      return Math.abs(b.delta) - Math.abs(a.delta);
+    }).slice(0, 2);
+    if (!ranked.length) {
+      el.hidden = true;
+      el.textContent = '';
+      return;
+    }
+    var parts = ranked.map(function (row) {
+      return expertLabel(row.name) + ' ' + (row.delta > 0 ? '+' : '') + fmt(row.delta, 2);
+    });
+    el.textContent = 'Council weights shifted: ' + parts.join(' · ');
+    el.hidden = false;
   }
 
   function patchK3CouncilVotes(weights, deltas) {
@@ -780,7 +811,19 @@
     }
     setText('k3-brief-thesis', brief.thesis || '');
     setText('k3-brief-vs', brief.vs || '');
+    setText('k3-brief-vs-hold', brief.vs_hold_tao || '');
     setText('k3-brief-trigger', brief.trigger || '');
+    var driversHost = document.getElementById('k3-evidence-drivers');
+    if (driversHost && brief.evidence_drivers && brief.evidence_drivers.length) {
+      driversHost.innerHTML = brief.evidence_drivers.map(function (d) {
+        var tag = d.tag || 'tech';
+        return '<span class="k3-evidence-driver k3-evidence-driver--' + esc(tag) + '">' + esc(tag) + ' · ' + esc(d.label || '') + '</span>';
+      }).join('');
+      driversHost.hidden = false;
+    } else if (driversHost) {
+      driversHost.innerHTML = '';
+      driversHost.hidden = true;
+    }
 
     var pump = payload.pump_chip || {};
     var pumpChip = document.getElementById('k3-pump-chip');
@@ -932,6 +975,9 @@
         '</p>';
       if (row.size_line) {
         html += '<p class="pump-alert__size">' + esc(row.size_line) + '</p>';
+      }
+      if (row.wallet_chip) {
+        html += '<p class="pump-alert__wallet-chip">' + esc(row.wallet_chip) + '</p>';
       }
       html +=
         '<p class="pump-alert__trigger">' +
@@ -1195,6 +1241,7 @@
       : '';
     replaceSectionContent('section-council', lean + '<div class="council-grid">' + cards + '</div>', '.council-grid, .card-muted');
     patchK3CouncilVotes(weights, deltaMap);
+    renderWeightNudgeLine(deltaMap);
   }
 
   function renderKpi(stats) {
@@ -1804,18 +1851,52 @@
   }
 
   var cockpitStream = null;
+  var cockpitPicksConnected = false;
+  var lastPicksEmittedAt = 0;
+
+  function applyPicksSnapshot(payload) {
+    if (!payload || payload.type !== 'cockpit.picks') return;
+    lastPicksEmittedAt = Date.now();
+    cockpitPicksConnected = true;
+    var hourPicks = (payload.hour && payload.hour.picks) || [];
+    var dayPick = payload.day && payload.day.pick;
+    var dayPicks = dayPick ? [dayPick] : [];
+    if (payload.day && payload.day.candidate && !dayPick) {
+      dayPicks = [payload.day.candidate];
+    }
+    renderHourDayPicks(hourPicks, dayPicks);
+    if (window.HourWatchUI && window.HourWatchUI.patchHourWatch) {
+      window.HourWatchUI.patchHourWatch(payload);
+    }
+    if (window.HomeHydrateCache) {
+      window.HomeHydrateCache.hourPicks = hourPicks;
+      window.HomeHydrateCache.dayPick = payload.day || null;
+      window.HomeHydrateCache.picksEmittedAt = payload.emitted_at;
+      window.HomeHydrateCache.at = Date.now();
+    }
+    document.dispatchEvent(new CustomEvent('home:cockpit-picks', { detail: payload }));
+  }
 
   function connectCockpitStream() {
     if (cockpitStream || typeof EventSource === 'undefined') return;
-    if (!document.querySelector('.cockpit-card[data-section-id]')) return;
+    if (!document.querySelector('[data-home-live]') && !document.querySelector('.cockpit-card[data-section-id]')) return;
     cockpitStream = new EventSource('/api/cockpit/stream');
+    cockpitStream.addEventListener('cockpit.picks', function (ev) {
+      try {
+        applyPicksSnapshot(JSON.parse(ev.data));
+      } catch (e) {
+        console.warn('[cockpit_hydrate] picks SSE parse failed', e);
+      }
+    });
     cockpitStream.addEventListener('cockpit.sections', function (ev) {
       try {
         var payload = JSON.parse(ev.data);
         if (payload && payload.sections) {
           renderCockpitSections(payload.sections);
         }
-        document.dispatchEvent(new CustomEvent('home:cockpit-tick'));
+        if (!cockpitPicksConnected || Date.now() - lastPicksEmittedAt > 5000) {
+          document.dispatchEvent(new CustomEvent('home:cockpit-tick'));
+        }
       } catch (e) {
         console.warn('[cockpit_hydrate] SSE parse failed', e);
       }
@@ -1823,6 +1904,15 @@
     cockpitStream.onerror = function () {
       console.warn('[cockpit_hydrate] SSE disconnect; keeping last snapshot');
     };
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden' && cockpitStream) {
+        cockpitStream.close();
+        cockpitStream = null;
+        cockpitPicksConnected = false;
+      } else if (document.visibilityState === 'visible' && !cockpitStream) {
+        connectCockpitStream();
+      }
+    });
   }
 
   function pause(ms) {
@@ -1970,20 +2060,26 @@
 
       try {
         var pickPayload = safePayload(await fetchJsonRetry('/api/top-picks', 30000, 1));
-        hourPicks = pickPayload.hour_picks || [];
-        dayPicks = pickPayload.day_picks || [];
+        if (!cockpitPicksConnected) {
+          hourPicks = pickPayload.hour_picks || [];
+          dayPicks = pickPayload.day_picks || [];
+        }
       } catch (e) {
-        try {
-          var hourRes = await fetchJsonRetry('/api/top-pick/hour', 18000, 1);
-          hourPicks = safePayload(hourRes).picks || [];
-          var dayRes = await fetchJsonRetry('/api/top-pick/day', 18000, 1);
-          dayPicks = safePayload(dayRes).picks || [];
-        } catch (e2) {
-          console.warn('[cockpit_hydrate] pick fallback failed', e2);
-          markSectionFailed('section-picks', 'Quiet — horizon picks timed out. Open Pro cockpit again after /api/top-picks responds.');
+        if (!cockpitPicksConnected) {
+          try {
+            var hourRes = await fetchJsonRetry('/api/top-pick/hour', 18000, 1);
+            hourPicks = safePayload(hourRes).picks || [];
+            var dayRes = await fetchJsonRetry('/api/top-pick/day', 18000, 1);
+            dayPicks = safePayload(dayRes).picks || [];
+          } catch (e2) {
+            console.warn('[cockpit_hydrate] pick fallback failed', e2);
+            markSectionFailed('section-picks', 'Quiet — horizon picks timed out. Open Pro cockpit again after /api/top-picks responds.');
+          }
         }
       }
-      renderHourDayPicks(hourPicks, dayPicks);
+      if (!cockpitPicksConnected) {
+        renderHourDayPicks(hourPicks, dayPicks);
+      }
 
       await pause(300);
       try {
@@ -2075,9 +2171,34 @@
     }
   }
 
+  function bindProofTabs() {
+    var tabs = document.querySelectorAll('.proof-band__tab[data-proof-tab]');
+    if (!tabs.length) return;
+    tabs.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var target = btn.getAttribute('data-proof-tab');
+        tabs.forEach(function (b) {
+          var on = b.getAttribute('data-proof-tab') === target;
+          b.classList.toggle('proof-band__tab--active', on);
+          b.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        var council = document.getElementById('proof-tab-council');
+        var pump = document.getElementById('proof-tab-pump');
+        var hero = document.getElementById('proof-band-score-hero');
+        if (council) council.hidden = target !== 'council';
+        if (pump) pump.hidden = target !== 'pump';
+        if (hero) hero.hidden = target === 'pump';
+      });
+    });
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', run);
+    document.addEventListener('DOMContentLoaded', function () {
+      bindProofTabs();
+      run();
+    });
   } else {
+    bindProofTabs();
     run();
   }
 

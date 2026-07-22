@@ -603,7 +603,18 @@
       }
       if (n == null) {
         setBrainState('quiet');
-        if (bodyEl) bodyEl.innerHTML = '<p class="living-focus__empty">No focus subnet today — council has not cleared a pick.</p>';
+        if (top.length && top[0] && top[0].netuid != null) {
+          var near = top[0];
+          var nearName = subnetName(near, near.netuid);
+          var nearConf = near.conviction != null ? Math.round(Number(near.conviction)) : null;
+          var trigger = nearConf != null ? 'Conviction ' + nearConf + '% — watch for 45% gate.' : 'Watch weigh room for a near-call trigger.';
+          if (bodyEl) {
+            bodyEl.innerHTML =
+              '<p class="living-focus__empty">No pinned focus — nearest near-call: <strong>' + esc(nearName) + '</strong>. ' + esc(trigger) + '</p>';
+          }
+        } else if (bodyEl) {
+          bodyEl.innerHTML = '<p class="living-focus__empty">No focus subnet today — council has not cleared a pick.</p>';
+        }
         return;
       }
       var sn = (dp.pick && dp.pick.subnet) || (dp.candidate && dp.candidate.subnet) || top[0] || {};

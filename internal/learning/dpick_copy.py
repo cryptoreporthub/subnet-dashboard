@@ -170,12 +170,68 @@ def _trigger_line(conviction: int, blockers: List[str], *, audit_pick: bool) -> 
     return f"Flip to LONG when conviction ≥ {_AUDIT_GATE_PCT}% (+{gap} pts)."
 
 
+def _evidence_drivers(
+    block: Optional[Dict[str, Any]],
+    payload: Dict[str, Any],
+) -> List[Dict[str, str]]:
+    """Up to three tagged drivers for S1 hero evidence."""
+    out: List[Dict[str, str]] = []
+    signals = []
+    if isinstance(block, dict):
+        signals.extend(block.get("active_signals") or [])
+        impact = block.get("signal_impact") if isinstance(block.get("signal_impact"), dict) else {}
+        for key in ("flow", "momentum", "social"):
+            if impact.get(key) is not None:
+                signals.append(f"{key}:{impact.get(key)}")
+    for raw in signals:
+        text = str(raw).strip()
+        if not text:
+            continue
+        low = text.lower()
+        if "social" in low or "buzz" in low or "hype" in low:
+            tag = "social"
+        elif "flow" in low or "volume" in low or "liquid" in low:
+            tag = "flow"
+        else:
+            tag = "tech"
+        out.append({"tag": tag, "label": text[:48]})
+        if len(out) >= 3:
+            break
+    if len(out) < 3 and isinstance(payload.get("shortlist"), list):
+        for alt in payload["shortlist"][:2]:
+            if not isinstance(alt, dict):
+                continue
+            role = str(alt.get("role") or alt.get("why_not") or "").strip()
+            if not role:
+                continue
+            out.append({"tag": _axis_from_role(role), "label": role[:48]})
+            if len(out) >= 3:
+                break
+    return out[:3]
+
+
+def _vs_hold_tao_line(block: Optional[Dict[str, Any]]) -> str:
+    if not isinstance(block, dict):
+        return ""
+    sn = block.get("subnet") if isinstance(block.get("subnet"), dict) else {}
+    chg = sn.get("price_change_7d")
+    if chg is None:
+        chg = sn.get("change_7d")
+    try:
+        pct = float(chg)
+    except (TypeError, ValueError):
+        return ""
+    return f"vs hold TAO 7d: {pct:+.1f}% on pick name"
+
+
 def build_dpick_brief(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Return move / thesis / vs / trigger for council_stage hero."""
     empty: Dict[str, Any] = {
         "move": "",
         "thesis": "",
         "vs": "",
+        "vs_hold_tao": "",
+        "evidence_drivers": [],
         "trigger": "",
         "tone": "neutral",
         "blockers": [],
@@ -254,6 +310,8 @@ def build_dpick_brief(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "move": move,
         "thesis": thesis,
         "vs": vs,
+        "vs_hold_tao": _vs_hold_tao_line(block if isinstance(block, dict) else None),
+        "evidence_drivers": _evidence_drivers(block if isinstance(block, dict) else None, payload),
         "trigger": trigger,
         "tone": tone,
         "blockers": concerns[:3],

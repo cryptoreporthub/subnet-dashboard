@@ -226,6 +226,29 @@ def _row_copy(
     }
 
 
+def _wallet_chip(netuid_int: Optional[int]) -> Optional[str]:
+    """Lead-wallet chip — honest-empty when no whale data."""
+    if netuid_int is None:
+        return None
+    try:
+        from internal.whales.service import WhaleIntelligenceService
+
+        flow = WhaleIntelligenceService().get_subnet_flow(netuid_int)
+        if not flow.get("data_available"):
+            return None
+        by_class = flow.get("by_classification") if isinstance(flow.get("by_classification"), dict) else {}
+        early = by_class.get("early_movers") or []
+        alpha = by_class.get("alpha_whales") or []
+        n = len(early) + len(alpha)
+        if n > 0:
+            return f"{n} wallet{'s' if n != 1 else ''} bought before move"
+        if flow.get("smart_money_present"):
+            return "Smart money in"
+    except Exception:
+        return None
+    return None
+
+
 def build_alert_row(
     ladder_entry: Dict[str, Any],
     subnet_row: Optional[Dict[str, Any]] = None,
@@ -267,6 +290,7 @@ def build_alert_row(
         copy["badge"] = badge
 
     size_line = _size_cliff_line(subnet_row)
+    wallet_chip = _wallet_chip(netuid_int)
     row = {
         "netuid": netuid_int,
         "name": name,
@@ -281,6 +305,7 @@ def build_alert_row(
         "volume_intensity": leads["volume_intensity"],
         "triad": triad,
         "size_line": size_line,
+        "wallet_chip": wallet_chip,
         "updated_at": ladder_entry.get("updated_at"),
     }
     return row

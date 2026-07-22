@@ -122,4 +122,15 @@ def record_pump_lead_at_phase_entry(
     if not append_prediction(prediction):
         return None
     logger.info("pump_lead ledger: SN%s %s @ %.6f", nu, badge, ref)
+    try:
+        from internal.learning.pump_phase_notify import maybe_notify_pump_phase_entry
+
+        maybe_notify_pump_phase_entry(
+            netuid=nu,
+            name=name,
+            badge=badge,
+            phase=phase,
+        )
+    except Exception:
+        pass
     return prediction

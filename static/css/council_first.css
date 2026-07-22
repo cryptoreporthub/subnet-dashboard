@@ -1658,6 +1658,42 @@ button.home-cta {
 .letters-drawer > summary { cursor: pointer; font-weight: 600; padding: 10px 0; }
 .letters-drawer .weekly-letter { margin-top: 12px; }
 .k3-weight-nudge { font-size: 11px; color: #8fd4ff; margin: 8px 0 0; }
+.hour-watch-now {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #bae6fd;
+  text-decoration: none;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(125, 211, 252, 0.25);
+  border-radius: 8px;
+  background: rgba(125, 211, 252, 0.06);
+}
+.hour-watch-now--quiet { color: #94a3b8; border-color: #1a1d24; background: #0d1016; }
+.hour-watch-now--building { color: #64748b; }
+.hour-watch-shift {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #fbbf24;
+  margin: 4px 0 0;
+}
+.k3-evidence-drivers { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
+.k3-evidence-driver {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 6px;
+  border: 1px solid #1a1d24;
+  color: #94a3b8;
+}
+.k3-evidence-driver--flow { color: #7dd3fc; border-color: rgba(125, 211, 252, 0.35); }
+.k3-evidence-driver--tech { color: #c4b5fd; border-color: rgba(196, 181, 253, 0.35); }
+.k3-evidence-driver--social { color: #fda4af; border-color: rgba(253, 164, 175, 0.35); }
+.k3-brief-vs-hold { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #64748b; margin: 0 0 6px; text-align: center; }
 
 .home-stage-why-not { margin: 12px 0; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,179,71,0.35); background: rgba(20,12,0,0.25); }
 .home-stage-why-not__title { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: #ffb347; }

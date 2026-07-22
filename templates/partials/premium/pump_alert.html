@@ -53,6 +53,9 @@
         {% if row.size_line %}
         <p class="pump-alert__size">{{ row.size_line }}</p>
         {% endif %}
+        {% if row.wallet_chip %}
+        <p class="pump-alert__wallet-chip">{{ row.wallet_chip }}</p>
+        {% endif %}
         <p class="pump-alert__trigger">{{ row.trigger }}</p>
       </article>
       {% endif %}

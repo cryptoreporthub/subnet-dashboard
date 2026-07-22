@@ -45,12 +45,22 @@
     <p class="proof-band__quiet">Building graded history — scores appear after calls resolve.</p>
     {% endif %}
   </div>
-  <div class="whats-working" id="section-whats-working" aria-labelledby="whats-working-title">
+  <div class="proof-band__tabs" role="tablist" aria-label="Track record views">
+    <button type="button" class="proof-band__tab proof-band__tab--active" data-proof-tab="council" role="tab" aria-selected="true">Council accuracy</button>
+    <button type="button" class="proof-band__tab" data-proof-tab="pump" role="tab" aria-selected="false">Pump early hit-rate</button>
+  </div>
+  <div id="proof-tab-council" class="proof-band__panel">
+    <div class="whats-working" id="section-whats-working" aria-labelledby="whats-working-title">
     <h3 class="whats-working__title" id="whats-working-title">What&apos;s working</h3>
     <p class="whats-working__sub">Signals that predicted token price — learned from graded picks.</p>
     <div id="whats-working-chips" class="whats-working__chips" aria-live="polite" data-brain-state="building">
       <p class="whats-working__empty">Quiet — signal rankings fill in as picks grade.</p>
     </div>
+    </div>
+  </div>
+  <div id="proof-tab-pump" class="proof-band__panel" hidden>
+    <p class="proof-band__quiet">Pump early hit-rate lives on the lead scanner — graded +2% in 1h claims with n=.</p>
+    <p><a href="#section-pump-alert">Jump to lead scanner trust line</a></p>
   </div>
   {% include "partials/premium/story_strip.html" %}
   {% include "partials/premium/paper_portfolio.html" %}

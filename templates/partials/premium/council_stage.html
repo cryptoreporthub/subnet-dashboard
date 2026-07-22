@@ -282,6 +282,12 @@
                 {% endif %}
                 {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
                 {% if brief.vs %}<p class="k3-brief-vs k3-also-weighed" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
+                {% if brief.vs_hold_tao %}<p class="k3-brief-vs-hold" id="k3-brief-vs-hold">{{ brief.vs_hold_tao }}</p>{% endif %}
+                <div id="k3-evidence-drivers" class="k3-evidence-drivers"{% if not brief.evidence_drivers %} hidden{% endif %}>
+                  {% for driver in brief.evidence_drivers or [] %}
+                  <span class="k3-evidence-driver k3-evidence-driver--{{ driver.tag|default('tech') }}">{{ driver.tag|default('tech') }} · {{ driver.label }}</span>
+                  {% endfor %}
+                </div>
                 {% if brief.trigger %}<p class="k3-brief-trigger" id="k3-brief-trigger"><span class="k3-brief-trigger__kicker">FLIP</span>{{ brief.trigger|replace('Flip to LONG when ', 'Long when ', 1) }}</p>{% endif %}
               </div>
               <div class="k3-orb-bg"></div>
@@ -401,6 +407,12 @@
                 {% endif %}
                 {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
                 {% if brief.vs %}<p class="k3-brief-vs" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
+                {% if brief.vs_hold_tao %}<p class="k3-brief-vs-hold" id="k3-brief-vs-hold">{{ brief.vs_hold_tao }}</p>{% endif %}
+                <div id="k3-evidence-drivers" class="k3-evidence-drivers"{% if not brief.evidence_drivers %} hidden{% endif %}>
+                  {% for driver in brief.evidence_drivers or [] %}
+                  <span class="k3-evidence-driver k3-evidence-driver--{{ driver.tag|default('tech') }}">{{ driver.tag|default('tech') }} · {{ driver.label }}</span>
+                  {% endfor %}
+                </div>
               </div>
               <div class="k3-orb-bg"></div>
               <div class="k3-orb-glow"></div>
@@ -422,6 +434,9 @@
         </div>
       </div>
       {% endif %}
+
+      <a id="hour-watch-now" class="hour-watch-now hour-watch-now--building" href="#" aria-live="polite">Hour watch loading…</a>
+      <p id="hour-watch-shift" class="hour-watch-shift" hidden aria-live="polite"></p>
 
       {# ---- EVIDENCE LAYER ---- #}
       <div class="k3-layer" id="k3-layer-evidence">
@@ -592,7 +607,7 @@
           id="habit-alert-btn"
           data-enabled="{{ '1' if habit_alerts.enabled else '0' }}"
         >Run conviction check</button>
-        <a class="home-cta home-cta--ghost" href="#pro-cockpit">Open Pro cockpit</a>
+        '<a class="home-cta home-cta--ghost" href="#pro-cockpit">Open depth</a>
       </div>
 
       {# ---- Habit status bar ---- #}

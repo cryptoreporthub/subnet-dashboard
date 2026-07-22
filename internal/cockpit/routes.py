@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Query, Request
 from starlette.responses import StreamingResponse
 
+from internal.cockpit.picks_snapshot import build_picks_snapshot
 from internal.cockpit.sections import get_cockpit_sections
 
 logger = logging.getLogger(__name__)
@@ -21,7 +22,7 @@ def _emitted_at_z() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _format_snapshot_event(emitted_at: str) -> str:
+def _format_sections_event(emitted_at: str) -> str:
     payload = get_cockpit_sections()
     data = {
         "type": "cockpit.sections",
@@ -31,12 +32,21 @@ def _format_snapshot_event(emitted_at: str) -> str:
         "sections": payload.get("sections", []),
     }
     body = json.dumps(data, separators=(",", ":"))
-    return f"retry: 15000\nevent: cockpit.sections\nid: {emitted_at}\ndata: {body}\n\n"
+    return f"event: cockpit.sections\nid: {emitted_at}\ndata: {body}\n\n"
+
+
+def _format_picks_event(emitted_at: str) -> str:
+    data = build_picks_snapshot()
+    data["emitted_at"] = emitted_at
+    body = json.dumps(data, separators=(",", ":"))
+    return f"event: cockpit.picks\nid: {emitted_at}\ndata: {body}\n\n"
 
 
 async def _cockpit_stream(request: Request, once: bool):
     emitted_at = _emitted_at_z()
-    yield _format_snapshot_event(emitted_at)
+    yield f"retry: 15000\n"
+    yield _format_picks_event(emitted_at)
+    yield _format_sections_event(emitted_at)
     if once:
         return
 
@@ -52,7 +62,9 @@ async def _cockpit_stream(request: Request, once: bool):
         if elapsed % 15 == 0:
             yield f": heartbeat {_emitted_at_z()}\n\n"
         if elapsed % 60 == 0:
-            yield _format_snapshot_event(_emitted_at_z())
+            yield _format_picks_event(_emitted_at_z())
+        if elapsed % 300 == 0:
+            yield _format_sections_event(_emitted_at_z())
 
 
 @cockpit_router.get("/api/cockpit/sections")
@@ -66,7 +78,7 @@ async def api_cockpit_stream(
     request: Request,
     once: int | None = Query(None),
 ):
-    """SSE stream of cockpit section snapshots for live hydration."""
+    """SSE stream: cockpit.picks every 60s, cockpit.sections every 300s."""
     headers = {
         "Cache-Control": "no-cache",
         "X-Accel-Buffering": "no",
