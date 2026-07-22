@@ -169,6 +169,19 @@ except Exception:
         return load_weights()
 
 
+def _registry_name_boot_sync() -> None:
+    """ponytail: one-shot ladder→registry name sync on web boot (no cron required)."""
+    import time
+
+    time.sleep(12)
+    try:
+        from internal.freshness import merge_ladder_names_into_registry
+
+        merge_ladder_names_into_registry()
+    except Exception as exc:
+        logger.debug("registry name boot sync skipped: %s", exc)
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     """Boot background workers on web only when BACKGROUND_ON_WEB=on (legacy/combined)."""
@@ -189,6 +202,11 @@ async def _lifespan(app: FastAPI):
             target=lambda: _warm_homepage_cache(None),
             daemon=True,
             name="homepage-warm-boot",
+        ).start()
+        threading.Thread(
+            target=_registry_name_boot_sync,
+            daemon=True,
+            name="registry-name-sync",
         ).start()
 
     if background_on_web():

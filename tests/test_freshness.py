@@ -66,6 +66,40 @@ def test_merge_remote_registry_preserves_local_fields(tmp_path):
     assert merged["0"]["social_mentions"] == 2000
 
 
+def test_merge_ladder_names_into_registry(tmp_path, monkeypatch):
+    registry = {
+        "99": {
+            "id": 99,
+            "name": "Old Label",
+            "status": "active",
+            "last_updated": "2026-06-10T00:00:00+00:00",
+        }
+    }
+    local_path = tmp_path / "registry.json"
+    local_path.write_text(json.dumps(registry))
+
+    ladder = {
+        "subnets": {
+            "99": {
+                "netuid": 99,
+                "name": "Live Desk Name",
+                "phase": "PUMPING",
+            }
+        }
+    }
+    monkeypatch.setattr("internal.pump.state.load_state", lambda path=None: ladder)
+    monkeypatch.setattr(
+        "internal.subnet_names._load_name_overrides",
+        lambda: {},
+    )
+
+    result = freshness.merge_ladder_names_into_registry(str(local_path))
+    assert result["ok"] is True
+    assert result["updated_count"] == 1
+    merged = json.loads(local_path.read_text())
+    assert merged["99"]["name"] == "Live Desk Name"
+
+
 def test_watchlist_freshness_detects_staleness():
     info = freshness.watchlist_freshness("/tmp/does-not-exist-watchlist.json")
     assert info["is_stale"] is True
