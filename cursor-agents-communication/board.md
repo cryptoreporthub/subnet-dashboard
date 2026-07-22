@@ -1,14 +1,22 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-20T22:30:00Z  
-**main:** `5302aaa` · **Batch 0 brain presentation** in flight (PR #382)
+**Last updated:** 2026-07-22T07:10:00Z  
+**main:** `de1854f` · Pump desk self-learning (#397) shipped
 
 ## Next slice queue
 
-1. **Batch 0** — B0-0→B0-d execute (`cursor/batch0-brain-presentation-impl-4a9d` / #382) — audit Rank‑1 first
-2. Phone QA 390px — Batch 0 Learning presence ≥4 gate
-3. **K3-9 pump desk** — 9a ledger then 9b UI (Rank‑3; after Batch 0 sign-off)
-4. **Telegram** — H4 session bootstrap + feed honesty
+1. **G0** — Phone QA 390px after #397 deploy (trust line + hydrate speed)
+2. **Wave 1 pump** — P1 triad · P2 hit-rate proof UI · P3 size cliff (`gameplan-pump-site-undeniable.md`)
+3. **Wave 2** — P4 push alerts · P5 lead-wallet/founder chips
+4. **Wave 3** — Site section upgrades S1→S8 (3 ACs each)
+5. **Telegram** — H4 session bootstrap + feed honesty (may share P4)
+
+## Gameplan
+
+**Canonical:** `cursor-agents-communication/gameplan-pump-site-undeniable.md`
+
+Peers: SubnetAIQ Pre-Pump Radar, TAO Subnet Radar, TaoDashboard, TaoDX.  
+North star: frozen pre-pump claim → grade → n= trust → adapt; trader voice; no council weight contamination.
 
 ## Stale PRs (superseded — close on GitHub)
 
@@ -19,25 +27,19 @@
 | #340 | Dark horse repair in `weights.py`; test added in cleanup PR |
 | #313, #309 | §27–§30 docs already on main |
 
-## Done (K3 sprint)
+## Done (recent)
 
-- K3-1 dossier · K3-2 deliberation · K3-2b shortlist · K3-3 lifecycle
-- K3-4 temporal ring (#350) · K3-5 polish (#351) · K3-6 horizon selector (#352)
-- Subnet canonical names fix (#353)
-- **Post-audit P0+P1** (#355): HOLD+candidate full hero, `final_confidence` orb
-- **Post-audit P2** (#356): horizon chip sync, mindmap shortlist SSR shape
-- **K3-7 hero copy + IA** (#361): `dpick_copy` brief, hydration safeguard, `/preview/k3-hold`
-- **K3-7b pump chip** (#362): STIRRING/ACCUMULATING lead-gated chip on dossier
-- **K3-8b lead scanner** (#370): predictive pump voice
-- **Horizon stage line** (#372): Now/24h/7d toggles show subnet + stage
+- #391–#394 hero hydrate / fast daily-pick / weighed deferred
+- #395 hero trust polish + pump step 0 `phase_at_prediction`
+- #396 `pump_lead` ledger at phase entry
+- #397 claim grading (+2%/1h), desk trust line, `pump_calibration` adapt n≥30
 
 ## Shipped on main
 
-Trader hero (move/thesis/vs/trigger), cool HOLD styling, also-weighed line, hydrate patch-by-ID, pump chip (EARLY HEAT / HEAT BUILDING), Pump Alert lane (IN PLAY / FADING), preview routes for 390px sign-off.
+Trader hero, lead scanner (WARMING UP / BUILDING / JUST STARTED / CHASE RISK), council closed loop, pump desk learning loop (ledger → grade → trust → calibrate).
 
-## Human follow-up (optional)
+## Human follow-up
 
-- Phone QA 390px on subnet-dashboard.fly.dev after deploy settles
-- Deferred: decay sparkline, 30d chip, time_capsules calendar UI, Now→Session rename
-- Env: `CONVICTION_ALERTS_ENABLED` for alert dot on habit button
-
+- Approve / amend `gameplan-pump-site-undeniable.md`
+- Phone QA 390px on subnet-dashboard.fly.dev after #397 deploy
+- Env: `CONVICTION_ALERTS_ENABLED` / Telegram for Wave 2 push
