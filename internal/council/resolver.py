@@ -16,9 +16,9 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from internal.council.deduplication import dedupe_predictions
 from internal.council.grading import (
-    classify_outcome_direction_only,
     compute_actual_pct,
-    direction_correct,
+    grade_prediction,
+    is_pump_lead,
 )
 from internal.council.price_reference import CANDLE_LOOKUP_MINUTES, price_at_resolve_at
 from internal.council.watchdog import check_resolver_watchdog
@@ -77,7 +77,7 @@ def _in_replay_mode() -> bool:
 
 def _skip_council_learning(prediction: Dict[str, Any]) -> bool:
     """Pump desk grades must not nudge council expert/signal weights."""
-    return str(prediction.get("pick_source") or "").lower() == "pump_lead"
+    return is_pump_lead(prediction)
 
 
 def _load_json(path: str, default: Any) -> Any:
@@ -518,8 +518,7 @@ def resolve_prediction(
     if current_price is not None and current_price > 0:
         ref = float(prediction.get("reference_price", 0) or 0)
         actual_pct = compute_actual_pct(ref, current_price)
-        outcome = classify_outcome_direction_only(prediction, actual_pct)
-        correct = direction_correct(prediction, actual_pct)
+        correct, outcome = grade_prediction(prediction, actual_pct)
         resolved_at = now.isoformat().replace("+00:00", "Z")
         expert = _normalize_expert(prediction)
         if expert and not _skip_council_learning(prediction):
@@ -542,6 +541,13 @@ def resolve_prediction(
         if not _skip_council_learning(prediction):
             _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
             _nudge_signal_weights(prediction, bool(correct))
+        else:
+            try:
+                from internal.learning.pump_calibration import maybe_adapt_after_resolve
+
+                maybe_adapt_after_resolve()
+            except Exception:
+                pass
         return prediction
     return resolve_prediction_at_horizon(prediction, now=now)
 
@@ -601,8 +607,7 @@ def resolve_prediction_at_horizon(
 
     ref = float(prediction.get("reference_price", 0) or 0)
     actual_pct = compute_actual_pct(ref, price)
-    outcome = classify_outcome_direction_only(prediction, actual_pct)
-    correct = direction_correct(prediction, actual_pct)
+    correct, outcome = grade_prediction(prediction, actual_pct)
     resolved_at = resolve_at.isoformat().replace("+00:00", "Z")
     expert = _normalize_expert(prediction)
     if expert and not _skip_council_learning(prediction):
@@ -627,6 +632,13 @@ def resolve_prediction_at_horizon(
     if not _skip_council_learning(prediction):
         _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
         _nudge_signal_weights(prediction, bool(correct))
+    else:
+        try:
+            from internal.learning.pump_calibration import maybe_adapt_after_resolve
+
+            maybe_adapt_after_resolve()
+        except Exception:
+            pass
     return prediction
 
 
@@ -662,22 +674,25 @@ def _nudge_impact_strength(prediction: Dict[str, Any], correct: bool) -> None:
 def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
     resolved = data.get("resolved", [])
     pending = data.get("predictions", [])
+    # Council trust banner must not absorb pump_lead grades (separate desk claim).
     gradable = [
         r for r in resolved
         if r.get("outcome") not in {"duplicate", "expired", "ungradeable"}
         and r.get("correct") is not None
+        and not is_pump_lead(r)
     ]
     correct = sum(1 for r in gradable if r.get("correct") is True)
     wrong = sum(1 for r in gradable if r.get("correct") is False)
-    expired = sum(1 for r in resolved if r.get("outcome") == "expired")
+    expired = sum(1 for r in resolved if r.get("outcome") == "expired" and not is_pump_lead(r))
     duplicates = sum(1 for r in resolved if r.get("outcome") == "duplicate")
-    total = len(resolved) + len(pending)
+    council_pending = sum(1 for r in pending if not is_pump_lead(r))
+    total = len([r for r in resolved if not is_pump_lead(r)]) + council_pending
     stats: Dict[str, Any] = {
         "correct": correct,
         "wrong": wrong,
         "expired": expired,
         "duplicate": duplicates,
-        "pending": len(pending),
+        "pending": council_pending,
         "total": total,
     }
     if correct + wrong > 0:

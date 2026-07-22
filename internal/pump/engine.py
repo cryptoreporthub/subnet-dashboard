@@ -33,11 +33,17 @@ def compute_composite_score(signals: Dict[str, Any]) -> float:
 
 def raw_phase_from_score(score: float, *, was_pumping: bool = False) -> str:
     """Map composite score to a target ladder phase (no hysteresis)."""
-    if was_pumping and score < PHASE_ENTRY_THRESHOLDS["PUMPING"] and score >= PHASE_ENTRY_THRESHOLDS["COOLING"]:
+    try:
+        from internal.learning.pump_calibration import effective_phase_entry
+
+        thresholds = effective_phase_entry()
+    except Exception:
+        thresholds = PHASE_ENTRY_THRESHOLDS
+    if was_pumping and score < thresholds["PUMPING"] and score >= thresholds.get("COOLING", PHASE_ENTRY_THRESHOLDS["COOLING"]):
         return "COOLING"
     target = "DORMANT"
     for phase in FORWARD_PHASES:
-        if score >= PHASE_ENTRY_THRESHOLDS[phase]:
+        if score >= thresholds.get(phase, PHASE_ENTRY_THRESHOLDS[phase]):
             target = phase
     if was_pumping and target == "ACCUMULATING" and score < 0.55:
         return "COOLING"
