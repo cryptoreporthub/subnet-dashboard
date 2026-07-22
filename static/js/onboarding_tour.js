@@ -15,24 +15,24 @@
         {
           element: '#section-daily-pick',
           popover: {
-            title: 'Council decision',
-            description: 'Today\'s audited call lives here — HOLD means the gate did not clear, not a broken page.',
+            title: 'Daily call',
+            description: 'Today\'s audited council decision — HOLD means the gate did not clear, not a broken page.',
             side: 'bottom',
           },
         },
         {
-          element: '#section-simivision-picks',
+          element: '#section-living-focus',
           popover: {
-            title: 'Council is weighing',
-            description: 'Names still on the table — how close each is to becoming the call, not a ranked scoreboard.',
+            title: 'Living Focus',
+            description: 'Four beats on the subnet in play: Focus · Contest · Prove it · Watch us update. Lane judges vs council weights are labeled separately.',
             side: 'top',
           },
         },
         {
-          element: '#section-judges',
+          element: '#section-brain-letter',
           popover: {
-            title: 'Judge panel',
-            description: 'Oracle, Echo, and Pulse score each subnet — three independent lenses.',
+            title: 'Brain letter',
+            description: 'Morning brief from graded memory — what changed, today\'s call citation, and the Next outlook for this window.',
             side: 'top',
           },
         },
