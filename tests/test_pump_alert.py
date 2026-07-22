@@ -60,6 +60,28 @@ def test_pumping_row_chase_risk_not_entry():
     assert "Coldint" in row["trigger"] or "SN29" in row["trigger"]
 
 
+def test_stale_signal_snapshot_rebuilt_from_subnet_row():
+    row = build_alert_row(
+        {
+            "netuid": 28,
+            "name": "LOL",
+            "phase": "PUMPING",
+            "composite_score": 0.75,
+            "signal_snapshot": {"buy_ratio": 0.5, "volume_intensity": 1.0},
+        },
+        {
+            "netuid": 28,
+            "name": "LOL",
+            "buy_volume_24h": 8000,
+            "sell_volume_24h": 2000,
+            "volume": 50000,
+            "emission": 1.5,
+        },
+    )
+    assert row["name"] == "gm"
+    assert row["buy_ratio"] != 0.5 or row["volume_intensity"] != 1.0
+
+
 def test_chase_risk_copy_unique_per_subnet():
     a = build_alert_row(_ladder_entry("PUMPING", netuid=29, score=0.81))
     b = build_alert_row(_ladder_entry("PUMPING", netuid=54, score=0.88))
