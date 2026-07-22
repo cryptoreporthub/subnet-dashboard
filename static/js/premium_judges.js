@@ -7,6 +7,7 @@
   if (!panel) return;
 
   var loaded = false;
+  var FETCH_MS = 18000;
 
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
@@ -29,6 +30,10 @@
       return Number(root.getAttribute('data-focus-netuid'));
     }
     return null;
+  }
+
+  function alreadyRendered() {
+    return !!(panel.querySelector('.judge-summary') || panel.querySelector('.kpi-grid'));
   }
 
   function judgeCard(j, opts) {
@@ -56,7 +61,7 @@
 
   function renderLeague(judges) {
     if (!judges.length) {
-      panel.innerHTML = '<p class="empty">No judge data yet — council scoring warms up after subnet snapshots load.</p>';
+      panel.innerHTML = '<p class="empty empty--quiet">Quiet — no lane judge scores yet. Council scoring warms after subnet snapshots load.</p>';
       return;
     }
     var cards = judges.slice(0, 12).map(function (j) {
@@ -66,14 +71,37 @@
       '<p class="pick-meta" style="margin-top:8px;">' + judges.length + ' subnets scored</p>';
   }
 
+  function fetchJson(url, ms) {
+    return new Promise(function (resolve, reject) {
+      var ctrl = new AbortController();
+      var timer = setTimeout(function () {
+        ctrl.abort();
+        reject(new Error('timeout'));
+      }, ms);
+      fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl.signal })
+        .then(function (r) {
+          clearTimeout(timer);
+          if (!r.ok) throw new Error(String(r.status));
+          return r.json();
+        })
+        .then(resolve)
+        .catch(function (err) {
+          clearTimeout(timer);
+          reject(err);
+        });
+    });
+  }
+
   function loadJudges() {
-    if (loaded) return;
+    if (loaded || alreadyRendered()) {
+      loaded = true;
+      return;
+    }
     loaded = true;
-    panel.innerHTML = '<p class="empty">Loading judge scores…</p>';
+    panel.innerHTML = '<p class="empty">Building — lane judges loading…</p>';
     var focus = focusNetuid();
     var url = focus != null ? '/api/judges/' + encodeURIComponent(focus) : '/api/judges';
-    fetch(url)
-      .then(function (r) { return r.json(); })
+    fetchJson(url, FETCH_MS)
       .then(function (data) {
         if (focus != null && data && !data.error) {
           panel.innerHTML = judgeCard(data, { focus: true });
@@ -82,7 +110,7 @@
         renderLeague((data && data.judges) || []);
       })
       .catch(function () {
-        panel.innerHTML = '<p class="empty">Judge panel unavailable — try again when subnets are loaded.</p>';
+        panel.innerHTML = '<p class="empty empty--quiet">Quiet — lane judges unavailable. Retry when /api/judges responds.</p>';
         loaded = false;
       });
   }

@@ -1078,6 +1078,12 @@ button.home-cta {
   .hydrate-skeleton__line { animation: none; opacity: 0.5; }
 }
 
+.empty--quiet {
+  color: var(--stage-muted, #8a9a8e);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 /* §21 — market drivers UI */
 .driver-card {
   margin-top: 16px;

@@ -553,6 +553,46 @@ def _read_shell_daily_pick() -> Dict[str, Any]:
         return {}
 
 
+def _registry_shell_subnets() -> List[Dict[str, Any]]:
+    """Registry-only rows for fast homepage shell — no live feed."""
+    from internal.subnet_names import enrich_subnet_rows
+
+    subnets = enrich_subnet_rows(list(load_data("config/registry.json").values()))
+    return _cap_subnets_for_scoring(subnets, limit=min(24, TOP_SCORING_UNIVERSE))
+
+
+def _shell_pump_and_picks(
+    subnets: List[Dict[str, Any]],
+    *,
+    include_picks: bool,
+) -> Dict[str, Any]:
+    """File-backed pump desk + optional horizon picks for SSR (B0-0 quiet shell)."""
+    out: Dict[str, Any] = {}
+    try:
+        out.update(_pump_alerts_context(subnets))
+    except Exception as exc:
+        logger.warning("shell pump context skipped: %s", exc)
+        out["pump_alerts"] = {
+            "status": "quiet",
+            "count": 0,
+            "alerts": [],
+            "empty_message": (
+                "Quiet — no lead or confirmed motion right now. "
+                "Early heat on today's pick stays on the dossier chip when flow warms."
+            ),
+        }
+    if include_picks:
+        try:
+            from internal.learning.dashboard_context import _pick_sections
+
+            picks = _pick_sections(subnets, _market_context_with_weights(subnets))
+            out["hour_picks"] = picks.get("hour_picks") or []
+            out["day_picks"] = picks.get("day_picks") or []
+        except Exception as exc:
+            logger.warning("shell picks context skipped: %s", exc)
+    return out
+
+
 def _fast_home_hero_context(trust_banner: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Cheap hero keys for degraded GET / — local pick read, hydrate upgrades live."""
     from internal.analytics.home_habit import (
@@ -721,12 +761,8 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
         return ctx
 
     from internal.learning.dashboard_context import fast_shell_dashboard_context
-    from internal.subnet_names import enrich_subnet_rows
 
-    subnets = enrich_subnet_rows(list(load_data("config/registry.json").values()))
-    # Market drawer is demoted — don't Jinja-loop 128 rows on the hot path.
-    # Hydrate + Market drawer APIs fill scanner/staking after first paint.
-    shell_subnets = _cap_subnets_for_scoring(subnets, limit=min(24, TOP_SCORING_UNIVERSE))
+    shell_subnets = _registry_shell_subnets()
     shell_learning = fast_shell_dashboard_context()
     simivision_data = _safe_simivision_payload(
         subnets=shell_subnets, source="registry-fallback"
@@ -752,14 +788,8 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
         },
     }
     ctx.update(_fast_home_hero_context(trust_banner))
-    # Letter + pump hydrate client-side — keep cold shell off the hang path
     ctx.update(_quiet_brain_letter_stub())
-    ctx["pump_alerts"] = {
-        "status": "quiet",
-        "count": 0,
-        "alerts": [],
-        "empty_message": "Pump desk loads after hydrate.",
-    }
+    ctx.update(_shell_pump_and_picks(shell_subnets, include_picks=True))
     stash = {k: v for k, v in ctx.items() if k != "request"}
     _DEGRADED_INDEX_CACHE["at"] = now
     _DEGRADED_INDEX_CACHE["ctx"] = stash
@@ -769,14 +799,15 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
 def _minimal_index_context(request: Request) -> Dict[str, Any]:
     """Emergency shell when homepage build exceeds HOMEPAGE_BUILD_TIMEOUT.
 
-    Must stay instant — no letter build, no pump scan. Blank-screen root cause
+    Must stay instant — no letter build, no pick scoring. Blank-screen root cause
     on Fly is 0-byte proxy timeout when this path also hangs.
     """
     from internal.learning.dashboard_context import fast_shell_dashboard_context
 
     shell_learning = fast_shell_dashboard_context()
     trust_banner = (shell_learning.get("learning_metrics") or {}).get("trust_banner") or {}
-    return {
+    shell_subnets = _registry_shell_subnets()
+    ctx = {
         "request": request,
         "public_base_url": _public_base_url(request),
         "subnets": [],
@@ -796,13 +827,9 @@ def _minimal_index_context(request: Request) -> Dict[str, Any]:
         },
         **_fast_home_hero_context(trust_banner),
         **_quiet_brain_letter_stub(),
-        "pump_alerts": {
-            "status": "quiet",
-            "count": 0,
-            "alerts": [],
-            "empty_message": "Pump desk quiet — retry after hydrate.",
-        },
     }
+    ctx.update(_shell_pump_and_picks(shell_subnets, include_picks=False))
+    return ctx
 
 
 def _build_index_context(request: Request) -> Dict[str, Any]:
