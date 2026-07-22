@@ -1,16 +1,17 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-22T07:10:00Z  
-**main:** `de1854f` · Pump desk self-learning (#397) shipped
+**Last updated:** 2026-07-22T17:45:00Z  
+**main:** `71abdf9` · B0-c proof band weight nudge (#409) shipped
 
 ## Next slice queue
 
-1. **G0** — Phone QA 390px after #397 deploy (trust line + hydrate speed)
-2. **Wave 1 pump** — P1 triad · P2 hit-rate proof UI · P3 size cliff (`gameplan-pump-site-undeniable.md`)
-3. **H1** — Hour watch live bus (`h1-hour-watch-live-lock.md`) — after G0 + Wave 1 exit + B0-0; `cockpit.picks` SSE + Now rib
-4. **Wave 2** — P4 push alerts · P5 lead-wallet/founder chips
-5. **Wave 3** — Site section upgrades S1→S8 (3 ACs each)
-6. **Telegram** — H4 session bootstrap + feed honesty (may share P4)
+1. **G0** — `./scripts/g0_phone_qa.sh` on prod after #409 deploy (+ human 390px pass)
+2. **B0-d** — Onboarding tour + final Quiet taxonomy QA (in progress PR)
+3. **Wave 1 exit** — after G0
+4. **H1** — Hour watch live bus (`h1-hour-watch-live-lock.md`) — after G0 + Wave 1 + user says `Execute H1`
+5. **Wave 2** — P4 push alerts · P5 lead-wallet/founder chips
+6. **Wave 3** — Site section upgrades S1→S8 (3 ACs each)
+7. **Telegram** — H4 session bootstrap + feed honesty (may share P4)
 
 ## Gameplan
 
@@ -30,6 +31,7 @@ North star: frozen pre-pump claim → grade → n= trust → adapt; trader voice
 
 ## Done (recent)
 
+- #405–#409 mobile SSR / quiet states / proof band / weight nudge (B0-0…c)
 - #391–#394 hero hydrate / fast daily-pick / weighed deferred
 - #395 hero trust polish + pump step 0 `phase_at_prediction`
 - #396 `pump_lead` ledger at phase entry
