@@ -881,7 +881,7 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
 
 
 def _bailout_homepage_html() -> Optional[str]:
-    """HTML bytes for ASGI bailout — cache, then Jinja emergency, else hardcoded."""
+    """HTML for ASGI bailout — warm cache on miss, then Jinja emergency, else hardcoded."""
     now = time.time()
     cached_html = _HOMEPAGE_HTML_CACHE.get("html")
     if (
@@ -890,9 +890,12 @@ def _bailout_homepage_html() -> Optional[str]:
         and now - float(_HOMEPAGE_HTML_CACHE.get("at") or 0) < HOMEPAGE_SHELL_CACHE_SECONDS
     ):
         return cached_html
-    if _EMERGENCY_HOME_HTML:
-        return _EMERGENCY_HOME_HTML
-    return None
+    _schedule_homepage_warm(None)
+    try:
+        return _prime_emergency_home_html()
+    except Exception as exc:
+        logger.warning("bailout emergency prime failed: %s", exc)
+        return None
 
 
 def _schedule_homepage_warm(request: Optional[Request] = None) -> None:
