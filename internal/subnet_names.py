@@ -14,6 +14,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
+OVERRIDES_PATH = os.environ.get("SUBNET_NAME_OVERRIDES_PATH", "config/subnet_name_overrides.json")
 REMOTE_REGISTRY_URL = os.environ.get(
     "REMOTE_REGISTRY_URL",
     "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json",
@@ -47,6 +48,18 @@ def _load_local_registry() -> Dict[str, Any]:
         with open(REGISTRY_PATH, "r") as f:
             data = json.load(f)
         return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _load_name_overrides() -> Dict[str, str]:
+    """Curator corrections when on-chain / taostat identity is stale or a meme placeholder."""
+    try:
+        with open(OVERRIDES_PATH, "r") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return {}
+        return {str(k): str(v).strip() for k, v in data.items() if v and str(v).strip()}
     except Exception:
         return {}
 
@@ -104,13 +117,17 @@ def resolve_subnet_name(
     tmc_name: Optional[str] = None,
     use_taostats: bool = True,
 ) -> str:
-    """Priority: taostat remote → TaoStats identity → local registry → TMC → SN{n}."""
+    """Priority: curator override → taostat remote → TaoStats identity → local → TMC → SN{n}."""
     if netuid is None:
         return "SN?"
     try:
         n = int(netuid)
     except (TypeError, ValueError):
         return "SN?"
+
+    override = _load_name_overrides().get(str(n))
+    if override and not _is_bad_name(override):
+        return override
 
     remote = remote if remote is not None else _remote_registry()
     remote_item = remote.get(str(n)) if isinstance(remote, dict) else None

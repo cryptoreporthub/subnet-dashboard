@@ -41,22 +41,19 @@ def _resolve_name(
     except (TypeError, ValueError):
         netuid_int = None
 
-    candidates: List[str] = []
-    for src in (subnet_row, ladder_entry):
-        if not isinstance(src, dict):
-            continue
-        raw = src.get("name") or src.get("subnet_name")
-        if raw and not _BAD_NAME.match(str(raw).strip()):
-            candidates.append(str(raw).strip())
-
-    if candidates:
-        return candidates[0]
-
     if netuid_int is not None:
+        tmc_name = None
+        for src in (subnet_row, ladder_entry):
+            if not isinstance(src, dict):
+                continue
+            raw = src.get("name") or src.get("subnet_name")
+            if raw and not _BAD_NAME.match(str(raw).strip()):
+                tmc_name = str(raw).strip()
+                break
         try:
             from internal.subnet_names import resolve_subnet_name
 
-            resolved = resolve_subnet_name(netuid_int, tmc_name=ladder_entry.get("name"))
+            resolved = resolve_subnet_name(netuid_int, tmc_name=tmc_name)
             if resolved and not _BAD_NAME.match(resolved):
                 return resolved
         except Exception:
