@@ -981,10 +981,10 @@
   },
   "54": {
     "id": 54,
-    "name": "WebGenieAI",
+    "name": "Yanez MIID",
     "status": "active",
     "risk_flags": [],
-    "last_updated": "2026-06-10T17:52:17.420373+00:00",
+    "last_updated": "2026-07-22T20:50:00+00:00",
     "sources": [
       "https://raw.githubusercontent.com/taostat/subnets-infos/main/subnets.json"
     ],

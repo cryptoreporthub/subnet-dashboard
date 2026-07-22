@@ -35,6 +35,12 @@ def _resolve_name(
     ladder_entry: Dict[str, Any],
     subnet_row: Optional[Dict[str, Any]],
 ) -> str:
+    """Display name for a pump desk card.
+
+    Prefer the live ladder / feed label when present — registries lag renames
+    (SN54 is Yanez MIID on-chain/desk; committed registry still says WebGenieAI).
+    Curator overrides still win via ``resolve_subnet_name``.
+    """
     netuid = ladder_entry.get("netuid")
     try:
         netuid_int = int(netuid) if netuid is not None else None
@@ -44,35 +50,24 @@ def _resolve_name(
     if netuid_int is None:
         return "subnet"
 
-    # Prefer local registry / overrides over stale ladder or remote labels
-    # (e.g. SN54 ladder "Yanez MIID" vs registry "WebGenieAI").
-    try:
-        from internal.subnet_names import _load_local_registry, _load_name_overrides
-
-        override = _load_name_overrides().get(str(netuid_int))
-        if override and not _BAD_NAME.match(str(override).strip()):
-            return str(override).strip()
-        local = _load_local_registry()
-        item = local.get(str(netuid_int)) if isinstance(local, dict) else None
-        if isinstance(item, dict):
-            lname = item.get("name")
-            if lname and not _BAD_NAME.match(str(lname).strip()):
-                return str(lname).strip()
-    except Exception:
-        pass
-
-    tmc_name = None
-    for src in (subnet_row, ladder_entry):
+    # Live labels first (ladder, then hydrated subnet row).
+    for src in (ladder_entry, subnet_row):
         if not isinstance(src, dict):
             continue
         raw = src.get("name") or src.get("subnet_name")
-        if raw and not _BAD_NAME.match(str(raw).strip()):
-            tmc_name = str(raw).strip()
-            break
+        if not raw:
+            continue
+        label = str(raw).strip()
+        if _BAD_NAME.match(label):
+            continue
+        if re.match(r"^SN\d+$", label, re.I):
+            continue
+        return label
+
     try:
         from internal.subnet_names import resolve_subnet_name
 
-        resolved = resolve_subnet_name(netuid_int, tmc_name=tmc_name)
+        resolved = resolve_subnet_name(netuid_int)
         if resolved and not _BAD_NAME.match(resolved):
             return resolved
     except Exception:
