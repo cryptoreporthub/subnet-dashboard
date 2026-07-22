@@ -210,18 +210,55 @@ def _evidence_drivers(
     return out[:3]
 
 
-def _vs_hold_tao_line(block: Optional[Dict[str, Any]]) -> str:
+def _tao_bench_7d(payload: Dict[str, Any]) -> Optional[float]:
+    """Average 7d price change across shortlist as hold-TAO proxy."""
+    vals: List[float] = []
+    for row in payload.get("shortlist") or []:
+        if not isinstance(row, dict):
+            continue
+        for key in ("price_change_7d", "change_7d"):
+            if row.get(key) is not None:
+                try:
+                    vals.append(float(row[key]))
+                    break
+                except (TypeError, ValueError):
+                    pass
+    if not vals:
+        ctx = payload.get("market_context") if isinstance(payload.get("market_context"), dict) else {}
+        if ctx.get("tao_change_7d") is not None:
+            try:
+                return float(ctx["tao_change_7d"])
+            except (TypeError, ValueError):
+                pass
+        if ctx.get("tao_change_24h") is not None:
+            try:
+                return float(ctx["tao_change_24h"])
+            except (TypeError, ValueError):
+                pass
+        return None
+    return sum(vals) / len(vals)
+
+
+def _vs_hold_tao_line(block: Optional[Dict[str, Any]], payload: Dict[str, Any]) -> str:
     if not isinstance(block, dict):
         return ""
     sn = block.get("subnet") if isinstance(block.get("subnet"), dict) else {}
-    chg = sn.get("price_change_7d")
-    if chg is None:
-        chg = sn.get("change_7d")
-    try:
-        pct = float(chg)
-    except (TypeError, ValueError):
+    pick_chg = None
+    for key in ("price_change_7d", "change_7d"):
+        if sn.get(key) is not None:
+            try:
+                pick_chg = float(sn[key])
+                break
+            except (TypeError, ValueError):
+                pass
+    bench = _tao_bench_7d(payload)
+    if pick_chg is None or bench is None:
         return ""
-    return f"vs hold TAO 7d: {pct:+.1f}% on pick name"
+    excess = pick_chg - bench
+    return (
+        f"vs hold TAO 7d: pick {pick_chg:+.1f}% · bench {bench:+.1f}% · "
+        f"{excess:+.1f}% vs network"
+    )
 
 
 def build_dpick_brief(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -310,7 +347,7 @@ def build_dpick_brief(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "move": move,
         "thesis": thesis,
         "vs": vs,
-        "vs_hold_tao": _vs_hold_tao_line(block if isinstance(block, dict) else None),
+        "vs_hold_tao": _vs_hold_tao_line(block if isinstance(block, dict) else None, payload),
         "evidence_drivers": _evidence_drivers(block if isinstance(block, dict) else None, payload),
         "trigger": trigger,
         "tone": tone,

@@ -112,7 +112,53 @@
     return html;
   }
 
+
+  function renderYesterday(outcome) {
+    if (!outcome) return "";
+    return block(
+      "Yesterday",
+      "brain-letter-yesterday",
+      '<p class="weekly-letter__lead">' + esc(outcome) + "</p>"
+    );
+  }
+
+  function renderSeedStrip(rows) {
+    rows = rows || [];
+    if (!rows.length) return "";
+    var html = '<ul class="weekly-letter__list">';
+    rows.slice(0, 5).forEach(function (row) {
+      html +=
+        '<li class="weekly-letter__item"><span class="weekly-letter__item-name">' +
+        esc(row.name || "SN" + row.netuid) +
+        '</span><span class="weekly-letter__item-meta">SN' +
+        esc(row.netuid) +
+        " · " +
+        esc(row.note || "verify on desk") +
+        "</span></li>";
+    });
+    html += "</ul>";
+    return block("New subnets on the desk", "brain-letter-seeds", html);
+  }
+
+  function bindDeskCopy(deskBlock) {
+    var btn = $("brain-letter-copy-desk");
+    if (!btn) return;
+    var text = deskBlock || "";
+    btn.disabled = !text;
+    btn.onclick = function () {
+      if (!text || !navigator.clipboard) return;
+      navigator.clipboard.writeText(text).catch(function () {});
+    };
+  }
+
   function renderOutlook(outlook) {
+    var text = outlook || "No sized call this window — watching the desk into resolve.";
+    if (/over the next\s+0m/i.test(text)) {
+      text = "Resolve window not set — flat until the pick locks.";
+    }
+    return '<p class="weekly-letter__lead">' + esc(text) + "</p>";
+  }
+
     var text = outlook || "No sized call this window — watching the desk into resolve.";
     if (/over the next\s+0m/i.test(text)) {
       text = "Resolve window not set — flat until the pick locks.";
@@ -161,6 +207,8 @@
     }
     root.innerHTML =
       '<article class="weekly-letter__digest brain-letter__digest">' +
+      renderYesterday(payload.yesterday_outcome) +
+      renderSeedStrip(payload.seed_strip) +
       block("What changed since yesterday", "brain-letter-learned", renderLearned(payload.trust_banner, payload.working)) +
       block("Today", "brain-letter-today", renderToday(payload.pick)) +
       block("Next", "brain-letter-next", renderOutlook(payload.outlook)) +
@@ -170,6 +218,7 @@
         renderIntegrity(payload.trust_banner, payload.brain_ui_ready, payload.watchdog)
       ) +
       "</article>";
+    bindDeskCopy(payload.desk_block);
     var section = document.getElementById("section-brain-letter");
     if (section) section.setAttribute("data-brain-state", payload.empty ? "quiet" : "live");
   }
@@ -197,6 +246,7 @@
         dateEl.textContent = "Morning brief · graded memory" + (data.date ? " · " + data.date : "");
       }
       render(root, data);
+      bindDeskCopy(data.desk_block);
       if (section) section.setAttribute("data-ssr", "1");
       if (window.LetterExport && window.LetterExport.brain) {
         window.LetterExport.brain.setMarkdown(

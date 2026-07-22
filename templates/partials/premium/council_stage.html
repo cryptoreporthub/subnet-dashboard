@@ -316,7 +316,7 @@
               <div id="k3-temporal-badge" class="k3-temporal-badge{% if ring_state == 'resolved' %} k3-temporal-badge--resolved{% else %} k3-temporal-badge--live{% endif %}"{% if resolve_at_iso %} data-resolve-at="{{ resolve_at_iso }}"{% endif %} aria-live="polite">{{ temporal_badge }}</div>
               {% if dpick.grade_on_resolve and ring_state != 'resolved' %}<div class="k3-temporal-grade">Graded on resolve · {{ horizon }} window</div>{% endif %}
               {% else %}
-              <div id="k3-temporal-badge" class="k3-temporal-badge k3-temporal-badge--empty" aria-live="polite">Resolve window not set · graded when this pick closes</div>
+              <div id="k3-temporal-badge" class="k3-temporal-badge k3-temporal-badge--empty" aria-live="polite">{{ temporal_badge|default('Window pending — not graded yet') }}</div>
               {% endif %}
               {% if pump_chip.show %}
               <div id="k3-pump-chip" class="k3-pump-chip k3-pump-chip--{{ pump_chip.tier|lower }}" aria-label="Pump ladder context">{{ pump_chip.label }}</div>
@@ -427,7 +427,7 @@
                   <div class="k3-orb-label" id="k3-orb-label">conviction</div>
                 </div>
               </div>
-              <div id="k3-temporal-badge" class="k3-temporal-badge k3-temporal-badge--empty" aria-live="polite">Resolve window not set · graded when this pick closes</div>
+              <div id="k3-temporal-badge" class="k3-temporal-badge k3-temporal-badge--empty" aria-live="polite">{{ temporal_badge|default('Window pending — not graded yet') }}</div>
               <div class="k3-badge hold" id="k3-action-badge" hidden>HOLD</div>
             </div>
           </div>
@@ -607,7 +607,7 @@
           id="habit-alert-btn"
           data-enabled="{{ '1' if habit_alerts.enabled else '0' }}"
         >Run conviction check</button>
-        '<a class="home-cta home-cta--ghost" href="#pro-cockpit">Open depth</a>
+        <a class="home-cta home-cta--ghost" href="#pro-cockpit">Open depth</a>
       </div>
 
       {# ---- Habit status bar ---- #}

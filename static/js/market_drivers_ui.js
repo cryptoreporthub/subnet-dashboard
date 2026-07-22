@@ -84,11 +84,14 @@
     var html = "";
     payload.top_price_signals.slice(0, 5).forEach(function (row) {
       var pct = Math.round((row.hit_rate || 0) * 100);
+      var n = row.n != null ? row.n : 0;
       html +=
         '<span class="whats-working__chip" title="' +
-        esc(row.n + " picks graded on token price") +
+        esc(n + " picks graded on token price") +
         '">' +
         esc(row.signal || row.tag || "?") +
+        " · n=" +
+        esc(n) +
         " · " +
         pct +
         "%</span>";

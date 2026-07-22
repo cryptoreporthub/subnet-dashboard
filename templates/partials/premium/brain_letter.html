@@ -6,6 +6,7 @@
     <h2 class="brain-letter__title weekly-letter__title" id="brain-letter-title">Brain letter</h2>
     <p class="brain-letter__meta weekly-letter__meta" id="brain-letter-date">Morning brief · graded memory{% if bl.date %} · {{ bl.date }}{% endif %}</p>
     <div class="weekly-letter__actions">
+      <button type="button" class="tab-btn" id="brain-letter-copy-desk" disabled>Copy today&apos;s desk</button>
       <button type="button" class="tab-btn" id="brain-letter-copy" disabled>Copy markdown</button>
       <button type="button" class="tab-btn" id="brain-letter-download" disabled>Download</button>
     </div>
@@ -16,6 +17,26 @@
     {% set tb = bl.trust_banner if bl.trust_banner is mapping else {} %}
     {% set working = bl.working if bl.working is mapping else {} %}
     <article class="weekly-letter__digest brain-letter__digest">
+      {% if bl.yesterday_outcome %}
+      <section class="weekly-letter__block brain-letter__yesterday" aria-labelledby="brain-letter-yesterday">
+        <h3 class="weekly-letter__block-title" id="brain-letter-yesterday">Yesterday</h3>
+        <p class="weekly-letter__lead">{{ bl.yesterday_outcome }}</p>
+      </section>
+      {% endif %}
+      {% set seeds = bl.seed_strip if bl.seed_strip is iterable and bl.seed_strip is not string else [] %}
+      {% if seeds %}
+      <section class="weekly-letter__block brain-letter__seeds" aria-labelledby="brain-letter-seeds">
+        <h3 class="weekly-letter__block-title" id="brain-letter-seeds">New subnets on the desk</h3>
+        <ul class="weekly-letter__list">
+          {% for row in seeds[:5] %}
+          <li class="weekly-letter__item">
+            <span class="weekly-letter__item-name">{{ row.name|default('SN' ~ row.netuid) }}</span>
+            <span class="weekly-letter__item-meta">SN{{ row.netuid }} · {{ row.note|default('verify on desk') }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
       <section class="weekly-letter__block" aria-labelledby="brain-letter-learned">
         <h3 class="weekly-letter__block-title" id="brain-letter-learned">What changed since yesterday</h3>
         {% if tb.ready and tb.headline %}

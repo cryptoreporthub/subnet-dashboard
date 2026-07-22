@@ -43,6 +43,31 @@
     btn.textContent = pinned ? "Unpin subnet" : "Pin to watchlist";
   }
 
+  function isPinned(netuid) {
+    const btn = $("habit-pin-btn");
+    if (!btn || String(btn.dataset.netuid) !== String(netuid)) return false;
+    return btn.dataset.pinned === "1";
+  }
+
+  async function togglePin(netuid) {
+    const n = parseInt(String(netuid), 10);
+    if (!n) return null;
+    const wl = await loadWatchlist();
+    let pins = (wl.netuids || []).map(Number).filter(Boolean);
+    const pinned = pins.indexOf(n) >= 0;
+    if (pinned) {
+      pins = pins.filter(function (x) { return x !== n; });
+    } else {
+      pins.push(n);
+    }
+    const saved = await saveWatchlist(pins);
+    updatePinButton(n, !pinned);
+    updateWatchSummary((saved.netuids || []).length);
+    setStatus(pinned ? "Removed SN" + n + " from watchlist" : "Pinned SN" + n);
+    document.dispatchEvent(new CustomEvent("habit-watchlist:change", { detail: { netuid: n, pinned: !pinned } }));
+    return saved;
+  }
+
   function updateWatchSummary(count) {
     const el = $("habit-watchlist-summary");
     if (el) el.textContent = "Watchlist: " + count + " pinned";
@@ -55,25 +80,14 @@
       const netuid = parseInt(btn.dataset.netuid || "", 10);
       if (!netuid) return;
       try {
-        const wl = await loadWatchlist();
-        let pins = (wl.netuids || []).map(Number).filter(Boolean);
-        const pinned = btn.dataset.pinned === "1";
-        if (pinned) {
-          pins = pins.filter(function (n) {
-            return n !== netuid;
-          });
-        } else if (pins.indexOf(netuid) < 0) {
-          pins.push(netuid);
-        }
-        const saved = await saveWatchlist(pins);
-        updatePinButton(netuid, !pinned);
-        updateWatchSummary((saved.netuids || []).length);
-        setStatus(pinned ? "Removed SN" + netuid + " from watchlist" : "Pinned SN" + netuid);
+        await togglePin(netuid);
       } catch (e) {
         setStatus("Watchlist update failed");
       }
     });
   }
+
+  window.HabitWatchlist = { togglePin: togglePin, isPinned: isPinned, updatePinButton: updatePinButton };
 
   function initAlerts() {
     const btn = $("habit-alert-btn");

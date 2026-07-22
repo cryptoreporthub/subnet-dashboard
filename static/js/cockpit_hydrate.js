@@ -641,6 +641,99 @@
     return document.getElementById('k3-orb-score') || document.querySelector('#k3-dossier .k3-orb-score');
   }
 
+  function dedupeBlockers(blockers) {
+    var seen = {};
+    return (blockers || []).filter(function (b) {
+      var key = String(b || '').trim().toLowerCase();
+      if (!key || seen[key]) return false;
+      seen[key] = true;
+      return true;
+    });
+  }
+
+  function patchK3LifecycleFromTrail(trail, payload) {
+    var host = document.getElementById('k3-lifecycle-outcome');
+    if (!host || !trail || !trail.length) return;
+    var chain = host.querySelector('.k3-lifecycle-chain');
+    if (chain && chain.children.length > 1) return;
+    var pick = (payload && (payload.pick || payload.candidate)) || {};
+    var sn = pick.subnet || {};
+    var netuid = sn.netuid;
+    if (netuid == null) return;
+    var rows = (trail || []).filter(function (ev) {
+      var p = ev.payload || ev;
+      return p && p.netuid != null && Number(p.netuid) === Number(netuid);
+    });
+    if (!rows.length) return;
+    var steps = [];
+    rows.slice(0, 4).forEach(function (ev, idx) {
+      var p = ev.payload || ev;
+      var type = ev.event_type || p.event_type || 'event';
+      var title = p.statement || p.reason || type.replace(/_/g, ' ');
+      var detail = '';
+      if (p.predicted_pct != null && p.actual_pct != null) {
+        detail = 'Expected ' + Number(p.predicted_pct).toFixed(1) + '% → actual ' + Number(p.actual_pct).toFixed(1) + '%';
+      } else if (p.expert) {
+        detail = String(p.expert);
+      }
+      steps.push(
+        '<li class="k3-lifecycle-step k3-lifecycle-step--done">' +
+        '<span class="k3-lifecycle-label">' + esc(String(idx + 1) + ' · ' + type.replace(/_/g, ' ')) + '</span>' +
+        '<span class="k3-lifecycle-title">' + esc(String(title).slice(0, 80)) + '</span>' +
+        (detail ? '<span class="k3-lifecycle-detail">' + esc(detail) + '</span>' : '') +
+        '</li>'
+      );
+    });
+    if (!steps.length) return;
+    host.innerHTML =
+      '<div class="k3-layer-title">Council lifecycle</div>' +
+      '<ol class="k3-lifecycle-chain" aria-label="Pick lifecycle path">' +
+      steps.join('') +
+      '</ol>';
+  }
+
+  function renderProofPumpTab(trust) {
+    trust = trust || {};
+    var quiet = document.getElementById('proof-pump-quiet');
+    var pctEl = document.getElementById('proof-pump-pct');
+    var metaEl = document.getElementById('proof-pump-meta');
+    if (!quiet && !pctEl) return;
+    var early = trust.early || {};
+    var n = Number(trust.headline_n != null ? trust.headline_n : early.n) || 0;
+    var rate = trust.headline_pct != null ? trust.headline_pct : (early.hit_rate != null ? Math.round(early.hit_rate * 100) : null);
+    if (trust.ready && rate != null && n > 0) {
+      if (quiet) quiet.hidden = true;
+      if (pctEl) {
+        pctEl.hidden = false;
+        pctEl.textContent = String(rate) + '%';
+      }
+      if (metaEl) {
+        metaEl.hidden = false;
+        metaEl.textContent = n + ' graded early alerts · +2% in 1h claim';
+      }
+    } else {
+      if (quiet) {
+        quiet.hidden = false;
+        quiet.textContent = trust.line || trust.message || 'Pump early hit-rate — grading +2% in 1h from WARMING UP / BUILDING entries.';
+      }
+      if (pctEl) pctEl.hidden = true;
+      if (metaEl) metaEl.hidden = true;
+    }
+  }
+
+  function syncProofBandGraded(graded) {
+    if (!graded) return;
+    var meta = document.querySelector('#proof-band-score-hero .proof-band__meta');
+    if (!meta) return;
+    var accMatch = meta.textContent.match(/^([\d.]+)%/);
+    var acc = accMatch ? accMatch[1] : null;
+    if (acc != null) {
+      meta.textContent = graded + ' graded · ' + acc + '% dir. · published, not curated';
+    } else {
+      meta.textContent = graded + ' graded · published, not curated';
+    }
+  }
+
   function patchK3ConvictionRing(confPct) {
     if (confPct == null || isNaN(confPct)) return;
     var ring = document.querySelector('#k3-dossier .ring-fill');
@@ -671,24 +764,47 @@
       var db = Math.abs(gate - Number(b.conviction || 0));
       return da - db;
     });
-    var rows = sorted.slice(0, 8).map(function (alt) {
+    var seenWhy = {};
+    var rows = sorted.slice(0, 8).map(function (alt, idx) {
       var nu = alt.netuid;
       var name = alt.name || resolveSubnetDisplayName(alt, nu);
       var pct =
         alt.conviction != null
           ? '<span class="k3-weighed-pct">' + esc(String(Math.round(Number(alt.conviction)))) + '%</span>'
           : '';
-      var role = alt.role ? '<p class="k3-weighed-why">' + esc(alt.role) + '</p>' : '';
-      var compareHint = alt.netuid != null ? ' title="Tap for subnet · flow 24h in dossier"' : '';
+      var whyKey = String(alt.role || '').slice(0, 40);
+      var whyText = alt.role || ('Rank #' + (idx + 1) + ' — did not clear the bar');
+      if (seenWhy[whyKey]) {
+        whyText = whyText + ' · alt path';
+      }
+      seenWhy[whyKey] = true;
+      var role = '<p class="k3-weighed-why">' + esc(whyText) + '</p>';
+      var flow = alt.price_change_24h != null ? Number(alt.price_change_24h).toFixed(1) + '%' : '—';
+      var depth = alt.volume != null ? String(alt.volume) : '—';
+      var emit = alt.emission != null ? String(alt.emission) : '—';
+      var compare =
+        '<p class="k3-weighed-compare" hidden>flow 24h ' + esc(flow) +
+        ' · depth ' + esc(depth) +
+        ' · emission ' + esc(emit) + '</p>';
       return (
-        '<div class="k3-weighed-row" data-netuid="' + esc(nu) + '" onclick="switchToSubnet(\'' + esc(nu) + '\')" role="button" tabindex="0"' + compareHint + '>' +
+        '<div class="k3-weighed-row" data-netuid="' + esc(nu) + '" role="button" tabindex="0">' +
         '<div class="k3-weighed-top"><span class="k3-weighed-name">' + esc(name) + '</span>' + pct + '</div>' +
-        role +
+        role + compare +
         '</div>'
       );
     }).join('');
     body.innerHTML =
       '<div class="k3-deliberation"><div class="k3-weighed-list">' + rows + '</div></div>';
+    body.querySelectorAll('.k3-weighed-row').forEach(function (row) {
+      row.addEventListener('click', function () {
+        var cmp = row.querySelector('.k3-weighed-compare');
+        if (cmp) cmp.hidden = !cmp.hidden;
+        var nu = row.getAttribute('data-netuid');
+        if (nu && typeof window.switchToSubnet === 'function') {
+          window.switchToSubnet(nu);
+        }
+      });
+    });
   }
 
   function formatWeightDelta(delta) {
@@ -813,6 +929,17 @@
     setText('k3-brief-vs', brief.vs || '');
     setText('k3-brief-vs-hold', brief.vs_hold_tao || '');
     setText('k3-brief-trigger', brief.trigger || '');
+    var triggerEl = document.getElementById('k3-brief-trigger');
+    if (triggerEl) {
+      if (brief.trigger) {
+        triggerEl.hidden = false;
+        var flip = brief.trigger.replace(/^Flip to LONG when /i, 'Long when ');
+        triggerEl.innerHTML = '<span class="k3-brief-trigger__kicker">FLIP</span>' + esc(flip);
+      } else {
+        triggerEl.hidden = true;
+        triggerEl.textContent = '';
+      }
+    }
     var driversHost = document.getElementById('k3-evidence-drivers');
     if (driversHost && brief.evidence_drivers && brief.evidence_drivers.length) {
       driversHost.innerHTML = brief.evidence_drivers.map(function (d) {
@@ -986,6 +1113,7 @@
     });
     html += '</div>';
     host.innerHTML = html;
+    renderProofPumpTab(trust);
   }
 
   function renderDailyPick(payload) {
@@ -1098,11 +1226,12 @@
           panel.innerHTML = '';
           return;
         }
+        var blockers = dedupeBlockers(explain.blockers).slice(0, 4);
         panel.hidden = false;
         panel.innerHTML =
           '<p class="home-stage-why-not__title">Why no audited long</p>' +
           '<ul class="home-stage-why-not__list">' +
-          explain.blockers.slice(0, 4).map(function (b) { return '<li>' + esc(b) + '</li>'; }).join('') +
+          blockers.map(function (b) { return '<li>' + esc(b) + '</li>'; }).join('') +
           '</ul>';
       })
       .catch(function () {
@@ -1270,6 +1399,7 @@
     if (gradedEl) {
       gradedEl.textContent = (stats.correct || 0) + '✓ / ' + (stats.wrong || 0) + '✗ graded (n=' + graded + ')';
     }
+    syncProofBandGraded(graded);
     var expEl = document.getElementById('kpi-expired');
     if (expEl) {
       expEl.textContent = String(expired);
@@ -2086,6 +2216,7 @@
         var trailPayload = await fetchJsonRetry('/api/mindmap/trail?limit=20', 15000, 1);
         trail = safePayload(trailPayload).trail || [];
         renderTrail(trail);
+        patchK3LifecycleFromTrail(trail, lastDailyPickPayload);
       } catch (e) {
         console.warn('[cockpit_hydrate] trail fetch failed', e);
       }

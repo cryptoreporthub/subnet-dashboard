@@ -45,7 +45,37 @@
     );
   }
 
-  function updateStatusChip() {
+  function updateCtaRow() {
+    if (!ctaEl) return;
+    var hasFocus = focusNetuid != null;
+    ctaEl.hidden = !hasFocus;
+    var proveBtn = document.getElementById('living-focus-prove-btn');
+    if (proveBtn) {
+      proveBtn.hidden = !hasFocus;
+      proveBtn.disabled = !hasFocus;
+    }
+    var pinBtn = document.getElementById('living-focus-pin-btn');
+    if (pinBtn) {
+      pinBtn.hidden = !hasFocus;
+      pinBtn.disabled = !hasFocus;
+      if (hasFocus && window.HabitWatchlist && window.HabitWatchlist.isPinned) {
+        var pinned = window.HabitWatchlist.isPinned(focusNetuid);
+        pinBtn.textContent = pinned ? 'Unpin from watchlist' : 'Pin to watchlist';
+        pinBtn.dataset.pinned = pinned ? '1' : '0';
+      }
+    }
+  }
+
+  function dedupeBlockers(blockers) {
+    var seen = {};
+    return (blockers || []).filter(function (b) {
+      var key = String(b || '').trim().toLowerCase();
+      if (!key || seen[key]) return false;
+      seen[key] = true;
+      return true;
+    });
+  }
+
     if (!statusChipEl) return;
     if (!focusNetuid) {
       statusChipEl.hidden = true;
@@ -130,6 +160,7 @@
     if (bodyEl) bodyEl.innerHTML = skeletonHtml('Building focus…');
     setBrainState('building');
     updateStatusChip();
+    updateCtaRow();
     root.setAttribute('data-focus-netuid', String(focusNetuid));
     window.LivingFocus = window.LivingFocus || {};
     window.LivingFocus.netuid = focusNetuid;
@@ -228,7 +259,7 @@
       return '';
     }
     var label = explain.verdict === 'gated_candidate' ? 'Why no audited long' : 'Why not today\'s pick';
-    var items = explain.blockers.slice(0, 4).map(function (b) {
+    var items = dedupeBlockers(explain.blockers).slice(0, 4).map(function (b) {
       return '<li>' + esc(b) + '</li>';
     }).join('');
     return (
@@ -377,6 +408,7 @@
     }
     bodyEl.innerHTML = html;
     showLearnStrip(trail, weights);
+    updateCtaRow();
     if (ctaEl) ctaEl.hidden = false;
   }
 
@@ -672,6 +704,7 @@
   var proveBtn = document.getElementById('living-focus-prove-btn');
   if (proveBtn) {
     proveBtn.addEventListener('click', function () {
+      if (focusNetuid == null) return;
       var drawer = document.getElementById('market-drawer');
       if (drawer && !drawer.open) drawer.setAttribute('open', 'open');
       var inv = document.getElementById('section-investigation');
@@ -684,6 +717,25 @@
       }
     });
   }
+
+  var lfPinBtn = document.getElementById('living-focus-pin-btn');
+  if (lfPinBtn) {
+    lfPinBtn.addEventListener('click', function () {
+      if (focusNetuid == null) return;
+      var heroPin = document.getElementById('habit-pin-btn');
+      if (heroPin && !heroPin.disabled && String(heroPin.dataset.netuid) === String(focusNetuid)) {
+        heroPin.click();
+        return;
+      }
+      if (window.HabitWatchlist && window.HabitWatchlist.togglePin) {
+        window.HabitWatchlist.togglePin(focusNetuid).then(function () { updateCtaRow(); });
+      }
+    });
+  }
+
+  document.addEventListener('habit-watchlist:change', function () {
+    updateCtaRow();
+  });
 
   window.LivingFocus = {
     get netuid() { return focusNetuid; },

@@ -40,6 +40,18 @@
     return '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(String(hash).slice(0, 10)) + '…</a>';
   }
 
+  function whaleBoardLabel(category) {
+    var key = String(category || '').toLowerCase();
+    if (key.indexOf('rugger') >= 0) return 'Rugger';
+    if (key.indexOf('conviction') >= 0 || key.indexOf('alpha') >= 0 || key.indexOf('early_mover') >= 0) {
+      return 'Smart money';
+    }
+    if (key.indexOf('owner') >= 0) return 'Owner';
+    if (key.indexOf('rotator') >= 0) return 'Rotator';
+    if (key.indexOf('market_mover') >= 0) return 'Market mover';
+    return category.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  }
+
   function renderSellersTable(payload, out) {
     if (!out) return;
     if (payload.error || payload.status === 'error') {
@@ -54,11 +66,12 @@
     var html = '<table class="inv-table"><thead><tr><th>Wallet</th><th>Side</th><th>TAO</th><th>Time</th><th>Tx</th></tr></thead><tbody>';
     rows.slice(0, 25).forEach(function (row) {
       var wallet = row.wallet || row.ss58 || row.coldkey || '—';
+      var role = row.is_owner ? 'Owner' : (row.smart_money ? 'Smart money' : (row.side || row.type || '—'));
       var walletCell = wallet !== '—'
         ? '<a href="/wallet/' + encodeURIComponent(wallet) + '"><code>' + esc(String(wallet).slice(0, 12)) + '…</code></a>'
         : '—';
       html += '<tr><td>' + walletCell + '</td>' +
-        '<td>' + esc(row.side || row.type || '—') + '</td>' +
+        '<td>' + esc(role) + '</td>' +
         '<td>' + esc(row.amount != null ? row.amount : row.tao != null ? row.tao : '—') + '</td>' +
         '<td>' + esc(row.time || row.timestamp || '—') + '</td>' +
         '<td>' + txLink(row.tx_hash || row.hash || row.extrinsic_hash) + '</td></tr>';
@@ -251,9 +264,10 @@
           var rows = boards[cat] || [];
           var lis = rows.slice(0, 5).map(function (row) {
             var w = row.wallet || row.ss58 || '—';
-            return '<li><code>' + esc(w.slice(0, 10)) + '…</code> · ' + esc(row.score != null ? row.score : '') + '</li>';
+            var label = whaleBoardLabel(cat);
+            return '<li><span class="whale-board__role">' + esc(label) + '</span> <code>' + esc(w.slice(0, 10)) + '…</code> · ' + esc(row.score != null ? row.score : '') + '</li>';
           }).join('');
-          return '<div class="whale-board"><h4>' + esc(cat) + '</h4><ul>' + lis + '</ul></div>';
+          return '<div class="whale-board"><h4>' + esc(whaleBoardLabel(cat)) + '</h4><ul>' + lis + '</ul></div>';
         }).join('');
       })
       .catch(function () {
