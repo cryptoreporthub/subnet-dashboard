@@ -25,6 +25,25 @@ def test_degraded_homepage_has_conviction_cards():
     assert "SimiVision picks warming up" not in html
 
 
+def test_degraded_shell_ssrs_daily_pick_not_blank():
+    """Hero must paint from local JSON — not wait for cockpit_hydrate.js."""
+    import server as srv
+
+    pick = srv._read_shell_daily_pick()
+    srv._HOMEPAGE_HTML_CACHE["html"] = None
+    srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
+    srv._warm_homepage_cache(None)
+    html = client.get("/").text
+    assert 'id="k3-dossier"' in html
+    assert 'id="k3-call-headline"' in html
+    if pick:
+        move = (pick.get("brief") or {}).get("move")
+        if move:
+            assert move in html
+        else:
+            assert "HOLD · no long" not in html
+
+
 def test_degraded_homepage_has_council_weights():
     _ensure_homepage_cache()
     html = client.get("/").text

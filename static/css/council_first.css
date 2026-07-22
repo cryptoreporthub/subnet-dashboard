@@ -43,12 +43,13 @@
   z-index: 1;
   width: min(920px, 100%);
   margin: 0 auto;
+  opacity: 1;
   animation: stage-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes stage-rise {
-  from { opacity: 0; transform: translateY(18px); }
-  to { opacity: 1; transform: none; }
+  from { transform: translateY(18px); }
+  to { transform: none; }
 }
 
 .council-stage__brand {
@@ -97,6 +98,7 @@
   border: none;
   background: transparent;
   box-shadow: none;
+  opacity: 1;
   animation: stage-rise 0.85s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -1013,6 +1015,8 @@ button.home-cta {
   .council-call,
   .council-stage__atmosphere {
     animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 }
 
