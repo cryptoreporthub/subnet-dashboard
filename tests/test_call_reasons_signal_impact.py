@@ -82,7 +82,13 @@ def test_daily_pick_reasons_use_scored_signal_impact():
     assert pick["prediction"] is not None
     # Expert/source derived from signal impact, not hard-coded quant/council_day_pick only.
     assert pick["prediction"]["signal_source"]
-    assert pick["prediction"]["expert"] in ("quant", "hype", "dark_horse", "technical")
+    assert pick["prediction"]["expert"] in (
+        "quant",
+        "hype",
+        "dark_horse",
+        "technical",
+        "unclassified",
+    )
     # At least one reason should not be the generic accumulation fallback alone.
     assert pick["reasons"] != ["Balanced metrics — accumulation phase"]
 

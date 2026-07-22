@@ -22,7 +22,12 @@ from internal.council.resolver_scheduler import (
     get_prediction_resolver_scheduler_state,
     start_prediction_resolver_scheduler,
 )
-from internal.learning.predictions_store import load_predictions, save_predictions, update_stats
+from internal.learning.predictions_store import (
+    count_unclassified,
+    load_predictions,
+    save_predictions,
+    update_stats,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -409,6 +414,7 @@ async def api_learning_stats():
     resolver_stats = snap["resolver_stats"]
     watchdog = snap["watchdog"]
     trust_banner = snap["trust_banner"]
+    unclassified = count_unclassified()
     return {
         "status": "success",
         "data": {
@@ -422,6 +428,7 @@ async def api_learning_stats():
             "duplicate": resolver_stats.get("duplicate", 0),
             "pending": resolver_stats.get("pending", stats.get("pending", 0)),
             "graded": trust_banner.get("graded"),
+            "unclassified_count": unclassified,
             "last_updated": stats.get("last_updated") or _utcnow_z(),
             "scenario_memory": scenario,
             "watchdog": watchdog,

@@ -313,9 +313,15 @@ def _expert_hits_by_regime() -> Dict[str, Dict[str, List[bool]]]:
             correct = pred.get("correct")
             if correct is None:
                 continue
-            expert = str(pred.get("expert") or "quant").lower()
+            raw = pred.get("expert")
+            if not isinstance(raw, str) or not raw.strip():
+                continue
+            expert = raw.lower().strip()
             if expert == "contrarian":
                 expert = "dark_horse"
+            # Skip catch-all / unknown — do not bake into any expert's hit rate.
+            if expert == "unclassified" or expert not in DEFAULT_WEIGHTS:
+                continue
             snap = pred.get("subnet_snapshot") if isinstance(pred.get("subnet_snapshot"), dict) else {}
             regime = detect_regime(snap) if snap else "chop"
             out.setdefault(regime, {}).setdefault(expert, []).append(bool(correct))

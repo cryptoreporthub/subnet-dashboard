@@ -147,6 +147,8 @@ def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
     if not isinstance(expert, str):
         return None
     expert = expert.lower().strip()
+    if not expert or expert in {"unclassified", "unknown", "neutral"}:
+        return None
 
     if expert in {"quant", "hype", "dark_horse", "technical"}:
         return expert
