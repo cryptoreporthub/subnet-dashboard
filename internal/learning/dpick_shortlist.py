@@ -53,15 +53,40 @@ def _conviction_pct(raw: Any) -> int:
     return max(0, min(100, int(round(val))))
 
 
-def _why_not(pick_block: Dict[str, Any], runner_score: Dict[str, Any], rank: int) -> Optional[str]:
+def _why_not(
+    pick_block: Dict[str, Any],
+    runner_score: Dict[str, Any],
+    rank: int,
+    *,
+    pick_conv: int = 0,
+    alt_conv: int = 0,
+) -> str:
     audit = pick_block.get("audit") if isinstance(pick_block.get("audit"), dict) else {}
     concerns = audit.get("concerns") or []
     if concerns and rank == 2:
         return str(concerns[0])[:120]
+
     reasons = runner_score.get("reasons") or []
     if isinstance(reasons, list) and reasons:
-        return str(reasons[0])[:120]
-    return None
+        first = str(reasons[0]).strip()
+        if first and first not in {"No strong bullish setup", "No strong bearish setup"}:
+            return first[:120]
+
+    ec = runner_score.get("expert_contributions") or {}
+    active = ec.get("active_signals") if isinstance(ec.get("active_signals"), list) else []
+    signal_line = str(active[0]).strip()[:80] if active else None
+
+    gap = int(pick_conv) - int(alt_conv)
+    if gap > 0:
+        gap_line = f"{gap} pts below today's {pick_conv}% call"
+    elif alt_conv > 0:
+        gap_line = f"{alt_conv}% conviction — below the sized-long bar"
+    else:
+        gap_line = "Council conviction still building on this name"
+
+    if signal_line:
+        return f"{gap_line} · {signal_line}"[:120]
+    return gap_line[:120]
 
 
 def _dissenters(pick_block: Optional[Dict[str, Any]]) -> List[str]:
@@ -163,7 +188,13 @@ def build_deliberation_shortlist(
                 "netuid": nu,
                 "name": name_for_netuid(nu) if nu is not None else "SN?",
                 "conviction": conv,
-                "why_not": _why_not(pick_block or {}, row["score"], rank),
+                "why_not": _why_not(
+                    pick_block or {},
+                    row["score"],
+                    rank,
+                    pick_conv=pick_conv,
+                    alt_conv=conv,
+                ),
                 "expert_contributions": expert_scores,
                 "rank": rank,
                 "price_change_24h": sn.get("price_change_24h"),

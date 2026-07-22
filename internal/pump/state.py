@@ -164,7 +164,13 @@ def transition_subnet(
         except Exception as exc:
             logger.debug("pump_lead ledger skipped SN%s: %s", netuid, exc)
 
-    entry["name"] = signals.get("name") or entry.get("name")
+    raw_name = signals.get("name") or entry.get("name")
+    try:
+        from internal.subnet_names import resolve_subnet_name
+
+        entry["name"] = resolve_subnet_name(int(netuid), tmc_name=raw_name, use_taostats=False)
+    except Exception:
+        entry["name"] = raw_name
     entry["composite_score"] = score
     entry["updated_at"] = _now_z()
     entry["signal_snapshot"] = classification.get("signals")

@@ -31,27 +31,8 @@ def _lead_thresholds() -> Dict[str, float]:
         }
 
 
-def _resolve_name(
-    ladder_entry: Dict[str, Any],
-    subnet_row: Optional[Dict[str, Any]],
-) -> str:
-    """Display name for a pump desk card.
-
-    Prefer the live ladder / feed label when present — registries lag renames
-    (SN54 is Yanez MIID on-chain/desk; committed registry still says WebGenieAI).
-    Curator overrides still win via ``resolve_subnet_name``.
-    """
-    netuid = ladder_entry.get("netuid")
-    try:
-        netuid_int = int(netuid) if netuid is not None else None
-    except (TypeError, ValueError):
-        netuid_int = None
-
-    if netuid_int is None:
-        return "subnet"
-
-    # Live labels first (ladder, then hydrated subnet row).
-    for src in (ladder_entry, subnet_row):
+def _label_hint(*sources: Optional[Dict[str, Any]]) -> Optional[str]:
+    for src in sources:
         if not isinstance(src, dict):
             continue
         raw = src.get("name") or src.get("subnet_name")
@@ -63,11 +44,34 @@ def _resolve_name(
         if re.match(r"^SN\d+$", label, re.I):
             continue
         return label
+    return None
+
+
+def _resolve_name(
+    ladder_entry: Dict[str, Any],
+    subnet_row: Optional[Dict[str, Any]],
+) -> str:
+    """Display name for a pump desk card (override → registry → live hint)."""
+    netuid = ladder_entry.get("netuid")
+    try:
+        netuid_int = int(netuid) if netuid is not None else None
+    except (TypeError, ValueError):
+        netuid_int = None
+
+    if netuid_int is None:
+        return "subnet"
 
     try:
         from internal.subnet_names import resolve_subnet_name
 
-        resolved = resolve_subnet_name(netuid_int)
+        ladder_hint = _label_hint(ladder_entry)
+        row_hint = _label_hint(subnet_row)
+        hint = ladder_hint or row_hint
+        resolved = resolve_subnet_name(netuid_int, tmc_name=hint, use_taostats=False)
+        if row_hint and not ladder_hint:
+            registry_only = resolve_subnet_name(netuid_int, tmc_name=None, use_taostats=False)
+            if row_hint != registry_only and not _BAD_NAME.match(row_hint):
+                return row_hint
         if resolved and not _BAD_NAME.match(resolved):
             return resolved
     except Exception:
@@ -82,6 +86,21 @@ def _subnet_row(netuid: int, subnets: List[Dict[str, Any]]) -> Optional[Dict[str
     return None
 
 
+def _signal_snapshot_stale(snapshot: Dict[str, Any]) -> bool:
+    """Detect placeholder ladder snapshots (0.5 buys / 100% vol) from missing flow fields."""
+    if not snapshot:
+        return True
+    try:
+        buy_ratio = float(snapshot.get("buy_ratio", 0.5))
+        volume_intensity = float(snapshot.get("volume_intensity", 0.0))
+    except (TypeError, ValueError):
+        return True
+    if abs(buy_ratio - 0.5) > 1e-6:
+        return False
+    # ponytail: Fly volume rows froze 0.5/1.0 when buy/sell flow was absent
+    return volume_intensity >= 0.99 or volume_intensity <= 0.0
+
+
 def _lead_signals(
     subnet_row: Optional[Dict[str, Any]],
     ladder_entry: Dict[str, Any],
@@ -90,7 +109,7 @@ def _lead_signals(
     raw = ladder_entry.get("signal_snapshot")
     if isinstance(raw, dict):
         snapshot = dict(raw)
-    if not snapshot and isinstance(subnet_row, dict):
+    if isinstance(subnet_row, dict) and (not snapshot or _signal_snapshot_stale(snapshot)):
         from internal.pump.signals import build_subnet_signals
 
         snapshot = build_subnet_signals(subnet_row)

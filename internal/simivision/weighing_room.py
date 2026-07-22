@@ -380,11 +380,21 @@ def shape_weighing_board(
         state = deliberation_state(prox, delta)
         band_slug, band_label = band_for_state(state)
         reasons = raw.get("reasons") if isinstance(raw.get("reasons"), list) else []
+        fallback_reason = None
+        if call_conv is not None:
+            gap = abs(conv - int(call_conv))
+            if state == "FADING":
+                fallback_reason = f"{gap} pts from today's call — conviction fading"
+            elif state == "NEAR-CALL":
+                fallback_reason = f"Within {gap} pts of today's call — council still aligning"
+            else:
+                fallback_reason = f"{gap} pts from call bar — experts still weighing"
         reason = (
             raw.get("reason")
             or raw.get("why_not")
             or raw.get("call_line")
             or (str(reasons[0]) if reasons else None)
+            or fallback_reason
             or "Council still weighing this name."
         )
         why_not = (
