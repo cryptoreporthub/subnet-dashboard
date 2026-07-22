@@ -2151,7 +2151,7 @@
           : fetchJsonRetry('/api/portfolio/status', 25000, 2),
         window.BrainLetter && window.BrainLetter.hydrate
           ? window.BrainLetter.hydrate()
-          : fetchJsonRetry('/api/letter/brain', 25000, 2),
+          : fetchJsonRetry('/api/letter/brain', 12000, 1),
       ]);
 
       window.HomeHydrateCache = {

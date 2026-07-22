@@ -393,6 +393,16 @@ async def add_cors_headers(request: Request, call_next):
 HOMEPAGE_BUILD_TIMEOUT = int(os.environ.get("HOMEPAGE_BUILD_TIMEOUT", "12"))
 HOMEPAGE_SHELL_CACHE_SECONDS = float(os.environ.get("HOMEPAGE_SHELL_CACHE_SECONDS", "45"))
 TOP_SCORING_UNIVERSE = int(os.environ.get("TOP_SCORING_UNIVERSE", "40"))
+PICK_HANDLER_TIMEOUT = float(os.environ.get("PICK_HANDLER_TIMEOUT_SECONDS", "8"))
+
+
+async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
+    """Run sync work off the event loop; raise TimeoutError on soft deadline."""
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(fn), timeout=timeout_s)
+    except asyncio.TimeoutError:
+        logger.warning("%s timed out after %.1fs", label, timeout_s)
+        raise
 _DEGRADED_INDEX_CACHE: Dict[str, Any] = {"at": 0.0, "ctx": None}
 _HOMEPAGE_HTML_CACHE: Dict[str, Any] = {"at": 0.0, "html": None}
 _EMERGENCY_HOME_HTML: str = ""
@@ -1787,77 +1797,99 @@ def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[st
 
 
 @app.get("/api/simivision")
-def api_simivision():
+async def api_simivision():
     """SimiVision Weighing Room — deliberation board (Daily Call excluded)."""
-    hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
-    subnets, source = _get_subnets_with_source(timeout=hydrate_timeout)
-    if not subnets:
-        subnets, source = _get_subnets_hydrate()
-    subnets = _cap_subnets_for_scoring(subnets)
-    daily_pick: Optional[Dict[str, Any]] = None
-    market_context: Optional[Dict[str, Any]] = None
-    try:
-        if _PICKS_ENGINE:
-            market_context = _market_context_with_weights(subnets)
-            from internal.council.daily_pick_engine import _find_today, _load
 
-            existing = _find_today(_load())
-            daily_pick = existing if existing is not None else None
+    def _build():
+        hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
+        subnets, source = _get_subnets_with_source(timeout=hydrate_timeout)
+        if not subnets:
+            subnets, source = _get_subnets_hydrate()
+        subnets = _cap_subnets_for_scoring(subnets)
+        daily_pick: Optional[Dict[str, Any]] = None
+        market_context: Optional[Dict[str, Any]] = None
+        try:
+            if _PICKS_ENGINE:
+                market_context = _market_context_with_weights(subnets)
+                from internal.council.daily_pick_engine import _find_today, _load
+
+                existing = _find_today(_load())
+                daily_pick = existing if existing is not None else None
+        except Exception as exc:
+            logger.warning("simivision daily-pick context skipped: %s", exc)
+        return _safe_simivision_payload(
+            subnets=subnets,
+            source=source,
+            daily_pick=daily_pick,
+            market_context=market_context,
+        )
+
+    try:
+        return await _to_thread_timeout(_build, PICK_HANDLER_TIMEOUT, label="simivision")
+    except asyncio.TimeoutError:
+        logger.warning("simivision timed out after %.1fs", PICK_HANDLER_TIMEOUT)
+        return {"top": [], "meta": {"count": 0, "source": "timeout"}}
     except Exception as exc:
-        logger.warning("simivision daily-pick context skipped: %s", exc)
-    return _safe_simivision_payload(
-        subnets=subnets,
-        source=source,
-        daily_pick=daily_pick,
-        market_context=market_context,
-    )
+        logger.warning("simivision failed: %s", exc)
+        return {"top": [], "meta": {"count": 0, "source": "error"}}
 
 
 @app.get("/api/top-picks")
-def api_top_picks():
+async def api_top_picks():
     """Top 3 subnets by short-horizon (hour) and 24h (day) Council scores."""
-    from internal.council.score_cache import score_universe
 
-    hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
-    subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
-    if not subnets:
-        subnets, _ = _get_subnets_hydrate()
-    subnets = _cap_subnets_for_scoring(subnets)
-    if not _PICKS_ENGINE:
-        return {"hour_picks": [], "day_picks": [], "error": "pick engine unavailable"}
-    market_context = _market_context_with_weights(subnets)
-    hour_scored, day_scored = score_universe(
-        subnets,
-        market_context,
-        score_hour=score_subnet_for_hour,
-        score_day=score_subnet_for_day,
-    )
-    hour_scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
-    day_scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
+    def _build():
+        from internal.council.score_cache import score_universe
 
-    def _format(item):
-        sn, sc = item["subnet"], item["score"]
+        hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
+        subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
+        if not subnets:
+            subnets, _ = _get_subnets_hydrate()
+        subnets = _cap_subnets_for_scoring(subnets)
+        if not _PICKS_ENGINE:
+            return {"hour_picks": [], "day_picks": [], "error": "pick engine unavailable"}
+        market_context = _market_context_with_weights(subnets)
+        hour_scored, day_scored = score_universe(
+            subnets,
+            market_context,
+            score_hour=score_subnet_for_hour,
+            score_day=score_subnet_for_day,
+        )
+        hour_scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
+        day_scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
+
+        def _format(item):
+            sn, sc = item["subnet"], item["score"]
+            return {
+                "netuid": sn.get("netuid"),
+                "name": sn.get("name"),
+                "symbol": sn.get("symbol"),
+                "score": sc["total_score"],
+                "confidence": sc["confidence"],
+                "expert_contributions": sc["expert_contributions"],
+                "signals": {
+                    "price_change_24h": sn.get("price_change_24h"),
+                    "price_change_7d": sn.get("price_change_7d"),
+                    "emission": sn.get("emission"),
+                    "apy": sn.get("apy"),
+                    "volume": sn.get("volume"),
+                },
+                "scenario_tags": sc["scenario_tags"],
+            }
+
         return {
-            "netuid": sn.get("netuid"),
-            "name": sn.get("name"),
-            "symbol": sn.get("symbol"),
-            "score": sc["total_score"],
-            "confidence": sc["confidence"],
-            "expert_contributions": sc["expert_contributions"],
-            "signals": {
-                "price_change_24h": sn.get("price_change_24h"),
-                "price_change_7d": sn.get("price_change_7d"),
-                "emission": sn.get("emission"),
-                "apy": sn.get("apy"),
-                "volume": sn.get("volume"),
-            },
-            "scenario_tags": sc["scenario_tags"],
+            "hour_picks": [_format(i) for i in hour_scored[:3]],
+            "day_picks": [_format(i) for i in day_scored[:3]],
         }
 
-    return {
-        "hour_picks": [_format(i) for i in hour_scored[:3]],
-        "day_picks": [_format(i) for i in day_scored[:3]],
-    }
+    try:
+        return await _to_thread_timeout(_build, PICK_HANDLER_TIMEOUT, label="top-picks")
+    except asyncio.TimeoutError:
+        logger.warning("top-picks timed out after %.1fs", PICK_HANDLER_TIMEOUT)
+        return {"hour_picks": [], "day_picks": [], "status": "timeout"}
+    except Exception as exc:
+        logger.warning("top-picks failed: %s", exc)
+        return {"hour_picks": [], "day_picks": [], "error": str(exc)}
 
 
 def _pick_netuid_from_daily_payload(payload: Any) -> Optional[int]:
@@ -1896,14 +1928,25 @@ def _daily_pick_weighed_shortlist(pick_payload: Optional[Dict[str, Any]]) -> Lis
 
 
 @app.get("/api/daily-pick/weighed")
-def api_daily_pick_weighed():
+async def api_daily_pick_weighed():
     """Deferred hydrate read — shortlist only, scored on live-priced subnets."""
-    from internal.council.daily_pick_engine import _find_today, _load
 
-    existing = _find_today(_load())
-    if existing is None:
-        return {"shortlist": []}
-    return {"shortlist": _daily_pick_weighed_shortlist(existing)}
+    def _build():
+        from internal.council.daily_pick_engine import _find_today, _load
+
+        existing = _find_today(_load())
+        if existing is None:
+            return {"shortlist": []}
+        return {"shortlist": _daily_pick_weighed_shortlist(existing)}
+
+    try:
+        return await _to_thread_timeout(_build, PICK_HANDLER_TIMEOUT, label="daily-pick-weighed")
+    except asyncio.TimeoutError:
+        logger.warning("daily-pick/weighed timed out after %.1fs", PICK_HANDLER_TIMEOUT)
+        return {"shortlist": [], "status": "timeout"}
+    except Exception as exc:
+        logger.warning("daily-pick/weighed failed: %s", exc)
+        return {"shortlist": [], "error": str(exc)}
 
 
 @app.get("/api/daily-pick")
@@ -1997,21 +2040,41 @@ def api_top_pick_day():
 
 
 @app.get("/api/top-pick/hour")
-def api_top_pick_hour():
+async def api_top_pick_hour():
     """Top short-horizon picks (audited #1 + distinct fill), with fallback.
 
     Response shape is always ``{"picks": [<pick>, ...]}`` — never a bare list.
+    Cap + timeout so a cold score of 128 subnets cannot wedge Fly (~9s → 503).
     """
-    subnets, _ = _get_subnets_with_source()
-    market_context = _market_context_with_weights(subnets)
-    picks: List[Dict[str, Any]] = []
+
+    def _build():
+        hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
+        subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
+        if not subnets:
+            subnets, _ = _get_subnets_hydrate()
+        subnets = _cap_subnets_for_scoring(subnets)
+        market_context = _market_context_with_weights(subnets)
+        picks: List[Dict[str, Any]] = []
+        try:
+            picks = _ordered_hour_picks(subnets, market_context, limit=3)
+        except Exception as e:
+            logger.error("Error fetching hour pick: %s", e)
+        if not picks:
+            picks = [_highest_emission_pick(subnets)]
+        return {"picks": picks}
+
     try:
-        picks = _ordered_hour_picks(subnets, market_context, limit=3)
-    except Exception as e:
-        logger.error("Error fetching hour pick: %s", e)
-    if not picks:
-        picks = [_highest_emission_pick(subnets)]
-    return {"picks": picks}
+        return await _to_thread_timeout(_build, PICK_HANDLER_TIMEOUT, label="top-pick-hour")
+    except asyncio.TimeoutError:
+        logger.warning("top-pick/hour timed out after %.1fs", PICK_HANDLER_TIMEOUT)
+        try:
+            subnets, _ = _get_subnets_hydrate()
+            return {"picks": [_highest_emission_pick(subnets)], "status": "timeout"}
+        except Exception:
+            return {"picks": [], "status": "timeout"}
+    except Exception as exc:
+        logger.error("top-pick/hour failed: %s", exc)
+        return {"picks": [], "error": str(exc)}
 
 
 from internal.instant_bailout import wrap_instant_bailout

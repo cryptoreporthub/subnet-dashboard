@@ -27,8 +27,11 @@ _LIGHT_API_PREFIXES = (
     "/api/pump-alerts",
     "/api/simivision",
     "/api/mindmap/story-path",
+    "/api/mindmap/trail",
     "/api/cockpit/sections",
     "/api/indicators-convergence",
+    "/api/subnets",
+    "/api/judges/",  # single-netuid only — /api/judges (all) stays shedable
 )
 _ACQUIRE_TIMEOUT = float(os.environ.get("LOAD_SHED_ACQUIRE_SECONDS", "2.0"))
 _MAX_IN_FLIGHT = max(1, int(os.environ.get("MAX_IN_FLIGHT_REQUESTS", "12")))
@@ -49,7 +52,11 @@ def bypass_path(path: str) -> bool:
     if path.startswith(_BYPASS_PREFIXES):
         return True
     for prefix in _LIGHT_API_PREFIXES:
-        if path == prefix.rstrip("/") or path.startswith(prefix):
+        # Trailing-slash prefixes are children-only (e.g. /api/judges/28, not /api/judges).
+        if prefix.endswith("/"):
+            if path.startswith(prefix):
+                return True
+        elif path == prefix or path.startswith(prefix):
             return True
     return False
 
