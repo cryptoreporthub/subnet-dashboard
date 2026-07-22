@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-22T22:15:00Z  
-**main:** pending merge `cursor/weight-rebalance-pump-overlay-c9f5` (Slice R + M)
+**Last updated:** 2026-07-22T22:25:00Z  
+**main:** `9c75415` (#419 Slice R+M merged)
 
 ## Next slice queue
 
