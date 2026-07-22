@@ -15,6 +15,75 @@ Do **not** clone full DEX / 128-row Bloomberg. Steal the five peer edges that ma
 
 ---
 
+## Design intent (internal — not public marketing)
+
+**Private bar:** On-chain, the most profitable wallets are overwhelmingly bot-operated — speed, always-on scanning, zero hesitation. A human cannot clone that stack. This app exists so an **attentive human checking signals through the day** can theoretically **keep pace with bot-level outcomes** (timing, conviction, not missing the move).
+
+**Do not sell this publicly.** “Beat the bots” sets expectations we cannot guarantee in copy. Hold the bar internally; keep external messaging grounded (graded claims, n=, hit rates, honest HOLD).
+
+**Why these surfaces exist:**
+
+| Surface | Trader job | Bot-parity role |
+|---------|------------|-----------------|
+| **Hero cards** | What to act on *now* | One-shot conviction without re-scanning 129 subnets |
+| **Pump desk** | Intraday lead scanner | Catch flow before price — the window bots already exploit |
+| **Horizons** | Multi-timeframe context | See the move bots are positioned for, not one candle in isolation |
+
+**Build test:** Does this help someone who checks the app during the day act in time — not just understand after the fact?
+
+---
+
+## Hard rule — design intent must hold site-wide
+
+This intent is not aspirational copy. It is the **acceptance bar for every feature, section, and PR**. If a surface does not help an attentive human act in time, it does not belong on the home path — or it must be reframed / cut.
+
+**The rule:** Every shipped surface answers: *“If I check this app during the day and follow the signals, does this help me keep pace with what bots are already doing?”*
+
+| Must | Must not |
+|------|----------|
+| Actionable now (hero, pump phase, horizon chip) | Dashboard noise that only explains yesterday |
+| Honest timing (early / chase / HOLD) | Hype that implies guaranteed bot-beating returns |
+| Proof that builds trust (n=, graded claims, hit rates) | Vanity metrics with no decision hook |
+| One clear trader question per section | Bloomberg clone / 128-row screener on first viewport |
+
+**Surfaces governed by this rule (verify on every change):**
+
+- **Hero** — single conviction call + evidence; not a research report
+- **Pump desk** — intraday lead with phase honesty; not lagging price chase
+- **Horizons** — multi-timeframe “where is the move”; not decorative chips
+- **Weighed against / Living Focus** — why act or wait *today*
+- **Track record / trust lines** — proof to act, not brag sheet
+- **Wave 3 sections** — each must map to the build test above before ship
+
+**Verification (required before merge when touching home, pump, horizons, or trader-facing copy):**
+
+- [ ] Can a user checking once in the morning and once mid-afternoon make a timed decision from this surface alone?
+- [ ] Does copy stay grounded (no public “beat the bots” promise)?
+- [ ] Does the feature connect to hero, pump, or horizons — or justify why it lives elsewhere?
+- [ ] Phone QA 390px: Call + Lead + at least one horizon path scannable without Pro scroll
+
+**Anti-patterns (reject in review):**
+
+- Analytics that require constant monitoring to be useful but give no alert/phase hook
+- Sections that duplicate TaoDashboard breadth without a faster *act* path
+- Features that only make sense if you already run a bot
+
+---
+
+## Subnet display names (operational — separate from design intent)
+
+Names must be trustworthy (wrong label = broken trust on an action surface). Not the north-star rule above — but still required hygiene.
+
+**Pipeline:** `internal/subnet_names.py` — resolve at read time; never trust frozen JSON labels on live surfaces.
+
+**Priority (today):** curator override → GitHub `taostat/subnets-infos` `subnets.json` → TaoStats API (when enabled) → local registry → TMC → `SN{n}`.
+
+**Why overrides exist:** TaoStats **website** can be correct while the **GitHub JSON** we fetch still lists the previous occupant (e.g. SN15 `De-Val` vs **ORO**). Overrides in `config/subnet_name_overrides.json` until upstream catches up.
+
+**When names drift:** add override + test in `test_subnet_names.py`; spot-check hero + pump + recent calls after deploy.
+
+---
+
 ## Already shipped (do not re-litigate)
 
 | Slice | Main |
