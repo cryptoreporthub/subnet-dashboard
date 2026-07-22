@@ -14,7 +14,7 @@
     if (!payload || !payload.data_available || !payload.steps || !payload.steps.length) {
       var reason = payload && payload.reason === "no_pick"
         ? "No audited pick today — chain appears when council clears a call."
-        : "Story path warming up.";
+        : "Quiet — story path fills when council clears an audited pick.";
       chain.innerHTML = '<li class="story-path__empty" id="story-path-empty">' + esc(reason) + "</li>";
       return;
     }
