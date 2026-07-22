@@ -7,9 +7,10 @@
 
 1. **G0** — Phone QA 390px after #397 deploy (trust line + hydrate speed)
 2. **Wave 1 pump** — P1 triad · P2 hit-rate proof UI · P3 size cliff (`gameplan-pump-site-undeniable.md`)
-3. **Wave 2** — P4 push alerts · P5 lead-wallet/founder chips
-4. **Wave 3** — Site section upgrades S1→S8 (3 ACs each)
-5. **Telegram** — H4 session bootstrap + feed honesty (may share P4)
+3. **H1** — Hour watch live bus (`h1-hour-watch-live-lock.md`) — after G0 + Wave 1 exit + B0-0; `cockpit.picks` SSE + Now rib
+4. **Wave 2** — P4 push alerts · P5 lead-wallet/founder chips
+5. **Wave 3** — Site section upgrades S1→S8 (3 ACs each)
+6. **Telegram** — H4 session bootstrap + feed honesty (may share P4)
 
 ## Gameplan
 
