@@ -69,6 +69,23 @@ def _subnet_snapshot(subnet: Dict[str, Any]) -> Dict[str, Any]:
     return snap
 
 
+def _pump_phase_at_prediction(netuid: Any) -> Optional[str]:
+    """Stamp ladder phase at pick time (pump learning step 0 — council path only)."""
+    try:
+        from internal.pump.state import load_state
+
+        data = load_state()
+        subnets = data.get("subnets") if isinstance(data.get("subnets"), dict) else {}
+        entry = subnets.get(str(netuid)) or subnets.get(int(netuid))  # type: ignore[arg-type]
+        if not isinstance(entry, dict):
+            return None
+        phase = entry.get("phase") or entry.get("current_phase")
+        return str(phase).upper() if phase else None
+    except Exception as exc:
+        logger.debug("pump phase stamp skipped for SN%s: %s", netuid, exc)
+        return None
+
+
 def _signal_impact_from_pick(pick: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     for key in ("signal_impact", "signals"):
         raw = pick.get(key)
@@ -239,6 +256,9 @@ def record_pick_prediction(
     prediction["pick_confidence"] = pick.get("confidence", pick.get("final_confidence"))
     prediction["magnitude_source"] = magnitude_source
     prediction["subnet_snapshot"] = _subnet_snapshot(subnet)
+    pump_phase = _pump_phase_at_prediction(netuid)
+    if pump_phase:
+        prediction["phase_at_prediction"] = pump_phase
     try:
         from internal.council.weights import load_impact_strength
         from internal.subnets.impact import impact_profile

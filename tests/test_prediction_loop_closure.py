@@ -66,6 +66,26 @@ def test_record_pick_prediction_persists_pending_row():
     assert "quant" in row["weights_at_creation"]
 
 
+def test_record_pick_prediction_stamps_pump_phase(monkeypatch):
+    pick = {
+        "subnet": {"netuid": 28, "name": "LOL"},
+        "confidence": 0.62,
+        "expert_contributions": {"quant": 0.5},
+        "action": "long",
+    }
+    subnet = {"netuid": 28, "name": "LOL", "price": 0.05, "price_change_24h": 4.0}
+
+    monkeypatch.setattr(
+        "internal.learning.prediction_loop._pump_phase_at_prediction",
+        lambda nu: "ACCUMULATING" if int(nu) == 28 else None,
+    )
+
+    stored = record_pick_prediction(pick, subnet, horizon_type="hour")
+    assert stored is not None
+    row = predictions_store.load_predictions()["predictions"][0]
+    assert row.get("phase_at_prediction") == "ACCUMULATING"
+
+
 def test_record_pick_prediction_dedupes_same_horizon():
     pick = {
         "subnet": {"netuid": 29, "name": "Coldint"},

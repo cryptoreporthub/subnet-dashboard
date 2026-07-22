@@ -67,6 +67,7 @@ def build_portfolio_status(
     wins = [p for p in closed if p.get("direction_hit")]
     total = len(closed)
     total_pnl = round(sum(float(p["pnl_pct"]) for p in closed), 4) if closed else 0.0
+    avg_pnl = round(total_pnl / total, 4) if total else 0.0
 
     # Open = pending predictions only (real rows, not invented fills).
     open_positions: List[Dict[str, Any]] = []
@@ -98,6 +99,7 @@ def build_portfolio_status(
             "loss_count": total - len(wins),
             "win_pct": round(len(wins) / total, 4) if total else 0.0,
             "total_pnl_pct": total_pnl,
+            "avg_pnl_pct": avg_pnl,
             "hold_tao_pnl_pct": 0.0,
             "excess_vs_hold_tao_pct": total_pnl,
             "grading": "direction_only_s16",

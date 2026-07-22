@@ -68,8 +68,16 @@
     if (!host) return;
     if (!payload || !payload.top_price_signals || !payload.top_price_signals.length) {
       host.setAttribute("data-brain-state", "quiet");
-      host.innerHTML =
-        '<p class="whats-working__empty">Not enough graded picks yet to rank price signals.</p>';
+      var graded = Number(payload && payload.graded_predictions) || 0;
+      if (graded >= 50) {
+        host.innerHTML =
+          '<p class="whats-working__empty">' +
+          graded +
+          " graded — signal tags sparse on older picks; rankings fill as new calls resolve with stamps.</p>";
+      } else {
+        host.innerHTML =
+          '<p class="whats-working__empty">Not enough graded picks yet to rank price signals.</p>';
+      }
       return;
     }
     host.setAttribute("data-brain-state", "live");
