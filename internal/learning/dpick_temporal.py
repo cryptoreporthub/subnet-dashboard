@@ -90,7 +90,7 @@ def build_temporal_block(
             "resolve_at": None,
             "time_horizon": payload.get("horizon") or "24h",
             "resolves_in": None,
-            "temporal_badge": None,
+            "temporal_badge": "Window pending — not graded yet",
             "ring_state": "resolved" if resolved else "fresh",
             "grade_on_resolve": True,
         }

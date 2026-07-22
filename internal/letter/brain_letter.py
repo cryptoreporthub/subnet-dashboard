@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 
@@ -224,6 +224,78 @@ def _story_block() -> Dict[str, Any]:
         return {"data_available": False, "steps": []}
 
 
+def _yesterday_graded_outcome() -> Optional[str]:
+    """One graded outcome from yesterday for S4 lead."""
+    try:
+        from internal.council import resolver
+
+        yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
+        for row in reversed(resolver.get_resolved_predictions().get("resolved") or []):
+            if not isinstance(row, dict):
+                continue
+            if str(row.get("created_at") or "")[:10] != yesterday:
+                continue
+            if row.get("actual_pct") is None:
+                continue
+            name = row.get("name") or f"SN{row.get('netuid')}"
+            hit = row.get("correct")
+            label = "HIT" if hit is True else ("MISS" if hit is False else "CLOSED")
+            try:
+                pct = float(row["actual_pct"])
+            except (TypeError, ValueError):
+                pct = 0.0
+            return f"Yesterday · {name} · {label} · {pct:+.1f}% actual"
+    except Exception:
+        pass
+    return None
+
+
+def _new_subnet_seed_strip(limit: int = 5) -> List[Dict[str, Any]]:
+    """Honest-empty new / high-netuid seed strip."""
+    try:
+        from server import load_data
+
+        registry = load_data("config/registry.json")
+        rows = []
+        for sn in registry.values():
+            if not isinstance(sn, dict):
+                continue
+            nu = sn.get("netuid")
+            if nu is None:
+                continue
+            try:
+                nu_i = int(nu)
+            except (TypeError, ValueError):
+                continue
+            if nu_i >= 100 or sn.get("is_new"):
+                rows.append(
+                    {
+                        "netuid": nu_i,
+                        "name": sn.get("name") or f"SN{nu_i}",
+                        "note": "New or recent occupant — verify name on desk",
+                    }
+                )
+        rows.sort(key=lambda r: r["netuid"], reverse=True)
+        return rows[:limit]
+    except Exception:
+        return []
+
+
+def _todays_desk_block(pick: Dict[str, Any], outlook: str, trust: Dict[str, Any]) -> str:
+    """Copyable desk block for S4."""
+    banner = trust.get("trust_banner") or {}
+    lines = [
+        f"SimiVision desk · { _today_utc() }",
+        f"Call: {pick.get('action') or 'HOLD'} {pick.get('name') or '—'}",
+        f"Outlook: {outlook}",
+    ]
+    if banner.get("headline"):
+        lines.append(f"Trust: {banner['headline']}")
+    elif banner.get("graded"):
+        lines.append(f"Graded: n={banner.get('graded')}")
+    return "\n".join(lines)
+
+
 def _hold_copy() -> str:
     return "Council on HOLD — confidence hasn't cleared a sized long."
 
@@ -334,6 +406,9 @@ def build_brain_letter() -> Dict[str, Any]:
     story = _story_block()
     banner = trust.get("trust_banner") or {}
     outlook = pick.get("outlook") or _outlook_sentence(pick)
+    yesterday_outcome = _yesterday_graded_outcome()
+    seed_strip = _new_subnet_seed_strip()
+    desk_block = _todays_desk_block(pick, outlook, trust)
 
     empty = (
         not pick.get("name")
@@ -369,5 +444,8 @@ def build_brain_letter() -> Dict[str, Any]:
             "steps": story.get("steps") or [],
         },
         "markdown": markdown,
+        "yesterday_outcome": yesterday_outcome,
+        "seed_strip": seed_strip,
+        "desk_block": desk_block,
         "source": "/api/letter/brain",
     }

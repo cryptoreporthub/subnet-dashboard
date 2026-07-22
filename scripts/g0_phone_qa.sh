@@ -36,6 +36,6 @@ print("G0 phone QA SSR checks OK")
 PY
 
 curl -fsS --max-time 20 "$BASE/api/daily-pick" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d.get('action'); print('daily-pick OK:', d.get('action'))"
-curl -fsS --max-time 25 "$BASE/api/pump-alerts" | python3 -c "import json,sys; d=json.load(sys.stdin); print('pump-alerts OK: count=', d.get('count', len(d.get('alerts') or [])))"
+curl -fsS --max-time 25 "$BASE/api/pump-alerts" | python3 -c "import json,sys; d=json.load(sys.stdin); print('pump-alerts OK: count=', d.get('count', len(d.get('alerts') or []))); alerts=d.get('alerts') or []; assert all('triad' in a for a in alerts), 'missing triad on alert rows'"
 
 echo "G0 complete"

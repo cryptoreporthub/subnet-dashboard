@@ -166,11 +166,17 @@ def build_deliberation_shortlist(
                 "why_not": _why_not(pick_block or {}, row["score"], rank),
                 "expert_contributions": expert_scores,
                 "rank": rank,
+                "price_change_24h": sn.get("price_change_24h"),
+                "emission": sn.get("emission"),
+                "volume": sn.get("volume"),
             }
         )
         rank += 1
         if len(alternatives) >= 8:
             break
+
+    gate = 45 if pick_conv < 45 else pick_conv
+    alternatives.sort(key=lambda a: abs(int(a.get("conviction") or 0) - gate))
 
     dissenters = _dissenters(pick_block)
     picked = None
@@ -203,6 +209,9 @@ def shortlist_cards_for_template(deliberation: Dict[str, Any]) -> List[Dict[str,
                 "conviction": alt.get("conviction"),
                 "role": alt.get("why_not"),
                 "stance": "LONG",
+                "price_change_24h": alt.get("price_change_24h"),
+                "emission": alt.get("emission"),
+                "volume": alt.get("volume"),
             }
         )
     return cards

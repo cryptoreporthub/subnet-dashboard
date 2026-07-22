@@ -8,6 +8,7 @@ it through the RedTeam audit layer before returning a final payload.
 import copy
 import os
 import time
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from internal.council.state_vector import (
@@ -83,6 +84,7 @@ def select_hourly_pick(
             "signal_impact": None,
             "signal_contributions": None,
             "active_signals": [],
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
         _PICK_CACHE.update(key=cache_key, ts=now, payload=copy.deepcopy(empty))
         return empty
@@ -142,6 +144,7 @@ def select_hourly_pick(
         "signal_impact": learning["signal_impact"],
         "signal_contributions": learning["signal_contributions"],
         "active_signals": learning["active_signals"],
+        "generated_at": datetime.fromtimestamp(now, tz=timezone.utc).isoformat().replace("+00:00", "Z"),
     }
     _PICK_CACHE.update(key=cache_key, ts=now, payload=copy.deepcopy(result))
     return result

@@ -101,6 +101,49 @@ def test_brain_letter_shows_real_accuracy_when_ready(monkeypatch):
     assert md.index("## Next") < md.index("## Integrity")
 
 
+def test_brain_letter_wave3_fields(monkeypatch):
+    monkeypatch.setattr(
+        "internal.letter.brain_letter._today_pick_block",
+        lambda: {
+            "date": "2026-07-16",
+            "action": "HOLD",
+            "published": False,
+            "name": "Taoshi",
+            "outlook": "No sized call this window — watching the desk into resolve.",
+        },
+    )
+    monkeypatch.setattr(
+        "internal.letter.brain_letter._trust_block",
+        lambda: {
+            "trust_banner": build_trust_banner({"correct": 5, "wrong": 5, "expired": 0, "total": 10}),
+            "brain_ui_ready": False,
+            "watchdog": {},
+        },
+    )
+    monkeypatch.setattr(
+        "internal.letter.brain_letter._working_block",
+        lambda: {"ready": False, "top_price_signals": [], "disclaimer": ""},
+    )
+    monkeypatch.setattr(
+        "internal.letter.brain_letter._story_block",
+        lambda: {"data_available": False, "steps": []},
+    )
+    monkeypatch.setattr(
+        "internal.letter.brain_letter._yesterday_graded_outcome",
+        lambda: "Yesterday · Taoshi · HIT · +2.1% actual",
+    )
+    monkeypatch.setattr(
+        "internal.letter.brain_letter._new_subnet_seed_strip",
+        lambda limit=5: [{"netuid": 120, "name": "NewNet", "note": "verify on desk"}],
+    )
+
+    out = build_brain_letter()
+    assert out["yesterday_outcome"].startswith("Yesterday")
+    assert out["seed_strip"][0]["netuid"] == 120
+    assert "SimiVision desk" in out["desk_block"]
+    assert "Taoshi" in out["desk_block"]
+
+
 def test_outlook_hold_candidate():
     outlook = _outlook_sentence(
         {

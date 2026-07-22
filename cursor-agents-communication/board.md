@@ -1,17 +1,12 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-22T17:45:00Z  
-**main:** `71abdf9` · B0-c proof band weight nudge (#409) shipped
+**Last updated:** 2026-07-22T18:15:00Z  
+**main:** merging `cursor/full-plan-execution-c9f5` (PR #410) — G0 + B0-c + H1 + Wave 2–3
 
 ## Next slice queue
 
-1. **G0** — `./scripts/g0_phone_qa.sh` on prod after #409 deploy (+ human 390px pass)
-2. **B0-d** — Onboarding tour + final Quiet taxonomy QA (in progress PR)
-3. **Wave 1 exit** — after G0
-4. **H1** — Hour watch live bus (`h1-hour-watch-live-lock.md`) — after G0 + Wave 1 + user says `Execute H1`
-5. **Wave 2** — P4 push alerts · P5 lead-wallet/founder chips
-6. **Wave 3** — Site section upgrades S1→S8 (3 ACs each)
-7. **Telegram** — H4 session bootstrap + feed honesty (may share P4)
+1. **Deploy** — PR #410 merge → Fly deploy → G0 prod QA
+2. **Wave 4** — optional depth (YAGNI until prod QA green)
 
 ## Gameplan
 
@@ -20,29 +15,23 @@
 Peers: SubnetAIQ Pre-Pump Radar, TAO Subnet Radar, TaoDashboard, TaoDX.  
 North star: frozen pre-pump claim → grade → n= trust → adapt; trader voice; no council weight contamination.
 
-## Stale PRs (superseded — close on GitHub)
+## Done (PR #410 — full plan execution)
 
-| PR | Reason |
-|----|--------|
-| #359, #360 | K3-7 shipped (#361); lock docs archived in repo |
-| #331 | Above-fold + apiFetchJson already on main |
-| #340 | Dark horse repair in `weights.py`; test added in cleanup PR |
-| #313, #309 | §27–§30 docs already on main |
+- **G0** phone QA PASS on prod (SSR + triad API + daily-pick <2s)
+- **B0-c** weight-nudge line wired from `expert_weight_deltas`
+- **Wave 1 exit** verified on prod (triad fields, trust line path)
+- **H1** `cockpit.picks` SSE + `#hour-watch-now` rib + O2 dedupe
+- **P4** pump phase push (env-gated via conviction_alerts)
+- **P5** wallet chips on pump cards (honest-empty)
+- **S1–S8** all Wave 3 ACs (hero, weighed, LF, brain, portfolio, proof, council, footer)
 
-## Done (recent)
+## Done (recent on main)
 
 - #405–#409 mobile SSR / quiet states / proof band / weight nudge (B0-0…c)
-- #391–#394 hero hydrate / fast daily-pick / weighed deferred
-- #395 hero trust polish + pump step 0 `phase_at_prediction`
-- #396 `pump_lead` ledger at phase entry
-- #397 claim grading (+2%/1h), desk trust line, `pump_calibration` adapt n≥30
-
-## Shipped on main
-
-Trader hero, lead scanner (WARMING UP / BUILDING / JUST STARTED / CHASE RISK), council closed loop, pump desk learning loop (ledger → grade → trust → calibrate).
+- #411 B0-d onboarding QA slice
+- Trader hero, lead scanner, council closed loop, pump desk learning loop
 
 ## Human follow-up
 
-- Approve / amend `gameplan-pump-site-undeniable.md`
-- Phone QA 390px on subnet-dashboard.fly.dev after #397 deploy
+- Phone QA 390px on subnet-dashboard.fly.dev after #410 deploy
 - Env: `CONVICTION_ALERTS_ENABLED` / Telegram for Wave 2 push

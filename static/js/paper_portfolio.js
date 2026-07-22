@@ -86,6 +86,13 @@
     return html;
   }
 
+  function openCue(row) {
+    var dir = String((row && row.direction) || "").toLowerCase();
+    if (dir === "down" || dir === "short" || dir === "sell") return "EXIT";
+    if (dir === "up" || dir === "long" || dir === "buy") return "TAKE";
+    return "HOLD";
+  }
+
   function renderPositions(closed, open) {
     closed = closed || [];
     open = open || [];
@@ -94,7 +101,7 @@
     var html = "";
     if (closed.length) {
       html += '<ol class="paper-portfolio__list" aria-label="Recent closed positions">';
-      closed.slice(-6).reverse().forEach(function (row) {
+      closed.slice(-10).reverse().forEach(function (row) {
         var hit = row.direction_hit;
         var cls = hit ? "paper-portfolio__item--win" : "paper-portfolio__item--loss";
         html +=
@@ -119,15 +126,23 @@
       html += "</ol>";
     }
     if (open.length) {
-      html += '<p class="paper-portfolio__open">Open: ';
-      html += open
-        .slice(0, 4)
-        .map(function (row) {
-          return esc(row.name || "SN" + row.netuid) + " (" + esc(row.direction || "?") + ")";
-        })
-        .join(" · ");
-      if (open.length > 4) html += " · +" + (open.length - 4) + " more";
-      html += "</p>";
+      html += '<ol class="paper-portfolio__list paper-portfolio__list--open" aria-label="Open positions">';
+      open.slice(0, 10).forEach(function (row) {
+        var cue = openCue(row);
+        html +=
+          '<li class="paper-portfolio__item paper-portfolio__item--open">' +
+          '<span class="paper-portfolio__cue" aria-label="desk cue">' +
+          esc(cue) +
+          "</span>" +
+          '<span class="paper-portfolio__name">' +
+          esc(row.name || "SN" + row.netuid) +
+          "</span>" +
+          '<span class="paper-portfolio__move">' +
+          esc(row.direction || "?") +
+          (row.predicted_pct != null ? " · est " + fmtSigned(row.predicted_pct) : "") +
+          "</span></li>";
+      });
+      html += "</ol>";
     }
     return html;
   }

@@ -641,6 +641,99 @@
     return document.getElementById('k3-orb-score') || document.querySelector('#k3-dossier .k3-orb-score');
   }
 
+  function dedupeBlockers(blockers) {
+    var seen = {};
+    return (blockers || []).filter(function (b) {
+      var key = String(b || '').trim().toLowerCase();
+      if (!key || seen[key]) return false;
+      seen[key] = true;
+      return true;
+    });
+  }
+
+  function patchK3LifecycleFromTrail(trail, payload) {
+    var host = document.getElementById('k3-lifecycle-outcome');
+    if (!host || !trail || !trail.length) return;
+    var chain = host.querySelector('.k3-lifecycle-chain');
+    if (chain && chain.children.length > 1) return;
+    var pick = (payload && (payload.pick || payload.candidate)) || {};
+    var sn = pick.subnet || {};
+    var netuid = sn.netuid;
+    if (netuid == null) return;
+    var rows = (trail || []).filter(function (ev) {
+      var p = ev.payload || ev;
+      return p && p.netuid != null && Number(p.netuid) === Number(netuid);
+    });
+    if (!rows.length) return;
+    var steps = [];
+    rows.slice(0, 4).forEach(function (ev, idx) {
+      var p = ev.payload || ev;
+      var type = ev.event_type || p.event_type || 'event';
+      var title = p.statement || p.reason || type.replace(/_/g, ' ');
+      var detail = '';
+      if (p.predicted_pct != null && p.actual_pct != null) {
+        detail = 'Expected ' + Number(p.predicted_pct).toFixed(1) + '% → actual ' + Number(p.actual_pct).toFixed(1) + '%';
+      } else if (p.expert) {
+        detail = String(p.expert);
+      }
+      steps.push(
+        '<li class="k3-lifecycle-step k3-lifecycle-step--done">' +
+        '<span class="k3-lifecycle-label">' + esc(String(idx + 1) + ' · ' + type.replace(/_/g, ' ')) + '</span>' +
+        '<span class="k3-lifecycle-title">' + esc(String(title).slice(0, 80)) + '</span>' +
+        (detail ? '<span class="k3-lifecycle-detail">' + esc(detail) + '</span>' : '') +
+        '</li>'
+      );
+    });
+    if (!steps.length) return;
+    host.innerHTML =
+      '<div class="k3-layer-title">Council lifecycle</div>' +
+      '<ol class="k3-lifecycle-chain" aria-label="Pick lifecycle path">' +
+      steps.join('') +
+      '</ol>';
+  }
+
+  function renderProofPumpTab(trust) {
+    trust = trust || {};
+    var quiet = document.getElementById('proof-pump-quiet');
+    var pctEl = document.getElementById('proof-pump-pct');
+    var metaEl = document.getElementById('proof-pump-meta');
+    if (!quiet && !pctEl) return;
+    var early = trust.early || {};
+    var n = Number(trust.headline_n != null ? trust.headline_n : early.n) || 0;
+    var rate = trust.headline_pct != null ? trust.headline_pct : (early.hit_rate != null ? Math.round(early.hit_rate * 100) : null);
+    if (trust.ready && rate != null && n > 0) {
+      if (quiet) quiet.hidden = true;
+      if (pctEl) {
+        pctEl.hidden = false;
+        pctEl.textContent = String(rate) + '%';
+      }
+      if (metaEl) {
+        metaEl.hidden = false;
+        metaEl.textContent = n + ' graded early alerts · +2% in 1h claim';
+      }
+    } else {
+      if (quiet) {
+        quiet.hidden = false;
+        quiet.textContent = trust.line || trust.message || 'Pump early hit-rate — grading +2% in 1h from WARMING UP / BUILDING entries.';
+      }
+      if (pctEl) pctEl.hidden = true;
+      if (metaEl) metaEl.hidden = true;
+    }
+  }
+
+  function syncProofBandGraded(graded) {
+    if (!graded) return;
+    var meta = document.querySelector('#proof-band-score-hero .proof-band__meta');
+    if (!meta) return;
+    var accMatch = meta.textContent.match(/^([\d.]+)%/);
+    var acc = accMatch ? accMatch[1] : null;
+    if (acc != null) {
+      meta.textContent = graded + ' graded · ' + acc + '% dir. · published, not curated';
+    } else {
+      meta.textContent = graded + ' graded · published, not curated';
+    }
+  }
+
   function patchK3ConvictionRing(confPct) {
     if (confPct == null || isNaN(confPct)) return;
     var ring = document.querySelector('#k3-dossier .ring-fill');
@@ -665,23 +758,53 @@
     if (!layer || !shortlist || !shortlist.length) return;
     var body = layer.querySelector('.k3-layer-body');
     if (!body || (body.querySelector('.k3-weighed-list') && !body.querySelector('.k3-empty'))) return;
-    var rows = shortlist.slice(0, 8).map(function (alt) {
+    var gate = 45;
+    var sorted = shortlist.slice().sort(function (a, b) {
+      var da = Math.abs(gate - Number(a.conviction || 0));
+      var db = Math.abs(gate - Number(b.conviction || 0));
+      return da - db;
+    });
+    var seenWhy = {};
+    var rows = sorted.slice(0, 8).map(function (alt, idx) {
       var nu = alt.netuid;
       var name = alt.name || resolveSubnetDisplayName(alt, nu);
       var pct =
         alt.conviction != null
           ? '<span class="k3-weighed-pct">' + esc(String(Math.round(Number(alt.conviction)))) + '%</span>'
           : '';
-      var role = alt.role ? '<p class="k3-weighed-why">' + esc(alt.role) + '</p>' : '';
+      var whyKey = String(alt.role || '').slice(0, 40);
+      var whyText = alt.role || ('Rank #' + (idx + 1) + ' — did not clear the bar');
+      if (seenWhy[whyKey]) {
+        whyText = whyText + ' · alt path';
+      }
+      seenWhy[whyKey] = true;
+      var role = '<p class="k3-weighed-why">' + esc(whyText) + '</p>';
+      var flow = alt.price_change_24h != null ? Number(alt.price_change_24h).toFixed(1) + '%' : '—';
+      var depth = alt.volume != null ? String(alt.volume) : '—';
+      var emit = alt.emission != null ? String(alt.emission) : '—';
+      var compare =
+        '<p class="k3-weighed-compare" hidden>flow 24h ' + esc(flow) +
+        ' · depth ' + esc(depth) +
+        ' · emission ' + esc(emit) + '</p>';
       return (
-        '<div class="k3-weighed-row" data-netuid="' + esc(nu) + '" onclick="switchToSubnet(\'' + esc(nu) + '\')" role="button" tabindex="0">' +
+        '<div class="k3-weighed-row" data-netuid="' + esc(nu) + '" role="button" tabindex="0">' +
         '<div class="k3-weighed-top"><span class="k3-weighed-name">' + esc(name) + '</span>' + pct + '</div>' +
-        role +
+        role + compare +
         '</div>'
       );
     }).join('');
     body.innerHTML =
       '<div class="k3-deliberation"><div class="k3-weighed-list">' + rows + '</div></div>';
+    body.querySelectorAll('.k3-weighed-row').forEach(function (row) {
+      row.addEventListener('click', function () {
+        var cmp = row.querySelector('.k3-weighed-compare');
+        if (cmp) cmp.hidden = !cmp.hidden;
+        var nu = row.getAttribute('data-netuid');
+        if (nu && typeof window.switchToSubnet === 'function') {
+          window.switchToSubnet(nu);
+        }
+      });
+    });
   }
 
   function formatWeightDelta(delta) {
@@ -692,6 +815,30 @@
     if (d > 0.001) return '<span class="k3-judge-delta up">+' + fmt(d, 2) + '</span>';
     if (d < -0.001) return '<span class="k3-judge-delta down">' + fmt(d, 2) + '</span>';
     return '<span class="k3-judge-delta flat">0.00</span>';
+  }
+
+  function renderWeightNudgeLine(deltas) {
+    var el = document.getElementById('k3-weight-nudge-line');
+    if (!el) return;
+    var deltaMap = deltas && typeof deltas === 'object' ? deltas : {};
+    var ranked = CANONICAL_EXPERTS.map(function (name) {
+      var d = Number(deltaMap[name]);
+      return { name: name, delta: isNaN(d) ? 0 : d };
+    }).filter(function (row) {
+      return Math.abs(row.delta) > 0.001;
+    }).sort(function (a, b) {
+      return Math.abs(b.delta) - Math.abs(a.delta);
+    }).slice(0, 2);
+    if (!ranked.length) {
+      el.hidden = true;
+      el.textContent = '';
+      return;
+    }
+    var parts = ranked.map(function (row) {
+      return expertLabel(row.name) + ' ' + (row.delta > 0 ? '+' : '') + fmt(row.delta, 2);
+    });
+    el.textContent = 'Council weights shifted: ' + parts.join(' · ');
+    el.hidden = false;
   }
 
   function patchK3CouncilVotes(weights, deltas) {
@@ -780,7 +927,30 @@
     }
     setText('k3-brief-thesis', brief.thesis || '');
     setText('k3-brief-vs', brief.vs || '');
+    setText('k3-brief-vs-hold', brief.vs_hold_tao || '');
     setText('k3-brief-trigger', brief.trigger || '');
+    var triggerEl = document.getElementById('k3-brief-trigger');
+    if (triggerEl) {
+      if (brief.trigger) {
+        triggerEl.hidden = false;
+        var flip = brief.trigger.replace(/^Flip to LONG when /i, 'Long when ');
+        triggerEl.innerHTML = '<span class="k3-brief-trigger__kicker">FLIP</span>' + esc(flip);
+      } else {
+        triggerEl.hidden = true;
+        triggerEl.textContent = '';
+      }
+    }
+    var driversHost = document.getElementById('k3-evidence-drivers');
+    if (driversHost && brief.evidence_drivers && brief.evidence_drivers.length) {
+      driversHost.innerHTML = brief.evidence_drivers.map(function (d) {
+        var tag = d.tag || 'tech';
+        return '<span class="k3-evidence-driver k3-evidence-driver--' + esc(tag) + '">' + esc(tag) + ' · ' + esc(d.label || '') + '</span>';
+      }).join('');
+      driversHost.hidden = false;
+    } else if (driversHost) {
+      driversHost.innerHTML = '';
+      driversHost.hidden = true;
+    }
 
     var pump = payload.pump_chip || {};
     var pumpChip = document.getElementById('k3-pump-chip');
@@ -933,6 +1103,9 @@
       if (row.size_line) {
         html += '<p class="pump-alert__size">' + esc(row.size_line) + '</p>';
       }
+      if (row.wallet_chip) {
+        html += '<p class="pump-alert__wallet-chip">' + esc(row.wallet_chip) + '</p>';
+      }
       html +=
         '<p class="pump-alert__trigger">' +
         esc(row.trigger || '') +
@@ -940,6 +1113,7 @@
     });
     html += '</div>';
     host.innerHTML = html;
+    renderProofPumpTab(trust);
   }
 
   function renderDailyPick(payload) {
@@ -1052,11 +1226,12 @@
           panel.innerHTML = '';
           return;
         }
+        var blockers = dedupeBlockers(explain.blockers).slice(0, 4);
         panel.hidden = false;
         panel.innerHTML =
           '<p class="home-stage-why-not__title">Why no audited long</p>' +
           '<ul class="home-stage-why-not__list">' +
-          explain.blockers.slice(0, 4).map(function (b) { return '<li>' + esc(b) + '</li>'; }).join('') +
+          blockers.map(function (b) { return '<li>' + esc(b) + '</li>'; }).join('') +
           '</ul>';
       })
       .catch(function () {
@@ -1195,44 +1370,9 @@
       : '';
     replaceSectionContent('section-council', lean + '<div class="council-grid">' + cards + '</div>', '.council-grid, .card-muted');
     patchK3CouncilVotes(weights, deltaMap);
-    patchK3WeightNudge(deltaMap);
+    renderWeightNudgeLine(deltaMap);
   }
 
-  function patchK3WeightNudge(deltas) {
-    var el = document.getElementById('k3-weight-nudge-line');
-    if (!el) return;
-    var deltaMap = deltas && typeof deltas === 'object' ? deltas : {};
-    var keys = CANONICAL_EXPERTS.filter(function (k) { return deltaMap[k] != null; });
-    if (!keys.length) {
-      keys = Object.keys(deltaMap);
-    }
-    if (!keys.length) {
-      el.hidden = true;
-      el.textContent = '';
-      return;
-    }
-    var best = keys[0];
-    keys.forEach(function (k) {
-      if (Math.abs(Number(deltaMap[k]) || 0) > Math.abs(Number(deltaMap[best]) || 0)) {
-        best = k;
-      }
-    });
-    var d = Number(deltaMap[best]) || 0;
-    if (Math.abs(d) < 0.0005) {
-      el.hidden = true;
-      el.textContent = '';
-      return;
-    }
-    var sign = d > 0 ? '+' : '';
-    el.textContent =
-      'Watch us update — ' +
-      expertLabel(best) +
-      ' weight ' +
-      sign +
-      fmt(d, 2) +
-      ' after the last graded resolve.';
-    el.hidden = false;
-  }
 
   function renderKpi(stats) {
     if (!stats) return;
@@ -1260,6 +1400,7 @@
     if (gradedEl) {
       gradedEl.textContent = (stats.correct || 0) + '✓ / ' + (stats.wrong || 0) + '✗ graded (n=' + graded + ')';
     }
+    syncProofBandGraded(graded);
     var expEl = document.getElementById('kpi-expired');
     if (expEl) {
       expEl.textContent = String(expired);
@@ -1841,18 +1982,52 @@
   }
 
   var cockpitStream = null;
+  var cockpitPicksConnected = false;
+  var lastPicksEmittedAt = 0;
+
+  function applyPicksSnapshot(payload) {
+    if (!payload || payload.type !== 'cockpit.picks') return;
+    lastPicksEmittedAt = Date.now();
+    cockpitPicksConnected = true;
+    var hourPicks = (payload.hour && payload.hour.picks) || [];
+    var dayPick = payload.day && payload.day.pick;
+    var dayPicks = dayPick ? [dayPick] : [];
+    if (payload.day && payload.day.candidate && !dayPick) {
+      dayPicks = [payload.day.candidate];
+    }
+    renderHourDayPicks(hourPicks, dayPicks);
+    if (window.HourWatchUI && window.HourWatchUI.patchHourWatch) {
+      window.HourWatchUI.patchHourWatch(payload);
+    }
+    if (window.HomeHydrateCache) {
+      window.HomeHydrateCache.hourPicks = hourPicks;
+      window.HomeHydrateCache.dayPick = payload.day || null;
+      window.HomeHydrateCache.picksEmittedAt = payload.emitted_at;
+      window.HomeHydrateCache.at = Date.now();
+    }
+    document.dispatchEvent(new CustomEvent('home:cockpit-picks', { detail: payload }));
+  }
 
   function connectCockpitStream() {
     if (cockpitStream || typeof EventSource === 'undefined') return;
-    if (!document.querySelector('.cockpit-card[data-section-id]')) return;
+    if (!document.querySelector('[data-home-live]') && !document.querySelector('.cockpit-card[data-section-id]')) return;
     cockpitStream = new EventSource('/api/cockpit/stream');
+    cockpitStream.addEventListener('cockpit.picks', function (ev) {
+      try {
+        applyPicksSnapshot(JSON.parse(ev.data));
+      } catch (e) {
+        console.warn('[cockpit_hydrate] picks SSE parse failed', e);
+      }
+    });
     cockpitStream.addEventListener('cockpit.sections', function (ev) {
       try {
         var payload = JSON.parse(ev.data);
         if (payload && payload.sections) {
           renderCockpitSections(payload.sections);
         }
-        document.dispatchEvent(new CustomEvent('home:cockpit-tick'));
+        if (!cockpitPicksConnected || Date.now() - lastPicksEmittedAt > 5000) {
+          document.dispatchEvent(new CustomEvent('home:cockpit-tick'));
+        }
       } catch (e) {
         console.warn('[cockpit_hydrate] SSE parse failed', e);
       }
@@ -1860,6 +2035,15 @@
     cockpitStream.onerror = function () {
       console.warn('[cockpit_hydrate] SSE disconnect; keeping last snapshot');
     };
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden' && cockpitStream) {
+        cockpitStream.close();
+        cockpitStream = null;
+        cockpitPicksConnected = false;
+      } else if (document.visibilityState === 'visible' && !cockpitStream) {
+        connectCockpitStream();
+      }
+    });
   }
 
   function pause(ms) {
@@ -2007,26 +2191,33 @@
 
       try {
         var pickPayload = safePayload(await fetchJsonRetry('/api/top-picks', 30000, 1));
-        hourPicks = pickPayload.hour_picks || [];
-        dayPicks = pickPayload.day_picks || [];
+        if (!cockpitPicksConnected) {
+          hourPicks = pickPayload.hour_picks || [];
+          dayPicks = pickPayload.day_picks || [];
+        }
       } catch (e) {
-        try {
-          var hourRes = await fetchJsonRetry('/api/top-pick/hour', 18000, 1);
-          hourPicks = safePayload(hourRes).picks || [];
-          var dayRes = await fetchJsonRetry('/api/top-pick/day', 18000, 1);
-          dayPicks = safePayload(dayRes).picks || [];
-        } catch (e2) {
-          console.warn('[cockpit_hydrate] pick fallback failed', e2);
-          markSectionFailed('section-picks', 'Quiet — horizon picks timed out. Open Pro cockpit again after /api/top-picks responds.');
+        if (!cockpitPicksConnected) {
+          try {
+            var hourRes = await fetchJsonRetry('/api/top-pick/hour', 18000, 1);
+            hourPicks = safePayload(hourRes).picks || [];
+            var dayRes = await fetchJsonRetry('/api/top-pick/day', 18000, 1);
+            dayPicks = safePayload(dayRes).picks || [];
+          } catch (e2) {
+            console.warn('[cockpit_hydrate] pick fallback failed', e2);
+            markSectionFailed('section-picks', 'Quiet — horizon picks timed out. Open Pro cockpit again after /api/top-picks responds.');
+          }
         }
       }
-      renderHourDayPicks(hourPicks, dayPicks);
+      if (!cockpitPicksConnected) {
+        renderHourDayPicks(hourPicks, dayPicks);
+      }
 
       await pause(300);
       try {
         var trailPayload = await fetchJsonRetry('/api/mindmap/trail?limit=20', 15000, 1);
         trail = safePayload(trailPayload).trail || [];
         renderTrail(trail);
+        patchK3LifecycleFromTrail(trail, lastDailyPickPayload);
       } catch (e) {
         console.warn('[cockpit_hydrate] trail fetch failed', e);
       }
@@ -2112,9 +2303,34 @@
     }
   }
 
+  function bindProofTabs() {
+    var tabs = document.querySelectorAll('.proof-band__tab[data-proof-tab]');
+    if (!tabs.length) return;
+    tabs.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var target = btn.getAttribute('data-proof-tab');
+        tabs.forEach(function (b) {
+          var on = b.getAttribute('data-proof-tab') === target;
+          b.classList.toggle('proof-band__tab--active', on);
+          b.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        var council = document.getElementById('proof-tab-council');
+        var pump = document.getElementById('proof-tab-pump');
+        var hero = document.getElementById('proof-band-score-hero');
+        if (council) council.hidden = target !== 'council';
+        if (pump) pump.hidden = target !== 'pump';
+        if (hero) hero.hidden = target === 'pump';
+      });
+    });
+  }
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', run);
+    document.addEventListener('DOMContentLoaded', function () {
+      bindProofTabs();
+      run();
+    });
   } else {
+    bindProofTabs();
     run();
   }
 

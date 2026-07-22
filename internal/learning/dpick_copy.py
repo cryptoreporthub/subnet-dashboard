@@ -170,12 +170,105 @@ def _trigger_line(conviction: int, blockers: List[str], *, audit_pick: bool) -> 
     return f"Flip to LONG when conviction ≥ {_AUDIT_GATE_PCT}% (+{gap} pts)."
 
 
+def _evidence_drivers(
+    block: Optional[Dict[str, Any]],
+    payload: Dict[str, Any],
+) -> List[Dict[str, str]]:
+    """Up to three tagged drivers for S1 hero evidence."""
+    out: List[Dict[str, str]] = []
+    signals = []
+    if isinstance(block, dict):
+        signals.extend(block.get("active_signals") or [])
+        impact = block.get("signal_impact") if isinstance(block.get("signal_impact"), dict) else {}
+        for key in ("flow", "momentum", "social"):
+            if impact.get(key) is not None:
+                signals.append(f"{key}:{impact.get(key)}")
+    for raw in signals:
+        text = str(raw).strip()
+        if not text:
+            continue
+        low = text.lower()
+        if "social" in low or "buzz" in low or "hype" in low:
+            tag = "social"
+        elif "flow" in low or "volume" in low or "liquid" in low:
+            tag = "flow"
+        else:
+            tag = "tech"
+        out.append({"tag": tag, "label": text[:48]})
+        if len(out) >= 3:
+            break
+    if len(out) < 3 and isinstance(payload.get("shortlist"), list):
+        for alt in payload["shortlist"][:2]:
+            if not isinstance(alt, dict):
+                continue
+            role = str(alt.get("role") or alt.get("why_not") or "").strip()
+            if not role:
+                continue
+            out.append({"tag": _axis_from_role(role), "label": role[:48]})
+            if len(out) >= 3:
+                break
+    return out[:3]
+
+
+def _tao_bench_7d(payload: Dict[str, Any]) -> Optional[float]:
+    """Average 7d price change across shortlist as hold-TAO proxy."""
+    vals: List[float] = []
+    for row in payload.get("shortlist") or []:
+        if not isinstance(row, dict):
+            continue
+        for key in ("price_change_7d", "change_7d"):
+            if row.get(key) is not None:
+                try:
+                    vals.append(float(row[key]))
+                    break
+                except (TypeError, ValueError):
+                    pass
+    if not vals:
+        ctx = payload.get("market_context") if isinstance(payload.get("market_context"), dict) else {}
+        if ctx.get("tao_change_7d") is not None:
+            try:
+                return float(ctx["tao_change_7d"])
+            except (TypeError, ValueError):
+                pass
+        if ctx.get("tao_change_24h") is not None:
+            try:
+                return float(ctx["tao_change_24h"])
+            except (TypeError, ValueError):
+                pass
+        return None
+    return sum(vals) / len(vals)
+
+
+def _vs_hold_tao_line(block: Optional[Dict[str, Any]], payload: Dict[str, Any]) -> str:
+    if not isinstance(block, dict):
+        return ""
+    sn = block.get("subnet") if isinstance(block.get("subnet"), dict) else {}
+    pick_chg = None
+    for key in ("price_change_7d", "change_7d"):
+        if sn.get(key) is not None:
+            try:
+                pick_chg = float(sn[key])
+                break
+            except (TypeError, ValueError):
+                pass
+    bench = _tao_bench_7d(payload)
+    if pick_chg is None or bench is None:
+        return ""
+    excess = pick_chg - bench
+    return (
+        f"vs hold TAO 7d: pick {pick_chg:+.1f}% · bench {bench:+.1f}% · "
+        f"{excess:+.1f}% vs network"
+    )
+
+
 def build_dpick_brief(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Return move / thesis / vs / trigger for council_stage hero."""
     empty: Dict[str, Any] = {
         "move": "",
         "thesis": "",
         "vs": "",
+        "vs_hold_tao": "",
+        "evidence_drivers": [],
         "trigger": "",
         "tone": "neutral",
         "blockers": [],
@@ -254,6 +347,8 @@ def build_dpick_brief(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "move": move,
         "thesis": thesis,
         "vs": vs,
+        "vs_hold_tao": _vs_hold_tao_line(block if isinstance(block, dict) else None, payload),
+        "evidence_drivers": _evidence_drivers(block if isinstance(block, dict) else None, payload),
         "trigger": trigger,
         "tone": tone,
         "blockers": concerns[:3],

@@ -328,6 +328,24 @@
     document.addEventListener("home:cockpit-tick", function () {
       refreshHomeHotPath();
     });
+    document.addEventListener("home:cockpit-picks", function (ev) {
+      var payload = ev && ev.detail;
+      if (!payload || !payload.day) return;
+      if (window.HomeHydrateCache) {
+        window.HomeHydrateCache.picksEmittedAt = payload.emitted_at;
+        window.HomeHydrateCache.dayPick = payload.day;
+        window.HomeHydrateCache.at = Date.now();
+      }
+      var day = payload.day;
+      if (day.pick || day.candidate) {
+        patchHomeDailyCall({
+          action: day.action,
+          pick: day.pick,
+          candidate: day.candidate,
+          reason: day.reason,
+        });
+      }
+    });
     setInterval(refreshHomeHotPath, REFRESH_MS);
   }
 

@@ -1,6 +1,14 @@
+{% set ds_raw = data_source|default('cache')|lower %}
+{% if 'timeout' in ds_raw or 'fallback' in ds_raw or ds_raw == 'snapshot' %}
+  {% set footer_source_label = 'Snapshot' %}
+{% elif not ds_raw or ds_raw == 'cache' %}
+  {% set footer_source_label = 'Live' %}
+{% else %}
+  {% set footer_source_label = data_source|replace('_',' ')|replace('-',' ')|title %}
+{% endif %}
 <footer class="status" id="section-footer">
   <div class="status-inner">
-    <span><span class="st-dot" aria-hidden="true"></span>SimiVision · <b id="footer-source-label">{{ data_source|default('cache')|replace('_',' ')|replace('-',' ')|title }}</b></span>
+    <span><span class="st-dot" aria-hidden="true"></span>SimiVision · <b id="footer-source-label">{{ footer_source_label }}</b></span>
     <span data-footer-metric="subnets"{% if not sn_list|length %} hidden{% endif %}>Subnets: <b id="footer-subnets-count">{{ sn_list|length }}</b></span>
     <span data-footer-metric="trail"{% if not (mindmap_trail|length if mindmap_trail else 0) %} hidden{% endif %}>Trail: <b id="footer-trail-count">{{ mindmap_trail|length if mindmap_trail else 0 }}</b></span>
     <span data-footer-metric="predictions"{% if not (predictions|length if predictions else 0) %} hidden{% endif %}>Predictions: <b id="footer-predictions-count">{{ predictions|length if predictions else 0 }}</b></span>
