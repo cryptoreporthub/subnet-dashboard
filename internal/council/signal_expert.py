@@ -112,6 +112,32 @@ def expert_from_signal_impact(signal_impact: Optional[Dict[str, Any]]) -> str:
     return expert_from_signal_source(str(label) if label else None)
 
 
+def expert_for_replay_row(row: Dict[str, Any]) -> Optional[str]:
+    """Re-derive council expert for historical replay (new map, skip pump desk)."""
+    try:
+        from internal.council.grading import is_pump_lead
+    except Exception:
+        is_pump_lead = lambda _r: False  # type: ignore
+    if is_pump_lead(row):
+        return None
+    si = row.get("signal_impact")
+    if isinstance(si, dict):
+        expert = expert_from_signal_impact(si)
+        if expert != "unclassified":
+            return expert
+    src = row.get("signal_source") or row.get("expert")
+    if src:
+        expert = expert_from_signal_source(str(src))
+        if expert != "unclassified":
+            return expert
+    try:
+        from internal.council.resolver import _normalize_expert
+
+        return _normalize_expert(row)
+    except Exception:
+        return None
+
+
 def dominant_signal_label(signal_impact: Optional[Dict[str, Any]]) -> Optional[str]:
     """Best ledger label: lead impact signal_type, else HOT/SELL, else direction."""
     if not isinstance(signal_impact, dict):

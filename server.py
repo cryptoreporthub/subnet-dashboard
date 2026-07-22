@@ -169,6 +169,23 @@ except Exception:
         return load_weights()
 
 
+def _council_weight_rebalance_boot() -> None:
+    """Optional one-shot Slice R on boot (env-gated)."""
+    import os
+    import time
+
+    flag = os.environ.get("COUNCIL_WEIGHT_REBALANCE_ON_BOOT", "off").strip().lower()
+    if flag not in ("1", "true", "yes", "on"):
+        return
+    time.sleep(18)
+    try:
+        from internal.council.weights import rebalance_council_weights
+
+        rebalance_council_weights(save=True)
+    except Exception as exc:
+        logger.debug("council weight rebalance boot skipped: %s", exc)
+
+
 def _registry_name_boot_sync() -> None:
     """ponytail: one-shot ladder→registry name sync on web boot (no cron required)."""
     import time
@@ -207,6 +224,11 @@ async def _lifespan(app: FastAPI):
             target=_registry_name_boot_sync,
             daemon=True,
             name="registry-name-sync",
+        ).start()
+        threading.Thread(
+            target=_council_weight_rebalance_boot,
+            daemon=True,
+            name="council-weight-rebalance",
         ).start()
 
     if background_on_web():

@@ -1,30 +1,33 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-22T20:40:00Z  
-**main:** `28ef38a` (#414 + #415) — Slice A+B shipped and verified on Fly
+**Last updated:** 2026-07-22T22:15:00Z  
+**main:** pending merge `cursor/weight-rebalance-pump-overlay-c9f5` (Slice R + M)
 
 ## Next slice queue
 
-1. ~~**Slice A**~~ — #414 unclassified attribution; prod `unclassified_count` live
-2. ~~**Slice B**~~ — #415 pump unique copy + registry names + council votes hydrate
-3. **Wave 4** — optional depth (YAGNI)
-4. Optional experiment — publish gate 45% → 40% (not started)
+1. ~~Slice A–B~~ — attribution + pump desk (#414–#418)
+2. ~~Slice R~~ — historical weight rebalance + soft reset (`POST /api/learning/rebalance-weights`)
+3. ~~Slice M~~ — α pump overlay at score time (`PUMP_SCORE_OVERLAY_ALPHA`, default 0.10)
+4. **Phone QA** — council votes + Yanez names + post-rebalance weights
+5. Optional — publish gate 45% → 40% experiment
+6. Wave 4 — YAGNI
+
+## Slice R + M (this PR)
+
+| Slice | What | soul_map writes? |
+|-------|------|------------------|
+| **R** | Replay council ledger with `expert_for_replay_row`, 70/30 soft blend vs defaults | Yes, via rebalance endpoint or `COUNCIL_WEIGHT_REBALANCE_ON_BOOT=on` |
+| **M** | `apply_pump_score_overlay` in hour/day scoring | **No** — score-time only |
+
+Pump desk learning stays in `pump_calibration.json`; resolver still skips `pump_lead` for council nudges.
 
 ## Gameplan
 
 **Canonical:** `cursor-agents-communication/gameplan-pump-site-undeniable.md`  
 **Fix plan:** `cursor-agents-communication/quant-pump-desk-fix-plan.md`
 
-Peers: SubnetAIQ Pre-Pump Radar, TAO Subnet Radar, TaoDashboard, TaoDX.  
-North star: frozen pre-pump claim → grade → n= trust → adapt; trader voice; no council weight contamination.
-
-## Prod check (2026-07-22)
-
-- `/api/learning/stats` → `unclassified_count` present (0 forward-only until new unmatched rows)
-- `/api/pump-alerts` → unique CHASE RISK theses; SN54 = WebGenieAI
-- `cockpit_hydrate.js` → always rewrite council votes when weights present
-
 ## Human follow-up
 
-- Phone QA: Council votes under conviction show Quant/Hype/Dark Horse/Technical
-- Env: `CONVICTION_ALERTS_ENABLED` / Telegram for Wave 2 push
+- After deploy: `POST /api/learning/rebalance-weights?dry_run=true` then `dry_run=false`
+- Phone QA 390px
+- Env: `CONVICTION_ALERTS_ENABLED` / Telegram

@@ -439,6 +439,23 @@ async def api_learning_stats():
     }
 
 
+@learning_router.post("/api/learning/rebalance-weights")
+async def api_learning_rebalance_weights(
+    replay_share: float = Query(default=0.7, ge=0.0, le=1.0),
+    dry_run: bool = Query(default=False),
+):
+    """Slice R — replay council weights from ledger with re-attribution + soft reset."""
+    from internal.council.weights import rebalance_council_weights
+
+    try:
+        result = rebalance_council_weights(replay_share=replay_share, save=not dry_run)
+        _learning_snapshot_cache["at"] = 0.0
+        return {"status": "success", "data": result}
+    except Exception as exc:
+        logger.error("rebalance-weights failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @learning_router.get("/api/learning-metrics")
 async def api_learning_metrics():
     try:
