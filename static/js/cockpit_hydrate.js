@@ -848,7 +848,8 @@
     var keys = CANONICAL_EXPERTS.filter(function (k) { return normalized[k] != null; });
     if (!keys.length) return;
     var body = layer.querySelector('.k3-layer-body');
-    if (!body || (body.querySelector('.k3-judge') && !body.querySelector('.k3-empty'))) return;
+    if (!body) return;
+    // Always rewrite when hydrate has live weights — empty SSR or stale judge rows.
     var deltaMap = deltas && typeof deltas === 'object' ? deltas : {};
     var html = '<div class="k3-layer-title">Judge weights &amp; deltas</div>';
     keys.forEach(function (name) {

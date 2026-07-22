@@ -44,7 +44,8 @@ def test_pumping_just_started_row():
     assert row["badge"] == "JUST STARTED"
     assert row["timing"] == "confirmed"
     assert "just confirmed" in row["thesis"].lower()
-    assert "profit" in row["thesis"].lower()
+    assert "size down" in row["thesis"].lower()
+    assert "0.66" in row["thesis"] or "Coldint" in row["thesis"]
 
 
 def test_pumping_row_chase_risk_not_entry():
@@ -53,6 +54,33 @@ def test_pumping_row_chase_risk_not_entry():
     assert row["timing"] == "confirmed"
     assert "not early" in row["thesis"].lower()
     assert "do not chase" in row["trigger"].lower() or "not chase" in row["trigger"].lower()
+    # Per-card specifics — not identical boilerplate across names.
+    assert "0.81" in row["thesis"] or "81" in row["thesis"]
+    assert "SN29" in row["thesis"] or "Coldint" in row["thesis"]
+    assert "Coldint" in row["trigger"] or "SN29" in row["trigger"]
+
+
+def test_chase_risk_copy_unique_per_subnet():
+    a = build_alert_row(_ladder_entry("PUMPING", netuid=29, score=0.81))
+    b = build_alert_row(_ladder_entry("PUMPING", netuid=54, score=0.88))
+    assert a["thesis"] != b["thesis"]
+    assert a["trigger"] != b["trigger"]
+
+
+def test_resolve_name_prefers_local_registry_over_stale_ladder():
+    """SN54 ladder may say Yanez MIID; local registry is WebGenieAI."""
+    row = build_alert_row(
+        {
+            "netuid": 54,
+            "name": "Yanez MIID",
+            "phase": "PUMPING",
+            "composite_score": 0.85,
+            "signal_snapshot": {"buy_ratio": 0.7, "volume_intensity": 0.5},
+        },
+        {"netuid": 54, "name": "Yanez MIID"},
+    )
+    assert "WebGenieAI" in row["move"]
+    assert "Yanez" not in row["move"]
 
 
 def test_cooling_row_exit_watch():

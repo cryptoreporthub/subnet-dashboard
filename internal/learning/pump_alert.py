@@ -41,25 +41,43 @@ def _resolve_name(
     except (TypeError, ValueError):
         netuid_int = None
 
-    if netuid_int is not None:
-        tmc_name = None
-        for src in (subnet_row, ladder_entry):
-            if not isinstance(src, dict):
-                continue
-            raw = src.get("name") or src.get("subnet_name")
-            if raw and not _BAD_NAME.match(str(raw).strip()):
-                tmc_name = str(raw).strip()
-                break
-        try:
-            from internal.subnet_names import resolve_subnet_name
+    if netuid_int is None:
+        return "subnet"
 
-            resolved = resolve_subnet_name(netuid_int, tmc_name=tmc_name)
-            if resolved and not _BAD_NAME.match(resolved):
-                return resolved
-        except Exception:
-            pass
-        return f"SN{netuid_int}"
-    return "subnet"
+    # Prefer local registry / overrides over stale ladder or remote labels
+    # (e.g. SN54 ladder "Yanez MIID" vs registry "WebGenieAI").
+    try:
+        from internal.subnet_names import _load_local_registry, _load_name_overrides
+
+        override = _load_name_overrides().get(str(netuid_int))
+        if override and not _BAD_NAME.match(str(override).strip()):
+            return str(override).strip()
+        local = _load_local_registry()
+        item = local.get(str(netuid_int)) if isinstance(local, dict) else None
+        if isinstance(item, dict):
+            lname = item.get("name")
+            if lname and not _BAD_NAME.match(str(lname).strip()):
+                return str(lname).strip()
+    except Exception:
+        pass
+
+    tmc_name = None
+    for src in (subnet_row, ladder_entry):
+        if not isinstance(src, dict):
+            continue
+        raw = src.get("name") or src.get("subnet_name")
+        if raw and not _BAD_NAME.match(str(raw).strip()):
+            tmc_name = str(raw).strip()
+            break
+    try:
+        from internal.subnet_names import resolve_subnet_name
+
+        resolved = resolve_subnet_name(netuid_int, tmc_name=tmc_name)
+        if resolved and not _BAD_NAME.match(resolved):
+            return resolved
+    except Exception:
+        pass
+    return f"SN{netuid_int}"
 
 
 def _subnet_row(netuid: int, subnets: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -193,26 +211,34 @@ def _row_copy(
         }
     if phase == "PUMPING":
         just_max = _lead_thresholds()["just_started_max_score"]
+        br = buy_ratio if buy_ratio is not None else 0.5
+        vi = volume_intensity if volume_intensity is not None else 0.0
+        sc = score if score is not None else 0.0
+        label = _display_label(name, netuid_int)
         if score is not None and score < just_max:
             return {
                 "move": _move_line("LIVE", name, netuid_int),
                 "badge": "JUST STARTED",
                 "timing": "confirmed",
                 "thesis": (
-                    "Move just confirmed — you missed the first leg but entry still has room; "
-                    "size down, profit potential remains."
+                    f"{label} just confirmed (score {sc:.2f}, {br:.0%} buys, vol {vi:.0%}) — "
+                    f"missed the first leg but entry still has room; size down."
                 ),
-                "trigger": "Not early, not chase — smaller position or wait for the next BUILDING name.",
+                "trigger": (
+                    f"Not early on {label} — smaller position or wait for the next BUILDING name."
+                ),
             }
         return {
             "move": _move_line("CONFIRMED", name, netuid_int),
             "badge": "CHASE RISK",
             "timing": "confirmed",
             "thesis": (
-                "Move is live — you are not early. Use for exit sizing and rotation, "
-                "not fresh entry."
+                f"{label} is live at score {sc:.2f} ({br:.0%} buys, vol {vi:.0%}) — "
+                f"you are not early. Use for exit sizing and rotation, not fresh entry."
             ),
-            "trigger": "Do not chase; trim on EXIT WATCH or rotate to BUILDING names.",
+            "trigger": (
+                f"Do not chase {label}; trim on EXIT WATCH or rotate to BUILDING names."
+            ),
         }
     br = buy_ratio if buy_ratio is not None else 0.5
     return {
