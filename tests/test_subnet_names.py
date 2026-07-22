@@ -78,6 +78,24 @@ def test_dpick_shortlist_uses_canonical_names():
         assert out["alternatives"][0]["name"] != "Stale" or out["alternatives"][0]["netuid"] != 41
 
 
+def test_sn28_override_beats_on_chain_lol():
+    """SN28 on-chain/taostat identity is 'LOL'; display as gm."""
+    remote = {"28": {"name": "LOL", "bittensor_id": "dalet"}}
+    name = resolve_subnet_name(28, remote=remote, local={"28": {"name": "LOL"}}, tmc_name="LOL", use_taostats=False)
+    assert name == "gm"
+
+
+def test_pump_alert_resolves_sn28_not_lol():
+    from internal.learning.pump_alert import build_alert_row
+
+    row = build_alert_row(
+        {"netuid": 28, "name": "LOL", "phase": "PUMPING", "composite_score": 0.75},
+        {"netuid": 28, "name": "LOL", "market_cap": 60000, "price": 0.015},
+    )
+    assert row["name"] == "gm"
+    assert "LOL" not in row["move"]
+
+
 def test_resolve_bad_name_falls_back_to_sn():
     name = resolve_subnet_name(63, local={"63": {"name": "Unknown"}}, remote={}, use_taostats=False)
     assert name == "SN63"
