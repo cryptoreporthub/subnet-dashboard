@@ -125,6 +125,7 @@ def test_resolver_skips_council_weight_nudge_for_pump_lead(monkeypatch):
         "horizon_hours": 1,
         "horizon_type": "pump_lead",
         "pick_source": "pump_lead",
+        "pump_claim": "ACCUMULATING",
         "expert": "quant",
         "resolve_at": "2099-01-01T00:00:00Z",
         "status": "pending",
@@ -132,3 +133,4 @@ def test_resolver_skips_council_weight_nudge_for_pump_lead(monkeypatch):
     resolve_prediction(pred, current_price=103.0)
     after = dict(weights.load_weights())
     assert before == after
+    assert pred.get("correct") is True

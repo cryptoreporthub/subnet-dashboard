@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 # SciWeave Phase 2 weights (phase-n-design.md §6)
 _DIRECTION_WEIGHT = 0.4
@@ -45,6 +45,46 @@ def classify_outcome_direction_only(
     return "miss"
 
 
+def is_pump_lead(prediction: Dict[str, Any]) -> bool:
+    return str(prediction.get("pick_source") or "").lower() == "pump_lead"
+
+
+def pump_lead_hit(prediction: Dict[str, Any], actual_pct: float) -> bool:
+    """Grade pump desk claim — not council direction-only.
+
+    Early (WARMING UP / BUILDING / STIRRING / ACCUMULATING): +predicted_pct
+    within 1h (default 2%). JUST STARTED: still-positive capture.
+    """
+    claim = str(prediction.get("pump_claim") or "").upper()
+    badge = str(prediction.get("pump_badge") or "").upper()
+    just_started = claim in {"JUST_STARTED", "JUST STARTED"} or badge == "JUST STARTED"
+    if just_started:
+        return float(actual_pct) > 0
+    try:
+        threshold = float(prediction.get("predicted_pct") or 2.0)
+    except (TypeError, ValueError):
+        threshold = 2.0
+    if threshold <= 0:
+        threshold = 2.0
+    return float(actual_pct) >= threshold
+
+
+def classify_outcome_pump_lead(prediction: Dict[str, Any], actual_pct: float) -> str:
+    if pump_lead_hit(prediction, actual_pct):
+        return "hit"
+    return "miss"
+
+
+def grade_prediction(prediction: Dict[str, Any], actual_pct: float) -> Tuple[bool, str]:
+    """Return (correct, outcome) using the right rule for pick_source."""
+    if is_pump_lead(prediction):
+        return pump_lead_hit(prediction, actual_pct), classify_outcome_pump_lead(
+            prediction, actual_pct
+        )
+    correct = direction_correct(prediction, actual_pct)
+    return correct, classify_outcome_direction_only(prediction, actual_pct)
+
+
 def magnitude_calibration(
     predicted_pct: float,
     actual_pct: float,
@@ -68,6 +108,8 @@ def _gradeable_resolved_count() -> int:
     skip = frozenset({"duplicate", "expired", "ungradeable"})
     for row in data.get("resolved") or []:
         if not isinstance(row, dict):
+            continue
+        if is_pump_lead(row):
             continue
         if row.get("outcome") in skip:
             continue

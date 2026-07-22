@@ -14,12 +14,21 @@ _EMPTY_MESSAGE = (
 _MAX_EARLY = 5
 _MAX_PUMPING = 3
 _MAX_COOLING = 2
-_LEAD_BUY_RATIO_MIN = 0.55
-_LEAD_VOLUME_INTENSITY_MIN = 0.22
 _EARLY_PHASES = frozenset({"STIRRING", "ACCUMULATING"})
-# ponytail: score band only — upgrade path is time-in-phase from ladder state
-_PUMPING_JUST_STARTED_MAX = 0.72
 _BAD_NAME = re.compile(r"^(unknown|deprecated|none|snnone|unnamed)$", re.I)
+
+
+def _lead_thresholds() -> Dict[str, float]:
+    try:
+        from internal.learning.pump_calibration import effective_lead_gates
+
+        return effective_lead_gates()
+    except Exception:
+        return {
+            "buy_ratio_min": 0.55,
+            "volume_intensity_min": 0.22,
+            "just_started_max_score": 0.72,
+        }
 
 
 def _resolve_name(
@@ -89,7 +98,11 @@ def _lead_signals(
 def _lead_qualifies(buy_ratio: Optional[float], volume_intensity: Optional[float]) -> bool:
     if buy_ratio is None or volume_intensity is None:
         return False
-    return buy_ratio >= _LEAD_BUY_RATIO_MIN and volume_intensity >= _LEAD_VOLUME_INTENSITY_MIN
+    gates = _lead_thresholds()
+    return (
+        buy_ratio >= gates["buy_ratio_min"]
+        and volume_intensity >= gates["volume_intensity_min"]
+    )
 
 
 def _display_label(name: str, netuid: Optional[int]) -> str:
@@ -141,7 +154,8 @@ def _row_copy(
             "trigger": "Best entry band — act before JUST STARTED or you only get a partial move.",
         }
     if phase == "PUMPING":
-        if score is not None and score < _PUMPING_JUST_STARTED_MAX:
+        just_max = _lead_thresholds()["just_started_max_score"]
+        if score is not None and score < just_max:
             return {
                 "move": _move_line("LIVE", name, netuid_int),
                 "badge": "JUST STARTED",
@@ -239,6 +253,10 @@ def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[st
             "alerts": [],
             "empty_message": _EMPTY_MESSAGE,
             "error": str(exc),
+            "trust": {
+                "ready": False,
+                "line": "Early alerts: grading starts once lead phase entries resolve (1h).",
+            },
         }
 
     early: List[Tuple[float, Dict[str, Any], Optional[Dict[str, Any]]]] = []
@@ -274,6 +292,15 @@ def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[st
     confirmed_count = sum(1 for a in alerts if a.get("timing") == "confirmed")
     count = early_count + confirmed_count
     status = "success" if count else "empty"
+    try:
+        from internal.learning.pump_lead_stats import build_pump_desk_trust
+
+        trust = build_pump_desk_trust()
+    except Exception:
+        trust = {
+            "ready": False,
+            "line": "Early alerts: grading starts once lead phase entries resolve (1h).",
+        }
     return {
         "status": status,
         "count": count,
@@ -282,4 +309,5 @@ def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[st
         "alerts": alerts,
         "empty_message": _EMPTY_MESSAGE,
         "error": None,
+        "trust": trust,
     }

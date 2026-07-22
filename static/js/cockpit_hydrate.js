@@ -767,6 +767,14 @@
   function renderPumpAlerts(payload) {
     var host = document.getElementById('pump-alert-body');
     if (!host || !payload) return;
+    var trustEl = document.getElementById('pump-alert-trust');
+    if (trustEl) {
+      var trustLine = (payload.trust && payload.trust.line) || '';
+      if (trustLine) {
+        trustEl.hidden = false;
+        trustEl.textContent = trustLine;
+      }
+    }
     var alerts = payload.alerts || [];
     var earlyCount = Number(payload.early_count);
     var confirmedCount = Number(payload.confirmed_count);

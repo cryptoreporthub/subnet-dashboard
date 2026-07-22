@@ -21,6 +21,15 @@ _JUST_STARTED_MAX_SCORE = 0.72
 _LEAD_PHASES = frozenset({"STIRRING", "ACCUMULATING"})
 
 
+def _just_started_max() -> float:
+    try:
+        from internal.learning.pump_calibration import effective_lead_gates
+
+        return float(effective_lead_gates()["just_started_max_score"])
+    except Exception:
+        return _JUST_STARTED_MAX_SCORE
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -31,7 +40,7 @@ def _badge_for_entry(phase: str, score: float) -> str:
         return "WARMING UP"
     if phase == "ACCUMULATING":
         return "BUILDING"
-    if phase == "PUMPING" and score < _JUST_STARTED_MAX_SCORE:
+    if phase == "PUMPING" and score < _just_started_max():
         return "JUST STARTED"
     return phase
 
@@ -41,7 +50,7 @@ def gradeable_phase_entry(phase: str, score: float) -> Optional[str]:
     phase = str(phase or "").upper()
     if phase in _LEAD_PHASES:
         return phase
-    if phase == "PUMPING" and score < _JUST_STARTED_MAX_SCORE:
+    if phase == "PUMPING" and score < _just_started_max():
         return "JUST_STARTED"
     return None
 
