@@ -67,8 +67,8 @@ def test_chase_risk_copy_unique_per_subnet():
     assert a["trigger"] != b["trigger"]
 
 
-def test_resolve_name_prefers_local_registry_over_stale_ladder():
-    """SN54 ladder may say Yanez MIID; local registry is WebGenieAI."""
+def test_resolve_name_prefers_live_ladder_over_stale_registry():
+    """SN54 live desk label is Yanez MIID; committed registry lagged as WebGenieAI."""
     row = build_alert_row(
         {
             "netuid": 54,
@@ -77,10 +77,24 @@ def test_resolve_name_prefers_local_registry_over_stale_ladder():
             "composite_score": 0.85,
             "signal_snapshot": {"buy_ratio": 0.7, "volume_intensity": 0.5},
         },
-        {"netuid": 54, "name": "Yanez MIID"},
+        {"netuid": 54, "name": "WebGenieAI"},
     )
-    assert "WebGenieAI" in row["move"]
-    assert "Yanez" not in row["move"]
+    assert "Yanez MIID" in row["move"]
+    assert "WebGenieAI" not in row["move"]
+
+
+def test_resolve_name_override_when_ladder_blank():
+    row = build_alert_row(
+        {
+            "netuid": 54,
+            "name": "Unknown",
+            "phase": "PUMPING",
+            "composite_score": 0.85,
+            "signal_snapshot": {"buy_ratio": 0.7, "volume_intensity": 0.5},
+        },
+        None,
+    )
+    assert "Yanez MIID" in row["move"]
 
 
 def test_cooling_row_exit_watch():

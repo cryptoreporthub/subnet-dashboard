@@ -21,10 +21,12 @@
 
 **Ship:**
 1. Per-card thesis/trigger include name + netuid + flow/score specifics (no identical CHASE RISK boilerplate).
-2. Prefer registry/canonical name over stale ladder labels (e.g. SN54).
+2. Prefer **live ladder / feed name** over stale registry (SN54 = Yanez MIID, not WebGenieAI).
 3. Council Votes under conviction: always patch weights when hydrate has them (don’t stick on empty SSR).
 
-**Merge → Fly → check:** pump cards unique; names match registry; council votes show Quant/Hype/DH/Technical.
+**Merge → Fly → check:** pump cards unique; SN54 = Yanez MIID; council votes show Quant/Hype/DH/Technical.
+
+**Correction (2026-07-22):** registry-first was wrong — Yanez is current; WebGenieAI was the stale label.
 
 ## Explicit non-goals
 - Rebalancing historical soul_map weights in bulk (new attributions only going forward).
