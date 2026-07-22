@@ -12,6 +12,22 @@ from internal.subnets.tradable import tradable_subnets, subnet_netuid
 _AUDIT_GATE = 0.45
 
 
+def _unique_blockers(items: List[str]) -> List[str]:
+    """Drop near-duplicate gate lines (confidence audit gate often appears twice)."""
+    seen: set[str] = set()
+    out: List[str] = []
+    for raw in items:
+        line = str(raw or "").strip()
+        if not line:
+            continue
+        key = line.lower().split("—")[0].split("–")[0].strip()[:56]
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(line)
+    return out
+
+
 def _subnet_row(subnets: List[Dict[str, Any]], netuid: int) -> Optional[Dict[str, Any]]:
     for row in subnets:
         n = subnet_netuid(row)
@@ -48,9 +64,11 @@ def explain_subnet(
     final_conf = float(audit.get("adjusted_confidence") or 0.0)
 
     blockers: List[str] = []
-    if final_conf < _AUDIT_GATE:
-        blockers.append(f"Confidence {final_conf:.0%} below {_AUDIT_GATE:.0%} audit gate")
-    blockers.extend(list(audit.get("concerns") or [])[:4])
+    concerns = [str(c) for c in (audit.get("concerns") or [])[:4]]
+    gate_short = f"Confidence {final_conf:.0%} below {_AUDIT_GATE:.0%} audit gate"
+    if final_conf < _AUDIT_GATE and not any("audit gate" in c.lower() for c in concerns):
+        blockers.append(gate_short)
+    blockers.extend(concerns)
 
     verdict = "not_today_pick"
     if published_n is not None and int(published_n) == int(netuid):
@@ -87,7 +105,7 @@ def explain_subnet(
         "final_confidence": round(final_conf, 4),
         "total_score": scored.get("total_score"),
         "score_gap_vs_candidate": score_gap,
-        "blockers": blockers[:6],
+        "blockers": _unique_blockers(blockers)[:6],
         "audit": audit,
         "published_netuid": published_n,
         "candidate_netuid": candidate_n,

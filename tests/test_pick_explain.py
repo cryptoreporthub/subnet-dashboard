@@ -26,3 +26,17 @@ def test_explain_subnet_not_found():
 
     out = explain_subnet(99999, [])
     assert out["status"] == "not_found"
+
+
+def test_explain_blockers_dedupe_audit_gate():
+    from internal.council.pick_explain import _unique_blockers
+
+    blockers = _unique_blockers(
+        [
+            "Confidence 29% below 45% audit gate — no long call published",
+            "Confidence 29% below 45% audit gate",
+            "Thin volume: $1,573 < $5k",
+        ]
+    )
+    assert len(blockers) == 2
+    assert any("Thin volume" in b for b in blockers)

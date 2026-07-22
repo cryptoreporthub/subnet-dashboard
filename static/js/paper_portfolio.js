@@ -34,19 +34,23 @@
   function renderSummary(summary) {
     summary = summary || {};
     var total = Number(summary.total_pnl_pct) || 0;
+    var avg = Number(summary.avg_pnl_pct);
+    if (isNaN(avg)) avg = summary.total_closed ? total / Number(summary.total_closed) : 0;
     var hold = Number(summary.hold_tao_pnl_pct) || 0;
     var excess = Number(summary.excess_vs_hold_tao_pct);
     if (isNaN(excess)) excess = total - hold;
     var extreme = Math.abs(total) > 200 || Math.abs(excess) > 200;
+    var headline = extreme ? avg : total;
+    var headlineLabel = extreme ? "Avg per graded call" : "Council P&amp;L";
 
     var html =
       '<div class="paper-portfolio__compare" role="group" aria-label="P&amp;L vs hold TAO">' +
       '<div class="paper-portfolio__kpi">' +
-      '<span class="paper-portfolio__lbl">Council P&amp;L</span>' +
+      '<span class="paper-portfolio__lbl">' + headlineLabel + '</span>' +
       '<span class="paper-portfolio__val ' +
-      pnlClass(total) +
+      pnlClass(headline) +
       '">' +
-      fmtSigned(total) +
+      fmtSigned(headline) +
       "</span>" +
       "</div>" +
       '<div class="paper-portfolio__kpi paper-portfolio__kpi--bench">' +
@@ -73,7 +77,11 @@
       "</p>";
     if (extreme) {
       html +=
-        '<p class="paper-portfolio__note">Sum of direction-graded paper % moves — not compounded dollar P&amp;L.</p>';
+        '<p class="paper-portfolio__note">Sum of paper % moves is ' +
+        fmtSigned(total) +
+        " across " +
+        String(summary.total_closed || 0) +
+        " closed — not compounded dollar P&amp;L.</p>";
     }
     return html;
   }

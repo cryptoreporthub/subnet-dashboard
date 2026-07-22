@@ -71,6 +71,7 @@ def test_portfolio_follows_resolved_no_fake_fills():
     assert status["summary"]["win_count"] == 2
     # up+10 long → +10; down+-4 short → +4
     assert status["summary"]["total_pnl_pct"] == 14.0
+    assert status["summary"]["avg_pnl_pct"] == 7.0
     assert status["summary"]["excess_vs_hold_tao_pct"] == 14.0
     assert status["summary"]["hold_tao_pnl_pct"] == 0.0
     assert len(status["open_positions"]) == 1
