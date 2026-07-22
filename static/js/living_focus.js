@@ -40,7 +40,7 @@
       '<div class="living-focus__judge"><span class="living-focus__judge-label">Echo</span><span class="living-focus__judge-bar"></span></div>' +
       '<div class="living-focus__judge"><span class="living-focus__judge-label">Pulse</span><span class="living-focus__judge-bar"></span></div>' +
       '</div>' +
-      '<p class="living-focus__quiet">' + esc(quietText || 'Building focus…') + '</p>' +
+      '<p class="living-focus__quiet">' + esc(quietText || 'Building — focus loads from lane judges and graded trail.') + '</p>' +
       '</div>'
     );
   }
@@ -310,10 +310,27 @@
     });
   }
 
+  function showLearnStrip(trail, weights) {
+    if (!learnEl) return;
+    var html = buildLearnStripHtml(trail, weights);
+    learnEl.innerHTML = html;
+    learnEl.hidden = false;
+    bindLearnActions(learnEl);
+  }
+
   function renderLearnStrip(trail, weights) {
     lastLearnHtml = buildLearnStripHtml(trail, weights);
     lastWeightNudge = weightNudgeFromTrail(trail, weights);
-    if (learnEl) {
+    showLearnStrip(trail, weights);
+  }
+
+  function renderJudgesQuiet(message, trail, weights) {
+    setBrainState('quiet');
+    if (!bodyEl) return;
+    bodyEl.innerHTML = '<p class="living-focus__empty">' + esc(message) + '</p>';
+    if (trail && trail.length) {
+      showLearnStrip(trail, weights || {});
+    } else if (learnEl) {
       learnEl.hidden = true;
       learnEl.innerHTML = '';
     }
@@ -322,16 +339,13 @@
   function renderJudges(data, action, weights, explain, trail) {
     if (!bodyEl) return;
     if (!data || data.error) {
-      setBrainState('quiet');
-      bodyEl.innerHTML = '<p class="living-focus__empty">Judges quiet — last try failed.</p>';
+      renderJudgesQuiet('Quiet — lane judges unavailable. Last graded beat below when trail has one.', trail, weights);
       return;
     }
     setBrainState('live');
     var consensus = data.consensus || {};
     var contested = !!consensus.contested || (consensus.agreement != null && consensus.agreement < 0.5);
     var dissent = dissentSummary(data);
-    var learnHtml = buildLearnStripHtml(trail, weights);
-    lastLearnHtml = learnHtml;
     lastWeightNudge = weightNudgeFromTrail(trail, weights);
     var nudgePlain = lastWeightNudge ? esc(lastWeightNudge) : '';
 
@@ -342,28 +356,27 @@
         html += '<p class="living-focus__contention living-focus__contention--detail">' + esc(dissent) + '</p>';
       }
     }
-    html += '<p class="living-focus__judges-caption">Judges (Oracle / Echo / Pulse)</p>';
+    html += '<p class="living-focus__judges-caption">Lane judges (Oracle / Echo / Pulse)</p>';
     html += '<div class="living-focus__judges">' +
       judgeBar('Oracle', (data.oracle || {}).score, contested) +
       judgeBar('Echo', (data.echo || {}).score, contested) +
       judgeBar('Pulse', (data.pulse || {}).score, contested) +
       '</div>';
-    html += learnHtml;
     html += (
       '<header class="living-focus__header">' +
       '<h3 class="living-focus__name"><a href="/subnet/' + focusNetuid + '" class="living-focus__link">' + esc(focusName) + '</a> <span class="living-focus__sn">SN' + focusNetuid + '</span></h3>' +
       '<span class="living-focus__action badge-' + (action === 'LONG' ? 'buy' : action === 'SHORT' ? 'sell' : 'watch') + '">' + esc(action || 'HOLD') + '</span>' +
       '</header>'
     );
-    html += renderWhyNot(explain);
     html += renderWeightLean(weights, nudgePlain);
+    html += renderWhyNot(explain);
     if (consensus.verdict) {
       html += '<p class="living-focus__verdict">Consensus: <strong>' + esc(consensus.verdict) + '</strong>' +
         (consensus.agreement != null ? ' · agreement ' + Number(consensus.agreement).toFixed(2) : '') +
         '</p>';
     }
     bodyEl.innerHTML = html;
-    bindLearnActions(bodyEl);
+    showLearnStrip(trail, weights);
     if (ctaEl) ctaEl.hidden = false;
   }
 
@@ -555,10 +568,7 @@
       renderTrailTeaser(trail);
       return loadChips();
     }).catch(function () {
-      setBrainState('quiet');
-      if (bodyEl) {
-        bodyEl.innerHTML = '<p class="living-focus__empty">Judges quiet — last try failed.</p>';
-      }
+      renderJudgesQuiet('Quiet — lane judges unavailable right now.', cachedTrail, {});
     });
   }
 

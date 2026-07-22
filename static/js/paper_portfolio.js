@@ -171,7 +171,7 @@
     } catch (e) {
       if (!root.querySelector(".paper-portfolio__compare")) {
         root.innerHTML =
-          '<p class="paper-portfolio__empty">Could not load paper portfolio — retrying after priority hydrate.</p>';
+          '<p class="paper-portfolio__empty empty--quiet">Quiet — paper portfolio unavailable. Retry when /api/portfolio/status responds.</p>';
       }
     }
   }

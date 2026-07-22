@@ -788,7 +788,7 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
         },
     }
     ctx.update(_fast_home_hero_context(trust_banner))
-    ctx.update(_quiet_brain_letter_stub())
+    ctx.update(_safe_brain_letter_context(timeout_s=2.0))
     ctx.update(_shell_pump_and_picks(shell_subnets, include_picks=True))
     stash = {k: v for k, v in ctx.items() if k != "request"}
     _DEGRADED_INDEX_CACHE["at"] = now

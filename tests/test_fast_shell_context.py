@@ -185,6 +185,21 @@ def test_homepage_includes_above_fold_scripts():
     assert "apiFetchJson" in html, "missing inline fetch timeout bootstrap"
 
 
+def test_degraded_shell_ssrs_brain_letter_when_available():
+    """B0-b: warm shell prefers file-backed brain letter over quiet stub."""
+    import server as srv
+
+    srv._HOMEPAGE_HTML_CACHE["html"] = None
+    srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
+    srv._warm_homepage_cache(None)
+    html = client.get("/").text
+    assert "brain-letter" in html
+    assert (
+        "What changed since yesterday" in html
+        or "Brief writes after the first graded windows land" in html
+    )
+
+
 def test_homepage_batch0_brain_presentation():
     _ensure_homepage_cache()
     html = client.get("/").text
