@@ -1378,12 +1378,34 @@ async def preview_k3_pump_alert(request: Request):
 
 @app.get("/api/pump-alerts")
 async def api_pump_alerts():
-    from internal.subnet_names import enrich_subnet_rows
+    """Pump lane — must not block the event loop (single-worker Fly wedge)."""
 
-    subnets = enrich_subnet_rows(list(load_data("config/registry.json").values()))
-    from internal.learning.pump_alert import build_pump_alerts
+    def _build():
+        from internal.learning.pump_alert import build_pump_alerts
+        from internal.pump.state import load_state
+        from internal.subnet_names import enrich_subnet_row
 
-    return build_pump_alerts(subnets)
+        state = load_state()
+        netuids = set()
+        for entry in (state.get("subnets") or {}).values():
+            if not isinstance(entry, dict):
+                continue
+            nu = entry.get("netuid")
+            if nu is not None:
+                try:
+                    netuids.add(int(nu))
+                except (TypeError, ValueError):
+                    continue
+        registry = load_data("config/registry.json")
+        rows = []
+        for nu in sorted(netuids):
+            raw = registry.get(str(nu)) if isinstance(registry, dict) else None
+            row = dict(raw) if isinstance(raw, dict) else {"netuid": nu}
+            row.setdefault("netuid", nu)
+            rows.append(enrich_subnet_row(row, use_taostats=False))
+        return build_pump_alerts(rows)
+
+    return await asyncio.to_thread(_build)
 
 
 # ---------------------------------------------------------------------------

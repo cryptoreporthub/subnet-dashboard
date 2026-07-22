@@ -24,6 +24,7 @@ _LIGHT_API_PREFIXES = (
     "/api/portfolio/",
     "/api/market-drivers",
     "/api/daily-pick",
+    "/api/pump-alerts",
     "/api/simivision",
     "/api/mindmap/story-path",
     "/api/cockpit/sections",
