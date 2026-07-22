@@ -59,10 +59,14 @@ def test_story_strip_filters_test_fixtures(tmp_path, monkeypatch):
     import internal.learning.predictions_store as ps
 
     monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(preds))
+    monkeypatch.setattr(
+        "internal.subnet_names.name_for_netuid",
+        lambda nu: "Canonical76" if int(nu) == 76 else f"SN{nu}",
+    )
     strip = build_story_strip(limit=5)
     assert strip["data_available"] is True
     assert len(strip["items"]) == 1
-    assert strip["items"][0]["name"] == "Real"
+    assert strip["items"][0]["name"] == "Canonical76"
 
 
 def test_build_story_strip_labels_outcomes(tmp_path, monkeypatch):
