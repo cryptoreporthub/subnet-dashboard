@@ -1,6 +1,7 @@
 # H1 LOCK — Hour watch live bus (modified option 2 + magic)
 
-**Status:** PLAN READY — **DO NOT EXECUTE until human signs LOCK**  
+**Status:** LOCK APPROVED (plan-only) — **DO NOT EXECUTE until G0 + Wave 1 exit + B0-0; human says `Execute H1`**
+**Approved:** 2026-07-22 (human)  
 **Revision:** v1.0 — 2026-07-22  
 **Slice ID:** H1  
 **Viewport:** 390px primary  
