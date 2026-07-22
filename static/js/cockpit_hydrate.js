@@ -1195,6 +1195,43 @@
       : '';
     replaceSectionContent('section-council', lean + '<div class="council-grid">' + cards + '</div>', '.council-grid, .card-muted');
     patchK3CouncilVotes(weights, deltaMap);
+    patchK3WeightNudge(deltaMap);
+  }
+
+  function patchK3WeightNudge(deltas) {
+    var el = document.getElementById('k3-weight-nudge-line');
+    if (!el) return;
+    var deltaMap = deltas && typeof deltas === 'object' ? deltas : {};
+    var keys = CANONICAL_EXPERTS.filter(function (k) { return deltaMap[k] != null; });
+    if (!keys.length) {
+      keys = Object.keys(deltaMap);
+    }
+    if (!keys.length) {
+      el.hidden = true;
+      el.textContent = '';
+      return;
+    }
+    var best = keys[0];
+    keys.forEach(function (k) {
+      if (Math.abs(Number(deltaMap[k]) || 0) > Math.abs(Number(deltaMap[best]) || 0)) {
+        best = k;
+      }
+    });
+    var d = Number(deltaMap[best]) || 0;
+    if (Math.abs(d) < 0.0005) {
+      el.hidden = true;
+      el.textContent = '';
+      return;
+    }
+    var sign = d > 0 ? '+' : '';
+    el.textContent =
+      'Watch us update — ' +
+      expertLabel(best) +
+      ' weight ' +
+      sign +
+      fmt(d, 2) +
+      ' after the last graded resolve.';
+    el.hidden = false;
   }
 
   function renderKpi(stats) {

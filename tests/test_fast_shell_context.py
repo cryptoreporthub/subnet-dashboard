@@ -219,6 +219,12 @@ def test_homepage_batch0_brain_presentation():
     assert "Morning brief · graded memory" in html
     assert "Resolver integrity" in html
     assert "brain UI gate" not in html.lower()
+    assert 'id="k3-weight-nudge-line"' in html
+    assert "Story path warming up" not in html
+    assert (
+        "Quiet — story path fills when council clears an audited pick." in html
+        or "No audited pick today" in html
+    )
 
 
 def test_homepage_shell_cache_speeds_repeat():
