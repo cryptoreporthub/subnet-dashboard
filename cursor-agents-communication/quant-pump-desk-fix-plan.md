@@ -28,6 +28,6 @@
 
 **Correction (2026-07-22):** registry-first was wrong — Yanez is current; WebGenieAI was the stale label.
 
-## Explicit non-goals
-- Rebalancing historical soul_map weights in bulk (new attributions only going forward).
-- Mixing pump outcomes into council weights.
+## Explicit non-goals (updated 2026-07-22)
+- ~~Rebalancing historical soul_map weights in bulk~~ → **Slice R** (`rebalance_council_weights`)
+- ~~Mixing pump outcomes into council weights~~ → **Slice M** (α overlay at score time only; no pump→soul_map)

@@ -1650,6 +1650,14 @@ def score_subnet_for_hour(
         memory_adj = 0.0
     total = round((weighted + momentum_boost) * 100 + memory_adj, 2)
     total = min(100.0, max(0.0, total))
+    pump_overlay = None
+    if not (market_context or {}).get("skip_pump_overlay"):
+        try:
+            from internal.council.pump_overlay import apply_pump_score_overlay
+
+            total, pump_overlay = apply_pump_score_overlay(total, sn)
+        except Exception:
+            pass
 
     confidence = _compute_confidence(sn, indicators, experts)
     tags = _scenario_tags(sn, indicators, market_context)
@@ -1671,6 +1679,7 @@ def score_subnet_for_hour(
         "horizon_type": "hour",
         "weights_used": hour_weights,
         "signal_impact": signal_impact,
+        "pump_overlay": pump_overlay,
     }
 
 
@@ -1743,6 +1752,14 @@ def score_subnet_for_day(
         memory_adj = 0.0
     total = round((weighted + value_boost + flow_boost + size_tilt) * 100 + memory_adj, 2)
     total = min(100.0, max(0.0, total))
+    pump_overlay = None
+    if not (market_context or {}).get("skip_pump_overlay"):
+        try:
+            from internal.council.pump_overlay import apply_pump_score_overlay
+
+            total, pump_overlay = apply_pump_score_overlay(total, sn)
+        except Exception:
+            pass
 
     confidence = _compute_confidence(sn, indicators, experts)
     tags = _scenario_tags(sn, indicators, market_context)
@@ -1764,6 +1781,7 @@ def score_subnet_for_day(
         "horizon_type": "day",
         "weights_used": day_weights,
         "signal_impact": signal_impact,
+        "pump_overlay": pump_overlay,
     }
 
 

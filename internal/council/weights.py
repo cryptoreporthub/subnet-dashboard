@@ -147,7 +147,8 @@ def replay_weights_from_predictions(
     predictions_path: Optional[str] = None,
 ) -> Dict[str, float]:
     """Rebuild council weights by replaying graded prediction nudges from defaults."""
-    from internal.council.resolver import _normalize_expert
+    from internal.council.grading import is_pump_lead
+    from internal.council.signal_expert import expert_for_replay_row
 
     path = predictions_path or os.path.join("data", "predictions.json")
     try:
@@ -165,13 +166,13 @@ def replay_weights_from_predictions(
         if isinstance(row, dict)
         and row.get("correct") is not None
         and row.get("outcome") not in _SKIP_OUTCOMES
-        and _normalize_expert(row) in weights
+        and not is_pump_lead(row)
     ]
     rows.sort(key=lambda row: str(row.get("resolved_at") or row.get("created_at") or ""))
 
     for row in rows:
-        expert = _normalize_expert(row)
-        if not expert:
+        expert = expert_for_replay_row(row)
+        if not expert or expert not in weights:
             continue
         delta = _LEARNING_DELTA_CORRECT if row.get("correct") else _LEARNING_DELTA_WRONG
         weights[expert] = round(
@@ -182,6 +183,86 @@ def replay_weights_from_predictions(
             4,
         )
     return weights
+
+
+def soft_blend_weights(
+    replayed: Dict[str, float],
+    *,
+    prior: Optional[Dict[str, float]] = None,
+    replay_share: float = 0.7,
+) -> Dict[str, float]:
+    """Soft reset: blend replayed weights with prior (defaults when omitted)."""
+    base = prior if prior is not None else dict(DEFAULT_WEIGHTS)
+    share = max(0.0, min(1.0, float(replay_share)))
+    out: Dict[str, float] = {}
+    for name in DEFAULT_WEIGHTS:
+        r = float(replayed.get(name, DEFAULT_WEIGHTS[name]))
+        p = float(base.get(name, DEFAULT_WEIGHTS[name]))
+        out[name] = round(share * r + (1.0 - share) * p, 4)
+    return normalize_council_weights(out)
+
+
+def rebalance_council_weights(
+    *,
+    predictions_path: Optional[str] = None,
+    soul_map_path: Optional[str] = None,
+    replay_share: float = 0.7,
+    save: bool = True,
+) -> Dict[str, Any]:
+    """Slice R — replay ledger with re-attribution, soft-blend, optional persist."""
+    from internal.council.grading import is_pump_lead
+    from internal.council.signal_expert import expert_for_replay_row
+
+    path = predictions_path or os.path.join("data", "predictions.json")
+    soul = soul_map_path or SOUL_MAP_PATH
+    before = load_weights(soul)
+    replayed = replay_weights_from_predictions(path)
+    blended = soft_blend_weights(replayed, prior=dict(DEFAULT_WEIGHTS), replay_share=replay_share)
+
+    rows_replayed = 0
+    rows_skipped_pump = 0
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        for row in (data.get("resolved") or []) if isinstance(data, dict) else []:
+            if not isinstance(row, dict) or row.get("correct") is None:
+                continue
+            if row.get("outcome") in _SKIP_OUTCOMES:
+                continue
+            if is_pump_lead(row):
+                rows_skipped_pump += 1
+                continue
+            if expert_for_replay_row(row):
+                rows_replayed += 1
+    except Exception:
+        pass
+
+    if save:
+        save_weights(blended, soul)
+        try:
+            from internal.learning.trail_bus import emit_weight_change
+
+            for name in DEFAULT_WEIGHTS:
+                if abs(float(blended.get(name, 0)) - float(before.get(name, 0))) > 0.001:
+                    emit_weight_change(
+                        name,
+                        before=float(before.get(name, 1.0)),
+                        after=float(blended.get(name, 1.0)),
+                        reason="council_rebalance",
+                    )
+        except Exception:
+            pass
+
+    return {
+        "ok": True,
+        "saved": bool(save),
+        "replay_share": replay_share,
+        "rows_replayed": rows_replayed,
+        "rows_skipped_pump": rows_skipped_pump,
+        "before": before,
+        "replayed": replayed,
+        "after": blended,
+    }
 
 
 def repair_stale_contrarian_weights(
