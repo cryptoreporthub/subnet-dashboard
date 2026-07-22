@@ -767,13 +767,21 @@
   function renderPumpAlerts(payload) {
     var host = document.getElementById('pump-alert-body');
     if (!host || !payload) return;
+    var trust = payload.trust || {};
     var trustEl = document.getElementById('pump-alert-trust');
-    if (trustEl) {
-      var trustLine = (payload.trust && payload.trust.line) || '';
+    var proofEl = document.getElementById('pump-alert-proof');
+    var proofPctEl = document.getElementById('pump-alert-proof-pct');
+    if (trust.ready && trust.headline_pct != null) {
+      if (proofEl) proofEl.hidden = false;
+      if (proofPctEl) proofPctEl.textContent = String(trust.headline_pct) + '%';
+      if (trustEl) trustEl.hidden = true;
+    } else if (trustEl) {
+      var trustLine = trust.line || '';
       if (trustLine) {
         trustEl.hidden = false;
         trustEl.textContent = trustLine;
       }
+      if (proofEl) proofEl.hidden = true;
     }
     var alerts = payload.alerts || [];
     var earlyCount = Number(payload.early_count);
@@ -835,10 +843,29 @@
           pct +
           '%"></span></div>';
       }
+      var triad = row.triad || {};
+      if (triad.inflow_quiet_load != null || triad.buy_pressure != null || triad.price_coil != null) {
+        html += '<div class="pump-alert__triad" aria-label="Pre-pump triad">';
+        ['inflow_quiet_load', 'buy_pressure', 'price_coil'].forEach(function (key, idx) {
+          var labels = ['Inflow', 'Pressure', 'Coil'];
+          var on = triad[key] ? ' pump-alert__triad-leg--on' : '';
+          html +=
+            '<span class="pump-alert__triad-leg' +
+            on +
+            '">' +
+            esc(labels[idx]) +
+            '</span>';
+        });
+        html += '</div>';
+      }
       html +=
         '<p class="pump-alert__thesis">' +
         esc(row.thesis || '') +
-        '</p>' +
+        '</p>';
+      if (row.size_line) {
+        html += '<p class="pump-alert__size">' + esc(row.size_line) + '</p>';
+      }
+      html +=
         '<p class="pump-alert__trigger">' +
         esc(row.trigger || '') +
         '</p></article>';

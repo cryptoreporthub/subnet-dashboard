@@ -149,13 +149,17 @@ def transition_subnet(
             from internal.learning.pump_lead_ledger import record_pump_lead_at_phase_entry
 
             sig = classification.get("signals") if isinstance(classification.get("signals"), dict) else signals
+            if isinstance(sig, dict) and "triad" not in sig:
+                from internal.pump.triad import attach_triad_to_signals
+
+                sig = attach_triad_to_signals(sig)
             record_pump_lead_at_phase_entry(
                 netuid=netuid,
                 name=entry.get("name"),
                 phase=new_phase,
                 composite_score=score,
                 reference_price=float(sig.get("price") or signals.get("price") or 0),
-                signal_snapshot=entry.get("signal_snapshot"),
+                signal_snapshot=sig,
             )
         except Exception as exc:
             logger.debug("pump_lead ledger skipped SN%s: %s", netuid, exc)

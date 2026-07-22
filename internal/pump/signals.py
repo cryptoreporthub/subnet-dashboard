@@ -99,7 +99,7 @@ def build_subnet_signals(subnet: Dict[str, Any]) -> Dict[str, Any]:
     momentum_1h = float(subnet.get("price_change_1h") or price_change / 24.0)
     price = float(subnet.get("price") or 0)
 
-    return {
+    base = {
         "netuid": netuid,
         "name": subnet.get("name") or f"SN{netuid}",
         "price": price,
@@ -111,6 +111,9 @@ def build_subnet_signals(subnet: Dict[str, Any]) -> Dict[str, Any]:
         "scenario_tag": scenario_tag,
         "emission": emission,
     }
+    from internal.pump.triad import attach_triad_to_signals
+
+    return attach_triad_to_signals(base)
 
 
 def fetch_all_subnet_signals() -> List[Dict[str, Any]]:

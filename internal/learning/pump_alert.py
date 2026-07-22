@@ -75,11 +75,11 @@ def _subnet_row(netuid: int, subnets: List[Dict[str, Any]]) -> Optional[Dict[str
 def _lead_signals(
     subnet_row: Optional[Dict[str, Any]],
     ladder_entry: Dict[str, Any],
-) -> Dict[str, Optional[float]]:
+) -> Dict[str, Any]:
     snapshot: Dict[str, Any] = {}
     raw = ladder_entry.get("signal_snapshot")
     if isinstance(raw, dict):
-        snapshot = raw
+        snapshot = dict(raw)
     if not snapshot and isinstance(subnet_row, dict):
         from internal.pump.signals import build_subnet_signals
 
@@ -92,7 +92,48 @@ def _lead_signals(
         volume_intensity = float(snapshot.get("volume_intensity", 0.0))
     except (TypeError, ValueError):
         volume_intensity = None
-    return {"buy_ratio": buy_ratio, "volume_intensity": volume_intensity}
+    triad = snapshot.get("triad")
+    if not isinstance(triad, dict) and snapshot:
+        from internal.pump.triad import compute_pump_triad
+
+        triad = compute_pump_triad(snapshot)
+    return {
+        "buy_ratio": buy_ratio,
+        "volume_intensity": volume_intensity,
+        "snapshot": snapshot,
+        "triad": triad if isinstance(triad, dict) else {},
+    }
+
+
+def _size_cliff_line(subnet_row: Optional[Dict[str, Any]]) -> Optional[str]:
+    if not isinstance(subnet_row, dict):
+        return None
+    try:
+        from internal.subnets.impact import REFERENCE_TAO, impact_profile, impact_tier
+
+        profile = impact_profile(subnet_row, tao_amount=REFERENCE_TAO)
+        ref_pct = profile.get("ref_impact_pct")
+        if ref_pct is None:
+            return None
+        tier = impact_tier(subnet_row)
+        depth = {"small": "thin", "mid": "healthy", "large": "deep"}.get(tier, "unknown")
+        if not profile.get("market_cap"):
+            return None
+        return f"{REFERENCE_TAO:.0f} τ ≈ {float(ref_pct):.2f}% of float · {depth}"
+    except Exception:
+        return None
+
+
+def _triad_badge(phase: str, triad: Dict[str, Any], default_badge: str) -> str:
+    """STRONG only when all three triad legs lit on lead phases."""
+    if phase not in _EARLY_PHASES:
+        return default_badge
+    lit = int(triad.get("lit_count") or 0)
+    if lit >= 3:
+        return "STRONG"
+    if lit >= 2 and phase == "ACCUMULATING":
+        return default_badge
+    return default_badge
 
 
 def _lead_qualifies(buy_ratio: Optional[float], volume_intensity: Optional[float]) -> bool:
@@ -200,6 +241,7 @@ def build_alert_row(
         netuid_int = None
     name = _resolve_name(ladder_entry, subnet_row)
     leads = _lead_signals(subnet_row, ladder_entry)
+    triad = leads.get("triad") or {}
     try:
         score = float(ladder_entry.get("composite_score") or 0.0)
     except (TypeError, ValueError):
@@ -212,6 +254,22 @@ def build_alert_row(
         netuid_int,
         score=score,
     )
+    badge = _triad_badge(phase, triad, copy["badge"])
+    if badge == "STRONG" and phase == "ACCUMULATING":
+        copy["badge"] = "STRONG"
+        copy["thesis"] = (
+            f"Full triad — inflow, pressure, and coil aligned. "
+            f"High chance of 2%+ soon if buyers hold "
+            f"({leads['buy_ratio']:.0%} buys, vol {leads['volume_intensity']:.0%})."
+            if leads["buy_ratio"] is not None and leads["volume_intensity"] is not None
+            else "Full triad — inflow, pressure, and coil aligned."
+        )
+    elif badge == "STRONG" and phase == "STIRRING":
+        copy["badge"] = "STRONG"
+    else:
+        copy["badge"] = badge
+
+    size_line = _size_cliff_line(subnet_row)
     row = {
         "netuid": netuid_int,
         "name": name,
@@ -224,6 +282,8 @@ def build_alert_row(
         "badge": copy["badge"],
         "buy_ratio": leads["buy_ratio"],
         "volume_intensity": leads["volume_intensity"],
+        "triad": triad,
+        "size_line": size_line,
         "updated_at": ladder_entry.get("updated_at"),
     }
     return row
