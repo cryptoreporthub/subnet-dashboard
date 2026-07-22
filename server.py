@@ -394,6 +394,9 @@ HOMEPAGE_BUILD_TIMEOUT = int(os.environ.get("HOMEPAGE_BUILD_TIMEOUT", "12"))
 HOMEPAGE_SHELL_CACHE_SECONDS = float(os.environ.get("HOMEPAGE_SHELL_CACHE_SECONDS", "45"))
 TOP_SCORING_UNIVERSE = int(os.environ.get("TOP_SCORING_UNIVERSE", "40"))
 PICK_HANDLER_TIMEOUT = float(os.environ.get("PICK_HANDLER_TIMEOUT_SECONDS", "8"))
+_HOUR_PICK_TTL = float(os.environ.get("HOUR_PICK_CACHE_SECONDS", "60"))
+_HOUR_PICK_LOCK = threading.Lock()
+_HOUR_PICK_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 
 
 async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
@@ -403,6 +406,8 @@ async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
     except asyncio.TimeoutError:
         logger.warning("%s timed out after %.1fs", label, timeout_s)
         raise
+
+
 _DEGRADED_INDEX_CACHE: Dict[str, Any] = {"at": 0.0, "ctx": None}
 _HOMEPAGE_HTML_CACHE: Dict[str, Any] = {"at": 0.0, "html": None}
 _EMERGENCY_HOME_HTML: str = ""
@@ -2044,29 +2049,52 @@ async def api_top_pick_hour():
     """Top short-horizon picks (audited #1 + distinct fill), with fallback.
 
     Response shape is always ``{"picks": [<pick>, ...]}`` — never a bare list.
-    Cap + timeout so a cold score of 128 subnets cannot wedge Fly (~9s → 503).
+    Cap + single-flight cache so cold scoring cannot wedge Fly (~9s thread pile-up).
     """
 
     def _build():
-        hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
-        subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
-        if not subnets:
+        now = time.time()
+        cached = _HOUR_PICK_CACHE.get("payload")
+        if isinstance(cached, dict) and now - float(_HOUR_PICK_CACHE.get("at") or 0) < _HOUR_PICK_TTL:
+            return cached
+        if not _HOUR_PICK_LOCK.acquire(blocking=False):
+            if isinstance(cached, dict):
+                return cached
             subnets, _ = _get_subnets_hydrate()
-        subnets = _cap_subnets_for_scoring(subnets)
-        market_context = _market_context_with_weights(subnets)
-        picks: List[Dict[str, Any]] = []
+            return {"picks": [_highest_emission_pick(subnets)], "status": "busy"}
         try:
-            picks = _ordered_hour_picks(subnets, market_context, limit=3)
-        except Exception as e:
-            logger.error("Error fetching hour pick: %s", e)
-        if not picks:
-            picks = [_highest_emission_pick(subnets)]
-        return {"picks": picks}
+            # Re-check cache after winning the lock (another thread may have filled it).
+            now = time.time()
+            cached = _HOUR_PICK_CACHE.get("payload")
+            if isinstance(cached, dict) and now - float(_HOUR_PICK_CACHE.get("at") or 0) < _HOUR_PICK_TTL:
+                return cached
+            hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
+            subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
+            if not subnets:
+                subnets, _ = _get_subnets_hydrate()
+            # Tight cap — full 40-universe select_hourly_pick is ~9s on Fly shared CPU.
+            subnets = _cap_subnets_for_scoring(subnets, limit=min(24, TOP_SCORING_UNIVERSE))
+            market_context = _market_context_with_weights(subnets)
+            picks: List[Dict[str, Any]] = []
+            try:
+                picks = _ordered_hour_picks(subnets, market_context, limit=3)
+            except Exception as e:
+                logger.error("Error fetching hour pick: %s", e)
+            if not picks:
+                picks = [_highest_emission_pick(subnets)]
+            payload = {"picks": picks}
+            _HOUR_PICK_CACHE["payload"] = payload
+            _HOUR_PICK_CACHE["at"] = time.time()
+            return payload
+        finally:
+            _HOUR_PICK_LOCK.release()
 
     try:
         return await _to_thread_timeout(_build, PICK_HANDLER_TIMEOUT, label="top-pick-hour")
     except asyncio.TimeoutError:
-        logger.warning("top-pick/hour timed out after %.1fs", PICK_HANDLER_TIMEOUT)
+        cached = _HOUR_PICK_CACHE.get("payload")
+        if isinstance(cached, dict):
+            return cached
         try:
             subnets, _ = _get_subnets_hydrate()
             return {"picks": [_highest_emission_pick(subnets)], "status": "timeout"}
