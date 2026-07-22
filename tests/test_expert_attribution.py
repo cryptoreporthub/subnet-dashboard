@@ -17,11 +17,12 @@ def test_empty_and_unmatched_are_unclassified():
 
 
 def test_keyword_buckets_still_map():
-    assert _expert_from_signal_source("emission_apy") == "quant"
-    assert _expert_from_signal_source("apy_yield_spike") == "quant"
-    assert _expert_from_signal_source("whale_alert") == "hype"
-    assert _expert_from_signal_source("social_hype") == "hype"
-    assert _expert_from_signal_source("dark_horse_onchain") == "dark_horse"
+    assert _expert_from_signal_source("emission_momentum") == "quant"
+    assert _expert_from_signal_source("emission_apy") == "unclassified"
+    assert _expert_from_signal_source("apy_yield_spike") == "unclassified"
+    assert _expert_from_signal_source("whale_accumulation") == "hype"
+    assert _expert_from_signal_source("social_sentiment") == "hype"
+    assert _expert_from_signal_source("delegation_flow") == "dark_horse"
     assert _expert_from_signal_source("rsi_crossover") == "technical"
     assert _expert_from_signal_source("macd_cross") == "technical"
 

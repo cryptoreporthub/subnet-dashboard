@@ -343,6 +343,94 @@ def merge_remote_registry(
     return result
 
 
+def merge_ladder_names_into_registry(
+    registry_path: str = REGISTRY_PATH,
+) -> Dict[str, Any]:
+    """Refresh registry display names from the live pump ladder (desk-trusted labels)."""
+    result: Dict[str, Any] = {
+        "ok": False,
+        "updated_count": 0,
+        "error": None,
+        "updated_at": _now_iso(),
+    }
+    try:
+        from internal.pump.state import load_state
+        from internal.subnet_names import _is_bad_name, _load_name_overrides
+
+        ladder = load_state()
+        subnets = ladder.get("subnets") if isinstance(ladder, dict) else {}
+        if not isinstance(subnets, dict):
+            subnets = {}
+        overrides = _load_name_overrides()
+    except Exception as exc:
+        result["error"] = str(exc)
+        return result
+
+    local: Dict[str, Any] = {}
+    if os.path.exists(registry_path):
+        try:
+            with open(registry_path, "r", encoding="utf-8") as handle:
+                local = json.load(handle)
+        except Exception as exc:
+            result["error"] = f"failed to read local registry: {exc}"
+            return result
+    if not isinstance(local, dict):
+        local = {}
+
+    now = _now_iso()
+    updated = 0
+    import re
+
+    for key, entry in subnets.items():
+        if not isinstance(entry, dict):
+            continue
+        netuid = entry.get("netuid", key)
+        try:
+            sk = str(int(netuid))
+        except (TypeError, ValueError):
+            continue
+        if sk in overrides:
+            continue
+        name = entry.get("name")
+        if _is_bad_name(name):
+            continue
+        label = str(name).strip()
+        if re.match(r"^SN\d+$", label, re.I):
+            continue
+        item = local.get(sk)
+        if not isinstance(item, dict):
+            continue
+        if item.get("name") == label:
+            continue
+        item["name"] = label
+        item["last_updated"] = now
+        updated += 1
+
+    if updated == 0:
+        result["ok"] = True
+        return result
+
+    try:
+        dir_name = os.path.dirname(registry_path)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
+        fd, temp_path = tempfile.mkstemp(dir=dir_name or ".", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(local, handle, indent=2)
+            os.replace(temp_path, registry_path)
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+    except Exception as exc:
+        result["error"] = f"failed to write registry: {exc}"
+        return result
+
+    result["ok"] = True
+    result["updated_count"] = updated
+    return result
+
+
 def refresh_watchlist(
     watchlist_path: str = WATCHLIST_PATH,
 ) -> Dict[str, Any]:
@@ -405,6 +493,7 @@ def refresh_all(
     result = {
         "synced_at": _now_iso(),
         "registry": merge_remote_registry(registry_path),
+        "ladder_names": merge_ladder_names_into_registry(registry_path),
         "watchlist": refresh_watchlist(watchlist_path),
         "freshness": overall_freshness(registry_path, soul_map_path, watchlist_path, price_cache_path=price_cache_path),
     }

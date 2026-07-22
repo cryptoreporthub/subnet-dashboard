@@ -952,25 +952,22 @@ def _compute_signal_impact(
 # Prediction helper (pure, no persistence)
 # ---------------------------------------------------------------------------
 def _expert_from_signal_source(source: Optional[str]) -> str:
-    """Map signal labels to canonical Council experts (not legacy alpha/beta/gamma).
+    """Map signal labels to canonical Council experts (exclusive table)."""
+    from internal.council.signal_expert import expert_from_signal_source
 
-    Unmatched / empty sources return ``\"unclassified\"`` — never silently credit
-    quant. Quant only wins on genuine fundamental/quant keyword matches.
-    """
-    if not source:
-        return "unclassified"
-    s = str(source).lower().strip()
-    if not s:
-        return "unclassified"
-    if any(k in s for k in ("contrarian", "dark", "horse", "onchain", "on-chain", "flow")):
-        return "dark_horse"
-    if any(k in s for k in ("whale", "momentum", "hype", "social", "hot")):
-        return "hype"
-    if any(k in s for k in ("rsi", "stochastic", "williams", "cci", "macd", "technical", "indicator")):
-        return "technical"
-    if any(k in s for k in ("emission", "apy", "yield", "fundamental", "quant")):
-        return "quant"
-    return "unclassified"
+    return expert_from_signal_source(source)
+
+
+def _expert_from_signal_impact(signal_impact: Optional[Dict[str, Any]]) -> str:
+    from internal.council.signal_expert import expert_from_signal_impact
+
+    return expert_from_signal_impact(signal_impact)
+
+
+def _dominant_signal_label(signal_impact: Optional[Dict[str, Any]]) -> Optional[str]:
+    from internal.council.signal_expert import dominant_signal_label
+
+    return dominant_signal_label(signal_impact)
 
 
 
@@ -1099,7 +1096,7 @@ def attach_council_prediction(
     ref = float(candidate.get("price", 0) or 0)
     predicted_pct = predicted_pct_from_score(score_payload, candidate, final_confidence)
     si = fields["signal_impact"] or {}
-    source = si.get("dominant") or si.get("net_direction") or f"council_{horizon_type}_pick"
+    source = _dominant_signal_label(si) or si.get("net_direction") or f"council_{horizon_type}_pick"
     hours = horizon_hours if horizon_hours is not None else (1 if horizon_type == "hour" else 4)
     return build_prediction_statement(
         sn=candidate,
@@ -1107,7 +1104,7 @@ def attach_council_prediction(
         horizon=hours,
         ref_price=ref,
         signal_source=str(source),
-        expert=_expert_from_signal_source(str(source)),
+        expert=_expert_from_signal_impact(si),
         now=_dt.now(_dt.UTC).replace(tzinfo=None) if hasattr(_dt, "UTC") else _dt.utcnow(),
         signal_contributions=fields["signal_contributions"],
         horizon_type=horizon_type,
@@ -1222,13 +1219,14 @@ def build_subnet_state_vector(netuid: int, subnets: List[dict], registry: Option
         hot = {**hot, "active": False, "label": None, "suppressed_by": "SELL ALERT"}
 
     signal_impact = _compute_signal_impact(sn, indicators, hot, sell)
+    pred_source = _dominant_signal_label(signal_impact) or signal_impact.get("net_direction", "neutral")
     prediction = build_prediction_statement(
         sn=sn,
         predicted_pct=signal_impact.get("net_predicted_pct", 0) or 1.5,
         horizon=24,
         ref_price=float(sn.get("price", 0) or 0) or 1.0,
-        signal_source=signal_impact.get("dominant") or signal_impact.get("net_direction", "neutral"),
-        expert=_expert_from_signal_source(signal_impact.get("dominant") or signal_impact.get("net_direction", "neutral")),
+        signal_source=pred_source,
+        expert=_expert_from_signal_impact(signal_impact),
         now=_dt.utcnow(),
     )
     social_sentiment = _compute_social_sentiment(sn)

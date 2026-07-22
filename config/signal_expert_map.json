@@ -1,0 +1,28 @@
+{
+  "signal_experts": {
+    "rsi_crossover": "technical",
+    "macd_cross": "technical",
+    "stochastic_reversal": "technical",
+    "bollinger_squeeze": "technical",
+    "mfi_flow": "technical",
+    "mfi_divergence": "technical",
+    "cci_divergence": "technical",
+    "cci_extreme": "technical",
+    "williams_r": "technical",
+    "williams_r_reversal": "technical",
+    "keltner_channel": "technical",
+    "funding_divergence": "technical",
+    "emission_momentum": "quant",
+    "emission_change": "quant",
+    "staking_conviction": "quant",
+    "registration_cost": "quant",
+    "momentum_shift": "hype",
+    "social_sentiment": "hype",
+    "whale_accumulation": "hype",
+    "delegation_flow": "dark_horse",
+    "onchain_flow": "dark_horse",
+    "hot": "hype",
+    "sell_alert": "technical",
+    "market_breadth": "unclassified"
+  }
+}
