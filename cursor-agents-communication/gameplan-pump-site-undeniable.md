@@ -15,6 +15,64 @@ Do **not** clone full DEX / 128-row Bloomberg. Steal the five peer edges that ma
 
 ---
 
+## Design intent (internal — not public marketing)
+
+**Private bar:** On-chain, the most profitable wallets are overwhelmingly bot-operated — speed, always-on scanning, zero hesitation. A human cannot clone that stack. This app exists so an **attentive human checking signals through the day** can theoretically **keep pace with bot-level outcomes** (timing, conviction, not missing the move).
+
+**Do not sell this publicly.** “Beat the bots” sets expectations we cannot guarantee in copy. Hold the bar internally; keep external messaging grounded (graded claims, n=, hit rates, honest HOLD).
+
+**Why these surfaces exist:**
+
+| Surface | Trader job | Bot-parity role |
+|---------|------------|-----------------|
+| **Hero cards** | What to act on *now* | One-shot conviction without re-scanning 129 subnets |
+| **Pump desk** | Intraday lead scanner | Catch flow before price — the window bots already exploit |
+| **Horizons** | Multi-timeframe context | See the move bots are positioned for, not one candle in isolation |
+
+**Build test:** Does this help someone who checks the app during the day act in time — not just understand after the fact?
+
+---
+
+## Hard rule — subnet display names (must hold site-wide)
+
+**Rule:** Every user-visible subnet name **must** resolve through the canonical pipeline at **read time**. Never trust a name frozen in historical JSON (`predictions.json`, `daily_picks.json`, trail rows, etc.) on any live surface.
+
+**Single source:** `internal/subnet_names.py` — `resolve_subnet_name()` / `name_for_netuid()` / `refresh_daily_pick_names()` / `refresh_stored_names()`.
+
+**Resolution priority (today):**
+
+1. Curator override — `config/subnet_name_overrides.json` (when upstream feeds lag a subnet rebrand)
+2. Remote registry — GitHub `taostat/subnets-infos` `subnets.json` (**not** the TaoStats.io website)
+3. TaoStats API identity — `api.taostats.io` (only when `use_taostats=True`; most hot paths skip for latency)
+4. Local registry — `config/registry.json`
+5. TaoMarketCap fallback → `SN{n}`
+
+**Why overrides exist:** The TaoStats **website** can show the correct name while our **primary remote feed** (community GitHub JSON) still lists the **previous occupant** (e.g. SN15 `De-Val` vs **ORO**, SN28 `LOL` vs **gm**). That is a **stale static file**, not “the user is wrong.” Curator overrides are the surgical fix until upstream catches up or we reprioritize live TaoStats identity on hot paths.
+
+**Surfaces in scope (non-exhaustive — verify on every new route/UI):**
+
+- Hero / daily pick / horizon chips
+- Pump desk cards
+- Recent calls / story strip
+- Weighed against, Living Focus, council votes
+- Share pages, scanner tables, whale rows, mindmap trail
+- Client hydrate (`resolveSubnetDisplayName` must prefer `/api/subnets` registry enriched by the resolver)
+
+**Verification (required before merge when touching names or display paths):**
+
+- [ ] `pytest tests/test_subnet_names.py` — resolver priority + override beats stale remote
+- [ ] Any new panel that shows a subnet name calls resolver on read (or consumes an API that already does)
+- [ ] No new `pred.get("name")` / `row.name` display without netuid re-resolve
+- [ ] Phone QA: spot-check renamed netuids (SN15 **ORO**, SN28 **gm**) on hero + pump + recent calls after deploy
+
+**Drift workflow (do not wait for user to notice):**
+
+1. User report or QA flags wrong name → add override + test in `test_subnet_names.py`
+2. Periodic audit (future automation): diff overrides + local registry vs GitHub `subnets.json` and flag mismatches
+3. Optional upgrade: prefer TaoStats API identity over stale GitHub when API key live and response is fresh
+
+---
+
 ## Already shipped (do not re-litigate)
 
 | Slice | Main |
