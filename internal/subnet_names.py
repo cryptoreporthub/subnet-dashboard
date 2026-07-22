@@ -52,16 +52,30 @@ def _load_local_registry() -> Dict[str, Any]:
         return {}
 
 
+_override_cache: Dict[str, Any] = {"at": 0.0, "data": {}}
+
+
 def _load_name_overrides() -> Dict[str, str]:
     """Curator corrections when on-chain / taostat identity is stale or a meme placeholder."""
+    now = time.time()
+    with _lock:
+        if now - float(_override_cache.get("at") or 0) < _CACHE_TTL_SECONDS:
+            cached = _override_cache.get("data")
+            if isinstance(cached, dict):
+                return cached
     try:
         with open(OVERRIDES_PATH, "r") as f:
             data = json.load(f)
         if not isinstance(data, dict):
-            return {}
-        return {str(k): str(v).strip() for k, v in data.items() if v and str(v).strip()}
+            out: Dict[str, str] = {}
+        else:
+            out = {str(k): str(v).strip() for k, v in data.items() if v and str(v).strip()}
     except Exception:
-        return {}
+        out = {}
+    with _lock:
+        _override_cache["at"] = now
+        _override_cache["data"] = out
+    return out
 
 
 def _remote_registry() -> Dict[str, Any]:
