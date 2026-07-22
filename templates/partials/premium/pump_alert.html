@@ -18,7 +18,13 @@
     </div>
     <p class="pump-alert__sub">Flow before price — early names first, confirmed moves flagged as chase risk.</p>
     {% set trust = pa.trust if pa.trust is mapping else {} %}
-    <p class="pump-alert__trust" id="pump-alert-trust"{% if not trust.line %} hidden{% endif %}>{{ trust.line|default('') }}</p>
+    {% if trust.ready and trust.headline_pct is not none %}
+    <div class="pump-alert__proof" id="pump-alert-proof">
+      <span class="pump-alert__proof-pct" id="pump-alert-proof-pct">{{ trust.headline_pct }}%</span>
+      <span class="pump-alert__proof-meta">early alerts hit 2%+ in 1h · n={{ trust.headline_n|default(trust.early.n|default(0)) }}</span>
+    </div>
+    {% endif %}
+    <p class="pump-alert__trust" id="pump-alert-trust"{% if not trust.line %} hidden{% endif %}{% if trust.ready %} hidden{% endif %}>{{ trust.line|default('') }}</p>
   </div>
   <div class="pump-alert__body" id="pump-alert-body" aria-live="polite">
     {% if pa_count > 0 %}
@@ -35,7 +41,18 @@
           <span class="pump-alert__meter-fill" style="width: {{ [(row.score|float * 100)|round(0), 100]|min }}%"></span>
         </div>
         {% endif %}
+        {% set triad = row.triad if row.triad is mapping else {} %}
+        {% if triad %}
+        <div class="pump-alert__triad" aria-label="Pre-pump triad">
+          <span class="pump-alert__triad-leg{% if triad.inflow_quiet_load %} pump-alert__triad-leg--on{% endif %}" title="TAO inflow quiet-load">Inflow</span>
+          <span class="pump-alert__triad-leg{% if triad.buy_pressure %} pump-alert__triad-leg--on{% endif %}" title="Buy pressure">Pressure</span>
+          <span class="pump-alert__triad-leg{% if triad.price_coil %} pump-alert__triad-leg--on{% endif %}" title="Price coil">Coil</span>
+        </div>
+        {% endif %}
         <p class="pump-alert__thesis">{{ row.thesis }}</p>
+        {% if row.size_line %}
+        <p class="pump-alert__size">{{ row.size_line }}</p>
+        {% endif %}
         <p class="pump-alert__trigger">{{ row.trigger }}</p>
       </article>
       {% endif %}
@@ -54,6 +71,9 @@
   .pump-alert__title { font-size: 17px; font-weight: 700; margin: 0; color: #e2e8f0; }
   .pump-alert__count { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; color: #7dd3fc; border: 1px solid rgba(125, 211, 252, 0.35); border-radius: 999px; padding: 4px 10px; white-space: nowrap; margin-top: 2px; }
   .pump-alert__sub { font-size: 12px; color: #64748b; margin: 0 0 6px; line-height: 1.4; }
+  .pump-alert__proof { display: flex; align-items: baseline; gap: 10px; margin: 0 0 8px; flex-wrap: wrap; }
+  .pump-alert__proof-pct { font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700; color: #7dd3fc; line-height: 1; letter-spacing: -0.02em; }
+  .pump-alert__proof-meta { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #94a3b8; line-height: 1.4; max-width: 220px; }
   .pump-alert__trust { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7dd3fc; margin: 0 0 12px; line-height: 1.4; }
   .pump-alert__lane { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
   .pump-alert__card { flex: 0 0 min(88vw, 300px); scroll-snap-align: start; padding: 12px; border-radius: 12px; background: linear-gradient(160deg, #0d1016 0%, #0a0c10 100%); border: 1px solid #1a1d24; min-height: 44px; }
@@ -71,7 +91,12 @@
   .pump-alert__badge--building { color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.08); }
   .pump-alert__badge--just-started { color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.45); background: rgba(251, 191, 36, 0.1); }
   .pump-alert__badge--chase-risk { color: #ff69b4; border: 1px solid rgba(255, 105, 180, 0.4); background: rgba(255, 105, 180, 0.08); }
+  .pump-alert__badge--strong { color: #34d399; border: 1px solid rgba(52, 211, 153, 0.45); background: rgba(52, 211, 153, 0.12); }
   .pump-alert__badge--fading { color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.35); }
+  .pump-alert__triad { display: flex; gap: 6px; margin: 0 0 8px; flex-wrap: wrap; }
+  .pump-alert__triad-leg { font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 6px; border-radius: 5px; color: #475569; border: 1px solid #1e293b; background: #0a0c10; }
+  .pump-alert__triad-leg--on { color: #7dd3fc; border-color: rgba(125, 211, 252, 0.45); background: rgba(125, 211, 252, 0.1); }
+  .pump-alert__size { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.4; color: #94a3b8; margin: 0 0 6px; }
   .pump-alert__meter { height: 3px; border-radius: 999px; background: #1a1d24; overflow: hidden; margin-bottom: 8px; }
   .pump-alert__meter-fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #7dd3fc, #38bdf8); }
   .pump-alert__card--confirmed .pump-alert__meter-fill { background: linear-gradient(90deg, #ff69b4, #f472b6); }

@@ -72,6 +72,7 @@ def build_pump_desk_trust(
     ready = n >= MIN_SAMPLE_FOR_TRUST and rate is not None
     adapt_ready = n >= MIN_SAMPLE_FOR_ADAPT and rate is not None
 
+    headline_pct = None
     if n == 0:
         line = "Early alerts: grading starts once lead phase entries resolve (1h)."
         message = "No graded pump leads yet"
@@ -80,6 +81,7 @@ def build_pump_desk_trust(
         message = line
     else:
         pct = round((rate or 0) * 100)
+        headline_pct = pct
         line = f"Early alerts: {pct}% hit 2%+ in 1h (n={n})"
         message = None
 
@@ -88,6 +90,9 @@ def build_pump_desk_trust(
         "adapt_ready": adapt_ready,
         "line": line,
         "message": message,
+        "headline_pct": headline_pct,
+        "headline_n": n if ready else None,
+        "headline_claim": "+2% in 1h from WARMING UP / BUILDING",
         "early": early_stats,
         "just_started": just_stats,
         "min_sample_trust": MIN_SAMPLE_FOR_TRUST,
