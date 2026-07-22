@@ -97,10 +97,12 @@ def build_subnet_signals(subnet: Dict[str, Any]) -> Dict[str, Any]:
     volume_intensity = min(volume / (emission * 1000.0 + 1.0), 3.0) / 3.0
 
     momentum_1h = float(subnet.get("price_change_1h") or price_change / 24.0)
+    price = float(subnet.get("price") or 0)
 
     return {
         "netuid": netuid,
         "name": subnet.get("name") or f"SN{netuid}",
+        "price": price,
         "price_change_24h": price_change,
         "momentum_1h": momentum_1h,
         "volume_intensity": round(volume_intensity, 4),

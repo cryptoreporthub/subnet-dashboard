@@ -75,6 +75,11 @@ def _in_replay_mode() -> bool:
     return _replay_mode.get()
 
 
+def _skip_council_learning(prediction: Dict[str, Any]) -> bool:
+    """Pump desk grades must not nudge council expert/signal weights."""
+    return str(prediction.get("pick_source") or "").lower() == "pump_lead"
+
+
 def _load_json(path: str, default: Any) -> Any:
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -517,13 +522,15 @@ def resolve_prediction(
         correct = direction_correct(prediction, actual_pct)
         resolved_at = now.isoformat().replace("+00:00", "Z")
         expert = _normalize_expert(prediction)
-        if expert:
+        if expert and not _skip_council_learning(prediction):
             prediction["expert"] = expert
             _nudge_weights(bool(correct), expert)
-        _nudge_weights_from_judge_audit(prediction, bool(correct))
+        if not _skip_council_learning(prediction):
+            _nudge_weights_from_judge_audit(prediction, bool(correct))
         _ensure_subnet_snapshot(prediction)
         # Impact dial before finalize so prediction_resolved trail includes after value.
-        _nudge_impact_strength(prediction, bool(correct))
+        if not _skip_council_learning(prediction):
+            _nudge_impact_strength(prediction, bool(correct))
         atomic_finalize_resolution(
             prediction,
             actual_pct=actual_pct,
@@ -532,8 +539,9 @@ def resolve_prediction(
             resolved_price=current_price,
             resolved_at=resolved_at,
         )
-        _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
-        _nudge_signal_weights(prediction, bool(correct))
+        if not _skip_council_learning(prediction):
+            _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
+            _nudge_signal_weights(prediction, bool(correct))
         return prediction
     return resolve_prediction_at_horizon(prediction, now=now)
 
@@ -597,14 +605,16 @@ def resolve_prediction_at_horizon(
     correct = direction_correct(prediction, actual_pct)
     resolved_at = resolve_at.isoformat().replace("+00:00", "Z")
     expert = _normalize_expert(prediction)
-    if expert:
+    if expert and not _skip_council_learning(prediction):
         prediction["expert"] = expert
         _nudge_weights(bool(correct), expert)
-    _nudge_weights_from_judge_audit(prediction, bool(correct))
+    if not _skip_council_learning(prediction):
+        _nudge_weights_from_judge_audit(prediction, bool(correct))
 
     _ensure_subnet_snapshot(prediction, subnet_row=subnet_row)
     # Impact dial before finalize so prediction_resolved trail includes after value.
-    _nudge_impact_strength(prediction, bool(correct))
+    if not _skip_council_learning(prediction):
+        _nudge_impact_strength(prediction, bool(correct))
     atomic_finalize_resolution(
         prediction,
         actual_pct=actual_pct,
@@ -614,8 +624,9 @@ def resolve_prediction_at_horizon(
         resolved_at=resolved_at,
         price_meta=meta,
     )
-    _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
-    _nudge_signal_weights(prediction, bool(correct))
+    if not _skip_council_learning(prediction):
+        _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
+        _nudge_signal_weights(prediction, bool(correct))
     return prediction
 
 
