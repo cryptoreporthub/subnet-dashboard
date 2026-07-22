@@ -1,13 +1,13 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-22T20:30:00Z  
-**main:** `34568c1` (post #413 hydrate) — Slice A in flight: unclassified attribution
+**Last updated:** 2026-07-22T20:35:00Z  
+**main:** `2d9ccca` (#414 Slice A live) — Slice B in flight: pump desk + council votes
 
 ## Next slice queue
 
-1. **Slice A** — quant catch-all → `unclassified` (`cursor/quant-attribution-fix-c9f5`)
-2. **Slice B** — pump desk unique copy + names + council votes hydrate
-3. **Wave 4** — optional depth (YAGNI until A/B green)
+1. ~~**Slice A**~~ — merged #414; prod `unclassified_count` on `/api/learning/stats`
+2. **Slice B** — pump desk unique copy + names + council votes hydrate (`cursor/pump-desk-council-votes-c9f5`)
+3. **Wave 4** — optional depth (YAGNI until B green)
 
 ## Gameplan
 
