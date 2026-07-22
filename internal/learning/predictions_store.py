@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -140,3 +140,17 @@ def update_stats(data: Dict[str, Any]) -> None:
     else:
         stats["accuracy"] = 0.0
     data["stats"] = stats
+
+
+def count_unclassified(data: Optional[Dict[str, Any]] = None) -> int:
+    """Count ledger rows tagged expert=unclassified (pending + resolved)."""
+    if data is None:
+        data = load_predictions()
+    if not isinstance(data, dict):
+        return 0
+    n = 0
+    for bucket in ("predictions", "resolved"):
+        for row in data.get(bucket) or []:
+            if isinstance(row, dict) and str(row.get("expert") or "").lower() == "unclassified":
+                n += 1
+    return n

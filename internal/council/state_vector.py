@@ -952,10 +952,16 @@ def _compute_signal_impact(
 # Prediction helper (pure, no persistence)
 # ---------------------------------------------------------------------------
 def _expert_from_signal_source(source: Optional[str]) -> str:
-    """Map signal labels to canonical Council experts (not legacy alpha/beta/gamma)."""
+    """Map signal labels to canonical Council experts (not legacy alpha/beta/gamma).
+
+    Unmatched / empty sources return ``\"unclassified\"`` — never silently credit
+    quant. Quant only wins on genuine fundamental/quant keyword matches.
+    """
     if not source:
-        return "quant"
-    s = str(source).lower()
+        return "unclassified"
+    s = str(source).lower().strip()
+    if not s:
+        return "unclassified"
     if any(k in s for k in ("contrarian", "dark", "horse", "onchain", "on-chain", "flow")):
         return "dark_horse"
     if any(k in s for k in ("whale", "momentum", "hype", "social", "hot")):
@@ -964,7 +970,7 @@ def _expert_from_signal_source(source: Optional[str]) -> str:
         return "technical"
     if any(k in s for k in ("emission", "apy", "yield", "fundamental", "quant")):
         return "quant"
-    return "quant"
+    return "unclassified"
 
 
 
