@@ -39,6 +39,11 @@ primary_region = "sjc"
   LOAD_SHED_ACQUIRE_SECONDS = "2"
   HOMEPAGE_BUILD_TIMEOUT = "8"
   HOMEPAGE_SHELL_CACHE_SECONDS = "60"
+  # Cap expensive scoring so hydrate storms cannot wedge the single worker (~36s 503).
+  SCORE_CACHE_TTL = "120"
+  PICK_HANDLER_TIMEOUT_SECONDS = "8"
+  BRAIN_LETTER_TIMEOUT_SECONDS = "8"
+  BRAIN_LETTER_CACHE_SECONDS = "60"
   ENABLE_METRICS = "0"
   # Web process: keep CPU for GET / + hydrate; resolver/retrain belongs on worker.
   CALIBRATION_AUTO_RETRAIN = "off"
