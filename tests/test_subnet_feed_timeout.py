@@ -50,8 +50,10 @@ def test_daily_pick_read_path_skips_live_feed(monkeypatch):
     assert body.get("brief") or body.get("pick") or body.get("candidate")
 
 
-def test_daily_pick_lite_includes_registry_shortlist(monkeypatch):
-    """Lite enrich surfaces weighed-against rows from capped registry scan."""
+def test_daily_pick_lite_skips_shortlist_scoring():
+    """Lite enrich stays fast — weighed-against is deferred to /api/daily-pick/weighed."""
+    import time
+
     import server as srv
 
     payload = {
@@ -62,8 +64,33 @@ def test_daily_pick_lite_includes_registry_shortlist(monkeypatch):
             "audit": {"concerns": ["Thin volume"]},
         },
     }
+    t0 = time.time()
     out = srv._enrich_daily_pick_payload_lite(payload)
-    shortlist = out.get("shortlist")
-    assert isinstance(shortlist, list)
-    assert len(shortlist) >= 2
-    assert all(isinstance(row, dict) and row.get("netuid") is not None for row in shortlist)
+    elapsed = time.time() - t0
+    assert elapsed < 2.0, f"lite enrich took {elapsed:.1f}s"
+    assert out.get("shortlist") == []
+
+
+def test_daily_pick_weighed_endpoint_returns_shortlist(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    import server as srv
+
+    stored = {
+        "date": "2099-01-01",
+        "action": "HOLD",
+        "candidate": {"subnet": {"netuid": 78}, "final_confidence": 0.3},
+    }
+    fake_shortlist = [
+        {"netuid": 1, "name": "Alpha", "conviction": 42, "role": "runner-up"},
+        {"netuid": 2, "name": "Beta", "conviction": 38, "role": "volume thin"},
+    ]
+
+    monkeypatch.setattr("internal.council.daily_pick_engine._find_today", lambda _rows: stored)
+    monkeypatch.setattr(srv, "_daily_pick_weighed_shortlist", lambda _payload: fake_shortlist)
+
+    client = TestClient(srv.app)
+    resp = client.get("/api/daily-pick/weighed")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["shortlist"] == fake_shortlist

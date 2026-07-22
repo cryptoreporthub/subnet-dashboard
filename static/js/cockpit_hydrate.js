@@ -1752,6 +1752,16 @@
 
       if (tier1[0].status === 'fulfilled') {
         renderDailyPick(tier1[0].value);
+        var dpPayload = tier1[0].value;
+        if (!dpPayload.shortlist || !dpPayload.shortlist.length) {
+          fetchJsonRetry('/api/daily-pick/weighed', 22000, 2)
+            .then(function (weighed) {
+              patchK3WeighedAgainst((weighed && weighed.shortlist) || []);
+            })
+            .catch(function (e) {
+              console.warn('[cockpit_hydrate] weighed shortlist fetch failed', e);
+            });
+        }
       } else {
         console.warn('[cockpit_hydrate] daily-pick fetch failed');
         markSectionFailed('section-daily-pick', 'Daily call delayed — retrying when the API responds.');

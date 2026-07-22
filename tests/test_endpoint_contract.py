@@ -44,6 +44,7 @@ CONTRACT = [
     ("GET", "/api/simivision", None),
     ("GET", "/api/top-picks", None),
     ("GET", "/api/daily-pick", None),
+    ("GET", "/api/daily-pick/weighed", None),
     ("GET", "/api/pick-explain/1", None),
     ("GET", "/api/top-pick/day", None),
     ("GET", "/api/top-pick/hour", None),

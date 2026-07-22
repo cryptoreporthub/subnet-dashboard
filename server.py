@@ -580,15 +580,11 @@ def _enrich_daily_pick_payload_lite(
         return {}
     from internal.learning.dpick_copy import attach_brief_to_daily_pick
     from internal.learning.dpick_pump import attach_pump_chip_to_daily_pick
-    from internal.learning.dpick_shortlist import attach_shortlist_to_daily_pick
     from internal.learning.dpick_temporal import attach_temporal_to_daily_pick
     from internal.subnet_names import refresh_daily_pick_names
-    from internal.subnets.feed import registry_subnet_rows
 
     out = refresh_daily_pick_names(pick_payload)
     out = attach_temporal_to_daily_pick(out)
-    # ponytail: cap registry scan — full roster shortlist is ~13s; top-40 is <1s on Fly
-    out = attach_shortlist_to_daily_pick(out, registry_subnet_rows()[:40])
     out = attach_brief_to_daily_pick(out)
     if "shortlist" not in out:
         out["shortlist"] = []
@@ -1811,6 +1807,36 @@ def _pick_netuid_from_daily_payload(payload: Any) -> Optional[int]:
         if isinstance(pred, dict) and pred.get("netuid") is not None:
             return int(pred["netuid"])
     return None
+
+
+def _daily_pick_weighed_shortlist(pick_payload: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Council deliberation rows for hero weighed-against — uses live subnet prices."""
+    if not isinstance(pick_payload, dict):
+        return []
+    from internal.learning.dpick_shortlist import attach_shortlist_to_daily_pick
+
+    hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
+    subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
+    if not subnets:
+        subnets, _ = _get_subnets_hydrate()
+    subnets = _cap_subnets_for_scoring(subnets)
+    if not subnets:
+        return []
+    market_context = _market_context_with_weights(subnets)
+    enriched = attach_shortlist_to_daily_pick(dict(pick_payload), subnets, market_context)
+    shortlist = enriched.get("shortlist")
+    return shortlist if isinstance(shortlist, list) else []
+
+
+@app.get("/api/daily-pick/weighed")
+def api_daily_pick_weighed():
+    """Deferred hydrate read — shortlist only, scored on live-priced subnets."""
+    from internal.council.daily_pick_engine import _find_today, _load
+
+    existing = _find_today(_load())
+    if existing is None:
+        return {"shortlist": []}
+    return {"shortlist": _daily_pick_weighed_shortlist(existing)}
 
 
 @app.get("/api/daily-pick")
