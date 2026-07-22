@@ -81,4 +81,17 @@ def test_bailout_root_prefers_cached_html():
 
 def test_hardcoded_emergency_has_inline_css():
     assert b"background:#0a0a0f" in HARDCODED_EMERGENCY_HTML
-    assert b"location.reload" in HARDCODED_EMERGENCY_HTML
+    assert b"location.reload" not in HARDCODED_EMERGENCY_HTML
+
+
+def test_bailout_homepage_primes_emergency_on_cold_cache():
+    """Cold bailout must serve full Jinja shell, not the hardcoded reload stub."""
+    import server as srv
+
+    srv._HOMEPAGE_HTML_CACHE["html"] = None
+    srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
+    srv._EMERGENCY_HOME_HTML = ""
+    html = srv._bailout_homepage_html()
+    assert html
+    assert "cockpit_hydrate.js" in html
+    assert "location.reload" not in html

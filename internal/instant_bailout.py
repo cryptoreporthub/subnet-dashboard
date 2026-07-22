@@ -31,9 +31,8 @@ HARDCODED_EMERGENCY_HTML = """<!DOCTYPE html>
 <body>
 <div class="wrap">
   <h1 class="pulse">Loading council…</h1>
-  <p>Subnet dashboard is warming up. This page will refresh automatically.</p>
+  <p>Subnet dashboard is warming up. If this stays blank, tap refresh.</p>
 </div>
-<script>setTimeout(function(){location.reload()},3500)</script>
 </body>
 </html>
 """.encode("utf-8")
