@@ -24,6 +24,8 @@ checks = [
     ("no eternal judge loading", "Loading judge scores" not in html),
     ("no backtest warming", "Backtest warming up" not in html),
     ("dual judge labels", "Lane judges" in html and "Council weights (soul map)" in html),
+    ("track record weight nudge hook", 'id="k3-weight-nudge-line"' in html),
+    ("no story path warming", "Story path warming up" not in html),
 ]
 failed = [name for name, ok in checks if not ok]
 for name, ok in checks:

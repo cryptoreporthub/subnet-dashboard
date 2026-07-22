@@ -1373,6 +1373,7 @@
     renderWeightNudgeLine(deltaMap);
   }
 
+
   function renderKpi(stats) {
     if (!stats) return;
     var section = document.getElementById('section-kpi');
