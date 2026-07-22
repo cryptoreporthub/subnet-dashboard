@@ -7,7 +7,7 @@ from internal.learning.weight_deltas import recent_expert_weight_deltas
 def test_story_strip_refreshes_name_from_netuid(monkeypatch):
     monkeypatch.setattr(
         "internal.subnet_names.name_for_netuid",
-        lambda nu: "gm" if int(nu) == 28 else f"SN{nu}",
+        lambda nu: "ORO" if int(nu) == 15 else ("gm" if int(nu) == 28 else f"SN{nu}"),
     )
     monkeypatch.setattr(
         "internal.learning.predictions_store.load_predictions",

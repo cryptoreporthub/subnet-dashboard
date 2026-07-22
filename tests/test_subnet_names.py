@@ -85,6 +85,13 @@ def test_sn28_override_beats_on_chain_lol():
     assert name == "gm"
 
 
+def test_sn15_override_beats_stale_de_val():
+    """SN15 is ORO; taostat still lists previous occupant De-Val."""
+    remote = {"15": {"name": "De-Val", "bittensor_id": "omicron"}}
+    name = resolve_subnet_name(15, remote=remote, local={"15": {"name": "De-Val"}}, tmc_name="De-Val", use_taostats=False)
+    assert name == "ORO"
+
+
 def test_pump_alert_resolves_sn28_not_lol():
     from internal.learning.pump_alert import build_alert_row
 
