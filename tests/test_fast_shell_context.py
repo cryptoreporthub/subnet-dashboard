@@ -44,11 +44,31 @@ def test_degraded_shell_ssrs_daily_pick_not_blank():
             assert "HOLD · no long" not in html
 
 
+def test_degraded_shell_ssrs_pump_and_horizons():
+    """Pump desk + horizon picks paint from file-backed shell (B0-0)."""
+    import server as srv
+
+    srv._HOMEPAGE_HTML_CACHE["html"] = None
+    srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
+    srv._warm_homepage_cache(None)
+    html = client.get("/").text
+    assert "Pump desk loads after hydrate" not in html
+    assert "Council is convening" not in html
+    assert "Backtest warming up" not in html
+    assert "Loading judge scores" not in html
+    assert (
+        "pump-alert__card" in html
+        or "pump-alert__empty" in html
+        or "Quiet — no lead" in html
+    )
+
+
 def test_degraded_homepage_has_council_weights():
     _ensure_homepage_cache()
     html = client.get("/").text
     assert "council-grid" in html
     assert "Council weights warming up" not in html
+    assert "Quiet — council weights" not in html or "council-grid" in html
 
 
 def test_fast_shell_learning_metrics_has_graded_field():

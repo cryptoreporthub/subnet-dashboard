@@ -203,7 +203,63 @@
     var empty = section.querySelector('.empty');
     if (!empty) return;
     empty.textContent = message;
-    empty.classList.add('empty--warn');
+    empty.classList.add('empty--quiet');
+  }
+
+  function pickNetuidFromPayload(payload) {
+    if (!payload || typeof payload !== 'object') return null;
+    var pick = payload.pick || payload.candidate;
+    var sn = pick && pick.subnet;
+    if (sn && sn.netuid != null) return Number(sn.netuid);
+    return null;
+  }
+
+  function renderFocusJudgeCard(data) {
+    var panel = document.getElementById('judges-panel');
+    if (!panel || !data || data.error) return;
+    function escLocal(s) {
+      return esc(s);
+    }
+    function verdictClass(v) {
+      if (v === 'bullish' || v === 'long') return 'badge-buy';
+      if (v === 'bearish' || v === 'short') return 'badge-sell';
+      return 'badge-watch';
+    }
+    var verdict = (data.consensus && data.consensus.verdict) || 'neutral';
+    var score = data.consensus ? data.consensus.score : null;
+    var oracle = data.oracle ? data.oracle.score.toFixed(2) : '—';
+    var echo = data.echo ? data.echo.score.toFixed(2) : '—';
+    var pulse = data.pulse ? data.pulse.score.toFixed(2) : '—';
+    var title = escLocal(data.name || ('SN' + data.netuid));
+    panel.innerHTML =
+      '<article class="card judge-summary" style="margin-bottom:10px;">' +
+      '<div class="card-head"><h3>' + title + '</h3>' +
+      '<span class="badge ' + verdictClass(verdict) + '">' + escLocal(String(verdict).toUpperCase()) + '</span></div>' +
+      '<div class="pick-meta">SN' + escLocal(data.netuid) + (score != null ? ' · consensus ' + Number(score).toFixed(2) : '') + ' · Living Focus</div>' +
+      '<div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-top:8px;">' +
+      '<div class="kpi-cell"><div class="k">Oracle</div><div class="v">' + oracle + '</div></div>' +
+      '<div class="kpi-cell"><div class="k">Echo</div><div class="v">' + echo + '</div></div>' +
+      '<div class="kpi-cell"><div class="k">Pulse</div><div class="v">' + pulse + '</div></div>' +
+      '</div></article>';
+  }
+
+  function prefetchFocusJudges(payload) {
+    var netuid = pickNetuidFromPayload(payload);
+    if (netuid == null) return;
+    fetchJsonRetry('/api/judges/' + encodeURIComponent(netuid), 18000, 1)
+      .then(function (data) {
+        renderFocusJudgeCard(data);
+      })
+      .catch(function () {
+        var panel = document.getElementById('judges-panel');
+        if (!panel) return;
+        var empty = panel.querySelector('.empty');
+        if (empty) {
+          empty.textContent =
+            'Quiet — lane judges unavailable right now. Open this drawer again after the API responds.';
+          empty.classList.add('empty--quiet');
+        }
+      });
   }
 
   async function fetchJsonRetry(url, ms, retries) {
@@ -1800,6 +1856,7 @@
 
       if (tier1[0].status === 'fulfilled') {
         renderDailyPick(tier1[0].value);
+        prefetchFocusJudges(tier1[0].value);
         var dpPayload = tier1[0].value;
         if (!dpPayload.shortlist || !dpPayload.shortlist.length) {
           fetchJsonRetry('/api/daily-pick/weighed', 22000, 2)
@@ -1812,7 +1869,7 @@
         }
       } else {
         console.warn('[cockpit_hydrate] daily-pick fetch failed');
-        markSectionFailed('section-daily-pick', 'Daily call delayed — retrying when the API responds.');
+        markSectionFailed('section-daily-pick', 'Quiet — daily call delayed. Retry when /api/daily-pick responds.');
       }
 
       if (tier1[1].status === 'fulfilled') {
@@ -1834,8 +1891,8 @@
           window.SimiTrustBanner.render(stats.trust_banner);
         }
       } else {
-        markSectionFailed('section-kpi', 'Learning stats unavailable — retry when the API responds.');
-        markSectionFailed('section-council', 'Council weights unavailable — retry when the API responds.');
+        markSectionFailed('section-kpi', 'Quiet — learning stats unavailable. KPIs stay on last SSR snapshot.');
+        markSectionFailed('section-council', 'Quiet — council weights unavailable. Expert cards stay on last SSR snapshot.');
       }
 
       renderFooterStatus({
@@ -1853,9 +1910,17 @@
             window.HomeLiveRefresh.patchStoryStrip(strip);
           }
         }),
-        fetchJsonRetry('/api/pump-alerts', 22000, 2).then(function (payload) {
-          renderPumpAlerts(payload);
-        }),
+        fetchJsonRetry('/api/pump-alerts', 22000, 2)
+          .then(function (payload) {
+            renderPumpAlerts(payload);
+          })
+          .catch(function () {
+            var host = document.getElementById('pump-alert-body');
+            if (!host) return;
+            if (host.querySelector('.pump-alert__card')) return;
+            host.innerHTML =
+              '<p class="pump-alert__empty">Quiet — lead scanner API slow. Cards above are from SSR; live refresh retries in the background.</p>';
+          }),
         fetchJsonRetry('/api/simivision', 35000, 2).then(function (payload) {
           var data = safePayload(safePayload(payload).data);
           renderSimivision(data.top || [], data.meta || {});
@@ -1915,7 +1980,7 @@
           dayPicks = safePayload(dayRes).picks || [];
         } catch (e2) {
           console.warn('[cockpit_hydrate] pick fallback failed', e2);
-          markSectionFailed('section-picks', 'Horizon picks timed out — council scores will load when the API responds.');
+          markSectionFailed('section-picks', 'Quiet — horizon picks timed out. Open Pro cockpit again after /api/top-picks responds.');
         }
       }
       renderHourDayPicks(hourPicks, dayPicks);
@@ -2000,7 +2065,7 @@
         console.warn('[cockpit_hydrate] backtest fetch failed', e);
         var btRoot = document.getElementById('backtest-panel-root');
         if (btRoot && btRoot.querySelector('.empty')) {
-          btRoot.innerHTML = '<p class="empty empty--warn">Backtest feed timed out — replay loads from /api/backtest when the server responds.</p>';
+          btRoot.innerHTML = '<p class="empty empty--quiet">Quiet — backtest replay unavailable right now. Resolved predictions populate this panel when the API responds.</p>';
         }
       }
 
