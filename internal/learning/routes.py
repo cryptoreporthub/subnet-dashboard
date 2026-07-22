@@ -116,6 +116,8 @@ def _rotation_summary() -> Dict[str, Any]:
 
 
 def _compute_learning_metrics() -> Dict[str, Any]:
+    from internal.learning.weight_deltas import recent_expert_weight_deltas
+
     snap = _learning_snapshot()
     stats = snap["engine_stats"]
     resolver_stats = snap["resolver_stats"]
@@ -124,6 +126,7 @@ def _compute_learning_metrics() -> Dict[str, Any]:
     recent = snap["recent"]
     return {
         "expert_weights": stats.get("expert_weights", {}),
+        "expert_weight_deltas": recent_expert_weight_deltas(),
         "total_records": stats.get("total_records", 0),
         "predictions_pending": stats.get("pending", 0),
         "predictions_resolved": stats.get("resolved", 0),

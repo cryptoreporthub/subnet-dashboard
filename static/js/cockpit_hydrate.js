@@ -628,7 +628,17 @@
       '<div class="k3-deliberation"><div class="k3-weighed-list">' + rows + '</div></div>';
   }
 
-  function patchK3CouncilVotes(weights) {
+  function formatWeightDelta(delta) {
+    if (delta == null || isNaN(Number(delta))) {
+      return '<span class="k3-judge-delta flat">—</span>';
+    }
+    var d = Number(delta);
+    if (d > 0.001) return '<span class="k3-judge-delta up">+' + fmt(d, 2) + '</span>';
+    if (d < -0.001) return '<span class="k3-judge-delta down">' + fmt(d, 2) + '</span>';
+    return '<span class="k3-judge-delta flat">0.00</span>';
+  }
+
+  function patchK3CouncilVotes(weights, deltas) {
     var layer = document.getElementById('k3-layer-council');
     if (!layer) return;
     var normalized = normalizeWeights(weights);
@@ -636,13 +646,15 @@
     if (!keys.length) return;
     var body = layer.querySelector('.k3-layer-body');
     if (!body || (body.querySelector('.k3-judge') && !body.querySelector('.k3-empty'))) return;
+    var deltaMap = deltas && typeof deltas === 'object' ? deltas : {};
     var html = '<div class="k3-layer-title">Judge weights &amp; deltas</div>';
     keys.forEach(function (name) {
       var w = Number(normalized[name]) || 0;
       html +=
         '<div class="k3-judge"><span class="k3-judge-name">' + esc(expertLabel(name)) + '</span>' +
         '<span><span class="k3-judge-weight">' + fmt(w, 2) + '</span>' +
-        '<span class="k3-judge-delta flat">—</span></span></div>';
+        formatWeightDelta(deltaMap[name]) +
+        '</span></div>';
     });
     body.innerHTML = html;
   }
@@ -1103,10 +1115,11 @@
     );
   }
 
-  function renderCouncilWeights(weights) {
+  function renderCouncilWeights(weights, deltas) {
     var normalized = normalizeWeights(weights);
     var keys = CANONICAL_EXPERTS.filter(function (k) { return normalized[k] != null; });
     if (!keys.length) return;
+    var deltaMap = deltas && typeof deltas === 'object' ? deltas : {};
     var ranked = keys.slice().sort(function (a, b) { return (normalized[b] || 0) - (normalized[a] || 0); });
     var top = ranked[0];
     var maxW = Math.max.apply(null, keys.map(function (k) { return normalized[k]; })) || 1;
@@ -1125,7 +1138,7 @@
       ? '<p class="council-lean">Leaning <strong>' + esc(expertLabel(top)) + '</strong> · weight ' + fmt(normalized[top], 3) + '</p>'
       : '';
     replaceSectionContent('section-council', lean + '<div class="council-grid">' + cards + '</div>', '.council-grid, .card-muted');
-    patchK3CouncilVotes(weights);
+    patchK3CouncilVotes(weights, deltaMap);
   }
 
   function renderKpi(stats) {
@@ -1816,7 +1829,7 @@
       if (tier1[2].status === 'fulfilled' && tier1[2].value) {
         stats = tier1[2].value;
         renderKpi(stats);
-        renderCouncilWeights(stats.expert_weights || {});
+        renderCouncilWeights(stats.expert_weights || {}, stats.expert_weight_deltas || {});
         if (stats.trust_banner && window.SimiTrustBanner && window.SimiTrustBanner.render) {
           window.SimiTrustBanner.render(stats.trust_banner);
         }

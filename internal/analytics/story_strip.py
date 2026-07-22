@@ -83,12 +83,20 @@ def build_story_strip(limit: int = 8) -> Dict[str, Any]:
                 continue
             netuid = pred.get("netuid")
             pid = pred.get("id")
+            display_name = pred.get("name") or (f"SN{netuid}" if netuid is not None else "—")
+            if netuid is not None:
+                try:
+                    from internal.subnet_names import name_for_netuid
+
+                    display_name = name_for_netuid(int(netuid))
+                except Exception:
+                    pass
             items.append(
                 {
                     "id": pid,
                     "share_page_url": f"/share/call/{pid}" if pid else None,
                     "netuid": netuid,
-                    "name": pred.get("name") or (f"SN{netuid}" if netuid is not None else "—"),
+                    "name": display_name,
                     "predicted_pct": pred.get("predicted_pct"),
                     "actual_pct": actual,
                     "outcome": "correct" if correct else "wrong",
