@@ -460,14 +460,11 @@ def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[st
     """Return predictive pump lane payload for SSR + GET /api/pump-alerts."""
     rows = subnets if isinstance(subnets, list) else []
     try:
-        from internal.pump.refresh import ensure_ladder_fresh
+        from internal.pump.refresh import kick_ladder_fresh
         from internal.pump.state import load_state
-        from internal.pump.taostats_overlay import active_ladder_netuids
-        from internal.whales.warm import kick_whale_ledger_warm
 
-        ensure_ladder_fresh()
-        # Background: fill empty whale ledger so day-whale chips appear on a later hit.
-        kick_whale_ledger_warm(active_ladder_netuids())
+        # Don't block the request on a full ladder rescan — chips/UI need to stay snappy.
+        kick_ladder_fresh()
         state = load_state()
     except Exception as exc:
         return {
@@ -522,6 +519,16 @@ def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[st
     alerts = _sort_bucket(early, _MAX_EARLY) + _sort_bucket(pumping, _MAX_PUMPING) + _sort_bucket(
         cooling, _MAX_COOLING
     )
+
+    # Background: warm whale ledger for the names on the desk (and active ladder).
+    try:
+        from internal.pump.taostats_overlay import active_ladder_netuids
+        from internal.whales.warm import kick_whale_ledger_warm
+
+        desk = [int(a["netuid"]) for a in alerts if a.get("netuid") is not None]
+        kick_whale_ledger_warm(desk + active_ladder_netuids())
+    except Exception:
+        pass
 
     for alert in alerts:
         brief = {"move": alert["move"], "thesis": alert["thesis"]}
