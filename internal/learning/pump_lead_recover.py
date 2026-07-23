@@ -238,7 +238,7 @@ def recover_overdue_pump_leads(
         "dry_run": dry_run,
         "graded": len(graded),
         "rejected_ungradeable": len(rejected),
-        "still_pending": kept_pending + sum(1 for p in still if is_pump_lead(p)),
+        "still_pending": sum(1 for p in still if isinstance(p, dict) and is_pump_lead(p)),
         "hits": sum(1 for r in graded if r.get("correct") is True),
         "misses": sum(1 for r in graded if r.get("correct") is False),
         "reject_reasons": {},
