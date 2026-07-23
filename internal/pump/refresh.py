@@ -7,7 +7,7 @@ import os
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +40,8 @@ def ladder_age_minutes() -> Optional[float]:
         return None
 
 
-def ensure_ladder_fresh(*, force: bool = False) -> bool:
-    """Run ``scan_all_subnets`` when ladder is missing/stale. Returns True if scan ran."""
+def _needs_scan(*, force: bool = False) -> bool:
+    """True when ladder is missing/stale and cooldown allows a scan."""
     global _last_scan_attempt
     now_mono = time.monotonic()
     with _lock:
@@ -59,7 +59,10 @@ def ensure_ladder_fresh(*, force: bool = False) -> bool:
         except Exception:
             pass
         _last_scan_attempt = now_mono
+        return True
 
+
+def _run_ladder_scan() -> bool:
     try:
         from internal.pump.state import scan_all_subnets
 
@@ -77,3 +80,26 @@ def ensure_ladder_fresh(*, force: bool = False) -> bool:
     except Exception as exc:
         logger.warning("pump ladder scan exception: %s", exc)
         return False
+
+
+def ensure_ladder_fresh(*, force: bool = False) -> bool:
+    """Run ``scan_all_subnets`` when ladder is missing/stale. Returns True if scan ran."""
+    if not _needs_scan(force=force):
+        return False
+    return _run_ladder_scan()
+
+
+def kick_ladder_fresh(*, force: bool = False) -> Dict[str, Any]:
+    """Fire-and-forget ladder refresh so /api/pump-alerts stays fast."""
+    if not _needs_scan(force=force):
+        return {"status": "skipped", "reason": "fresh_or_cooldown"}
+
+    def _run() -> None:
+        try:
+            _run_ladder_scan()
+        except Exception as exc:
+            logger.debug("background ladder scan died: %s", exc)
+
+    t = threading.Thread(target=_run, name="pump-ladder-scan", daemon=True)
+    t.start()
+    return {"status": "started", "thread": t.name}

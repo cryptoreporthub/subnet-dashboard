@@ -15,8 +15,9 @@ from server import app
 
 @pytest.fixture(autouse=True)
 def _no_ladder_refresh():
-    with patch("internal.pump.refresh.ensure_ladder_fresh"):
-        yield
+    with patch("internal.pump.refresh.kick_ladder_fresh"):
+        with patch("internal.pump.refresh.ensure_ladder_fresh"):
+            yield
 
 
 def _ladder_entry(phase: str, netuid: int = 29, score: float = 0.71) -> dict:
@@ -188,6 +189,39 @@ def test_alert_row_includes_whale_day_chips_key():
     row = build_alert_row(_ladder_entry("ACCUMULATING", netuid=42, score=0.48))
     assert "whale_day_chips" in row
     assert isinstance(row["whale_day_chips"], list)
+
+
+def test_alert_row_surfaces_day_whale_chip(tmp_path, monkeypatch):
+    """Recent ledger fill → Day whale chip on the card."""
+    import json
+    from datetime import datetime, timezone
+
+    from internal.whales.service import WhaleIntelligenceService
+
+    config = tmp_path / "whales.json"
+    data = tmp_path / "intel.json"
+    config.write_text(json.dumps({"min_tao_notional": 10.0}))
+    data.write_text(json.dumps({"events": [], "profiles": {}, "open_positions": {}, "closed_trades": {}}))
+    monkeypatch.setenv("WHALES_CONFIG_PATH", str(config))
+    monkeypatch.setenv("WHALES_DATA_PATH", str(data))
+    svc = WhaleIntelligenceService(config_path=str(config), data_path=str(data))
+    now = datetime.now(timezone.utc).isoformat()
+    svc.record_event(
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        42,
+        "buy",
+        250.0,
+        timestamp=now,
+        total_stake_tao=50_000.0,
+        slippage_pct=2.5,
+        min_notional=10.0,
+    )
+    row = build_alert_row(
+        _ladder_entry("ACCUMULATING", netuid=42, score=0.48),
+        {"netuid": 42, "name": "Coldint", "market_cap": 50_000},
+    )
+    assert row["whale_day_chips"]
+    assert any("Day whale" in c for c in row["whale_day_chips"])
 
 
 def test_pump_alert_template_renders_lead_scanner():
