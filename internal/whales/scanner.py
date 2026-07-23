@@ -16,6 +16,7 @@ _WALLET_KEYS = (
 )
 _BUY_TOKENS = ("stake", "buy", "add", "delegate", "in", "incoming", "deposit")
 _SELL_TOKENS = ("unstake", "sell", "remove", "undelegate", "out", "outgoing", "withdraw")
+_RAO = 1_000_000_000.0
 
 
 def _extract_wallet(row: Dict[str, Any]) -> Optional[str]:
@@ -33,15 +34,29 @@ def _extract_wallet(row: Dict[str, Any]) -> Optional[str]:
 def _infer_side(row: Dict[str, Any]) -> Optional[str]:
     for field in ("direction", "action", "type", "side", "flow"):
         raw = str(row.get(field, "")).lower()
-        if any(tok in raw for tok in _BUY_TOKENS):
-            return "buy"
+        if not raw:
+            continue
+        # UNDELEGATE contains "delegate" — check sells first
         if any(tok in raw for tok in _SELL_TOKENS):
             return "sell"
+        if any(tok in raw for tok in _BUY_TOKENS):
+            return "buy"
     return "buy"
 
 
 def _extract_amount(row: Dict[str, Any]) -> float:
-    for key in ("amount_tao", "amount", "tao", "value", "stake", "quantity"):
+    """TaoStats delegation ``amount`` is rao (string). Prefer explicit tao fields."""
+    for key in ("amount_tao", "tao_amount"):
+        val = row.get(key)
+        if isinstance(val, str):
+            try:
+                val = float(val.replace(",", "").strip())
+            except ValueError:
+                continue
+        if isinstance(val, (int, float)) and float(val) > 0:
+            return abs(float(val))
+
+    for key in ("amount", "tao", "value", "stake", "quantity"):
         val = row.get(key)
         if isinstance(val, str):
             try:
@@ -50,11 +65,24 @@ def _extract_amount(row: Dict[str, Any]) -> float:
                 continue
         if isinstance(val, (int, float)):
             amt = abs(float(val))
-            # ponytail: TaoStats sometimes returns rao (1e9); ceiling if absurd for a whale fill
+            # Integer-ish rao from TaoStats (docs: amount in rao)
+            if key == "amount" and amt >= 1_000_000:
+                return amt / _RAO
             if amt >= 1e9:
-                amt = amt / 1e9
+                return amt / _RAO
             return amt
     return 0.0
+
+
+def _extract_slippage_pct(row: Dict[str, Any]) -> Optional[float]:
+    raw = row.get("slippage")
+    if raw is None:
+        return None
+    try:
+        # TaoStats slippage is a fraction string, e.g. "0.376..." → percent
+        return round(abs(float(raw)) * 100.0, 4)
+    except (TypeError, ValueError):
+        return None
 
 
 def _extract_timestamp(row: Dict[str, Any]) -> Optional[str]:
@@ -79,20 +107,23 @@ def _normalize_rows(payload: Any) -> List[Dict[str, Any]]:
 
 
 def _fetch_delegation_rows(netuid: int) -> List[Dict[str, Any]]:
-    """Fetch recent delegation events for a subnet (one TaoStats call).
-
-    Prefer ``/delegation/v1?netuid=`` — the subnet ``/delegations`` path is
-    often empty/slow and doubling the call blew pump-alerts past request budgets.
-    """
+    """Fetch recent large delegation events for a subnet (one TaoStats call)."""
     try:
         from fetchers.taostats_client import get_delegation_events
 
-        rows = _normalize_rows(get_delegation_events(netuid=netuid, limit=50))
+        # Prefer biggest fills first; amount_min ~10τ so small dust is skipped upstream.
+        rows = _normalize_rows(
+            get_delegation_events(
+                netuid=netuid,
+                limit=50,
+                order="amount_desc",
+                amount_min_rao=int(10 * _RAO),
+            )
+        )
         if rows:
             return rows
     except Exception as exc:
         logger.debug("delegation/v1 failed netuid=%s: %s", netuid, exc)
-    # Last resort — may 404/empty on some TaoStats plans
     try:
         return _normalize_rows(get_subnet_delegation_flow(netuid))
     except Exception as exc:
@@ -122,6 +153,7 @@ def scan_subnet_delegations(
         if amount <= 0:
             skipped += 1
             continue
+        slip = _extract_slippage_pct(row)
         try:
             result = service.record_event(
                 wallet=wallet,
@@ -130,16 +162,20 @@ def scan_subnet_delegations(
                 amount_tao=amount,
                 timestamp=_extract_timestamp(row),
                 source="taostats_delegation",
-                tx_hash=row.get("tx_hash") or row.get("hash"),
+                tx_hash=row.get("tx_hash") or row.get("extrinsic_id") or row.get("hash"),
                 subnet_name=meta.get("name"),
                 entry_price=meta.get("price") if side == "buy" else None,
                 exit_price=meta.get("price") if side == "sell" else None,
                 market_cap_rank=meta.get("emission_rank") or meta.get("rank"),
                 total_stake_tao=meta.get("total_stake") or meta.get("staking_data", {}).get("total_stake"),
                 price_change_after_hours=row.get("price_change_24h"),
+                slippage_pct=slip,
+                min_notional=10.0,
             )
             if result.get("status") == "recorded":
                 ingested += 1
+            else:
+                skipped += 1
         except Exception as exc:
             logger.debug("whale ingest skip netuid=%s: %s", netuid, exc)
             skipped += 1

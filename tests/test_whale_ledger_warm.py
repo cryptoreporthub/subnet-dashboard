@@ -79,39 +79,38 @@ def test_ensure_warm_scans_only_missing(tmp_path, monkeypatch):
     assert out["ingested"] == 3
 
 
-def test_scanner_falls_back_to_delegation_v1(monkeypatch, tmp_path):
+def test_scanner_parses_taostats_rao_and_nominator_dict(monkeypatch, tmp_path):
     from internal.whales.scanner import scan_subnet_delegations
+    from internal.whales.service import WhaleIntelligenceService
 
     config = tmp_path / "whales.json"
     data = tmp_path / "intel.json"
-    config.write_text(json.dumps({"min_tao_notional": 10.0}))
+    config.write_text(json.dumps({"min_tao_notional": 50.0}))
     data.write_text(json.dumps({"events": [], "profiles": {}, "open_positions": {}, "closed_trades": {}}))
     svc = WhaleIntelligenceService(config_path=str(config), data_path=str(data))
 
-    monkeypatch.setattr(
-        "internal.whales.scanner.get_subnet_delegation_flow",
-        lambda netuid: {"data": []},
-    )
     monkeypatch.setattr(
         "fetchers.taostats_client.get_delegation_events",
         lambda **kwargs: {
             "data": [
                 {
-                    "coldkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
-                    "amount_tao": 420,
-                    "action": "stake",
+                    "nominator": {"ss58": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"},
+                    "amount": "175000000000",  # 175 τ in rao
+                    "action": "DELEGATE",
+                    "slippage": "0.037",
                     "timestamp": "2026-07-23T12:00:00+00:00",
+                    "extrinsic_id": "1-1",
                 }
             ]
         },
     )
-    monkeypatch.setattr(
-        "internal.whales.scanner.get_subnet_delegation_flow",
-        lambda netuid: {"data": []},
-    )
-    result = scan_subnet_delegations(97, service=svc)
-    assert result["ingested"] == 1
+    result = scan_subnet_delegations(108, service=svc)
     assert result["rows_seen"] == 1
+    assert result["ingested"] == 1
+    ev = svc.data["events"][-1]
+    assert ev["amount_tao"] == 175.0
+    assert ev["side"] == "buy"
+    assert ev["slippage_pct"] == 3.7
 
 
 def test_kick_starts_background_warm(monkeypatch):
