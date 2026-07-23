@@ -112,9 +112,13 @@ def ensure_whale_ledger_warm(
         from internal.whales.service import WhaleIntelligenceService
 
         svc = WhaleIntelligenceService()
+        candidates = list(netuids)
+        if not candidates:
+            # Ladder may be empty mid-refresh — still try a few liquid names.
+            candidates = [64, 6, 2, 3, 7, 10, 18, 52, 97, 1]
         missing = _netuids_missing_recent(
             svc.data.get("events") or [],
-            netuids,
+            candidates,
             hours=24.0,
         )
         if not missing:

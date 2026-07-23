@@ -214,16 +214,27 @@ def is_available():
     return bool(TAOSTATS_API_KEY)
 
 
-def _api_get(path: str, params: Optional[Dict[str, Any]] = None) -> Optional[Any]:
-    """Shared GET for TaoStats REST (api/v1 prefix)."""
+def _api_get(
+    path: str,
+    params: Optional[Dict[str, Any]] = None,
+    *,
+    api_prefix: str = "/api/v1",
+) -> Optional[Any]:
+    """Shared GET for TaoStats REST.
+
+    Most pool/subnet routes live under ``/api/v1/...``. Delegation + transfer
+    docs use ``/api/delegation/v1`` (no v1 segment before the resource) — pass
+    ``api_prefix='/api'`` for those.
+    """
     if not TAOSTATS_API_KEY:
         return None
     _rate_limit()
     try:
         base = TAOSTATS_API_BASE.rstrip("/")
-        if not base.endswith("/api/v1"):
-            base = f"{base}/api/v1"
-        url = f"{base}{path}"
+        prefix = (api_prefix or "/api/v1").rstrip("/")
+        if not prefix.startswith("/"):
+            prefix = "/" + prefix
+        url = f"{base}{prefix}{path}"
         headers = {"Authorization": f"Bearer {TAOSTATS_API_KEY}", "Accept": "application/json"}
         resp = requests.get(url, params=params, headers=headers, timeout=20)
         if resp.status_code == 429:
@@ -252,13 +263,18 @@ def get_delegation_events(
     nominator: Optional[str] = None,
     action: str = "all",
     limit: int = 50,
+    order: str = "amount_desc",
+    amount_min_rao: Optional[int] = None,
 ) -> Optional[Any]:
-    params: Dict[str, Any] = {"limit": limit, "action": action}
+    """Staking/delegation events — path is ``/api/delegation/v1`` (not /api/v1/...)."""
+    params: Dict[str, Any] = {"limit": limit, "action": action, "order": order}
     if netuid is not None:
         params["netuid"] = netuid
     if nominator:
         params["nominator"] = nominator
-    return _api_get("/delegation/v1", params)
+    if amount_min_rao is not None:
+        params["amount_min"] = str(int(amount_min_rao))
+    return _api_get("/delegation/v1", params, api_prefix="/api")
 
 
 def get_transfers(
@@ -272,11 +288,11 @@ def get_transfers(
         params["from"] = from_wallet
     if to_wallet:
         params["to"] = to_wallet
-    return _api_get("/transfer/v1", params)
+    return _api_get("/transfer/v1", params, api_prefix="/api")
 
 
 def get_account(wallet: str) -> Optional[Any]:
-    return _api_get(f"/account/{wallet}")
+    return _api_get(f"/account/{wallet}", api_prefix="/api")
 
 
 def get_subnet_delegation_flow(netuid: int, limit: int = 50) -> Optional[Any]:

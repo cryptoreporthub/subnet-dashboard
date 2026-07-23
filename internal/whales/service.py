@@ -197,6 +197,8 @@ class WhaleIntelligenceService:
         market_cap_rank: Optional[int] = None,
         total_stake_tao: Optional[float] = None,
         price_change_after_hours: Optional[float] = None,
+        slippage_pct: Optional[float] = None,
+        min_notional: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Record a buy/sell event and update wallet intelligence."""
         side_norm = side.strip().lower()
@@ -212,8 +214,13 @@ class WhaleIntelligenceService:
             raise ValueError("wallet is required")
 
         ts = timestamp or _now_iso()
-        min_notional = float(self.config.get("min_tao_notional", 50.0))
-        if amount_tao < min_notional:
+        try:
+            floor = float(min_notional) if min_notional is not None else float(
+                self.config.get("min_tao_notional", 50.0)
+            )
+        except (TypeError, ValueError):
+            floor = float(self.config.get("min_tao_notional", 50.0))
+        if amount_tao < floor:
             return {"status": "ignored", "reason": "below_min_notional", "amount_tao": amount_tao}
 
         event = {
@@ -230,6 +237,7 @@ class WhaleIntelligenceService:
             "market_cap_rank": market_cap_rank,
             "total_stake_tao": total_stake_tao,
             "price_change_after_hours": price_change_after_hours,
+            "slippage_pct": round(float(slippage_pct), 4) if slippage_pct is not None else None,
         }
         self.data.setdefault("events", []).append(event)
 
@@ -545,7 +553,12 @@ class WhaleIntelligenceService:
 
         now = datetime.now(timezone.utc)
         cutoff = now - timedelta(hours=float(hours))
-        min_notional = float(self.config.get("min_tao_notional", 50.0))
+        try:
+            min_notional = float(self.config.get("min_tao_notional", 50.0))
+        except (TypeError, ValueError):
+            min_notional = 50.0
+        # Chip floor tracks scan ingest (10τ) so newly warmed fills aren't hidden.
+        min_notional = min(min_notional, 10.0)
         try:
             liq_override = float(liquidity_tao) if liquidity_tao is not None else 0.0
         except (TypeError, ValueError):
@@ -581,9 +594,17 @@ class WhaleIntelligenceService:
             # Display % of float prefers live liquidity when the caller supplied it.
             disp_liq = liq_override if liq_override > 0 else ev_stake
             slip_ratio = (amt / rank_liq) if rank_liq > 0 else None
-            slip_pct = (
-                round((amt / disp_liq) * 100.0, 2) if disp_liq > 0 else None
-            )
+            api_slip = None
+            try:
+                if ev.get("slippage_pct") is not None:
+                    api_slip = float(ev.get("slippage_pct"))
+            except (TypeError, ValueError):
+                api_slip = None
+            slip_pct = api_slip
+            if slip_pct is None and disp_liq > 0:
+                slip_pct = round((amt / disp_liq) * 100.0, 2)
+            # Prefer TaoStats-reported slippage for "biggest slip" ranking.
+            rank_slip = (api_slip / 100.0) if api_slip is not None else slip_ratio
 
             row = {
                 "wallet": ev.get("wallet"),
@@ -597,8 +618,8 @@ class WhaleIntelligenceService:
             if amt > best_tao_amt:
                 best_tao_amt = amt
                 best_tao = row
-            if slip_ratio is not None and slip_ratio > best_slip_ratio:
-                best_slip_ratio = slip_ratio
+            if rank_slip is not None and rank_slip > best_slip_ratio:
+                best_slip_ratio = rank_slip
                 best_slip = row
 
         same = bool(
