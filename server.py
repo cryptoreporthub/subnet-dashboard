@@ -199,6 +199,21 @@ def _registry_name_boot_sync() -> None:
         logger.debug("registry name boot sync skipped: %s", exc)
 
 
+def _pump_ladder_scheduler_boot() -> None:
+    """Pump ladder must run on web — BACKGROUND_ON_WEB=off skips resolver boot."""
+    import time
+
+    defer = int(os.environ.get("BOOT_DEFER_SECONDS", "45"))
+    time.sleep(max(defer, 5))
+    try:
+        from internal.pump.scheduler import ensure_pump_ladder_scheduler
+
+        ensure_pump_ladder_scheduler(immediate=True)
+        logger.info("pump ladder scheduler started on web boot")
+    except Exception as exc:
+        logger.warning("pump ladder scheduler boot failed: %s", exc)
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     """Boot background workers on web only when BACKGROUND_ON_WEB=on (legacy/combined)."""
@@ -229,6 +244,11 @@ async def _lifespan(app: FastAPI):
             target=_council_weight_rebalance_boot,
             daemon=True,
             name="council-weight-rebalance",
+        ).start()
+        threading.Thread(
+            target=_pump_ladder_scheduler_boot,
+            daemon=True,
+            name="pump-ladder-scheduler-boot",
         ).start()
 
     if background_on_web():
@@ -1482,28 +1502,21 @@ async def api_pump_alerts():
 
     def _build():
         from internal.learning.pump_alert import build_pump_alerts
-        from internal.pump.state import load_state
-        from internal.subnet_names import enrich_subnet_row
+        from internal.subnet_names import enrich_subnet_rows
 
-        state = load_state()
-        netuids = set()
-        for entry in (state.get("subnets") or {}).values():
-            if not isinstance(entry, dict):
-                continue
-            nu = entry.get("netuid")
-            if nu is not None:
-                try:
-                    netuids.add(int(nu))
-                except (TypeError, ValueError):
-                    continue
-        registry = load_data("config/registry.json")
-        rows = []
-        for nu in sorted(netuids):
-            raw = registry.get(str(nu)) if isinstance(registry, dict) else None
-            row = dict(raw) if isinstance(raw, dict) else {"netuid": nu}
-            row.setdefault("netuid", nu)
-            rows.append(enrich_subnet_row(row, use_taostats=False))
-        return build_pump_alerts(rows)
+        subnets: List[Dict[str, Any]] = []
+        try:
+            from internal.subnets.feed import get_council_subnet_feed
+
+            feed_rows, _src = get_council_subnet_feed(timeout=4.0)
+            subnets = enrich_subnet_rows(list(feed_rows or []))
+        except Exception as exc:
+            logger.debug("pump-alerts live feed fallback: %s", exc)
+        if not subnets:
+            from internal.subnets.feed import registry_subnet_rows
+
+            subnets = enrich_subnet_rows(registry_subnet_rows())
+        return build_pump_alerts(subnets)
 
     return await asyncio.to_thread(_build)
 

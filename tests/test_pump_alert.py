@@ -4,12 +4,19 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from internal.learning.dpick_pump import build_pump_chip
 from internal.learning.pump_alert import build_alert_row, build_pump_alerts
 from server import app
+
+
+@pytest.fixture(autouse=True)
+def _no_ladder_refresh():
+    with patch("internal.pump.refresh.ensure_ladder_fresh"):
+        yield
 
 
 def _ladder_entry(phase: str, netuid: int = 29, score: float = 0.71) -> dict:
@@ -141,6 +148,17 @@ def test_build_pump_alerts_includes_lead_before_confirmed():
     assert out["count"] == 2
     assert out["alerts"][0]["timing"] == "lead"
     assert out["alerts"][1]["timing"] == "confirmed"
+
+
+def test_accumulating_shows_without_strict_lead_gate():
+    """ACCUMULATING already passed classifier — desk should not re-gate on buy_ratio."""
+    entry = _ladder_entry("ACCUMULATING", netuid=42, score=0.48)
+    entry["signal_snapshot"] = {"buy_ratio": 0.4, "volume_intensity": 0.1}
+    ladder = {"subnets": {"42": entry}}
+    with patch("internal.pump.state.load_state", return_value=ladder):
+        out = build_pump_alerts([])
+    assert out["early_count"] == 1
+    assert out["alerts"][0]["badge"] == "BUILDING"
 
 
 def test_stirring_without_lead_signals_excluded():
