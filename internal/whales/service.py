@@ -64,6 +64,42 @@ def _return_pct(entry_price: Optional[float], exit_price: Optional[float]) -> Op
     return None
 
 
+def _short_ss58(wallet: str, head: int = 4, tail: int = 4) -> str:
+    w = (wallet or "").strip()
+    if len(w) <= head + tail + 1:
+        return w
+    return f"{w[:head]}…{w[-tail:]}"
+
+
+def _fmt_tao(amount: float) -> str:
+    if amount >= 100:
+        return f"{amount:,.0f}"
+    if amount >= 10:
+        return f"{amount:,.1f}"
+    return f"{amount:,.2f}"
+
+
+def _day_whale_chip(row: Dict[str, Any], *, include_slip: bool) -> str:
+    side = str(row.get("side") or "buy")
+    amt = _fmt_tao(float(row.get("amount_tao") or 0))
+    short = row.get("wallet_short") or _short_ss58(str(row.get("wallet") or ""))
+    base = f"Day whale · {amt}τ {side} · {short}"
+    slip = row.get("slip_pct")
+    if include_slip and slip is not None:
+        return f"{base} · ~{float(slip):.2f}% float"
+    return base
+
+
+def _slip_day_chip(row: Dict[str, Any]) -> str:
+    side = str(row.get("side") or "buy")
+    amt = _fmt_tao(float(row.get("amount_tao") or 0))
+    short = row.get("wallet_short") or _short_ss58(str(row.get("wallet") or ""))
+    slip = row.get("slip_pct")
+    if slip is not None:
+        return f"Biggest slip · ~{float(slip):.2f}% float · {amt}τ {side} · {short}"
+    return f"Biggest slip · {amt}τ {side} · {short}"
+
+
 class WhaleIntelligenceService:
     """Central whale tracking service with multi-dimensional leaderboards."""
 
@@ -481,6 +517,119 @@ class WhaleIntelligenceService:
                 by_class.get("alpha_whales") or by_class.get("early_movers") or by_class.get("conviction_holders")
             )
         return flow
+
+    def day_move_highlights(
+        self,
+        netuid: int,
+        liquidity_tao: Optional[float] = None,
+        hours: float = 24.0,
+    ) -> Dict[str, Any]:
+        """Biggest single whale tx in the window, plus largest by slippage proxy.
+
+        No AMM slippage in the ledger — proxy is amount_tao / liquidity
+        (caller liquidity, else event total_stake_tao). Honest-empty when no events.
+        """
+        honesty = self._ledger_honesty()
+        empty: Dict[str, Any] = {
+            "status": "success",
+            **honesty,
+            "netuid": int(netuid),
+            "hours": hours,
+            "biggest_tao": None,
+            "biggest_slip": None,
+            "same_event": False,
+            "chips": [],
+        }
+        if not honesty["data_available"]:
+            return empty
+
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(hours=float(hours))
+        min_notional = float(self.config.get("min_tao_notional", 50.0))
+        try:
+            liq_override = float(liquidity_tao) if liquidity_tao is not None else 0.0
+        except (TypeError, ValueError):
+            liq_override = 0.0
+
+        best_tao: Optional[Dict[str, Any]] = None
+        best_slip: Optional[Dict[str, Any]] = None
+        best_tao_amt = -1.0
+        best_slip_ratio = -1.0
+
+        for ev in self.data.get("events") or []:
+            if int(ev.get("netuid", -1)) != int(netuid):
+                continue
+            ts = _parse_iso(ev.get("timestamp"))
+            if not ts or ts < cutoff:
+                continue
+            try:
+                amt = float(ev.get("amount_tao") or 0)
+            except (TypeError, ValueError):
+                continue
+            if amt < min_notional:
+                continue
+            side = (ev.get("side") or "").lower()
+            if side not in ("buy", "sell"):
+                continue
+
+            try:
+                ev_stake = float(ev.get("total_stake_tao") or 0)
+            except (TypeError, ValueError):
+                ev_stake = 0.0
+            # Rank by event-time float when known (thin-name hits win); else live liquidity.
+            rank_liq = ev_stake if ev_stake > 0 else liq_override
+            # Display % of float prefers live liquidity when the caller supplied it.
+            disp_liq = liq_override if liq_override > 0 else ev_stake
+            slip_ratio = (amt / rank_liq) if rank_liq > 0 else None
+            slip_pct = (
+                round((amt / disp_liq) * 100.0, 2) if disp_liq > 0 else None
+            )
+
+            row = {
+                "wallet": ev.get("wallet"),
+                "wallet_short": _short_ss58(str(ev.get("wallet") or "")),
+                "side": side,
+                "amount_tao": round(amt, 4),
+                "timestamp": ev.get("timestamp"),
+                "tx_hash": ev.get("tx_hash"),
+                "slip_pct": slip_pct,
+            }
+            if amt > best_tao_amt:
+                best_tao_amt = amt
+                best_tao = row
+            if slip_ratio is not None and slip_ratio > best_slip_ratio:
+                best_slip_ratio = slip_ratio
+                best_slip = row
+
+        same = bool(
+            best_tao
+            and best_slip
+            and best_tao.get("wallet") == best_slip.get("wallet")
+            and best_tao.get("timestamp") == best_slip.get("timestamp")
+            and best_tao.get("amount_tao") == best_slip.get("amount_tao")
+            and best_tao.get("side") == best_slip.get("side")
+        )
+        chips: List[str] = []
+        if best_tao and same:
+            chips.append(_day_whale_chip(best_tao, include_slip=True))
+        else:
+            if best_tao:
+                chips.append(_day_whale_chip(best_tao, include_slip=False))
+            if best_slip:
+                chips.append(_slip_day_chip(best_slip))
+
+        return {
+            "status": "success",
+            "data_available": True,
+            "source": "ledger",
+            "reason": None,
+            "netuid": int(netuid),
+            "hours": hours,
+            "biggest_tao": best_tao,
+            "biggest_slip": best_slip,
+            "same_event": same,
+            "chips": chips,
+        }
 
     def detect_flow_signals(self, hours: int = 24) -> Dict[str, Any]:
         """Per-subnet flow flips and volume surges from the event ledger."""

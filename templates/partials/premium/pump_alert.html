@@ -56,6 +56,9 @@
         {% if row.wallet_chip %}
         <p class="pump-alert__wallet-chip">{{ row.wallet_chip }}</p>
         {% endif %}
+        {% for chip in row.whale_day_chips|default([]) %}
+        <p class="pump-alert__wallet-chip pump-alert__wallet-chip--day">{{ chip }}</p>
+        {% endfor %}
         <p class="pump-alert__trigger">{{ row.trigger }}</p>
       </article>
       {% endif %}

@@ -289,6 +289,42 @@ def _wallet_chip(netuid_int: Optional[int]) -> Optional[str]:
     return None
 
 
+def _whale_day_chips(
+    netuid_int: Optional[int],
+    subnet_row: Optional[Dict[str, Any]],
+) -> List[str]:
+    """Biggest TAO tx + largest slip-proxy move today — card chips, no new section."""
+    if netuid_int is None:
+        return []
+    try:
+        from internal.subnets.impact import subnet_market_cap
+        from internal.whales.service import WhaleIntelligenceService
+
+        liq = 0.0
+        if isinstance(subnet_row, dict):
+            liq = float(subnet_market_cap(subnet_row) or 0)
+            if liq <= 0:
+                for key in ("liquidity", "liquidity_tao", "total_stake", "total_stake_tao"):
+                    try:
+                        v = float(subnet_row.get(key) or 0)
+                    except (TypeError, ValueError):
+                        continue
+                    if v > 0:
+                        liq = v
+                        break
+        highlights = WhaleIntelligenceService().day_move_highlights(
+            netuid_int,
+            liquidity_tao=liq if liq > 0 else None,
+            hours=24.0,
+        )
+        chips = highlights.get("chips") if isinstance(highlights, dict) else None
+        if isinstance(chips, list):
+            return [str(c) for c in chips if c]
+    except Exception:
+        return []
+    return []
+
+
 def build_alert_row(
     ladder_entry: Dict[str, Any],
     subnet_row: Optional[Dict[str, Any]] = None,
@@ -345,6 +381,7 @@ def build_alert_row(
 
     size_line = _size_cliff_line(subnet_row)
     wallet_chip = _wallet_chip(netuid_int)
+    day_chips = _whale_day_chips(netuid_int, subnet_row)
     snap = ladder_entry.get("signal_snapshot") if isinstance(ladder_entry.get("signal_snapshot"), dict) else {}
     src = subnet_row if isinstance(subnet_row, dict) else {}
 
@@ -395,6 +432,7 @@ def build_alert_row(
         "triad": triad,
         "size_line": size_line,
         "wallet_chip": wallet_chip,
+        "whale_day_chips": day_chips,
         "fear_and_greed": fear,
         "buys_24hr": buys,
         "sells_24hr": sells,
