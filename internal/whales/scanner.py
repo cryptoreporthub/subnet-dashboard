@@ -79,17 +79,24 @@ def _normalize_rows(payload: Any) -> List[Dict[str, Any]]:
 
 
 def _fetch_delegation_rows(netuid: int) -> List[Dict[str, Any]]:
-    """Prefer subnet delegations path; fall back to /delegation/v1?netuid=."""
-    payload = get_subnet_delegation_flow(netuid)
-    rows = _normalize_rows(payload)
-    if rows:
-        return rows
+    """Fetch recent delegation events for a subnet (one TaoStats call).
+
+    Prefer ``/delegation/v1?netuid=`` — the subnet ``/delegations`` path is
+    often empty/slow and doubling the call blew pump-alerts past request budgets.
+    """
     try:
         from fetchers.taostats_client import get_delegation_events
 
-        return _normalize_rows(get_delegation_events(netuid=netuid, limit=50))
+        rows = _normalize_rows(get_delegation_events(netuid=netuid, limit=50))
+        if rows:
+            return rows
     except Exception as exc:
-        logger.debug("delegation fallback failed netuid=%s: %s", netuid, exc)
+        logger.debug("delegation/v1 failed netuid=%s: %s", netuid, exc)
+    # Last resort — may 404/empty on some TaoStats plans
+    try:
+        return _normalize_rows(get_subnet_delegation_flow(netuid))
+    except Exception as exc:
+        logger.debug("subnet delegations failed netuid=%s: %s", netuid, exc)
         return []
 
 

@@ -105,6 +105,34 @@ def test_scanner_falls_back_to_delegation_v1(monkeypatch, tmp_path):
             ]
         },
     )
+    monkeypatch.setattr(
+        "internal.whales.scanner.get_subnet_delegation_flow",
+        lambda netuid: {"data": []},
+    )
     result = scan_subnet_delegations(97, service=svc)
     assert result["ingested"] == 1
     assert result["rows_seen"] == 1
+
+
+def test_kick_starts_background_warm(monkeypatch):
+    from internal.whales.warm import kick_whale_ledger_warm
+    import internal.whales.warm as warm_mod
+
+    warm_mod._last_warm_attempt = 0.0
+    called = []
+
+    def fake_ensure(netuids, force=False, subnet_meta_by_id=None):
+        called.append(list(netuids))
+        return {"status": "ok"}
+
+    monkeypatch.setattr(warm_mod, "ensure_whale_ledger_warm", fake_ensure)
+    out = kick_whale_ledger_warm([6, 97], force=True)
+    assert out["status"] == "started"
+    # daemon thread should run quickly
+    import time
+
+    for _ in range(50):
+        if called:
+            break
+        time.sleep(0.02)
+    assert called and called[0] == [6, 97]
