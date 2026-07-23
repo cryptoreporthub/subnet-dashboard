@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-from pathlib import Path
 
 from internal.learning.pump_lead_features import (
     FEATURE_KEYS,
@@ -18,7 +16,6 @@ from internal.learning.pump_lead_train import (
     MIN_TRAIN_SAMPLES,
     collect_training_rows,
     dataset_status,
-    export_train_matrix,
     train_offline,
 )
 from internal.learning import predictions_store
