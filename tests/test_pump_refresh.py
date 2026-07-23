@@ -50,6 +50,9 @@ def test_kick_ladder_fresh_starts_background(monkeypatch):
 
     import internal.pump.refresh as refresh_mod
 
+    # Exercise the real thread path (pytest normally disables kicks).
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("DISABLE_BACKGROUND_SCANS", raising=False)
     refresh_mod._last_scan_attempt = 0.0
     called = []
 
@@ -66,6 +69,13 @@ def test_kick_ladder_fresh_starts_background(monkeypatch):
             break
         time.sleep(0.02)
     assert called
+
+
+def test_kick_ladder_fresh_skips_under_pytest(monkeypatch):
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "tests/test_pump_refresh.py::x")
+    out = kick_ladder_fresh(force=True)
+    assert out["status"] == "skipped"
+    assert out["reason"] == "background_disabled"
 
 
 def test_ladder_age_minutes_missing_meta(tmp_path, monkeypatch):

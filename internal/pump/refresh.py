@@ -18,6 +18,16 @@ _lock = threading.Lock()
 _last_scan_attempt = 0.0
 
 
+def _background_scans_allowed() -> bool:
+    """Skip daemon scans under pytest / Deploy Guard — they hang contract jobs."""
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return False
+    flag = os.environ.get("DISABLE_BACKGROUND_SCANS", "").strip().lower()
+    if flag in {"1", "true", "yes", "on"}:
+        return False
+    return True
+
+
 def _parse_ts(value: Optional[str]) -> Optional[datetime]:
     if not value:
         return None
@@ -91,6 +101,8 @@ def ensure_ladder_fresh(*, force: bool = False) -> bool:
 
 def kick_ladder_fresh(*, force: bool = False) -> Dict[str, Any]:
     """Fire-and-forget ladder refresh so /api/pump-alerts stays fast."""
+    if not _background_scans_allowed():
+        return {"status": "skipped", "reason": "background_disabled"}
     if not _needs_scan(force=force):
         return {"status": "skipped", "reason": "fresh_or_cooldown"}
 

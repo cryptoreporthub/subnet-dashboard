@@ -281,3 +281,24 @@ def test_day_move_highlights_same_event_one_chip(whale_paths):
     assert len(out["chips"]) == 1
     assert "Day whale" in out["chips"][0]
     assert "% float" in out["chips"][0]
+
+
+def test_day_move_highlights_falls_back_to_7d(whale_paths):
+    from datetime import datetime, timedelta, timezone
+
+    config, data = whale_paths
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    now = datetime.now(timezone.utc)
+    wallet = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+    svc.record_event(
+        wallet,
+        11,
+        "buy",
+        900.0,
+        timestamp=(now - timedelta(hours=36)).isoformat(),
+        total_stake_tao=50_000.0,
+    )
+    out = svc.day_move_highlights(11, hours=24.0)
+    assert out["hours"] == 168.0
+    assert out["biggest_tao"]["amount_tao"] == 900.0
+    assert out["chips"]

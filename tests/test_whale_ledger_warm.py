@@ -117,6 +117,8 @@ def test_kick_starts_background_warm(monkeypatch):
     from internal.whales.warm import kick_whale_ledger_warm
     import internal.whales.warm as warm_mod
 
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("DISABLE_BACKGROUND_SCANS", raising=False)
     warm_mod._last_warm_attempt = 0.0
     called = []
 
@@ -135,3 +137,13 @@ def test_kick_starts_background_warm(monkeypatch):
             break
         time.sleep(0.02)
     assert called and called[0] == [6, 97]
+
+
+def test_kick_warm_skips_when_background_disabled(monkeypatch):
+    from internal.whales.warm import kick_whale_ledger_warm
+
+    monkeypatch.setenv("DISABLE_BACKGROUND_SCANS", "1")
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    out = kick_whale_ledger_warm([6], force=True)
+    assert out["status"] == "skipped"
+    assert out["reason"] == "background_disabled"

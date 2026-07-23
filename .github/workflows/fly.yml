@@ -34,6 +34,10 @@ jobs:
           fi
           echo "STATIC GUARDS PASSED"
       - name: Endpoint contract guard
+        env:
+          # Daemon ladder/whale warm threads hang Deploy Guard if a contract
+          # hit races a TaoStats/TMC scan — keep CI synchronous-only.
+          DISABLE_BACKGROUND_SCANS: "1"
         run: |
           set -e
           echo "=== Enforcing endpoint contract (every route must return non-5xx / 200) ==="
