@@ -80,11 +80,12 @@ def _apply_hysteresis(
         return current
 
     locked = _minutes_between(since, now) < PHASE_LOCK_MINUTES
-    if current != "DORMANT" and locked and suggested != "COOLING":
-        return current
-
     cur_idx = PHASE_INDEX.get(current, 0)
     sug_idx = PHASE_INDEX.get(suggested, 0)
+    if current != "DORMANT" and locked and suggested != "COOLING":
+        # Block lateral/downgrade flapping during lock; allow upward promotion on fast pumps.
+        if sug_idx <= cur_idx:
+            return current
 
     # Downward moves allowed when score crosses exit band.
     if sug_idx < cur_idx:

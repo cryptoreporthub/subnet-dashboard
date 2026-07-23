@@ -35,7 +35,6 @@ def ladder_env(tmp_path, monkeypatch):
 
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", soul_path)
     monkeypatch.setattr(constants, "STATE_PATH", state_path)
-    monkeypatch.setattr(pump_state, "STATE_PATH", state_path)
     monkeypatch.setattr(constants, "PHASE_LOCK_MINUTES", 0)
     yield {"state_path": state_path, "soul_path": soul_path}
 

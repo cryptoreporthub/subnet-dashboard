@@ -363,8 +363,10 @@ def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[st
     """Return predictive pump lane payload for SSR + GET /api/pump-alerts."""
     rows = subnets if isinstance(subnets, list) else []
     try:
+        from internal.pump.refresh import ensure_ladder_fresh
         from internal.pump.state import load_state
 
+        ensure_ladder_fresh()
         state = load_state()
     except Exception as exc:
         return {
@@ -394,7 +396,9 @@ def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[st
         score = float(entry.get("composite_score") or 0.0)
         if phase in _EARLY_PHASES:
             leads = _lead_signals(subnet, entry)
-            if _lead_qualifies(leads["buy_ratio"], leads["volume_intensity"]):
+            if phase == "ACCUMULATING" or _lead_qualifies(
+                leads["buy_ratio"], leads["volume_intensity"]
+            ):
                 early.append((score, entry, subnet))
         elif phase == "PUMPING":
             pumping.append((score, entry, subnet))

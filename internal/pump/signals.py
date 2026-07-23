@@ -87,16 +87,22 @@ def build_subnet_signals(subnet: Dict[str, Any]) -> Dict[str, Any]:
     flow_total = buy + sell
     buy_ratio = (buy / flow_total) if flow_total > 0 else 0.5
 
+    raw_1h = subnet.get("price_change_1h")
+    if raw_1h is not None:
+        momentum_1h = float(raw_1h)
+    elif abs(price_change) >= 0.04:
+        # ponytail: hot 24h names get faster momentum proxy than /24 when 1h feed missing
+        momentum_1h = price_change / 8.0
+    else:
+        momentum_1h = price_change / 24.0
+
     chatter_map = message_intel_chatter_by_netuid()
     scenario_map = scenario_tags_by_netuid()
     chatter = float(chatter_map.get(int(netuid), 0)) if netuid is not None else 0.0
     scenario_tag = scenario_map.get(int(netuid)) if netuid is not None else None
 
-    # Volume spike proxy: scale 24h volume against emission (activity per unit stake).
     emission = float(subnet.get("emission") or 1.0) or 1.0
     volume_intensity = min(volume / (emission * 1000.0 + 1.0), 3.0) / 3.0
-
-    momentum_1h = float(subnet.get("price_change_1h") or price_change / 24.0)
     price = float(subnet.get("price") or 0)
 
     base = {
