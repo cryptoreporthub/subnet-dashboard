@@ -211,3 +211,73 @@ def test_detect_flow_signals_accumulation_flip(whale_paths):
     assert payload["data_available"] is True
     flips = [s for s in payload["signals"] if s.get("kind") == "flow_flip"]
     assert any(s["netuid"] == 64 and s["flip_direction"] == "accumulation" for s in flips)
+
+
+def test_day_move_highlights_biggest_tao_and_slip(whale_paths):
+    from datetime import datetime, timedelta, timezone
+
+    config, data = whale_paths
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    now = datetime.now(timezone.utc)
+    big = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+    thin = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+
+    # Larger TAO on deep float
+    svc.record_event(
+        big,
+        7,
+        "buy",
+        5000.0,
+        timestamp=(now - timedelta(hours=2)).isoformat(),
+        total_stake_tao=1_000_000.0,
+    )
+    # Smaller TAO but huge vs thin float → wins slip
+    svc.record_event(
+        thin,
+        7,
+        "buy",
+        800.0,
+        timestamp=(now - timedelta(hours=1)).isoformat(),
+        total_stake_tao=10_000.0,
+    )
+    # Outside window — ignored
+    svc.record_event(
+        big,
+        7,
+        "buy",
+        50_000.0,
+        timestamp=(now - timedelta(hours=30)).isoformat(),
+        total_stake_tao=10_000.0,
+    )
+
+    out = svc.day_move_highlights(7, hours=24.0)
+    assert out["biggest_tao"]["amount_tao"] == 5000.0
+    assert out["biggest_tao"]["wallet"] == big
+    assert out["biggest_slip"]["wallet"] == thin
+    assert out["biggest_slip"]["slip_pct"] == 8.0
+    assert out["same_event"] is False
+    assert len(out["chips"]) == 2
+    assert out["chips"][0].startswith("Day whale")
+    assert out["chips"][1].startswith("Biggest slip")
+
+
+def test_day_move_highlights_same_event_one_chip(whale_paths):
+    from datetime import datetime, timedelta, timezone
+
+    config, data = whale_paths
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    now = datetime.now(timezone.utc)
+    wallet = "5DAAnrj7VHTznn2AWBemMuyVRZ6xZVzgfP8hCskoy4Eccg4"
+    svc.record_event(
+        wallet,
+        9,
+        "sell",
+        1200.0,
+        timestamp=(now - timedelta(hours=3)).isoformat(),
+        total_stake_tao=40_000.0,
+    )
+    out = svc.day_move_highlights(9, liquidity_tao=40_000.0, hours=24.0)
+    assert out["same_event"] is True
+    assert len(out["chips"]) == 1
+    assert "Day whale" in out["chips"][0]
+    assert "% float" in out["chips"][0]

@@ -1107,6 +1107,14 @@
       if (row.wallet_chip) {
         html += '<p class="pump-alert__wallet-chip">' + esc(row.wallet_chip) + '</p>';
       }
+      var dayChips = Array.isArray(row.whale_day_chips) ? row.whale_day_chips : [];
+      dayChips.forEach(function (chip) {
+        if (!chip) return;
+        html +=
+          '<p class="pump-alert__wallet-chip pump-alert__wallet-chip--day">' +
+          esc(chip) +
+          '</p>';
+      });
       html +=
         '<p class="pump-alert__trigger">' +
         esc(row.trigger || '') +

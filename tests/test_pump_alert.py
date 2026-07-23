@@ -184,6 +184,12 @@ def test_resolve_name_from_subnet_row():
     assert "FlameWire" in row["move"]
 
 
+def test_alert_row_includes_whale_day_chips_key():
+    row = build_alert_row(_ladder_entry("ACCUMULATING", netuid=42, score=0.48))
+    assert "whale_day_chips" in row
+    assert isinstance(row["whale_day_chips"], list)
+
+
 def test_pump_alert_template_renders_lead_scanner():
     env = Environment(
         loader=FileSystemLoader("templates"),
