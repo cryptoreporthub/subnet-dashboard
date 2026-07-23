@@ -462,8 +462,12 @@ def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[st
     try:
         from internal.pump.refresh import ensure_ladder_fresh
         from internal.pump.state import load_state
+        from internal.pump.taostats_overlay import active_ladder_netuids
+        from internal.whales.warm import ensure_whale_ledger_warm
 
         ensure_ladder_fresh()
+        # Fill empty whale ledger for active names so day-whale chips can render.
+        ensure_whale_ledger_warm(active_ladder_netuids())
         state = load_state()
     except Exception as exc:
         return {
