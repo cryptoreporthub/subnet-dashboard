@@ -95,9 +95,9 @@ def ensure_whale_ledger_warm(
     cooldown = max(30, min(cooldown, 3600))
 
     try:
-        cap = int(os.environ.get("WHALE_LEDGER_WARM_CAP", "5"))
+        cap = int(os.environ.get("WHALE_LEDGER_WARM_CAP", "3"))
     except ValueError:
-        cap = 5
+        cap = 3
     # Keep free-tier safe; share budget with pump TaoStats overlay.
     cap = max(1, min(cap, 5))
 
@@ -122,16 +122,8 @@ def ensure_whale_ledger_warm(
 
         target = missing[:cap]
         meta = subnet_meta_by_id or {}
-        if not meta:
-            try:
-                from fetchers.taomarketcap import get_all_subnets
-
-                for s in get_all_subnets() or []:
-                    nuid = s.get("netuid", s.get("id"))
-                    if nuid is not None:
-                        meta[int(nuid)] = s
-            except Exception:
-                pass
+        # Skip TMC universe fetch here — meta is optional for ingest; avoids
+        # blocking warm on a second external API.
 
         result = scan_netuids(target, subnet_meta_by_id=meta, service=svc)
         logger.info(
@@ -150,3 +142,37 @@ def ensure_whale_ledger_warm(
     except Exception as exc:
         logger.warning("whale ledger warm failed: %s", exc)
         return {"status": "error", "error": str(exc)}
+
+
+def kick_whale_ledger_warm(
+    netuids: Sequence[int],
+    *,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """Fire-and-forget warm so pump-alerts stays fast; chips appear on next hit."""
+    global _last_warm_attempt
+
+    try:
+        cooldown = int(os.environ.get("WHALE_LEDGER_WARM_COOLDOWN_SECONDS", "600"))
+    except ValueError:
+        cooldown = 600
+    cooldown = max(30, min(cooldown, 3600))
+
+    now_mono = time.monotonic()
+    with _lock:
+        if not force and (now_mono - _last_warm_attempt) < cooldown:
+            return {"status": "skipped", "reason": "cooldown"}
+        # Claim the cooldown window so concurrent pump hits don't spawn a stampede.
+        _last_warm_attempt = now_mono
+
+    snapshot = [int(n) for n in netuids if n is not None]
+
+    def _run() -> None:
+        try:
+            ensure_whale_ledger_warm(snapshot, force=True)
+        except Exception as exc:
+            logger.debug("background whale warm died: %s", exc)
+
+    t = threading.Thread(target=_run, name="whale-ledger-warm", daemon=True)
+    t.start()
+    return {"status": "started", "thread": t.name}
