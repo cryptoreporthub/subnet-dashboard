@@ -139,9 +139,20 @@ def record_pump_lead_at_phase_entry(
         "pump_phase": str(phase).upper(),
         "pump_badge": badge,
         "pump_claim": claim,
+        "composite_score": float(composite_score),
         "signal_snapshot": frozen,
         "statement": f"pump lead +{PUMP_LEAD_CLAIM_PCT:.0f}% within 1h from {badge} entry",
     }
+    try:
+        from internal.learning.pump_lead_features import attach_frozen_features
+
+        attach_frozen_features(
+            prediction,
+            signal_snapshot=frozen,
+            composite_score=float(composite_score),
+        )
+    except Exception as exc:
+        logger.debug("pump_lead feature freeze skipped SN%s: %s", nu, exc)
     if not append_prediction(prediction):
         return None
     logger.info("pump_lead ledger: SN%s %s @ %.6f", nu, badge, ref)
