@@ -77,7 +77,15 @@ If `GET /api/subnets` times out, the app falls back to registry after `SUBNETS_L
 | Phase | What | Doc |
 |-------|------|-----|
 | **A (now)** | One machine — fast shell, load shed, hydrate stagger (#332–#333) | troubleshooting above |
-| **B (now)** | Colocated worker deferred on 1GB — single process + load shed; `internal.worker` for future split | [`docs/fly-web-worker-split.md`](docs/fly-web-worker-split.md) |
+| **B (now)** | Web `BACKGROUND_ON_WEB=essential` (pump/resolver/whale warm); optional `worker` process for live feed | [`docs/fly-web-worker-split.md`](docs/fly-web-worker-split.md) |
+
+After deploy with the worker process group in `fly.toml`:
+
+```bash
+fly scale count web=1 worker=1 --app subnet-dashboard
+```
+
+Worker shares the app image; attach `data_volume` to the worker machine in `sjc` (same region as web) so JSON/SQLite state stays consistent. Until worker=1, web essential mode keeps pump ladder + resolver + whale warm without the live-subnet wedge.
 
 ---
 

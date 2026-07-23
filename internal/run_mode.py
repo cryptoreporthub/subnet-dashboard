@@ -13,16 +13,21 @@ def is_worker_mode() -> bool:
     return get_run_mode() == "worker"
 
 
-def background_on_web() -> bool:
-    """True when this process should start resolver/feed/sync (legacy combined mode)."""
+def _background_flag() -> str:
     if is_worker_mode():
-        return False
-    return os.environ.get("BACKGROUND_ON_WEB", "on").strip().lower() not in (
-        "0",
-        "false",
-        "no",
-        "off",
-    )
+        return "off"
+    return os.environ.get("BACKGROUND_ON_WEB", "on").strip().lower()
+
+
+def background_on_web() -> bool:
+    """True when web should run any background schedulers (essential or full)."""
+    return _background_flag() not in ("0", "false", "no", "off")
+
+
+def background_heavy_on_web() -> bool:
+    """True for legacy combined mode — live subnets + feed warmup on web."""
+    flag = _background_flag()
+    return flag in ("1", "true", "yes", "on", "full")
 
 
 def worker_mode_label() -> str:
@@ -32,3 +37,11 @@ def worker_mode_label() -> str:
     if background_on_web():
         return "combined"
     return "web"
+
+
+def background_boot_allowed() -> bool:
+    """Skip lifespan/worker boot under pytest or Deploy Guard."""
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return False
+    flag = os.environ.get("DISABLE_BACKGROUND_SCANS", "").strip().lower()
+    return flag not in ("1", "true", "yes", "on")

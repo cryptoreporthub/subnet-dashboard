@@ -199,98 +199,43 @@ def _registry_name_boot_sync() -> None:
         logger.debug("registry name boot sync skipped: %s", exc)
 
 
-def _pump_ladder_scheduler_boot() -> None:
-    """Pump ladder must run on web — BACKGROUND_ON_WEB=off skips resolver boot."""
-    import time
-
-    defer = int(os.environ.get("BOOT_DEFER_SECONDS", "45"))
-    time.sleep(max(defer, 5))
-    try:
-        from internal.pump.scheduler import ensure_pump_ladder_scheduler
-
-        ensure_pump_ladder_scheduler(immediate=True)
-        logger.info("pump ladder scheduler started on web boot")
-    except Exception as exc:
-        logger.warning("pump ladder scheduler boot failed: %s", exc)
-
-
-def _prediction_resolver_boot() -> None:
-    """Grade pump_lead + council picks on web — BACKGROUND_ON_WEB=off skips workers."""
-    import time
-
-    defer = int(os.environ.get("BOOT_DEFER_SECONDS", "45"))
-    time.sleep(max(defer + 10, 15))
-    try:
-        from internal.council.resolver_scheduler import start_prediction_resolver_scheduler
-
-        immediate = os.environ.get("RESOLVER_BOOT_IMMEDIATE", "off").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-            "on",
-        )
-        start_prediction_resolver_scheduler(immediate=immediate)
-        logger.info("prediction resolver scheduler started on web boot")
-    except Exception as exc:
-        logger.warning("prediction resolver boot failed: %s", exc)
-    # One-shot quality recovery of overdue pump_lead (candle grades only).
-    try:
-        from internal.learning.pump_lead_recover import recover_overdue_pump_leads
-
-        summary = recover_overdue_pump_leads(dry_run=False)
-        logger.info("pump_lead recover on boot: %s", summary)
-    except Exception as exc:
-        logger.warning("pump_lead recover boot failed: %s", exc)
-
-
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    """Boot background workers on web only when BACKGROUND_ON_WEB=on (legacy/combined)."""
-    from internal.run_mode import background_on_web, is_worker_mode
+    """Boot background workers on web only when BACKGROUND_ON_WEB allows it."""
+    from internal.run_mode import background_boot_allowed, background_on_web, is_worker_mode
 
     if is_worker_mode():
         yield
         return
 
     # Never block lifespan on Jinja — Fly health checks fail and edge returns 0 bytes.
-    if not is_worker_mode():
-        threading.Thread(
-            target=_prime_emergency_home_html,
-            daemon=True,
-            name="emergency-prime",
-        ).start()
-        threading.Thread(
-            target=lambda: _warm_homepage_cache(None),
-            daemon=True,
-            name="homepage-warm-boot",
-        ).start()
-        threading.Thread(
-            target=_registry_name_boot_sync,
-            daemon=True,
-            name="registry-name-sync",
-        ).start()
-        threading.Thread(
-            target=_council_weight_rebalance_boot,
-            daemon=True,
-            name="council-weight-rebalance",
-        ).start()
-        threading.Thread(
-            target=_pump_ladder_scheduler_boot,
-            daemon=True,
-            name="pump-ladder-scheduler-boot",
-        ).start()
-        threading.Thread(
-            target=_prediction_resolver_boot,
-            daemon=True,
-            name="prediction-resolver-boot",
-        ).start()
+    threading.Thread(
+        target=_prime_emergency_home_html,
+        daemon=True,
+        name="emergency-prime",
+    ).start()
+    threading.Thread(
+        target=lambda: _warm_homepage_cache(None),
+        daemon=True,
+        name="homepage-warm-boot",
+    ).start()
+    threading.Thread(
+        target=_registry_name_boot_sync,
+        daemon=True,
+        name="registry-name-sync",
+    ).start()
+    threading.Thread(
+        target=_council_weight_rebalance_boot,
+        daemon=True,
+        name="council-weight-rebalance",
+    ).start()
 
-    if background_on_web():
+    if background_on_web() and background_boot_allowed():
         from internal.background_boot import start_background_workers, stop_background_workers
 
         start_background_workers()
     yield
-    if background_on_web():
+    if background_on_web() and background_boot_allowed():
         from internal.background_boot import stop_background_workers
 
         stop_background_workers()

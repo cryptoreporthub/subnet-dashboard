@@ -30,7 +30,7 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
 
-    start_background_workers()
+    start_background_workers(heavy=True)
     logger.info("background worker running (RUN_MODE=worker)")
     _shutdown.wait()
     stop_background_workers()

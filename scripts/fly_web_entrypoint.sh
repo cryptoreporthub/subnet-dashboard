@@ -1,5 +1,5 @@
 #!/bin/sh
-# Single process on 1GB Fly — uvicorn + background in one process (BACKGROUND_ON_WEB=on).
-# ponytail: colocated worker subprocess OOMs 1GB (2× CPython + pandas/live_subnets).
-# internal.worker remains for future 2GB / separate-machine split.
+# Fly web process — HTTP only; essential background via BACKGROUND_ON_WEB=essential.
+# Full heavy feeds (live subnets wedge) run on the worker process group when scaled:
+#   fly scale count worker=1 --app subnet-dashboard
 exec uvicorn server:app --host 0.0.0.0 --port 8080

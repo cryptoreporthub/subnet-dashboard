@@ -53,19 +53,61 @@ def test_worker_mode_label(monkeypatch):
     assert worker_mode_label() == "combined"
 
 
-def test_start_background_workers_starts_resolver(monkeypatch):
-    started = MagicMock(return_value={"started": True})
+def test_background_on_web_essential(monkeypatch):
+    monkeypatch.setenv("BACKGROUND_ON_WEB", "essential")
+    monkeypatch.setenv("RUN_MODE", "web")
+
+    from internal.run_mode import background_heavy_on_web, background_on_web
+
+    assert background_on_web() is True
+    assert background_heavy_on_web() is False
+
+
+def test_background_heavy_on_full(monkeypatch):
+    monkeypatch.setenv("BACKGROUND_ON_WEB", "on")
+    monkeypatch.setenv("RUN_MODE", "web")
+
+    from internal.run_mode import background_heavy_on_web, background_on_web
+
+    assert background_on_web() is True
+    assert background_heavy_on_web() is True
+
+
+def test_start_background_workers_essential_skips_live_subnets(monkeypatch):
+    live = MagicMock()
+    monkeypatch.setattr("internal.live_subnets.get_live_subnets", live)
+    monkeypatch.setattr("internal.freshness.start_background_sync", MagicMock())
     monkeypatch.setattr(
         "internal.council.resolver_scheduler.start_prediction_resolver_scheduler",
-        started,
+        MagicMock(),
     )
+    monkeypatch.setattr("internal.message_intel.listener_service.start_message_intel_listeners", MagicMock())
+    monkeypatch.setattr("internal.background_boot._start_pump_ladder", MagicMock())
+    monkeypatch.setattr("internal.background_boot._start_resolver", MagicMock())
+    monkeypatch.setattr("internal.background_boot._start_whale_warm_scheduler", MagicMock())
+
+    from internal.background_boot import start_background_workers
+
+    start_background_workers(heavy=False)
+    live.assert_not_called()
+
+
+def test_start_background_workers_starts_resolver(monkeypatch):
+    resolver = MagicMock()
+    pump = MagicMock()
+    whale = MagicMock()
+    monkeypatch.setattr("internal.background_boot._start_resolver", resolver)
+    monkeypatch.setattr("internal.background_boot._start_pump_ladder", pump)
+    monkeypatch.setattr("internal.background_boot._start_whale_warm_scheduler", whale)
     monkeypatch.setattr("internal.freshness.start_background_sync", MagicMock())
     monkeypatch.setattr("internal.message_intel.listener_service.start_message_intel_listeners", MagicMock())
 
     from internal.background_boot import start_background_workers
 
     start_background_workers()
-    started.assert_called_once()
+    resolver.assert_called_once()
+    pump.assert_called_once()
+    whale.assert_called_once()
 
 
 def test_ops_readiness_worker_mode_field():
