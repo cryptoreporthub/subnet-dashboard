@@ -156,6 +156,12 @@ def kick_whale_ledger_warm(
     """Fire-and-forget warm so pump-alerts stays fast; chips appear on next hit."""
     global _last_warm_attempt
 
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return {"status": "skipped", "reason": "background_disabled"}
+    flag = os.environ.get("DISABLE_BACKGROUND_SCANS", "").strip().lower()
+    if flag in {"1", "true", "yes", "on"}:
+        return {"status": "skipped", "reason": "background_disabled"}
+
     try:
         cooldown = int(os.environ.get("WHALE_LEDGER_WARM_COOLDOWN_SECONDS", "600"))
     except ValueError:
@@ -169,7 +175,12 @@ def kick_whale_ledger_warm(
         # Claim the cooldown window so concurrent pump hits don't spawn a stampede.
         _last_warm_attempt = now_mono
 
-    snapshot = [int(n) for n in netuids if n is not None]
+    snapshot = []
+    for n in netuids:
+        try:
+            snapshot.append(int(n))
+        except (TypeError, ValueError):
+            continue
 
     def _run() -> None:
         try:

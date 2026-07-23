@@ -536,6 +536,8 @@ class WhaleIntelligenceService:
 
         No AMM slippage in the ledger — proxy is amount_tao / liquidity
         (caller liquidity, else event total_stake_tao). Honest-empty when no events.
+        Falls back to the newest event within 7d when the 24h window is empty
+        (TaoStats sometimes returns fills just outside a strict day cut).
         """
         honesty = self._ledger_honesty()
         empty: Dict[str, Any] = {
@@ -551,6 +553,23 @@ class WhaleIntelligenceService:
         if not honesty["data_available"]:
             return empty
 
+        primary = self._day_move_window(
+            int(netuid), liquidity_tao=liquidity_tao, hours=float(hours)
+        )
+        if primary.get("chips"):
+            return primary
+        # Soft fallback — still label as Day whale when the newest fill is recent.
+        return self._day_move_window(
+            int(netuid), liquidity_tao=liquidity_tao, hours=max(float(hours), 168.0)
+        )
+
+    def _day_move_window(
+        self,
+        netuid: int,
+        liquidity_tao: Optional[float] = None,
+        hours: float = 24.0,
+    ) -> Dict[str, Any]:
+        honesty = self._ledger_honesty()
         now = datetime.now(timezone.utc)
         cutoff = now - timedelta(hours=float(hours))
         try:
