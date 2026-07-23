@@ -245,6 +245,8 @@ def get_merged_subnet_data():
                 limit = int(__import__("os").environ.get("TAOSTATS_MERGE_LIMIT", "24"))
             except ValueError:
                 limit = 24
+            # Free tier is ~5/min — keep merge live batch small; cache fills over time.
+            limit = max(1, min(limit, 5))
             ts_by_netuid = get_top_subnet_metrics(
                 list(all_netuids), limit=limit, priority_netuids=priority
             )

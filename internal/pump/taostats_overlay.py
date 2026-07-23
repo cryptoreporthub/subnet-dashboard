@@ -99,12 +99,22 @@ def warm_taostats_metrics(
         ordered.append(n)
 
     out: Dict[int, Dict[str, Any]] = {}
+    live_fetches = 0
+    try:
+        live_cap = int(os.environ.get("TAOSTATS_PUMP_LIVE_FETCH_CAP", "5"))
+    except ValueError:
+        live_cap = 5
+    live_cap = max(0, min(live_cap, 5))  # free tier ~5/min — never burst past
+
     for nu in ordered[:cap]:
         cached = get_cached_metrics(nu)
         if cached:
             out[nu] = cached
             continue
+        if live_fetches >= live_cap:
+            continue
         metrics = get_subnet_metrics(nu)
+        live_fetches += 1
         if metrics:
             out[nu] = metrics
     return out

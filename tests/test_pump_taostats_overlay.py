@@ -96,6 +96,7 @@ def test_warm_taostats_metrics_priority(monkeypatch):
     monkeypatch.setattr(
         "fetchers.taostats_client.get_subnet_metrics", fake_metrics
     )
+    monkeypatch.setenv("TAOSTATS_PUMP_LIVE_FETCH_CAP", "5")
     out = warm_taostats_metrics(
         [10, 20, 30, 40],
         priority=[40, 20],
@@ -103,3 +104,19 @@ def test_warm_taostats_metrics_priority(monkeypatch):
     )
     assert list(out.keys()) == [40, 20, 10]
     assert calls == [40, 20, 10]
+
+
+def test_warm_respects_live_fetch_cap(monkeypatch):
+    calls = []
+
+    def fake_metrics(nu):
+        calls.append(nu)
+        return {"netuid": nu, "buy_volume_24h": 1}
+
+    monkeypatch.setattr("fetchers.taostats_client.is_available", lambda: True)
+    monkeypatch.setattr("fetchers.taostats_client.get_cached_metrics", lambda nu: None)
+    monkeypatch.setattr("fetchers.taostats_client.get_subnet_metrics", fake_metrics)
+    monkeypatch.setenv("TAOSTATS_PUMP_LIVE_FETCH_CAP", "2")
+    out = warm_taostats_metrics([1, 2, 3, 4, 5], priority=[5, 4, 3], limit=10)
+    assert calls == [5, 4]
+    assert set(out) == {5, 4}
