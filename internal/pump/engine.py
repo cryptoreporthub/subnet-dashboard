@@ -5,10 +5,20 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from internal.pump.constants import PHASE_ENTRY_THRESHOLDS, FORWARD_PHASES
+from internal.pump.two_score import (
+    apply_confirm_pump_gate,
+    compute_accum_score,
+    compute_confirm_score,
+    score_layer_for_phase,
+)
 
 
 def compute_composite_score(signals: Dict[str, Any]) -> float:
-    """Blend volume, momentum, price action, message-intel, and scenario context."""
+    """Blend volume, momentum, price action, message-intel, and scenario context.
+
+    Kept byte-stable for calibration / phase thresholds. Upgrade 5 adds
+    accum_score + confirm_score beside this — see ``two_score``.
+    """
     vol = float(signals.get("volume_intensity") or 0)
     mom = float(signals.get("momentum_1h") or 0)
     price = float(signals.get("price_change_24h") or 0)
@@ -51,15 +61,21 @@ def raw_phase_from_score(score: float, *, was_pumping: bool = False) -> str:
 
 
 def classify_signals(signals: Dict[str, Any], *, current_phase: str = "DORMANT") -> Dict[str, Any]:
-    """Return classification payload for one subnet."""
+    """Return classification payload for one subnet (Upgrade 5 two-score)."""
     score = compute_composite_score(signals)
+    accum = compute_accum_score(signals)
+    confirm = compute_confirm_score(signals)
     was_pumping = current_phase in ("PUMPING", "COOLING")
     suggested = raw_phase_from_score(score, was_pumping=was_pumping)
+    suggested = apply_confirm_pump_gate(suggested, confirm)
     return {
         "netuid": signals.get("netuid"),
         "name": signals.get("name"),
         "composite_score": score,
+        "accum_score": accum,
+        "confirm_score": confirm,
         "suggested_phase": suggested,
+        "score_layer": score_layer_for_phase(suggested),
         "signals": signals,
     }
 

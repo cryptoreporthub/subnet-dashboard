@@ -29,6 +29,8 @@ def test_freeze_feature_vector_schema_v1():
             "price_change_24h": 0.03,
             "momentum_1h": 0.01,
             "chatter_intensity": 0.2,
+            "accum_score": 0.44,
+            "confirm_score": 0.31,
             "triad": {
                 "inflow_quiet_load": True,
                 "buy_pressure": True,
@@ -45,6 +47,8 @@ def test_freeze_feature_vector_schema_v1():
     assert vec["hour_utc"] == 14.0
     assert vec["phase_code"] == 2.0
     assert vec["composite_score"] == 0.55
+    assert vec["accum_score"] == 0.44
+    assert vec["confirm_score"] == 0.31
 
 
 def test_ledger_attaches_frozen_feature_vector(tmp_path, monkeypatch):
