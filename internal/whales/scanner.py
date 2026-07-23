@@ -41,10 +41,19 @@ def _infer_side(row: Dict[str, Any]) -> Optional[str]:
 
 
 def _extract_amount(row: Dict[str, Any]) -> float:
-    for key in ("amount", "tao", "value", "stake", "quantity"):
+    for key in ("amount_tao", "amount", "tao", "value", "stake", "quantity"):
         val = row.get(key)
+        if isinstance(val, str):
+            try:
+                val = float(val.replace(",", "").strip())
+            except ValueError:
+                continue
         if isinstance(val, (int, float)):
-            return abs(float(val))
+            amt = abs(float(val))
+            # ponytail: TaoStats sometimes returns rao (1e9); ceiling if absurd for a whale fill
+            if amt >= 1e9:
+                amt = amt / 1e9
+            return amt
     return 0.0
 
 
@@ -69,6 +78,21 @@ def _normalize_rows(payload: Any) -> List[Dict[str, Any]]:
     return []
 
 
+def _fetch_delegation_rows(netuid: int) -> List[Dict[str, Any]]:
+    """Prefer subnet delegations path; fall back to /delegation/v1?netuid=."""
+    payload = get_subnet_delegation_flow(netuid)
+    rows = _normalize_rows(payload)
+    if rows:
+        return rows
+    try:
+        from fetchers.taostats_client import get_delegation_events
+
+        return _normalize_rows(get_delegation_events(netuid=netuid, limit=50))
+    except Exception as exc:
+        logger.debug("delegation fallback failed netuid=%s: %s", netuid, exc)
+        return []
+
+
 def scan_subnet_delegations(
     netuid: int,
     service: Optional[WhaleIntelligenceService] = None,
@@ -76,8 +100,7 @@ def scan_subnet_delegations(
 ) -> Dict[str, Any]:
     service = service or WhaleIntelligenceService()
     meta = subnet_meta or {}
-    payload = get_subnet_delegation_flow(netuid)
-    rows = _normalize_rows(payload)
+    rows = _fetch_delegation_rows(netuid)
 
     ingested = 0
     skipped = 0
