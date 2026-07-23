@@ -129,6 +129,8 @@ CONTRACT = [
     ("POST", "/api/learning/rebalance-weights", None),
     ("POST", "/api/predictions/resolver/run", None),
     ("POST", "/api/learning/pump-lead/recover", None),
+    ("GET", "/api/learning/pump-lead/train-status", None),
+    ("POST", "/api/learning/pump-lead/train", None),
     # Scenario memory + pick history (slice 8)
     ("GET", "/api/scenario-memory", None),
     (

@@ -588,6 +588,34 @@ async def api_pump_lead_recover(dry_run: bool = False, hydrate: bool = True):
         return {"status": "error", "message": str(exc)}
 
 
+@learning_router.get("/api/learning/pump-lead/train-status")
+async def api_pump_lead_train_status():
+    """Upgrade-6 dataset gate: gradeable n, frozen features, ready_to_train."""
+    try:
+        from internal.learning.pump_lead_train import dataset_status
+
+        return {"status": "success", "data": dataset_status()}
+    except Exception as exc:
+        logger.warning("pump_lead train-status failed: %s", exc)
+        return {"status": "error", "message": str(exc)}
+
+
+@learning_router.post("/api/learning/pump-lead/train")
+async def api_pump_lead_train(dry_run: bool = True):
+    """Export train matrix; fit XGBoost stub only when n>=50 and package present.
+
+    Never swaps prod hand score (ready_for_prod_replace still n>=100 + explicit).
+    """
+    try:
+        from internal.learning.pump_lead_train import train_offline
+
+        summary = train_offline(dry_run=bool(dry_run))
+        return {"status": "success", "data": summary}
+    except Exception as exc:
+        logger.warning("pump_lead train failed: %s", exc)
+        return {"status": "error", "message": str(exc)}
+
+
 @learning_router.get("/api/scenario-memory")
 async def api_scenario_memory():
     """Return the full regime-aware scenario memory snapshot."""
