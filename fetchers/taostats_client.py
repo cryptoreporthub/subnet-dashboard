@@ -219,6 +219,7 @@ def _api_get(
     params: Optional[Dict[str, Any]] = None,
     *,
     api_prefix: str = "/api/v1",
+    timeout: float = 20.0,
 ) -> Optional[Any]:
     """Shared GET for TaoStats REST.
 
@@ -235,17 +236,25 @@ def _api_get(
         if not prefix.startswith("/"):
             prefix = "/" + prefix
         url = f"{base}{prefix}{path}"
-        headers = {"Authorization": f"Bearer {TAOSTATS_API_KEY}", "Accept": "application/json"}
-        resp = requests.get(url, params=params, headers=headers, timeout=20)
+        # Docs: Authorization API key header. Some tenants accept raw key;
+        # Bearer works for /api/v1 pool routes — try Bearer first.
+        headers = {
+            "Authorization": f"Bearer {TAOSTATS_API_KEY}",
+            "Accept": "application/json",
+        }
+        resp = requests.get(url, params=params, headers=headers, timeout=timeout)
+        if resp.status_code == 401:
+            headers["Authorization"] = TAOSTATS_API_KEY
+            resp = requests.get(url, params=params, headers=headers, timeout=timeout)
         if resp.status_code == 429:
             logger.warning("TaoStats rate limited on %s", path)
             return None
         if resp.status_code != 200:
-            logger.debug("TaoStats %s returned %d", path, resp.status_code)
+            logger.warning("TaoStats %s returned %d body=%s", path, resp.status_code, resp.text[:180])
             return None
         return resp.json()
     except Exception as exc:
-        logger.debug("TaoStats GET %s failed: %s", path, exc)
+        logger.warning("TaoStats GET %s failed: %s", path, exc)
         return None
 
 
@@ -263,8 +272,9 @@ def get_delegation_events(
     nominator: Optional[str] = None,
     action: str = "all",
     limit: int = 50,
-    order: str = "amount_desc",
+    order: str = "timestamp_desc",
     amount_min_rao: Optional[int] = None,
+    timestamp_start: Optional[int] = None,
 ) -> Optional[Any]:
     """Staking/delegation events — path is ``/api/delegation/v1`` (not /api/v1/...)."""
     params: Dict[str, Any] = {"limit": limit, "action": action, "order": order}
@@ -274,7 +284,9 @@ def get_delegation_events(
         params["nominator"] = nominator
     if amount_min_rao is not None:
         params["amount_min"] = str(int(amount_min_rao))
-    return _api_get("/delegation/v1", params, api_prefix="/api")
+    if timestamp_start is not None:
+        params["timestamp_start"] = int(timestamp_start)
+    return _api_get("/delegation/v1", params, api_prefix="/api", timeout=35.0)
 
 
 def get_transfers(

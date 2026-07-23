@@ -45,7 +45,7 @@ def test_get_delegation_events_uses_api_not_apiv1_prefix():
     assert url.endswith("/api/delegation/v1")
     assert "/api/v1/delegation" not in url
     params = mock_req.get.call_args.kwargs.get("params") or {}
-    assert params.get("order") == "amount_desc"
+    assert params.get("order") == "timestamp_desc"
     assert params.get("netuid") == 108
 
 
