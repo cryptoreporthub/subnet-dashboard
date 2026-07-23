@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Dict, List, Optional
 
 from internal.indicators.taostats_client import get_subnet_delegation_flow
@@ -107,27 +108,27 @@ def _normalize_rows(payload: Any) -> List[Dict[str, Any]]:
 
 
 def _fetch_delegation_rows(netuid: int) -> List[Dict[str, Any]]:
-    """Fetch recent large delegation events for a subnet (one TaoStats call)."""
+    """Fetch recent delegation events for a subnet (one TaoStats call)."""
     try:
         from fetchers.taostats_client import get_delegation_events
 
-        # Prefer biggest fills first; amount_min ~10τ so small dust is skipped upstream.
+        # Recent first — amount_desc + amount_min returned empty/hung on free tier.
         rows = _normalize_rows(
             get_delegation_events(
                 netuid=netuid,
                 limit=50,
-                order="amount_desc",
-                amount_min_rao=int(10 * _RAO),
+                order="timestamp_desc",
+                timestamp_start=int(time.time()) - 86400,
             )
         )
         if rows:
             return rows
+        # Retry without time window if nothing in last 24h
+        return _normalize_rows(
+            get_delegation_events(netuid=netuid, limit=50, order="timestamp_desc")
+        )
     except Exception as exc:
-        logger.debug("delegation/v1 failed netuid=%s: %s", netuid, exc)
-    try:
-        return _normalize_rows(get_subnet_delegation_flow(netuid))
-    except Exception as exc:
-        logger.debug("subnet delegations failed netuid=%s: %s", netuid, exc)
+        logger.warning("delegation/v1 failed netuid=%s: %s", netuid, exc)
         return []
 
 
