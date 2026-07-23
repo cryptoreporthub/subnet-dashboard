@@ -345,6 +345,37 @@ def build_alert_row(
 
     size_line = _size_cliff_line(subnet_row)
     wallet_chip = _wallet_chip(netuid_int)
+    snap = ladder_entry.get("signal_snapshot") if isinstance(ladder_entry.get("signal_snapshot"), dict) else {}
+    src = subnet_row if isinstance(subnet_row, dict) else {}
+
+    def _metric(*keys, default=None):
+        for k in keys:
+            for bag in (src, snap, ladder_entry):
+                if isinstance(bag, dict) and bag.get(k) is not None:
+                    return bag.get(k)
+        return default
+
+    try:
+        fear = float(_metric("fear_and_greed", default=0) or 0)
+    except (TypeError, ValueError):
+        fear = None
+    try:
+        buys = int(_metric("buys_24hr", default=0) or 0)
+    except (TypeError, ValueError):
+        buys = None
+    try:
+        sells = int(_metric("sells_24hr", default=0) or 0)
+    except (TypeError, ValueError):
+        sells = None
+    try:
+        buy_vol = float(_metric("buy_volume_24h", default=0) or 0)
+    except (TypeError, ValueError):
+        buy_vol = None
+    try:
+        sell_vol = float(_metric("sell_volume_24h", default=0) or 0)
+    except (TypeError, ValueError):
+        sell_vol = None
+
     row = {
         "netuid": netuid_int,
         "name": name,
@@ -364,6 +395,16 @@ def build_alert_row(
         "triad": triad,
         "size_line": size_line,
         "wallet_chip": wallet_chip,
+        "fear_and_greed": fear,
+        "buys_24hr": buys,
+        "sells_24hr": sells,
+        "buy_volume_24h": buy_vol,
+        "sell_volume_24h": sell_vol,
+        "taostats_wired": bool(
+            src.get("taostats_wired")
+            or snap.get("taostats_wired")
+            or (isinstance(src.get("sources"), list) and "taostats" in src.get("sources"))
+        ),
         "updated_at": ladder_entry.get("updated_at"),
     }
     return row

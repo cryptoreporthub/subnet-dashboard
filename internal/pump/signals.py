@@ -78,7 +78,7 @@ def scenario_tags_by_netuid() -> Dict[int, str]:
 
 
 def build_subnet_signals(subnet: Dict[str, Any]) -> Dict[str, Any]:
-    """Normalize TaoMarketCap subnet row into ladder classifier inputs."""
+    """Normalize subnet row (+ optional TaoStats overlay) into ladder inputs."""
     netuid = subnet.get("netuid")
     price_change = float(subnet.get("price_change_24h") or subnet.get("change_24h") or 0)
     volume = float(subnet.get("volume") or 0)
@@ -105,6 +105,19 @@ def build_subnet_signals(subnet: Dict[str, Any]) -> Dict[str, Any]:
     volume_intensity = min(volume / (emission * 1000.0 + 1.0), 3.0) / 3.0
     price = float(subnet.get("price") or 0)
 
+    try:
+        fear = float(subnet.get("fear_and_greed") or 0)
+    except (TypeError, ValueError):
+        fear = 0.0
+    try:
+        buys = int(subnet.get("buys_24hr") or 0)
+    except (TypeError, ValueError):
+        buys = 0
+    try:
+        sells = int(subnet.get("sells_24hr") or 0)
+    except (TypeError, ValueError):
+        sells = 0
+
     base = {
         "netuid": netuid,
         "name": subnet.get("name") or f"SN{netuid}",
@@ -116,6 +129,13 @@ def build_subnet_signals(subnet: Dict[str, Any]) -> Dict[str, Any]:
         "chatter_intensity": chatter,
         "scenario_tag": scenario_tag,
         "emission": emission,
+        "fear_and_greed": fear,
+        "buys_24hr": buys,
+        "sells_24hr": sells,
+        "buy_volume_24h": buy,
+        "sell_volume_24h": sell,
+        "taostats_wired": bool(subnet.get("taostats_wired")),
+        "sources": list(subnet.get("sources") or []),
     }
     from internal.pump.triad import attach_triad_to_signals
 
@@ -124,9 +144,9 @@ def build_subnet_signals(subnet: Dict[str, Any]) -> Dict[str, Any]:
 
 def fetch_all_subnet_signals() -> List[Dict[str, Any]]:
     try:
-        from fetchers.taomarketcap import get_all_subnets
+        from internal.pump.taostats_overlay import load_subnets_for_pump_signals
 
-        subnets = get_all_subnets() or []
+        subnets = load_subnets_for_pump_signals()
         return [build_subnet_signals(s) for s in subnets if s.get("netuid") is not None]
     except Exception as exc:
         logger.warning("subnet signal fetch failed: %s", exc)
