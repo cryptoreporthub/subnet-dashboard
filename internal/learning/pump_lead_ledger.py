@@ -89,6 +89,9 @@ def record_pump_lead_at_phase_entry(
         nu = int(netuid)
     except (TypeError, ValueError):
         return None
+    # Root / invalid — never training samples
+    if nu < 1:
+        return None
     ref = float(reference_price or 0)
     if ref <= 0:
         return None
@@ -99,6 +102,26 @@ def record_pump_lead_at_phase_entry(
     resolve_at = now + timedelta(hours=PUMP_LEAD_HORIZON_HOURS)
     badge = _badge_for_entry(phase, composite_score)
     frozen = dict(signal_snapshot) if isinstance(signal_snapshot, dict) else {}
+
+    # Quality gate — don't ledger placeholder-flow STIRRING noise
+    try:
+        from internal.learning.pump_lead_recover import sample_quality_ok
+
+        probe = {
+            "netuid": nu,
+            "reference_price": ref,
+            "pump_phase": str(phase).upper(),
+            "pump_badge": badge,
+            "pump_claim": claim,
+            "signal_snapshot": frozen,
+            "pick_source": "pump_lead",
+        }
+        ok, reason = sample_quality_ok(probe)
+        if not ok:
+            logger.debug("pump_lead skip SN%s: %s", nu, reason)
+            return None
+    except Exception:
+        pass
 
     prediction: Dict[str, Any] = {
         "id": uuid.uuid4().hex[:10],

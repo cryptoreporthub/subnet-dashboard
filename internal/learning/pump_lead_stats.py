@@ -37,6 +37,8 @@ def _gradeable_pump_rows(resolved: List[Any]) -> List[Dict[str, Any]]:
             continue
         if row.get("outcome") in _SKIP:
             continue
+        if row.get("sample_quality") == "reject":
+            continue
         if row.get("correct") is None and row.get("actual_pct") is None:
             continue
         out.append(row)
