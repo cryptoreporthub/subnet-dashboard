@@ -128,6 +128,7 @@ CONTRACT = [
     ("POST", "/api/learning/trigger", None),
     ("POST", "/api/learning/rebalance-weights", None),
     ("POST", "/api/predictions/resolver/run", None),
+    ("POST", "/api/learning/pump-lead/recover", None),
     # Scenario memory + pick history (slice 8)
     ("GET", "/api/scenario-memory", None),
     (

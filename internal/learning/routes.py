@@ -569,6 +569,19 @@ async def api_predictions_resolver_run():
         return {"status": "error", "message": str(exc)}
 
 
+@learning_router.post("/api/learning/pump-lead/recover")
+async def api_pump_lead_recover(dry_run: bool = False):
+    """Candle-grade overdue pump_lead backlog (quality filter; no late live prices)."""
+    try:
+        from internal.learning.pump_lead_recover import recover_overdue_pump_leads
+
+        summary = recover_overdue_pump_leads(dry_run=bool(dry_run))
+        return {"status": "success", "data": summary}
+    except Exception as exc:
+        logger.warning("pump_lead recover failed: %s", exc)
+        return {"status": "error", "message": str(exc)}
+
+
 @learning_router.get("/api/scenario-memory")
 async def api_scenario_memory():
     """Return the full regime-aware scenario memory snapshot."""

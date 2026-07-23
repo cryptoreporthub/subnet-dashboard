@@ -12,9 +12,10 @@ CANDLE_LOOKUP_MINUTES = 15
 MIN_CANDLES_FOR_GRADE = 3
 
 
-def _load_cache(path: str = PRICE_CACHE_PATH) -> Dict[str, Any]:
+def _load_cache(path: Optional[str] = None) -> Dict[str, Any]:
+    resolved = path or PRICE_CACHE_PATH
     try:
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(resolved, "r", encoding="utf-8") as fh:
             data = json.load(fh)
         return data if isinstance(data, dict) else {}
     except Exception:

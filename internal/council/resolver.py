@@ -826,6 +826,25 @@ def resolve_due_predictions(
             continue
 
         if _is_expired(pred, resolve_at, now):
+            # Pump leads past grace: candle-grade if quality sample, else ungradeable.
+            # Never expire with a late live price (would falsify +2%/1h).
+            if is_pump_lead(pred):
+                try:
+                    from internal.learning.pump_lead_recover import (
+                        grade_pump_lead_at_resolve_candle,
+                    )
+
+                    recovered = grade_pump_lead_at_resolve_candle(pred, now=now)
+                    if recovered.get("status") == "resolved":
+                        resolved.append(recovered)
+                        resolved_now.append(recovered)
+                        continue
+                    if recovered.get("status") == "ungradeable":
+                        resolved.append(recovered)
+                        resolved_now.append(recovered)
+                        continue
+                except Exception:
+                    pass
             _expire_prediction(pred, now)
             resolved.append(pred)
             expired_now.append(pred)
