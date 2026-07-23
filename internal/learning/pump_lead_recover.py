@@ -3,20 +3,24 @@
 Quality-first: junk samples become ungradeable (not training fuel).
 Never grades with late live prices hours after resolve_at — that would
 falsify the +2%/1h claim. Candle VWAP/median at resolve_at only.
+
+Before grading, hydrate OHLCV for overdue netuids when the resolve window
+is missing from price_cache — otherwise recover burns samples as
+missing_horizon_candles even when a live fetch would cover them.
 """
 
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from internal.council.grading import (
     compute_actual_pct,
     grade_prediction,
     is_pump_lead,
 )
-from internal.council.price_reference import price_at_resolve_at
+from internal.council.price_reference import PRICE_CACHE_PATH, price_at_resolve_at
 from internal.file_utils import safe_read_json, safe_write_json
 
 logger = logging.getLogger(__name__)
@@ -152,13 +156,132 @@ def _finalize_grade(
     return out
 
 
+def horizon_candles_ready(
+    netuid: Any,
+    resolve_at: datetime,
+    *,
+    cache: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """True when price_cache already has a gradeable window at resolve_at."""
+    status, price, _meta = price_at_resolve_at(netuid, resolve_at, cache=cache)
+    return status == "ok" and price > 0
+
+
+def hydrate_candles_for_resolve(
+    netuid: Any,
+    resolve_at: datetime,
+    *,
+    cache_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Ensure OHLCV covers resolve_at. Force-refetch when the window is thin.
+
+    Busts price_cache TTL for that netuid only when coverage is missing so we
+    do not skip a live fetch on a fresh-but-incomplete cache entry.
+    Never synthesizes candles.
+    """
+    from internal.council.price_reference import _load_cache
+
+    resolved_cache = cache_path or PRICE_CACHE_PATH
+    cache = _load_cache(resolved_cache)
+    if horizon_candles_ready(netuid, resolve_at, cache=cache):
+        return {"netuid": netuid, "hydrated": False, "ready": True, "reason": "already_ready"}
+
+    key = str(netuid)
+    try:
+        disk = safe_read_json(resolved_cache, default={})
+        if not isinstance(disk, dict):
+            disk = {}
+        block = disk.get(key)
+        if isinstance(block, dict):
+            # Force fetch_ohlcv past CACHE_TTL without editing indicators module.
+            block = dict(block)
+            block["cached_at"] = 0.0
+            disk[key] = block
+            safe_write_json(resolved_cache, disk)
+    except Exception as exc:
+        logger.debug("pump_lead hydrate cache bust SN%s: %s", netuid, exc)
+
+    candles: List[Any] = []
+    try:
+        from internal.indicators.price_fetcher import fetch_ohlcv
+
+        candles = (
+            fetch_ohlcv(
+                str(netuid),
+                use_cache=True,
+                allow_synthetic=False,
+                cache_path=resolved_cache,
+            )
+            or []
+        )
+    except Exception as exc:
+        logger.warning("pump_lead hydrate fetch SN%s failed: %s", netuid, exc)
+        return {
+            "netuid": netuid,
+            "hydrated": True,
+            "ready": False,
+            "reason": "fetch_failed",
+            "error": str(exc),
+            "candles": 0,
+        }
+
+    cache = _load_cache(resolved_cache)
+    ready = horizon_candles_ready(netuid, resolve_at, cache=cache)
+    return {
+        "netuid": netuid,
+        "hydrated": True,
+        "ready": ready,
+        "reason": "ready" if ready else "still_missing_window",
+        "candles": len(candles) if isinstance(candles, list) else 0,
+    }
+
+
+def hydrate_overdue_pump_lead_netuids(
+    predictions: List[Dict[str, Any]],
+    *,
+    now: Optional[datetime] = None,
+    only_due: bool = True,
+) -> Dict[str, Any]:
+    """Hydrate unique quality-ok overdue netuids once each before grading."""
+    now = now or _utcnow()
+    seen: Set[str] = set()
+    results: List[Dict[str, Any]] = []
+    for pred in predictions:
+        if not isinstance(pred, dict) or not is_pump_lead(pred):
+            continue
+        ok, _reason = sample_quality_ok(pred)
+        if not ok:
+            continue
+        resolve_at = _parse_ts(pred.get("resolve_at"))
+        if resolve_at is None:
+            continue
+        if only_due and now < resolve_at:
+            continue
+        key = str(pred.get("netuid"))
+        if key in seen:
+            continue
+        seen.add(key)
+        results.append(hydrate_candles_for_resolve(pred.get("netuid"), resolve_at))
+    return {
+        "attempted": len(results),
+        "ready": sum(1 for r in results if r.get("ready")),
+        "fetched": sum(1 for r in results if r.get("hydrated")),
+        "netuids": [r.get("netuid") for r in results],
+        "details": results,
+    }
+
+
 def grade_pump_lead_at_resolve_candle(
     prediction: Dict[str, Any],
     *,
     now: Optional[datetime] = None,
     cache: Optional[Dict[str, Any]] = None,
+    hydrate: bool = False,
 ) -> Dict[str, Any]:
-    """Grade one pump_lead using candles at resolve_at only (no live fallback)."""
+    """Grade one pump_lead using candles at resolve_at only (no live fallback).
+
+    When hydrate=True, attempt OHLCV fill for this netuid before lookup.
+    """
     now = now or _utcnow()
     if not is_pump_lead(prediction):
         return _mark_ungradeable(prediction, reason="not_pump_lead", now=now)
@@ -174,6 +297,10 @@ def grade_pump_lead_at_resolve_candle(
         out = dict(prediction)
         out["status"] = "pending"
         return out
+
+    if hydrate:
+        hydrate_candles_for_resolve(prediction.get("netuid"), resolve_at)
+        cache = None  # reload from disk after hydrate
 
     status, price, meta = price_at_resolve_at(
         prediction.get("netuid"),
@@ -192,6 +319,7 @@ def recover_overdue_pump_leads(
     path: Optional[str] = None,
     dry_run: bool = False,
     only_due: bool = True,
+    hydrate: bool = True,
 ) -> Dict[str, Any]:
     """Move overdue pending pump_lead → resolved/ungradeable with candle grades."""
     resolved_path = path or PREDICTIONS_PATH
@@ -207,7 +335,46 @@ def recover_overdue_pump_leads(
     rejected: List[Dict[str, Any]] = []
     kept_pending = 0
 
-    from internal.council.price_reference import PRICE_CACHE_PATH, _load_cache
+    from internal.council.price_reference import _load_cache
+
+    hydrate_summary: Dict[str, Any] = {
+        "attempted": 0,
+        "ready": 0,
+        "fetched": 0,
+        "netuids": [],
+        "skipped": not hydrate,
+    }
+    if hydrate and not dry_run:
+        hydrate_summary = hydrate_overdue_pump_lead_netuids(
+            pending, now=now, only_due=only_due
+        )
+    elif hydrate and dry_run:
+        # Dry-run: report which netuids would hydrate, without network I/O.
+        would: List[Any] = []
+        seen: Set[str] = set()
+        for pred in pending:
+            if not isinstance(pred, dict) or not is_pump_lead(pred):
+                continue
+            ok, _ = sample_quality_ok(pred)
+            if not ok:
+                continue
+            resolve_at = _parse_ts(pred.get("resolve_at"))
+            if resolve_at is None:
+                continue
+            if only_due and now < resolve_at:
+                continue
+            key = str(pred.get("netuid"))
+            if key in seen:
+                continue
+            seen.add(key)
+            would.append(pred.get("netuid"))
+        hydrate_summary = {
+            "attempted": len(would),
+            "ready": 0,
+            "fetched": 0,
+            "netuids": would,
+            "dry_run": True,
+        }
 
     cache = _load_cache(PRICE_CACHE_PATH)
 
@@ -236,6 +403,7 @@ def recover_overdue_pump_leads(
     summary = {
         "ok": True,
         "dry_run": dry_run,
+        "hydrate": hydrate_summary,
         "graded": len(graded),
         "rejected_ungradeable": len(rejected),
         "still_pending": sum(1 for p in still if isinstance(p, dict) and is_pump_lead(p)),

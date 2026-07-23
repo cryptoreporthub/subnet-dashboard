@@ -570,12 +570,18 @@ async def api_predictions_resolver_run():
 
 
 @learning_router.post("/api/learning/pump-lead/recover")
-async def api_pump_lead_recover(dry_run: bool = False):
-    """Candle-grade overdue pump_lead backlog (quality filter; no late live prices)."""
+async def api_pump_lead_recover(dry_run: bool = False, hydrate: bool = True):
+    """Candle-grade overdue pump_lead backlog (quality filter; no late live prices).
+
+    hydrate=true (default): fetch OHLCV for overdue quality netuids before grading
+    so cold price_cache does not burn samples as missing_horizon_candles.
+    """
     try:
         from internal.learning.pump_lead_recover import recover_overdue_pump_leads
 
-        summary = recover_overdue_pump_leads(dry_run=bool(dry_run))
+        summary = recover_overdue_pump_leads(
+            dry_run=bool(dry_run), hydrate=bool(hydrate)
+        )
         return {"status": "success", "data": summary}
     except Exception as exc:
         logger.warning("pump_lead recover failed: %s", exc)
