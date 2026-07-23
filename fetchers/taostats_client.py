@@ -145,26 +145,64 @@ def get_subnet_metrics(netuid):
         return None
 
 
-def get_top_subnet_metrics(netuids, limit=20):
+def get_top_subnet_metrics(netuids, limit=20, priority_netuids=None):
     if not TAOSTATS_API_KEY:
         logger.debug("TaoStats API key not set, skipping batch fetch")
         return {}
     if not netuids:
         return {}
-    offset = _get_rotation_offset()
+    universe = []
+    seen_u = set()
+    for nu in netuids:
+        try:
+            n = int(nu)
+        except (TypeError, ValueError):
+            continue
+        if n in seen_u:
+            continue
+        seen_u.add(n)
+        universe.append(n)
+    if not universe:
+        return {}
+
     selected = []
-    for i in range(limit):
-        idx = (offset + i) % len(netuids)
-        selected.append(netuids[idx])
-    new_offset = (offset + limit) % len(netuids)
-    _set_rotation_offset(new_offset)
+    seen = set()
+    for nu in list(priority_netuids or []):
+        try:
+            n = int(nu)
+        except (TypeError, ValueError):
+            continue
+        if n not in seen_u or n in seen:
+            continue
+        seen.add(n)
+        selected.append(n)
+        if len(selected) >= limit:
+            break
+
+    if len(selected) < limit:
+        offset = _get_rotation_offset()
+        for i in range(len(universe)):
+            if len(selected) >= limit:
+                break
+            n = universe[(offset + i) % len(universe)]
+            if n in seen:
+                continue
+            seen.add(n)
+            selected.append(n)
+        _set_rotation_offset((offset + limit) % len(universe))
+
     results = {}
     for netuid in selected:
         metrics = get_subnet_metrics(netuid)
         if metrics:
             results[netuid] = metrics
-    logger.info("TaoStats batch: fetched %d/%d subnets (offset %d -> %d, total %d)",
-                len(results), limit, offset, new_offset, len(netuids))
+    logger.info(
+        "TaoStats batch: fetched %d/%d (priority_in=%d, universe=%d)",
+        len(results),
+        limit,
+        len(list(priority_netuids or [])),
+        len(universe),
+    )
     return results
 
 

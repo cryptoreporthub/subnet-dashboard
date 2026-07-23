@@ -227,12 +227,29 @@ def get_merged_subnet_data():
         logger.error("Merged: no data from any source!")
         return []
     sorted_netuids = sorted(all_netuids)
-    # Layer 2: TaoStats
+    # Layer 2: TaoStats — prefer active ladder + recent hot names in the batch.
     ts_by_netuid = {}
     try:
         from fetchers.taostats_client import get_top_subnet_metrics, get_cached_metrics, is_available
+
         if is_available():
-            ts_by_netuid = get_top_subnet_metrics(list(all_netuids), limit=20)
+            priority = []
+            try:
+                from internal.pump.taostats_overlay import active_ladder_netuids
+
+                priority.extend(active_ladder_netuids())
+            except Exception:
+                pass
+            limit = 24
+            try:
+                limit = int(__import__("os").environ.get("TAOSTATS_MERGE_LIMIT", "24"))
+            except ValueError:
+                limit = 24
+            # Free tier is ~5/min — keep merge live batch small; cache fills over time.
+            limit = max(1, min(limit, 5))
+            ts_by_netuid = get_top_subnet_metrics(
+                list(all_netuids), limit=limit, priority_netuids=priority
+            )
         for netuid in all_netuids:
             if netuid not in ts_by_netuid:
                 cached_ts = get_cached_metrics(netuid)
