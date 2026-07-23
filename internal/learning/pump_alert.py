@@ -306,6 +306,20 @@ def build_alert_row(
         score = float(ladder_entry.get("composite_score") or 0.0)
     except (TypeError, ValueError):
         score = None
+    try:
+        accum = float(ladder_entry.get("accum_score")) if ladder_entry.get("accum_score") is not None else None
+    except (TypeError, ValueError):
+        accum = None
+    try:
+        confirm = float(ladder_entry.get("confirm_score")) if ladder_entry.get("confirm_score") is not None else None
+    except (TypeError, ValueError):
+        confirm = None
+    try:
+        from internal.pump.two_score import score_layer_for_phase
+
+        layer = str(ladder_entry.get("score_layer") or score_layer_for_phase(phase))
+    except Exception:
+        layer = "none"
     copy = _row_copy(
         phase,
         name,
@@ -337,6 +351,10 @@ def build_alert_row(
         "phase": phase,
         "timing": copy["timing"],
         "score": round(score, 2) if score is not None else None,
+        "accum_score": round(accum, 2) if accum is not None else None,
+        "confirm_score": round(confirm, 2) if confirm is not None else None,
+        "score_layer": layer,
+        "alert_id": ladder_entry.get("alert_id"),
         "move": copy["move"],
         "thesis": copy["thesis"],
         "trigger": copy["trigger"],
@@ -394,14 +412,27 @@ def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[st
         netuid = entry.get("netuid")
         subnet = _subnet_row(int(netuid), rows) if netuid is not None else None
         score = float(entry.get("composite_score") or 0.0)
+        # Early lane ranks by predictive accum when present.
+        try:
+            rank = float(entry.get("accum_score")) if entry.get("accum_score") is not None else score
+        except (TypeError, ValueError):
+            rank = score
         if phase in _EARLY_PHASES:
             leads = _lead_signals(subnet, entry)
             if phase == "ACCUMULATING" or _lead_qualifies(
                 leads["buy_ratio"], leads["volume_intensity"]
             ):
-                early.append((score, entry, subnet))
+                early.append((rank, entry, subnet))
         elif phase == "PUMPING":
-            pumping.append((score, entry, subnet))
+            try:
+                conf_rank = (
+                    float(entry.get("confirm_score"))
+                    if entry.get("confirm_score") is not None
+                    else score
+                )
+            except (TypeError, ValueError):
+                conf_rank = score
+            pumping.append((conf_rank, entry, subnet))
         elif phase == "COOLING":
             cooling.append((score, entry, subnet))
 

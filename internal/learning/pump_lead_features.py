@@ -11,9 +11,9 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 # Bump when adding keys (old rows stay valid for their version).
-FEATURE_SCHEMA_VERSION = 1
+FEATURE_SCHEMA_VERSION = 2
 
-# Ordered feature names for matrix columns (schema v1).
+# Ordered feature names for matrix columns (schema v2 = v1 + two-score).
 FEATURE_KEYS: Tuple[str, ...] = (
     "buy_ratio",
     "volume_intensity",
@@ -24,6 +24,8 @@ FEATURE_KEYS: Tuple[str, ...] = (
     "chatter_intensity",
     "hour_utc",
     "phase_code",
+    "accum_score",
+    "confirm_score",
 )
 
 _PHASE_CODE = {
@@ -105,6 +107,8 @@ def freeze_feature_vector(
         "chatter_intensity": _f(snap.get("chatter_intensity"), 0.0),
         "hour_utc": hour,
         "phase_code": _phase_code(pred, snap),
+        "accum_score": _f(snap.get("accum_score"), 0.0),
+        "confirm_score": _f(snap.get("confirm_score"), 0.0),
     }
 
 

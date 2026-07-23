@@ -80,6 +80,7 @@ def record_pump_lead_at_phase_entry(
     composite_score: float,
     reference_price: float,
     signal_snapshot: Optional[Dict[str, Any]] = None,
+    alert_id: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Persist a gradeable pump_lead row when the ladder enters a lead phase."""
     claim = gradeable_phase_entry(phase, composite_score)
@@ -143,6 +144,8 @@ def record_pump_lead_at_phase_entry(
         "signal_snapshot": frozen,
         "statement": f"pump lead +{PUMP_LEAD_CLAIM_PCT:.0f}% within 1h from {badge} entry",
     }
+    if alert_id:
+        prediction["alert_id"] = str(alert_id)
     try:
         from internal.learning.pump_lead_features import attach_frozen_features
 

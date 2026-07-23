@@ -17,6 +17,7 @@ from internal.pump.constants import (
 from internal.pump.engine import classify_signals
 from internal.pump.signals import build_subnet_signals, fetch_all_subnet_signals
 from internal.pump.soul_sync import apply_phase_transitions
+from internal.pump.two_score import score_layer_for_phase
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +128,8 @@ def transition_subnet(
 
     classification = classify_signals(signals, current_phase=entry.get("phase", "DORMANT"))
     score = classification["composite_score"]
+    accum = float(classification.get("accum_score") or 0.0)
+    confirm = float(classification.get("confirm_score") or 0.0)
     suggested = classification["suggested_phase"]
     current = entry.get("phase", "DORMANT")
     new_phase = _apply_hysteresis(current, suggested, score, entry.get("since"), now)
@@ -138,6 +141,9 @@ def transition_subnet(
             "from_phase": current,
             "to_phase": new_phase,
             "composite_score": score,
+            "accum_score": accum,
+            "confirm_score": confirm,
+            "score_layer": classification.get("score_layer"),
             "signals": classification.get("signals"),
         }
         transitions = entry.setdefault("transitions", [])
@@ -146,6 +152,11 @@ def transition_subnet(
         entry["phase"] = new_phase
         entry["since"] = _now_z()
         entry["last_transition"] = _now_z()
+        # Cross-layer alert id — sticky from first non-dormant entry.
+        if new_phase != "DORMANT" and not entry.get("alert_id"):
+            import uuid
+
+            entry["alert_id"] = uuid.uuid4().hex[:12]
         try:
             from internal.learning.pump_lead_ledger import record_pump_lead_at_phase_entry
 
@@ -154,6 +165,11 @@ def transition_subnet(
                 from internal.pump.triad import attach_triad_to_signals
 
                 sig = attach_triad_to_signals(sig)
+            # Freeze two-score into the claim snapshot for Upgrade 6.
+            if isinstance(sig, dict):
+                sig = dict(sig)
+                sig["accum_score"] = accum
+                sig["confirm_score"] = confirm
             record_pump_lead_at_phase_entry(
                 netuid=netuid,
                 name=entry.get("name"),
@@ -161,6 +177,7 @@ def transition_subnet(
                 composite_score=score,
                 reference_price=float(sig.get("price") or signals.get("price") or 0),
                 signal_snapshot=sig,
+                alert_id=entry.get("alert_id"),
             )
         except Exception as exc:
             logger.debug("pump_lead ledger skipped SN%s: %s", netuid, exc)
@@ -173,6 +190,9 @@ def transition_subnet(
     except Exception:
         entry["name"] = raw_name
     entry["composite_score"] = score
+    entry["accum_score"] = accum
+    entry["confirm_score"] = confirm
+    entry["score_layer"] = classification.get("score_layer") or score_layer_for_phase(new_phase)
     entry["updated_at"] = _now_z()
     entry["signal_snapshot"] = classification.get("signals")
     subnets[key] = entry
@@ -184,6 +204,10 @@ def transition_subnet(
             "from_phase": current,
             "to_phase": new_phase,
             "composite_score": score,
+            "accum_score": accum,
+            "confirm_score": confirm,
+            "score_layer": entry.get("score_layer"),
+            "alert_id": entry.get("alert_id"),
         }
         if changed
         else None,
@@ -247,6 +271,8 @@ def _normalize_ladder_subnet(entry: Dict[str, Any]) -> Dict[str, Any]:
     """Shape persisted state rows for pump-tracker read API consumers."""
     phase = str(entry.get("phase") or entry.get("current_phase") or "DORMANT").upper()
     score = float(entry.get("composite_score") or 0.0)
+    accum = float(entry.get("accum_score") or score)
+    confirm = float(entry.get("confirm_score") or 0.0)
     netuid = entry.get("netuid")
     return {
         "netuid": netuid,
@@ -254,6 +280,10 @@ def _normalize_ladder_subnet(entry: Dict[str, Any]) -> Dict[str, Any]:
         "current_phase": phase,
         "phase": phase,
         "composite_score": score,
+        "accum_score": accum,
+        "confirm_score": confirm,
+        "score_layer": entry.get("score_layer") or score_layer_for_phase(phase),
+        "alert_id": entry.get("alert_id"),
         "pump_score": score,
         "final_score": score,
         "pump_proneness": round(score * 100, 1),
