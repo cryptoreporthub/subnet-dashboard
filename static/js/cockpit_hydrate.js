@@ -979,6 +979,16 @@
         resolveCrumb.hidden = true;
       }
     }
+    var socialCrumb = document.getElementById('k3-social-crumb');
+    if (socialCrumb) {
+      if (brief.social_crumb) {
+        socialCrumb.textContent = brief.social_crumb;
+        socialCrumb.hidden = false;
+      } else {
+        socialCrumb.textContent = '';
+        socialCrumb.hidden = true;
+      }
+    }
     setText('k3-brief-thesis', brief.thesis || '');
     setText('k3-brief-vs', brief.vs || '');
     setText('k3-brief-vs-hold', brief.vs_hold_tao || '');
