@@ -1,6 +1,7 @@
 {# Home cause chain — compact 4-step path from story_path #}
 {% set sp = story_path if story_path is mapping else {} %}
-{% set chain_steps = sp.steps[:4] if sp.steps is iterable and sp.steps is not string else [] %}
+{% set raw_steps = sp.steps if sp.steps is defined else [] %}
+{% set chain_steps = raw_steps[:4] if raw_steps is iterable and raw_steps is not string else [] %}
 <section class="sr-cause-chain wrap-pad" id="section-cause-chain" aria-labelledby="cause-chain-title">
   <div class="sr-cause-chain__head">
     <h2 class="sr-cause-chain__title" id="cause-chain-title">Cause chain</h2>

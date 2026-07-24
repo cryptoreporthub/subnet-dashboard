@@ -734,6 +734,20 @@ def _fast_home_hero_context(trust_banner: Optional[Dict[str, Any]] = None) -> Di
         },
         "trust_banner": tb,
     }
+    try:
+        from internal.analytics.soul_weights_chip import soul_weights_chip_context
+
+        ctx.update(soul_weights_chip_context())
+    except Exception:
+        ctx["soul_weights_chip"] = None
+    try:
+        from internal.learning.story_path import build_story_path
+
+        if isinstance(pick_payload, dict) and pick_payload:
+            ctx["story_path"] = build_story_path(pick_payload)
+    except Exception:
+        ctx["story_path"] = {"data_available": False, "steps": []}
+    return ctx
 
 
 def _enrich_daily_pick_payload_lite(
