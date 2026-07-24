@@ -8,7 +8,11 @@
       <button type="button" class="tab-btn" id="daily-letter-download" disabled>Download</button>
     </div>
   </div>
-  <div id="daily-recap-root" class="weekly-letter__body" aria-live="polite">
-    <p class="weekly-letter__loading">Loading daily recap…</p>
+  <div id="daily-recap-root" class="weekly-letter__body is-loading" aria-live="polite" aria-busy="true">
+    <div class="hydrate-skeleton" aria-hidden="true">
+      <span class="hydrate-skeleton__line"></span>
+      <span class="hydrate-skeleton__line hydrate-skeleton__line--med"></span>
+      <span class="hydrate-skeleton__line hydrate-skeleton__line--short"></span>
+    </div>
   </div>
 </section>

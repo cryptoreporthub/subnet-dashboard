@@ -6,7 +6,7 @@
 {% else %}
   {% set footer_source_label = data_source|replace('_',' ')|replace('-',' ')|title %}
 {% endif %}
-<footer class="status" id="section-footer">
+<footer class="status" id="section-footer" data-source="{{ data_source|default('cache')|lower }}">
   <div class="status-inner">
     <span><span class="st-dot" aria-hidden="true"></span>SimiVision · <b id="footer-source-label">{{ footer_source_label }}</b></span>
     <span data-footer-metric="subnets"{% if not sn_list|length %} hidden{% endif %}>Subnets: <b id="footer-subnets-count">{{ sn_list|length }}</b></span>

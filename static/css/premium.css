@@ -719,8 +719,22 @@ footer.status {
   border-top: 1px solid var(--cockpit-green-line);
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
 }
+@media (max-width: 720px) {
+  footer.status {
+    position: static;
+  }
+  body.council-first-theme {
+    padding-bottom: 0;
+  }
+}
 .status-inner b { color: var(--txt); }
 .st-dot { background: var(--cockpit-green); box-shadow: 0 0 10px var(--cockpit-green-glow); }
+footer.status[data-source="snapshot"] .st-dot,
+footer.status[data-source*="timeout"] .st-dot,
+footer.status[data-source*="fallback"] .st-dot {
+  background: var(--signal-amber);
+  box-shadow: 0 0 10px rgba(255, 179, 0, 0.35);
+}
 
 /* ---------- Scrollbars (cockpit tint) ---------- */
 .scroll-y::-webkit-scrollbar,

@@ -35,7 +35,7 @@
   /* Text */
   --text-primary: #e8f7ff;
   --text-secondary: #8aa0b8;
-  --text-muted: #5f6d7e;
+  --text-muted: #8a9a9e;
 
   /* Borders — slate hairlines; accent on interactive only */
   --border-subtle: rgba(148, 163, 184, 0.12);
@@ -115,3 +115,41 @@ a:hover { color: var(--accent-orange); text-shadow: 0 0 12px var(--accent-glow-o
 .neg, .sell { color: var(--signal-sell); text-shadow: 0 0 10px rgba(255, 23, 68, 0.4); }
 .neu, .hold { color: var(--signal-hold); text-shadow: 0 0 10px rgba(255, 43, 214, 0.35); }
 .watch { color: var(--signal-watch); }
+
+/* Accessibility + numeric alignment (visual upgrade) */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  z-index: 1000;
+  padding: 10px 16px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+}
+.skip-link:focus {
+  left: 12px;
+  top: 12px;
+  width: auto;
+  height: auto;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}

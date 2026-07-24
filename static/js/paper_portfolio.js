@@ -158,7 +158,7 @@
     }
     if (payload.empty) {
       root.innerHTML =
-        '<p class="paper-portfolio__empty">No council paper trades yet — P&amp;L appears after resolved picks are graded (§16).</p>';
+        '<p class="paper-portfolio__empty">No council paper trades yet — P&amp;L appears after resolved picks are graded.</p>';
       return;
     }
     root.innerHTML =
@@ -185,8 +185,9 @@
       render(root, data);
     } catch (e) {
       if (!root.querySelector(".paper-portfolio__compare")) {
+        root.classList.add("is-error");
         root.innerHTML =
-          '<p class="paper-portfolio__empty empty--quiet">Quiet — paper portfolio unavailable. Retry when /api/portfolio/status responds.</p>';
+          '<p class="paper-portfolio__empty is-error">Could not load paper portfolio — try again shortly.</p>';
       }
     }
   }

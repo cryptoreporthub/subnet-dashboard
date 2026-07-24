@@ -136,5 +136,12 @@
     poll();
   }
 
-  setInterval(poll, 60000);
+  function tick() {
+    if (document.visibilityState === 'hidden') return;
+    poll();
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') tick();
+  });
+  setInterval(tick, 60000);
 })();

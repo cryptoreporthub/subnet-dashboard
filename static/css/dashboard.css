@@ -201,8 +201,8 @@
 
 .badge-hold {
   color: var(--signal-hold);
-  background: rgba(245, 158, 11, 0.08);
-  border-color: rgba(245, 158, 11, 0.25);
+  background: rgba(255, 43, 214, 0.08);
+  border-color: rgba(255, 43, 214, 0.25);
 }
 
 .badge-watch {

@@ -19,6 +19,22 @@
     });
   }
 
+  function storyStripMeta(stats, itemCount) {
+    stats = stats || { correct: 0, wrong: 0 };
+    var correct = stats.correct || 0;
+    var wrong = stats.wrong || 0;
+    var n = itemCount != null ? itemCount : correct + wrong;
+    if (!n) return correct + " right · " + wrong + " wrong";
+    return "Last " + n + " calls — " + correct + " right · " + wrong + " wrong";
+  }
+
+  function clearShellWarming() {
+    var stage = document.getElementById("section-daily-pick");
+    if (stage) stage.removeAttribute("data-shell-warming");
+    var banner = document.getElementById("council-warming-composite");
+    if (banner) banner.hidden = true;
+  }
+
   function fmtSigned(n) {
     n = Number(n) || 0;
     return (n >= 0 ? "+" : "") + n.toFixed(1) + "%";
@@ -206,7 +222,7 @@
       body.innerHTML =
         '<p class="story-strip__empty" id="story-strip-empty">' +
         (strip.reason === "no_resolved_outcomes"
-          ? "No graded pick outcomes yet — the strip fills as §16 resolution runs."
+          ? "No graded pick outcomes yet — the strip fills in as picks resolve."
           : "Pick story unavailable right now.") +
         "</p>";
       return;
@@ -214,10 +230,8 @@
     var stats = strip.stats || { correct: 0, wrong: 0 };
     var html =
       '<p class="story-strip__meta" id="story-strip-meta">' +
-      stats.correct +
-      " right · " +
-      stats.wrong +
-      " wrong</p>" +
+      esc(storyStripMeta(stats, strip.items.length)) +
+      "</p>" +
       '<ol class="story-strip__list" id="story-strip-list">';
     strip.items.forEach(function (row) {
       html +=
@@ -301,7 +315,10 @@
         fetchJson("/api/predictions/resolved"),
         fetchJson("/api/subnets?fields=id,netuid,name,price_change_24h,apy,staking_data,total_stake,stake,emission,source,live,sources"),
       ]);
-      if (results[0].status === "fulfilled") patchHomeDailyCall(results[0].value);
+      if (results[0].status === "fulfilled") {
+        patchHomeDailyCall(results[0].value);
+        clearShellWarming();
+      }
       if (results[1].status === "fulfilled") {
         var resolved = (results[1].value.resolved) || [];
         patchStoryStrip(buildStoryStrip(resolved));
@@ -331,6 +348,7 @@
     document.addEventListener("home:cockpit-picks", function (ev) {
       var payload = ev && ev.detail;
       if (!payload || !payload.day) return;
+      clearShellWarming();
       if (window.HomeHydrateCache) {
         window.HomeHydrateCache.picksEmittedAt = payload.emitted_at;
         window.HomeHydrateCache.dayPick = payload.day;
@@ -346,7 +364,14 @@
         });
       }
     });
-    setInterval(refreshHomeHotPath, REFRESH_MS);
+    function tick() {
+      if (document.visibilityState === "hidden") return;
+      refreshHomeHotPath();
+    }
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") tick();
+    });
+    setInterval(tick, REFRESH_MS);
   }
 
   if (document.readyState === "loading") {

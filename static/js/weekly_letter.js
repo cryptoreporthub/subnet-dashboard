@@ -149,6 +149,9 @@
         weekEl.textContent = "Week of " + payload.week_of;
       }
       render(root, payload);
+      root.classList.remove("is-loading");
+      root.classList.remove("is-error");
+      root.setAttribute("aria-busy", "false");
       if (window.LetterExport && window.LetterExport.weekly) {
         window.LetterExport.weekly.setMarkdown(
           payload.markdown,
@@ -157,8 +160,11 @@
       }
     } catch (e) {
       if (weekEl) weekEl.textContent = "SimiVision digest";
+      root.classList.remove("is-loading");
+      root.classList.add("is-error");
+      root.setAttribute("aria-busy", "false");
       root.innerHTML =
-        '<p class="weekly-letter__empty">Could not load weekly letter — try again shortly.</p>';
+        '<p class="weekly-letter__empty is-error">Could not load weekly letter — try again shortly.</p>';
       if (window.LetterExport && window.LetterExport.weekly) {
         window.LetterExport.weekly.setMarkdown("");
       }

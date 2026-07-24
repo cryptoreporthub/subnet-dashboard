@@ -2,7 +2,7 @@
 <section class="row" id="section-kpi" aria-labelledby="kpi-title">
   <div class="section-label">KPI Strip</div>
   <h2 class="section-title" id="kpi-title">Learning Loop KPIs</h2>
-  <p class="section-sub">Resolver accuracy and prediction backlog — post-replay honest stats.</p>
+  <p class="section-sub">Resolver accuracy and prediction backlog — graded stats only.</p>
   {% set lm = learning_metrics if learning_metrics is mapping else {} %}
   {% set acc = ((lm.accuracy|default(0))|float * 100)|round(1) %}
   <div class="kpi-strip" id="kpi-strip-root">
