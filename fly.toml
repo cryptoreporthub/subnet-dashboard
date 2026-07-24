@@ -60,8 +60,10 @@ primary_region = "sjc"
   # Web process: keep CPU for GET / + hydrate; resolver/retrain belongs on worker.
   CALIBRATION_AUTO_RETRAIN = "off"
   CONVICTION_ALERTS_ENABLED = "off"
-  PUMP_LADDER_REFRESH_MINUTES = "5"
-  PUMP_LADDER_STALE_MINUTES = "8"
+  PUMP_LADDER_REFRESH_MINUTES = "20"
+  PUMP_LADDER_STALE_MINUTES = "12"
+  # Never immediate full scan on boot — wedges HTTP on shared VM (white screen / 503).
+  PUMP_LADDER_BOOT_IMMEDIATE = "off"
   WHALE_LEDGER_WARM_INTERVAL_MINUTES = "20"
   # O4: allow fly.dev + cryptoreporthub hostnames when DNS is pointed (see DEPLOY.md)
   ALLOWED_ORIGINS = "https://subnet-dashboard.fly.dev,https://dashboard.cryptoreporthub.com,https://cryptoreporthub.com"
