@@ -8,6 +8,8 @@ jobs:
   deploy-guard:
     name: Deploy Guard
     runs-on: ubuntu-latest
+    # PRs are gated by ci-smoke.yml (job: smoke). Re-run contract here before deploy
+    # so production never depends on workflow ordering on main.
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.12
