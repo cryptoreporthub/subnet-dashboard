@@ -106,9 +106,8 @@ jobs:
           exit 1
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Scale to one machine (avoid split-brain on volume)
-        continue-on-error: true
-        run: flyctl scale count 1 --app subnet-dashboard --yes
+      - name: Scale to one web machine (avoid split-brain on volume)
+        run: flyctl scale count web=1 --app subnet-dashboard --yes
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       # flyctl treats "stopped" as a good post-deploy state; a started machine
@@ -154,6 +153,8 @@ jobs:
             echo "GUARD FAIL: public /health did not return 200 within ~2.5m"
             exit 1
           fi
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Warm production caches
         run: |
           chmod +x scripts/warm_prod.sh

@@ -2022,42 +2022,43 @@ async def api_daily_pick_weighed():
 
 
 @app.get("/api/daily-pick")
-def api_daily_pick(full: bool = False):
+async def api_daily_pick(full: bool = False):
     """Today's audited daily pick from the Council engine."""
-    from internal.council.daily_pick_engine import _find_today, _load
-    from internal.whales.enrichment_badge import empty_whale_flow_badge, whale_flow_badge
 
-    existing = _find_today(_load())
-    if existing is not None:
-        result = dict(existing)
-        if full:
-            try:
-                subnets, _ = _get_subnets_hydrate()
-                market_context = _market_context_with_weights(subnets)
-                result = _enrich_daily_pick_payload(result, subnets, market_context)
-            except Exception as exc:
-                logger.warning("daily-pick full enrich skipped: %s", exc)
+    def _build() -> Dict[str, Any]:
+        from internal.council.daily_pick_engine import _find_today, _load, get_or_create_today_pick
+        from internal.whales.enrichment_badge import empty_whale_flow_badge, whale_flow_badge
+
+        existing = _find_today(_load())
+        if existing is not None:
+            result = dict(existing)
+            if full:
+                try:
+                    subnets, _ = _get_subnets_hydrate()
+                    market_context = _market_context_with_weights(subnets)
+                    result = _enrich_daily_pick_payload(result, subnets, market_context)
+                except Exception as exc:
+                    logger.warning("daily-pick full enrich skipped: %s", exc)
+                    result = _enrich_daily_pick_payload_lite(result)
+                netuid = _pick_netuid_from_daily_payload(result)
+                result["enrichment_badge"] = (
+                    whale_flow_badge(netuid) if netuid is not None else empty_whale_flow_badge()
+                )
+            else:
                 result = _enrich_daily_pick_payload_lite(result)
-            netuid = _pick_netuid_from_daily_payload(result)
-            result["enrichment_badge"] = (
-                whale_flow_badge(netuid) if netuid is not None else empty_whale_flow_badge()
-            )
-        else:
-            result = _enrich_daily_pick_payload_lite(result)
-            result["enrichment_badge"] = empty_whale_flow_badge("lite_read")
-        return result
+                result["enrichment_badge"] = empty_whale_flow_badge("lite_read")
+            return result
 
-    subnets, _ = _get_subnets_hydrate()
-    if not _PICKS_ENGINE:
-        return {
-            "status": "error",
-            "date": datetime.utcnow().date().isoformat(),
-            "action": "HOLD",
-            "reason": "pick engine unavailable",
-            "pick": None,
-        }
-    market_context = _market_context_with_weights(subnets)
-    try:
+        subnets, _ = _get_subnets_hydrate()
+        if not _PICKS_ENGINE:
+            return {
+                "status": "error",
+                "date": datetime.utcnow().date().isoformat(),
+                "action": "HOLD",
+                "reason": "pick engine unavailable",
+                "pick": None,
+            }
+        market_context = _market_context_with_weights(subnets)
         result = get_or_create_today_pick(subnets, market_context)
         if isinstance(result, dict):
             netuid = _pick_netuid_from_daily_payload(result)
@@ -2069,6 +2070,17 @@ def api_daily_pick(full: bool = False):
                 ),
             }
         return result
+
+    try:
+        return await _to_thread_timeout(_build, PICK_HANDLER_TIMEOUT, label="daily-pick")
+    except asyncio.TimeoutError:
+        return {
+            "status": "timeout",
+            "date": datetime.utcnow().date().isoformat(),
+            "action": "HOLD",
+            "reason": "pick handler busy — retry shortly",
+            "pick": None,
+        }
     except Exception as e:
         logger.error("Error fetching daily pick: %s", e)
         return {

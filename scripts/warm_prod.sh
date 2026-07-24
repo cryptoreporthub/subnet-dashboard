@@ -8,8 +8,11 @@ PATHS=(
   "/"
   "/api/data-freshness"
   "/api/learning/stats"
-  "/api/daily-pick"
   "/api/portfolio/status"
+)
+# daily-pick can wedge a cold machine; warm separately with a short deadline
+OPTIONAL_PATHS=(
+  "/api/daily-pick"
 )
 
 echo "== warm $BASE =="
@@ -20,6 +23,11 @@ for path in "${PATHS[@]}"; do
   if [ "$code" != "200" ] && [ "$code" != "304" ]; then
     fail=1
   fi
+done
+
+for path in "${OPTIONAL_PATHS[@]}"; do
+  code=$(curl -sS -m 10 -o /tmp/warm_body.txt -w "%{http_code}" "$BASE$path" || echo 000)
+  echo "$path -> HTTP $code (optional)"
 done
 
 if [ "$fail" -ne 0 ]; then
