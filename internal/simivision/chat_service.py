@@ -15,8 +15,9 @@ from datastore.learning_engine import LearningEngine
 logger = logging.getLogger(__name__)
 
 _CHUNK_SIZE = 48
-_CHAT_TIMEOUT_SEC = float(os.environ.get("SIMIVISION_CHAT_TIMEOUT_SECONDS", "25"))
+_CHAT_TIMEOUT_SEC = float(os.environ.get("SIMIVISION_CHAT_TIMEOUT_SECONDS", "35"))
 _INVESTIGATION_TIMEOUT_SEC = float(os.environ.get("SIMIVISION_INVESTIGATION_TIMEOUT_SECONDS", "8"))
+_DEFAULT_LLM_BASE = "https://llm.chutes.ai/v1"
 
 
 def sanitize_reply(text: str) -> str:
@@ -175,7 +176,7 @@ def call_llm(prompt: str, message: str, context: Dict[str, Any]) -> Tuple[str, b
         or os.environ.get("LLM_API_KEY")
     )
     base_url = os.environ.get("CHUTES_BASE_URL") or os.environ.get(
-        "LLM_BASE_URL", "https://api.chutes.ai/v1"
+        "LLM_BASE_URL", _DEFAULT_LLM_BASE
     )
     model = os.environ.get("CHUTES_MODEL") or os.environ.get(
         "LLM_MODEL", "deepseek-ai/DeepSeek-V3.2-TEE"
@@ -229,15 +230,37 @@ def call_llm(prompt: str, message: str, context: Dict[str, Any]) -> Tuple[str, b
         )
 
 
+def _light_picks_from_registry(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Fast top-N for chat prompts — avoid full council scoring on the chat path."""
+    ranked = sorted(
+        [s for s in subnets if isinstance(s, dict) and s.get("netuid") is not None],
+        key=lambda s: float(s.get("emission") or 0),
+        reverse=True,
+    )[:5]
+    return [
+        {
+            "rank": i,
+            "name": s.get("name"),
+            "netuid": s.get("netuid"),
+            "emission": s.get("emission"),
+            "apy": s.get("apy"),
+            "price_change_24h": s.get("price_change_24h"),
+            "conviction": s.get("conviction"),
+            "recommendation": s.get("recommendation") or s.get("action"),
+        }
+        for i, s in enumerate(ranked, 1)
+    ]
+
+
 def build_chat_context() -> Dict[str, Any]:
     """Assemble subnet + learning context for chat (file-backed; no live feed wait)."""
-    from server import _normalize_registry_subnet, _safe_simivision_payload, load_data
+    from server import _normalize_registry_subnet, load_data
 
     subnets = [
         _normalize_registry_subnet(s) for s in load_data("config/registry.json").values()
     ]
     source = "registry-fallback"
-    simivision = _safe_simivision_payload(subnets=subnets, source=source)["data"]
+    top = _light_picks_from_registry(subnets)
 
     engine = LearningEngine()
     soul_map = engine.load_soul_map()
@@ -250,14 +273,10 @@ def build_chat_context() -> Dict[str, Any]:
     daily_pick_data = _safe_load_json("data", "daily_picks.json", default=[{}])
     daily_pick = daily_pick_data[0] if daily_pick_data else {}
 
-    top = simivision.get("top", [])
     return {
         "source": source,
         "simivision_picks": top,
-        "market_overview": {
-            "count": simivision.get("meta", {}).get("count", len(subnets)),
-            "updated_at": simivision.get("meta", {}).get("updated_at"),
-        },
+        "market_overview": {"count": len(subnets), "updated_at": None},
         "expert_weights": expert_weights,
         "soul_map": soul_map,
         "predictions": predictions,
@@ -315,6 +334,9 @@ async def handle_simivision_chat(message: str) -> Dict[str, str]:
 
 async def iter_simivision_chat_chunks(message: str) -> AsyncIterator[str]:
     """Yield XSS-safe reply chunks for streaming clients."""
+    # Mobile proxies drop connections that send no bytes for ~25s; ping first.
+    yield ": ok\n\n"
+    yield f"event: meta\ndata: {json.dumps({'status': 'thinking'})}\n\n"
     result = await handle_simivision_chat(message)
     reply = result.get("reply") or ""
     model = result.get("model") or ""
