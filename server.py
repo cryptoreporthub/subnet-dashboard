@@ -985,7 +985,12 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
     try:
         from internal.message_intel.context import build_message_intel_context
 
-        context.update(build_message_intel_context(subnets))
+        context.update(
+            build_message_intel_context(
+                subnets,
+                pick_netuid=_pick_netuid_from_daily_payload(context.get("daily_pick_stage")),
+            )
+        )
     except Exception as exc:
         logger.warning("Message intel context unavailable: %s", exc)
 

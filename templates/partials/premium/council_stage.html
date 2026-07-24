@@ -260,6 +260,7 @@
       .k3-claim-name--sub { font-size: 17px; margin: 0 0 2px; animation: none; background: none; -webkit-text-fill-color: var(--k3-text); color: var(--k3-text); font-weight: 600; letter-spacing: 0.02em; }
       .k3-claim-desc { font-size: 12px; line-height: 1.45; color: var(--k3-muted); margin: 0 auto 6px; max-width: 300px; }
       .k3-resolve-crumb { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-blue); margin: 0 0 8px; letter-spacing: 0.03em; }
+      .k3-social-crumb { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-pink, #ff69b4); margin: 0 0 8px; letter-spacing: 0.03em; }
       .k3-brief { text-align: left; width: 100%; max-width: 340px; margin: 0 auto 8px; padding: 0; z-index: 1; }
       .k3-brief-thesis { font-size: 14px; line-height: 1.5; color: var(--k3-text); margin: 0 0 8px; text-align: center; }
       .k3-brief-vs { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.45; color: var(--k3-muted); margin: 0 0 8px; text-align: center; }
@@ -305,6 +306,11 @@
                 <p class="k3-resolve-crumb" id="k3-resolve-crumb">Resolves in {{ resolves_in }} · {{ horizon }} window</p>
                 {% else %}
                 <p class="k3-resolve-crumb" id="k3-resolve-crumb" hidden></p>
+                {% endif %}
+                {% if brief.social_crumb %}
+                <p class="k3-social-crumb" id="k3-social-crumb">{{ brief.social_crumb }}</p>
+                {% else %}
+                <p class="k3-social-crumb" id="k3-social-crumb" hidden></p>
                 {% endif %}
                 {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
                 {% if brief.vs %}<p class="k3-brief-vs k3-also-weighed" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
@@ -436,6 +442,7 @@
                   <p class="k3-claim-desc" id="k3-claim-desc" hidden></p>
                 </div>
                 <p class="k3-resolve-crumb" id="k3-resolve-crumb" hidden></p>
+                <p class="k3-social-crumb" id="k3-social-crumb"{% if not brief.social_crumb %} hidden{% endif %}>{{ brief.social_crumb|default('') }}</p>
                 {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
                 {% if brief.vs %}<p class="k3-brief-vs" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
                 {% if brief.vs_hold_tao %}<p class="k3-brief-vs-hold" id="k3-brief-vs-hold">{{ brief.vs_hold_tao }}</p>{% endif %}

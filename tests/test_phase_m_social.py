@@ -121,6 +121,39 @@ def test_jinja_message_intel_context(client):
     assert api["count"] >= 1
 
 
+def test_social_sentiment_for_home_prioritizes_pick(intel_env):
+    from internal.message_intel.context import social_sentiment_for_home
+    from internal.message_intel.store import get_db
+
+    db = get_db()
+    for msg_id, content, netuid in (
+        ("7a", "Subnet 7 looks bullish", 7),
+        ("99a", "Subnet 99 chatter", 99),
+    ):
+        mid, _ = db.save_message(
+            {
+                "source": "telegram",
+                "group_id": "g1",
+                "message_id": msg_id,
+                "content": content,
+            }
+        )
+        db.save_analysis(
+            mid,
+            {
+                "sentiment": "bullish",
+                "sentiment_confidence": 0.8,
+                "entities": {"subnets": [f"subnet {netuid}"]},
+            },
+        )
+        db.save_price_snapshot(mid, 1.0, netuid=netuid)
+
+    subnets = [{"netuid": 7, "name": "Apex"}, {"netuid": 99, "name": "SN99"}]
+    rows = social_sentiment_for_home(subnets, pick_netuid=99, limit=6)
+    assert rows
+    assert rows[0]["netuid"] == 99
+
+
 def test_build_message_intel_context_module():
     from internal.message_intel.context import build_message_intel_context
 

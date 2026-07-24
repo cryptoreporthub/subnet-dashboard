@@ -71,6 +71,46 @@ def test_empty_hold_voice():
     assert hero_copy_is_clean(brief)
 
 
+def test_evidence_drivers_includes_shortlist_role_social():
+    brief = build_dpick_brief(
+        {
+            "action": "HOLD",
+            "pick": None,
+            "candidate": {
+                "subnet": {"netuid": 99, "name": "SN99"},
+                "final_confidence": 0.23,
+            },
+            "shortlist": [
+                {"netuid": 118, "name": "Ditto", "conviction": 26, "role": "Social buzz", "stance": "LONG"},
+            ],
+        }
+    )
+    tags = [d["tag"] for d in brief["evidence_drivers"]]
+    labels = " ".join(d["label"] for d in brief["evidence_drivers"]).lower()
+    assert "social" in tags or "social" in labels
+
+
+def test_social_crumb_empty_without_mentions():
+    brief = build_dpick_brief(_hold_candidate_payload())
+    assert brief.get("social_crumb") == ""
+
+
+def test_social_crumb_from_registry_mentions(monkeypatch):
+    monkeypatch.setattr(
+        "internal.message_intel.context.lookup_social_sentiment_for_netuid",
+        lambda *a, **k: None,
+    )
+    payload = _hold_candidate_payload()
+    payload["candidate"]["subnet"]["social_mentions"] = 42
+    payload["candidate"]["subnet"]["social_sentiment"] = 0.72
+    brief = build_dpick_brief(payload)
+    assert brief["social_crumb"].startswith("Social · bullish")
+    assert "42 mentions" in brief["social_crumb"]
+    social_drivers = [d for d in brief["evidence_drivers"] if d["tag"] == "social"]
+    assert social_drivers
+    assert "42 mentions" in social_drivers[0]["label"]
+
+
 def test_attach_brief_on_payload():
     out = attach_brief_to_daily_pick(_hold_candidate_payload())
     assert "brief" in out

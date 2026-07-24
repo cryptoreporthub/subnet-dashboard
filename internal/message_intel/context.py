@@ -23,6 +23,93 @@ def _subnet_name_lookup(subnets: List[Dict[str, Any]]) -> Dict[int, str]:
     return names
 
 
+def lookup_social_sentiment_for_netuid(
+    netuid: int,
+    subnets: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[Dict[str, Any]]:
+    """Single-netuid sentiment from message_intel; None when no mentions."""
+    try:
+        nu = int(netuid)
+    except (TypeError, ValueError):
+        return None
+    names = _subnet_name_lookup(subnets if isinstance(subnets, list) else [])
+    try:
+        from internal.message_intel.store import get_db
+
+        for item in get_db().netuid_sentiment_rollup(limit=200):
+            if int(item.get("netuid", -1)) != nu:
+                continue
+            mentions = int(item.get("mentions", 0) or 0)
+            if mentions <= 0:
+                return None
+            return {
+                "netuid": nu,
+                "name": names.get(nu, f"SN{nu}"),
+                "score": item.get("score", 0.5),
+                "label": item.get("label", "neutral"),
+                "mentions": mentions,
+                "feed": [],
+                "source": "message_intel",
+            }
+    except Exception as exc:
+        logger.debug("social lookup for SN%s unavailable: %s", netuid, exc)
+    return None
+
+
+def _registry_social_row(
+    netuid: int,
+    subnets: List[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """Fallback when message_intel is empty but registry has mention counts."""
+    try:
+        nu = int(netuid)
+    except (TypeError, ValueError):
+        return None
+    names = _subnet_name_lookup(subnets)
+    for sn in subnets:
+        if not isinstance(sn, dict) or int(sn.get("netuid", -1)) != nu:
+            continue
+        mentions = int(sn.get("social_mentions", 0) or 0)
+        if mentions <= 0:
+            return None
+        sent = float(sn.get("social_sentiment", 0.5) or 0.5)
+        label = "bullish" if sent >= 0.6 else ("bearish" if sent <= 0.4 else "neutral")
+        return {
+            "netuid": nu,
+            "name": names.get(nu, str(sn.get("name") or f"SN{nu}")),
+            "score": sent,
+            "label": label,
+            "mentions": mentions,
+            "feed": [],
+            "source": "registry",
+        }
+    return None
+
+
+def social_sentiment_for_home(
+    subnets: Optional[List[Dict[str, Any]]] = None,
+    *,
+    pick_netuid: Optional[int] = None,
+    limit: int = 6,
+) -> List[Dict[str, Any]]:
+    """Homepage social rows — desk pick first when intel exists."""
+    subnets = subnets if isinstance(subnets, list) else []
+    rows = build_social_sentiment_rows(subnets, limit=limit)
+    if pick_netuid is None:
+        return rows
+
+    pick_row = next((r for r in rows if r.get("netuid") == pick_netuid), None)
+    if pick_row is None:
+        pick_row = lookup_social_sentiment_for_netuid(pick_netuid, subnets)
+    if pick_row is None:
+        pick_row = _registry_social_row(pick_netuid, subnets)
+    if pick_row is None:
+        return rows
+
+    rest = [r for r in rows if r.get("netuid") != pick_netuid]
+    return [pick_row, *rest][:limit]
+
+
 def build_social_sentiment_rows(
     subnets: Optional[List[Dict[str, Any]]] = None,
     *,
@@ -63,10 +150,11 @@ def build_social_sentiment_rows(
 def build_message_intel_context(
     subnets: Optional[List[Dict[str, Any]]] = None,
     *,
+    pick_netuid: Optional[int] = None,
     limit: int = 20,
 ) -> Dict[str, Any]:
     """Return message_intel panel data for GET /."""
-    social_sentiment = build_social_sentiment_rows(subnets, limit=6)
+    social_sentiment = social_sentiment_for_home(subnets, pick_netuid=pick_netuid, limit=6)
     try:
         from internal.message_intel.engine import list_messages
         from internal.message_intel.summary import summarize_message_intel

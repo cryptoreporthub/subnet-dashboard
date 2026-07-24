@@ -170,6 +170,50 @@ def _trigger_line(conviction: int, blockers: List[str], *, audit_pick: bool) -> 
     return f"Flip to LONG when conviction ≥ {_AUDIT_GATE_PCT}% (+{gap} pts)."
 
 
+def _social_driver_label(row: Dict[str, Any]) -> str:
+    label = str(row.get("label") or "neutral").lower()
+    mentions = int(row.get("mentions", 0) or 0)
+    if mentions <= 0:
+        return ""
+    unit = "mention" if mentions == 1 else "mentions"
+    return f"{label} · {mentions} {unit}"
+
+
+def _social_row_for_block(block: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not isinstance(block, dict):
+        return None
+    sn = block.get("subnet") if isinstance(block.get("subnet"), dict) else {}
+    netuid = sn.get("netuid")
+    if netuid is None:
+        return None
+    try:
+        from internal.message_intel.context import (
+            _registry_social_row,
+            lookup_social_sentiment_for_netuid,
+        )
+
+        row = lookup_social_sentiment_for_netuid(int(netuid), [sn])
+        if row is None:
+            row = _registry_social_row(int(netuid), [sn])
+        return row
+    except Exception:
+        mentions = int(sn.get("social_mentions", 0) or 0)
+        if mentions <= 0:
+            return None
+        sent = float(sn.get("social_sentiment", 0.5) or 0.5)
+        label = "bullish" if sent >= 0.6 else ("bearish" if sent <= 0.4 else "neutral")
+        return {"label": label, "mentions": mentions}
+    return None
+
+
+def _social_crumb_for_block(block: Optional[Dict[str, Any]]) -> str:
+    row = _social_row_for_block(block)
+    if not row:
+        return ""
+    label = _social_driver_label(row)
+    return f"Social · {label}" if label else ""
+
+
 def _evidence_drivers(
     block: Optional[Dict[str, Any]],
     payload: Dict[str, Any],
@@ -207,6 +251,11 @@ def _evidence_drivers(
             out.append({"tag": _axis_from_role(role), "label": role[:48]})
             if len(out) >= 3:
                 break
+    social_row = _social_row_for_block(block)
+    if social_row:
+        social_label = _social_driver_label(social_row)
+        if social_label and not any(d.get("tag") == "social" for d in out):
+            out.insert(0, {"tag": "social", "label": social_label})
     return out[:3]
 
 
@@ -269,6 +318,7 @@ def build_dpick_brief(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "vs": "",
         "vs_hold_tao": "",
         "evidence_drivers": [],
+        "social_crumb": "",
         "trigger": "",
         "tone": "neutral",
         "blockers": [],
@@ -349,6 +399,7 @@ def build_dpick_brief(payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         "vs": vs,
         "vs_hold_tao": _vs_hold_tao_line(block if isinstance(block, dict) else None, payload),
         "evidence_drivers": _evidence_drivers(block if isinstance(block, dict) else None, payload),
+        "social_crumb": _social_crumb_for_block(block if isinstance(block, dict) else None),
         "trigger": trigger,
         "tone": tone,
         "blockers": concerns[:3],
