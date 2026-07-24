@@ -28,14 +28,25 @@ def defer_boot(name: str, target: Callable[[], None], delay: Optional[int] = Non
     threading.Thread(target=_run, daemon=True, name=name).start()
 
 
+def _pump_boot_immediate() -> bool:
+    flag = os.environ.get("PUMP_LADDER_BOOT_IMMEDIATE", "off").strip().lower()
+    return flag in ("1", "true", "yes", "on")
+
+
 def _start_pump_ladder() -> None:
     def _run() -> None:
         from internal.pump.scheduler import ensure_pump_ladder_scheduler
 
-        ensure_pump_ladder_scheduler(immediate=True)
-        logger.info("pump ladder scheduler started")
+        ensure_pump_ladder_scheduler(immediate=_pump_boot_immediate())
+        logger.info("pump ladder scheduler started (immediate=%s)", _pump_boot_immediate())
 
-    defer_boot("pump-ladder-scheduler", _run)
+    from internal.run_mode import inline_worker_expected
+
+    # ponytail: on split VM, defer pump scan until HTTP has been stable ~2 min
+    delay = BOOT_DEFER_SECONDS
+    if inline_worker_expected():
+        delay = max(BOOT_DEFER_SECONDS + 90, 120)
+    defer_boot("pump-ladder-scheduler", _run, delay=delay)
 
 
 def _start_resolver() -> None:
