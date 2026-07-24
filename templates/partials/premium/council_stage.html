@@ -40,6 +40,10 @@
         {% set call_reasons = cand.reasons %}
       {% endif %}
       {% set why_line = call_reasons|first if call_reasons else (dpick.reason|default('')) %}
+      {% set subnet_desc = '' %}
+      {% if sn %}
+        {% set subnet_desc = sn.description|default(sn.tagline|default(sn.subtitle|default(why_line|default('')))) %}
+      {% endif %}
       {% set hybrid = hybrid_trust if hybrid_trust is mapping else {} %}
       {% set tb = trust_banner if trust_banner is mapping else {} %}
 
@@ -252,6 +256,10 @@
       .k3-call-headline { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; letter-spacing: 0.04em; margin: 0 0 10px; color: var(--k3-text); line-height: 1.25; }
       .k3-call-headline--hold { color: var(--k3-blue); text-shadow: 0 0 12px rgba(0, 212, 255, 0.25); }
       .k3-call-headline--go { color: var(--k3-green); text-shadow: 0 0 12px rgba(57, 255, 20, 0.2); }
+      .k3-claim-identity { margin: -2px 0 10px; z-index: 1; }
+      .k3-claim-name--sub { font-size: 17px; margin: 0 0 2px; animation: none; background: none; -webkit-text-fill-color: var(--k3-text); color: var(--k3-text); font-weight: 600; letter-spacing: 0.02em; }
+      .k3-claim-desc { font-size: 12px; line-height: 1.45; color: var(--k3-muted); margin: 0 auto 6px; max-width: 300px; }
+      .k3-resolve-crumb { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-blue); margin: 0 0 8px; letter-spacing: 0.03em; }
       .k3-brief { text-align: left; width: 100%; max-width: 340px; margin: 0 auto 8px; padding: 0; z-index: 1; }
       .k3-brief-thesis { font-size: 14px; line-height: 1.5; color: var(--k3-text); margin: 0 0 8px; text-align: center; }
       .k3-brief-vs { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.45; color: var(--k3-muted); margin: 0 0 8px; text-align: center; }
@@ -288,11 +296,21 @@
                 {% else %}
                 <h2 class="k3-call-headline k3-call-headline--{{ 'go' if act == 'LONG' else 'hold' }}" id="k3-call-headline">{% if act == 'LONG' %}LONG{% else %}HOLD{% endif %} · {{ sn.name|default('SN' ~ sn.netuid) }}</h2>
                 {% endif %}
+                <div class="k3-claim-identity" id="k3-claim-identity">
+                  <p class="k3-claim-name k3-claim-name--sub" id="k3-claim-name">{{ sn.name|default('SN' ~ sn.netuid) }}</p>
+                  <p class="k3-claim-meta" id="k3-claim-meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}</p>
+                  <p class="k3-claim-desc" id="k3-claim-desc"{% if not subnet_desc %} hidden{% endif %}>{{ subnet_desc|truncate(96, True) if subnet_desc else '' }}</p>
+                </div>
+                {% if resolves_in and outcome_status != 'resolved' %}
+                <p class="k3-resolve-crumb" id="k3-resolve-crumb">Resolves in {{ resolves_in }} · {{ horizon }} window</p>
+                {% else %}
+                <p class="k3-resolve-crumb" id="k3-resolve-crumb" hidden></p>
+                {% endif %}
                 {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
                 {% if brief.vs %}<p class="k3-brief-vs k3-also-weighed" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
                 {% if brief.vs_hold_tao %}<p class="k3-brief-vs-hold" id="k3-brief-vs-hold">{{ brief.vs_hold_tao }}</p>{% endif %}
                 <div id="k3-evidence-drivers" class="k3-evidence-drivers"{% if not brief.evidence_drivers %} hidden{% endif %}>
-                  {% for driver in brief.evidence_drivers or [] %}
+                  {% for driver in (brief.evidence_drivers or [])[:3] %}
                   <span class="k3-evidence-driver k3-evidence-driver--{{ driver.tag|default('tech') }}">{{ driver.tag|default('tech') }} · {{ driver.label }}</span>
                   {% endfor %}
                 </div>
@@ -351,7 +369,6 @@
               <script type="application/json" id="k3-watchlist-pins">{{ pins | tojson }}</script>
               <p id="k3-horizon-note" class="k3-horizon-note" hidden></p>
               {% endif %}
-              <div class="k3-claim-meta" id="k3-claim-meta" hidden>SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}</div>
               {% if act == 'LONG' %}<div class="k3-badge buy" id="k3-action-badge" hidden>BUY</div>
               {% elif act == 'SHORT' %}<div class="k3-badge sell" id="k3-action-badge" hidden>SELL</div>
               {% else %}<div class="k3-badge hold" id="k3-action-badge" hidden>{{ act }}</div>{% endif %}
@@ -413,11 +430,17 @@
                 {% else %}
                 <h2 class="k3-call-headline k3-call-headline--hold" id="k3-call-headline">HOLD · no long</h2>
                 {% endif %}
+                <div class="k3-claim-identity" id="k3-claim-identity" hidden>
+                  <p class="k3-claim-name k3-claim-name--sub" id="k3-claim-name" hidden></p>
+                  <p class="k3-claim-meta" id="k3-claim-meta" hidden></p>
+                  <p class="k3-claim-desc" id="k3-claim-desc" hidden></p>
+                </div>
+                <p class="k3-resolve-crumb" id="k3-resolve-crumb" hidden></p>
                 {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
                 {% if brief.vs %}<p class="k3-brief-vs" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
                 {% if brief.vs_hold_tao %}<p class="k3-brief-vs-hold" id="k3-brief-vs-hold">{{ brief.vs_hold_tao }}</p>{% endif %}
                 <div id="k3-evidence-drivers" class="k3-evidence-drivers"{% if not brief.evidence_drivers %} hidden{% endif %}>
-                  {% for driver in brief.evidence_drivers or [] %}
+                  {% for driver in (brief.evidence_drivers or [])[:3] %}
                   <span class="k3-evidence-driver k3-evidence-driver--{{ driver.tag|default('tech') }}">{{ driver.tag|default('tech') }} · {{ driver.label }}</span>
                   {% endfor %}
                 </div>
@@ -797,7 +820,15 @@ function k3SwitchHorizon(chipId) {
   var metaEl = document.getElementById('k3-claim-meta');
   if (metaEl) {
     metaEl.textContent = 'SN' + sn.netuid + (sn.symbol ? ' · ' + sn.symbol : '');
+    metaEl.hidden = false;
   }
+  var nameEl = document.getElementById('k3-claim-name');
+  if (nameEl) {
+    nameEl.textContent = sn.name || ('SN' + sn.netuid);
+    nameEl.hidden = false;
+  }
+  var identityEl = document.getElementById('k3-claim-identity');
+  if (identityEl) identityEl.hidden = false;
   k3SyncFocusNetuid(sn.netuid, sn.name);
   k3RenderConviction(view.conviction);
   k3SetActionBadge(view.action);

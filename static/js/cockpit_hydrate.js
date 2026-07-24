@@ -933,6 +933,52 @@
         headline.className = 'k3-call-headline k3-call-headline--' + (brief.tone || 'neutral');
       }
     }
+    var claimName = document.getElementById('k3-claim-name');
+    var claimMeta = document.getElementById('k3-claim-meta');
+    var claimDesc = document.getElementById('k3-claim-desc');
+    var claimIdentity = document.getElementById('k3-claim-identity');
+    var snLabel = sn.name || (sn.netuid != null ? 'SN' + sn.netuid : '');
+    if (claimName) {
+      if (snLabel) {
+        claimName.textContent = snLabel;
+        claimName.hidden = false;
+      } else {
+        claimName.hidden = true;
+      }
+    }
+    if (claimMeta) {
+      if (sn.netuid != null) {
+        claimMeta.textContent = 'SN' + sn.netuid + (sn.symbol ? ' · ' + sn.symbol : '');
+        claimMeta.hidden = false;
+      } else {
+        claimMeta.hidden = true;
+      }
+    }
+    if (claimDesc) {
+      var desc = brief.subnet_desc || brief.thesis || '';
+      if (!desc && payload.reason) desc = String(payload.reason);
+      if (desc) {
+        claimDesc.textContent = desc.length > 96 ? desc.slice(0, 93) + '…' : desc;
+        claimDesc.hidden = false;
+      } else {
+        claimDesc.textContent = '';
+        claimDesc.hidden = true;
+      }
+    }
+    if (claimIdentity) {
+      claimIdentity.hidden = !(snLabel || (claimDesc && !claimDesc.hidden));
+    }
+    var resolveCrumb = document.getElementById('k3-resolve-crumb');
+    if (resolveCrumb) {
+      if (payload.resolves_in && String(payload.outcome_status || 'pending') !== 'resolved') {
+        resolveCrumb.textContent =
+          'Resolves in ' + payload.resolves_in + ' · ' + (payload.time_horizon || payload.horizon || '24h') + ' window';
+        resolveCrumb.hidden = false;
+      } else {
+        resolveCrumb.textContent = '';
+        resolveCrumb.hidden = true;
+      }
+    }
     setText('k3-brief-thesis', brief.thesis || '');
     setText('k3-brief-vs', brief.vs || '');
     setText('k3-brief-vs-hold', brief.vs_hold_tao || '');
@@ -950,7 +996,7 @@
     }
     var driversHost = document.getElementById('k3-evidence-drivers');
     if (driversHost && brief.evidence_drivers && brief.evidence_drivers.length) {
-      driversHost.innerHTML = brief.evidence_drivers.map(function (d) {
+      driversHost.innerHTML = brief.evidence_drivers.slice(0, 3).map(function (d) {
         var tag = d.tag || 'tech';
         return '<span class="k3-evidence-driver k3-evidence-driver--' + esc(tag) + '">' + esc(tag) + ' · ' + esc(d.label || '') + '</span>';
       }).join('');
