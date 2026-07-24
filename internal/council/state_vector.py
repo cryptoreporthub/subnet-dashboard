@@ -1659,6 +1659,13 @@ def score_subnet_for_hour(
         except Exception:
             pass
 
+    try:
+        from internal.integrations.macro_overlay import apply_macro_score_overlay
+
+        total, macro_overlay = apply_macro_score_overlay(total, market_context)
+    except Exception:
+        macro_overlay = None
+
     confidence = _compute_confidence(sn, indicators, experts)
     tags = _scenario_tags(sn, indicators, market_context)
 
@@ -1680,6 +1687,7 @@ def score_subnet_for_hour(
         "weights_used": hour_weights,
         "signal_impact": signal_impact,
         "pump_overlay": pump_overlay,
+        "macro_overlay": macro_overlay,
     }
 
 
@@ -1761,6 +1769,13 @@ def score_subnet_for_day(
         except Exception:
             pass
 
+    try:
+        from internal.integrations.macro_overlay import apply_macro_score_overlay
+
+        total, macro_overlay = apply_macro_score_overlay(total, market_context)
+    except Exception:
+        macro_overlay = None
+
     confidence = _compute_confidence(sn, indicators, experts)
     tags = _scenario_tags(sn, indicators, market_context)
 
@@ -1782,6 +1797,7 @@ def score_subnet_for_day(
         "weights_used": day_weights,
         "signal_impact": signal_impact,
         "pump_overlay": pump_overlay,
+        "macro_overlay": macro_overlay,
     }
 
 
