@@ -32,7 +32,10 @@ def test_chat_stream_chunks_via_query():
     ) as resp:
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
-        body = "".join(resp.iter_text())
+        chunks = list(resp.iter_text())
+        first = chunks[0] if chunks else ""
+        assert ": ok" in first or "thinking" in first
+        body = "".join(chunks)
     assert "event: meta" in body
     assert "event: chunk" in body or "event: done" in body
     assert "event: done" in body
