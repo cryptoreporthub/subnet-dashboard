@@ -9,7 +9,8 @@ _start_inline_worker() {
     0|false|no|off) return 0 ;;
   esac
   echo "starting inline background worker (RUN_MODE=worker, WORKER_HEAVY=${WORKER_HEAVY:-essential})..."
-  env RUN_MODE=worker WORKER_HEAVY="${WORKER_HEAVY:-essential}" python -m internal.worker &
+  # Lower CPU priority so HTTP wins under contention on shared 2GB machine.
+  nice -n 10 env RUN_MODE=worker WORKER_HEAVY="${WORKER_HEAVY:-essential}" python -m internal.worker &
 }
 
 _start_inline_worker

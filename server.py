@@ -436,6 +436,9 @@ PICK_HANDLER_TIMEOUT = float(os.environ.get("PICK_HANDLER_TIMEOUT_SECONDS", "8")
 _HOUR_PICK_TTL = float(os.environ.get("HOUR_PICK_CACHE_SECONDS", "60"))
 _HOUR_PICK_LOCK = threading.Lock()
 _HOUR_PICK_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+_PUMP_ALERTS_TTL = float(os.environ.get("PUMP_ALERTS_CACHE_SECONDS", "30"))
+_PUMP_ALERTS_LOCK = threading.Lock()
+_PUMP_ALERTS_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 
 
 async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
@@ -1512,27 +1515,42 @@ async def preview_k3_pump_alert(request: Request):
 
 @app.get("/api/pump-alerts")
 async def api_pump_alerts():
-    """Pump lane — must not block the event loop (single-worker Fly wedge)."""
+    """Pump lane — file-backed ladder + registry enrichment; must stay sub-second."""
+
+    now = time.monotonic()
+    with _PUMP_ALERTS_LOCK:
+        cached = _PUMP_ALERTS_CACHE.get("payload")
+        if isinstance(cached, dict) and now - float(_PUMP_ALERTS_CACHE.get("at") or 0) < _PUMP_ALERTS_TTL:
+            return cached
 
     def _build():
         from internal.learning.pump_alert import build_pump_alerts
         from internal.subnet_names import enrich_subnet_rows
+        from internal.subnets.feed import registry_subnet_rows
 
-        subnets: List[Dict[str, Any]] = []
-        try:
-            from internal.subnets.feed import get_council_subnet_feed
-
-            feed_rows, _src = get_council_subnet_feed(timeout=4.0)
-            subnets = enrich_subnet_rows(list(feed_rows or []))
-        except Exception as exc:
-            logger.debug("pump-alerts live feed fallback: %s", exc)
-        if not subnets:
-            from internal.subnets.feed import registry_subnet_rows
-
-            subnets = enrich_subnet_rows(registry_subnet_rows())
+        # Registry-only on the hot path — ladder state is file-backed; live feed
+        # waits on worker/TMC and was wedging hydrate under scan lock contention.
+        subnets = enrich_subnet_rows(registry_subnet_rows())
         return build_pump_alerts(subnets)
 
-    return await asyncio.to_thread(_build)
+    try:
+        payload = await _to_thread_timeout(_build, 6.0, label="pump-alerts")
+    except asyncio.TimeoutError:
+        payload = {
+            "status": "timeout",
+            "count": 0,
+            "early_count": 0,
+            "confirmed_count": 0,
+            "alerts": [],
+            "empty_message": "Pump desk busy — retry shortly.",
+            "error": "timeout",
+            "trust": {"ready": False, "line": ""},
+        }
+
+    with _PUMP_ALERTS_LOCK:
+        _PUMP_ALERTS_CACHE["at"] = time.monotonic()
+        _PUMP_ALERTS_CACHE["payload"] = payload
+    return payload
 
 
 # ---------------------------------------------------------------------------
