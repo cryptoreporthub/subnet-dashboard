@@ -112,36 +112,188 @@
         --k3-text: #e2e8f0; --k3-muted: #64748b;
       }
       .k3-dossier { color: var(--k3-text); padding: 0; margin: 0; max-width: 100%; overflow-x: hidden; }
-      .k3-claim { position: relative; padding: 24px 16px 16px; text-align: center; min-height: 320px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-      .k3-orb-bg { position: absolute; width: 200px; height: 200px; border-radius: 50%; background: conic-gradient(var(--k3-green), var(--k3-blue), var(--k3-green)); animation: k3-spin 25s linear infinite; opacity: 0.15; filter: blur(40px); z-index: 0; }
-      .k3-orb-glow { position: absolute; width: 160px; height: 160px; border-radius: 50%; background: radial-gradient(circle, var(--k3-green) 0%, transparent 70%), radial-gradient(circle at 60% 40%, var(--k3-blue) 0%, transparent 60%); animation: k3-pulse 4s ease-in-out infinite; opacity: 0.2; filter: blur(30px); z-index: 0; }
+      /* Demote tall hero chrome when Featured Call is live (brand stays in site header) */
+      .council-stage:has(#k3-claim-identity:not([hidden])) .council-stage__brand,
+      .council-stage:has(#k3-claim-identity:not([hidden])) .council-stage__eyebrow,
+      .council-stage:has(#k3-claim-identity:not([hidden])) .council-stage__title {
+        position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+        clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+      }
+      .council-stage:has(#k3-claim-identity:not([hidden])) .council-stage__inner { padding-top: 8px; }
+      .k3-claim {
+        position: relative; padding: 16px 14px 14px; text-align: center; min-height: 0;
+        display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;
+        border: 1px solid rgba(0, 212, 255, 0.22); border-radius: 12px;
+        background: linear-gradient(165deg, rgba(10, 14, 22, 0.95) 0%, rgba(4, 6, 10, 0.98) 100%);
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      }
+      .k3-claim-head {
+        display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        margin-bottom: 12px; z-index: 2; text-align: left;
+      }
+      .k3-claim-head .k3-claim-name {
+        font-size: 18px; font-weight: 700; margin: 0; animation: none;
+        background: none; -webkit-text-fill-color: var(--k3-text); color: var(--k3-text);
+        letter-spacing: 0.01em; line-height: 1.2;
+      }
+      .k3-claim-head .k3-badge { margin: 0; flex-shrink: 0; }
+      .k3-badge.hold { background: transparent; color: var(--k3-orange); border: 1px solid rgba(255, 165, 0, 0.55); }
+      .k3-badge.buy { box-shadow: 0 0 18px rgba(57, 255, 20, 0.45), 0 0 36px rgba(57, 255, 20, 0.2); }
+      .k3-claim-main {
+        display: flex; flex-direction: column; align-items: center; gap: 14px;
+        position: relative; z-index: 1; width: 100%;
+      }
+      .k3-orb-wrap {
+        position: relative; width: 148px; height: 148px; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .k3-orb-bg {
+        position: absolute; width: 210px; height: 210px; border-radius: 50%;
+        background: conic-gradient(var(--k3-blue), var(--k3-green), var(--k3-blue));
+        animation: k3-spin 22s linear infinite; opacity: 0.28; filter: blur(36px); z-index: 0;
+        pointer-events: none;
+      }
+      .k3-orb-glow {
+        position: absolute; width: 180px; height: 180px; border-radius: 50%;
+        background:
+          radial-gradient(circle, rgba(0, 212, 255, 0.55) 0%, transparent 55%),
+          radial-gradient(circle at 40% 35%, rgba(57, 255, 20, 0.35) 0%, transparent 60%);
+        animation: k3-pulse 3.2s ease-in-out infinite; opacity: 0.85; filter: blur(22px); z-index: 0;
+        pointer-events: none;
+      }
+      .k3-claim--glow-hot .k3-orb-glow {
+        background:
+          radial-gradient(circle, rgba(57, 255, 20, 0.65) 0%, transparent 52%),
+          radial-gradient(circle at 60% 40%, rgba(0, 212, 255, 0.4) 0%, transparent 62%);
+        opacity: 0.95; filter: blur(20px);
+      }
+      .k3-claim--glow-cool .k3-orb-glow {
+        background:
+          radial-gradient(circle, rgba(0, 212, 255, 0.7) 0%, transparent 50%),
+          radial-gradient(circle at 55% 45%, rgba(255, 165, 0, 0.25) 0%, transparent 65%);
+        opacity: 0.9;
+      }
+      .k3-claim--glow-hot .k3-orb-bg {
+        background: conic-gradient(var(--k3-green), var(--k3-blue), var(--k3-green));
+        opacity: 0.35;
+      }
       @keyframes k3-spin { to { transform: rotate(360deg); } }
-      @keyframes k3-pulse { 0%,100% { opacity: 0.15; } 50% { opacity: 0.25; } }
-      .k3-orb { position: relative; width: 148px; height: 148px; z-index: 1; margin-bottom: 12px; }
-      .k3-orb svg { width: 100%; height: 100%; transform: rotate(-90deg); }
-      .k3-orb .ring-track { fill: none; stroke: var(--k3-surface); stroke-width: 9; }
-      .k3-orb .ring-fill { fill: none; stroke: url(#k3-gradient); stroke-width: 9; stroke-linecap: round; stroke-dasharray: 389.56; stroke-dashoffset: 389.56; animation: k3-ring-fill 1.2s ease-out forwards; }
-      .k3-orb.k3-ring--fresh .ring-fill { stroke: #39ff14; }
-      .k3-orb.k3-ring--aging .ring-fill { stroke: #00d4ff; }
-      .k3-orb.k3-ring--expiring .ring-fill { stroke: #ffa500; }
-      .k3-orb.k3-ring--resolved .ring-fill { stroke: #64748b; animation: none; }
+      @keyframes k3-pulse {
+        0%, 100% { opacity: 0.55; transform: scale(0.96); }
+        50% { opacity: 0.95; transform: scale(1.04); }
+      }
+      .k3-orb-particles {
+        position: absolute; inset: -6px; border-radius: 50%; z-index: 1; pointer-events: none;
+        animation: k3-particle-drift 14s linear infinite;
+      }
+      .k3-orb-particles span {
+        position: absolute; width: 3px; height: 3px; border-radius: 50%;
+        background: #7df9ff; box-shadow: 0 0 6px 1px rgba(0, 212, 255, 0.9), 0 0 12px rgba(57, 255, 20, 0.35);
+        opacity: 0.85;
+      }
+      .k3-orb-particles span:nth-child(1) { top: 8%; left: 48%; }
+      .k3-orb-particles span:nth-child(2) { top: 18%; left: 78%; width: 2px; height: 2px; opacity: 0.6; }
+      .k3-orb-particles span:nth-child(3) { top: 42%; left: 92%; }
+      .k3-orb-particles span:nth-child(4) { top: 72%; left: 82%; width: 2px; height: 2px; }
+      .k3-orb-particles span:nth-child(5) { top: 88%; left: 52%; opacity: 0.5; }
+      .k3-orb-particles span:nth-child(6) { top: 70%; left: 12%; width: 2px; height: 2px; }
+      .k3-orb-particles span:nth-child(7) { top: 38%; left: 4%; }
+      .k3-orb-particles span:nth-child(8) { top: 14%; left: 18%; width: 2px; height: 2px; opacity: 0.7; }
+      .k3-claim--glow-hot .k3-orb-particles span {
+        background: #39ff14; box-shadow: 0 0 6px 1px rgba(57, 255, 20, 0.95), 0 0 14px rgba(0, 212, 255, 0.35);
+      }
+      @keyframes k3-particle-drift { to { transform: rotate(360deg); } }
+      .k3-orb { position: relative; width: 148px; height: 148px; z-index: 2; margin: 0; }
+      .k3-orb svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+      .k3-orb .ring-track { fill: none; stroke: rgba(26, 29, 36, 0.95); stroke-width: 9; }
+      .k3-orb .ring-fill {
+        fill: none; stroke: url(#k3-gradient); stroke-width: 9; stroke-linecap: round;
+        stroke-dasharray: 389.56; stroke-dashoffset: 389.56; animation: k3-ring-fill 1.2s ease-out forwards;
+        filter:
+          drop-shadow(0 0 4px rgba(0, 212, 255, 0.95))
+          drop-shadow(0 0 12px rgba(0, 212, 255, 0.55))
+          drop-shadow(0 0 22px rgba(57, 255, 20, 0.35));
+      }
+      .k3-orb.k3-ring--fresh .ring-fill {
+        stroke: #39ff14;
+        filter:
+          drop-shadow(0 0 5px rgba(57, 255, 20, 0.95))
+          drop-shadow(0 0 14px rgba(57, 255, 20, 0.55))
+          drop-shadow(0 0 24px rgba(0, 212, 255, 0.3));
+      }
+      .k3-orb.k3-ring--aging .ring-fill {
+        stroke: #00d4ff;
+        filter:
+          drop-shadow(0 0 5px rgba(0, 212, 255, 0.95))
+          drop-shadow(0 0 14px rgba(0, 212, 255, 0.55))
+          drop-shadow(0 0 22px rgba(57, 255, 20, 0.25));
+      }
+      .k3-orb.k3-ring--expiring .ring-fill {
+        stroke: #ffa500;
+        filter:
+          drop-shadow(0 0 5px rgba(255, 165, 0, 0.9))
+          drop-shadow(0 0 12px rgba(255, 165, 0, 0.45));
+      }
+      .k3-orb.k3-ring--resolved .ring-fill { stroke: #64748b; animation: none; filter: none; }
+      .k3-claim--hold .k3-orb .ring-fill,
+      .k3-claim--glow-cool .k3-orb .ring-fill {
+        stroke: var(--k3-blue);
+        filter:
+          drop-shadow(0 0 6px rgba(0, 212, 255, 1))
+          drop-shadow(0 0 16px rgba(0, 212, 255, 0.65))
+          drop-shadow(0 0 28px rgba(0, 212, 255, 0.35));
+      }
+      .k3-claim--glow-hot .k3-orb .ring-fill {
+        filter:
+          drop-shadow(0 0 6px rgba(57, 255, 20, 1))
+          drop-shadow(0 0 16px rgba(57, 255, 20, 0.65))
+          drop-shadow(0 0 28px rgba(0, 212, 255, 0.4));
+      }
       .k3-temporal-badge { display: inline-block; margin: 4px 0 8px; padding: 4px 12px; border-radius: 12px; background: var(--k3-surface); border: 1px solid #1a1d24; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--k3-muted); z-index: 1; }
       .k3-temporal-badge--live { color: var(--k3-green); border-color: rgba(57, 255, 20, 0.35); }
       .k3-temporal-badge--resolved { color: var(--k3-muted); }
       .k3-temporal-badge--empty { font-size: 10px; max-width: 280px; line-height: 1.4; }
       .k3-temporal-grade { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); margin: -4px 0 8px; z-index: 1; }
       @keyframes k3-ring-fill { to { stroke-dashoffset: var(--ring-offset, 389.56); } }
-      .k3-orb-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 2; }
+      .k3-orb-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 3; }
       .k3-orb-score { font-family: 'JetBrains Mono', monospace; font-size: 42px; font-weight: 700; line-height: 1; display: flex; }
-      .k3-orb-score .digit-tens { color: var(--k3-green); text-shadow: 0 0 12px var(--k3-green); }
-      .k3-orb-score .digit-ones { color: var(--k3-blue); text-shadow: 0 0 12px var(--k3-blue); }
+      .k3-orb-score .digit-tens,
+      .k3-orb-score .digit-ones {
+        color: #7df9ff;
+        text-shadow:
+          0 0 8px rgba(0, 212, 255, 0.95),
+          0 0 18px rgba(0, 212, 255, 0.65),
+          0 0 36px rgba(0, 212, 255, 0.35),
+          0 0 48px rgba(57, 255, 20, 0.2);
+      }
+      .k3-claim--glow-hot .k3-orb-score .digit-tens {
+        color: var(--k3-green);
+        text-shadow:
+          0 0 8px rgba(57, 255, 20, 0.95),
+          0 0 20px rgba(57, 255, 20, 0.7),
+          0 0 40px rgba(57, 255, 20, 0.35);
+      }
+      .k3-claim--glow-hot .k3-orb-score .digit-ones {
+        color: #b8ff7a;
+        text-shadow:
+          0 0 8px rgba(57, 255, 20, 0.9),
+          0 0 18px rgba(0, 212, 255, 0.45),
+          0 0 36px rgba(57, 255, 20, 0.3);
+      }
+      .k3-claim--glow-cool .k3-orb-score .digit-tens,
+      .k3-claim--glow-cool .k3-orb-score .digit-ones {
+        color: #ffa94d;
+        text-shadow:
+          0 0 8px rgba(255, 165, 0, 0.85),
+          0 0 18px rgba(0, 212, 255, 0.45),
+          0 0 32px rgba(255, 165, 0, 0.3);
+      }
       .k3-orb-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
       .k3-claim-name { font-size: 28px; font-weight: 700; background: linear-gradient(90deg, var(--k3-green), var(--k3-blue), var(--k3-pink), var(--k3-orange)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: k3-shimmer 3s ease-in-out infinite; margin: 8px 0 4px; z-index: 1; background-size: 200% 100%; }
       @keyframes k3-shimmer { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
       .k3-claim-meta { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--k3-muted); margin-bottom: 8px; z-index: 1; }
       .k3-badge { display: inline-block; padding: 4px 16px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; letter-spacing: 0.08em; margin-bottom: 12px; z-index: 1; }
       .k3-badge.buy { background: var(--k3-green); color: #000; }
-      .k3-badge.hold { background: var(--k3-blue); color: #000; }
       .k3-badge.sell { background: var(--k3-pink); color: #000; }
       .k3-badge.none { background: var(--k3-surface); color: var(--k3-muted); border: 1px solid var(--k3-muted); }
       .k3-claim-stats { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-bottom: 8px; z-index: 1; }
@@ -183,10 +335,35 @@
       .k3-empty { text-align: center; padding: 32px 16px; color: var(--k3-muted); max-width: 32em; margin: 0 auto; }
       .k3-empty-icon { font-size: 24px; margin-bottom: 8px; opacity: 0.5; }
       .k3-empty-text { font-size: 13px; line-height: 1.5; }
-      @media (max-width: 400px) { .k3-orb { width: 132px; height: 132px; } .k3-orb-score { font-size: 36px; } .k3-claim-name { font-size: 24px; } .k3-claim { min-height: 280px; padding: 16px 12px 12px; } }
-      @media (max-width: 360px) { .k3-orb { width: 116px; height: 116px; } .k3-orb-score { font-size: 30px; } .k3-claim-name { font-size: 20px; } .k3-claim-stats { gap: 10px; } .k3-stat { min-width: 50px; } .k3-stat-value { font-size: 14px; } }
-      @media (min-width: 768px) { .k3-dossier { max-width: 480px; margin: 0 auto; } .k3-claim { min-height: 360px; } }
-      @media (prefers-reduced-motion: reduce) { .k3-orb-bg, .k3-orb-glow, .k3-claim-name, .k3-orb .ring-fill { animation: none !important; } .k3-orb .ring-fill { stroke-dashoffset: var(--ring-offset, 389.56); } }
+      @media (max-width: 400px) {
+        .k3-orb-wrap, .k3-orb { width: 132px; height: 132px; }
+        .k3-orb-bg { width: 180px; height: 180px; }
+        .k3-orb-glow { width: 160px; height: 160px; }
+        .k3-orb-score { font-size: 36px; }
+        .k3-claim-head .k3-claim-name { font-size: 16px; }
+        .k3-claim { padding: 14px 12px 12px; }
+      }
+      @media (max-width: 360px) {
+        .k3-orb-wrap, .k3-orb { width: 116px; height: 116px; }
+        .k3-orb-score { font-size: 30px; }
+        .k3-claim-stats { gap: 10px; }
+        .k3-stat { min-width: 50px; }
+        .k3-stat-value { font-size: 14px; }
+      }
+      @media (min-width: 420px) {
+        .k3-claim-main { flex-direction: row; align-items: center; text-align: left; gap: 16px; }
+        .k3-call-lead { flex: 1; min-width: 0; margin: 0; text-align: left; max-width: none; }
+        .k3-brief-thesis, .k3-brief-vs, .k3-brief-vs-hold, .k3-call-headline { text-align: left; }
+        .k3-brief-trigger { text-align: left; }
+        .k3-claim-identity { text-align: left; }
+        .k3-dossier { max-width: 560px; margin: 0 auto; }
+      }
+      @media (min-width: 768px) { .k3-dossier { max-width: 560px; margin: 0 auto; } .k3-claim { padding: 18px 18px 16px; } }
+      @media (prefers-reduced-motion: reduce) {
+        .k3-orb-bg, .k3-orb-glow, .k3-orb-particles, .k3-claim-name, .k3-orb .ring-fill { animation: none !important; }
+        .k3-orb .ring-fill { stroke-dashoffset: var(--ring-offset, 389.56); }
+        .k3-orb-glow { opacity: 0.75; transform: none; }
+      }
       {# ---- K3-5: trust banner + alert dot polish ---- #}
       #home-trust-banner { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
       @media (max-width: 420px) {
@@ -252,25 +429,25 @@
       .k3-lifecycle-title { display: block; font-size: 13px; font-weight: 600; color: var(--k3-text); }
       .k3-lifecycle-detail { display: block; font-size: 11px; color: var(--k3-muted); margin-top: 4px; line-height: 1.4; }
       .k3-candidate-gate { font-size: 11px; color: var(--k3-blue); margin: 8px 0 0; letter-spacing: 0.02em; opacity: 0.85; }
-      .k3-call-lead { width: 100%; max-width: 340px; margin: 0 auto 12px; text-align: center; z-index: 2; position: relative; }
-      .k3-call-headline { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; letter-spacing: 0.04em; margin: 0 0 10px; color: var(--k3-text); line-height: 1.25; }
+      .k3-call-lead { width: 100%; max-width: 340px; margin: 0 auto; text-align: center; z-index: 2; position: relative; }
+      .k3-call-headline { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; letter-spacing: 0.04em; margin: 0 0 8px; color: var(--k3-text); line-height: 1.25; }
       .k3-call-headline--hold { color: var(--k3-blue); text-shadow: 0 0 12px rgba(0, 212, 255, 0.25); }
       .k3-call-headline--go { color: var(--k3-green); text-shadow: 0 0 12px rgba(57, 255, 20, 0.2); }
-      .k3-claim-identity { margin: -2px 0 10px; z-index: 1; }
+      .k3-claim-identity { margin: 0 0 8px; z-index: 1; }
       .k3-claim-name--sub { font-size: 17px; margin: 0 0 2px; animation: none; background: none; -webkit-text-fill-color: var(--k3-text); color: var(--k3-text); font-weight: 600; letter-spacing: 0.02em; }
       .k3-claim-desc { font-size: 12px; line-height: 1.45; color: var(--k3-muted); margin: 0 auto 6px; max-width: 300px; }
       .k3-resolve-crumb { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-blue); margin: 0 0 8px; letter-spacing: 0.03em; }
       .k3-brief { text-align: left; width: 100%; max-width: 340px; margin: 0 auto 8px; padding: 0; z-index: 1; }
       .k3-brief-thesis { font-size: 14px; line-height: 1.5; color: var(--k3-text); margin: 0 0 8px; text-align: center; }
       .k3-brief-vs { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.45; color: var(--k3-muted); margin: 0 0 8px; text-align: center; }
-      .k3-brief-trigger { font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.45; color: var(--k3-blue); margin: 0 0 12px; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(0, 212, 255, 0.25); background: rgba(0, 212, 255, 0.06); text-align: left; }
+      .k3-brief-trigger { font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.45; color: var(--k3-blue); margin: 0 0 0; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(0, 212, 255, 0.45); background: rgba(0, 212, 255, 0.08); text-align: left; box-shadow: 0 0 14px rgba(0, 212, 255, 0.12); }
       .k3-brief-trigger__kicker { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: var(--k3-green); margin-bottom: 4px; }
       .council-stage__trust-whisper { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-muted); margin: -4px 0 8px; letter-spacing: 0.04em; }
       .k3-track-footnote { font-size: 12px; line-height: 1.5; color: var(--k3-muted); margin: 12px 0 0; text-align: center; }
       .k3-track-window { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--k3-surface); border: 1px solid #1a1d24; }
       .k3-track-window__label { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
       .k3-track-window__value { font-size: 13px; font-weight: 600; color: var(--k3-text); }
-      .k3-claim--hold .k3-orb .ring-fill { stroke: var(--k3-blue); }
+      .k3-claim-foot { display: flex; flex-direction: column; align-items: center; width: 100%; margin-top: 10px; z-index: 1; }
       .k3-pump-chip { display: inline-block; margin: 4px 0 8px; padding: 4px 10px; border-radius: 12px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; z-index: 1; max-width: 320px; line-height: 1.35; }
       .k3-pump-chip--stirring { color: #ffa500; border: 1px solid rgba(255, 165, 0, 0.35); background: rgba(255, 165, 0, 0.08); }
       .k3-pump-chip--accumulating { color: var(--k3-pink); border: 1px solid rgba(255, 105, 180, 0.35); background: rgba(255, 105, 180, 0.08); }
@@ -286,58 +463,74 @@
 
       {# ---- CLAIM LAYER (inside home-daily-call for live-refresh) ---- #}
       {% if sn %}
+      {% set glow_tier = 'cool' if (act == 'HOLD' and not audit_pick) or conviction_pct < 45 else 'hot' %}
       <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
         <div class="k3-dossier" id="k3-dossier">
           <div class="k3-layer open" id="k3-layer-claim">
-            <div class="k3-claim{% if not audit_pick and act == 'HOLD' %} k3-claim--hold{% endif %}">
-              <div class="k3-call-lead">
-                {% if brief.move %}
-                <h2 class="k3-call-headline k3-call-headline--{{ brief.tone|default('neutral') }}" id="k3-call-headline">{{ brief.move }}</h2>
-                {% else %}
-                <h2 class="k3-call-headline k3-call-headline--{{ 'go' if act == 'LONG' else 'hold' }}" id="k3-call-headline">{% if act == 'LONG' %}LONG{% else %}HOLD{% endif %} · {{ sn.name|default('SN' ~ sn.netuid) }}</h2>
-                {% endif %}
-                <div class="k3-claim-identity" id="k3-claim-identity">
-                  <p class="k3-claim-name k3-claim-name--sub" id="k3-claim-name">{{ sn.name|default('SN' ~ sn.netuid) }}</p>
-                  <p class="k3-claim-meta" id="k3-claim-meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}</p>
-                  <p class="k3-claim-desc" id="k3-claim-desc"{% if not subnet_desc %} hidden{% endif %}>{{ subnet_desc|truncate(96, True) if subnet_desc else '' }}</p>
-                </div>
-                {% if resolves_in and outcome_status != 'resolved' %}
-                <p class="k3-resolve-crumb" id="k3-resolve-crumb">Resolves in {{ resolves_in }} · {{ horizon }} window</p>
-                {% else %}
-                <p class="k3-resolve-crumb" id="k3-resolve-crumb" hidden></p>
-                {% endif %}
-                {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
-                {% if brief.vs %}<p class="k3-brief-vs k3-also-weighed" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
-                {% if brief.vs_hold_tao %}<p class="k3-brief-vs-hold" id="k3-brief-vs-hold">{{ brief.vs_hold_tao }}</p>{% endif %}
-                <div id="k3-evidence-drivers" class="k3-evidence-drivers"{% if not brief.evidence_drivers %} hidden{% endif %}>
-                  {% for driver in (brief.evidence_drivers or [])[:3] %}
-                  <span class="k3-evidence-driver k3-evidence-driver--{{ driver.tag|default('tech') }}">{{ driver.tag|default('tech') }} · {{ driver.label }}</span>
-                  {% endfor %}
-                </div>
-                {% if brief.trigger %}<p class="k3-brief-trigger" id="k3-brief-trigger"><span class="k3-brief-trigger__kicker">FLIP</span>{{ brief.trigger|replace('Flip to LONG when ', 'Long when ', 1) }}</p>{% endif %}
+            <div class="k3-claim k3-claim--glow-{{ glow_tier }}{% if not audit_pick and act == 'HOLD' %} k3-claim--hold{% endif %}" id="k3-claim" data-glow="{{ glow_tier }}">
+              <div class="k3-claim-head">
+                <p class="k3-claim-name" id="k3-claim-head-name">{{ sn.name|default('SN' ~ sn.netuid) }}</p>
+                {% if act == 'LONG' %}<div class="k3-badge buy" id="k3-action-badge">LONG</div>
+                {% elif act == 'SHORT' %}<div class="k3-badge sell" id="k3-action-badge">SHORT</div>
+                {% else %}<div class="k3-badge hold" id="k3-action-badge">{{ act }}</div>{% endif %}
               </div>
-              <div class="k3-orb-bg"></div>
-              <div class="k3-orb-glow"></div>
-              <div class="k3-orb k3-ring--{{ ring_state }}"{% if resolve_at_iso %} data-resolve-at="{{ resolve_at_iso }}"{% endif %}>
-                <svg viewBox="0 0 148 148">
-                  <defs><linearGradient id="k3-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#39ff14"/><stop offset="33%" stop-color="#00d4ff"/><stop offset="66%" stop-color="#ff69b4"/><stop offset="100%" stop-color="#ffa500"/></linearGradient></defs>
-                  <circle class="ring-track" cx="74" cy="74" r="62"/>
-                  <circle class="ring-fill" cx="74" cy="74" r="62" style="--ring-offset: {{ ring_offset }}"/>
-                </svg>
-                <div class="k3-orb-center">
-                  {% if conviction_pct > 0 %}
-                    {% set tens = (conviction_pct // 10) %}
-                    {% set ones = conviction_pct % 10 %}
-                    <div class="k3-orb-score" id="k3-orb-score">
-                      {% if tens > 0 %}<span class="digit-tens">{{ tens }}</span>{% endif %}
-                      <span class="digit-ones">{{ ones }}</span>
+              <div class="k3-claim-main">
+                <div class="k3-orb-wrap" aria-hidden="false">
+                  <div class="k3-orb-bg"></div>
+                  <div class="k3-orb-glow"></div>
+                  <div class="k3-orb-particles" aria-hidden="true">
+                    <span></span><span></span><span></span><span></span>
+                    <span></span><span></span><span></span><span></span>
+                  </div>
+                  <div class="k3-orb k3-ring--{{ ring_state }}"{% if resolve_at_iso %} data-resolve-at="{{ resolve_at_iso }}"{% endif %}>
+                    <svg viewBox="0 0 148 148">
+                      <defs><linearGradient id="k3-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#39ff14"/><stop offset="33%" stop-color="#00d4ff"/><stop offset="66%" stop-color="#ff69b4"/><stop offset="100%" stop-color="#ffa500"/></linearGradient></defs>
+                      <circle class="ring-track" cx="74" cy="74" r="62"/>
+                      <circle class="ring-fill" cx="74" cy="74" r="62" style="--ring-offset: {{ ring_offset }}"/>
+                    </svg>
+                    <div class="k3-orb-center">
+                      {% if conviction_pct > 0 %}
+                        {% set tens = (conviction_pct // 10) %}
+                        {% set ones = conviction_pct % 10 %}
+                        <div class="k3-orb-score" id="k3-orb-score">
+                          {% if tens > 0 %}<span class="digit-tens">{{ tens }}</span>{% endif %}
+                          <span class="digit-ones">{{ ones }}</span>
+                        </div>
+                      {% else %}
+                        <div class="k3-orb-score" id="k3-orb-score"><span class="digit-ones">—</span></div>
+                      {% endif %}
+                      <div class="k3-orb-label" id="k3-orb-label">{% if conviction_pct >= 70 %}high{% elif conviction_pct >= 45 %}mid{% elif conviction_pct > 0 %}low{% else %}conviction{% endif %}</div>
                     </div>
+                  </div>
+                </div>
+                <div class="k3-call-lead">
+                  {% if brief.move %}
+                  <h2 class="k3-call-headline k3-call-headline--{{ brief.tone|default('neutral') }}" id="k3-call-headline">{{ brief.move }}</h2>
                   {% else %}
-                    <div class="k3-orb-score" id="k3-orb-score"><span class="digit-ones">—</span></div>
+                  <h2 class="k3-call-headline k3-call-headline--{{ 'go' if act == 'LONG' else 'hold' }}" id="k3-call-headline">{% if act == 'LONG' %}LONG{% else %}HOLD{% endif %} · {{ sn.name|default('SN' ~ sn.netuid) }}</h2>
                   {% endif %}
-                  <div class="k3-orb-label" id="k3-orb-label">conviction</div>
+                  <div class="k3-claim-identity" id="k3-claim-identity">
+                    <p class="k3-claim-name k3-claim-name--sub" id="k3-claim-name" hidden>{{ sn.name|default('SN' ~ sn.netuid) }}</p>
+                    <p class="k3-claim-meta" id="k3-claim-meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}</p>
+                    <p class="k3-claim-desc" id="k3-claim-desc"{% if not subnet_desc %} hidden{% endif %}>{{ subnet_desc|truncate(96, True) if subnet_desc else '' }}</p>
+                  </div>
+                  {% if resolves_in and outcome_status != 'resolved' %}
+                  <p class="k3-resolve-crumb" id="k3-resolve-crumb">Resolves in {{ resolves_in }} · {{ horizon }} window</p>
+                  {% else %}
+                  <p class="k3-resolve-crumb" id="k3-resolve-crumb" hidden></p>
+                  {% endif %}
+                  {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
+                  {% if brief.vs %}<p class="k3-brief-vs k3-also-weighed" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
+                  {% if brief.vs_hold_tao %}<p class="k3-brief-vs-hold" id="k3-brief-vs-hold">{{ brief.vs_hold_tao }}</p>{% endif %}
+                  <div id="k3-evidence-drivers" class="k3-evidence-drivers"{% if not brief.evidence_drivers %} hidden{% endif %}>
+                    {% for driver in (brief.evidence_drivers or [])[:3] %}
+                    <span class="k3-evidence-driver k3-evidence-driver--{{ driver.tag|default('tech') }}">{{ driver.tag|default('tech') }} · {{ driver.label }}</span>
+                    {% endfor %}
+                  </div>
+                  {% if brief.trigger %}<p class="k3-brief-trigger" id="k3-brief-trigger"><span class="k3-brief-trigger__kicker">FLIP</span>{{ brief.trigger|replace('Flip to LONG when ', 'Long when ', 1) }}</p>{% endif %}
                 </div>
               </div>
+              <div class="k3-claim-foot">
               {% if temporal_badge %}
               <div id="k3-temporal-badge" class="k3-temporal-badge{% if ring_state == 'resolved' %} k3-temporal-badge--resolved{% else %} k3-temporal-badge--live{% endif %}"{% if resolve_at_iso %} data-resolve-at="{{ resolve_at_iso }}"{% endif %} aria-live="polite">{{ temporal_badge }}</div>
               {% if dpick.grade_on_resolve and ring_state != 'resolved' %}<div class="k3-temporal-grade">Graded on resolve · {{ horizon }} window</div>{% endif %}
@@ -369,9 +562,6 @@
               <script type="application/json" id="k3-watchlist-pins">{{ pins | tojson }}</script>
               <p id="k3-horizon-note" class="k3-horizon-note" hidden></p>
               {% endif %}
-              {% if act == 'LONG' %}<div class="k3-badge buy" id="k3-action-badge" hidden>BUY</div>
-              {% elif act == 'SHORT' %}<div class="k3-badge sell" id="k3-action-badge" hidden>SELL</div>
-              {% else %}<div class="k3-badge hold" id="k3-action-badge" hidden>{{ act }}</div>{% endif %}
               {% if sn.price or sn.change_1h is defined or sn.change_24h is defined or sn.halving_days %}
               <div class="k3-claim-stats">
                 {% if sn.price %}<div class="k3-stat"><div class="k3-stat-value">{{ '%.4f'|format(sn.price|float) }}</div><div class="k3-stat-label">alpha</div></div>{% endif %}
@@ -380,6 +570,7 @@
                 {% if sn.halving_days %}<div class="k3-stat"><div class="k3-stat-value">{{ sn.halving_days }}</div><div class="k3-stat-label">halving</div></div>{% endif %}
               </div>
               {% endif %}
+              </div>
             </div>
           </div>
         </div>
@@ -423,43 +614,56 @@
       <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
         <div class="k3-dossier" id="k3-dossier">
           <div class="k3-layer open" id="k3-layer-claim">
-            <div class="k3-claim k3-claim--hold">
-              <div class="k3-call-lead">
-                {% if brief.move %}
-                <h2 class="k3-call-headline k3-call-headline--{{ brief.tone|default('neutral') }}" id="k3-call-headline">{{ brief.move }}</h2>
-                {% else %}
-                <h2 class="k3-call-headline k3-call-headline--hold" id="k3-call-headline">HOLD · no long</h2>
-                {% endif %}
-                <div class="k3-claim-identity" id="k3-claim-identity" hidden>
-                  <p class="k3-claim-name k3-claim-name--sub" id="k3-claim-name" hidden></p>
-                  <p class="k3-claim-meta" id="k3-claim-meta" hidden></p>
-                  <p class="k3-claim-desc" id="k3-claim-desc" hidden></p>
+            <div class="k3-claim k3-claim--hold k3-claim--glow-cool" id="k3-claim" data-glow="cool">
+              <div class="k3-claim-head">
+                <p class="k3-claim-name" id="k3-claim-head-name">No call yet</p>
+                <div class="k3-badge hold" id="k3-action-badge">HOLD</div>
+              </div>
+              <div class="k3-claim-main">
+                <div class="k3-orb-wrap">
+                  <div class="k3-orb-bg"></div>
+                  <div class="k3-orb-glow"></div>
+                  <div class="k3-orb-particles" aria-hidden="true">
+                    <span></span><span></span><span></span><span></span>
+                    <span></span><span></span><span></span><span></span>
+                  </div>
+                  <div class="k3-orb k3-ring--{{ ring_state }}">
+                    <svg viewBox="0 0 148 148">
+                      <defs><linearGradient id="k3-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#39ff14"/><stop offset="33%" stop-color="#00d4ff"/><stop offset="66%" stop-color="#ff69b4"/><stop offset="100%" stop-color="#ffa500"/></linearGradient></defs>
+                      <circle class="ring-track" cx="74" cy="74" r="62"/>
+                      <circle class="ring-fill" cx="74" cy="74" r="62" style="--ring-offset: 389.56"/>
+                    </svg>
+                    <div class="k3-orb-center">
+                      <div class="k3-orb-score" id="k3-orb-score"><span class="digit-ones">—</span></div>
+                      <div class="k3-orb-label" id="k3-orb-label">conviction</div>
+                    </div>
+                  </div>
                 </div>
-                <p class="k3-resolve-crumb" id="k3-resolve-crumb" hidden></p>
-                {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
-                {% if brief.vs %}<p class="k3-brief-vs" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
-                {% if brief.vs_hold_tao %}<p class="k3-brief-vs-hold" id="k3-brief-vs-hold">{{ brief.vs_hold_tao }}</p>{% endif %}
-                <div id="k3-evidence-drivers" class="k3-evidence-drivers"{% if not brief.evidence_drivers %} hidden{% endif %}>
-                  {% for driver in (brief.evidence_drivers or [])[:3] %}
-                  <span class="k3-evidence-driver k3-evidence-driver--{{ driver.tag|default('tech') }}">{{ driver.tag|default('tech') }} · {{ driver.label }}</span>
-                  {% endfor %}
+                <div class="k3-call-lead">
+                  {% if brief.move %}
+                  <h2 class="k3-call-headline k3-call-headline--{{ brief.tone|default('neutral') }}" id="k3-call-headline">{{ brief.move }}</h2>
+                  {% else %}
+                  <h2 class="k3-call-headline k3-call-headline--hold" id="k3-call-headline">HOLD · no long</h2>
+                  {% endif %}
+                  <div class="k3-claim-identity" id="k3-claim-identity" hidden>
+                    <p class="k3-claim-name k3-claim-name--sub" id="k3-claim-name" hidden></p>
+                    <p class="k3-claim-meta" id="k3-claim-meta" hidden></p>
+                    <p class="k3-claim-desc" id="k3-claim-desc" hidden></p>
+                  </div>
+                  <p class="k3-resolve-crumb" id="k3-resolve-crumb" hidden></p>
+                  {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
+                  {% if brief.vs %}<p class="k3-brief-vs" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
+                  {% if brief.vs_hold_tao %}<p class="k3-brief-vs-hold" id="k3-brief-vs-hold">{{ brief.vs_hold_tao }}</p>{% endif %}
+                  <div id="k3-evidence-drivers" class="k3-evidence-drivers"{% if not brief.evidence_drivers %} hidden{% endif %}>
+                    {% for driver in (brief.evidence_drivers or [])[:3] %}
+                    <span class="k3-evidence-driver k3-evidence-driver--{{ driver.tag|default('tech') }}">{{ driver.tag|default('tech') }} · {{ driver.label }}</span>
+                    {% endfor %}
+                  </div>
                 </div>
               </div>
-              <div class="k3-orb-bg"></div>
-              <div class="k3-orb-glow"></div>
-              <div class="k3-orb k3-ring--{{ ring_state }}">
-                <svg viewBox="0 0 148 148">
-                  <defs><linearGradient id="k3-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#39ff14"/><stop offset="33%" stop-color="#00d4ff"/><stop offset="66%" stop-color="#ff69b4"/><stop offset="100%" stop-color="#ffa500"/></linearGradient></defs>
-                  <circle class="ring-track" cx="74" cy="74" r="62"/>
-                  <circle class="ring-fill" cx="74" cy="74" r="62" style="--ring-offset: 389.56"/>
-                </svg>
-                <div class="k3-orb-center">
-                  <div class="k3-orb-score" id="k3-orb-score"><span class="digit-ones">—</span></div>
-                  <div class="k3-orb-label" id="k3-orb-label">conviction</div>
-                </div>
+              <div class="k3-claim-foot">
+                <div id="k3-temporal-badge" class="k3-temporal-badge k3-temporal-badge--empty" aria-live="polite">{{ temporal_badge|default('Window pending — not graded yet') }}</div>
               </div>
-              <div id="k3-temporal-badge" class="k3-temporal-badge k3-temporal-badge--empty" aria-live="polite">{{ temporal_badge|default('Window pending — not graded yet') }}</div>
-              <div class="k3-badge hold" id="k3-action-badge" hidden>HOLD</div>
             </div>
           </div>
         </div>

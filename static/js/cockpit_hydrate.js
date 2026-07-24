@@ -758,6 +758,25 @@
         (tens > 0 ? '<span class="digit-tens">' + tens + '</span>' : '') +
         '<span class="digit-ones">' + ones + '</span>';
     }
+    syncK3GlowTier(fc.conf);
+  }
+
+  function syncK3GlowTier(confPct, action) {
+    var claim = document.getElementById('k3-claim');
+    if (!claim) return;
+    var pct = confPct == null || isNaN(confPct) ? 0 : Number(confPct);
+    var act = String(action || '').toUpperCase();
+    var cool = act === 'HOLD' || pct < 45;
+    claim.classList.remove('k3-claim--glow-hot', 'k3-claim--glow-cool');
+    claim.classList.add(cool ? 'k3-claim--glow-cool' : 'k3-claim--glow-hot');
+    claim.setAttribute('data-glow', cool ? 'cool' : 'hot');
+    var label = document.getElementById('k3-orb-label');
+    if (label) {
+      if (pct >= 70) label.textContent = 'high';
+      else if (pct >= 45) label.textContent = 'mid';
+      else if (pct > 0) label.textContent = 'low';
+      else label.textContent = 'conviction';
+    }
   }
 
   function patchK3WeighedAgainst(shortlist) {
@@ -937,14 +956,15 @@
     var claimMeta = document.getElementById('k3-claim-meta');
     var claimDesc = document.getElementById('k3-claim-desc');
     var claimIdentity = document.getElementById('k3-claim-identity');
+    var claimHeadName = document.getElementById('k3-claim-head-name');
     var snLabel = sn.name || (sn.netuid != null ? 'SN' + sn.netuid : '');
+    if (claimHeadName && snLabel) {
+      claimHeadName.textContent = snLabel;
+    }
     if (claimName) {
-      if (snLabel) {
-        claimName.textContent = snLabel;
-        claimName.hidden = false;
-      } else {
-        claimName.hidden = true;
-      }
+      // Featured Call shows name in the card head; keep identity name for hydrate IDs only
+      claimName.textContent = snLabel || '';
+      claimName.hidden = true;
     }
     if (claimMeta) {
       if (sn.netuid != null) {
@@ -968,6 +988,16 @@
     if (claimIdentity) {
       claimIdentity.hidden = !(snLabel || (claimDesc && !claimDesc.hidden));
     }
+    var actionBadge = document.getElementById('k3-action-badge');
+    if (actionBadge) {
+      var actRaw = String(payload.action || 'HOLD').toUpperCase();
+      if (actRaw === 'BUY') actRaw = 'LONG';
+      actionBadge.hidden = false;
+      actionBadge.textContent = actRaw === 'LONG' ? 'LONG' : actRaw === 'SHORT' ? 'SHORT' : actRaw || 'HOLD';
+      actionBadge.className =
+        'k3-badge ' + (actRaw === 'LONG' ? 'buy' : actRaw === 'SHORT' ? 'sell' : 'hold');
+    }
+    syncK3GlowTier(fc.conf, payload.action);
     var resolveCrumb = document.getElementById('k3-resolve-crumb');
     if (resolveCrumb) {
       if (payload.resolves_in && String(payload.outcome_status || 'pending') !== 'resolved') {
