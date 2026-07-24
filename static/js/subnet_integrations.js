@@ -51,12 +51,45 @@
       '<div class="subnet-int-inner" role="list" aria-label="Bittensor subnet integrations">' +
       '<span class="subnet-int-heading">Built on Bittensor</span>' +
       rows.map(renderRow).join('') +
+      renderCandidates(payload.candidates) +
       '<span class="subnet-int-summary" title="Launch target: at least ' +
       esc(target) +
       ' live subnet integrations">' +
       esc(summary) +
       '</span>' +
       '</div>';
+  }
+
+  function renderCandidates(candidates) {
+    if (!candidates || !candidates.length) return '';
+    var top = candidates.slice(0, 4);
+    var more = candidates.length - top.length;
+    var chips = top
+      .map(function (c) {
+        return (
+          '<span class="subnet-int-chip subnet-int-chip--candidate" title="' +
+          esc(c.description || c.category || '') +
+          ' · TaonSquare catalog">' +
+          '<span class="subnet-int-dot" aria-hidden="true"></span>' +
+          '<span class="subnet-int-label">SN' +
+          esc(c.netuid) +
+          ' · ' +
+          esc(c.name) +
+          '</span>' +
+          '<span class="subnet-int-state">Next</span>' +
+          '</span>'
+        );
+      })
+      .join('');
+    var tail =
+      more > 0
+        ? '<span class="subnet-int-more">+' +
+          esc(more) +
+          ' more via TaonSquare</span>'
+        : '';
+    return (
+      '<span class="subnet-int-subheading">Could connect next</span>' + chips + tail
+    );
   }
 
   function poll() {

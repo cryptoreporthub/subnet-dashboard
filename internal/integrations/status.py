@@ -1,17 +1,16 @@
 """Live connection status for Bittensor subnet integrations (SN22/50/64/118).
 
-Priority order from Ditto subnet research (129 subnets reviewed):
-  SN22 DeSearch — social/search evidence
-  SN50 Synth — macro forecasting signals
-  SN64 Chutes — LLM compute (chat)
-  SN118 Ditto — persistence / dogfood
+Primary four from Ditto subnet research; expanded candidates from TaonSquare
+(https://taonsquare.com/api) — 102 products, 51 live with API (Jul 2026).
 """
 
 from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
+
+from internal.integrations.taonsquare import catalog_summary, recommend_candidates
 
 logger = logging.getLogger(__name__)
 
@@ -191,14 +190,19 @@ def build_integrations_status() -> Dict[str, Any]:
     """Aggregate live probe results for marketing corner + ops."""
     rows: List[Dict[str, Any]] = []
     connected_n = 0
+    primary_netuids: Set[int] = set()
     for spec in INTEGRATIONS:
         slug = spec["slug"]
         probe = _PROBERS[slug]()
         if probe.get("connected"):
             connected_n += 1
-        rows.append({**spec, **probe, "status": _status_label(probe)})
+        primary_netuids.add(spec["netuid"])
+        rows.append({**spec, **probe, "status": _status_label(probe), "tier": "primary"})
+    candidates = recommend_candidates(exclude=primary_netuids, limit=12)
     return {
         "integrations": rows,
+        "candidates": candidates,
+        "catalog": catalog_summary(),
         "connected_count": connected_n,
         "target_minimum": 3,
         "ready_for_launch": connected_n >= 3,

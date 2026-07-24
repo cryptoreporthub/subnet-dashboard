@@ -798,6 +798,27 @@ footer.status[data-source*="fallback"] .st-dot {
 .subnet-int-chip--offline .subnet-int-state {
   color: var(--txt-3);
 }
+.subnet-int-chip--candidate .subnet-int-dot {
+  background: rgba(100, 180, 255, 0.85);
+  box-shadow: 0 0 6px rgba(100, 180, 255, 0.35);
+}
+.subnet-int-chip--candidate .subnet-int-state {
+  color: rgba(100, 180, 255, 0.95);
+  font-weight: 500;
+}
+.subnet-int-subheading {
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--txt-3);
+  margin-top: 0.15rem;
+}
+.subnet-int-more {
+  font-size: 0.6rem;
+  color: var(--txt-3);
+  font-style: italic;
+}
 .subnet-int-label {
   font-weight: 600;
   color: var(--txt);
