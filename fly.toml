@@ -7,9 +7,14 @@ primary_region = "sjc"
 [build]
   dockerfile = "Dockerfile"
 
+[processes]
+  web = "./scripts/fly_web_entrypoint.sh"
+  worker = "./scripts/fly_worker_entrypoint.sh"
+
 [http_service]
   internal_port = 8080
   force_https = true
+  processes = ["web"]
   # String form preferred by current flyctl; keep machine warm (no idle stop).
   auto_stop_machines = "off"
   auto_start_machines = true
@@ -24,7 +29,8 @@ primary_region = "sjc"
 
 [env]
   RUN_MODE = "web"
-  BACKGROUND_ON_WEB = "off"
+  # essential = pump ladder + resolver + whale warm (no live-subnet wedge on 1GB web)
+  BACKGROUND_ON_WEB = "essential"
   # Keep prod boot light; Telegram needs a live session on the volume.
   MESSAGE_INTEL_LISTENER = "off"
   RESOLVER_REFRESH_MINUTES = "15"
@@ -51,6 +57,7 @@ primary_region = "sjc"
   CONVICTION_ALERTS_ENABLED = "off"
   PUMP_LADDER_REFRESH_MINUTES = "5"
   PUMP_LADDER_STALE_MINUTES = "8"
+  WHALE_LEDGER_WARM_INTERVAL_MINUTES = "20"
   # O4: allow fly.dev + cryptoreporthub hostnames when DNS is pointed (see DEPLOY.md)
   ALLOWED_ORIGINS = "https://subnet-dashboard.fly.dev,https://dashboard.cryptoreporthub.com,https://cryptoreporthub.com"
 
