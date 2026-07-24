@@ -751,6 +751,8 @@ footer.status[data-source*="fallback"] .st-dot {
   border: 1px solid var(--cockpit-green-line);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(8px);
+  max-height: min(70vh, 28rem);
+  overflow-y: auto;
 }
 .subnet-int-heading {
   font-size: 0.62rem;

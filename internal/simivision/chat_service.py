@@ -184,6 +184,7 @@ def call_llm(prompt: str, message: str, context: Dict[str, Any]) -> Tuple[str, b
     if api_key:
         try:
             import requests
+            from internal.ops.llm_cost import record_chat_usage
 
             resp = requests.post(
                 f"{base_url.rstrip('/')}/chat/completions",
@@ -207,14 +208,48 @@ def call_llm(prompt: str, message: str, context: Dict[str, Any]) -> Tuple[str, b
             if resp.status_code == 200:
                 data = resp.json()
                 reply = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                usage = data.get("usage") or {}
+                record_chat_usage(
+                    llm_used=bool(reply),
+                    model=model,
+                    provider=base_url,
+                    prompt_tokens=int(usage.get("prompt_tokens") or 0),
+                    completion_tokens=int(usage.get("completion_tokens") or 0),
+                    total_tokens=int(usage.get("total_tokens") or 0),
+                    status="ok" if reply else "empty_reply",
+                )
                 if reply:
                     return reply.strip(), True
-            logger.warning(
-                "LLM API call failed (%s); falling back to local explainer",
-                resp.status_code,
-            )
+            else:
+                logger.warning(
+                    "LLM API call failed (%s); falling back to local explainer",
+                    resp.status_code,
+                )
+                record_chat_usage(
+                    llm_used=False,
+                    model=model,
+                    provider=base_url,
+                    status=f"http_{resp.status_code}",
+                )
         except Exception as exc:
             logger.warning("LLM API call errored (%s); falling back to local explainer", exc)
+            from internal.ops.llm_cost import record_chat_usage
+
+            record_chat_usage(
+                llm_used=False,
+                model=model,
+                provider=base_url,
+                status="error",
+            )
+    else:
+        from internal.ops.llm_cost import record_chat_usage
+
+        record_chat_usage(
+            llm_used=False,
+            model="local-fallback",
+            provider="internal.llm.explainer",
+            status="no_api_key",
+        )
 
     try:
         from internal.llm.explainer import generate_ai_response

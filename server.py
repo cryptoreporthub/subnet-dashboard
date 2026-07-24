@@ -1621,7 +1621,17 @@ def _market_context_with_weights(subnets: List[Dict[str, Any]]) -> Dict[str, Any
     return {
         "tao_change_24h": tao_chg,
         "weights": effective_weights(market_data),
+        "macro_overlay": _safe_macro_overlay(),
     }
+
+
+def _safe_macro_overlay() -> Dict[str, Any]:
+    try:
+        from internal.integrations.macro_overlay import build_macro_overlay
+
+        return build_macro_overlay()
+    except Exception:
+        return {"mood": "unavailable", "tailwind": 0.0, "sources": [], "signal_count": 0}
 
 
 def _subnet_for_pick(subnets: List[Dict[str, Any]], pick: Dict[str, Any]) -> Dict[str, Any]:

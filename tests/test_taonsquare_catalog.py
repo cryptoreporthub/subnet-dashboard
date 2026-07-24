@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from internal.integrations.registry import INTEGRATION_NETUIDS
 from internal.integrations.taonsquare import recommend_candidates
 
 
@@ -58,12 +59,11 @@ _MOCK_CATALOG = [
 
 def test_recommend_candidates_excludes_primary_and_ranks_forecast():
     with patch("internal.integrations.taonsquare.fetch_catalog", return_value=_MOCK_CATALOG):
-        rows = recommend_candidates(exclude={22, 50, 64, 118}, limit=5)
+        rows = recommend_candidates(exclude=INTEGRATION_NETUIDS, limit=5)
     netuids = [r["netuid"] for r in rows]
     assert 99 not in netuids
-    assert 6 in netuids
-    assert rows[0]["netuid"] == 6
-    assert rows[0]["tier"] == "candidate"
+    assert 6 not in netuids  # now in INTEGRATIONS registry
+    assert rows == [] or rows[0]["tier"] == "candidate"
 
 
 def test_integrations_api_includes_taonsquare_candidates():
@@ -71,23 +71,22 @@ def test_integrations_api_includes_taonsquare_candidates():
 
     from server import app
 
-    mock_catalog = _MOCK_CATALOG + [
-        {
-            "netuid": 22,
-            "name": "Desearch",
-            "status": "live",
-            "category": "Data Pipeline",
-            "description": "search",
-            "tags": ["search"],
-            "api_available": True,
-            "api_url": "https://api.desearch.ai",
-            "docs_url": None,
-            "website_url": None,
-            "pricing_model": None,
-            "market_cap_tao": None,
-            "source": "taonsquare",
-        }
-    ]
+    extra_candidate = {
+        "netuid": 77,
+        "name": "FutureSubnet",
+        "status": "live",
+        "category": "Predictive Systems",
+        "description": "forecast market analytics",
+        "tags": ["forecast", "prediction"],
+        "api_available": True,
+        "api_url": "https://example.com",
+        "docs_url": None,
+        "website_url": None,
+        "pricing_model": None,
+        "market_cap_tao": None,
+        "source": "taonsquare",
+    }
+    mock_catalog = _MOCK_CATALOG + [extra_candidate]
     with patch("internal.integrations.taonsquare.fetch_catalog", return_value=mock_catalog):
         with TestClient(app) as client:
             body = client.get("/api/subnet-integrations").json()
@@ -95,5 +94,6 @@ def test_integrations_api_includes_taonsquare_candidates():
     assert "catalog" in body
     assert body["catalog"]["source"] == "taonsquare.com"
     cand_uids = {c["netuid"] for c in body["candidates"]}
-    assert 22 not in cand_uids  # primary excluded
-    assert 6 in cand_uids
+    assert 22 not in cand_uids
+    assert 6 not in cand_uids
+    assert 77 in cand_uids

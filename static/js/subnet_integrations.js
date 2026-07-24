@@ -47,10 +47,13 @@
       connected >= target
         ? connected + ' subnets connected'
         : connected + ' / ' + target + ' connected';
+    var core = rows.filter(function (r) { return r.tier === 'core'; });
+    var extended = rows.filter(function (r) { return r.tier !== 'core'; });
     root.innerHTML =
       '<div class="subnet-int-inner" role="list" aria-label="Bittensor subnet integrations">' +
       '<span class="subnet-int-heading">Built on Bittensor</span>' +
-      rows.map(renderRow).join('') +
+      (core.length ? '<span class="subnet-int-subheading">Core</span>' + core.map(renderRow).join('') : '') +
+      (extended.length ? '<span class="subnet-int-subheading">Extended</span>' + extended.map(renderRow).join('') : '') +
       renderCandidates(payload.candidates) +
       '<span class="subnet-int-summary" title="Launch target: at least ' +
       esc(target) +
