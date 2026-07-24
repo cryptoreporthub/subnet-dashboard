@@ -736,6 +736,88 @@ footer.status[data-source*="fallback"] .st-dot {
   box-shadow: 0 0 10px rgba(255, 179, 0, 0.35);
 }
 
+/* ---------- Subnet integration corner (SN22/50/64/118) ---------- */
+.subnet-integrations-corner {
+  position: fixed;
+  right: 0.65rem;
+  bottom: 2.75rem;
+  z-index: 45;
+  max-width: min(18rem, calc(100vw - 1.25rem));
+  pointer-events: none;
+}
+.subnet-int-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  background: rgba(4, 12, 8, 0.92);
+  border: 1px solid var(--cockpit-green-line);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+}
+.subnet-int-heading {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--txt-3);
+}
+.subnet-int-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  color: var(--txt-2);
+  white-space: nowrap;
+}
+.subnet-int-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--txt-3);
+}
+.subnet-int-chip--connected .subnet-int-dot {
+  background: var(--cockpit-green);
+  box-shadow: 0 0 8px var(--cockpit-green-glow);
+}
+.subnet-int-chip--connected .subnet-int-state {
+  color: var(--cockpit-green);
+  font-weight: 600;
+}
+.subnet-int-chip--reachable .subnet-int-dot {
+  background: var(--signal-amber);
+  box-shadow: 0 0 6px rgba(255, 179, 0, 0.35);
+}
+.subnet-int-chip--reachable .subnet-int-state {
+  color: var(--signal-amber);
+}
+.subnet-int-chip--offline .subnet-int-state {
+  color: var(--txt-3);
+}
+.subnet-int-label {
+  font-weight: 600;
+  color: var(--txt);
+}
+.subnet-int-summary {
+  font-size: 0.62rem;
+  color: var(--txt-3);
+  letter-spacing: 0.04em;
+}
+@media (max-width: 720px) {
+  .subnet-integrations-corner {
+    bottom: 0.65rem;
+    right: 0.45rem;
+    max-width: calc(100vw - 0.9rem);
+  }
+  .subnet-int-inner {
+    padding: 0.45rem 0.55rem;
+  }
+}
+
 /* ---------- Scrollbars (cockpit tint) ---------- */
 .scroll-y::-webkit-scrollbar,
 .trail::-webkit-scrollbar { width: 6px; }

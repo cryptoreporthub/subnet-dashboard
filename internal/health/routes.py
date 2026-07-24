@@ -27,3 +27,11 @@ async def api_ops_readiness():
     from internal.ops.readiness import build_readiness_report
 
     return build_readiness_report()
+
+
+@health_router.get("/api/subnet-integrations")
+async def api_subnet_integrations():
+    """Live Bittensor subnet integration status (SN22/50/64/118)."""
+    from internal.integrations.status import build_integrations_status
+
+    return build_integrations_status()
