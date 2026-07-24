@@ -1,0 +1,33 @@
+{# Dev Signals Desk — card presentation from real signals pipeline (honest empty) #}
+{% set desk_signals = top_signals[:3] if top_signals else [] %}
+<section class="sr-dev-desk" id="section-dev-signals-desk" aria-labelledby="dev-signals-desk-title">
+  <div class="sr-dev-desk__head">
+    <h2 class="sr-dev-desk__title" id="dev-signals-desk-title">Dev Signals Desk</h2>
+    <p class="sr-dev-desk__sub">Council signal pipeline — evidence from live posture, not curated research cards.</p>
+  </div>
+  {% if desk_signals %}
+  <ul class="sr-dev-desk__list">
+    {% for sig in desk_signals %}
+    {% set st = (sig.signal_type|default('neutral'))|string|lower %}
+    {% set conf = ((sig.confidence|default(0))|float * 100)|round(0) %}
+    <li class="sr-dev-desk__card sr-glow-live">
+      <div class="sr-dev-desk__top">
+        <span class="sr-dev-desk__name">{{ sig.name|default('SN' ~ sig.subnet_id) }} <span class="sr-dev-desk__conf-lbl">SN{{ sig.subnet_id }}</span></span>
+        <span class="sr-dev-desk__badge sr-dev-desk__badge--{% if st == 'buy' %}buy{% elif st == 'sell' %}sell{% else %}neutral{% endif %}">{{ st|upper }}</span>
+      </div>
+      <p class="sr-dev-desk__evidence">{{ sig.evidence|default('No evidence text on this signal yet.')|truncate(140, True) }}</p>
+      <div class="sr-dev-desk__meta">
+        <div class="sr-dev-desk__conf" aria-hidden="true"><span class="sr-dev-desk__conf-fill" style="width: {{ conf }}%"></span></div>
+        <span class="sr-dev-desk__conf-lbl">{{ conf }}% conf</span>
+        <span class="sr-dev-desk__status">{% if sig.outcome %}{{ sig.outcome }}{% else %}PENDING{% endif %}</span>
+        {% if sig.source_expert %}
+        <span class="sr-dev-desk__status">{{ sig.source_expert }}</span>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="sr-dev-desk__empty">Signal desk warming up — council posture cards appear after the pipeline scores subnets.</p>
+  {% endif %}
+</section>

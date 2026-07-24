@@ -1,0 +1,67 @@
+{# Today's Intel — compact editorial strip (max 4 cards, honest empty) #}
+{% set pa_rows_intel = pa.alerts if pa is defined and pa.alerts is iterable and pa.alerts is not string else [] %}
+{% set earliest_lead = namespace(row=none) %}
+{% for row in pa_rows_intel %}
+  {% if row.timing == 'lead' and earliest_lead.row is none %}
+    {% set earliest_lead.row = row %}
+  {% endif %}
+{% endfor %}
+{% set call_thesis = none %}
+{% if dpick is defined and dpick.brief is mapping and dpick.brief.thesis %}
+  {% set call_thesis = dpick.brief.thesis %}
+{% elif dpick is defined and dpick.thesis %}
+  {% set call_thesis = dpick.thesis %}
+{% elif dpick is defined and dpick.pick is mapping and dpick.pick.thesis %}
+  {% set call_thesis = dpick.pick.thesis %}
+{% endif %}
+{% set call_name = dp_subnet.name if dp_subnet and dp_subnet.name else none %}
+
+<section class="sr-intel" id="section-todays-intel" aria-labelledby="todays-intel-title">
+  <h2 class="sr-intel__title" id="todays-intel-title">Today&apos;s Intel</h2>
+  <div class="sr-intel__grid">
+    {% if mi_top_gainer and (mi_top_gainer.price_change_24h|default(0)|float) != 0 %}
+    <article class="sr-intel__card sr-glow-live">
+      <p class="sr-intel__card-lbl">Biggest mover</p>
+      <p class="sr-intel__card-val pos">{{ mi_top_gainer.name|default('SN' ~ mi_top_gainer.netuid) }} {{ '%+.1f'|format(mi_top_gainer.price_change_24h|float) }}%</p>
+      <p class="sr-intel__card-sub">24h · SN{{ mi_top_gainer.netuid|default('—') }}</p>
+    </article>
+    {% endif %}
+    {% if call_name or call_thesis %}
+    <article class="sr-intel__card sr-glow-live">
+      <p class="sr-intel__card-lbl">Today&apos;s call</p>
+      <p class="sr-intel__card-val">{% if call_name %}{{ call_name }}{% else %}Council pick{% endif %}</p>
+      {% if call_thesis %}
+      <p class="sr-intel__card-sub">{{ call_thesis|truncate(72, True) }}</p>
+      {% endif %}
+    </article>
+    {% endif %}
+    {% if earliest_lead.row %}
+    <article class="sr-intel__card sr-glow-live">
+      <p class="sr-intel__card-lbl">Lead scanner</p>
+      <p class="sr-intel__card-val">{{ earliest_lead.row.name }} <span class="sr-intel__card-sub" style="display:inline">· {{ earliest_lead.row.badge|default('EARLY') }}</span></p>
+      {% if earliest_lead.row.thesis %}
+      <p class="sr-intel__card-sub">{{ earliest_lead.row.thesis|truncate(64, True) }}</p>
+      {% endif %}
+    </article>
+    {% elif pa is defined and pa.count|default(0)|int == 0 %}
+    <article class="sr-intel__card">
+      <p class="sr-intel__card-lbl">Lead scanner</p>
+      <p class="sr-intel__card-val">Quiet</p>
+      <p class="sr-intel__card-sub">No early leads right now</p>
+    </article>
+    {% endif %}
+    {% if caution is defined and caution and caution|length > 0 %}
+    <article class="sr-intel__card">
+      <p class="sr-intel__card-lbl">Risk watch</p>
+      <p class="sr-intel__card-val">{{ caution[0].line|default(caution[0].name)|truncate(56, True) }}</p>
+      <p class="sr-intel__card-sub">{{ caution[0].label|default('CAUTION') }}</p>
+    </article>
+    {% elif mi_breadth == 'bearish' %}
+    <article class="sr-intel__card">
+      <p class="sr-intel__card-lbl">Risk watch</p>
+      <p class="sr-intel__card-val neg">Bearish breadth</p>
+      <p class="sr-intel__card-sub">Tape leaning down across registry</p>
+    </article>
+    {% endif %}
+  </div>
+</section>

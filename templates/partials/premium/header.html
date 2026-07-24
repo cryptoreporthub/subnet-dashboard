@@ -1,19 +1,20 @@
-<header class="top" id="section-header" aria-label="Site header">
+<header class="top sr-hud" id="section-header" aria-label="Site header">
   <div class="top-inner">
     <div class="logo">
       <div class="logo-mark" aria-hidden="true">◈</div>
       <div>
         <div class="logo-text">Simi<span>Vision</span></div>
-        <div class="logo-sub">Council-first subnet intelligence</div>
+        <div class="logo-sub">Situation Room · subnet intelligence</div>
       </div>
     </div>
-    <div class="src-tag">
-      DATA: <b id="headerDataSource">{{ data_source|default('cache')|replace('_',' ')|replace('-',' ')|title }}</b>
+    <div class="src-tag" aria-hidden="true">
+      <span id="headerDataSource" hidden>{{ data_source|default('cache') }}</span>
       <span class="data-freshness-badge data-freshness-warming" id="dataFreshnessBadge" role="status" aria-live="polite" aria-atomic="true">Chain feed: loading…</span>
       <span class="ops-readiness-badge ops-readiness--warming" id="opsReadinessBadge" role="status" aria-live="polite" hidden title="Production readiness"></span>
     </div>
-    <div class="header-actions">
+    <div class="header-actions sr-hud-status">
       <button type="button" class="cmd-palette-trigger" id="cmd-palette-trigger" title="Search (Ctrl+K)">Search</button>
+      <span class="sr-hud-chip" id="headerSourceChip" title="Data source">{{ data_source|default('snapshot')|replace('_',' ')|title }}</span>
       <span class="live-pill live-pill--snapshot" id="liveFeedPill" role="status" aria-live="polite"><span class="live-dot" aria-hidden="true"></span>SNAPSHOT</span>
       <span class="utc-clock" id="utcClock">--:--:-- UTC</span>
     </div>
@@ -22,7 +23,7 @@
 <nav class="top-nav" aria-label="Page sections">
   <a href="#section-daily-pick">Council</a>
   <a href="#section-simivision-picks">Weighing</a>
-  <a href="#section-judges">Judges</a>
-  <a href="#section-picks">Hour/Day</a>
-  <a href="#market-drawer">Market</a>
+  <a href="#section-pump-alert">Lead</a>
+  <a href="#section-living-focus">Focus</a>
+  <a href="#section-proof-band">Proof</a>
 </nav>

@@ -1,0 +1,42 @@
+{# Strategic Deck — weighing + pump + compact weights peers after council stage #}
+<section class="sr-deck" id="section-strategic-deck" aria-label="Strategic deck">
+  <p class="sr-deck__label">Strategic deck</p>
+  <div class="sr-deck__grid">
+    <div class="sr-deck__pane sr-glow-live">
+      <div class="sr-deck__pane-head">
+        <h3 class="sr-deck__pane-title">Council weighing</h3>
+        <a class="sr-deck__pane-link" href="#section-simivision-picks">Open</a>
+      </div>
+      <div class="sr-deck__pane-body">
+        {% include "partials/premium/simivision_picks.html" %}
+      </div>
+    </div>
+    <div class="sr-deck__pane sr-glow-live">
+      <div class="sr-deck__pane-head">
+        <h3 class="sr-deck__pane-title">Lead scanner</h3>
+        <a class="sr-deck__pane-link" href="#section-pump-alert">Open</a>
+      </div>
+      <div class="sr-deck__pane-body">
+        {% include "partials/premium/pump_alert.html" %}
+      </div>
+    </div>
+    <div class="sr-deck__pane sr-glow-live">
+      <div class="sr-deck__pane-head">
+        <h3 class="sr-deck__pane-title">Your weights</h3>
+        <a class="sr-deck__pane-link" href="#section-proof-band">Proof</a>
+      </div>
+      <div class="sr-deck__weights">
+        {% if cal_n|int > 0 and cal_acc is not none %}
+        <div class="sr-deck__weights-kpi">
+          <span class="sr-deck__weights-pct">{{ cal_acc|round(0) }}%</span>
+          <span class="sr-deck__weights-meta">Council accuracy · {{ cal_n }} graded</span>
+        </div>
+        <p class="sr-deck__weights-meta"><a href="#section-paper-portfolio">Paper portfolio vs hold TAO →</a></p>
+        {% else %}
+        <p class="sr-deck__weights-quiet">Building graded history — council accuracy and paper P&amp;L appear after calls resolve.</p>
+        <p class="sr-deck__weights-meta"><a href="#section-paper-portfolio">Paper portfolio →</a></p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
