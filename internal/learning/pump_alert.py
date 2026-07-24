@@ -413,6 +413,15 @@ def build_alert_row(
     except (TypeError, ValueError):
         sell_vol = None
 
+    spark_closes: List[float] = []
+    if isinstance(subnet_row, dict):
+        try:
+            from internal.analytics.root_context import _spark_closes_for_subnet
+
+            spark_closes = _spark_closes_for_subnet(subnet_row)
+        except Exception:
+            spark_closes = []
+
     row = {
         "netuid": netuid_int,
         "name": name,
@@ -440,6 +449,7 @@ def build_alert_row(
         "sell_volume_24h": sell_vol,
         "price_change_24h": _metric("price_change_24h"),
         "price_change_1h": _metric("price_change_1h", "change_1h"),
+        "spark_closes": spark_closes,
         "taostats_wired": bool(
             src.get("taostats_wired")
             or snap.get("taostats_wired")

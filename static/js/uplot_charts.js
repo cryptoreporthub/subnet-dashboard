@@ -25,7 +25,19 @@
     if (!pts) return;
     destroySpark(el);
     var up = pts[pts.length - 1] >= pts[0];
-    var col = up ? '#34d399' : '#f43f5e';
+    var tone = el.getAttribute('data-spark-tone');
+    var col;
+    var fill;
+    if (tone === 'warm') {
+      col = '#fb923c';
+      fill = 'rgba(251, 146, 60, 0.22)';
+    } else if (tone === 'active') {
+      col = '#34d399';
+      fill = 'rgba(52, 211, 153, 0.25)';
+    } else {
+      col = up ? '#34d399' : '#f43f5e';
+      fill = up ? 'rgba(52,211,153,0.25)' : 'rgba(244,63,94,0.25)';
+    }
     var xs = pts.map(function (_, i) { return i; });
     var w = el.clientWidth || 96;
     var h = el.clientHeight || 36;
@@ -42,7 +54,7 @@
         {
           stroke: col,
           width: 1.6,
-          fill: up ? 'rgba(52,211,153,0.25)' : 'rgba(244,63,94,0.25)',
+          fill: fill,
         },
       ],
     }, [xs, pts], el);
