@@ -44,6 +44,82 @@
     return rest;
   }
 
+  function applyJsonReply(botBody, j) {
+    botBody.textContent = j.reply || (j.data && j.data.reply) || "No response.";
+    if (meta) meta.textContent = "LLM: " + (j.model || "ok");
+  }
+
+  async function readStream(resp, botBody) {
+    var full = "";
+    var reader = resp.body.getReader();
+    var decoder = new TextDecoder();
+    var buf = "";
+    while (true) {
+      var chunk = await reader.read();
+      if (chunk.done) break;
+      buf += decoder.decode(chunk.value, { stream: true });
+      buf = consumeSSE(buf, function (ev) {
+        if (ev.event === "meta") {
+          try {
+            var m = JSON.parse(ev.data);
+            if (meta && m.model) meta.textContent = "LLM: " + m.model;
+          } catch (e) {
+            /* ignore */
+          }
+        } else if (ev.event === "chunk") {
+          try {
+            var c = JSON.parse(ev.data);
+            if (c.text) {
+              full += c.text;
+              botBody.textContent = full;
+              log.scrollTop = log.scrollHeight;
+            }
+          } catch (e) {
+            /* ignore */
+          }
+        }
+      });
+    }
+    if (buf.trim()) {
+      consumeSSE(buf + "\n\n", function (ev) {
+        if (ev.event === "chunk") {
+          try {
+            var c = JSON.parse(ev.data);
+            if (c.text) {
+              full += c.text;
+              botBody.textContent = full;
+            }
+          } catch (e) {
+            /* ignore */
+          }
+        }
+      });
+    }
+    if (!full) botBody.textContent = "No response.";
+    return full;
+  }
+
+  async function deliverChat(msg, botBody, useStream) {
+    var url = useStream ? "/api/simivision/chat?stream=1" : "/api/simivision/chat";
+    var body = useStream
+      ? JSON.stringify({ message: msg, stream: true })
+      : JSON.stringify({ message: msg });
+    var resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: body,
+    });
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+
+    var ct = resp.headers.get("content-type") || "";
+    if (ct.indexOf("text/event-stream") < 0) {
+      applyJsonReply(botBody, await resp.json());
+      return;
+    }
+    if (!resp.body || !resp.body.getReader) throw new Error("no stream");
+    await readStream(resp, botBody);
+  }
+
   async function send() {
     var msg = (input.value || "").trim();
     if (!msg) return;
@@ -53,71 +129,14 @@
     if (meta) meta.textContent = "LLM: thinking…";
 
     var botBody = appendMsg("bot");
-    var full = "";
 
     try {
-      var resp = await fetch("/api/simivision/chat?stream=1", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg, stream: true }),
-      });
-      if (!resp.ok) throw new Error("HTTP " + resp.status);
-
-      var ct = resp.headers.get("content-type") || "";
-      if (ct.indexOf("text/event-stream") < 0) {
-        var j = await resp.json();
-        botBody.textContent = j.reply || (j.data && j.data.reply) || "No response.";
-        if (meta) meta.textContent = "LLM: " + (j.model || "ok");
-        return;
+      try {
+        await deliverChat(msg, botBody, true);
+      } catch (streamErr) {
+        if (meta) meta.textContent = "LLM: retrying…";
+        await deliverChat(msg, botBody, false);
       }
-
-      if (!resp.body || !resp.body.getReader) throw new Error("no stream");
-
-      var reader = resp.body.getReader();
-      var decoder = new TextDecoder();
-      var buf = "";
-      while (true) {
-        var chunk = await reader.read();
-        if (chunk.done) break;
-        buf += decoder.decode(chunk.value, { stream: true });
-        buf = consumeSSE(buf, function (ev) {
-          if (ev.event === "meta") {
-            try {
-              var m = JSON.parse(ev.data);
-              if (meta && m.model) meta.textContent = "LLM: " + m.model;
-            } catch (e) {
-              /* ignore */
-            }
-          } else if (ev.event === "chunk") {
-            try {
-              var c = JSON.parse(ev.data);
-              if (c.text) {
-                full += c.text;
-                botBody.textContent = full;
-                log.scrollTop = log.scrollHeight;
-              }
-            } catch (e) {
-              /* ignore */
-            }
-          }
-        });
-      }
-      if (buf.trim()) {
-        consumeSSE(buf + "\n\n", function (ev) {
-          if (ev.event === "chunk") {
-            try {
-              var c = JSON.parse(ev.data);
-              if (c.text) {
-                full += c.text;
-                botBody.textContent = full;
-              }
-            } catch (e) {
-              /* ignore */
-            }
-          }
-        });
-      }
-      if (!full) botBody.textContent = "No response.";
     } catch (e) {
       botBody.textContent = "Connection error — intelligence layer unreachable.";
       if (meta) meta.textContent = "LLM: error";
