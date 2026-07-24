@@ -9,7 +9,9 @@ primary_region = "sjc"
 
 [processes]
   web = "./scripts/fly_web_entrypoint.sh"
-  worker = "./scripts/fly_worker_entrypoint.sh"
+  # ponytail: worker process group disabled until ops scales a second machine with
+  # volume strategy. A lone worker machine steals the only slot and kills HTTP.
+  # Manual: fly scale count worker=1 after web=1 is confirmed healthy.
 
 [http_service]
   internal_port = 8080
