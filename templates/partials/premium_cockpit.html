@@ -1,4 +1,4 @@
-{# Council-first cockpit — decision stage, then bench, then demoted market tools #}
+{# Council-first cockpit — Situation Room spine #}
 <script>document.documentElement.dataset.hydrate='1';</script>
 {% set sn_list = subnets if subnets is iterable and subnets is not string else [] %}
 {% set ti_rows = api_indicators_convergence.subnets if api_indicators_convergence is mapping and api_indicators_convergence.subnets else [] %}
@@ -26,12 +26,37 @@
 {% else %}
   {% set cal_acc = none %}
 {% endif %}
+{% set wr_meta = simivision.meta if simivision is mapping and simivision.meta is mapping else {} %}
+{% set caution = wr_meta.caution_cells if wr_meta.caution_cells is iterable and wr_meta.caution_cells is not string else [] %}
+{% set pa = pump_alerts if pump_alerts is mapping else {} %}
+
+{# Market intel — computed early for pulse + today's intel #}
+{% set mi_ns = namespace(chg_sum=0.0, apy_sum=0.0, apy_n=0, gainers=0, losers=0) %}
+{% for sn in sn_list %}
+  {% set chg = (sn.price_change_24h|default(0))|float %}
+  {% set mi_ns.chg_sum = mi_ns.chg_sum + chg %}
+  {% if chg > 0 %}{% set mi_ns.gainers = mi_ns.gainers + 1 %}{% elif chg < 0 %}{% set mi_ns.losers = mi_ns.losers + 1 %}{% endif %}
+  {% set apy_raw = sn.apy|default(none) %}
+  {% if apy_raw is none and sn.staking_data is mapping %}{% set apy_raw = sn.staking_data.apy %}{% endif %}
+  {% if apy_raw is not none %}
+    {% set mi_ns.apy_sum = mi_ns.apy_sum + (apy_raw|float) %}
+    {% set mi_ns.apy_n = mi_ns.apy_n + 1 %}
+  {% endif %}
+{% endfor %}
+{% set mi_total = sn_list|length %}
+{% set mi_avg_chg = (mi_ns.chg_sum / mi_total)|round(2) if mi_total else 0 %}
+{% set mi_avg_apy = ((mi_ns.apy_sum / mi_ns.apy_n) * 100)|round(2) if mi_ns.apy_n else 0 %}
+{% set mi_breadth = 'bullish' if mi_ns.gainers > mi_ns.losers else ('bearish' if mi_ns.losers > mi_ns.gainers else 'neutral') %}
+{% set mi_top_gainer = sn_list|sort(attribute='price_change_24h', reverse=true)|first if sn_list else none %}
+{% set mi_top_loser = sn_list|sort(attribute='price_change_24h')|first if sn_list else none %}
 
 {% include "partials/premium/header.html" %}
+{% include "partials/premium/pulse_strip.html" %}
 {% include "partials/premium/council_stage.html" %}
-{% include "partials/premium/simivision_picks.html" %}
+{% include "partials/premium/strategic_deck.html" %}
 {% include "partials/premium/caution_cells.html" %}
-{% include "partials/premium/pump_alert.html" %}
+{% include "partials/premium/todays_intel.html" %}
+{% include "partials/premium/dev_signals_desk.html" %}
 {% include "partials/premium/living_focus.html" %}
 {% include "partials/premium/brain_letter.html" %}
 
@@ -93,26 +118,6 @@
     {% include "partials/premium/backtest.html" %}
   </div>
 </details>
-
-{# Market KPIs for demoted hero (honest registry snapshot) #}
-{% set mi_ns = namespace(chg_sum=0.0, apy_sum=0.0, apy_n=0, gainers=0, losers=0) %}
-{% for sn in sn_list %}
-  {% set chg = (sn.price_change_24h|default(0))|float %}
-  {% set mi_ns.chg_sum = mi_ns.chg_sum + chg %}
-  {% if chg > 0 %}{% set mi_ns.gainers = mi_ns.gainers + 1 %}{% elif chg < 0 %}{% set mi_ns.losers = mi_ns.losers + 1 %}{% endif %}
-  {% set apy_raw = sn.apy|default(none) %}
-  {% if apy_raw is none and sn.staking_data is mapping %}{% set apy_raw = sn.staking_data.apy %}{% endif %}
-  {% if apy_raw is not none %}
-    {% set mi_ns.apy_sum = mi_ns.apy_sum + (apy_raw|float) %}
-    {% set mi_ns.apy_n = mi_ns.apy_n + 1 %}
-  {% endif %}
-{% endfor %}
-{% set mi_total = sn_list|length %}
-{% set mi_avg_chg = (mi_ns.chg_sum / mi_total)|round(2) if mi_total else 0 %}
-{% set mi_avg_apy = ((mi_ns.apy_sum / mi_ns.apy_n) * 100)|round(2) if mi_ns.apy_n else 0 %}
-{% set mi_breadth = 'bullish' if mi_ns.gainers > mi_ns.losers else ('bearish' if mi_ns.losers > mi_ns.gainers else 'neutral') %}
-{% set mi_top_gainer = sn_list|sort(attribute='price_change_24h', reverse=true)|first if sn_list else none %}
-{% set mi_top_loser = sn_list|sort(attribute='price_change_24h')|first if sn_list else none %}
 
 {# Market / tools — demoted, not equal-volume landfill #}
 <details class="market-drawer wrap-pad" id="market-drawer">

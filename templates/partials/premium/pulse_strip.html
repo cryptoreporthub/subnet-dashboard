@@ -1,0 +1,44 @@
+{# Market Pulse — breadth / avg 24h / alerts / risk from mi_* context #}
+<section class="sr-pulse" id="section-market-pulse" aria-label="Market pulse">
+  <div class="sr-pulse__grid">
+    <div class="sr-pulse__cell sr-pulse__cell--{% if mi_breadth == 'bullish' %}bullish{% elif mi_breadth == 'bearish' %}bearish{% else %}neutral{% endif %}">
+      <span class="sr-pulse__lbl">Breadth</span>
+      <span class="sr-pulse__val">{{ mi_breadth|default('neutral')|title }}</span>
+      {% if mi_total %}
+      <span class="sr-pulse__sub">{{ mi_ns.gainers }}↑ · {{ mi_ns.losers }}↓</span>
+      {% else %}
+      <span class="sr-pulse__sub">Registry loading</span>
+      {% endif %}
+    </div>
+    <div class="sr-pulse__cell sr-pulse__cell--{% if mi_avg_chg > 0 %}bullish{% elif mi_avg_chg < 0 %}bearish{% else %}neutral{% endif %}">
+      <span class="sr-pulse__lbl">Avg 24h</span>
+      <span class="sr-pulse__val {% if mi_avg_chg > 0 %}pos{% elif mi_avg_chg < 0 %}neg{% endif %}">
+        {% if mi_total %}{{ '%+.2f'|format(mi_avg_chg) }}%{% else %}—{% endif %}
+      </span>
+      {% if mi_avg_apy %}
+      <span class="sr-pulse__sub">Avg APY {{ mi_avg_apy }}%</span>
+      {% endif %}
+    </div>
+    <div class="sr-pulse__cell sr-pulse__cell--cyan">
+      <span class="sr-pulse__lbl">Signals</span>
+      <span class="sr-pulse__val">{{ sig_list|length if sig_list else 0 }}</span>
+      <span class="sr-pulse__sub">{{ alert_list|length if alert_list else 0 }} alerts</span>
+    </div>
+    <div class="sr-pulse__cell sr-pulse__cell--amber">
+      <span class="sr-pulse__lbl">Risk watch</span>
+      {% if caution is defined and caution and caution|length > 0 %}
+      <span class="sr-pulse__val">{{ caution[0].name|default(caution[0].line)|truncate(18, True) }}</span>
+      <span class="sr-pulse__sub">{{ caution|length }} caution cell{{ 's' if caution|length != 1 else '' }}</span>
+      {% elif mi_breadth == 'bearish' %}
+      <span class="sr-pulse__val neg">Bearish breadth</span>
+      <span class="sr-pulse__sub">More losers than gainers</span>
+      {% elif mi_top_loser and (mi_top_loser.price_change_24h|default(0)|float) < -5 %}
+      <span class="sr-pulse__val neg">{{ mi_top_loser.name|default('SN' ~ mi_top_loser.netuid)|truncate(18, True) }}</span>
+      <span class="sr-pulse__sub">{{ '%.1f'|format(mi_top_loser.price_change_24h|float) }}% 24h</span>
+      {% else %}
+      <span class="sr-pulse__val">Quiet</span>
+      <span class="sr-pulse__sub">No active caution</span>
+      {% endif %}
+    </div>
+  </div>
+</section>

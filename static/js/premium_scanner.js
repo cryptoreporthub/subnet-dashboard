@@ -61,6 +61,20 @@
     return items;
   }
 
+  function chgOf(item) {
+    var raw = item.price_change_24h != null ? item.price_change_24h : item.change_24h;
+    if (raw == null) return null;
+    var n = Number(raw);
+    return isNaN(n) ? null : n;
+  }
+
+  function priceOf(item) {
+    var raw = item.price != null ? item.price : item.token_price;
+    if (raw == null) return null;
+    var n = Number(raw);
+    return isNaN(n) ? null : n;
+  }
+
   function render() {
     var items = filtered();
     if (metaEl) metaEl.textContent = items.length + ' subnet' + (items.length === 1 ? '' : 's');
@@ -81,7 +95,22 @@
         '<td>' + fmt(item.social_mentions, 0) + '</td>' +
         '</tr>';
     }).join('');
-    tableEl.innerHTML = '<table class="tbl"><thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Emission</th><th>APY</th><th>Social</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    var cards = items.map(function (item) {
+      var id = item.netuid != null ? item.netuid : item.id;
+      var chg = chgOf(item);
+      var chgCls = chg == null ? '' : (chg >= 0 ? ' pos' : ' neg');
+      var chgTxt = chg == null ? '—' : ((chg >= 0 ? '+' : '') + chg.toFixed(2) + '%');
+      var price = priceOf(item);
+      return '<div class="sr-matrix-card scanner-row" data-netuid="' + esc(id) + '" tabindex="0" role="button" aria-label="Open ' + esc(item.name || 'SN' + id) + '">' +
+        '<span class="sr-matrix-card__name">' + esc(item.name || 'Unnamed') + '</span>' +
+        '<span class="sr-matrix-card__price">' + (price != null ? fmt(price, 4) : '—') + '</span>' +
+        '<span class="sr-matrix-card__sn">SN' + esc(id) + '</span>' +
+        '<span class="sr-matrix-card__chg' + chgCls + '">' + chgTxt + ' 24h</span>' +
+        '</div>';
+    }).join('');
+    tableEl.innerHTML =
+      '<table class="tbl"><thead><tr><th>ID</th><th>Name</th><th>Status</th><th>Emission</th><th>APY</th><th>Social</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="sr-matrix-cards" aria-label="Subnet cards">' + cards + '</div>';
   }
 
   function load() {
@@ -129,12 +158,12 @@
 
   tableEl.addEventListener('click', function (e) {
     if (e.target.closest('a.scanner-report-link')) return;
-    var row = e.target.closest('tr.scanner-row');
+    var row = e.target.closest('.scanner-row');
     if (row) openReport(row.getAttribute('data-netuid'));
   });
   tableEl.addEventListener('keydown', function (e) {
     if (e.key !== 'Enter' && e.key !== ' ') return;
-    var row = e.target.closest('tr.scanner-row');
+    var row = e.target.closest('.scanner-row');
     if (!row) return;
     e.preventDefault();
     openReport(row.getAttribute('data-netuid'));
