@@ -39,7 +39,13 @@ def build_k3_hold_preview_context(request: Request) -> Dict[str, Any]:
             "reason": "Conviction 23% — below the 45% bar for a sized 24h long",
             "pick": None,
             "candidate": {
-                "subnet": {"netuid": 99, "name": "SN99", "symbol": "T99"},
+                "subnet": {
+                    "netuid": 99,
+                    "name": "SN99",
+                    "symbol": "T99",
+                    "description": "Overbought momentum play — thin liquidity, high RSI.",
+                    "price_change_7d": -44.2,
+                },
                 "final_confidence": 0.233,
                 "action": "LONG",
                 "reasons": ["Stochastic %K 98.1 (overbought)"],
@@ -84,6 +90,7 @@ def build_k3_hold_preview_context(request: Request) -> Dict[str, Any]:
                 },
             },
             "temporal_badge": "LIVE · 4h 12m remaining",
+            "resolves_in": "4h 12m",
             "ring_state": "fresh",
             "resolve_at": resolve_at,
             "grade_on_resolve": True,
