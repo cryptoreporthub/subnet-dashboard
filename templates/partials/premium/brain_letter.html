@@ -1,6 +1,7 @@
 {# §21 L11 — Brain letter (today's living narrative) #}
 {% set bl = brain_letter if brain_letter is mapping else {} %}
 {% set bl_ok = bl.status == 'ok' and not bl.empty %}
+{% set pick = bl.pick if bl_ok and bl.pick is mapping else {} %}
 <section class="brain-letter wrap-pad" id="section-brain-letter" aria-labelledby="brain-letter-title" data-brain-state="{{ 'live' if bl_ok else 'quiet' }}"{% if bl_ok %} data-ssr="1"{% endif %}>
   <div class="brain-letter__head weekly-letter__head">
     <h2 class="brain-letter__title weekly-letter__title" id="brain-letter-title">Brain letter</h2>
@@ -11,9 +12,28 @@
       <button type="button" class="tab-btn" id="brain-letter-download" disabled>Download</button>
     </div>
   </div>
+  <div class="brain-letter__desk-strip" id="brain-letter-desk-strip" aria-label="Desk strip">
+    {% if bl_ok %}
+    <article class="brain-letter__desk-card">
+      <span class="brain-letter__desk-lbl">Yesterday</span>
+      <p class="brain-letter__desk-val">{{ bl.yesterday_outcome|default('No graded outcome yet.')|truncate(90, True) }}</p>
+    </article>
+    <article class="brain-letter__desk-card">
+      <span class="brain-letter__desk-lbl">Today</span>
+      <p class="brain-letter__desk-val">
+        {% if pick.published and pick.name %}{% if pick.action == 'LONG' %}BUY{% else %}{{ pick.action|default('HOLD') }}{% endif %} {{ pick.name }}{% elif pick.name %}Candidate: {{ pick.name }}{% else %}Council on HOLD{% endif %}
+      </p>
+    </article>
+    <article class="brain-letter__desk-card">
+      <span class="brain-letter__desk-lbl">Next</span>
+      <p class="brain-letter__desk-val">{{ bl.outlook|default('Watching the desk into resolve.')|truncate(90, True) }}</p>
+    </article>
+    {% endif %}
+  </div>
+  <details class="brain-letter__full" id="brain-letter-full">
+    <summary class="brain-letter__full-summary">Open full letter</summary>
   <div id="brain-letter-root" class="brain-letter__body weekly-letter__body" aria-live="polite">
     {% if bl_ok %}
-    {% set pick = bl.pick if bl.pick is mapping else {} %}
     {% set tb = bl.trust_banner if bl.trust_banner is mapping else {} %}
     {% set working = bl.working if bl.working is mapping else {} %}
     <article class="weekly-letter__digest brain-letter__digest">
@@ -92,4 +112,5 @@
     <p class="weekly-letter__empty">Brief writes after the first graded windows land.</p>
     {% endif %}
   </div>
+  </details>
 </section>

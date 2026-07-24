@@ -701,3 +701,49 @@ body.council-first-theme {
 @media (prefers-reduced-motion: reduce) {
   .living-focus__contest-dial--skeleton .living-focus__dial-pct { animation: none; }
 }
+
+/* ---------- Brain letter desk strip ---------- */
+.brain-letter__desk-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.brain-letter__desk-card {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--sr-hairline);
+  background: rgba(10, 12, 18, 0.55);
+  min-width: 0;
+}
+.brain-letter__desk-lbl {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sr-muted);
+  margin-bottom: 4px;
+}
+.brain-letter__desk-val {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #e2e8f0;
+}
+.brain-letter__full {
+  margin: 0;
+}
+.brain-letter__full-summary {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #38bdf8;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+@media (max-width: 640px) {
+  .brain-letter__desk-strip {
+    grid-template-columns: 1fr;
+  }
+}
