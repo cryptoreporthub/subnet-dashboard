@@ -2026,7 +2026,7 @@ async def api_daily_pick(full: bool = False):
     """Today's audited daily pick from the Council engine."""
 
     def _build() -> Dict[str, Any]:
-        from internal.council.daily_pick_engine import _find_today, _load, get_or_create_today_pick
+        from internal.council.daily_pick_engine import _find_today, _load
         from internal.whales.enrichment_badge import empty_whale_flow_badge, whale_flow_badge
 
         existing = _find_today(_load())
@@ -2049,27 +2049,14 @@ async def api_daily_pick(full: bool = False):
                 result["enrichment_badge"] = empty_whale_flow_badge("lite_read")
             return result
 
-        subnets, _ = _get_subnets_hydrate()
-        if not _PICKS_ENGINE:
-            return {
-                "status": "error",
-                "date": datetime.utcnow().date().isoformat(),
-                "action": "HOLD",
-                "reason": "pick engine unavailable",
-                "pick": None,
-            }
-        market_context = _market_context_with_weights(subnets)
-        result = get_or_create_today_pick(subnets, market_context)
-        if isinstance(result, dict):
-            netuid = _pick_netuid_from_daily_payload(result)
-            result = _enrich_daily_pick_payload(result, subnets, market_context)
-            result = {
-                **result,
-                "enrichment_badge": (
-                    whale_flow_badge(netuid) if netuid is not None else empty_whale_flow_badge()
-                ),
-            }
-        return result
+        # ponytail: never run pick engine on hydrate API — wedges single-worker Fly.
+        return {
+            "status": "pending",
+            "date": datetime.utcnow().date().isoformat(),
+            "action": "HOLD",
+            "reason": "today's pick forming",
+            "pick": None,
+        }
 
     try:
         return await _to_thread_timeout(_build, PICK_HANDLER_TIMEOUT, label="daily-pick")

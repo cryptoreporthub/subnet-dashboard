@@ -51,30 +51,24 @@ def test_daily_pick_read_path_skips_live_feed(monkeypatch):
 
 
 def test_daily_pick_times_out_without_wedging_event_loop(monkeypatch):
-    """Sync pick work must not block the ASGI loop past PICK_HANDLER_TIMEOUT."""
-    import time
-
+    """Missing stored pick must not call subnet hydrate or pick engine."""
     from fastapi.testclient import TestClient
 
     import server as srv
 
     monkeypatch.setattr("internal.council.daily_pick_engine._find_today", lambda _rows: None)
-    monkeypatch.setattr(srv, "PICK_HANDLER_TIMEOUT", 0.2)
 
-    def _slow_hydrate():
-        time.sleep(2.0)
-        return [], "snapshot"
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("hydrate must not run when no stored pick")
 
-    monkeypatch.setattr(srv, "_get_subnets_hydrate", _slow_hydrate)
+    monkeypatch.setattr(srv, "_get_subnets_hydrate", _boom)
 
     client = TestClient(srv.app)
-    t0 = time.time()
     resp = client.get("/api/daily-pick")
-    elapsed = time.time() - t0
 
     assert resp.status_code == 200
-    assert elapsed < 2.0, f"daily-pick blocked {elapsed:.1f}s"
     body = resp.json()
+    assert body.get("status") == "pending"
     assert body.get("action") == "HOLD"
 
 
