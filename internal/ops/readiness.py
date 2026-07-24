@@ -92,6 +92,23 @@ def build_readiness_report() -> Dict[str, Any]:
     learning = _learning_summary()
     daily = _daily_pick_summary()
 
+    from internal.run_mode import inline_worker_expected, worker_mode_label
+
+    inline_worker = inline_worker_expected()
+    worker_peer_alive = False
+    worker_peer: Dict[str, Any] = {"expected": inline_worker, "alive": False}
+    if inline_worker:
+        from internal.worker_heartbeat import is_alive, read_heartbeat
+
+        worker_peer_alive = is_alive()
+        worker_peer = {
+            "expected": True,
+            "alive": worker_peer_alive,
+            "heartbeat": read_heartbeat(),
+        }
+        if worker_peer_alive:
+            resolver = {**resolver, "running": True, "peer": "inline_worker"}
+
     try:
         from fetchers.taostats_client import is_available as taostats_available
     except Exception:
@@ -101,6 +118,8 @@ def build_readiness_report() -> Dict[str, Any]:
 
     if learning.get("graded", 0) <= 0:
         issues.append("learning_loop_has_no_graded_picks")
+    if inline_worker and not worker_peer_alive:
+        issues.append("inline_worker_not_running")
     if not resolver.get("running"):
         issues.append("prediction_resolver_not_running")
     if feed.get("likely_total", 0) <= 0:
@@ -125,13 +144,12 @@ def build_readiness_report() -> Dict[str, Any]:
         )
     )
 
-    from internal.run_mode import worker_mode_label
-
     return {
         "status": "ready" if ready else "degraded",
         "checked_at": _utcnow_z(),
         "ready": ready,
         "worker_mode": worker_mode_label(),
+        "worker_peer": worker_peer,
         "thin_ui_likely": thin_ui,
         "issues": issues,
         "learning": learning,
@@ -161,6 +179,8 @@ def _next_levers(issues: List[str], taostats: bool) -> List[str]:
         levers.append("set_TAOSTATS_API_KEY_via_flyctl_secrets")
     if "prediction_resolver_not_running" in issues:
         levers.append("check_resolver_at_GET_/api/predictions/resolver")
+    if "inline_worker_not_running" in issues:
+        levers.append("check_inline_worker_heartbeat_data/.worker_heartbeat")
     if "daily_pick_hold_no_published_long" in issues:
         levers.append("hold_is_honest_when_below_audit_gate_not_a_feed_outage")
     if not levers:

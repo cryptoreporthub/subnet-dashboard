@@ -110,6 +110,15 @@ def test_start_background_workers_starts_resolver(monkeypatch):
     whale.assert_called_once()
 
 
+def test_worker_mode_label_split(monkeypatch):
+    from internal.run_mode import worker_mode_label
+
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("BACKGROUND_ON_WEB", "off")
+    monkeypatch.setenv("INLINE_WORKER", "1")
+    assert worker_mode_label() == "split"
+
+
 def test_ops_readiness_worker_mode_field():
     from fastapi.testclient import TestClient
 
@@ -119,4 +128,4 @@ def test_ops_readiness_worker_mode_field():
     resp = client.get("/api/ops/readiness")
     assert resp.status_code == 200
     body = resp.json()
-    assert body.get("worker_mode") in ("web", "worker", "combined")
+    assert body.get("worker_mode") in ("web", "worker", "combined", "split")

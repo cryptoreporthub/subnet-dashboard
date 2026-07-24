@@ -9,9 +9,8 @@ primary_region = "sjc"
 
 [processes]
   web = "./scripts/fly_web_entrypoint.sh"
-  # ponytail: worker process group disabled until ops scales a second machine with
-  # volume strategy. A lone worker machine steals the only slot and kills HTTP.
-  # Manual: fly scale count worker=1 after web=1 is confirmed healthy.
+  # v1: inline worker subprocess in fly_web_entrypoint.sh (one machine, one volume).
+  # Do NOT add a separate worker process group — it steals HTTP without volume strategy.
 
 [http_service]
   internal_port = 8080
@@ -31,8 +30,12 @@ primary_region = "sjc"
 
 [env]
   RUN_MODE = "web"
-  # off = stable single-machine web (pre-#437). essential wedges 1GB RAM over time.
+  # Web serves HTTP only; schedulers run in inline worker subprocess (same machine/volume).
   BACKGROUND_ON_WEB = "off"
+  INLINE_WORKER = "1"
+  ENABLE_INLINE_WORKER = "1"
+  # essential = pump/resolver/whale on worker; full adds live-subnet wedge (2GB+ only).
+  WORKER_HEAVY = "essential"
   # Keep prod boot light; Telegram needs a live session on the volume.
   MESSAGE_INTEL_LISTENER = "off"
   RESOLVER_REFRESH_MINUTES = "15"

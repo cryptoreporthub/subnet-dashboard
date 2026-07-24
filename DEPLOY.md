@@ -76,16 +76,19 @@ If `GET /api/subnets` times out, the app falls back to registry after `SUBNETS_L
 
 | Phase | What | Doc |
 |-------|------|-----|
-| **A (now)** | One machine — fast shell, load shed, hydrate stagger (#332–#333) | troubleshooting above |
-| **B (now)** | Web `BACKGROUND_ON_WEB=essential` (pump/resolver/whale warm); optional `worker` process for live feed | [`docs/fly-web-worker-split.md`](docs/fly-web-worker-split.md) |
+| **A** | One machine — fast shell, load shed, hydrate stagger (#332–#333) | troubleshooting above |
+| **B v1 (now)** | One machine — **web** (HTTP only) + **inline worker** subprocess on same VM/volume | [`docs/fly-web-worker-split.md`](docs/fly-web-worker-split.md) |
 
-After deploy with the worker process group in `fly.toml`:
+`scripts/fly_web_entrypoint.sh` starts `python -m internal.worker` in the background, then `exec uvicorn`. Web has `BACKGROUND_ON_WEB=off`; worker runs pump/resolver/whale warm (`WORKER_HEAVY=essential` on 1GB).
+
+**Do not** add a separate `worker` Fly process group or `fly scale count worker=1` without a volume strategy — a second machine steals HTTP with no shared volume.
+
+Verify after deploy:
 
 ```bash
-fly scale count web=1 worker=1 --app subnet-dashboard
+curl -s https://subnet-dashboard.fly.dev/api/ops/readiness | jq '{worker_mode, worker_peer, resolver}'
+# expect: worker_mode "split", worker_peer.alive true, resolver.running true
 ```
-
-Worker shares the app image; attach `data_volume` to the worker machine in `sjc` (same region as web) so JSON/SQLite state stays consistent. Until worker=1, web essential mode keeps pump ladder + resolver + whale warm without the live-subnet wedge.
 
 ---
 
