@@ -79,7 +79,9 @@ If `GET /api/subnets` times out, the app falls back to registry after `SUBNETS_L
 | **A** | One machine — fast shell, load shed, hydrate stagger (#332–#333) | troubleshooting above |
 | **B v1 (now)** | One machine — **web** (HTTP only) + **inline worker** subprocess on same VM/volume | [`docs/fly-web-worker-split.md`](docs/fly-web-worker-split.md) |
 
-`scripts/fly_web_entrypoint.sh` starts `python -m internal.worker` in the background, then `exec uvicorn`. Web has `BACKGROUND_ON_WEB=off`; worker runs pump/resolver/whale warm (`WORKER_HEAVY=essential` on 1GB).
+`scripts/fly_web_entrypoint.sh` starts `python -m internal.worker` in the background (nice +10), then `exec uvicorn`. Web has `BACKGROUND_ON_WEB=off`; worker runs pump/resolver/whale warm (`WORKER_HEAVY=essential`).
+
+**VM:** `2gb` on `shared-cpu-1x` — required headroom for inline worker + HTTP on one machine (1GB OOMs/wedges).
 
 **Do not** add a separate `worker` Fly process group or `fly scale count worker=1` without a volume strategy — a second machine steals HTTP with no shared volume.
 

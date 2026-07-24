@@ -55,20 +55,47 @@ def _safe_pump_analytics() -> Dict[str, Any]:
         return _empty_pump_analytics()
 
 
-def _spark_closes_for_subnet(sn: Dict[str, Any]) -> List[float]:
+def _spark_closes_for_subnet(sn: Dict[str, Any], *, cache_only: bool = False) -> List[float]:
     """Last N cached close prices for sparklines — empty when only synthetic history exists."""
     try:
-        from internal.council.state_vector import _get_price_history
+        if cache_only:
+            from internal.council.state_vector import (
+                _history_from_candles,
+                _load_price_cache,
+            )
 
-        hist = _get_price_history(sn.get("netuid"), sn)
-        if hist.get("source") == "synthetic":
-            return []
-        closes = hist.get("closes") or []
+            netuid = sn.get("netuid")
+            try:
+                netuid_key: Any = int(netuid)
+            except (TypeError, ValueError):
+                netuid_key = str(netuid)
+            cache = _load_price_cache()
+            raw = cache.get(str(netuid_key)) or (
+                cache.get(netuid_key) if isinstance(netuid_key, int) else None
+            )
+            if not raw or not isinstance(raw, dict):
+                return []
+            if raw.get("source") == "synthetic":
+                return []
+            hist = _history_from_candles(raw.get("candles") or [], raw.get("source", "cached"))
+            closes = hist.get("closes") or []
+        else:
+            from internal.council.state_vector import _get_price_history
+
+            hist = _get_price_history(sn.get("netuid"), sn)
+            if hist.get("source") == "synthetic":
+                return []
+            closes = hist.get("closes") or []
         if len(closes) < 2:
             return []
         return [float(c) for c in closes[-24:]]
     except Exception:
         return []
+
+
+def spark_closes_cached_only(sn: Dict[str, Any]) -> List[float]:
+    """Hot-path sparklines — never triggers lazy OHLCV fetch."""
+    return _spark_closes_for_subnet(sn, cache_only=True)
 
 
 def _safe_indicators_convergence(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:

@@ -73,8 +73,8 @@ primary_region = "sjc"
   source = "data_volume"
   destination = "/app/data"
 
-# 256MB OOMs / stalls under pandas + live_subnets workers; health goes critical
-# and the edge returns 0-byte timeouts ("no good candidate").
+# 256MB OOMs; 1GB wedges with inline worker + pump scan. 2GB is the stable floor
+# for web (HTTP) + essential worker (pump/resolver/whale) on one machine.
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "1gb"
+  memory = "2gb"

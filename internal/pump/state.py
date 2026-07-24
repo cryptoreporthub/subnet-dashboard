@@ -217,11 +217,22 @@ def transition_subnet(
 
 def scan_all_subnets(state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Scan ~129 subnets, apply ladder transitions, persist + Soul-Map/trail."""
+    # ponytail: fetch signals OUTSIDE the state lock — scan can take 30s+ and was
+    # wedging GET /api/pump-alerts (load_state blocked behind worker scan).
+    signal_rows = fetch_all_subnet_signals()
+    if not signal_rows:
+        return {"ok": False, "error": "no subnet signals", "scanned": 0, "transitions": []}
+
     with _lock:
-        data = state if state is not None else load_state()
-        signal_rows = fetch_all_subnet_signals()
-        if not signal_rows:
-            return {"ok": False, "error": "no subnet signals", "scanned": 0, "transitions": []}
+        resolved = _resolve_path(None)
+        if state is not None:
+            data = state
+        else:
+            data = safe_read_json(resolved, default={})
+            if not isinstance(data, dict):
+                data = {"version": "1.0", "subnets": {}, "meta": {}}
+        data.setdefault("subnets", {})
+        data.setdefault("meta", {})
 
         transitions: List[Dict[str, Any]] = []
         for row in signal_rows:
@@ -241,7 +252,7 @@ def scan_all_subnets(state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
             ) + 1
         data["meta"]["phase_counts"] = phase_counts
 
-        save_state(data)
+        safe_write_json(resolved, data)
         soul = apply_phase_transitions(transitions, data)
 
         return {

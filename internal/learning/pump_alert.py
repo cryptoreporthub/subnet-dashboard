@@ -416,9 +416,9 @@ def build_alert_row(
     spark_closes: List[float] = []
     if isinstance(subnet_row, dict):
         try:
-            from internal.analytics.root_context import _spark_closes_for_subnet
+            from internal.analytics.root_context import spark_closes_cached_only
 
-            spark_closes = _spark_closes_for_subnet(subnet_row)
+            spark_closes = spark_closes_cached_only(subnet_row)
         except Exception:
             spark_closes = []
 
