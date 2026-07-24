@@ -8,11 +8,11 @@
   --cockpit-green-soft: rgba(0, 255, 65, 0.12);
   --cockpit-green-line: rgba(0, 255, 65, 0.22);
   --cockpit-green-glow: rgba(0, 255, 65, 0.28);
-  --bg-cockpit: #000000;
-  --bg-cockpit-edge: #050505;
-  --bg-cockpit-card: rgba(10, 12, 18, 0.55);
-  --bg-cockpit-surface: rgba(8, 10, 16, 0.72);
-  --bg-cockpit-elevated: rgba(14, 16, 24, 0.78);
+  --bg-cockpit: #04060e;
+  --bg-cockpit-edge: #020308;
+  --bg-cockpit-card: rgba(10, 14, 24, 0.55);
+  --bg-cockpit-surface: rgba(8, 12, 20, 0.72);
+  --bg-cockpit-elevated: rgba(14, 18, 30, 0.78);
   --txt: var(--text-primary);
   --txt-2: var(--text-secondary);
   --txt-3: #7c8a9e;
@@ -26,12 +26,7 @@
 
 body {
   background-color: var(--bg-cockpit);
-  background-image:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 255, 65, 0.14) 0%, transparent 55%),
-    radial-gradient(circle at 85% 15%, rgba(255, 43, 214, 0.08) 0%, transparent 35%),
-    radial-gradient(circle at 12% 82%, rgba(255, 122, 26, 0.07) 0%, transparent 40%),
-    radial-gradient(circle at 72% 68%, rgba(0, 200, 255, 0.06) 0%, transparent 38%),
-    linear-gradient(180deg, #000000 0%, #050805 100%);
+  background-image: var(--bg-atmosphere);
   background-attachment: fixed;
   color: var(--txt);
 }
@@ -45,9 +40,9 @@ body {
 .top-spacer { flex: 1 1 auto; }
 
 header.top {
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.88) 0%, rgba(5, 8, 5, 0.72) 100%);
+  background: linear-gradient(180deg, rgba(4, 6, 14, 0.94) 0%, rgba(6, 10, 18, 0.82) 100%);
   border-bottom: 1px solid var(--border-default);
-  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(0, 255, 65, 0.15) inset;
+  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(148, 163, 184, 0.08) inset;
 }
 
 .logo-mark {
