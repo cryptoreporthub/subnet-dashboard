@@ -10,13 +10,13 @@
     <div class="pump-alert__head-row">
       <div>
         <p class="pump-alert__eyebrow">Tier 3 · Predictive</p>
-        <h2 class="pump-alert__title" id="pump-alert-title">Lead scanner</h2>
+        <h2 class="pump-alert__title" id="pump-alert-title">Pump desk</h2>
       </div>
       {% if pa_count > 0 %}
-      <span class="pump-alert__count" id="pump-alert-count">{{ pa_early }} lead · {{ pa_confirmed }} live</span>
+      <span class="pump-alert__count" id="pump-alert-count">{{ pa_early }} warming · {{ pa_confirmed }} active</span>
       {% endif %}
     </div>
-    <p class="pump-alert__sub">Flow before price — early names first, confirmed moves flagged as chase risk.</p>
+    <p class="pump-alert__sub">Formation and momentum at a glance — warming names first, active moves flagged as chase risk.</p>
     {% set trust = pa.trust if pa.trust is mapping else {} %}
     {% if trust.ready and trust.headline_pct is not none %}
     <div class="pump-alert__proof" id="pump-alert-proof">
@@ -25,47 +25,75 @@
     </div>
     {% endif %}
     <p class="pump-alert__trust" id="pump-alert-trust"{% if not trust.line %} hidden{% endif %}{% if trust.ready %} hidden{% endif %}>{{ trust.line|default('') }}</p>
-    <div class="pump-alert__toggle-row" role="tablist" aria-label="Lead scanner view">
-      <button type="button" class="pump-alert__toggle is-active" data-pump-view="chart" role="tab" aria-selected="true">Chart</button>
-      <button type="button" class="pump-alert__toggle" data-pump-view="list" role="tab" aria-selected="false">List</button>
-    </div>
   </div>
   {% set map_ns = namespace(rows=[]) %}
-  {% set trigger_row = namespace(r=none) %}
+  {% set warm_ns = namespace(rows=[]) %}
+  {% set active_ns = namespace(rows=[]) %}
   {% for row in pa_rows %}
     {% if row.timing == 'lead' or row.timing == 'confirmed' or row.timing == 'exit' %}
       {% set _ = map_ns.rows.append(row) %}
-      {% if row.timing == 'lead' and (trigger_row.r is none or (row.score|default(0)|float) > (trigger_row.r.score|default(0)|float)) %}
-        {% set trigger_row.r = row %}
-      {% endif %}
+      {% if row.timing == 'lead' %}{% set _ = warm_ns.rows.append(row) %}{% endif %}
+      {% if row.timing == 'confirmed' %}{% set _ = active_ns.rows.append(row) %}{% endif %}
     {% endif %}
   {% endfor %}
   <div class="pump-alert__body" id="pump-alert-body" aria-live="polite">
-    <div class="pump-alert__map-panel" id="pump-map-panel">
-      <div class="pump-alert__map-wrap">
-        <canvas id="pump-map-canvas" class="pump-alert__map-canvas" role="img" aria-label="Momentum map: formation versus price momentum"></canvas>
-      </div>
-      {% if trigger_row.r %}
-      <article class="pump-alert__trigger-card" id="pump-trigger-card" data-netuid="{{ trigger_row.r.netuid }}">
-        <p class="pump-alert__trigger-card-lbl">Closest to trigger</p>
-        <div class="pump-alert__card-top">
-          <a class="pump-alert__name" href="/subnet/{{ trigger_row.r.netuid }}">{{ trigger_row.r.name }}{% if trigger_row.r.netuid is not none %} <span class="pump-alert__sn">SN{{ trigger_row.r.netuid }}</span>{% endif %}</a>
-          <span class="pump-alert__badge pump-alert__badge--{{ trigger_row.r.badge|lower|replace(' ', '-') }}">{{ trigger_row.r.badge }}</span>
-        </div>
-        {% set triad_t = trigger_row.r.triad if trigger_row.r.triad is mapping else {} %}
-        {% if triad_t %}
-        <div class="pump-alert__triad" aria-label="Pre-pump triad">
-          <span class="pump-alert__triad-leg{% if triad_t.inflow_quiet_load %} pump-alert__triad-leg--on{% endif %}">Inflow</span>
-          <span class="pump-alert__triad-leg{% if triad_t.buy_pressure %} pump-alert__triad-leg--on{% endif %}">Pressure</span>
-          <span class="pump-alert__triad-leg{% if triad_t.price_coil %} pump-alert__triad-leg--on{% endif %}">Coil</span>
+    <div class="pump-desk" id="pump-desk-panel">
+      {% if pa_count > 0 %}
+        {% if warm_ns.rows %}
+        <div class="pump-desk__section">
+          <p class="pump-desk__section-lbl">Warming</p>
+          <div class="pump-desk__rows">
+            {% for row in warm_ns.rows %}
+            {% set spark_pts = row.spark_closes if row.spark_closes is iterable and row.spark_closes is not string and row.spark_closes|length >= 2 else [] %}
+            {% set form_pct = ((row.score|default(0)|float * 100)|round(0))|int if row.score is not none else none %}
+            <a class="pump-desk__row pump-desk__row--warm" href="/subnet/{{ row.netuid }}" data-netuid="{{ row.netuid }}">
+              <div class="pump-desk__row-main">
+                <span class="pump-desk__name">{{ row.name }}</span>
+                <span class="pump-desk__sn">SN{{ row.netuid }}</span>
+              </div>
+              <div class="pump-desk__row-meta">
+                {% if form_pct is not none %}<span class="pump-desk__formation"><span class="pump-desk__formation-lbl">Formation</span> {{ form_pct }}%</span>{% endif %}
+                {% if spark_pts|length >= 2 %}
+                <div class="pump-desk__spark-wrap"><div class="spark pump-desk__spark" data-spark="{{ spark_pts|join(',') }}" data-spark-tone="warm" role="img" aria-label="Price sparkline for {{ row.name }}"></div></div>
+                {% else %}
+                <div class="pump-desk__spark-empty" aria-hidden="true">—</div>
+                {% endif %}
+              </div>
+            </a>
+            {% endfor %}
+          </div>
         </div>
         {% endif %}
-        <p class="pump-alert__thesis">{{ trigger_row.r.thesis|truncate(120, True) }}</p>
-        <p class="pump-alert__trigger">{{ trigger_row.r.trigger }}</p>
-      </article>
+        {% if active_ns.rows %}
+        <div class="pump-desk__section">
+          <p class="pump-desk__section-lbl">Active</p>
+          <div class="pump-desk__rows">
+            {% for row in active_ns.rows %}
+            {% set spark_pts = row.spark_closes if row.spark_closes is iterable and row.spark_closes is not string and row.spark_closes|length >= 2 else [] %}
+            {% set form_pct = ((row.score|default(0)|float * 100)|round(0))|int if row.score is not none else none %}
+            <a class="pump-desk__row pump-desk__row--active" href="/subnet/{{ row.netuid }}" data-netuid="{{ row.netuid }}">
+              <div class="pump-desk__row-main">
+                <span class="pump-desk__name">{{ row.name }}</span>
+                <span class="pump-desk__sn">SN{{ row.netuid }}</span>
+              </div>
+              <div class="pump-desk__row-meta">
+                {% if form_pct is not none %}<span class="pump-desk__formation"><span class="pump-desk__formation-lbl">Formation</span> {{ form_pct }}%</span>{% endif %}
+                {% if spark_pts|length >= 2 %}
+                <div class="pump-desk__spark-wrap"><div class="spark pump-desk__spark" data-spark="{{ spark_pts|join(',') }}" data-spark-tone="active" role="img" aria-label="Price sparkline for {{ row.name }}"></div></div>
+                {% else %}
+                <div class="pump-desk__spark-empty" aria-hidden="true">—</div>
+                {% endif %}
+              </div>
+            </a>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      {% else %}
+      <p class="pump-desk__empty">Quiet — no warming or active names on the ladder right now.</p>
       {% endif %}
     </div>
-    <div class="pump-alert__list-panel" id="pump-list-panel" hidden>
+    <div class="pump-alert__list-panel" id="pump-list-panel"{% if pa_count == 0 %} hidden{% endif %}>
     {% if pa_count > 0 %}
     <div class="pump-alert__lane" id="pump-alert-list" role="list">
       {% for row in pa_rows %}
@@ -103,8 +131,6 @@
       {% endif %}
       {% endfor %}
     </div>
-    {% else %}
-    <p class="pump-alert__empty" id="pump-alert-empty">{{ pa.empty_message|default('Quiet — no lead or confirmed motion right now. Early heat on today\'s pick stays on the dossier chip when flow warms.') }}</p>
     {% endif %}
     </div>
     <script type="application/json" id="pump-map-data">{{ map_ns.rows|tojson }}</script>
@@ -122,14 +148,26 @@
   .pump-alert__proof-pct { font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700; color: #7dd3fc; line-height: 1; letter-spacing: -0.02em; }
   .pump-alert__proof-meta { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #94a3b8; line-height: 1.4; max-width: 220px; }
   .pump-alert__trust { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7dd3fc; margin: 0 0 12px; line-height: 1.4; }
-  .pump-alert__toggle-row { display: flex; gap: 6px; margin: 0 0 10px; }
-  .pump-alert__toggle { font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 12px; border-radius: 999px; border: 1px solid #1e293b; background: #0a0c10; color: #64748b; cursor: pointer; }
-  .pump-alert__toggle.is-active { color: #7dd3fc; border-color: rgba(125, 211, 252, 0.45); background: rgba(125, 211, 252, 0.1); }
-  .pump-alert__map-panel { margin-bottom: 10px; }
-  .pump-alert__map-wrap { border: 1px solid #1a1d24; border-radius: 12px; background: #0a0c10; overflow: hidden; margin-bottom: 10px; }
-  .pump-alert__map-canvas { display: block; width: 100%; height: 220px; }
-  .pump-alert__trigger-card { padding: 12px; border-radius: 12px; border: 1px solid rgba(125, 211, 252, 0.35); background: linear-gradient(160deg, #0d1016 0%, #0a0c10 100%); }
-  .pump-alert__trigger-card-lbl { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #64748b; margin: 0 0 8px; }
+  .pump-desk { border: 1px solid #1a1d24; border-radius: 12px; background: linear-gradient(160deg, #0d1016 0%, #0a0c10 100%); padding: 12px; margin-bottom: 12px; }
+  .pump-desk__section + .pump-desk__section { margin-top: 12px; padding-top: 12px; border-top: 1px solid #1a1d24; }
+  .pump-desk__section-lbl { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: #64748b; margin: 0 0 8px; }
+  .pump-desk__rows { display: flex; flex-direction: column; gap: 6px; }
+  .pump-desk__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 10px; border: 1px solid #1a1d24; background: #0a0c10; text-decoration: none; color: inherit; }
+  .pump-desk__row--warm { border-color: rgba(251, 146, 60, 0.28); }
+  .pump-desk__row--active { border-color: rgba(52, 211, 153, 0.28); }
+  .pump-desk__row:hover { background: #0f1318; }
+  .pump-desk__row-main { min-width: 0; }
+  .pump-desk__name { display: block; font-size: 13px; font-weight: 700; color: #f8fafc; line-height: 1.2; }
+  .pump-desk__row--warm .pump-desk__name { color: #fdba74; }
+  .pump-desk__row--active .pump-desk__name { color: #6ee7b7; }
+  .pump-desk__sn { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: #64748b; }
+  .pump-desk__row-meta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .pump-desk__formation { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #94a3b8; white-space: nowrap; }
+  .pump-desk__formation-lbl { color: #64748b; margin-right: 4px; text-transform: uppercase; letter-spacing: 0.06em; font-size: 8px; }
+  .pump-desk__spark-wrap, .pump-desk__spark-empty { width: 88px; height: 32px; flex-shrink: 0; }
+  .pump-desk__spark { width: 88px; height: 32px; }
+  .pump-desk__spark-empty { display: grid; place-items: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #475569; border: 1px dashed #1e293b; border-radius: 6px; }
+  .pump-desk__empty { font-size: 13px; line-height: 1.5; color: #64748b; margin: 0; }
   .pump-alert__card--highlight { outline: 2px solid rgba(125, 211, 252, 0.55); outline-offset: 2px; }
   .pump-alert__lane { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
   .pump-alert__card { flex: 0 0 min(88vw, 300px); scroll-snap-align: start; padding: 12px; border-radius: 12px; background: linear-gradient(160deg, #0d1016 0%, #0a0c10 100%); border: 1px solid #1a1d24; min-height: 44px; }
@@ -159,7 +197,6 @@
   .pump-alert__card--exit .pump-alert__meter-fill { background: #64748b; }
   .pump-alert__thesis { font-size: 13px; line-height: 1.45; color: #e2e8f0; margin: 0 0 6px; }
   .pump-alert__trigger { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.4; color: #64748b; margin: 0; }
-  .pump-alert__empty { font-size: 13px; line-height: 1.5; color: #64748b; margin: 0; padding: 12px; border-radius: 10px; background: #0a0c10; border: 1px dashed #1a1d24; }
   @media (min-width: 720px) {
     .pump-alert__lane { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); overflow: visible; }
     .pump-alert__card { flex: initial; }

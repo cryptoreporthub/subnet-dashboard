@@ -242,7 +242,8 @@ def test_pump_alert_template_renders_lead_scanner():
             ],
         }
     )
-    assert "Lead scanner" in html
+    assert "Pump desk" in html
+    assert "Warming" in html or "BUILDING" in html
     assert "BUILDING" in html
     assert "CHASE RISK" in html
     assert "chase risk" in html.lower()
@@ -260,5 +261,5 @@ def test_api_pump_alerts_route():
 def test_preview_pump_alert_route():
     with TestClient(app) as client:
         html = client.get("/preview/k3-pump-alert").text
-    assert "Lead scanner" in html
+    assert "Pump desk" in html
     assert "BUILDING" in html

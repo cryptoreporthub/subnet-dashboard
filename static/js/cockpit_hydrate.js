@@ -1086,19 +1086,23 @@
     var count = Number(payload.count) || earlyCount + confirmedCount;
     var countEl = document.getElementById('pump-alert-count');
     if (countEl) {
-      countEl.textContent = count > 0 ? earlyCount + ' lead · ' + confirmedCount + ' live' : '';
+      countEl.textContent = count > 0 ? earlyCount + ' warming · ' + confirmedCount + ' active' : '';
       countEl.style.display = count > 0 ? '' : 'none';
     }
     if (!count) {
-      if (listPanel) {
-        listPanel.hidden = false;
-        listPanel.innerHTML =
-          '<p class="pump-alert__empty" id="pump-alert-empty">' +
+      var deskPanel = document.getElementById('pump-desk-panel');
+      if (deskPanel) {
+        deskPanel.innerHTML =
+          '<p class="pump-desk__empty">' +
           esc(
             payload.empty_message ||
-              "No lead or confirmed motion right now. Early heat on today's pick stays on the dossier chip when flow warms."
+              "Quiet — no warming or active names on the ladder right now."
           ) +
           '</p>';
+      }
+      if (listPanel) {
+        listPanel.hidden = true;
+        listPanel.innerHTML = '';
       }
       var emptyMap = document.getElementById('pump-map-data');
       if (emptyMap) emptyMap.textContent = '[]';
@@ -1190,6 +1194,7 @@
     var mapData = document.getElementById('pump-map-data');
     if (mapData) mapData.textContent = JSON.stringify(mapRows);
     if (window.PumpMap) window.PumpMap.refresh(mapRows);
+    if (typeof window.__paintSparks === 'function') window.__paintSparks();
     renderProofPumpTab(trust);
   }
 
