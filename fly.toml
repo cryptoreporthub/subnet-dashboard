@@ -31,8 +31,8 @@ primary_region = "sjc"
 
 [env]
   RUN_MODE = "web"
-  # essential = pump ladder + resolver + whale warm (no live-subnet wedge on 1GB web)
-  BACKGROUND_ON_WEB = "essential"
+  # off = stable single-machine web (pre-#437). essential wedges 1GB RAM over time.
+  BACKGROUND_ON_WEB = "off"
   # Keep prod boot light; Telegram needs a live session on the volume.
   MESSAGE_INTEL_LISTENER = "off"
   RESOLVER_REFRESH_MINUTES = "15"
