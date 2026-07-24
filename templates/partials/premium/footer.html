@@ -12,7 +12,7 @@
     <span data-footer-metric="subnets"{% if not sn_list|length %} hidden{% endif %}>Subnets: <b id="footer-subnets-count">{{ sn_list|length }}</b></span>
     <span data-footer-metric="trail"{% if not (mindmap_trail|length if mindmap_trail else 0) %} hidden{% endif %}>Trail: <b id="footer-trail-count">{{ mindmap_trail|length if mindmap_trail else 0 }}</b></span>
     <span data-footer-metric="predictions"{% if not (predictions|length if predictions else 0) %} hidden{% endif %}>Predictions: <b id="footer-predictions-count">{{ predictions|length if predictions else 0 }}</b></span>
-    <span class="footer-tag footer-sn118">Powered on SN118 · Ditto</span>
+    <span class="footer-tag footer-sn118" id="footerSubnetIntegrationsHint">Bittensor subnets · corner status</span>
     <span class="footer-tag">UTC clock · Press <kbd>C</kbd> compact</span>
   </div>
 </footer>
