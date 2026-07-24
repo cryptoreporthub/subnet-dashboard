@@ -14,6 +14,8 @@
   var ctaEl = document.getElementById('living-focus-cta');
   var subEl = document.getElementById('living-focus-sub');
   var statusChipEl = document.getElementById('living-focus-status-chip');
+  var dailyPickNetuid = null;
+  var identityChipEl = document.getElementById('living-focus-identity-chip');
   var focusNetuid = null;
   var focusName = '';
   var audited = false;
@@ -34,11 +36,9 @@
   function skeletonHtml(quietText) {
     return (
       '<div class="living-focus__skeleton" aria-hidden="true">' +
-      '<p class="living-focus__judges-caption">Judges (Oracle / Echo / Pulse)</p>' +
-      '<div class="living-focus__judges living-focus__judges--skeleton">' +
-      '<div class="living-focus__judge"><span class="living-focus__judge-label">Oracle</span><span class="living-focus__judge-bar"></span></div>' +
-      '<div class="living-focus__judge"><span class="living-focus__judge-label">Echo</span><span class="living-focus__judge-bar"></span></div>' +
-      '<div class="living-focus__judge"><span class="living-focus__judge-label">Pulse</span><span class="living-focus__judge-bar"></span></div>' +
+      '<div class="living-focus__contest-dial living-focus__contest-dial--skeleton">' +
+      '<span class="living-focus__dial-pct">—</span>' +
+      '<span class="living-focus__dial-label">Contest</span>' +
       '</div>' +
       '<p class="living-focus__quiet">' + esc(quietText || 'Building — focus loads from lane judges and graded trail.') + '</p>' +
       '</div>'
@@ -76,6 +76,7 @@
     });
   }
 
+  function updateStatusChip() {
     if (!statusChipEl) return;
     if (!focusNetuid) {
       statusChipEl.hidden = true;
@@ -174,15 +175,40 @@
     }
   }
 
-  function judgeBar(label, score, contested) {
-    var pct = Math.max(0, Math.min(100, Number(score || 0) * 100));
+  function renderContestDial(consensus, contested) {
+    var agree = consensus && consensus.agreement != null ? Number(consensus.agreement) : 0.5;
+    if (isNaN(agree)) agree = 0.5;
+    var pct = Math.round(Math.max(0, Math.min(1, agree)) * 100);
+    var label = contested ? 'Contested' : 'Aligned';
+    var verdict = consensus && consensus.verdict ? String(consensus.verdict) : '';
     return (
-      '<div class="living-focus__judge' + (contested ? ' living-focus__judge--contested' : '') + '">' +
-      '<span class="living-focus__judge-label">' + esc(label) + '</span>' +
-      '<span class="living-focus__judge-score">' + (score != null ? Number(score).toFixed(2) : '—') + '</span>' +
-      '<span class="living-focus__judge-bar" style="--pct:' + pct + '%"></span>' +
+      '<div class="living-focus__contest-dial' + (contested ? ' living-focus__contest-dial--contested' : '') + '" role="meter" aria-valuenow="' + pct + '" aria-valuemin="0" aria-valuemax="100" aria-label="Council agreement">' +
+      '<div class="living-focus__dial-arc" style="--agree:' + agree + '"></div>' +
+      '<span class="living-focus__dial-pct">' + pct + '%</span>' +
+      '<span class="living-focus__dial-label">' + esc(label) + '</span>' +
+      (verdict ? '<p class="living-focus__dial-verdict">' + esc(verdict) + '</p>' : '') +
       '</div>'
     );
+  }
+
+  function updateIdentityChip(dp) {
+    if (!identityChipEl) return;
+    var callNu = pickFocusNetuid(dp || {});
+    dailyPickNetuid = callNu;
+    if (callNu == null || focusNetuid == null || Number(callNu) === Number(focusNetuid)) {
+      identityChipEl.hidden = true;
+      identityChipEl.textContent = '';
+      return;
+    }
+    identityChipEl.hidden = false;
+    identityChipEl.textContent = 'Focus SN' + focusNetuid + ' · not today\u2019s call (SN' + callNu + ')';
+  }
+
+  function compactJudgeLine(data, contested) {
+    var dissent = dissentSummary(data);
+    if (dissent) return '<p class="living-focus__judges-compact">' + esc(dissent) + '</p>';
+    if (contested) return '<p class="living-focus__judges-compact">Oracle / Echo / Pulse split on this name.</p>';
+    return '';
   }
 
   function weightNudgeFromTrail(trail, weights) {
@@ -387,12 +413,8 @@
         html += '<p class="living-focus__contention living-focus__contention--detail">' + esc(dissent) + '</p>';
       }
     }
-    html += '<p class="living-focus__judges-caption">Lane judges (Oracle / Echo / Pulse)</p>';
-    html += '<div class="living-focus__judges">' +
-      judgeBar('Oracle', (data.oracle || {}).score, contested) +
-      judgeBar('Echo', (data.echo || {}).score, contested) +
-      judgeBar('Pulse', (data.pulse || {}).score, contested) +
-      '</div>';
+    html += renderContestDial(consensus, contested);
+    html += compactJudgeLine(data, contested);
     html += (
       '<header class="living-focus__header">' +
       '<h3 class="living-focus__name"><a href="/subnet/' + focusNetuid + '" class="living-focus__link">' + esc(focusName) + '</a> <span class="living-focus__sn">SN' + focusNetuid + '</span></h3>' +
@@ -401,10 +423,10 @@
     );
     html += renderWeightLean(weights, nudgePlain);
     html += renderWhyNot(explain);
-    if (consensus.verdict) {
-      html += '<p class="living-focus__verdict">Consensus: <strong>' + esc(consensus.verdict) + '</strong>' +
-        (consensus.agreement != null ? ' · agreement ' + Number(consensus.agreement).toFixed(2) : '') +
-        '</p>';
+    if (consensus.verdict && consensus.agreement == null) {
+      html += '<p class="living-focus__verdict">Consensus: <strong>' + esc(consensus.verdict) + '</strong></p>';
+    } else if (consensus.agreement != null && !consensus.verdict) {
+      html += '<p class="living-focus__verdict">Agreement <strong>' + Number(consensus.agreement).toFixed(2) + '</strong></p>';
     }
     bodyEl.innerHTML = html;
     showLearnStrip(trail, weights);
@@ -595,6 +617,7 @@
       var explain = res[4] || {};
       action = String(dp.action || 'HOLD').toUpperCase();
       var weights = calibrationWeights(cal);
+      updateIdentityChip(dp);
       renderJudges(judges, action, weights, explain, trail);
       renderLearnStrip(trail, weights);
       renderTrailTeaser(trail);
