@@ -23,6 +23,15 @@
     if (banner) banner.hidden = true;
   }
 
+  function maybeClearShellWarmingEarly() {
+    if (
+      document.getElementById('k3-claim') ||
+      document.querySelector('#k3-dossier #k3-claim-identity:not([hidden])')
+    ) {
+      clearShellWarming();
+    }
+  }
+
   function fmt(n, d) {
     d = d === undefined ? 2 : d;
     if (n == null || isNaN(n)) return '—';
@@ -2439,10 +2448,12 @@
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
+      maybeClearShellWarmingEarly();
       bindProofTabs();
       run();
     });
   } else {
+    maybeClearShellWarmingEarly();
     bindProofTabs();
     run();
   }

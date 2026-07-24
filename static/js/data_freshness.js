@@ -91,7 +91,11 @@
     }
 
     if (!payload.last_sync) {
-      applyBadge(el, 'warming', 'Chain feed: warming up');
+      if (count > 0) {
+        applyBadge(el, 'snapshot', eff + ' · ' + count + ' subnets');
+      } else {
+        applyBadge(el, 'snapshot', 'Chain feed: registry snapshot');
+      }
       return;
     }
 
@@ -105,6 +109,20 @@
     }
 
     applyBadge(el, 'live', 'Live · ' + (age || 'just now') + ' · ' + count + ' subnets');
+  }
+
+  function ssrBootstrap() {
+    var el = document.getElementById(BADGE_ID);
+    var chip = document.getElementById('headerDataSource');
+    if (!el) return;
+    var raw = (chip && chip.textContent ? chip.textContent : '').trim().toLowerCase();
+    if (raw && raw !== 'cache') {
+      applyBadge(el, 'snapshot', 'Chain feed: ' + raw.replace(/_/g, ' '));
+      return;
+    }
+    if (/loading/i.test(el.textContent || '')) {
+      applyBadge(el, 'snapshot', 'Chain feed: registry snapshot');
+    }
   }
 
   function poll() {
@@ -126,13 +144,23 @@
           });
           return;
         }
-        render({ sync_enabled: true, effective_source: 'registry-fallback', effective_total: 0, subnet_count: 0 });
+        render({
+          sync_enabled: true,
+          effective_source: 'registry-fallback',
+          effective_total: 0,
+          subnet_count: 0,
+          ci_or_test: false,
+        });
       });
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', poll);
+    document.addEventListener('DOMContentLoaded', function () {
+      ssrBootstrap();
+      poll();
+    });
   } else {
+    ssrBootstrap();
     poll();
   }
 

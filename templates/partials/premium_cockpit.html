@@ -54,11 +54,14 @@
 {% include "partials/premium/header.html" %}
 {% include "partials/premium/pulse_strip.html" %}
 {% include "partials/premium/council_stage.html" %}
-{% include "partials/premium/strategic_deck.html" %}
-{% include "partials/premium/simileads.html" %}
-{% include "partials/premium/caution_cells.html" %}
-{% include "partials/premium/todays_intel.html" %}
-{% include "partials/premium/dev_signals_desk.html" %}
+{% include "partials/premium/pump_alert.html" %}
+<section class="sr-weighing-rib wrap-pad" id="section-strategic-weighing" aria-labelledby="sr-weighing-rib-title">
+  <div class="sr-weighing-rib__head">
+    <h2 class="sr-weighing-rib__title" id="sr-weighing-rib-title">Council weighing</h2>
+    <a class="sr-weighing-rib__link" href="#section-proof-band">Proof</a>
+  </div>
+  {% include "partials/premium/simivision_picks.html" %}
+</section>
 {% include "partials/premium/living_focus.html" %}
 {% include "partials/premium/brain_letter.html" %}
 
@@ -100,6 +103,16 @@
   {% include "partials/premium/story_strip.html" %}
   {% include "partials/premium/paper_portfolio.html" %}
 </section>
+
+<details class="intel-ribs wrap-pad" id="intel-ribs">
+  <summary class="intel-ribs__summary">More intel · movers · dev signals</summary>
+  <div class="intel-ribs__body">
+    {% include "partials/premium/simileads.html" %}
+    {% include "partials/premium/caution_cells.html" %}
+    {% include "partials/premium/todays_intel.html" %}
+    {% include "partials/premium/dev_signals_desk.html" %}
+  </div>
+</details>
 
 <details class="letters-drawer wrap-pad" id="letters-drawer">
   <summary>Letters · weekly &amp; daily</summary>
