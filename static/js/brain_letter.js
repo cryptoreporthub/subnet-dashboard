@@ -44,6 +44,42 @@
     return "Council on HOLD — confidence hasn't cleared a sized long.";
   }
 
+  function deskTodayLine(pick) {
+    pick = pick || {};
+    if (pick.published && pick.name) {
+      var act = String(pick.action || "HOLD").toUpperCase();
+      if (act === "LONG") act = "BUY";
+      return act + " " + pick.name + (pick.netuid != null ? " (SN" + pick.netuid + ")" : "");
+    }
+    if (pick.name) return "Candidate: " + pick.name;
+    return holdCopy();
+  }
+
+  function deskNextLine(outlook) {
+    var text = outlook || "Watching the desk into resolve.";
+    if (/over the next\s+0m/i.test(text)) {
+      return "Resolve window not set — flat until the pick locks.";
+    }
+    return text;
+  }
+
+  function renderDeskStrip(payload) {
+    var strip = $("brain-letter-desk-strip");
+    if (!strip) return;
+    if (!payload || payload.status !== "ok") {
+      strip.innerHTML = "";
+      return;
+    }
+    var yesterday = payload.yesterday_outcome || "No graded outcome yet.";
+    strip.innerHTML =
+      '<article class="brain-letter__desk-card"><span class="brain-letter__desk-lbl">Yesterday</span>' +
+      '<p class="brain-letter__desk-val">' + esc(String(yesterday).slice(0, 90)) + "</p></article>" +
+      '<article class="brain-letter__desk-card"><span class="brain-letter__desk-lbl">Today</span>' +
+      '<p class="brain-letter__desk-val">' + esc(deskTodayLine(payload.pick)) + "</p></article>" +
+      '<article class="brain-letter__desk-card"><span class="brain-letter__desk-lbl">Next</span>' +
+      '<p class="brain-letter__desk-val">' + esc(String(deskNextLine(payload.outlook)).slice(0, 90)) + "</p></article>";
+  }
+
   function renderToday(pick) {
     pick = pick || {};
     if (!pick.name && !pick.why) {
@@ -152,18 +188,7 @@
   }
 
   function renderOutlook(outlook) {
-    var text = outlook || "No sized call this window — watching the desk into resolve.";
-    if (/over the next\s+0m/i.test(text)) {
-      text = "Resolve window not set — flat until the pick locks.";
-    }
-    return '<p class="weekly-letter__lead">' + esc(text) + "</p>";
-  }
-
-    var text = outlook || "No sized call this window — watching the desk into resolve.";
-    if (/over the next\s+0m/i.test(text)) {
-      text = "Resolve window not set — flat until the pick locks.";
-    }
-    return '<p class="weekly-letter__lead">' + esc(text) + "</p>";
+    return '<p class="weekly-letter__lead">' + esc(deskNextLine(outlook)) + "</p>";
   }
 
   function renderIntegrity(tb, ready, watchdog) {
@@ -193,6 +218,7 @@
 
   function render(root, payload) {
     if (!root) return;
+    renderDeskStrip(payload);
     if (!payload || payload.status !== "ok") {
       if (!hasSsrDigest(root, document.getElementById("section-brain-letter"))) {
         var graded = gradedCountFromDom();
