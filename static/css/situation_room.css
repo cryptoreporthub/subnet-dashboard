@@ -511,3 +511,105 @@ body.council-first-theme {
     box-shadow: none;
   }
 }
+
+/* ---------- SimiLeads ---------- */
+.sr-simileads {
+  max-width: 1440px;
+  margin: 16px auto 0;
+  padding: 0 20px;
+}
+.sr-simileads__title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #cbd5e1;
+  margin: 0 0 4px;
+}
+.sr-simileads__sub {
+  font-size: 12px;
+  color: var(--sr-muted);
+  margin: 0 0 10px;
+}
+.sr-simileads__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.sr-simileads__row {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--sr-hairline);
+  background: rgba(10, 12, 18, 0.6);
+}
+.sr-simileads__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.sr-simileads__name {
+  font-weight: 600;
+  font-size: 13px;
+  color: #e2e8f0;
+  text-decoration: none;
+}
+.sr-simileads__sn {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--sr-muted);
+  font-weight: 500;
+}
+.sr-simileads__lag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #38bdf8;
+}
+.sr-simileads__bars {
+  display: grid;
+  gap: 6px;
+}
+.sr-simileads__bar {
+  display: grid;
+  grid-template-columns: 56px 1fr 48px;
+  gap: 8px;
+  align-items: center;
+}
+.sr-simileads__bar-lbl {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--sr-muted);
+  text-transform: uppercase;
+}
+.sr-simileads__bar-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(148, 163, 184, 0.15);
+  overflow: hidden;
+}
+.sr-simileads__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+}
+.sr-simileads__bar-fill--score { background: linear-gradient(90deg, #38bdf8, #34d399); }
+.sr-simileads__bar-fill--price { background: #64748b; }
+.sr-simileads__bar-val {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-align: right;
+}
+.sr-simileads__bar-val.pos { color: #34d399; }
+.sr-simileads__bar-val.neg { color: #f87171; }
+.sr-simileads__empty {
+  margin: 0;
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px dashed var(--sr-hairline);
+  color: var(--sr-muted);
+  font-size: 12px;
+  text-align: center;
+}

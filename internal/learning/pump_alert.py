@@ -438,6 +438,8 @@ def build_alert_row(
         "sells_24hr": sells,
         "buy_volume_24h": buy_vol,
         "sell_volume_24h": sell_vol,
+        "price_change_24h": _metric("price_change_24h"),
+        "price_change_1h": _metric("price_change_1h", "change_1h"),
         "taostats_wired": bool(
             src.get("taostats_wired")
             or snap.get("taostats_wired")
