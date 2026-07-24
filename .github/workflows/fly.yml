@@ -110,6 +110,12 @@ jobs:
         run: flyctl scale count web=1 --app subnet-dashboard --yes
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Destroy orphan worker machines
+        run: |
+          chmod +x scripts/fly_web_recover.sh
+          FLY_APP=subnet-dashboard ./scripts/fly_web_recover.sh
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       # flyctl treats "stopped" as a good post-deploy state; a started machine
       # with critical checks is also unreachable (proxy: no good candidate).
       # Force start/restart + verify public /health before declaring success.
@@ -122,7 +128,9 @@ jobs:
           for id in $(flyctl machines list -a subnet-dashboard --json | python3 -c "
           import json,sys
           for m in json.load(sys.stdin):
-              print(m.get('id',''))
+              pg = (m.get('process_group') or 'web').lower()
+              if pg == 'web' and m.get('id'):
+                  print(m.get('id'))
           "); do
             [ -n "$id" ] || continue
             state=$(flyctl machines list -a subnet-dashboard --json | python3 -c "
