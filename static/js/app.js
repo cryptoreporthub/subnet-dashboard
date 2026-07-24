@@ -49,4 +49,21 @@
   // ---------- Chart paint hooks (uplot_charts.js defines __paintSparks / __paintRadar) ----------
   if (typeof window.__paintSparks === 'function') window.__paintSparks();
   if (typeof window.__paintRadar === 'function') window.__paintRadar();
+
+  // Open closed drawers when nav targets a section inside <details>
+  function openDrawerForHash() {
+    var id = (location.hash || '').replace(/^#/, '');
+    if (!id) return;
+    var el = document.getElementById(id);
+    if (!el) return;
+    var drawer = el.closest('details');
+    if (drawer && !drawer.open) drawer.open = true;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', openDrawerForHash);
+  } else {
+    openDrawerForHash();
+  }
+  window.addEventListener('hashchange', openDrawerForHash);
 })();

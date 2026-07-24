@@ -5,7 +5,8 @@
    Compatibility: preserves all existing IDs for JS live-refresh
    ============================================================ #}
 
-<section class="council-stage home-job" id="section-daily-pick" aria-labelledby="council-stage-title" data-home-live="1">
+{% set shell_warming = degraded|default(false) or (data_source|default('')|lower in ['snapshot', 'timeout', 'fallback']) %}
+<section class="council-stage home-job" id="section-daily-pick" aria-labelledby="council-stage-title" data-home-live="1"{% if shell_warming %} data-shell-warming="1"{% endif %}>
   <div class="council-stage__atmosphere" aria-hidden="true"></div>
   <div class="council-stage__inner">
     <p class="council-stage__brand">Simi<span>Vision</span></p>
@@ -13,6 +14,13 @@
     <h1 class="council-stage__title" id="council-stage-title">One job: know what to watch</h1>
 
     <div id="council-stage-body" class="council-stage__body home-job__body">
+
+      {% if shell_warming %}
+      <div class="council-stage__warming is-warming" id="council-warming-composite" role="status">
+        <p class="council-stage__warming-title">Council warming up</p>
+        <p class="council-stage__warming-body">Live scores and dossier layers are loading. Today&apos;s call may already show above; detail fills in shortly.</p>
+      </div>
+      {% endif %}
 
       {# ---- Data extraction (existing context only) ---- #}
       {% set act = (dpick.action|default('HOLD'))|string|upper %}
@@ -501,7 +509,7 @@
             <div class="k3-judge"><span class="k3-judge-name">{{ j.name|default('Judge') }}</span><span><span class="k3-judge-weight">{{ '%.2f'|format(j.weight|float) if j.weight else '—' }}</span>{% if j.delta is defined %}{% set d = j.delta|float %}{% if d > 0.01 %}<span class="k3-judge-delta up">+{{ '%.2f'|format(d) }}</span>{% elif d < -0.01 %}<span class="k3-judge-delta down">{{ '%.2f'|format(d) }}</span>{% else %}<span class="k3-judge-delta flat">0.00</span>{% endif %}{% endif %}</span></div>
             {% endfor %}
           {% else %}
-            <div class="k3-empty"><div class="k3-empty-icon">⚖️</div><div class="k3-empty-text">Weight evolution pending. Council deliberation data will surface as grading matures.</div></div>
+            <div class="k3-empty"><div class="k3-empty-icon">⚖️</div><div class="k3-empty-text">Judge weight history fills in as more picks grade.</div></div>
           {% endif %}
         </div>
       </div>
@@ -539,7 +547,7 @@
             <div class="k3-empty" style="padding: 16px 0;">
               <div class="k3-empty-text" style="font-size: 12px;">
                 {% if sp.reason == 'no_pick' %}This pick is still forming. Council lifecycle appears when conviction clears a sized call.
-                {% else %}Building lifecycle chain — signal → deliberation → outcome surfaces as grading matures.{% endif %}
+                {% else %}Lifecycle chain builds as picks grade — signal, deliberation, then outcome.{% endif %}
               </div>
             </div>
             {% endif %}

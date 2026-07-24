@@ -7,8 +7,9 @@
   </div>
   <div id="story-strip-body" aria-live="polite">
     {% if strip.data_available and strip.stats is mapping %}
+    {% set strip_n = rows|length if rows else (strip.stats.correct|default(0) + strip.stats.wrong|default(0)) %}
     <p class="story-strip__meta" id="story-strip-meta">
-      {{ strip.stats.correct|default(0) }} right · {{ strip.stats.wrong|default(0) }} wrong
+      Last {{ strip_n }} calls — {{ strip.stats.correct|default(0) }} right · {{ strip.stats.wrong|default(0) }} wrong
     </p>
     {% endif %}
   {% if strip.data_available and rows %}

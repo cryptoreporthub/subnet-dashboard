@@ -16,6 +16,13 @@
     });
   }
 
+  function clearShellWarming() {
+    var stage = document.getElementById('section-daily-pick');
+    if (stage) stage.removeAttribute('data-shell-warming');
+    var banner = document.getElementById('council-warming-composite');
+    if (banner) banner.hidden = true;
+  }
+
   function fmt(n, d) {
     d = d === undefined ? 2 : d;
     if (n == null || isNaN(n)) return '—';
@@ -2189,6 +2196,7 @@
       document.dispatchEvent(new CustomEvent('home:hydrate-cache', {
         detail: window.HomeHydrateCache,
       }));
+      clearShellWarming();
 
       console.log('[cockpit_hydrate] tier-1/2 panels updated');
 

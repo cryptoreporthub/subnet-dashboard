@@ -148,6 +148,9 @@
         dateEl.textContent = "Recap for " + payload.date + " (UTC)";
       }
       render(root, payload);
+      root.classList.remove("is-loading");
+      root.classList.remove("is-error");
+      root.setAttribute("aria-busy", "false");
       if (window.LetterExport && window.LetterExport.daily) {
         window.LetterExport.daily.setMarkdown(
           payload.markdown,
@@ -156,8 +159,11 @@
       }
     } catch (e) {
       if (dateEl) dateEl.textContent = "Morning briefing";
+      root.classList.remove("is-loading");
+      root.classList.add("is-error");
+      root.setAttribute("aria-busy", "false");
       root.innerHTML =
-        '<p class="weekly-letter__empty">Could not load daily recap — try again shortly.</p>';
+        '<p class="weekly-letter__empty is-error">Could not load daily recap — try again shortly.</p>';
       if (window.LetterExport && window.LetterExport.daily) {
         window.LetterExport.daily.setMarkdown("");
       }
