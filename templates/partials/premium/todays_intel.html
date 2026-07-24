@@ -26,30 +26,6 @@
       <p class="sr-intel__card-sub">24h · SN{{ mi_top_gainer.netuid|default('—') }}</p>
     </article>
     {% endif %}
-    {% if call_name or call_thesis %}
-    <article class="sr-intel__card sr-glow-live">
-      <p class="sr-intel__card-lbl">Today&apos;s call</p>
-      <p class="sr-intel__card-val">{% if call_name %}{{ call_name }}{% else %}Council pick{% endif %}</p>
-      {% if call_thesis %}
-      <p class="sr-intel__card-sub">{{ call_thesis|truncate(72, True) }}</p>
-      {% endif %}
-    </article>
-    {% endif %}
-    {% if earliest_lead.row %}
-    <article class="sr-intel__card sr-glow-live">
-      <p class="sr-intel__card-lbl">Lead scanner</p>
-      <p class="sr-intel__card-val">{{ earliest_lead.row.name }} <span class="sr-intel__card-sub" style="display:inline">· {{ earliest_lead.row.badge|default('EARLY') }}</span></p>
-      {% if earliest_lead.row.thesis %}
-      <p class="sr-intel__card-sub">{{ earliest_lead.row.thesis|truncate(64, True) }}</p>
-      {% endif %}
-    </article>
-    {% elif pa is defined and pa.count|default(0)|int == 0 %}
-    <article class="sr-intel__card">
-      <p class="sr-intel__card-lbl">Lead scanner</p>
-      <p class="sr-intel__card-val">Quiet</p>
-      <p class="sr-intel__card-sub">No early leads right now</p>
-    </article>
-    {% endif %}
     {% if caution is defined and caution and caution|length > 0 %}
     <article class="sr-intel__card">
       <p class="sr-intel__card-lbl">Risk watch</p>

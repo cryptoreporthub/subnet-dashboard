@@ -15,20 +15,20 @@
 
     <div id="council-stage-body" class="council-stage__body home-job__body">
 
-      {% if shell_warming %}
-      <div class="council-stage__warming is-warming" id="council-warming-composite" role="status">
-        <p class="council-stage__warming-title">Council warming up</p>
-        <p class="council-stage__warming-body">Live scores and dossier layers are loading. Today&apos;s call may already show above; detail fills in shortly.</p>
-      </div>
-      {% endif %}
-
-      {# ---- Data extraction (existing context only) ---- #}
+      {# ---- Data extraction (before warming banner — hide banner when call exists) ---- #}
       {% set act = (dpick.action|default('HOLD'))|string|upper %}
       {% set audit_pick = dpick.pick if dpick.pick is mapping else none %}
       {% set cand = dpick.candidate if dpick.candidate is mapping else none %}
       {% set sn = none %}
       {% if audit_pick and audit_pick.subnet is mapping %}{% set sn = audit_pick.subnet %}{% endif %}
       {% if sn is none and cand and cand.subnet is mapping %}{% set sn = cand.subnet %}{% endif %}
+
+      {% if shell_warming and not sn %}
+      <div class="council-stage__warming is-warming" id="council-warming-composite" role="status">
+        <p class="council-stage__warming-title">Council warming up</p>
+        <p class="council-stage__warming-body">Live scores and dossier layers are loading. Detail fills in shortly.</p>
+      </div>
+      {% endif %}
       {% set conf_src = audit_pick if audit_pick else cand %}
       {% set band_obj = conviction_band if conviction_band is mapping else {} %}
       {% set band = band_obj.band %}
@@ -670,7 +670,7 @@
       </div>
       {% endif %}
 
-      <a id="hour-watch-now" class="hour-watch-now hour-watch-now--building" href="#" aria-live="polite">Hour watch loading…</a>
+      <a id="hour-watch-now" class="hour-watch-now hour-watch-now--quiet" href="#" aria-live="polite">Hour watch · 1h lens updates when council clears a short pick</a>
       <p id="hour-watch-shift" class="hour-watch-shift" hidden aria-live="polite"></p>
 
       {# ---- EVIDENCE LAYER ---- #}

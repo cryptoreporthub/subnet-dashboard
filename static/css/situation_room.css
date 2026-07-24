@@ -823,3 +823,84 @@ body.council-first-theme {
 .sr-weights-chip:hover {
   border-color: rgba(56, 189, 248, 0.5);
 }
+
+/* Spine polish — compact pulse, weighing rib, demoted intel */
+.sr-pulse--compact {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+@media (max-width: 480px) {
+  .sr-pulse--compact .sr-pulse__grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+  .sr-pulse--compact .sr-pulse__cell {
+    padding: 8px 10px;
+  }
+  .sr-pulse--compact .sr-pulse__val {
+    font-size: 14px;
+  }
+  .sr-pulse--compact .sr-pulse__sub {
+    display: none;
+  }
+}
+
+.sr-weighing-rib {
+  margin: 0 auto;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+.sr-weighing-rib__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.sr-weighing-rib__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #e2e8f0;
+}
+.sr-weighing-rib__link {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #38bdf8;
+  text-decoration: none;
+}
+.sr-weighing-rib .weighing-room {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.sr-weighing-rib .section-title,
+.sr-weighing-rib .section-label {
+  display: none;
+}
+
+.intel-ribs {
+  margin: 16px auto;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+.intel-ribs__summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  padding: 12px 0;
+  list-style: none;
+}
+.intel-ribs__summary::-webkit-details-marker { display: none; }
+.intel-ribs__body > * + * {
+  margin-top: 12px;
+}
+
+.council-stage:has(#k3-claim) #council-warming-composite {
+  display: none !important;
+}
