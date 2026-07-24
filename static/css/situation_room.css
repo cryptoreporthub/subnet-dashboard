@@ -613,3 +613,91 @@ body.council-first-theme {
   font-size: 12px;
   text-align: center;
 }
+
+/* ---------- Living Focus contest dial ---------- */
+.living-focus__contest-dial {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 12px 16px 8px;
+  margin: 0 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--sr-hairline);
+  background: rgba(10, 12, 18, 0.55);
+}
+.living-focus__contest-dial--contested {
+  border-color: rgba(251, 191, 36, 0.35);
+}
+.living-focus__contest-dial--skeleton .living-focus__dial-pct {
+  opacity: 0.4;
+  animation: lf-pulse 1.4s ease-in-out infinite;
+}
+.living-focus__dial-arc {
+  width: 120px;
+  height: 60px;
+  border-radius: 120px 120px 0 0;
+  background: conic-gradient(
+    from 180deg,
+    #34d399 0deg,
+    #34d399 calc(var(--agree, 0.5) * 180deg),
+    rgba(148, 163, 184, 0.15) calc(var(--agree, 0.5) * 180deg),
+    rgba(148, 163, 184, 0.15) 180deg
+  );
+  mask: radial-gradient(farthest-side, transparent calc(100% - 10px), #000 calc(100% - 9px));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 10px), #000 calc(100% - 9px));
+}
+.living-focus__contest-dial--contested .living-focus__dial-arc {
+  background: conic-gradient(
+    from 180deg,
+    #fbbf24 0deg,
+    #fbbf24 calc(var(--agree, 0.5) * 180deg),
+    rgba(148, 163, 184, 0.15) calc(var(--agree, 0.5) * 180deg),
+    rgba(148, 163, 184, 0.15) 180deg
+  );
+}
+.living-focus__dial-pct {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  color: #e2e8f0;
+  margin-top: -42px;
+}
+.living-focus__dial-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sr-muted);
+}
+.living-focus__dial-verdict {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #cbd5e1;
+  text-align: center;
+  max-width: 280px;
+}
+.living-focus__judges-compact {
+  font-size: 11px;
+  color: var(--sr-muted);
+  margin: 0 0 10px;
+  line-height: 1.4;
+}
+.living-focus__identity-chip {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: #38bdf8;
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  background: rgba(56, 189, 248, 0.06);
+}
+@keyframes lf-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.85; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .living-focus__contest-dial--skeleton .living-focus__dial-pct { animation: none; }
+}
