@@ -25,13 +25,28 @@ def _handle_signal(signum, _frame) -> None:
 
 
 def main() -> None:
+    import os
+
     from internal.background_boot import start_background_workers, stop_background_workers
+    from internal.worker_heartbeat import touch_heartbeat
 
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
 
-    start_background_workers(heavy=True)
-    logger.info("background worker running (RUN_MODE=worker)")
+    heavy_flag = os.environ.get("WORKER_HEAVY", "essential").strip().lower()
+    heavy = heavy_flag in ("1", "true", "yes", "on", "full")
+    start_background_workers(heavy=heavy)
+    touch_heartbeat()
+
+    def _beat() -> None:
+        while not _shutdown.wait(30):
+            try:
+                touch_heartbeat()
+            except Exception as exc:
+                logger.warning("worker heartbeat failed: %s", exc)
+
+    threading.Thread(target=_beat, daemon=True, name="worker-heartbeat").start()
+    logger.info("background worker running (RUN_MODE=worker, heavy=%s)", heavy)
     _shutdown.wait()
     stop_background_workers()
     logger.info("background worker stopped")

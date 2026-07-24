@@ -30,10 +30,17 @@ def background_heavy_on_web() -> bool:
     return flag in ("1", "true", "yes", "on", "full")
 
 
+def inline_worker_expected() -> bool:
+    """True when web machine should host a sibling worker process (Fly v1)."""
+    return os.environ.get("INLINE_WORKER", "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def worker_mode_label() -> str:
-    """web | worker | combined — for /api/ops/readiness."""
+    """web | worker | split | combined — for /api/ops/readiness."""
     if is_worker_mode():
         return "worker"
+    if inline_worker_expected():
+        return "split"
     if background_on_web():
         return "combined"
     return "web"

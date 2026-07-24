@@ -1,7 +1,7 @@
 # Fly web + worker split (Phase B)
 
-**Status:** planned · **Phase A:** in prod (#332–#333) · **Owner:** infra slice  
-**Last updated:** 2026-07-18
+**Status:** **v1 in prod** — inline worker subprocess on one machine · **Phase A:** in prod (#332–#333) · **Owner:** infra slice  
+**Last updated:** 2026-07-24
 
 ## Why
 
@@ -18,7 +18,8 @@ When the worker saturates, even `/health` stops responding. Phase A (#1) mitigat
 | Phase | List # | What | Status |
 |-------|--------|------|--------|
 | **A** | 1 | One machine — priority, cache, stagger, load shed | **Now** (#332, #333) |
-| **B** | 2 | Two processes — **web** + **worker** (this doc) | Planned |
+| **B v1** | 2 | One machine — **web** + **inline worker** subprocess (this doc) | **Now** |
+| **B v2** | 2b | Separate worker machine + volume strategy | Deferred |
 | C | 3 | Static front (CDN) + API-only Fly | Optional later |
 | D | 4 | 2GB RAM or `min_machines_running = 2` | Optional later |
 | E | 5 | Microservices split | Not now |
@@ -33,20 +34,19 @@ When the worker saturates, even `/health` stops responding. Phase A (#1) mitigat
                     │  • Light /api/* (hydrate reads)     │
                     │  • NO resolver / feed boot threads  │
                     └──────────────┬──────────────────────┘
-                                   │
-                    shared volume  │  data_volume → /app/data
-                    (soul_map,    │  (predictions, picks, SQLite)
-                     predictions)  │
-                                   │
+                                   │  same Fly machine + volume
                     ┌──────────────▼──────────────────────┐
-                    │  worker process (no public HTTP)    │
+                    │  inline worker (sibling OS process) │
                     │  python -m internal.worker          │
-                    │  • Resolver scheduler             │
-                    │  • Registry freshness sync        │
-                    │  • Live subnets + feed warmup     │
-                    │  • Optional message-intel listener  │
+                    │  • Resolver scheduler               │
+                    │  • Pump ladder + whale warm         │
+                    │  • Heartbeat → data/.worker_heartbeat │
                     └─────────────────────────────────────┘
 ```
+
+**v1 (shipped):** one Fly machine, one `web` process group. `fly_web_entrypoint.sh` forks the worker before `exec uvicorn`. Readiness reports `worker_mode: "split"` and checks `data/.worker_heartbeat`.
+
+**v2 (deferred):** second Fly machine with explicit volume attach strategy — do not scale `worker=1` without that plan.
 
 Same Docker image, two commands. **No second codebase** (single-foundation rule unchanged).
 
@@ -102,23 +102,32 @@ async def _lifespan(app: FastAPI):
 
 Env flag **`BACKGROUND_ON_WEB=off`** (set in fly.toml for web process) skips heavy threads on web even before worker ships.
 
-### 3. `fly.toml` — process groups
+### 3. `fly.toml` — v1 inline worker (shipped)
 
-Fly Machines support multiple processes in one app (same image, different `cmd`):
+```toml
+[processes]
+  web = "./scripts/fly_web_entrypoint.sh"
+  # No separate worker process group — inline subprocess only.
+
+[env]
+  RUN_MODE = "web"
+  BACKGROUND_ON_WEB = "off"
+  INLINE_WORKER = "1"
+  ENABLE_INLINE_WORKER = "1"
+  WORKER_HEAVY = "essential"
+```
+
+`fly_web_entrypoint.sh` spawns `env RUN_MODE=worker python -m internal.worker &` then `exec uvicorn`.
+
+### 3b. `fly.toml` — v2 separate process group (deferred)
+
+Do **not** deploy without volume strategy. Historical outage: `fly scale count worker=1` created a second machine that stole HTTP.
 
 ```toml
 [processes]
   web = "uvicorn server:app --host 0.0.0.0 --port 8080"
   worker = "python -m internal.worker"
-
-[[services]]
-  processes = ["web"]
-  # ... existing http_service checks on /health ...
-
-# worker: no [[services]] — not on public edge
 ```
-
-Both processes mount `data_volume` → `/app/data`.
 
 ### 4. `fly.toml` env per process
 
@@ -142,20 +151,11 @@ worker = "env RUN_MODE=worker python -m internal.worker"
 ### 5. Deploy + scale
 
 ```bash
-# After first deploy with [processes]:
-fly scale count web=1 worker=1 --app subnet-dashboard
-fly volumes list  # confirm data_volume attached to BOTH machines (or shared — see risks)
+# v1: web=1 only; inline worker starts via entrypoint
+fly scale count web=1 --app subnet-dashboard
 ```
 
-**Volume note:** Fly volumes attach to **one machine** at a time. Options:
-
-| Approach | Pros | Cons |
-|----------|------|------|
-| **A. Worker only on same machine as web** | One volume, no split-brain | Less isolation (still share CPU/RAM) |
-| **B. Worker on second machine + same region volume** | Real CPU isolation | Need volume attach strategy or accept worker reads via API |
-| **C. Worker machine with volume; web machine stateless reads via SQLite WAL / API** | Best isolation | More work |
-
-**Recommended for v1:** **two processes on one machine** (Fly `[[vm]]` with process groups) — gets thread/GIL separation for HTTP vs schedulers without volume complexity. **v2:** second machine when CPU is still tight.
+**Volume note:** Fly volumes attach to **one machine** at a time. v1 keeps web + worker on that machine so JSON/SQLite state stays consistent without split-brain.
 
 ### 6. Tests
 
@@ -166,7 +166,7 @@ fly volumes list  # confirm data_volume attached to BOTH machines (or shared —
 ### 7. Docs / ops
 
 - Update `DEPLOY.md` post-deploy table
-- `GET /api/ops/readiness` → report `worker_mode: web|worker|combined`
+- `GET /api/ops/readiness` → report `worker_mode: web|worker|split|combined` and `worker_peer.alive`
 
 ## Acceptance criteria
 
@@ -203,4 +203,4 @@ fly volumes list  # confirm data_volume attached to BOTH machines (or shared —
 
 ## Next step
 
-Open implementation PR: `internal/worker.py` + `RUN_MODE` gate + `fly.toml` `[processes]` (web + worker on one machine first).
+v1 shipped. v2 (second machine) only when 1GB inline worker is still CPU-tight and volume attach is designed.
