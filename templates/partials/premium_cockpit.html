@@ -29,6 +29,7 @@
 {% set wr_meta = simivision.meta if simivision is mapping and simivision.meta is mapping else {} %}
 {% set caution = wr_meta.caution_cells if wr_meta.caution_cells is iterable and wr_meta.caution_cells is not string else [] %}
 {% set pa = pump_alerts if pump_alerts is mapping else {} %}
+{% set simileads_rows = simileads_rows if simileads_rows is defined else [] %}
 
 {# Market intel — computed early for pulse + today's intel #}
 {% set mi_ns = namespace(chg_sum=0.0, apy_sum=0.0, apy_n=0, gainers=0, losers=0) %}
@@ -54,6 +55,7 @@
 {% include "partials/premium/pulse_strip.html" %}
 {% include "partials/premium/council_stage.html" %}
 {% include "partials/premium/strategic_deck.html" %}
+{% include "partials/premium/simileads.html" %}
 {% include "partials/premium/caution_cells.html" %}
 {% include "partials/premium/todays_intel.html" %}
 {% include "partials/premium/dev_signals_desk.html" %}

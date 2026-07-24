@@ -1004,8 +1004,9 @@
   }
 
   function renderPumpAlerts(payload) {
-    var host = document.getElementById('pump-alert-body');
-    if (!host || !payload) return;
+    var body = document.getElementById('pump-alert-body');
+    if (!body || !payload) return;
+    var listPanel = document.getElementById('pump-list-panel');
     var trust = payload.trust || {};
     var trustEl = document.getElementById('pump-alert-trust');
     var proofEl = document.getElementById('pump-alert-proof');
@@ -1036,18 +1037,26 @@
       countEl.style.display = count > 0 ? '' : 'none';
     }
     if (!count) {
-      host.innerHTML =
-        '<p class="pump-alert__empty" id="pump-alert-empty">' +
-        esc(
-          payload.empty_message ||
-            "No lead or confirmed motion right now. Early heat on today's pick stays on the dossier chip when flow warms."
-        ) +
-        '</p>';
+      if (listPanel) {
+        listPanel.hidden = false;
+        listPanel.innerHTML =
+          '<p class="pump-alert__empty" id="pump-alert-empty">' +
+          esc(
+            payload.empty_message ||
+              "No lead or confirmed motion right now. Early heat on today's pick stays on the dossier chip when flow warms."
+          ) +
+          '</p>';
+      }
+      var emptyMap = document.getElementById('pump-map-data');
+      if (emptyMap) emptyMap.textContent = '[]';
+      if (window.PumpMap) window.PumpMap.refresh([]);
       return;
     }
-    var html = '<div class="pump-alert__lane" id="pump-alert-list" role="list">';
+    var mapRows = [];
+    var html = '';
     alerts.forEach(function (row) {
       if (row.timing !== 'lead' && row.timing !== 'confirmed' && row.timing !== 'exit') return;
+      mapRows.push(row);
       var timing = String(row.timing || 'confirmed');
       var phase = String(row.phase || '').toLowerCase();
       var badge = String(row.badge || '').toLowerCase().replace(/\s+/g, '-');
@@ -1120,8 +1129,14 @@
         esc(row.trigger || '') +
         '</p></article>';
     });
-    html += '</div>';
-    host.innerHTML = html;
+    if (listPanel) {
+      listPanel.innerHTML =
+        '<div class="pump-alert__lane" id="pump-alert-list" role="list">' + html + '</div>';
+      listPanel.hidden = false;
+    }
+    var mapData = document.getElementById('pump-map-data');
+    if (mapData) mapData.textContent = JSON.stringify(mapRows);
+    if (window.PumpMap) window.PumpMap.refresh(mapRows);
     renderProofPumpTab(trust);
   }
 

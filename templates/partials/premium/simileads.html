@@ -1,0 +1,33 @@
+{# SimiLeads — score rising · price flat #}
+<section class="sr-simileads wrap-pad" id="section-simileads" aria-labelledby="simileads-title">
+  <div class="sr-simileads__head">
+    <h2 class="sr-simileads__title" id="simileads-title">SimiLeads</h2>
+    <p class="sr-simileads__sub">Score rising · price flat — mispricing watch</p>
+  </div>
+  {% if simileads_rows and simileads_rows|length > 0 %}
+  <ul class="sr-simileads__list">
+    {% for row in simileads_rows %}
+    <li class="sr-simileads__row sr-glow-live">
+      <div class="sr-simileads__top">
+        <a class="sr-simileads__name" href="/subnet/{{ row.netuid }}">{{ row.name }} <span class="sr-simileads__sn">SN{{ row.netuid }}</span></a>
+        <span class="sr-simileads__lag" title="Lag index">λ {{ row.lag_index }}</span>
+      </div>
+      <div class="sr-simileads__bars" aria-hidden="true">
+        <div class="sr-simileads__bar">
+          <span class="sr-simileads__bar-lbl">Score Δ</span>
+          <span class="sr-simileads__bar-track"><span class="sr-simileads__bar-fill sr-simileads__bar-fill--score" style="width: {{ [(row.score_delta / 15 * 100)|round(0), 100]|min }}%"></span></span>
+          <span class="sr-simileads__bar-val pos">+{{ row.score_delta }}</span>
+        </div>
+        <div class="sr-simileads__bar">
+          <span class="sr-simileads__bar-lbl">Price 24h</span>
+          <span class="sr-simileads__bar-track"><span class="sr-simileads__bar-fill sr-simileads__bar-fill--price" style="width: {{ [(row.price_delta|abs / 5 * 100)|round(0), 100]|min }}%"></span></span>
+          <span class="sr-simileads__bar-val{% if row.price_delta > 0 %} pos{% elif row.price_delta < 0 %} neg{% endif %}">{{ '%+.1f'|format(row.price_delta) }}%</span>
+        </div>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="sr-simileads__empty">No score–price divergence right now — fills when council warms ahead of tape.</p>
+  {% endif %}
+</section>

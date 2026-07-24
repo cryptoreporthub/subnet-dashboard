@@ -859,6 +859,19 @@ def _pump_alerts_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         }
 
 
+def _simileads_context(
+    subnets: List[Dict[str, Any]], simivision: Optional[Dict[str, Any]]
+) -> Dict[str, Any]:
+    try:
+        from internal.analytics.simileads import build_simileads_rows
+
+        top = simivision.get("top") if isinstance(simivision, dict) else []
+        return {"simileads_rows": build_simileads_rows(subnets, top)}
+    except Exception as exc:
+        logger.warning("simileads context failed: %s", exc)
+        return {"simileads_rows": []}
+
+
 def _degraded_index_context(request: Request) -> Dict[str, Any]:
     """Fast shell — registry subnets + local learning state; hydrate upgrades live APIs."""
     now = time.time()
@@ -899,6 +912,7 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
     ctx.update(_fast_home_hero_context(trust_banner))
     ctx.update(_safe_brain_letter_context(timeout_s=2.0))
     ctx.update(_shell_pump_and_picks(shell_subnets, include_picks=True))
+    ctx.update(_simileads_context(shell_subnets, simivision_data))
     stash = {k: v for k, v in ctx.items() if k != "request"}
     _DEGRADED_INDEX_CACHE["at"] = now
     _DEGRADED_INDEX_CACHE["ctx"] = stash
@@ -1027,6 +1041,7 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
         logger.warning("Signal hub context unavailable: %s", exc)
 
     context.update(_pump_alerts_context(subnets))
+    context.update(_simileads_context(subnets, context.get("simivision")))
 
     return context
 
