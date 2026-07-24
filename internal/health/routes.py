@@ -29,6 +29,14 @@ async def api_ops_readiness():
     return build_readiness_report()
 
 
+@health_router.get("/api/ops/llm-cost")
+async def api_ops_llm_cost():
+    """Rolling SimiVision chat token usage + estimated Chutes cost."""
+    from internal.ops.llm_cost import build_llm_cost_report
+
+    return build_llm_cost_report()
+
+
 @health_router.get("/api/subnet-integrations")
 async def api_subnet_integrations():
     """Live Bittensor subnet integration status."""

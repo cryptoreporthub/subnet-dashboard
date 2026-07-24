@@ -21,6 +21,16 @@ def test_ops_readiness_contract():
     assert body.get("worker_mode") in ("web", "worker", "combined")
 
 
+def test_ops_llm_cost_contract():
+    resp = client.get("/api/ops/llm-cost")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "totals" in body
+    assert "rates_per_million" in body
+    assert "recent" in body
+    assert "averages_per_llm_call" in body
+
+
 def test_data_freshness_effective_fields():
     resp = client.get("/api/data-freshness")
     assert resp.status_code == 200
