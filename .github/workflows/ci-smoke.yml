@@ -1,36 +1,70 @@
+# Required PR/main gate — single job named "smoke" (branch protection).
+# Replaces the old health-only smoke + duplicate ci-check + Phase K gate stack.
 name: CI Smoke Test
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
+
+concurrency:
+  group: ci-smoke-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   smoke:
     name: smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
+          cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install pytest httpx bandit
 
-      - name: Compile Python
+      - name: Static foundation guards
+        run: |
+          set -e
+          echo "=== GUARD: FastAPI + uvicorn in requirements.txt ==="
+          grep -qi fastapi requirements.txt
+          grep -qi uvicorn requirements.txt
+          echo "=== GUARD: Procfile starts uvicorn ==="
+          grep -qi uvicorn Procfile
+          echo "=== GUARD: single server foundation ==="
+          test ! -d server
+          test ! -f server_original.py
+          echo "STATIC GUARDS PASSED"
+
+      - name: Compile server entrypoint
         run: python -m py_compile server.py
 
-      - name: Start server
+      - name: Endpoint contract + server tests
+        env:
+          DISABLE_BACKGROUND_SCANS: "1"
+        run: python -m pytest tests/test_endpoint_contract.py tests/test_server.py -q
+
+      - name: Security scan (bandit high)
+        run: bandit -q -r server.py internal tests --severity-level high
+
+      - name: Lint report (non-blocking)
+        continue-on-error: true
+        run: |
+          pip install black flake8
+          black --check --line-length 88 server.py internal tests
+          flake8 server.py internal tests --max-line-length 88 --statistics
+
+      - name: Runtime health check
         run: |
           uvicorn server:app --host 0.0.0.0 --port 8080 &
           sleep 5
-
-      - name: Health check
-        run: curl --fail http://localhost:8080/health
+          curl --fail http://localhost:8080/health
+          curl --fail http://localhost:8080/api/subnets
