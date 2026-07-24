@@ -280,4 +280,15 @@ def build_agent_b_root_context(
         "story_path": _safe_story_path(daily_pick_payload),
         "oracle_snapshot": _safe_oracle_snapshot(subnets, data_source),
         "price_tracking_baselines": _safe_price_baselines(),
+        "subnet_macro_signals": _safe_subnet_macro_signals(),
     }
+
+
+def _safe_subnet_macro_signals() -> Dict[str, Any]:
+    try:
+        from internal.integrations.signals import build_macro_signals
+
+        return build_macro_signals()
+    except Exception as exc:
+        logger.warning("Could not load subnet macro signals for root: %s", exc)
+        return {"signal_count": 0, "signals": [], "mood": "unavailable"}

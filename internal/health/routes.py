@@ -31,7 +31,15 @@ async def api_ops_readiness():
 
 @health_router.get("/api/subnet-integrations")
 async def api_subnet_integrations():
-    """Live Bittensor subnet integration status (SN22/50/64/118)."""
+    """Live Bittensor subnet integration status."""
     from internal.integrations.status import build_integrations_status
 
     return build_integrations_status()
+
+
+@health_router.get("/api/subnet-integrations/signals")
+async def api_subnet_integration_signals():
+    """Macro mood signals from connected subnet APIs."""
+    from internal.integrations.signals import build_macro_signals
+
+    return build_macro_signals()

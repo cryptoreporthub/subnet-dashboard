@@ -16,10 +16,41 @@ def test_subnet_integrations_api_contract():
     assert resp.status_code == 200
     body = resp.json()
     assert "integrations" in body
-    assert len(body["integrations"]) >= 3
+    assert len(body["integrations"]) >= 10
     assert body["target_minimum"] == 3
     slugs = {row["slug"] for row in body["integrations"]}
-    assert slugs >= {"desearch", "synth", "chutes", "ditto"}
+    assert slugs >= {
+        "desearch",
+        "synth",
+        "chutes",
+        "ditto",
+        "numinous",
+        "data_universe",
+        "vanta",
+        "readyai",
+    }
+
+
+def test_subnet_integration_signals_endpoint():
+    with TestClient(app) as client:
+        resp = client.get("/api/subnet-integrations/signals")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "signals" in body
+    assert "mood" in body
+    assert "updated_at" in body
+
+
+def test_numinous_connected_on_leaderboard_200(monkeypatch):
+    def fake_probe(method, url, **kwargs):
+        if "numinouslabs" in url:
+            return True, 200, '{"results":[{"miner_uid":1,"weight":0.1}]}'
+        return True, 401, ""
+
+    with patch("internal.integrations.status._http_probe", side_effect=fake_probe):
+        payload = build_integrations_status()
+    num = next(r for r in payload["integrations"] if r["slug"] == "numinous")
+    assert num["connected"] is True
 
 
 def test_ditto_always_connected(monkeypatch):
