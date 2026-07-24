@@ -71,6 +71,9 @@
     {% else %}
     <p class="proof-band__quiet">Building graded history — scores appear after calls resolve.</p>
     {% endif %}
+    {% if soul_weights_chip %}
+    <a class="sr-weights-chip" id="proof-weights-chip" href="#pro-cockpit">Weights updated · {{ soul_weights_chip.ago }}</a>
+    {% endif %}
   </div>
   <div class="proof-band__tabs" role="tablist" aria-label="Track record views">
     <button type="button" class="proof-band__tab proof-band__tab--active" data-proof-tab="council" role="tab" aria-selected="true">Council accuracy</button>
@@ -93,6 +96,7 @@
     </div>
     <p><a href="#section-pump-alert">Jump to lead scanner</a></p>
   </div>
+  {% include "partials/premium/cause_chain.html" %}
   {% include "partials/premium/story_strip.html" %}
   {% include "partials/premium/paper_portfolio.html" %}
 </section>

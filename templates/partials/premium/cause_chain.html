@@ -1,0 +1,22 @@
+{# Home cause chain — compact 4-step path from story_path #}
+{% set sp = story_path if story_path is mapping else {} %}
+{% set chain_steps = sp.steps[:4] if sp.steps is iterable and sp.steps is not string else [] %}
+<section class="sr-cause-chain wrap-pad" id="section-cause-chain" aria-labelledby="cause-chain-title">
+  <div class="sr-cause-chain__head">
+    <h2 class="sr-cause-chain__title" id="cause-chain-title">Cause chain</h2>
+    <p class="sr-cause-chain__sub">How today&apos;s call formed — signals to learning</p>
+  </div>
+  {% if sp.data_available and chain_steps %}
+  <ol class="sr-cause-chain__list">
+    {% for step in chain_steps %}
+    <li class="sr-cause-chain__step sr-cause-chain__step--{{ step.status|default('done') }}">
+      <span class="sr-cause-chain__lbl">{{ step.label|default('Step') }}</span>
+      <span class="sr-cause-chain__title">{{ step.title|default('—') }}</span>
+      {% if step.detail %}<span class="sr-cause-chain__detail">{{ step.detail|truncate(72, True) }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="sr-cause-chain__empty">Quiet — chain appears when council clears an audited pick.</p>
+  {% endif %}
+</section>

@@ -711,7 +711,7 @@ def _fast_home_hero_context(trust_banner: Optional[Dict[str, Any]] = None) -> Di
 
     tb = trust_banner if isinstance(trust_banner, dict) else {}
     pick_payload = _read_shell_daily_pick()
-    return {
+    ctx = {
         "daily_pick_stage": pick_payload,
         "conviction_band": {"band": None, "reason": "hydrate", "status": "ok"},
         "enrichment_badge": {"status": "pending"},
@@ -828,6 +828,12 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         "story_path": story_path,
     }
     hero.update(_safe_brain_letter_context())
+    try:
+        from internal.analytics.soul_weights_chip import soul_weights_chip_context
+
+        hero.update(soul_weights_chip_context())
+    except Exception:
+        hero["soul_weights_chip"] = None
     return hero
 
 
