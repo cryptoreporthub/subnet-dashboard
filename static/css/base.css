@@ -2,13 +2,23 @@
 /* Fonts loaded via <link> in templates (§31-2 O4) — no blocking @import here */
 
 :root {
-  /* Backgrounds — deep slate (Situation Room) */
-  --bg-base: #0a0a12;
-  --bg-edge: #050508;
-  --bg-surface: rgba(10, 12, 20, 0.78);
-  --bg-card: rgba(12, 14, 22, 0.62);
-  --bg-elevated: rgba(16, 18, 28, 0.85);
-  --bg-header: rgba(8, 10, 16, 0.88);
+  /* Backgrounds — midnight base with smoky slate atmosphere */
+  --bg-base: #04060e;
+  --bg-edge: #020308;
+  --bg-midnight: #050a14;
+  --bg-surface: rgba(10, 14, 24, 0.78);
+  --bg-card: rgba(12, 16, 26, 0.62);
+  --bg-elevated: rgba(16, 20, 32, 0.85);
+  --bg-header: rgba(6, 10, 18, 0.9);
+  --bg-atmosphere:
+    radial-gradient(ellipse 110% 72% at 50% -18%, rgba(148, 163, 184, 0.2) 0%, transparent 58%),
+    radial-gradient(ellipse 62% 48% at 10% 26%, rgba(100, 116, 139, 0.15) 0%, transparent 54%),
+    radial-gradient(ellipse 58% 44% at 92% 18%, rgba(148, 163, 184, 0.12) 0%, transparent 52%),
+    radial-gradient(ellipse 78% 58% at 72% 70%, rgba(71, 85, 105, 0.18) 0%, transparent 56%),
+    radial-gradient(ellipse 68% 52% at 22% 84%, rgba(148, 163, 184, 0.11) 0%, transparent 50%),
+    radial-gradient(ellipse 52% 38% at 48% 42%, rgba(203, 213, 225, 0.05) 0%, transparent 62%),
+    radial-gradient(ellipse 95% 65% at 50% 108%, rgba(15, 23, 42, 0.85) 0%, transparent 54%),
+    linear-gradient(168deg, var(--bg-midnight) 0%, var(--bg-base) 42%, var(--bg-edge) 100%);
 
   /* Accents — green primary, blue logo, pink outlines, orange highlights */
   --accent-primary: #00ff41;
@@ -96,11 +106,7 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   background-color: var(--bg-base);
-  background-image:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(56, 189, 248, 0.08) 0%, transparent 55%),
-    radial-gradient(circle at 85% 15%, rgba(52, 211, 153, 0.05) 0%, transparent 35%),
-    radial-gradient(circle at 12% 82%, rgba(251, 191, 36, 0.04) 0%, transparent 40%),
-    linear-gradient(180deg, var(--bg-base) 0%, var(--bg-edge) 100%);
+  background-image: var(--bg-atmosphere);
   background-attachment: fixed;
   padding-bottom: 64px;
 }

@@ -2,9 +2,9 @@
 
 .council-first-theme {
   --stage-ink: #e8f0e9;
-  --stage-muted: #9fb0a3;
+  --stage-muted: #94a3b8;
   --stage-accent: #00ff41;
-  --stage-wash: #06140a;
+  --stage-wash: #0a101c;
 }
 
 .app-shell.council-first {
@@ -25,16 +25,18 @@
   align-items: center;
   padding: clamp(48px, 8vh, 96px) var(--space-5, 24px) clamp(56px, 10vh, 120px);
   overflow: hidden;
-  border-bottom: 1px solid rgba(0, 255, 65, 0.18);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 .council-stage__atmosphere {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 80% 60% at 70% 40%, rgba(0, 255, 65, 0.12) 0%, transparent 55%),
-    radial-gradient(ellipse 50% 40% at 15% 80%, rgba(0, 200, 255, 0.06) 0%, transparent 50%),
-    linear-gradient(180deg, #020805 0%, var(--stage-wash) 45%, #000 100%);
+    radial-gradient(ellipse 88% 62% at 68% 36%, rgba(148, 163, 184, 0.16) 0%, transparent 56%),
+    radial-gradient(ellipse 54% 42% at 14% 78%, rgba(100, 116, 139, 0.13) 0%, transparent 52%),
+    radial-gradient(ellipse 46% 36% at 92% 12%, rgba(203, 213, 225, 0.07) 0%, transparent 48%),
+    radial-gradient(ellipse 72% 50% at 42% 58%, rgba(71, 85, 105, 0.12) 0%, transparent 54%),
+    linear-gradient(180deg, #030508 0%, var(--stage-wash) 48%, #020308 100%);
   pointer-events: none;
 }
 
@@ -999,14 +1001,10 @@ button.home-cta {
   letter-spacing: 0.12em;
 }
 
-/* Motion: subtle stage atmosphere drift */
+/* Stage atmosphere is static — smoky midnight, no drift */
 @media (prefers-reduced-motion: no-preference) {
   .council-stage__atmosphere {
-    animation: stage-wash 14s ease-in-out infinite alternate;
-  }
-  @keyframes stage-wash {
-    from { transform: scale(1); }
-    to { transform: scale(1.04); }
+    animation: none;
   }
 }
 
