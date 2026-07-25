@@ -1109,14 +1109,20 @@
     var inflowOn = !!triad.inflow_quiet_load;
     var pressureOn = !!triad.buy_pressure;
     var coilOn = !!triad.price_coil;
-    var sparks = Array.isArray(row.spark_closes) ? row.spark_closes : [];
-    var sparkHtml =
-      sparks.length >= 2
-        ? '<div class="pump-hero__spark-wrap"><div class="spark pump-hero__spark" data-spark="' +
-          esc(sparks.join(',')) +
-          '" data-spark-tone="' +
-          (timing === 'lead' ? 'warm' : 'active') +
-          '" role="img" aria-label="Price sparkline"></div></div>'
+    var corr = row.correlation_series || {};
+    var corrForm = Array.isArray(corr.formation) ? corr.formation : [];
+    var corrMom = Array.isArray(corr.momentum) ? corr.momentum : [];
+    var corrHtml =
+      corrForm.length >= 2 && corrMom.length >= 2
+        ? '<div class="pump-hero__corr-wrap">' +
+          '<div class="pump-hero__corr-legend" aria-hidden="true">' +
+          '<span class="pump-hero__corr-key pump-hero__corr-key--form">Formation</span>' +
+          '<span class="pump-hero__corr-key pump-hero__corr-key--mom">Momentum</span></div>' +
+          '<div class="pump-corr pump-hero__corr" data-corr-form="' +
+          esc(corrForm.join(',')) +
+          '" data-corr-mom="' +
+          esc(corrMom.join(',')) +
+          '" role="img" aria-label="Formation and momentum correlation chart"></div></div>'
         : '';
     return (
       '<div class="pump-hero" id="pump-desk-hero">' +
@@ -1158,11 +1164,12 @@
       '<span class="pump-hero__meter" aria-hidden="true"><span class="pump-hero__meter-fill pump-hero__meter-fill--mom" style="width:' +
       Math.min(100, momPct) +
       '%"></span></span></div>' +
-      '<div class="pump-hero__stat"><span class="pump-hero__stat-lbl">Distance</span>' +
+      '<div class="pump-hero__stat pump-hero__stat--corr">' +
+      corrHtml +
+      '<span class="pump-hero__stat-lbl">Distance</span>' +
       '<span class="pump-hero__stat-val pump-hero__stat-val--dist">' +
       esc(row.distance != null ? row.distance : '—') +
       '</span><span class="pump-hero__stat-hint">to trigger</span></div></div>' +
-      sparkHtml +
       '</div>' +
       '<div class="pump-hero__triad" aria-label="Pre-pump triad">' +
       '<span class="pump-hero__triad-pill' +

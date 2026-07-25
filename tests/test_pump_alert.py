@@ -9,7 +9,13 @@ from fastapi.testclient import TestClient
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from internal.learning.dpick_pump import build_pump_chip
-from internal.learning.pump_alert import build_alert_row, build_desk_row, build_pump_alerts, build_pump_alerts_desk
+from internal.learning.pump_alert import (
+    _correlation_series_from_closes,
+    build_alert_row,
+    build_desk_row,
+    build_pump_alerts,
+    build_pump_alerts_desk,
+)
 from server import app
 
 
@@ -294,6 +300,24 @@ def test_pump_alert_compact_renders_hero_card():
     assert "Inflow" in html
     assert "pump-hero__meter" in html
     assert "pump-hero__glow" in html
+    assert "correlation_series" in row
+    assert row["correlation_series"]["formation"][-1] == row["formation_pct"]
+    assert row["correlation_series"]["momentum"][-1] == row["momentum_pct"]
+
+
+def test_correlation_series_anchors_last_point_to_live_scores():
+    closes = [1.0 + i * 0.02 + (0.01 if i % 3 == 0 else 0) for i in range(20)]
+    out = _correlation_series_from_closes(closes, 48, 81)
+    assert len(out["formation"]) >= 2
+    assert len(out["momentum"]) >= 2
+    assert out["formation"][-1] == 48
+    assert out["momentum"][-1] == 81
+
+
+def test_correlation_series_fallback_without_price_history():
+    out = _correlation_series_from_closes([], 33, 55)
+    assert out["formation"][-1] == 33
+    assert out["momentum"][-1] == 55
 
 
 def test_api_pump_alerts_route():
@@ -322,6 +346,8 @@ def test_build_pump_alerts_desk_includes_hero_and_metrics():
     hero = out["hero"]
     assert hero["formation_pct"] == 48
     assert hero["momentum_pct"] == 81
+    assert hero["correlation_series"]["formation"][-1] == 48
+    assert hero["correlation_series"]["momentum"][-1] == 81
     assert "triad" in hero
     assert "triad_labels" in hero
     assert hero["subtitle"]

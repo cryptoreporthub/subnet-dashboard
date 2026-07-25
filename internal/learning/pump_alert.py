@@ -529,6 +529,54 @@ def _desk_metrics(
     }
 
 
+def _anchor_series(raw: List[float], target: int, *, points: int = 18) -> List[int]:
+    """Shape-preserving 0–100 series with the last point pinned to ``target``."""
+    if not raw:
+        return [int(target)]
+    clipped = [float(v) for v in raw[-points:]]
+    lo, hi = min(clipped), max(clipped)
+    if hi - lo < 1e-9:
+        return [int(target)] * len(clipped)
+    normed = [(v - lo) / (hi - lo) * 100.0 for v in clipped]
+    offset = float(target) - normed[-1]
+    return [min(100, max(0, int(round(v + offset)))) for v in normed]
+
+
+def _correlation_series_from_closes(
+    closes: List[float],
+    formation_pct: int,
+    momentum_pct: int,
+    *,
+    points: int = 18,
+) -> Dict[str, List[int]]:
+    """Dual-layer formation/momentum traces from cached closes — last point = live desk scores."""
+    if len(closes) < 3:
+        return {
+            "formation": [formation_pct] * min(6, points),
+            "momentum": [momentum_pct] * min(6, points),
+        }
+    window = [float(c) for c in closes[-points:]]
+    formation_raw: List[float] = []
+    momentum_raw: List[float] = []
+    for i, price in enumerate(window):
+        seg = window[max(0, i - 5) : i + 1]
+        lo, hi = min(seg), max(seg)
+        span = hi - lo or max(abs(price), 1e-12) * 0.002
+        mid = (lo + hi) / 2.0
+        compress = 1.0 - min(span / max(mid, 1e-12), 0.25) / 0.25
+        pos = (price - lo) / span
+        formation_raw.append(0.55 * compress + 0.45 * pos)
+        if i == 0:
+            momentum_raw.append(0.5)
+        else:
+            roc = (price - window[i - 1]) / max(window[i - 1], 1e-12)
+            momentum_raw.append(0.5 + min(max(roc * 10.0, -0.45), 0.45))
+    return {
+        "formation": _anchor_series(formation_raw, formation_pct, points=points),
+        "momentum": _anchor_series(momentum_raw, momentum_pct, points=points),
+    }
+
+
 def _triad_pill_labels(triad: Dict[str, Any]) -> Dict[str, str]:
     inflow_on = bool(triad.get("inflow_quiet_load"))
     pressure_on = bool(triad.get("buy_pressure"))
@@ -577,6 +625,11 @@ def build_desk_row(
             spark_closes = spark_closes_cached_only(subnet_row)
         except Exception:
             spark_closes = []
+    corr = _correlation_series_from_closes(
+        spark_closes,
+        metrics["formation_pct"],
+        metrics["momentum_pct"],
+    )
     return {
         "netuid": netuid_int,
         "name": name,
@@ -585,6 +638,7 @@ def build_desk_row(
         "score": round(score, 2) if score is not None else None,
         "badge": copy["badge"],
         "spark_closes": spark_closes,
+        "correlation_series": corr,
         "move": copy["move"],
         "thesis": copy["thesis"],
         "trigger": copy["trigger"],
