@@ -1103,20 +1103,27 @@
     var trigger = row.trigger_score != null ? Number(row.trigger_score) : 0.72;
     var trigPct = Math.min(100, Math.round((score / trigger) * 100));
     var formPct = row.formation_pct != null ? Number(row.formation_pct) : Math.min(100, Math.round(score * 100));
-    var momPct = row.momentum_pct != null ? Number(row.momentum_pct) : formPct;
+    var confirmPct =
+      row.confirm_pct != null
+        ? Number(row.confirm_pct)
+        : row.momentum_pct != null
+          ? Number(row.momentum_pct)
+          : formPct;
     var timing = String(row.timing || 'lead');
     var badgeSlug = String(row.badge || '').toLowerCase().replace(/\s+/g, '-');
     var inflowOn = !!triad.inflow_quiet_load;
     var pressureOn = !!triad.buy_pressure;
     var coilOn = !!triad.price_coil;
-    var sparks = Array.isArray(row.spark_closes) ? row.spark_closes : [];
-    var sparkHtml =
-      sparks.length >= 2
-        ? '<div class="pump-hero__spark-wrap"><div class="spark pump-hero__spark" data-spark="' +
-          esc(sparks.join(',')) +
-          '" data-spark-tone="' +
-          (timing === 'lead' ? 'warm' : 'active') +
-          '" role="img" aria-label="Price sparkline"></div></div>'
+    var progress = Array.isArray(row.progress_series) ? row.progress_series : [];
+    var progressHtml =
+      progress.length >= 2
+        ? '<div class="pump-hero__progress-wrap">' +
+          '<div class="pump-hero__progress-legend" aria-hidden="true">' +
+          '<span class="pump-hero__progress-key">Approach</span>' +
+          '<span class="pump-hero__progress-key pump-hero__progress-key--trigger">Trigger</span></div>' +
+          '<div class="pump-progress pump-hero__progress" data-progress="' +
+          esc(progress.join(',')) +
+          '" role="img" aria-label="Score progress toward trigger"></div></div>'
         : '';
     return (
       '<div class="pump-hero" id="pump-desk-hero">' +
@@ -1144,25 +1151,26 @@
       esc(row.subtitle || row.badge || '') +
       '</p>' +
       '<div class="pump-hero__body-grid"><div class="pump-hero__stats">' +
-      '<div class="pump-hero__stat"><span class="pump-hero__stat-lbl">Formation</span>' +
+      '<div class="pump-hero__stat"><span class="pump-hero__stat-lbl">Flow</span>' +
       '<span class="pump-hero__stat-val">' +
       esc(formPct) +
       '<span class="pump-hero__stat-den">/100</span></span>' +
       '<span class="pump-hero__meter" aria-hidden="true"><span class="pump-hero__meter-fill" style="width:' +
       Math.min(100, formPct) +
       '%"></span></span></div>' +
-      '<div class="pump-hero__stat"><span class="pump-hero__stat-lbl">Momentum</span>' +
+      '<div class="pump-hero__stat"><span class="pump-hero__stat-lbl">Confirm</span>' +
       '<span class="pump-hero__stat-val">' +
-      esc(momPct) +
+      esc(confirmPct) +
       '<span class="pump-hero__stat-den">/100</span></span>' +
       '<span class="pump-hero__meter" aria-hidden="true"><span class="pump-hero__meter-fill pump-hero__meter-fill--mom" style="width:' +
-      Math.min(100, momPct) +
+      Math.min(100, confirmPct) +
       '%"></span></span></div>' +
-      '<div class="pump-hero__stat"><span class="pump-hero__stat-lbl">Distance</span>' +
+      '<div class="pump-hero__stat pump-hero__stat--progress">' +
+      progressHtml +
+      '<span class="pump-hero__stat-lbl">Distance</span>' +
       '<span class="pump-hero__stat-val pump-hero__stat-val--dist">' +
       esc(row.distance != null ? row.distance : '—') +
       '</span><span class="pump-hero__stat-hint">to trigger</span></div></div>' +
-      sparkHtml +
       '</div>' +
       '<div class="pump-hero__triad" aria-label="Pre-pump triad">' +
       '<span class="pump-hero__triad-pill' +

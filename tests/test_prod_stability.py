@@ -10,6 +10,31 @@ from internal.analytics.root_context import spark_closes_cached_only
 from internal.pump.state import load_state, scan_all_subnets
 
 
+from fastapi.testclient import TestClient
+
+from server import app
+
+
+def test_get_index_returns_instant_shell_without_blocking_on_prime(monkeypatch):
+    import server as srv
+
+    monkeypatch.setattr(srv, "_EMERGENCY_HOME_HTML", "")
+    monkeypatch.setattr(srv, "_HOMEPAGE_HTML_CACHE", {"at": 0.0, "html": None})
+
+    def _hang_prime():
+        time.sleep(30)
+
+    monkeypatch.setattr(srv, "_prime_emergency_home_html", _hang_prime)
+    with TestClient(app) as client:
+        t0 = time.monotonic()
+        r = client.get("/")
+        elapsed = time.monotonic() - t0
+    assert r.status_code == 200
+    assert elapsed < 2.0
+    assert "Loading council" in r.text
+    assert b"background:#0a0a0f" in r.content or "#04060e" in r.text
+
+
 def test_spark_closes_cached_only_skips_lazy_fill(monkeypatch):
     with patch("internal.council.state_vector._lazy_fill_price_candles") as lazy:
         spark_closes_cached_only({"netuid": 29})

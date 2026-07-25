@@ -455,6 +455,18 @@ _HOMEPAGE_HTML_CACHE: Dict[str, Any] = {"at": 0.0, "html": None}
 _EMERGENCY_HOME_HTML: str = ""
 _HOMEPAGE_WARM_LOCK = threading.Lock()
 _HOMEPAGE_WARMING = False
+# ponytail: zero I/O — never block GET / waiting for Jinja or pump ladder lock
+_INSTANT_HOME_SHELL = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimiVision — Council</title>
+<meta name="theme-color" content="#04060e">
+<style>html,body{margin:0;min-height:100%;background:#04060e;color:#e8f0e9;font-family:system-ui,sans-serif}</style>
+</head>
+<body><p style="padding:1.5rem;font-family:JetBrains Mono,monospace;font-size:14px;color:#8cb39f">Loading council desk…</p></body>
+</html>"""
 
 
 class _HomepageStubRequest:
@@ -918,8 +930,16 @@ def _minimal_index_context(request: Request) -> Dict[str, Any]:
         },
         **_fast_home_hero_context(trust_banner),
         **_quiet_brain_letter_stub(),
+        "pump_alerts": {
+            "status": "quiet",
+            "count": 0,
+            "early_count": 0,
+            "confirmed_count": 0,
+            "alerts": [],
+            "desk": True,
+            "empty_message": "Loading pump desk…",
+        },
     }
-    ctx.update(_shell_pump_and_picks(shell_subnets, include_picks=False))
     return ctx
 
 
@@ -1015,7 +1035,7 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
 
 
 def _bailout_homepage_html() -> Optional[str]:
-    """HTML for ASGI bailout — warm cache on miss, then Jinja emergency, else hardcoded."""
+    """HTML for ASGI bailout — never block; cold cache returns None → hardcoded shell."""
     now = time.time()
     cached_html = _HOMEPAGE_HTML_CACHE.get("html")
     if (
@@ -1025,11 +1045,14 @@ def _bailout_homepage_html() -> Optional[str]:
     ):
         return cached_html
     _schedule_homepage_warm(None)
-    try:
-        return _prime_emergency_home_html()
-    except Exception as exc:
-        logger.warning("bailout emergency prime failed: %s", exc)
-        return None
+    if _EMERGENCY_HOME_HTML:
+        return _EMERGENCY_HOME_HTML
+    threading.Thread(
+        target=_prime_emergency_home_html,
+        daemon=True,
+        name="bailout-emergency-prime",
+    ).start()
+    return None
 
 
 def _schedule_homepage_warm(request: Optional[Request] = None) -> None:
@@ -1057,7 +1080,15 @@ async def index(request: Request):
         return HTMLResponse(cached_html)
 
     _schedule_homepage_warm(request)
-    html = _EMERGENCY_HOME_HTML or _prime_emergency_home_html()
+    if _EMERGENCY_HOME_HTML:
+        html = _EMERGENCY_HOME_HTML
+    else:
+        threading.Thread(
+            target=_prime_emergency_home_html,
+            daemon=True,
+            name="emergency-prime-on-demand",
+        ).start()
+        html = _INSTANT_HOME_SHELL
     return HTMLResponse(
         html,
         headers={"Cache-Control": "no-store, max-age=0"},

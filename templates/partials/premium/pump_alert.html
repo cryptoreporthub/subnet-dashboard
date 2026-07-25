@@ -57,9 +57,9 @@
       {% set triad = hero_row.triad if hero_row.triad is mapping else {} %}
       {% set labels = hero_row.triad_labels if hero_row.triad_labels is mapping else {} %}
       {% set form_pct = hero_row.formation_pct|default(0)|int %}
-      {% set mom_pct = hero_row.momentum_pct|default(0)|int %}
+      {% set confirm_pct = hero_row.confirm_pct|default(hero_row.momentum_pct|default(0))|int %}
       {% set trig_pct = ((hero_row.score|default(0)|float / hero_row.trigger_score|default(0.72)|float * 100)|round(0))|int if hero_row.score is not none else 0 %}
-      {% set spark_pts = hero_row.spark_closes if hero_row.spark_closes is iterable and hero_row.spark_closes is not string and hero_row.spark_closes|length >= 2 else [] %}
+      {% set progress_pts = hero_row.progress_series if hero_row.progress_series is iterable and hero_row.progress_series is not string and hero_row.progress_series|length >= 2 else [] %}
       <div class="pump-hero" id="pump-desk-hero">
         <a class="pump-hero__card pump-hero__card--{{ hero_row.timing }} pump-hero__card--flag" href="/subnet/{{ hero_row.netuid }}" data-netuid="{{ hero_row.netuid }}">
           <div class="pump-hero__glow" aria-hidden="true"></div>
@@ -74,26 +74,30 @@
           <div class="pump-hero__body-grid">
             <div class="pump-hero__stats">
               <div class="pump-hero__stat">
-                <span class="pump-hero__stat-lbl">Formation</span>
+                <span class="pump-hero__stat-lbl">Flow</span>
                 <span class="pump-hero__stat-val">{{ form_pct }}<span class="pump-hero__stat-den">/100</span></span>
                 <span class="pump-hero__meter" aria-hidden="true"><span class="pump-hero__meter-fill" style="width:{{ [form_pct, 100]|min }}%"></span></span>
               </div>
               <div class="pump-hero__stat">
-                <span class="pump-hero__stat-lbl">Momentum</span>
-                <span class="pump-hero__stat-val">{{ mom_pct }}<span class="pump-hero__stat-den">/100</span></span>
-                <span class="pump-hero__meter" aria-hidden="true"><span class="pump-hero__meter-fill pump-hero__meter-fill--mom" style="width:{{ [mom_pct, 100]|min }}%"></span></span>
+                <span class="pump-hero__stat-lbl">Confirm</span>
+                <span class="pump-hero__stat-val">{{ confirm_pct }}<span class="pump-hero__stat-den">/100</span></span>
+                <span class="pump-hero__meter" aria-hidden="true"><span class="pump-hero__meter-fill pump-hero__meter-fill--mom" style="width:{{ [confirm_pct, 100]|min }}%"></span></span>
               </div>
-              <div class="pump-hero__stat">
+              <div class="pump-hero__stat pump-hero__stat--progress">
+                {% if progress_pts|length >= 2 %}
+                <div class="pump-hero__progress-wrap">
+                  <div class="pump-hero__progress-legend" aria-hidden="true">
+                    <span class="pump-hero__progress-key">Approach</span>
+                    <span class="pump-hero__progress-key pump-hero__progress-key--trigger">Trigger</span>
+                  </div>
+                  <div class="pump-progress pump-hero__progress" data-progress="{{ progress_pts|join(',') }}" role="img" aria-label="Score progress toward trigger"></div>
+                </div>
+                {% endif %}
                 <span class="pump-hero__stat-lbl">Distance</span>
                 <span class="pump-hero__stat-val pump-hero__stat-val--dist">{{ hero_row.distance|default('—') }}</span>
                 <span class="pump-hero__stat-hint">to trigger</span>
               </div>
             </div>
-            {% if spark_pts|length >= 2 %}
-            <div class="pump-hero__spark-wrap">
-              <div class="spark pump-hero__spark" data-spark="{{ spark_pts|join(',') }}" data-spark-tone="{{ 'warm' if hero_row.timing == 'lead' else 'active' }}" role="img" aria-label="Price sparkline"></div>
-            </div>
-            {% endif %}
           </div>
           <div class="pump-hero__triad" aria-label="Pre-pump triad">
             <span class="pump-hero__triad-pill{% if triad.inflow_quiet_load %} pump-hero__triad-pill--on{% endif %}"><span class="pump-hero__triad-k">Inflow</span> {{ labels.inflow|default('WATCH') }}</span>
@@ -374,10 +378,47 @@
     gap: 12px;
     margin-bottom: 14px;
   }
-  @media (min-width: 380px) {
-    .pump-hero__body-grid { grid-template-columns: 1.4fr 0.8fr; align-items: end; }
-  }
   .pump-hero__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .pump-hero__stat--progress { display: flex; flex-direction: column; }
+  .pump-hero__progress-wrap {
+    flex: 1 1 auto;
+    min-height: 58px;
+    margin-bottom: 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(51, 65, 85, 0.8);
+    background: linear-gradient(180deg, rgba(2, 6, 12, 0.75), rgba(8, 12, 20, 0.45));
+    padding: 5px 6px 4px;
+    position: relative;
+    overflow: hidden;
+  }
+  .pump-hero__progress-legend {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 2px;
+    position: relative;
+    z-index: 1;
+  }
+  .pump-hero__progress-key {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #64748b;
+  }
+  .pump-hero__progress-key::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 2px;
+    border-radius: 999px;
+    margin-right: 4px;
+    vertical-align: middle;
+    transform: translateY(-1px);
+    background: #38bdf8;
+  }
+  .pump-hero__progress-key--trigger::before { background: #fb923c; }
+  .pump-hero__progress { width: 100%; height: 38px; position: relative; z-index: 1; }
   .pump-hero__stat-lbl {
     display: block;
     font-family: 'JetBrains Mono', monospace;
@@ -422,14 +463,6 @@
   .pump-hero__meter-fill--mom {
     background: linear-gradient(90deg, #a855f7, #e879f9);
   }
-  .pump-hero__spark-wrap {
-    height: 52px;
-    border-radius: 10px;
-    border: 1px solid rgba(51, 65, 85, 0.8);
-    background: rgba(2, 6, 12, 0.55);
-    padding: 6px;
-  }
-  .pump-hero__spark { width: 100%; height: 100%; }
   .pump-hero__triad { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
   .pump-hero__triad-pill {
     flex: 1 1 30%;
