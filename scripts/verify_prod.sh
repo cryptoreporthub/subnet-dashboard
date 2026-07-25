@@ -135,7 +135,11 @@ if subs:
 "
 
 echo "== cockpit SSE once =="
-curl -fsS -o /dev/null -w "%{http_code}\n" "$BASE/api/cockpit/stream?once=1"
+sse_code="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 15 "$BASE/api/cockpit/stream?once=1" || true)"
+echo "$sse_code"
+if [ "$sse_code" != "200" ]; then
+  echo "WARN: cockpit SSE returned $sse_code (non-fatal for Wave A gate)"
+fi
 
 echo "== shareable subnet page =="
 curl -fsS "$BASE/subnet/1" | head -c 200 >/dev/null

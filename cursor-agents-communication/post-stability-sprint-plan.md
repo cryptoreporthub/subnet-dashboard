@@ -37,6 +37,8 @@ Wave A  Verify + ops gate          ← human + script; worker scale if soak fail
 
 **Branch:** `cursor/wave-a-prod-gate-d2cd` (docs + script tweaks only; ops is human)
 
+**One command:** `./scripts/wave_a_gate.sh` runs contract tests + G0 + pump/health soak + `verify_prod.sh`.
+
 ### A1 — Automated prod gate
 | Step | Command / work |
 |------|----------------|

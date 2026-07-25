@@ -10,8 +10,9 @@
 ## Next (sequential — one PR at a time)
 
 ### Wave A — Verify & ops gate
-1. Run `verify_prod.sh` + G0 human 390px sign-off
-2. Ops: `fly scale count worker=1` only if prod soak fails
+1. ✅ Automated: `./scripts/wave_a_gate.sh` (G0 + pump soak + verify_prod)
+2. ⚠️ **Human:** 390px sign-off — Call → Pump desk → horizon path
+3. Ops: `fly scale count worker=1` only if prod soak fails after merge
 
 ### Wave B — Batch 0 brain (B0-a → B0-d)
 3. `cursor/b0-a-living-focus-d2cd` → B0-b → B0-c → B0-d
