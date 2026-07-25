@@ -58,7 +58,7 @@ _MOCK_CATALOG = [
 
 def test_recommend_candidates_excludes_primary_and_ranks_forecast():
     with patch("internal.integrations.taonsquare.fetch_catalog", return_value=_MOCK_CATALOG):
-        rows = recommend_candidates(exclude={22, 50, 64, 118}, limit=5)
+        rows = recommend_candidates(exclude={19, 22, 64, 118}, limit=5)
     netuids = [r["netuid"] for r in rows]
     assert 99 not in netuids
     assert 6 in netuids
