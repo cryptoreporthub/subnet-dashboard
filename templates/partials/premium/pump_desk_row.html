@@ -1,0 +1,17 @@
+{% set spark_pts = row.spark_closes if row.spark_closes is iterable and row.spark_closes is not string and row.spark_closes|length >= 2 else [] %}
+{% set form_pct = row.formation_pct if row.formation_pct is not none else (((row.score|default(0)|float * 100)|round(0))|int if row.score is not none else none) %}
+{% set tone = 'warm' if row.timing == 'lead' else 'active' %}
+<a class="pump-desk__row pump-desk__row--{{ tone }}" href="/subnet/{{ row.netuid }}" data-netuid="{{ row.netuid }}">
+  <div class="pump-desk__row-main">
+    <span class="pump-desk__name">{{ row.name }}</span>
+    <span class="pump-desk__sn">SN{{ row.netuid }}</span>
+  </div>
+  <div class="pump-desk__row-meta">
+    {% if form_pct is not none %}<span class="pump-desk__formation"><span class="pump-desk__formation-lbl">Formation</span> {{ form_pct }}%</span>{% endif %}
+    {% if spark_pts|length >= 2 %}
+    <div class="pump-desk__spark-wrap"><div class="spark pump-desk__spark" data-spark="{{ spark_pts|join(',') }}" data-spark-tone="{{ tone }}" role="img" aria-label="Price sparkline for {{ row.name }}"></div></div>
+    {% else %}
+    <div class="pump-desk__spark-empty" aria-hidden="true">—</div>
+    {% endif %}
+  </div>
+</a>

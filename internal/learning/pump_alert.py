@@ -487,6 +487,59 @@ def _snapshot_lead_signals(ladder_entry: Dict[str, Any]) -> Dict[str, Any]:
     return {"buy_ratio": buy_ratio, "volume_intensity": volume_intensity}
 
 
+_HERO_SUBTITLES = {
+    "WARMING UP": "Early flow building before price runs",
+    "BUILDING": "Momentum breakout forming",
+    "STRONG": "Full triad aligned — act band",
+    "JUST STARTED": "Move just confirmed on ladder",
+    "CHASE RISK": "Late leg — size down only",
+    "FADING": "Cooling — exit watch",
+}
+
+
+def _desk_metrics(
+    ladder_entry: Dict[str, Any],
+    leads: Dict[str, Any],
+    score: Optional[float],
+) -> Dict[str, Any]:
+    snapshot: Dict[str, Any] = {}
+    raw = ladder_entry.get("signal_snapshot")
+    if isinstance(raw, dict):
+        snapshot = dict(raw)
+    try:
+        from internal.pump.triad import compute_pump_triad
+
+        triad = compute_pump_triad(snapshot) if snapshot else compute_pump_triad({})
+    except Exception:
+        triad = {"inflow_quiet_load": False, "buy_pressure": False, "price_coil": False, "lit_count": 0}
+    sc = float(score or 0.0)
+    try:
+        accum = float(ladder_entry.get("accum_score")) if ladder_entry.get("accum_score") is not None else sc
+    except (TypeError, ValueError):
+        accum = sc
+    gates = _lead_thresholds()
+    trigger = float(gates.get("just_started_max_score", 0.72))
+    distance = round(max(0.0, trigger - sc), 2)
+    return {
+        "formation_pct": min(100, int(round(sc * 100))),
+        "momentum_pct": min(100, int(round(accum * 100))),
+        "distance": distance,
+        "trigger_score": trigger,
+        "triad": triad,
+    }
+
+
+def _triad_pill_labels(triad: Dict[str, Any]) -> Dict[str, str]:
+    inflow_on = bool(triad.get("inflow_quiet_load"))
+    pressure_on = bool(triad.get("buy_pressure"))
+    coil_on = bool(triad.get("price_coil"))
+    return {
+        "inflow": "STRONG" if inflow_on else "WATCH",
+        "pressure": "RISING" if pressure_on else "FLAT",
+        "coil": "TIGHT" if coil_on else "OPEN",
+    }
+
+
 def build_desk_row(
     ladder_entry: Dict[str, Any],
     subnet_row: Optional[Dict[str, Any]] = None,
@@ -512,6 +565,10 @@ def build_desk_row(
         netuid_int,
         score=score,
     )
+    metrics = _desk_metrics(ladder_entry, leads, score)
+    triad = metrics.get("triad") or {}
+    pills = _triad_pill_labels(triad if isinstance(triad, dict) else {})
+    subtitle = _HERO_SUBTITLES.get(copy["badge"], copy["badge"])
     spark_closes: List[float] = []
     if isinstance(subnet_row, dict):
         try:
@@ -531,6 +588,13 @@ def build_desk_row(
         "move": copy["move"],
         "thesis": copy["thesis"],
         "trigger": copy["trigger"],
+        "subtitle": subtitle,
+        "formation_pct": metrics["formation_pct"],
+        "momentum_pct": metrics["momentum_pct"],
+        "distance": metrics["distance"],
+        "trigger_score": metrics["trigger_score"],
+        "triad": triad,
+        "triad_labels": pills,
     }
 
 
@@ -603,7 +667,7 @@ def _finalize_pump_payload(
             "ready": False,
             "line": "Early alerts: grading starts once lead phase entries resolve (1h).",
         }
-    return {
+    payload = {
         "status": status,
         "count": count,
         "early_count": early_count,
@@ -614,6 +678,10 @@ def _finalize_pump_payload(
         "trust": trust,
         "desk": desk,
     }
+    if desk and alerts:
+        hero = next((a for a in alerts if a.get("timing") == "lead"), alerts[0])
+        payload["hero"] = hero
+    return payload
 
 
 def build_pump_alerts_desk(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:

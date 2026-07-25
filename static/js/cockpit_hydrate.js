@@ -1095,6 +1095,82 @@
     return true;
   }
 
+  function renderPumpHeroCard(row) {
+    if (!row || row.netuid == null) return '';
+    var triad = row.triad || {};
+    var labels = row.triad_labels || {};
+    var score = row.score != null ? Number(row.score) : 0;
+    var trigger = row.trigger_score != null ? Number(row.trigger_score) : 0.72;
+    var trigPct = Math.min(100, Math.round((score / trigger) * 100));
+    var timing = String(row.timing || 'lead');
+    var inflowOn = !!triad.inflow_quiet_load;
+    var pressureOn = !!triad.buy_pressure;
+    var coilOn = !!triad.price_coil;
+    return (
+      '<div class="pump-hero" id="pump-desk-hero">' +
+      '<p class="pump-hero__eyebrow">Closest to trigger</p>' +
+      '<a class="pump-hero__card pump-hero__card--' +
+      esc(timing) +
+      '" href="/subnet/' +
+      esc(row.netuid) +
+      '" data-netuid="' +
+      esc(row.netuid) +
+      '">' +
+      '<div class="pump-hero__title-row">' +
+      '<h3 class="pump-hero__title"><span class="pump-hero__sn">SN' +
+      esc(row.netuid) +
+      '</span> ' +
+      esc(row.name || '') +
+      '</h3>' +
+      '<span class="pump-hero__badge">' +
+      esc(row.badge || '') +
+      '</span></div>' +
+      '<p class="pump-hero__subtitle">' +
+      esc(row.subtitle || row.badge || '') +
+      '</p>' +
+      '<div class="pump-hero__stats">' +
+      '<div class="pump-hero__stat"><span class="pump-hero__stat-lbl">Formation</span>' +
+      '<span class="pump-hero__stat-val">' +
+      esc(row.formation_pct != null ? row.formation_pct : 0) +
+      '<span class="pump-hero__stat-den">/100</span></span></div>' +
+      '<div class="pump-hero__stat"><span class="pump-hero__stat-lbl">Momentum</span>' +
+      '<span class="pump-hero__stat-val">' +
+      esc(row.momentum_pct != null ? row.momentum_pct : 0) +
+      '<span class="pump-hero__stat-den">/100</span></span></div>' +
+      '<div class="pump-hero__stat"><span class="pump-hero__stat-lbl">Distance</span>' +
+      '<span class="pump-hero__stat-val pump-hero__stat-val--dist">' +
+      esc(row.distance != null ? row.distance : '—') +
+      '</span></div></div>' +
+      '<div class="pump-hero__triad" aria-label="Pre-pump triad">' +
+      '<span class="pump-hero__triad-pill' +
+      (inflowOn ? ' pump-hero__triad-pill--on' : '') +
+      '">Inflow ' +
+      esc(labels.inflow || 'WATCH') +
+      '</span>' +
+      '<span class="pump-hero__triad-pill' +
+      (pressureOn ? ' pump-hero__triad-pill--on pump-hero__triad-pill--pressure' : '') +
+      '">Pressure ' +
+      esc(labels.pressure || 'FLAT') +
+      '</span>' +
+      '<span class="pump-hero__triad-pill' +
+      (coilOn ? ' pump-hero__triad-pill--on' : '') +
+      '">Coil ' +
+      esc(labels.coil || 'OPEN') +
+      '</span></div>' +
+      '<div class="pump-hero__trigger" aria-hidden="true">' +
+      '<div class="pump-hero__trigger-track"><span class="pump-hero__trigger-fill" style="width:' +
+      trigPct +
+      '%"></span><span class="pump-hero__trigger-knob" style="left:' +
+      trigPct +
+      '%"></span></div>' +
+      '<div class="pump-hero__trigger-labels"><span>Trigger: ' +
+      esc(trigger) +
+      '</span><span>' +
+      esc(score) +
+      '</span></div></div></a></div>'
+    );
+  }
+
   function renderPumpDeskRow(row, tone) {
     var formPct = row.score != null ? Math.min(100, Math.round(Number(row.score) * 100)) : null;
     var sparks = Array.isArray(row.spark_closes) ? row.spark_closes : [];
@@ -1136,9 +1212,10 @@
     );
   }
 
-  function renderPumpDeskPanel(alerts, emptyMessage) {
+  function renderPumpDeskPanel(alerts, emptyMessage, payload) {
     var deskPanel = document.getElementById('pump-desk-panel');
     if (!deskPanel) return;
+    var compact = !!document.querySelector('[data-pump-compact="1"]');
     var warm = (alerts || []).filter(function (r) {
       return r.timing === 'lead';
     });
@@ -1152,7 +1229,52 @@
         '</p>';
       return;
     }
+    var hero =
+      (payload && payload.hero) ||
+      warm[0] ||
+      active[0];
     var html = '';
+    if (compact && hero) {
+      html += renderPumpHeroCard(hero);
+      var more = '';
+      if (warm.length > 1) {
+        more += '<p class="pump-desk__section-lbl">Also warming</p><div class="pump-desk__rows">';
+        warm.slice(1).forEach(function (row) {
+          more += renderPumpDeskRow(row, 'warm');
+        });
+        more += '</div>';
+      }
+      if (active.length) {
+        more += '<p class="pump-desk__section-lbl">Active</p><div class="pump-desk__rows">';
+        active.forEach(function (row) {
+          more += renderPumpDeskRow(row, 'active');
+        });
+        more += '</div>';
+      }
+      if (more) {
+        html += '<div class="pump-desk__more" id="pump-desk-more">' + more + '</div>';
+      }
+      var pillsEl = document.getElementById('pump-hero-pills');
+      if (pillsEl) {
+        var pillHtml = '';
+        if (warm.length) {
+          pillHtml +=
+            '<span class="pump-hero__pill pump-hero__pill--lead">' +
+            warm.length +
+            ' LEAD</span>';
+        }
+        if (active.length) {
+          pillHtml +=
+            '<span class="pump-hero__pill pump-hero__pill--live">' +
+            active.length +
+            ' LIVE</span>';
+        }
+        pillsEl.innerHTML = pillHtml;
+      }
+      deskPanel.innerHTML = html;
+      if (typeof window.__paintSparks === 'function') window.__paintSparks();
+      return;
+    }
     if (warm.length) {
       html +=
         '<div class="pump-desk__section"><p class="pump-desk__section-lbl">Warming</p><div class="pump-desk__rows">';
@@ -1177,7 +1299,7 @@
     var body = document.getElementById('pump-alert-body');
     if (!body || !payload) return;
     if (payload.status === 'timeout') {
-      if (body.querySelector('.pump-desk__row')) return;
+      if (body.querySelector('.pump-desk__row') || body.querySelector('.pump-hero__card')) return;
     }
     var listPanel = document.getElementById('pump-list-panel');
     var trust = payload.trust || {};
@@ -1204,8 +1326,22 @@
       confirmedCount = alerts.filter(function (r) { return r.timing === 'confirmed'; }).length;
     }
     var count = Number(payload.count) || earlyCount + confirmedCount;
+    var compact = !!document.querySelector('[data-pump-compact="1"]');
     var countEl = document.getElementById('pump-alert-count');
-    if (countEl) {
+    var pillsEl = document.getElementById('pump-hero-pills');
+    if (compact && pillsEl) {
+      var pillHtml = '';
+      if (earlyCount) {
+        pillHtml +=
+          '<span class="pump-hero__pill pump-hero__pill--lead">' + earlyCount + ' LEAD</span>';
+      }
+      if (confirmedCount) {
+        pillHtml +=
+          '<span class="pump-hero__pill pump-hero__pill--live">' + confirmedCount + ' LIVE</span>';
+      }
+      pillsEl.innerHTML = pillHtml;
+      pillsEl.style.display = count > 0 ? '' : 'none';
+    } else if (countEl) {
       countEl.textContent = count > 0 ? earlyCount + ' warming · ' + confirmedCount + ' active' : '';
       countEl.style.display = count > 0 ? '' : 'none';
     }
@@ -1231,8 +1367,7 @@
     }
     var mapRows = [];
     var html = '';
-    var compact = !!document.querySelector('[data-pump-compact="1"]');
-    renderPumpDeskPanel(alerts, payload.empty_message);
+    renderPumpDeskPanel(alerts, payload.empty_message, payload);
     alerts.forEach(function (row) {
       if (row.timing !== 'lead' && row.timing !== 'confirmed' && row.timing !== 'exit') return;
       mapRows.push(row);
