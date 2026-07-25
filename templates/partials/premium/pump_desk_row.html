@@ -1,30 +1,21 @@
-{# Ladder row — identity + badge + flow + gap + triad dots + spark #}
+{# Ladder row — dense table: badge+name | flow | gap | triad dots | spark #}
 {% set spark_pts = row.spark_closes if row.spark_closes is iterable and row.spark_closes is not string and row.spark_closes|length >= 2 else [] %}
 {% set form_pct = row.formation_pct if row.formation_pct is not none else (((row.score|default(0)|float * 100)|round(0))|int if row.score is not none else none) %}
 {% set tone = 'warm' if row.timing == 'lead' else ('exit' if row.timing == 'exit' else 'active') %}
 {% set badge_slug = (row.badge|default('')|lower|replace(' ', '-')) %}
 {% set triad = row.triad if row.triad is mapping else {} %}
-{% set lit = row.triad_lit|default(triad.lit_count|default(0))|int %}
-<a class="pd-row pd-row--{{ tone }}" href="/subnet/{{ row.netuid }}" data-netuid="{{ row.netuid }}">
-  <div class="pd-row__id">
-    <span class="pd-row__badge pd-row__badge--{{ badge_slug }}">{{ row.badge }}</span>
-    <span class="pd-row__name">{{ row.name }}</span>
-    <span class="pd-row__sn">SN{{ row.netuid }}</span>
-  </div>
-  <div class="pd-row__stats">
-    {% if form_pct is not none %}
-    <span class="pd-row__stat"><span class="pd-row__stat-k">Flow</span> {{ form_pct }}</span>
-    {% endif %}
-    {% if row.distance is not none %}
-    <span class="pd-row__stat pd-row__stat--gap"><span class="pd-row__stat-k">Gap</span> {{ row.distance }}</span>
-    {% endif %}
-    <span class="pd-row__triad" aria-label="Triad {{ lit }} of 3 lit" title="Inflow · Pressure · Coil">
-      <i class="pd-dot{% if triad.inflow_quiet_load %} pd-dot--on pd-dot--in{% endif %}"></i>
-      <i class="pd-dot{% if triad.buy_pressure %} pd-dot--on pd-dot--pr{% endif %}"></i>
-      <i class="pd-dot{% if triad.price_coil %} pd-dot--on pd-dot--coil{% endif %}"></i>
-    </span>
-    {% if spark_pts|length >= 2 %}
-    <div class="pd-row__spark-wrap"><div class="spark pd-row__spark" data-spark="{{ spark_pts|join(',') }}" data-spark-tone="{{ tone }}" role="img" aria-label="Price sparkline for {{ row.name }}"></div></div>
-    {% endif %}
-  </div>
+{% set BADGE_ABBR = {'WARMING UP': 'WARM', 'BUILDING': 'BUILD', 'STRONG': 'STRONG', 'JUST STARTED': 'JUST', 'CHASE RISK': 'CHASE', 'FADING': 'FADE'} %}
+<a class="pd-r pd-r--{{ tone }}" href="/subnet/{{ row.netuid }}" data-netuid="{{ row.netuid }}" title="{{ row.badge }}">
+  <span class="pd-r__badge pd-r__badge--{{ badge_slug }}">{{ BADGE_ABBR.get(row.badge, row.badge) }}</span>
+  <span class="pd-r__name">{{ row.name }} <b class="pd-r__sn">SN{{ row.netuid }}</b></span>
+  <span class="pd-r__num">{% if form_pct is not none %}{{ form_pct }}{% else %}—{% endif %}</span>
+  <span class="pd-r__num pd-r__num--gap">{% if row.distance is not none %}{{ row.distance }}{% else %}—{% endif %}</span>
+  <span class="pd-r__triad" aria-label="Inflow {{ triad.inflow_quiet_load and 'on' or 'off' }}, pressure {{ triad.buy_pressure and 'on' or 'off' }}, coil {{ triad.price_coil and 'on' or 'off' }}">
+    <i class="pd-dot{% if triad.inflow_quiet_load %} pd-dot--in{% endif %}"></i><i class="pd-dot{% if triad.buy_pressure %} pd-dot--pr{% endif %}"></i><i class="pd-dot{% if triad.price_coil %} pd-dot--coil{% endif %}"></i>
+  </span>
+  {% if spark_pts|length >= 2 %}
+  <span class="pd-r__spark"><span class="spark" data-spark="{{ spark_pts|join(',') }}" data-spark-tone="{{ tone }}" role="img" aria-label="Price sparkline for {{ row.name }}"></span></span>
+  {% else %}
+  <span class="pd-r__spark"></span>
+  {% endif %}
 </a>

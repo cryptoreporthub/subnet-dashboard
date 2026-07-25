@@ -295,17 +295,21 @@ def test_pump_alert_compact_renders_hero_card():
             "trust": {"ready": False, "line": "grading starts"},
         },
     )
-    assert "closest to trigger" in html.lower()
     assert "pd-lead" in html
-    assert "pd-lead__verdict" in html
-    assert "Flow before price" in html or "Intraday" in html
+    assert "pd-lead__row1" in html
+    assert "pd-lead__pct" in html
+    assert "Pump desk" in html
     assert "Flow" in html
     assert "Confirm" in html
-    assert "Inflow" in html
-    assert "pd-evidence" in html
-    assert "pd-phase" in html
+    assert "Gap" in html
+    assert "pd-legend" in html
+    assert "inflow" in html.lower()
     assert "progress_series" in row
     assert row["progress_series"][-1] == int(round(float(row["score"]) / row["trigger_score"] * 100))
+    assert row.get("buy_pct") is not None
+    assert row.get("vol_pct") is not None
+    assert "% buys" in html
+    assert "% vol" in html
 
 
 def test_pump_alert_compact_surfaces_trust_and_census():
@@ -328,10 +332,37 @@ def test_pump_alert_compact_surfaces_trust_and_census():
         },
     )
     assert "62%" in html
-    assert "pd-census" in html
-    assert "pd-trust" in html
+    assert "pd-meta" in html
+    assert "1 lead" in html
+    assert "2 live" in html
+    assert "1 exit" in html
     assert row.get("thesis")
-    assert "pd-lead__thesis" in html or row["thesis"] in html
+
+
+def test_pump_alert_ladder_rows_use_dense_table_columns():
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    tmpl = env.get_template("partials/premium/pump_alert.html")
+    hero = build_desk_row(_ladder_entry("ACCUMULATING", netuid=1, score=0.6))
+    row2 = build_desk_row(_ladder_entry("ACCUMULATING", netuid=2, score=0.5))
+    html = tmpl.render(
+        pump_compact=True,
+        pump_alerts={
+            "count": 2,
+            "early_count": 2,
+            "confirmed_count": 0,
+            "exit_count": 0,
+            "hero": hero,
+            "alerts": [hero, row2],
+            "trust": {"ready": False, "line": "grading starts"},
+        },
+    )
+    assert "pd-table" in html
+    assert "pd-cols" in html
+    assert "pd-r pd-r--warm" in html
+    assert "Also warming" in html
 
 
 def test_progress_series_from_trail_uses_real_scores():

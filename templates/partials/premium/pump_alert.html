@@ -1,4 +1,4 @@
-{# Pump desk — formation board (decision order: trust → lead → verdict → evidence → ladder) #}
+{# Pump desk — dense scan table (data-ink first: one headline number, real %s, no decorative chrome) #}
 {% set pa = pump_alerts if pump_alerts is mapping else {} %}
 {% set compact = pump_compact|default(false) %}
 {% set pa_rows = pa.alerts if pa.alerts is iterable and pa.alerts is not string else [] %}
@@ -24,196 +24,115 @@
   {% if warm_ns.rows %}{% set hero_row = warm_ns.rows[0] %}{% elif active_ns.rows %}{% set hero_row = active_ns.rows[0] %}{% endif %}
 {% endif %}
 {% if pa_exit == 0 %}{% set pa_exit = exit_ns.rows|length %}{% endif %}
+{% set BADGE_ABBR = {'WARMING UP': 'WARM', 'BUILDING': 'BUILD', 'STRONG': 'STRONG', 'JUST STARTED': 'JUST', 'CHASE RISK': 'CHASE', 'FADING': 'FADE'} %}
 
 <section class="pump-alert wrap-pad{% if compact %} pump-alert--board{% endif %}" id="section-pump-alert" aria-labelledby="pump-alert-title" data-home-live="1"{% if compact %} data-pump-compact="1"{% endif %}>
   <header class="pd-head">
-    <div class="pd-head__copy">
-      {% if compact %}
-      <p class="pd-eyebrow">Intraday · Flow before price</p>
+    <h2 class="pd-title" id="pump-alert-title">Pump desk<i class="pd-live" aria-hidden="true" title="Live"></i></h2>
+    <div id="pd-meta-wrap">
+      {% if trust.ready and trust.headline_pct is not none %}
+      <p class="pd-meta"><b class="pd-meta__pct">{{ trust.headline_pct }}%</b> hit-rate (n={{ trust.headline_n|default((trust.early.n if trust.early is mapping else 0)|default(0)) }}) · {{ pa_early }} lead · {{ pa_confirmed }} live · {{ pa_exit }} exit</p>
       {% else %}
-      <p class="pd-eyebrow">Tier 3 · Predictive</p>
+      <p class="pd-meta">{{ pa_early }} lead · {{ pa_confirmed }} live · {{ pa_exit }} exit</p>
+      <p class="pd-meta pd-meta--building">{{ trust.line|default('Early alerts: grading starts once lead phase entries resolve (1h).') }}</p>
       {% endif %}
-      <h2 class="pd-title" id="pump-alert-title">Pump desk</h2>
-      <p class="pd-tagline">Catch the move while it&apos;s still forming — early entries graded, chase risk called out.</p>
-    </div>
-    <div class="pd-census" id="pump-hero-pills"{% if pa_count == 0 and pa_exit == 0 %} hidden{% endif %}>
-      <span class="pd-census__cell pd-census__cell--lead"><b id="pd-census-lead">{{ pa_early }}</b> lead</span>
-      <span class="pd-census__cell pd-census__cell--live"><b id="pd-census-live">{{ pa_confirmed }}</b> live</span>
-      <span class="pd-census__cell pd-census__cell--exit"><b id="pd-census-exit">{{ pa_exit }}</b> exit</span>
     </div>
   </header>
-
-  <div class="pd-trust" id="pd-trust-rail" aria-live="polite">
-    {% if trust.ready and trust.headline_pct is not none %}
-    <div class="pd-trust__ready" id="pump-alert-proof">
-      <span class="pd-trust__pct" id="pump-alert-proof-pct">{{ trust.headline_pct }}%</span>
-      <span class="pd-trust__meta">early alerts hit +2% in 1h · n={% if trust.headline_n is not none %}{{ trust.headline_n }}{% elif trust.early is mapping and trust.early.n is not none %}{{ trust.early.n }}{% else %}0{% endif %}</span>
-    </div>
-    {% else %}
-    <p class="pd-trust__building" id="pump-alert-trust">{{ trust.line|default('Early alerts: grading starts once lead phase entries resolve (1h).') }}</p>
-    {% endif %}
-  </div>
 
   <div class="pump-alert__body" id="pump-alert-body" aria-live="polite">
     <div class="pump-desk" id="pump-desk-panel">
       {% if compact and hero_row %}
       {% set triad = hero_row.triad if hero_row.triad is mapping else {} %}
-      {% set labels = hero_row.triad_labels if hero_row.triad_labels is mapping else {} %}
       {% set form_pct = hero_row.formation_pct|default(0)|int %}
       {% set confirm_pct = hero_row.confirm_pct|default(hero_row.momentum_pct|default(0))|int %}
       {% set trig_pct = ((hero_row.score|default(0)|float / hero_row.trigger_score|default(0.72)|float * 100)|round(0))|int if hero_row.score is not none else 0 %}
       {% set progress_pts = hero_row.progress_series if hero_row.progress_series is iterable and hero_row.progress_series is not string and hero_row.progress_series|length >= 2 else [] %}
       {% set phase = (hero_row.phase|default('STIRRING'))|upper %}
+      {% set timing = hero_row.timing|default('lead') %}
       {% set badge_slug = (hero_row.badge|default('')|lower|replace(' ', '-')) %}
-      <article class="pd-lead pd-lead--{{ hero_row.timing }}" id="pump-desk-hero" data-netuid="{{ hero_row.netuid }}">
-        <ol class="pd-phase" aria-label="Formation phase">
-          {% for p, label in [('STIRRING','Stir'),('ACCUMULATING','Build'),('PUMPING','Pump'),('COOLING','Cool')] %}
-          <li class="pd-phase__step{% if phase == p %} pd-phase__step--now{% elif (p == 'STIRRING' and phase in ['ACCUMULATING','PUMPING','COOLING']) or (p == 'ACCUMULATING' and phase in ['PUMPING','COOLING']) or (p == 'PUMPING' and phase == 'COOLING') %} pd-phase__step--done{% endif %}">
-            <span class="pd-phase__tick"></span>
-            <span class="pd-phase__lbl">{{ label }}</span>
-          </li>
-          {% endfor %}
-        </ol>
-        <div class="pd-lead__body">
-          <div class="pd-lead__top">
-            <div>
-              <p class="pd-lead__eyebrow">Primary lead · closest to trigger</p>
-              <h3 class="pd-lead__name"><span class="pd-lead__sn">SN{{ hero_row.netuid }}</span> {{ hero_row.name }}</h3>
-            </div>
-            <span class="pd-lead__badge pd-lead__badge--{{ badge_slug }}">{{ hero_row.badge }}</span>
-          </div>
-          <p class="pd-lead__verdict">{{ hero_row.trigger|default(hero_row.subtitle|default(hero_row.badge)) }}</p>
-          {% if hero_row.thesis %}<p class="pd-lead__thesis">{{ hero_row.thesis }}</p>{% endif %}
+      {% set reason = hero_row.trigger|default(hero_row.subtitle|default(hero_row.badge)) %}
 
-          <div class="pd-evidence" aria-label="Formation evidence">
-            <div class="pd-evidence__cell">
-              <span class="pd-evidence__k">Flow</span>
-              <span class="pd-evidence__v">{{ form_pct }}<span class="pd-evidence__den">/100</span></span>
-              <span class="pd-evidence__bar" aria-hidden="true"><span style="width:{{ [form_pct, 100]|min }}%"></span></span>
-              <span class="pd-evidence__cap">Buy + volume forming</span>
-            </div>
-            <div class="pd-evidence__cell">
-              <span class="pd-evidence__k">Confirm</span>
-              <span class="pd-evidence__v">{{ confirm_pct }}<span class="pd-evidence__den">/100</span></span>
-              <span class="pd-evidence__bar pd-evidence__bar--confirm" aria-hidden="true"><span style="width:{{ [confirm_pct, 100]|min }}%"></span></span>
-              <span class="pd-evidence__cap">Price catching up</span>
-            </div>
-            <div class="pd-evidence__cell pd-evidence__cell--gap">
-              <span class="pd-evidence__k">Gap</span>
-              <span class="pd-evidence__v pd-evidence__v--gap">{{ hero_row.distance|default('—') }}</span>
-              <span class="pd-evidence__cap">Pts to JUST STARTED</span>
-            </div>
-          </div>
+      <p class="pd-legend" aria-hidden="true"><i class="pd-dot pd-dot--in"></i>inflow&nbsp;&nbsp;<i class="pd-dot pd-dot--pr"></i>pressure&nbsp;&nbsp;<i class="pd-dot pd-dot--coil"></i>coil</p>
 
-          <div class="pd-approach" aria-hidden="true">
-            {% if progress_pts|length >= 2 %}
-            <div class="pd-approach__chart">
-              <div class="pump-progress pd-approach__progress" data-progress="{{ progress_pts|join(',') }}" role="img" aria-label="Score progress toward trigger"></div>
-            </div>
-            {% endif %}
-            <div class="pd-approach__track">
-              <span class="pd-approach__fill" style="width:{{ [trig_pct, 100]|min }}%"></span>
-              <span class="pd-approach__knob" style="left:{{ [trig_pct, 100]|min }}%"></span>
-            </div>
-            <div class="pd-approach__labels">
-              <span>Trigger {{ hero_row.trigger_score|default(0.72) }}</span>
-              <span class="pd-approach__score">Score {{ hero_row.score|default(0) }} · {{ [trig_pct, 100]|min }}%</span>
-            </div>
-          </div>
-
-          <div class="pd-triad" aria-label="Pre-pump triad">
-            <div class="pd-triad__leg{% if triad.inflow_quiet_load %} pd-triad__leg--on{% endif %}">
-              <span class="pd-triad__k">Inflow</span>
-              <span class="pd-triad__v">{{ labels.inflow|default('WATCH') }}</span>
-              <span class="pd-triad__cap">Quiet load before price</span>
-            </div>
-            <div class="pd-triad__leg{% if triad.buy_pressure %} pd-triad__leg--on pd-triad__leg--pressure{% endif %}">
-              <span class="pd-triad__k">Pressure</span>
-              <span class="pd-triad__v">{{ labels.pressure|default('FLAT') }}</span>
-              <span class="pd-triad__cap">Buy ratio at gate</span>
-            </div>
-            <div class="pd-triad__leg{% if triad.price_coil %} pd-triad__leg--on pd-triad__leg--coil{% endif %}">
-              <span class="pd-triad__k">Coil</span>
-              <span class="pd-triad__v">{{ labels.coil|default('OPEN') }}</span>
-              <span class="pd-triad__cap">Compressed price band</span>
-            </div>
-          </div>
-
-          {% if hero_row.size_line %}
-          <p class="pd-chip pd-chip--size">{{ hero_row.size_line }}</p>
+      <article class="pd-lead pd-lead--{{ timing }}" id="pump-desk-hero" data-netuid="{{ hero_row.netuid }}">
+        <a class="pd-lead__row1" href="/subnet/{{ hero_row.netuid }}">
+          <span class="pd-lead__badge pd-lead__badge--{{ badge_slug }}">{{ hero_row.badge }}</span>
+          <span class="pd-lead__name">{{ hero_row.name }} <b class="pd-lead__sn">SN{{ hero_row.netuid }}</b></span>
+          <span class="pd-lead__pct">{{ [trig_pct, 100]|min }}<i>%</i></span>
+        </a>
+        <p class="pd-lead__phase">
+          {% for p, label in [('STIRRING','STIR'),('ACCUMULATING','BUILD'),('PUMPING','PUMP'),('COOLING','COOL')] %}<span{% if phase == p %} class="pd-lead__phase-now"{% endif %}>{{ label }}</span>{% if not loop.last %} · {% endif %}{% endfor %}
+          {% if hero_row.updated_ago %}<span class="pd-lead__ago">· {{ hero_row.updated_ago }}</span>{% endif %}
+        </p>
+        <p class="pd-lead__reason">{{ reason }}</p>
+        <p class="pd-lead__stats">
+          <span>Flow <b>{{ form_pct }}</b></span><span>Confirm <b>{{ confirm_pct }}</b></span><span>Gap <b class="pd-lead__gap">{{ hero_row.distance|default('—') }}</b></span>{% if hero_row.buy_pct is not none %}<span>{{ hero_row.buy_pct }}% buys</span>{% endif %}{% if hero_row.vol_pct is not none %}<span>{{ hero_row.vol_pct }}% vol</span>{% endif %}
+        </p>
+        <div class="pd-lead__row3">
+          <span class="pd-lead__triad" aria-label="Inflow {{ triad.inflow_quiet_load and 'on' or 'off' }}, pressure {{ triad.buy_pressure and 'on' or 'off' }}, coil {{ triad.price_coil and 'on' or 'off' }}">
+            <i class="pd-dot{% if triad.inflow_quiet_load %} pd-dot--in{% endif %}"></i><i class="pd-dot{% if triad.buy_pressure %} pd-dot--pr{% endif %}"></i><i class="pd-dot{% if triad.price_coil %} pd-dot--coil{% endif %}"></i>
+          </span>
+          {% if progress_pts|length >= 2 %}
+          <span class="pd-lead__trend"><span class="pump-progress" data-progress="{{ progress_pts|join(',') }}" role="img" aria-label="Score trend toward trigger"></span></span>
           {% endif %}
-          {% if hero_row.wallet_chip %}
-          <p class="pd-chip pd-chip--wallet">{{ hero_row.wallet_chip }}</p>
-          {% endif %}
-
-          <a class="pd-lead__cta" href="/subnet/{{ hero_row.netuid }}">Open SN{{ hero_row.netuid }} dossier →</a>
         </div>
+        {% if hero_row.size_line %}<p class="pd-lead__chip">{{ hero_row.size_line }}</p>{% endif %}
+        {% if hero_row.wallet_chip %}<p class="pd-lead__chip">{{ hero_row.wallet_chip }}</p>{% endif %}
       </article>
 
       {% if warm_ns.rows|length > 1 or active_ns.rows or exit_ns.rows %}
-      <div class="pd-board" id="pump-desk-more">
+      <div class="pd-table" id="pump-desk-more">
+        <div class="pd-cols" aria-hidden="true"><span></span><span></span><span>Flow</span><span>Gap</span><span></span><span></span></div>
         {% if warm_ns.rows|length > 1 %}
-        <section class="pd-board__section">
-          <h4 class="pd-board__lbl">Also warming <span>{{ warm_ns.rows|length - 1 }}</span></h4>
-          <div class="pd-board__rows">
-            {% for row in warm_ns.rows[1:] %}
-            {% include "partials/premium/pump_desk_row.html" %}
-            {% endfor %}
-          </div>
-        </section>
+        <p class="pd-table__lbl">Also warming — {{ warm_ns.rows|length - 1 }}</p>
+        <div class="pd-table__rows">
+          {% for row in warm_ns.rows[1:] %}
+          {% include "partials/premium/pump_desk_row.html" %}
+          {% endfor %}
+        </div>
         {% endif %}
         {% if active_ns.rows %}
-        <section class="pd-board__section">
-          <h4 class="pd-board__lbl">Active · chase risk <span>{{ active_ns.rows|length }}</span></h4>
-          <div class="pd-board__rows">
-            {% for row in active_ns.rows %}
-            {% include "partials/premium/pump_desk_row.html" %}
-            {% endfor %}
-          </div>
-        </section>
+        <p class="pd-table__lbl">Active — chase risk, {{ active_ns.rows|length }}</p>
+        <div class="pd-table__rows">
+          {% for row in active_ns.rows %}
+          {% include "partials/premium/pump_desk_row.html" %}
+          {% endfor %}
+        </div>
         {% endif %}
         {% if exit_ns.rows %}
-        <section class="pd-board__section">
-          <h4 class="pd-board__lbl">Cooling · exit watch <span>{{ exit_ns.rows|length }}</span></h4>
-          <div class="pd-board__rows">
-            {% for row in exit_ns.rows %}
-            {% include "partials/premium/pump_desk_row.html" %}
-            {% endfor %}
-          </div>
-        </section>
+        <p class="pd-table__lbl">Cooling — exit watch, {{ exit_ns.rows|length }}</p>
+        <div class="pd-table__rows">
+          {% for row in exit_ns.rows %}
+          {% include "partials/premium/pump_desk_row.html" %}
+          {% endfor %}
+        </div>
         {% endif %}
       </div>
       {% endif %}
 
       {% elif pa_count > 0 %}
         {% if warm_ns.rows %}
-        <div class="pd-board__section">
-          <h4 class="pd-board__lbl">Warming</h4>
-          <div class="pd-board__rows">
-            {% for row in warm_ns.rows %}
-            {% include "partials/premium/pump_desk_row.html" %}
-            {% endfor %}
-          </div>
+        <div class="pd-table__lbl">Warming</div>
+        <div class="pd-table__rows">
+          {% for row in warm_ns.rows %}
+          {% include "partials/premium/pump_desk_row.html" %}
+          {% endfor %}
         </div>
         {% endif %}
         {% if active_ns.rows %}
-        <div class="pd-board__section">
-          <h4 class="pd-board__lbl">Active</h4>
-          <div class="pd-board__rows">
-            {% for row in active_ns.rows %}
-            {% include "partials/premium/pump_desk_row.html" %}
-            {% endfor %}
-          </div>
+        <div class="pd-table__lbl">Active</div>
+        <div class="pd-table__rows">
+          {% for row in active_ns.rows %}
+          {% include "partials/premium/pump_desk_row.html" %}
+          {% endfor %}
         </div>
         {% endif %}
         {% if exit_ns.rows %}
-        <div class="pd-board__section">
-          <h4 class="pd-board__lbl">Cooling</h4>
-          <div class="pd-board__rows">
-            {% for row in exit_ns.rows %}
-            {% include "partials/premium/pump_desk_row.html" %}
-            {% endfor %}
-          </div>
+        <div class="pd-table__lbl">Cooling</div>
+        <div class="pd-table__rows">
+          {% for row in exit_ns.rows %}
+          {% include "partials/premium/pump_desk_row.html" %}
+          {% endfor %}
         </div>
         {% endif %}
       {% else %}
@@ -262,640 +181,293 @@
 </section>
 
 <style>
-  /* —— Pump desk formation board —— */
+  /* —— Pump desk: dense scan table, data-ink first —— */
   .pump-alert {
-    --pd-ink: #f1ebe0;
-    --pd-muted: #9a9286;
-    --pd-dim: #6b645a;
-    --pd-line: rgba(241, 235, 224, 0.1);
-    --pd-lead: #d4a017;
-    --pd-lead-soft: rgba(212, 160, 23, 0.14);
-    --pd-live: #e07a5f;
-    --pd-live-soft: rgba(224, 122, 95, 0.14);
-    --pd-exit: #6d9b7c;
-    --pd-exit-soft: rgba(109, 155, 124, 0.14);
-    --pd-gap: #8fd4a0;
-    --pd-surface: #12100e;
-    --pd-panel: #1a1714;
+    --pd-ink: #edeae3;
+    --pd-sub: #a39b8d;
+    --pd-dim: #6e675b;
+    --pd-line: rgba(237, 234, 227, 0.08);
+    --pd-lead: #d7a72e;
+    --pd-live: #dd6b4a;
+    --pd-exit: #6f9b80;
+    --pd-panel: #15130f;
     margin: 0;
-    padding: 14px 0 22px;
+    padding: 14px 0 20px;
     border-top: 1px solid var(--pd-line);
     color: var(--pd-ink);
   }
-  .pump-alert--board {
-    border-top: none;
-    position: relative;
-    padding-top: 8px;
-  }
-  .pump-alert--board::before {
-    content: "";
-    position: absolute;
-    inset: 0 -3% auto;
-    height: 220px;
-    background:
-      radial-gradient(ellipse 70% 80% at 8% 0%, rgba(212, 160, 23, 0.11), transparent 60%),
-      radial-gradient(ellipse 50% 60% at 95% 10%, rgba(224, 122, 95, 0.07), transparent 55%);
-    pointer-events: none;
-    z-index: 0;
-  }
-  .pump-alert--board > * { position: relative; z-index: 1; }
+  .pump-alert--board { border-top: none; padding-top: 6px; }
 
-  .pd-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 10px;
-  }
-  .pd-eyebrow {
-    margin: 0 0 4px;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 9px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--pd-lead);
-  }
+  .pd-head { margin-bottom: 8px; }
   .pd-title {
-    margin: 0;
-    font-size: 24px;
-    font-weight: 800;
-    letter-spacing: -0.03em;
-    line-height: 1.1;
-    color: var(--pd-ink);
-  }
-  .pd-tagline {
-    margin: 6px 0 0;
-    font-size: 12px;
-    line-height: 1.45;
-    color: var(--pd-muted);
-    max-width: 34ch;
-  }
-  .pd-census {
-    display: grid;
-    gap: 5px;
-    flex-shrink: 0;
-    min-width: 72px;
-  }
-  .pd-census__cell {
-    display: flex;
-    align-items: baseline;
-    justify-content: flex-end;
-    gap: 5px;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 9px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--pd-dim);
-    padding: 4px 8px;
-    border-radius: 6px;
-    border: 1px solid var(--pd-line);
-    background: rgba(0, 0, 0, 0.25);
-  }
-  .pd-census__cell b {
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0;
-    color: var(--pd-ink);
-  }
-  .pd-census__cell--lead { border-color: rgba(212, 160, 23, 0.4); color: #c9a84a; }
-  .pd-census__cell--lead b { color: #f0d078; }
-  .pd-census__cell--live { border-color: rgba(224, 122, 95, 0.4); color: #d4896f; }
-  .pd-census__cell--live b { color: #f0a890; }
-  .pd-census__cell--exit { border-color: rgba(109, 155, 124, 0.4); color: #7a9e88; }
-  .pd-census__cell--exit b { color: #a8c9b4; }
-
-  .pd-trust {
-    margin: 0 0 14px;
-    padding: 10px 12px;
-    border-radius: 10px;
-    border: 1px solid var(--pd-line);
-    background: linear-gradient(135deg, rgba(212, 160, 23, 0.08), rgba(0, 0, 0, 0.2));
-  }
-  .pd-trust__ready {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  .pd-trust__pct {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 26px;
-    font-weight: 700;
-    color: #f0d078;
-    line-height: 1;
-  }
-  .pd-trust__meta,
-  .pd-trust__building {
-    margin: 0;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 10px;
-    line-height: 1.4;
-    color: var(--pd-muted);
-  }
-
-  /* Featured lead */
-  .pd-lead {
-    display: grid;
-    grid-template-columns: 44px 1fr;
-    gap: 12px;
-    margin-bottom: 16px;
-    padding: 14px 14px 14px 10px;
-    border-radius: 14px;
-    border: 1px solid rgba(212, 160, 23, 0.35);
-    background:
-      linear-gradient(165deg, #1c1812 0%, var(--pd-surface) 55%, #0e0c0a 100%);
-    box-shadow: inset 0 1px 0 rgba(241, 235, 224, 0.04);
-    animation: pdLeadIn 0.5s ease-out both;
-  }
-  .pd-lead--confirmed {
-    border-color: rgba(224, 122, 95, 0.4);
-  }
-  @keyframes pdLeadIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: none; }
-  }
-
-  .pd-phase {
-    list-style: none;
-    margin: 4px 0 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    position: relative;
-  }
-  .pd-phase::before {
-    content: "";
-    position: absolute;
-    left: 5px;
-    top: 6px;
-    bottom: 14px;
-    width: 1px;
-    background: var(--pd-line);
-  }
-  .pd-phase__step {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 5px 0;
-    position: relative;
-  }
-  .pd-phase__tick {
-    width: 11px;
-    height: 11px;
-    border-radius: 50%;
-    border: 1.5px solid #3d3830;
-    background: #0a0908;
-    flex-shrink: 0;
-    z-index: 1;
-  }
-  .pd-phase__lbl {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 8px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--pd-dim);
-    writing-mode: horizontal-tb;
-  }
-  .pd-phase__step--done .pd-phase__tick {
-    border-color: rgba(212, 160, 23, 0.45);
-    background: rgba(212, 160, 23, 0.35);
-  }
-  .pd-phase__step--now .pd-phase__tick {
-    border-color: #f0d078;
-    background: #d4a017;
-    box-shadow: 0 0 0 3px rgba(212, 160, 23, 0.25);
-    animation: pdTickPulse 2.2s ease-in-out infinite;
-  }
-  .pd-phase__step--now .pd-phase__lbl {
-    color: #f0d078;
-    font-weight: 700;
-  }
-  @keyframes pdTickPulse {
-    0%, 100% { box-shadow: 0 0 0 3px rgba(212, 160, 23, 0.2); }
-    50% { box-shadow: 0 0 0 5px rgba(212, 160, 23, 0.08); }
-  }
-
-  .pd-lead__eyebrow {
-    margin: 0 0 4px;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 9px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--pd-dim);
-  }
-  .pd-lead__top {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 10px;
-  }
-  .pd-lead__name {
+    gap: 8px;
     margin: 0;
     font-size: 20px;
     font-weight: 800;
     letter-spacing: -0.02em;
-    line-height: 1.15;
     color: var(--pd-ink);
   }
-  .pd-lead__sn {
+  .pd-live {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #6fbf8b;
+    box-shadow: 0 0 0 0 rgba(111, 191, 139, 0.6);
+    animation: pdLivePulse 2s ease-out infinite;
+  }
+  @keyframes pdLivePulse {
+    0% { box-shadow: 0 0 0 0 rgba(111, 191, 139, 0.5); }
+    70% { box-shadow: 0 0 0 6px rgba(111, 191, 139, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(111, 191, 139, 0); }
+  }
+  .pd-meta {
+    margin: 3px 0 0;
     font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--pd-lead);
-    margin-right: 4px;
+    font-size: 10.5px;
+    letter-spacing: 0.02em;
+    color: var(--pd-dim);
+  }
+  .pd-meta__pct { color: #f0cd7a; font-size: 12px; }
+  .pd-meta--building { color: var(--pd-sub); }
+
+  .pd-legend {
+    margin: 0 0 8px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 8.5px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--pd-dim);
+  }
+  .pd-legend .pd-dot { margin-right: 3px; }
+
+  /* Primary lead — top row of the table, elevated but flat (no gradient/glow) */
+  .pd-lead {
+    margin-bottom: 12px;
+    padding: 10px 10px 10px;
+    border-radius: 10px;
+    background: rgba(215, 167, 46, 0.055);
+    border: 1px solid rgba(215, 167, 46, 0.25);
+  }
+  .pd-lead--confirmed { background: rgba(221, 107, 74, 0.06); border-color: rgba(221, 107, 74, 0.28); }
+  .pd-lead--exit { background: rgba(111, 155, 128, 0.06); border-color: rgba(111, 155, 128, 0.28); }
+
+  .pd-lead__row1 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    color: inherit;
   }
   .pd-lead__badge {
     flex-shrink: 0;
     font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 9px;
+    font-size: 8.5px;
     font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    padding: 6px 8px;
-    border-radius: 6px;
-    color: #f0d078;
-    border: 1px solid rgba(212, 160, 23, 0.5);
-    background: var(--pd-lead-soft);
-  }
-  .pd-lead__badge--chase-risk,
-  .pd-lead__badge--just-started {
-    color: #f0a890;
-    border-color: rgba(224, 122, 95, 0.55);
-    background: var(--pd-live-soft);
-  }
-  .pd-lead__badge--fading {
-    color: #a8c9b4;
-    border-color: rgba(109, 155, 124, 0.5);
-    background: var(--pd-exit-soft);
-  }
-
-  .pd-lead__verdict {
-    margin: 0 0 8px;
-    padding: 10px 12px;
-    font-size: 14px;
-    font-weight: 650;
-    line-height: 1.35;
-    color: var(--pd-ink);
-    border-left: 3px solid var(--pd-lead);
-    background: rgba(212, 160, 23, 0.07);
-    border-radius: 0 8px 8px 0;
-  }
-  .pd-lead--confirmed .pd-lead__verdict {
-    border-left-color: var(--pd-live);
-    background: rgba(224, 122, 95, 0.08);
-  }
-  .pd-lead__thesis {
-    margin: 0 0 14px;
-    font-size: 13px;
-    line-height: 1.5;
-    color: #cfc6b8;
-  }
-
-  .pd-evidence {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin-bottom: 12px;
-  }
-  .pd-evidence__cell {
-    padding: 8px 8px 9px;
-    border-radius: 8px;
-    border: 1px solid var(--pd-line);
-    background: rgba(0, 0, 0, 0.28);
-  }
-  .pd-evidence__k {
-    display: block;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 8px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--pd-dim);
-    margin-bottom: 4px;
-  }
-  .pd-evidence__v {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--pd-ink);
-    line-height: 1;
-  }
-  .pd-evidence__den { font-size: 10px; color: var(--pd-dim); font-weight: 500; }
-  .pd-evidence__v--gap { color: var(--pd-gap); }
-  .pd-evidence__bar {
-    display: block;
-    margin: 7px 0 6px;
-    height: 3px;
-    border-radius: 999px;
-    background: #2a2620;
-    overflow: hidden;
-  }
-  .pd-evidence__bar span {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, #a67c00, #d4a017);
-  }
-  .pd-evidence__bar--confirm span {
-    background: linear-gradient(90deg, #9a4a38, #e07a5f);
-  }
-  .pd-evidence__cap {
-    display: block;
-    font-size: 9px;
-    line-height: 1.3;
-    color: var(--pd-dim);
-  }
-
-  .pd-approach { margin-bottom: 12px; }
-  .pd-approach__chart {
-    height: 36px;
-    margin-bottom: 8px;
-    border-radius: 8px;
-    border: 1px solid var(--pd-line);
-    background: rgba(0, 0, 0, 0.3);
-    padding: 4px 6px;
-    overflow: hidden;
-  }
-  .pd-approach__progress { width: 100%; height: 28px; }
-  .pd-approach__track {
-    position: relative;
-    height: 6px;
-    border-radius: 999px;
-    background: #2a2620;
-    margin-bottom: 6px;
-  }
-  .pd-approach__fill {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, #a67c00, #d4a017 70%, #e07a5f);
-  }
-  .pd-approach__knob {
-    position: absolute;
-    top: 50%;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    background: #f0d078;
-    border: 2px solid #1a1714;
-    transform: translate(-50%, -50%);
-    box-shadow: 0 0 0 3px rgba(212, 160, 23, 0.2);
-  }
-  .pd-approach__labels {
-    display: flex;
-    justify-content: space-between;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 9px;
-    color: var(--pd-dim);
-  }
-  .pd-approach__score { color: #c9a84a; }
-
-  .pd-triad {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-    margin-bottom: 12px;
-  }
-  .pd-triad__leg {
-    padding: 8px;
-    border-radius: 8px;
-    border: 1px solid #2a2620;
-    background: rgba(0, 0, 0, 0.35);
-  }
-  .pd-triad__k {
-    display: block;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 8px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--pd-dim);
-    margin-bottom: 2px;
-  }
-  .pd-triad__v {
-    display: block;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: #5c564c;
-    margin-bottom: 3px;
-  }
-  .pd-triad__cap {
-    display: block;
-    font-size: 9px;
-    line-height: 1.25;
-    color: #4a453c;
-  }
-  .pd-triad__leg--on {
-    border-color: rgba(109, 155, 124, 0.5);
-    background: rgba(109, 155, 124, 0.1);
-  }
-  .pd-triad__leg--on .pd-triad__v { color: #8fd4a0; }
-  .pd-triad__leg--on .pd-triad__k { color: rgba(143, 212, 160, 0.7); }
-  .pd-triad__leg--on .pd-triad__cap { color: #6d9b7c; }
-  .pd-triad__leg--pressure.pd-triad__leg--on {
-    border-color: rgba(224, 122, 95, 0.5);
-    background: rgba(224, 122, 95, 0.1);
-  }
-  .pd-triad__leg--pressure.pd-triad__leg--on .pd-triad__v { color: #f0a890; }
-  .pd-triad__leg--pressure.pd-triad__leg--on .pd-triad__k,
-  .pd-triad__leg--pressure.pd-triad__leg--on .pd-triad__cap { color: #d4896f; }
-  .pd-triad__leg--coil.pd-triad__leg--on {
-    border-color: rgba(212, 160, 23, 0.5);
-    background: rgba(212, 160, 23, 0.1);
-  }
-  .pd-triad__leg--coil.pd-triad__leg--on .pd-triad__v { color: #f0d078; }
-  .pd-triad__leg--coil.pd-triad__leg--on .pd-triad__k,
-  .pd-triad__leg--coil.pd-triad__leg--on .pd-triad__cap { color: #c9a84a; }
-
-  .pd-chip {
-    margin: 0 0 6px;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 10px;
-    color: var(--pd-muted);
-    padding: 6px 8px;
-    border-radius: 6px;
-    border: 1px dashed rgba(241, 235, 224, 0.15);
-  }
-  .pd-chip--size { color: #c9a84a; border-color: rgba(212, 160, 23, 0.3); }
-  .pd-chip--wallet { color: #a8c9b4; border-color: rgba(109, 155, 124, 0.3); }
-
-  .pd-lead__cta {
-    display: inline-flex;
-    margin-top: 8px;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    color: #f0d078;
-    text-decoration: none;
-    border-bottom: 1px solid rgba(240, 208, 120, 0.35);
-    padding-bottom: 2px;
-  }
-  .pd-lead__cta:hover { color: #fff4c8; border-bottom-color: #fff4c8; }
-
-  /* Ladder board */
-  .pd-board { margin-top: 4px; }
-  .pd-board__section + .pd-board__section {
-    margin-top: 14px;
-    padding-top: 12px;
-    border-top: 1px solid var(--pd-line);
-  }
-  .pd-board__lbl {
-    margin: 0 0 8px;
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 10px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--pd-muted);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .pd-board__lbl span {
-    font-size: 9px;
-    color: var(--pd-dim);
     letter-spacing: 0.06em;
-    padding: 2px 6px;
-    border-radius: 999px;
-    border: 1px solid var(--pd-line);
+    text-transform: uppercase;
+    padding: 3px 6px;
+    border-radius: 5px;
+    color: #f0cd7a;
+    background: rgba(215, 167, 46, 0.14);
   }
-  .pd-board__rows { display: flex; flex-direction: column; gap: 6px; }
+  .pd-lead__badge--chase-risk, .pd-lead__badge--just-started { color: #f5a184; background: rgba(221, 107, 74, 0.16); }
+  .pd-lead__badge--fading { color: #a6cdb1; background: rgba(111, 155, 128, 0.16); }
+  .pd-lead__name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--pd-ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pd-lead__sn { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; font-weight: 600; color: var(--pd-dim); }
+  .pd-lead__pct {
+    flex-shrink: 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1;
+    color: #f0cd7a;
+  }
+  .pd-lead--confirmed .pd-lead__pct { color: #f5a184; }
+  .pd-lead--exit .pd-lead__pct { color: #a6cdb1; }
+  .pd-lead__pct i { font-size: 13px; font-style: normal; opacity: 0.6; }
 
-  .pd-row {
+  .pd-lead__phase {
+    margin: 6px 0 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 8.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #4c463c;
+  }
+  .pd-lead__phase-now { color: #f0cd7a; font-weight: 700; }
+  .pd-lead--confirmed .pd-lead__phase-now { color: #f5a184; }
+  .pd-lead--exit .pd-lead__phase-now { color: #a6cdb1; }
+  .pd-lead__ago { color: var(--pd-dim); text-transform: none; letter-spacing: 0; }
+
+  .pd-lead__reason {
+    margin: 6px 0 0;
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: #cbc3b4;
+  }
+
+  .pd-lead__stats {
+    margin: 7px 0 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10.5px;
+    color: var(--pd-dim);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px 10px;
+  }
+  .pd-lead__stats b { color: var(--pd-ink); font-weight: 700; }
+  .pd-lead__gap { color: #8fc79f; }
+
+  .pd-lead__row3 {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 9px 10px;
-    border-radius: 10px;
-    border: 1px solid var(--pd-line);
-    background: var(--pd-panel);
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .pd-lead__triad { display: inline-flex; gap: 4px; flex-shrink: 0; }
+  .pd-lead__trend { flex: 0 0 100px; width: 100px; height: 18px; opacity: 0.85; }
+  .pd-lead__trend .pump-progress { width: 100%; height: 18px; display: block; }
+
+  .pd-lead__chip {
+    margin: 7px 0 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--pd-sub);
+  }
+  .pd-lead__chip::before { content: '· '; color: var(--pd-dim); }
+
+  .pd-dot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #3a352c;
+  }
+  .pd-dot--in { background: #6fbf8b; }
+  .pd-dot--pr { background: #dd6b4a; }
+  .pd-dot--coil { background: #d7a72e; }
+
+  /* Ladder — real table via matched CSS grid columns across sibling rows */
+  .pd-table { margin-top: 2px; }
+  .pd-cols {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) 28px 34px 26px 44px;
+    gap: 6px;
+    padding: 0 6px 3px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 7.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #6e675b;
+  }
+  .pd-cols span:nth-child(3), .pd-cols span:nth-child(4) { text-align: right; }
+  .pd-table__lbl {
+    margin: 10px 0 4px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--pd-sub);
+  }
+  .pd-table__rows { display: flex; flex-direction: column; }
+
+  .pd-r {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) 28px 34px 26px 44px;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 6px;
+    border-bottom: 1px solid var(--pd-line);
     text-decoration: none;
     color: inherit;
   }
-  .pd-row--warm { border-color: rgba(212, 160, 23, 0.28); }
-  .pd-row--active { border-color: rgba(224, 122, 95, 0.3); }
-  .pd-row--exit { border-color: rgba(109, 155, 124, 0.28); }
-  .pd-row__id { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 8px; }
-  .pd-row__badge {
+  .pd-r:last-child { border-bottom: none; }
+  .pd-r__badge {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 8px;
+    font-size: 7.5px;
     font-weight: 700;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.02em;
     text-transform: uppercase;
-    padding: 2px 5px;
-    border-radius: 4px;
-    color: #c9a84a;
-    border: 1px solid rgba(212, 160, 23, 0.35);
-    background: rgba(212, 160, 23, 0.08);
+    color: #d7a72e;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
   }
-  .pd-row__badge--chase-risk,
-  .pd-row__badge--just-started {
-    color: #f0a890;
-    border-color: rgba(224, 122, 95, 0.4);
-    background: rgba(224, 122, 95, 0.08);
-  }
-  .pd-row__badge--fading {
-    color: #a8c9b4;
-    border-color: rgba(109, 155, 124, 0.4);
-    background: rgba(109, 155, 124, 0.08);
-  }
-  .pd-row__name {
-    font-size: 13px;
-    font-weight: 700;
+  .pd-r__badge--chase-risk, .pd-r__badge--just-started { color: #dd6b4a; }
+  .pd-r__badge--fading { color: #6f9b80; }
+  .pd-r__name {
+    min-width: 0;
+    font-size: 12.5px;
+    font-weight: 600;
     color: var(--pd-ink);
-    line-height: 1.2;
-  }
-  .pd-row--warm .pd-row__name { color: #f0d078; }
-  .pd-row--active .pd-row__name { color: #f0a890; }
-  .pd-row--exit .pd-row__name { color: #a8c9b4; }
-  .pd-row__sn {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 9px;
-    color: var(--pd-dim);
-  }
-  .pd-row__stats {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-  .pd-row__stat {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 11px;
-    font-weight: 700;
-    color: #cfc6b8;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .pd-row__stat-k {
-    display: block;
-    font-size: 7px;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--pd-dim);
+  .pd-r__sn { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 9px; font-weight: 500; color: var(--pd-dim); }
+  .pd-r__num {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--pd-sub);
+    text-align: right;
   }
-  .pd-row__stat--gap { color: var(--pd-gap); }
-  .pd-row__triad { display: flex; gap: 3px; align-items: center; }
-  .pd-dot {
-    display: block;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #2a2620;
-    border: 1px solid #3d3830;
-  }
-  .pd-dot--on.pd-dot--in { background: #8fd4a0; border-color: #8fd4a0; }
-  .pd-dot--on.pd-dot--pr { background: #e07a5f; border-color: #e07a5f; }
-  .pd-dot--on.pd-dot--coil { background: #d4a017; border-color: #d4a017; }
-  .pd-row__spark-wrap, .pd-row__spark { width: 64px; height: 28px; flex-shrink: 0; }
+  .pd-r__num--gap { color: #8fc79f; }
+  .pd-r__triad { display: flex; gap: 3px; justify-content: center; }
+  .pd-r__spark { width: 44px; height: 20px; }
+  .pd-r__spark .spark { width: 44px; height: 20px; display: block; }
 
   .pd-empty {
-    margin: 0;
-    padding: 20px 16px;
+    margin: 8px 0 0;
+    padding: 18px 14px;
     text-align: center;
-    font-size: 13px;
+    font-size: 12.5px;
     line-height: 1.5;
-    color: var(--pd-muted);
-    border: 1px dashed rgba(212, 160, 23, 0.3);
-    border-radius: 12px;
-    background: rgba(0, 0, 0, 0.25);
+    color: var(--pd-sub);
+    border: 1px dashed var(--pd-line);
+    border-radius: 10px;
   }
 
-  /* Legacy non-compact card lane (kept for preview/full mode) */
+  /* Legacy non-compact card lane (preview/full mode) */
   .pump-alert__lane { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
   .pump-alert__card { flex: 0 0 min(88vw, 300px); scroll-snap-align: start; padding: 12px; border-radius: 12px; background: var(--pd-panel); border: 1px solid var(--pd-line); }
   .pump-alert__card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
   .pump-alert__name { font-size: 13px; font-weight: 700; color: var(--pd-ink); text-decoration: none; }
-  .pump-alert__badge { font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.1em; padding: 3px 7px; border-radius: 6px; text-transform: uppercase; color: #c9a84a; border: 1px solid rgba(212,160,23,0.4); }
+  .pump-alert__badge { font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.1em; padding: 3px 7px; border-radius: 6px; text-transform: uppercase; color: #d7a72e; }
   .pump-alert__triad { display: flex; gap: 6px; margin: 0 0 8px; flex-wrap: wrap; }
   .pump-alert__triad-leg { font-family: 'JetBrains Mono', monospace; font-size: 8px; padding: 3px 6px; border-radius: 5px; color: var(--pd-dim); border: 1px solid #2a2620; }
-  .pump-alert__triad-leg--on { color: #8fd4a0; border-color: rgba(143,212,160,0.45); }
-  .pump-alert__thesis { font-size: 13px; line-height: 1.45; color: #cfc6b8; margin: 0 0 6px; }
+  .pump-alert__triad-leg--on { color: #6fbf8b; border-color: rgba(111,191,139,0.4); }
+  .pump-alert__thesis { font-size: 13px; line-height: 1.45; color: #cbc3b4; margin: 0 0 6px; }
   .pump-alert__trigger { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--pd-dim); margin: 0; }
   .pump-alert__meter { height: 3px; background: #2a2620; border-radius: 999px; margin-bottom: 8px; overflow: hidden; }
-  .pump-alert__meter-fill { display: block; height: 100%; background: #d4a017; }
-  .pump-alert__size, .pump-alert__wallet-chip { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--pd-muted); margin: 0 0 4px; }
+  .pump-alert__meter-fill { display: block; height: 100%; background: #d7a72e; }
+  .pump-alert__size, .pump-alert__wallet-chip { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--pd-sub); margin: 0 0 4px; }
 
-  /* Compat aliases — hydrate timeout / G0 / older JS selectors */
-  .pump-desk__empty { /* alias */ }
-  .pump-hero__card { /* hydrate timeout probe */ }
-  .pump-desk__row { /* hydrate timeout probe */ }
+  /* Compat probes — hydrate timeout / legacy selectors */
+  .pump-desk__empty {}
+  .pump-hero__card {}
+  .pump-desk__row {}
 
-  @media (max-width: 380px) {
-    .pd-lead { grid-template-columns: 36px 1fr; gap: 8px; padding-left: 8px; }
-    .pd-evidence { gap: 5px; }
-    .pd-evidence__v { font-size: 15px; }
-    .pd-row__spark-wrap { display: none; }
+  @media (max-width: 360px) {
+    .pd-cols, .pd-r { grid-template-columns: 36px minmax(0, 1fr) 24px 30px 22px 0; }
+    .pd-r__spark { display: none; }
   }
   @media (min-width: 720px) {
     .pump-alert__lane { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); overflow: visible; }
     .pump-alert__card { flex: initial; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .pd-lead, .pd-phase__step--now .pd-phase__tick { animation: none; }
+    .pd-live { animation: none; }
   }
 </style>

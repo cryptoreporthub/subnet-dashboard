@@ -1095,56 +1095,73 @@
     return true;
   }
 
-  function _pdPhaseRail(phase) {
-    var order = ['STIRRING', 'ACCUMULATING', 'PUMPING', 'COOLING'];
-    var labels = { STIRRING: 'Stir', ACCUMULATING: 'Build', PUMPING: 'Pump', COOLING: 'Cool' };
-    var cur = String(phase || 'STIRRING').toUpperCase();
-    var curIdx = order.indexOf(cur);
-    if (curIdx < 0) curIdx = 0;
-    var html = '<ol class="pd-phase" aria-label="Formation phase">';
-    order.forEach(function (p, i) {
-      var cls = 'pd-phase__step';
-      if (i === curIdx) cls += ' pd-phase__step--now';
-      else if (i < curIdx) cls += ' pd-phase__step--done';
-      html +=
-        '<li class="' +
-        cls +
-        '"><span class="pd-phase__tick"></span><span class="pd-phase__lbl">' +
-        labels[p] +
-        '</span></li>';
-    });
-    return html + '</ol>';
+  var PD_BADGE_ABBR = {
+    'WARMING UP': 'WARM',
+    BUILDING: 'BUILD',
+    STRONG: 'STRONG',
+    'JUST STARTED': 'JUST',
+    'CHASE RISK': 'CHASE',
+    FADING: 'FADE',
+  };
+
+  function _pdTriadDots(triad, cls) {
+    triad = triad || {};
+    return (
+      '<span class="' +
+      (cls || 'pd-lead__triad') +
+      '" aria-label="Inflow ' +
+      (triad.inflow_quiet_load ? 'on' : 'off') +
+      ', pressure ' +
+      (triad.buy_pressure ? 'on' : 'off') +
+      ', coil ' +
+      (triad.price_coil ? 'on' : 'off') +
+      '"><i class="pd-dot' +
+      (triad.inflow_quiet_load ? ' pd-dot--in' : '') +
+      '"></i><i class="pd-dot' +
+      (triad.buy_pressure ? ' pd-dot--pr' : '') +
+      '"></i><i class="pd-dot' +
+      (triad.price_coil ? ' pd-dot--coil' : '') +
+      '"></i></span>'
+    );
   }
 
-  function _pdUpdateCensus(lead, live, exitN, show) {
-    var pillsEl = document.getElementById('pump-hero-pills');
-    if (!pillsEl) return;
-    var leadEl = document.getElementById('pd-census-lead');
-    var liveEl = document.getElementById('pd-census-live');
-    var exitEl = document.getElementById('pd-census-exit');
-    if (leadEl) leadEl.textContent = String(lead);
-    if (liveEl) liveEl.textContent = String(live);
-    if (exitEl) exitEl.textContent = String(exitN);
-    if (!leadEl) {
-      pillsEl.innerHTML =
-        '<span class="pd-census__cell pd-census__cell--lead"><b id="pd-census-lead">' +
-        lead +
-        '</b> lead</span>' +
-        '<span class="pd-census__cell pd-census__cell--live"><b id="pd-census-live">' +
+  function renderPumpMetaWrap(trust, early, live, exitN) {
+    var wrap = document.getElementById('pd-meta-wrap');
+    if (!wrap) return;
+    if (trust && trust.ready && trust.headline_pct != null) {
+      var n = trust.headline_n != null ? trust.headline_n : (trust.early && trust.early.n) || 0;
+      wrap.innerHTML =
+        '<p class="pd-meta"><b class="pd-meta__pct">' +
+        esc(trust.headline_pct) +
+        '%</b> hit-rate (n=' +
+        esc(n) +
+        ') · ' +
+        early +
+        ' lead · ' +
         live +
-        '</b> live</span>' +
-        '<span class="pd-census__cell pd-census__cell--exit"><b id="pd-census-exit">' +
+        ' live · ' +
         exitN +
-        '</b> exit</span>';
+        ' exit</p>';
+    } else {
+      var line =
+        (trust && trust.line) || 'Early alerts: grading starts once lead phase entries resolve (1h).';
+      wrap.innerHTML =
+        '<p class="pd-meta">' +
+        early +
+        ' lead · ' +
+        live +
+        ' live · ' +
+        exitN +
+        ' exit</p>' +
+        '<p class="pd-meta pd-meta--building">' +
+        esc(line) +
+        '</p>';
     }
-    pillsEl.hidden = !show;
-    pillsEl.style.display = show ? '' : 'none';
   }
 
   function renderPumpHeroCard(row) {
     if (!row || row.netuid == null) return '';
     var triad = row.triad || {};
-    var labels = row.triad_labels || {};
     var score = row.score != null ? Number(row.score) : 0;
     var trigger = row.trigger_score != null ? Number(row.trigger_score) : 0.72;
     var trigPct = Math.min(100, Math.round((score / trigger) * 100));
@@ -1160,108 +1177,76 @@
     var badgeSlug = String(row.badge || '')
       .toLowerCase()
       .replace(/\s+/g, '-');
-    var inflowOn = !!triad.inflow_quiet_load;
-    var pressureOn = !!triad.buy_pressure;
-    var coilOn = !!triad.price_coil;
+    var phase = String(row.phase || 'STIRRING').toUpperCase();
+    var order = [
+      ['STIRRING', 'STIR'],
+      ['ACCUMULATING', 'BUILD'],
+      ['PUMPING', 'PUMP'],
+      ['COOLING', 'COOL'],
+    ];
+    var phaseHtml = order
+      .map(function (pair) {
+        var cls = phase === pair[0] ? ' class="pd-lead__phase-now"' : '';
+        return '<span' + cls + '>' + pair[1] + '</span>';
+      })
+      .join(' · ');
+    if (row.updated_ago) {
+      phaseHtml += ' <span class="pd-lead__ago">· ' + esc(row.updated_ago) + '</span>';
+    }
     var progress = Array.isArray(row.progress_series) ? row.progress_series : [];
-    var progressHtml =
+    var trendHtml =
       progress.length >= 2
-        ? '<div class="pd-approach__chart"><div class="pump-progress pd-approach__progress" data-progress="' +
+        ? '<span class="pd-lead__trend"><span class="pump-progress" data-progress="' +
           esc(progress.join(',')) +
-          '" role="img" aria-label="Score progress toward trigger"></div></div>'
+          '" role="img" aria-label="Score trend toward trigger"></span></span>'
         : '';
-    var sizeHtml = row.size_line
-      ? '<p class="pd-chip pd-chip--size">' + esc(row.size_line) + '</p>'
-      : '';
-    var walletHtml = row.wallet_chip
-      ? '<p class="pd-chip pd-chip--wallet">' + esc(row.wallet_chip) + '</p>'
-      : '';
-    var thesisHtml = row.thesis
-      ? '<p class="pd-lead__thesis">' + esc(row.thesis) + '</p>'
-      : '';
-    var verdict = row.trigger || row.subtitle || row.badge || '';
+    var reason = row.trigger || row.subtitle || row.badge || '';
+    var statBits = [
+      'Flow <b>' + esc(formPct) + '</b>',
+      'Confirm <b>' + esc(confirmPct) + '</b>',
+      'Gap <b class="pd-lead__gap">' + esc(row.distance != null ? row.distance : '—') + '</b>',
+    ];
+    if (row.buy_pct != null) statBits.push(esc(row.buy_pct) + '% buys');
+    if (row.vol_pct != null) statBits.push(esc(row.vol_pct) + '% vol');
+    var chipsHtml = '';
+    if (row.size_line) chipsHtml += '<p class="pd-lead__chip">' + esc(row.size_line) + '</p>';
+    if (row.wallet_chip) chipsHtml += '<p class="pd-lead__chip">' + esc(row.wallet_chip) + '</p>';
     return (
+      '<p class="pd-legend" aria-hidden="true"><i class="pd-dot pd-dot--in"></i>inflow&nbsp;&nbsp;' +
+      '<i class="pd-dot pd-dot--pr"></i>pressure&nbsp;&nbsp;<i class="pd-dot pd-dot--coil"></i>coil</p>' +
       '<article class="pd-lead pd-lead--' +
       esc(timing) +
       ' pump-hero__card" id="pump-desk-hero" data-netuid="' +
       esc(row.netuid) +
       '">' +
-      _pdPhaseRail(row.phase) +
-      '<div class="pd-lead__body">' +
-      '<div class="pd-lead__top"><div>' +
-      '<p class="pd-lead__eyebrow">Primary lead · closest to trigger</p>' +
-      '<h3 class="pd-lead__name"><span class="pd-lead__sn">SN' +
+      '<a class="pd-lead__row1" href="/subnet/' +
       esc(row.netuid) +
-      '</span> ' +
-      esc(row.name || '') +
-      '</h3></div>' +
-      '<span class="pd-lead__badge pd-lead__badge--' +
+      '"><span class="pd-lead__badge pd-lead__badge--' +
       esc(badgeSlug) +
       '">' +
       esc(row.badge || '') +
-      '</span></div>' +
-      '<p class="pd-lead__verdict">' +
-      esc(verdict) +
+      '</span><span class="pd-lead__name">' +
+      esc(row.name || '') +
+      ' <b class="pd-lead__sn">SN' +
+      esc(row.netuid) +
+      '</b></span><span class="pd-lead__pct">' +
+      trigPct +
+      '<i>%</i></span></a>' +
+      '<p class="pd-lead__phase">' +
+      phaseHtml +
       '</p>' +
-      thesisHtml +
-      '<div class="pd-evidence" aria-label="Formation evidence">' +
-      '<div class="pd-evidence__cell"><span class="pd-evidence__k">Flow</span>' +
-      '<span class="pd-evidence__v">' +
-      esc(formPct) +
-      '<span class="pd-evidence__den">/100</span></span>' +
-      '<span class="pd-evidence__bar" aria-hidden="true"><span style="width:' +
-      Math.min(100, formPct) +
-      '%"></span></span>' +
-      '<span class="pd-evidence__cap">Buy + volume forming</span></div>' +
-      '<div class="pd-evidence__cell"><span class="pd-evidence__k">Confirm</span>' +
-      '<span class="pd-evidence__v">' +
-      esc(confirmPct) +
-      '<span class="pd-evidence__den">/100</span></span>' +
-      '<span class="pd-evidence__bar pd-evidence__bar--confirm" aria-hidden="true"><span style="width:' +
-      Math.min(100, confirmPct) +
-      '%"></span></span>' +
-      '<span class="pd-evidence__cap">Price catching up</span></div>' +
-      '<div class="pd-evidence__cell pd-evidence__cell--gap"><span class="pd-evidence__k">Gap</span>' +
-      '<span class="pd-evidence__v pd-evidence__v--gap">' +
-      esc(row.distance != null ? row.distance : '—') +
-      '</span><span class="pd-evidence__cap">Pts to JUST STARTED</span></div></div>' +
-      '<div class="pd-approach" aria-hidden="true">' +
-      progressHtml +
-      '<div class="pd-approach__track"><span class="pd-approach__fill" style="width:' +
-      trigPct +
-      '%"></span><span class="pd-approach__knob" style="left:' +
-      trigPct +
-      '%"></span></div>' +
-      '<div class="pd-approach__labels"><span>Trigger ' +
-      esc(trigger) +
-      '</span><span class="pd-approach__score">Score ' +
-      esc(score) +
-      ' · ' +
-      trigPct +
-      '%</span></div></div>' +
-      '<div class="pd-triad" aria-label="Pre-pump triad">' +
-      '<div class="pd-triad__leg' +
-      (inflowOn ? ' pd-triad__leg--on' : '') +
-      '"><span class="pd-triad__k">Inflow</span><span class="pd-triad__v">' +
-      esc(labels.inflow || 'WATCH') +
-      '</span><span class="pd-triad__cap">Quiet load before price</span></div>' +
-      '<div class="pd-triad__leg' +
-      (pressureOn ? ' pd-triad__leg--on pd-triad__leg--pressure' : '') +
-      '"><span class="pd-triad__k">Pressure</span><span class="pd-triad__v">' +
-      esc(labels.pressure || 'FLAT') +
-      '</span><span class="pd-triad__cap">Buy ratio at gate</span></div>' +
-      '<div class="pd-triad__leg' +
-      (coilOn ? ' pd-triad__leg--on pd-triad__leg--coil' : '') +
-      '"><span class="pd-triad__k">Coil</span><span class="pd-triad__v">' +
-      esc(labels.coil || 'OPEN') +
-      '</span><span class="pd-triad__cap">Compressed price band</span></div></div>' +
-      sizeHtml +
-      walletHtml +
-      '<a class="pd-lead__cta" href="/subnet/' +
-      esc(row.netuid) +
-      '">Open SN' +
-      esc(row.netuid) +
-      ' dossier →</a></div></article>'
+      '<p class="pd-lead__reason">' +
+      esc(reason) +
+      '</p>' +
+      '<p class="pd-lead__stats">' +
+      statBits.map(function (s) { return '<span>' + s + '</span>'; }).join('') +
+      '</p>' +
+      '<div class="pd-lead__row3">' +
+      _pdTriadDots(triad) +
+      trendHtml +
+      '</div>' +
+      chipsHtml +
+      '</article>'
     );
   }
 
@@ -1273,67 +1258,46 @@
           ? Math.min(100, Math.round(Number(row.score) * 100))
           : null;
     var sparks = Array.isArray(row.spark_closes) ? row.spark_closes : [];
-    var triad = row.triad || {};
-    var badgeSlug = String(row.badge || '')
-      .toLowerCase()
-      .replace(/\s+/g, '-');
+    var badge = String(row.badge || '');
+    var badgeSlug = badge.toLowerCase().replace(/\s+/g, '-');
+    var shortBadge = PD_BADGE_ABBR[badge] || badge;
     var sparkHtml =
       sparks.length >= 2
-        ? '<div class="pd-row__spark-wrap"><div class="spark pd-row__spark" data-spark="' +
+        ? '<span class="pd-r__spark"><span class="spark" data-spark="' +
           esc(sparks.join(',')) +
           '" data-spark-tone="' +
           esc(tone) +
           '" role="img" aria-label="Price sparkline for ' +
           esc(row.name || '') +
-          '"></div></div>'
-        : '';
-    var formHtml =
-      formPct != null
-        ? '<span class="pd-row__stat"><span class="pd-row__stat-k">Flow</span> ' +
-          formPct +
-          '</span>'
-        : '';
-    var gapHtml =
-      row.distance != null
-        ? '<span class="pd-row__stat pd-row__stat--gap"><span class="pd-row__stat-k">Gap</span> ' +
-          esc(row.distance) +
-          '</span>'
-        : '';
+          '"></span></span>'
+        : '<span class="pd-r__spark"></span>';
     return (
-      '<a class="pd-row pd-row--' +
+      '<a class="pd-r pd-r--' +
       esc(tone) +
       ' pump-desk__row" href="/subnet/' +
       esc(row.netuid) +
       '" data-netuid="' +
       esc(row.netuid) +
       '">' +
-      '<div class="pd-row__id">' +
-      '<span class="pd-row__badge pd-row__badge--' +
+      '<span class="pd-r__badge pd-r__badge--' +
       esc(badgeSlug) +
       '">' +
-      esc(row.badge || '') +
+      esc(shortBadge) +
       '</span>' +
-      '<span class="pd-row__name">' +
+      '<span class="pd-r__name">' +
       esc(row.name || '') +
-      '</span>' +
-      '<span class="pd-row__sn">SN' +
+      ' <b class="pd-r__sn">SN' +
       esc(row.netuid) +
-      '</span></div>' +
-      '<div class="pd-row__stats">' +
-      formHtml +
-      gapHtml +
-      '<span class="pd-row__triad" aria-label="Triad">' +
-      '<i class="pd-dot' +
-      (triad.inflow_quiet_load ? ' pd-dot--on pd-dot--in' : '') +
-      '"></i>' +
-      '<i class="pd-dot' +
-      (triad.buy_pressure ? ' pd-dot--on pd-dot--pr' : '') +
-      '"></i>' +
-      '<i class="pd-dot' +
-      (triad.price_coil ? ' pd-dot--on pd-dot--coil' : '') +
-      '"></i></span>' +
+      '</b></span>' +
+      '<span class="pd-r__num">' +
+      (formPct != null ? formPct : '—') +
+      '</span>' +
+      '<span class="pd-r__num pd-r__num--gap">' +
+      esc(row.distance != null ? row.distance : '—') +
+      '</span>' +
+      _pdTriadDots(row.triad, 'pd-r__triad') +
       sparkHtml +
-      '</div></a>'
+      '</a>'
     );
   }
 
@@ -1364,65 +1328,62 @@
       var more = '';
       if (warm.length > 1) {
         more +=
-          '<section class="pd-board__section"><h4 class="pd-board__lbl">Also warming <span>' +
+          '<p class="pd-table__lbl">Also warming — ' +
           (warm.length - 1) +
-          '</span></h4><div class="pd-board__rows">';
+          '</p><div class="pd-table__rows">';
         warm.slice(1).forEach(function (row) {
           more += renderPumpDeskRow(row, 'warm');
         });
-        more += '</div></section>';
+        more += '</div>';
       }
       if (active.length) {
         more +=
-          '<section class="pd-board__section"><h4 class="pd-board__lbl">Active · chase risk <span>' +
-          active.length +
-          '</span></h4><div class="pd-board__rows">';
+          '<p class="pd-table__lbl">Active — chase risk, ' + active.length + '</p><div class="pd-table__rows">';
         active.forEach(function (row) {
           more += renderPumpDeskRow(row, 'active');
         });
-        more += '</div></section>';
+        more += '</div>';
       }
       if (exits.length) {
         more +=
-          '<section class="pd-board__section"><h4 class="pd-board__lbl">Cooling · exit watch <span>' +
-          exits.length +
-          '</span></h4><div class="pd-board__rows">';
+          '<p class="pd-table__lbl">Cooling — exit watch, ' + exits.length + '</p><div class="pd-table__rows">';
         exits.forEach(function (row) {
           more += renderPumpDeskRow(row, 'exit');
         });
-        more += '</div></section>';
+        more += '</div>';
       }
       if (more) {
-        html += '<div class="pd-board" id="pump-desk-more">' + more + '</div>';
+        html +=
+          '<div class="pd-table" id="pump-desk-more">' +
+          '<div class="pd-cols" aria-hidden="true"><span></span><span></span><span>Flow</span><span>Gap</span><span></span><span></span></div>' +
+          more +
+          '</div>';
       }
-      _pdUpdateCensus(warm.length, active.length, exits.length, true);
+      renderPumpMetaWrap(payload && payload.trust, warm.length, active.length, exits.length);
       deskPanel.innerHTML = html;
       if (typeof window.__paintSparks === 'function') window.__paintSparks();
       return;
     }
     if (warm.length) {
-      html +=
-        '<div class="pd-board__section"><h4 class="pd-board__lbl">Warming</h4><div class="pd-board__rows">';
+      html += '<div class="pd-table__lbl">Warming</div><div class="pd-table__rows">';
       warm.forEach(function (row) {
         html += renderPumpDeskRow(row, 'warm');
       });
-      html += '</div></div>';
+      html += '</div>';
     }
     if (active.length) {
-      html +=
-        '<div class="pd-board__section"><h4 class="pd-board__lbl">Active</h4><div class="pd-board__rows">';
+      html += '<div class="pd-table__lbl">Active</div><div class="pd-table__rows">';
       active.forEach(function (row) {
         html += renderPumpDeskRow(row, 'active');
       });
-      html += '</div></div>';
+      html += '</div>';
     }
     if (exits.length) {
-      html +=
-        '<div class="pd-board__section"><h4 class="pd-board__lbl">Cooling</h4><div class="pd-board__rows">';
+      html += '<div class="pd-table__lbl">Cooling</div><div class="pd-table__rows">';
       exits.forEach(function (row) {
         html += renderPumpDeskRow(row, 'exit');
       });
-      html += '</div></div>';
+      html += '</div>';
     }
     deskPanel.innerHTML = html;
     if (typeof window.__paintSparks === 'function') window.__paintSparks();
@@ -1442,39 +1403,6 @@
     }
     var listPanel = document.getElementById('pump-list-panel');
     var trust = payload.trust || {};
-    var trustEl = document.getElementById('pump-alert-trust');
-    var proofEl = document.getElementById('pump-alert-proof');
-    var proofPctEl = document.getElementById('pump-alert-proof-pct');
-    var trustRail = document.getElementById('pd-trust-rail');
-    if (trust.ready && trust.headline_pct != null) {
-      if (trustRail) {
-        trustRail.innerHTML =
-          '<div class="pd-trust__ready" id="pump-alert-proof">' +
-          '<span class="pd-trust__pct" id="pump-alert-proof-pct">' +
-          String(trust.headline_pct) +
-          '%</span>' +
-          '<span class="pd-trust__meta">early alerts hit +2% in 1h · n=' +
-          esc(trust.headline_n != null ? trust.headline_n : (trust.early && trust.early.n) || 0) +
-          '</span></div>';
-      } else {
-        if (proofEl) proofEl.hidden = false;
-        if (proofPctEl) proofPctEl.textContent = String(trust.headline_pct) + '%';
-        if (trustEl) trustEl.hidden = true;
-      }
-    } else if (trustRail) {
-      var trustLine = trust.line || '';
-      if (trustLine) {
-        trustRail.innerHTML =
-          '<p class="pd-trust__building" id="pump-alert-trust">' + esc(trustLine) + '</p>';
-      }
-    } else if (trustEl) {
-      var trustLine2 = trust.line || '';
-      if (trustLine2) {
-        trustEl.hidden = false;
-        trustEl.textContent = trustLine2;
-      }
-      if (proofEl) proofEl.hidden = true;
-    }
     var alerts = payload.alerts || [];
     var earlyCount = Number(payload.early_count);
     var confirmedCount = Number(payload.confirmed_count);
@@ -1490,12 +1418,12 @@
     var compact = !!document.querySelector('[data-pump-compact="1"]');
     var countEl = document.getElementById('pump-alert-count');
     if (compact) {
-      _pdUpdateCensus(earlyCount, confirmedCount, exitCount, count > 0 || exitCount > 0);
+      renderPumpMetaWrap(trust, earlyCount, confirmedCount, exitCount);
     } else if (countEl) {
       countEl.textContent = count > 0 ? earlyCount + ' warming · ' + confirmedCount + ' active' : '';
       countEl.style.display = count > 0 ? '' : 'none';
     }
-    if (!count) {
+    if (!count && !exitCount) {
       var deskPanel = document.getElementById('pump-desk-panel');
       if (deskPanel) {
         deskPanel.innerHTML =
