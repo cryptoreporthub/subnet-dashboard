@@ -4,31 +4,27 @@
       <div class="logo-mark" aria-hidden="true">◈</div>
       <div>
         <div class="logo-text">Simi<span>Vision</span></div>
-        <div class="logo-sub">Situation Room · subnet intelligence</div>
+        <div class="logo-sub">Subnet intelligence</div>
       </div>
     </div>
     <div class="src-tag" aria-hidden="true">
       <span id="headerDataSource" hidden>{{ data_source|default('cache') }}</span>
       {% set ds_label = data_source|default('snapshot')|replace('_',' ')|title %}
-      <span class="data-freshness-badge data-freshness-snapshot" id="dataFreshnessBadge" role="status" aria-live="polite" aria-atomic="true">Chain feed: {{ ds_label }}</span>
+      <span class="data-freshness-badge data-freshness-snapshot" id="dataFreshnessBadge" role="status" aria-live="polite" aria-atomic="true">{{ ds_label }}</span>
       <span class="ops-readiness-badge ops-readiness--warming" id="opsReadinessBadge" role="status" aria-live="polite" hidden title="Production readiness"></span>
     </div>
     <div class="header-actions sr-hud-status">
       <button type="button" class="cmd-palette-trigger" id="cmd-palette-trigger" title="Search (Ctrl+K)">Search</button>
-      <span class="sr-hud-chip" id="headerSourceChip" title="Data source">{{ data_source|default('snapshot')|replace('_',' ')|title }}</span>
-      <span class="live-pill live-pill--snapshot" id="liveFeedPill" role="status" aria-live="polite"><span class="live-dot" aria-hidden="true"></span>SNAPSHOT</span>
+      <span class="live-pill live-pill--snapshot" id="liveFeedPill" role="status" aria-live="polite"><span class="live-dot" aria-hidden="true"></span>LIVE</span>
       <span class="utc-clock" id="utcClock">--:--:-- UTC</span>
     </div>
   </div>
 </header>
 <nav class="top-nav" aria-label="Page sections">
-  <a href="#section-daily-pick">Council</a>
+  <a href="#section-daily-pick" aria-current="page">Council</a>
   <a href="#section-simivision-picks">Weighing</a>
   <a href="#section-pump-alert">Lead</a>
   <a href="#section-living-focus">Focus</a>
   <a href="#section-proof-band">Proof</a>
 </nav>
-<section class="subnet-integrations-bar" id="subnetIntegrationsBar" aria-label="Bittensor subnet integrations" hidden>
-  <div class="subnet-integrations-bar__inner" id="subnetIntegrationsBarInner"></div>
-</section>
 <div id="subnetIntegrationsCorner" class="subnet-integrations-corner" hidden aria-live="polite"></div>
