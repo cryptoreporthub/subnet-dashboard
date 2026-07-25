@@ -1102,70 +1102,94 @@
     var score = row.score != null ? Number(row.score) : 0;
     var trigger = row.trigger_score != null ? Number(row.trigger_score) : 0.72;
     var trigPct = Math.min(100, Math.round((score / trigger) * 100));
+    var formPct = row.formation_pct != null ? Number(row.formation_pct) : Math.min(100, Math.round(score * 100));
+    var momPct = row.momentum_pct != null ? Number(row.momentum_pct) : formPct;
     var timing = String(row.timing || 'lead');
+    var badgeSlug = String(row.badge || '').toLowerCase().replace(/\s+/g, '-');
     var inflowOn = !!triad.inflow_quiet_load;
     var pressureOn = !!triad.buy_pressure;
     var coilOn = !!triad.price_coil;
+    var sparks = Array.isArray(row.spark_closes) ? row.spark_closes : [];
+    var sparkHtml =
+      sparks.length >= 2
+        ? '<div class="pump-hero__spark-wrap"><div class="spark pump-hero__spark" data-spark="' +
+          esc(sparks.join(',')) +
+          '" data-spark-tone="' +
+          (timing === 'lead' ? 'warm' : 'active') +
+          '" role="img" aria-label="Price sparkline"></div></div>'
+        : '';
     return (
       '<div class="pump-hero" id="pump-desk-hero">' +
-      '<p class="pump-hero__eyebrow">Closest to trigger</p>' +
       '<a class="pump-hero__card pump-hero__card--' +
       esc(timing) +
-      '" href="/subnet/' +
+      ' pump-hero__card--flag" href="/subnet/' +
       esc(row.netuid) +
       '" data-netuid="' +
       esc(row.netuid) +
       '">' +
-      '<div class="pump-hero__title-row">' +
+      '<div class="pump-hero__glow" aria-hidden="true"></div>' +
+      '<div class="pump-hero__top"><div>' +
+      '<p class="pump-hero__eyebrow">Closest to trigger</p>' +
       '<h3 class="pump-hero__title"><span class="pump-hero__sn">SN' +
       esc(row.netuid) +
       '</span> ' +
       esc(row.name || '') +
-      '</h3>' +
-      '<span class="pump-hero__badge">' +
+      '</h3></div>' +
+      '<span class="pump-hero__badge pump-hero__badge--' +
+      esc(badgeSlug) +
+      '">' +
       esc(row.badge || '') +
       '</span></div>' +
       '<p class="pump-hero__subtitle">' +
       esc(row.subtitle || row.badge || '') +
       '</p>' +
-      '<div class="pump-hero__stats">' +
+      '<div class="pump-hero__body-grid"><div class="pump-hero__stats">' +
       '<div class="pump-hero__stat"><span class="pump-hero__stat-lbl">Formation</span>' +
       '<span class="pump-hero__stat-val">' +
-      esc(row.formation_pct != null ? row.formation_pct : 0) +
-      '<span class="pump-hero__stat-den">/100</span></span></div>' +
+      esc(formPct) +
+      '<span class="pump-hero__stat-den">/100</span></span>' +
+      '<span class="pump-hero__meter" aria-hidden="true"><span class="pump-hero__meter-fill" style="width:' +
+      Math.min(100, formPct) +
+      '%"></span></span></div>' +
       '<div class="pump-hero__stat"><span class="pump-hero__stat-lbl">Momentum</span>' +
       '<span class="pump-hero__stat-val">' +
-      esc(row.momentum_pct != null ? row.momentum_pct : 0) +
-      '<span class="pump-hero__stat-den">/100</span></span></div>' +
+      esc(momPct) +
+      '<span class="pump-hero__stat-den">/100</span></span>' +
+      '<span class="pump-hero__meter" aria-hidden="true"><span class="pump-hero__meter-fill pump-hero__meter-fill--mom" style="width:' +
+      Math.min(100, momPct) +
+      '%"></span></span></div>' +
       '<div class="pump-hero__stat"><span class="pump-hero__stat-lbl">Distance</span>' +
       '<span class="pump-hero__stat-val pump-hero__stat-val--dist">' +
       esc(row.distance != null ? row.distance : '—') +
-      '</span></div></div>' +
+      '</span><span class="pump-hero__stat-hint">to trigger</span></div></div>' +
+      sparkHtml +
+      '</div>' +
       '<div class="pump-hero__triad" aria-label="Pre-pump triad">' +
       '<span class="pump-hero__triad-pill' +
       (inflowOn ? ' pump-hero__triad-pill--on' : '') +
-      '">Inflow ' +
+      '"><span class="pump-hero__triad-k">Inflow</span> ' +
       esc(labels.inflow || 'WATCH') +
       '</span>' +
       '<span class="pump-hero__triad-pill' +
       (pressureOn ? ' pump-hero__triad-pill--on pump-hero__triad-pill--pressure' : '') +
-      '">Pressure ' +
+      '"><span class="pump-hero__triad-k">Pressure</span> ' +
       esc(labels.pressure || 'FLAT') +
       '</span>' +
       '<span class="pump-hero__triad-pill' +
-      (coilOn ? ' pump-hero__triad-pill--on' : '') +
-      '">Coil ' +
+      (coilOn ? ' pump-hero__triad-pill--on pump-hero__triad-pill--coil' : '') +
+      '"><span class="pump-hero__triad-k">Coil</span> ' +
       esc(labels.coil || 'OPEN') +
       '</span></div>' +
       '<div class="pump-hero__trigger" aria-hidden="true">' +
-      '<div class="pump-hero__trigger-track"><span class="pump-hero__trigger-fill" style="width:' +
+      '<div class="pump-hero__trigger-track"><span class="pump-hero__trigger-ticks"></span>' +
+      '<span class="pump-hero__trigger-fill" style="width:' +
       trigPct +
       '%"></span><span class="pump-hero__trigger-knob" style="left:' +
       trigPct +
       '%"></span></div>' +
-      '<div class="pump-hero__trigger-labels"><span>Trigger: ' +
+      '<div class="pump-hero__trigger-labels"><span>Trigger ' +
       esc(trigger) +
-      '</span><span>' +
+      '</span><span class="pump-hero__trigger-now">Score ' +
       esc(score) +
       '</span></div></div></a></div>'
     );
@@ -1256,20 +1280,15 @@
       }
       var pillsEl = document.getElementById('pump-hero-pills');
       if (pillsEl) {
-        var pillHtml = '';
-        if (warm.length) {
-          pillHtml +=
-            '<span class="pump-hero__pill pump-hero__pill--lead">' +
-            warm.length +
-            ' LEAD</span>';
-        }
-        if (active.length) {
-          pillHtml +=
-            '<span class="pump-hero__pill pump-hero__pill--live">' +
-            active.length +
-            ' LIVE</span>';
-        }
-        pillsEl.innerHTML = pillHtml;
+        pillsEl.innerHTML =
+          '<span class="pump-hero__pill pump-hero__pill--lead">' +
+          warm.length +
+          ' LEAD</span>' +
+          '<span class="pump-hero__pill pump-hero__pill--live">' +
+          active.length +
+          ' LIVE</span>';
+        pillsEl.hidden = false;
+        pillsEl.style.display = '';
       }
       deskPanel.innerHTML = html;
       if (typeof window.__paintSparks === 'function') window.__paintSparks();
@@ -1330,16 +1349,14 @@
     var countEl = document.getElementById('pump-alert-count');
     var pillsEl = document.getElementById('pump-hero-pills');
     if (compact && pillsEl) {
-      var pillHtml = '';
-      if (earlyCount) {
-        pillHtml +=
-          '<span class="pump-hero__pill pump-hero__pill--lead">' + earlyCount + ' LEAD</span>';
-      }
-      if (confirmedCount) {
-        pillHtml +=
-          '<span class="pump-hero__pill pump-hero__pill--live">' + confirmedCount + ' LIVE</span>';
-      }
-      pillsEl.innerHTML = pillHtml;
+      pillsEl.innerHTML =
+        '<span class="pump-hero__pill pump-hero__pill--lead">' +
+        earlyCount +
+        ' LEAD</span>' +
+        '<span class="pump-hero__pill pump-hero__pill--live">' +
+        confirmedCount +
+        ' LIVE</span>';
+      pillsEl.hidden = count <= 0;
       pillsEl.style.display = count > 0 ? '' : 'none';
     } else if (countEl) {
       countEl.textContent = count > 0 ? earlyCount + ' warming · ' + confirmedCount + ' active' : '';

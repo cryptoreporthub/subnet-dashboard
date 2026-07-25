@@ -287,10 +287,13 @@ def test_pump_alert_compact_renders_hero_card():
         },
     )
     assert "Closest to trigger" in html
-    assert "pump-hero__card" in html
+    assert "pump-hero__card--flag" in html
+    assert "Lead scanner" in html
     assert "Formation" in html
     assert "Momentum" in html
     assert "Inflow" in html
+    assert "pump-hero__meter" in html
+    assert "pump-hero__glow" in html
 
 
 def test_api_pump_alerts_route():
