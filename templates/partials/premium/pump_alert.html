@@ -1,22 +1,23 @@
 {# K3-8b — Lead scanner: flow before price (predictive lane) #}
 {% set pa = pump_alerts if pump_alerts is mapping else {} %}
+{% set compact = pump_compact|default(false) %}
 {% set pa_rows = pa.alerts if pa.alerts is iterable and pa.alerts is not string else [] %}
 {% set pa_early = pa.early_count|default(0)|int %}
 {% set pa_confirmed = pa.confirmed_count|default(0)|int %}
 {% set pa_count = pa.count|default(0)|int %}
 
-<section class="pump-alert wrap-pad" id="section-pump-alert" aria-labelledby="pump-alert-title" data-home-live="1">
+<section class="pump-alert wrap-pad{% if compact %} pump-alert--compact{% endif %}" id="section-pump-alert" aria-labelledby="pump-alert-title" data-home-live="1"{% if compact %} data-pump-compact="1"{% endif %}>
   <div class="pump-alert__head">
     <div class="pump-alert__head-row">
       <div>
-        <p class="pump-alert__eyebrow">Tier 3 · Predictive</p>
+        {% if not compact %}<p class="pump-alert__eyebrow">Tier 3 · Predictive</p>{% endif %}
         <h2 class="pump-alert__title" id="pump-alert-title">Pump desk</h2>
       </div>
       {% if pa_count > 0 %}
       <span class="pump-alert__count" id="pump-alert-count">{{ pa_early }} warming · {{ pa_confirmed }} active</span>
       {% endif %}
     </div>
-    <p class="pump-alert__sub">Formation and momentum at a glance — warming names first, active moves flagged as chase risk.</p>
+    <p class="pump-alert__sub"{% if compact %} hidden{% endif %}>Formation and momentum at a glance — warming names first, active moves flagged as chase risk.</p>
     {% set trust = pa.trust if pa.trust is mapping else {} %}
     {% if trust.ready and trust.headline_pct is not none %}
     <div class="pump-alert__proof" id="pump-alert-proof">
@@ -93,7 +94,7 @@
       <p class="pump-desk__empty">Quiet — no warming or active names on the ladder right now.</p>
       {% endif %}
     </div>
-    <div class="pump-alert__list-panel" id="pump-list-panel"{% if pa_count == 0 %} hidden{% endif %}>
+    <div class="pump-alert__list-panel" id="pump-list-panel"{% if pa_count == 0 or compact %} hidden{% endif %}>
     {% if pa_count > 0 %}
     <div class="pump-alert__lane" id="pump-alert-list" role="list">
       {% for row in pa_rows %}
@@ -139,6 +140,20 @@
 
 <style>
   .pump-alert { margin: 0; padding: 12px 0 18px; border-top: 1px solid #1a1d24; }
+  .pump-alert--compact { padding: 8px 0 12px; border-top: none; }
+  .pump-alert--compact .pump-alert__sub,
+  .pump-alert--compact .pump-alert__proof,
+  .pump-alert--compact .pump-alert__trust,
+  .pump-alert--compact #pump-list-panel { display: none !important; }
+  .pump-alert--compact .pump-desk {
+    margin-bottom: 0;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(125, 211, 252, 0.18);
+    background: linear-gradient(165deg, rgba(13, 16, 22, 0.95) 0%, rgba(10, 12, 16, 0.98) 100%);
+  }
+  .pump-alert--compact .pump-alert__head-row { margin-bottom: 8px; }
+  .pump-alert--compact .pump-alert__title { font-size: 15px; }
   .pump-alert__head-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
   .pump-alert__eyebrow { font-family: 'JetBrains Mono', monospace; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: #64748b; margin: 0 0 4px; }
   .pump-alert__title { font-size: 17px; font-weight: 700; margin: 0; color: #e2e8f0; }
