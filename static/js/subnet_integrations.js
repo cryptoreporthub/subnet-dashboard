@@ -10,12 +10,20 @@
 
   function displayName(row) {
     var name = row.name || row.slug || '—';
-    // Prefer short product names over "Finney mainnet" verbosity where useful.
     if (row.slug === 'bittensor') return 'Finney';
     if (row.slug === 'blockmachine') return 'Blockmachine';
     if (row.slug === 'desearch') return 'DeSearch';
     if (row.slug === 'chutes') return 'Chutes';
     if (row.slug === 'ditto') return 'Ditto';
+    return name;
+  }
+
+  function itemLabel(row) {
+    var name = displayName(row);
+    if (row.slug === 'bittensor') return name + ' (mainnet)';
+    if (row.netuid != null && row.netuid !== '') {
+      return name + ' (SN' + row.netuid + ')';
+    }
     return name;
   }
 
@@ -27,11 +35,7 @@
 
   function buildItem(row) {
     var status = row.status || 'offline';
-    var name = displayName(row);
-    var label = name;
-    if (row.netuid != null && row.netuid !== '') {
-      label = name + ' (SN' + row.netuid + ')';
-    }
+    var label = itemLabel(row);
     var tip =
       label +
       ' — ' +
