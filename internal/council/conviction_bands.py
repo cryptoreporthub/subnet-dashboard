@@ -14,12 +14,17 @@ def _clamp01(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
 
 
+_COUNCIL_EXPERTS = frozenset({"quant", "hype", "dark_horse", "technical"})
+
+
 def expert_agreement(expert_contributions: Optional[Dict[str, Any]]) -> Optional[float]:
     """1.0 = experts aligned; 0.0 = maximally split. None if unusable."""
     if not isinstance(expert_contributions, dict) or len(expert_contributions) < 2:
         return None
     vals: List[float] = []
-    for v in expert_contributions.values():
+    for name, v in expert_contributions.items():
+        if name not in _COUNCIL_EXPERTS:
+            continue
         try:
             vals.append(float(v))
         except (TypeError, ValueError):

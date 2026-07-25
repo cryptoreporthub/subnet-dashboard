@@ -8,10 +8,77 @@ import statistics
 from typing import Any, Dict, List, Optional
 
 from internal.chain_client import ChainClient
-from internal.judges import oracle_judge, echo_judge, pulse_judge
-from internal.judges.judges import ORACLE, ECHO, PULSE
+from internal.judges.judges import ECHO, ORACLE, PULSE
 
 DATA_DIR = os.environ.get("DATA_DIR", "data")
+
+
+def _flat_subnet_for_judges(subnet: Dict[str, Any]) -> Dict[str, Any]:
+    """Subnet dict for judge evaluate(subnet=...) — not nested under prediction."""
+    return {
+        "price": subnet.get("price", 0),
+        "apy": subnet.get("apy", 0),
+        "emission": subnet.get("emission", subnet.get("emissions", 0)),
+        "stake": subnet.get("stake", subnet.get("total_stake", 0)),
+        "volume": subnet.get("volume", subnet.get("volume_24h", 0)),
+        "price_change_24h": subnet.get("price_change_24h", subnet.get("change_24h", 0)),
+        "price_change_7d": subnet.get("price_change_7d", subnet.get("change_7d", 0)),
+        "social_mentions": subnet.get("social_mentions", subnet.get("mentions", 0)),
+        "social_sentiment": subnet.get("social_sentiment", subnet.get("sentiment", 0.5)),
+        "yield_trap": subnet.get("yield_trap"),
+        "blockmachine_alpha_price": subnet.get("blockmachine_alpha_price"),
+        "blockmachine_price_delta": subnet.get("blockmachine_price_delta"),
+    }
+
+
+def _prediction_for_judges(
+    subnet: Dict[str, Any],
+    *,
+  predicted_pct: float,
+    direction: str,
+    signal_source: str = "dashboard",
+) -> Dict[str, Any]:
+    return {
+        "subnet": subnet.get("name", f"Subnet {subnet.get('netuid')}"),
+        "netuid": subnet.get("netuid"),
+        "predicted_pct": predicted_pct,
+        "direction": direction,
+        "signal_source": signal_source,
+    }
+
+
+def _signal_impact_from_subnet(subnet: Dict[str, Any]) -> Dict[str, Any]:
+    """Minimal signal_impact for dashboard Echo when no pick ledger exists."""
+    chg = float(subnet.get("price_change_24h", subnet.get("change_24h", 0)) or 0)
+    direction = "bullish" if chg > 0 else "bearish" if chg < 0 else "neutral"
+    impacts: List[Dict[str, Any]] = []
+    if chg != 0:
+        impacts.append(
+            {
+                "direction": direction,
+                "magnitude_pct": abs(chg),
+                "signal": "price_change_24h",
+            }
+        )
+    sentiment = subnet.get("social_sentiment", subnet.get("sentiment"))
+    if sentiment is not None:
+        try:
+            s = float(sentiment)
+            impacts.append(
+                {
+                    "direction": "bullish" if s >= 0.55 else "bearish" if s <= 0.45 else "neutral",
+                    "magnitude_pct": abs(s - 0.5) * 10,
+                    "signal": "social_sentiment",
+                }
+            )
+        except (TypeError, ValueError):
+            pass
+    return {
+        "impacts": impacts,
+        "net_direction": direction,
+        "net_predicted_pct": chg,
+    }
+
 
 def score_subnet(
     netuid: int,
@@ -21,26 +88,19 @@ def score_subnet(
 ) -> Dict[str, Any]:
     """Score a single subnet with all three judges + consensus."""
     name = subnet.get("name", f"Subnet {netuid}")
+    flat = _flat_subnet_for_judges(subnet)
+    chg = float(flat.get("price_change_24h", 0) or 0)
+    predicted_pct = chg if chg != 0 else 0.5
+    direction = "up" if predicted_pct >= 0 else "down"
+    signal_impact = _signal_impact_from_subnet(subnet)
+    prediction = _prediction_for_judges(
+        subnet, predicted_pct=predicted_pct, direction=direction
+    )
 
-    # --- Oracle: evaluate fundamentals ---
-    oracle_prediction = {
-        "subnet": name,
-        "netuid": netuid,
-        "signal_impact": 0.5,
-        "subnet_data": {
-            "price": subnet.get("price", 0),
-            "apy": subnet.get("apy", 0),
-            "emission": subnet.get("emission", subnet.get("emissions", 0)),
-            "stake": subnet.get("stake", subnet.get("total_stake", 0)),
-            "delegated": subnet.get("delegated", subnet.get("delegation_count", 0)),
-            "owner_count": subnet.get("owner_count", subnet.get("owners", 0)),
-            "registration_cost": subnet.get("registration_cost", subnet.get("cost", 0)),
-            "age_blocks": subnet.get("age_blocks", subnet.get("blocks_since_registration", subnet.get("age", 0))),
-        },
-        "prices": {"current": subnet.get("price", 0)},
-    }
     try:
-        oracle_result = ORACLE.evaluate(oracle_prediction)
+        oracle_result = ORACLE.evaluate(
+            prediction, signal_impact=signal_impact, subnet=flat
+        )
         oracle_score = oracle_result.get("score", 0.5)
         oracle_confidence = oracle_result.get("confidence", 0.5)
         oracle_degraded = False
@@ -55,22 +115,10 @@ def score_subnet(
     ):
         oracle_degraded = True
 
-    # --- Echo: evaluate signal consensus ---
-    echo_prediction = {
-        "subnet": name,
-        "netuid": netuid,
-        "signal_impact": float(subnet.get("signal_impact", subnet.get("sentiment", 0.5))),
-        "subnet_data": {
-            "price_change_24h": subnet.get("price_change_24h", subnet.get("change_24h", 0)),
-            "price_change_7d": subnet.get("price_change_7d", subnet.get("change_7d", 0)),
-            "volume": subnet.get("volume", subnet.get("volume_24h", 0)),
-            "social_mentions": subnet.get("social_mentions", subnet.get("mentions", 0)),
-            "social_sentiment": subnet.get("social_sentiment", subnet.get("sentiment", 0.5)),
-            "active_signals": subnet.get("active_signals", subnet.get("signals", 0)),
-        },
-    }
     try:
-        echo_result = ECHO.evaluate(echo_prediction)
+        echo_result = ECHO.evaluate(
+            prediction, signal_impact=signal_impact, expert_weights=None
+        )
         echo_score = echo_result.get("score", 0.5)
         echo_confidence = echo_result.get("confidence", 0.5)
         echo_degraded = False
@@ -81,16 +129,7 @@ def score_subnet(
         echo_confidence = 0.0
         echo_degraded = True
 
-    # --- Pulse: evaluate momentum + optional Blockmachine ---
-    pulse_subnet_data = {
-        "price_change_24h": subnet.get("price_change_24h", subnet.get("change_24h", 0)),
-        "volume": subnet.get("volume", subnet.get("volume_24h", 0)),
-        "price": subnet.get("price", 0),
-        "buys_24hr": subnet.get("buys_24hr", 0),
-        "sells_24hr": subnet.get("sells_24hr", 0),
-        "buy_volume_24h": subnet.get("buy_volume_24h", 0),
-        "sell_volume_24h": subnet.get("sell_volume_24h", 0),
-    }
+    pulse_subnet = dict(flat)
     on_chain_price_delta = None
     if chain_client is not None:
         try:
@@ -116,21 +155,16 @@ def score_subnet(
                             json.dump(cached, f)
                     except Exception:
                         pass
-                    pulse_subnet_data["blockmachine_alpha_price"] = alpha_price
+                    pulse_subnet["blockmachine_alpha_price"] = alpha_price
                     if on_chain_price_delta is not None:
-                        pulse_subnet_data["blockmachine_price_delta"] = on_chain_price_delta
+                        pulse_subnet["blockmachine_price_delta"] = on_chain_price_delta
         except Exception:
             pass
 
-    pulse_prediction = {
-        "subnet": name,
-        "netuid": netuid,
-        "signal_impact": 0.5,
-        "subnet_data": pulse_subnet_data,
-        "prices": {"current": subnet.get("price", 0)},
-    }
     try:
-        pulse_result = PULSE.evaluate(pulse_prediction)
+        pulse_result = PULSE.evaluate(
+            prediction, signal_impact=signal_impact, subnet=pulse_subnet
+        )
         pulse_score = pulse_result.get("score", 0.5)
         pulse_confidence = pulse_result.get("confidence", 0.5)
         pulse_degraded = False
@@ -141,7 +175,6 @@ def score_subnet(
         pulse_confidence = 0.0
         pulse_degraded = True
 
-    # --- Consensus ---
     scores = [oracle_score, echo_score, pulse_score]
     consensus_score = oracle_score * 0.35 + echo_score * 0.30 + pulse_score * 0.35
     if len(scores) > 1:
@@ -171,7 +204,7 @@ def score_subnet(
         "echo": {
             "score": round(echo_score, 4),
             "confidence": round(echo_confidence, 4),
-            "signals": {"signal_count": 1, "agreement_ratio": 0.5},
+            "signals": {"signal_count": len(signal_impact.get("impacts") or [])},
             "degraded": echo_degraded,
         },
         "pulse": {
@@ -192,26 +225,25 @@ def score_subnet(
         },
     }
 
+
 def score_all_subnets(
     subnets: Optional[List[Dict[str, Any]]] = None,
     market_context: Optional[Dict] = None,
     use_chain: bool = True,
 ) -> List[Dict[str, Any]]:
-    """Score all subnets and return sorted by consensus score descending.
-
-    If subnets is None, automatically fetches merged data from the layered
-    pipeline (Blockmachine > TaoStats > TaoMarketCap).
-    """
+    """Score all subnets and return sorted by consensus score descending."""
     if subnets is None:
         try:
             from fetchers.merged_data import get_merged_subnet_data
+
             subnets = get_merged_subnet_data()
             if not subnets:
-                # Fallback to TaoMarketCap if merged data is empty
                 from fetchers.taomarketcap import get_all_subnets
+
                 subnets = get_all_subnets()
         except Exception as exc:
             import logging
+
             logging.getLogger(__name__).warning("Failed to fetch merged data: %s", exc)
             subnets = []
 
@@ -229,14 +261,22 @@ def score_all_subnets(
             result = score_subnet(netuid, subnet, market_context, chain_client)
             results.append(result)
         except Exception:
-            results.append({
-                "netuid": netuid,
-                "name": subnet.get("name", f"Subnet {netuid}"),
-                "oracle": {"score": 0.5, "confidence": 0, "signals": {}, "degraded": True},
-                "echo": {"score": 0.5, "confidence": 0, "signals": {}, "degraded": True},
-                "pulse": {"score": 0.5, "confidence": 0, "signals": {}, "degraded": True},
-                "consensus": {"score": 0.5, "agreement": 1, "verdict": "neutral", "confidence": 0, "contested": False},
-            })
+            results.append(
+                {
+                    "netuid": netuid,
+                    "name": subnet.get("name", f"Subnet {netuid}"),
+                    "oracle": {"score": 0.5, "confidence": 0, "signals": {}, "degraded": True},
+                    "echo": {"score": 0.5, "confidence": 0, "signals": {}, "degraded": True},
+                    "pulse": {"score": 0.5, "confidence": 0, "signals": {}, "degraded": True},
+                    "consensus": {
+                        "score": 0.5,
+                        "agreement": 1,
+                        "verdict": "neutral",
+                        "confidence": 0,
+                        "contested": False,
+                    },
+                }
+            )
 
     results.sort(key=lambda r: r["consensus"]["score"], reverse=True)
     return results

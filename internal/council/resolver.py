@@ -232,7 +232,11 @@ def _leading_judge_name(scores_at_creation: Any) -> Optional[str]:
 
 
 def _nudge_weights_from_judge_audit(prediction: Dict[str, Any], correct: bool) -> None:
-    """Half-strength weight nudge from leading Oracle/Echo/Pulse score at creation."""
+    """Half-strength weight nudge from leading Oracle/Echo/Pulse score at creation.
+
+    Not invoked on live resolve — stacks with primary expert nudge on the same
+    experts (ponytail: one credit per outcome). Kept for tests / optional replay.
+    """
     if _in_replay_mode():
         return
     leading = _leading_judge_name(prediction.get("judge_scores_at_creation"))
@@ -526,8 +530,6 @@ def resolve_prediction(
         if expert and not _skip_council_learning(prediction):
             prediction["expert"] = expert
             _nudge_weights(bool(correct), expert)
-        if not _skip_council_learning(prediction):
-            _nudge_weights_from_judge_audit(prediction, bool(correct))
         _ensure_subnet_snapshot(prediction)
         # Impact dial before finalize so prediction_resolved trail includes after value.
         if not _skip_council_learning(prediction):
@@ -615,8 +617,6 @@ def resolve_prediction_at_horizon(
     if expert and not _skip_council_learning(prediction):
         prediction["expert"] = expert
         _nudge_weights(bool(correct), expert)
-    if not _skip_council_learning(prediction):
-        _nudge_weights_from_judge_audit(prediction, bool(correct))
 
     _ensure_subnet_snapshot(prediction, subnet_row=subnet_row)
     # Impact dial before finalize so prediction_resolved trail includes after value.

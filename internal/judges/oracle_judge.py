@@ -20,6 +20,17 @@ def _source_alignment(prediction: Dict[str, Any], predicted_pct: float) -> float
         return 0.5
     bullish = predicted_pct > 0
     bearish = predicted_pct < 0
+    src_lower = source.lower().replace(" ", "_")
+    if src_lower.startswith("council") and src_lower.endswith("_pick"):
+        if bullish:
+            return 1.0
+        if bearish:
+            return 0.2
+        return 0.5
+    if source in ("UP",):
+        return 1.0 if bullish else (0.2 if bearish else 0.5)
+    if source in ("DOWN",):
+        return 1.0 if bearish else (0.2 if bullish else 0.5)
     if source in ("HOT", "BUY") and bullish:
         return 1.0
     if source in ("SELL ALERT", "SELL") and bearish:
@@ -38,8 +49,6 @@ def _signal_source_adjustment(prediction: Dict[str, Any]) -> float:
         return 0.12
     if source in ("sell_alert", "sell"):
         return 0.12
-    if source.startswith("council"):
-        return -0.1
     if any(
         token in source
         for token in (
