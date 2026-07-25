@@ -57,11 +57,9 @@
       {% set triad = hero_row.triad if hero_row.triad is mapping else {} %}
       {% set labels = hero_row.triad_labels if hero_row.triad_labels is mapping else {} %}
       {% set form_pct = hero_row.formation_pct|default(0)|int %}
-      {% set mom_pct = hero_row.momentum_pct|default(0)|int %}
+      {% set confirm_pct = hero_row.confirm_pct|default(hero_row.momentum_pct|default(0))|int %}
       {% set trig_pct = ((hero_row.score|default(0)|float / hero_row.trigger_score|default(0.72)|float * 100)|round(0))|int if hero_row.score is not none else 0 %}
-      {% set corr = hero_row.correlation_series if hero_row.correlation_series is mapping else {} %}
-      {% set corr_form = corr.formation if corr.formation is iterable and corr.formation is not string and corr.formation|length >= 2 else [] %}
-      {% set corr_mom = corr.momentum if corr.momentum is iterable and corr.momentum is not string and corr.momentum|length >= 2 else [] %}
+      {% set progress_pts = hero_row.progress_series if hero_row.progress_series is iterable and hero_row.progress_series is not string and hero_row.progress_series|length >= 2 else [] %}
       <div class="pump-hero" id="pump-desk-hero">
         <a class="pump-hero__card pump-hero__card--{{ hero_row.timing }} pump-hero__card--flag" href="/subnet/{{ hero_row.netuid }}" data-netuid="{{ hero_row.netuid }}">
           <div class="pump-hero__glow" aria-hidden="true"></div>
@@ -76,23 +74,23 @@
           <div class="pump-hero__body-grid">
             <div class="pump-hero__stats">
               <div class="pump-hero__stat">
-                <span class="pump-hero__stat-lbl">Formation</span>
+                <span class="pump-hero__stat-lbl">Flow</span>
                 <span class="pump-hero__stat-val">{{ form_pct }}<span class="pump-hero__stat-den">/100</span></span>
                 <span class="pump-hero__meter" aria-hidden="true"><span class="pump-hero__meter-fill" style="width:{{ [form_pct, 100]|min }}%"></span></span>
               </div>
               <div class="pump-hero__stat">
-                <span class="pump-hero__stat-lbl">Momentum</span>
-                <span class="pump-hero__stat-val">{{ mom_pct }}<span class="pump-hero__stat-den">/100</span></span>
-                <span class="pump-hero__meter" aria-hidden="true"><span class="pump-hero__meter-fill pump-hero__meter-fill--mom" style="width:{{ [mom_pct, 100]|min }}%"></span></span>
+                <span class="pump-hero__stat-lbl">Confirm</span>
+                <span class="pump-hero__stat-val">{{ confirm_pct }}<span class="pump-hero__stat-den">/100</span></span>
+                <span class="pump-hero__meter" aria-hidden="true"><span class="pump-hero__meter-fill pump-hero__meter-fill--mom" style="width:{{ [confirm_pct, 100]|min }}%"></span></span>
               </div>
-              <div class="pump-hero__stat pump-hero__stat--corr">
-                {% if corr_form|length >= 2 and corr_mom|length >= 2 %}
-                <div class="pump-hero__corr-wrap">
-                  <div class="pump-hero__corr-legend" aria-hidden="true">
-                    <span class="pump-hero__corr-key pump-hero__corr-key--form">Formation</span>
-                    <span class="pump-hero__corr-key pump-hero__corr-key--mom">Momentum</span>
+              <div class="pump-hero__stat pump-hero__stat--progress">
+                {% if progress_pts|length >= 2 %}
+                <div class="pump-hero__progress-wrap">
+                  <div class="pump-hero__progress-legend" aria-hidden="true">
+                    <span class="pump-hero__progress-key">Approach</span>
+                    <span class="pump-hero__progress-key pump-hero__progress-key--trigger">Trigger</span>
                   </div>
-                  <div class="pump-corr pump-hero__corr" data-corr-form="{{ corr_form|join(',') }}" data-corr-mom="{{ corr_mom|join(',') }}" role="img" aria-label="Formation and momentum correlation chart"></div>
+                  <div class="pump-progress pump-hero__progress" data-progress="{{ progress_pts|join(',') }}" role="img" aria-label="Score progress toward trigger"></div>
                 </div>
                 {% endif %}
                 <span class="pump-hero__stat-lbl">Distance</span>
@@ -381,8 +379,8 @@
     margin-bottom: 14px;
   }
   .pump-hero__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  .pump-hero__stat--corr { display: flex; flex-direction: column; }
-  .pump-hero__corr-wrap {
+  .pump-hero__stat--progress { display: flex; flex-direction: column; }
+  .pump-hero__progress-wrap {
     flex: 1 1 auto;
     min-height: 58px;
     margin-bottom: 8px;
@@ -393,29 +391,22 @@
     position: relative;
     overflow: hidden;
   }
-  .pump-hero__corr-wrap::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(90deg, transparent 0%, rgba(56, 189, 248, 0.04) 50%, transparent 100%);
-    pointer-events: none;
-  }
-  .pump-hero__corr-legend {
+  .pump-hero__progress-legend {
     display: flex;
+    justify-content: space-between;
     gap: 8px;
     margin-bottom: 2px;
     position: relative;
     z-index: 1;
   }
-  .pump-hero__corr-key {
+  .pump-hero__progress-key {
     font-family: 'JetBrains Mono', monospace;
     font-size: 7px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: #64748b;
   }
-  .pump-hero__corr-key--form::before,
-  .pump-hero__corr-key--mom::before {
+  .pump-hero__progress-key::before {
     content: '';
     display: inline-block;
     width: 8px;
@@ -424,10 +415,10 @@
     margin-right: 4px;
     vertical-align: middle;
     transform: translateY(-1px);
+    background: #38bdf8;
   }
-  .pump-hero__corr-key--form::before { background: #38bdf8; }
-  .pump-hero__corr-key--mom::before { background: #c084fc; }
-  .pump-hero__corr { width: 100%; height: 38px; position: relative; z-index: 1; }
+  .pump-hero__progress-key--trigger::before { background: #fb923c; }
+  .pump-hero__progress { width: 100%; height: 38px; position: relative; z-index: 1; }
   .pump-hero__stat-lbl {
     display: block;
     font-family: 'JetBrains Mono', monospace;

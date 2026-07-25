@@ -3,7 +3,7 @@
   'use strict';
 
   var sparkPlots = new WeakMap();
-  var corrPlots = new WeakMap();
+  var progressPlots = new WeakMap();
   var radarResizeBound = false;
 
   function parseSpark(raw) {
@@ -20,58 +20,57 @@
     }
   }
 
-  function destroyCorr(el) {
-    var plot = corrPlots.get(el);
+  function destroyProgress(el) {
+    var plot = progressPlots.get(el);
     if (plot) {
       plot.destroy();
-      corrPlots.delete(el);
+      progressPlots.delete(el);
     }
   }
 
-  function parseCorrSeries(raw) {
+  function parseProgressSeries(raw) {
     if (!raw) return null;
     var pts = raw.split(',').map(Number).filter(function (n) { return !isNaN(n); });
     return pts.length >= 2 ? pts : null;
   }
 
-  function drawCorrelation(el) {
+  function drawProgress(el) {
     if (typeof uPlot === 'undefined') return;
-    var form = parseCorrSeries(el.getAttribute('data-corr-form'));
-    var mom = parseCorrSeries(el.getAttribute('data-corr-mom'));
-    if (!form || !mom) return;
-    var n = Math.min(form.length, mom.length);
-    if (n < 2) return;
-    form = form.slice(-n);
-    mom = mom.slice(-n);
-    destroyCorr(el);
-    var xs = form.map(function (_, i) { return i; });
+    var progress = parseProgressSeries(el.getAttribute('data-progress'));
+    if (!progress) return;
+    destroyProgress(el);
+    var xs = progress.map(function (_, i) { return i; });
+    var triggerLine = progress.map(function () { return 100; });
+    var lo = Math.min.apply(null, progress.concat([0]));
+    var hi = Math.max.apply(null, progress.concat([100, 110]));
     var w = el.clientWidth || 120;
-    var h = el.clientHeight || 52;
+    var h = el.clientHeight || 38;
     var plot = new uPlot({
       width: w,
       height: h,
       pxAlign: 1,
       cursor: { show: false },
       legend: { show: false },
-      scales: { x: { show: false }, y: { range: [0, 100] } },
+      scales: { x: { show: false }, y: { range: [Math.max(0, lo - 8), hi + 6] } },
       axes: [],
       series: [
         {},
         {
-          label: 'Formation',
+          label: 'Progress',
           stroke: '#38bdf8',
-          width: 1.8,
-          fill: 'rgba(56, 189, 248, 0.12)',
+          width: 2,
+          fill: 'rgba(56, 189, 248, 0.14)',
         },
         {
-          label: 'Momentum',
-          stroke: '#c084fc',
-          width: 1.8,
-          fill: 'rgba(192, 132, 252, 0.08)',
+          label: 'Trigger',
+          stroke: 'rgba(251, 146, 60, 0.75)',
+          width: 1,
+          dash: [5, 4],
+          points: { show: false },
         },
       ],
-    }, [xs, form, mom], el);
-    corrPlots.set(el, plot);
+    }, [xs, progress, triggerLine], el);
+    progressPlots.set(el, plot);
   }
 
   function drawSpark(el) {
@@ -118,7 +117,7 @@
 
   function paintSparks() {
     document.querySelectorAll('.spark[data-spark]').forEach(drawSpark);
-    document.querySelectorAll('.pump-corr[data-corr-form]').forEach(drawCorrelation);
+    document.querySelectorAll('.pump-progress[data-progress]').forEach(drawProgress);
   }
 
   function hexToRgba(hex, a) {

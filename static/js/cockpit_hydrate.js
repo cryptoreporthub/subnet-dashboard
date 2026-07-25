@@ -1103,26 +1103,27 @@
     var trigger = row.trigger_score != null ? Number(row.trigger_score) : 0.72;
     var trigPct = Math.min(100, Math.round((score / trigger) * 100));
     var formPct = row.formation_pct != null ? Number(row.formation_pct) : Math.min(100, Math.round(score * 100));
-    var momPct = row.momentum_pct != null ? Number(row.momentum_pct) : formPct;
+    var confirmPct =
+      row.confirm_pct != null
+        ? Number(row.confirm_pct)
+        : row.momentum_pct != null
+          ? Number(row.momentum_pct)
+          : formPct;
     var timing = String(row.timing || 'lead');
     var badgeSlug = String(row.badge || '').toLowerCase().replace(/\s+/g, '-');
     var inflowOn = !!triad.inflow_quiet_load;
     var pressureOn = !!triad.buy_pressure;
     var coilOn = !!triad.price_coil;
-    var corr = row.correlation_series || {};
-    var corrForm = Array.isArray(corr.formation) ? corr.formation : [];
-    var corrMom = Array.isArray(corr.momentum) ? corr.momentum : [];
-    var corrHtml =
-      corrForm.length >= 2 && corrMom.length >= 2
-        ? '<div class="pump-hero__corr-wrap">' +
-          '<div class="pump-hero__corr-legend" aria-hidden="true">' +
-          '<span class="pump-hero__corr-key pump-hero__corr-key--form">Formation</span>' +
-          '<span class="pump-hero__corr-key pump-hero__corr-key--mom">Momentum</span></div>' +
-          '<div class="pump-corr pump-hero__corr" data-corr-form="' +
-          esc(corrForm.join(',')) +
-          '" data-corr-mom="' +
-          esc(corrMom.join(',')) +
-          '" role="img" aria-label="Formation and momentum correlation chart"></div></div>'
+    var progress = Array.isArray(row.progress_series) ? row.progress_series : [];
+    var progressHtml =
+      progress.length >= 2
+        ? '<div class="pump-hero__progress-wrap">' +
+          '<div class="pump-hero__progress-legend" aria-hidden="true">' +
+          '<span class="pump-hero__progress-key">Approach</span>' +
+          '<span class="pump-hero__progress-key pump-hero__progress-key--trigger">Trigger</span></div>' +
+          '<div class="pump-progress pump-hero__progress" data-progress="' +
+          esc(progress.join(',')) +
+          '" role="img" aria-label="Score progress toward trigger"></div></div>'
         : '';
     return (
       '<div class="pump-hero" id="pump-desk-hero">' +
@@ -1150,22 +1151,22 @@
       esc(row.subtitle || row.badge || '') +
       '</p>' +
       '<div class="pump-hero__body-grid"><div class="pump-hero__stats">' +
-      '<div class="pump-hero__stat"><span class="pump-hero__stat-lbl">Formation</span>' +
+      '<div class="pump-hero__stat"><span class="pump-hero__stat-lbl">Flow</span>' +
       '<span class="pump-hero__stat-val">' +
       esc(formPct) +
       '<span class="pump-hero__stat-den">/100</span></span>' +
       '<span class="pump-hero__meter" aria-hidden="true"><span class="pump-hero__meter-fill" style="width:' +
       Math.min(100, formPct) +
       '%"></span></span></div>' +
-      '<div class="pump-hero__stat"><span class="pump-hero__stat-lbl">Momentum</span>' +
+      '<div class="pump-hero__stat"><span class="pump-hero__stat-lbl">Confirm</span>' +
       '<span class="pump-hero__stat-val">' +
-      esc(momPct) +
+      esc(confirmPct) +
       '<span class="pump-hero__stat-den">/100</span></span>' +
       '<span class="pump-hero__meter" aria-hidden="true"><span class="pump-hero__meter-fill pump-hero__meter-fill--mom" style="width:' +
-      Math.min(100, momPct) +
+      Math.min(100, confirmPct) +
       '%"></span></span></div>' +
-      '<div class="pump-hero__stat pump-hero__stat--corr">' +
-      corrHtml +
+      '<div class="pump-hero__stat pump-hero__stat--progress">' +
+      progressHtml +
       '<span class="pump-hero__stat-lbl">Distance</span>' +
       '<span class="pump-hero__stat-val pump-hero__stat-val--dist">' +
       esc(row.distance != null ? row.distance : '—') +
