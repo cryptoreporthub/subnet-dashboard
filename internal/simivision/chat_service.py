@@ -7,6 +7,7 @@ import html
 import json
 import logging
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
@@ -17,7 +18,9 @@ logger = logging.getLogger(__name__)
 _CHUNK_SIZE = 48
 _CHAT_TIMEOUT_SEC = float(os.environ.get("SIMIVISION_CHAT_TIMEOUT_SECONDS", "35"))
 _INVESTIGATION_TIMEOUT_SEC = float(os.environ.get("SIMIVISION_INVESTIGATION_TIMEOUT_SECONDS", "8"))
+_CHAT_CONTEXT_TTL = float(os.environ.get("SIMIVISION_CHAT_CONTEXT_SECONDS", "30"))
 _DEFAULT_LLM_BASE = "https://llm.chutes.ai/v1"
+_CHAT_CONTEXT_CACHE: Dict[str, Any] = {"at": 0.0, "ctx": None}
 
 
 def sanitize_reply(text: str) -> str:
@@ -254,6 +257,11 @@ def _light_picks_from_registry(subnets: List[Dict[str, Any]]) -> List[Dict[str, 
 
 def build_chat_context() -> Dict[str, Any]:
     """Assemble subnet + learning context for chat (file-backed; no live feed wait)."""
+    now = time.monotonic()
+    cached = _CHAT_CONTEXT_CACHE.get("ctx")
+    if isinstance(cached, dict) and now - float(_CHAT_CONTEXT_CACHE.get("at") or 0) < _CHAT_CONTEXT_TTL:
+        return dict(cached)
+
     from server import _normalize_registry_subnet, load_data
 
     subnets = [
@@ -263,25 +271,22 @@ def build_chat_context() -> Dict[str, Any]:
     top = _light_picks_from_registry(subnets)
 
     engine = LearningEngine()
-    soul_map = engine.load_soul_map()
     stats = engine.get_stats()
     expert_weights = stats.get("expert_weights", {})
 
-    predictions = _safe_load_json("data", "predictions.json", default={}).get(
-        "predictions", []
-    )
     daily_pick_data = _safe_load_json("data", "daily_picks.json", default=[{}])
     daily_pick = daily_pick_data[0] if daily_pick_data else {}
 
-    return {
+    ctx = {
         "source": source,
         "simivision_picks": top,
         "market_overview": {"count": len(subnets), "updated_at": None},
         "expert_weights": expert_weights,
-        "soul_map": soul_map,
-        "predictions": predictions,
         "daily_pick": daily_pick,
     }
+    _CHAT_CONTEXT_CACHE["ctx"] = ctx
+    _CHAT_CONTEXT_CACHE["at"] = now
+    return dict(ctx)
 
 
 def _display_model(llm_used: bool) -> str:

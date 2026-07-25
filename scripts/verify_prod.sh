@@ -4,9 +4,22 @@ set -euo pipefail
 
 BASE="${APP_BASE_URL:-https://subnet-dashboard.fly.dev}"
 
-echo "== health =="
-curl -fsS "$BASE/health"
-echo
+echo "== pump-alerts (fast desk) =="
+for i in 1 2 3 4 5; do
+  curl -fsS --max-time 8 -w "pump_alerts attempt $i: %{http_code} %{time_total}s\n" -o /tmp/pump_alerts.json "$BASE/api/pump-alerts" || echo "pump_alerts attempt $i: FAILED"
+done
+python3 -c "
+import json
+d=json.load(open('/tmp/pump_alerts.json'))
+print('status:', d.get('status'))
+print('count:', d.get('count'))
+assert d.get('status') != 'timeout', 'pump-alerts must not return timeout on warm prod'
+"
+
+echo "== health burst (hydrate stability) =="
+for i in $(seq 1 10); do
+  curl -fsS --max-time 5 -w "health $i: %{http_code} %{time_total}s\n" -o /dev/null "$BASE/health" || echo "health $i: FAILED"
+done
 
 echo "== calibration auto_retrain =="
 curl -fsS "$BASE/api/calibration/status" | python3 -c "
