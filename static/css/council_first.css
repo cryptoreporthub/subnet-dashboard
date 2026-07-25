@@ -2182,51 +2182,11 @@ button.home-cta {
   box-shadow: none;
 }
 
-/* Integrations: never steal the first viewport */
-.subnet-integrations-corner {
-  bottom: 1.25rem;
-  opacity: 0.92;
-  transform: scale(0.92);
-  transform-origin: bottom right;
-}
-@media (max-width: 720px) {
-  #subnetIntegrationsCorner {
-    display: none !important;
-  }
-  #subnetIntegrationsBar:not([hidden]) {
-    padding: 0.35rem 0.75rem;
-    border-top: 1px solid rgba(148, 163, 184, 0.1);
-  }
-  #subnetIntegrationsBar .subnet-int-inner {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.35rem 0.65rem;
-    padding: 0.25rem 0;
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    backdrop-filter: none;
-  }
-  #subnetIntegrationsBar .subnet-int-heading {
-    width: 100%;
-    margin-bottom: 0.1rem;
-  }
-  #subnetIntegrationsBar .subnet-int-chip .subnet-int-label {
-    max-width: 9.5rem;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+/* Integrations strip lives below pulse — corner panel retired in premium.css */
+#section-market-pulse.sr-pulse--compact + .subnet-integrations-bar {
+  margin-top: 0;
 }
 
-/* Claim head: demote name when the call headline carries the brand of the pick */
-.k3-claim:has(#k3-call-headline) .k3-claim-head .k3-claim-name {
-  font-size: 0.78rem;
-  font-weight: 500;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #64748b;
-}
 
 @media (prefers-reduced-motion: reduce) {
   .logo-mark,

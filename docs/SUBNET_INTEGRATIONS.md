@@ -15,11 +15,12 @@ Primary four integrations: marketing badges + optional data enrichment on the Fe
 
 ## Where it shows on the site
 
-1. **Status bar** — under the nav: `Built on Bittensor` + Connected / Reachable / Offline chips
-2. **Footer card** — `Integrations` shows `N/4` connected
-3. **Corner panel** — bottom-right (candidates + detail)
-4. **API** — `GET /api/subnet-integrations` (includes `desearch_spend` totals)
-5. **Ops** — `GET /api/ops/desearch-spend?recent=25` (full ledger)
+1. **Status strip** — below the Featured Call / pulse: `Built on Bittensor` · five status dots · `5/5 live` (names on desktop)
+2. **Footer** — `Integrations` shows `N/5` connected
+3. **API** — `GET /api/subnet-integrations` (60s cache; parallel probes)
+4. **Ops** — `GET /api/ops/desearch-spend?recent=25` (full ledger)
+
+The floating corner panel was removed — it competed with the first viewport.
 
 ## DeSearch spend tracking
 
