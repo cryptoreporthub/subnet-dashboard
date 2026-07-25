@@ -133,7 +133,7 @@ def _probe_chutes() -> Dict[str, Any]:
         or os.environ.get("LLM_API_KEY")
     )
     base = os.environ.get("CHUTES_BASE_URL") or os.environ.get(
-        "LLM_BASE_URL", "https://api.chutes.ai/v1"
+        "LLM_BASE_URL", "https://llm.chutes.ai/v1"
     )
     base = base.rstrip("/")
     if not api_key:
