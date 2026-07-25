@@ -296,20 +296,24 @@ def test_pump_alert_compact_renders_hero_card():
         },
     )
     assert "pd-lead" in html
-    assert "pd-lead__row1" in html
-    assert "pd-lead__pct" in html
+    assert "pd-lead__identity" in html
+    assert "pd-lead__meter" in html
+    assert "pd-verdict" in html
+    assert "pd-evidence" in html
+    assert "pd-triad" in html
+    assert "pd-phase" in html
     assert "Pump desk" in html
-    assert "Flow" in html
+    assert "Formation" in html
     assert "Confirm" in html
     assert "Gap" in html
-    assert "pd-legend" in html
-    assert "inflow" in html.lower()
+    assert "Inflow" in html
+    assert "Open SN" in html and "dossier" in html
     assert "progress_series" in row
     assert row["progress_series"][-1] == int(round(float(row["score"]) / row["trigger_score"] * 100))
     assert row.get("buy_pct") is not None
     assert row.get("vol_pct") is not None
-    assert "% buys" in html
-    assert "% vol" in html
+    assert row.get("thesis")
+    assert row["thesis"] in html or "pd-verdict__thesis" in html
 
 
 def test_pump_alert_compact_surfaces_trust_and_census():
@@ -332,10 +336,11 @@ def test_pump_alert_compact_surfaces_trust_and_census():
         },
     )
     assert "62%" in html
-    assert "pd-meta" in html
-    assert "1 lead" in html
-    assert "2 live" in html
-    assert "1 exit" in html
+    assert "pd-proof" in html
+    assert "pd-census" in html
+    assert "1</b> lead" in html
+    assert "2</b> live" in html
+    assert "1</b> exit" in html
     assert row.get("thesis")
 
 
@@ -359,10 +364,11 @@ def test_pump_alert_ladder_rows_use_dense_table_columns():
             "trust": {"ready": False, "line": "grading starts"},
         },
     )
-    assert "pd-table" in html
-    assert "pd-cols" in html
+    assert "pd-board" in html
     assert "pd-r pd-r--warm" in html
     assert "Also warming" in html
+    assert "pd-r__why" in html
+    assert "pd-r__legs" in html
 
 
 def test_progress_series_from_trail_uses_real_scores():

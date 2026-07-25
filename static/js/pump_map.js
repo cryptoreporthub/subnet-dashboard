@@ -39,41 +39,16 @@
     return Math.max(0, Math.min(100, Math.round(Number(row.score) * 100)));
   }
 
-  function triadDots(triad) {
-    triad = triad || {};
-    return (
-      '<span class="pd-r__triad"><i class="pd-dot' +
-      (triad.inflow_quiet_load ? ' pd-dot--in' : '') +
-      '"></i><i class="pd-dot' +
-      (triad.buy_pressure ? ' pd-dot--pr' : '') +
-      '"></i><i class="pd-dot' +
-      (triad.price_coil ? ' pd-dot--coil' : '') +
-      '"></i></span>'
-    );
-  }
-
-  function sparkHtml(row, tone) {
-    var sparks = row.spark_closes;
-    if (sparks && sparks.length >= 2) {
-      return (
-        '<span class="pd-r__spark"><span class="spark" data-spark="' +
-        esc(sparks.join(',')) +
-        '" data-spark-tone="' +
-        esc(tone) +
-        '" role="img" aria-label="Price sparkline for ' +
-        esc(row.name || 'subnet') +
-        '"></span></span>'
-      );
-    }
-    return '<span class="pd-r__spark"></span>';
-  }
-
   function deskRow(row, tone) {
     var pct = formationPct(row);
     var sn = row.netuid != null ? 'SN' + row.netuid : '';
     var badge = String(row.badge || '');
     var badgeSlug = badge.toLowerCase().replace(/\s+/g, '-');
     var shortBadge = BADGE_ABBR[badge] || badge;
+    var labels = row.triad_labels || {};
+    var triad = row.triad || {};
+    var why = row.trigger || row.subtitle || row.badge || '';
+    if (why.length > 72) why = why.slice(0, 69).replace(/\s+\S*$/, '') + '…';
     return (
       '<a class="pd-r pd-r--' +
       esc(tone) +
@@ -81,7 +56,10 @@
       esc(row.netuid) +
       '" data-netuid="' +
       esc(row.netuid) +
+      '" title="' +
+      esc(badge) +
       '">' +
+      '<div class="pd-r__main"><div class="pd-r__id">' +
       '<span class="pd-r__badge pd-r__badge--' +
       esc(badgeSlug) +
       '">' +
@@ -91,25 +69,38 @@
       esc(row.name || sn) +
       ' <b class="pd-r__sn">' +
       esc(sn) +
-      '</b></span>' +
-      '<span class="pd-r__num">' +
+      '</b></span></div>' +
+      (why ? '<p class="pd-r__why">' + esc(why) + '</p>' : '') +
+      '<span class="pd-r__legs">' +
+      '<span class="pd-r__leg' +
+      (triad.inflow_quiet_load ? ' pd-r__leg--on' : '') +
+      '">In ' +
+      esc(labels.inflow || 'WATCH') +
+      '</span>' +
+      '<span class="pd-r__leg' +
+      (triad.buy_pressure ? ' pd-r__leg--on' : '') +
+      '">Pr ' +
+      esc(labels.pressure || 'FLAT') +
+      '</span>' +
+      '<span class="pd-r__leg' +
+      (triad.price_coil ? ' pd-r__leg--on' : '') +
+      '">Coil ' +
+      esc(labels.coil || 'OPEN') +
+      '</span></span></div>' +
+      '<div class="pd-r__nums"><span class="pd-r__num"><i>Flow</i> ' +
       (pct != null ? pct : '—') +
-      '</span>' +
-      '<span class="pd-r__num pd-r__num--gap">' +
+      '</span><span class="pd-r__num pd-r__num--gap"><i>Gap</i> ' +
       (row.distance != null ? esc(row.distance) : '—') +
-      '</span>' +
-      triadDots(row.triad) +
-      sparkHtml(row, tone) +
-      '</a>'
+      '</span></div></a>'
     );
   }
 
   function section(title, rows, tone) {
     if (!rows.length) return '';
     return (
-      '<div class="pd-table__lbl">' +
+      '<h4 class="pd-board__lbl">' +
       esc(title) +
-      '</div><div class="pd-table__rows">' +
+      '</h4><div class="pd-board__rows">' +
       rows
         .map(function (row) {
           return deskRow(row, tone);
@@ -120,7 +111,6 @@
   }
 
   function renderDesk(rows) {
-    // Compact home board is owned by cockpit_hydrate (featured lead + ladder).
     if (isBoardMode()) return;
     var panel = document.getElementById('pump-desk-panel');
     if (!panel) return;
@@ -140,7 +130,6 @@
     }
     panel.innerHTML =
       section('Warming', warming, 'warm') + section('Active', active, 'active') + section('Cooling', exits, 'exit');
-    if (typeof window.__paintSparks === 'function') window.__paintSparks();
   }
 
   function highlightCard(netuid) {
@@ -150,8 +139,6 @@
         String(card.getAttribute('data-netuid')) === String(netuid)
       );
     });
-    var card = document.querySelector('.pump-alert__card[data-netuid="' + netuid + '"]');
-    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }
 
   function bindDeskClicks() {
@@ -175,7 +162,6 @@
     refresh: function (rows) {
       var el = document.getElementById('pump-map-data');
       if (el && rows) el.textContent = JSON.stringify(rows);
-      // Board mode: hydrate already painted the featured lead — only sync map JSON.
       if (isBoardMode()) return;
       renderDesk(rows || readRows());
     },
