@@ -8,14 +8,20 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, List, Optional, Set
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from internal.integrations.desearch_spend import get_spend_summary, record_desearch_response
 from internal.integrations.taonsquare import catalog_summary, recommend_candidates
 
 logger = logging.getLogger(__name__)
 
-_PROBE_TIMEOUT = 6
+_PROBE_TIMEOUT = 3
+_CACHE_TTL_SEC = 60.0
+_cache_lock = threading.Lock()
+_cache: Dict[str, Any] = {"at": 0.0, "payload": None}
 _BLOCKMACHINE_RPC = os.environ.get("BLOCKMACHINE_RPC_URL", "https://rpc.blockmachine.io").rstrip("/")
 _BITTENSOR_RPC = os.environ.get("BITTENSOR_RPC_URL", _BLOCKMACHINE_RPC).rstrip("/")
 _BITTENSOR_NETWORK = os.environ.get("BITTENSOR_NETWORK", "finney").strip().lower() or "finney"
@@ -149,26 +155,10 @@ def _probe_desearch() -> Dict[str, Any]:
     detail = "health unreachable"
     if reachable:
         detail = "health ok"
+        # Key present + health ok = connected. Skip paid search probe on every status poll.
         if api_key:
-            from internal.integrations.desearch_http import desearch_auth_headers
-
-            hdrs = desearch_auth_headers(api_key)
-            s_ok, s_code, _ = _http_probe(
-                "POST",
-                f"{base}/search/links/web",
-                headers=hdrs,
-                json_body={"prompt": "Bittensor subnet", "count": 1},
-            )
-            if s_ok and s_code in (401, 403):
-                detail = "key rejected"
-            else:
-                connected = True
-                if s_ok and s_code == 200:
-                    detail = "search probe ok"
-                elif s_ok:
-                    detail = f"key configured · probe HTTP {s_code}"
-                else:
-                    detail = "key configured · health ok"
+            connected = True
+            detail = "key configured · health ok"
     return {
         "reachable": reachable,
         "connected": connected,
@@ -261,14 +251,55 @@ _PROBERS = {
 }
 
 
-def build_integrations_status() -> Dict[str, Any]:
-    """Aggregate live probe results for marketing corner + ops."""
+def clear_status_cache() -> None:
+    """Reset probe cache (tests / forced refresh)."""
+    with _cache_lock:
+        _cache["at"] = 0.0
+        _cache["payload"] = None
+
+
+def build_integrations_status(*, force: bool = False) -> Dict[str, Any]:
+    """Aggregate live probe results for the compact status strip + ops.
+
+    Cached ~60s so homepage polls don't wedge the Fly worker with serial probes.
+    """
+    if force:
+        clear_status_cache()
+    now = time.monotonic()
+    with _cache_lock:
+        cached = _cache.get("payload")
+        if (
+            not force
+            and cached is not None
+            and (now - float(_cache.get("at") or 0.0)) < _CACHE_TTL_SEC
+        ):
+            return cached
+
     rows: List[Dict[str, Any]] = []
     connected_n = 0
     primary_netuids: Set[int] = set()
+    probe_results: Dict[str, Dict[str, Any]] = {}
+
+    def _run(slug: str) -> Tuple[str, Dict[str, Any]]:
+        return slug, _PROBERS[slug]()
+
+    with ThreadPoolExecutor(max_workers=len(INTEGRATIONS)) as pool:
+        futures = [pool.submit(_run, spec["slug"]) for spec in INTEGRATIONS]
+        for fut in as_completed(futures):
+            try:
+                slug, probe = fut.result()
+                probe_results[slug] = probe
+            except Exception as exc:
+                logger.warning("integration probe failed: %s", exc)
+
     for spec in INTEGRATIONS:
         slug = spec["slug"]
-        probe = _PROBERS[slug]()
+        probe = probe_results.get(slug) or {
+            "reachable": False,
+            "connected": False,
+            "detail": "probe failed",
+            "has_credential": False,
+        }
         if probe.get("connected"):
             connected_n += 1
         netuid = spec.get("netuid")
@@ -277,7 +308,7 @@ def build_integrations_status() -> Dict[str, Any]:
         rows.append({**spec, **probe, "status": _status_label(probe), "tier": "primary"})
     candidates = recommend_candidates(exclude=primary_netuids, limit=12)
     target_minimum = 3
-    return {
+    payload = {
         "integrations": rows,
         "candidates": candidates,
         "catalog": catalog_summary(),
@@ -286,7 +317,12 @@ def build_integrations_status() -> Dict[str, Any]:
         "target_minimum": target_minimum,
         "ready_for_launch": connected_n >= target_minimum,
         "desearch_spend": get_spend_summary(recent_limit=10),
+        "cached": False,
     }
+    with _cache_lock:
+        _cache["at"] = time.monotonic()
+        _cache["payload"] = {**payload, "cached": True}
+    return payload
 
 
 def _status_label(probe: Dict[str, Any]) -> str:
