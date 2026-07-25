@@ -84,14 +84,15 @@ def test_hardcoded_emergency_has_inline_css():
     assert b"location.reload" not in HARDCODED_EMERGENCY_HTML
 
 
-def test_bailout_homepage_primes_emergency_on_cold_cache():
-    """Cold bailout must serve full Jinja shell, not the hardcoded reload stub."""
+def test_bailout_homepage_does_not_block_on_cold_cache():
+    """Cold bailout must return instantly — ASGI serves HARDCODED_EMERGENCY_HTML."""
     import server as srv
 
     srv._HOMEPAGE_HTML_CACHE["html"] = None
     srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
     srv._EMERGENCY_HOME_HTML = ""
+    t0 = time.monotonic()
     html = srv._bailout_homepage_html()
-    assert html
-    assert "cockpit_hydrate.js" in html
-    assert "location.reload" not in html
+    elapsed = time.monotonic() - t0
+    assert elapsed < 0.5
+    assert html is None
