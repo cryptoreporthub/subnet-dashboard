@@ -1061,6 +1061,11 @@ button.home-cta {
   background: rgba(0, 255, 65, 0.08);
 }
 
+.council-first-theme .top-nav a[aria-current="page"] {
+  color: var(--stage-accent, #00ff41);
+  background: rgba(0, 255, 65, 0.1);
+}
+
 /* Hydration skeleton shimmer */
 .hydrate-skeleton {
   display: grid;
@@ -2046,6 +2051,181 @@ button.home-cta {
 .story-strip__move {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
+}
+
+/* ---------- First-viewport A+ polish (K3-7 shell preserved) ---------- */
+.council-stage {
+  border-bottom: none;
+}
+.council-stage__atmosphere {
+  background:
+    radial-gradient(ellipse 70% 55% at 18% 22%, rgba(0, 212, 255, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse 58% 48% at 88% 18%, rgba(57, 255, 20, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(15, 23, 42, 0.9) 0%, transparent 60%),
+    linear-gradient(180deg, #02040a 0%, #060a14 42%, #030508 100%);
+}
+.council-stage__atmosphere::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(148, 163, 184, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.03) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 75% 70% at 50% 30%, #000 20%, transparent 75%);
+  pointer-events: none;
+  opacity: 0.55;
+}
+.council-stage:has(#k3-claim) {
+  min-height: min(92vh, 760px);
+  align-items: flex-start;
+  padding-top: clamp(20px, 4vh, 40px);
+  padding-bottom: clamp(28px, 6vh, 56px);
+}
+@media (max-width: 480px) {
+  .council-stage:has(#k3-claim) {
+    min-height: 0;
+    padding-top: 10px;
+    padding-bottom: 18px;
+  }
+}
+
+/* Claim head: quieter name, stronger action badge */
+.k3-claim-head .k3-claim-name {
+  font-family: 'Rajdhani', system-ui, sans-serif;
+  font-size: clamp(1.15rem, 3.5vw, 1.45rem);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #94a3b8;
+}
+.k3-badge {
+  border-radius: 4px;
+  letter-spacing: 0.12em;
+}
+.k3-badge.hold {
+  background: rgba(125, 211, 252, 0.08);
+  color: #7dd3fc;
+  border: 1px solid rgba(125, 211, 252, 0.4);
+}
+
+/* Particles softer — presence without noise */
+.k3-orb-particles { opacity: 0.45; }
+.k3-orb-particles span {
+  box-shadow: 0 0 4px rgba(0, 212, 255, 0.45) !important;
+}
+
+/* Evidence drivers: less pill-cluster */
+.k3-evidence-drivers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.k3-evidence-driver {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  border: none;
+  border-bottom: 1px solid rgba(100, 116, 139, 0.35);
+  border-radius: 0;
+  padding: 2px 0;
+  background: transparent;
+}
+
+/* Demoted chrome — after the call, quieter */
+.home-job__signals--demoted {
+  margin-top: 18px;
+  opacity: 0.55;
+}
+.home-job__signals--demoted .home-band,
+.home-job__signals--demoted .home-enrichment {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: transparent;
+  padding: 4px 8px;
+}
+#home-trust-banner.trust-banner {
+  margin-top: 12px;
+  border-radius: 0;
+  border-left: 2px solid rgba(57, 255, 20, 0.35);
+  border-right: none;
+  border-top: none;
+  border-bottom: none;
+  background: rgba(8, 16, 12, 0.35);
+  box-shadow: none;
+}
+.council-stage__trust-whisper {
+  margin: 0 0 12px;
+  opacity: 0.7;
+}
+
+/* CTAs as one group under the call */
+.home-job__cta {
+  margin-top: 20px;
+  gap: 10px;
+}
+.home-cta--primary {
+  letter-spacing: 0.04em;
+}
+
+/* Pulse after hero — thin ribbon, not a dashboard strip */
+#section-market-pulse.sr-pulse--compact {
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  background: rgba(2, 4, 10, 0.65);
+  padding: 10px var(--space-5, 24px) 14px;
+}
+#section-market-pulse.sr-pulse--compact .sr-pulse__cell {
+  background: transparent;
+  border: none;
+  border-left: 2px solid rgba(148, 163, 184, 0.25);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Integrations: never steal the first viewport */
+.subnet-integrations-corner {
+  bottom: 1.25rem;
+  opacity: 0.92;
+  transform: scale(0.92);
+  transform-origin: bottom right;
+}
+@media (max-width: 720px) {
+  #subnetIntegrationsCorner {
+    display: none !important;
+  }
+  #subnetIntegrationsBar:not([hidden]) {
+    padding: 0.35rem 0.75rem;
+    border-top: 1px solid rgba(148, 163, 184, 0.1);
+  }
+  #subnetIntegrationsBar .subnet-int-inner {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.65rem;
+    padding: 0.25rem 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+  #subnetIntegrationsBar .subnet-int-heading {
+    width: 100%;
+    margin-bottom: 0.1rem;
+  }
+  #subnetIntegrationsBar .subnet-int-chip .subnet-int-label {
+    max-width: 9.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* Claim head: demote name when the call headline carries the brand of the pick */
+.k3-claim:has(#k3-call-headline) .k3-claim-head .k3-claim-name {
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #64748b;
 }
 
 @media (prefers-reduced-motion: reduce) {
