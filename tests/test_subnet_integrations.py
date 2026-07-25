@@ -71,6 +71,27 @@ def test_desearch_connected_with_key_and_reachable(monkeypatch):
     assert desearch["status"] == "connected"
 
 
+def test_chutes_falls_back_when_base_url_404(monkeypatch):
+    monkeypatch.setenv("CHUTES_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_BASE_URL", "https://api.chutes.ai/v1")
+
+    def fake_probe(method, url, **kwargs):
+        if "api.chutes.ai" in url:
+            return True, 404, "not found"
+        if "llm.chutes.ai" in url:
+            if kwargs.get("headers", {}).get("Authorization"):
+                return True, 200, '{"data":[]}'
+            return True, 200, '{"data":[]}'
+        return True, 404, ""
+
+    with patch("internal.integrations.status._http_probe", side_effect=fake_probe):
+        with patch("internal.integrations.status._rpc_chain_healthy", return_value=(True, "ok")):
+            payload = build_integrations_status()
+    chutes = next(r for r in payload["integrations"] if r["slug"] == "chutes")
+    assert chutes["connected"] is True
+    assert chutes["status"] == "connected"
+
+
 def test_corner_markup_on_homepage():
     with TestClient(app) as client:
         html = client.get("/").text

@@ -177,18 +177,31 @@ def _probe_desearch() -> Dict[str, Any]:
     }
 
 
+_DEFAULT_CHUTES_BASE = "https://llm.chutes.ai/v1"
+
+
+def _chutes_base_url() -> str:
+    return (
+        os.environ.get("CHUTES_BASE_URL")
+        or os.environ.get("LLM_BASE_URL")
+        or _DEFAULT_CHUTES_BASE
+    ).rstrip("/")
+
+
 def _probe_chutes() -> Dict[str, Any]:
     api_key = (
         os.environ.get("CHUTES_API_KEY")
         or os.environ.get("OPENAI_API_KEY")
         or os.environ.get("LLM_API_KEY")
     )
-    base = os.environ.get("CHUTES_BASE_URL") or os.environ.get(
-        "LLM_BASE_URL", "https://llm.chutes.ai/v1"
-    )
-    base = base.rstrip("/")
+    base = _chutes_base_url()
     models_url = f"{base}/models"
     ok_pub, code_pub, _ = _http_probe("GET", models_url)
+    # ponytail: Fly secrets sometimes set LLM_BASE_URL to api.chutes.ai (404 on /models).
+    if (not ok_pub or code_pub == 404) and base != _DEFAULT_CHUTES_BASE.rstrip("/"):
+        base = _DEFAULT_CHUTES_BASE.rstrip("/")
+        models_url = f"{base}/models"
+        ok_pub, code_pub, _ = _http_probe("GET", models_url)
     reachable = ok_pub and code_pub == 200
     if not api_key:
         return {
@@ -208,6 +221,8 @@ def _probe_chutes() -> Dict[str, Any]:
         detail = "key rejected"
     elif reachable:
         detail = "API live · key not verified on /models"
+    elif code_pub == 404:
+        detail = "check CHUTES_BASE_URL (use https://llm.chutes.ai/v1)"
     else:
         detail = f"HTTP {code}" if ok else body
     connected = ok and code == 200
