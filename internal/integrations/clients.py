@@ -1,4 +1,4 @@
-"""Thin HTTP clients for primary Bittensor subnet integrations (SN22/50/64/118).
+"""Thin HTTP clients for primary Bittensor subnet integrations (SN22/64/118).
 
 All calls are optional: missing keys return None without raising.
 """
@@ -31,18 +31,6 @@ def _cached(key: str, factory):
         value = None
     _cache[key] = {"at": now, "value": value}
     return value
-
-
-def _request(method: str, url: str, *, headers=None, json_body=None, timeout: int = 8):
-    import requests
-
-    return requests.request(
-        method,
-        url,
-        headers=headers or {},
-        json=json_body,
-        timeout=timeout,
-    )
 
 
 def desearch_subnet_snippet(netuid: int, name: str = "") -> Optional[str]:
@@ -118,43 +106,6 @@ def desearch_ai_summary(prompt: str, *, tools=None) -> Optional[Dict[str, Any]]:
 
     key = hashlib.sha256(f"{prompt}:{','.join(tool_list)}".encode()).hexdigest()[:16]
     return _cached(f"desearch:ai:{key}", _fetch)
-
-
-def synth_macro_skew(asset: str = "BTC", *, horizon: str = "24h") -> Optional[Dict[str, Any]]:
-    """Macro forecast skew from Synth (SN50) — not per-subnet; tape context."""
-    api_key = os.environ.get("SYNTH_API_KEY") or os.environ.get("SYNTHDATA_API_KEY")
-    if not api_key:
-        return None
-    base = os.environ.get("SYNTH_BASE_URL", "https://api.synthdata.co").rstrip("/")
-
-    def _fetch():
-        hdrs = {"Authorization": f"Apikey {api_key}"}
-        url = f"{base}/insights/prediction-percentiles?asset={asset}&horizon={horizon}"
-        resp = _request("GET", url, headers=hdrs, timeout=10)
-        if resp.status_code != 200:
-            return None
-        data = resp.json()
-        if not isinstance(data, dict):
-            return None
-        median = data.get("median") or data.get("p50") or data.get("percentile_50")
-        if median is None and isinstance(data.get("percentiles"), dict):
-            median = data["percentiles"].get("50") or data["percentiles"].get("p50")
-        if median is None:
-            return None
-        try:
-            pct = float(median)
-        except (TypeError, ValueError):
-            return None
-        direction = "up" if pct > 0.15 else "down" if pct < -0.15 else "flat"
-        return {
-            "asset": asset,
-            "horizon": horizon,
-            "median_pct": round(pct, 2),
-            "direction": direction,
-            "source": "synth",
-        }
-
-    return _cached(f"synth:{asset}:{horizon}", _fetch)
 
 
 def chutes_configured() -> bool:

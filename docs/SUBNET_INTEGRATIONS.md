@@ -1,6 +1,6 @@
-# Bittensor subnet integrations (SN22 / SN50 / SN64 / SN118)
+# Bittensor subnet integrations (SN22 / SN64 / SN118)
 
-Primary four integrations: marketing badges + optional data enrichment on the Featured Call evidence layer.
+Primary three on the status banner: marketing badges + optional DeSearch evidence on the Featured Call.
 
 ## Verdict (pricing vs cut)
 
@@ -9,14 +9,14 @@ Primary four integrations: marketing badges + optional data enrichment on the Fe
 | **118** | Ditto | Yes (dogfood) | $0 | **Keep** | Memory layer; always shows Connected |
 | **22** | DeSearch | Free credits at signup | ~$0.10/100 web searches | **Keep — priority key** | Social/web evidence on daily pick |
 | **64** | Chutes | No (ended 2026) | $10/mo Plus or PAYG tokens | **Keep if chat matters** | Council chat LLM (`chat_service.py`) |
-| **50** | Synth | No | **$49/mo** Standard (100 credits) | **Defer** unless you pay | Macro BTC 24h skew only; not per-subnet |
+| **50** | Synth | No | **$49/mo** Standard | **Removed from banner** | Deferred — too expensive for now |
 
-**Recommendation:** Set `DESEARCH_API_KEY` first (best ROI). Set `CHUTES_API_KEY` if you want live LLM chat. Skip `SYNTH_API_KEY` until you want to pay $49/mo — badge stays **Reachable** without it.
+**Recommendation:** Set `DESEARCH_API_KEY` first. Set `CHUTES_API_KEY` if you want live LLM chat. Synth is not shown on the banner; it may still appear in TaonSquare **candidates**.
 
 ## Where it shows on the site
 
-1. **Status bar** — under the nav: `Built on Bittensor` + Connected / Reachable / Offline chips
-2. **Footer card** — `Integrations` shows `N/4` connected
+1. **Status bar** — under the nav: `Built on Bittensor` + Connected / Reachable / Offline chips (3 subnets)
+2. **Footer card** — `Integrations` shows `N/3` connected
 3. **Corner panel** — bottom-right (candidates + detail)
 4. **API** — `GET /api/subnet-integrations` (includes `desearch_spend` totals)
 5. **Ops** — `GET /api/ops/desearch-spend?recent=25` (full ledger)
@@ -38,9 +38,10 @@ curl localhost:50745/api/ops/desearch-spend | python3 -m json.tool
 ## Evidence wiring (when keys exist)
 
 - **DeSearch** → `integration_evidence_drivers()` adds a `social` chip on the Featured Call (`dpick_copy.py`)
-- **Synth** → adds macro `Synth BTC 24h …` driver (tape context, not subnet-specific)
 - **Chutes** → chat only; status probe does not call chat
 - **Ditto** → status only
+
+DeSearch shows **Connected** when `DESEARCH_API_KEY` is set and the API is reachable (key rejected → not connected).
 
 ## Get API keys
 
@@ -52,6 +53,7 @@ curl localhost:50745/api/ops/desearch-spend | python3 -m json.tool
    ```bash
    flyctl secrets set DESEARCH_API_KEY=your_key --app subnet-dashboard
    ```
+   Or use [Fly secrets UI](https://fly.io/apps/subnet-dashboard/secrets).
 
 ### Chutes (SN64) — for live chat
 
@@ -59,14 +61,6 @@ curl localhost:50745/api/ops/desearch-spend | python3 -m json.tool
 2. Plus **$10/mo** or top-up PAYG balance
 3. ```bash
    flyctl secrets set CHUTES_API_KEY=your_key --app subnet-dashboard
-   ```
-
-### Synth (SN50) — optional paid
-
-1. [dashboard.synthdata.co](https://dashboard.synthdata.co/choose-plan/) → Standard $49/mo+
-2. Only set if you want macro forecast drivers:
-   ```bash
-   flyctl secrets set SYNTH_API_KEY=your_key --app subnet-dashboard
    ```
 
 ### Ditto (SN118)
@@ -88,7 +82,7 @@ curl localhost:50745/api/subnet-integrations | python3 -m json.tool
 | File | Purpose |
 |------|---------|
 | `internal/integrations/status.py` | Live probes + `/api/subnet-integrations` |
-| `internal/integrations/clients.py` | DeSearch snippet + AI summary + Synth macro |
+| `internal/integrations/clients.py` | DeSearch snippet + AI summary |
 | `internal/integrations/desearch_spend.py` | Header billing ledger + ops summary |
 | `internal/integrations/desearch_http.py` | DeSearch auth + `desearch_request()` wrapper |
 | `internal/integrations/enrichment.py` | Evidence drivers for daily pick |
