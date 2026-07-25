@@ -25,7 +25,7 @@ def test_desearch_snippet_with_key(monkeypatch):
         resp.json.return_value = [{"title": "Subnet alpha momentum rising"}]
         return resp
 
-    with patch("internal.integrations.clients._request", side_effect=fake_request):
+    with patch("internal.integrations.clients.desearch_request", side_effect=fake_request):
         with patch("internal.integrations.clients._cache", {}):
             out = desearch_subnet_snippet(1, name="Alpha")
     assert out == "Subnet alpha momentum rising"

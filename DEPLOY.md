@@ -200,6 +200,12 @@ Required for `/api/investigate/*`, wallet tracing, and SimiVision on-chain chat.
 flyctl secrets set TAOSTATS_API_KEY='<your-taostats-api-key>' --app subnet-dashboard
 ```
 
+Subnet integrations (DeSearch / Chutes / Synth): see [`docs/SUBNET_INTEGRATIONS.md`](docs/SUBNET_INTEGRATIONS.md). Priority: `DESEARCH_API_KEY` (free credits), then `CHUTES_API_KEY` ($10/mo for chat). Skip `SYNTH_API_KEY` unless paying $49/mo.
+
+```bash
+flyctl secrets set DESEARCH_API_KEY='...' CHUTES_API_KEY='...' --app subnet-dashboard
+```
+
 Verify:
 
 ```bash

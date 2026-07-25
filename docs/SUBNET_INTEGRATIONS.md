@@ -18,7 +18,22 @@ Primary four integrations: marketing badges + optional data enrichment on the Fe
 1. **Status bar** — under the nav: `Built on Bittensor` + Connected / Reachable / Offline chips
 2. **Footer card** — `Integrations` shows `N/4` connected
 3. **Corner panel** — bottom-right (candidates + detail)
-4. **API** — `GET /api/subnet-integrations`
+4. **API** — `GET /api/subnet-integrations` (includes `desearch_spend` totals)
+5. **Ops** — `GET /api/ops/desearch-spend?recent=25` (full ledger)
+
+## DeSearch spend tracking
+
+Every DeSearch HTTP response is parsed for billing headers:
+
+- `X-Desearch-Cost-Usd` — charge for the call
+- `X-Desearch-Usage-Count` — billed items (per source; min 10)
+- `X-Desearch-Service` — e.g. `web_search`, `ai_search`
+
+Totals persist to `data/desearch_spend.json` on Fly (volume mount). Override with `DESEARCH_SPEND_PATH`. Probes, evidence snippets, and AI search all record via `desearch_request()` / `_http_probe()`.
+
+```bash
+curl localhost:50745/api/ops/desearch-spend | python3 -m json.tool
+```
 
 ## Evidence wiring (when keys exist)
 
@@ -73,7 +88,9 @@ curl localhost:50745/api/subnet-integrations | python3 -m json.tool
 | File | Purpose |
 |------|---------|
 | `internal/integrations/status.py` | Live probes + `/api/subnet-integrations` |
-| `internal/integrations/clients.py` | DeSearch snippet + Synth macro fetch |
+| `internal/integrations/clients.py` | DeSearch snippet + AI summary + Synth macro |
+| `internal/integrations/desearch_spend.py` | Header billing ledger + ops summary |
+| `internal/integrations/desearch_http.py` | DeSearch auth + `desearch_request()` wrapper |
 | `internal/integrations/enrichment.py` | Evidence drivers for daily pick |
 | `static/js/subnet_integrations.js` | Status bar + corner UI |
 | `internal/simivision/chat_service.py` | Chutes LLM for chat |

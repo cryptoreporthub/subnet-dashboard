@@ -5,10 +5,13 @@ All calls are optional: missing keys return None without raising.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import time
 from typing import Any, Dict, Optional
+
+from internal.integrations.desearch_http import desearch_request
 
 logger = logging.getLogger(__name__)
 
@@ -44,19 +47,17 @@ def _request(method: str, url: str, *, headers=None, json_body=None, timeout: in
 
 def desearch_subnet_snippet(netuid: int, name: str = "") -> Optional[str]:
     """One-line social/web snippet for evidence layer (SN22)."""
-    api_key = os.environ.get("DESEARCH_API_KEY") or os.environ.get("DESEARCH_ACCESS_KEY")
-    if not api_key:
+    if not (os.environ.get("DESEARCH_API_KEY") or os.environ.get("DESEARCH_ACCESS_KEY")):
         return None
-    base = os.environ.get("DESEARCH_BASE_URL", "https://api.desearch.ai").rstrip("/")
     label = name or f"SN{netuid}"
     query = f"Bittensor subnet {netuid} {label}"
 
     def _fetch():
-        resp = _request(
+        resp = desearch_request(
             "POST",
-            f"{base}/search/links/web",
-            headers={"access-key": api_key, "Content-Type": "application/json"},
-            json_body={"prompt": query, "count": 1},
+            "/desearch/ai/search/links/web",
+            json_body={"prompt": query, "tools": ["web"], "count": 10},
+            label=f"snippet:SN{netuid}",
         )
         if resp.status_code != 200:
             return None
@@ -69,6 +70,54 @@ def desearch_subnet_snippet(netuid: int, name: str = "") -> Optional[str]:
         return title[:120] if title else None
 
     return _cached(f"desearch:{netuid}", _fetch)
+
+
+def desearch_ai_summary(prompt: str, *, tools=None) -> Optional[Dict[str, Any]]:
+    """AI Search summary + citations when key configured (cached 5m)."""
+    if not (os.environ.get("DESEARCH_API_KEY") or os.environ.get("DESEARCH_ACCESS_KEY")):
+        return None
+    tool_list = tools or ["web", "twitter"]
+
+    def _fetch():
+        resp = desearch_request(
+            "POST",
+            "/desearch/ai/search",
+            json_body={
+                "prompt": prompt,
+                "tools": tool_list,
+                "count": 10,
+                "streaming": False,
+                "result_type": "LINKS_WITH_FINAL_SUMMARY",
+            },
+            timeout=30,
+            label="ai_summary",
+        )
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        if not isinstance(data, dict):
+            return None
+        completion = data.get("completion") if isinstance(data.get("completion"), dict) else data
+        summary = (
+            completion.get("search_summary")
+            or completion.get("text")
+            or data.get("search_summary")
+            or ""
+        )
+        sources = completion.get("key_sources") or data.get("key_sources") or []
+        if not summary and not sources:
+            return None
+        return {
+            "summary": str(summary).strip()[:500],
+            "sources": [
+                {"text": s.get("text", ""), "url": s.get("url", "")}
+                for s in sources[:5]
+                if isinstance(s, dict)
+            ],
+        }
+
+    key = hashlib.sha256(f"{prompt}:{','.join(tool_list)}".encode()).hexdigest()[:16]
+    return _cached(f"desearch:ai:{key}", _fetch)
 
 
 def synth_macro_skew(asset: str = "BTC", *, horizon: str = "24h") -> Optional[Dict[str, Any]]:

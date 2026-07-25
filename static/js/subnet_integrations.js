@@ -67,10 +67,15 @@
     var rows = (payload && payload.integrations) || [];
     var connected = payload.connected_count != null ? payload.connected_count : 0;
     var target = payload.target_minimum != null ? payload.target_minimum : 3;
+    var spend = payload.desearch_spend || {};
+    var spendUsd = spend.total_usd != null ? Number(spend.total_usd) : 0;
     var summary =
       connected >= target
         ? connected + ' subnets connected'
         : connected + ' / ' + target + ' connected';
+    if (spendUsd > 0) {
+      summary += ' · DeSearch $' + spendUsd.toFixed(4);
+    }
     return (
       '<div class="subnet-int-inner" role="list" aria-label="Bittensor subnet integrations">' +
       '<span class="subnet-int-heading">Built on Bittensor</span>' +

@@ -10,6 +10,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional, Set
 
+from internal.integrations.desearch_spend import get_spend_summary, record_desearch_response
 from internal.integrations.taonsquare import catalog_summary, recommend_candidates
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,8 @@ def _http_probe(
             json=json_body,
             timeout=_PROBE_TIMEOUT,
         )
+        if "desearch.ai" in url:
+            record_desearch_response(resp, path=url, label="probe")
         return True, resp.status_code, (resp.text or "")[:240]
     except Exception as exc:
         logger.debug("probe %s failed: %s", url, exc)
@@ -216,6 +219,7 @@ def build_integrations_status() -> Dict[str, Any]:
         "connected_count": connected_n,
         "target_minimum": 3,
         "ready_for_launch": connected_n >= 3,
+        "desearch_spend": get_spend_summary(recent_limit=10),
     }
 
 
