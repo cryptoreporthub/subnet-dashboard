@@ -31,6 +31,7 @@ CI (`main` push) runs Deploy Guard then deploys automatically when green.
 | Endpoint | Expected |
 |----------|----------|
 | `GET /health` | `OK` |
+| `GET /api/subnet-integrations` | 200, four primary rows + `connected_count` |
 | `GET /api/data-freshness` | 200, `stale` + `effective_source` fields |
 | `GET /api/ops/readiness` | 200, `ready`, `issues`, resolver + feed probes |
 | `GET /api/calibration/status` | 200, weights + thresholds |
@@ -197,6 +198,12 @@ Required for `/api/investigate/*`, wallet tracing, and SimiVision on-chain chat.
 
 ```bash
 flyctl secrets set TAOSTATS_API_KEY='<your-taostats-api-key>' --app subnet-dashboard
+```
+
+Subnet integrations (DeSearch / Chutes / Synth): see [`docs/SUBNET_INTEGRATIONS.md`](docs/SUBNET_INTEGRATIONS.md). Priority: `DESEARCH_API_KEY` (free credits), then `CHUTES_API_KEY` ($10/mo for chat). Skip `SYNTH_API_KEY` unless paying $49/mo.
+
+```bash
+flyctl secrets set DESEARCH_API_KEY='...' CHUTES_API_KEY='...' --app subnet-dashboard
 ```
 
 Verify:

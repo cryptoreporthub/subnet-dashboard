@@ -207,6 +207,21 @@ def _evidence_drivers(
             out.append({"tag": _axis_from_role(role), "label": role[:48]})
             if len(out) >= 3:
                 break
+    if len(out) < 3:
+        try:
+            sn = {}
+            if isinstance(block, dict):
+                sn = block.get("subnet") if isinstance(block.get("subnet"), dict) else {}
+            netuid = sn.get("netuid")
+            if netuid is not None:
+                from internal.integrations.enrichment import integration_evidence_drivers
+
+                for row in integration_evidence_drivers(int(netuid), str(sn.get("name") or "")):
+                    if len(out) >= 3:
+                        break
+                    out.append(row)
+        except Exception:
+            pass
     return out[:3]
 
 

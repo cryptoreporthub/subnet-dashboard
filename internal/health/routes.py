@@ -29,6 +29,14 @@ async def api_ops_readiness():
     return build_readiness_report()
 
 
+@health_router.get("/api/ops/desearch-spend")
+async def api_desearch_spend(recent: int = 25):
+    """Rolling DeSearch API spend from X-Desearch-* response headers."""
+    from internal.integrations.desearch_spend import get_spend_summary
+
+    return get_spend_summary(recent_limit=max(1, min(recent, 100)))
+
+
 @health_router.get("/api/subnet-integrations")
 async def api_subnet_integrations():
     """Live Bittensor subnet integration status (SN22/50/64/118)."""

@@ -1,4 +1,4 @@
-/** Corner strip — Bittensor subnet integrations (SN22/50/64/118). */
+/** Bittensor subnet integrations — status bar + corner (SN22/50/64/118). */
 (function () {
   'use strict';
 
@@ -11,10 +11,10 @@
   function renderRow(row) {
     var status = row.status || 'offline';
     var label = status === 'connected' ? 'Connected' : status === 'reachable' ? 'Reachable' : 'Offline';
-    var chip =
+    return (
       '<span class="subnet-int-chip subnet-int-chip--' +
       esc(status) +
-      '" title="' +
+      '" role="listitem" title="' +
       esc(row.role || '') +
       ' — ' +
       esc(row.detail || '') +
@@ -28,41 +28,13 @@
       '<span class="subnet-int-state">' +
       esc(label) +
       '</span>' +
-      '</span>';
-    return chip;
+      '</span>'
+    );
   }
 
-  function render(payload) {
-    var root = document.getElementById('subnetIntegrationsCorner');
-    if (!root) return;
-    var rows = (payload && payload.integrations) || [];
-    if (!rows.length) {
-      root.hidden = true;
-      return;
-    }
-    root.hidden = false;
-    var connected = payload.connected_count != null ? payload.connected_count : 0;
-    var target = payload.target_minimum != null ? payload.target_minimum : 3;
-    var summary =
-      connected >= target
-        ? connected + ' subnets connected'
-        : connected + ' / ' + target + ' connected';
-    root.innerHTML =
-      '<div class="subnet-int-inner" role="list" aria-label="Bittensor subnet integrations">' +
-      '<span class="subnet-int-heading">Built on Bittensor</span>' +
-      rows.map(renderRow).join('') +
-      renderCandidates(payload.candidates) +
-      '<span class="subnet-int-summary" title="Launch target: at least ' +
-      esc(target) +
-      ' live subnet integrations">' +
-      esc(summary) +
-      '</span>' +
-      '</div>';
-  }
-
-  function renderCandidates(candidates) {
+  function renderCandidates(candidates, max) {
     if (!candidates || !candidates.length) return '';
-    var top = candidates.slice(0, 4);
+    var top = candidates.slice(0, max || 4);
     var more = candidates.length - top.length;
     var chips = top
       .map(function (c) {
@@ -83,13 +55,66 @@
       .join('');
     var tail =
       more > 0
-        ? '<span class="subnet-int-more">+' +
-          esc(more) +
-          ' more via TaonSquare</span>'
+        ? '<span class="subnet-int-more">+' + esc(more) + ' more</span>'
         : '';
     return (
       '<span class="subnet-int-subheading">Could connect next</span>' + chips + tail
     );
+  }
+
+  function buildInner(payload, opts) {
+    opts = opts || {};
+    var rows = (payload && payload.integrations) || [];
+    var connected = payload.connected_count != null ? payload.connected_count : 0;
+    var target = payload.target_minimum != null ? payload.target_minimum : 3;
+    var spend = payload.desearch_spend || {};
+    var spendUsd = spend.total_usd != null ? Number(spend.total_usd) : 0;
+    var summary =
+      connected >= target
+        ? connected + ' subnets connected'
+        : connected + ' / ' + target + ' connected';
+    if (spendUsd > 0) {
+      summary += ' · DeSearch $' + spendUsd.toFixed(4);
+    }
+    return (
+      '<div class="subnet-int-inner" role="list" aria-label="Bittensor subnet integrations">' +
+      '<span class="subnet-int-heading">Built on Bittensor</span>' +
+      rows.map(renderRow).join('') +
+      (opts.showCandidates ? renderCandidates(payload.candidates, opts.candidateMax) : '') +
+      '<span class="subnet-int-summary" title="Launch target: at least ' +
+      esc(target) +
+      ' live subnet integrations">' +
+      esc(summary) +
+      '</span>' +
+      '</div>'
+    );
+  }
+
+  function render(payload) {
+    var rows = (payload && payload.integrations) || [];
+    var connected = payload.connected_count != null ? payload.connected_count : 0;
+    var bar = document.getElementById('subnetIntegrationsBar');
+    var barInner = document.getElementById('subnetIntegrationsBarInner');
+    var corner = document.getElementById('subnetIntegrationsCorner');
+    var footerCount = document.getElementById('footer-integrations-count');
+
+    if (!rows.length) {
+      if (bar) bar.hidden = true;
+      if (corner) corner.hidden = true;
+      return;
+    }
+
+    if (bar && barInner) {
+      bar.hidden = false;
+      barInner.innerHTML = buildInner(payload, { showCandidates: false });
+    }
+    if (corner) {
+      corner.hidden = false;
+      corner.innerHTML = buildInner(payload, { showCandidates: true, candidateMax: 3 });
+    }
+    if (footerCount) {
+      footerCount.textContent = String(connected) + '/4';
+    }
   }
 
   function poll() {
@@ -100,8 +125,10 @@
       })
       .then(render)
       .catch(function () {
-        var root = document.getElementById('subnetIntegrationsCorner');
-        if (root) root.hidden = true;
+        var bar = document.getElementById('subnetIntegrationsBar');
+        var corner = document.getElementById('subnetIntegrationsCorner');
+        if (bar) bar.hidden = true;
+        if (corner) corner.hidden = true;
       });
   }
 

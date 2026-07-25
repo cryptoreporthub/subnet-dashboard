@@ -12,6 +12,31 @@
     window.location.href = url.toString();
   }
 
+  function bindTabs(root) {
+    var tabs = root.querySelectorAll(".wr-tab");
+    if (!tabs.length) return;
+    var panels = root.querySelectorAll(".wr-band[data-band]");
+    function activate(band) {
+      tabs.forEach(function (btn) {
+        var on = btn.getAttribute("data-wr-tab") === band;
+        btn.classList.toggle("wr-tab--active", on);
+        btn.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      panels.forEach(function (panel) {
+        var show = panel.getAttribute("data-band") === band;
+        if (show) panel.removeAttribute("hidden");
+        else panel.setAttribute("hidden", "");
+      });
+    }
+    tabs.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        activate(btn.getAttribute("data-wr-tab"));
+      });
+    });
+    var initial = root.querySelector(".wr-tab--active");
+    if (initial) activate(initial.getAttribute("data-wr-tab"));
+  }
+
   function bind(root) {
     if (!root) return;
     if (root.dataset.wrBound === "1") return;
@@ -44,6 +69,7 @@
     var section = document.getElementById("section-simivision-picks");
     if (section) section.dataset.wrBound = "";
     bind(section);
+    bindTabs(section);
   }
 
   if (document.readyState === "loading") {
