@@ -1,37 +1,63 @@
 # STATUS
 
-**Updated:** 2026-07-25T00:15:00Z  
-**main:** see `board.md` / latest merge  
-**active plan:** `prod-stability-plan.md` (Phases 0–4) · pump gameplan Waves 0–3 **shipped** · G0 human QA **open**
+**Updated:** 2026-07-25T01:12:00Z  
+**main:** `49159d5`+ (#461 docs merged)  
+**active plan:** `post-stability-sprint-plan.md`  
+**previous plan:** `prod-stability-plan.md` Phases 0–4 ✅ **COMPLETE**
+
+---
 
 ## Next (sequential — one PR at a time)
 
-1. **Phase 0** `cursor/reconnect-smoke-d2cd` — verify no real 422s; B0-0 Quiet gate
-2. **Phase 1** `cursor/pump-alerts-fast-d2cd` — fast desk API; stop caching timeouts (**critical**)
-3. **Phase 2** `cursor/pump-desk-compact-d2cd` — compact Warming/Active UI
-4. **Phase 3** `cursor/hydrate-stability-d2cd` — sequential hydrate + prod gates
-5. **Phase 4** `cursor/chat-context-fast-d2cd` — after site stable (optional)
+### Wave A — Verify & ops gate
+1. Run `verify_prod.sh` + G0 human 390px sign-off
+2. Ops: `fly scale count worker=1` only if prod soak fails
 
-**Also open:** G0 human 390px · P5 founder chip · E1 test debt (`post-s28-backlog.md`)
+### Wave B — Batch 0 brain (B0-a → B0-d)
+3. `cursor/b0-a-living-focus-d2cd` → B0-b → B0-c → B0-d
+
+### Wave C — Pump parity
+4. `cursor/p5-founder-chip-d2cd`
+5. Rebase #455 social conviction (optional)
+
+### Wave D — Chat
+6. `cursor/chat-fast-path-d2cd` — complete Phase 4 AC
+
+### Wave E — Subnet connections (phased)
+7. #449 E1 API → E2 UI → E3 macro overlay
+
+### Wave F — Housekeeping
+8. Stale doc PRs · E1 test debt · H1 hour-watch (after B0-d)
+
+---
 
 ## Done (recent)
 
+- **#461–#464** — prod stability plan (docs + Phases 0–4 implementation)
+- **#462** — fast pump-alerts desk, no timeout cache
+- **#463** — compact pump desk UI + hydrate desk refresh
+- **#464** — sequential hydrate + chat context cache
+- **#453–#460** — inline worker, pump desk sparklines, spine polish, conviction orb
 - #410 — full plan execution: G0 script, Wave 2–3 (S1–S8), P4 notify
-- #430–#436 — day-whale + slip chips, TaoStats ingest, CI bg-scan fix
-- #437 — Fly Phase B: `BACKGROUND_ON_WEB=essential` + worker process group
-- #442–#446 — subnet integration badges, dossier crumbs, brain letter strip
-- #419 — Slice R+M (rebalance + pump score overlay)
-- §34 + subnet-names (#325) · §33 prod readiness · §31 website opt
+
+---
 
 ## Gameplan slice summary
 
 | ID | Status |
 |----|--------|
-| G0 | ⚠️ script only |
-| P1–P4, S1–S2, S4–S8 | ✅ |
-| P5, S3 | ⚠️ partial |
-| Wave 4 | — skipped |
+| Prod stability 0–4 | ✅ |
+| G0 | ⚠️ script ✅ · **human 390px open** |
+| B0-a…d | ❌ unblocked (B0-0 met) |
+| P5 founder chip | ❌ |
+| #455 social | ⚠️ open PR, needs rebase |
+| #449 integrations | ❌ phased in Wave E |
+| H1 hour-watch | — gated on B0-d + G0 |
 
-## Skipped
+---
 
-- H1 custom domain until human · Wave 4 depth · D1–D7 deferred features
+## Skipped / deferred
+
+- Wave 4 pump gameplan depth (YAGNI)
+- Full frontend modernization (Batch 0 covers Tier‑1)
+- Prediction/weights algorithm rewrite (no evidence of breakage)
