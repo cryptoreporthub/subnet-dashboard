@@ -99,7 +99,9 @@ def test_strip_markup_on_homepage():
         html = client.get("/").text
     assert 'id="subnetIntegrationsBar"' in html
     assert "subnet_integrations.js" in html
-    assert "subnet-int-strip" in open("static/js/subnet_integrations.js").read()
+    js = open("static/js/subnet_integrations.js").read()
+    assert "subnet-int-item" in js
+    assert "SN" in js
 
 
 def test_status_cache_returns_same_payload():

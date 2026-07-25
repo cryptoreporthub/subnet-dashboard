@@ -1,4 +1,4 @@
-/** Bittensor subnet integrations — compact 5/5 status strip (no floating panel). */
+/** Bittensor subnet integrations — compact strip: ● Name (SN#) per service. */
 (function () {
   'use strict';
 
@@ -8,15 +8,50 @@
     });
   }
 
-  function shortLabel(row) {
-    if (row.netuid == null || row.netuid === '') return esc(row.name || row.slug || '—');
-    return 'SN' + esc(row.netuid);
+  function displayName(row) {
+    var name = row.name || row.slug || '—';
+    // Prefer short product names over "Finney mainnet" verbosity where useful.
+    if (row.slug === 'bittensor') return 'Finney';
+    if (row.slug === 'blockmachine') return 'Blockmachine';
+    if (row.slug === 'desearch') return 'DeSearch';
+    if (row.slug === 'chutes') return 'Chutes';
+    if (row.slug === 'ditto') return 'Ditto';
+    return name;
   }
 
   function statusWord(status) {
     if (status === 'connected') return 'live';
     if (status === 'reachable') return 'reachable';
     return 'offline';
+  }
+
+  function buildItem(row) {
+    var status = row.status || 'offline';
+    var name = displayName(row);
+    var label = name;
+    if (row.netuid != null && row.netuid !== '') {
+      label = name + ' (SN' + row.netuid + ')';
+    }
+    var tip =
+      label +
+      ' — ' +
+      statusWord(status) +
+      (row.detail ? ' · ' + row.detail : '') +
+      (row.role ? ' · ' + row.role : '');
+    return (
+      '<span class="subnet-int-item subnet-int-item--' +
+      esc(status) +
+      '" title="' +
+      esc(tip) +
+      '">' +
+      '<span class="subnet-int-dot subnet-int-dot--' +
+      esc(status) +
+      '" aria-hidden="true"></span>' +
+      '<span class="subnet-int-label">' +
+      esc(label) +
+      '</span>' +
+      '</span>'
+    );
   }
 
   function buildStrip(payload) {
@@ -26,54 +61,17 @@
     var live = connected >= total && total > 0;
     var countLabel = live ? total + '/' + total + ' live' : connected + '/' + total + ' live';
 
-    var dots = rows
-      .map(function (row) {
-        var status = row.status || 'offline';
-        var tip =
-          (row.netuid != null ? 'SN' + row.netuid + ' · ' : '') +
-          (row.name || '') +
-          ' — ' +
-          statusWord(status) +
-          (row.detail ? ' · ' + row.detail : '');
-        return (
-          '<span class="subnet-int-dot subnet-int-dot--' +
-          esc(status) +
-          '" title="' +
-          esc(tip) +
-          '" role="img" aria-label="' +
-          esc(tip) +
-          '"></span>'
-        );
-      })
-      .join('');
-
-    var names = rows
-      .map(function (row) {
-        var status = row.status || 'offline';
-        return (
-          '<span class="subnet-int-name subnet-int-name--' +
-          esc(status) +
-          '" title="' +
-          esc(row.role || row.detail || '') +
-          '">' +
-          shortLabel(row) +
-          '</span>'
-        );
-      })
-      .join('<span class="subnet-int-sep" aria-hidden="true">·</span>');
+    var items = rows.map(buildItem).join('');
 
     return (
       '<div class="subnet-int-strip' +
       (live ? ' subnet-int-strip--live' : '') +
-      '" role="status" aria-label="Bittensor subnet integrations: ' +
+      '" role="list" aria-label="Bittensor subnet integrations: ' +
       esc(countLabel) +
       '">' +
       '<span class="subnet-int-strip__brand">Built on Bittensor</span>' +
-      '<span class="subnet-int-strip__dots" aria-hidden="true">' +
-      dots +
-      '</span>' +
-      '<span class="subnet-int-strip__names">' +
-      names +
+      '<span class="subnet-int-strip__items">' +
+      items +
       '</span>' +
       '<span class="subnet-int-strip__count">' +
       esc(countLabel) +
@@ -90,7 +88,6 @@
     var corner = document.getElementById('subnetIntegrationsCorner');
     var footerCount = document.getElementById('footer-integrations-count');
 
-    // Corner panel retired — compact strip only.
     if (corner) {
       corner.hidden = true;
       corner.innerHTML = '';

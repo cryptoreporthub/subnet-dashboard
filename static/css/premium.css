@@ -779,7 +779,7 @@ footer.status[data-source*="fallback"] .st-dot {
   box-shadow: 0 0 10px rgba(255, 179, 0, 0.35);
 }
 
-/* ---------- Subnet integrations — compact 5/5 strip ---------- */
+/* ---------- Subnet integrations — ● Name (SN#) strip ---------- */
 .subnet-integrations-bar {
   border-top: 1px solid rgba(148, 163, 184, 0.1);
   border-bottom: none;
@@ -794,7 +794,7 @@ footer.status[data-source*="fallback"] .st-dot {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.45rem 0.75rem;
+  gap: 0.45rem 0.85rem;
   padding: 0.35rem 0;
 }
 .subnet-int-strip__brand {
@@ -805,21 +805,45 @@ footer.status[data-source*="fallback"] .st-dot {
   text-transform: uppercase;
   color: var(--txt-3, #64748b);
 }
-.subnet-int-strip__dots {
+.subnet-int-strip__items {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1rem;
+}
+.subnet-int-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.78rem;
+  letter-spacing: 0.01em;
+  color: var(--txt-2, #94a3b8);
+  white-space: nowrap;
+}
+.subnet-int-item--connected {
+  color: var(--txt, #e2e8f0);
+}
+.subnet-int-item--connected .subnet-int-label {
+  font-weight: 600;
+}
+.subnet-int-item--reachable {
+  color: var(--signal-amber, #fbbf24);
+}
+.subnet-int-item--offline {
+  color: var(--txt-3, #64748b);
+  opacity: 0.8;
 }
 .subnet-int-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
   background: var(--txt-3, #64748b);
 }
 .subnet-int-dot--connected {
   background: var(--cockpit-green, #00ff41);
-  box-shadow: 0 0 6px rgba(0, 255, 65, 0.35);
+  box-shadow: 0 0 6px rgba(0, 255, 65, 0.4);
 }
 .subnet-int-dot--reachable {
   background: var(--signal-amber, #fbbf24);
@@ -828,20 +852,6 @@ footer.status[data-source*="fallback"] .st-dot {
 .subnet-int-dot--offline {
   background: rgba(100, 116, 139, 0.55);
 }
-.subnet-int-strip__names {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.2rem 0.35rem;
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  font-size: 0.7rem;
-  letter-spacing: 0.02em;
-  color: var(--txt-2, #94a3b8);
-}
-.subnet-int-name--connected { color: var(--txt, #e2e8f0); font-weight: 600; }
-.subnet-int-name--reachable { color: var(--signal-amber, #fbbf24); }
-.subnet-int-name--offline { color: var(--txt-3, #64748b); opacity: 0.75; }
-.subnet-int-sep { opacity: 0.35; }
 .subnet-int-strip__count {
   margin-left: auto;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
@@ -853,13 +863,17 @@ footer.status[data-source*="fallback"] .st-dot {
 .subnet-int-strip--live .subnet-int-strip__count {
   color: var(--cockpit-green, #00ff41);
 }
-/* Corner panel retired */
 .subnet-integrations-corner {
   display: none !important;
 }
 @media (max-width: 720px) {
-  .subnet-int-strip__names { display: none; }
-  .subnet-int-strip__count { margin-left: 0; }
+  .subnet-int-strip__count {
+    margin-left: 0;
+    width: 100%;
+  }
+  .subnet-int-item {
+    font-size: 0.72rem;
+  }
 }
 
 /* ---------- Scrollbars (cockpit tint) ---------- */
