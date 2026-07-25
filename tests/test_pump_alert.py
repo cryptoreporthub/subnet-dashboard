@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from internal.learning.dpick_pump import build_pump_chip
-from internal.learning.pump_alert import build_alert_row, build_pump_alerts
+from internal.learning.pump_alert import build_alert_row, build_pump_alerts, build_pump_alerts_desk
 from server import app
 
 
@@ -256,6 +256,65 @@ def test_api_pump_alerts_route():
             body = client.get("/api/pump-alerts").json()
     assert body["confirmed_count"] == 1
     assert body["alerts"][0]["badge"] == "CHASE RISK"
+    assert body.get("desk") is True
+
+
+def test_build_pump_alerts_desk_skips_background_kicks():
+    ladder = {"subnets": {"29": _ladder_entry("PUMPING", score=0.81)}}
+    with patch("internal.pump.state.load_state", return_value=ladder):
+        with patch("internal.pump.refresh.kick_ladder_fresh") as kick:
+            out = build_pump_alerts_desk([])
+    kick.assert_not_called()
+    assert out["confirmed_count"] == 1
+    assert out["desk"] is True
+
+
+def test_build_pump_alerts_desk_builds_quickly():
+    import time
+
+    ladder = {
+        "subnets": {
+            str(i): _ladder_entry("ACCUMULATING", netuid=i, score=0.4 + i * 0.01)
+            for i in range(1, 130)
+        }
+    }
+    with patch("internal.pump.state.load_state", return_value=ladder):
+        t0 = time.monotonic()
+        out = build_pump_alerts_desk([])
+        elapsed = time.monotonic() - t0
+    assert elapsed < 0.5
+    assert out["status"] in ("success", "empty")
+
+
+def test_api_pump_alerts_timeout_serves_stale_not_cache(monkeypatch):
+    import asyncio
+    import time
+
+    import server as srv
+
+    good = {
+        "status": "success",
+        "count": 1,
+        "early_count": 0,
+        "confirmed_count": 1,
+        "alerts": [{"netuid": 29, "badge": "CHASE RISK"}],
+        "desk": True,
+    }
+    monkeypatch.setattr(srv, "_PUMP_ALERTS_TTL", 60.0)
+    monkeypatch.setattr(
+        srv,
+        "_PUMP_ALERTS_CACHE",
+        {"at": time.monotonic(), "payload": good},
+    )
+
+    async def _always_timeout(fn, timeout_s, *, label):
+        raise asyncio.TimeoutError()
+
+    with patch.object(srv, "_to_thread_timeout", side_effect=_always_timeout):
+        with TestClient(app) as client:
+            body = client.get("/api/pump-alerts").json()
+    assert body["status"] == "success"
+    assert body["count"] == 1
 
 
 def test_preview_pump_alert_route():

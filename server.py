@@ -809,9 +809,9 @@ def _public_base_url(request: Request) -> str:
 
 def _pump_alerts_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     try:
-        from internal.learning.pump_alert import build_pump_alerts
+        from internal.learning.pump_alert import build_pump_alerts_desk
 
-        return {"pump_alerts": build_pump_alerts(subnets)}
+        return {"pump_alerts": build_pump_alerts_desk(subnets)}
     except Exception as exc:
         logger.warning("pump alerts context failed: %s", exc)
         return {
@@ -1524,19 +1524,21 @@ async def api_pump_alerts():
             return cached
 
     def _build():
-        from internal.learning.pump_alert import build_pump_alerts
+        from internal.learning.pump_alert import build_pump_alerts_desk
         from internal.subnet_names import enrich_subnet_rows
         from internal.subnets.feed import registry_subnet_rows
 
-        # Registry-only on the hot path — ladder state is file-backed; live feed
-        # waits on worker/TMC and was wedging hydrate under scan lock contention.
         subnets = enrich_subnet_rows(registry_subnet_rows())
-        return build_pump_alerts(subnets)
+        return build_pump_alerts_desk(subnets)
 
     try:
         payload = await _to_thread_timeout(_build, 6.0, label="pump-alerts")
     except asyncio.TimeoutError:
-        payload = {
+        with _PUMP_ALERTS_LOCK:
+            stale = _PUMP_ALERTS_CACHE.get("payload")
+            if isinstance(stale, dict) and stale.get("status") not in ("timeout", "unavailable", None):
+                return stale
+        return {
             "status": "timeout",
             "count": 0,
             "early_count": 0,
@@ -1545,7 +1547,11 @@ async def api_pump_alerts():
             "empty_message": "Pump desk busy — retry shortly.",
             "error": "timeout",
             "trust": {"ready": False, "line": ""},
+            "desk": True,
         }
+
+    if payload.get("status") in ("timeout", "unavailable"):
+        return payload
 
     with _PUMP_ALERTS_LOCK:
         _PUMP_ALERTS_CACHE["at"] = time.monotonic()

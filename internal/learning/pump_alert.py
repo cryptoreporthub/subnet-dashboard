@@ -463,36 +463,87 @@ def build_alert_row(
 def _sort_bucket(
     entries: List[Tuple[float, Dict[str, Any], Optional[Dict[str, Any]]]],
     limit: int,
+    *,
+    row_builder=build_alert_row,
 ) -> List[Dict[str, Any]]:
     entries.sort(key=lambda t: t[0], reverse=True)
-    return [build_alert_row(entry, row) for _, entry, row in entries[:limit]]
+    return [row_builder(entry, row) for _, entry, row in entries[:limit]]
 
 
-def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
-    """Return predictive pump lane payload for SSR + GET /api/pump-alerts."""
-    rows = subnets if isinstance(subnets, list) else []
+def _snapshot_lead_signals(ladder_entry: Dict[str, Any]) -> Dict[str, Any]:
+    """Ladder-only lead metrics — no live subnet signal rebuild (hot API path)."""
+    snapshot: Dict[str, Any] = {}
+    raw = ladder_entry.get("signal_snapshot")
+    if isinstance(raw, dict):
+        snapshot = dict(raw)
     try:
-        from internal.pump.refresh import kick_ladder_fresh
-        from internal.pump.state import load_state
+        buy_ratio = float(snapshot.get("buy_ratio", 0.5))
+    except (TypeError, ValueError):
+        buy_ratio = None
+    try:
+        volume_intensity = float(snapshot.get("volume_intensity", 0.0))
+    except (TypeError, ValueError):
+        volume_intensity = None
+    return {"buy_ratio": buy_ratio, "volume_intensity": volume_intensity}
 
-        # Don't block the request on a full ladder rescan — chips/UI need to stay snappy.
-        kick_ladder_fresh()
-        state = load_state()
-    except Exception as exc:
-        return {
-            "status": "unavailable",
-            "count": 0,
-            "early_count": 0,
-            "confirmed_count": 0,
-            "alerts": [],
-            "empty_message": _EMPTY_MESSAGE,
-            "error": str(exc),
-            "trust": {
-                "ready": False,
-                "line": "Early alerts: grading starts once lead phase entries resolve (1h).",
-            },
-        }
 
+def build_desk_row(
+    ladder_entry: Dict[str, Any],
+    subnet_row: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Minimal pump desk row — names, timing, formation %, cached sparklines only."""
+    phase = str(ladder_entry.get("phase") or "DORMANT").upper()
+    netuid = ladder_entry.get("netuid")
+    try:
+        netuid_int = int(netuid) if netuid is not None else None
+    except (TypeError, ValueError):
+        netuid_int = None
+    name = _resolve_name(ladder_entry, subnet_row)
+    leads = _snapshot_lead_signals(ladder_entry)
+    try:
+        score = float(ladder_entry.get("composite_score") or 0.0)
+    except (TypeError, ValueError):
+        score = None
+    copy = _row_copy(
+        phase,
+        name,
+        leads["buy_ratio"],
+        leads["volume_intensity"],
+        netuid_int,
+        score=score,
+    )
+    spark_closes: List[float] = []
+    if isinstance(subnet_row, dict):
+        try:
+            from internal.analytics.root_context import spark_closes_cached_only
+
+            spark_closes = spark_closes_cached_only(subnet_row)
+        except Exception:
+            spark_closes = []
+    return {
+        "netuid": netuid_int,
+        "name": name,
+        "phase": phase,
+        "timing": copy["timing"],
+        "score": round(score, 2) if score is not None else None,
+        "badge": copy["badge"],
+        "spark_closes": spark_closes,
+        "move": copy["move"],
+        "thesis": copy["thesis"],
+        "trigger": copy["trigger"],
+    }
+
+
+def _collect_pump_buckets(
+    state: Dict[str, Any],
+    subnets: List[Dict[str, Any]],
+    *,
+    desk: bool = False,
+) -> Tuple[
+    List[Tuple[float, Dict[str, Any], Optional[Dict[str, Any]]]],
+    List[Tuple[float, Dict[str, Any], Optional[Dict[str, Any]]]],
+    List[Tuple[float, Dict[str, Any], Optional[Dict[str, Any]]]],
+]:
     early: List[Tuple[float, Dict[str, Any], Optional[Dict[str, Any]]]] = []
     pumping: List[Tuple[float, Dict[str, Any], Optional[Dict[str, Any]]]] = []
     cooling: List[Tuple[float, Dict[str, Any], Optional[Dict[str, Any]]]] = []
@@ -502,15 +553,14 @@ def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[st
             continue
         phase = str(entry.get("phase") or "").upper()
         netuid = entry.get("netuid")
-        subnet = _subnet_row(int(netuid), rows) if netuid is not None else None
+        subnet = _subnet_row(int(netuid), subnets) if netuid is not None else None
         score = float(entry.get("composite_score") or 0.0)
-        # Early lane ranks by predictive accum when present.
         try:
             rank = float(entry.get("accum_score")) if entry.get("accum_score") is not None else score
         except (TypeError, ValueError):
             rank = score
         if phase in _EARLY_PHASES:
-            leads = _lead_signals(subnet, entry)
+            leads = _snapshot_lead_signals(entry) if desk else _lead_signals(subnet, entry)
             if phase == "ACCUMULATING" or _lead_qualifies(
                 leads["buy_ratio"], leads["volume_intensity"]
             ):
@@ -527,21 +577,14 @@ def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[st
             pumping.append((conf_rank, entry, subnet))
         elif phase == "COOLING":
             cooling.append((score, entry, subnet))
+    return early, pumping, cooling
 
-    alerts = _sort_bucket(early, _MAX_EARLY) + _sort_bucket(pumping, _MAX_PUMPING) + _sort_bucket(
-        cooling, _MAX_COOLING
-    )
 
-    # Background: warm whale ledger for the names on the desk (and active ladder).
-    try:
-        from internal.pump.taostats_overlay import active_ladder_netuids
-        from internal.whales.warm import kick_whale_ledger_warm
-
-        desk = [int(a["netuid"]) for a in alerts if a.get("netuid") is not None]
-        kick_whale_ledger_warm(desk + active_ladder_netuids())
-    except Exception:
-        pass
-
+def _finalize_pump_payload(
+    alerts: List[Dict[str, Any]],
+    *,
+    desk: bool,
+) -> Dict[str, Any]:
     for alert in alerts:
         brief = {"move": alert["move"], "thesis": alert["thesis"]}
         if not hero_copy_is_clean(brief):
@@ -569,4 +612,80 @@ def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[st
         "empty_message": _EMPTY_MESSAGE,
         "error": None,
         "trust": trust,
+        "desk": desk,
     }
+
+
+def build_pump_alerts_desk(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """Fast pump desk payload — file-backed ladder, no background kicks on GET."""
+    rows = subnets if isinstance(subnets, list) else []
+    try:
+        from internal.pump.state import load_state
+
+        state = load_state()
+    except Exception as exc:
+        return {
+            "status": "unavailable",
+            "count": 0,
+            "early_count": 0,
+            "confirmed_count": 0,
+            "alerts": [],
+            "empty_message": _EMPTY_MESSAGE,
+            "error": str(exc),
+            "trust": {
+                "ready": False,
+                "line": "Early alerts: grading starts once lead phase entries resolve (1h).",
+            },
+            "desk": True,
+        }
+
+    early, pumping, cooling = _collect_pump_buckets(state, rows, desk=True)
+    alerts = (
+        _sort_bucket(early, _MAX_EARLY, row_builder=build_desk_row)
+        + _sort_bucket(pumping, _MAX_PUMPING, row_builder=build_desk_row)
+        + _sort_bucket(cooling, _MAX_COOLING, row_builder=build_desk_row)
+    )
+    return _finalize_pump_payload(alerts, desk=True)
+
+
+def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    """Return predictive pump lane payload for SSR + GET /api/pump-alerts."""
+    rows = subnets if isinstance(subnets, list) else []
+    try:
+        from internal.pump.refresh import kick_ladder_fresh
+        from internal.pump.state import load_state
+
+        # Don't block the request on a full ladder rescan — chips/UI need to stay snappy.
+        kick_ladder_fresh()
+        state = load_state()
+    except Exception as exc:
+        return {
+            "status": "unavailable",
+            "count": 0,
+            "early_count": 0,
+            "confirmed_count": 0,
+            "alerts": [],
+            "empty_message": _EMPTY_MESSAGE,
+            "error": str(exc),
+            "trust": {
+                "ready": False,
+                "line": "Early alerts: grading starts once lead phase entries resolve (1h).",
+            },
+        }
+
+    early, pumping, cooling = _collect_pump_buckets(state, rows, desk=False)
+    alerts = _sort_bucket(early, _MAX_EARLY) + _sort_bucket(pumping, _MAX_PUMPING) + _sort_bucket(
+        cooling, _MAX_COOLING
+    )
+
+    # Background: warm whale ledger for the names on the desk (and active ladder).
+    try:
+        from internal.pump.taostats_overlay import active_ladder_netuids
+        from internal.whales.warm import kick_whale_ledger_warm
+
+        desk = [int(a["netuid"]) for a in alerts if a.get("netuid") is not None]
+        kick_whale_ledger_warm(desk + active_ladder_netuids())
+    except Exception:
+        pass
+
+    return _finalize_pump_payload(alerts, desk=False)
