@@ -6,12 +6,29 @@
 {% else %}
   {% set footer_source_label = data_source|replace('_',' ')|replace('-',' ')|title %}
 {% endif %}
+{% set footer_subnet_n = sn_list|length if sn_list else 0 %}
+{% set footer_trail_n = mindmap_trail|length if mindmap_trail else 0 %}
+{% set footer_pred_n = predictions|length if predictions else 0 %}
 <footer class="status" id="section-footer" data-source="{{ data_source|default('cache')|lower }}">
-  <div class="status-inner">
-    <span><span class="st-dot" aria-hidden="true"></span>SimiVision · <b id="footer-source-label">{{ footer_source_label }}</b></span>
-    <span data-footer-metric="subnets"{% if not sn_list|length %} hidden{% endif %}>Subnets: <b id="footer-subnets-count">{{ sn_list|length }}</b></span>
-    <span data-footer-metric="trail"{% if not (mindmap_trail|length if mindmap_trail else 0) %} hidden{% endif %}>Trail: <b id="footer-trail-count">{{ mindmap_trail|length if mindmap_trail else 0 }}</b></span>
-    <span data-footer-metric="predictions"{% if not (predictions|length if predictions else 0) %} hidden{% endif %}>Predictions: <b id="footer-predictions-count">{{ predictions|length if predictions else 0 }}</b></span>
+  <div class="footer-cards" aria-label="Site status">
+    <div class="footer-card footer-card--source">
+      <span class="footer-card__lbl">Source</span>
+      <span class="footer-card__val"><span class="st-dot" aria-hidden="true"></span> <b id="footer-source-label">{{ footer_source_label }}</b></span>
+    </div>
+    <div class="footer-card">
+      <span class="footer-card__lbl">Subnets</span>
+      <span class="footer-card__val" data-footer-metric="subnets"><b id="footer-subnets-count">{{ footer_subnet_n if footer_subnet_n else '—' }}</b></span>
+    </div>
+    <div class="footer-card">
+      <span class="footer-card__lbl">Trail</span>
+      <span class="footer-card__val" data-footer-metric="trail"><b id="footer-trail-count">{{ footer_trail_n if footer_trail_n else '—' }}</b></span>
+    </div>
+    <div class="footer-card">
+      <span class="footer-card__lbl">Predictions</span>
+      <span class="footer-card__val" data-footer-metric="predictions"><b id="footer-predictions-count">{{ footer_pred_n if footer_pred_n else '—' }}</b></span>
+    </div>
+  </div>
+  <div class="status-inner status-inner--meta">
     <span class="footer-tag footer-sn118" id="footerSubnetIntegrationsHint">Bittensor subnets · corner status</span>
     <span class="footer-tag">UTC clock · Press <kbd>C</kbd> compact</span>
   </div>
