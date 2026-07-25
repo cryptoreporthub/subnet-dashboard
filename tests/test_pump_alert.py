@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from internal.learning.dpick_pump import build_pump_chip
-from internal.learning.pump_alert import build_alert_row, build_pump_alerts, build_pump_alerts_desk
+from internal.learning.pump_alert import build_alert_row, build_desk_row, build_pump_alerts, build_pump_alerts_desk
 from server import app
 
 
@@ -269,6 +269,30 @@ def test_pump_alert_compact_hides_detail_lane():
     assert 'id="pump-list-panel" hidden' in html or "hidden" in html
 
 
+def test_pump_alert_compact_renders_hero_card():
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    tmpl = env.get_template("partials/premium/pump_alert.html")
+    row = build_desk_row(_ladder_entry("ACCUMULATING", netuid=42, score=0.72))
+    html = tmpl.render(
+        pump_compact=True,
+        pump_alerts={
+            "count": 1,
+            "early_count": 1,
+            "confirmed_count": 0,
+            "hero": row,
+            "alerts": [row],
+        },
+    )
+    assert "Closest to trigger" in html
+    assert "pump-hero__card" in html
+    assert "Formation" in html
+    assert "Momentum" in html
+    assert "Inflow" in html
+
+
 def test_api_pump_alerts_route():
     ladder = {"subnets": {"29": _ladder_entry("PUMPING", score=0.81)}}
     with patch("internal.pump.state.load_state", return_value=ladder):
@@ -279,7 +303,25 @@ def test_api_pump_alerts_route():
     assert body.get("desk") is True
 
 
-def test_build_pump_alerts_desk_skips_background_kicks():
+def test_build_pump_alerts_desk_includes_hero_and_metrics():
+    ladder = {
+        "subnets": {
+            "42": {
+                **_ladder_entry("ACCUMULATING", netuid=42, score=0.48),
+                "accum_score": 0.81,
+            },
+            "29": _ladder_entry("PUMPING", score=0.81),
+        }
+    }
+    with patch("internal.pump.state.load_state", return_value=ladder):
+        out = build_pump_alerts_desk([])
+    assert out.get("hero")
+    hero = out["hero"]
+    assert hero["formation_pct"] == 48
+    assert hero["momentum_pct"] == 81
+    assert "triad" in hero
+    assert "triad_labels" in hero
+    assert hero["subtitle"]
     ladder = {"subnets": {"29": _ladder_entry("PUMPING", score=0.81)}}
     with patch("internal.pump.state.load_state", return_value=ladder):
         with patch("internal.pump.refresh.kick_ladder_fresh") as kick:
