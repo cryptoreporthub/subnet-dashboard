@@ -17,12 +17,17 @@ from internal.learning.predictions_store import append_prediction, has_pending_d
 logger = logging.getLogger(__name__)
 
 
+_COUNCIL_EXPERTS = frozenset({"quant", "hype", "dark_horse", "technical"})
+
+
 def _dominant_expert(expert_contributions: Optional[Dict[str, Any]]) -> str:
     if not isinstance(expert_contributions, dict) or not expert_contributions:
         return "quant"
     best_name = "quant"
     best_val = float("-inf")
     for name, raw in expert_contributions.items():
+        if name not in _COUNCIL_EXPERTS:
+            continue
         try:
             val = float(raw)
         except (TypeError, ValueError):
@@ -32,8 +37,6 @@ def _dominant_expert(expert_contributions: Optional[Dict[str, Any]]) -> str:
             best_name = str(name)
     if best_name in ("contrarian",):
         return "dark_horse"
-    if best_name not in ("quant", "hype", "dark_horse", "technical"):
-        return "quant"
     return best_name
 
 
@@ -299,6 +302,9 @@ def record_pick_prediction(
 
     try:
         from internal.judges.tracker import on_prediction_created
+
+        if isinstance(signal_impact, dict):
+            prediction["signal_impact"] = signal_impact
 
         judge_scores = on_prediction_created(
             prediction,

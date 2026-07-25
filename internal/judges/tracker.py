@@ -43,7 +43,9 @@ def on_prediction_created(
         "pulse": pulse_judge.evaluate(prediction, signal_impact=signal_impact, subnet=subnet),
     }
     for judge in all_judges():
-        judge.open_position(prediction)
+        block = scores.get(judge.name) or {}
+        conf = float(block.get("confidence", 0.5) or 0.5)
+        judge.open_position(prediction, size=0.5 + 0.5 * conf)
     return scores
 
 
