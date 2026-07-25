@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pump desk preview (v4) — SimiVision</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; min-height: 100%; background: #04060e; color: #edeae3; font-family: system-ui, sans-serif; }
+    .k3-preview-banner {
+      background: #1a1200; color: #ffb347; text-align: center;
+      font: 12px/1.4 'JetBrains Mono', monospace; padding: 8px 12px;
+      border-bottom: 1px solid rgba(255,179,71,0.4);
+    }
+    .k3-preview-frame { max-width: 390px; margin: 0 auto; padding: 0 12px; border-left: 1px solid #222; border-right: 1px solid #222; }
+  </style>
+</head>
+<body>
+<p class="k3-preview-banner">K3-8 preview · Pump Alert lane · hydrate off · SSR fixture data</p>
+<div class="k3-preview-frame">
+<section class="pump-alert wrap-pad pump-alert--board" id="section-pump-alert" aria-labelledby="pump-alert-title" data-home-live="1" data-pump-compact="1">
+  <header class="pd-head">
+    <h2 class="pd-title" id="pump-alert-title">Pump desk<i class="pd-live" aria-hidden="true" title="Live"></i></h2>
+    <div id="pd-meta-wrap">
+      
+      <p class="pd-meta"><b class="pd-meta__pct">58%</b> hit-rate (n=14) · 2 lead · 1 live · 0 exit</p>
+      
+    </div>
+  </header>
+
+  <div class="pump-alert__body" id="pump-alert-body" aria-live="polite">
+    <div class="pump-desk" id="pump-desk-panel">
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+
+      <p class="pd-legend" aria-hidden="true"><i class="pd-dot pd-dot--in"></i>inflow&nbsp;&nbsp;<i class="pd-dot pd-dot--pr"></i>pressure&nbsp;&nbsp;<i class="pd-dot pd-dot--coil"></i>coil</p>
+
+      <article class="pd-lead pd-lead--lead" id="pump-desk-hero" data-netuid="99">
+        <a class="pd-lead__row1" href="/subnet/99">
+          <span class="pd-lead__badge pd-lead__badge--building">BUILDING</span>
+          <span class="pd-lead__name">Apex <b class="pd-lead__sn">SN99</b></span>
+          <span class="pd-lead__pct">67<i>%</i></span>
+        </a>
+        <p class="pd-lead__phase">
+          <span>STIR</span> · <span class="pd-lead__phase-now">BUILD</span> · <span>PUMP</span> · <span>COOL</span>
+          <span class="pd-lead__ago">· 2m ago</span>
+        </p>
+        <p class="pd-lead__reason">Best risk/reward band — chase only if you miss this window.</p>
+        <p class="pd-lead__stats">
+          <span>Flow <b>62</b></span><span>Confirm <b>31</b></span><span>Gap <b class="pd-lead__gap">0.24</b></span><span>62% buys</span><span>51% vol</span>
+        </p>
+        <div class="pd-lead__row3">
+          <span class="pd-lead__triad" aria-label="Inflow on, pressure on, coil off">
+            <i class="pd-dot pd-dot--in"></i><i class="pd-dot pd-dot--pr"></i><i class="pd-dot"></i>
+          </span>
+          
+          <span class="pd-lead__trend"><span class="pump-progress" data-progress="55,58,62,67" role="img" aria-label="Score trend toward trigger"></span></span>
+          
+        </div>
+        <p class="pd-lead__chip">50 τ ≈ 1.20% of float · healthy</p>
+        
+      </article>
+
+      
+      <div class="pd-table" id="pump-desk-more">
+        <div class="pd-cols" aria-hidden="true"><span></span><span></span><span>Flow</span><span>Gap</span><span></span><span></span></div>
+        
+        <p class="pd-table__lbl">Also warming — 1</p>
+        <div class="pd-table__rows">
+          
+          
+
+
+
+
+
+
+<a class="pd-r pd-r--warm" href="/subnet/42" data-netuid="42" title="WARMING UP">
+  <span class="pd-r__badge pd-r__badge--warming-up">WARM</span>
+  <span class="pd-r__name">Subnet42 <b class="pd-r__sn">SN42</b></span>
+  <span class="pd-r__num">40</span>
+  <span class="pd-r__num pd-r__num--gap">0.44</span>
+  <span class="pd-r__triad" aria-label="Inflow on, pressure off, coil off">
+    <i class="pd-dot pd-dot--in"></i><i class="pd-dot"></i><i class="pd-dot"></i>
+  </span>
+  
+  <span class="pd-r__spark"></span>
+  
+</a>
+          
+        </div>
+        
+        
+        <p class="pd-table__lbl">Active — chase risk, 1</p>
+        <div class="pd-table__rows">
+          
+          
+
+
+
+
+
+
+<a class="pd-r pd-r--active" href="/subnet/29" data-netuid="29" title="CHASE RISK">
+  <span class="pd-r__badge pd-r__badge--chase-risk">CHASE</span>
+  <span class="pd-r__name">Coldint <b class="pd-r__sn">SN29</b></span>
+  <span class="pd-r__num">70</span>
+  <span class="pd-r__num pd-r__num--gap">0.01</span>
+  <span class="pd-r__triad" aria-label="Inflow off, pressure on, coil off">
+    <i class="pd-dot"></i><i class="pd-dot pd-dot--pr"></i><i class="pd-dot"></i>
+  </span>
+  
+  <span class="pd-r__spark"></span>
+  
+</a>
+          
+        </div>
+        
+        
+      </div>
+      
+
+      
+    </div>
+
+    <div class="pump-alert__list-panel" id="pump-list-panel" hidden>
+    
+    </div>
+    <script type="application/json" id="pump-map-data">[{"badge": "BUILDING", "buy_ratio": 0.62, "confirm_pct": 31, "distance": 0.24, "formation_pct": 62, "move": "BUILDING \u00b7 Apex (SN99)", "name": "Apex", "netuid": 99, "phase": "ACCUMULATING", "progress_series": [55, 58, 62, 67], "score": 0.48, "size_line": "50 \u03c4 \u2248 1.20% of float \u00b7 healthy", "thesis": "Flow and volume aligning ahead of price \u2014 62% buys, vol 51%.", "timing": "lead", "triad": {"buy_pressure": true, "inflow_quiet_load": true, "lit_count": 2, "price_coil": false}, "triad_labels": {"coil": "OPEN", "inflow": "STRONG", "pressure": "RISING"}, "trigger": "Best risk/reward band \u2014 chase only if you miss this window.", "trigger_score": 0.72, "volume_intensity": 0.51}, {"badge": "WARMING UP", "buy_ratio": 0.58, "confirm_pct": 18, "distance": 0.44, "formation_pct": 40, "move": "WATCH \u00b7 Subnet42 (SN42)", "name": "Subnet42", "netuid": 42, "phase": "STIRRING", "score": 0.28, "thesis": "Buy pressure building before price runs \u2014 58% buy flow, volume still warming (24%).", "timing": "lead", "triad": {"buy_pressure": false, "inflow_quiet_load": true, "lit_count": 1, "price_coil": false}, "triad_labels": {"coil": "OPEN", "inflow": "WATCH", "pressure": "FLAT"}, "trigger": "Entry window open \u2014 small size now or wait for BUILDING confirmation.", "trigger_score": 0.72, "volume_intensity": 0.24}, {"badge": "CHASE RISK", "buy_ratio": 0.68, "confirm_pct": 74, "distance": 0.01, "formation_pct": 70, "move": "CONFIRMED \u00b7 Coldint (SN29)", "name": "Coldint", "netuid": 29, "phase": "PUMPING", "score": 0.71, "thesis": "Move is live \u2014 you are not early. Use for exit sizing and rotation, not fresh entry.", "timing": "confirmed", "triad": {"buy_pressure": true, "inflow_quiet_load": false, "lit_count": 1, "price_coil": false}, "triad_labels": {"coil": "OPEN", "inflow": "WATCH", "pressure": "RISING"}, "trigger": "Do not chase; trim on EXIT WATCH or rotate to BUILDING names.", "trigger_score": 0.72, "volume_intensity": 0.55}]</script>
+  </div>
+</section>
+
+<style>
+  /* —— Pump desk: dense scan table, data-ink first —— */
+  .pump-alert {
+    --pd-ink: #edeae3;
+    --pd-sub: #a39b8d;
+    --pd-dim: #6e675b;
+    --pd-line: rgba(237, 234, 227, 0.08);
+    --pd-lead: #d7a72e;
+    --pd-live: #dd6b4a;
+    --pd-exit: #6f9b80;
+    --pd-panel: #15130f;
+    margin: 0;
+    padding: 14px 0 20px;
+    border-top: 1px solid var(--pd-line);
+    color: var(--pd-ink);
+  }
+  .pump-alert--board { border-top: none; padding-top: 6px; }
+
+  .pd-head { margin-bottom: 8px; }
+  .pd-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: var(--pd-ink);
+  }
+  .pd-live {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #6fbf8b;
+    box-shadow: 0 0 0 0 rgba(111, 191, 139, 0.6);
+    animation: pdLivePulse 2s ease-out infinite;
+  }
+  @keyframes pdLivePulse {
+    0% { box-shadow: 0 0 0 0 rgba(111, 191, 139, 0.5); }
+    70% { box-shadow: 0 0 0 6px rgba(111, 191, 139, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(111, 191, 139, 0); }
+  }
+  .pd-meta {
+    margin: 3px 0 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.02em;
+    color: var(--pd-dim);
+  }
+  .pd-meta__pct { color: #f0cd7a; font-size: 12px; }
+  .pd-meta--building { color: var(--pd-sub); }
+
+  .pd-legend {
+    margin: 0 0 8px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 8.5px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--pd-dim);
+  }
+  .pd-legend .pd-dot { margin-right: 3px; }
+
+  /* Primary lead — top row of the table, elevated but flat (no gradient/glow) */
+  .pd-lead {
+    margin-bottom: 12px;
+    padding: 10px 10px 10px;
+    border-radius: 10px;
+    background: rgba(215, 167, 46, 0.055);
+    border: 1px solid rgba(215, 167, 46, 0.25);
+  }
+  .pd-lead--confirmed { background: rgba(221, 107, 74, 0.06); border-color: rgba(221, 107, 74, 0.28); }
+  .pd-lead--exit { background: rgba(111, 155, 128, 0.06); border-color: rgba(111, 155, 128, 0.28); }
+
+  .pd-lead__row1 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    color: inherit;
+  }
+  .pd-lead__badge {
+    flex-shrink: 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 3px 6px;
+    border-radius: 5px;
+    color: #f0cd7a;
+    background: rgba(215, 167, 46, 0.14);
+  }
+  .pd-lead__badge--chase-risk, .pd-lead__badge--just-started { color: #f5a184; background: rgba(221, 107, 74, 0.16); }
+  .pd-lead__badge--fading { color: #a6cdb1; background: rgba(111, 155, 128, 0.16); }
+  .pd-lead__name {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--pd-ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pd-lead__sn { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 10px; font-weight: 600; color: var(--pd-dim); }
+  .pd-lead__pct {
+    flex-shrink: 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1;
+    color: #f0cd7a;
+  }
+  .pd-lead--confirmed .pd-lead__pct { color: #f5a184; }
+  .pd-lead--exit .pd-lead__pct { color: #a6cdb1; }
+  .pd-lead__pct i { font-size: 13px; font-style: normal; opacity: 0.6; }
+
+  .pd-lead__phase {
+    margin: 6px 0 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 8.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #4c463c;
+  }
+  .pd-lead__phase-now { color: #f0cd7a; font-weight: 700; }
+  .pd-lead--confirmed .pd-lead__phase-now { color: #f5a184; }
+  .pd-lead--exit .pd-lead__phase-now { color: #a6cdb1; }
+  .pd-lead__ago { color: var(--pd-dim); text-transform: none; letter-spacing: 0; }
+
+  .pd-lead__reason {
+    margin: 6px 0 0;
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: #cbc3b4;
+  }
+
+  .pd-lead__stats {
+    margin: 7px 0 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10.5px;
+    color: var(--pd-dim);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px 10px;
+  }
+  .pd-lead__stats b { color: var(--pd-ink); font-weight: 700; }
+  .pd-lead__gap { color: #8fc79f; }
+
+  .pd-lead__row3 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .pd-lead__triad { display: inline-flex; gap: 4px; flex-shrink: 0; }
+  .pd-lead__trend { flex: 0 0 100px; width: 100px; height: 18px; opacity: 0.85; }
+  .pd-lead__trend .pump-progress { width: 100%; height: 18px; display: block; }
+
+  .pd-lead__chip {
+    margin: 7px 0 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--pd-sub);
+  }
+  .pd-lead__chip::before { content: '· '; color: var(--pd-dim); }
+
+  .pd-dot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #3a352c;
+  }
+  .pd-dot--in { background: #6fbf8b; }
+  .pd-dot--pr { background: #dd6b4a; }
+  .pd-dot--coil { background: #d7a72e; }
+
+  /* Ladder — real table via matched CSS grid columns across sibling rows */
+  .pd-table { margin-top: 2px; }
+  .pd-cols {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) 28px 34px 26px 44px;
+    gap: 6px;
+    padding: 0 6px 3px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 7.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #6e675b;
+  }
+  .pd-cols span:nth-child(3), .pd-cols span:nth-child(4) { text-align: right; }
+  .pd-table__lbl {
+    margin: 10px 0 4px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--pd-sub);
+  }
+  .pd-table__rows { display: flex; flex-direction: column; }
+
+  .pd-r {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) 28px 34px 26px 44px;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 6px;
+    border-bottom: 1px solid var(--pd-line);
+    text-decoration: none;
+    color: inherit;
+  }
+  .pd-r:last-child { border-bottom: none; }
+  .pd-r__badge {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 7.5px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #d7a72e;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
+  }
+  .pd-r__badge--chase-risk, .pd-r__badge--just-started { color: #dd6b4a; }
+  .pd-r__badge--fading { color: #6f9b80; }
+  .pd-r__name {
+    min-width: 0;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--pd-ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pd-r__sn { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 9px; font-weight: 500; color: var(--pd-dim); }
+  .pd-r__num {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--pd-sub);
+    text-align: right;
+  }
+  .pd-r__num--gap { color: #8fc79f; }
+  .pd-r__triad { display: flex; gap: 3px; justify-content: center; }
+  .pd-r__spark { width: 44px; height: 20px; }
+  .pd-r__spark .spark { width: 44px; height: 20px; display: block; }
+
+  .pd-empty {
+    margin: 8px 0 0;
+    padding: 18px 14px;
+    text-align: center;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--pd-sub);
+    border: 1px dashed var(--pd-line);
+    border-radius: 10px;
+  }
+
+  /* Legacy non-compact card lane (preview/full mode) */
+  .pump-alert__lane { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
+  .pump-alert__card { flex: 0 0 min(88vw, 300px); scroll-snap-align: start; padding: 12px; border-radius: 12px; background: var(--pd-panel); border: 1px solid var(--pd-line); }
+  .pump-alert__card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+  .pump-alert__name { font-size: 13px; font-weight: 700; color: var(--pd-ink); text-decoration: none; }
+  .pump-alert__badge { font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.1em; padding: 3px 7px; border-radius: 6px; text-transform: uppercase; color: #d7a72e; }
+  .pump-alert__triad { display: flex; gap: 6px; margin: 0 0 8px; flex-wrap: wrap; }
+  .pump-alert__triad-leg { font-family: 'JetBrains Mono', monospace; font-size: 8px; padding: 3px 6px; border-radius: 5px; color: var(--pd-dim); border: 1px solid #2a2620; }
+  .pump-alert__triad-leg--on { color: #6fbf8b; border-color: rgba(111,191,139,0.4); }
+  .pump-alert__thesis { font-size: 13px; line-height: 1.45; color: #cbc3b4; margin: 0 0 6px; }
+  .pump-alert__trigger { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--pd-dim); margin: 0; }
+  .pump-alert__meter { height: 3px; background: #2a2620; border-radius: 999px; margin-bottom: 8px; overflow: hidden; }
+  .pump-alert__meter-fill { display: block; height: 100%; background: #d7a72e; }
+  .pump-alert__size, .pump-alert__wallet-chip { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--pd-sub); margin: 0 0 4px; }
+
+  /* Compat probes — hydrate timeout / legacy selectors */
+  .pump-desk__empty {}
+  .pump-hero__card {}
+  .pump-desk__row {}
+
+  @media (max-width: 360px) {
+    .pd-cols, .pd-r { grid-template-columns: 36px minmax(0, 1fr) 24px 30px 22px 0; }
+    .pd-r__spark { display: none; }
+  }
+  @media (min-width: 720px) {
+    .pump-alert__lane { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); overflow: visible; }
+    .pump-alert__card { flex: initial; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pd-live { animation: none; }
+  }
+</style>
+</div>
+</body>
+</html>
