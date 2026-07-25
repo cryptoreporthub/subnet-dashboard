@@ -517,16 +517,44 @@ def _desk_metrics(
         accum = float(ladder_entry.get("accum_score")) if ladder_entry.get("accum_score") is not None else sc
     except (TypeError, ValueError):
         accum = sc
+    try:
+        confirm = float(ladder_entry.get("confirm_score")) if ladder_entry.get("confirm_score") is not None else sc
+    except (TypeError, ValueError):
+        confirm = sc
     gates = _lead_thresholds()
     trigger = float(gates.get("just_started_max_score", 0.72))
     distance = round(max(0.0, trigger - sc), 2)
     return {
-        "formation_pct": min(100, int(round(sc * 100))),
-        "momentum_pct": min(100, int(round(accum * 100))),
+        "formation_pct": min(100, int(round(accum * 100))),
+        "confirm_pct": min(100, int(round(confirm * 100))),
+        "momentum_pct": min(100, int(round(confirm * 100))),
         "distance": distance,
         "trigger_score": trigger,
         "triad": triad,
     }
+
+
+def _progress_series_from_trail(
+    ladder_entry: Dict[str, Any],
+    score: Optional[float],
+    trigger: float,
+) -> List[int]:
+    """Score ÷ trigger as % — honest trail from ladder scans; last point = live progress."""
+    trigger = max(float(trigger), 1e-9)
+    trail = ladder_entry.get("score_trail")
+    scores: List[float] = []
+    if isinstance(trail, list):
+        for raw in trail:
+            try:
+                scores.append(float(raw))
+            except (TypeError, ValueError):
+                continue
+    if len(scores) < 2 and score is not None:
+        progress = int(round(float(score) / trigger * 100))
+        return [progress, progress]
+    if len(scores) < 2:
+        return []
+    return [int(round(s / trigger * 100)) for s in scores]
 
 
 def _triad_pill_labels(triad: Dict[str, Any]) -> Dict[str, str]:
@@ -577,6 +605,11 @@ def build_desk_row(
             spark_closes = spark_closes_cached_only(subnet_row)
         except Exception:
             spark_closes = []
+    corr = _progress_series_from_trail(
+        ladder_entry,
+        score,
+        metrics["trigger_score"],
+    )
     return {
         "netuid": netuid_int,
         "name": name,
@@ -585,11 +618,13 @@ def build_desk_row(
         "score": round(score, 2) if score is not None else None,
         "badge": copy["badge"],
         "spark_closes": spark_closes,
+        "progress_series": corr,
         "move": copy["move"],
         "thesis": copy["thesis"],
         "trigger": copy["trigger"],
         "subtitle": subtitle,
         "formation_pct": metrics["formation_pct"],
+        "confirm_pct": metrics["confirm_pct"],
         "momentum_pct": metrics["momentum_pct"],
         "distance": metrics["distance"],
         "trigger_score": metrics["trigger_score"],

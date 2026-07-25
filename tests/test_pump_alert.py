@@ -9,7 +9,14 @@ from fastapi.testclient import TestClient
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from internal.learning.dpick_pump import build_pump_chip
-from internal.learning.pump_alert import build_alert_row, build_desk_row, build_pump_alerts, build_pump_alerts_desk
+from internal.learning.pump_alert import (
+    _progress_series_from_trail,
+    build_alert_row,
+    build_desk_row,
+    build_pump_alerts,
+    build_pump_alerts_desk,
+)
+from internal.pump.state import transition_subnet
 from server import app
 
 
@@ -289,11 +296,44 @@ def test_pump_alert_compact_renders_hero_card():
     assert "Closest to trigger" in html
     assert "pump-hero__card--flag" in html
     assert "Lead scanner" in html
-    assert "Formation" in html
-    assert "Momentum" in html
+    assert "Formation" not in html or "Flow" in html
+    assert "Flow" in html
+    assert "Confirm" in html
     assert "Inflow" in html
     assert "pump-hero__meter" in html
     assert "pump-hero__glow" in html
+    assert "progress_series" in row
+    assert row["progress_series"][-1] == int(round(float(row["score"]) / row["trigger_score"] * 100))
+
+
+def test_progress_series_from_trail_uses_real_scores():
+    entry = {"score_trail": [0.40, 0.44, 0.48]}
+    out = _progress_series_from_trail(entry, 0.48, 0.72)
+    assert out == [56, 61, 67]
+
+
+def test_progress_series_fallback_without_trail():
+    out = _progress_series_from_trail({}, 0.48, 0.72)
+    assert out == [67, 67]
+
+
+def test_transition_subnet_appends_score_trail():
+    state = {"subnets": {}}
+    signals = {
+        "netuid": 42,
+        "name": "Test",
+        "volume_intensity": 0.5,
+        "momentum_1h": 0.02,
+        "price_change_24h": 0.03,
+        "buy_ratio": 0.6,
+        "chatter_intensity": 0.1,
+    }
+    _event, _changed = transition_subnet(state, signals)
+    entry = state["subnets"]["42"]
+    assert isinstance(entry.get("score_trail"), list)
+    assert len(entry["score_trail"]) == 1
+    _event2, _changed2 = transition_subnet(state, signals)
+    assert len(state["subnets"]["42"]["score_trail"]) == 2
 
 
 def test_api_pump_alerts_route():
@@ -320,8 +360,8 @@ def test_build_pump_alerts_desk_includes_hero_and_metrics():
         out = build_pump_alerts_desk([])
     assert out.get("hero")
     hero = out["hero"]
-    assert hero["formation_pct"] == 48
-    assert hero["momentum_pct"] == 81
+    assert hero["formation_pct"] == 81
+    assert hero["progress_series"][-1] == int(round(0.48 / hero["trigger_score"] * 100))
     assert "triad" in hero
     assert "triad_labels" in hero
     assert hero["subtitle"]

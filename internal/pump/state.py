@@ -22,6 +22,17 @@ from internal.pump.two_score import score_layer_for_phase
 logger = logging.getLogger(__name__)
 
 _lock = threading.RLock()
+# ponytail: ring buffer only — upgrade path is SQLite trail if scans go sub-minute
+_SCORE_TRAIL_MAX = 36
+
+
+def _append_score_trail(entry: Dict[str, Any], score: float) -> None:
+    """Append composite score sample for hero progress chart (one per ladder scan)."""
+    trail = entry.get("score_trail")
+    if not isinstance(trail, list):
+        trail = []
+    trail.append(round(float(score), 4))
+    entry["score_trail"] = trail[-_SCORE_TRAIL_MAX:]
 
 
 def _now_z() -> str:
@@ -192,6 +203,7 @@ def transition_subnet(
     entry["composite_score"] = score
     entry["accum_score"] = accum
     entry["confirm_score"] = confirm
+    _append_score_trail(entry, score)
     entry["score_layer"] = classification.get("score_layer") or score_layer_for_phase(new_phase)
     entry["updated_at"] = _now_z()
     entry["signal_snapshot"] = classification.get("signals")
