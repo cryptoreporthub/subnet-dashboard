@@ -610,6 +610,10 @@ def build_desk_row(
         score,
         metrics["trigger_score"],
     )
+    # Size cliff is cheap (subnet_row only). Skip wallet/whale chips here —
+    # WhaleIntelligenceService is too slow for the desk GET path.
+    size_line = _size_cliff_line(subnet_row)
+    lit = int(triad.get("lit_count") or 0) if isinstance(triad, dict) else 0
     return {
         "netuid": netuid_int,
         "name": name,
@@ -630,6 +634,8 @@ def build_desk_row(
         "trigger_score": metrics["trigger_score"],
         "triad": triad,
         "triad_labels": pills,
+        "triad_lit": lit,
+        "size_line": size_line,
     }
 
 
@@ -691,6 +697,7 @@ def _finalize_pump_payload(
 
     early_count = sum(1 for a in alerts if a.get("timing") == "lead")
     confirmed_count = sum(1 for a in alerts if a.get("timing") == "confirmed")
+    exit_count = sum(1 for a in alerts if a.get("timing") == "exit")
     count = early_count + confirmed_count
     status = "success" if count else "empty"
     try:
@@ -707,6 +714,7 @@ def _finalize_pump_payload(
         "count": count,
         "early_count": early_count,
         "confirmed_count": confirmed_count,
+        "exit_count": exit_count,
         "alerts": alerts,
         "empty_message": _EMPTY_MESSAGE,
         "error": None,

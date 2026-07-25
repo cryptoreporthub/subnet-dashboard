@@ -289,21 +289,49 @@ def test_pump_alert_compact_renders_hero_card():
             "count": 1,
             "early_count": 1,
             "confirmed_count": 0,
+            "exit_count": 0,
             "hero": row,
             "alerts": [row],
+            "trust": {"ready": False, "line": "grading starts"},
         },
     )
-    assert "Closest to trigger" in html
-    assert "pump-hero__card--flag" in html
-    assert "Lead scanner" in html
-    assert "Formation" not in html or "Flow" in html
+    assert "closest to trigger" in html.lower()
+    assert "pd-lead" in html
+    assert "pd-lead__verdict" in html
+    assert "Flow before price" in html or "Intraday" in html
     assert "Flow" in html
     assert "Confirm" in html
     assert "Inflow" in html
-    assert "pump-hero__meter" in html
-    assert "pump-hero__glow" in html
+    assert "pd-evidence" in html
+    assert "pd-phase" in html
     assert "progress_series" in row
     assert row["progress_series"][-1] == int(round(float(row["score"]) / row["trigger_score"] * 100))
+
+
+def test_pump_alert_compact_surfaces_trust_and_census():
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    tmpl = env.get_template("partials/premium/pump_alert.html")
+    row = build_desk_row(_ladder_entry("ACCUMULATING", netuid=42, score=0.55))
+    html = tmpl.render(
+        pump_compact=True,
+        pump_alerts={
+            "count": 1,
+            "early_count": 1,
+            "confirmed_count": 2,
+            "exit_count": 1,
+            "hero": row,
+            "alerts": [row],
+            "trust": {"ready": True, "headline_pct": 62, "headline_n": 12, "line": ""},
+        },
+    )
+    assert "62%" in html
+    assert "pd-census" in html
+    assert "pd-trust" in html
+    assert row.get("thesis")
+    assert "pd-lead__thesis" in html or row["thesis"] in html
 
 
 def test_progress_series_from_trail_uses_real_scores():
