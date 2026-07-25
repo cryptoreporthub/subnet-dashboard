@@ -1,6 +1,6 @@
-"""Live connection status for Bittensor subnet integrations (SN22/50/64/118).
+"""Live connection status for Bittensor subnet integrations (SN22/64/118).
 
-Primary four from Ditto subnet research; expanded candidates from TaonSquare
+Primary three from Ditto subnet research; expanded candidates from TaonSquare
 (https://taonsquare.com/api) — 102 products, 51 live with API (Jul 2026).
 """
 
@@ -25,13 +25,6 @@ INTEGRATIONS: List[Dict[str, Any]] = [
         "name": "DeSearch",
         "role": "Search & social evidence",
         "docs_url": "https://www.desearch.ai/docs/api-reference",
-    },
-    {
-        "netuid": 50,
-        "slug": "synth",
-        "name": "Synth",
-        "role": "Macro forecasting signals",
-        "docs_url": "https://api.synthdata.co",
     },
     {
         "netuid": 64,
@@ -86,41 +79,25 @@ def _probe_desearch() -> Dict[str, Any]:
     if reachable:
         detail = "health ok"
         if api_key:
-            hdrs = {"access-key": api_key, "Content-Type": "application/json"}
+            from internal.integrations.desearch_http import desearch_auth_headers
+
+            hdrs = desearch_auth_headers(api_key)
             s_ok, s_code, _ = _http_probe(
                 "POST",
                 f"{base}/search/links/web",
                 headers=hdrs,
                 json_body={"prompt": "Bittensor subnet", "count": 1},
             )
-            if s_ok and s_code == 200:
-                connected = True
-                detail = "search probe ok"
-            elif s_ok and s_code in (401, 403):
+            if s_ok and s_code in (401, 403):
                 detail = "key rejected"
             else:
-                detail = f"search probe HTTP {s_code}"
-    return {
-        "reachable": reachable,
-        "connected": connected,
-        "detail": detail,
-        "has_credential": bool(api_key),
-    }
-
-
-def _probe_synth() -> Dict[str, Any]:
-    api_key = os.environ.get("SYNTH_API_KEY") or os.environ.get("SYNTHDATA_API_KEY")
-    base = os.environ.get("SYNTH_BASE_URL", "https://api.synthdata.co").rstrip("/")
-    url = f"{base}/insights/prediction-percentiles?asset=BTC"
-    headers: Dict[str, str] = {}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-    ok, code, body = _http_probe("GET", url, headers=headers)
-    reachable = ok and code in (200, 400, 401, 403)
-    connected = ok and code == 200
-    detail = f"HTTP {code}" if ok else body
-    if ok and code == 400 and "missing key" in body.lower():
-        detail = "API live — add SYNTH_API_KEY"
+                connected = True
+                if s_ok and s_code == 200:
+                    detail = "search probe ok"
+                elif s_ok:
+                    detail = f"key configured · probe HTTP {s_code}"
+                else:
+                    detail = "key configured · health ok"
     return {
         "reachable": reachable,
         "connected": connected,
@@ -193,7 +170,6 @@ def _probe_ditto() -> Dict[str, Any]:
 
 _PROBERS = {
     "desearch": _probe_desearch,
-    "synth": _probe_synth,
     "chutes": _probe_chutes,
     "ditto": _probe_ditto,
 }
@@ -217,8 +193,8 @@ def build_integrations_status() -> Dict[str, Any]:
         "candidates": candidates,
         "catalog": catalog_summary(),
         "connected_count": connected_n,
-        "target_minimum": 3,
-        "ready_for_launch": connected_n >= 3,
+        "target_minimum": 2,
+        "ready_for_launch": connected_n >= 2,
         "desearch_spend": get_spend_summary(recent_limit=10),
     }
 

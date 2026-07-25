@@ -113,7 +113,7 @@
       corner.innerHTML = buildInner(payload, { showCandidates: true, candidateMax: 3 });
     }
     if (footerCount) {
-      footerCount.textContent = String(connected) + '/4';
+      footerCount.textContent = String(connected) + '/3';
     }
   }
 
