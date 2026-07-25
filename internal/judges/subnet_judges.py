@@ -34,7 +34,7 @@ def _flat_subnet_for_judges(subnet: Dict[str, Any]) -> Dict[str, Any]:
 def _prediction_for_judges(
     subnet: Dict[str, Any],
     *,
-  predicted_pct: float,
+    predicted_pct: float,
     direction: str,
     signal_source: str = "dashboard",
 ) -> Dict[str, Any]:
@@ -47,10 +47,19 @@ def _prediction_for_judges(
     }
 
 
+def _impact_direction(value: float, *, bullish_above: float = 0.0) -> str:
+    if value > bullish_above:
+        return "bullish"
+    if value < -bullish_above:
+        return "bearish"
+    return "neutral"
+
+
 def _signal_impact_from_subnet(subnet: Dict[str, Any]) -> Dict[str, Any]:
-    """Minimal signal_impact for dashboard Echo when no pick ledger exists."""
+    """Dashboard signal_impact — enough voices for Echo to differentiate subnets."""
     chg = float(subnet.get("price_change_24h", subnet.get("change_24h", 0)) or 0)
-    direction = "bullish" if chg > 0 else "bearish" if chg < 0 else "neutral"
+    chg7 = float(subnet.get("price_change_7d", subnet.get("change_7d", 0)) or 0)
+    direction = _impact_direction(chg)
     impacts: List[Dict[str, Any]] = []
     if chg != 0:
         impacts.append(
@@ -58,6 +67,38 @@ def _signal_impact_from_subnet(subnet: Dict[str, Any]) -> Dict[str, Any]:
                 "direction": direction,
                 "magnitude_pct": abs(chg),
                 "signal": "price_change_24h",
+            }
+        )
+    if chg7 != 0:
+        impacts.append(
+            {
+                "direction": _impact_direction(chg7),
+                "magnitude_pct": abs(chg7),
+                "signal": "price_change_7d",
+            }
+        )
+    try:
+        apy = float(subnet.get("apy", 0) or 0)
+    except (TypeError, ValueError):
+        apy = 0.0
+    if apy > 0:
+        impacts.append(
+            {
+                "direction": "bullish" if apy >= 0.12 else "neutral" if apy >= 0.05 else "bearish",
+                "magnitude_pct": min(apy * 100, 10.0),
+                "signal": "apy_tier",
+            }
+        )
+    try:
+        volume = float(subnet.get("volume", subnet.get("volume_24h", 0)) or 0)
+    except (TypeError, ValueError):
+        volume = 0.0
+    if volume > 0:
+        impacts.append(
+            {
+                "direction": "bullish" if volume >= 100_000 else "neutral" if volume >= 1_000 else "bearish",
+                "magnitude_pct": min(max(volume, 1.0) ** 0.25, 10.0),
+                "signal": "volume_tier",
             }
         )
     sentiment = subnet.get("social_sentiment", subnet.get("sentiment"))
@@ -77,6 +118,42 @@ def _signal_impact_from_subnet(subnet: Dict[str, Any]) -> Dict[str, Any]:
         "impacts": impacts,
         "net_direction": direction,
         "net_predicted_pct": chg,
+    }
+
+
+def _oracle_signals(
+    flat: Dict[str, Any],
+    signal_impact: Dict[str, Any],
+    prediction: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Observable drivers behind Oracle score (dashboard honesty, not hardcoded)."""
+    chg24 = float(flat.get("price_change_24h", 0) or 0)
+    chg7 = float(flat.get("price_change_7d", chg24) or 0)
+    predicted_pct = float(prediction.get("predicted_pct", 0) or 0)
+    if predicted_pct > 0:
+        align_24h = chg24 >= 0
+        align_7d = chg7 >= -1.0
+    elif predicted_pct < 0:
+        align_24h = chg24 <= 0
+        align_7d = chg7 <= 1.0
+    else:
+        align_24h = align_7d = True
+    impacts = signal_impact.get("impacts") or []
+    directional = sum(
+        1 for item in impacts if item.get("direction") in ("bullish", "bearish")
+    )
+    completeness = sum(
+        1 for key in ("price", "apy", "emission") if flat.get(key) not in (None, "", 0)
+    )
+    return {
+        "price_align_24h": align_24h,
+        "price_align_7d": align_7d,
+        "fundamentals_present": completeness,
+        "has_volume": flat.get("volume") not in (None, "", 0),
+        "has_social": flat.get("social_mentions") is not None,
+        "yield_trap": bool(flat.get("yield_trap")),
+        "directional_impacts": directional,
+        "impact_count": len(impacts),
     }
 
 
@@ -198,7 +275,7 @@ def score_subnet(
         "oracle": {
             "score": round(oracle_score, 4),
             "confidence": round(oracle_confidence, 4),
-            "signals": {"fundamentals": True},
+            "signals": _oracle_signals(flat, signal_impact, prediction),
             "degraded": oracle_degraded,
         },
         "echo": {
