@@ -54,7 +54,9 @@
 {% include "partials/premium/header.html" %}
 {% include "partials/premium/pulse_strip.html" %}
 {% include "partials/premium/council_stage.html" %}
+{% with pump_compact=true %}
 {% include "partials/premium/pump_alert.html" %}
+{% endwith %}
 <section class="sr-weighing-rib wrap-pad" id="section-strategic-weighing" aria-labelledby="sr-weighing-rib-title">
   <div class="sr-weighing-rib__head">
     <h2 class="sr-weighing-rib__title" id="sr-weighing-rib-title">Council weighing</h2>

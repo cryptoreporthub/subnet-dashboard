@@ -1095,9 +1095,90 @@
     return true;
   }
 
+  function renderPumpDeskRow(row, tone) {
+    var formPct = row.score != null ? Math.min(100, Math.round(Number(row.score) * 100)) : null;
+    var sparks = Array.isArray(row.spark_closes) ? row.spark_closes : [];
+    var sparkHtml =
+      sparks.length >= 2
+        ? '<div class="pump-desk__spark-wrap"><div class="spark pump-desk__spark" data-spark="' +
+          esc(sparks.join(',')) +
+          '" data-spark-tone="' +
+          esc(tone) +
+          '" role="img" aria-label="Price sparkline for ' +
+          esc(row.name || '') +
+          '"></div></div>'
+        : '<div class="pump-desk__spark-empty" aria-hidden="true">—</div>';
+    var formHtml =
+      formPct != null
+        ? '<span class="pump-desk__formation"><span class="pump-desk__formation-lbl">Formation</span> ' +
+          formPct +
+          '%</span>'
+        : '';
+    return (
+      '<a class="pump-desk__row pump-desk__row--' +
+      esc(tone) +
+      '" href="/subnet/' +
+      esc(row.netuid) +
+      '" data-netuid="' +
+      esc(row.netuid) +
+      '">' +
+      '<div class="pump-desk__row-main">' +
+      '<span class="pump-desk__name">' +
+      esc(row.name || '') +
+      '</span>' +
+      '<span class="pump-desk__sn">SN' +
+      esc(row.netuid) +
+      '</span></div>' +
+      '<div class="pump-desk__row-meta">' +
+      formHtml +
+      sparkHtml +
+      '</div></a>'
+    );
+  }
+
+  function renderPumpDeskPanel(alerts, emptyMessage) {
+    var deskPanel = document.getElementById('pump-desk-panel');
+    if (!deskPanel) return;
+    var warm = (alerts || []).filter(function (r) {
+      return r.timing === 'lead';
+    });
+    var active = (alerts || []).filter(function (r) {
+      return r.timing === 'confirmed';
+    });
+    if (!warm.length && !active.length) {
+      deskPanel.innerHTML =
+        '<p class="pump-desk__empty">' +
+        esc(emptyMessage || 'Quiet — no warming or active names on the ladder right now.') +
+        '</p>';
+      return;
+    }
+    var html = '';
+    if (warm.length) {
+      html +=
+        '<div class="pump-desk__section"><p class="pump-desk__section-lbl">Warming</p><div class="pump-desk__rows">';
+      warm.forEach(function (row) {
+        html += renderPumpDeskRow(row, 'warm');
+      });
+      html += '</div></div>';
+    }
+    if (active.length) {
+      html +=
+        '<div class="pump-desk__section"><p class="pump-desk__section-lbl">Active</p><div class="pump-desk__rows">';
+      active.forEach(function (row) {
+        html += renderPumpDeskRow(row, 'active');
+      });
+      html += '</div></div>';
+    }
+    deskPanel.innerHTML = html;
+    if (typeof window.__paintSparks === 'function') window.__paintSparks();
+  }
+
   function renderPumpAlerts(payload) {
     var body = document.getElementById('pump-alert-body');
     if (!body || !payload) return;
+    if (payload.status === 'timeout') {
+      if (body.querySelector('.pump-desk__row')) return;
+    }
     var listPanel = document.getElementById('pump-list-panel');
     var trust = payload.trust || {};
     var trustEl = document.getElementById('pump-alert-trust');
@@ -1150,6 +1231,8 @@
     }
     var mapRows = [];
     var html = '';
+    var compact = !!document.querySelector('[data-pump-compact="1"]');
+    renderPumpDeskPanel(alerts, payload.empty_message);
     alerts.forEach(function (row) {
       if (row.timing !== 'lead' && row.timing !== 'confirmed' && row.timing !== 'exit') return;
       mapRows.push(row);
@@ -1226,9 +1309,14 @@
         '</p></article>';
     });
     if (listPanel) {
-      listPanel.innerHTML =
-        '<div class="pump-alert__lane" id="pump-alert-list" role="list">' + html + '</div>';
-      listPanel.hidden = false;
+      if (compact) {
+        listPanel.hidden = true;
+        listPanel.innerHTML = '';
+      } else {
+        listPanel.innerHTML =
+          '<div class="pump-alert__lane" id="pump-alert-list" role="list">' + html + '</div>';
+        listPanel.hidden = false;
+      }
     }
     var mapData = document.getElementById('pump-map-data');
     if (mapData) mapData.textContent = JSON.stringify(mapRows);

@@ -249,6 +249,26 @@ def test_pump_alert_template_renders_lead_scanner():
     assert "chase risk" in html.lower()
 
 
+def test_pump_alert_compact_hides_detail_lane():
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    tmpl = env.get_template("partials/premium/pump_alert.html")
+    html = tmpl.render(
+        pump_compact=True,
+        pump_alerts={
+            "count": 1,
+            "early_count": 1,
+            "confirmed_count": 0,
+            "alerts": [build_alert_row(_ladder_entry("ACCUMULATING", netuid=42, score=0.48))],
+        },
+    )
+    assert 'data-pump-compact="1"' in html
+    assert "Tier 3" not in html
+    assert 'id="pump-list-panel" hidden' in html or "hidden" in html
+
+
 def test_api_pump_alerts_route():
     ladder = {"subnets": {"29": _ladder_entry("PUMPING", score=0.81)}}
     with patch("internal.pump.state.load_state", return_value=ladder):
