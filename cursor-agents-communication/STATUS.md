@@ -1,15 +1,18 @@
 # STATUS
 
-**Updated:** 2026-07-24T04:10:00Z  
-**main:** `6ee7d0d`  
-**active plan:** `gameplan-pump-site-undeniable.md` — Waves 0–3 **complete on code** · G0 human QA + P5 founder chip **open**
+**Updated:** 2026-07-25T00:15:00Z  
+**main:** see `board.md` / latest merge  
+**active plan:** `prod-stability-plan.md` (Phases 0–4) · pump gameplan Waves 0–3 **shipped** · G0 human QA **open**
 
-## Next (pick one)
+## Next (sequential — one PR at a time)
 
-1. **G0 human** — 390px phone QA sign-off after `./scripts/g0_phone_qa.sh`
-2. **Ops** — scale Fly worker process (`fly scale count worker=1`) for full live-feed background
-3. **P5 gap** — founder/owner chip on pump cards (optional TaoDX parity)
-4. **E1 test debt** — `post-s28-backlog.md` (pre-existing failures in judges/phase2/etc.)
+1. **Phase 0** `cursor/reconnect-smoke-d2cd` — verify no real 422s; B0-0 Quiet gate
+2. **Phase 1** `cursor/pump-alerts-fast-d2cd` — fast desk API; stop caching timeouts (**critical**)
+3. **Phase 2** `cursor/pump-desk-compact-d2cd` — compact Warming/Active UI
+4. **Phase 3** `cursor/hydrate-stability-d2cd` — sequential hydrate + prod gates
+5. **Phase 4** `cursor/chat-context-fast-d2cd` — after site stable (optional)
+
+**Also open:** G0 human 390px · P5 founder chip · E1 test debt (`post-s28-backlog.md`)
 
 ## Done (recent)
 
