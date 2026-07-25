@@ -724,8 +724,8 @@ footer.status {
 }
 @media (min-width: 640px) {
   .footer-cards {
-    grid-template-columns: repeat(4, 1fr);
-    max-width: 900px;
+    grid-template-columns: repeat(5, 1fr);
+    max-width: 960px;
   }
 }
 .footer-card {
@@ -780,6 +780,31 @@ footer.status[data-source*="fallback"] .st-dot {
 }
 
 /* ---------- Subnet integration corner (SN22/50/64/118) ---------- */
+.subnet-integrations-bar {
+  border-bottom: 1px solid var(--cockpit-green-line);
+  background: rgba(4, 12, 8, 0.65);
+  padding: 0.35rem 0.75rem;
+}
+.subnet-integrations-bar__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  max-width: var(--cockpit-max, 1200px);
+  margin: 0 auto;
+}
+.subnet-integrations-bar .subnet-int-heading {
+  margin-right: 0.25rem;
+}
+.subnet-integrations-bar .subnet-int-summary {
+  margin-left: auto;
+}
+@media (max-width: 720px) {
+  .subnet-integrations-bar .subnet-int-summary {
+    margin-left: 0;
+    width: 100%;
+  }
+}
 .subnet-integrations-corner {
   position: fixed;
   right: 0.65rem;

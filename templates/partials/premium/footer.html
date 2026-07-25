@@ -23,13 +23,17 @@
       <span class="footer-card__lbl">Trail</span>
       <span class="footer-card__val" data-footer-metric="trail"><b id="footer-trail-count">{{ footer_trail_n if footer_trail_n else '—' }}</b></span>
     </div>
+    <div class="footer-card footer-card--integrations">
+      <span class="footer-card__lbl">Integrations</span>
+      <span class="footer-card__val" data-footer-metric="integrations"><b id="footer-integrations-count">—</b></span>
+    </div>
     <div class="footer-card">
       <span class="footer-card__lbl">Predictions</span>
       <span class="footer-card__val" data-footer-metric="predictions"><b id="footer-predictions-count">{{ footer_pred_n if footer_pred_n else '—' }}</b></span>
     </div>
   </div>
   <div class="status-inner status-inner--meta">
-    <span class="footer-tag footer-sn118" id="footerSubnetIntegrationsHint">Bittensor subnets · corner status</span>
+    <span class="footer-tag footer-sn118" id="footerSubnetIntegrationsHint">Built on Bittensor · status bar above footer</span>
     <span class="footer-tag">UTC clock · Press <kbd>C</kbd> compact</span>
   </div>
 </footer>

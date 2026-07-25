@@ -136,25 +136,35 @@ def _probe_chutes() -> Dict[str, Any]:
         "LLM_BASE_URL", "https://llm.chutes.ai/v1"
     )
     base = base.rstrip("/")
+    models_url = f"{base}/models"
+    # Public model list is the health check (works without a key).
+    ok_pub, code_pub, _ = _http_probe("GET", models_url)
+    reachable = ok_pub and code_pub == 200
     if not api_key:
-        ok, code, body = _http_probe("GET", f"{base}/models")
-        reachable = ok and code in (200, 401, 403, 404)
         return {
             "reachable": reachable,
             "connected": False,
-            "detail": "add CHUTES_API_KEY for council chat",
+            "detail": "add CHUTES_API_KEY for council chat" if reachable else f"HTTP {code_pub}",
             "has_credential": False,
         }
     ok, code, body = _http_probe(
         "GET",
-        f"{base}/models",
+        models_url,
         headers={"Authorization": f"Bearer {api_key}"},
     )
+    if ok and code == 200:
+        detail = "models ok · council chat"
+    elif ok and code in (401, 403):
+        detail = "key rejected"
+    elif reachable:
+        detail = "API live · key not verified on /models"
+    else:
+        detail = f"HTTP {code}" if ok else body
     connected = ok and code == 200
     return {
-        "reachable": ok and code in (200, 401, 403),
+        "reachable": reachable or (ok and code in (200, 401, 403)),
         "connected": connected,
-        "detail": f"HTTP {code}" if ok else body,
+        "detail": detail,
         "has_credential": True,
     }
 

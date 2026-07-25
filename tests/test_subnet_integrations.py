@@ -53,6 +53,7 @@ def test_corner_markup_on_homepage():
     with TestClient(app) as client:
         html = client.get("/").text
     assert 'id="subnetIntegrationsCorner"' in html
+    assert 'id="subnetIntegrationsBar"' in html
     assert "subnet_integrations.js" in html
 
 

@@ -31,6 +31,7 @@ CI (`main` push) runs Deploy Guard then deploys automatically when green.
 | Endpoint | Expected |
 |----------|----------|
 | `GET /health` | `OK` |
+| `GET /api/subnet-integrations` | 200, four primary rows + `connected_count` |
 | `GET /api/data-freshness` | 200, `stale` + `effective_source` fields |
 | `GET /api/ops/readiness` | 200, `ready`, `issues`, resolver + feed probes |
 | `GET /api/calibration/status` | 200, weights + thresholds |
