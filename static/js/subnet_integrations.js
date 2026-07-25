@@ -1,4 +1,4 @@
-/** Bittensor subnet integrations — status bar + corner (SN22/50/64/118). */
+/** Bittensor subnet integrations — status bar + corner (Finney + SN19/22/64/118). */
 (function () {
   'use strict';
 
@@ -6,6 +6,11 @@
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
     });
+  }
+
+  function chipName(row) {
+    if (row.netuid == null || row.netuid === '') return esc(row.name || '');
+    return 'SN' + esc(row.netuid) + ' · ' + esc(row.name || '');
   }
 
   function renderRow(row) {
@@ -20,10 +25,8 @@
       esc(row.detail || '') +
       '">' +
       '<span class="subnet-int-dot" aria-hidden="true"></span>' +
-      '<span class="subnet-int-label">SN' +
-      esc(row.netuid) +
-      ' · ' +
-      esc(row.name) +
+      '<span class="subnet-int-label">' +
+      chipName(row) +
       '</span>' +
       '<span class="subnet-int-state">' +
       esc(label) +
@@ -113,7 +116,8 @@
       corner.innerHTML = buildInner(payload, { showCandidates: true, candidateMax: 3 });
     }
     if (footerCount) {
-      footerCount.textContent = String(connected) + '/4';
+      var total = payload.integration_total != null ? payload.integration_total : rows.length;
+      footerCount.textContent = String(connected) + '/' + String(total);
     }
   }
 
