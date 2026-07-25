@@ -2273,22 +2273,12 @@
     var trail = [];
 
     try {
-      // Tier 1 — hero path first (daily call + registry + council weights)
-      var tier1 = await Promise.allSettled([
-        fetchJsonRetry('/api/daily-pick', 35000, 3),
-        fetchJsonRetry(
-          '/api/subnets?fields=' + encodeURIComponent(SUBNET_FIELDS),
-          28000,
-          2
-        ),
-        loadLearningStats(),
-      ]);
-
-      if (tier1[0].status === 'fulfilled') {
-        renderDailyPick(tier1[0].value);
-        prefetchFocusJudges(tier1[0].value);
-        var dpPayload = tier1[0].value;
-        if (!dpPayload.shortlist || !dpPayload.shortlist.length) {
+      // Tier 1a — daily call first (hero path wins under load)
+      try {
+        var dpResult = await fetchJsonRetry('/api/daily-pick', 35000, 3);
+        renderDailyPick(dpResult);
+        prefetchFocusJudges(dpResult);
+        if (!dpResult.shortlist || !dpResult.shortlist.length) {
           fetchJsonRetry('/api/daily-pick/weighed', 22000, 2)
             .then(function (weighed) {
               patchK3WeighedAgainst((weighed && weighed.shortlist) || []);
@@ -2297,24 +2287,62 @@
               console.warn('[cockpit_hydrate] weighed shortlist fetch failed', e);
             });
         }
-      } else {
-        console.warn('[cockpit_hydrate] daily-pick fetch failed');
+      } catch (e) {
+        console.warn('[cockpit_hydrate] daily-pick fetch failed', e);
         markSectionFailed('section-daily-pick', 'Quiet — daily call delayed. Retry when /api/daily-pick responds.');
       }
 
-      if (tier1[1].status === 'fulfilled') {
-        var subPayload = safePayload(tier1[1].value);
+      // Tier 1b — pump desk before parallel hydrate burst
+      try {
+        var pumpPayload = await fetchJsonRetry('/api/pump-alerts', 12000, 2);
+        renderPumpAlerts(pumpPayload);
+      } catch (e) {
+        console.warn('[cockpit_hydrate] pump-alerts fetch failed', e);
+        var pumpHost = document.getElementById('pump-alert-body');
+        if (pumpHost && !pumpHost.querySelector('.pump-desk__row')) {
+          pumpHost.innerHTML =
+            '<p class="pump-desk__empty">Quiet — lead scanner API slow. SSR snapshot stays until refresh succeeds.</p>';
+        }
+      }
+
+      // Tier 1c + 2 — registry, council, proof band (parallel, capped burst)
+      var tierBatch = await Promise.allSettled([
+        fetchJsonRetry(
+          '/api/subnets?fields=' + encodeURIComponent(SUBNET_FIELDS),
+          28000,
+          2
+        ),
+        loadLearningStats(),
+        fetchJsonRetry('/api/story-strip', 22000, 2).then(function (strip) {
+          if (window.HomeLiveRefresh && window.HomeLiveRefresh.patchStoryStrip) {
+            window.HomeLiveRefresh.patchStoryStrip(strip);
+          }
+        }),
+        fetchJsonRetry('/api/simivision', 35000, 2).then(function (payload) {
+          var data = safePayload(safePayload(payload).data);
+          renderSimivision(data.top || [], data.meta || {});
+        }),
+        window.PaperPortfolio && window.PaperPortfolio.hydrate
+          ? window.PaperPortfolio.hydrate()
+          : fetchJsonRetry('/api/portfolio/status', 25000, 2),
+        window.BrainLetter && window.BrainLetter.hydrate
+          ? window.BrainLetter.hydrate()
+          : fetchJsonRetry('/api/letter/brain', 12000, 1),
+      ]);
+
+      if (tierBatch[0].status === 'fulfilled') {
+        var subPayload = safePayload(tierBatch[0].value);
         subnets = subPayload.subnets || [];
         subnetsMeta = subPayload.meta || {};
         indexRegistry(subnets);
         renderHero(subnets, subnetsMeta);
         patchDataFreshnessFromSubnetMeta(subnets, subnetsMeta);
       } else {
-        console.warn('[cockpit_hydrate] subnets fetch failed', tier1[1].reason);
+        console.warn('[cockpit_hydrate] subnets fetch failed', tierBatch[0].reason);
       }
 
-      if (tier1[2].status === 'fulfilled' && tier1[2].value) {
-        stats = tier1[2].value;
+      if (tierBatch[1].status === 'fulfilled' && tierBatch[1].value) {
+        stats = tierBatch[1].value;
         renderKpi(stats);
         renderCouncilWeights(stats.expert_weights || {}, stats.expert_weight_deltas || {});
         if (stats.trust_banner && window.SimiTrustBanner && window.SimiTrustBanner.render) {
@@ -2332,36 +2360,6 @@
         trail: null,
         predictions: stats && stats.total_records != null ? stats.total_records : null,
       });
-
-      // Tier 2 — proof band + council peripherals (parallel, no warehouse flood yet)
-      await Promise.allSettled([
-        fetchJsonRetry('/api/story-strip', 22000, 2).then(function (strip) {
-          if (window.HomeLiveRefresh && window.HomeLiveRefresh.patchStoryStrip) {
-            window.HomeLiveRefresh.patchStoryStrip(strip);
-          }
-        }),
-        fetchJsonRetry('/api/pump-alerts', 22000, 2)
-          .then(function (payload) {
-            renderPumpAlerts(payload);
-          })
-          .catch(function () {
-            var host = document.getElementById('pump-alert-body');
-            if (!host) return;
-            if (host.querySelector('.pump-alert__card')) return;
-            host.innerHTML =
-              '<p class="pump-alert__empty">Quiet — lead scanner API slow. Cards above are from SSR; live refresh retries in the background.</p>';
-          }),
-        fetchJsonRetry('/api/simivision', 35000, 2).then(function (payload) {
-          var data = safePayload(safePayload(payload).data);
-          renderSimivision(data.top || [], data.meta || {});
-        }),
-        window.PaperPortfolio && window.PaperPortfolio.hydrate
-          ? window.PaperPortfolio.hydrate()
-          : fetchJsonRetry('/api/portfolio/status', 25000, 2),
-        window.BrainLetter && window.BrainLetter.hydrate
-          ? window.BrainLetter.hydrate()
-          : fetchJsonRetry('/api/letter/brain', 12000, 1),
-      ]);
 
       window.HomeHydrateCache = {
         dailyPick: lastDailyPickPayload,
