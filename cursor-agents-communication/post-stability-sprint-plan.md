@@ -1,8 +1,8 @@
 # Post-stability sprint — close the trust gap
 
-**Status:** ACTIVE — execute one PR at a time: merge → verify prod → next  
+**Status:** ACTIVE — **Build queue:** `post-stability-automated-build-plan.md` (hit Build in Cursor)  
 **Updated:** 2026-07-25  
-**Predecessor:** `prod-stability-plan.md` Phases 0–4 ✅ **COMPLETE** (`main` ≥ `49159d5` + #461 docs)  
+**Predecessor:** `prod-stability-plan.md` Phases 0–4 ✅ **COMPLETE** (`main` = `c75e7ed` + #469 pump hero)  
 **North star:** Tier‑1 surfaces show **real data or dignified Quiet within ~5s**; home answers one trader question per viewport.
 
 ---
@@ -11,10 +11,18 @@
 
 | PR | Delivered |
 |----|-----------|
+| #469 | Pump hero: Flow/Confirm meters, score÷trigger progress chart, `score_trail` |
 | #462–#464 | Fast pump desk API, compact UI, sequential hydrate, chat context cache |
-| #461 | This planning chain + STATUS pointer |
+| #461 | Planning chain + STATUS pointer |
 
-**B0-0 gate:** Met by stability Phases 0–3 (reconnect smoke, Quiet states, pump data live). **Batch 0 (B0-a…d) is unblocked.**
+**B0-0 gate:** Met. **Batch 0 (B0-a…d) unblocked** after A-HUMAN sign-off.
+
+---
+
+## Build automation
+
+**Use:** `post-stability-automated-build-plan.md` — agent prompt, queue table, per-slice AC, prod curl verify block.  
+**Pause:** A-HUMAN until user passes 390px pump hero check.
 
 ---
 
@@ -47,12 +55,12 @@ Wave A  Verify + ops gate          ← human + script; worker scale if soak fail
 | Pump soak | 5× `/api/pump-alerts` &lt;2s, `status != timeout` |
 | Health soak | 10× `/health` 200 (already in `verify_prod.sh`) |
 
-### A2 — G0 human sign-off (required)
+### A2 — G0 human sign-off (required) ⏸ PAUSE
 | Step | Work |
 |------|------|
 | Script | `./scripts/g0_phone_qa.sh` |
-| Manual 390px | Featured Call → Pump desk (Warming/Active + sparklines) → one horizon path without Pro scroll |
-| Record | Note pass/fail in Ditto + tick G0 in `gameplan-pump-site-undeniable.md` |
+| Manual 390px | Featured Call → Pump desk (Flow/Confirm/Approach chart) → one horizon path |
+| Record | User sends pass/fail in chat; agent ticks A-HUMAN in `post-stability-automated-build-plan.md` |
 
 **AC:**
 - [ ] G0 script green
@@ -211,6 +219,7 @@ Wave A  Verify + ops gate          ← human + script; worker scale if soak fail
 
 ## References
 
+- **`post-stability-automated-build-plan.md`** — Build button queue (primary)
 - `prod-stability-plan.md` — completed Phases 0–4
 - `batch0-final-merged-plan.md` — B0-a…d detail
 - `gameplan-pump-site-undeniable.md` — G0, P5, design intent
