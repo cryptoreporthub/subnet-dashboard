@@ -237,9 +237,31 @@ class ScoreSnapshotScheduler:
             self._last_result = {
                 k: result.get(k) for k in ("count", "written_at", "path") if k in result
             }
+        self._persist_cycle_summary(result)
         if reschedule and self._running:
             schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
         return result
+
+    def _persist_cycle_summary(self, result: Dict[str, Any]) -> None:
+        summary = {
+            "run_at": result.get("run_at"),
+            "ok": bool(result.get("ok")),
+            "count": result.get("count"),
+            "written_at": result.get("written_at"),
+            "path": result.get("path"),
+            "error": result.get("error"),
+        }
+        try:
+            from internal.council import weights
+
+            path = weights.SOUL_MAP_PATH
+            data = weights._load_raw(path)
+            sched = data.setdefault("score_snapshot_scheduler", {})
+            if isinstance(sched, dict):
+                sched["last_cycle"] = summary
+                weights._save_raw(data, path)
+        except Exception:
+            pass
 
 
 def _enabled() -> bool:

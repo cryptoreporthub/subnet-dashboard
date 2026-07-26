@@ -7,12 +7,11 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from internal.council.resolver_scheduler import (
-    RESOLVER_REFRESH_MINUTES,
-    get_prediction_resolver_scheduler_state,
-)
+from internal.council.resolver_scheduler import RESOLVER_REFRESH_MINUTES
+from internal.council.watchdog import check_resolver_watchdog
 from internal.council.weights import SOUL_MAP_PATH, _load_raw
 from internal.learning.predictions_store import PREDICTIONS_PATH, load_predictions
+from internal.run_mode import inline_worker_expected, is_worker_mode
 
 SCORE_SNAPSHOTS_PATH = os.environ.get(
     "SCORE_SNAPSHOTS_PATH", os.path.join("data", "score_snapshots.json")
@@ -108,12 +107,43 @@ def _snapshot_age_seconds(path: Optional[str] = None) -> Optional[float]:
         return max(0.0, _utcnow().timestamp() - mtime)
 
 
+def _worker_peer() -> Dict[str, Any]:
+    """Inline Fly worker liveness (web reads heartbeat file on shared volume)."""
+    if not inline_worker_expected() or is_worker_mode():
+        return {"expected": inline_worker_expected(), "alive": None, "peer": "in_process"}
+    try:
+        from internal.worker_heartbeat import is_alive, read_heartbeat
+
+        return {
+            "expected": True,
+            "alive": is_alive(max_age_seconds=180),
+            "heartbeat": read_heartbeat(),
+            "peer": "inline_worker",
+        }
+    except Exception:
+        return {"expected": True, "alive": False, "peer": "inline_worker"}
+
+
 def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
-    state = get_prediction_resolver_scheduler_state()
+    """Prefer soul_map cycle summary — survives split web/worker processes."""
     candidates: List[tuple] = []
-    mem_at = state.get("last_run_at")
-    if mem_at:
-        candidates.append((_parse_iso(mem_at) or datetime.min.replace(tzinfo=timezone.utc), mem_at, state.get("last_run_ok")))
+    state: Dict[str, Any] = {}
+    try:
+        from internal.council.resolver_scheduler import get_prediction_resolver_scheduler_state
+
+        state = get_prediction_resolver_scheduler_state()
+        mem_at = state.get("last_run_at")
+        if mem_at:
+            candidates.append(
+                (
+                    _parse_iso(mem_at) or datetime.min.replace(tzinfo=timezone.utc),
+                    mem_at,
+                    state.get("last_run_ok"),
+                    bool(state.get("running")),
+                )
+            )
+    except Exception:
+        state = {}
     try:
         soul = _load_raw(soul_path or SOUL_MAP_PATH)
         sched = soul.get("prediction_resolver_scheduler") or {}
@@ -126,21 +156,32 @@ def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
                         _parse_iso(run_at) or datetime.min.replace(tzinfo=timezone.utc),
                         run_at,
                         last.get("ok"),
+                        True,
                     )
                 )
     except Exception:
         pass
-    tick, ok = None, state.get("last_run_ok")
+    tick, ok, mem_running = None, None, False
     if candidates:
         candidates.sort(key=lambda row: row[0], reverse=True)
-        _, tick, ok = candidates[0]
+        _, tick, ok, mem_running = candidates[0]
+    peer = _worker_peer()
+    running = mem_running
+    if inline_worker_expected() and not is_worker_mode():
+        running = bool(peer.get("alive")) or mem_running
+    else:
+        running = bool(mem_running)
+    refresh_m = RESOLVER_REFRESH_MINUTES
+    try:
+        refresh_m = int(state.get("refresh_minutes") or RESOLVER_REFRESH_MINUTES)
+    except Exception:
+        pass
     return {
         "at": tick,
         "ok": ok,
-        "running": bool(state.get("running")),
-        "refresh_minutes": int(
-            state.get("refresh_minutes") or RESOLVER_REFRESH_MINUTES
-        ),
+        "running": running,
+        "refresh_minutes": refresh_m,
+        "worker_peer": peer,
     }
 
 
@@ -200,9 +241,15 @@ def build_learning_loop_health(
         tick_age_s = max(0.0, (_utcnow() - tick_at).total_seconds())
 
     snapshot_age = _snapshot_age_seconds(snapshots_path)
+    watchdog = check_resolver_watchdog(pending_rows)
+    worker_peer = resolver.get("worker_peer") or {}
 
     status = "ok"
     if ledger["gap"]:
+        status = "stalled"
+    elif worker_peer.get("expected") and worker_peer.get("alive") is False:
+        status = "stalled"
+    elif watchdog.get("warning"):
         status = "stalled"
     elif pending > 0 and (
         tick_at is None or (tick_age_s is not None and tick_age_s > stall_after_s)
@@ -221,7 +268,10 @@ def build_learning_loop_health(
             "last_ok": resolver.get("ok"),
             "age_seconds": tick_age_s,
             "refresh_minutes": refresh_m,
+            "peer": worker_peer.get("peer"),
         },
+        "worker_peer": worker_peer,
+        "watchdog": watchdog,
         "daily_pick": daily,
         "ledger": ledger,
         "snapshot_age_seconds": snapshot_age,
