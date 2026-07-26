@@ -41,28 +41,116 @@ def test_chutes_llm_base_url_rewrites_api_chutes_ai(monkeypatch):
 
 
 def test_call_llm_uses_llm_chutes_when_llm_base_is_api_chutes(monkeypatch):
+    from internal.integrations.clients import clear_models_probe_cache
     from internal.simivision.chat_service import call_llm
 
+    clear_models_probe_cache()
     monkeypatch.setenv("CHUTES_API_KEY", "test-key")
     monkeypatch.setenv("LLM_BASE_URL", "https://api.chutes.ai/v1")
     monkeypatch.delenv("CHUTES_BASE_URL", raising=False)
     seen: list[str] = []
 
-    def _fake_post(url, **kwargs):
-        seen.append(url)
-        class _R:
-            status_code = 200
+    def _fake_request(method, url, **kwargs):
+        if method == "GET" and url.endswith("/models"):
+            class _R:
+                status_code = 200
 
-            def json(self):
-                return {"choices": [{"message": {"content": "ok from chutes"}}]}
+            return _R()
+        if method == "POST" and url.endswith("/chat/completions"):
+            seen.append(url)
+            class _R:
+                status_code = 200
 
-        return _R()
+                def json(self):
+                    return {"choices": [{"message": {"content": "ok from chutes"}}]}
 
-    monkeypatch.setattr("requests.post", _fake_post)
-    reply, llm_used = call_llm("prompt", "hello", {})
+            return _R()
+        raise AssertionError(f"unexpected {method} {url}")
+
+    monkeypatch.setattr("internal.integrations.clients._request", _fake_request)
+    reply, llm_used, provider = call_llm("prompt", "hello", {})
     assert llm_used is True
+    assert provider == "chutes"
     assert reply == "ok from chutes"
     assert seen and seen[0].startswith("https://llm.chutes.ai/v1/chat/completions")
+
+
+def test_call_llm_prefers_thirty_spokes_when_chutes_models_fail(monkeypatch):
+    from internal.integrations.clients import clear_models_probe_cache
+    from internal.simivision.chat_service import call_llm
+
+    clear_models_probe_cache()
+    monkeypatch.setenv("THIRTY_SPOKES_API_KEY", "test-key")
+    monkeypatch.delenv("CHUTES_API_KEY", raising=False)
+    seen: list[str] = []
+
+    def _fake_request(method, url, **kwargs):
+        if method == "GET" and url.endswith("/models"):
+            if "llm.chutes.ai" in url:
+                class _R:
+                    status_code = 401
+
+                return _R()
+            if "thirtyspokes.ai" in url:
+                class _R:
+                    status_code = 200
+
+                return _R()
+        if method == "POST" and url.endswith("/chat/completions"):
+            seen.append(url)
+            class _R:
+                status_code = 200
+
+                def json(self):
+                    return {"choices": [{"message": {"content": "from router"}}]}
+
+            return _R()
+        raise AssertionError(f"unexpected request {method} {url}")
+
+    monkeypatch.setattr("internal.integrations.clients._request", _fake_request)
+    reply, llm_used, provider = call_llm("prompt", "hello", {})
+    assert llm_used is True
+    assert provider == "thirty_spokes"
+    assert reply == "from router"
+    assert seen and "thirtyspokes.ai" in seen[0]
+
+
+def test_call_llm_chutes_model_fallback_to_default(monkeypatch):
+    from internal.integrations.clients import clear_models_probe_cache
+    from internal.simivision.chat_service import call_llm
+
+    clear_models_probe_cache()
+    monkeypatch.setenv("CHUTES_API_KEY", "test-key")
+    monkeypatch.setenv("CHUTES_MODEL", "bad-model-id")
+    models_seen: list[str] = []
+
+    def _fake_request(method, url, **kwargs):
+        if method == "GET" and url.endswith("/models"):
+            class _R:
+                status_code = 200
+
+            return _R()
+        if method == "POST" and url.endswith("/chat/completions"):
+            body = kwargs.get("json_body") or kwargs.get("json") or {}
+            model = body.get("model", "")
+            models_seen.append(model)
+            class _R:
+                status_code = 200 if model == "default" else 400
+                text = "bad model"
+
+                def json(self):
+                    return {"choices": [{"message": {"content": "ok default"}}]}
+
+            return _R()
+        raise AssertionError(f"unexpected {method} {url}")
+
+    monkeypatch.setattr("internal.integrations.clients._request", _fake_request)
+    reply, llm_used, provider = call_llm("prompt", "hello", {})
+    assert llm_used is True
+    assert provider == "chutes"
+    assert reply == "ok default"
+    assert models_seen[0] == "bad-model-id"
+    assert "default" in models_seen
 
 
 def test_wants_investigation_generic_pick_question_false():
@@ -100,7 +188,7 @@ def test_handle_chat_returns_status_local_fallback(monkeypatch):
 
     monkeypatch.setattr(chat, "build_chat_context", lambda: {"source": "registry-fallback"})
     monkeypatch.setattr(chat, "_maybe_investigation_context", lambda _m: None)
-    monkeypatch.setattr(chat, "call_llm", lambda *_a, **_k: ("local answer", False))
+    monkeypatch.setattr(chat, "call_llm", lambda *_a, **_k: ("local answer", False, ""))
 
     async def _run():
         return await chat.handle_simivision_chat("hello")
