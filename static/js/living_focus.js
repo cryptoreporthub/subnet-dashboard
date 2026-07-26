@@ -640,16 +640,25 @@
     return fetchJson('/api/daily-pick', 8000).catch(function () { return {}; });
   }
 
+  function trailPromise() {
+    var cache = window.HomeHydrateCache;
+    if (cacheFresh(cache) && cache.trail != null) {
+      return Promise.resolve({ trail: cache.trail });
+    }
+    if (cachedTrail != null) {
+      return Promise.resolve({ trail: cachedTrail });
+    }
+    return fetchJson('/api/mindmap/trail?limit=40', 10000).catch(function () { return { trail: [] }; });
+  }
+
   function refreshFocus() {
     if (focusNetuid == null) return Promise.resolve();
     var action = 'HOLD';
-    var trailPromise = cachedTrail
-      ? Promise.resolve({ trail: cachedTrail })
-      : fetchJson('/api/mindmap/trail?limit=40', 10000).catch(function () { return { trail: [] }; });
+    var trailFetch = trailPromise();
     return Promise.all([
       fetchJson('/api/judges/' + focusNetuid, 15000),
       fetchJson('/api/calibration/status', 8000).catch(function () { return {}; }),
-      trailPromise,
+      trailFetch,
       dailyPickPromise(),
       fetchJson('/api/pick-explain/' + focusNetuid, 10000).catch(function () { return {}; }),
     ]).then(function (res) {
@@ -680,7 +689,7 @@
       n = Number(top[0].netuid);
       audited = false;
     }
-    if (cache.trail) cachedTrail = cache.trail;
+    if (cache.trail != null) cachedTrail = cache.trail;
     return { dp: dp, top: top, n: n };
   }
 
@@ -763,6 +772,13 @@
       renderSwitcher(boot.top);
       scrollToFocus();
       refreshFocus();
+    });
+
+    document.addEventListener('home:hydrate-trail', function (ev) {
+      var trail = ev && ev.detail && ev.detail.trail;
+      if (trail == null) return;
+      cachedTrail = trail;
+      if (focusNetuid != null) renderTrailTeaser(trail);
     });
   }
 

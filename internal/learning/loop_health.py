@@ -93,18 +93,69 @@ def _day_ledger_present(netuid: Any, data: Optional[Dict[str, Any]] = None) -> b
     return False
 
 
-def _snapshot_age_seconds(path: Optional[str] = None) -> Optional[float]:
+def _snapshot_age_seconds(
+    path: Optional[str] = None,
+    soul_path: Optional[str] = None,
+) -> Optional[float]:
+    snap_path = path or SCORE_SNAPSHOTS_PATH
     try:
         from internal.council.score_snapshots import snapshot_age_seconds
 
-        return snapshot_age_seconds(path or SCORE_SNAPSHOTS_PATH)
+        age = snapshot_age_seconds(snap_path)
+        if age is not None:
+            return age
     except Exception:
-        snap_path = path or SCORE_SNAPSHOTS_PATH
-        try:
-            mtime = os.path.getmtime(snap_path)
-        except OSError:
-            return None
+        pass
+    try:
+        mtime = os.path.getmtime(snap_path)
         return max(0.0, _utcnow().timestamp() - mtime)
+    except OSError:
+        pass
+    # Cross-process: worker may have written cycle summary before file flush.
+    try:
+        soul = _load_raw(soul_path or SOUL_MAP_PATH)
+        sched = soul.get("score_snapshot_scheduler") or {}
+        last = sched.get("last_cycle") if isinstance(sched, dict) else None
+        if isinstance(last, dict) and last.get("run_at"):
+            tick = _parse_iso(last.get("run_at"))
+            if tick is not None:
+                return max(0.0, (_utcnow() - tick).total_seconds())
+    except Exception:
+        pass
+    return None
+
+
+def _score_snapshot_meta(
+    path: Optional[str] = None,
+    soul_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Snapshot scheduler visibility for ops (file + soul_map)."""
+    age = _snapshot_age_seconds(path, soul_path=soul_path)
+    file_ok = False
+    snap_path = path or SCORE_SNAPSHOTS_PATH
+    try:
+        file_ok = os.path.isfile(snap_path)
+    except Exception:
+        pass
+    last_cycle: Dict[str, Any] = {}
+    try:
+        sched = (_load_raw(soul_path or SOUL_MAP_PATH).get("score_snapshot_scheduler") or {})
+        if isinstance(sched, dict):
+            last_cycle = sched.get("last_cycle") or {}
+    except Exception:
+        pass
+    try:
+        from internal.council.score_snapshots import get_score_snapshot_scheduler_state
+
+        sched_state = get_score_snapshot_scheduler_state()
+    except Exception:
+        sched_state = {}
+    return {
+        "age_seconds": age,
+        "file_present": file_ok,
+        "last_cycle": last_cycle if isinstance(last_cycle, dict) else {},
+        "scheduler": sched_state,
+    }
 
 
 def _worker_peer() -> Dict[str, Any]:
@@ -265,7 +316,8 @@ def build_learning_loop_health(
     if tick_at is not None:
         tick_age_s = max(0.0, (_utcnow() - tick_at).total_seconds())
 
-    snapshot_age = _snapshot_age_seconds(snapshots_path)
+    score_snapshot = _score_snapshot_meta(snapshots_path, soul_path=soul_path)
+    snapshot_age = score_snapshot.get("age_seconds")
     watchdog = check_resolver_watchdog(pending_rows)
     worker_peer = resolver.get("worker_peer") or {}
 
@@ -303,4 +355,5 @@ def build_learning_loop_health(
         "daily_pick": daily,
         "ledger": ledger,
         "snapshot_age_seconds": snapshot_age,
+        "score_snapshot": score_snapshot,
     }
