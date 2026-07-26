@@ -6,11 +6,14 @@ BASE="${APP_BASE_URL:-https://subnet-dashboard.fly.dev}"
 
 echo "== G0 phone QA @ $BASE =="
 
-html="$(curl -fsS --max-time 45 "$BASE/")"
+html_tmp="$(mktemp)"
+trap 'rm -f "$html_tmp"' EXIT
+curl -fsS --max-time 45 "$BASE/" -o "$html_tmp"
 
-python3 - <<'PY' "$html"
+python3 - "$html_tmp" <<'PY'
+import pathlib
 import sys
-html = sys.argv[1]
+html = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
 checks = [
     ("hydrate flag", "dataset.hydrate='1'" in html or 'data-hydrate="1"' in html),
     ("hero dossier", 'id="k3-dossier"' in html),
