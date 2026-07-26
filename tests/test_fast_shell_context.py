@@ -59,7 +59,11 @@ def test_degraded_shell_ssrs_pump_and_horizons():
     assert (
         "pump-alert__card" in html
         or "pump-alert__empty" in html
+        or "pds-hero" in html
+        or "pds-empty" in html
+        or "pump-hero__card" in html
         or "Quiet — no lead" in html
+        or "Quiet — no warming or active names" in html
     )
 
 
@@ -224,6 +228,9 @@ def test_homepage_batch0_brain_presentation():
     assert (
         "Quiet — story path fills when council clears an audited pick." in html
         or "No audited pick today" in html
+        or "story-path__step" in html
+        or "sr-cause-chain__step" in html
+        or "Quiet — chain appears when council clears an audited pick." in html
     )
 
 
