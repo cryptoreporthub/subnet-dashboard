@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<script>document.documentElement.dataset.hydrate = '0';</script>
+<style>
+  .k3-preview-banner {
+    position: sticky; top: 0; z-index: 9999;
+    background: #1a1200; color: #ffb347; text-align: center;
+    font: 12px/1.4 'JetBrains Mono', monospace; padding: 8px 12px;
+    border-bottom: 1px solid rgba(255,179,71,0.4);
+  }
+  .k3-preview-banner a { color: #00ff41; margin: 0 6px; }
+  .k3-preview-frame { max-width: 390px; margin: 0 auto; border-left: 1px solid #222; border-right: 1px solid #222; }
+  .k3-preview-note {
+    max-width: 390px; margin: 12px auto 0; padding: 0 12px;
+    font: 11px/1.45 'JetBrains Mono', monospace; color: #94a3b8;
+  }
+</style>
+<p class="k3-preview-banner" role="status">
+  P1 preview · flagship deep-dive (would ship as <b>/pump</b>) · hydrate off ·
+  <a href="/preview/pump-desk-polish">home polish</a> ·
+  <a href="/preview/k3-pump-alert">existing flagship preview</a>
+</p>
+<p class="k3-preview-note">Full Situation Room theater: big proof %, census chips, evidence cells, triad legs, dossier + depth CTAs. Linked from home scan — not embedded on homepage.</p>
+<div class="k3-preview-frame app-shell council-first">
+  {% include "partials/premium/pump_alert.html" %}
+</div>
+{% endblock %}

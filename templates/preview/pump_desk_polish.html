@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<script>document.documentElement.dataset.hydrate = '0';</script>
+<style>
+  .k3-preview-banner {
+    position: sticky; top: 0; z-index: 9999;
+    background: #0a1628; color: #7dd3fc; text-align: center;
+    font: 12px/1.4 'JetBrains Mono', monospace; padding: 8px 12px;
+    border-bottom: 1px solid rgba(56, 189, 248, 0.35);
+  }
+  .k3-preview-banner a { color: #00ff41; margin: 0 6px; }
+  .k3-preview-frame { max-width: 390px; margin: 0 auto; border-left: 1px solid #222; border-right: 1px solid #222; }
+  .k3-preview-note {
+    max-width: 390px; margin: 12px auto 0; padding: 0 12px;
+    font: 11px/1.45 'JetBrains Mono', monospace; color: #94a3b8;
+  }
+</style>
+<p class="k3-preview-banner" role="status">
+  P1 polish preview · home SCAN + proof rail + phase bar · hydrate off ·
+  <a href="/preview/pump-desk-full">full desk (/pump)</a> ·
+  <a href="/preview/k3-pump-alert-scan">current scan</a> ·
+  <a href="/">live home</a>
+</p>
+<p class="k3-preview-note">Proposed home section: stronger proof rail, segmented phase ladder, subtle atmosphere, “Open full desk →” CTA. SCAN density kept — no flagship bloat.</p>
+<div class="k3-preview-frame app-shell council-first">
+  {% with pump_compact=true, pump_full_desk_href='/preview/pump-desk-full' %}
+  {% include "partials/premium/pump_alert_scan_polish.html" %}
+  {% endwith %}
+</div>
+{% endblock %}

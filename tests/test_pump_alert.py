@@ -589,3 +589,21 @@ def test_preview_pump_alert_scan_route():
     assert "pds-ladder" in html
     assert "pd-evidence" not in html
     assert "pd-verdict__trigger" not in html
+
+
+def test_preview_pump_desk_polish_route():
+    with TestClient(app) as client:
+        html = client.get("/preview/pump-desk-polish").text
+    assert "pds--polish" in html
+    assert "pds-phase" in html
+    assert "pds-proof__pct" in html
+    assert "Open full desk" in html
+    assert 'href="/preview/pump-desk-full"' in html
+
+
+def test_preview_pump_desk_full_route():
+    with TestClient(app) as client:
+        html = client.get("/preview/pump-desk-full").text
+    assert "pd-evidence" in html
+    assert "pd-phase" in html
+    assert "pd-proof__pct" in html

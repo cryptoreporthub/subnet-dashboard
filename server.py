@@ -1570,6 +1570,28 @@ async def preview_k3_pump_alert_scan(request: Request):
     )
 
 
+@app.get("/preview/pump-desk-polish")
+async def preview_pump_desk_polish(request: Request):
+    """SSR preview — P1 polish: proof rail, phase bar, full-desk CTA (home scan)."""
+    from internal.preview.k3_pump_alert import build_k3_pump_alert_preview_context
+
+    return templates.TemplateResponse(
+        "preview/pump_desk_polish.html",
+        build_k3_pump_alert_preview_context(request),
+    )
+
+
+@app.get("/preview/pump-desk-full")
+async def preview_pump_desk_full(request: Request):
+    """SSR preview — flagship deep-dive (proposed /pump route)."""
+    from internal.preview.k3_pump_alert import build_k3_pump_alert_preview_context
+
+    return templates.TemplateResponse(
+        "preview/pump_desk_full.html",
+        build_k3_pump_alert_preview_context(request),
+    )
+
+
 @app.get("/api/pump-alerts")
 async def api_pump_alerts():
     """Pump lane — file-backed ladder + registry enrichment; must stay sub-second."""
