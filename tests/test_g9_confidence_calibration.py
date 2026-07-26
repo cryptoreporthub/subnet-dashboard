@@ -15,9 +15,11 @@ from internal.council.confidence_calibration import blended_prior
 def isolate_predictions(tmp_path, monkeypatch):
     pred_path = str(tmp_path / "predictions.json")
     monkeypatch.setattr("internal.council.resolver.PREDICTIONS_PATH", pred_path)
+    sv.clear_resolver_hit_rate_cache()
     with open(pred_path, "w") as f:
         json.dump({"predictions": [], "resolved": []}, f)
     yield pred_path
+    sv.clear_resolver_hit_rate_cache()
 
 
 def _confidence(sn, indicators, experts, total_score=None):
@@ -96,3 +98,20 @@ def test_zero_hit_rate_still_has_floor(isolate_predictions):
     experts = {"quant": 0.6, "hype": 0.6, "dark_horse": 0.6, "technical": 0.6}
     conf = _confidence(sn, indicators, experts)
     assert conf > 0.35
+
+
+def test_resolver_hit_rate_cached_by_mtime(isolate_predictions):
+    """Scoring pass should not re-read predictions.json per subnet."""
+    resolved = [{"correct": True}] * 20 + [{"correct": False}] * 20
+    with open(isolate_predictions, "w") as f:
+        json.dump({"predictions": [], "resolved": resolved}, f)
+
+    sv.clear_resolver_hit_rate_cache()
+    assert sv._resolver_hit_rate() == pytest.approx(0.5)
+    # Same mtime — second call hits cache (no error, same value).
+    assert sv._resolver_hit_rate() == pytest.approx(0.5)
+
+    with open(isolate_predictions, "w") as f:
+        json.dump({"predictions": [], "resolved": resolved + [{"correct": True}]}, f)
+    assert sv._resolver_hit_rate() == pytest.approx(21 / 41)
+
