@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
@@ -110,3 +111,23 @@ def test_scheduler_disabled(monkeypatch):
     snaps.stop_score_snapshot_scheduler()
     out = snaps.start_score_snapshot_scheduler()
     assert out["started"] is False
+
+
+def test_persist_cycle_summary_writes_soul_map(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    sched = snaps.ScoreSnapshotScheduler()
+    sched._persist_cycle_summary(
+        {
+            "run_at": "2026-07-26T12:00:00Z",
+            "ok": True,
+            "count": 42,
+            "written_at": "2026-07-26T12:00:00Z",
+            "path": "data/score_snapshots.json",
+        }
+    )
+    data = json.loads(soul.read_text(encoding="utf-8"))
+    last = data["score_snapshot_scheduler"]["last_cycle"]
+    assert last["ok"] is True
+    assert last["count"] == 42
