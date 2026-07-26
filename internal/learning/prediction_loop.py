@@ -175,8 +175,12 @@ def record_pick_prediction(
     *,
     horizon_type: str = "hour",
     market_context: Optional[Dict[str, Any]] = None,
+    shadow: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """Persist a Council pick as a pending prediction and open judge positions.
+
+    When ``shadow=True`` (HOLD counterfactual), the row is gradeable for
+    research but excluded from RF-2 trust stats and council weight nudges.
 
     Returns the stored prediction dict, or None when skipped (duplicate / invalid).
     """
@@ -201,7 +205,7 @@ def record_pick_prediction(
         if int(netuid) <= 0:
             return None
 
-    if has_pending_duplicate(netuid, horizon_type):
+    if has_pending_duplicate(netuid, horizon_type, shadow=shadow):
         return None
 
     ref_price = float(subnet.get("price", 0) or 0)
@@ -209,6 +213,7 @@ def record_pick_prediction(
         return None
 
     expert = dominant_expert_for_learning(pick)
+    expert_contributions = pick.get("expert_contributions") or {}
     existing_pred = pick.get("prediction") if isinstance(pick.get("prediction"), dict) else None
     magnitude_source = "preattached"
     if existing_pred and existing_pred.get("predicted_pct") is not None:
@@ -260,10 +265,14 @@ def record_pick_prediction(
             horizon_type=horizon_type,
             active_signals=active_signals or None,
         )
-    prediction["pick_source"] = "council"
+    prediction["pick_source"] = "council_shadow" if shadow else "council"
     prediction["pick_score"] = pick.get("score")
     prediction["pick_confidence"] = pick.get("confidence", pick.get("final_confidence"))
     prediction["magnitude_source"] = magnitude_source
+    if shadow:
+        prediction["shadow"] = True
+        prediction["counterfactual"] = True
+        prediction["shadow_reason"] = "hold_near_call"
     prediction["subnet_snapshot"] = _subnet_snapshot(subnet)
     pump_phase = _pump_phase_at_prediction(netuid)
     if pump_phase:
@@ -462,10 +471,13 @@ def record_hold_decision(
     candidate: Optional[Dict[str, Any]] = None,
     reason: Optional[str] = None,
     horizon_type: str = "day",
+    subnet: Optional[Dict[str, Any]] = None,
+    market_context: Optional[Dict[str, Any]] = None,
 ) -> None:
-    """HOLD still writes the brain — trail + soul-map, no gradeable prediction.
+    """HOLD still writes the brain — trail + soul-map, no gradeable primary prediction.
 
-    Confidence gate / empty market must not leave the learning loop silent.
+    Phase 3: also enqueue a ``shadow`` counterfactual prediction for the
+    candidate when a priced subnet row is available (excluded from RF-2).
     """
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     cand = candidate if isinstance(candidate, dict) else {}
@@ -523,3 +535,23 @@ def record_hold_decision(
         _save_raw(data)
     except Exception as exc:
         logger.warning("HOLD soul-map mirror failed: %s", exc)
+
+    # Phase 3 — counterfactual shadow (no RF-2 / no weight nudge).
+    if cand:
+        try:
+            subnet_row = subnet if isinstance(subnet, dict) else None
+            if subnet_row is None and netuid is not None:
+                subnet_row = dict(sn) if sn else {"netuid": netuid}
+                if "price" not in subnet_row and isinstance(cand.get("subnet"), dict):
+                    # Candidate may lack live price; skip shadow quietly.
+                    pass
+            if subnet_row and float(subnet_row.get("price", 0) or 0) > 0:
+                record_pick_prediction(
+                    cand,
+                    subnet_row,
+                    horizon_type=horizon_type,
+                    market_context=market_context,
+                    shadow=True,
+                )
+        except Exception as exc:
+            logger.warning("HOLD shadow prediction failed: %s", exc)

@@ -80,15 +80,17 @@ def save_predictions(data: Dict[str, Any]) -> None:
         logger.warning("Failed to persist predictions.json: %s", exc)
 
 
-def has_pending_duplicate(netuid: Any, horizon_type: str = "hour") -> bool:
-    """True when a pending row already exists for netuid + horizon."""
+def has_pending_duplicate(netuid: Any, horizon_type: str = "hour", *, shadow: bool = False) -> bool:
+    """True when a pending row already exists for netuid + horizon (+ shadow flag)."""
     if netuid is None:
         return False
+    want_shadow = bool(shadow)
     for existing in load_predictions().get("predictions", []) or []:
         if (
             existing.get("netuid") == netuid
             and existing.get("horizon_type", "hour") == horizon_type
             and existing.get("status") == "pending"
+            and bool(existing.get("shadow") or existing.get("counterfactual")) == want_shadow
         ):
             return True
     return False
@@ -97,7 +99,7 @@ def has_pending_duplicate(netuid: Any, horizon_type: str = "hour") -> bool:
 def append_prediction(prediction: Dict[str, Any]) -> bool:
     """Append a pending prediction if no duplicate is already pending.
 
-    Duplicate key: same ``netuid`` + ``horizon_type`` while status is pending.
+    Duplicate key: same ``netuid`` + ``horizon_type`` + shadow flag while pending.
     Returns True when the prediction was stored.
     """
     if not isinstance(prediction, dict):
@@ -106,6 +108,7 @@ def append_prediction(prediction: Dict[str, Any]) -> bool:
     horizon_type = prediction.get("horizon_type", "hour")
     if netuid is None:
         return False
+    shadow = bool(prediction.get("shadow") or prediction.get("counterfactual"))
 
     data = load_predictions()
     pending = data.get("predictions", [])
@@ -114,6 +117,7 @@ def append_prediction(prediction: Dict[str, Any]) -> bool:
             existing.get("netuid") == netuid
             and existing.get("horizon_type", "hour") == horizon_type
             and existing.get("status") == "pending"
+            and bool(existing.get("shadow") or existing.get("counterfactual")) == shadow
         ):
             return False
 
@@ -127,13 +131,19 @@ def append_prediction(prediction: Dict[str, Any]) -> bool:
 def update_stats(data: Dict[str, Any]) -> None:
     preds: List[Dict[str, Any]] = data.get("predictions", [])
     resolved: List[Dict[str, Any]] = data.get("resolved", [])
-    correct = sum(1 for row in resolved if row.get("correct"))
-    wrong = sum(1 for row in resolved if not row.get("correct"))
+
+    def _primary(row: Dict[str, Any]) -> bool:
+        return not bool(row.get("shadow") or row.get("counterfactual"))
+
+    primary_resolved = [row for row in resolved if _primary(row)]
+    primary_pending = [row for row in preds if _primary(row)]
+    correct = sum(1 for row in primary_resolved if row.get("correct") is True)
+    wrong = sum(1 for row in primary_resolved if row.get("correct") is False)
     stats = {
         "correct": correct,
         "wrong": wrong,
-        "pending": len(preds),
-        "total": len(preds) + len(resolved),
+        "pending": len(primary_pending),
+        "total": len(primary_pending) + len(primary_resolved),
     }
     if correct + wrong > 0:
         stats["accuracy"] = round(correct / (correct + wrong), 3)

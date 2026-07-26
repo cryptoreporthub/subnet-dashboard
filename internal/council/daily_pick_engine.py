@@ -180,10 +180,19 @@ def get_or_create_today_pick(
         try:
             from internal.learning.prediction_loop import record_hold_decision
 
+            # Prefer live subnet row for shadow price when candidate has netuid.
+            subnet_row = None
+            if isinstance(candidate, dict):
+                sn = candidate.get("subnet") if isinstance(candidate.get("subnet"), dict) else {}
+                netuid = sn.get("netuid") or candidate.get("netuid")
+                if netuid is not None:
+                    subnet_row = next((s for s in subnets if s.get("netuid") == netuid), None)
             record_hold_decision(
                 candidate=candidate,
                 reason=reason,
                 horizon_type="day",
+                subnet=subnet_row,
+                market_context=market_context,
             )
         except Exception:
             pass
