@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
-_AUDIT_GATE_PCT = 45
+from internal.council.publish_gate import publish_gate_percent
 
 _BANNED_IN_HERO = (
     "council scan",
@@ -150,7 +150,7 @@ def _vs_line(
 
 
 def _trigger_line(conviction: int, blockers: List[str], *, audit_pick: bool) -> str:
-    if audit_pick or conviction >= _AUDIT_GATE_PCT:
+    if audit_pick or conviction >= publish_gate_percent():
         return ""
     blocker = ""
     for raw in blockers:
@@ -164,10 +164,11 @@ def _trigger_line(conviction: int, blockers: List[str], *, audit_pick: bool) -> 
         blocker = "volume supports size"
     elif blocker:
         blocker = f"{blocker} clears"
+    gate = publish_gate_percent()
     if blocker:
-        return f"Flip to LONG when conviction ≥ {_AUDIT_GATE_PCT}% and {blocker}."
-    gap = max(0, _AUDIT_GATE_PCT - conviction)
-    return f"Flip to LONG when conviction ≥ {_AUDIT_GATE_PCT}% (+{gap} pts)."
+        return f"Flip to LONG when conviction ≥ {gate}% and {blocker}."
+    gap = max(0, gate - conviction)
+    return f"Flip to LONG when conviction ≥ {gate}% (+{gap} pts)."
 
 
 def _evidence_drivers(

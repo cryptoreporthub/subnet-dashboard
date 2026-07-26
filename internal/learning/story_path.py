@@ -78,25 +78,27 @@ def _signal_step(pick: Dict[str, Any], subnet: Dict[str, Any]) -> Dict[str, Any]
 
 
 def _judge_step(pick: Dict[str, Any]) -> Dict[str, Any]:
-    ec = pick.get("expert_contributions") or {}
-    ranked: List[tuple[str, float]] = []
-    for name, raw in ec.items():
-        if name in ("signal_contributions", "active_signals"):
-            continue
-        try:
-            ranked.append((str(name), float(raw)))
-        except (TypeError, ValueError):
-            continue
-    ranked.sort(key=lambda x: x[1], reverse=True)
-    if ranked:
-        top_name, top_val = ranked[0]
-        label = top_name.replace("_", " ").title()
-        others = ", ".join(n.replace("_", " ").title() for n, _ in ranked[1:3])
-        detail = f"{label} led ({top_val:.2f})"
-        if others:
-            detail += f" · also {others}"
-        return _step("judges", "2 · Council experts", f"Council blend → {label}", detail)
-    return _step("judges", "2 · Council experts", "Four-expert council", "Quant · Hype · Dark horse · Technical")
+    from internal.council.expert_display import (
+        CANONICAL_EXPERTS,
+        canonical_expert_contributions,
+        expert_label,
+        leading_expert_for_pick,
+    )
+
+    leader_key, label, lead_val = leading_expert_for_pick(pick)
+    scores = canonical_expert_contributions(pick.get("expert_contributions"))
+    ranked = sorted(
+        ((name, scores[name]) for name in scores),
+        key=lambda row: row[1],
+        reverse=True,
+    )
+    others = ", ".join(
+        expert_label(n) for n, _ in ranked[1:3] if n != leader_key and n in CANONICAL_EXPERTS
+    )
+    detail = f"{label} led ({lead_val:.2f})"
+    if others:
+        detail += f" · also {others}"
+    return _step("judges", "2 · Council experts", f"Council blend → {label}", detail)
 
 
 def _council_step(payload: Dict[str, Any], pick: Dict[str, Any], subnet: Dict[str, Any]) -> Dict[str, Any]:

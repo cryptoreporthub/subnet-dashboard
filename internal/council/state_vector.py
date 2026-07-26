@@ -1402,11 +1402,10 @@ def _expert_contributions(
     ma = indicators.get("ma_cross", {}) if isinstance(indicators.get("ma_cross"), dict) else {}
 
     # Quant: yield + relative turnover (vol/mcap), not absolute mega-cap size.
-    # Large-cap absolute volume is easy; impactful flow is vol as a share of float.
-    quant = 0.45
-    quant += min(0.25, emission * 0.08)
-    quant += min(0.20, apy * 0.006)
-    quant += min(0.18, flow * 2.5)  # high turnover vs size
+    quant = 0.42
+    quant += min(0.20, emission * 0.06)
+    quant += min(0.16, apy * 0.005)
+    quant += min(0.14, flow * 2.0)
     if volume > 500:
         quant += 0.04  # some absolute activity still matters for fills
     quant = min(1.0, max(0.0, quant))
@@ -1709,12 +1708,12 @@ def score_subnet_for_day(
     if market_context and isinstance(market_context.get("weights"), dict):
         weights.update(market_context["weights"])
 
-    # Day lens: overweight quant/dark_horse, underweight hype
+    # Day lens: slight quant/dark_horse tilt — toned down so technical+hype signals can lead.
     day_weights = {
-        "quant": weights.get("quant", 0.30) * 1.15,
-        "hype": weights.get("hype", 0.25) * 0.80,
-        "dark_horse": weights.get("dark_horse", 0.20) * 1.10,
-        "technical": weights.get("technical", 0.25) * 0.95,
+        "quant": weights.get("quant", 0.30) * 1.05,
+        "hype": weights.get("hype", 0.25) * 0.90,
+        "dark_horse": weights.get("dark_horse", 0.20) * 1.08,
+        "technical": weights.get("technical", 0.25) * 1.05,
     }
     total_weight = sum(day_weights.values()) or 1.0
     day_weights = {k: v / total_weight for k, v in day_weights.items()}
