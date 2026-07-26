@@ -307,6 +307,38 @@ def _wallet_chip(netuid_int: Optional[int]) -> Optional[str]:
     return None
 
 
+def _abbrev_coldkey(addr: str) -> str:
+    s = str(addr).strip()
+    if len(s) <= 12:
+        return s
+    return f"{s[:4]}…{s[-4:]}"
+
+
+def _owner_chip(
+    netuid_int: Optional[int],
+    subnet_row: Optional[Dict[str, Any]],
+) -> Optional[str]:
+    """Subnet owner coldkey from registry / subnet row — honest-empty when unknown."""
+    owner = None
+    if isinstance(subnet_row, dict):
+        owner = subnet_row.get("owner") or subnet_row.get("owner_coldkey")
+    if not owner and netuid_int is not None:
+        try:
+            from internal.subnet_names import _load_local_registry
+
+            item = _load_local_registry().get(str(netuid_int))
+            if isinstance(item, dict):
+                owner = item.get("owner")
+        except Exception:
+            owner = None
+    if not owner:
+        return None
+    addr = str(owner).strip()
+    if len(addr) < 8:
+        return None
+    return f"Owner {_abbrev_coldkey(addr)}"
+
+
 def _whale_day_chips(
     netuid_int: Optional[int],
     subnet_row: Optional[Dict[str, Any]],
@@ -399,6 +431,7 @@ def build_alert_row(
 
     size_line = _size_cliff_line(subnet_row)
     wallet_chip = _wallet_chip(netuid_int)
+    owner_chip = _owner_chip(netuid_int, subnet_row)
     day_chips = _whale_day_chips(netuid_int, subnet_row)
     snap = ladder_entry.get("signal_snapshot") if isinstance(ladder_entry.get("signal_snapshot"), dict) else {}
     src = subnet_row if isinstance(subnet_row, dict) else {}
@@ -459,6 +492,7 @@ def build_alert_row(
         "triad": triad,
         "size_line": size_line,
         "wallet_chip": wallet_chip,
+        "owner_chip": owner_chip,
         "whale_day_chips": day_chips,
         "fear_and_greed": fear,
         "buys_24hr": buys,
@@ -631,6 +665,7 @@ def build_desk_row(
     # Size cliff is cheap (subnet_row only). Skip wallet/whale chips here —
     # WhaleIntelligenceService is too slow for the desk GET path.
     size_line = _size_cliff_line(subnet_row)
+    owner_chip = _owner_chip(netuid_int, subnet_row)
     lit = int(triad.get("lit_count") or 0) if isinstance(triad, dict) else 0
     buy_pct = int(round(leads["buy_ratio"] * 100)) if leads.get("buy_ratio") is not None else None
     vol_pct = (
@@ -658,6 +693,7 @@ def build_desk_row(
         "triad_labels": pills,
         "triad_lit": lit,
         "size_line": size_line,
+        "owner_chip": owner_chip,
         "buy_pct": buy_pct,
         "vol_pct": vol_pct,
         "updated_at": ladder_entry.get("updated_at"),
