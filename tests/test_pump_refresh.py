@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from unittest.mock import patch
 
 from internal.pump.refresh import ensure_ladder_fresh, kick_ladder_fresh, ladder_age_minutes
@@ -76,6 +77,63 @@ def test_kick_ladder_fresh_skips_under_pytest(monkeypatch):
     out = kick_ladder_fresh(force=True)
     assert out["status"] == "skipped"
     assert out["reason"] == "background_disabled"
+
+
+def test_fetch_all_subnet_signals_loads_intel_maps_once(monkeypatch):
+    from unittest.mock import MagicMock
+
+    import internal.pump.signals as sig
+
+    chatter_calls = 0
+    scenario_calls = 0
+
+    def chatter():
+        nonlocal chatter_calls
+        chatter_calls += 1
+        return {1: 0.5}
+
+    def scenario():
+        nonlocal scenario_calls
+        scenario_calls += 1
+        return {1: "tag"}
+
+    monkeypatch.setattr(sig, "message_intel_chatter_by_netuid", chatter)
+    monkeypatch.setattr(sig, "scenario_tags_by_netuid", scenario)
+    monkeypatch.setattr(
+        "internal.pump.taostats_overlay.load_subnets_for_pump_signals",
+        lambda: [{"netuid": 1, "name": "A"}, {"netuid": 2, "name": "B"}],
+    )
+
+    rows = sig.fetch_all_subnet_signals()
+    assert len(rows) == 2
+    assert chatter_calls == 1
+    assert scenario_calls == 1
+
+
+def test_scan_all_subnets_skips_when_already_running(tmp_path, monkeypatch):
+    monkeypatch.setenv("PUMP_LADDER_STATE_PATH", str(tmp_path / "pump_ladder.json"))
+    from internal.pump import constants
+
+    monkeypatch.setattr(constants, "STATE_PATH", str(tmp_path / "pump_ladder.json"))
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_fetch():
+        started.set()
+        release.wait(timeout=2.0)
+        return []
+
+    import internal.pump.state as pump_state
+
+    with patch("internal.pump.state.fetch_all_subnet_signals", side_effect=slow_fetch):
+        t = threading.Thread(target=pump_state.scan_all_subnets, daemon=True)
+        t.start()
+        assert started.wait(timeout=2.0)
+        dup = pump_state.scan_all_subnets()
+        assert dup.get("error") == "scan_in_progress"
+        release.set()
+        t.join(timeout=3.0)
 
 
 def test_ladder_age_minutes_missing_meta(tmp_path, monkeypatch):
