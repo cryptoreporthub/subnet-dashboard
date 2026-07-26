@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import json
+import os
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from internal.council.publish_gate import publish_gate_fraction, publish_gate_label
 
 _last_lead_netuid: Optional[int] = None
+_SNAPSHOT_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+_SNAPSHOT_TTL = int(os.environ.get("COCKPIT_PICKS_CACHE_TTL", "60"))
+_REGISTRY_HOUR_CAP = int(os.environ.get("COCKPIT_PICKS_REGISTRY_CAP", "24"))
 
 
 def _emitted_at_z() -> str:
@@ -51,13 +57,43 @@ def _hour_pick_row(pick: Dict[str, Any], rank: int) -> Dict[str, Any]:
     }
 
 
-def _load_hour_picks() -> List[Dict[str, Any]]:
+def _cached_hourly_payload() -> Optional[Dict[str, Any]]:
     try:
-        from internal.subnets.feed import load_pick_subnets
+        from internal.council.hourly_pick import _PICK_CACHE
+
+        payload = _PICK_CACHE.get("payload")
+        if isinstance(payload, dict) and payload.get("subnet"):
+            return dict(payload)
+    except Exception:
+        pass
+    return None
+
+
+def _registry_subnets_for_hour() -> List[Dict[str, Any]]:
+    """Registry-only rows — avoids slow live feed on SSE tick."""
+    try:
+        with open("config/registry.json", encoding="utf-8") as f:
+            data = json.load(f)
+        from internal.subnet_names import enrich_subnet_rows
+
+        rows = enrich_subnet_rows(list(data.values()))
+        return rows[: max(1, _REGISTRY_HOUR_CAP)]
+    except Exception:
+        return []
+
+
+def _load_hour_picks() -> List[Dict[str, Any]]:
+    cached = _cached_hourly_payload()
+    if cached:
+        row = dict(cached)
+        row.setdefault("generated_at", _generated_at_from_cache())
+        return [_hour_pick_row(row, 1)]
+
+    try:
         from internal.council.hourly_pick import select_hourly_pick
         from internal.council.weights import load_weights
 
-        subnets = load_pick_subnets()
+        subnets = _registry_subnets_for_hour()
         if not subnets:
             return []
         ctx = {"tao_change_24h": 0.0, "weights": load_weights()}
@@ -71,6 +107,18 @@ def _load_hour_picks() -> List[Dict[str, Any]]:
         return []
 
 
+def _day_from_disk() -> Optional[Dict[str, Any]]:
+    try:
+        from internal.council.daily_pick_engine import _find_today, _load
+
+        daily = _find_today(_load())
+        if isinstance(daily, dict):
+            return daily
+    except Exception:
+        pass
+    return None
+
+
 def _load_day_snapshot() -> Dict[str, Any]:
     emitted_at = _emitted_at_z()
     day: Dict[str, Any] = {
@@ -82,43 +130,52 @@ def _load_day_snapshot() -> Dict[str, Any]:
         "pick": None,
         "candidate": None,
     }
-    try:
-        from internal.subnets.feed import load_pick_subnets
-        from internal.council.daily_pick_engine import get_or_create_today_pick
-        from internal.council.weights import load_weights
-
-        subnets = load_pick_subnets()
-        if not subnets:
-            return day
-        ctx = {"tao_change_24h": 0.0, "weights": load_weights()}
-        daily = get_or_create_today_pick(subnets, ctx)
-        if not isinstance(daily, dict):
-            return day
-        day["action"] = str(daily.get("action") or "HOLD").upper()
-        pick = daily.get("pick")
-        cand = daily.get("candidate")
-        day["published"] = bool(pick)
-        day["pick"] = pick
-        day["candidate"] = cand
-        if not pick and isinstance(cand, dict):
-            fc = float(cand.get("final_confidence") or cand.get("confidence") or 0)
-            if fc < publish_gate_fraction():
-                day["reason"] = (
-                    f"Confidence {fc * 100:.0f}% below {publish_gate_label()} — "
-                    "no long call published"
-                )
-            else:
-                day["reason"] = "Audit blocked today's long call"
-        elif daily.get("reason"):
-            day["reason"] = str(daily.get("reason"))
-    except Exception as exc:
-        day["reason"] = str(exc)
+    daily = _day_from_disk()
+    if not isinstance(daily, dict):
+        return day
+    day["action"] = str(daily.get("action") or "HOLD").upper()
+    pick = daily.get("pick")
+    cand = daily.get("candidate")
+    day["published"] = bool(pick)
+    day["pick"] = pick
+    day["candidate"] = cand
+    day["date"] = daily.get("date") or day["date"]
+    day["timestamp_utc"] = daily.get("timestamp_utc") or emitted_at
+    if not pick and isinstance(cand, dict):
+        fc = float(cand.get("final_confidence") or cand.get("confidence") or 0)
+        if fc < publish_gate_fraction():
+            day["reason"] = (
+                f"Confidence {fc * 100:.0f}% below {publish_gate_label()} — "
+                "no long call published"
+            )
+        else:
+            day["reason"] = "Audit blocked today's long call"
+    elif daily.get("reason"):
+        day["reason"] = str(daily.get("reason"))
     return day
+
+
+def get_stale_picks_snapshot() -> Optional[Dict[str, Any]]:
+    """Last good snapshot for SSE timeout fallback."""
+    payload = _SNAPSHOT_CACHE.get("payload")
+    if isinstance(payload, dict):
+        return dict(payload)
+    return None
 
 
 def build_picks_snapshot() -> Dict[str, Any]:
     """Atomic hour+day snapshot for cockpit.picks SSE."""
     global _last_lead_netuid
+
+    now = time.time()
+    cached = _SNAPSHOT_CACHE.get("payload")
+    if (
+        isinstance(cached, dict)
+        and now - float(_SNAPSHOT_CACHE.get("at") or 0) < _SNAPSHOT_TTL
+    ):
+        out = dict(cached)
+        out["emitted_at"] = _emitted_at_z()
+        return out
 
     emitted_at = _emitted_at_z()
     hour_picks = _load_hour_picks()
@@ -142,7 +199,7 @@ def build_picks_snapshot() -> Dict[str, Any]:
     elif not hour_picks:
         quiet_reason = "Council quiet on 1h — no name cleared the short lens"
 
-    return {
+    out = {
         "type": "cockpit.picks",
         "version": 1,
         "emitted_at": emitted_at,
@@ -158,3 +215,6 @@ def build_picks_snapshot() -> Dict[str, Any]:
         },
         "day": day,
     }
+    _SNAPSHOT_CACHE["payload"] = out
+    _SNAPSHOT_CACHE["at"] = now
+    return out
