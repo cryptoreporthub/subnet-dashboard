@@ -403,7 +403,6 @@ def build_brain_letter() -> Dict[str, Any]:
     pick = _today_pick_block()
     trust = _trust_block()
     working = _working_block()
-    story = _story_block()
     banner = trust.get("trust_banner") or {}
     outlook = pick.get("outlook") or _outlook_sentence(pick)
     yesterday_outcome = _yesterday_graded_outcome()
@@ -414,7 +413,6 @@ def build_brain_letter() -> Dict[str, Any]:
         not pick.get("name")
         and not banner.get("graded")
         and not (working.get("top_price_signals") or [])
-        and not story.get("data_available")
     )
 
     markdown = _render_markdown(
@@ -438,10 +436,6 @@ def build_brain_letter() -> Dict[str, Any]:
             "ready": working.get("ready"),
             "top_price_signals": (working.get("top_price_signals") or [])[:5],
             "disclaimer": working.get("disclaimer"),
-        },
-        "story_path": {
-            "data_available": story.get("data_available"),
-            "steps": story.get("steps") or [],
         },
         "markdown": markdown,
         "yesterday_outcome": yesterday_outcome,

@@ -58,6 +58,13 @@ INTEGRATIONS: List[Dict[str, Any]] = [
         "docs_url": "https://chutes.ai",
     },
     {
+        "netuid": 99,
+        "slug": "thirty_spokes",
+        "name": "Thirty Spokes",
+        "role": "Model router fallback (SN99)",
+        "docs_url": "https://www.thirtyspokes.ai",
+    },
+    {
         "netuid": 118,
         "slug": "ditto",
         "name": "Ditto",
@@ -168,36 +175,35 @@ def _probe_desearch() -> Dict[str, Any]:
 
 
 _DEFAULT_CHUTES_BASE = "https://llm.chutes.ai/v1"
+_DEFAULT_THIRTY_SPOKES_BASE = "https://api.thirtyspokes.ai/v1"
 
 
-def _chutes_base_url() -> str:
+def _llm_api_key() -> Optional[str]:
     return (
-        os.environ.get("CHUTES_BASE_URL")
-        or os.environ.get("LLM_BASE_URL")
-        or _DEFAULT_CHUTES_BASE
-    ).rstrip("/")
-
-
-def _probe_chutes() -> Dict[str, Any]:
-    api_key = (
         os.environ.get("CHUTES_API_KEY")
+        or os.environ.get("THIRTY_SPOKES_API_KEY")
         or os.environ.get("OPENAI_API_KEY")
         or os.environ.get("LLM_API_KEY")
     )
-    base = _chutes_base_url()
-    models_url = f"{base}/models"
-    ok_pub, code_pub, _ = _http_probe("GET", models_url)
-    # ponytail: Fly secrets sometimes set LLM_BASE_URL to api.chutes.ai (404 on /models).
-    if (not ok_pub or code_pub == 404) and base != _DEFAULT_CHUTES_BASE.rstrip("/"):
-        base = _DEFAULT_CHUTES_BASE.rstrip("/")
-        models_url = f"{base}/models"
-        ok_pub, code_pub, _ = _http_probe("GET", models_url)
+
+
+def _thirty_spokes_base_url() -> str:
+    return (
+        os.environ.get("THIRTY_SPOKES_BASE_URL")
+        or os.environ.get("THIRTY_SPOKES_API_BASE")
+        or _DEFAULT_THIRTY_SPOKES_BASE
+    ).rstrip("/")
+
+
+def _probe_openai_models(base: str, api_key: Optional[str] = None) -> Dict[str, Any]:
+    models_url = f"{base.rstrip('/')}/models"
+    ok_pub, code_pub, body_pub = _http_probe("GET", models_url)
     reachable = ok_pub and code_pub == 200
     if not api_key:
         return {
-            "reachable": reachable,
+            "reachable": reachable or (ok_pub and code_pub in (401, 403)),
             "connected": False,
-            "detail": "add CHUTES_API_KEY for council chat" if reachable else f"HTTP {code_pub}",
+            "detail": "add API key for council chat" if reachable else f"HTTP {code_pub}",
             "has_credential": False,
         }
     ok, code, body = _http_probe(
@@ -211,10 +217,8 @@ def _probe_chutes() -> Dict[str, Any]:
         detail = "key rejected"
     elif reachable:
         detail = "API live · key not verified on /models"
-    elif code_pub == 404:
-        detail = "check CHUTES_BASE_URL (use https://llm.chutes.ai/v1)"
     else:
-        detail = f"HTTP {code}" if ok else body
+        detail = f"HTTP {code}" if ok else body_pub or body
     connected = ok and code == 200
     return {
         "reachable": reachable or (ok and code in (200, 401, 403)),
@@ -222,6 +226,52 @@ def _probe_chutes() -> Dict[str, Any]:
         "detail": detail,
         "has_credential": True,
     }
+
+
+def _chutes_base_url() -> str:
+    return (
+        os.environ.get("CHUTES_BASE_URL")
+        or os.environ.get("LLM_BASE_URL")
+        or _DEFAULT_CHUTES_BASE
+    ).rstrip("/")
+
+
+def _probe_chutes() -> Dict[str, Any]:
+    api_key = _llm_api_key()
+    base = _chutes_base_url()
+    models_url = f"{base}/models"
+    ok_pub, code_pub, _ = _http_probe("GET", models_url)
+    # ponytail: Fly secrets sometimes set LLM_BASE_URL to api.chutes.ai (404 on /models).
+    if (not ok_pub or code_pub == 404) and base != _DEFAULT_CHUTES_BASE.rstrip("/"):
+        base = _DEFAULT_CHUTES_BASE.rstrip("/")
+    probe = _probe_openai_models(base, api_key)
+    if probe.get("connected"):
+        return probe
+    # ponytail: Fly often keys Thirty Spokes but not Chutes — same OpenAI-compatible key.
+    if api_key and not probe.get("connected"):
+        ts_probe = _probe_thirty_spokes(api_key=api_key)
+        if ts_probe.get("connected"):
+            return {
+                **ts_probe,
+                "detail": "Thirty Spokes router · council chat (Chutes fallback)",
+            }
+    if not api_key:
+        ts_reach = _probe_thirty_spokes(api_key=None)
+        if ts_reach.get("reachable") and not probe.get("reachable"):
+            probe["reachable"] = True
+            probe["detail"] = probe.get("detail") or "add CHUTES_API_KEY or THIRTY_SPOKES_API_KEY"
+    elif not probe.get("connected") and code_pub == 404 and base == _DEFAULT_CHUTES_BASE.rstrip("/"):
+        probe["detail"] = "check CHUTES_BASE_URL (use https://llm.chutes.ai/v1)"
+    return probe
+
+
+def _probe_thirty_spokes(api_key: Optional[str] = None) -> Dict[str, Any]:
+    key = api_key or _llm_api_key()
+    base = _thirty_spokes_base_url()
+    probe = _probe_openai_models(base, key)
+    if probe.get("connected"):
+        probe["detail"] = "models ok · model router"
+    return probe
 
 
 def _probe_ditto() -> Dict[str, Any]:
@@ -247,6 +297,7 @@ _PROBERS = {
     "blockmachine": _probe_blockmachine,
     "desearch": _probe_desearch,
     "chutes": _probe_chutes,
+    "thirty_spokes": _probe_thirty_spokes,
     "ditto": _probe_ditto,
 }
 

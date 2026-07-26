@@ -32,7 +32,6 @@ def _quiet_brain() -> Dict[str, Any]:
         "brain_ui_ready": False,
         "watchdog": {},
         "working": {"ready": False, "top_price_signals": [], "disclaimer": ""},
-        "story_path": {"data_available": False, "steps": []},
         "markdown": "",
         "yesterday_outcome": None,
         "seed_strip": [],
