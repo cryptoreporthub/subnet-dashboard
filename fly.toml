@@ -1,5 +1,5 @@
 # fly.toml app configuration file generated for subnet-dashboard
-# Redeploy trigger — 2026-07-26: disable inline worker (pump scan wedged 2GB VM)
+# Redeploy trigger — 2026-07-26: pump scan O(n²) fix + inline worker restored
 
 app = "subnet-dashboard"
 primary_region = "sjc"
@@ -32,8 +32,8 @@ primary_region = "sjc"
   RUN_MODE = "web"
   # Web serves HTTP only; schedulers run in inline worker subprocess (same machine/volume).
   BACKGROUND_ON_WEB = "off"
-  INLINE_WORKER = "0"
-  ENABLE_INLINE_WORKER = "0"
+  INLINE_WORKER = "1"
+  ENABLE_INLINE_WORKER = "1"
   # essential = pump/resolver/whale on worker; full adds live-subnet wedge (2GB+ only).
   WORKER_HEAVY = "essential"
   # Keep prod boot light; Telegram needs a live session on the volume.
@@ -67,8 +67,8 @@ primary_region = "sjc"
   PUMP_LADDER_BOOT_IMMEDIATE = "off"
   # Inline worker first pump scan — 120s wedge killed prod after #480; 5min still wedged.
   PUMP_LADDER_INLINE_DEFER_SECONDS = "300"
-  # Periodic pump scheduler on inline worker wedges 2GB VM — desk uses cached ladder + API kicks.
-  PUMP_LADDER_INLINE_SCHEDULER = "off"
+  # Periodic pump scheduler re-enabled after O(n²) intel-map fix in fetch_all_subnet_signals.
+  PUMP_LADDER_INLINE_SCHEDULER = "on"
   WHALE_LEDGER_WARM_INTERVAL_MINUTES = "20"
   # O4: allow fly.dev + cryptoreporthub hostnames when DNS is pointed (see DEPLOY.md)
   ALLOWED_ORIGINS = "https://subnet-dashboard.fly.dev,https://dashboard.cryptoreporthub.com,https://cryptoreporthub.com"

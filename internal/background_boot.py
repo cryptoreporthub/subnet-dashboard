@@ -82,13 +82,17 @@ def _start_resolver() -> None:
         )
         start_prediction_resolver_scheduler(immediate=immediate)
         logger.info("prediction resolver scheduler started")
-        try:
-            from internal.learning.pump_lead_recover import recover_overdue_pump_leads
 
-            summary = recover_overdue_pump_leads(dry_run=False)
-            logger.info("pump_lead recover on boot: %s", summary)
-        except Exception as exc:
-            logger.warning("pump_lead recover boot failed: %s", exc)
+        def _recover() -> None:
+            try:
+                from internal.learning.pump_lead_recover import recover_overdue_pump_leads
+
+                summary = recover_overdue_pump_leads(dry_run=False)
+                logger.info("pump_lead recover on boot: %s", summary)
+            except Exception as exc:
+                logger.warning("pump_lead recover boot failed: %s", exc)
+
+        threading.Thread(target=_recover, daemon=True, name="pump-lead-recover").start()
 
     defer_boot("prediction-resolver", _run, delay=max(BOOT_DEFER_SECONDS + 10, 15))
 

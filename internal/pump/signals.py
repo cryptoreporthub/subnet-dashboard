@@ -77,7 +77,12 @@ def scenario_tags_by_netuid() -> Dict[int, str]:
     return tags
 
 
-def build_subnet_signals(subnet: Dict[str, Any]) -> Dict[str, Any]:
+def build_subnet_signals(
+    subnet: Dict[str, Any],
+    *,
+    chatter_map: Optional[Dict[int, float]] = None,
+    scenario_map: Optional[Dict[int, str]] = None,
+) -> Dict[str, Any]:
     """Normalize subnet row (+ optional TaoStats overlay) into ladder inputs."""
     netuid = subnet.get("netuid")
     price_change = float(subnet.get("price_change_24h") or subnet.get("change_24h") or 0)
@@ -96,8 +101,10 @@ def build_subnet_signals(subnet: Dict[str, Any]) -> Dict[str, Any]:
     else:
         momentum_1h = price_change / 24.0
 
-    chatter_map = message_intel_chatter_by_netuid()
-    scenario_map = scenario_tags_by_netuid()
+    if chatter_map is None:
+        chatter_map = message_intel_chatter_by_netuid()
+    if scenario_map is None:
+        scenario_map = scenario_tags_by_netuid()
     chatter = float(chatter_map.get(int(netuid), 0)) if netuid is not None else 0.0
     scenario_tag = scenario_map.get(int(netuid)) if netuid is not None else None
 
@@ -147,7 +154,18 @@ def fetch_all_subnet_signals() -> List[Dict[str, Any]]:
         from internal.pump.taostats_overlay import load_subnets_for_pump_signals
 
         subnets = load_subnets_for_pump_signals()
-        return [build_subnet_signals(s) for s in subnets if s.get("netuid") is not None]
+        # ponytail: load intel maps once — per-row calls wedge Fly (129× SQLite scans).
+        chatter_map = message_intel_chatter_by_netuid()
+        scenario_map = scenario_tags_by_netuid()
+        return [
+            build_subnet_signals(
+                s,
+                chatter_map=chatter_map,
+                scenario_map=scenario_map,
+            )
+            for s in subnets
+            if s.get("netuid") is not None
+        ]
     except Exception as exc:
         logger.warning("subnet signal fetch failed: %s", exc)
         return []

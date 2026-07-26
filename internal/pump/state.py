@@ -22,6 +22,7 @@ from internal.pump.two_score import score_layer_for_phase
 logger = logging.getLogger(__name__)
 
 _lock = threading.RLock()
+_scan_lock = threading.Lock()
 # ponytail: ring buffer only — upgrade path is SQLite trail if scans go sub-minute
 _SCORE_TRAIL_MAX = 36
 
@@ -229,6 +230,15 @@ def transition_subnet(
 
 def scan_all_subnets(state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Scan ~129 subnets, apply ladder transitions, persist + Soul-Map/trail."""
+    if not _scan_lock.acquire(blocking=False):
+        return {"ok": False, "error": "scan_in_progress", "scanned": 0, "transitions": []}
+    try:
+        return _scan_all_subnets_locked(state)
+    finally:
+        _scan_lock.release()
+
+
+def _scan_all_subnets_locked(state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     # ponytail: fetch signals OUTSIDE the state lock — scan can take 30s+ and was
     # wedging GET /api/pump-alerts (load_state blocked behind worker scan).
     signal_rows = fetch_all_subnet_signals()
