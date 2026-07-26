@@ -229,7 +229,9 @@ Revert to live delivery with `telegram` or `webhook` secrets above, or `CONVICTI
 
 ### Message-intel Telegram listener (§18 C1)
 
-Live social ingest uses **Telethon user session** (not the conviction-alert bot). `fly.toml` keeps `MESSAGE_INTEL_LISTENER=off` by default so CI/cold boots stay safe — enable only after a session file exists on the volume.
+Live social ingest uses a **Telethon user session** (not the conviction-alert bot). `fly.toml` keeps `MESSAGE_INTEL_LISTENER=off` so CI/cold boots stay safe — enable **`auto`** only after a session file exists on the volume.
+
+**Do not set `WORKER_HEAVY=full` on the current single 2GB Fly machine** — it adds live-subnet sync and wedges HTTP. Telegram runs on the **essential** inline worker (deferred boot; see `internal/background_boot.py`).
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
@@ -238,53 +240,52 @@ Live social ingest uses **Telethon user session** (not the conviction-alert bot)
 | `TELEGRAM_PHONE` | first login | E.164 phone (`+1...`) for one-time auth |
 | `TELEGRAM_GROUP` | no | Group username to monitor (default `OfficialSubnetSummer`) |
 | `TELEGRAM_SESSION_PATH` | no | Session base path (default `data/telegram_listener` → `/app/data` on Fly) |
-| `MESSAGE_INTEL_LISTENER` | enable | Set `auto` or `on` to start listener at boot |
-| `WORKER_HEAVY` | **full** for ingest | Fly inline worker defaults to `essential`, which **skips** Telegram ingest. Set `WORKER_HEAVY=full` so `start_message_intel_listeners()` runs. |
+| `MESSAGE_INTEL_LISTENER` | enable | `auto` or `on` after session exists on volume |
+| `WORKER_HEAVY` | **essential** | Keep `essential` (default). **`full` is not required** for Telegram and wedges prod. |
 
-**Not the conviction-alert bot:** outbound push uses `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ALERT_CHAT_ID` (see above). Message-intel ingest uses a **Telethon user session** (`TELEGRAM_API_ID` / `HASH` / `.session` file).
+**Not the conviction-alert bot:** outbound push uses `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ALERT_CHAT_ID` (see above).
 
-**Step 1 — bootstrap session locally** (interactive SMS/Telegram code; not runnable headless on Fly):
+#### Fast path when API id/hash are already Fly secrets
+
+1. **Bootstrap session on the volume** (one interactive SSH; writes `/app/data/telegram_listener.session`):
+
+   ```bash
+   fly ssh console --app subnet-dashboard
+   cd /app && python scripts/bootstrap_telegram_session.py
+   # Enter the code Telegram sends to your phone. exit when you see OK — session saved.
+   ```
+
+2. **Enable listener** (if not already set):
+
+   ```bash
+   flyctl secrets set MESSAGE_INTEL_LISTENER=auto WORKER_HEAVY=essential --app subnet-dashboard
+   ```
+
+3. **Wait ~2–3 minutes** after machine restart (listener defers ~120s after worker boot).
+
+4. **Verify:**
+
+   ```bash
+   ./scripts/check_telegram_ready.sh
+   # or: curl -fsS https://subnet-dashboard.fly.dev/api/message-intel/status | python3 -m json.tool
+   ```
+
+   Want: `listener.reason=running`, `listener.live=true`, `has_session=true`.
+
+#### Alternative: bootstrap locally, copy session
 
 ```bash
 export TELEGRAM_API_ID='<your-api-id>'
 export TELEGRAM_API_HASH='<your-api-hash>'
 export TELEGRAM_PHONE='<your-phone-e164>'
 python scripts/bootstrap_telegram_session.py
-# Creates data/telegram_listener.session (+ .session-journal while open)
-```
-
-**Step 2 — copy session to Fly volume** (human / `flyctl ssh`):
-
-```bash
-flyctl ssh console --app subnet-dashboard
-# From local machine in another terminal:
 flyctl ssh sftp shell --app subnet-dashboard
 # put data/telegram_listener.session /app/data/telegram_listener.session
 ```
 
-**Step 3 — set Fly secrets and enable listener:**
-
-```bash
-flyctl secrets set \
-  TELEGRAM_API_ID='<your-api-id>' \
-  TELEGRAM_API_HASH='<your-api-hash>' \
-  TELEGRAM_PHONE='<your-phone-e164>' \
-  MESSAGE_INTEL_LISTENER=auto \
-  WORKER_HEAVY=full \
-  --app subnet-dashboard
-```
-
-`WORKER_HEAVY=essential` (fly.toml default) keeps pump/resolver on the inline worker but **does not** start the Telegram listener — status will show `listener.reason=worker_heavy_off` until you set `full`.
+Then set `MESSAGE_INTEL_LISTENER=auto` and `WORKER_HEAVY=essential` as above.
 
 Optional group override: `TELEGRAM_GROUP='YourGroupUsername'`.
-
-Verify:
-
-```bash
-curl -fsS https://subnet-dashboard.fly.dev/api/message-intel/status | python3 -m json.tool
-# listener.reason=running, listener.live=true when session + group resolve
-./scripts/verify_prod.sh
-```
 
 **Security:** never commit `*.session` files or API secrets. Rotate API hash at my.telegram.org if exposed.
 
@@ -292,32 +293,20 @@ curl -fsS https://subnet-dashboard.fly.dev/api/message-intel/status | python3 -m
 
 You do **not** need a desktop. Session file is created **on the Fly volume** in one SSH session; Telegram sends the login code to the same phone.
 
-1. **Secrets in browser** — [fly.io/apps/subnet-dashboard/secrets](https://fly.io/apps/subnet-dashboard/secrets)  
-   Add (do **not** enable listener yet):
-   - `TELEGRAM_API_ID` = your api id  
-   - `TELEGRAM_API_HASH` = your api hash  
-   - `TELEGRAM_PHONE` = E.164, e.g. `+14155551234`  
-   Leave `MESSAGE_INTEL_LISTENER` unset or `off` for now.
+1. **Secrets** — [fly.io/apps/subnet-dashboard/secrets](https://fly.io/apps/subnet-dashboard/secrets): `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_PHONE` (if not already set).
 
-2. **SSH from phone** — install `flyctl` once (Android: [Termux](https://termux.dev); iOS: [Blink](https://blink.sh) or [a-Shell](https://holzschu.github.io/a-Shell-docs/)), then:
+2. **SSH from phone** — Termux / Blink / a-Shell:
    ```bash
-   fly auth login   # opens browser on phone
+   fly auth login
    fly ssh console --app subnet-dashboard
+   cd /app && python scripts/bootstrap_telegram_session.py
    ```
 
-3. **Bootstrap inside the machine** (session writes to `/app/data` automatically):
-   ```bash
-   cd /app
-   python scripts/bootstrap_telegram_session.py
-   ```
-   When prompted, enter the code Telegram sends to your app. Type `exit` when you see `OK — session saved`.
+3. **Enable listener** — add `MESSAGE_INTEL_LISTENER=auto` and keep `WORKER_HEAVY=essential` (not `full`).
 
-4. **Enable listener** — back in [Fly secrets](https://fly.io/apps/subnet-dashboard/secrets), add:
-   - `MESSAGE_INTEL_LISTENER` = `auto`
-   - `WORKER_HEAVY` = `full`  
-   Machine restarts; listener should show `running` at `/api/message-intel/status`.
+4. Verify with `./scripts/check_telegram_ready.sh` after ~2–3 minutes.
 
-**No SSH app?** Skip live listener for now — `POST /api/message-intel/ingest` still accepts pushed messages (honest-empty until something ingests).
+**No SSH app?** Use `POST /api/message-intel/ingest` from an external forwarder (honest-empty until something ingests).
 
 ---
 
@@ -328,8 +317,8 @@ You do **not** need a desktop. Session file is created **on the Fly volume** in 
 | `CALIBRATION_AUTO_RETRAIN` | **on** (fly.toml) | N3 post-resolver retrain hook |
 | `CONVICTION_ALERTS_ENABLED` | **on** (fly.toml) | O1 notify evaluation |
 | `CONVICTION_ALERT_DELIVERY` | **off** | Outbound delivery: off/dry_run/webhook/telegram |
-| `MESSAGE_INTEL_LISTENER` | **off** (fly.toml) | Telegram ingest at boot (`auto`/`on` when session ready) |
-| `WORKER_HEAVY` | **essential** (fly.toml) | Inline worker load: `essential` = pump/resolver only; **`full`** required for Telegram listener |
+| `MESSAGE_INTEL_LISTENER` | **off** (fly.toml) | Telegram ingest at boot (`auto` when session on volume) |
+| `WORKER_HEAVY` | **essential** (fly.toml) | Inline worker: pump/resolver + deferred Telegram on `essential`; **`full` wedges 2GB VM** |
 | `ALLOWED_ORIGINS` | fly.dev + cryptoreporthub.com | CORS allowlist |
 
 ---
