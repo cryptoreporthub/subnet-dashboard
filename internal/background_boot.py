@@ -149,6 +149,25 @@ def _start_pick_schedulers() -> None:
     defer_boot("pick-schedulers", _run, delay=max(BOOT_DEFER_SECONDS + 20, 60))
 
 
+def _start_score_snapshot_scheduler() -> None:
+    """Phase 2 — full-universe scores off the hot path (essential / worker)."""
+
+    def _run() -> None:
+        from internal.council.score_snapshots import start_score_snapshot_scheduler
+
+        immediate = os.environ.get("SCORE_SNAPSHOT_BOOT_IMMEDIATE", "off").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        start_score_snapshot_scheduler(immediate=immediate)
+        logger.info("score snapshot scheduler started")
+
+    # After pick schedulers; full score is heavier.
+    defer_boot("score-snapshots", _run, delay=max(BOOT_DEFER_SECONDS + 45, 90))
+
+
 def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     """Start background schedulers.
 
@@ -180,6 +199,7 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _start_resolver()
     _start_whale_warm_scheduler()
     _start_pick_schedulers()
+    _start_score_snapshot_scheduler()
 
     if not heavy:
         logger.info("background workers: essential mode (heavy feeds skipped)")
@@ -230,6 +250,12 @@ def stop_background_workers() -> None:
         from internal.council.pick_scheduler import stop_pick_schedulers
 
         stop_pick_schedulers()
+    except Exception:
+        pass
+    try:
+        from internal.council.score_snapshots import stop_score_snapshot_scheduler
+
+        stop_score_snapshot_scheduler()
     except Exception:
         pass
     try:

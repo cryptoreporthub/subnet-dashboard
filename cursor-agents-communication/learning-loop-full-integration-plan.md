@@ -36,9 +36,15 @@ Never call `select_daily_pick` / full `score_universe(~127)` on synchronous API 
 
 | Phase | Status | Notes |
 |-------|--------|-------|
+<<<<<<< HEAD
 | 0 Instrumentation | **merged (#498)** | `/api/learning/health`, ledger contract, LB-7/8 verify |
 | 1 Schedulers | **in progress** | Traffic-independent daily + hour create |
 | 2 Score snapshots | gated on 1 | Full 127 off hot path |
+=======
+| 0 Instrumentation | **done (PR #498)** | CI green; awaiting merge |
+| 1 Schedulers | **done (PR #500)** | stacked on Phase 0; awaiting merge |
+| 2 Score snapshots | **in progress** | Full 127 off hot path; cap reads snapshot |
+>>>>>>> 573f9da (feat(council): Phase 2 full-universe score snapshots off hot path)
 | 3 Shadows / HOLD / Option A | gated on 2 **stable** | Counterfactuals + hero |
 | 4 Intel / pump / history | gated on 3 | Bridge into loop |
 | 5 UI trust | gated on 4 | RF-2 honesty |

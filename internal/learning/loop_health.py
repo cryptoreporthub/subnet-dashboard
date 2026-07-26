@@ -93,12 +93,17 @@ def _day_ledger_present(netuid: Any, data: Optional[Dict[str, Any]] = None) -> b
 
 
 def _snapshot_age_seconds(path: Optional[str] = None) -> Optional[float]:
-    snap_path = path or SCORE_SNAPSHOTS_PATH
     try:
-        mtime = os.path.getmtime(snap_path)
-    except OSError:
-        return None
-    return max(0.0, _utcnow().timestamp() - mtime)
+        from internal.council.score_snapshots import snapshot_age_seconds
+
+        return snapshot_age_seconds(path or SCORE_SNAPSHOTS_PATH)
+    except Exception:
+        snap_path = path or SCORE_SNAPSHOTS_PATH
+        try:
+            mtime = os.path.getmtime(snap_path)
+        except OSError:
+            return None
+        return max(0.0, _utcnow().timestamp() - mtime)
 
 
 def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
