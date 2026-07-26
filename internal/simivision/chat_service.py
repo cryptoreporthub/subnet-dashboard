@@ -15,7 +15,7 @@ from datastore.learning_engine import LearningEngine
 from internal.integrations import clients as integration_clients
 from internal.integrations.clients import (
     chutes_chat_model,
-    chutes_model_fallbacks,
+    chutes_completion_models,
     chat_llm_targets,
     llm_api_key,
     thirty_spokes_base_url,
@@ -275,7 +275,16 @@ def _post_chat_completion(
             (resp.text or "")[:240],
         )
         return None
-    data = resp.json()
+    try:
+        data = resp.json()
+    except ValueError:
+        logger.warning(
+            "LLM API non-JSON response at %s model=%s body=%s",
+            base_url,
+            model,
+            (resp.text or "")[:240],
+        )
+        return None
     if not isinstance(data, dict):
         return None
     return _extract_completion_text(data)
@@ -290,9 +299,7 @@ def call_llm(prompt: str, message: str, context: Dict[str, Any]) -> Tuple[str, b
     if api_key:
         try:
             for base, model, provider in chat_llm_targets():
-                models = [model]
-                if provider == "chutes":
-                    models.extend(chutes_model_fallbacks(model))
+                models = chutes_completion_models(model) if provider == "chutes" else [model]
                 seen: set[str] = set()
                 for model_id in models:
                     if model_id in seen:
@@ -398,7 +405,12 @@ def _run_chat_sync(message: str) -> Dict[str, str]:
     prompt = build_simivision_prompt(message, context)
     reply, llm_used, provider = call_llm(prompt, message, context)
     model = _display_model(llm_used, provider)
-    status = "ok" if llm_used else "local-fallback"
+    if llm_used:
+        status = "ok"
+    elif _llm_api_key():
+        status = "offline"
+    else:
+        status = "local-fallback"
     return {"reply": sanitize_reply(reply), "model": model, "status": status}
 
 

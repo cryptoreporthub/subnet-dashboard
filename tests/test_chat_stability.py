@@ -129,17 +129,20 @@ def test_call_llm_chutes_model_fallback_to_default(monkeypatch):
             class _R:
                 status_code = 200
 
+                def json(self):
+                    return {"data": [{"id": "catalog-model"}]}
+
             return _R()
         if method == "POST" and url.endswith("/chat/completions"):
             body = kwargs.get("json_body") or kwargs.get("json") or {}
             model = body.get("model", "")
             models_seen.append(model)
             class _R:
-                status_code = 200 if model == "default" else 400
+                status_code = 200 if model in ("default", "catalog-model") else 400
                 text = "bad model"
 
                 def json(self):
-                    return {"choices": [{"message": {"content": "ok default"}}]}
+                    return {"choices": [{"message": {"content": f"ok {model}"}}]}
 
             return _R()
         raise AssertionError(f"unexpected {method} {url}")
@@ -151,6 +154,24 @@ def test_call_llm_chutes_model_fallback_to_default(monkeypatch):
     assert reply == "ok default"
     assert models_seen[0] == "bad-model-id"
     assert "default" in models_seen
+
+
+def test_handle_chat_offline_when_key_configured_but_llm_fails(monkeypatch):
+    import asyncio
+
+    import internal.simivision.chat_service as chat
+
+    monkeypatch.setenv("CHUTES_API_KEY", "test-key")
+    monkeypatch.setattr(chat, "build_chat_context", lambda: {"source": "registry-fallback"})
+    monkeypatch.setattr(chat, "_maybe_investigation_context", lambda _m: None)
+    monkeypatch.setattr(chat, "call_llm", lambda *_a, **_k: ("local answer", False, ""))
+
+    async def _run():
+        return await chat.handle_simivision_chat("hello")
+
+    out = asyncio.run(_run())
+    assert out["status"] == "offline"
+    assert out["model"] == "local-fallback"
 
 
 def test_wants_investigation_generic_pick_question_false():
