@@ -3,11 +3,33 @@ RedTeam audit layer for the Council daily pick.
 
 Flags low liquidity, extreme volatility, unstable rank vs raw score, and
 missing critical fields before a daily pick is promoted to the API.
+
+Multipliers are calibrated against graded predictions (2026-07-26): volume and
+emission-rank flags did not predict worse hit rates in the n≈60 sample, so they
+are notes with tiny haircuts. Stacked cuts are capped (RED_TEAM_MAX_HAIRCUT).
 """
 
+from __future__ import annotations
+
+import os
 from typing import Any, Dict, List, Optional
 
 from internal.subnets.tradable import is_tradable_subnet, subnet_netuid, subnet_volume
+
+
+def _max_haircut_fraction() -> float:
+    """Max confidence reduction from stacked audit multipliers (default 12%)."""
+    raw = os.environ.get("RED_TEAM_MAX_HAIRCUT", "0.12").strip()
+    try:
+        val = float(raw)
+    except ValueError:
+        val = 0.12
+    return max(0.05, min(0.35, val))
+
+
+def _apply_multiplier(multiplier: float, factor: float) -> float:
+    floor = 1.0 - _max_haircut_fraction()
+    return max(floor, multiplier * factor)
 
 
 def audit_daily_pick(
@@ -48,44 +70,48 @@ def audit_daily_pick(
             concerns.append(f"Missing critical field: {field}")
             confidence_multiplier *= 0.5
 
-    # Liquidity — alpha subnet turnover is typically $0.5k–$50k/day, not mega-cap USD.
+    # Liquidity — alpha turnover is typically $0.5k–$50k/day.
+    # Graded sample: volume<$500 hit ≈ base rate; do not crush thin names.
     volume = subnet_volume(candidate)
-    if volume < 500:
+    if volume < 100:
+        concerns.append(f"Very thin volume: ${volume:,.0f} < $100")
+        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.97)
+    elif volume < 500:
         concerns.append(f"Low liquidity: volume ${volume:,.0f} < $500")
-        confidence_multiplier *= 0.80
+        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.98)
     elif volume < 5_000:
         concerns.append(f"Thin volume: ${volume:,.0f} < $5k")
-        confidence_multiplier *= 0.95
+        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.99)
 
-    # Extreme recent volatility
+    # Volatility — momentum can be the edge; haircuts are mild notes.
     chg24 = float(candidate.get("price_change_24h", 0) or 0)
     chg7 = float(candidate.get("price_change_7d", 0) or 0)
     if abs(chg24) > 20:
         concerns.append(f"Extreme 24h volatility: {chg24:+.1f}%")
-        confidence_multiplier *= 0.85
+        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.92)
     elif abs(chg24) > 12:
         concerns.append(f"Elevated 24h volatility: {chg24:+.1f}%")
-        confidence_multiplier *= 0.95
+        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.98)
 
     if abs(chg7) > 50:
         concerns.append(f"Extreme 7d volatility: {chg7:+.1f}%")
-        confidence_multiplier *= 0.90
+        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.95)
 
-    # Risk flags
+    # Real risk — keep meaningful, but never stack to a second HOLD via audit alone.
     risk_flags = candidate.get("risk_flags") or []
     if risk_flags:
         concerns.append(f"Risk flags present: {risk_flags}")
-        confidence_multiplier *= 0.90
+        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.95)
 
     if candidate.get("is_overvalued"):
         concerns.append("Subnet flagged as overvalued")
-        confidence_multiplier *= 0.85
+        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.92)
 
     if str(candidate.get("status", "active")).lower() in ("deprecated", "at-risk", "inactive"):
         concerns.append(f"Non-active status: {candidate.get('status')}")
-        confidence_multiplier *= 0.70
+        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.90)
 
-    # Rank vs raw score stability: compare emission/market-cap rank to score rank
+    # Emission-rank mismatch: note only — did not predict misses in graded sample.
     if all_subnets and len(all_subnets) > 1:
         netuid = candidate.get("netuid")
         try:
@@ -102,7 +128,7 @@ def audit_daily_pick(
                 concerns.append(
                     f"Unstable rank: score pick but emission rank #{emission_rank}"
                 )
-                confidence_multiplier *= 0.95
+                confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.98)
         except Exception:
             pass
 
@@ -116,4 +142,6 @@ def audit_daily_pick(
         "approved": approved,
         "concerns": concerns,
         "adjusted_confidence": adjusted,
+        "confidence_multiplier": round(confidence_multiplier, 4),
+        "max_haircut": _max_haircut_fraction(),
     }

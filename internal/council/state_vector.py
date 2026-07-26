@@ -1541,22 +1541,30 @@ def _resolver_hit_rate(min_n: int = 30) -> Optional[float]:
     return hits / len(graded)
 
 
-# Cold-start prior must clear the 45% publish gate after mild RedTeam haircuts.
-# Prior 0.5 capped raw confidence at 0.5, so any ×0.95 audit cut forced HOLD.
-_COLD_START_PRIOR = 0.62
+# Re-export cold-start for tests; canonical value lives in confidence_calibration.
+from internal.council.confidence_calibration import COLD_START_PRIOR as _COLD_START_PRIOR  # noqa: E402
 
 
 def _compute_confidence(
     sn: Dict[str, Any],
     indicators: Dict[str, Any],
     expert_contributions: Dict[str, float],
+    total_score: Optional[float] = None,
 ) -> float:
-    """Return a 0-1 confidence score calibrated against resolver history."""
-    prior = _resolver_hit_rate()
-    if prior is None:
-        prior = _COLD_START_PRIOR
+    """Return a 0-1 publishability confidence, calibrated against resolver history.
 
+    Do **not** multiply by raw hit rate (~0.45 with current n). That collapse
+    forced HOLD on high-score candidates. See ``confidence_calibration.py``.
+    """
+    from internal.council.confidence_calibration import (
+        blended_prior,
+        reliability_factor,
+        score_boost,
+    )
     from internal.subnets.tradable import subnet_volume
+
+    hit = _resolver_hit_rate()
+    prior = blended_prior(hit)
 
     vol = subnet_volume(sn)
     required = ("netuid", "name", "price")
@@ -1587,7 +1595,10 @@ def _compute_confidence(
     else:
         agreement = 0.5
 
-    confidence = prior * completeness * (0.75 + 0.25 * agreement)
+    confidence = (
+        prior * completeness * (0.75 + 0.25 * agreement) * reliability_factor(hit)
+        + score_boost(total_score)
+    )
     return round(min(1.0, max(0.0, confidence)), 4)
 
 
@@ -1659,7 +1670,7 @@ def score_subnet_for_hour(
         except Exception:
             pass
 
-    confidence = _compute_confidence(sn, indicators, experts)
+    confidence = _compute_confidence(sn, indicators, experts, total_score=total)
     tags = _scenario_tags(sn, indicators, market_context)
 
     # Compute weighted technical score for hour horizon
@@ -1761,7 +1772,7 @@ def score_subnet_for_day(
         except Exception:
             pass
 
-    confidence = _compute_confidence(sn, indicators, experts)
+    confidence = _compute_confidence(sn, indicators, experts, total_score=total)
     tags = _scenario_tags(sn, indicators, market_context)
 
     # Compute weighted technical score for day horizon
