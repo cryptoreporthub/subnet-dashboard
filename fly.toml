@@ -1,5 +1,5 @@
 # fly.toml app configuration file generated for subnet-dashboard
-# Redeploy trigger — 2026-07-14: post-deploy start + health gate (machine left stopped)
+# Redeploy trigger — 2026-07-26: post-#480 SCAN ship — restart wedged machine
 
 app = "subnet-dashboard"
 primary_region = "sjc"
