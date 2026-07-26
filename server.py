@@ -528,15 +528,25 @@ def _cap_subnets_for_scoring(
 ) -> List[Dict[str, Any]]:
     """Limit council scoring to the most active subnets (Fly single-worker safety).
 
-    Prefer live-priced market activity (volume, market_cap) when present; fall
-    back to emission so registry-only snapshots still produce a stable universe.
-    Unpriced emission-only rows rank below any row with a positive price.
+    Prefer a fresh full-universe ``score_snapshots.json`` ranking when present
+    (Phase 2) so the capped hot path still covers high-scoring netuids that
+    volume/emission alone would miss. Fall back to live-priced market activity
+    (volume, market_cap) then emission.
     """
     from internal.subnets.tradable import subnet_volume
 
     cap = limit if limit is not None else TOP_SCORING_UNIVERSE
     if not subnets or len(subnets) <= cap:
         return subnets
+
+    try:
+        from internal.council.score_snapshots import rank_subnets_by_snapshot
+
+        ranked = rank_subnets_by_snapshot(subnets, horizon="day")
+        if ranked:
+            return ranked[:cap]
+    except Exception:
+        pass
 
     def _has_price(s: Dict[str, Any]) -> int:
         try:
