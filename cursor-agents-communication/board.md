@@ -1,27 +1,35 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-26T17:30:00Z  
-**main:** `7a5de5a` · Learning loop Phases 0–6 merged
+**Last updated:** 2026-07-26T17:48:00Z  
+**main:** `e926c40` — post-stability sprint **COMPLETE** (#508 Wave E)
 
-## Active plan
+## Post-stability sprint (`post-stability-sprint-plan.md`)
 
-**Canonical:** `cursor-agents-communication/learning-loop-full-integration-plan.md`  
-**Status:** **DONE** (Phases 0–6 on `main`)
+| Wave | Status | PRs |
+|------|--------|-----|
+| A Verify/G0 | ✅ | #501, prod `g0_phone_qa.sh` 2026-07-26 |
+| B Batch 0 | ✅ | #486–#488 |
+| C Pump parity | ✅ | #489, #493 |
+| D Chat | ✅ | #492–#507 |
+| E Integrations | ✅ | **#508** (phased; supersedes #449) |
 
-| Phase | PR | Status |
-|-------|-----|--------|
-| 0 Instrumentation | #498 | ✅ |
-| 1 Schedulers | #500 | ✅ |
-| 2 Score snapshots | #502 | ✅ |
-| 3 Shadows / HOLD | #503 | ✅ |
-| 4–6 bridges + trust + verify | #504 | ✅ |
+**Prod verified after #508:** `/health` OK · `/api/subnet-integrations/signals` OK · G0 script green.
 
-## Ops follow-up
+## Learning loop (`learning-loop-full-integration-plan.md`)
 
-- Confirm worker/essential process writes `score_snapshots.json` (snapshot_age non-null)
+Phases 0–6 merged (#498–#504). Separate track — babysit agent did not own `internal/learning/*`.
+
+## Housekeeping (human)
+
+Close superseded PRs — agent token lacks `closePullRequest`:
+
+- #455, #491, #487, #474, #449
+
+## Out of scope (skipped)
+
+- Chutes billing / live LLM chat replies (human Fly secrets)
+
+## Ops optional
+
 - `APP_BASE_URL=https://subnet-dashboard.fly.dev ./scripts/verify_prod.sh`
-- Optional: `fly scale count web=1 worker=1`
-
-## Prior (done)
-
-Pump-site + G0 · H1 SSE · Calibration (#494).
+- `fly scale count web=1 worker=1 --app subnet-dashboard`
