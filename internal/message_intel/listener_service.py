@@ -141,7 +141,7 @@ def _on_telegram_message(normalized: Dict[str, Any]) -> None:
     from internal.message_intel.engine import ingest_message
 
     try:
-        ingest_message(normalized, snapshot_price=False)
+        ingest_message(normalized, snapshot_price=True)
         _touch_listener_heartbeat()
     except Exception as exc:
         logger.warning("Telegram ingest failed: %s", exc)

@@ -62,6 +62,7 @@ async def api_message_intel(
 async def api_message_intel_status():
     """Listener + store health (no secrets). Honest when creds absent."""
     from internal.message_intel.listener_service import listener_status
+    from internal.message_intel.outcome_loop import outcome_loop_status
     from internal.message_intel.store import live_stats
     from internal.message_intel.sources import source_status
 
@@ -75,6 +76,7 @@ async def api_message_intel_status():
         "listener": listener,
         "store": stats,
         "sources": source_status(),
+        "outcomes": outcome_loop_status(),
         "live": bool(listener.get("live")),
         "empty": int(stats.get("total_messages") or 0) == 0,
     }

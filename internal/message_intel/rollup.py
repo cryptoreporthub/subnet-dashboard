@@ -191,10 +191,52 @@ def build_trending_subnets(
     return out[:limit]
 
 
+def _author_outcome_stats(db=None) -> Dict[str, Dict[str, Any]]:
+    """Map author_id → {graded, hits, hit_rate} from price_outcomes + verdicts."""
+    database = db or get_db()
+    stats: Dict[str, Dict[str, Any]] = {}
+    try:
+        with database._connect() as conn:
+            rows = conn.execute(
+                """SELECT m.author_id, m.author_username, m.author_name,
+                          v.predicted_direction, po.outcome, po.pump_pct_max
+                   FROM messages m
+                   JOIN price_outcomes po ON po.message_id = m.id
+                   LEFT JOIN message_verdicts v ON v.message_id = m.id"""
+            ).fetchall()
+    except Exception:
+        return {}
+
+    for row in rows:
+        author_id = str(row["author_id"] or row["author_username"] or row["author_name"] or "unknown")
+        entry = stats.setdefault(author_id, {"graded": 0, "hits": 0})
+        entry["graded"] += 1
+        direction = str(row["predicted_direction"] or "").lower()
+        outcome = str(row["outcome"] or "").lower()
+        hit = False
+        if direction in ("up", "bullish") and outcome in ("pump", "mild_pump"):
+            hit = True
+        elif direction in ("down", "bearish") and outcome in ("dump", "mild_dump"):
+            hit = True
+        elif direction in ("flat", "sideways", "neutral", "") and outcome == "stable":
+            hit = True
+        elif outcome in ("pump", "mild_pump") and not direction:
+            hit = True
+        if hit:
+            entry["hits"] += 1
+
+    for entry in stats.values():
+        graded = int(entry["graded"])
+        hits = int(entry["hits"])
+        entry["hit_rate"] = round((hits / graded) * 100.0, 1) if graded else None
+    return stats
+
+
 def build_weekly_authors(*, days: int = 7, limit: int = 8, db=None) -> List[Dict[str, Any]]:
     """Top contributors by emoji-weighted influence over the last N days."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     authors: Dict[str, Dict[str, Any]] = {}
+    outcome_stats = _author_outcome_stats(db)
 
     for row in _load_message_rows(db):
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
@@ -228,6 +270,7 @@ def build_weekly_authors(*, days: int = 7, limit: int = 8, db=None) -> List[Dict
             continue
         name = str(entry["author_name"] or "Unknown")
         initials = "".join(part[0].upper() for part in name.split()[:2]) or "?"
+        graded = outcome_stats.get(entry["author_id"]) or {}
         out.append(
             {
                 "author_id": entry["author_id"],
@@ -238,6 +281,9 @@ def build_weekly_authors(*, days: int = 7, limit: int = 8, db=None) -> List[Dict
                 "subnet_count": len(entry["subnets"]),
                 "influence_score": round(float(entry["influence_score"]), 2),
                 "reactions": dict(entry["reactions"]),
+                "graded": int(graded.get("graded") or 0),
+                "hits": int(graded.get("hits") or 0),
+                "hit_rate": graded.get("hit_rate"),
             }
         )
 
