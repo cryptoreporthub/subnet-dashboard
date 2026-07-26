@@ -135,9 +135,16 @@ if subs:
 "
 
 echo "== cockpit SSE once =="
-sse_code="$(curl -sS -o /dev/null -w "%{http_code}" --max-time 15 "$BASE/api/cockpit/stream?once=1" || true)"
+sse_code="$(curl -sS -o /tmp/cockpit_sse.txt -w "%{http_code}" --max-time 25 "$BASE/api/cockpit/stream?once=1" || true)"
 echo "$sse_code"
-if [ "$sse_code" != "200" ]; then
+if [ "$sse_code" = "200" ]; then
+  python3 -c "
+import pathlib
+body = pathlib.Path('/tmp/cockpit_sse.txt').read_text()
+assert 'event: cockpit.picks' in body, 'missing cockpit.picks event'
+print('cockpit SSE OK, bytes=', len(body))
+"
+else
   echo "WARN: cockpit SSE returned $sse_code (non-fatal for Wave A gate)"
 fi
 
