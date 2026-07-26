@@ -185,6 +185,31 @@ def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
     }
 
 
+def _heartbeat_age_seconds(peer: Dict[str, Any]) -> Optional[float]:
+    hb = peer.get("heartbeat") if isinstance(peer.get("heartbeat"), dict) else {}
+    ts = _parse_iso(hb.get("ts"))
+    if ts is None:
+        return None
+    return max(0.0, (_utcnow() - ts).total_seconds())
+
+
+def _machine_restarted_since_tick(
+    worker_peer: Dict[str, Any],
+    tick_age_s: Optional[float],
+    *,
+    window_s: int = 900,
+) -> bool:
+    """True when inline worker heartbeat is fresh but soul_map tick predates this boot."""
+    if not inline_worker_expected() or is_worker_mode():
+        return False
+    if not worker_peer.get("alive") or tick_age_s is None:
+        return False
+    hb_age = _heartbeat_age_seconds(worker_peer)
+    if hb_age is None or hb_age > window_s:
+        return False
+    return tick_age_s > hb_age + 60.0
+
+
 def build_learning_loop_health(
     *,
     daily_picks_path: Optional[str] = None,
@@ -254,7 +279,10 @@ def build_learning_loop_health(
     elif pending > 0 and (
         tick_at is None or (tick_age_s is not None and tick_age_s > stall_after_s)
     ):
-        status = "stalled"
+        if _machine_restarted_since_tick(worker_peer, tick_age_s) and not watchdog.get("warning"):
+            status = "degraded"
+        else:
+            status = "stalled"
     elif not resolver.get("running") or tick_at is None:
         status = "degraded"
 
