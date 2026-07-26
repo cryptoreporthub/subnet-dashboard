@@ -93,3 +93,20 @@ def test_maybe_investigation_skipped_for_generic_pick(monkeypatch):
     monkeypatch.setattr(chat, "build_investigation_context", _boom)
     assert chat._maybe_investigation_context("What is today's featured council pick?") is None
     assert called["n"] == 0
+
+
+def test_handle_chat_returns_status_local_fallback(monkeypatch):
+    import internal.simivision.chat_service as chat
+
+    monkeypatch.setattr(chat, "build_chat_context", lambda: {"source": "registry-fallback"})
+    monkeypatch.setattr(chat, "_maybe_investigation_context", lambda _m: None)
+    monkeypatch.setattr(chat, "call_llm", lambda *_a, **_k: ("local answer", False))
+
+    async def _run():
+        return await chat.handle_simivision_chat("hello")
+
+    import asyncio
+
+    out = asyncio.run(_run())
+    assert out["status"] == "local-fallback"
+    assert out["model"] == "local-fallback"
