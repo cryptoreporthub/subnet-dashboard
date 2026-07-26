@@ -60,6 +60,30 @@ def test_owner_chip_honest_empty_without_owner():
     assert row.get("owner_chip") is None
 
 
+def test_desk_row_includes_whale_intel_when_available():
+    flow = {
+        "data_available": True,
+        "by_classification": {
+            "alpha_whales": [{"wallet": "a"}],
+            "early_movers": [{"wallet": "b"}],
+            "conviction_holders": [],
+            "ruggers": [],
+        },
+        "smart_money_present": True,
+    }
+
+    class _Svc:
+        def get_subnet_flow(self, netuid):
+            return flow
+
+    import internal.learning.pump_alert as pa
+
+    pa._whale_service_singleton = _Svc()
+    row = build_desk_row(_ladder_entry("ACCUMULATING", netuid=113, score=0.72))
+    assert row["wallet_chip"] == "2 whale wallets accumulating"
+    assert row["whale_archetype"] == "Smart money accumulation"
+
+
 def test_desk_row_owner_chip_from_subnet_row():
     row = build_desk_row(
         _ladder_entry("STIRRING", netuid=2, score=0.35),

@@ -1302,8 +1302,17 @@
       esc(labels.coil || 'OPEN') +
       '</span></p></div>' +
       (row.size_line ? '<p class="pds-hero__chip">' + esc(row.size_line) + '</p>' : '') +
+      (row.whale_archetype
+        ? '<p class="pds-hero__chip pds-hero__chip--whale">' + esc(row.whale_archetype) + '</p>'
+        : '') +
+      (row.wallet_chip
+        ? '<p class="pds-hero__chip pds-hero__chip--wallet">' + esc(row.wallet_chip) + '</p>'
+        : '') +
       (row.telegram_chip
         ? '<p class="pds-hero__chip pds-hero__chip--tg">' + esc(row.telegram_chip) + '</p>'
+        : '') +
+      (row.owner_chip
+        ? '<p class="pds-hero__chip pds-hero__chip--owner">' + esc(row.owner_chip) + '</p>'
         : '') +
       '<a class="pds-hero__cta home-cta home-cta--primary" href="/subnet/' +
       esc(row.netuid) +
@@ -1468,9 +1477,12 @@
     if (row.vol_pct != null) rawBits.push('<span>' + esc(row.vol_pct) + '% vol intensity</span>');
     var chipsHtml = '';
     if (row.size_line) chipsHtml += '<p class="pd-chip">' + esc(row.size_line) + '</p>';
+    if (row.whale_archetype)
+      chipsHtml += '<p class="pd-chip pd-chip--whale">' + esc(row.whale_archetype) + '</p>';
+    if (row.wallet_chip) chipsHtml += '<p class="pd-chip pd-chip--wallet">' + esc(row.wallet_chip) + '</p>';
     if (row.telegram_chip)
       chipsHtml += '<p class="pd-chip pd-chip--tg">' + esc(row.telegram_chip) + '</p>';
-    if (row.wallet_chip) chipsHtml += '<p class="pd-chip pd-chip--wallet">' + esc(row.wallet_chip) + '</p>';
+    if (row.owner_chip) chipsHtml += '<p class="pd-chip pd-chip--owner">' + esc(row.owner_chip) + '</p>';
     return (
       '<article class="pd-lead pd-lead--' +
       esc(timing) +

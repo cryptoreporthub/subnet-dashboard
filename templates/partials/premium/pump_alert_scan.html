@@ -109,10 +109,11 @@
           </p>
         </div>
 
+        {% if hero_row.whale_archetype %}<p class="pds-hero__chip pds-hero__chip--whale">{{ hero_row.whale_archetype }}</p>{% endif %}
+        {% if hero_row.wallet_chip %}<p class="pds-hero__chip pds-hero__chip--wallet">{{ hero_row.wallet_chip }}</p>{% endif %}
         {% if hero_row.size_line %}<p class="pds-hero__chip">{{ hero_row.size_line }}</p>{% endif %}
         {% if hero_row.telegram_chip %}<p class="pds-hero__chip pds-hero__chip--tg">{{ hero_row.telegram_chip }}</p>{% endif %}
         {% if hero_row.owner_chip %}<p class="pds-hero__chip pds-hero__chip--owner">{{ hero_row.owner_chip }}</p>{% endif %}
-        {% if hero_row.wallet_chip %}<p class="pds-hero__chip pds-hero__chip--wallet">{{ hero_row.wallet_chip }}</p>{% endif %}
 
         <a class="pds-hero__cta home-cta home-cta--primary" href="/subnet/{{ hero_row.netuid }}">Open SN{{ hero_row.netuid }} dossier</a>
       </article>
@@ -463,6 +464,8 @@
     color: var(--pds-sub);
   }
   .pds-hero__chip--tg { color: #7dd3fc; }
+  .pds-hero__chip--whale { color: #fbbf24; }
+  .pds-hero__chip--wallet { color: #a7f3d0; }
   .pds-hero__cta {
     display: block;
     margin-top: 12px;
