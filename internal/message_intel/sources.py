@@ -8,9 +8,10 @@ from typing import Any, Dict
 
 def source_status() -> Dict[str, Any]:
     """Report which social ingest sources are configured vs unreachable."""
+    session_path = os.environ.get("TELEGRAM_SESSION_PATH", "data/telegram_listener").strip()
     telegram = {
         "configured": bool(os.environ.get("TELEGRAM_API_ID") and os.environ.get("TELEGRAM_API_HASH")),
-        "session": bool(os.environ.get("TELEGRAM_SESSION") or os.environ.get("TELEGRAM_SESSION_PATH")),
+        "session": os.path.isfile(f"{session_path}.session"),
         "channels": os.environ.get("TELEGRAM_CHANNELS", ""),
     }
     discord = {
