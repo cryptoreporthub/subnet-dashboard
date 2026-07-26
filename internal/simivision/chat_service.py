@@ -71,11 +71,42 @@ def build_simivision_prompt(message: str, context: Dict[str, Any]) -> str:
     )
 
 
+def _wants_investigation(message: str) -> bool:
+    """TaoStats path only for explicit on-chain questions — not generic council picks."""
+    import re
+
+    text = (message or "").strip()
+    if not text:
+        return False
+    if re.search(r"\b5[A-HJ-NP-Za-km-z1-9]{47,48}\b", text):
+        return True
+    q = text.lower()
+    if any(
+        tok in q
+        for tok in (
+            "wallet",
+            "coldkey",
+            "undelegate",
+            "transfer",
+            "trace",
+            "seller",
+            "selling",
+            "who sold",
+            "owner",
+        )
+    ):
+        return True
+    if "sell" in q and any(w in q for w in ("who", "wallet", "subnet", "sn", "tao")):
+        return True
+    if re.search(r"\b(?:sn|subnet)\s*\d+\b", text, re.I):
+        return True
+    return False
+
+
 def _maybe_investigation_context(message: str) -> Optional[Dict[str, Any]]:
     import re
 
-    q = (message or "").lower()
-    if not any(tok in q for tok in ("wallet", "sell", "selling", "undelegate", "transfer", "owner", "coldkey", "sn", "subnet")):
+    if not _wants_investigation(message):
         return None
     netuid = None
     m = re.search(r"\b(?:sn|subnet)\s*(\d+)\b", message, re.I)

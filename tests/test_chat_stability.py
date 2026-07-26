@@ -63,3 +63,33 @@ def test_call_llm_uses_llm_chutes_when_llm_base_is_api_chutes(monkeypatch):
     assert llm_used is True
     assert reply == "ok from chutes"
     assert seen and seen[0].startswith("https://llm.chutes.ai/v1/chat/completions")
+
+
+def test_wants_investigation_generic_pick_question_false():
+    from internal.simivision.chat_service import _wants_investigation
+
+    assert not _wants_investigation("What is today's best subnet pick?")
+    assert not _wants_investigation("Explain the council featured call")
+    assert not _wants_investigation("Which subnet has the highest APY?")
+
+
+def test_wants_investigation_on_chain_true():
+    from internal.simivision.chat_service import _wants_investigation
+
+    assert _wants_investigation("Who sold on SN29 today?")
+    assert _wants_investigation("Trace transfers from 5HCFWvRqzSHWRPecN7q8J6c7aKQnrCZTMHstPv39xL1wgDHh")
+    assert _wants_investigation("Is the subnet owner selling?")
+
+
+def test_maybe_investigation_skipped_for_generic_pick(monkeypatch):
+    import internal.simivision.chat_service as chat
+
+    called = {"n": 0}
+
+    def _boom(*_a, **_k):
+        called["n"] += 1
+        raise AssertionError("investigation should not run")
+
+    monkeypatch.setattr(chat, "build_investigation_context", _boom)
+    assert chat._maybe_investigation_context("What is today's featured council pick?") is None
+    assert called["n"] == 0
