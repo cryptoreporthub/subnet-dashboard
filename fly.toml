@@ -1,5 +1,5 @@
 # fly.toml app configuration file generated for subnet-dashboard
-# Redeploy trigger — 2026-07-26: post-#480 SCAN ship — restart wedged machine
+# Redeploy trigger — 2026-07-26: disable inline worker (pump scan wedged 2GB VM)
 
 app = "subnet-dashboard"
 primary_region = "sjc"
@@ -32,8 +32,8 @@ primary_region = "sjc"
   RUN_MODE = "web"
   # Web serves HTTP only; schedulers run in inline worker subprocess (same machine/volume).
   BACKGROUND_ON_WEB = "off"
-  INLINE_WORKER = "1"
-  ENABLE_INLINE_WORKER = "1"
+  INLINE_WORKER = "0"
+  ENABLE_INLINE_WORKER = "0"
   # essential = pump/resolver/whale on worker; full adds live-subnet wedge (2GB+ only).
   WORKER_HEAVY = "essential"
   # Keep prod boot light; Telegram needs a live session on the volume.
