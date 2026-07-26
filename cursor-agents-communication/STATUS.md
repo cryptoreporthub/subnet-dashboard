@@ -1,45 +1,40 @@
 # STATUS
 
-**Updated:** 2026-07-25T01:12:00Z  
-**main:** `49159d5`+ (#461 docs merged)  
-**active plan:** `post-stability-sprint-plan.md`  
+**Updated:** 2026-07-26T19:00:00Z  
+**main:** `e9fee8e` (#515 Telegram outcome loop)  
+**active plan:** Wave F housekeeping (`post-stability-sprint-plan.md` waves A–E ✅ **COMPLETE**)  
 **previous plan:** `prod-stability-plan.md` Phases 0–4 ✅ **COMPLETE**
 
 ---
 
-## Next (sequential — one PR at a time)
+## Next (Wave F — housekeeping)
 
-### Wave A — Verify & ops gate
-1. ✅ Automated: `./scripts/wave_a_gate.sh` (G0 + pump soak + verify_prod)
-2. ⚠️ **Human:** 390px sign-off — Call → Pump desk → horizon path
-3. Ops: `fly scale count worker=1` only if prod soak fails after merge
-
-### Wave B — Batch 0 brain (B0-a → B0-d)
-3. `cursor/b0-a-living-focus-d2cd` → B0-b → B0-c → B0-d
-
-### Wave C — Pump parity
-4. `cursor/p5-founder-chip-d2cd`
-5. Rebase #455 social conviction (optional)
-
-### Wave D — Chat
-6. `cursor/chat-fast-path-d2cd` — complete Phase 4 AC
-
-### Wave E — Subnet connections (phased)
-7. #449 E1 API → E2 UI → E3 macro overlay
-
-### Wave F — Housekeeping
-8. Stale doc PRs · E1 test debt · H1 hour-watch (after B0-d)
+1. Merge **#518** — `verify_prod.sh` wedge hardening + board sync
+2. **Human:** close superseded PRs (#455, #491, #487, #474, #449)
+3. **Human ops (optional):** `WORKER_HEAVY=full` on Fly for Telegram listener + price-outcome loop (`listener.reason` ≠ `worker_heavy_off`)
+4. Learning loop `stalled` on prod — learning-loop agent / confirm `score_snapshots.json` on volume
+5. E1 test debt · H1 hour-watch (`h1-hour-watch-live-lock.md`) — after G0 human 390px if still open
 
 ---
 
-## Done (recent)
+## Post-stability sprint (COMPLETE)
 
-- **#461–#464** — prod stability plan (docs + Phases 0–4 implementation)
-- **#462** — fast pump-alerts desk, no timeout cache
-- **#463** — compact pump desk UI + hydrate desk refresh
-- **#464** — sequential hydrate + chat context cache
-- **#453–#460** — inline worker, pump desk sparklines, spine polish, conviction orb
-- #410 — full plan execution: G0 script, Wave 2–3 (S1–S8), P4 notify
+| Wave | Status | Notes |
+|------|--------|-------|
+| A Verify/G0 | ✅ | G0 SSR script green 2026-07-26 |
+| B Batch 0 | ✅ | #486–#488 |
+| C Pump parity | ✅ | #489, #493 |
+| D Chat | ✅ | #492–#507 |
+| E Integrations | ✅ | **#508** (not #449) |
+
+**Telegram intel (#513–#515):** rollup UI, listener hardening, outcome loop on `main` — prod needs `WORKER_HEAVY=full` for live ingest/outcomes.
+
+---
+
+## Prod smoke (2026-07-26)
+
+- `./scripts/verify_prod.sh` — **OK** (WARN: learning stalled, message-intel `worker_heavy_off`)
+- `./scripts/g0_phone_qa.sh` — SSR checks **PASS** (pump API may timeout under load; desk SSR is gate)
 
 ---
 
@@ -48,17 +43,17 @@
 | ID | Status |
 |----|--------|
 | Prod stability 0–4 | ✅ |
-| G0 | ⚠️ script ✅ · **human 390px open** |
-| B0-a…d | ❌ unblocked (B0-0 met) |
-| P5 founder chip | ❌ |
-| #455 social | ⚠️ open PR, needs rebase |
-| #449 integrations | ❌ phased in Wave E |
+| Post-stability A–E | ✅ |
+| G0 | ✅ script · **human 390px** may still be open |
+| B0-a…d | ✅ (#486–#488) |
+| P5 founder chip | ✅ |
+| #449 integrations | ❌ superseded by #508 |
 | H1 hour-watch | — gated on B0-d + G0 |
 
 ---
 
 ## Skipped / deferred
 
+- Chutes billing / live LLM chat (human Fly secrets)
 - Wave 4 pump gameplan depth (YAGNI)
 - Full frontend modernization (Batch 0 covers Tier‑1)
-- Prediction/weights algorithm rewrite (no evidence of breakage)

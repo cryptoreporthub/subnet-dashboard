@@ -1,6 +1,6 @@
 # Post-stability sprint — close the trust gap
 
-**Status:** ACTIVE — execute one PR at a time: merge → verify prod → next  
+**Status:** COMPLETE (waves A–E shipped on `main` ≥ `e9fee8e`) — Wave F housekeeping optional  
 **Updated:** 2026-07-25  
 **Predecessor:** `prod-stability-plan.md` Phases 0–4 ✅ **COMPLETE** (`main` ≥ `49159d5` + #461 docs)  
 **North star:** Tier‑1 surfaces show **real data or dignified Quiet within ~5s**; home answers one trader question per viewport.
