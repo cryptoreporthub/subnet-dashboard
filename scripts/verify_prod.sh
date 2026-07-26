@@ -21,6 +21,30 @@ for i in $(seq 1 10); do
   curl -fsS --max-time 5 -w "health $i: %{http_code} %{time_total}s\n" -o /dev/null "$BASE/health" || echo "health $i: FAILED"
 done
 
+echo "== learning loop health (Phase 0–6) =="
+curl -fsS --max-time 8 "$BASE/api/learning/health" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print('status:', d.get('status'))
+print('pending:', d.get('pending'))
+print('ledger:', d.get('ledger'))
+print('snapshot_age_seconds:', d.get('snapshot_age_seconds'))
+print('daily_pick:', d.get('daily_pick'))
+assert d.get('status') in ('ok','degraded','stalled'), 'unexpected learning health status'
+if d.get('status') == 'stalled':
+    print('WARN: learning loop stalled — check ledger gap / resolver tick')
+"
+
+echo "== ops readiness includes loop health =="
+curl -fsS --max-time 8 "$BASE/api/ops/readiness" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+lh=d.get('learning_loop_health') or {}
+print('ready:', d.get('ready'))
+print('loop_status:', lh.get('status'))
+print('issues:', d.get('issues'))
+"
+
 echo "== calibration auto_retrain =="
 curl -fsS "$BASE/api/calibration/status" | python3 -c "
 import json,sys
