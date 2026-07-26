@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-_AUDIT_GATE = 0.45
+from internal.council.publish_gate import publish_gate_fraction, publish_gate_label
+
 _last_lead_netuid: Optional[int] = None
 
 
@@ -42,7 +43,7 @@ def _hour_pick_row(pick: Dict[str, Any], rank: int) -> Dict[str, Any]:
         "confidence": pick.get("confidence"),
         "final_confidence": fc,
         "action": pick.get("action", "long"),
-        "audited": fc >= _AUDIT_GATE,
+        "audited": fc >= publish_gate_fraction(),
         "horizon": "1h",
         "generated_at": pick.get("generated_at") or _generated_at_from_cache(),
         "reasons": pick.get("reasons") if isinstance(pick.get("reasons"), list) else [],
@@ -101,9 +102,9 @@ def _load_day_snapshot() -> Dict[str, Any]:
         day["candidate"] = cand
         if not pick and isinstance(cand, dict):
             fc = float(cand.get("final_confidence") or cand.get("confidence") or 0)
-            if fc < _AUDIT_GATE:
+            if fc < publish_gate_fraction():
                 day["reason"] = (
-                    f"Confidence {fc * 100:.0f}% below 45% audit gate — "
+                    f"Confidence {fc * 100:.0f}% below {publish_gate_label()} — "
                     "no long call published"
                 )
             else:
