@@ -59,8 +59,8 @@ Never call `select_daily_pick` / full `score_universe(~127)` on synchronous API 
 | 2 Score snapshots | #502 | stacked — awaiting merge |
 | 3 Shadows / HOLD | #503 | stacked — awaiting merge |
 | 4 Intel / pump / history | #504 (this) | hour #2–3 shadows; readiness bridge |
-| 5 UI trust | #504 | RF-2 excludes shadows; ops surfaces loop health |
-| 6 Validation | #504 | `scripts/verify_prod.sh` learning-loop checks |
+| 5 UI trust | #504 | **merged** |
+| 6 Validation | #504 | **merged** |
 >>>>>>> 807e94d (feat(learning): Phases 4–6 bridges, trust surface, prod verify)
 
 ## Phase gate
