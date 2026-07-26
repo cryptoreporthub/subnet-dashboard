@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-26T17:48:00Z  
-**main:** `e926c40` — post-stability sprint **COMPLETE** (#508 Wave E)
+**Last updated:** 2026-07-26T18:50:00Z  
+**main:** `e9fee8e` — post-stability **COMPLETE** (#508); Telegram intel hardening + outcome loop (#513–#515)
 
 ## Post-stability sprint (`post-stability-sprint-plan.md`)
 
@@ -13,11 +13,15 @@
 | D Chat | ✅ | #492–#507 |
 | E Integrations | ✅ | **#508** (phased; supersedes #449) |
 
-**Prod verified after #508:** `/health` OK · `/api/subnet-integrations/signals` OK · G0 script green.
+**Prod verified:** `/health` OK · G0 green · `/api/subnet-integrations/signals` OK · `verify_prod.sh` hardened (readiness timeout → WARN, not abort).
+
+## Telegram intel + outcome loop (#513–#515 on `main`)
+
+Message-intel rollup UI, listener hardening, background price-outcome loop (`outcomes` in `/api/message-intel/status`). Babysit: prod verify + `verify_prod.sh` coverage.
 
 ## Learning loop (`learning-loop-full-integration-plan.md`)
 
-Phases 0–6 merged (#498–#504). Separate track — babysit agent did not own `internal/learning/*`.
+Phases 0–6 merged (#498–#504). Prod may show `stalled` / missing `score_snapshots` — learning-loop agent territory.
 
 ## Housekeeping (human)
 
