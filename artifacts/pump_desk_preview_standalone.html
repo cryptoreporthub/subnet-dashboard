@@ -1,31 +1,23 @@
-{# Pump desk — flagship formation theater (Situation Room language, not Dex ticker) #}
-{% set pa = pump_alerts if pump_alerts is mapping else {} %}
-{% set compact = pump_compact|default(false) %}
-{% set pa_rows = pa.alerts if pa.alerts is iterable and pa.alerts is not string else [] %}
-{% set pa_early = pa.early_count|default(0)|int %}
-{% set pa_confirmed = pa.confirmed_count|default(0)|int %}
-{% set pa_exit = pa.exit_count|default(0)|int %}
-{% set pa_count = pa.count|default(0)|int %}
-{% set hero_row = pa.hero if pa.hero is mapping else none %}
-{% set trust = pa.trust if pa.trust is mapping else {} %}
-{% set map_ns = namespace(rows=[]) %}
-{% set warm_ns = namespace(rows=[]) %}
-{% set active_ns = namespace(rows=[]) %}
-{% set exit_ns = namespace(rows=[]) %}
-{% for row in pa_rows %}
-  {% if row.timing == 'lead' or row.timing == 'confirmed' or row.timing == 'exit' %}
-    {% set _ = map_ns.rows.append(row) %}
-    {% if row.timing == 'lead' %}{% set _ = warm_ns.rows.append(row) %}{% endif %}
-    {% if row.timing == 'confirmed' %}{% set _ = active_ns.rows.append(row) %}{% endif %}
-    {% if row.timing == 'exit' %}{% set _ = exit_ns.rows.append(row) %}{% endif %}
-  {% endif %}
-{% endfor %}
-{% if not hero_row and pa_count > 0 %}
-  {% if warm_ns.rows %}{% set hero_row = warm_ns.rows[0] %}{% elif active_ns.rows %}{% set hero_row = active_ns.rows[0] %}{% endif %}
-{% endif %}
-{% if pa_exit == 0 %}{% set pa_exit = exit_ns.rows|length %}{% endif %}
-
-<section class="pump-alert wrap-pad{% if compact %} pump-alert--board{% endif %}" id="section-pump-alert" aria-labelledby="pump-alert-title" data-home-live="1"{% if compact %} data-pump-compact="1"{% endif %}>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pump desk flagship preview — SimiVision</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; min-height: 100%; background: #04060e; color: #e8f0e9; font-family: system-ui, sans-serif; }
+    .k3-preview-banner { background: #1a1200; color: #ffb347; text-align: center; font: 12px/1.4 JetBrains Mono, monospace; padding: 8px 12px; border-bottom: 1px solid rgba(255,179,71,0.4); }
+    .k3-preview-frame { max-width: 390px; margin: 0 auto; padding: 0 12px; border-left: 1px solid #222; border-right: 1px solid #222; }
+    .home-cta { display: inline-flex; align-items: center; justify-content: center; padding: 10px 14px; border-radius: 10px; font-weight: 700; text-decoration: none; font-size: 13px; }
+    .home-cta--primary { background: #00ff41; color: #04110a; }
+    .home-cta--ghost { border: 1px solid rgba(148,163,184,0.35); color: #e8f0e9; }
+  </style>
+</head>
+<body>
+<p class="k3-preview-banner">Pump desk flagship · SSR fixture · Ditto handoff</p>
+<div class="k3-preview-frame">
+<section class="pump-alert wrap-pad pump-alert--board" id="section-pump-alert" aria-labelledby="pump-alert-title" data-home-live="1" data-pump-compact="1">
   <div class="pd-atmosphere" aria-hidden="true"></div>
 
   <header class="pd-head">
@@ -35,225 +27,210 @@
     </div>
 
     <div class="pd-proof" id="pd-meta-wrap">
-      {% if trust.ready and trust.headline_pct is not none %}
+      
       <div class="pd-proof__ready" id="pump-alert-proof">
-        <span class="pd-proof__pct" id="pump-alert-proof-pct">{{ trust.headline_pct }}%</span>
-        <span class="pd-proof__copy">early alerts hit +2% in 1h · n={{ trust.headline_n|default((trust.early.n if trust.early is mapping else 0)|default(0)) }}</span>
+        <span class="pd-proof__pct" id="pump-alert-proof-pct">58%</span>
+        <span class="pd-proof__copy">early alerts hit +2% in 1h · n=14</span>
       </div>
-      {% else %}
-      <p class="pd-proof__building" id="pump-alert-trust">{{ trust.line|default('Early alerts: grading starts once lead phase entries resolve (1h).') }}</p>
-      {% endif %}
+      
       <div class="pd-census" id="pd-census" aria-label="Desk census">
-        <span class="pd-census__chip pd-census__chip--lead"><b id="pd-census-lead">{{ pa_early }}</b> lead</span>
-        <span class="pd-census__chip pd-census__chip--live"><b id="pd-census-live">{{ pa_confirmed }}</b> live</span>
-        <span class="pd-census__chip pd-census__chip--exit"><b id="pd-census-exit">{{ pa_exit }}</b> exit</span>
+        <span class="pd-census__chip pd-census__chip--lead"><b id="pd-census-lead">2</b> lead</span>
+        <span class="pd-census__chip pd-census__chip--live"><b id="pd-census-live">1</b> live</span>
+        <span class="pd-census__chip pd-census__chip--exit"><b id="pd-census-exit">0</b> exit</span>
       </div>
     </div>
   </header>
 
   <div class="pump-alert__body" id="pump-alert-body" aria-live="polite">
     <div class="pump-desk" id="pump-desk-panel">
-      {% if compact and hero_row %}
-      {% set triad = hero_row.triad if hero_row.triad is mapping else {} %}
-      {% set labels = hero_row.triad_labels if hero_row.triad_labels is mapping else {} %}
-      {% set form_pct = hero_row.formation_pct|default(0)|int %}
-      {% set confirm_pct = hero_row.confirm_pct|default(hero_row.momentum_pct|default(0))|int %}
-      {% set trig_pct = ((hero_row.score|default(0)|float / hero_row.trigger_score|default(0.72)|float * 100)|round(0))|int if hero_row.score is not none else 0 %}
-      {% set trig_pct = [trig_pct, 100]|min %}
-      {% set progress_pts = hero_row.progress_series if hero_row.progress_series is iterable and hero_row.progress_series is not string and hero_row.progress_series|length >= 2 else [] %}
-      {% set phase = (hero_row.phase|default('STIRRING'))|upper %}
-      {% set timing = hero_row.timing|default('lead') %}
-      {% set badge_slug = (hero_row.badge|default('')|lower|replace(' ', '-')) %}
-      {% set move = hero_row.move|default(hero_row.badge ~ ' · ' ~ hero_row.name) %}
-      {% set thesis = hero_row.thesis|default('') %}
-      {% set trigger = hero_row.trigger|default(hero_row.subtitle|default('')) %}
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
 
-      <article class="pd-lead pd-lead--{{ timing }} pump-hero__card" id="pump-desk-hero" data-netuid="{{ hero_row.netuid }}">
+      <article class="pd-lead pd-lead--lead pump-hero__card" id="pump-desk-hero" data-netuid="99">
         <div class="pd-lead__identity">
-          <span class="pd-lead__badge pd-lead__badge--{{ badge_slug }}">{{ hero_row.badge }}</span>
+          <span class="pd-lead__badge pd-lead__badge--building">BUILDING</span>
           <div class="pd-lead__who">
-            <a class="pd-lead__name" href="/subnet/{{ hero_row.netuid }}">{{ hero_row.name }} <b class="pd-lead__sn">SN{{ hero_row.netuid }}</b></a>
-            {% if hero_row.updated_ago %}<span class="pd-lead__ago">{{ hero_row.updated_ago }}</span>{% endif %}
+            <a class="pd-lead__name" href="/subnet/99">Apex <b class="pd-lead__sn">SN99</b></a>
+            <span class="pd-lead__ago">2m ago</span>
           </div>
-          <div class="pd-lead__meter" aria-label="{{ trig_pct }} percent of the way to trigger">
-            <span class="pd-lead__meter-val">{{ trig_pct }}<i>%</i></span>
+          <div class="pd-lead__meter" aria-label="67 percent of the way to trigger">
+            <span class="pd-lead__meter-val">67<i>%</i></span>
             <span class="pd-lead__meter-lbl">to trigger</span>
           </div>
         </div>
 
-        <div class="pd-lead__bar" role="progressbar" aria-valuenow="{{ trig_pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="Formation progress to trigger">
-          <span class="pd-lead__bar-fill" style="width: {{ trig_pct }}%"></span>
-          {% if progress_pts|length >= 2 %}
-          <span class="pd-lead__trend"><span class="pump-progress" data-progress="{{ progress_pts|join(',') }}" role="img" aria-label="Score trend toward trigger"></span></span>
-          {% endif %}
+        <div class="pd-lead__bar" role="progressbar" aria-valuenow="67" aria-valuemin="0" aria-valuemax="100" aria-label="Formation progress to trigger">
+          <span class="pd-lead__bar-fill" style="width: 67%"></span>
+          
+          <span class="pd-lead__trend"><span class="pump-progress" data-progress="55,58,62,67" role="img" aria-label="Score trend toward trigger"></span></span>
+          
         </div>
 
         <ol class="pd-phase" aria-label="Formation phase">
-          {% for p, label in [('STIRRING','Stir'),('ACCUMULATING','Build'),('PUMPING','Pump'),('COOLING','Cool')] %}
-          <li class="pd-phase__step{% if phase == p %} pd-phase__step--now{% endif %}">{{ label }}</li>
-          {% endfor %}
+          
+          <li class="pd-phase__step">Stir</li>
+          
+          <li class="pd-phase__step pd-phase__step--now">Build</li>
+          
+          <li class="pd-phase__step">Pump</li>
+          
+          <li class="pd-phase__step">Cool</li>
+          
         </ol>
 
         <div class="pd-verdict">
-          <p class="pd-verdict__move">{{ move }}</p>
-          {% if thesis %}<p class="pd-verdict__thesis">{{ thesis }}</p>{% endif %}
-          {% if trigger %}<p class="pd-verdict__trigger">{{ trigger }}</p>{% endif %}
+          <p class="pd-verdict__move">BUILDING · Apex (SN99)</p>
+          <p class="pd-verdict__thesis">Flow and volume aligning ahead of price — 62% buys, vol 51%.</p>
+          <p class="pd-verdict__trigger">Best risk/reward band — chase only if you miss this window.</p>
         </div>
 
         <div class="pd-evidence" aria-label="Formation evidence">
           <div class="pd-evidence__cell">
             <span class="pd-evidence__k">Formation</span>
-            <span class="pd-evidence__v">{{ form_pct }}</span>
+            <span class="pd-evidence__v">62</span>
             <span class="pd-evidence__cap">Quiet inflow loading before price runs</span>
           </div>
           <div class="pd-evidence__cell">
             <span class="pd-evidence__k">Confirm</span>
-            <span class="pd-evidence__v">{{ confirm_pct }}</span>
+            <span class="pd-evidence__v">31</span>
             <span class="pd-evidence__cap">Buy pressure + volume intensity</span>
           </div>
           <div class="pd-evidence__cell">
             <span class="pd-evidence__k">Gap</span>
-            <span class="pd-evidence__v pd-evidence__v--gap">{{ hero_row.distance|default('—') }}</span>
+            <span class="pd-evidence__v pd-evidence__v--gap">0.24</span>
             <span class="pd-evidence__cap">Distance left to act band</span>
           </div>
         </div>
 
-        {% if hero_row.buy_pct is not none or hero_row.vol_pct is not none %}
+        
         <p class="pd-raw">
-          {% if hero_row.buy_pct is not none %}<span>{{ hero_row.buy_pct }}% buys</span>{% endif %}
-          {% if hero_row.vol_pct is not none %}<span>{{ hero_row.vol_pct }}% vol intensity</span>{% endif %}
+          <span>62% buys</span>
+          <span>51% vol intensity</span>
         </p>
-        {% endif %}
+        
 
-        <div class="pd-triad" aria-label="Pre-pump triad {{ hero_row.triad_lit|default(0) }} of 3 lit">
-          <span class="pd-triad__leg{% if triad.inflow_quiet_load %} pd-triad__leg--on{% endif %}">
+        <div class="pd-triad" aria-label="Pre-pump triad 0 of 3 lit">
+          <span class="pd-triad__leg pd-triad__leg--on">
             <i class="pd-dot pd-dot--in"></i>
             <b>Inflow</b>
-            <em>{{ labels.inflow|default('WATCH') }}</em>
+            <em>STRONG</em>
           </span>
-          <span class="pd-triad__leg{% if triad.buy_pressure %} pd-triad__leg--on{% endif %}">
+          <span class="pd-triad__leg pd-triad__leg--on">
             <i class="pd-dot pd-dot--pr"></i>
             <b>Pressure</b>
-            <em>{{ labels.pressure|default('FLAT') }}</em>
+            <em>RISING</em>
           </span>
-          <span class="pd-triad__leg{% if triad.price_coil %} pd-triad__leg--on{% endif %}">
+          <span class="pd-triad__leg">
             <i class="pd-dot pd-dot--coil"></i>
             <b>Coil</b>
-            <em>{{ labels.coil|default('OPEN') }}</em>
+            <em>OPEN</em>
           </span>
         </div>
 
-        {% if hero_row.size_line %}<p class="pd-chip">{{ hero_row.size_line }}</p>{% endif %}
-        {% if hero_row.wallet_chip %}<p class="pd-chip pd-chip--wallet">{{ hero_row.wallet_chip }}</p>{% endif %}
+        <p class="pd-chip">50 τ ≈ 1.20% of float · healthy</p>
+        
 
         <div class="pd-cta" role="group" aria-label="Lead actions">
-          <a class="home-cta home-cta--primary" href="/subnet/{{ hero_row.netuid }}">Open SN{{ hero_row.netuid }} dossier</a>
+          <a class="home-cta home-cta--primary" href="/subnet/99">Open SN99 dossier</a>
           <a class="home-cta home-cta--ghost" href="#pro-cockpit">Open depth</a>
         </div>
       </article>
 
-      {% if warm_ns.rows|length > 1 or active_ns.rows or exit_ns.rows %}
+      
       <div class="pd-board" id="pump-desk-more">
-        {% if warm_ns.rows|length > 1 %}
+        
         <section class="pd-board__section">
-          <h4 class="pd-board__lbl">Also warming <span>{{ warm_ns.rows|length - 1 }}</span></h4>
+          <h4 class="pd-board__lbl">Also warming <span>1</span></h4>
           <div class="pd-board__rows">
-            {% for row in warm_ns.rows[1:] %}
-            {% include "partials/premium/pump_desk_row.html" %}
-            {% endfor %}
+            
+            
+
+
+
+
+
+
+
+<a class="pd-r pd-r--warm" href="/subnet/42" data-netuid="42" title="WARMING UP">
+  <div class="pd-r__main">
+    <div class="pd-r__id">
+      <span class="pd-r__badge pd-r__badge--warming-up">WARM</span>
+      <span class="pd-r__name">Subnet42 <b class="pd-r__sn">SN42</b></span>
+    </div>
+    <p class="pd-r__why">Entry window open — small size now or wait for BUILDING confirmation.</p>
+    <div class="pd-r__legs" aria-label="Triad">
+      <span class="pd-r__leg pd-r__leg--on">In WATCH</span>
+      <span class="pd-r__leg">Pr FLAT</span>
+      <span class="pd-r__leg">Coil OPEN</span>
+    </div>
+  </div>
+  <div class="pd-r__nums" aria-label="Flow and gap">
+    <span class="pd-r__num"><i>Flow</i> 40</span>
+    <span class="pd-r__num pd-r__num--gap"><i>Gap</i> 0.44</span>
+  </div>
+</a>
+            
           </div>
         </section>
-        {% endif %}
-        {% if active_ns.rows %}
+        
+        
         <section class="pd-board__section">
-          <h4 class="pd-board__lbl">Active · chase risk <span>{{ active_ns.rows|length }}</span></h4>
+          <h4 class="pd-board__lbl">Active · chase risk <span>1</span></h4>
           <div class="pd-board__rows">
-            {% for row in active_ns.rows %}
-            {% include "partials/premium/pump_desk_row.html" %}
-            {% endfor %}
+            
+            
+
+
+
+
+
+
+
+<a class="pd-r pd-r--active" href="/subnet/29" data-netuid="29" title="CHASE RISK">
+  <div class="pd-r__main">
+    <div class="pd-r__id">
+      <span class="pd-r__badge pd-r__badge--chase-risk">CHASE</span>
+      <span class="pd-r__name">Coldint <b class="pd-r__sn">SN29</b></span>
+    </div>
+    <p class="pd-r__why">Do not chase; trim on EXIT WATCH or rotate to BUILDING names.</p>
+    <div class="pd-r__legs" aria-label="Triad">
+      <span class="pd-r__leg">In WATCH</span>
+      <span class="pd-r__leg pd-r__leg--on">Pr RISING</span>
+      <span class="pd-r__leg">Coil OPEN</span>
+    </div>
+  </div>
+  <div class="pd-r__nums" aria-label="Flow and gap">
+    <span class="pd-r__num"><i>Flow</i> 70</span>
+    <span class="pd-r__num pd-r__num--gap"><i>Gap</i> 0.01</span>
+  </div>
+</a>
+            
           </div>
         </section>
-        {% endif %}
-        {% if exit_ns.rows %}
-        <section class="pd-board__section">
-          <h4 class="pd-board__lbl">Cooling · exit watch <span>{{ exit_ns.rows|length }}</span></h4>
-          <div class="pd-board__rows">
-            {% for row in exit_ns.rows %}
-            {% include "partials/premium/pump_desk_row.html" %}
-            {% endfor %}
-          </div>
-        </section>
-        {% endif %}
+        
+        
       </div>
-      {% endif %}
+      
 
-      {% elif pa_count > 0 %}
-        {% if warm_ns.rows %}
-        <h4 class="pd-board__lbl">Warming</h4>
-        <div class="pd-board__rows">
-          {% for row in warm_ns.rows %}
-          {% include "partials/premium/pump_desk_row.html" %}
-          {% endfor %}
-        </div>
-        {% endif %}
-        {% if active_ns.rows %}
-        <h4 class="pd-board__lbl">Active</h4>
-        <div class="pd-board__rows">
-          {% for row in active_ns.rows %}
-          {% include "partials/premium/pump_desk_row.html" %}
-          {% endfor %}
-        </div>
-        {% endif %}
-        {% if exit_ns.rows %}
-        <h4 class="pd-board__lbl">Cooling</h4>
-        <div class="pd-board__rows">
-          {% for row in exit_ns.rows %}
-          {% include "partials/premium/pump_desk_row.html" %}
-          {% endfor %}
-        </div>
-        {% endif %}
-      {% else %}
-      <p class="pd-empty pump-desk__empty">Quiet — no warming or active names on the ladder right now. Early heat on today&apos;s pick stays on the dossier chip when flow warms.</p>
-      {% endif %}
+      
     </div>
 
-    <div class="pump-alert__list-panel" id="pump-list-panel"{% if pa_count == 0 or compact %} hidden{% endif %}>
-    {% if pa_count > 0 and not compact %}
-    <div class="pump-alert__lane" id="pump-alert-list" role="list">
-      {% for row in pa_rows %}
-      {% if row.timing == 'lead' or row.timing == 'confirmed' or row.timing == 'exit' %}
-      <article class="pump-alert__card pump-alert__card--{{ row.timing }} pump-alert__card--{{ row.phase|lower }}" role="listitem" data-netuid="{{ row.netuid }}" data-timing="{{ row.timing }}">
-        <div class="pump-alert__card-top">
-          <a class="pump-alert__name" href="/subnet/{{ row.netuid }}">{{ row.name }}{% if row.netuid is not none %} <span class="pump-alert__sn">SN{{ row.netuid }}</span>{% endif %}</a>
-          <span class="pump-alert__badge pump-alert__badge--{{ row.badge|lower|replace(' ', '-') }}">{{ row.badge }}</span>
-        </div>
-        {% if row.score is not none %}
-        <div class="pump-alert__meter" aria-hidden="true">
-          <span class="pump-alert__meter-fill" style="width: {{ [(row.score|float * 100)|round(0), 100]|min }}%"></span>
-        </div>
-        {% endif %}
-        {% set triad = row.triad if row.triad is mapping else {} %}
-        {% if triad %}
-        <div class="pump-alert__triad" aria-label="Pre-pump triad">
-          <span class="pump-alert__triad-leg{% if triad.inflow_quiet_load %} pump-alert__triad-leg--on{% endif %}">Inflow</span>
-          <span class="pump-alert__triad-leg{% if triad.buy_pressure %} pump-alert__triad-leg--on{% endif %}">Pressure</span>
-          <span class="pump-alert__triad-leg{% if triad.price_coil %} pump-alert__triad-leg--on{% endif %}">Coil</span>
-        </div>
-        {% endif %}
-        <p class="pump-alert__thesis">{{ row.thesis }}</p>
-        {% if row.size_line %}<p class="pump-alert__size">{{ row.size_line }}</p>{% endif %}
-        {% if row.wallet_chip %}<p class="pump-alert__wallet-chip">{{ row.wallet_chip }}</p>{% endif %}
-        {% for chip in row.whale_day_chips|default([]) %}
-        <p class="pump-alert__wallet-chip pump-alert__wallet-chip--day">{{ chip }}</p>
-        {% endfor %}
-        <p class="pump-alert__trigger">{{ row.trigger }}</p>
-      </article>
-      {% endif %}
-      {% endfor %}
+    <div class="pump-alert__list-panel" id="pump-list-panel" hidden>
+    
     </div>
-    {% endif %}
-    </div>
-    <script type="application/json" id="pump-map-data">{{ map_ns.rows|tojson }}</script>
+    <script type="application/json" id="pump-map-data">[{"badge": "BUILDING", "buy_ratio": 0.62, "confirm_pct": 31, "distance": 0.24, "formation_pct": 62, "move": "BUILDING \u00b7 Apex (SN99)", "name": "Apex", "netuid": 99, "phase": "ACCUMULATING", "progress_series": [55, 58, 62, 67], "score": 0.48, "size_line": "50 \u03c4 \u2248 1.20% of float \u00b7 healthy", "thesis": "Flow and volume aligning ahead of price \u2014 62% buys, vol 51%.", "timing": "lead", "triad": {"buy_pressure": true, "inflow_quiet_load": true, "lit_count": 2, "price_coil": false}, "triad_labels": {"coil": "OPEN", "inflow": "STRONG", "pressure": "RISING"}, "trigger": "Best risk/reward band \u2014 chase only if you miss this window.", "trigger_score": 0.72, "volume_intensity": 0.51}, {"badge": "WARMING UP", "buy_ratio": 0.58, "confirm_pct": 18, "distance": 0.44, "formation_pct": 40, "move": "WATCH \u00b7 Subnet42 (SN42)", "name": "Subnet42", "netuid": 42, "phase": "STIRRING", "score": 0.28, "thesis": "Buy pressure building before price runs \u2014 58% buy flow, volume still warming (24%).", "timing": "lead", "triad": {"buy_pressure": false, "inflow_quiet_load": true, "lit_count": 1, "price_coil": false}, "triad_labels": {"coil": "OPEN", "inflow": "WATCH", "pressure": "FLAT"}, "trigger": "Entry window open \u2014 small size now or wait for BUILDING confirmation.", "trigger_score": 0.72, "volume_intensity": 0.24}, {"badge": "CHASE RISK", "buy_ratio": 0.68, "confirm_pct": 74, "distance": 0.01, "formation_pct": 70, "move": "CONFIRMED \u00b7 Coldint (SN29)", "name": "Coldint", "netuid": 29, "phase": "PUMPING", "score": 0.71, "thesis": "Move is live \u2014 you are not early. Use for exit sizing and rotation, not fresh entry.", "timing": "confirmed", "triad": {"buy_pressure": true, "inflow_quiet_load": false, "lit_count": 1, "price_coil": false}, "triad_labels": {"coil": "OPEN", "inflow": "WATCH", "pressure": "RISING"}, "trigger": "Do not chase; trim on EXIT WATCH or rotate to BUILDING names.", "trigger_score": 0.72, "volume_intensity": 0.55}]</script>
   </div>
 </section>
 
@@ -857,3 +834,6 @@
     .pd-r { transition: none; }
   }
 </style>
+</div>
+</body>
+</html>

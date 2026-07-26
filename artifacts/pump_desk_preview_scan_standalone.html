@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SimiVision — Council</title>
+    <meta name="description" content="Bittensor subnet council dashboard — picks, paper portfolio, and SimiVision intelligence.">
+    
+    <link rel="canonical" href="http://testserver/">
+    <meta property="og:url" content="http://testserver/">
+    <meta property="og:title" content="SimiVision — Council">
+    <meta property="og:description" content="Subnet council picks, accountability, and live intelligence.">
+    <meta property="og:image" content="http://testserver/static/favicon.svg">
+    <meta property="og:type" content="website">
+    <meta name="twitter:card" content="summary">
+    
+    <meta name="theme-color" content="#04060e">
+    <style>
+      /* Critical paint — visible before /static CSS on cold Fly mobile loads */
+      html, body { margin: 0; min-height: 100%; background: #04060e; color: #e8f0e9; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/css/base.css">
+    <link rel="stylesheet" href="/static/css/layout.css">
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="stylesheet" href="/static/css/chat.css">
+    <link rel="stylesheet" href="/static/css/premium.css">
+    <link rel="stylesheet" href="/static/css/responsive.css">
+    <link rel="stylesheet" href="/static/css/cockpit.css">
+    <link rel="stylesheet" href="/static/css/simivision.css">
+    <link rel="stylesheet" href="/static/css/council_first.css">
+    <link rel="stylesheet" href="/static/css/situation_room.css">
+    <link rel="stylesheet" href="/static/vendor/uplot/uPlot.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.css">
+    <link rel="stylesheet" href="/static/css/share_pages.css">
+</head>
+<body class="council-first-theme">
+    
+<script>document.documentElement.dataset.hydrate = '0';</script>
+<style>
+  .k3-preview-banner {
+    position: sticky; top: 0; z-index: 9999;
+    background: #0a1628; color: #7dd3fc; text-align: center;
+    font: 12px/1.4 'JetBrains Mono', monospace; padding: 8px 12px;
+    border-bottom: 1px solid rgba(56, 189, 248, 0.35);
+  }
+  .k3-preview-banner a { color: #00ff41; margin: 0 6px; }
+  .k3-preview-frame { max-width: 390px; margin: 0 auto; border-left: 1px solid #222; border-right: 1px solid #222; }
+</style>
+<p class="k3-preview-banner" role="status">
+  SCAN variant (thinned hero · ladder-first) · hydrate off ·
+  <a href="/preview/k3-pump-alert">flagship</a> ·
+  <a href="/">live home</a>
+</p>
+<div class="k3-preview-frame app-shell council-first">
+  
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+    
+    
+    
+    
+  
+
+  
+    
+    
+    
+    
+  
+
+  
+    
+    
+    
+    
+  
+
+
+
+
+<section class="pds wrap-pad" id="section-pump-alert-scan" aria-labelledby="pds-title" data-pump-scan="1">
+  <header class="pds-head">
+    <h2 class="pds-title" id="pds-title">Pump desk <span class="pds-variant">scan</span><span class="pds-live" aria-hidden="true"></span></h2>
+    <div class="pds-proof" id="pd-meta-wrap">
+      
+      <p class="pds-proof__line"><b>58%</b> hit +2% in 1h · n=14 · <span id="pd-census-lead">2</span> lead · <span id="pd-census-live">1</span> live · <span id="pd-census-exit">0</span> exit</p>
+      
+    </div>
+  </header>
+
+  <div class="pds-body" id="pump-alert-body">
+    <div class="pds-desk" id="pump-desk-panel">
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+
+      <article class="pds-hero pds-hero--lead pump-hero__card" id="pump-desk-hero" data-netuid="99">
+        <div class="pds-hero__top">
+          <span class="pds-hero__badge pds-hero__badge--building">BUILDING</span>
+          <a class="pds-hero__name" href="/subnet/99">Apex <b>SN99</b></a>
+          <span class="pds-hero__ago">2m ago</span>
+          <div class="pds-hero__headline" aria-label="67 percent to trigger">
+            <span class="pds-hero__pct">67<i>%</i></span>
+            <span class="pds-hero__pct-lbl">to trigger</span>
+          </div>
+        </div>
+
+        <div class="pds-hero__bar" role="progressbar" aria-valuenow="67" aria-valuemin="0" aria-valuemax="100">
+          <span class="pds-hero__bar-fill" style="width: 67%"></span>
+          
+          <span class="pds-hero__spark"><span class="pump-progress" data-progress="55,58,62,67" role="img" aria-label="Score trend"></span></span>
+          
+        </div>
+
+        <p class="pds-hero__phase" aria-label="Formation phase">
+          <span>Stir</span> · <span class="pds-hero__phase-now">Build</span> · <span>Pump</span> · <span>Cool</span>
+        </p>
+
+        <p class="pds-hero__thesis">Flow and volume aligning ahead of price — 62% buys, vol 51%.</p>
+        <p class="pds-hero__trigger">Best risk/reward band — chase only if you miss this window.</p>
+
+        <div class="pds-strip" aria-label="Metrics and triad">
+          <p class="pds-strip__metrics">
+            <span>Form <b>62</b></span>
+            <span>Conf <b>31</b></span>
+            <span>Gap <b class="pds-strip__gap">0.24</b></span>
+            <span>62% buys</span>
+            <span>51% vol</span>
+          </p>
+          <p class="pds-strip__triad">
+            <span class="pds-strip__pill pds-strip__pill--on">In STRONG</span>
+            <span class="pds-strip__pill pds-strip__pill--on">Pr RISING</span>
+            <span class="pds-strip__pill">Coil OPEN</span>
+          </p>
+        </div>
+
+        <p class="pds-hero__chip">50 τ ≈ 1.20% of float · healthy</p>
+
+        <a class="pds-hero__cta home-cta home-cta--primary" href="/subnet/99">Open SN99 dossier</a>
+      </article>
+
+      
+      <div class="pds-board" id="pump-desk-more">
+        
+        <h3 class="pds-board__lbl">Also warming <span>1</span></h3>
+        
+        
+
+
+
+
+
+
+
+<a class="pds-ladder pds-ladder--warm" href="/subnet/42" data-netuid="42">
+  <div class="pds-ladder__head">
+    <span class="pds-ladder__badge pds-ladder__badge--warming-up">WARM</span>
+    <span class="pds-ladder__name">Subnet42 <b>SN42</b></span>
+    <span class="pds-ladder__nums">
+      <span class="pds-ladder__num"><i>Flow</i>40</span>
+      <span class="pds-ladder__num pds-ladder__num--gap"><i>Gap</i>0.44</span>
+    </span>
+  </div>
+  <p class="pds-ladder__why">Entry window open — small size now or wait for BUILDING confirmation.</p>
+  <div class="pds-ladder__legs">
+    <span class="pds-ladder__leg pds-ladder__leg--on">In WATCH</span>
+    <span class="pds-ladder__leg">Pr FLAT</span>
+    <span class="pds-ladder__leg">Coil OPEN</span>
+  </div>
+</a>
+        
+        
+        
+        <h3 class="pds-board__lbl pds-board__lbl--chase">Active · chase risk <span>1</span></h3>
+        
+        
+
+
+
+
+
+
+
+<a class="pds-ladder pds-ladder--active" href="/subnet/29" data-netuid="29">
+  <div class="pds-ladder__head">
+    <span class="pds-ladder__badge pds-ladder__badge--chase-risk">CHASE</span>
+    <span class="pds-ladder__name">Coldint <b>SN29</b></span>
+    <span class="pds-ladder__nums">
+      <span class="pds-ladder__num"><i>Flow</i>70</span>
+      <span class="pds-ladder__num pds-ladder__num--gap"><i>Gap</i>0.01</span>
+    </span>
+  </div>
+  <p class="pds-ladder__why">Do not chase; trim on EXIT WATCH or rotate to BUILDING names.</p>
+  <div class="pds-ladder__legs">
+    <span class="pds-ladder__leg">In WATCH</span>
+    <span class="pds-ladder__leg pds-ladder__leg--on">Pr RISING</span>
+    <span class="pds-ladder__leg">Coil OPEN</span>
+  </div>
+</a>
+        
+        
+        
+      </div>
+      
+
+      
+    </div>
+    <script type="application/json" id="pump-map-data">[{"badge": "BUILDING", "buy_ratio": 0.62, "confirm_pct": 31, "distance": 0.24, "formation_pct": 62, "move": "BUILDING \u00b7 Apex (SN99)", "name": "Apex", "netuid": 99, "phase": "ACCUMULATING", "progress_series": [55, 58, 62, 67], "score": 0.48, "size_line": "50 \u03c4 \u2248 1.20% of float \u00b7 healthy", "thesis": "Flow and volume aligning ahead of price \u2014 62% buys, vol 51%.", "timing": "lead", "triad": {"buy_pressure": true, "inflow_quiet_load": true, "lit_count": 2, "price_coil": false}, "triad_labels": {"coil": "OPEN", "inflow": "STRONG", "pressure": "RISING"}, "trigger": "Best risk/reward band \u2014 chase only if you miss this window.", "trigger_score": 0.72, "volume_intensity": 0.51}, {"badge": "WARMING UP", "buy_ratio": 0.58, "confirm_pct": 18, "distance": 0.44, "formation_pct": 40, "move": "WATCH \u00b7 Subnet42 (SN42)", "name": "Subnet42", "netuid": 42, "phase": "STIRRING", "score": 0.28, "thesis": "Buy pressure building before price runs \u2014 58% buy flow, volume still warming (24%).", "timing": "lead", "triad": {"buy_pressure": false, "inflow_quiet_load": true, "lit_count": 1, "price_coil": false}, "triad_labels": {"coil": "OPEN", "inflow": "WATCH", "pressure": "FLAT"}, "trigger": "Entry window open \u2014 small size now or wait for BUILDING confirmation.", "trigger_score": 0.72, "volume_intensity": 0.24}, {"badge": "CHASE RISK", "buy_ratio": 0.68, "confirm_pct": 74, "distance": 0.01, "formation_pct": 70, "move": "CONFIRMED \u00b7 Coldint (SN29)", "name": "Coldint", "netuid": 29, "phase": "PUMPING", "score": 0.71, "thesis": "Move is live \u2014 you are not early. Use for exit sizing and rotation, not fresh entry.", "timing": "confirmed", "triad": {"buy_pressure": true, "inflow_quiet_load": false, "lit_count": 1, "price_coil": false}, "triad_labels": {"coil": "OPEN", "inflow": "WATCH", "pressure": "RISING"}, "trigger": "Do not chase; trim on EXIT WATCH or rotate to BUILDING names.", "trigger_score": 0.72, "volume_intensity": 0.55}]</script>
+  </div>
+</section>
+
+<style>
+  .pds {
+    --pds-ink: #e8f0e9;
+    --pds-sub: #94a3b8;
+    --pds-dim: #64748b;
+    --pds-line: rgba(148, 163, 184, 0.14);
+    --pds-panel: rgba(10, 14, 24, 0.88);
+    position: relative;
+    padding: 14px 0 24px;
+    border-top: 1px solid var(--pds-line);
+    border-left: 3px solid #38bdf8;
+    padding-left: 12px;
+    margin-left: -2px;
+    color: var(--pds-ink);
+  }
+  .pds-title {
+    margin: 0 0 6px;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pds-variant {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #38bdf8;
+    padding: 2px 6px;
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 4px;
+  }
+  .pds-live {
+    width: 7px; height: 7px; border-radius: 50%; background: #34d399;
+    box-shadow: 0 0 8px rgba(52, 211, 153, 0.5);
+  }
+  .pds-proof__line {
+    margin: 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--pds-sub);
+    line-height: 1.45;
+  }
+  .pds-proof__line b { color: #fbbf24; font-size: 13px; }
+  .pds-proof__line--building { color: var(--pds-dim); }
+
+  /* Thinned hero — one headline number */
+  .pds-hero {
+    margin-bottom: 16px;
+    padding: 12px;
+    border-radius: 12px;
+    background: var(--pds-panel);
+    border: 1px solid rgba(251, 191, 36, 0.22);
+  }
+  .pds-hero--confirmed { border-color: rgba(251, 113, 133, 0.28); }
+  .pds-hero--exit { border-color: rgba(52, 211, 153, 0.28); }
+
+  .pds-hero__top {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 2px 10px;
+    align-items: start;
+  }
+  .pds-hero__badge {
+    grid-row: 1 / 3;
+    align-self: center;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 7px;
+    border-radius: 5px;
+    color: #fde68a;
+    background: rgba(251, 191, 36, 0.12);
+    border: 1px solid rgba(251, 191, 36, 0.25);
+  }
+  .pds-hero__badge--chase-risk, .pds-hero__badge--just-started {
+    color: #fecdd3; background: rgba(251, 113, 133, 0.12); border-color: rgba(251, 113, 133, 0.28);
+  }
+  .pds-hero__name {
+    grid-column: 2;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--pds-ink);
+    text-decoration: none;
+  }
+  .pds-hero__name b {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--pds-dim);
+  }
+  .pds-hero__ago {
+    grid-column: 2;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--pds-dim);
+  }
+  .pds-hero__headline {
+    grid-column: 3;
+    grid-row: 1 / 3;
+    text-align: right;
+  }
+  .pds-hero__pct {
+    display: block;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 34px;
+    font-weight: 800;
+    line-height: 1;
+    color: #fbbf24;
+  }
+  .pds-hero--confirmed .pds-hero__pct { color: #fb7185; }
+  .pds-hero__pct i { font-size: 15px; font-style: normal; opacity: 0.55; }
+  .pds-hero__pct-lbl {
+    display: block;
+    margin-top: 2px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 8px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--pds-dim);
+  }
+
+  .pds-hero__bar {
+    position: relative;
+    margin-top: 10px;
+    height: 22px;
+    border-radius: 6px;
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid var(--pds-line);
+    overflow: hidden;
+  }
+  .pds-hero__bar-fill {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(251, 191, 36, 0.2), rgba(251, 191, 36, 0.65));
+  }
+  .pds-hero__spark {
+    position: absolute;
+    inset: 3px 6px;
+    opacity: 0.85;
+  }
+  .pds-hero__spark .pump-progress { width: 100%; height: 16px; display: block; }
+
+  .pds-hero__phase {
+    margin: 8px 0 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--pds-dim);
+  }
+  .pds-hero__phase-now { color: #fbbf24; font-weight: 700; }
+
+  .pds-hero__thesis {
+    margin: 8px 0 0;
+    font-size: 13.5px;
+    line-height: 1.45;
+    color: #cbd5e1;
+  }
+  .pds-hero__trigger {
+    margin: 6px 0 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    line-height: 1.4;
+    color: #94a3b8;
+  }
+
+  /* Collapsed evidence + triad strip */
+  .pds-strip {
+    margin-top: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(2, 6, 23, 0.55);
+    border: 1px solid var(--pds-line);
+  }
+  .pds-strip__metrics {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--pds-dim);
+  }
+  .pds-strip__metrics b { color: var(--pds-ink); font-weight: 700; }
+  .pds-strip__gap { color: #6ee7b7; }
+  .pds-strip__triad {
+    margin: 8px 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .pds-strip__pill {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 9px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 5px;
+    color: var(--pds-dim);
+    border: 1px solid #1e293b;
+    background: rgba(15, 23, 42, 0.6);
+  }
+  .pds-strip__pill--on {
+    color: #6ee7b7;
+    border-color: rgba(52, 211, 153, 0.35);
+    background: rgba(52, 211, 153, 0.08);
+  }
+
+  .pds-hero__chip {
+    margin: 8px 0 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--pds-sub);
+  }
+  .pds-hero__cta {
+    display: block;
+    margin-top: 12px;
+    text-align: center;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Ladder — first-class cards */
+  .pds-board { margin-top: 4px; }
+  .pds-board__lbl {
+    margin: 14px 0 8px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--pds-sub);
+  }
+  .pds-board__lbl span { color: var(--pds-dim); }
+  .pds-board__lbl--chase { color: #fb7185; }
+  .pds-board__lbl--exit { color: #34d399; }
+
+  .pds-ladder {
+    display: block;
+    margin-bottom: 8px;
+    padding: 12px;
+    border-radius: 12px;
+    text-decoration: none;
+    color: inherit;
+    background: var(--pds-panel);
+    border: 1px solid var(--pds-line);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .pds-ladder:hover, .pds-ladder:focus-visible {
+    border-color: rgba(56, 189, 248, 0.4);
+    box-shadow: 0 0 14px rgba(56, 189, 248, 0.15);
+  }
+  .pds-ladder--active { border-color: rgba(251, 113, 133, 0.22); }
+  .pds-ladder--exit { opacity: 0.9; }
+
+  .pds-ladder__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pds-ladder__badge {
+    flex-shrink: 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 3px 6px;
+    border-radius: 5px;
+    color: #fde68a;
+    background: rgba(251, 191, 36, 0.12);
+  }
+  .pds-ladder__badge--chase-risk { color: #fecdd3; background: rgba(251, 113, 133, 0.14); }
+  .pds-ladder__name {
+    flex: 1;
+    min-width: 0;
+    font-size: 15px;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pds-ladder__name b {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--pds-dim);
+  }
+  .pds-ladder__nums {
+    flex-shrink: 0;
+    display: flex;
+    gap: 12px;
+    text-align: right;
+  }
+  .pds-ladder__num {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--pds-ink);
+  }
+  .pds-ladder__num i {
+    display: block;
+    font-style: normal;
+    font-size: 8px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--pds-dim);
+    margin-bottom: 1px;
+  }
+  .pds-ladder__num--gap { color: #6ee7b7; }
+  .pds-ladder__why {
+    margin: 8px 0 0;
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: var(--pds-sub);
+  }
+  .pds-ladder__legs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 8px;
+  }
+  .pds-ladder__leg {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 9px;
+    padding: 3px 7px;
+    border-radius: 4px;
+    color: var(--pds-dim);
+    border: 1px solid #1e293b;
+  }
+  .pds-ladder__leg--on {
+    color: #6ee7b7;
+    border-color: rgba(52, 211, 153, 0.35);
+  }
+
+  .pds-empty {
+    padding: 20px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--pds-sub);
+    border: 1px dashed var(--pds-line);
+    border-radius: 10px;
+  }
+</style>
+  
+</div>
+
+    <script src="/static/js/app.js" defer></script>
+    <script src="/static/js/chat_stream.js" defer></script>
+    <script src="/static/judge_panel.js" defer></script>
+    <script src="/static/js/command_palette.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/driver.js@1.3.1/dist/driver.js.iife.js" defer></script>
+    <script src="/static/js/onboarding_tour.js" defer></script>
+</body>
+</html>

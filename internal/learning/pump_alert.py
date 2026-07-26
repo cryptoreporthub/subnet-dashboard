@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from internal.learning.dpick_copy import hero_copy_is_clean
@@ -151,6 +152,23 @@ def _size_cliff_line(subnet_row: Optional[Dict[str, Any]]) -> Optional[str]:
         return f"{REFERENCE_TAO:.0f} τ ≈ {float(ref_pct):.2f}% of float · {depth}"
     except Exception:
         return None
+
+
+def _human_updated_ago(updated_at: Optional[str]) -> str:
+    if not updated_at:
+        return ""
+    try:
+        ts = datetime.fromisoformat(str(updated_at).replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    age = int((datetime.now(timezone.utc) - ts.astimezone(timezone.utc)).total_seconds())
+    if age < 60:
+        return "just now"
+    if age < 3600:
+        return f"{age // 60}m ago"
+    if age < 86400:
+        return f"{age // 3600}h ago"
+    return f"{age // 86400}d ago"
 
 
 def _triad_badge(phase: str, triad: Dict[str, Any], default_badge: str) -> str:
@@ -610,6 +628,14 @@ def build_desk_row(
         score,
         metrics["trigger_score"],
     )
+    # Size cliff is cheap (subnet_row only). Skip wallet/whale chips here —
+    # WhaleIntelligenceService is too slow for the desk GET path.
+    size_line = _size_cliff_line(subnet_row)
+    lit = int(triad.get("lit_count") or 0) if isinstance(triad, dict) else 0
+    buy_pct = int(round(leads["buy_ratio"] * 100)) if leads.get("buy_ratio") is not None else None
+    vol_pct = (
+        int(round(leads["volume_intensity"] * 100)) if leads.get("volume_intensity") is not None else None
+    )
     return {
         "netuid": netuid_int,
         "name": name,
@@ -630,6 +656,12 @@ def build_desk_row(
         "trigger_score": metrics["trigger_score"],
         "triad": triad,
         "triad_labels": pills,
+        "triad_lit": lit,
+        "size_line": size_line,
+        "buy_pct": buy_pct,
+        "vol_pct": vol_pct,
+        "updated_at": ladder_entry.get("updated_at"),
+        "updated_ago": _human_updated_ago(ladder_entry.get("updated_at")),
     }
 
 
@@ -691,6 +723,7 @@ def _finalize_pump_payload(
 
     early_count = sum(1 for a in alerts if a.get("timing") == "lead")
     confirmed_count = sum(1 for a in alerts if a.get("timing") == "confirmed")
+    exit_count = sum(1 for a in alerts if a.get("timing") == "exit")
     count = early_count + confirmed_count
     status = "success" if count else "empty"
     try:
@@ -707,6 +740,7 @@ def _finalize_pump_payload(
         "count": count,
         "early_count": early_count,
         "confirmed_count": confirmed_count,
+        "exit_count": exit_count,
         "alerts": alerts,
         "empty_message": _EMPTY_MESSAGE,
         "error": None,

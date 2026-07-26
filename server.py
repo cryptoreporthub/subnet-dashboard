@@ -1544,6 +1544,17 @@ async def preview_k3_pump_alert(request: Request):
     )
 
 
+@app.get("/preview/k3-pump-alert-scan")
+async def preview_k3_pump_alert_scan(request: Request):
+    """SSR preview — scan variant: one headline number, collapsed strip, ladder-first."""
+    from internal.preview.k3_pump_alert import build_k3_pump_alert_preview_context
+
+    return templates.TemplateResponse(
+        "preview/k3_pump_alert_scan.html",
+        build_k3_pump_alert_preview_context(request),
+    )
+
+
 @app.get("/api/pump-alerts")
 async def api_pump_alerts():
     """Pump lane — file-backed ladder + registry enrichment; must stay sub-second."""

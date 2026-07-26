@@ -4,21 +4,21 @@
 <style>
   .k3-preview-banner {
     position: sticky; top: 0; z-index: 9999;
-    background: #1a1200; color: #ffb347; text-align: center;
+    background: #0a1628; color: #7dd3fc; text-align: center;
     font: 12px/1.4 'JetBrains Mono', monospace; padding: 8px 12px;
-    border-bottom: 1px solid rgba(255,179,71,0.4);
+    border-bottom: 1px solid rgba(56, 189, 248, 0.35);
   }
-  .k3-preview-banner a { color: #00ff41; }
+  .k3-preview-banner a { color: #00ff41; margin: 0 6px; }
   .k3-preview-frame { max-width: 390px; margin: 0 auto; border-left: 1px solid #222; border-right: 1px solid #222; }
 </style>
 <p class="k3-preview-banner" role="status">
-  K3-8 preview · Pump Alert lane · hydrate off ·
-  <a href="/preview/k3-pump-alert-scan">scan variant</a> ·
+  SCAN variant (thinned hero · ladder-first) · hydrate off ·
+  <a href="/preview/k3-pump-alert">flagship</a> ·
   <a href="/">live home</a>
 </p>
 <div class="k3-preview-frame app-shell council-first">
   {% with pump_compact=true %}
-  {% include "partials/premium/pump_alert.html" %}
+  {% include "partials/premium/pump_alert_scan.html" %}
   {% endwith %}
 </div>
 {% endblock %}

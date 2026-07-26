@@ -289,21 +289,86 @@ def test_pump_alert_compact_renders_hero_card():
             "count": 1,
             "early_count": 1,
             "confirmed_count": 0,
+            "exit_count": 0,
             "hero": row,
             "alerts": [row],
+            "trust": {"ready": False, "line": "grading starts"},
         },
     )
-    assert "Closest to trigger" in html
-    assert "pump-hero__card--flag" in html
-    assert "Lead scanner" in html
-    assert "Formation" not in html or "Flow" in html
-    assert "Flow" in html
+    assert "pd-lead" in html
+    assert "pd-lead__identity" in html
+    assert "pd-lead__meter" in html
+    assert "pd-verdict" in html
+    assert "pd-evidence" in html
+    assert "pd-triad" in html
+    assert "pd-phase" in html
+    assert "Pump desk" in html
+    assert "Formation" in html
     assert "Confirm" in html
+    assert "Gap" in html
     assert "Inflow" in html
-    assert "pump-hero__meter" in html
-    assert "pump-hero__glow" in html
+    assert "Open SN" in html and "dossier" in html
     assert "progress_series" in row
     assert row["progress_series"][-1] == int(round(float(row["score"]) / row["trigger_score"] * 100))
+    assert row.get("buy_pct") is not None
+    assert row.get("vol_pct") is not None
+    assert row.get("thesis")
+    assert row["thesis"] in html or "pd-verdict__thesis" in html
+
+
+def test_pump_alert_compact_surfaces_trust_and_census():
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    tmpl = env.get_template("partials/premium/pump_alert.html")
+    row = build_desk_row(_ladder_entry("ACCUMULATING", netuid=42, score=0.55))
+    html = tmpl.render(
+        pump_compact=True,
+        pump_alerts={
+            "count": 1,
+            "early_count": 1,
+            "confirmed_count": 2,
+            "exit_count": 1,
+            "hero": row,
+            "alerts": [row],
+            "trust": {"ready": True, "headline_pct": 62, "headline_n": 12, "line": ""},
+        },
+    )
+    assert "62%" in html
+    assert "pd-proof" in html
+    assert "pd-census" in html
+    assert "1</b> lead" in html
+    assert "2</b> live" in html
+    assert "1</b> exit" in html
+    assert row.get("thesis")
+
+
+def test_pump_alert_ladder_rows_use_dense_table_columns():
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    tmpl = env.get_template("partials/premium/pump_alert.html")
+    hero = build_desk_row(_ladder_entry("ACCUMULATING", netuid=1, score=0.6))
+    row2 = build_desk_row(_ladder_entry("ACCUMULATING", netuid=2, score=0.5))
+    html = tmpl.render(
+        pump_compact=True,
+        pump_alerts={
+            "count": 2,
+            "early_count": 2,
+            "confirmed_count": 0,
+            "exit_count": 0,
+            "hero": hero,
+            "alerts": [hero, row2],
+            "trust": {"ready": False, "line": "grading starts"},
+        },
+    )
+    assert "pd-board" in html
+    assert "pd-r pd-r--warm" in html
+    assert "Also warming" in html
+    assert "pd-r__why" in html
+    assert "pd-r__legs" in html
 
 
 def test_progress_series_from_trail_uses_real_scores():
@@ -427,3 +492,79 @@ def test_preview_pump_alert_route():
         html = client.get("/preview/k3-pump-alert").text
     assert "Pump desk" in html
     assert "BUILDING" in html
+
+
+def test_pump_alert_scan_compact_renders_hero():
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    tmpl = env.get_template("partials/premium/pump_alert_scan.html")
+    row = build_desk_row(_ladder_entry("ACCUMULATING", netuid=42, score=0.72))
+    html = tmpl.render(
+        pump_compact=True,
+        pump_alerts={
+            "count": 1,
+            "early_count": 1,
+            "confirmed_count": 0,
+            "exit_count": 0,
+            "hero": row,
+            "alerts": [row],
+            "trust": {"ready": False, "line": "grading starts"},
+        },
+    )
+    assert 'data-pump-compact="1"' in html
+    assert 'data-pump-scan="1"' in html
+    assert "pds-hero" in html
+    assert "pds-strip" in html
+    assert "pd-evidence" not in html
+    assert "pd-verdict__trigger" not in html
+    assert "Open SN" in html and "dossier" in html
+    assert 'class="pds-variant"' not in html
+
+
+def test_pump_alert_scan_compact_surfaces_trust_and_census():
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    tmpl = env.get_template("partials/premium/pump_alert_scan.html")
+    row = build_desk_row(_ladder_entry("ACCUMULATING", netuid=42, score=0.55))
+    html = tmpl.render(
+        pump_compact=True,
+        pump_alerts={
+            "count": 1,
+            "early_count": 1,
+            "confirmed_count": 2,
+            "exit_count": 1,
+            "hero": row,
+            "alerts": [row],
+            "trust": {"ready": True, "headline_pct": 62, "headline_n": 12, "line": ""},
+        },
+    )
+    assert "62%" in html
+    assert "pds-proof__line" in html
+    assert 'id="pd-census-lead">1</span> lead' in html
+    assert 'id="pd-census-live">2</span> live' in html
+    assert 'id="pd-census-exit">1</span> exit' in html
+
+
+def test_preview_pump_alert_scan_matches_home_markup():
+    with TestClient(app) as client:
+        html = client.get("/preview/k3-pump-alert-scan").text
+    assert 'id="section-pump-alert"' in html
+    assert 'data-pump-compact="1"' in html
+    assert "pds-hero" in html
+    assert "pds-strip" in html
+    assert "pd-evidence" not in html
+
+
+def test_preview_pump_alert_scan_route():
+    with TestClient(app) as client:
+        html = client.get("/preview/k3-pump-alert-scan").text
+    assert "Pump desk" in html
+    assert "pds-hero" in html
+    assert "pds-strip" in html
+    assert "pds-ladder" in html
+    assert "pd-evidence" not in html
+    assert "pd-verdict__trigger" not in html

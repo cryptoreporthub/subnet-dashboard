@@ -1,10 +1,23 @@
 (function () {
   'use strict';
 
+  var BADGE_ABBR = {
+    'WARMING UP': 'WARM',
+    BUILDING: 'BUILD',
+    STRONG: 'STRONG',
+    'JUST STARTED': 'JUST',
+    'CHASE RISK': 'CHASE',
+    FADING: 'FADE',
+  };
+
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
     });
+  }
+
+  function isBoardMode() {
+    return !!document.querySelector('[data-pump-compact="1"]');
   }
 
   function readRows() {
@@ -19,73 +32,86 @@
   }
 
   function formationPct(row) {
+    if (row.formation_pct != null && !isNaN(row.formation_pct)) {
+      return Math.max(0, Math.min(100, Math.round(Number(row.formation_pct))));
+    }
     if (row.score == null || isNaN(row.score)) return null;
     return Math.max(0, Math.min(100, Math.round(Number(row.score) * 100)));
-  }
-
-  function sparkHtml(row, tone) {
-    var sparks = row.spark_closes;
-    if (sparks && sparks.length >= 2) {
-      return (
-        '<div class="pump-desk__spark-wrap">' +
-        '<div class="spark pump-desk__spark" data-spark="' +
-        esc(sparks.join(',')) +
-        '" data-spark-tone="' +
-        esc(tone) +
-        '" role="img" aria-label="Price sparkline for ' +
-        esc(row.name || 'subnet') +
-        '"></div></div>'
-      );
-    }
-    return '<div class="pump-desk__spark-empty" aria-hidden="true">—</div>';
   }
 
   function deskRow(row, tone) {
     var pct = formationPct(row);
     var sn = row.netuid != null ? 'SN' + row.netuid : '';
+    var badge = String(row.badge || '');
+    var badgeSlug = badge.toLowerCase().replace(/\s+/g, '-');
+    var shortBadge = BADGE_ABBR[badge] || badge;
+    var labels = row.triad_labels || {};
+    var triad = row.triad || {};
+    var why = row.trigger || row.subtitle || row.badge || '';
+    if (why.length > 72) why = why.slice(0, 69).replace(/\s+\S*$/, '') + '…';
     return (
-      '<a class="pump-desk__row pump-desk__row--' +
+      '<a class="pd-r pd-r--' +
       esc(tone) +
-      '" href="/subnet/' +
+      ' pump-desk__row" href="/subnet/' +
       esc(row.netuid) +
       '" data-netuid="' +
       esc(row.netuid) +
+      '" title="' +
+      esc(badge) +
       '">' +
-      '<div class="pump-desk__row-main">' +
-      '<span class="pump-desk__name">' +
+      '<div class="pd-r__main"><div class="pd-r__id">' +
+      '<span class="pd-r__badge pd-r__badge--' +
+      esc(badgeSlug) +
+      '">' +
+      esc(shortBadge) +
+      '</span>' +
+      '<span class="pd-r__name">' +
       esc(row.name || sn) +
-      '</span>' +
-      '<span class="pump-desk__sn">' +
+      ' <b class="pd-r__sn">' +
       esc(sn) +
+      '</b></span></div>' +
+      (why ? '<p class="pd-r__why">' + esc(why) + '</p>' : '') +
+      '<span class="pd-r__legs">' +
+      '<span class="pd-r__leg' +
+      (triad.inflow_quiet_load ? ' pd-r__leg--on' : '') +
+      '">In ' +
+      esc(labels.inflow || 'WATCH') +
       '</span>' +
-      '</div>' +
-      '<div class="pump-desk__row-meta">' +
-      (pct != null
-        ? '<span class="pump-desk__formation"><span class="pump-desk__formation-lbl">Formation</span> ' +
-          pct +
-          '%</span>'
-        : '') +
-      sparkHtml(row, tone) +
-      '</div></a>'
+      '<span class="pd-r__leg' +
+      (triad.buy_pressure ? ' pd-r__leg--on' : '') +
+      '">Pr ' +
+      esc(labels.pressure || 'FLAT') +
+      '</span>' +
+      '<span class="pd-r__leg' +
+      (triad.price_coil ? ' pd-r__leg--on' : '') +
+      '">Coil ' +
+      esc(labels.coil || 'OPEN') +
+      '</span></span></div>' +
+      '<div class="pd-r__nums"><span class="pd-r__num"><i>Flow</i> ' +
+      (pct != null ? pct : '—') +
+      '</span><span class="pd-r__num pd-r__num--gap"><i>Gap</i> ' +
+      (row.distance != null ? esc(row.distance) : '—') +
+      '</span></div></a>'
     );
   }
 
   function section(title, rows, tone) {
     if (!rows.length) return '';
     return (
-      '<div class="pump-desk__section">' +
-      '<p class="pump-desk__section-lbl">' +
+      '<h4 class="pd-board__lbl">' +
       esc(title) +
-      '</p>' +
-      '<div class="pump-desk__rows">' +
-      rows.map(function (row) {
-        return deskRow(row, tone);
-      }).join('') +
-      '</div></div>'
+      '</h4><div class="pd-board__rows">' +
+      rows
+        .map(function (row) {
+          return deskRow(row, tone);
+        })
+        .join('') +
+      '</div>'
     );
   }
 
   function renderDesk(rows) {
+    if (isBoardMode()) return;
     var panel = document.getElementById('pump-desk-panel');
     if (!panel) return;
     var warming = rows.filter(function (r) {
@@ -94,21 +120,25 @@
     var active = rows.filter(function (r) {
       return r.timing === 'confirmed';
     });
+    var exits = rows.filter(function (r) {
+      return r.timing === 'exit';
+    });
     if (!warming.length && !active.length) {
       panel.innerHTML =
-        '<p class="pump-desk__empty">Quiet — no warming or active names on the ladder right now.</p>';
+        '<p class="pd-empty pump-desk__empty">Quiet — no warming or active names on the ladder right now.</p>';
       return;
     }
-    panel.innerHTML = section('Warming', warming, 'warm') + section('Active', active, 'active');
-    if (typeof window.__paintSparks === 'function') window.__paintSparks();
+    panel.innerHTML =
+      section('Warming', warming, 'warm') + section('Active', active, 'active') + section('Cooling', exits, 'exit');
   }
 
   function highlightCard(netuid) {
     document.querySelectorAll('.pump-alert__card').forEach(function (card) {
-      card.classList.toggle('pump-alert__card--highlight', String(card.getAttribute('data-netuid')) === String(netuid));
+      card.classList.toggle(
+        'pump-alert__card--highlight',
+        String(card.getAttribute('data-netuid')) === String(netuid)
+      );
     });
-    var card = document.querySelector('.pump-alert__card[data-netuid="' + netuid + '"]');
-    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }
 
   function bindDeskClicks() {
@@ -116,7 +146,7 @@
     if (!panel || panel._pumpDeskBound) return;
     panel._pumpDeskBound = true;
     panel.addEventListener('click', function (ev) {
-      var row = ev.target.closest('.pump-desk__row');
+      var row = ev.target.closest('.pump-desk__row, .pd-r');
       if (!row) return;
       highlightCard(row.getAttribute('data-netuid'));
     });
@@ -124,7 +154,7 @@
 
   function init() {
     bindDeskClicks();
-    renderDesk(readRows());
+    if (!isBoardMode()) renderDesk(readRows());
   }
 
   window.PumpMap = {
@@ -132,6 +162,7 @@
     refresh: function (rows) {
       var el = document.getElementById('pump-map-data');
       if (el && rows) el.textContent = JSON.stringify(rows);
+      if (isBoardMode()) return;
       renderDesk(rows || readRows());
     },
     renderDesk: renderDesk,

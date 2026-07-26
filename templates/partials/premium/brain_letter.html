@@ -16,7 +16,7 @@
     {% if bl_ok %}
     <article class="brain-letter__desk-card">
       <span class="brain-letter__desk-lbl">Yesterday</span>
-      <p class="brain-letter__desk-val">{{ bl.yesterday_outcome|default('No graded outcome yet.')|truncate(90, True) }}</p>
+      <p class="brain-letter__desk-val">{{ bl.yesterday_outcome|default('No graded outcome yet.', true)|truncate(90, True) }}</p>
     </article>
     <article class="brain-letter__desk-card">
       <span class="brain-letter__desk-lbl">Today</span>
@@ -26,7 +26,7 @@
     </article>
     <article class="brain-letter__desk-card">
       <span class="brain-letter__desk-lbl">Next</span>
-      <p class="brain-letter__desk-val">{{ bl.outlook|default('Watching the desk into resolve.')|truncate(90, True) }}</p>
+      <p class="brain-letter__desk-val">{{ bl.outlook|default('Watching the desk into resolve.', true)|truncate(90, True) }}</p>
     </article>
     {% endif %}
   </div>

@@ -1,0 +1,24 @@
+{# Scan ladder row — intentional secondary card (reason + triad + flow/gap) #}
+{% set form_pct = row.formation_pct if row.formation_pct is not none else (((row.score|default(0)|float * 100)|round(0))|int if row.score is not none else none) %}
+{% set tone = 'warm' if row.timing == 'lead' else ('exit' if row.timing == 'exit' else 'active') %}
+{% set badge_slug = (row.badge|default('')|lower|replace(' ', '-')) %}
+{% set triad = row.triad if row.triad is mapping else {} %}
+{% set labels = row.triad_labels if row.triad_labels is mapping else {} %}
+{% set why = row.trigger|default(row.subtitle|default('')) %}
+{% set BADGE_ABBR = {'WARMING UP': 'WARM', 'BUILDING': 'BUILD', 'STRONG': 'STRONG', 'JUST STARTED': 'JUST', 'CHASE RISK': 'CHASE', 'FADING': 'FADE'} %}
+<a class="pds-ladder pds-ladder--{{ tone }}" href="/subnet/{{ row.netuid }}" data-netuid="{{ row.netuid }}">
+  <div class="pds-ladder__head">
+    <span class="pds-ladder__badge pds-ladder__badge--{{ badge_slug }}">{{ BADGE_ABBR.get(row.badge, row.badge) }}</span>
+    <span class="pds-ladder__name">{{ row.name }} <b>SN{{ row.netuid }}</b></span>
+    <span class="pds-ladder__nums">
+      <span class="pds-ladder__num"><i>Flow</i>{% if form_pct is not none %}{{ form_pct }}{% else %}—{% endif %}</span>
+      <span class="pds-ladder__num pds-ladder__num--gap"><i>Gap</i>{% if row.distance is not none %}{{ row.distance }}{% else %}—{% endif %}</span>
+    </span>
+  </div>
+  {% if why %}<p class="pds-ladder__why">{{ why }}</p>{% endif %}
+  <div class="pds-ladder__legs">
+    <span class="pds-ladder__leg{% if triad.inflow_quiet_load %} pds-ladder__leg--on{% endif %}">In {{ labels.inflow|default('WATCH') }}</span>
+    <span class="pds-ladder__leg{% if triad.buy_pressure %} pds-ladder__leg--on{% endif %}">Pr {{ labels.pressure|default('FLAT') }}</span>
+    <span class="pds-ladder__leg{% if triad.price_coil %} pds-ladder__leg--on{% endif %}">Coil {{ labels.coil|default('OPEN') }}</span>
+  </div>
+</a>
