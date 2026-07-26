@@ -40,7 +40,20 @@ def _pump_inline_defer_seconds() -> int:
         return 300
 
 
+def _pump_inline_scheduler_enabled() -> bool:
+    flag = os.environ.get("PUMP_LADDER_INLINE_SCHEDULER", "off").strip().lower()
+    return flag in ("1", "true", "yes", "on")
+
+
 def _start_pump_ladder() -> None:
+    from internal.run_mode import inline_worker_expected
+
+    if inline_worker_expected() and not _pump_inline_scheduler_enabled():
+        logger.info(
+            "pump ladder scheduler skipped on inline worker (PUMP_LADDER_INLINE_SCHEDULER=off)"
+        )
+        return
+
     def _run() -> None:
         from internal.pump.scheduler import ensure_pump_ladder_scheduler
 
