@@ -1570,6 +1570,40 @@ async def preview_k3_pump_alert_scan(request: Request):
     )
 
 
+@app.get("/preview/pump-desk-polish")
+async def preview_pump_desk_polish(request: Request):
+    """SSR preview — P1 polish: proof rail, phase bar, full-desk CTA (home scan)."""
+    from internal.preview.k3_pump_alert import build_k3_pump_alert_preview_context
+
+    return templates.TemplateResponse(
+        "preview/pump_desk_polish.html",
+        build_k3_pump_alert_preview_context(request),
+    )
+
+
+@app.get("/preview/pump-desk-full")
+async def preview_pump_desk_full(request: Request):
+    """SSR preview — flagship deep-dive (proposed /pump route)."""
+    from internal.preview.k3_pump_alert import build_k3_pump_alert_preview_context
+
+    return templates.TemplateResponse(
+        "preview/pump_desk_full.html",
+        build_k3_pump_alert_preview_context(request),
+    )
+
+
+@app.get("/pump")
+async def pump_desk_page(request: Request):
+    """Flagship pump desk — full Situation Room theater."""
+    subnets = _registry_shell_subnets()
+    context: Dict[str, Any] = {
+        "request": request,
+        "public_base_url": _public_base_url(request),
+    }
+    context.update(_pump_alerts_context(subnets))
+    return templates.TemplateResponse("pump.html", context)
+
+
 @app.get("/api/pump-alerts")
 async def api_pump_alerts():
     """Pump lane — file-backed ladder + registry enrichment; must stay sub-second."""

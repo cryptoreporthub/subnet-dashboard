@@ -1,4 +1,4 @@
-{# Pump desk SCAN variant — thinned hero, one headline number, ladder-first #}
+{# Pump desk SCAN — proof rail, phase ladder, link to full desk #}
 {% set pa = pump_alerts if pump_alerts is mapping else {} %}
 {% set compact = pump_compact|default(false) %}
 {% set pa_rows = pa.alerts if pa.alerts is iterable and pa.alerts is not string else [] %}
@@ -24,16 +24,30 @@
   {% if warm_ns.rows %}{% set hero_row = warm_ns.rows[0] %}{% elif active_ns.rows %}{% set hero_row = active_ns.rows[0] %}{% endif %}
 {% endif %}
 {% if pa_exit == 0 %}{% set pa_exit = exit_ns.rows|length %}{% endif %}
+{% set full_desk_href = pump_full_desk_href|default('/pump') %}
 
-<section class="pds wrap-pad" id="section-pump-alert" aria-labelledby="pds-title" data-home-live="1" data-pump-compact="1" data-pump-scan="1">
+<section class="pds pds--polish wrap-pad" id="section-pump-alert" aria-labelledby="pds-title" data-home-live="1" data-pump-compact="1" data-pump-scan="1" data-pump-polish="1">
+  <div class="pds-atmosphere" aria-hidden="true"></div>
+
   <header class="pds-head">
-    <h2 class="pds-title" id="pds-title">Pump desk{% if not compact %} <span class="pds-variant">scan</span>{% endif %}<span class="pds-live" aria-hidden="true"></span></h2>
+    <div class="pds-head__row">
+      <h2 class="pds-title" id="pds-title">Pump desk<span class="pds-live" aria-hidden="true"></span></h2>
+      <a class="pds-full-desk" href="{{ full_desk_href }}">Open full desk →</a>
+    </div>
     <div class="pds-proof" id="pd-meta-wrap">
       {% if trust.ready and trust.headline_pct is not none %}
-      <p class="pds-proof__line"><b>{{ trust.headline_pct }}%</b> hit +2% in 1h · n={{ trust.headline_n|default((trust.early.n if trust.early is mapping else 0)|default(0)) }} · <span id="pd-census-lead">{{ pa_early }}</span> lead · <span id="pd-census-live">{{ pa_confirmed }}</span> live · <span id="pd-census-exit">{{ pa_exit }}</span> exit</p>
+      <div class="pds-proof__ready">
+        <span class="pds-proof__pct">{{ trust.headline_pct }}%</span>
+        <span class="pds-proof__copy">hit +2% in 1h · n={{ trust.headline_n|default((trust.early.n if trust.early is mapping else 0)|default(0)) }}</span>
+      </div>
       {% else %}
-      <p class="pds-proof__line pds-proof__line--building" id="pump-alert-trust">{{ trust.line|default('Early alerts: grading starts once lead phase entries resolve (1h).') }} · {{ pa_early }} lead · {{ pa_confirmed }} live · {{ pa_exit }} exit</p>
+      <p class="pds-proof__line pds-proof__line--building" id="pump-alert-trust">{{ trust.line|default('Early alerts: grading starts once lead phase entries resolve (1h).') }}</p>
       {% endif %}
+      <div class="pds-census" id="pd-census" aria-label="Desk census">
+        <span class="pds-census__chip pds-census__chip--lead"><b id="pd-census-lead">{{ pa_early }}</b> lead</span>
+        <span class="pds-census__chip pds-census__chip--live"><b id="pd-census-live">{{ pa_confirmed }}</b> live</span>
+        <span class="pds-census__chip pds-census__chip--exit"><b id="pd-census-exit">{{ pa_exit }}</b> exit</span>
+      </div>
     </div>
   </header>
 
@@ -71,9 +85,11 @@
           {% endif %}
         </div>
 
-        <p class="pds-hero__phase" aria-label="Formation phase">
-          {% for p, label in [('STIRRING','Stir'),('ACCUMULATING','Build'),('PUMPING','Pump'),('COOLING','Cool')] %}<span{% if phase == p %} class="pds-hero__phase-now"{% endif %}>{{ label }}</span>{% if not loop.last %} · {% endif %}{% endfor %}
-        </p>
+        <ol class="pds-phase" aria-label="Formation phase">
+          {% for p, label in [('STIRRING','Stir'),('ACCUMULATING','Build'),('PUMPING','Pump'),('COOLING','Cool')] %}
+          <li class="pds-phase__step{% if phase == p %} pds-phase__step--now{% endif %}">{{ label }}</li>
+          {% endfor %}
+        </ol>
 
         {% if thesis %}<p class="pds-hero__thesis">{{ thesis }}</p>{% endif %}
         {% if trigger %}<p class="pds-hero__trigger">{{ trigger }}</p>{% endif %}
@@ -135,7 +151,7 @@
 </section>
 
 <style>
-  .pds {
+  .pds--polish {
     --pds-ink: #e8f0e9;
     --pds-sub: #94a3b8;
     --pds-dim: #64748b;
@@ -148,9 +164,29 @@
     padding-left: 12px;
     margin-left: -2px;
     color: var(--pds-ink);
+    overflow: hidden;
+  }
+  .pds-atmosphere {
+    position: absolute;
+    inset: -20% -10% auto -10%;
+    height: 65%;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 70% 55% at 12% 20%, rgba(56, 189, 248, 0.08), transparent 60%),
+      radial-gradient(ellipse 50% 40% at 88% 8%, rgba(251, 191, 36, 0.05), transparent 55%);
+    z-index: 0;
+  }
+  .pds--polish > *:not(.pds-atmosphere) { position: relative; z-index: 1; }
+
+  .pds-head__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
   }
   .pds-title {
-    margin: 0 0 6px;
+    margin: 0;
     font-size: 22px;
     font-weight: 800;
     letter-spacing: -0.02em;
@@ -158,20 +194,49 @@
     align-items: center;
     gap: 8px;
   }
-  .pds-variant {
+  .pds-full-desk {
+    flex-shrink: 0;
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-size: 10px;
     font-weight: 600;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     color: #38bdf8;
-    padding: 2px 6px;
+    text-decoration: none;
+    padding: 5px 8px;
     border: 1px solid rgba(56, 189, 248, 0.35);
-    border-radius: 4px;
+    border-radius: 6px;
+    background: rgba(56, 189, 248, 0.06);
+  }
+  .pds-full-desk:hover, .pds-full-desk:focus-visible {
+    background: rgba(56, 189, 248, 0.12);
+    border-color: rgba(56, 189, 248, 0.55);
   }
   .pds-live {
     width: 7px; height: 7px; border-radius: 50%; background: #34d399;
     box-shadow: 0 0 8px rgba(52, 211, 153, 0.5);
+  }
+
+  .pds-proof { display: flex; flex-direction: column; gap: 8px; }
+  .pds-proof__ready {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .pds-proof__pct {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 26px;
+    font-weight: 800;
+    line-height: 1;
+    color: #fbbf24;
+    text-shadow: 0 0 16px rgba(251, 191, 36, 0.22);
+  }
+  .pds-proof__copy {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--pds-sub);
+    line-height: 1.4;
   }
   .pds-proof__line {
     margin: 0;
@@ -180,10 +245,26 @@
     color: var(--pds-sub);
     line-height: 1.45;
   }
-  .pds-proof__line b { color: #fbbf24; font-size: 13px; }
   .pds-proof__line--building { color: var(--pds-dim); }
 
-  /* Thinned hero — one headline number */
+  .pds-census { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pds-census__chip {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    padding: 4px 8px;
+    border-radius: 7px;
+    border: 1px solid var(--pds-line);
+    background: rgba(10, 14, 24, 0.65);
+    color: var(--pds-sub);
+  }
+  .pds-census__chip b { color: var(--pds-ink); font-weight: 700; }
+  .pds-census__chip--lead { border-color: rgba(251, 191, 36, 0.35); }
+  .pds-census__chip--lead b { color: #fbbf24; }
+  .pds-census__chip--live { border-color: rgba(251, 113, 133, 0.35); }
+  .pds-census__chip--live b { color: #fb7185; }
+  .pds-census__chip--exit { border-color: rgba(52, 211, 153, 0.35); }
+  .pds-census__chip--exit b { color: #34d399; }
+
   .pds-hero {
     margin-bottom: 16px;
     padding: 12px;
@@ -283,15 +364,42 @@
   }
   .pds-hero__spark .pump-progress { width: 100%; height: 16px; display: block; }
 
-  .pds-hero__phase {
-    margin: 8px 0 0;
+  .pds-phase {
+    display: flex;
+    gap: 0;
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--pds-line);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .pds-phase__step {
+    flex: 1;
+    padding: 6px 2px;
+    text-align: center;
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-size: 9px;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--pds-dim);
+    background: rgba(10, 14, 24, 0.5);
+    border-right: 1px solid var(--pds-line);
   }
-  .pds-hero__phase-now { color: #fbbf24; font-weight: 700; }
+  .pds-phase__step:last-child { border-right: none; }
+  .pds-phase__step--now {
+    color: #fde68a;
+    background: rgba(251, 191, 36, 0.14);
+    font-weight: 700;
+  }
+  .pds-hero--confirmed .pds-phase__step--now {
+    color: #fecdd3;
+    background: rgba(251, 113, 133, 0.14);
+  }
+  .pds-hero--exit .pds-phase__step--now {
+    color: #a7f3d0;
+    background: rgba(52, 211, 153, 0.14);
+  }
 
   .pds-hero__thesis {
     margin: 8px 0 0;
@@ -307,7 +415,6 @@
     color: #94a3b8;
   }
 
-  /* Collapsed evidence + triad strip */
   .pds-strip {
     margin-top: 10px;
     padding: 10px;
@@ -362,7 +469,6 @@
     box-sizing: border-box;
   }
 
-  /* Ladder — first-class cards */
   .pds-board { margin-top: 4px; }
   .pds-board__lbl {
     margin: 14px 0 8px;
@@ -376,7 +482,7 @@
   .pds-board__lbl--chase { color: #fb7185; }
   .pds-board__lbl--exit { color: #34d399; }
 
-  .pds-ladder {
+  .pds--polish .pds-ladder {
     display: block;
     margin-bottom: 8px;
     padding: 12px;
@@ -387,19 +493,14 @@
     border: 1px solid var(--pds-line);
     transition: border-color 0.15s, box-shadow 0.15s;
   }
-  .pds-ladder:hover, .pds-ladder:focus-visible {
+  .pds--polish .pds-ladder:hover, .pds--polish .pds-ladder:focus-visible {
     border-color: rgba(56, 189, 248, 0.4);
     box-shadow: 0 0 14px rgba(56, 189, 248, 0.15);
   }
-  .pds-ladder--active { border-color: rgba(251, 113, 133, 0.22); }
-  .pds-ladder--exit { opacity: 0.9; }
-
-  .pds-ladder__head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .pds-ladder__badge {
+  .pds--polish .pds-ladder--active { border-color: rgba(251, 113, 133, 0.22); }
+  .pds--polish .pds-ladder--exit { opacity: 0.9; }
+  .pds--polish .pds-ladder__head { display: flex; align-items: center; gap: 8px; }
+  .pds--polish .pds-ladder__badge {
     flex-shrink: 0;
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-size: 9px;
@@ -409,69 +510,35 @@
     color: #fde68a;
     background: rgba(251, 191, 36, 0.12);
   }
-  .pds-ladder__badge--chase-risk { color: #fecdd3; background: rgba(251, 113, 133, 0.14); }
-  .pds-ladder__name {
-    flex: 1;
-    min-width: 0;
-    font-size: 15px;
-    font-weight: 700;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .pds--polish .pds-ladder__badge--chase-risk { color: #fecdd3; background: rgba(251, 113, 133, 0.14); }
+  .pds--polish .pds-ladder__name {
+    flex: 1; min-width: 0;
+    font-size: 15px; font-weight: 700;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .pds-ladder__name b {
+  .pds--polish .pds-ladder__name b {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--pds-dim);
+    font-size: 10px; font-weight: 500; color: var(--pds-dim);
   }
-  .pds-ladder__nums {
-    flex-shrink: 0;
-    display: flex;
-    gap: 12px;
-    text-align: right;
-  }
-  .pds-ladder__num {
+  .pds--polish .pds-ladder__nums { flex-shrink: 0; display: flex; gap: 12px; text-align: right; }
+  .pds--polish .pds-ladder__num {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 16px;
-    font-weight: 800;
-    line-height: 1.1;
-    color: var(--pds-ink);
+    font-size: 16px; font-weight: 800; line-height: 1.1; color: var(--pds-ink);
   }
-  .pds-ladder__num i {
-    display: block;
-    font-style: normal;
-    font-size: 8px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--pds-dim);
-    margin-bottom: 1px;
+  .pds--polish .pds-ladder__num i {
+    display: block; font-style: normal; font-size: 8px; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase; color: var(--pds-dim); margin-bottom: 1px;
   }
-  .pds-ladder__num--gap { color: #6ee7b7; }
-  .pds-ladder__why {
-    margin: 8px 0 0;
-    font-size: 12.5px;
-    line-height: 1.4;
-    color: var(--pds-sub);
-  }
-  .pds-ladder__legs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    margin-top: 8px;
-  }
-  .pds-ladder__leg {
+  .pds--polish .pds-ladder__num--gap { color: #6ee7b7; }
+  .pds--polish .pds-ladder__why { margin: 8px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--pds-sub); }
+  .pds--polish .pds-ladder__legs { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+  .pds--polish .pds-ladder__leg {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 9px;
-    padding: 3px 7px;
-    border-radius: 4px;
-    color: var(--pds-dim);
-    border: 1px solid #1e293b;
+    font-size: 9px; padding: 3px 7px; border-radius: 4px;
+    color: var(--pds-dim); border: 1px solid #1e293b;
   }
-  .pds-ladder__leg--on {
-    color: #6ee7b7;
-    border-color: rgba(52, 211, 153, 0.35);
+  .pds--polish .pds-ladder__leg--on {
+    color: #6ee7b7; border-color: rgba(52, 211, 153, 0.35);
   }
 
   .pds-empty {
