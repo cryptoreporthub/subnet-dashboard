@@ -84,6 +84,8 @@ def _day_ledger_present(netuid: Any, data: Optional[Dict[str, Any]] = None) -> b
                 continue
             if str(row.get("horizon_type") or "hour") != "day":
                 continue
+            if row.get("shadow") or row.get("counterfactual"):
+                continue
             try:
                 if int(row.get("netuid")) == want:
                     return True

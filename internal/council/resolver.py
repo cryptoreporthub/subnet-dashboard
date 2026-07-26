@@ -76,8 +76,14 @@ def _in_replay_mode() -> bool:
 
 
 def _skip_council_learning(prediction: Dict[str, Any]) -> bool:
-    """Pump desk grades must not nudge council expert/signal weights."""
-    return is_pump_lead(prediction)
+    """Pump desk + HOLD counterfactual shadows must not nudge council weights."""
+    if is_pump_lead(prediction):
+        return True
+    return bool(prediction.get("shadow") or prediction.get("counterfactual"))
+
+
+def _is_shadow(prediction: Dict[str, Any]) -> bool:
+    return bool(prediction.get("shadow") or prediction.get("counterfactual"))
 
 
 def _load_json(path: str, default: Any) -> Any:
@@ -676,19 +682,29 @@ def _nudge_impact_strength(prediction: Dict[str, Any], correct: bool) -> None:
 def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
     resolved = data.get("resolved", [])
     pending = data.get("predictions", [])
-    # Council trust banner must not absorb pump_lead grades (separate desk claim).
+    # Council trust banner must not absorb pump_lead or shadow/counterfactual grades.
     gradable = [
         r for r in resolved
         if r.get("outcome") not in {"duplicate", "expired", "ungradeable"}
         and r.get("correct") is not None
         and not is_pump_lead(r)
+        and not _is_shadow(r)
     ]
     correct = sum(1 for r in gradable if r.get("correct") is True)
     wrong = sum(1 for r in gradable if r.get("correct") is False)
-    expired = sum(1 for r in resolved if r.get("outcome") == "expired" and not is_pump_lead(r))
+    expired = sum(
+        1
+        for r in resolved
+        if r.get("outcome") == "expired" and not is_pump_lead(r) and not _is_shadow(r)
+    )
     duplicates = sum(1 for r in resolved if r.get("outcome") == "duplicate")
-    council_pending = sum(1 for r in pending if not is_pump_lead(r))
-    total = len([r for r in resolved if not is_pump_lead(r)]) + council_pending
+    council_pending = sum(
+        1 for r in pending if not is_pump_lead(r) and not _is_shadow(r)
+    )
+    total = (
+        len([r for r in resolved if not is_pump_lead(r) and not _is_shadow(r)])
+        + council_pending
+    )
     stats: Dict[str, Any] = {
         "correct": correct,
         "wrong": wrong,
