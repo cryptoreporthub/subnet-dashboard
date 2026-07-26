@@ -95,12 +95,12 @@
         " " +
         esc(pick.name) +
         (pick.netuid != null ? " (SN" + esc(pick.netuid) + ")" : "") +
-        "</strong></p>";
+        "</strong> · <a href=\"#section-daily-pick\">Featured call</a></p>";
     } else if (pick.name) {
       html +=
         '<p class="weekly-letter__lead">Candidate: <strong>' +
         esc(pick.name) +
-        "</strong> · no audited long yet</p>";
+        "</strong> · no audited long yet · <a href=\"#section-daily-pick\">Featured call</a></p>";
     }
     if (pick.why) html += '<p class="weekly-letter__note">' + esc(pick.why) + "</p>";
     if (pick.dissent) {

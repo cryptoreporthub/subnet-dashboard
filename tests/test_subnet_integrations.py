@@ -20,11 +20,18 @@ def test_subnet_integrations_api_contract():
     assert resp.status_code == 200
     body = resp.json()
     assert "integrations" in body
-    assert len(body["integrations"]) == 5
-    assert body["integration_total"] == 5
+    assert len(body["integrations"]) == 6
+    assert body["integration_total"] == 6
     assert body["target_minimum"] == 3
     slugs = {row["slug"] for row in body["integrations"]}
-    assert slugs == {"bittensor", "blockmachine", "desearch", "chutes", "ditto"}
+    assert slugs == {
+        "bittensor",
+        "blockmachine",
+        "desearch",
+        "chutes",
+        "thirty_spokes",
+        "ditto",
+    }
     assert "synth" not in slugs
     finney = next(r for r in body["integrations"] if r["slug"] == "bittensor")
     assert finney["name"] == "Finney mainnet"
@@ -92,6 +99,32 @@ def test_chutes_falls_back_when_base_url_404(monkeypatch):
     chutes = next(r for r in payload["integrations"] if r["slug"] == "chutes")
     assert chutes["connected"] is True
     assert chutes["status"] == "connected"
+
+
+def test_chutes_uses_thirty_spokes_when_chutes_models_fail(monkeypatch):
+    monkeypatch.setenv("THIRTY_SPOKES_API_KEY", "test-key")
+    monkeypatch.delenv("CHUTES_API_KEY", raising=False)
+
+    def fake_probe(method, url, **kwargs):
+        if "llm.chutes.ai" in url:
+            return True, 401, "unauthorized"
+        if "thirtyspokes.ai" in url:
+            if kwargs.get("headers", {}).get("Authorization"):
+                return True, 200, '{"data":[]}'
+            return True, 401, ""
+        if "desearch.ai" in url:
+            return True, 200, "ok"
+        return True, 200, "ok"
+
+    with patch("internal.integrations.status._http_probe", side_effect=fake_probe):
+        with patch("internal.integrations.status._rpc_chain_healthy", return_value=(True, "ok")):
+            payload = build_integrations_status(force=True)
+    chutes = next(r for r in payload["integrations"] if r["slug"] == "chutes")
+    thirty = next(r for r in payload["integrations"] if r["slug"] == "thirty_spokes")
+    assert chutes["connected"] is True
+    assert "Thirty Spokes" in chutes["detail"]
+    assert thirty["connected"] is True
+    assert thirty["netuid"] == 99
 
 
 def test_strip_markup_on_homepage():

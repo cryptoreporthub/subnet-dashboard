@@ -144,7 +144,34 @@ def test_brain_letter_wave3_fields(monkeypatch):
     assert "Taoshi" in out["desk_block"]
 
 
-def test_outlook_hold_candidate():
+def test_brain_letter_api_omits_story_path(monkeypatch):
+    monkeypatch.setattr(
+        "internal.letter.brain_letter._today_pick_block",
+        lambda: {
+            "date": "2026-07-26",
+            "action": "HOLD",
+            "published": False,
+            "name": "Taoshi",
+            "outlook": "No sized call this window — watching the desk into resolve.",
+        },
+    )
+    monkeypatch.setattr(
+        "internal.letter.brain_letter._trust_block",
+        lambda: {
+            "trust_banner": build_trust_banner({"correct": 5, "wrong": 5, "expired": 0, "total": 10}),
+            "brain_ui_ready": False,
+            "watchdog": {},
+        },
+    )
+    monkeypatch.setattr(
+        "internal.letter.brain_letter._working_block",
+        lambda: {"ready": False, "top_price_signals": [], "disclaimer": ""},
+    )
+    out = build_brain_letter()
+    assert "story_path" not in out
+    assert out.get("outlook")
+
+
     outlook = _outlook_sentence(
         {
             "action": "HOLD",

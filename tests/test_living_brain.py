@@ -1,5 +1,6 @@
 """§30 Living Brain closure tests."""
 
+from pathlib import Path
 from unittest.mock import patch
 
 from internal.council.memory_scoring import (
@@ -9,7 +10,20 @@ from internal.council.memory_scoring import (
 from internal.council.weights import load_weights, nudge_expert, nudge_signal_weight, save_weights
 
 
-def test_calibration_status_exposes_weights():
+def test_b0_a_living_focus_four_beat_present():
+    html = Path("templates/partials/premium/living_focus.html").read_text(encoding="utf-8")
+    assert "section-living-focus" in html
+    assert "Focus · Contest · Prove it · Watch us update" in html
+    assert "living-focus-weights" in html
+    assert "Focus opens when judges score this subnet" in html
+
+    js = Path("static/js/living_focus.js").read_text(encoding="utf-8")
+    assert "renderJudgeLanes" in js
+    assert "Judges (Oracle · Echo · Pulse)" in js
+    assert "showWeightLean" in js
+    assert "living-focus-weights" in js
+
+
     from fastapi.testclient import TestClient
     from server import app
 

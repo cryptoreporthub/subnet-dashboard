@@ -13,7 +13,8 @@
     if (row.slug === 'bittensor') return 'Finney';
     if (row.slug === 'blockmachine') return 'Blockmachine';
     if (row.slug === 'desearch') return 'DeSearch';
-    if (row.slug === 'chutes') return 'Chutes';
+    if row.slug === 'chutes') return 'Chutes';
+    if (row.slug === 'thirty_spokes') return 'Thirty Spokes';
     if (row.slug === 'ditto') return 'Ditto';
     return name;
   }
