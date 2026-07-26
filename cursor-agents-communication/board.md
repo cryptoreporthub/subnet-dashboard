@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-26T19:20:00Z  
-**main:** `7357bc9` — #518 + #519 merged; **#520** hotfix `WORKER_HEAVY=essential` (full wedged prod)
+**Last updated:** 2026-07-26T19:30:00Z  
+**main:** `6daefbf` — #518–#520 merged (verify_prod, learning babysit, essential hotfix)
 
 ## Post-stability sprint (`post-stability-sprint-plan.md`)
 
@@ -21,11 +21,13 @@ Message-intel rollup UI, listener hardening, background price-outcome loop (`out
 
 ## Learning loop (`learning-loop-full-integration-plan.md`)
 
-Phases 0–6 merged (#498–#504). **Babysit PR:** cross-process `/api/learning/health`, inline worker supervisor, score snapshot soul_map cycle.
+Phases 0–6 merged (#498–#504). **#519:** cross-process health (`resolver.running` from worker heartbeat), inline worker supervisor, score snapshot soul_map.
 
-**Human ops (agent cannot flyctl):**
+**Prod 2026-07-26:** `verify_prod.sh` OK · worker alive · resolver `running: true` · may show `stalled` until resolver tick clears 1 young pending · `snapshot_age` fills after first score-snapshot job.
+
+**Human ops (agent cannot):**
 - Close superseded PRs: #455, #491, #487, #474, #449
-- Telegram + outcomes live: `WORKER_HEAVY=full` wedges single 2GB VM — use `essential` + manual soak; see `DEPLOY.md`
+- `WORKER_HEAVY=full` wedged 2GB single VM (#517→#520 revert) — Telegram needs split VM or lighter path
 
 ## Housekeeping (human)
 
