@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-26T18:50:00Z  
-**main:** `e9fee8e` — post-stability **COMPLETE** (#508); Telegram intel hardening + outcome loop (#513–#515)
+**Last updated:** 2026-07-26T19:15:00Z  
+**main:** `f944806` — #518 verify_prod hardening merged; **#519** learning-loop babysit in flight
 
 ## Post-stability sprint (`post-stability-sprint-plan.md`)
 
@@ -21,7 +21,11 @@ Message-intel rollup UI, listener hardening, background price-outcome loop (`out
 
 ## Learning loop (`learning-loop-full-integration-plan.md`)
 
-Phases 0–6 merged (#498–#504). Prod may show `stalled` / missing `score_snapshots` — learning-loop agent territory.
+Phases 0–6 merged (#498–#504). **Babysit PR:** cross-process `/api/learning/health`, inline worker supervisor, score snapshot soul_map cycle.
+
+**Human ops (agent cannot flyctl):**
+- Close superseded PRs: #455, #491, #487, #474, #449
+- Telegram + outcomes live: `WORKER_HEAVY=full` + `MESSAGE_INTEL_LISTENER=auto` (see `DEPLOY.md`)
 
 ## Housekeeping (human)
 
