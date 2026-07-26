@@ -1,16 +1,21 @@
 # Subnet Dashboard Coordination Board
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 **Last updated:** 2026-07-26T16:55:00Z  
 **main:** `083f456` · G0 prod green · cockpit SSE fast path (#497)
 =======
 **Last updated:** 2026-07-26T16:50:00Z  
 **main:** see git (`#494` calibration + follow-ups)
 >>>>>>> 20db888 (feat(learning): Phase 0 loop health + ledger contract guard)
+=======
+**Last updated:** 2026-07-26T17:30:00Z  
+>>>>>>> 807e94d (feat(learning): Phases 4–6 bridges, trust surface, prod verify)
 
 ## Active plan
 
 **Canonical:** `cursor-agents-communication/learning-loop-full-integration-plan.md`  
+<<<<<<< HEAD
 **Status:** Phase **0** done (PR #498) — awaiting merge
 
 <<<<<<< HEAD
@@ -44,9 +49,21 @@
 | 4 Intel / pump / history | — | gated on 3 |
 | 5 UI trust | — | gated on 4 |
 | 6 Validation | — | gated on 5 |
+=======
+**Status:** Phases 0–6 implemented on stacked PRs — **merge gate open**
 
-## Next slice queue
+| Phase | PR | Status |
+|-------|-----|--------|
+| 0 Instrumentation | #498 | CI green — merge first |
+| 1 Schedulers | #500 | stacked |
+| 2 Score snapshots | #502 | stacked |
+| 3 Shadows / HOLD | #503 | stacked |
+| 4–6 bridges + trust + validate | #504 | stacked |
+>>>>>>> 807e94d (feat(learning): Phases 4–6 bridges, trust surface, prod verify)
 
+## Merge order
+
+<<<<<<< HEAD
 1. **Merge #498** (Phase 0)
 2. Phase 1 — traffic-independent daily/hour schedulers
 3. Phase 2 — `score_snapshots.json`
@@ -63,3 +80,10 @@ H1 SSE cockpit fast path (#497).
 - Merge Phase 0 PR when CI green, then unlock Phase 1
 - Optional: `fly scale count web=1 worker=1 --app subnet-dashboard`
 - G0 human — 390px phone QA sign-off (`./scripts/g0_phone_qa.sh` + manual)
+=======
+`#498 → #500 → #502 → #503 → #504` then run `./scripts/verify_prod.sh`.
+
+## Prior (done)
+
+Pump-site Waves 0–3 · Calibration + 40% gate (#494).
+>>>>>>> 807e94d (feat(learning): Phases 4–6 bridges, trust surface, prod verify)

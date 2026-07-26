@@ -1944,7 +1944,21 @@ def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[st
         ]
         scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
         for item in scored[: max(0, limit - len(picks))]:
-            picks.append(_unify(_build_hour_pick_payload(item["subnet"], item["score"]), item["subnet"]))
+            payload = _unify(_build_hour_pick_payload(item["subnet"], item["score"]), item["subnet"])
+            picks.append(payload)
+            # Phase 4 — near-miss hour picks as shadows (no RF-2 / no weight nudge).
+            try:
+                from internal.learning.prediction_loop import record_pick_prediction
+
+                record_pick_prediction(
+                    payload,
+                    item["subnet"],
+                    horizon_type="hour",
+                    market_context=market_context,
+                    shadow=True,
+                )
+            except Exception:
+                pass
 
     return picks[:limit]
 

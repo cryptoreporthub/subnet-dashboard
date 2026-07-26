@@ -21,8 +21,8 @@ Never call `select_daily_pick` / full `score_universe(~127)` on synchronous API 
 
 ## HOLD vs LONG ledger rule
 
-- **Published LONG/BUY** (pick present, action not HOLD) **must** have a matching `horizon_type=day` pending/resolved row in `predictions.json`. Gap → `/api/learning/health` `status=stalled`.
-- **HOLD** is trail-only via `record_hold_decision` until Phase 3 shadows. No ledger row required.
+- **Published LONG/BUY** (pick present, action not HOLD) **must** have a matching primary `horizon_type=day` pending/resolved row in `predictions.json`. Gap → `/api/learning/health` `status=stalled`.
+- **HOLD** writes trail + optional **shadow** counterfactual (Phase 3). Shadows do not satisfy the LONG ledger requirement and do not enter RF-2.
 
 ## Weight writers (quarantine)
 
@@ -31,9 +31,11 @@ Never call `select_daily_pick` / full `score_universe(~127)` on synchronous API 
 | `nudge_expert` / `nudge_signal_weight` (+ trail) | Online authority |
 | Calibration / `rebalance_council_weights` | Batch OK |
 | `message_intel.self_learning.SelfLearning.start_background_learning` | **Quarantined** — not started from `server.py` / `background_boot` |
+| Pump overlay / pump_calibration | **Separate track** — never writes `council_weights` |
 
 ## Phase STATUS
 
+<<<<<<< HEAD
 | Phase | Status | Notes |
 |-------|--------|-------|
 <<<<<<< HEAD
@@ -49,30 +51,26 @@ Never call `select_daily_pick` / full `score_universe(~127)` on synchronous API 
 | 4 Intel / pump / history | gated on 3 | Bridge into loop |
 | 5 UI trust | gated on 4 | RF-2 honesty |
 | 6 Validation | gated on 5 | End-to-end + Fly regression |
+=======
+| Phase | PR | Status |
+|-------|-----|--------|
+| 0 Instrumentation | #498 | CI green — **awaiting merge** |
+| 1 Schedulers | #500 | stacked — awaiting merge |
+| 2 Score snapshots | #502 | stacked — awaiting merge |
+| 3 Shadows / HOLD | #503 | stacked — awaiting merge |
+| 4 Intel / pump / history | #504 (this) | hour #2–3 shadows; readiness bridge |
+| 5 UI trust | #504 | RF-2 excludes shadows; ops surfaces loop health |
+| 6 Validation | #504 | `scripts/verify_prod.sh` learning-loop checks |
+>>>>>>> 807e94d (feat(learning): Phases 4–6 bridges, trust surface, prod verify)
 
 ## Phase gate
 
-Next phase starts only after previous is **merged to main** and verify checklist passes (contract tests, `/api/learning/health`, `/health`, Ditto STATUS).
+Next phase starts only after previous is **merged to main** and verify checklist passes. Stacked PRs are ready; **merge order: #498 → #500 → #502 → #503 → #504**.
 
-## Phase summaries
+## Prod verify (Phase 6)
 
-### 0 — Instrumentation
-`GET /api/learning/health`: pending, last resolver tick, daily pick, ledger gap, snapshot age, status ok/degraded/stalled. No behavior change.
+```bash
+APP_BASE_URL=https://subnet-dashboard.fly.dev ./scripts/verify_prod.sh
+```
 
-### 1 — Schedulers
-Background daily + hour pick creation. Keep `GET /api/daily-pick` read-only.
-
-### 2 — Score snapshots
-Worker writes `data/score_snapshots.json`; APIs read it. Never raise scoring cap on request path.
-
-### 3 — Shadows + HOLD + Option A
-Grade near-calls/HOLD candidates as shadows (excluded from RF-2); harden live-desk hero on HOLD.
-
-### 4 — Bridges
-Message-intel / pump (keep pump weights separate) / rotation / pick history into learning surfaces.
-
-### 5 — UI trust
-Trust banner + Living Focus only gated RF-2 stats.
-
-### 6 — Validation
-Cross-phase regression + prod day checklist.
+Expect `/api/learning/health` not `stalled` for LONG-without-ledger; snapshot age present after worker cycle; `/health` OK during snapshot job.

@@ -92,6 +92,18 @@ def build_readiness_report() -> Dict[str, Any]:
     learning = _learning_summary()
     daily = _daily_pick_summary()
 
+    loop_health: Dict[str, Any] = {}
+    try:
+        from internal.learning.loop_health import build_learning_loop_health
+
+        loop_health = build_learning_loop_health()
+        if loop_health.get("status") == "stalled":
+            issues.append("learning_loop_stalled")
+        elif loop_health.get("ledger", {}).get("gap"):
+            issues.append("daily_pick_ledger_gap")
+    except Exception:
+        loop_health = {}
+
     from internal.run_mode import inline_worker_expected, worker_mode_label
 
     inline_worker = inline_worker_expected()
@@ -153,6 +165,7 @@ def build_readiness_report() -> Dict[str, Any]:
         "thin_ui_likely": thin_ui,
         "issues": issues,
         "learning": learning,
+        "learning_loop_health": loop_health,
         "resolver": resolver,
         "registry_sync": {
             "background_running": sync.get("background_running"),
@@ -183,6 +196,8 @@ def _next_levers(issues: List[str], taostats: bool) -> List[str]:
         levers.append("check_inline_worker_heartbeat_data/.worker_heartbeat")
     if "daily_pick_hold_no_published_long" in issues:
         levers.append("hold_is_honest_when_below_audit_gate_not_a_feed_outage")
+    if "learning_loop_stalled" in issues or "daily_pick_ledger_gap" in issues:
+        levers.append("check_GET_/api/learning/health_ledger_gap_phase1_schedulers")
     if not levers:
         levers.append("volume_and_scheduler_healthy")
     return levers
