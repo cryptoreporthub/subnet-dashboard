@@ -15,6 +15,7 @@ from internal.integrations.desearch_http import desearch_request
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_CHUTES_LLM_BASE = "https://llm.chutes.ai/v1"
 _CACHE_TTL = 300
 _cache: Dict[str, Dict[str, Any]] = {}
 
@@ -155,6 +156,19 @@ def synth_macro_skew(asset: str = "BTC", *, horizon: str = "24h") -> Optional[Di
         }
 
     return _cached(f"synth:{asset}:{horizon}", _fetch)
+
+
+def chutes_llm_base_url() -> str:
+    """OpenAI-compatible Chutes LLM base — normalizes stale api.chutes.ai Fly secrets."""
+    base = (
+        os.environ.get("CHUTES_BASE_URL")
+        or os.environ.get("LLM_BASE_URL")
+        or _DEFAULT_CHUTES_LLM_BASE
+    ).rstrip("/")
+    # ponytail: Fly often sets LLM_BASE_URL to api.chutes.ai (404 on /models and chat).
+    if "api.chutes.ai" in base:
+        return _DEFAULT_CHUTES_LLM_BASE.rstrip("/")
+    return base
 
 
 def chutes_configured() -> bool:
