@@ -25,6 +25,7 @@ CONTRACT = [
     ("GET", "/health", None),
     ("GET", "/preview/k3-hold", None),
     ("GET", "/preview/k3-pump-alert", None),
+    ("GET", "/preview/k3-pump-alert-scan", None),
     ("GET", "/api/pump-alerts", None),
     ("GET", "/metrics", None),
     ("GET", "/api/health", None),

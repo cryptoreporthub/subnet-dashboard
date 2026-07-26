@@ -492,3 +492,15 @@ def test_preview_pump_alert_route():
         html = client.get("/preview/k3-pump-alert").text
     assert "Pump desk" in html
     assert "BUILDING" in html
+
+
+def test_preview_pump_alert_scan_route():
+    with TestClient(app) as client:
+        html = client.get("/preview/k3-pump-alert-scan").text
+    assert "Pump desk" in html
+    assert "scan" in html.lower()
+    assert "pds-hero" in html
+    assert "pds-strip" in html
+    assert "pds-ladder" in html
+    assert "pd-evidence" not in html
+    assert "pd-verdict__trigger" not in html
