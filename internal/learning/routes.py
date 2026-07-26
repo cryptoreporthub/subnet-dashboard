@@ -406,6 +406,14 @@ async def share_call_page(prediction_id: str, request: Request):
     )
 
 
+@learning_router.get("/api/learning/health")
+async def api_learning_loop_health():
+    """Phase 0 — pick→ledger→resolver loop status (no scoring)."""
+    from internal.learning.loop_health import build_learning_loop_health
+
+    return build_learning_loop_health()
+
+
 @learning_router.get("/api/learning/stats")
 async def api_learning_stats():
     snap = _learning_snapshot()

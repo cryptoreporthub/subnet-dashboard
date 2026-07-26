@@ -1,13 +1,19 @@
 # Subnet Dashboard Coordination Board
 
+<<<<<<< HEAD
 **Last updated:** 2026-07-26T16:55:00Z  
 **main:** `083f456` · G0 prod green · cockpit SSE fast path (#497)
+=======
+**Last updated:** 2026-07-26T16:50:00Z  
+**main:** see git (`#494` calibration + follow-ups)
+>>>>>>> 20db888 (feat(learning): Phase 0 loop health + ledger contract guard)
 
 ## Active plan
 
-**Canonical:** `cursor-agents-communication/gameplan-pump-site-undeniable.md` (audited 2026-07-24)  
-**Status:** Waves **0–3 shipped** on `main` · Wave 4 YAGNI
+**Canonical:** `cursor-agents-communication/learning-loop-full-integration-plan.md`  
+**Status:** Phase **0** in progress (instrumentation)
 
+<<<<<<< HEAD
 | Wave | Status | Notes |
 |------|--------|-------|
 | 0 G0 | ✅ | `./scripts/g0_phone_qa.sh` prod green 2026-07-26 · 390px visual QA local pass |
@@ -28,14 +34,32 @@
 5. ~~G0 human~~ — prod + local 390px pass 2026-07-26
 6. **Ops** — `fly scale count worker=1` when ready (#437 worker process)
 7. Wave 4 — YAGNI
+=======
+| Phase | Status | Notes |
+|-------|--------|-------|
+| 0 Instrumentation | 🔄 | `/api/learning/health` + ledger contract |
+| 1 Schedulers | — | gated on 0 verify |
+| 2 Score snapshots | — | gated on 1; never score 127 on request |
+| 3 Shadows / HOLD / Option A | — | gated on 2 stable |
+| 4 Intel / pump / history | — | gated on 3 |
+| 5 UI trust | — | gated on 4 |
+| 6 Validation | — | gated on 5 |
 
-## Fix plan (done)
+## Next slice queue
 
-`cursor-agents-communication/quant-pump-desk-fix-plan.md` — Slices A–B + R + M shipped (#414–#419).
+1. **Phase 0** — learning health + contract guard (this branch / PR #498)
+2. Phase 1 — traffic-independent daily/hour schedulers
+3. Phase 2 — `score_snapshots.json`
+4. Phases 3–6 per plan gate protocol
+>>>>>>> 20db888 (feat(learning): Phase 0 loop health + ledger contract guard)
+
+## Prior (done)
+
+Pump-site Waves 0–3 shipped (#410 + follow-ups). Calibration + 40% gate on main (#494).  
+H1 SSE cockpit fast path (#497).
 
 ## Human follow-up
 
-- `APP_BASE_URL=https://subnet-dashboard.fly.dev ./scripts/g0_phone_qa.sh`
-- Phone QA 390px (Call + Lead + trust line)
+- Merge Phase 0 PR when CI green, then unlock Phase 1
 - Optional: `fly scale count web=1 worker=1 --app subnet-dashboard`
-- Env: `CONVICTION_ALERTS_ENABLED` / Telegram (off by default)
+- G0 human — 390px phone QA sign-off (`./scripts/g0_phone_qa.sh` + manual)
