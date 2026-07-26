@@ -71,12 +71,13 @@ def _format_picks_event(data: dict, emitted_at: str) -> str:
 
 async def _cockpit_stream(request: Request, once: bool):
     yield f"retry: 15000\n"
+    yield f": open {_emitted_at_z()}\n\n"
     emitted_at = _emitted_at_z()
     picks = await _build_picks_payload()
     yield _format_picks_event(picks, emitted_at)
-    yield _format_sections_event(emitted_at)
     if once:
         return
+    yield _format_sections_event(emitted_at)
 
     elapsed = 0
     while True:

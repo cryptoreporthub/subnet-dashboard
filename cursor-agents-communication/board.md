@@ -12,7 +12,7 @@
 |------|--------|-------|
 | 0 G0 | ⚠️ | `scripts/g0_phone_qa.sh` ✅ · human 390px QA open |
 | 1 P1–P3 | ✅ | Triad, hit-rate UI, size cliff (#410) |
-| 2 P4–P5 | ⚠️ | Phase notify ✅ · wallet + day-whale chips ⚠️ · founder chip open |
+| 2 P4–P5 | ✅ | Phase notify ✅ · wallet + day-whale + owner chips |
 | 3 S1–S8 | ⚠️ | All merged #410; S3 who-sold = Prove-it button only |
 | 4 | — | YAGNI |
 
@@ -26,7 +26,7 @@
 4. ~~Full plan Waves 1–3~~ — #410 + follow-ups (#430–#446)
 5. **G0 human** — 390px phone QA sign-off (`./scripts/g0_phone_qa.sh` + manual)
 6. **Ops** — `fly scale count worker=1` when ready (#437 worker process)
-7. **Optional** — P5 founder/owner chip · publish gate 45%→40% experiment
+7. **H1 SSE** — #497 cockpit.picks fast path (verify prod after deploy)
 8. Wave 4 — YAGNI
 
 ## Fix plan (done)
