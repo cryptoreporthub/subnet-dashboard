@@ -119,6 +119,20 @@ def test_worker_mode_label_split(monkeypatch):
     assert worker_mode_label() == "split"
 
 
+def test_pump_inline_defer_seconds_default(monkeypatch):
+    monkeypatch.delenv("PUMP_LADDER_INLINE_DEFER_SECONDS", raising=False)
+    from internal.background_boot import _pump_inline_defer_seconds
+
+    assert _pump_inline_defer_seconds() == 300
+
+
+def test_pump_inline_defer_seconds_env(monkeypatch):
+    monkeypatch.setenv("PUMP_LADDER_INLINE_DEFER_SECONDS", "420")
+    from internal.background_boot import _pump_inline_defer_seconds
+
+    assert _pump_inline_defer_seconds() == 420
+
+
 def test_ops_readiness_worker_mode_field():
     from fastapi.testclient import TestClient
 

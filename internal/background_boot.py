@@ -33,6 +33,13 @@ def _pump_boot_immediate() -> bool:
     return flag in ("1", "true", "yes", "on")
 
 
+def _pump_inline_defer_seconds() -> int:
+    try:
+        return max(60, int(os.environ.get("PUMP_LADDER_INLINE_DEFER_SECONDS", "300")))
+    except ValueError:
+        return 300
+
+
 def _start_pump_ladder() -> None:
     def _run() -> None:
         from internal.pump.scheduler import ensure_pump_ladder_scheduler
@@ -42,10 +49,11 @@ def _start_pump_ladder() -> None:
 
     from internal.run_mode import inline_worker_expected
 
-    # ponytail: on split VM, defer pump scan until HTTP has been stable ~2 min
+    # ponytail: on split VM, defer pump scan until HTTP has been stable ~5 min — 120s
+    # wedge was killing the only Fly machine (0-byte /health timeouts).
     delay = BOOT_DEFER_SECONDS
     if inline_worker_expected():
-        delay = max(BOOT_DEFER_SECONDS + 90, 120)
+        delay = _pump_inline_defer_seconds()
     defer_boot("pump-ladder-scheduler", _run, delay=delay)
 
 
