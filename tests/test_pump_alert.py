@@ -549,10 +549,11 @@ def test_pump_alert_scan_compact_surfaces_trust_and_census():
     assert 'id="pd-census-exit">1</span> exit' in html
 
 
-def test_home_renders_pump_scan_desk():
+def test_preview_pump_alert_scan_matches_home_markup():
     with TestClient(app) as client:
-        html = client.get("/").text
+        html = client.get("/preview/k3-pump-alert-scan").text
     assert 'id="section-pump-alert"' in html
+    assert 'data-pump-compact="1"' in html
     assert "pds-hero" in html
     assert "pds-strip" in html
     assert "pd-evidence" not in html
