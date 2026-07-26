@@ -15,9 +15,11 @@ from internal.council.red_team import audit_daily_pick
 def isolate_predictions(tmp_path, monkeypatch):
     pred_path = str(tmp_path / "predictions.json")
     monkeypatch.setattr("internal.council.resolver.PREDICTIONS_PATH", pred_path)
+    sv.clear_resolver_hit_rate_cache()
     with open(pred_path, "w") as f:
         json.dump({"predictions": [], "resolved": []}, f)
     yield
+    sv.clear_resolver_hit_rate_cache()
 
 
 def test_cold_start_healthy_survives_mild_red_team_haircut():
