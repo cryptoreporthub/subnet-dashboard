@@ -43,3 +43,11 @@ async def api_subnet_integrations():
     from internal.integrations.status import build_integrations_status
 
     return build_integrations_status()
+
+
+@health_router.get("/api/subnet-integrations/signals")
+async def api_subnet_integration_signals():
+    """Macro mood signals from connected subnet APIs (Wave E)."""
+    from internal.integrations.signals import build_macro_signals
+
+    return build_macro_signals()
