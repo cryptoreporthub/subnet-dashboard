@@ -33,6 +33,7 @@ CONTRACT = [
     ("GET", "/api/ops/readiness", None),
     ("GET", "/api/ops/desearch-spend", None),
     ("GET", "/api/subnet-integrations", None),
+    ("GET", "/api/subnet-integrations/signals", None),
     ("GET", "/api/daily-rotation", None),
     ("GET", "/api/registry", None),
     ("GET", "/api/subnets", None),
