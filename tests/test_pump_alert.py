@@ -47,6 +47,27 @@ def test_stirring_lead_row_predictive():
     assert "ladder" not in row["thesis"].lower()
 
 
+def test_owner_chip_from_registry_owner():
+    row = build_alert_row(
+        _ladder_entry("STIRRING", netuid=1, score=0.28),
+        {"netuid": 1, "owner": "5HCFWvRqzSHWRPecN7q8J6c7aKQnrCZTMHstPv39xL1wgDHh"},
+    )
+    assert row["owner_chip"] == "Owner 5HCF…gDHh"
+
+
+def test_owner_chip_honest_empty_without_owner():
+    row = build_alert_row(_ladder_entry("STIRRING", netuid=999, score=0.28), {"netuid": 999})
+    assert row.get("owner_chip") is None
+
+
+def test_desk_row_owner_chip_from_subnet_row():
+    row = build_desk_row(
+        _ladder_entry("STIRRING", netuid=2, score=0.35),
+        {"netuid": 2, "owner": "5EcYQ3W77ndrmMWdvVQusoFqY8doxfP3U2zrh7xZQiaz7avY"},
+    )
+    assert row["owner_chip"] == "Owner 5EcY…7avY"
+
+
 def test_accumulating_lead_row():
     row = build_alert_row(_ladder_entry("ACCUMULATING", score=0.48))
     assert row["badge"] == "BUILDING"

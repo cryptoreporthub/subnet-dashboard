@@ -16,6 +16,7 @@
     </span>
   </div>
   {% if why %}<p class="pds-ladder__why">{{ why }}</p>{% endif %}
+  {% if row.owner_chip %}<p class="pds-ladder__owner">{{ row.owner_chip }}</p>{% endif %}
   <div class="pds-ladder__legs">
     <span class="pds-ladder__leg{% if triad.inflow_quiet_load %} pds-ladder__leg--on{% endif %}">In {{ labels.inflow|default('WATCH') }}</span>
     <span class="pds-ladder__leg{% if triad.buy_pressure %} pds-ladder__leg--on{% endif %}">Pr {{ labels.pressure|default('FLAT') }}</span>
