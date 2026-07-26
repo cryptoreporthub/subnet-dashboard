@@ -9,13 +9,14 @@ import hashlib
 import logging
 import os
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from internal.integrations.desearch_http import desearch_request
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_CHUTES_LLM_BASE = "https://llm.chutes.ai/v1"
+_DEFAULT_THIRTY_SPOKES_BASE = "https://api.thirtyspokes.ai/v1"
 _CACHE_TTL = 300
 _cache: Dict[str, Dict[str, Any]] = {}
 
@@ -173,8 +174,91 @@ def chutes_llm_base_url() -> str:
 
 def chutes_configured() -> bool:
     """True when council chat can use Chutes (SN64)."""
-    return bool(
+    return bool(llm_api_key())
+
+
+def llm_api_key() -> Optional[str]:
+    return (
         os.environ.get("CHUTES_API_KEY")
+        or os.environ.get("THIRTY_SPOKES_API_KEY")
         or os.environ.get("OPENAI_API_KEY")
         or os.environ.get("LLM_API_KEY")
     )
+
+
+def thirty_spokes_base_url() -> str:
+    return (
+        os.environ.get("THIRTY_SPOKES_BASE_URL")
+        or os.environ.get("THIRTY_SPOKES_API_BASE")
+        or _DEFAULT_THIRTY_SPOKES_BASE
+    ).rstrip("/")
+
+
+def chutes_chat_model() -> str:
+    """Chutes model id — ``default`` uses Chutes saved failover pool when unset."""
+    return (
+        os.environ.get("CHUTES_MODEL")
+        or os.environ.get("LLM_MODEL")
+        or "default"
+    )
+
+
+def thirty_spokes_chat_model() -> str:
+    return os.environ.get("THIRTY_SPOKES_MODEL", "auto")
+
+
+def _models_endpoint_ok(base: str, api_key: str) -> bool:
+    """GET /models with bearer — mirrors integrations status probe."""
+
+    def _check() -> bool:
+        resp = _request(
+            "GET",
+            f"{base.rstrip('/')}/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=4,
+        )
+        return resp.status_code == 200
+
+    key = f"models_ok:{base.rstrip('/')}"
+    val = _cached(key, _check)
+    return val is True
+
+
+def clear_models_probe_cache() -> None:
+    """Reset cached /models probes (tests)."""
+    for key in list(_cache.keys()):
+        if key.startswith("models_ok:"):
+            del _cache[key]
+
+
+def chat_llm_targets() -> List[Tuple[str, str, str]]:
+    """Ordered (base_url, model, provider_slug) for chat completions — probe-aligned."""
+    api_key = llm_api_key()
+    if not api_key:
+        return []
+    chutes_base = chutes_llm_base_url()
+    chutes_model = chutes_chat_model()
+    ts_base = thirty_spokes_base_url()
+    ts_model = thirty_spokes_chat_model()
+    chutes_ok = _models_endpoint_ok(chutes_base, api_key)
+    ts_ok = _models_endpoint_ok(ts_base, api_key)
+    targets: List[Tuple[str, str, str]] = []
+    if chutes_ok:
+        targets.append((chutes_base, chutes_model, "chutes"))
+    if ts_ok:
+        targets.append((ts_base, ts_model, "thirty_spokes"))
+    if not targets:
+        targets.append((chutes_base, chutes_model, "chutes"))
+        targets.append((ts_base, ts_model, "thirty_spokes"))
+    return targets
+
+
+def chutes_model_fallbacks(primary: str) -> List[str]:
+    """Extra Chutes model ids when the configured one returns empty."""
+    fallbacks: List[str] = []
+    if primary != "default":
+        fallbacks.append("default")
+    legacy = "deepseek-ai/DeepSeek-V3.2-TEE"
+    if primary not in {legacy, "default"}:
+        fallbacks.append(legacy)
+    return fallbacks

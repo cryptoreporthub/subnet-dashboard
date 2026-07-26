@@ -12,7 +12,15 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 from datastore.learning_engine import LearningEngine
-from internal.integrations.clients import chutes_llm_base_url
+from internal.integrations import clients as integration_clients
+from internal.integrations.clients import (
+    chutes_chat_model,
+    chutes_model_fallbacks,
+    chat_llm_targets,
+    llm_api_key,
+    thirty_spokes_base_url,
+    thirty_spokes_chat_model,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +28,6 @@ _CHUNK_SIZE = 48
 _CHAT_TIMEOUT_SEC = float(os.environ.get("SIMIVISION_CHAT_TIMEOUT_SECONDS", "35"))
 _INVESTIGATION_TIMEOUT_SEC = float(os.environ.get("SIMIVISION_INVESTIGATION_TIMEOUT_SECONDS", "8"))
 _CHAT_CONTEXT_TTL = float(os.environ.get("SIMIVISION_CHAT_CONTEXT_SECONDS", "30"))
-_DEFAULT_THIRTY_SPOKES_BASE = "https://api.thirtyspokes.ai/v1"
 _CHAT_CONTEXT_CACHE: Dict[str, Any] = {"at": 0.0, "ctx": None}
 
 
@@ -204,22 +211,31 @@ def build_investigation_context(
 
 
 def _llm_api_key() -> Optional[str]:
-    return (
-        os.environ.get("CHUTES_API_KEY")
-        or os.environ.get("THIRTY_SPOKES_API_KEY")
-        or os.environ.get("OPENAI_API_KEY")
-        or os.environ.get("LLM_API_KEY")
-    )
+    return llm_api_key()
 
 
 def _thirty_spokes_chat_config() -> Tuple[str, str]:
-    base = (
-        os.environ.get("THIRTY_SPOKES_BASE_URL")
-        or os.environ.get("THIRTY_SPOKES_API_BASE")
-        or _DEFAULT_THIRTY_SPOKES_BASE
-    ).rstrip("/")
-    model = os.environ.get("THIRTY_SPOKES_MODEL", "auto")
-    return base, model
+    return thirty_spokes_base_url(), thirty_spokes_chat_model()
+
+
+def _extract_completion_text(data: Dict[str, Any]) -> Optional[str]:
+    choices = data.get("choices") or []
+    if not choices or not isinstance(choices[0], dict):
+        return None
+    msg = choices[0].get("message") or {}
+    if not isinstance(msg, dict):
+        return None
+    content = msg.get("content")
+    if content is None:
+        content = msg.get("reasoning_content") or msg.get("text") or ""
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, dict):
+                parts.append(str(part.get("text") or part.get("content") or ""))
+        content = "".join(parts)
+    text = str(content or "").strip()
+    return text or None
 
 
 def _post_chat_completion(
@@ -228,17 +244,16 @@ def _post_chat_completion(
     model: str,
     prompt: str,
     *,
-    timeout: int = 20,
+    timeout: int = 12,
 ) -> Optional[str]:
-    import requests
-
-    resp = requests.post(
+    resp = integration_clients._request(
+        "POST",
         f"{base_url.rstrip('/')}/chat/completions",
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         },
-        json={
+        json_body={
             "model": model,
             "messages": [
                 {
@@ -252,43 +267,54 @@ def _post_chat_completion(
         timeout=timeout,
     )
     if resp.status_code != 200:
-        logger.warning("LLM API call failed (%s) at %s", resp.status_code, base_url)
+        logger.warning(
+            "LLM API call failed (%s) at %s model=%s body=%s",
+            resp.status_code,
+            base_url,
+            model,
+            (resp.text or "")[:240],
+        )
         return None
     data = resp.json()
-    reply = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-    return reply.strip() if reply else None
+    if not isinstance(data, dict):
+        return None
+    return _extract_completion_text(data)
 
 
-def call_llm(prompt: str, message: str, context: Dict[str, Any]) -> Tuple[str, bool]:
-    """Call Chutes or Thirty Spokes when configured; else local explainer."""
+def call_llm(prompt: str, message: str, context: Dict[str, Any]) -> Tuple[str, bool, str]:
+    """Call Chutes or Thirty Spokes when configured; else local explainer.
+
+    Returns (reply, llm_used, provider_slug).
+    """
     api_key = _llm_api_key()
-    chutes_base = chutes_llm_base_url()
-    chutes_model = os.environ.get("CHUTES_MODEL") or os.environ.get(
-        "LLM_MODEL", "deepseek-ai/DeepSeek-V3.2-TEE"
-    )
-    ts_base, ts_model = _thirty_spokes_chat_config()
-
     if api_key:
         try:
-            reply = _post_chat_completion(chutes_base, api_key, chutes_model, prompt)
-            if reply:
-                return reply, True
-            reply = _post_chat_completion(ts_base, api_key, ts_model, prompt)
-            if reply:
-                return reply, True
+            for base, model, provider in chat_llm_targets():
+                models = [model]
+                if provider == "chutes":
+                    models.extend(chutes_model_fallbacks(model))
+                seen: set[str] = set()
+                for model_id in models:
+                    if model_id in seen:
+                        continue
+                    seen.add(model_id)
+                    reply = _post_chat_completion(base, api_key, model_id, prompt)
+                    if reply:
+                        return reply, True, provider
         except Exception as exc:
             logger.warning("LLM API call errored (%s); falling back to local explainer", exc)
 
     try:
         from internal.llm.explainer import generate_ai_response
 
-        return generate_ai_response(message, context), False
+        return generate_ai_response(message, context), False, ""
     except Exception as exc:
         logger.warning("Local explainer failed (%s); returning canned reply", exc)
         return (
             "SimiVision is online. I can explain top subnet picks, compare APY, "
             "or analyze market trends. What would you like to know?",
             False,
+            "",
         )
 
 
@@ -348,13 +374,15 @@ def build_chat_context() -> Dict[str, Any]:
     return dict(ctx)
 
 
-def _display_model(llm_used: bool) -> str:
+def _display_model(llm_used: bool, provider: str) -> str:
     if not llm_used:
         return "local-fallback"
-    if os.environ.get("THIRTY_SPOKES_API_KEY") and not os.environ.get("CHUTES_API_KEY"):
-        model = os.environ.get("THIRTY_SPOKES_MODEL", "auto")
+    if provider == "thirty_spokes":
+        model = thirty_spokes_chat_model()
         return f"thirty-spokes/{model}"
-    model_tag = os.environ.get("CHUTES_MODEL", "deepseek-ai/DeepSeek-V3.2-TEE")
+    model_tag = chutes_chat_model()
+    if model_tag == "default":
+        return "chutes/default"
     return f"chutes/{model_tag.split('/')[-1].lower()}"
 
 
@@ -368,8 +396,8 @@ def _run_chat_sync(message: str) -> Dict[str, str]:
     if inv:
         context["investigation"] = inv
     prompt = build_simivision_prompt(message, context)
-    reply, llm_used = call_llm(prompt, message, context)
-    model = _display_model(llm_used)
+    reply, llm_used, provider = call_llm(prompt, message, context)
+    model = _display_model(llm_used, provider)
     status = "ok" if llm_used else "local-fallback"
     return {"reply": sanitize_reply(reply), "model": model, "status": status}
 
