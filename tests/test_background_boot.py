@@ -133,6 +133,20 @@ def test_pump_inline_defer_seconds_env(monkeypatch):
     assert _pump_inline_defer_seconds() == 420
 
 
+def test_pump_inline_scheduler_disabled_by_default(monkeypatch):
+    monkeypatch.delenv("PUMP_LADDER_INLINE_SCHEDULER", raising=False)
+    from internal.background_boot import _pump_inline_scheduler_enabled
+
+    assert _pump_inline_scheduler_enabled() is False
+
+
+def test_pump_inline_scheduler_env_on(monkeypatch):
+    monkeypatch.setenv("PUMP_LADDER_INLINE_SCHEDULER", "on")
+    from internal.background_boot import _pump_inline_scheduler_enabled
+
+    assert _pump_inline_scheduler_enabled() is True
+
+
 def test_ops_readiness_worker_mode_field():
     from fastapi.testclient import TestClient
 
