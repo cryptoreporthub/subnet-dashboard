@@ -239,6 +239,9 @@ Live social ingest uses **Telethon user session** (not the conviction-alert bot)
 | `TELEGRAM_GROUP` | no | Group username to monitor (default `OfficialSubnetSummer`) |
 | `TELEGRAM_SESSION_PATH` | no | Session base path (default `data/telegram_listener` → `/app/data` on Fly) |
 | `MESSAGE_INTEL_LISTENER` | enable | Set `auto` or `on` to start listener at boot |
+| `WORKER_HEAVY` | **full** for ingest | Fly inline worker defaults to `essential`, which **skips** Telegram ingest. Set `WORKER_HEAVY=full` so `start_message_intel_listeners()` runs. |
+
+**Not the conviction-alert bot:** outbound push uses `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ALERT_CHAT_ID` (see above). Message-intel ingest uses a **Telethon user session** (`TELEGRAM_API_ID` / `HASH` / `.session` file).
 
 **Step 1 — bootstrap session locally** (interactive SMS/Telegram code; not runnable headless on Fly):
 
@@ -267,8 +270,11 @@ flyctl secrets set \
   TELEGRAM_API_HASH='<your-api-hash>' \
   TELEGRAM_PHONE='<your-phone-e164>' \
   MESSAGE_INTEL_LISTENER=auto \
+  WORKER_HEAVY=full \
   --app subnet-dashboard
 ```
+
+`WORKER_HEAVY=essential` (fly.toml default) keeps pump/resolver on the inline worker but **does not** start the Telegram listener — status will show `listener.reason=worker_heavy_off` until you set `full`.
 
 Optional group override: `TELEGRAM_GROUP='YourGroupUsername'`.
 
@@ -307,7 +313,8 @@ You do **not** need a desktop. Session file is created **on the Fly volume** in 
    When prompted, enter the code Telegram sends to your app. Type `exit` when you see `OK — session saved`.
 
 4. **Enable listener** — back in [Fly secrets](https://fly.io/apps/subnet-dashboard/secrets), add:
-   - `MESSAGE_INTEL_LISTENER` = `auto`  
+   - `MESSAGE_INTEL_LISTENER` = `auto`
+   - `WORKER_HEAVY` = `full`  
    Machine restarts; listener should show `running` at `/api/message-intel/status`.
 
 **No SSH app?** Skip live listener for now — `POST /api/message-intel/ingest` still accepts pushed messages (honest-empty until something ingests).
@@ -322,6 +329,7 @@ You do **not** need a desktop. Session file is created **on the Fly volume** in 
 | `CONVICTION_ALERTS_ENABLED` | **on** (fly.toml) | O1 notify evaluation |
 | `CONVICTION_ALERT_DELIVERY` | **off** | Outbound delivery: off/dry_run/webhook/telegram |
 | `MESSAGE_INTEL_LISTENER` | **off** (fly.toml) | Telegram ingest at boot (`auto`/`on` when session ready) |
+| `WORKER_HEAVY` | **essential** (fly.toml) | Inline worker load: `essential` = pump/resolver only; **`full`** required for Telegram listener |
 | `ALLOWED_ORIGINS` | fly.dev + cryptoreporthub.com | CORS allowlist |
 
 ---
