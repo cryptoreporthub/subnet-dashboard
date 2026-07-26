@@ -12,9 +12,9 @@ from server import app
 def test_k3_5_footer_sn118_chip():
     with TestClient(app) as client:
         html = client.get("/").text
-    assert "subnetIntegrationsCorner" in html
+    assert "subnetIntegrationsBar" in html
     assert "subnet_integrations.js" in html
-    assert "Bittensor subnets" in html
+    assert "Built on Bittensor" in html
 
 
 def test_k3_5_onboarding_three_steps():

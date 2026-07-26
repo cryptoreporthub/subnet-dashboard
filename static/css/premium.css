@@ -779,131 +779,100 @@ footer.status[data-source*="fallback"] .st-dot {
   box-shadow: 0 0 10px rgba(255, 179, 0, 0.35);
 }
 
-/* ---------- Subnet integration corner (SN22/50/64/118) ---------- */
+/* ---------- Subnet integrations — ● Name (SN#) strip ---------- */
 .subnet-integrations-bar {
-  border-bottom: 1px solid var(--cockpit-green-line);
-  background: rgba(4, 12, 8, 0.65);
-  padding: 0.35rem 0.75rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.1);
+  border-bottom: none;
+  background: transparent;
+  padding: 0.55rem 0.75rem 0.75rem;
 }
 .subnet-integrations-bar__inner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.35rem 0.5rem;
   max-width: var(--cockpit-max, 1200px);
   margin: 0 auto;
 }
-.subnet-integrations-bar .subnet-int-heading {
-  margin-right: 0.25rem;
-}
-.subnet-integrations-bar .subnet-int-summary {
-  margin-left: auto;
-}
-@media (max-width: 720px) {
-  .subnet-integrations-bar .subnet-int-summary {
-    margin-left: 0;
-    width: 100%;
-  }
-}
-.subnet-integrations-corner {
-  position: fixed;
-  right: 0.65rem;
-  bottom: 2.75rem;
-  z-index: 45;
-  max-width: min(18rem, calc(100vw - 1.25rem));
-  pointer-events: none;
-}
-.subnet-int-inner {
+.subnet-int-strip {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.35rem;
-  padding: 0.55rem 0.65rem;
-  border-radius: 10px;
-  background: rgba(4, 12, 8, 0.92);
-  border: 1px solid var(--cockpit-green-line);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(8px);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.85rem;
+  padding: 0.35rem 0;
 }
-.subnet-int-heading {
+.subnet-int-strip__brand {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--txt-3);
+  color: var(--txt-3, #64748b);
 }
-.subnet-int-chip {
+.subnet-int-strip__items {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 1rem;
+}
+.subnet-int-item {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.72rem;
-  line-height: 1.2;
-  color: var(--txt-2);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.78rem;
+  letter-spacing: 0.01em;
+  color: var(--txt-2, #94a3b8);
   white-space: nowrap;
+}
+.subnet-int-item--connected {
+  color: var(--txt, #e2e8f0);
+}
+.subnet-int-item--connected .subnet-int-label {
+  font-weight: 600;
+}
+.subnet-int-item--reachable {
+  color: var(--signal-amber, #fbbf24);
+}
+.subnet-int-item--offline {
+  color: var(--txt-3, #64748b);
+  opacity: 0.8;
 }
 .subnet-int-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: var(--txt-3);
+  background: var(--txt-3, #64748b);
 }
-.subnet-int-chip--connected .subnet-int-dot {
-  background: var(--cockpit-green);
-  box-shadow: 0 0 8px var(--cockpit-green-glow);
+.subnet-int-dot--connected {
+  background: var(--cockpit-green, #00ff41);
+  box-shadow: 0 0 6px rgba(0, 255, 65, 0.4);
 }
-.subnet-int-chip--connected .subnet-int-state {
-  color: var(--cockpit-green);
-  font-weight: 600;
+.subnet-int-dot--reachable {
+  background: var(--signal-amber, #fbbf24);
+  box-shadow: 0 0 5px rgba(251, 191, 36, 0.3);
 }
-.subnet-int-chip--reachable .subnet-int-dot {
-  background: var(--signal-amber);
-  box-shadow: 0 0 6px rgba(255, 179, 0, 0.35);
+.subnet-int-dot--offline {
+  background: rgba(100, 116, 139, 0.55);
 }
-.subnet-int-chip--reachable .subnet-int-state {
-  color: var(--signal-amber);
-}
-.subnet-int-chip--offline .subnet-int-state {
-  color: var(--txt-3);
-}
-.subnet-int-chip--candidate .subnet-int-dot {
-  background: rgba(100, 180, 255, 0.85);
-  box-shadow: 0 0 6px rgba(100, 180, 255, 0.35);
-}
-.subnet-int-chip--candidate .subnet-int-state {
-  color: rgba(100, 180, 255, 0.95);
-  font-weight: 500;
-}
-.subnet-int-subheading {
-  font-size: 0.58rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--txt-3);
-  margin-top: 0.15rem;
-}
-.subnet-int-more {
-  font-size: 0.6rem;
-  color: var(--txt-3);
-  font-style: italic;
-}
-.subnet-int-label {
-  font-weight: 600;
-  color: var(--txt);
-}
-.subnet-int-summary {
-  font-size: 0.62rem;
-  color: var(--txt-3);
+.subnet-int-strip__count {
+  margin-left: auto;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
   letter-spacing: 0.04em;
+  color: var(--txt-2, #94a3b8);
+}
+.subnet-int-strip--live .subnet-int-strip__count {
+  color: var(--cockpit-green, #00ff41);
+}
+.subnet-integrations-corner {
+  display: none !important;
 }
 @media (max-width: 720px) {
-  .subnet-integrations-corner {
-    bottom: 0.65rem;
-    right: 0.45rem;
-    max-width: calc(100vw - 0.9rem);
+  .subnet-int-strip__count {
+    margin-left: 0;
+    width: 100%;
   }
-  .subnet-int-inner {
-    padding: 0.45rem 0.55rem;
+  .subnet-int-item {
+    font-size: 0.72rem;
   }
 }
 

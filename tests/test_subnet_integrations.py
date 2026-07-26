@@ -1,4 +1,4 @@
-"""Subnet integration status API and corner UI wiring."""
+"""Subnet integration status API and compact strip wiring."""
 
 from __future__ import annotations
 
@@ -6,8 +6,12 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from internal.integrations.status import build_integrations_status
+from internal.integrations.status import build_integrations_status, clear_status_cache
 from server import app
+
+
+def setup_function():
+    clear_status_cache()
 
 
 def test_subnet_integrations_api_contract():
@@ -35,7 +39,7 @@ def test_ditto_always_connected(monkeypatch):
 
     with patch("internal.integrations.status._http_probe", side_effect=fake_probe):
         with patch("internal.integrations.status._rpc_chain_healthy", return_value=(True, "ok")):
-            payload = build_integrations_status()
+            payload = build_integrations_status(force=True)
     ditto = next(r for r in payload["integrations"] if r["slug"] == "ditto")
     assert ditto["connected"] is True
     assert ditto["status"] == "connected"
@@ -44,7 +48,7 @@ def test_ditto_always_connected(monkeypatch):
 def test_finney_and_blockmachine_connected_when_rpc_ok(monkeypatch):
     with patch("internal.integrations.status._rpc_chain_healthy", return_value=(True, "chain RPC ok")):
         with patch("internal.integrations.status._http_probe", return_value=(True, 401, "")):
-            payload = build_integrations_status()
+            payload = build_integrations_status(force=True)
     finney = next(r for r in payload["integrations"] if r["slug"] == "bittensor")
     blockmachine = next(r for r in payload["integrations"] if r["slug"] == "blockmachine")
     assert finney["connected"] is True
@@ -59,13 +63,11 @@ def test_desearch_connected_with_key_and_reachable(monkeypatch):
     def fake_probe(method, url, **kwargs):
         if "desearch.ai" in url and method == "GET":
             return True, 200, "ok"
-        if "desearch.ai" in url:
-            return True, 402, "payment required"
         return True, 401, ""
 
     with patch("internal.integrations.status._http_probe", side_effect=fake_probe):
         with patch("internal.integrations.status._rpc_chain_healthy", return_value=(True, "ok")):
-            payload = build_integrations_status()
+            payload = build_integrations_status(force=True)
     desearch = next(r for r in payload["integrations"] if r["slug"] == "desearch")
     assert desearch["connected"] is True
     assert desearch["status"] == "connected"
@@ -86,18 +88,29 @@ def test_chutes_falls_back_when_base_url_404(monkeypatch):
 
     with patch("internal.integrations.status._http_probe", side_effect=fake_probe):
         with patch("internal.integrations.status._rpc_chain_healthy", return_value=(True, "ok")):
-            payload = build_integrations_status()
+            payload = build_integrations_status(force=True)
     chutes = next(r for r in payload["integrations"] if r["slug"] == "chutes")
     assert chutes["connected"] is True
     assert chutes["status"] == "connected"
 
 
-def test_corner_markup_on_homepage():
+def test_strip_markup_on_homepage():
     with TestClient(app) as client:
         html = client.get("/").text
-    assert 'id="subnetIntegrationsCorner"' in html
     assert 'id="subnetIntegrationsBar"' in html
     assert "subnet_integrations.js" in html
+    js = open("static/js/subnet_integrations.js").read()
+    assert "subnet-int-item" in js
+    assert "SN" in js
+
+
+def test_status_cache_returns_same_payload():
+    with patch("internal.integrations.status._rpc_chain_healthy", return_value=(True, "ok")):
+        with patch("internal.integrations.status._http_probe", return_value=(True, 200, "ok")):
+            a = build_integrations_status(force=True)
+            b = build_integrations_status()
+    assert a["connected_count"] == b["connected_count"]
+    assert b.get("cached") is True
 
 
 def test_ready_for_launch_when_three_connected(monkeypatch):
@@ -112,6 +125,6 @@ def test_ready_for_launch_when_three_connected(monkeypatch):
 
     with patch("internal.integrations.status._http_probe", side_effect=fake_probe):
         with patch("internal.integrations.status._rpc_chain_healthy", return_value=(True, "ok")):
-            payload = build_integrations_status()
+            payload = build_integrations_status(force=True)
     assert payload["connected_count"] >= 3
     assert payload["ready_for_launch"] is True
