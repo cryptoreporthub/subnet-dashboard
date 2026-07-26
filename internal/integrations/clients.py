@@ -227,8 +227,60 @@ def _models_endpoint_ok(base: str, api_key: str) -> bool:
 def clear_models_probe_cache() -> None:
     """Reset cached /models probes (tests)."""
     for key in list(_cache.keys()):
-        if key.startswith("models_ok:"):
+        if key.startswith("models_ok:") or key.startswith("chutes_models:"):
             del _cache[key]
+
+
+def _chutes_catalog_model_ids(base: str, api_key: str, limit: int = 4) -> List[str]:
+    """Live model ids from GET /models — used when default/env model fails completions."""
+
+    def _fetch() -> List[str]:
+        resp = _request(
+            "GET",
+            f"{base.rstrip('/')}/models",
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=4,
+        )
+        if resp.status_code != 200:
+            return []
+        try:
+            data = resp.json()
+        except ValueError:
+            return []
+        rows = data.get("data") if isinstance(data, dict) else None
+        if not isinstance(rows, list):
+            return []
+        ids: List[str] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            mid = str(row.get("id") or row.get("name") or "").strip()
+            if mid:
+                ids.append(mid)
+            if len(ids) >= limit:
+                break
+        return ids
+
+    key = f"chutes_models:{base.rstrip('/')}"
+    val = _cached(key, _fetch)
+    return val if isinstance(val, list) else []
+
+
+def chutes_completion_models(primary: str) -> List[str]:
+    """Ordered Chutes model ids for chat — env/default fallbacks then live catalog."""
+    seen: set[str] = set()
+    ordered: List[str] = []
+    for mid in [primary] + chutes_model_fallbacks(primary):
+        if mid not in seen:
+            seen.add(mid)
+            ordered.append(mid)
+    api_key = llm_api_key()
+    if api_key:
+        for mid in _chutes_catalog_model_ids(chutes_llm_base_url(), api_key):
+            if mid not in seen:
+                seen.add(mid)
+                ordered.append(mid)
+    return ordered
 
 
 def chat_llm_targets() -> List[Tuple[str, str, str]]:
