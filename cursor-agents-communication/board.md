@@ -11,7 +11,7 @@
 ## Active plan
 
 **Canonical:** `cursor-agents-communication/learning-loop-full-integration-plan.md`  
-**Status:** Phase **0** in progress (instrumentation)
+**Status:** Phase **0** done (PR #498) — awaiting merge
 
 <<<<<<< HEAD
 | Wave | Status | Notes |
@@ -37,8 +37,8 @@
 =======
 | Phase | Status | Notes |
 |-------|--------|-------|
-| 0 Instrumentation | 🔄 | `/api/learning/health` + ledger contract |
-| 1 Schedulers | — | gated on 0 verify |
+| 0 Instrumentation | ✅ | `/api/learning/health` + ledger contract (#498) |
+| 1 Schedulers | — | gated on 0 merge |
 | 2 Score snapshots | — | gated on 1; never score 127 on request |
 | 3 Shadows / HOLD / Option A | — | gated on 2 stable |
 | 4 Intel / pump / history | — | gated on 3 |
@@ -47,7 +47,7 @@
 
 ## Next slice queue
 
-1. **Phase 0** — learning health + contract guard (this branch / PR #498)
+1. **Merge #498** (Phase 0)
 2. Phase 1 — traffic-independent daily/hour schedulers
 3. Phase 2 — `score_snapshots.json`
 4. Phases 3–6 per plan gate protocol
