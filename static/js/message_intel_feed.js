@@ -88,7 +88,7 @@
     var reason = String(listener.reason || "");
     return (
       reason === "idle_not_started" ||
-      reason === "worker_heavy_off" ||
+      reason === "missing_session" ||
       reason === "disabled" ||
       reason === "missing_telegram_creds"
     );
@@ -239,8 +239,14 @@
     if (listener.reason === "disabled") {
       return '<p class="empty">Telegram listener is off on this deploy (<code>MESSAGE_INTEL_LISTENER</code>).</p>';
     }
-    if (listener.reason === "worker_heavy_off") {
-      return '<p class="empty">Listener skipped in essential worker mode — set <code>WORKER_HEAVY=full</code> on Fly.</p>';
+    if (listener.reason === "missing_session") {
+      return (
+        '<p class="empty">Telegram creds are set — run <code>python scripts/bootstrap_telegram_session.py</code> ' +
+        "on the Fly volume (see <code>DEPLOY.md</code>), then set <code>MESSAGE_INTEL_LISTENER=auto</code>.</p>"
+      );
+    }
+    if (listener.reason === "telethon_unavailable") {
+      return '<p class="empty">Telethon missing in runtime image — ingest via API only.</p>';
     }
     if (listener.reason === "missing_telegram_creds") {
       return '<p class="empty">Telegram creds not configured — ingest via API only.</p>';
