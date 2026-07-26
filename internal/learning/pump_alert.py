@@ -307,6 +307,22 @@ def _wallet_chip(netuid_int: Optional[int]) -> Optional[str]:
     return None
 
 
+def _telegram_chip(ladder_entry: Dict[str, Any]) -> Optional[str]:
+    """Surface Telegram chatter intensity already baked into signal_snapshot."""
+    snap = ladder_entry.get("signal_snapshot") if isinstance(ladder_entry.get("signal_snapshot"), dict) else {}
+    try:
+        chatter = float(snap.get("chatter_intensity") or 0)
+    except (TypeError, ValueError):
+        return None
+    if chatter < 0.15:
+        return None
+    if chatter >= 0.65:
+        return f"Telegram hot · {chatter:.0%}"
+    if chatter >= 0.35:
+        return f"Telegram warming · {chatter:.0%}"
+    return f"Telegram chatter · {chatter:.0%}"
+
+
 def _abbrev_coldkey(addr: str) -> str:
     s = str(addr).strip()
     if len(s) <= 12:
@@ -432,6 +448,7 @@ def build_alert_row(
     size_line = _size_cliff_line(subnet_row)
     wallet_chip = _wallet_chip(netuid_int)
     owner_chip = _owner_chip(netuid_int, subnet_row)
+    telegram_chip = _telegram_chip(ladder_entry)
     day_chips = _whale_day_chips(netuid_int, subnet_row)
     snap = ladder_entry.get("signal_snapshot") if isinstance(ladder_entry.get("signal_snapshot"), dict) else {}
     src = subnet_row if isinstance(subnet_row, dict) else {}
@@ -493,6 +510,7 @@ def build_alert_row(
         "size_line": size_line,
         "wallet_chip": wallet_chip,
         "owner_chip": owner_chip,
+        "telegram_chip": telegram_chip,
         "whale_day_chips": day_chips,
         "fear_and_greed": fear,
         "buys_24hr": buys,
@@ -666,6 +684,7 @@ def build_desk_row(
     # WhaleIntelligenceService is too slow for the desk GET path.
     size_line = _size_cliff_line(subnet_row)
     owner_chip = _owner_chip(netuid_int, subnet_row)
+    telegram_chip = _telegram_chip(ladder_entry)
     lit = int(triad.get("lit_count") or 0) if isinstance(triad, dict) else 0
     buy_pct = int(round(leads["buy_ratio"] * 100)) if leads.get("buy_ratio") is not None else None
     vol_pct = (
@@ -694,6 +713,7 @@ def build_desk_row(
         "triad_lit": lit,
         "size_line": size_line,
         "owner_chip": owner_chip,
+        "telegram_chip": telegram_chip,
         "buy_pct": buy_pct,
         "vol_pct": vol_pct,
         "updated_at": ladder_entry.get("updated_at"),

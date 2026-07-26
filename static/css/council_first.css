@@ -911,6 +911,7 @@ button.home-cta {
   color: var(--stage-muted);
 }
 .message-intel__mentions { color: rgba(232, 245, 233, 0.9); }
+.message-intel__conv { color: #c4b5fd; }
 .message-intel__delta--up { color: #34d399; }
 .message-intel__delta--down { color: #fb7185; }
 .message-intel__spark { color: #38bdf8; display: block; }

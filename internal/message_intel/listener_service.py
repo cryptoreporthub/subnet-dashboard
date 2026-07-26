@@ -11,9 +11,12 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 _listener: Any = None
-_LISTENER_HEARTBEAT = os.environ.get(
-    "MESSAGE_INTEL_LISTENER_HEARTBEAT", "data/.message_intel_listener"
-)
+_heartbeat_stop: Optional[Any] = None
+_DEFAULT_HEARTBEAT = "data/.message_intel_listener"
+
+
+def _heartbeat_path() -> str:
+    return os.environ.get("MESSAGE_INTEL_LISTENER_HEARTBEAT", _DEFAULT_HEARTBEAT)
 
 
 def _listener_enabled() -> bool:
@@ -52,7 +55,7 @@ def _has_session_file() -> bool:
 
 
 def _touch_listener_heartbeat() -> None:
-    path = _LISTENER_HEARTBEAT
+    path = _heartbeat_path()
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     payload = {
         "pid": os.getpid(),
@@ -64,7 +67,7 @@ def _touch_listener_heartbeat() -> None:
 
 def _clear_listener_heartbeat() -> None:
     try:
-        os.remove(_LISTENER_HEARTBEAT)
+        os.remove(_heartbeat_path())
     except FileNotFoundError:
         pass
     except Exception as exc:
@@ -73,7 +76,7 @@ def _clear_listener_heartbeat() -> None:
 
 def _listener_alive_cross_process(*, max_age_seconds: int = 120) -> bool:
     try:
-        with open(_LISTENER_HEARTBEAT, "r", encoding="utf-8") as fh:
+        with open(_heartbeat_path(), "r", encoding="utf-8") as fh:
             raw = json.load(fh)
         if not isinstance(raw, dict) or not raw.get("ts"):
             return False
@@ -139,8 +142,38 @@ def _on_telegram_message(normalized: Dict[str, Any]) -> None:
 
     try:
         ingest_message(normalized, snapshot_price=False)
+        _touch_listener_heartbeat()
     except Exception as exc:
         logger.warning("Telegram ingest failed: %s", exc)
+
+
+def _start_heartbeat_loop() -> None:
+    """Keep cross-process status fresh while the listener thread is alive."""
+    global _heartbeat_stop
+    import threading
+
+    if _heartbeat_stop is not None:
+        return
+    stop = threading.Event()
+    _heartbeat_stop = stop
+
+    def _loop() -> None:
+        while not stop.wait(45):
+            if not _listener_running_local():
+                break
+            try:
+                _touch_listener_heartbeat()
+            except Exception as exc:
+                logger.debug("listener heartbeat refresh failed: %s", exc)
+
+    threading.Thread(target=_loop, daemon=True, name="mi-listener-heartbeat").start()
+
+
+def _stop_heartbeat_loop() -> None:
+    global _heartbeat_stop
+    if _heartbeat_stop is not None:
+        _heartbeat_stop.set()
+        _heartbeat_stop = None
 
 
 def start_message_intel_listeners() -> bool:
@@ -171,6 +204,7 @@ def start_message_intel_listeners() -> bool:
     started = _listener.start()
     if started:
         _touch_listener_heartbeat()
+        _start_heartbeat_loop()
         logger.info("Telegram message-intel listener started")
     else:
         _listener = None
@@ -179,6 +213,7 @@ def start_message_intel_listeners() -> bool:
 
 def stop_message_intel_listeners() -> None:
     global _listener
+    _stop_heartbeat_loop()
     if _listener is not None:
         try:
             _listener.stop()

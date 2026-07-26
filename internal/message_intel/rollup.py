@@ -102,11 +102,12 @@ def _load_message_rows(db=None) -> List[Dict[str, Any]]:
         rows = conn.execute(
             """SELECT m.id, m.author_id, m.author_name, m.author_username, m.group_name,
                       m.timestamp, m.created_at, a.sentiment, a.influence_score, a.entities_json,
-                      mm.reactions, ps.netuid AS snap_netuid
+                      mm.reactions, ps.netuid AS snap_netuid, v.conviction
                FROM messages m
                LEFT JOIN message_analysis a ON a.message_id = m.id
                LEFT JOIN message_metrics mm ON mm.message_id = m.id
                LEFT JOIN price_snapshots ps ON ps.message_id = m.id
+               LEFT JOIN message_verdicts v ON v.message_id = m.id
                ORDER BY m.id DESC"""
         ).fetchall()
     return [dict(r) for r in rows]
@@ -132,6 +133,7 @@ def build_trending_subnets(
             "mentions_prev_1h": 0,
             "sentiment_sum": 0.0,
             "sentiment_n": 0,
+            "conviction_sum": 0.0,
             "spark": [0] * window_hours,
         }
     )
@@ -146,6 +148,10 @@ def build_trending_subnets(
         hour_idx = int((ts - window_start).total_seconds() // 3600)
         hour_idx = max(0, min(window_hours - 1, hour_idx))
         s_val = _sentiment_value(row.get("sentiment"))
+        try:
+            conviction = float(row.get("conviction") or 0)
+        except (TypeError, ValueError):
+            conviction = 0.0
         for netuid in netuids:
             b = buckets[netuid]
             b["spark"][hour_idx] += 1
@@ -153,6 +159,7 @@ def build_trending_subnets(
                 b["mentions_1h"] += 1
                 b["sentiment_sum"] += s_val
                 b["sentiment_n"] += 1
+                b["conviction_sum"] += conviction
             elif ts >= two_hours_ago:
                 b["mentions_prev_1h"] += 1
 
@@ -164,6 +171,9 @@ def build_trending_subnets(
         prev = int(b["mentions_prev_1h"])
         change = mentions - prev
         avg = (b["sentiment_sum"] / b["sentiment_n"]) if b["sentiment_n"] else 0.0
+        avg_conv = (b["conviction_sum"] / mentions) if mentions else 0.0
+        # Rank by chatter × conviction so fluff spam doesn't dominate.
+        heat = mentions * (1.0 + avg_conv / 100.0)
         out.append(
             {
                 "netuid": netuid,
@@ -171,11 +181,13 @@ def build_trending_subnets(
                 "mentions": mentions,
                 "change_1h": change,
                 "sentiment": _sentiment_tag(avg),
+                "avg_conviction": round(avg_conv, 1),
+                "heat": round(heat, 3),
                 "sparkline": list(b["spark"]),
             }
         )
 
-    out.sort(key=lambda r: (r["mentions"], abs(r.get("change_1h", 0))), reverse=True)
+    out.sort(key=lambda r: (r["heat"], r["mentions"], abs(r.get("change_1h", 0))), reverse=True)
     return out[:limit]
 
 
