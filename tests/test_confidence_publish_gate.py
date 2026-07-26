@@ -7,6 +7,7 @@ import json
 import pytest
 
 from internal.council import state_vector as sv
+from internal.council.publish_gate import publish_gate_fraction
 from internal.council.red_team import audit_daily_pick
 
 
@@ -34,7 +35,7 @@ def test_cold_start_healthy_survives_mild_red_team_haircut():
     assert raw > 0.45
     sn["confidence"] = raw
     audit = audit_daily_pick(sn, [sn])
-    assert audit["adjusted_confidence"] >= 0.45
+    assert audit["adjusted_confidence"] >= publish_gate_fraction()
 
 
 def test_buy_sell_volume_counts_as_complete():
@@ -59,4 +60,4 @@ def test_short_ohlcv_still_penalized_but_can_clear_gate():
     conf = sv._compute_confidence(sn, indicators, experts)
     # 0.62 * 0.85 * 1.0
     assert conf == pytest.approx(sv._COLD_START_PRIOR * 0.85, rel=1e-3)
-    assert conf > 0.45
+    assert conf > publish_gate_fraction()

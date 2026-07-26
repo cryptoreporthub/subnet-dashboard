@@ -7,9 +7,7 @@ from typing import Any, Dict, List, Optional
 from internal.council.daily_pick import _weights_for_context
 from internal.council.red_team import audit_daily_pick
 from internal.council.state_vector import score_subnet_for_day
-from internal.subnets.tradable import tradable_subnets, subnet_netuid
-
-_AUDIT_GATE = 0.45
+from internal.council.publish_gate import publish_gate_fraction, publish_gate_label
 
 
 def _unique_blockers(items: List[str]) -> List[str]:
@@ -65,8 +63,8 @@ def explain_subnet(
 
     blockers: List[str] = []
     concerns = [str(c) for c in (audit.get("concerns") or [])[:4]]
-    gate_short = f"Confidence {final_conf:.0%} below {_AUDIT_GATE:.0%} audit gate"
-    if final_conf < _AUDIT_GATE and not any("audit gate" in c.lower() for c in concerns):
+    gate_short = f"Confidence {final_conf:.0%} below {publish_gate_label()}"
+    if final_conf < publish_gate_fraction() and not any("audit gate" in c.lower() for c in concerns):
         blockers.append(gate_short)
     blockers.extend(concerns)
 

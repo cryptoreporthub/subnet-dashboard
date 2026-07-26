@@ -52,7 +52,10 @@ def build_weighing_candidates_from_shortlist(
     )
     alternatives = deliberation.get("alternatives") or []
     total_considered = int(deliberation.get("total_considered") or 0)
-    if len(alternatives) < 2:
+    min_alts = 1
+    if isinstance(daily_pick, dict) and str(daily_pick.get("action", "")).upper() != "HOLD":
+        min_alts = 2
+    if len(alternatives) < min_alts:
         return [], total_considered
 
     by_netuid: Dict[int, Dict[str, Any]] = {}

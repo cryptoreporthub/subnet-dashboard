@@ -1,5 +1,5 @@
 # fly.toml app configuration file generated for subnet-dashboard
-# Redeploy trigger — 2026-07-26: pump scan O(n²) fix + inline worker restored
+# Redeploy trigger — 2026-07-26: softer red-team + 40% gate experiment + hydrate cache
 
 app = "subnet-dashboard"
 primary_region = "sjc"
@@ -51,8 +51,9 @@ primary_region = "sjc"
   HOMEPAGE_BUILD_TIMEOUT = "8"
   HOMEPAGE_SHELL_CACHE_SECONDS = "60"
   # Cap expensive scoring so hydrate storms cannot wedge the single worker (~36s 503).
-  SCORE_CACHE_TTL = "120"
-  PICK_HANDLER_TIMEOUT_SECONDS = "8"
+  SCORE_CACHE_TTL = "180"
+  SHORTLIST_CACHE_SECONDS = "180"
+  PICK_HANDLER_TIMEOUT_SECONDS = "12"
   HOUR_PICK_CACHE_SECONDS = "60"
   PUMP_ALERTS_CACHE_SECONDS = "60"
   BRAIN_LETTER_TIMEOUT_SECONDS = "8"
@@ -66,9 +67,12 @@ primary_region = "sjc"
   # Never immediate full scan on boot — wedges HTTP on shared VM (white screen / 503).
   PUMP_LADDER_BOOT_IMMEDIATE = "off"
   # Inline worker first pump scan — 120s wedge killed prod after #480; 5min still wedged.
-  PUMP_LADDER_INLINE_DEFER_SECONDS = "300"
+  PUMP_LADDER_INLINE_DEFER_SECONDS = "600"
   # Periodic pump scheduler re-enabled after O(n²) intel-map fix in fetch_all_subnet_signals.
   PUMP_LADDER_INLINE_SCHEDULER = "on"
+  # Council publish + audit tuning (see internal/council/publish_gate.py, red_team.py).
+  DAILY_PICK_PUBLISH_GATE = "0.40"
+  RED_TEAM_MAX_HAIRCUT = "0.15"
   WHALE_LEDGER_WARM_INTERVAL_MINUTES = "20"
   # O4: allow fly.dev + cryptoreporthub hostnames when DNS is pointed (see DEPLOY.md)
   ALLOWED_ORIGINS = "https://subnet-dashboard.fly.dev,https://dashboard.cryptoreporthub.com,https://cryptoreporthub.com"
