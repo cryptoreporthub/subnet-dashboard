@@ -15,6 +15,10 @@ print('resolver.running:', (d.get('resolver') or {}).get('running'))
 print('resolver.age_seconds:', (d.get('resolver') or {}).get('age_seconds'))
 print('worker_peer.alive:', (d.get('worker_peer') or {}).get('alive'))
 print('snapshot_age_seconds:', d.get('snapshot_age_seconds'))
+ss = d.get('score_snapshot') or {}
+print('score_snapshot.file_present:', ss.get('file_present'))
+lc = ss.get('last_cycle') or {}
+print('score_snapshot.last_cycle.run_at:', lc.get('run_at'))
 print('watchdog.warning:', (d.get('watchdog') or {}).get('warning'))
 print('daily_pick.action:', (d.get('daily_pick') or {}).get('action'))
 

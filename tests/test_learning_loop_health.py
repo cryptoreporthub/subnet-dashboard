@@ -33,6 +33,7 @@ def test_api_learning_health_shape():
         "daily_pick",
         "ledger",
         "snapshot_age_seconds",
+        "score_snapshot",
         "checked_at",
     ):
         assert key in data
@@ -290,6 +291,45 @@ def test_restart_with_stale_tick_degraded_not_stalled(tmp_path, monkeypatch):
     )
     assert report["status"] == "degraded"
     assert report["watchdog"].get("warning") is not True
+
+
+def test_snapshot_age_from_soul_map_when_file_missing(tmp_path, monkeypatch):
+    """Worker may log cycle to soul_map before score_snapshots.json flush."""
+    soul = tmp_path / "soul_map.json"
+    snap = tmp_path / "score_snapshots.json"
+    tick = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    _write_json(
+        soul,
+        {
+            "score_snapshot_scheduler": {
+                "last_cycle": {"run_at": tick, "ok": True, "snapshots_written": 3},
+            }
+        },
+    )
+    daily = tmp_path / "daily_picks.json"
+    preds = tmp_path / "predictions.json"
+    _write_json(daily, [{"date": _today(), "action": "HOLD", "pick": None}])
+    _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
+    monkeypatch.setattr(
+        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
+        lambda: {
+            "running": True,
+            "last_run_at": tick,
+            "last_run_ok": True,
+            "refresh_minutes": 15,
+        },
+    )
+    report = build_learning_loop_health(
+        daily_picks_path=str(daily),
+        predictions_path=str(preds),
+        snapshots_path=str(snap),
+        soul_path=str(soul),
+    )
+    assert report["snapshot_age_seconds"] is not None
+    assert report["snapshot_age_seconds"] < 120.0
+    meta = report["score_snapshot"]
+    assert meta["file_present"] is False
+    assert meta["last_cycle"].get("run_at") == tick
 
 
 def test_self_learning_not_started_from_boot_or_server():

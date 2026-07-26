@@ -2901,7 +2901,7 @@
       window.HomeHydrateCache = {
         dailyPick: lastDailyPickPayload,
         simivision: lastSimivisionTop ? { top: lastSimivisionTop, meta: lastSimivisionMeta } : null,
-        trail: trail,
+        trail: null,
         subnets: subnets,
         subnetsMeta: subnetsMeta,
         at: Date.now(),
@@ -2963,6 +2963,11 @@
         trail = safePayload(trailPayload).trail || [];
         renderTrail(trail);
         patchK3LifecycleFromTrail(trail, lastDailyPickPayload);
+        if (window.HomeHydrateCache) {
+          window.HomeHydrateCache.trail = trail;
+          window.HomeHydrateCache.at = Date.now();
+        }
+        document.dispatchEvent(new CustomEvent('home:hydrate-trail', { detail: { trail: trail } }));
       } catch (e) {
         console.warn('[cockpit_hydrate] trail fetch failed', e);
       }
