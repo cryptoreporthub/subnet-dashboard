@@ -112,9 +112,6 @@ def listener_status() -> Dict[str, Any]:
     elif not telethon:
         reason = "telethon_unavailable"
         hint = "Install telethon>=1.33.0 in the runtime image"
-    elif not worker_heavy:
-        reason = "worker_heavy_off"
-        hint = "Set WORKER_HEAVY=full so the inline worker starts Telegram ingest"
     elif not has_session:
         reason = "missing_session"
         hint = "Run scripts/bootstrap_telegram_session.py and save session under data/ on the volume"

@@ -30,17 +30,18 @@ def test_listener_status_disabled(monkeypatch):
     assert "hint" in status
 
 
-def test_listener_status_worker_heavy_off(monkeypatch):
+def test_listener_status_essential_missing_session(monkeypatch, tmp_path):
     monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "auto")
     monkeypatch.setenv("TELEGRAM_API_ID", "12345")
     monkeypatch.setenv("TELEGRAM_API_HASH", "deadbeef")
     monkeypatch.setenv("WORKER_HEAVY", "essential")
+    monkeypatch.setenv("TELEGRAM_SESSION_PATH", str(tmp_path / "telegram_listener"))
     listener_service._listener = None
     listener_service._clear_listener_heartbeat()
     status = listener_service.listener_status()
-    assert status["reason"] == "worker_heavy_off"
+    assert status["reason"] == "missing_session"
     assert status["worker_heavy"] is False
-    assert "WORKER_HEAVY=full" in status["hint"]
+    assert "bootstrap_telegram_session" in status["hint"]
 
 
 def test_listener_status_cross_process_running(monkeypatch, tmp_path):

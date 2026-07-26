@@ -149,6 +149,32 @@ def _start_pick_schedulers() -> None:
     defer_boot("pick-schedulers", _run, delay=max(BOOT_DEFER_SECONDS + 20, 60))
 
 
+def _message_intel_enabled() -> bool:
+    flag = os.environ.get("MESSAGE_INTEL_LISTENER", "auto").strip().lower()
+    return flag not in ("off", "false", "0", "no")
+
+
+def _maybe_start_message_intel() -> None:
+    """Telegram ingest on essential worker — deferred so HTTP wins boot (ponytail)."""
+    if not _message_intel_enabled():
+        return
+
+    def _listeners() -> None:
+        from internal.message_intel.listener_service import start_message_intel_listeners
+
+        start_message_intel_listeners()
+
+    def _outcomes() -> None:
+        from internal.message_intel.outcome_loop import start_price_outcome_loop
+
+        start_price_outcome_loop()
+
+    # After pump first scan window — full heavy mode wedged prod with live subnets + Telegram.
+    delay = max(BOOT_DEFER_SECONDS + 60, 120)
+    defer_boot("message-intel-listeners", _listeners, delay=delay)
+    defer_boot("message-intel-outcomes", _outcomes, delay=max(delay + 30, 150))
+
+
 def _start_score_snapshot_scheduler() -> None:
     """Phase 2 — full-universe scores off the hot path (essential / worker)."""
 
@@ -172,9 +198,10 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     """Start background schedulers.
 
     * **essential** (default on web with ``BACKGROUND_ON_WEB=essential``): pump
-      ladder, resolver, whale warm, registry freshness — no live-subnet wedge.
-    * **heavy** (worker or ``BACKGROUND_ON_WEB=on``): also live subnets, feed,
-      message-intel listeners.
+      ladder, resolver, whale warm, registry freshness, and (when enabled)
+      deferred Telegram message-intel — no live-subnet wedge.
+    * **heavy** (worker or ``BACKGROUND_ON_WEB=on``): also live subnets and feed
+      warmup on top of essential.
     """
     from internal.run_mode import background_heavy_on_web, is_worker_mode
 
@@ -201,6 +228,8 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _start_pick_schedulers()
     _start_score_snapshot_scheduler()
 
+    _maybe_start_message_intel()
+
     if not heavy:
         logger.info("background workers: essential mode (heavy feeds skipped)")
         return
@@ -219,18 +248,6 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
         logger.info("Subnet feed warmup deferred %ss", BOOT_DEFER_SECONDS)
     except Exception as exc:
         logger.warning("Subnet feed warmup failed to start: %s", exc)
-    try:
-        from internal.message_intel.listener_service import start_message_intel_listeners
-
-        start_message_intel_listeners()
-    except Exception as exc:
-        logger.warning("Message-intel listeners failed to start: %s", exc)
-    try:
-        from internal.message_intel.outcome_loop import start_price_outcome_loop
-
-        start_price_outcome_loop()
-    except Exception as exc:
-        logger.warning("Message-intel price outcome loop failed to start: %s", exc)
 
 
 def stop_background_workers() -> None:
