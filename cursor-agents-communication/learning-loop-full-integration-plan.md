@@ -36,7 +36,7 @@ Never call `select_daily_pick` / full `score_universe(~127)` on synchronous API 
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| 0 Instrumentation | **in progress** | `/api/learning/health`, ledger contract, LB-7/8 verify |
+| 0 Instrumentation | **done (PR #498)** | `/api/learning/health`, ledger contract, LB-7/8 verify |
 | 1 Schedulers | gated on 0 | Traffic-independent daily + hour create |
 | 2 Score snapshots | gated on 1 | Full 127 off hot path |
 | 3 Shadows / HOLD / Option A | gated on 2 **stable** | Counterfactuals + hero |
