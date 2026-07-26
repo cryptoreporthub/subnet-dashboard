@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<script>document.documentElement.dataset.hydrate = '1';</script>
+<div class="app-shell council-first wrap-pad" style="max-width:480px;margin:0 auto;">
+  <p style="margin:12px 0;font-family:'JetBrains Mono',monospace;font-size:11px;color:#64748b;">
+    <a href="/" style="color:#38bdf8;">← Home</a> · Flow before price · early vs chase
+  </p>
+  {% with pump_compact=true %}
+  {% include "partials/premium/pump_alert.html" %}
+  {% endwith %}
+</div>
+{% endblock %}

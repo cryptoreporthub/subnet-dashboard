@@ -538,6 +538,7 @@ def test_pump_alert_scan_compact_renders_hero():
     assert 'data-pump-scan="1"' in html
     assert "pds-hero" in html
     assert "pds-strip" in html
+    assert "pds-phase" in html
     assert "pd-evidence" not in html
     assert "pd-verdict__trigger" not in html
     assert "Open SN" in html and "dossier" in html
@@ -564,10 +565,12 @@ def test_pump_alert_scan_compact_surfaces_trust_and_census():
         },
     )
     assert "62%" in html
-    assert "pds-proof__line" in html
-    assert 'id="pd-census-lead">1</span> lead' in html
-    assert 'id="pd-census-live">2</span> live' in html
-    assert 'id="pd-census-exit">1</span> exit' in html
+    assert "pds-proof__pct" in html
+    assert 'id="pd-census-lead">1</b> lead' in html
+    assert 'id="pd-census-live">2</b> live' in html
+    assert 'id="pd-census-exit">1</b> exit' in html
+    assert "pds-phase" in html
+    assert "Open full desk" in html
 
 
 def test_preview_pump_alert_scan_matches_home_markup():
@@ -577,6 +580,7 @@ def test_preview_pump_alert_scan_matches_home_markup():
     assert 'data-pump-compact="1"' in html
     assert "pds-hero" in html
     assert "pds-strip" in html
+    assert "pds-phase" in html
     assert "pd-evidence" not in html
 
 
@@ -598,7 +602,15 @@ def test_preview_pump_desk_polish_route():
     assert "pds-phase" in html
     assert "pds-proof__pct" in html
     assert "Open full desk" in html
-    assert 'href="/preview/pump-desk-full"' in html
+    assert 'href="/pump"' in html
+
+
+def test_pump_desk_page_route():
+    with TestClient(app) as client:
+        html = client.get("/pump").text
+    assert "Pump desk" in html
+    assert "pd-evidence" in html
+    assert 'href="/"' in html
 
 
 def test_preview_pump_desk_full_route():

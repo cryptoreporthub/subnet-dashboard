@@ -1159,30 +1159,35 @@
     var wrap = document.getElementById('pd-meta-wrap');
     if (!wrap) return;
     var census =
-      ' · <span id="pd-census-lead">' +
+      '<div class="pds-census" id="pd-census" aria-label="Desk census">' +
+      '<span class="pds-census__chip pds-census__chip--lead"><b id="pd-census-lead">' +
       early +
-      '</span> lead · <span id="pd-census-live">' +
+      '</b> lead</span>' +
+      '<span class="pds-census__chip pds-census__chip--live"><b id="pd-census-live">' +
       live +
-      '</span> live · <span id="pd-census-exit">' +
+      '</b> live</span>' +
+      '<span class="pds-census__chip pds-census__chip--exit"><b id="pd-census-exit">' +
       exitN +
-      '</span> exit';
+      '</b> exit</span></div>';
     if (trust && trust.ready && trust.headline_pct != null) {
       var n = trust.headline_n != null ? trust.headline_n : (trust.early && trust.early.n) || 0;
       wrap.innerHTML =
-        '<p class="pds-proof__line"><b>' +
+        '<div class="pds-proof__ready">' +
+        '<span class="pds-proof__pct">' +
         esc(trust.headline_pct) +
-        '%</b> hit +2% in 1h · n=' +
+        '%</span>' +
+        '<span class="pds-proof__copy">hit +2% in 1h · n=' +
         esc(n) +
-        census +
-        '</p>';
+        '</span></div>' +
+        census;
     } else {
       var line =
         (trust && trust.line) || 'Early alerts: grading starts once lead phase entries resolve (1h).';
       wrap.innerHTML =
         '<p class="pds-proof__line pds-proof__line--building" id="pump-alert-trust">' +
         esc(line) +
-        census +
-        '</p>';
+        '</p>' +
+        census;
     }
   }
 
@@ -1213,14 +1218,13 @@
       ['COOLING', 'Cool'],
     ];
     var phaseHtml = order
-      .map(function (pair, idx) {
+      .map(function (pair) {
         return (
-          (idx ? ' · ' : '') +
-          '<span' +
-          (phase === pair[0] ? ' class="pds-hero__phase-now"' : '') +
-          '>' +
+          '<li class="pds-phase__step' +
+          (phase === pair[0] ? ' pds-phase__step--now' : '') +
+          '">' +
           pair[1] +
-          '</span>'
+          '</li>'
         );
       })
       .join('');
@@ -1274,9 +1278,9 @@
       '%"></span>' +
       sparkHtml +
       '</div>' +
-      '<p class="pds-hero__phase" aria-label="Formation phase">' +
+      '<ol class="pds-phase" aria-label="Formation phase">' +
       phaseHtml +
-      '</p>' +
+      '</ol>' +
       (thesis ? '<p class="pds-hero__thesis">' + esc(thesis) + '</p>' : '') +
       (triggerCopy ? '<p class="pds-hero__trigger">' + esc(triggerCopy) + '</p>' : '') +
       '<div class="pds-strip" aria-label="Metrics and triad"><p class="pds-strip__metrics">' +

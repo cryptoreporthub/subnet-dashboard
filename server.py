@@ -1592,6 +1592,18 @@ async def preview_pump_desk_full(request: Request):
     )
 
 
+@app.get("/pump")
+async def pump_desk_page(request: Request):
+    """Flagship pump desk — full Situation Room theater."""
+    subnets = _registry_shell_subnets()
+    context: Dict[str, Any] = {
+        "request": request,
+        "public_base_url": _public_base_url(request),
+    }
+    context.update(_pump_alerts_context(subnets))
+    return templates.TemplateResponse("pump.html", context)
+
+
 @app.get("/api/pump-alerts")
 async def api_pump_alerts():
     """Pump lane — file-backed ladder + registry enrichment; must stay sub-second."""
