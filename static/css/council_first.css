@@ -1630,7 +1630,8 @@ button.home-cta {
 .living-focus__switch { font-size: 12px; padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(0,255,65,0.25); background: transparent; color: inherit; cursor: pointer; }
 .living-focus__switch--active { background: rgba(0,255,65,0.12); }
 .living-focus__cta { margin-top: 12px; }
-.living-focus__learn-strip { margin-top: 14px; padding: 12px; border-radius: 8px; border: 1px dashed rgba(0,255,65,0.25); font-size: 13px; }
+.living-focus__learn-strip { margin-top: 14px; padding: 12px; border-radius: 8px; border: 1px dashed rgba(0,255,65,0.35); font-size: 13px; background: rgba(0,255,65,0.04); }
+.living-focus__weights-slot { margin-top: 12px; }
 .living-focus__learn-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .living-focus__weights { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(138,154,142,0.2); }
 .living-focus__weights-label { font-size: 12px; color: var(--stage-muted); margin: 0 0 8px; }
