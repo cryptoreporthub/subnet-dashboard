@@ -17,10 +17,17 @@ from internal.learning.predictions_store import append_prediction, has_pending_d
 logger = logging.getLogger(__name__)
 
 
+from internal.council.expert_display import dominant_expert_for_learning
+
 _COUNCIL_EXPERTS = frozenset({"quant", "hype", "dark_horse", "technical"})
 
 
 def _dominant_expert(expert_contributions: Optional[Dict[str, Any]]) -> str:
+    """Legacy wrapper — prefer signal-fired expert when pick-shaped data is available."""
+    if isinstance(expert_contributions, dict) and any(
+        k in expert_contributions for k in ("active_signals", "signal_impact", "subnet")
+    ):
+        return dominant_expert_for_learning(expert_contributions)
     if not isinstance(expert_contributions, dict) or not expert_contributions:
         return "quant"
     best_name = "quant"
@@ -201,8 +208,7 @@ def record_pick_prediction(
     if ref_price <= 0:
         return None
 
-    expert_contributions = pick.get("expert_contributions") or {}
-    expert = _dominant_expert(expert_contributions)
+    expert = dominant_expert_for_learning(pick)
     existing_pred = pick.get("prediction") if isinstance(pick.get("prediction"), dict) else None
     magnitude_source = "preattached"
     if existing_pred and existing_pred.get("predicted_pct") is not None:
