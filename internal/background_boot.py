@@ -130,6 +130,25 @@ def _start_whale_warm_scheduler() -> None:
     defer_boot("whale-warm-scheduler", _run, delay=max(BOOT_DEFER_SECONDS, 5))
 
 
+def _start_pick_schedulers() -> None:
+    """Phase 1 — traffic-independent daily + hour pick creation (essential)."""
+
+    def _run() -> None:
+        from internal.council.pick_scheduler import start_pick_schedulers
+
+        immediate = os.environ.get("PICK_SCHEDULER_BOOT_IMMEDIATE", "off").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        start_pick_schedulers(immediate=immediate)
+        logger.info("daily/hour pick schedulers started")
+
+    # After resolver (+10); avoid coinciding with pump first scan.
+    defer_boot("pick-schedulers", _run, delay=max(BOOT_DEFER_SECONDS + 20, 60))
+
+
 def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     """Start background schedulers.
 
@@ -160,6 +179,7 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _start_pump_ladder()
     _start_resolver()
     _start_whale_warm_scheduler()
+    _start_pick_schedulers()
 
     if not heavy:
         logger.info("background workers: essential mode (heavy feeds skipped)")
@@ -204,6 +224,12 @@ def stop_background_workers() -> None:
         from internal.pump.scheduler import stop_pump_ladder_scheduler
 
         stop_pump_ladder_scheduler()
+    except Exception:
+        pass
+    try:
+        from internal.council.pick_scheduler import stop_pick_schedulers
+
+        stop_pick_schedulers()
     except Exception:
         pass
     try:
