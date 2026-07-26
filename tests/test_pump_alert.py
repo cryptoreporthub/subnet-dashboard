@@ -494,11 +494,74 @@ def test_preview_pump_alert_route():
     assert "BUILDING" in html
 
 
+def test_pump_alert_scan_compact_renders_hero():
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    tmpl = env.get_template("partials/premium/pump_alert_scan.html")
+    row = build_desk_row(_ladder_entry("ACCUMULATING", netuid=42, score=0.72))
+    html = tmpl.render(
+        pump_compact=True,
+        pump_alerts={
+            "count": 1,
+            "early_count": 1,
+            "confirmed_count": 0,
+            "exit_count": 0,
+            "hero": row,
+            "alerts": [row],
+            "trust": {"ready": False, "line": "grading starts"},
+        },
+    )
+    assert 'data-pump-compact="1"' in html
+    assert 'data-pump-scan="1"' in html
+    assert "pds-hero" in html
+    assert "pds-strip" in html
+    assert "pd-evidence" not in html
+    assert "pd-verdict__trigger" not in html
+    assert "Open SN" in html and "dossier" in html
+    assert 'class="pds-variant"' not in html
+
+
+def test_pump_alert_scan_compact_surfaces_trust_and_census():
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    tmpl = env.get_template("partials/premium/pump_alert_scan.html")
+    row = build_desk_row(_ladder_entry("ACCUMULATING", netuid=42, score=0.55))
+    html = tmpl.render(
+        pump_compact=True,
+        pump_alerts={
+            "count": 1,
+            "early_count": 1,
+            "confirmed_count": 2,
+            "exit_count": 1,
+            "hero": row,
+            "alerts": [row],
+            "trust": {"ready": True, "headline_pct": 62, "headline_n": 12, "line": ""},
+        },
+    )
+    assert "62%" in html
+    assert "pds-proof__line" in html
+    assert 'id="pd-census-lead">1</span> lead' in html
+    assert 'id="pd-census-live">2</span> live' in html
+    assert 'id="pd-census-exit">1</span> exit' in html
+
+
+def test_home_renders_pump_scan_desk():
+    with TestClient(app) as client:
+        html = client.get("/").text
+    assert 'id="section-pump-alert"' in html
+    assert "pds-hero" in html
+    assert "pds-strip" in html
+    assert "pd-evidence" not in html
+
+
 def test_preview_pump_alert_scan_route():
     with TestClient(app) as client:
         html = client.get("/preview/k3-pump-alert-scan").text
     assert "Pump desk" in html
-    assert "scan" in html.lower()
     assert "pds-hero" in html
     assert "pds-strip" in html
     assert "pds-ladder" in html

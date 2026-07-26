@@ -1,7 +1,7 @@
 # Pump desk — SCAN variant (recommended)
 
 **Compare:** [flagship theater](/preview/k3-pump-alert) · **this variant:** `/preview/k3-pump-alert-scan`  
-**Branch:** `cursor/pump-desk-reimagine-d98b`
+**Branch:** `cursor/pump-desk-reimagine-d98b` · **Shipped on home** (SCAN variant)
 
 ## Design intent (vs flagship)
 

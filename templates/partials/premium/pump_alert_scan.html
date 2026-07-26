@@ -25,9 +25,9 @@
 {% endif %}
 {% if pa_exit == 0 %}{% set pa_exit = exit_ns.rows|length %}{% endif %}
 
-<section class="pds wrap-pad" id="section-pump-alert-scan" aria-labelledby="pds-title" data-pump-scan="1">
+<section class="pds wrap-pad" id="section-pump-alert" aria-labelledby="pds-title" data-home-live="1" data-pump-compact="1" data-pump-scan="1">
   <header class="pds-head">
-    <h2 class="pds-title" id="pds-title">Pump desk <span class="pds-variant">scan</span><span class="pds-live" aria-hidden="true"></span></h2>
+    <h2 class="pds-title" id="pds-title">Pump desk{% if not compact %} <span class="pds-variant">scan</span>{% endif %}<span class="pds-live" aria-hidden="true"></span></h2>
     <div class="pds-proof" id="pd-meta-wrap">
       {% if trust.ready and trust.headline_pct is not none %}
       <p class="pds-proof__line"><b>{{ trust.headline_pct }}%</b> hit +2% in 1h · n={{ trust.headline_n|default((trust.early.n if trust.early is mapping else 0)|default(0)) }} · <span id="pd-census-lead">{{ pa_early }}</span> lead · <span id="pd-census-live">{{ pa_confirmed }}</span> live · <span id="pd-census-exit">{{ pa_exit }}</span> exit</p>

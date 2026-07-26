@@ -1141,7 +1141,229 @@
     );
   }
 
+  function isPumpScanMode() {
+    return !!document.querySelector('[data-pump-scan="1"]');
+  }
+
+  function renderPumpScanMetaWrap(trust, early, live, exitN) {
+    var wrap = document.getElementById('pd-meta-wrap');
+    if (!wrap) return;
+    var census =
+      ' · <span id="pd-census-lead">' +
+      early +
+      '</span> lead · <span id="pd-census-live">' +
+      live +
+      '</span> live · <span id="pd-census-exit">' +
+      exitN +
+      '</span> exit';
+    if (trust && trust.ready && trust.headline_pct != null) {
+      var n = trust.headline_n != null ? trust.headline_n : (trust.early && trust.early.n) || 0;
+      wrap.innerHTML =
+        '<p class="pds-proof__line"><b>' +
+        esc(trust.headline_pct) +
+        '%</b> hit +2% in 1h · n=' +
+        esc(n) +
+        census +
+        '</p>';
+    } else {
+      var line =
+        (trust && trust.line) || 'Early alerts: grading starts once lead phase entries resolve (1h).';
+      wrap.innerHTML =
+        '<p class="pds-proof__line pds-proof__line--building" id="pump-alert-trust">' +
+        esc(line) +
+        census +
+        '</p>';
+    }
+  }
+
+  function renderPumpScanHeroCard(row) {
+    if (!row || row.netuid == null) return '';
+    var triad = row.triad || {};
+    var labels = row.triad_labels || {};
+    var score = row.score != null ? Number(row.score) : 0;
+    var trigger = row.trigger_score != null ? Number(row.trigger_score) : 0.72;
+    var trigPct = Math.min(100, Math.round((score / trigger) * 100));
+    var formPct =
+      row.formation_pct != null ? Number(row.formation_pct) : Math.min(100, Math.round(score * 100));
+    var confirmPct =
+      row.confirm_pct != null
+        ? Number(row.confirm_pct)
+        : row.momentum_pct != null
+          ? Number(row.momentum_pct)
+          : formPct;
+    var timing = String(row.timing || 'lead');
+    var badgeSlug = String(row.badge || '')
+      .toLowerCase()
+      .replace(/\s+/g, '-');
+    var phase = String(row.phase || 'STIRRING').toUpperCase();
+    var order = [
+      ['STIRRING', 'Stir'],
+      ['ACCUMULATING', 'Build'],
+      ['PUMPING', 'Pump'],
+      ['COOLING', 'Cool'],
+    ];
+    var phaseHtml = order
+      .map(function (pair, idx) {
+        return (
+          (idx ? ' · ' : '') +
+          '<span' +
+          (phase === pair[0] ? ' class="pds-hero__phase-now"' : '') +
+          '>' +
+          pair[1] +
+          '</span>'
+        );
+      })
+      .join('');
+    var progress = Array.isArray(row.progress_series) ? row.progress_series : [];
+    var sparkHtml =
+      progress.length >= 2
+        ? '<span class="pds-hero__spark"><span class="pump-progress" data-progress="' +
+          esc(progress.join(',')) +
+          '" role="img" aria-label="Score trend"></span></span>'
+        : '';
+    var thesis = row.thesis || '';
+    var triggerCopy = row.trigger || row.subtitle || '';
+    var metrics = [
+      '<span>Form <b>' + esc(formPct) + '</b></span>',
+      '<span>Conf <b>' + esc(confirmPct) + '</b></span>',
+      '<span>Gap <b class="pds-strip__gap">' +
+        esc(row.distance != null ? row.distance : '—') +
+        '</b></span>',
+    ];
+    if (row.buy_pct != null) metrics.push('<span>' + esc(row.buy_pct) + '% buys</span>');
+    if (row.vol_pct != null) metrics.push('<span>' + esc(row.vol_pct) + '% vol</span>');
+    return (
+      '<article class="pds-hero pds-hero--' +
+      esc(timing) +
+      ' pump-hero__card" id="pump-desk-hero" data-netuid="' +
+      esc(row.netuid) +
+      '">' +
+      '<div class="pds-hero__top">' +
+      '<span class="pds-hero__badge pds-hero__badge--' +
+      esc(badgeSlug) +
+      '">' +
+      esc(row.badge || '') +
+      '</span>' +
+      '<a class="pds-hero__name" href="/subnet/' +
+      esc(row.netuid) +
+      '">' +
+      esc(row.name || '') +
+      ' <b>SN' +
+      esc(row.netuid) +
+      '</b></a>' +
+      (row.updated_ago ? '<span class="pds-hero__ago">' + esc(row.updated_ago) + '</span>' : '') +
+      '<div class="pds-hero__headline" aria-label="' +
+      trigPct +
+      ' percent to trigger"><span class="pds-hero__pct">' +
+      trigPct +
+      '<i>%</i></span><span class="pds-hero__pct-lbl">to trigger</span></div></div>' +
+      '<div class="pds-hero__bar" role="progressbar" aria-valuenow="' +
+      trigPct +
+      '" aria-valuemin="0" aria-valuemax="100"><span class="pds-hero__bar-fill" style="width:' +
+      trigPct +
+      '%"></span>' +
+      sparkHtml +
+      '</div>' +
+      '<p class="pds-hero__phase" aria-label="Formation phase">' +
+      phaseHtml +
+      '</p>' +
+      (thesis ? '<p class="pds-hero__thesis">' + esc(thesis) + '</p>' : '') +
+      (triggerCopy ? '<p class="pds-hero__trigger">' + esc(triggerCopy) + '</p>' : '') +
+      '<div class="pds-strip" aria-label="Metrics and triad"><p class="pds-strip__metrics">' +
+      metrics.join('') +
+      '</p><p class="pds-strip__triad">' +
+      '<span class="pds-strip__pill' +
+      (triad.inflow_quiet_load ? ' pds-strip__pill--on' : '') +
+      '">In ' +
+      esc(labels.inflow || 'WATCH') +
+      '</span>' +
+      '<span class="pds-strip__pill' +
+      (triad.buy_pressure ? ' pds-strip__pill--on' : '') +
+      '">Pr ' +
+      esc(labels.pressure || 'FLAT') +
+      '</span>' +
+      '<span class="pds-strip__pill' +
+      (triad.price_coil ? ' pds-strip__pill--on' : '') +
+      '">Coil ' +
+      esc(labels.coil || 'OPEN') +
+      '</span></p></div>' +
+      (row.size_line ? '<p class="pds-hero__chip">' + esc(row.size_line) + '</p>' : '') +
+      '<a class="pds-hero__cta home-cta home-cta--primary" href="/subnet/' +
+      esc(row.netuid) +
+      '">Open SN' +
+      esc(row.netuid) +
+      ' dossier</a></article>'
+    );
+  }
+
+  function renderPumpScanRow(row, tone) {
+    var formPct =
+      row.formation_pct != null
+        ? Number(row.formation_pct)
+        : row.score != null
+          ? Math.min(100, Math.round(Number(row.score) * 100))
+          : null;
+    var badge = String(row.badge || '');
+    var badgeSlug = badge.toLowerCase().replace(/\s+/g, '-');
+    var shortBadge =
+      {
+        'WARMING UP': 'WARM',
+        BUILDING: 'BUILD',
+        STRONG: 'STRONG',
+        'JUST STARTED': 'JUST',
+        'CHASE RISK': 'CHASE',
+        FADING: 'FADE',
+      }[badge] || badge;
+    var labels = row.triad_labels || {};
+    var triad = row.triad || {};
+    var why = row.trigger || row.subtitle || '';
+    return (
+      '<a class="pds-ladder pds-ladder--' +
+      esc(tone) +
+      '" href="/subnet/' +
+      esc(row.netuid) +
+      '" data-netuid="' +
+      esc(row.netuid) +
+      '"><div class="pds-ladder__head">' +
+      '<span class="pds-ladder__badge pds-ladder__badge--' +
+      esc(badgeSlug) +
+      '">' +
+      esc(shortBadge) +
+      '</span>' +
+      '<span class="pds-ladder__name">' +
+      esc(row.name || '') +
+      ' <b>SN' +
+      esc(row.netuid) +
+      '</b></span>' +
+      '<span class="pds-ladder__nums"><span class="pds-ladder__num"><i>Flow</i>' +
+      (formPct != null ? formPct : '—') +
+      '</span><span class="pds-ladder__num pds-ladder__num--gap"><i>Gap</i>' +
+      esc(row.distance != null ? row.distance : '—') +
+      '</span></span></div>' +
+      (why ? '<p class="pds-ladder__why">' + esc(why) + '</p>' : '') +
+      '<div class="pds-ladder__legs">' +
+      '<span class="pds-ladder__leg' +
+      (triad.inflow_quiet_load ? ' pds-ladder__leg--on' : '') +
+      '">In ' +
+      esc(labels.inflow || 'WATCH') +
+      '</span>' +
+      '<span class="pds-ladder__leg' +
+      (triad.buy_pressure ? ' pds-ladder__leg--on' : '') +
+      '">Pr ' +
+      esc(labels.pressure || 'FLAT') +
+      '</span>' +
+      '<span class="pds-ladder__leg' +
+      (triad.price_coil ? ' pds-ladder__leg--on' : '') +
+      '">Coil ' +
+      esc(labels.coil || 'OPEN') +
+      '</span></div></a>'
+    );
+  }
+
   function renderPumpMetaWrap(trust, early, live, exitN) {
+    if (isPumpScanMode()) {
+      return renderPumpScanMetaWrap(trust, early, live, exitN);
+    }
     var wrap = document.getElementById('pd-meta-wrap');
     if (!wrap) return;
     var census =
@@ -1362,7 +1584,9 @@
     });
     if (!warm.length && !active.length) {
       deskPanel.innerHTML =
-        '<p class="pd-empty pump-desk__empty">' +
+        '<p class="' +
+        (isPumpScanMode() ? 'pds-empty' : 'pd-empty') +
+        ' pump-desk__empty">' +
         esc(emptyMessage || 'Quiet — no warming or active names on the ladder right now.') +
         '</p>';
       return;
@@ -1370,6 +1594,42 @@
     var hero = (payload && payload.hero) || warm[0] || active[0];
     var html = '';
     if (compact && hero) {
+      if (isPumpScanMode()) {
+        html += renderPumpScanHeroCard(hero);
+        var moreScan = '';
+        if (warm.length > 1) {
+          moreScan +=
+            '<h3 class="pds-board__lbl">Also warming <span>' +
+            (warm.length - 1) +
+            '</span></h3>';
+          warm.slice(1).forEach(function (row) {
+            moreScan += renderPumpScanRow(row, 'warm');
+          });
+        }
+        if (active.length) {
+          moreScan +=
+            '<h3 class="pds-board__lbl pds-board__lbl--chase">Active · chase risk <span>' +
+            active.length +
+            '</span></h3>';
+          active.forEach(function (row) {
+            moreScan += renderPumpScanRow(row, 'active');
+          });
+        }
+        if (exits.length) {
+          moreScan +=
+            '<h3 class="pds-board__lbl pds-board__lbl--exit">Cooling <span>' +
+            exits.length +
+            '</span></h3>';
+          exits.forEach(function (row) {
+            moreScan += renderPumpScanRow(row, 'exit');
+          });
+        }
+        if (moreScan) html += '<div class="pds-board" id="pump-desk-more">' + moreScan + '</div>';
+        renderPumpMetaWrap(payload && payload.trust, warm.length, active.length, exits.length);
+        deskPanel.innerHTML = html;
+        if (typeof window.__paintSparks === 'function') window.__paintSparks();
+        return;
+      }
       html += renderPumpHeroCard(hero);
       var more = '';
       if (warm.length > 1) {
@@ -1441,6 +1701,7 @@
         body.querySelector('.pump-desk__row') ||
         body.querySelector('.pump-hero__card') ||
         body.querySelector('.pd-lead') ||
+        body.querySelector('.pds-hero') ||
         body.querySelector('.pd-row')
       )
         return;
