@@ -110,6 +110,19 @@ async def api_message_intel_chatter(
         return {"status": "error", "messages": [], "error": str(exc)}
 
 
+@message_intel_router.get("/api/message-intel/authors")
+async def api_message_intel_authors(
+    days: int = Query(default=7, ge=1, le=30),
+    limit: int = Query(default=8, ge=1, le=50),
+):
+    return engine.list_authors(days=days, limit=limit)
+
+
+@message_intel_router.get("/api/message-intel/topics")
+async def api_message_intel_topics(limit: int = Query(default=12, ge=1, le=50)):
+    return engine.list_topics(limit=limit)
+
+
 @message_intel_router.get("/api/message-intel/patterns")
 async def api_message_intel_patterns(limit: int = Query(default=20, ge=1, le=100)):
     try:

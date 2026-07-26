@@ -1,0 +1,103 @@
+"""Telegram message-intel trending + weekly champions rollups."""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
+
+import pytest
+from fastapi.testclient import TestClient
+
+from server import app
+
+
+@pytest.fixture
+def intel_env(tmp_path, monkeypatch):
+    db_path = str(tmp_path / "message_intel.db")
+    monkeypatch.setenv("MESSAGE_INTEL_DB", db_path)
+    from internal.message_intel import store
+
+    store.reset_db_cache()
+    yield {"db_path": db_path}
+
+
+@pytest.fixture
+def client(intel_env):
+    with TestClient(app) as c:
+        yield c
+
+
+def _ingest(client, content: str, **extra):
+    payload = {
+        "source": "telegram",
+        "group_name": "SubnetAlpha",
+        "content": content,
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        **extra,
+    }
+    with patch("internal.message_intel.engine._load_pipeline") as mock_pipe:
+        from message_intel.nlp_engine import NLPAnalyzer
+
+        mock_pipe.return_value = (
+            NLPAnalyzer(),
+            type("PT", (), {"db": None, "snapshot": lambda *a, **k: None})(),
+        )
+        return client.post("/api/message-intel/ingest", json=payload).json()
+
+
+def test_api_message_intel_authors_and_topics(client):
+    authors = client.get("/api/message-intel/authors").json()
+    topics = client.get("/api/message-intel/topics").json()
+    assert authors["status"] == "success"
+    assert "authors" in authors
+    assert topics["status"] == "success"
+    assert "topics" in topics
+
+
+def test_trending_and_authors_after_ingest(client):
+    _ingest(
+        client,
+        "Subnet 7 is extremely bullish with strong emission growth!",
+        author_id="u1",
+        author_name="Alpha Trader",
+        author_username="alpha",
+        metrics={"reactions": [{"emoji": "🔥", "count": 5}]},
+    )
+    _ingest(
+        client,
+        "SN7 still building — watch the flow",
+        author_id="u1",
+        author_name="Alpha Trader",
+        author_username="alpha",
+    )
+    _ingest(
+        client,
+        "Subnet 12 partnership looks solid",
+        author_id="u2",
+        author_name="Beta Scout",
+        author_username="beta",
+        metrics={"reactions": [{"emoji": "👍", "count": 2}]},
+    )
+
+    listed = client.get("/api/message-intel/list").json()
+    assert listed["status"] == "success"
+    trending = listed.get("meta", {}).get("trending") or []
+    assert isinstance(trending, list)
+    if trending:
+        assert "netuid" in trending[0]
+        assert "mentions" in trending[0]
+        assert "sparkline" in trending[0]
+
+    authors = client.get("/api/message-intel/authors?days=7&limit=8").json()
+    assert authors["status"] == "success"
+    assert authors["count"] >= 1
+    top = authors["authors"][0]
+    assert top["author_name"]
+    assert top["message_count"] >= 1
+    assert "influence_score" in top
+    assert "reactions" in top
+
+    topics = client.get("/api/message-intel/topics").json()
+    assert topics["status"] == "success"
+    assert any(t.get("kind") == "group" for t in topics.get("topics") or [])

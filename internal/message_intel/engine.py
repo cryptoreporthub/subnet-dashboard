@@ -142,13 +142,42 @@ def ingest_batch(messages: List[Dict[str, Any]], *, snapshot_price: bool = False
     }
 
 
+def _registry_subnet_names() -> Dict[int, str]:
+    """Registry names for trending labels — no server import (avoids cycle)."""
+    import json
+    from pathlib import Path
+
+    try:
+        raw = json.loads(Path("config/registry.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError):
+        return {}
+    names: Dict[int, str] = {}
+    for key, row in raw.items():
+        if not isinstance(row, dict):
+            continue
+        try:
+            netuid = int(row.get("id", key))
+        except (TypeError, ValueError):
+            continue
+        names[netuid] = str(row.get("name") or f"Subnet {netuid}")
+    return names
+
+
 def list_messages(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
     from internal.message_intel.listener_service import listener_status
+    from internal.message_intel.rollup import build_trending_subnets
 
     db = get_db()
     messages = db.list_messages(limit=limit, offset=offset)
     meta = live_stats(db)
     meta["listener"] = listener_status()
+    try:
+        meta["trending"] = build_trending_subnets(
+            registry_names=_registry_subnet_names(), limit=8, db=db
+        )
+    except Exception as exc:
+        logger.warning("message-intel trending rollup failed: %s", exc)
+        meta["trending"] = []
     return {
         "status": "success",
         "count": len(messages),
@@ -186,6 +215,39 @@ def list_patterns(limit: int = 20) -> Dict[str, Any]:
         "count": len(patterns),
         "patterns": patterns,
     }
+
+
+def list_authors(*, days: int = 7, limit: int = 8) -> Dict[str, Any]:
+    from internal.message_intel.rollup import build_weekly_authors
+
+    try:
+        authors = build_weekly_authors(days=days, limit=limit)
+        return {
+            "status": "success",
+            "days": days,
+            "count": len(authors),
+            "authors": authors,
+            "empty": len(authors) == 0,
+        }
+    except Exception as exc:
+        logger.error("message-intel authors failed: %s", exc)
+        return {"status": "error", "authors": [], "error": str(exc), "empty": True}
+
+
+def list_topics(*, limit: int = 12) -> Dict[str, Any]:
+    from internal.message_intel.rollup import build_topics
+
+    try:
+        topics = build_topics(limit=limit)
+        return {
+            "status": "success",
+            "count": len(topics),
+            "topics": topics,
+            "empty": len(topics) == 0,
+        }
+    except Exception as exc:
+        logger.error("message-intel topics failed: %s", exc)
+        return {"status": "error", "topics": [], "error": str(exc), "empty": True}
 
 
 def pipeline_health() -> Dict[str, Any]:
