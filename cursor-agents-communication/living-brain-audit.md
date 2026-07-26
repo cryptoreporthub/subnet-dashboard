@@ -28,7 +28,7 @@ live subnets (get_all_subnets)
 |-------|--------|
 | Expert weight learn on resolve | ✅ via `nudge_expert` (§27-4) |
 | Regime tilt from graded history | ✅ `learned_regime_adjustment` in `effective_weights` |
-| Signal weights nudged on resolve | ✅ persist; **silent** (no trail) |
+| Signal weights nudged on resolve | ✅ persist + trail (`signal_resolve`) |
 | Trail + story path + time capsule | ✅ narrate the loop |
 | Trust banner from gated stats | ✅ RF-2 primary surface |
 | Living Focus / Public Self-Update | ✅ UI exists; **bugs below** |
@@ -80,16 +80,16 @@ Pump / message-intel / selector write `*_dispositions` into soul_map and trail, 
 `scenario_memory.record_outcome` grows the store; pick scoring uses prediction-regime hit rates only (`learned_regime_adjustment`), not scenario-store retrieval.
 
 ### LB-7 — Signal-weight learning invisible
-`nudge_signal_weight` persists but emits **no trail** → Public Self-Update cannot show signal lean.
+**Status:** ✅ fixed — `nudge_signal_weight` emits `weight_change` via trail_bus (`reason=signal_resolve`); covered by `tests/test_living_brain.py`.
 
 ### LB-8 — Duplicate weight writers (fight `nudge_expert`)
 | Path | Uses `nudge_expert`? |
 |------|----------------------|
 | Resolver `_nudge_weights` | Yes |
 | `LearningEngine.record_feedback` | Yes |
-| `alignment_nudge` | No — direct `save_weights` |
+| `alignment_nudge` | Yes (+ trail) |
 | `calibration.fire_weights` | No — intentional batch |
-| `message_intel.self_learning.adjust_jury_weights` | No — **renormalizes sum→1.0** (fights multiplicative council scale) |
+| `message_intel.self_learning.adjust_jury_weights` | Yes — no renormalize-to-1.0; **`start_background_learning` quarantined off boot/hot path** |
 
 ### LB-9 — Feedback path silent
 `POST /api/feedback` nudges without trail emit → mindmap/Living Focus miss the event.

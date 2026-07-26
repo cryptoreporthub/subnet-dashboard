@@ -91,6 +91,7 @@ CONTRACT = [
     ("GET", "/api/message-intel", None),
     ("GET", "/api/message-intel/status", None),
     ("GET", "/api/message-intel/social", None),
+    ("GET", "/api/learning/health", None),
     ("GET", "/api/learning/stats", None),
     ("GET", "/api/story-strip", None),
     ("GET", "/api/learning-metrics", None),
