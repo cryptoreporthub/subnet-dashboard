@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-26T19:15:00Z  
-**main:** `f944806` — #518 verify_prod hardening merged; **#519** learning-loop babysit in flight
+**Last updated:** 2026-07-26T19:20:00Z  
+**main:** `7357bc9` — #518 + #519 merged; **#520** hotfix `WORKER_HEAVY=essential` (full wedged prod)
 
 ## Post-stability sprint (`post-stability-sprint-plan.md`)
 
@@ -25,7 +25,7 @@ Phases 0–6 merged (#498–#504). **Babysit PR:** cross-process `/api/learning/
 
 **Human ops (agent cannot flyctl):**
 - Close superseded PRs: #455, #491, #487, #474, #449
-- Telegram + outcomes live: `WORKER_HEAVY=full` + `MESSAGE_INTEL_LISTENER=auto` (see `DEPLOY.md`)
+- Telegram + outcomes live: `WORKER_HEAVY=full` wedges single 2GB VM — use `essential` + manual soak; see `DEPLOY.md`
 
 ## Housekeeping (human)
 
