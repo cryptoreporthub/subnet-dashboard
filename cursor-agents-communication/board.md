@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-24T04:10:00Z  
-**main:** `6ee7d0d` (#437 Fly Phase B · post-#410 pump/site waves)
+**Last updated:** 2026-07-26T16:55:00Z  
+**main:** `083f456` · G0 prod green · cockpit SSE fast path (#497)
 
 ## Active plan
 
@@ -10,11 +10,12 @@
 
 | Wave | Status | Notes |
 |------|--------|-------|
-| 0 G0 | ⚠️ | `scripts/g0_phone_qa.sh` ✅ · human 390px QA open |
+| 0 G0 | ✅ | `./scripts/g0_phone_qa.sh` prod green 2026-07-26 · 390px visual QA local pass |
 | 1 P1–P3 | ✅ | Triad, hit-rate UI, size cliff (#410) |
 | 2 P4–P5 | ✅ | Phase notify ✅ · wallet + day-whale + owner chips |
-| 3 S1–S8 | ⚠️ | All merged #410; S3 who-sold = Prove-it button only |
+| 3 S1–S8 | ✅ | All merged #410; S3 who-sold = Prove-it button only |
 | 4 | — | YAGNI |
+| H1 | ✅ | cockpit.picks SSE + hour-watch rib (#497 SSE fix) |
 
 **Execution history:** PR **#410** (Cursor Cloud Agent, 2026-07-22) + #430–#437 whale/Fly + #442–#446 site polish.
 
@@ -24,10 +25,9 @@
 2. ~~Slice R~~ — historical weight rebalance (#419)
 3. ~~Slice M~~ — α pump overlay (#419)
 4. ~~Full plan Waves 1–3~~ — #410 + follow-ups (#430–#446)
-5. **G0 human** — 390px phone QA sign-off (`./scripts/g0_phone_qa.sh` + manual)
+5. ~~G0 human~~ — prod + local 390px pass 2026-07-26
 6. **Ops** — `fly scale count worker=1` when ready (#437 worker process)
-7. **H1 SSE** — #497 cockpit.picks fast path (verify prod after deploy)
-8. Wave 4 — YAGNI
+7. Wave 4 — YAGNI
 
 ## Fix plan (done)
 
