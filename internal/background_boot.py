@@ -225,6 +225,12 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
         start_message_intel_listeners()
     except Exception as exc:
         logger.warning("Message-intel listeners failed to start: %s", exc)
+    try:
+        from internal.message_intel.outcome_loop import start_price_outcome_loop
+
+        start_price_outcome_loop()
+    except Exception as exc:
+        logger.warning("Message-intel price outcome loop failed to start: %s", exc)
 
 
 def stop_background_workers() -> None:
@@ -232,6 +238,12 @@ def stop_background_workers() -> None:
         from internal.message_intel.listener_service import stop_message_intel_listeners
 
         stop_message_intel_listeners()
+    except Exception:
+        pass
+    try:
+        from internal.message_intel.outcome_loop import stop_price_outcome_loop
+
+        stop_price_outcome_loop()
     except Exception:
         pass
     try:

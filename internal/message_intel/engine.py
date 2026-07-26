@@ -23,7 +23,7 @@ def _load_pipeline():
         from message_intel.price_tracker import PriceTracker
     except ImportError as exc:
         raise MessageIntelUnavailable(str(exc)) from exc
-    return NLPAnalyzer(), PriceTracker
+    return NLPAnalyzer(), PriceTracker()
 
 
 def ingest_message(payload: Dict[str, Any], *, snapshot_price: bool = True) -> Dict[str, Any]:
@@ -54,17 +54,23 @@ def ingest_message(payload: Dict[str, Any], *, snapshot_price: bool = True) -> D
     price_result: Optional[Dict[str, Any]] = None
     if snapshot_price:
         try:
-            price_tracker.db = db
-            snap = price_tracker.snapshot(message_id)
-            if snap is not None:
-                price_result = {"tao_usd_price": snap}
             from internal.message_intel.soul_sync import _extract_netuids
 
-            for netuid in _extract_netuids(analysis)[:1]:
-                subnet_snap = price_tracker.snapshot_subnet(message_id, netuid)
-                if subnet_snap is not None and price_result is not None:
-                    price_result["subnet_netuid"] = netuid
-                    price_result["subnet_price"] = subnet_snap
+            price_tracker.db = db
+            # Prefer subnet alpha snapshot when NLP found a netuid — more relevant
+            # than TAO/USD and avoids an extra CoinGecko hit on every chat message.
+            netuids = _extract_netuids(analysis)[:1]
+            if netuids:
+                subnet_snap = price_tracker.snapshot_subnet(message_id, netuids[0])
+                if subnet_snap is not None:
+                    price_result = {
+                        "subnet_netuid": netuids[0],
+                        "subnet_price": subnet_snap,
+                    }
+            if price_result is None:
+                snap = price_tracker.snapshot(message_id)
+                if snap is not None:
+                    price_result = {"tao_usd_price": snap}
         except Exception as exc:
             logger.warning("Price snapshot skipped for message %s: %s", message_id, exc)
             price_result = {"error": str(exc)}

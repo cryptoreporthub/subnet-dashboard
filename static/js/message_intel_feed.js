@@ -172,6 +172,13 @@
         '<span class="message-intel__influence">' +
         esc(row.influence_score) +
         " influence</span>" +
+        (row.hit_rate != null && row.graded
+          ? '<span class="message-intel__hit">' +
+            esc(row.hit_rate) +
+            "% hit · n=" +
+            esc(row.graded) +
+            "</span>"
+          : "") +
         "</div>" +
         '<div class="message-intel__champ-meta">' +
         '<span>' +
