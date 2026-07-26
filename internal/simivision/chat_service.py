@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 from datastore.learning_engine import LearningEngine
+from internal.integrations.clients import chutes_llm_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,6 @@ _CHUNK_SIZE = 48
 _CHAT_TIMEOUT_SEC = float(os.environ.get("SIMIVISION_CHAT_TIMEOUT_SECONDS", "35"))
 _INVESTIGATION_TIMEOUT_SEC = float(os.environ.get("SIMIVISION_INVESTIGATION_TIMEOUT_SECONDS", "8"))
 _CHAT_CONTEXT_TTL = float(os.environ.get("SIMIVISION_CHAT_CONTEXT_SECONDS", "30"))
-_DEFAULT_LLM_BASE = "https://llm.chutes.ai/v1"
 _DEFAULT_THIRTY_SPOKES_BASE = "https://api.thirtyspokes.ai/v1"
 _CHAT_CONTEXT_CACHE: Dict[str, Any] = {"at": 0.0, "ctx": None}
 
@@ -231,9 +231,7 @@ def _post_chat_completion(
 def call_llm(prompt: str, message: str, context: Dict[str, Any]) -> Tuple[str, bool]:
     """Call Chutes or Thirty Spokes when configured; else local explainer."""
     api_key = _llm_api_key()
-    chutes_base = os.environ.get("CHUTES_BASE_URL") or os.environ.get(
-        "LLM_BASE_URL", _DEFAULT_LLM_BASE
-    )
+    chutes_base = chutes_llm_base_url()
     chutes_model = os.environ.get("CHUTES_MODEL") or os.environ.get(
         "LLM_MODEL", "deepseek-ai/DeepSeek-V3.2-TEE"
     )

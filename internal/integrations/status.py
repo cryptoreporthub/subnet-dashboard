@@ -229,11 +229,9 @@ def _probe_openai_models(base: str, api_key: Optional[str] = None) -> Dict[str, 
 
 
 def _chutes_base_url() -> str:
-    return (
-        os.environ.get("CHUTES_BASE_URL")
-        or os.environ.get("LLM_BASE_URL")
-        or _DEFAULT_CHUTES_BASE
-    ).rstrip("/")
+    from internal.integrations.clients import chutes_llm_base_url
+
+    return chutes_llm_base_url()
 
 
 def _probe_chutes() -> Dict[str, Any]:
