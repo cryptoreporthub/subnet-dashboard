@@ -30,6 +30,7 @@ _LIGHT_API_PREFIXES = (
     "/api/mindmap/trail",
     "/api/cockpit/sections",
     "/api/indicators-convergence",
+    "/api/message-intel",
     "/api/subnets",
     "/api/judges/",  # single-netuid only — /api/judges (all) stays shedable
 )
