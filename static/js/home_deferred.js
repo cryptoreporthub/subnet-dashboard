@@ -13,7 +13,6 @@
     '/static/js/investigation_panel.js',
     '/static/js/premium_judges.js',
     '/static/js/subnet_report.js',
-    '/static/js/message_intel_feed.js',
     '/static/js/social_sentiment.js',
   ];
 
@@ -59,6 +58,7 @@
   document.addEventListener('DOMContentLoaded', function () {
     bindDrawer('pro-cockpit');
     bindDrawer('market-drawer');
+    bindDrawer('intel-ribs');
     var idle = window.requestIdleCallback || function (cb) { setTimeout(cb, 2000); };
     idle(function () { loadDeferred().catch(function () {}); }, { timeout: 2500 });
   });
