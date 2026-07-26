@@ -131,6 +131,9 @@
         '<span class="message-intel__mentions">' +
         esc(row.mentions) +
         " mentions</span>" +
+        (row.avg_conviction
+          ? '<span class="message-intel__conv">conv ' + esc(row.avg_conviction) + "</span>"
+          : "") +
         changeLabel(row.change_1h) +
         sparklineSvg(row.sparkline) +
         "</div></li>";
@@ -253,10 +256,15 @@
       else if (listener.reason) parts.push(listener.reason);
       parts.push(total + " stored");
       meta.textContent = parts.join(" · ");
+      if (listener.hint && !listener.live) {
+        meta.title = listener.hint;
+      }
     }
     if (sub) {
       if (listener.live) {
         sub.textContent = "Live ingest from the monitored Telegram group — newest messages first.";
+      } else if (listener.hint) {
+        sub.textContent = listener.hint;
       } else if (listener.reason === "idle_not_started") {
         sub.textContent = "Credentials present — start the worker listener to begin ingest.";
       }
