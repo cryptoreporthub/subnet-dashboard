@@ -1519,11 +1519,29 @@ def _scenario_tags(
     }
 
 
+_HIT_RATE_CACHE: Dict[str, Any] = {"key": None, "min_n": None, "value": None}
+
+
 def _resolver_hit_rate(min_n: int = 30) -> Optional[float]:
-    """Return historical resolver accuracy when enough graded outcomes exist."""
+    """Return historical resolver accuracy when enough graded outcomes exist.
+
+    ponytail: cache by predictions file mtime+size — ``_compute_confidence`` runs
+    once per subnet in a scoring pass (~30–40 JSON reads per pick without this).
+    """
+    global _HIT_RATE_CACHE
     try:
         from internal.council.resolver import PREDICTIONS_PATH
 
+        st = _os.stat(PREDICTIONS_PATH)
+        cache_key = (st.st_mtime, st.st_size)
+    except Exception:
+        return None
+
+    cached = _HIT_RATE_CACHE
+    if cached.get("key") == cache_key and cached.get("min_n") == min_n:
+        return cached.get("value")
+
+    try:
         with open(PREDICTIONS_PATH, "r") as f:
             data = _json.load(f)
     except Exception:
@@ -1535,10 +1553,20 @@ def _resolver_hit_rate(min_n: int = 30) -> Optional[float]:
         if isinstance(p, dict) and p.get("correct") is not None
     ]
     if len(graded) < min_n:
-        return None
+        result: Optional[float] = None
+    else:
+        hits = sum(1 for p in graded if p.get("correct") is True)
+        result = hits / len(graded)
 
-    hits = sum(1 for p in graded if p.get("correct") is True)
-    return hits / len(graded)
+    _HIT_RATE_CACHE = {"key": cache_key, "min_n": min_n, "value": result}
+    return result
+
+
+def clear_resolver_hit_rate_cache() -> None:
+    """Test helper — drop cached resolver hit rate."""
+    global _HIT_RATE_CACHE
+    _HIT_RATE_CACHE = {"key": None, "min_n": None, "value": None}
+
 
 
 # Re-export cold-start for tests; canonical value lives in confidence_calibration.
