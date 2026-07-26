@@ -26,6 +26,7 @@ checks = [
     ("dual judge labels", "Lane judges" in html and "Council weights (soul map)" in html),
     ("track record weight nudge hook", 'id="k3-weight-nudge-line"' in html),
     ("no story path warming", "Story path warming up" not in html),
+    ("hour watch rib", 'id="hour-watch-now"' in html),
 ]
 failed = [name for name, ok in checks if not ok]
 for name, ok in checks:
