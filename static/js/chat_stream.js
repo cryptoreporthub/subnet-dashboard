@@ -44,9 +44,17 @@
     return rest;
   }
 
+  function formatChatMeta(model, status) {
+    if (status === "timeout") return "LLM: busy (timeout)";
+    if (status === "error") return "LLM: unreachable";
+    if (model === "local-fallback" || status === "local-fallback") return "LLM: local fallback";
+    if (model) return "LLM: " + model;
+    return "LLM: ok";
+  }
+
   function applyJsonReply(botBody, j) {
     botBody.textContent = j.reply || (j.data && j.data.reply) || "No response.";
-    if (meta) meta.textContent = "LLM: " + (j.model || "ok");
+    if (meta) meta.textContent = formatChatMeta(j.model || (j.data && j.data.model), j.status || (j.data && j.data.status));
   }
 
   async function readStream(resp, botBody) {
@@ -62,7 +70,7 @@
         if (ev.event === "meta") {
           try {
             var m = JSON.parse(ev.data);
-            if (meta && m.model) meta.textContent = "LLM: " + m.model;
+            if (meta) meta.textContent = formatChatMeta(m.model, m.status);
           } catch (e) {
             /* ignore */
           }
@@ -138,8 +146,11 @@
         await deliverChat(msg, botBody, false);
       }
     } catch (e) {
-      botBody.textContent = "Connection error — intelligence layer unreachable.";
-      if (meta) meta.textContent = "LLM: error";
+      botBody.textContent =
+        e && String(e.message || e).indexOf("HTTP") >= 0
+          ? "Chat request failed — try again in a moment."
+          : "Connection error — check network or retry.";
+      if (meta) meta.textContent = "LLM: offline";
     } finally {
       btn.disabled = false;
       input.focus();

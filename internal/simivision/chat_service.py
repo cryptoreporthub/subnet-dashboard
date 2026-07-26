@@ -369,7 +369,9 @@ def _run_chat_sync(message: str) -> Dict[str, str]:
         context["investigation"] = inv
     prompt = build_simivision_prompt(message, context)
     reply, llm_used = call_llm(prompt, message, context)
-    return {"reply": sanitize_reply(reply), "model": _display_model(llm_used)}
+    model = _display_model(llm_used)
+    status = "ok" if llm_used else "local-fallback"
+    return {"reply": sanitize_reply(reply), "model": model, "status": status}
 
 
 async def handle_simivision_chat(message: str) -> Dict[str, str]:
@@ -387,6 +389,7 @@ async def handle_simivision_chat(message: str) -> Dict[str, str]:
                 "Try again in a moment."
             ),
             "model": "",
+            "status": "timeout",
         }
     except Exception as exc:
         logger.error("SimiVision chat failed: %s", exc, exc_info=True)
@@ -396,6 +399,7 @@ async def handle_simivision_chat(message: str) -> Dict[str, str]:
                 "unreachable. Please try again shortly."
             ),
             "model": "",
+            "status": "error",
         }
 
 
@@ -407,7 +411,8 @@ async def iter_simivision_chat_chunks(message: str) -> AsyncIterator[str]:
     result = await handle_simivision_chat(message)
     reply = result.get("reply") or ""
     model = result.get("model") or ""
-    yield f"event: meta\ndata: {json.dumps({'model': model})}\n\n"
+    status = result.get("status") or ("ok" if model and model != "local-fallback" else "local-fallback")
+    yield f"event: meta\ndata: {json.dumps({'model': model, 'status': status})}\n\n"
     if not reply:
         yield "event: done\ndata: {}\n\n"
         return
