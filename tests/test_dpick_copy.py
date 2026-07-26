@@ -32,12 +32,15 @@ def _hold_candidate_payload() -> dict:
 
 
 def test_hold_candidate_trader_voice():
+    from internal.council.publish_gate import publish_gate_percent
+
+    gate = publish_gate_percent()
     brief = build_dpick_brief(_hold_candidate_payload())
     assert brief["move"] == "HOLD · SN99"
     assert "closest long" in brief["thesis"].lower()
     assert "rich vs peers" in brief["thesis"].lower()
-    assert brief["trigger"].startswith("Flip to LONG when conviction ≥ 45%")
-    assert "valuation" in brief["trigger"].lower() or "45%" in brief["trigger"]
+    assert brief["trigger"].startswith(f"Flip to LONG when conviction ≥ {gate}%")
+    assert "valuation" in brief["trigger"].lower() or f"{gate}%" in brief["trigger"]
     assert "Beat SN64" in brief["vs"]
     assert brief["tone"] == "hold"
     assert hero_copy_is_clean(brief)

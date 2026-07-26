@@ -476,6 +476,7 @@ def record_hold_decision(
         conv_pct = round(conv, 1)
 
     try:
+        from internal.council.publish_gate import publish_gate_fraction
         from internal.learning.trail_events import emit_trail_event
 
         emit_trail_event(
@@ -487,7 +488,7 @@ def record_hold_decision(
                 "reason": reason or "No long call published",
                 "conviction": conv_pct,
                 "horizon_type": horizon_type,
-                "gate": "confidence_below_0.45" if cand else "no_subnets",
+                "gate": f"confidence_below_{publish_gate_fraction():.2f}" if cand else "no_subnets",
             },
             signal="council_hold",
             decision="HOLD",

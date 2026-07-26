@@ -1519,11 +1519,29 @@ def _scenario_tags(
     }
 
 
+_HIT_RATE_CACHE: Dict[str, Any] = {"key": None, "min_n": None, "value": None}
+
+
 def _resolver_hit_rate(min_n: int = 30) -> Optional[float]:
-    """Return historical resolver accuracy when enough graded outcomes exist."""
+    """Return historical resolver accuracy when enough graded outcomes exist.
+
+    ponytail: cache by predictions file mtime+size — ``_compute_confidence`` runs
+    once per subnet in a scoring pass (~30–40 JSON reads per pick without this).
+    """
+    global _HIT_RATE_CACHE
     try:
         from internal.council.resolver import PREDICTIONS_PATH
 
+        st = _os.stat(PREDICTIONS_PATH)
+        cache_key = (st.st_mtime, st.st_size)
+    except Exception:
+        return None
+
+    cached = _HIT_RATE_CACHE
+    if cached.get("key") == cache_key and cached.get("min_n") == min_n:
+        return cached.get("value")
+
+    try:
         with open(PREDICTIONS_PATH, "r") as f:
             data = _json.load(f)
     except Exception:
@@ -1535,28 +1553,46 @@ def _resolver_hit_rate(min_n: int = 30) -> Optional[float]:
         if isinstance(p, dict) and p.get("correct") is not None
     ]
     if len(graded) < min_n:
-        return None
+        result: Optional[float] = None
+    else:
+        hits = sum(1 for p in graded if p.get("correct") is True)
+        result = hits / len(graded)
 
-    hits = sum(1 for p in graded if p.get("correct") is True)
-    return hits / len(graded)
+    _HIT_RATE_CACHE = {"key": cache_key, "min_n": min_n, "value": result}
+    return result
 
 
-# Cold-start prior must clear the 45% publish gate after mild RedTeam haircuts.
-# Prior 0.5 capped raw confidence at 0.5, so any ×0.95 audit cut forced HOLD.
-_COLD_START_PRIOR = 0.62
+def clear_resolver_hit_rate_cache() -> None:
+    """Test helper — drop cached resolver hit rate."""
+    global _HIT_RATE_CACHE
+    _HIT_RATE_CACHE = {"key": None, "min_n": None, "value": None}
+
+
+
+# Re-export cold-start for tests; canonical value lives in confidence_calibration.
+from internal.council.confidence_calibration import COLD_START_PRIOR as _COLD_START_PRIOR  # noqa: E402
 
 
 def _compute_confidence(
     sn: Dict[str, Any],
     indicators: Dict[str, Any],
     expert_contributions: Dict[str, float],
+    total_score: Optional[float] = None,
 ) -> float:
-    """Return a 0-1 confidence score calibrated against resolver history."""
-    prior = _resolver_hit_rate()
-    if prior is None:
-        prior = _COLD_START_PRIOR
+    """Return a 0-1 publishability confidence, calibrated against resolver history.
 
+    Do **not** multiply by raw hit rate (~0.45 with current n). That collapse
+    forced HOLD on high-score candidates. See ``confidence_calibration.py``.
+    """
+    from internal.council.confidence_calibration import (
+        blended_prior,
+        reliability_factor,
+        score_boost,
+    )
     from internal.subnets.tradable import subnet_volume
+
+    hit = _resolver_hit_rate()
+    prior = blended_prior(hit)
 
     vol = subnet_volume(sn)
     required = ("netuid", "name", "price")
@@ -1587,7 +1623,10 @@ def _compute_confidence(
     else:
         agreement = 0.5
 
-    confidence = prior * completeness * (0.75 + 0.25 * agreement)
+    confidence = (
+        prior * completeness * (0.75 + 0.25 * agreement) * reliability_factor(hit)
+        + score_boost(total_score)
+    )
     return round(min(1.0, max(0.0, confidence)), 4)
 
 
@@ -1659,7 +1698,7 @@ def score_subnet_for_hour(
         except Exception:
             pass
 
-    confidence = _compute_confidence(sn, indicators, experts)
+    confidence = _compute_confidence(sn, indicators, experts, total_score=total)
     tags = _scenario_tags(sn, indicators, market_context)
 
     # Compute weighted technical score for hour horizon
@@ -1761,7 +1800,7 @@ def score_subnet_for_day(
         except Exception:
             pass
 
-    confidence = _compute_confidence(sn, indicators, experts)
+    confidence = _compute_confidence(sn, indicators, experts, total_score=total)
     tags = _scenario_tags(sn, indicators, market_context)
 
     # Compute weighted technical score for day horizon

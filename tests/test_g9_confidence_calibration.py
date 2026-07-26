@@ -8,19 +8,22 @@ from unittest.mock import patch
 import pytest
 
 from internal.council import state_vector as sv
+from internal.council.confidence_calibration import blended_prior
 
 
 @pytest.fixture(autouse=True)
 def isolate_predictions(tmp_path, monkeypatch):
     pred_path = str(tmp_path / "predictions.json")
     monkeypatch.setattr("internal.council.resolver.PREDICTIONS_PATH", pred_path)
+    sv.clear_resolver_hit_rate_cache()
     with open(pred_path, "w") as f:
         json.dump({"predictions": [], "resolved": []}, f)
     yield pred_path
+    sv.clear_resolver_hit_rate_cache()
 
 
-def _confidence(sn, indicators, experts):
-    return sv._compute_confidence(sn, indicators, experts)
+def _confidence(sn, indicators, experts, total_score=None):
+    return sv._compute_confidence(sn, indicators, experts, total_score=total_score)
 
 
 def test_cold_start_prior_when_insufficient_history(isolate_predictions):
@@ -32,20 +35,23 @@ def test_cold_start_prior_when_insufficient_history(isolate_predictions):
     )
 
 
-def test_resolver_hit_rate_used_when_enough_graded(isolate_predictions):
-    resolved = [
-        {"correct": True} if i % 2 == 0 else {"correct": False}
-        for i in range(40)
-    ]
+def test_resolver_hit_rate_blended_not_raw(isolate_predictions):
+    """Enough graded history blends toward hit rate — does not replace prior."""
+    resolved = [{"correct": True} if i % 2 == 0 else {"correct": False} for i in range(40)]
     with open(isolate_predictions, "w") as f:
         json.dump({"predictions": [], "resolved": resolved}, f)
 
     sn = {"netuid": 1, "name": "A", "price": 1.0, "volume": 100}
     indicators = {"history_length": 30}
     experts = {"quant": 0.6, "hype": 0.6, "dark_horse": 0.6, "technical": 0.6}
-    prior = 20 / 40
-    expected = prior * 1.0 * 1.0
+    hit = 20 / 40
+    prior = blended_prior(hit)
+    from internal.council.confidence_calibration import reliability_factor
+
+    expected = prior * 1.0 * 1.0 * reliability_factor(hit)
     assert _confidence(sn, indicators, experts) == pytest.approx(expected, rel=1e-3)
+    # Must stay well above raw hit rate (the old bug).
+    assert _confidence(sn, indicators, experts) > hit + 0.05
 
 
 def test_completeness_penalizes_missing_fields():
@@ -77,11 +83,12 @@ def test_confidence_bounded_zero_to_one(isolate_predictions):
     sn = {"netuid": 1, "name": "A", "price": 1.0, "volume": 100}
     indicators = {"history_length": 30}
     experts = {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
-    conf = _confidence(sn, indicators, experts)
+    conf = _confidence(sn, indicators, experts, total_score=100)
     assert 0.0 <= conf <= 1.0
 
 
-def test_zero_hit_rate_not_treated_as_cold_start(isolate_predictions):
+def test_zero_hit_rate_still_has_floor(isolate_predictions):
+    """Even 0% empirical hit rate blends toward cold start — never zeros confidence."""
     resolved = [{"correct": False} for _ in range(30)]
     with open(isolate_predictions, "w") as f:
         json.dump({"predictions": [], "resolved": resolved}, f)
@@ -89,4 +96,22 @@ def test_zero_hit_rate_not_treated_as_cold_start(isolate_predictions):
     sn = {"netuid": 1, "name": "A", "price": 1.0, "volume": 100}
     indicators = {"history_length": 30}
     experts = {"quant": 0.6, "hype": 0.6, "dark_horse": 0.6, "technical": 0.6}
-    assert _confidence(sn, indicators, experts) == pytest.approx(0.0, abs=1e-6)
+    conf = _confidence(sn, indicators, experts)
+    assert conf > 0.35
+
+
+def test_resolver_hit_rate_cached_by_mtime(isolate_predictions):
+    """Scoring pass should not re-read predictions.json per subnet."""
+    resolved = [{"correct": True}] * 20 + [{"correct": False}] * 20
+    with open(isolate_predictions, "w") as f:
+        json.dump({"predictions": [], "resolved": resolved}, f)
+
+    sv.clear_resolver_hit_rate_cache()
+    assert sv._resolver_hit_rate() == pytest.approx(0.5)
+    # Same mtime — second call hits cache (no error, same value).
+    assert sv._resolver_hit_rate() == pytest.approx(0.5)
+
+    with open(isolate_predictions, "w") as f:
+        json.dump({"predictions": [], "resolved": resolved + [{"correct": True}]}, f)
+    assert sv._resolver_hit_rate() == pytest.approx(21 / 41)
+
