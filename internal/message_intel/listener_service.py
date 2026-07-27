@@ -128,7 +128,13 @@ def listener_status() -> Dict[str, Any]:
         "running": running,
         "reason": reason,
         "live": bool(running and has_creds),
+        "monitored_group": os.environ.get("TELEGRAM_GROUP", "OfficialSubnetSummer"),
     }
+    if _listener is not None:
+        title = getattr(_listener, "group_title", None)
+        if title:
+            out["group_title"] = title
+        out["group_connected"] = bool(getattr(_listener, "group_connected", False))
     if hint:
         out["hint"] = hint
     return out
