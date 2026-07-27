@@ -58,6 +58,7 @@ class TelegramListener:
         ingest_url: Optional[str] = None,
         on_message: Optional[Callable[[Dict[str, Any]], None]] = None,
         session_name: str = "telegram_listener",
+        session: Any = None,
         forward_to_ingest: bool = True,
     ):
         self.api_id = int(api_id or TELEGRAM_API_ID or 0)
@@ -67,7 +68,7 @@ class TelegramListener:
         self.ingest_url = ingest_url or INGEST_URL
         self.on_message = on_message
         self.forward_to_ingest = forward_to_ingest
-        self.session_name = session_name
+        self.session_name = session if session is not None else session_name
         self._client: Optional[Any] = None
         self._running = False
         self._thread: Optional[threading.Thread] = None

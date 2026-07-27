@@ -46,12 +46,10 @@ def _worker_heavy_enabled() -> bool:
     return flag in ("1", "true", "yes", "on", "full")
 
 
-def _session_base() -> str:
-    return os.environ.get("TELEGRAM_SESSION_PATH", "data/telegram_listener").strip()
-
-
 def _has_session_file() -> bool:
-    return os.path.isfile(f"{_session_base()}.session")
+    from internal.message_intel.session import has_telegram_session
+
+    return has_telegram_session()
 
 
 def _touch_listener_heartbeat() -> None:
@@ -114,7 +112,10 @@ def listener_status() -> Dict[str, Any]:
         hint = "Install telethon>=1.33.0 in the runtime image"
     elif not has_session:
         reason = "missing_session"
-        hint = "Run scripts/bootstrap_telegram_session.py and save session under data/ on the volume"
+        hint = (
+            "Run scripts/bootstrap_telegram_session.py locally, then set "
+            "TELEGRAM_SESSION_STRING in Fly secrets (or save .session on the volume)"
+        )
     else:
         reason = "idle_not_started"
         hint = "Listener should start on next worker boot; check fly logs for Telegram errors"
@@ -198,11 +199,12 @@ def start_message_intel_listeners() -> bool:
         logger.warning("Telegram listener unavailable: %s", exc)
         return False
 
-    session = os.environ.get("TELEGRAM_SESSION_PATH", "data/telegram_listener")
+    from internal.message_intel.session import telegram_session_arg
+
     _listener = TelegramListener(
         on_message=_on_telegram_message,
         forward_to_ingest=False,
-        session_name=session,
+        session=telegram_session_arg(),
     )
     started = _listener.start()
     if started:
