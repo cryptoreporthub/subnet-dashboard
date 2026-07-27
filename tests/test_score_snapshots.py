@@ -131,3 +131,16 @@ def test_persist_cycle_summary_writes_soul_map(tmp_path, monkeypatch):
     last = data["score_snapshot_scheduler"]["last_cycle"]
     assert last["ok"] is True
     assert last["count"] == 42
+
+
+def test_skipped_tick_persists_last_cycle(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    sched = snaps.ScoreSnapshotScheduler()
+    sched._persist_cycle_summary(
+        {"run_at": "2026-07-26T12:05:00Z", "ok": True, "skipped": "heavy_job_busy"}
+    )
+    data = json.loads(soul.read_text(encoding="utf-8"))
+    last = data["score_snapshot_scheduler"]["last_cycle"]
+    assert last.get("skipped") == "heavy_job_busy"

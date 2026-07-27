@@ -332,6 +332,52 @@ def test_snapshot_age_from_soul_map_when_file_missing(tmp_path, monkeypatch):
     assert meta["last_cycle"].get("run_at") == tick
 
 
+def test_snapshot_stale_degraded_not_stalled(tmp_path, monkeypatch):
+    """Worker alive past grace with no snapshot file → degraded, not stalled."""
+    from datetime import timedelta
+
+    monkeypatch.setenv("INLINE_WORKER", "1")
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("LEARNING_SNAPSHOT_BOOT_GRACE_SECONDS", "60")
+    monkeypatch.setenv("LEARNING_SNAPSHOT_STALE_SECONDS", "120")
+    daily = tmp_path / "daily_picks.json"
+    preds = tmp_path / "predictions.json"
+    soul = tmp_path / "soul_map.json"
+    snap = tmp_path / "score_snapshots.json"
+    now = datetime.now(timezone.utc)
+    tick = now.isoformat().replace("+00:00", "Z")
+    old_hb = (now - timedelta(hours=2)).isoformat().replace("+00:00", "Z")
+    _write_json(daily, [{"date": _today(), "action": "HOLD", "pick": None}])
+    _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
+    _write_json(soul, {"score_snapshot_scheduler": {"last_cycle": {}}})
+    monkeypatch.setattr(
+        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
+        lambda: {
+            "running": True,
+            "last_run_at": tick,
+            "last_run_ok": True,
+            "refresh_minutes": 15,
+        },
+    )
+    monkeypatch.setattr("internal.worker_heartbeat.is_alive", lambda max_age_seconds=180: True)
+    monkeypatch.setattr(
+        "internal.worker_heartbeat.read_heartbeat",
+        lambda: {"ts": old_hb, "run_mode": "worker"},
+    )
+    monkeypatch.setattr(
+        "internal.council.score_snapshots._enabled",
+        lambda: True,
+    )
+    report = build_learning_loop_health(
+        daily_picks_path=str(daily),
+        predictions_path=str(preds),
+        snapshots_path=str(snap),
+        soul_path=str(soul),
+    )
+    assert report["status"] == "degraded"
+    assert report["snapshot_age_seconds"] is None
+
+
 def test_self_learning_not_started_from_boot_or_server():
     """LB-8 quarantine: message_intel SelfLearning must stay off prod hot path."""
     boot = Path("internal/background_boot.py").read_text(encoding="utf-8")

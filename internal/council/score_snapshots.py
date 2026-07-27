@@ -23,6 +23,7 @@ SCORE_SNAPSHOTS_PATH = os.environ.get(
 )
 SCORE_SNAPSHOT_REFRESH_MINUTES = int(os.environ.get("SCORE_SNAPSHOT_REFRESH_MINUTES", "30"))
 SCORE_SNAPSHOT_MAX_AGE_SECONDS = int(os.environ.get("SCORE_SNAPSHOT_MAX_AGE_SECONDS", "7200"))
+SCORE_SNAPSHOT_FIRST_DELAY_SECONDS = int(os.environ.get("SCORE_SNAPSHOT_FIRST_DELAY_SECONDS", "90"))
 JOB_ID = "score-snapshot-scheduler"
 
 _lock = threading.Lock()
@@ -165,9 +166,11 @@ def build_full_universe_snapshot(
 def write_full_universe_snapshot() -> Dict[str, Any]:
     """Load live subnets uncapped, score, persist. Call only from background."""
     try:
-        from server import _get_subnets_with_source, _market_context_with_weights
+        from server import _get_subnets_hydrate, _get_subnets_with_source, _market_context_with_weights
 
-        subnets, source = _get_subnets_with_source()
+        subnets, source = _get_subnets_with_source(timeout=20)
+        if not subnets:
+            subnets, source = _get_subnets_hydrate()
         ctx = _market_context_with_weights(subnets or [])
     except Exception as exc:
         return {"ok": False, "error": f"subnet load: {exc}"}
@@ -204,7 +207,7 @@ class ScoreSnapshotScheduler:
             threading.Thread(target=self._tick, daemon=True, name="score-snap-tick").start()
         else:
             # After pick schedulers; full score is the heavy job.
-            schedule_in_seconds(JOB_ID, self._tick, 180)
+            schedule_in_seconds(JOB_ID, self._tick, SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)
         return {"started": True, "refresh_minutes": self.refresh_minutes}
 
     def stop(self) -> Dict[str, Any]:
@@ -233,6 +236,7 @@ class ScoreSnapshotScheduler:
         with heavy_job_slot("score_snapshot") as acquired:
             if not acquired:
                 skipped = {"ok": True, "run_at": _now_iso(), "skipped": "heavy_job_busy"}
+                self._persist_cycle_summary(skipped)
                 if reschedule and self._running:
                     schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
                 return skipped
@@ -261,6 +265,7 @@ class ScoreSnapshotScheduler:
             "written_at": result.get("written_at"),
             "path": result.get("path"),
             "error": result.get("error"),
+            "skipped": result.get("skipped"),
         }
         try:
             from internal.council import weights
@@ -306,6 +311,7 @@ def stop_score_snapshot_scheduler() -> Dict[str, Any]:
 
 
 def get_score_snapshot_scheduler_state() -> Dict[str, Any]:
+    """In-process state; web workers see soul_map via loop_health cross-process merge."""
     with _lock:
         if _scheduler is None:
             return {

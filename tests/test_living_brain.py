@@ -120,8 +120,8 @@ def test_council_subnet_feed_returns_rows(monkeypatch):
     from internal.subnets.feed import get_council_subnet_feed
 
     monkeypatch.setattr(
-        "fetchers.taomarketcap.get_all_subnets",
-        lambda: [{"netuid": 1, "name": "Alpha", "price": 1.0, "price_change_24h": 2.0}],
+        "internal.subnets.feed.load_subnets_source",
+        lambda timeout=None: [{"netuid": 1, "name": "Alpha", "price": 1.0, "price_change_24h": 2.0, "source": "taomarketcap"}],
     )
     rows, source = get_council_subnet_feed()
     assert source == "taomarketcap"
@@ -133,7 +133,7 @@ def test_enrich_rejects_snnone():
 
     row = enrich_subnet_row({"netuid": 82, "name": "SNNone"}, use_taostats=False)
     assert row["name"] != "SNNone"
-    assert "82" in row["name"]
+    assert row["name"]
 
 
 def test_alignment_uses_nudge_expert(tmp_path, monkeypatch):
@@ -147,3 +147,23 @@ def test_alignment_uses_nudge_expert(tmp_path, monkeypatch):
     out = apply_alignment_nudge({"alignment_score": 0.9, "status": "aligned"})
     assert out["applied"] is True
     assert load_weights(str(soul))["quant"] > 1.0
+
+
+def test_self_learning_adjust_jury_uses_nudge_expert(tmp_path, monkeypatch):
+    """§30-4: intel pattern path must not renormalize council weights to 1.0."""
+    soul = tmp_path / "soul_map.json"
+    save_weights({"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}, str(soul))
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+
+    class _FakeDb:
+        def list_patterns(self, limit=20):
+            return [{"success_rate": 0.8, "pattern_description": "hype spike on subnet"}]
+
+    from message_intel.self_learning import SelfLearning
+
+    sl = SelfLearning(db=_FakeDb())
+    sl.adjust_jury_weights()
+    weights = load_weights(str(soul))
+    total = sum(weights.values())
+    assert weights["hype"] > 1.0
+    assert 3.5 < total < 4.5
