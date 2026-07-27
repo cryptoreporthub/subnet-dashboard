@@ -2927,6 +2927,8 @@
   async function run() {
     if (document.documentElement.dataset.hydrate !== '1') return;
     showHydrateSkeletons();
+    // H1: hour-watch rib via cockpit.picks — connect before deferred tier-3 panels
+    connectCockpitStream();
 
     var stats = null;
     var subnets = [];

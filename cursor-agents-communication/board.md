@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-27T18:35:00Z  
-**main:** `f59747b` — #544 Brain Trio DONE · #543 Track 1 LONG  
+**Last updated:** 2026-07-27T21:15:00Z  
+**main:** `a762d02` — #545 docs · #544 Brain Trio · #543 Track 1 LONG  
 **Handoff:** `ditto-cursor-handoff.md`
 
 ## Brain Trio Revision — DONE
@@ -22,13 +22,23 @@ Lock: `brain-trio-revision-lock.md` → **DONE**
 
 #480, #511, #528, #533, #534
 
+## H1 Hour watch — DONE
+
+| Check | Status |
+|-------|--------|
+| `cockpit.picks` SSE | ✅ on `/` |
+| `#hour-watch-now` rib | ✅ live / quiet states |
+| O2 (no parallel hour poll when SSE) | ✅ `cockpitPicksConnected` guard |
+| Tests | ✅ `test_cockpit_picks_stream.py` |
+
+Lock: `h1-hour-watch-live-lock.md` → **DONE**
+
 ## Active (next)
 
 | Track | Plan / lock | Gate |
 |-------|-------------|------|
 | Track 1 soak | #543 | 7–14d publish rate review |
-| Telegram ingest proof | ops | Human session string / bootstrap |
-| H1 hour watch | `h1-hour-watch-live-lock.md` | Board clear + G0 |
+| Telegram ingest proof | ops | Human `TELEGRAM_SESSION_STRING` paste |
 | Council automations | Ditto Settings | Manual create |
 
 ## Out of scope

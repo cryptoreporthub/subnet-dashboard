@@ -1,6 +1,6 @@
 # H1 LOCK — Hour watch live bus (modified option 2 + magic)
 
-**Status:** LOCK APPROVED (plan-only) — **DO NOT EXECUTE until G0 + Wave 1 exit + B0-0; human says `Execute H1`**
+**Status:** DONE 2026-07-27 — human: `Execute H1`
 **Approved:** 2026-07-22 (human)  
 **Revision:** v1.0 — 2026-07-22  
 **Slice ID:** H1  
@@ -357,11 +357,11 @@ Writer: `cockpit_hydrate.js` on initial hydrate **and** on each `cockpit.picks` 
 
 ## 12. Definition of done
 
-- [ ] LOCK signed by human
-- [ ] G0 + Wave 1 exit + B0-0 gate met
-- [ ] H1 AC §8 green on phone 390px
-- [ ] O2 satisfied (grep: no parallel hour poll + SSE)
-- [ ] board.md updated with H1 queued → done
+- [x] LOCK signed by human
+- [x] G0 + Wave 1 exit + B0-0 gate met
+- [x] H1 AC §8 green (prod: `cockpit.picks`, `#hour-watch-now`, tests green)
+- [x] O2 satisfied (`cockpitPicksConnected` skips hour REST when SSE live)
+- [x] board.md updated H1 → done
 
 ---
 

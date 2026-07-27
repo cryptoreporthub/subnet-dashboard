@@ -27,9 +27,9 @@ if listener.get('live'):
     print('OK — Telegram listener live')
     sys.exit(0)
 if reason == 'missing_session' and listener.get('has_creds'):
-    print('NEXT — fly ssh console --app subnet-dashboard')
-    print('      cd /app && python scripts/bootstrap_telegram_session.py')
-    print('      then ensure MESSAGE_INTEL_LISTENER=auto and WORKER_HEAVY=essential')
+    print('NEXT — bootstrap locally, paste TELEGRAM_SESSION_STRING (see DEPLOY.md)')
+    print('      python scripts/bootstrap_telegram_session.py')
+    print('      flyctl secrets set TELEGRAM_SESSION_STRING=\'<whole line>\' MESSAGE_INTEL_LISTENER=auto WORKER_HEAVY=essential --app subnet-dashboard')
     sys.exit(1)
 if reason == 'disabled':
     print('NEXT — flyctl secrets set MESSAGE_INTEL_LISTENER=auto WORKER_HEAVY=essential --app subnet-dashboard')
