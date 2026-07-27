@@ -1,8 +1,14 @@
 # Subnet Dashboard Coordination Board
 
+<<<<<<< HEAD
 **Last updated:** 2026-07-27T17:15:00Z  
 **main:** `f7aadc0` — #542 LB-12 focus graph/story strip  
 **Handoff:** `ditto-cursor-handoff.md` — Ditto reviews → promote to git lock before Cursor builds
+=======
+**Last updated:** 2026-07-27T15:00:00Z  
+**main:** `f7aadc0` (#542 LB-12) · learning loop **green**  
+**in flight:** Track 1 LONG unlock (`cursor/track1-long-unlock-4988`) — stale boot HOLD regen + #487 shortlist cache/HOLD UX
+>>>>>>> origin/main
 
 ## Active — Brain Trio Revision (`brain-trio-revision-lock.md`)
 
@@ -51,9 +57,14 @@ Message-intel rollup UI, listener hardening, background price-outcome loop. Sess
 
 | Track | Plan / lock | Gate |
 |-------|-------------|------|
+<<<<<<< HEAD
 | Telegram ingest proof | ops | Human bootstrap / TELEGRAM_SESSION_STRING |
 | Living brain LB-12 | `living-brain-lock.md` | ✅ #542 |
 | Brain trio quality | `brain-trio-revision-lock.md` | **W0-A…F execute** |
+=======
+| **Track 1** calibration + LONG | `cursor/track1-long-unlock-4988` | stale boot HOLD regen + shortlist cache |
+| Telegram ingest proof | ops | Human test message in `TELEGRAM_GROUP` |
+>>>>>>> origin/main
 | H1 hour watch | `h1-hour-watch-live-lock.md` | Board clear + G0 |
 | Council automations | Ditto Settings | Manual create |
 

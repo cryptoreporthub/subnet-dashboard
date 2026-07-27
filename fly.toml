@@ -52,6 +52,7 @@ primary_region = "sjc"
   HOMEPAGE_SHELL_CACHE_SECONDS = "60"
   # Cap expensive scoring so hydrate storms cannot wedge the single worker (~36s 503).
   SCORE_CACHE_TTL = "120"
+  SHORTLIST_CACHE_SECONDS = "180"
   PICK_HANDLER_TIMEOUT_SECONDS = "8"
   HOUR_PICK_CACHE_SECONDS = "60"
   PUMP_ALERTS_CACHE_SECONDS = "60"
