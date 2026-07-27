@@ -623,3 +623,35 @@ def test_scheduler_skip_persists_last_cycle_when_heavy_job_busy(monkeypatch, fre
     last = soul["prediction_resolver_scheduler"]["last_cycle"]
     assert last.get("skipped") == "heavy_job_busy"
     assert last.get("run_at")
+
+
+def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler):
+    import time
+
+    def _hang(self):
+        time.sleep(5)
+        return {
+            "ok": True,
+            "run_at": _now_iso(),
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+        }
+
+    from internal.council.resolver_scheduler import _now_iso
+
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr(
+        resolver_scheduler.PredictionResolverScheduler,
+        "_run_refresh_cycle",
+        _hang,
+    )
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
+    )
+    sched._running = True
+    sched._tick()
+    with open(weights.SOUL_MAP_PATH, "r") as f:
+        soul = json.load(f)
+    last = soul["prediction_resolver_scheduler"]["last_cycle"]
+    assert "cycle_timeout" in str(last.get("error"))
