@@ -12,7 +12,7 @@ import logging
 import os
 import threading
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 
@@ -24,6 +24,7 @@ SCORE_SNAPSHOTS_PATH = os.environ.get(
 SCORE_SNAPSHOT_REFRESH_MINUTES = int(os.environ.get("SCORE_SNAPSHOT_REFRESH_MINUTES", "30"))
 SCORE_SNAPSHOT_MAX_AGE_SECONDS = int(os.environ.get("SCORE_SNAPSHOT_MAX_AGE_SECONDS", "7200"))
 SCORE_SNAPSHOT_FIRST_DELAY_SECONDS = int(os.environ.get("SCORE_SNAPSHOT_FIRST_DELAY_SECONDS", "90"))
+SCORE_SNAPSHOT_STUCK_SECONDS = int(os.environ.get("SCORE_SNAPSHOT_STUCK_SECONDS", "900"))
 JOB_ID = "score-snapshot-scheduler"
 
 _lock = threading.Lock()
@@ -32,6 +33,15 @@ _scheduler: Optional["ScoreSnapshotScheduler"] = None
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _parse_iso(value: Any) -> Optional[datetime]:
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 def snapshot_age_seconds(path: Optional[str] = None) -> Optional[float]:
@@ -116,31 +126,38 @@ def rank_subnets_by_snapshot(
 def build_full_universe_snapshot(
     subnets: List[Dict[str, Any]],
     market_context: Optional[Dict[str, Any]] = None,
+    *,
+    score_hour: Optional[bool] = None,
+    progress_cb: Optional[Callable[[int, int], None]] = None,
 ) -> Dict[str, Any]:
     """Score every subnet (background only). Returns serializable snapshot."""
     from internal.council.state_vector import score_subnet_for_day, score_subnet_for_hour
     from internal.subnets.tradable import tradable_subnets
 
+    if score_hour is None:
+        score_hour = _score_hour_enabled()
     market_context = market_context or {}
     rows = tradable_subnets(subnets) if subnets else []
     hour_rows: List[Dict[str, Any]] = []
     day_rows: List[Dict[str, Any]] = []
-    for sn in rows:
+    total = len(rows)
+    for idx, sn in enumerate(rows):
         try:
             netuid = int(sn.get("netuid"))
         except (TypeError, ValueError):
             continue
-        try:
-            h = score_subnet_for_hour(sn, market_context)
-            hour_rows.append(
-                {
-                    "netuid": netuid,
-                    "total_score": float(h.get("total_score") or 0),
-                    "name": sn.get("name"),
-                }
-            )
-        except Exception:
-            pass
+        if score_hour:
+            try:
+                h = score_subnet_for_hour(sn, market_context)
+                hour_rows.append(
+                    {
+                        "netuid": netuid,
+                        "total_score": float(h.get("total_score") or 0),
+                        "name": sn.get("name"),
+                    }
+                )
+            except Exception:
+                pass
         try:
             d = score_subnet_for_day(sn, market_context)
             day_rows.append(
@@ -152,6 +169,11 @@ def build_full_universe_snapshot(
             )
         except Exception:
             pass
+        if progress_cb and total and (idx + 1) % 20 == 0:
+            progress_cb(idx + 1, total)
+
+    if not score_hour and day_rows:
+        hour_rows = [dict(row) for row in day_rows]
 
     hour_rows.sort(key=lambda r: r["total_score"], reverse=True)
     day_rows.sort(key=lambda r: r["total_score"], reverse=True)
@@ -177,7 +199,23 @@ def _registry_only_snapshot() -> bool:
     return flag in ("1", "true", "yes", "on")
 
 
-def write_full_universe_snapshot() -> Dict[str, Any]:
+def _score_hour_enabled() -> bool:
+    """Hour scoring doubles CPU on worker — day-only is enough for ranking."""
+    default = "off"
+    try:
+        from internal.run_mode import is_worker_mode
+
+        if is_worker_mode():
+            default = "off"
+    except Exception:
+        pass
+    flag = os.environ.get("SCORE_SNAPSHOT_SCORE_HOUR", default).strip().lower()
+    return flag in ("1", "true", "yes", "on")
+
+
+def write_full_universe_snapshot(
+    progress_cb: Optional[Callable[[int, int], None]] = None,
+) -> Dict[str, Any]:
     """Load subnets, score, persist. Call only from background."""
     try:
         from server import _get_subnets_hydrate, _get_subnets_with_source, _market_context_with_weights
@@ -192,7 +230,11 @@ def write_full_universe_snapshot() -> Dict[str, Any]:
     except Exception as exc:
         return {"ok": False, "error": f"subnet load: {exc}"}
     try:
-        payload = build_full_universe_snapshot(subnets or [], ctx)
+        payload = build_full_universe_snapshot(
+            subnets or [],
+            ctx,
+            progress_cb=progress_cb,
+        )
         payload["source"] = source
         save_score_snapshot(payload)
         return {
@@ -247,8 +289,55 @@ class ScoreSnapshotScheduler:
     def run_once(self) -> Dict[str, Any]:
         return self._tick(reschedule=False)
 
+    def _scoring_in_progress(self) -> bool:
+        try:
+            from internal.council import weights
+
+            sched = weights._load_raw().get("score_snapshot_scheduler") or {}
+            last = sched.get("last_cycle") if isinstance(sched, dict) else {}
+            if not isinstance(last, dict) or last.get("phase") != "scoring":
+                return False
+            tick = _parse_iso(last.get("run_at"))
+            if tick is None:
+                return False
+            age = max(0.0, (datetime.now(timezone.utc) - tick).total_seconds())
+            return age < SCORE_SNAPSHOT_STUCK_SECONDS
+        except Exception:
+            return False
+
+    def _clear_stuck_scoring(self) -> None:
+        try:
+            from internal.council import weights
+
+            sched = weights._load_raw().get("score_snapshot_scheduler") or {}
+            last = sched.get("last_cycle") if isinstance(sched, dict) else {}
+            if not isinstance(last, dict) or last.get("phase") != "scoring":
+                return
+            tick = _parse_iso(last.get("run_at"))
+            if tick is None:
+                return
+            age = max(0.0, (datetime.now(timezone.utc) - tick).total_seconds())
+            if age >= SCORE_SNAPSHOT_STUCK_SECONDS:
+                self._persist_cycle_summary(
+                    {
+                        "run_at": _now_iso(),
+                        "ok": False,
+                        "error": "scoring_stuck_timeout",
+                        "phase": "failed",
+                    }
+                )
+        except Exception:
+            pass
+
     def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
         from internal.heavy_job_gate import heavy_job_slot
+
+        if self._scoring_in_progress():
+            skipped = {"ok": True, "run_at": _now_iso(), "skipped": "scoring_in_progress"}
+            self._persist_cycle_summary(skipped)
+            if reschedule and self._running:
+                schedule_in_seconds(JOB_ID, self._tick, min(120, self.refresh_minutes * 60))
+            return skipped
 
         with heavy_job_slot("score_snapshot") as acquired:
             if not acquired:
@@ -261,10 +350,26 @@ class ScoreSnapshotScheduler:
         return self._tick_body(reschedule=reschedule)
 
     def _tick_body(self, reschedule: bool = True) -> Dict[str, Any]:
+        self._clear_stuck_scoring()
         started_at = _now_iso()
         self._persist_cycle_summary({"run_at": started_at, "ok": False, "phase": "scoring"})
+
+        def _progress(done: int, total: int) -> None:
+            self._persist_cycle_summary(
+                {
+                    "run_at": _now_iso(),
+                    "ok": False,
+                    "phase": "scoring",
+                    "progress": f"{done}/{total}",
+                }
+            )
+
         logger.info("score snapshot cycle started")
-        result = write_full_universe_snapshot()
+        try:
+            result = write_full_universe_snapshot(progress_cb=_progress)
+        except Exception as exc:
+            logger.warning("score snapshot cycle exception: %s", exc)
+            result = {"ok": False, "error": str(exc)}
         result["run_at"] = _now_iso()
         with _lock:
             self._last_run_at = result["run_at"]
@@ -296,6 +401,7 @@ class ScoreSnapshotScheduler:
             "error": result.get("error"),
             "skipped": result.get("skipped"),
             "phase": result.get("phase"),
+            "progress": result.get("progress"),
         }
         try:
             from internal.council import weights

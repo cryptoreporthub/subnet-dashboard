@@ -315,7 +315,7 @@ On the current **one 2GB machine** (web + inline essential worker), `MESSAGE_INT
 - `WORKER_HEAVY=essential` (**never `full`** — #517/#520 wedge),
 - Telegram session already exists on the volume,
 - Pump / score-snapshot / resolver jobs are staggered (see `internal/heavy_job_gate.py`).
-- Score snapshots default to **registry-only** subnet rows on the worker (`SCORE_SNAPSHOT_REGISTRY_ONLY=on`) so the first cycle completes without live-feed wedge; full-universe scoring runs **outside** the heavy-job mutex so resolver can grade while snapshot scores.
+- Score snapshots default to **registry-only** subnet rows on the worker (`SCORE_SNAPSHOT_REGISTRY_ONLY=on`) so the first cycle completes without live-feed wedge; full-universe scoring runs **outside** the heavy-job mutex so resolver can grade while snapshot scores. Day-only scoring on worker (`SCORE_SNAPSHOT_SCORE_HOUR=off` default) halves CPU; resolver boot immediate on worker clears pending after deploy.
 
 If prod flaps (TLS OK but `/health` 0 bytes), **disable Telegram first** (`MESSAGE_INTEL_LISTENER=off`) before scaling VM or splitting processes. Fly **secrets override** `fly.toml` — verify with `flyctl secrets list`.
 

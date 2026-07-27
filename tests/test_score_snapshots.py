@@ -146,6 +146,32 @@ def test_skipped_tick_persists_last_cycle(tmp_path, monkeypatch):
     assert last.get("skipped") == "heavy_job_busy"
 
 
+def test_build_snapshot_day_only_skips_hour_scoring(monkeypatch):
+    hour_calls = 0
+
+    def _hour(sn, ctx):
+        nonlocal hour_calls
+        hour_calls += 1
+        return {"total_score": 1.0}
+
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_hour",
+        _hour,
+    )
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_day",
+        lambda sn, ctx: {"total_score": 2.0},
+    )
+    monkeypatch.setattr(
+        "internal.subnets.tradable.tradable_subnets",
+        lambda rows: rows,
+    )
+    out = snaps.build_full_universe_snapshot([{"netuid": 3, "name": "A"}], {}, score_hour=False)
+    assert hour_calls == 0
+    assert out["day"][0]["netuid"] == 3
+    assert out["hour"][0]["netuid"] == 3
+
+
 def test_write_snapshot_prefers_registry_when_enabled(monkeypatch, tmp_path):
     path = tmp_path / "score_snapshots.json"
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
