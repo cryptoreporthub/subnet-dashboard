@@ -228,6 +228,17 @@ class ScoreSnapshotScheduler:
         return self._tick(reschedule=False)
 
     def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
+        from internal.heavy_job_gate import heavy_job_slot
+
+        with heavy_job_slot("score_snapshot") as acquired:
+            if not acquired:
+                skipped = {"ok": True, "run_at": _now_iso(), "skipped": "heavy_job_busy"}
+                if reschedule and self._running:
+                    schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
+                return skipped
+            return self._tick_body(reschedule=reschedule)
+
+    def _tick_body(self, reschedule: bool = True) -> Dict[str, Any]:
         result = write_full_universe_snapshot()
         result["run_at"] = _now_iso()
         with _lock:

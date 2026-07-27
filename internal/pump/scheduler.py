@@ -70,6 +70,17 @@ class PumpLadderScheduler:
         schedule_in_seconds(JOB_ID, self._tick, minutes * 60)
 
     def _tick(self) -> Dict[str, Any]:
+        from internal.heavy_job_gate import heavy_job_slot
+
+        with heavy_job_slot("pump_ladder") as acquired:
+            if not acquired:
+                skipped = {"ok": True, "run_at": _now_iso(), "skipped": "heavy_job_busy"}
+                if self._running:
+                    self._schedule(self.refresh_minutes)
+                return skipped
+            return self._tick_body()
+
+    def _tick_body(self) -> Dict[str, Any]:
         result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
         try:
             scan = scan_all_subnets()

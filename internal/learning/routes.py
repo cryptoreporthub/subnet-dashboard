@@ -7,6 +7,7 @@ import logging
 import os
 import threading
 import time
+import asyncio
 from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 
@@ -443,7 +444,8 @@ async def api_learning_loop_health():
     """Phase 0 — pick→ledger→resolver loop status (no scoring)."""
     from internal.learning.loop_health import build_learning_loop_health
 
-    return build_learning_loop_health()
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, build_learning_loop_health)
 
 
 @learning_router.get("/api/learning/stats")
@@ -555,8 +557,17 @@ async def api_predictions_resolver_state():
     }
 
 
+def _resolver_allowed_on_this_process() -> bool:
+    """Prod web serves HTTP only — resolver runs on inline worker."""
+    from internal.run_mode import background_on_web, is_worker_mode
+
+    return is_worker_mode() or background_on_web()
+
+
 def _ensure_resolver_scheduler():
     """Start the resolver scheduler singleton if headless (tests / first trigger)."""
+    if not _resolver_allowed_on_this_process():
+        return None
     scheduler = get_prediction_resolver_scheduler()
     if scheduler is None:
         start_prediction_resolver_scheduler(immediate=False)
@@ -574,6 +585,11 @@ def _ensure_resolver_scheduler():
 @learning_router.post("/api/learning/trigger")
 async def api_learning_trigger():
     """Manually run a prediction-resolution cycle and return scheduler state."""
+    if not _resolver_allowed_on_this_process():
+        raise HTTPException(
+            status_code=503,
+            detail="prediction resolver runs on background worker only (BACKGROUND_ON_WEB=off)",
+        )
     scheduler = _ensure_resolver_scheduler()
     cycle: Dict[str, Any] = {}
     if scheduler is not None:
@@ -595,6 +611,11 @@ async def api_learning_trigger():
 @learning_router.post("/api/predictions/resolver/run")
 async def api_predictions_resolver_run():
     """Trigger a single prediction-resolution cycle on demand."""
+    if not _resolver_allowed_on_this_process():
+        raise HTTPException(
+            status_code=503,
+            detail="prediction resolver runs on background worker only (BACKGROUND_ON_WEB=off)",
+        )
     scheduler = _ensure_resolver_scheduler()
     if scheduler is None:
         return {

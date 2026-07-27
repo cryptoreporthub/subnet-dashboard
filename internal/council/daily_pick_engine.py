@@ -8,6 +8,7 @@ and rotation summary so the daily pick is deterministic and auditable.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -17,6 +18,8 @@ from internal.council.scenario_memory import classify_regime
 from internal.council.rotation_tracker import get_rotation_summary
 from internal.council.publish_gate import publish_gate_fraction, publish_gate_label
 from internal.subnets.tradable import is_tradable_subnet, subnet_netuid, tradable_subnets
+
+logger = logging.getLogger(__name__)
 
 DAILY_PICKS_PATH = os.path.join("data", "daily_picks.json")
 
@@ -122,8 +125,8 @@ def get_or_create_today_pick(
             from internal.learning.prediction_loop import record_hold_decision
 
             record_hold_decision(reason="No subnets available", horizon_type="day")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("record_hold_decision failed (no subnets): %s", exc)
         return payload
 
     pick = select_daily_pick(subnets, market_context)
@@ -174,8 +177,12 @@ def get_or_create_today_pick(
                     horizon_type="day",
                     market_context=market_context,
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+                "record_pick_prediction failed for daily pick netuid=%s: %s",
+                (stored_pick.get("subnet") or {}).get("netuid") if isinstance(stored_pick, dict) else None,
+                exc,
+            )
     elif action == "HOLD":
         try:
             from internal.learning.prediction_loop import record_hold_decision
@@ -194,8 +201,8 @@ def get_or_create_today_pick(
                 subnet=subnet_row,
                 market_context=market_context,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("record_hold_decision failed: %s", exc)
 
     return payload
 

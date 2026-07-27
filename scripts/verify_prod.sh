@@ -26,10 +26,21 @@ print('count:', d.get('count'))
 assert d.get('status') != 'timeout', 'pump-alerts must not return timeout on warm prod'
 "
 
-echo "== health burst (hydrate stability) =="
-for i in $(seq 1 10); do
-  curl -fsS --max-time 5 -w "health $i: %{http_code} %{time_total}s\n" -o /dev/null "$BASE/health" || echo "health $i: FAILED"
+echo "== health check (serial, spaced) =="
+health_ok=0
+for i in 1 2 3; do
+  if curl -fsS --max-time 8 -w "health $i: %{http_code} %{time_total}s\n" -o /dev/null "$BASE/health"; then
+    health_ok=$((health_ok + 1))
+  else
+    echo "health $i: FAILED"
+    if [ "$i" -eq 1 ]; then
+      echo "ABORT: /health failed on first probe — prod likely wedged"
+      exit 1
+    fi
+  fi
+  sleep 3
 done
+echo "health summary: $health_ok/3 OK"
 
 echo "== learning loop health (Phase 0–6) =="
 if curl_json_safe "$BASE/api/learning/health" /tmp/learning_health.json 10; then

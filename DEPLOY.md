@@ -308,6 +308,16 @@ You do **not** need a desktop. Session file is created **on the Fly volume** in 
 
 **No SSH app?** Use `POST /api/message-intel/ingest` from an external forwarder (honest-empty until something ingests).
 
+#### Single-VM stability (learning loop audit 2026-07-27)
+
+On the current **one 2GB machine** (web + inline essential worker), `MESSAGE_INTEL_LISTENER=auto` is safe only when:
+
+- `WORKER_HEAVY=essential` (**never `full`** — #517/#520 wedge),
+- Telegram session already exists on the volume,
+- Pump / score-snapshot / resolver jobs are staggered (see `internal/heavy_job_gate.py`).
+
+If prod flaps (TLS OK but `/health` 0 bytes), **disable Telegram first** (`MESSAGE_INTEL_LISTENER=off`) before scaling VM or splitting processes. Fly **secrets override** `fly.toml` — verify with `flyctl secrets list`.
+
 ---
 
 ## Environment reference
