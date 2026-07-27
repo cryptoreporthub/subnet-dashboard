@@ -144,3 +144,31 @@ def test_skipped_tick_persists_last_cycle(tmp_path, monkeypatch):
     data = json.loads(soul.read_text(encoding="utf-8"))
     last = data["score_snapshot_scheduler"]["last_cycle"]
     assert last.get("skipped") == "heavy_job_busy"
+
+
+def test_write_snapshot_prefers_registry_when_enabled(monkeypatch, tmp_path):
+    path = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    hydrate = [{"netuid": 5, "name": "Five"}]
+    monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+
+    def _live_fail(**_kwargs):
+        raise AssertionError("live feed should not run when registry-only")
+
+    monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
+    monkeypatch.setattr("server._get_subnets_with_source", _live_fail)
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_hour",
+        lambda sn, ctx: {"total_score": 1.0},
+    )
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_day",
+        lambda sn, ctx: {"total_score": 2.0},
+    )
+    monkeypatch.setattr(
+        "internal.subnets.tradable.tradable_subnets",
+        lambda rows: rows,
+    )
+    out = snaps.write_full_universe_snapshot()
+    assert out["ok"] is True
+    assert path.is_file()

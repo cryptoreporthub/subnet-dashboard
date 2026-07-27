@@ -231,6 +231,7 @@ class PredictionResolverScheduler:
                     "expired_now": 0,
                     "pending": 0,
                 }
+                self._persist_cycle_summary(skipped)
                 if self._running:
                     self._schedule_next(self.refresh_minutes)
                 return skipped
@@ -332,6 +333,7 @@ class PredictionResolverScheduler:
             "expired_now": result.get("expired_now", 0),
             "pending": result.get("pending", 0),
             "error": result.get("error"),
+            "skipped": result.get("skipped"),
             "watchdog": result.get("watchdog"),
             "batch_size": result.get("batch_size", 0),
             "round_robin_cursor": result.get("round_robin_cursor"),
