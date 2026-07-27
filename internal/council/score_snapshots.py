@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -25,6 +26,10 @@ SCORE_SNAPSHOT_REFRESH_MINUTES = int(os.environ.get("SCORE_SNAPSHOT_REFRESH_MINU
 SCORE_SNAPSHOT_MAX_AGE_SECONDS = int(os.environ.get("SCORE_SNAPSHOT_MAX_AGE_SECONDS", "7200"))
 SCORE_SNAPSHOT_FIRST_DELAY_SECONDS = int(os.environ.get("SCORE_SNAPSHOT_FIRST_DELAY_SECONDS", "90"))
 SCORE_SNAPSHOT_STUCK_SECONDS = int(os.environ.get("SCORE_SNAPSHOT_STUCK_SECONDS", "900"))
+SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = int(
+    os.environ.get("SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", "600")
+)
+SCORE_SNAPSHOT_MAX_SUBNETS = int(os.environ.get("SCORE_SNAPSHOT_MAX_SUBNETS", "0"))
 JOB_ID = "score-snapshot-scheduler"
 
 _lock = threading.Lock()
@@ -226,10 +231,16 @@ def write_full_universe_snapshot(
             subnets, source = _get_subnets_with_source(timeout=20)
             if not subnets:
                 subnets, source = _get_subnets_hydrate()
+        cap = SCORE_SNAPSHOT_MAX_SUBNETS
+        if cap > 0 and subnets and len(subnets) > cap:
+            from server import _cap_subnets_for_scoring
+
+            subnets = _cap_subnets_for_scoring(subnets, limit=cap)
         ctx = _market_context_with_weights(subnets or [])
     except Exception as exc:
         return {"ok": False, "error": f"subnet load: {exc}"}
-    try:
+
+    def _build_and_save() -> Dict[str, Any]:
         payload = build_full_universe_snapshot(
             subnets or [],
             ctx,
@@ -243,9 +254,30 @@ def write_full_universe_snapshot(
             "written_at": payload.get("written_at"),
             "path": SCORE_SNAPSHOTS_PATH,
         }
+
+    timeout = SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS
+    if timeout <= 0:
+        try:
+            return _build_and_save()
+        except Exception as exc:
+            logger.warning("score snapshot write failed: %s", exc)
+            return {"ok": False, "error": str(exc)}
+
+    pool = ThreadPoolExecutor(max_workers=1)
+    try:
+        fut = pool.submit(_build_and_save)
+        try:
+            return fut.result(timeout=timeout)
+        except FuturesTimeoutError:
+            logger.warning(
+                "score snapshot write timed out after %ds", timeout
+            )
+            return {"ok": False, "error": f"write_timeout_{timeout}s"}
     except Exception as exc:
         logger.warning("score snapshot write failed: %s", exc)
         return {"ok": False, "error": str(exc)}
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
 
 class ScoreSnapshotScheduler:
