@@ -15,6 +15,7 @@ _EMPTY_MESSAGE = (
 _MAX_EARLY = 5
 _MAX_PUMPING = 3
 _MAX_COOLING = 2
+_MAX_WATCH = 5
 _EARLY_PHASES = frozenset({"STIRRING", "ACCUMULATING"})
 _BAD_NAME = re.compile(r"^(unknown|deprecated|none|snnone|unnamed)$", re.I)
 
@@ -204,6 +205,35 @@ def _display_label(name: str, netuid: Optional[int]) -> str:
 
 def _move_line(prefix: str, name: str, netuid: Optional[int]) -> str:
     return f"{prefix} · {_display_label(name, netuid)}"
+
+
+def _watch_row_copy(
+    name: str,
+    buy_ratio: Optional[float],
+    volume_intensity: Optional[float],
+    netuid_int: Optional[int],
+) -> Dict[str, str]:
+    gates = _lead_thresholds()
+    br_min = float(gates["buy_ratio_min"])
+    vi_min = float(gates["volume_intensity_min"])
+    br = buy_ratio if buy_ratio is not None else 0.5
+    vi = volume_intensity if volume_intensity is not None else 0.0
+    gaps: List[str] = []
+    if br < br_min:
+        gaps.append(f"buy flow {br:.0%} (need {br_min:.0%})")
+    if vi < vi_min:
+        gaps.append(f"vol {vi:.0%} (need {vi_min:.0%})")
+    gap_txt = "; ".join(gaps) if gaps else "flow below lead gate"
+    return {
+        "move": _move_line("RADAR", name, netuid_int),
+        "badge": "NEAR GATE",
+        "timing": "watch",
+        "thesis": (
+            f"STIRRING on ladder but below lead gate — {gap_txt}. "
+            "Not a lead alert; watch the dossier if flow ticks up."
+        ),
+        "trigger": "Desk stays quiet until buy ratio and volume clear the gate.",
+    }
 
 
 def _row_copy(
@@ -828,6 +858,68 @@ def build_desk_row(
     }
 
 
+def build_watch_row(
+    ladder_entry: Dict[str, Any],
+    subnet_row: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """STIRRING below lead gate — honest radar row when the desk has no leads."""
+    row = build_desk_row(ladder_entry, subnet_row)
+    leads = _snapshot_lead_signals(ladder_entry)
+    copy = _watch_row_copy(row["name"], leads["buy_ratio"], leads["volume_intensity"], row["netuid"])
+    row.update(
+        {
+            "timing": "watch",
+            "badge": copy["badge"],
+            "move": copy["move"],
+            "thesis": copy["thesis"],
+            "trigger": copy["trigger"],
+            "subtitle": "Below lead gate — radar only",
+        }
+    )
+    return row
+
+
+def _collect_almost_warming(
+    state: Dict[str, Any],
+    subnets: List[Dict[str, Any]],
+) -> List[Tuple[float, Dict[str, Any], Optional[Dict[str, Any]]]]:
+    """STIRRING names on the ladder that have not cleared buy/vol lead gates."""
+    out: List[Tuple[float, Dict[str, Any], Optional[Dict[str, Any]]]] = []
+    for entry in (state.get("subnets") or {}).values():
+        if not isinstance(entry, dict):
+            continue
+        if str(entry.get("phase") or "").upper() != "STIRRING":
+            continue
+        netuid = entry.get("netuid")
+        subnet = _subnet_row(int(netuid), subnets) if netuid is not None else None
+        leads = _snapshot_lead_signals(entry)
+        if _lead_qualifies(leads["buy_ratio"], leads["volume_intensity"]):
+            continue
+        score = float(entry.get("composite_score") or 0.0)
+        try:
+            rank = float(entry.get("accum_score")) if entry.get("accum_score") is not None else score
+        except (TypeError, ValueError):
+            rank = score
+        out.append((rank, entry, subnet))
+    return out
+
+
+def _attach_watch_when_empty(
+    payload: Dict[str, Any],
+    state: Dict[str, Any],
+    subnets: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    if payload.get("status") != "empty" or payload.get("count"):
+        return payload
+    almost = _collect_almost_warming(state, subnets)
+    if not almost:
+        return payload
+    watch = _sort_bucket(almost, _MAX_WATCH, row_builder=build_watch_row)
+    payload["watch"] = watch
+    payload["watch_count"] = len(watch)
+    return payload
+
+
 def _collect_pump_buckets(
     state: Dict[str, Any],
     subnets: List[Dict[str, Any]],
@@ -945,7 +1037,8 @@ def build_pump_alerts_desk(subnets: Optional[List[Dict[str, Any]]] = None) -> Di
         + _sort_bucket(pumping, _MAX_PUMPING, row_builder=build_desk_row)
         + _sort_bucket(cooling, _MAX_COOLING, row_builder=build_desk_row)
     )
-    return _finalize_pump_payload(alerts, desk=True)
+    payload = _finalize_pump_payload(alerts, desk=True)
+    return _attach_watch_when_empty(payload, state, rows)
 
 
 def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
@@ -988,4 +1081,5 @@ def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[st
     except Exception:
         pass
 
-    return _finalize_pump_payload(alerts, desk=False)
+    payload = _finalize_pump_payload(alerts, desk=False)
+    return _attach_watch_when_empty(payload, state, rows)

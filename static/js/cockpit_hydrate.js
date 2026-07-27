@@ -1339,6 +1339,7 @@
         'JUST STARTED': 'JUST',
         'CHASE RISK': 'CHASE',
         FADING: 'FADE',
+        'NEAR GATE': 'NEAR',
       }[badge] || badge;
     var labels = row.triad_labels || {};
     var triad = row.triad || {};
@@ -1563,6 +1564,7 @@
         'JUST STARTED': 'JUST',
         'CHASE RISK': 'CHASE',
         FADING: 'FADE',
+        'NEAR GATE': 'NEAR',
       }[badge] || badge;
     var why = row.trigger || row.subtitle || row.badge || '';
     if (why.length > 72) why = why.slice(0, 69).replace(/\s+\S*$/, '') + '…';
@@ -1614,6 +1616,20 @@
       return r.timing === 'exit';
     });
     if (!warm.length && !active.length) {
+      var watch = (payload && payload.watch) || [];
+      if (watch.length) {
+        var watchHtml =
+          '<p class="pds-empty-note">No lead alerts yet — these names are STIRRING below the gate.</p>' +
+          '<h3 class="pds-board__lbl pds-board__lbl--watch">Almost warming <span>' +
+          watch.length +
+          '</span></h3>';
+        watch.forEach(function (row) {
+          watchHtml += renderPumpScanRow(row, 'watch');
+        });
+        deskPanel.innerHTML = watchHtml;
+        if (typeof window.__paintSparks === 'function') window.__paintSparks();
+        return;
+      }
       deskPanel.innerHTML =
         '<p class="' +
         (isPumpScanMode() ? 'pds-empty' : 'pd-empty') +
@@ -1760,6 +1776,8 @@
       countEl.style.display = count > 0 ? '' : 'none';
     }
     if (!count && !exitCount) {
+      var watchRows = payload.watch || [];
+      if (!watchRows.length) {
       var deskPanel = document.getElementById('pump-desk-panel');
       if (deskPanel) {
         deskPanel.innerHTML =
@@ -1776,6 +1794,16 @@
       }
       var emptyMap = document.getElementById('pump-map-data');
       if (emptyMap) emptyMap.textContent = '[]';
+      if (window.PumpMap) window.PumpMap.refresh([]);
+      return;
+      }
+      renderPumpDeskPanel([], payload.empty_message, payload);
+      if (listPanel) {
+        listPanel.hidden = true;
+        listPanel.innerHTML = '';
+      }
+      var watchMap = document.getElementById('pump-map-data');
+      if (watchMap) watchMap.textContent = '[]';
       if (window.PumpMap) window.PumpMap.refresh([]);
       return;
     }
