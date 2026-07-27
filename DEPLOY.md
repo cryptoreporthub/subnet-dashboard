@@ -240,12 +240,56 @@ Live social ingest uses a **Telethon user session** (not the conviction-alert bo
 | `TELEGRAM_PHONE` | first login | E.164 phone (`+1...`) for one-time auth |
 | `TELEGRAM_GROUP` | no | Group username to monitor (default `OfficialSubnetSummer`) |
 | `TELEGRAM_SESSION_PATH` | no | Session base path (default `data/telegram_listener` → `/app/data` on Fly) |
+| `TELEGRAM_SESSION_STRING` | **preferred** | Telethon `StringSession` from bootstrap — **no Fly SSH** (#541) |
 | `MESSAGE_INTEL_LISTENER` | enable | `auto` or `on` after session exists on volume |
 | `WORKER_HEAVY` | **essential** | Keep `essential` (default). **`full` is not required** for Telegram and wedges prod. |
 
 **Not the conviction-alert bot:** outbound push uses `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ALERT_CHAT_ID` (see above).
 
-#### Fast path when API id/hash are already Fly secrets
+#### Fastest path: session string (no SSH) — paste whole line in one go
+
+Use this when Fly SSH is awkward (phone-only, Windows without curl, iSH, etc.).
+
+1. **On any machine with Python 3.12+** (laptop, Codespaces, friend’s Mac — not required to be Fly):
+
+   ```bash
+   cd subnet-dashboard
+   source .venv/bin/activate   # or: pip install 'telethon>=1.33.0'
+   export TELEGRAM_API_ID='<your-api-id>'
+   export TELEGRAM_API_HASH='<your-api-hash>'
+   export TELEGRAM_PHONE='+1...'   # E.164, same phone Telegram will text
+   python scripts/bootstrap_telegram_session.py
+   ```
+
+2. **Telegram texts you a login code** — type it at the prompt (one code, one try; don’t spam retries).
+
+3. **Copy the entire session string** — the script prints one long line between the `---` markers (starts with `1`, no spaces, no line breaks). Select and copy **the whole thing in one go**.
+
+4. **Set Fly secret** — paste that entire string as the value (quotes are fine):
+
+   ```bash
+   flyctl secrets set \
+     TELEGRAM_SESSION_STRING='PASTE_ENTIRE_LINE_HERE' \
+     MESSAGE_INTEL_LISTENER=auto \
+     WORKER_HEAVY=essential \
+     --app subnet-dashboard
+   ```
+
+   Or use [fly.io/apps/subnet-dashboard/secrets](https://fly.io/apps/subnet-dashboard/secrets): name `TELEGRAM_SESSION_STRING`, value = paste the full line in the value field once.
+
+5. **Wait ~2–3 minutes** after the machine restarts, then:
+
+   ```bash
+   ./scripts/check_telegram_ready.sh
+   ```
+
+   Want: `has_session=true`, `listener.live=true`, `listener.reason=running`.
+
+**FloodWait / lockout:** If bootstrap fails with `FloodWait`, Telegram has rate-limited logins. **Stop** — do not re-run bootstrap or SSH login in a loop. Wait the full time shown (often hours). One OTP attempt per cooldown.
+
+`TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, and `TELEGRAM_PHONE` must already be Fly secrets (or set in the same `flyctl secrets set` command).
+
+#### Fast path when API id/hash are already Fly secrets (SSH)
 
 1. **Bootstrap session on the volume** (one interactive SSH; writes `/app/data/telegram_listener.session`):
 
