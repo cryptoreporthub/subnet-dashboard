@@ -216,6 +216,24 @@ def _start_pick_audit_scheduler() -> None:
     defer_boot("pick-audit-scheduler", _run, delay=max(BOOT_DEFER_SECONDS + 50, 95))
 
 
+def _start_pump_desk_snapshot_scheduler() -> None:
+    """Periodic pump desk + learning health snapshot (replaces Ditto 15m fetch)."""
+
+    def _run() -> None:
+        from internal.pump.desk_snapshot_scheduler import start_pump_desk_snapshot_scheduler
+
+        immediate = os.environ.get("PUMP_DESK_SNAPSHOT_BOOT_IMMEDIATE", "off").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        start_pump_desk_snapshot_scheduler(immediate=immediate)
+        logger.info("pump desk snapshot scheduler started (immediate=%s)", immediate)
+
+    defer_boot("pump-desk-snapshot", _run, delay=max(BOOT_DEFER_SECONDS + 55, 100))
+
+
 def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     """Start background schedulers.
 
@@ -250,6 +268,7 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _start_pick_schedulers()
     _start_score_snapshot_scheduler()
     _start_pick_audit_scheduler()
+    _start_pump_desk_snapshot_scheduler()
 
     _maybe_start_message_intel()
 
@@ -308,6 +327,12 @@ def stop_background_workers() -> None:
         from internal.council.pick_audit_scheduler import stop_pick_audit_scheduler
 
         stop_pick_audit_scheduler()
+    except Exception:
+        pass
+    try:
+        from internal.pump.desk_snapshot_scheduler import stop_pump_desk_snapshot_scheduler
+
+        stop_pump_desk_snapshot_scheduler()
     except Exception:
         pass
     try:
