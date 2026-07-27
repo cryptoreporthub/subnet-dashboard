@@ -163,14 +163,31 @@ def build_full_universe_snapshot(
     }
 
 
+def _registry_only_snapshot() -> bool:
+    """Background snapshot defaults to registry rows — fast, no outbound wedge."""
+    default = "on"
+    try:
+        from internal.run_mode import is_worker_mode
+
+        if is_worker_mode():
+            default = "on"
+    except Exception:
+        pass
+    flag = os.environ.get("SCORE_SNAPSHOT_REGISTRY_ONLY", default).strip().lower()
+    return flag in ("1", "true", "yes", "on")
+
+
 def write_full_universe_snapshot() -> Dict[str, Any]:
-    """Load live subnets uncapped, score, persist. Call only from background."""
+    """Load subnets, score, persist. Call only from background."""
     try:
         from server import _get_subnets_hydrate, _get_subnets_with_source, _market_context_with_weights
 
-        subnets, source = _get_subnets_with_source(timeout=20)
-        if not subnets:
+        if _registry_only_snapshot():
             subnets, source = _get_subnets_hydrate()
+        else:
+            subnets, source = _get_subnets_with_source(timeout=20)
+            if not subnets:
+                subnets, source = _get_subnets_hydrate()
         ctx = _market_context_with_weights(subnets or [])
     except Exception as exc:
         return {"ok": False, "error": f"subnet load: {exc}"}
@@ -238,11 +255,15 @@ class ScoreSnapshotScheduler:
                 skipped = {"ok": True, "run_at": _now_iso(), "skipped": "heavy_job_busy"}
                 self._persist_cycle_summary(skipped)
                 if reschedule and self._running:
-                    schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
+                    schedule_in_seconds(JOB_ID, self._tick, min(120, self.refresh_minutes * 60))
                 return skipped
-            return self._tick_body(reschedule=reschedule)
+        # ponytail: release gate before ~127×2 scoring — holding it wedged resolver for hours
+        return self._tick_body(reschedule=reschedule)
 
     def _tick_body(self, reschedule: bool = True) -> Dict[str, Any]:
+        started_at = _now_iso()
+        self._persist_cycle_summary({"run_at": started_at, "ok": False, "phase": "scoring"})
+        logger.info("score snapshot cycle started")
         result = write_full_universe_snapshot()
         result["run_at"] = _now_iso()
         with _lock:
@@ -253,6 +274,14 @@ class ScoreSnapshotScheduler:
                 k: result.get(k) for k in ("count", "written_at", "path") if k in result
             }
         self._persist_cycle_summary(result)
+        if result.get("ok"):
+            logger.info(
+                "score snapshot cycle ok count=%s path=%s",
+                result.get("count"),
+                result.get("path"),
+            )
+        else:
+            logger.warning("score snapshot cycle failed: %s", result.get("error"))
         if reschedule and self._running:
             schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
         return result
@@ -266,6 +295,7 @@ class ScoreSnapshotScheduler:
             "path": result.get("path"),
             "error": result.get("error"),
             "skipped": result.get("skipped"),
+            "phase": result.get("phase"),
         }
         try:
             from internal.council import weights
