@@ -73,15 +73,17 @@ def _start_pump_ladder() -> None:
 def _start_resolver() -> None:
     def _run() -> None:
         from internal.council.resolver_scheduler import start_prediction_resolver_scheduler
+        from internal.run_mode import is_worker_mode
 
-        immediate = os.environ.get("RESOLVER_BOOT_IMMEDIATE", "off").strip().lower() in (
+        default_immediate = "on" if is_worker_mode() else "off"
+        immediate = os.environ.get("RESOLVER_BOOT_IMMEDIATE", default_immediate).strip().lower() in (
             "1",
             "true",
             "yes",
             "on",
         )
         start_prediction_resolver_scheduler(immediate=immediate)
-        logger.info("prediction resolver scheduler started")
+        logger.info("prediction resolver scheduler started (immediate=%s)", immediate)
 
         def _recover() -> None:
             try:
