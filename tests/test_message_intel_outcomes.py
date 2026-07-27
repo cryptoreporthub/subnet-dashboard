@@ -58,6 +58,18 @@ def test_outcome_loop_start_stop(intel_env):
             assert outcome_loop.outcome_loop_status()["running"] is False
 
 
+def test_outcome_loop_cross_process_heartbeat(intel_env, tmp_path, monkeypatch):
+    from internal.message_intel import outcome_loop
+
+    hb = tmp_path / "outcome_hb.json"
+    monkeypatch.setenv("MESSAGE_INTEL_OUTCOME_HEARTBEAT", str(hb))
+    outcome_loop.stop_price_outcome_loop()
+    outcome_loop._touch_outcome_heartbeat()
+    assert outcome_loop.outcome_loop_status()["running"] is True
+    outcome_loop.stop_price_outcome_loop()
+    assert outcome_loop.outcome_loop_status()["running"] is False
+
+
 def test_ingest_prefers_subnet_snapshot(client, intel_env):
     payload = {
         "source": "telegram",

@@ -265,6 +265,9 @@
       0;
     if (meta) {
       var parts = ["telegram"];
+      if (listener.group_title || listener.monitored_group) {
+        parts.push(listener.group_title || listener.monitored_group);
+      }
       if (listener.live) parts.push("listener live");
       else if (listener.reason) parts.push(listener.reason);
       parts.push(total + " stored");
