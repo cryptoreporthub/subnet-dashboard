@@ -1,4 +1,4 @@
-"""Scoring universe cap — majors budget + mid-cap focus."""
+"""Scoring universe cap — mega exclusion + mid-cap focus."""
 
 import pytest
 
@@ -14,10 +14,10 @@ def _no_snapshot_rank(monkeypatch):
     )
 
 
-def _mega(netuid: int, rank: int, volume: float = 1e6) -> dict:
+def _mega(netuid: int, rank: int, volume: float = 1e6, name: str = "") -> dict:
     return {
         "netuid": netuid,
-        "name": f"Mega{netuid}",
+        "name": name or f"Mega{netuid}",
         "marketcap_rank": rank,
         "market_cap": 50e6,
         "volume": volume,
@@ -38,31 +38,35 @@ def _mid(netuid: int, rank: int, volume: float = 5_000) -> dict:
     }
 
 
-def test_majors_capped_rest_prefers_mid_band():
-    rows = [_mega(i, i, volume=1e6) for i in range(1, 11)]
-    rows.append(_mid(50, 40, volume=8_000))
-    rows.append(_mid(51, 55, volume=7_000))
-    capped = cap_subnets_for_scoring(rows, limit=10)
-    uids = [r["netuid"] for r in capped]
-    assert len(uids) == 10
-    # Up to 8 mega names, not all 10 megas
-    mega_count = sum(1 for u in uids if u <= 10)
-    assert mega_count <= 8
-    # Mid-cap focus rows must appear
-    assert 50 in uids
-    assert 51 in uids
-
-
-def test_activity_within_mid_beats_mega_spillover():
+def test_mega_names_excluded_from_heuristic_cap():
+    """Chutes/Targon-tier ranks should not consume scoring slots without snapshot."""
     rows = [
-        _mega(1, 1),
-        _mega(12, 12, volume=500),  # large-cap spillover, weak activity
+        _mega(64, 1, name="Chutes"),
+        _mega(4, 2, name="Targon"),
+        _mega(51, 3, name="Lium"),
+        _mega(120, 4, name="Affine"),
+        _mega(5, 5, volume=1e6),
+        _mega(6, 6, volume=1e6),
+        _mega(7, 7, volume=1e6),
+        _mega(8, 8, volume=1e6),
+        _mega(9, 9, volume=1e6),
+        _mega(10, 10, volume=1e6),
+    ]
+    rows.extend(_mid(200 + i, 40 + i, volume=8_000) for i in range(12))
+    capped = cap_subnets_for_scoring(rows, limit=10)
+    uids = {r["netuid"] for r in capped}
+    assert uids.isdisjoint({64, 4, 51, 120, 5, 6, 7, 8, 9, 10})
+    assert len(uids) == 10
+    assert all(u >= 200 for u in uids)
+
+
+def test_mid_beats_rank_eleven_spillover():
+    rows = [
+        _mega(11, 11, volume=500),
         _mid(30, 30, volume=20_000),
     ]
-    capped = cap_subnets_for_scoring(rows, limit=2)
-    uids = [r["netuid"] for r in capped]
-    assert uids[0] == 1  # major slot
-    assert uids[1] == 30  # mid band beats rank-12 spillover
+    capped = cap_subnets_for_scoring(rows, limit=1)
+    assert capped[0]["netuid"] == 30
 
 
 def test_cap_prefers_volume_over_stale_emission():

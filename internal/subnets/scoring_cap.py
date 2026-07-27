@@ -1,8 +1,8 @@
-"""Scoring universe cap — represent top names, hunt low/mid cap.
+"""Scoring universe cap — hunt low/mid cap; mega names via snapshot only.
 
-Legacy cap sorted by volume + market_cap, so mega subnets (Chutes, Targon, …)
-filled every slot. This module keeps a small ``majors`` budget then fills the
-rest from a mid-cap focus band (marketcap_rank 16–70 by default).
+Heuristic cap (no fresh snapshot) excludes top marketcap_rank names (Chutes,
+Targon, Lium, Affine, …) so scoring budget goes to the low–mid band.
+Council ``score_snapshots.json`` ranking still promotes any netuid when fresh.
 """
 
 from __future__ import annotations
@@ -11,6 +11,8 @@ import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from internal.subnets.tradable import subnet_netuid, subnet_volume
+
+_UNRANKED = 10_000
 
 
 def _env_int(name: str, default: int) -> int:
@@ -24,9 +26,9 @@ def marketcap_rank(sn: Dict[str, Any]) -> int:
     raw = sn.get("marketcap_rank")
     try:
         r = int(raw)
-        return r if r > 0 else 10_000
+        return r if r > 0 else _UNRANKED
     except (TypeError, ValueError):
-        return 10_000
+        return _UNRANKED
 
 
 def activity_rank_key(sn: Dict[str, Any]) -> Tuple[Any, ...]:
@@ -54,22 +56,36 @@ def activity_rank_key(sn: Dict[str, Any]) -> Tuple[Any, ...]:
     return (priced, 0, 0.0, 0.0, 0, emission)
 
 
-def _focus_tier(
-    sn: Dict[str, Any],
-    *,
-    mid_min: int,
-    mid_max: int,
-    majors_top_rank: int,
-) -> int:
-    """Higher = prefer for remaining slots after the majors budget."""
+def _focus_tier(sn: Dict[str, Any], *, mid_min: int, mid_max: int) -> int:
+    """Higher = prefer for hunt-pool slots."""
     r = marketcap_rank(sn)
     if mid_min <= r <= mid_max:
         return 3  # mid-cap focus band
-    if r > mid_max:
-        return 2  # low cap / unranked gems
-    if r <= majors_top_rank:
-        return 1  # large-cap spillover (did not win a major slot)
-    return 2
+    if r > mid_max or r >= _UNRANKED:
+        return 2  # low cap / unranked
+    return 0
+
+
+def _heuristic_hunt_pool(
+    subnets: List[Dict[str, Any]],
+    *,
+    mega_ceiling_rank: int,
+    mid_min: int,
+    mid_max: int,
+) -> List[Dict[str, Any]]:
+    """Subnets eligible for heuristic cap — mega ranks excluded."""
+    pool: List[Dict[str, Any]] = []
+    for sn in subnets:
+        r = marketcap_rank(sn)
+        if r <= mega_ceiling_rank:
+            continue
+        if mid_min <= r <= mid_max or r > mid_max or r >= _UNRANKED:
+            pool.append(sn)
+    pool.sort(
+        key=lambda sn: (_focus_tier(sn, mid_min=mid_min, mid_max=mid_max), activity_rank_key(sn)),
+        reverse=True,
+    )
+    return pool
 
 
 def cap_subnets_for_scoring(
@@ -92,32 +108,14 @@ def cap_subnets_for_scoring(
     except Exception:
         pass
 
-    majors_top_rank = _env_int("SCORING_CAP_MAJORS_TOP_RANK", 15)
-    majors_max_cfg = _env_int("SCORING_CAP_MAJORS_MAX", 8)
-    mid_min = _env_int("SCORING_CAP_MID_RANK_MIN", 16)
-    mid_max = _env_int("SCORING_CAP_MID_RANK_MAX", 70)
+    mega_ceiling = _env_int("SCORING_CAP_MEGA_CEILING_RANK", 10)
+    mid_min = _env_int("SCORING_CAP_MID_RANK_MIN", 11)
+    mid_max = _env_int("SCORING_CAP_MID_RANK_MAX", 75)
 
-    # Reserve the majority of slots for mid/low focus; majors stay visible but bounded.
-    focus_floor = 0 if cap <= 1 else max(1, cap // 2)
-    majors_max = min(majors_max_cfg, max(0, cap - focus_floor))
-
-    majors_pool = [sn for sn in subnets if marketcap_rank(sn) <= majors_top_rank]
-    majors_pool.sort(key=activity_rank_key, reverse=True)
-    majors = majors_pool[:majors_max]
-    major_uids = {u for sn in majors if (u := subnet_netuid(sn)) is not None}
-
-    rest = [sn for sn in subnets if subnet_netuid(sn) not in major_uids]
-    rest.sort(
-        key=lambda sn: (
-            _focus_tier(
-                sn,
-                mid_min=mid_min,
-                mid_max=mid_max,
-                majors_top_rank=majors_top_rank,
-            ),
-            activity_rank_key(sn),
-        ),
-        reverse=True,
+    pool = _heuristic_hunt_pool(
+        subnets,
+        mega_ceiling_rank=mega_ceiling,
+        mid_min=mid_min,
+        mid_max=mid_max,
     )
-    remaining = max(0, cap - len(majors))
-    return majors + rest[:remaining]
+    return pool[:cap]
