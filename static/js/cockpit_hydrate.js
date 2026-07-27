@@ -2849,6 +2849,22 @@
 
   var SUBNET_FIELDS = 'id,netuid,name,price_change_24h,apy,staking_data,total_stake,stake,emission,source,live,sources';
 
+  function storyStripUrl() {
+    var f = window.LivingFocus && window.LivingFocus.netuid;
+    return f != null ? '/api/story-strip?focus=' + encodeURIComponent(f) : '/api/story-strip';
+  }
+
+  async function refreshStoryStrip() {
+    try {
+      var strip = await fetchJsonRetry(storyStripUrl(), 22000, 2);
+      if (window.HomeLiveRefresh && window.HomeLiveRefresh.patchStoryStrip) {
+        window.HomeLiveRefresh.patchStoryStrip(strip);
+      }
+    } catch (e) {
+      console.warn('[cockpit_hydrate] story-strip refresh failed', e);
+    }
+  }
+
   async function run() {
     if (document.documentElement.dataset.hydrate !== '1') return;
     showHydrateSkeletons();
@@ -2901,7 +2917,7 @@
           2
         ),
         loadLearningStats(),
-        fetchJsonRetry('/api/story-strip', 22000, 2).then(function (strip) {
+        fetchJsonRetry(storyStripUrl(), 22000, 2).then(function (strip) {
           if (window.HomeLiveRefresh && window.HomeLiveRefresh.patchStoryStrip) {
             window.HomeLiveRefresh.patchStoryStrip(strip);
           }
@@ -3124,6 +3140,10 @@
       });
     });
   }
+
+  document.addEventListener('living-focus:change', function () {
+    refreshStoryStrip();
+  });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {

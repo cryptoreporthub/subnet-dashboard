@@ -35,6 +35,27 @@ def test_mindmap_graph_subnet_signal_edges_when_trail_present():
     assert any(e["source"].startswith("subnet:") for e in graph["edges"])
 
 
+def test_mindmap_graph_focus_scopes_trail(monkeypatch):
+    import internal.learning.mindmap_aggregator as agg
+
+    trail = [
+        {"netuid": 42, "event_type": "weight_change", "time": "2026-07-27T00:00:00Z"},
+        {"netuid": 99, "event_type": "weight_change", "time": "2026-07-27T00:01:00Z"},
+    ]
+    monkeypatch.setattr(agg, "collect_trail_events", lambda limit=100: trail)
+    monkeypatch.setattr(agg, "build_mindmap_state", lambda: {"status": "success", "trail": trail})
+
+    import internal.mindmap.graph as graph_mod
+
+    monkeypatch.setattr(graph_mod, "_load_dispositions", lambda: [])
+
+    graph = get_mindmap_graph(focus_netuid=42)
+    assert graph["scoped"] is True
+    assert graph["focus_netuid"] == 42
+    subnet_ids = {n["id"] for n in graph["nodes"] if n["kind"] == "subnet"}
+    assert subnet_ids == {"subnet:42"}
+
+
 def test_mindmap_graph_empty_state_success(monkeypatch):
     import internal.learning.mindmap_aggregator as agg
 

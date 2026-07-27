@@ -152,7 +152,25 @@ def _append_edge(
     )
 
 
-def get_mindmap_graph() -> Dict[str, Any]:
+def _trail_matches_netuid(row: Dict[str, Any], focus: int) -> bool:
+    nu = row.get("netuid")
+    if nu is not None:
+        try:
+            if int(nu) == focus:
+                return True
+        except (TypeError, ValueError):
+            pass
+    payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+    pl_nu = payload.get("netuid")
+    if pl_nu is not None:
+        try:
+            return int(pl_nu) == focus
+        except (TypeError, ValueError):
+            return False
+    return False
+
+
+def get_mindmap_graph(focus_netuid: Optional[int] = None) -> Dict[str, Any]:
     """Return node/edge graph for interactive Mindmap UI (never raises)."""
     try:
         from internal.learning.mindmap_aggregator import build_mindmap_state
@@ -170,7 +188,19 @@ def get_mindmap_graph() -> Dict[str, Any]:
     if not trail:
         trail = _collect_trail()
 
-    dispositions = _load_dispositions()
+    if focus_netuid is not None:
+        try:
+            focus = int(focus_netuid)
+            trail = [r for r in trail if _trail_matches_netuid(r, focus)]
+            dispositions = [
+                d
+                for d in _load_dispositions()
+                if d.get("netuid") is not None and int(d["netuid"]) == focus
+            ]
+        except (TypeError, ValueError):
+            dispositions = _load_dispositions()
+    else:
+        dispositions = _load_dispositions()
 
     nodes: Dict[str, Dict[str, Any]] = {}
     edges: List[Dict[str, Any]] = []
@@ -331,6 +361,8 @@ def get_mindmap_graph() -> Dict[str, Any]:
 
     return {
         "status": "success",
+        "focus_netuid": focus_netuid,
+        "scoped": focus_netuid is not None,
         "nodes": list(nodes.values()),
         "edges": edges,
     }
