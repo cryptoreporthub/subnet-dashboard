@@ -526,50 +526,10 @@ def _cap_subnets_for_scoring(
     subnets: List[Dict[str, Any]],
     limit: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    """Limit council scoring to the most active subnets (Fly single-worker safety).
+    """Limit council scoring — majors represented, mid-cap focus for the rest."""
+    from internal.subnets.scoring_cap import cap_subnets_for_scoring
 
-    Prefer a fresh full-universe ``score_snapshots.json`` ranking when present
-    (Phase 2) so the capped hot path still covers high-scoring netuids that
-    volume/emission alone would miss. Fall back to live-priced market activity
-    (volume, market_cap) then emission.
-    """
-    from internal.subnets.tradable import subnet_volume
-
-    cap = limit if limit is not None else TOP_SCORING_UNIVERSE
-    if not subnets or len(subnets) <= cap:
-        return subnets
-
-    try:
-        from internal.council.score_snapshots import rank_subnets_by_snapshot
-
-        ranked = rank_subnets_by_snapshot(subnets, horizon="day")
-        if ranked:
-            return ranked[:cap]
-    except Exception:
-        pass
-
-    def _has_price(s: Dict[str, Any]) -> int:
-        try:
-            return 1 if float(s.get("price") or 0) > 0 else 0
-        except (TypeError, ValueError):
-            return 0
-
-    def _rank_key(s: Dict[str, Any]):
-        vol = subnet_volume(s)
-        mcap = float(s.get("market_cap", 0) or 0)
-        emission = float(s.get("emission", 0) or 0)
-        mcr = s.get("marketcap_rank")
-        try:
-            # Lower marketcap_rank is better when present and positive.
-            rank_bonus = -int(mcr) if mcr not in (None, "", 0, "0") else 0
-        except (TypeError, ValueError):
-            rank_bonus = 0
-        priced = _has_price(s)
-        if vol > 0 or mcap > 0:
-            return (priced, 1, vol, mcap, rank_bonus, emission)
-        return (priced, 0, 0.0, 0.0, 0, emission)
-
-    return sorted(subnets, key=_rank_key, reverse=True)[:cap]
+    return cap_subnets_for_scoring(subnets, limit, default_limit=TOP_SCORING_UNIVERSE)
 
 
 def _normalize_registry_subnet(sn: Dict[str, Any]) -> Dict[str, Any]:
