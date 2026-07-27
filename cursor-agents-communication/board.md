@@ -1,8 +1,8 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-27T15:00:00Z  
-**main:** `f7aadc0` (#542 LB-12) · learning loop **green**  
-**in flight:** Track 1 LONG unlock (`cursor/track1-long-unlock-4988`) — stale boot HOLD regen + #487 shortlist cache/HOLD UX
+**Last updated:** 2026-07-27T17:21:00Z  
+**main:** `df214c6` (#543 Track 1 LONG unlock merged) · learning loop **green**  
+**in flight:** post-#543 prod verify (daily pick regen on worker tick)
 
 ## Learning loop audit (2026-07-27)
 
