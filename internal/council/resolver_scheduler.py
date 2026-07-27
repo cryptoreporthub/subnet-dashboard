@@ -219,7 +219,22 @@ class PredictionResolverScheduler:
 
     def _tick(self) -> Dict[str, Any]:
         """Run one resolution cycle and reschedule."""
-        result = self._run_refresh_cycle()
+        from internal.heavy_job_gate import heavy_job_slot
+
+        with heavy_job_slot("prediction_resolver") as acquired:
+            if not acquired:
+                skipped = {
+                    "ok": True,
+                    "run_at": _now_iso(),
+                    "skipped": "heavy_job_busy",
+                    "resolved_now": 0,
+                    "expired_now": 0,
+                    "pending": 0,
+                }
+                if self._running:
+                    self._schedule_next(self.refresh_minutes)
+                return skipped
+            result = self._run_refresh_cycle()
 
         with self._lock:
             self._last_run_at = result["run_at"]

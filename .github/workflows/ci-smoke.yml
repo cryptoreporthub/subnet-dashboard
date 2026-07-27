@@ -47,10 +47,14 @@ jobs:
       - name: Compile server entrypoint
         run: python -m py_compile server.py
 
-      - name: Endpoint contract + server tests
+      - name: Endpoint contract + server + learning loop tests
         env:
           DISABLE_BACKGROUND_SCANS: "1"
-        run: python -m pytest tests/test_endpoint_contract.py tests/test_server.py -q
+        run: |
+          python -m pytest tests/test_endpoint_contract.py tests/test_server.py \
+            tests/test_learning_loop_health.py \
+            tests/test_prediction_loop_closure.py \
+            tests/test_learning_loop_impact.py -q
 
       - name: Security scan (bandit high)
         run: bandit -q -r server.py internal tests --severity-level high

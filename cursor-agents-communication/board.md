@@ -1,7 +1,14 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-26T19:30:00Z  
-**main:** `6daefbf` — #518–#520 merged (verify_prod, learning babysit, essential hotfix)
+**Last updated:** 2026-07-27T01:25:00Z  
+**main:** learning-loop audit hardening in PR  
+**prod baseline (2026-07-27):** `/health` OK · `/api/learning/health` `status=ok` · `worker_peer.alive=true` · `resolver.running=true` · HOLD daily (28% &lt; 40% gate) · `snapshot_age_seconds` null (first score-snapshot cycle pending)
+
+## Learning loop audit (2026-07-27)
+
+- Live prod verified via `check_learning_loop.sh` (ok; snapshot not written yet post-boot).
+- Hardening PR: CI learning-loop tests, deploy `check_learning_loop.sh`, heavy-job mutex, softer warm/verify scripts, resolver web guard, plan doc cleanup.
+- **Fly secrets:** agent env lacked `FLY_API_TOKEN`; confirm `WORKER_HEAVY=essential` via `flyctl secrets list` (human or env with token).
 
 ## Post-stability sprint (`post-stability-sprint-plan.md`)
 
