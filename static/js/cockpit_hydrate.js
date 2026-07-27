@@ -2139,29 +2139,38 @@
     var strip = section.querySelector('.kpi-strip');
     if (!strip) return;
 
-    var tb = stats.trust_banner || {};
-    var accRaw = tb.accuracy != null ? tb.accuracy : null;
-    var acc = Math.round((Number(accRaw) || 0) * 1000) / 10;
-    var graded = tb.graded != null ? tb.graded : (Number(stats.correct || 0) + Number(stats.wrong || 0));
-    var expired = Number(stats.expired != null ? stats.expired : tb.expired || 0);
-    var expiredRate = stats.expired_rate != null ? stats.expired_rate : tb.expired_rate;
+    var tb = stats.trust_banner;
+    var hasTrust = tb && typeof tb === 'object';
+    var accRaw = hasTrust && tb.accuracy != null ? tb.accuracy : null;
+    var acc = accRaw != null ? Math.round(Number(accRaw) * 1000) / 10 : null;
+    var graded = hasTrust && tb.graded != null ? Number(tb.graded) : 0;
+    var correct = hasTrust ? Number(tb.correct || 0) : 0;
+    var wrong = hasTrust ? Number(tb.wrong || 0) : 0;
+    var expired = hasTrust && tb.expired != null ? Number(tb.expired) : null;
+    var expiredRate = hasTrust && tb.expired_rate != null ? tb.expired_rate : null;
     var expiredPct = expiredRate != null ? Math.round(Number(expiredRate) * 1000) / 10 : null;
-    var wd = stats.watchdog || tb.watchdog || {};
-    var ready = stats.brain_ui_ready != null ? stats.brain_ui_ready : tb.ready;
+    var wd = hasTrust ? (tb.watchdog || stats.watchdog || {}) : (stats.watchdog || {});
+    var ready = hasTrust && tb.ready != null ? tb.ready : stats.brain_ui_ready;
 
     var accEl = document.getElementById('kpi-accuracy');
     if (accEl) {
-      accEl.textContent = graded > 0 ? acc + '%' : '—';
-      accEl.className = 'val' + (acc >= 50 ? ' pos' : acc > 0 ? ' neg' : '');
+      accEl.textContent = acc != null && graded > 0 ? acc + '%' : '—';
+      accEl.className = 'val' + (acc != null && acc >= 50 ? ' pos' : acc != null && acc > 0 ? ' neg' : '');
     }
     var gradedEl = document.getElementById('kpi-graded');
     if (gradedEl) {
-      gradedEl.textContent = (stats.correct || 0) + '✓ / ' + (stats.wrong || 0) + '✗ graded (n=' + graded + ')';
+      if (hasTrust && graded > 0) {
+        gradedEl.textContent = correct + '✓ / ' + wrong + '✗ graded (n=' + graded + ')';
+      } else if (hasTrust && tb.message) {
+        gradedEl.textContent = tb.message;
+      } else {
+        gradedEl.textContent = '— graded (trust banner building)';
+      }
     }
-    syncProofBandGraded(graded);
+    syncProofBandGraded(hasTrust ? graded : 0);
     var expEl = document.getElementById('kpi-expired');
     if (expEl) {
-      expEl.textContent = String(expired);
+      expEl.textContent = expired != null ? String(expired) : '—';
       expEl.className = 'val' + (expiredPct != null && expiredPct >= 10 ? ' neg' : '');
     }
     var expRateEl = document.getElementById('kpi-expired-rate');
@@ -2169,7 +2178,9 @@
       expRateEl.textContent = expiredPct != null ? expiredPct + '% of ledger' : 'resolver backlog';
     }
     var pendEl = document.getElementById('kpi-pending');
-    if (pendEl) pendEl.textContent = String(stats.pending || 0);
+    if (pendEl) {
+      pendEl.textContent = hasTrust && tb.pending != null ? String(tb.pending) : String(stats.pending || 0);
+    }
     var intEl = document.getElementById('kpi-integrity');
     if (intEl) {
       intEl.textContent = ready ? 'Ready' : 'Blocked';
@@ -2180,7 +2191,7 @@
     if (wdEl) {
       if (wd.warning) {
         wdEl.textContent = wd.reason || 'watchdog warning';
-      } else if (tb.message) {
+      } else if (hasTrust && tb.message) {
         wdEl.textContent = tb.message;
       } else if (ready) {
         wdEl.textContent = 'trust surfaces unlocked';
@@ -2189,7 +2200,7 @@
       }
     }
     var trustWhisper = document.getElementById('council-trust-whisper');
-    if (trustWhisper && graded > 0) {
+    if (trustWhisper && hasTrust && graded > 0 && acc != null) {
       var line = graded + ' graded · ' + acc + '% dir.';
       if (tb.streak_whisper) line += ' · ' + tb.streak_whisper;
       trustWhisper.textContent = line;

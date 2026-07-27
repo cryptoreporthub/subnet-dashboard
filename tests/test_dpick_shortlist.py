@@ -73,6 +73,33 @@ def test_shortlist_cards_for_template_maps_role():
     assert cards[0]["stance"] == "LONG"
 
 
+def test_mindmap_summary_conviction_not_stub_fifty():
+    from fastapi.testclient import TestClient
+
+    from server import app
+
+    with TestClient(app) as client:
+        resp = client.get("/api/mindmap/summary")
+    assert resp.status_code == 200
+    conv = (resp.json().get("data") or {}).get("conviction") or {}
+    assert conv.get("current") != 50.0 or conv.get("data_available") is True
+    if not conv.get("data_available"):
+        assert conv.get("current") is None
+        assert "explanation" in conv
+
+
+def test_mindmap_conviction_block_helper():
+    from internal.learning.routes import _mindmap_conviction_block
+
+    empty = _mindmap_conviction_block({})
+    assert empty["data_available"] is False
+    assert empty["current"] is None
+
+    with_pick = _mindmap_conviction_block({"final_confidence": 0.42})
+    assert with_pick["data_available"] is True
+    assert with_pick["current"] == 42.0
+
+
 def test_mindmap_summary_includes_dpick_shortlist():
     from fastapi.testclient import TestClient
 
