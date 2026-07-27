@@ -75,16 +75,17 @@
       {# Judge weights for council layer #}
       {% set judges = dpick.judges if dpick.judges is iterable and dpick.judges is not string else [] %}
 
-      {# Learning / calibration — trust_banner holds accuracy (0–1); hybrid_trust only has graded n #}
+      {# Learning / calibration — RF-2: accuracy only when trust_banner.ready #}
       {% set cal_n = tb.graded|default(hybrid.n|default(0)) %}
-      {% if tb.accuracy is defined and tb.accuracy is not none %}
+      {% set tb_ready = tb.ready|default(false) %}
+      {% if tb_ready and tb.accuracy is defined and tb.accuracy is not none %}
         {% set cal_acc = (tb.accuracy|float * 100)|round(1) %}
-      {% elif cal_n|int > 0 and tb.correct is defined and tb.correct is not none %}
+      {% elif tb_ready and cal_n|int > 0 and tb.correct is defined and tb.correct is not none %}
         {% set cal_acc = ((tb.correct|float / cal_n|float) * 100)|round(1) %}
-      {% elif hybrid.accuracy is defined and hybrid.accuracy is not none %}
+      {% elif tb_ready and hybrid.accuracy is defined and hybrid.accuracy is not none %}
         {% set cal_acc = (hybrid.accuracy|float * 100)|round(1) %}
       {% else %}
-        {% set cal_acc = 0 %}
+        {% set cal_acc = none %}
       {% endif %}
 
       {# K3-3: Council lifecycle (promoted story path) #}
@@ -455,7 +456,7 @@
       .home-job__signals--demoted .home-enrichment { font-size: 10px; }
       </style>
 
-      {% if tb.ready and cal_n|int > 0 %}
+      {% if tb_ready and cal_n|int > 0 and cal_acc is not none %}
       <p class="council-stage__trust-whisper" id="council-trust-whisper">{{ cal_n }} graded · {{ cal_acc }}% dir.{% if tb.streak_whisper %} · {{ tb.streak_whisper }}{% endif %}</p>
       {% endif %}
 
@@ -595,15 +596,15 @@
       </div>
       <div
         id="home-trust-banner"
-        class="trust-banner{% if tb.ready %} trust-banner--ready{% else %} trust-banner--pending{% endif %}"
-        {% if not tb.ready %}hidden{% endif %}
+        class="trust-banner{% if tb.ready %} trust-banner--ready{% else %} trust-banner--blocked{% endif %}"
         aria-live="polite"
       >
-        {% if tb.headline %}
+        {% if tb.ready and tb.headline %}
         <p class="trust-banner__headline">{{ tb.headline }}</p>
-        {% endif %}
-        {% if tb.message %}
+        {% elif tb.message %}
         <p class="trust-banner__message">{{ tb.message }}</p>
+        {% else %}
+        <p class="trust-banner__message">Building graded track record — trust surfaces stay honest until sample clears.</p>
         {% endif %}
         {% if tb.note %}
         <p class="trust-banner__note">{{ tb.note }}</p>
@@ -790,7 +791,7 @@
         <div class="k3-layer-body">
           <div class="k3-learning-stats">
             <div class="k3-learning-stat"><div class="k3-learning-value">{{ cal_n }}</div><div class="k3-learning-label">graded calls</div></div>
-            <div class="k3-learning-stat"><div class="k3-learning-value">{{ '%.0f'|format(cal_acc|float) }}%</div><div class="k3-learning-label">directional accuracy</div></div>
+            <div class="k3-learning-stat"><div class="k3-learning-value">{% if tb_ready and cal_acc is not none %}{{ '%.0f'|format(cal_acc|float) }}%{% else %}—{% endif %}</div><div class="k3-learning-label">directional accuracy</div></div>
           </div>
           {% if outcome_status == 'resolved' or resolves_in %}
           <div class="k3-track-window">
@@ -801,8 +802,11 @@
             </div>
           </div>
           {% endif %}
-          {% if cal_n|int > 0 %}
+          {% if tb_ready and cal_n|int > 0 and cal_acc is not none %}
           <p class="k3-track-footnote">We keep score on every call. {{ cal_acc }}% directional accuracy across {{ cal_n }} graded windows — published, not curated.</p>
+          <p class="k3-weight-nudge" id="k3-weight-nudge-line" hidden></p>
+          {% elif cal_n|int > 0 %}
+          <p class="k3-track-footnote">{% if tb.message %}{{ tb.message }}{% else %}Trust gate pending — {{ cal_n }} graded so far. Accuracy publishes when integrity clears.{% endif %}</p>
           <p class="k3-weight-nudge" id="k3-weight-nudge-line" hidden></p>
           {% else %}
           <p class="k3-track-footnote">Graded outcomes will appear here as picks resolve. Published, not curated.</p>

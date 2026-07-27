@@ -1,8 +1,21 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-27T04:40:00Z  
-**main:** `b7a2df2` — #533–#534 merged (pump desk warming, snapshot gate)  
+**Last updated:** 2026-07-27T17:15:00Z  
+**main:** `f7aadc0` — #542 LB-12 focus graph/story strip  
 **Handoff:** `ditto-cursor-handoff.md` — Ditto reviews → promote to git lock before Cursor builds
+
+## Active — Brain Trio Revision (`brain-trio-revision-lock.md`)
+
+| Wave | Status | Branch / PR |
+|------|--------|-------------|
+| W0-A Proof RF-2 honesty | 🔄 in progress | `cursor/brain-trio-revision-1d2f` |
+| W0-B Living Focus truth | queued | — |
+| W0-C One live story spine | queued | — |
+| W0-D Graph taste | queued | — |
+| W0-E Placement (mindmap on spine) | queued | — |
+| W0-F Stub kill + board DONE | queued | — |
+
+**Loop:** merge → prod smoke → next wave until lock DONE.
 
 ## Learning loop audit (2026-07-27)
 
@@ -32,14 +45,15 @@
 
 ## Telegram intel + outcome loop (#513–#515 on `main`)
 
-Message-intel rollup UI, listener hardening, background price-outcome loop. **In flight:** cross-process outcome heartbeat (status was false on web while loop ran on boot worker).
+Message-intel rollup UI, listener hardening, background price-outcome loop. Session string path: #541.
 
-## Active (next — need lock before build)
+## Active (other)
 
 | Track | Plan / lock | Gate |
 |-------|-------------|------|
-| Telegram ingest proof | ops | Human test message in `TELEGRAM_GROUP` |
-| Living brain graph-lite | `post-s30-living-brain-plan.md` | **promote to `living-brain-lock.md`** |
+| Telegram ingest proof | ops | Human bootstrap / TELEGRAM_SESSION_STRING |
+| Living brain LB-12 | `living-brain-lock.md` | ✅ #542 |
+| Brain trio quality | `brain-trio-revision-lock.md` | **W0-A…F execute** |
 | H1 hour watch | `h1-hour-watch-live-lock.md` | Board clear + G0 |
 | Council automations | Ditto Settings | Manual create |
 
