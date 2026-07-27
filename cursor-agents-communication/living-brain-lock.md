@@ -20,14 +20,15 @@
 | Learning loop + snapshot | #531–541 |
 | Mid-cap scoring cap | #540 |
 
-## Active slice — LB-12 (graph-lite + focus handoff)
+## LB-12 — DONE (#542 on `main`)
 
-**Branch:** `cursor/living-brain-lb12-4988`
-
-**AC:**
 - `/api/mindmap/graph?focus=` scopes trail + dispositions to focus netuid
 - `/api/story-strip?focus=` scopes resolved outcomes to focus netuid
 - `mindmap_graph.js` refetches on `living-focus:change`
+
+## Active — Track 1 (calibration + LONG publish)
+
+**Branch:** `cursor/track1-long-unlock-4988` — stale boot HOLD regen, shortlist cache, HOLD-day alternatives UX (cherry from #487).
 - Cockpit story strip refetches on focus change
 - Honest empty when focus has no trail/outcomes yet
 

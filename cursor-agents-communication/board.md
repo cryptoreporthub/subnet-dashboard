@@ -1,8 +1,8 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-27T04:40:00Z  
-**main:** `b7a2df2` — #533–#534 merged (pump desk warming, snapshot gate)  
-**Handoff:** `ditto-cursor-handoff.md` — Ditto reviews → promote to git lock before Cursor builds
+**Last updated:** 2026-07-27T15:00:00Z  
+**main:** `f7aadc0` (#542 LB-12) · learning loop **green**  
+**in flight:** Track 1 LONG unlock (`cursor/track1-long-unlock-4988`) — stale boot HOLD regen + #487 shortlist cache/HOLD UX
 
 ## Learning loop audit (2026-07-27)
 
@@ -38,8 +38,8 @@ Message-intel rollup UI, listener hardening, background price-outcome loop. **In
 
 | Track | Plan / lock | Gate |
 |-------|-------------|------|
+| **Track 1** calibration + LONG | `cursor/track1-long-unlock-4988` | stale boot HOLD regen + shortlist cache |
 | Telegram ingest proof | ops | Human test message in `TELEGRAM_GROUP` |
-| Living brain graph-lite | `post-s30-living-brain-plan.md` | **promote to `living-brain-lock.md`** |
 | H1 hour watch | `h1-hour-watch-live-lock.md` | Board clear + G0 |
 | Council automations | Ditto Settings | Manual create |
 
