@@ -15,6 +15,7 @@
     if (!host || !tb) return;
     var ready = !!tb.ready;
     host.className = "trust-banner" + (ready ? " trust-banner--ready" : " trust-banner--blocked");
+    host.removeAttribute("hidden");
 
     var html = "";
     if (ready && tb.headline) {

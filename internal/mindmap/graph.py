@@ -319,7 +319,10 @@ def get_mindmap_graph(focus_netuid: Optional[int] = None) -> Dict[str, Any]:
         netuid = disp.get("netuid")
         if netuid is None:
             continue
-        action = str(disp.get("action") or "hold")
+        action = str(disp.get("action") or "hold").lower()
+        # Graph taste: skip generic holds unless focus-scoped (ego still useful)
+        if focus_netuid is None and action in ("hold", "neutral", "none", ""):
+            continue
         score_raw = disp.get("score")
         try:
             weight = float(score_raw) if score_raw is not None else 1.0
@@ -359,10 +362,37 @@ def get_mindmap_graph(focus_netuid: Optional[int] = None) -> Dict[str, Any]:
             weight=weight,
         )
 
+    node_list = list(nodes.values())
+    # Cap unscoped graphs — keep highest-degree nodes (readable ego clusters)
+    _NODE_CAP = 48
+    if focus_netuid is None and len(node_list) > _NODE_CAP:
+        degree: Dict[str, int] = {}
+        for e in edges:
+            s, t = str(e.get("source")), str(e.get("target"))
+            degree[s] = degree.get(s, 0) + 1
+            degree[t] = degree.get(t, 0) + 1
+        kind_boost = {
+            "judge": 3,
+            "prediction": 2,
+            "signal": 2,
+            "scenario": 1,
+            "disposition": 1,
+            "subnet": 0,
+        }
+        node_list.sort(
+            key=lambda n: (
+                -(degree.get(str(n.get("id")), 0) + kind_boost.get(str(n.get("kind")), 0)),
+                str(n.get("id")),
+            )
+        )
+        keep_ids = {n["id"] for n in node_list[:_NODE_CAP]}
+        node_list = [n for n in node_list if n["id"] in keep_ids]
+        edges = [e for e in edges if e.get("source") in keep_ids and e.get("target") in keep_ids]
+
     return {
         "status": "success",
         "focus_netuid": focus_netuid,
         "scoped": focus_netuid is not None,
-        "nodes": list(nodes.values()),
+        "nodes": node_list,
         "edges": edges,
     }
