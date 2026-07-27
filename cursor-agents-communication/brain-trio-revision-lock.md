@@ -1,44 +1,37 @@
 # Brain Trio Revision — Living Focus · Mindmap · Living Brain
 
-**Status:** LOCK ACTIVE — W0-A…F implemented on `cursor/brain-trio-revision-1d2f` (babysit → merge)  
-**Updated:** 2026-07-27  
-**Branch:** `cursor/brain-trio-revision-1d2f`  
-**Baseline:** `main` @ `f7aadc0` (#542 LB-12)  
+**Status:** DONE 2026-07-27  
+**Merged:** #544 → `main` @ `f59747b`  
+**Baseline:** post-#542 LB-12 · post-#543 Track 1 LONG  
 **DITTO_REVIEW:** `e32a6fae`
 
 ```
-VERDICT: CONDITIONAL — W0-A…F coded; await merge + prod smoke
-DECISIONS:
-- Honesty before features (RF-2 on Proof)
-- One story spine (hydrate home cause chain)
-- Graph skips hold dispositions; cap ~48 by degree
-- Mindmap+trail on brain spine (not Market drawer)
-- Kill LB-10 SN1/2/3 stub
-NON-GOALS: confidence/LONG (#491), Telegram, dual portfolio, full money-flow
+VERDICT: PASS — W0-A…F merged + prod smoke green
 ```
 
-## Wave status
+## Prod smoke (2026-07-27 post-deploy)
 
-| Wave | Status | What shipped |
-|------|--------|--------------|
-| W0-A Proof RF-2 | ✅ | Proof/KPI/track record gated on `trust_banner.ready`; banner visible when blocked |
-| W0-B Focus truth | ✅ | `trailEvidence`, pickLearnEvent, weight `--pct`, Open subnet, WATCH badge, one dissent |
-| W0-C Story spine | ✅ | `story_path_ui` hydrates home cause chain; weight step `done` when weights exist |
-| W0-D Graph taste | ✅ | Skip unscoped holds; node cap 48; human detail line |
-| W0-E Placement | ✅ | Mindmap + trail after Proof band |
-| W0-F Stub + board | ✅ | Honest-empty brain recs; summary fluff removed |
-| DONE | 🔄 | Merge + prod smoke |
+| Check | Result |
+|-------|--------|
+| `/health` | OK |
+| Graph nodes/edges | **48 / 66**, hold dispositions **0** |
+| Mindmap + trail before Market drawer | YES |
+| `Open subnet` CTA | YES |
+| Learning loop | OK · `daily_pick.action: LONG` |
+| CI smoke | success |
 
-## Verify
+## Waves shipped (#544)
 
-```bash
-PYTHONPATH=/workspace .venv/bin/pytest tests/test_proof_rf2.py tests/test_living_brain.py \
-  tests/test_phase_g_mindmap_graph.py tests/test_endpoint_contract.py -q
-```
+| Wave | What |
+|------|------|
+| W0-A | Proof RF-2 honesty |
+| W0-B | Living Focus trail evidence + bars + CTAs |
+| W0-C | Home cause chain hydrate |
+| W0-D | Graph taste (no hold wallpaper, cap 48) |
+| W0-E | Mindmap+trail on brain spine |
+| W0-F | Kill SN1/2/3 stub; summary fluff removed |
 
-## Definition of DONE
+## Next (optional)
 
-- [x] W0-A…F implemented
-- [ ] Merged to `main`
-- [ ] Prod smoke: proof quiet if not ready; graph ≤48; mindmap on spine
-- [ ] Lock → Status: DONE; board Active cleared
+- Confidence soak at 40% gate (Track 1)
+- Graph-lite further path layout (not required for DONE)
