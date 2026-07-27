@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-27T21:15:00Z  
-**main:** `a762d02` — #545 docs · #544 Brain Trio · #543 Track 1 LONG  
+**Last updated:** 2026-07-27T21:20:00Z  
+**main:** `7a3743c` — #546 pick audit · #545 docs · #544 Brain Trio  
 **Handoff:** `ditto-cursor-handoff.md`
 
 ## Brain Trio Revision — DONE
@@ -31,7 +31,7 @@ Lock: `brain-trio-revision-lock.md` → **DONE**
 | O2 (no parallel hour poll when SSE) | ✅ `cockpitPicksConnected` guard |
 | Tests | ✅ `test_cockpit_picks_stream.py` |
 
-Lock: `h1-hour-watch-live-lock.md` → **DONE**
+Lock: `h1-hour-watch-live-lock.md` → **DONE** · PR **#548**
 
 ## Active (next)
 
