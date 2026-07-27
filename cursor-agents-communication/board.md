@@ -1,14 +1,15 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-27T01:25:00Z  
-**main:** learning-loop audit hardening in PR  
-**prod baseline (2026-07-27):** `/health` OK · `/api/learning/health` `status=ok` · `worker_peer.alive=true` · `resolver.running=true` · HOLD daily (28% &lt; 40% gate) · `snapshot_age_seconds` null (first score-snapshot cycle pending)
+**Last updated:** 2026-07-27T01:48:00Z  
+**main:** `9e7b4ee` — **#530 merged** (learning-loop audit hardening)  
+**prod babysit (2026-07-27):** Deploy green · post-deploy flapping ~2min then **stable** · `/health` OK · homepage 200 · learning loop `ok` · `verify_prod.sh` OK (subnet page timeout non-fatal) · score snapshot still pending first cycle
 
 ## Learning loop audit (2026-07-27)
 
-- Live prod verified via `check_learning_loop.sh` (ok; snapshot not written yet post-boot).
-- Hardening PR: CI learning-loop tests, deploy `check_learning_loop.sh`, heavy-job mutex, softer warm/verify scripts, resolver web guard, plan doc cleanup.
-- **Fly secrets:** agent env lacked `FLY_API_TOKEN`; confirm `WORKER_HEAVY=essential` via `flyctl secrets list` (human or env with token).
+- **#530 merged** — heavy-job mutex, CI learning tests, deploy `check_learning_loop.sh`, softer warm/verify, resolver web guard.
+- Prod: flaps under heavy probe load (post-deploy); recovers in ~1–2 min. Babysit: 5/5 sustained `/health` then homepage 200 in 0.26s.
+- **§30 deferred until:** #530 deploy stable + `check_learning_loop.sh` green on sustained probes (this gate met 2026-07-27 ~01:48 UTC).
+- Confirm `WORKER_HEAVY=essential` via `flyctl secrets list` when token available.
 
 ## Post-stability sprint (`post-stability-sprint-plan.md`)
 
