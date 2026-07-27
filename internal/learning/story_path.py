@@ -173,8 +173,9 @@ def _weight_step() -> Dict[str, Any]:
         if top:
             parts = [f"{n.replace('_', ' ')} {v:.2f}" for n, v in top]
             detail = "Learned weights · " + " · ".join(parts)
-        else:
-            detail = "Expert weights nudge ±0.02 on each graded outcome"
+            # Weights exist → learning loop is live (not waiting on this cycle)
+            return _step("weights", "5 · Weight nudge", "Learning loop", detail, status="done")
+        detail = "Expert weights nudge ±0.02 on each graded outcome"
         return _step("weights", "5 · Weight nudge", "Learning loop", detail, status="pending")
     except Exception:
         return _step(

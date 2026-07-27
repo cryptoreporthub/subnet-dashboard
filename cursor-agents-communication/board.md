@@ -1,57 +1,42 @@
 # Subnet Dashboard Coordination Board
 
+<<<<<<< HEAD
 **Last updated:** 2026-07-27T17:21:00Z  
 **main:** `df214c6` (#543 Track 1 LONG unlock merged) · learning loop **green**  
 **in flight:** post-#543 prod verify (daily pick regen on worker tick)
+=======
+**Last updated:** 2026-07-27T18:35:00Z  
+**main:** `f59747b` — #544 Brain Trio DONE · #543 Track 1 LONG  
+**Handoff:** `ditto-cursor-handoff.md`
+>>>>>>> origin/main
 
-## Learning loop audit (2026-07-27)
+## Brain Trio Revision — DONE
 
-- Live prod verified via `check_learning_loop.sh` (ok; snapshot not written yet post-boot).
-- Hardening merged: #533–#534 (heavy-job gate, resolver web guard, snapshot wedge fix).
-- **Fly secrets:** confirm `WORKER_HEAVY=essential` via `flyctl secrets list` (human).
+| Wave | Status | PR |
+|------|--------|-----|
+| W0-A…F | ✅ | **#544** |
+| Prod smoke | ✅ | graph 48 nodes · 0 hold wallpaper · mindmap on spine · loop OK · LONG published |
+
+Lock: `brain-trio-revision-lock.md` → **DONE**
+
+## Learning loop
+
+- `check_learning_loop.sh` OK post-#544
+- `daily_pick.action: LONG` (Track 1 + calibration live)
 
 ## Pump desk — DONE
 
-| Item | PR |
-|------|-----|
-| SCAN home + `/pump` flagship | #480, #511 |
-| Whale line + BUILDING Telegram | #528 |
-| Desk warming / snapshot stability | #533, #534 |
+#480, #511, #528, #533, #534
 
-## Post-stability sprint (`post-stability-sprint-plan.md`)
-
-| Wave | Status | PRs |
-|------|--------|-----|
-| A Verify/G0 | ✅ | #501, prod `g0_phone_qa.sh` 2026-07-26 |
-| B Batch 0 | ✅ | #486–#488 |
-| C Pump parity | ✅ | #489, #493 |
-| D Chat | ✅ | #492–#507 |
-| E Integrations | ✅ | **#508** (phased; supersedes #449) |
-
-**Prod verified:** `/health` OK · G0 green · `/api/subnet-integrations/signals` OK · `verify_prod.sh` hardened (readiness timeout → WARN, not abort).
-
-## Telegram intel + outcome loop (#513–#515 on `main`)
-
-Message-intel rollup UI, listener hardening, background price-outcome loop. **In flight:** cross-process outcome heartbeat (status was false on web while loop ran on boot worker).
-
-## Active (next — need lock before build)
+## Active (next)
 
 | Track | Plan / lock | Gate |
 |-------|-------------|------|
-| **Track 1** calibration + LONG | `cursor/track1-long-unlock-4988` | stale boot HOLD regen + shortlist cache |
-| Telegram ingest proof | ops | Human test message in `TELEGRAM_GROUP` |
+| Track 1 soak | #543 | 7–14d publish rate review |
+| Telegram ingest proof | ops | Human session string / bootstrap |
 | H1 hour watch | `h1-hour-watch-live-lock.md` | Board clear + G0 |
 | Council automations | Ditto Settings | Manual create |
 
-## Communication
+## Out of scope
 
-See `ditto-cursor-handoff.md` — **promote to lock** after Ditto or Cursor finishes a review.
-
-## Out of scope (skipped)
-
-- Chutes billing / live LLM chat replies (human Fly secrets)
-
-## Ops optional
-
-- `APP_BASE_URL=https://subnet-dashboard.fly.dev ./scripts/verify_prod.sh`
-- `fly scale count web=1 worker=1 --app subnet-dashboard`
+- Chutes billing / live LLM chat replies

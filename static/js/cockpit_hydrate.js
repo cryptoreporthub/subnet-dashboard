@@ -737,17 +737,72 @@
     }
   }
 
-  function syncProofBandGraded(graded) {
-    if (!graded) return;
-    var meta = document.querySelector('#proof-band-score-hero .proof-band__meta');
-    if (!meta) return;
-    var accMatch = meta.textContent.match(/^([\d.]+)%/);
-    var acc = accMatch ? accMatch[1] : null;
-    if (acc != null) {
-      meta.textContent = graded + ' graded · ' + acc + '% dir. · published, not curated';
-    } else {
-      meta.textContent = graded + ' graded · published, not curated';
+  function syncProofBandFromTrust(tb) {
+    var hero = document.getElementById('proof-band-score-hero');
+    var section = document.getElementById('section-proof-band');
+    if (!hero) return;
+    var pctEl = document.getElementById('proof-band-pct');
+    var metaEl = document.getElementById('proof-band-meta');
+    var quietEl = document.getElementById('proof-band-quiet');
+    if (!quietEl) {
+      quietEl = hero.querySelector('.proof-band__quiet');
     }
+    var ready = !!(tb && tb.ready);
+    var graded = tb && tb.graded != null ? Number(tb.graded) : 0;
+    var minG = tb && tb.min_graded != null ? Number(tb.min_graded) : 30;
+    var accRaw = tb && tb.accuracy != null ? Number(tb.accuracy) : null;
+    var accPct = accRaw != null ? Math.round(accRaw * 100) : null;
+
+    if (section) section.setAttribute('data-brain-state', ready ? 'live' : 'building');
+
+    if (ready && accPct != null && graded > 0) {
+      if (!pctEl) {
+        pctEl = document.createElement('div');
+        pctEl.className = 'proof-band__pct';
+        pctEl.id = 'proof-band-pct';
+        hero.insertBefore(pctEl, hero.firstChild);
+      }
+      pctEl.hidden = false;
+      pctEl.textContent = accPct + '%';
+      if (!metaEl) {
+        metaEl = document.createElement('p');
+        metaEl.className = 'proof-band__meta';
+        metaEl.id = 'proof-band-meta';
+        pctEl.insertAdjacentElement('afterend', metaEl);
+      }
+      metaEl.hidden = false;
+      metaEl.textContent = graded + ' graded · published, not curated';
+      if (quietEl) quietEl.hidden = true;
+    } else {
+      if (pctEl) {
+        pctEl.hidden = true;
+        pctEl.textContent = '—';
+      }
+      if (metaEl) metaEl.hidden = true;
+      if (!quietEl) {
+        quietEl = document.createElement('p');
+        quietEl.className = 'proof-band__quiet';
+        quietEl.id = 'proof-band-quiet';
+        hero.appendChild(quietEl);
+      }
+      quietEl.hidden = false;
+      if (tb && tb.message) {
+        quietEl.textContent = tb.message;
+      } else if (graded > 0) {
+        quietEl.textContent = 'Building trust gate — ' + graded + '/' + minG + ' graded';
+      } else {
+        quietEl.textContent = 'Building graded history — scores appear after calls resolve.';
+      }
+    }
+  }
+
+  function syncProofBandGraded(graded) {
+    /* legacy callers — prefer syncProofBandFromTrust */
+    if (!graded) return;
+    var meta = document.getElementById('proof-band-meta') ||
+      document.querySelector('#proof-band-score-hero .proof-band__meta');
+    if (!meta || meta.hidden) return;
+    meta.textContent = graded + ' graded · published, not curated';
   }
 
   function patchK3ConvictionRing(confPct) {
@@ -2182,20 +2237,24 @@
 
     var accEl = document.getElementById('kpi-accuracy');
     if (accEl) {
-      accEl.textContent = acc != null && graded > 0 ? acc + '%' : '—';
-      accEl.className = 'val' + (acc != null && acc >= 50 ? ' pos' : acc != null && acc > 0 ? ' neg' : '');
+      /* RF-2: never paint accuracy until integrity gate ready */
+      accEl.textContent = ready && acc != null && graded > 0 ? acc + '%' : '—';
+      accEl.className = 'val' + (ready && acc != null && acc >= 50 ? ' pos' : ready && acc != null && acc > 0 ? ' neg' : '');
     }
     var gradedEl = document.getElementById('kpi-graded');
     if (gradedEl) {
-      if (hasTrust && graded > 0) {
+      if (hasTrust && ready && graded > 0) {
         gradedEl.textContent = correct + '✓ / ' + wrong + '✗ graded (n=' + graded + ')';
       } else if (hasTrust && tb.message) {
         gradedEl.textContent = tb.message;
+      } else if (hasTrust && graded > 0) {
+        gradedEl.textContent = graded + ' graded · trust gate pending';
       } else {
         gradedEl.textContent = '— graded (trust banner building)';
       }
     }
-    syncProofBandGraded(hasTrust ? graded : 0);
+    if (hasTrust) syncProofBandFromTrust(tb);
+    else syncProofBandGraded(0);
     var expEl = document.getElementById('kpi-expired');
     if (expEl) {
       expEl.textContent = expired != null ? String(expired) : '—';

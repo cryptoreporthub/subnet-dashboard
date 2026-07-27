@@ -10,6 +10,17 @@ from internal.council.memory_scoring import (
 from internal.council.weights import load_weights, nudge_expert, nudge_signal_weight, save_weights
 
 
+def test_living_focus_reads_trail_evidence_schema():
+    js = Path("static/js/living_focus.js").read_text(encoding="utf-8")
+    assert "function trailEvidence" in js
+    assert "function pickLearnEvent" in js
+    assert "function focusActionBadge" in js
+    assert "Open subnet" in js
+    # weight bar: bare --pct number (CSS multiplies by 1%)
+    assert "style=\"--pct:' + pct + '\"" in js or 'style="--pct:\' + pct + \'"' in js
+    assert "--pct:' + pct + '%" not in js
+
+
 def test_b0_a_living_focus_four_beat_present():
     html = Path("templates/partials/premium/living_focus.html").read_text(encoding="utf-8")
     assert "section-living-focus" in html
