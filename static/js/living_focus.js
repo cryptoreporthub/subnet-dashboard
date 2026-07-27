@@ -567,8 +567,6 @@
       if (n === focusNetuid) match = s;
     });
     if (match) return match;
-    if (scen.regime) return { regime: scen.regime };
-    if (scen.stats && scen.stats.dominant_regime) return { regime: scen.stats.dominant_regime };
     return null;
   }
 
@@ -581,7 +579,7 @@
         var pred = (p && p.prediction) || {};
         if (pred.netuid != null && Number(pred.netuid) === focusNetuid) return p;
       }
-      return posts[0] || null;
+      return null;
     }
     if (posts && typeof posts === 'object') {
       var keys = Object.keys(posts);

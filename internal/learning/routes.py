@@ -166,6 +166,39 @@ def _compute_learning_metrics() -> Dict[str, Any]:
     }
 
 
+def _mindmap_conviction_block(daily_payload: Dict[str, Any] | None) -> Dict[str, Any]:
+    """RF-2: no fake 50% — daily pick conviction when present, else honest-empty."""
+    conf = None
+    if isinstance(daily_payload, dict):
+        for key in ("final_confidence", "confidence"):
+            raw = daily_payload.get(key)
+            if raw is not None:
+                conf = raw
+                break
+        if conf is None:
+            pick = daily_payload.get("pick") if isinstance(daily_payload.get("pick"), dict) else {}
+            cand = daily_payload.get("candidate") if isinstance(daily_payload.get("candidate"), dict) else {}
+            conf = pick.get("final_confidence") or pick.get("confidence") or cand.get("final_confidence")
+    if conf is not None:
+        try:
+            val = float(conf)
+            pct = round(val * 100, 1) if val <= 1.0 else round(val, 1)
+            return {
+                "data_available": True,
+                "current": pct,
+                "trend": "stable",
+                "explanation": "From today's daily call conviction",
+            }
+        except (TypeError, ValueError):
+            pass
+    return {
+        "data_available": False,
+        "current": None,
+        "trend": None,
+        "explanation": "No aggregated conviction — see daily call and Living Focus",
+    }
+
+
 @learning_router.get("/api/mindmap/summary")
 async def api_mindmap_summary():
     """Mindmap summary wired to expert weights and resolver stats."""
@@ -183,6 +216,7 @@ async def api_mindmap_summary():
     resolved = snap["resolved_payload"]
 
     dpick_block: Dict[str, Any] = {"shortlist": []}
+    daily_payload: Dict[str, Any] = {}
     try:
         from internal.council.daily_pick_engine import get_or_create_today_pick
         from internal.learning.dpick_shortlist import (
@@ -200,6 +234,8 @@ async def api_mindmap_summary():
         logger.warning("mindmap summary dpick.shortlist failed: %s", exc)
         dpick_block = {"shortlist": []}
 
+    conviction_block = _mindmap_conviction_block(daily_payload)
+
     return {
         "status": "success",
         "data": {
@@ -207,11 +243,7 @@ async def api_mindmap_summary():
             "noticed": ["Using safe cached subnet snapshot"],
             "opinion_changes": ["No significant opinion changes"],
             "technical_indicators": ["No strong technical signals"],
-            "conviction": {
-                "current": 50.0,
-                "trend": "stable",
-                "explanation": f"Derived from {simivision.get('meta', {}).get('count', 0)} subnets",
-            },
+            "conviction": conviction_block,
             "expert_insights": [
                 {"expert": name.title(), "weight": weight}
                 for name, weight in expert_weights.items()
