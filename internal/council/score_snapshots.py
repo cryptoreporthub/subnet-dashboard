@@ -32,6 +32,24 @@ SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = int(
 SCORE_SNAPSHOT_MAX_SUBNETS = int(os.environ.get("SCORE_SNAPSHOT_MAX_SUBNETS", "0"))
 JOB_ID = "score-snapshot-scheduler"
 
+
+def _snapshot_subnet_cap() -> int:
+    """Cap scoring universe on small VMs; worker defaults to TOP_SCORING_UNIVERSE."""
+    raw = os.environ.get("SCORE_SNAPSHOT_MAX_SUBNETS")
+    if raw is not None and str(raw).strip() != "":
+        try:
+            return max(0, int(raw))
+        except ValueError:
+            return 0
+    try:
+        from internal.run_mode import is_worker_mode
+
+        if is_worker_mode():
+            return int(os.environ.get("TOP_SCORING_UNIVERSE", "40"))
+    except Exception:
+        pass
+    return 0
+
 _lock = threading.Lock()
 _scheduler: Optional["ScoreSnapshotScheduler"] = None
 
@@ -231,7 +249,7 @@ def write_full_universe_snapshot(
             subnets, source = _get_subnets_with_source(timeout=20)
             if not subnets:
                 subnets, source = _get_subnets_hydrate()
-        cap = SCORE_SNAPSHOT_MAX_SUBNETS
+        cap = _snapshot_subnet_cap()
         if cap > 0 and subnets and len(subnets) > cap:
             from server import _cap_subnets_for_scoring
 
@@ -444,8 +462,8 @@ class ScoreSnapshotScheduler:
             if isinstance(sched, dict):
                 sched["last_cycle"] = summary
                 weights._save_raw(data, path)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("score snapshot cycle summary persist failed: %s", exc)
 
 
 def _enabled() -> bool:
