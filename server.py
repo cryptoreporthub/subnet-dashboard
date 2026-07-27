@@ -2083,19 +2083,23 @@ def _daily_pick_weighed_shortlist(pick_payload: Optional[Dict[str, Any]]) -> Lis
     """Council deliberation rows for hero weighed-against — uses live subnet prices."""
     if not isinstance(pick_payload, dict):
         return []
+    from internal.council.shortlist_cache import cached_shortlist
     from internal.learning.dpick_shortlist import attach_shortlist_to_daily_pick
 
-    hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
-    subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
-    if not subnets:
-        subnets, _ = _get_subnets_hydrate()
-    subnets = _cap_subnets_for_scoring(subnets)
-    if not subnets:
-        return []
-    market_context = _market_context_with_weights(subnets)
-    enriched = attach_shortlist_to_daily_pick(dict(pick_payload), subnets, market_context)
-    shortlist = enriched.get("shortlist")
-    return shortlist if isinstance(shortlist, list) else []
+    def _build() -> List[Dict[str, Any]]:
+        hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
+        subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
+        if not subnets:
+            subnets, _ = _get_subnets_hydrate()
+        subnets = _cap_subnets_for_scoring(subnets)
+        if not subnets:
+            return []
+        market_context = _market_context_with_weights(subnets)
+        enriched = attach_shortlist_to_daily_pick(dict(pick_payload), subnets, market_context)
+        shortlist = enriched.get("shortlist")
+        return shortlist if isinstance(shortlist, list) else []
+
+    return cached_shortlist(pick_payload, _build)
 
 
 @app.get("/api/daily-pick/weighed")

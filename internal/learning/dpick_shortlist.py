@@ -6,7 +6,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from internal.council.state_vector import score_subnet_for_day
+from internal.council.publish_gate import publish_gate_percent
+from internal.council.state_vector import score_subnet_for_day, score_subnet_for_hour
 from internal.subnet_names import name_for_netuid
 from internal.subnets.tradable import tradable_subnets
 
@@ -128,13 +129,24 @@ def build_deliberation_shortlist(
     if not subnets:
         return empty
 
-    scored: List[Dict[str, Any]] = []
-    for sn in subnets:
-        try:
-            score = score_subnet_for_day(sn, market_context)
-            scored.append({"subnet": sn, "score": score})
-        except Exception:
-            continue
+    try:
+        from internal.council.score_cache import score_universe
+
+        _, day_scored = score_universe(
+            subnets,
+            market_context,
+            score_hour=score_subnet_for_hour,
+            score_day=score_subnet_for_day,
+        )
+        scored = [{"subnet": item["subnet"], "score": item["score"]} for item in day_scored]
+    except Exception:
+        scored = []
+        for sn in subnets:
+            try:
+                score = score_subnet_for_day(sn, market_context)
+                scored.append({"subnet": sn, "score": score})
+            except Exception:
+                continue
     scored.sort(key=lambda row: float(row["score"].get("total_score", 0)), reverse=True)
     if not scored:
         return empty
@@ -206,7 +218,7 @@ def build_deliberation_shortlist(
         if len(alternatives) >= 8:
             break
 
-    gate = 45 if pick_conv < 45 else pick_conv
+    gate = publish_gate_percent() if pick_conv < publish_gate_percent() else pick_conv
     alternatives.sort(key=lambda a: abs(int(a.get("conviction") or 0) - gate))
 
     dissenters = _dissenters(pick_block)
@@ -248,6 +260,13 @@ def shortlist_cards_for_template(deliberation: Dict[str, Any]) -> List[Dict[str,
     return cards
 
 
+def _shortlist_min_cards(daily_payload: Optional[Dict[str, Any]]) -> int:
+    """HOLD days show near-miss names even when only one alternative is close."""
+    if isinstance(daily_payload, dict) and str(daily_payload.get("action", "")).upper() == "HOLD":
+        return 1
+    return 2
+
+
 def attach_shortlist_to_daily_pick(
     daily_payload: Optional[Dict[str, Any]],
     subnets: List[Dict[str, Any]],
@@ -258,7 +277,8 @@ def attach_shortlist_to_daily_pick(
     try:
         deliberation = build_deliberation_shortlist(subnets, market_context, base)
         cards = shortlist_cards_for_template(deliberation)
-        base["shortlist"] = cards if len(cards) >= 2 else []
+        min_cards = _shortlist_min_cards(base)
+        base["shortlist"] = cards if len(cards) >= min_cards else []
     except Exception as exc:
         logger.warning("dpick.shortlist attach failed: %s", exc)
         base["shortlist"] = []
