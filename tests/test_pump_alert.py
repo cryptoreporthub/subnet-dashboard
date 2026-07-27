@@ -222,6 +222,62 @@ def test_stirring_without_lead_signals_excluded():
         out = build_pump_alerts([])
     assert out["count"] == 0
     assert out["status"] == "empty"
+    assert out.get("watch_count") == 1
+    assert out["watch"][0]["timing"] == "watch"
+    assert out["watch"][0]["badge"] == "NEAR GATE"
+    assert "below lead gate" in out["watch"][0]["thesis"].lower()
+
+
+def test_almost_warming_desk_when_empty():
+    low = _ladder_entry("STIRRING", netuid=7, score=0.31)
+    low["signal_snapshot"] = {"buy_ratio": 0.48, "volume_intensity": 0.18}
+    high = _ladder_entry("STIRRING", netuid=12, score=0.44)
+    high["signal_snapshot"] = {"buy_ratio": 0.52, "volume_intensity": 0.19}
+    ladder = {"subnets": {"7": low, "12": high}}
+    with patch("internal.pump.state.load_state", return_value=ladder):
+        out = build_pump_alerts_desk([])
+    assert out["status"] == "empty"
+    assert out["watch_count"] == 2
+    assert out["watch"][0]["netuid"] == 12
+
+
+def test_almost_warming_hidden_when_leads_present():
+    entry = _ladder_entry("STIRRING", score=0.25)
+    entry["signal_snapshot"] = {"buy_ratio": 0.4, "volume_intensity": 0.1}
+    lead = _ladder_entry("ACCUMULATING", netuid=42, score=0.48)
+    ladder = {"subnets": {"29": entry, "42": lead}}
+    with patch("internal.pump.state.load_state", return_value=ladder):
+        out = build_pump_alerts_desk([])
+    assert out["count"] == 1
+    assert "watch" not in out
+
+
+def test_pump_alert_scan_renders_almost_warming():
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    from internal.learning.pump_alert import build_watch_row
+
+    tmpl = env.get_template("partials/premium/pump_alert_scan.html")
+    entry = _ladder_entry("STIRRING", netuid=7, score=0.31)
+    entry["signal_snapshot"] = {"buy_ratio": 0.48, "volume_intensity": 0.18}
+    watch_row = build_watch_row(entry)
+    html = tmpl.render(
+        pump_compact=True,
+        pump_alerts={
+            "count": 0,
+            "early_count": 0,
+            "confirmed_count": 0,
+            "exit_count": 0,
+            "watch_count": 1,
+            "watch": [watch_row],
+            "trust": {"ready": False, "line": "grading starts"},
+        },
+    )
+    assert "Almost warming" in html
+    assert "NEAR" in html
+    assert "below the gate" in html
 
 
 def test_pumping_not_on_dossier_chip():

@@ -6,6 +6,8 @@
 {% set pa_confirmed = pa.confirmed_count|default(0)|int %}
 {% set pa_exit = pa.exit_count|default(0)|int %}
 {% set pa_count = pa.count|default(0)|int %}
+{% set pa_watch = pa.watch if pa.watch is iterable and pa.watch is not string else [] %}
+{% set pa_watch_count = pa.watch_count|default(pa_watch|length)|int %}
 {% set hero_row = pa.hero if pa.hero is mapping else none %}
 {% set trust = pa.trust if pa.trust is mapping else {} %}
 {% set warm_ns = namespace(rows=[]) %}
@@ -144,6 +146,12 @@
       {% elif pa_count > 0 %}
       {% for row in warm_ns.rows %}{% include "partials/premium/pump_desk_row_scan.html" %}{% endfor %}
       {% for row in active_ns.rows %}{% include "partials/premium/pump_desk_row_scan.html" %}{% endfor %}
+      {% elif pa_watch_count > 0 %}
+      <p class="pds-empty-note">No lead alerts yet — these names are STIRRING below the gate.</p>
+      <h3 class="pds-board__lbl pds-board__lbl--watch">Almost warming <span>{{ pa_watch_count }}</span></h3>
+      {% for row in pa_watch %}
+      {% include "partials/premium/pump_desk_row_scan.html" %}
+      {% endfor %}
       {% else %}
       <p class="pds-empty pump-desk__empty">Quiet — no warming or active names on the ladder right now.</p>
       {% endif %}
@@ -486,6 +494,14 @@
   .pds-board__lbl span { color: var(--pds-dim); }
   .pds-board__lbl--chase { color: #fb7185; }
   .pds-board__lbl--exit { color: #34d399; }
+  .pds-board__lbl--watch { color: #94a3b8; }
+
+  .pds-empty-note {
+    margin: 0 0 10px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--pds-sub);
+  }
 
   .pds--polish .pds-ladder {
     display: block;
@@ -504,6 +520,7 @@
   }
   .pds--polish .pds-ladder--active { border-color: rgba(251, 113, 133, 0.22); }
   .pds--polish .pds-ladder--exit { opacity: 0.9; }
+  .pds--polish .pds-ladder--watch { border-color: rgba(148, 163, 184, 0.22); opacity: 0.92; }
   .pds--polish .pds-ladder__head { display: flex; align-items: center; gap: 8px; }
   .pds--polish .pds-ladder__badge {
     flex-shrink: 0;
