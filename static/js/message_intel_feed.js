@@ -1,17 +1,21 @@
-/** §19.M1 — Telegram message-intel UI (trending, champions, live feed) */
+/** SS-TG W0 — Subnet Summers Telegram desk (trending, champions, rich live feed) */
 (function () {
   "use strict";
 
   var feed = document.getElementById("message-intel-feed");
   var meta = document.getElementById("message-intel-meta");
   var sub = document.getElementById("message-intel-sub");
+  var pulse = document.getElementById("message-intel-pulse");
+  var groupLink = document.getElementById("message-intel-group-link");
   var trendingEl = document.getElementById("message-intel-trending");
   var championsEl = document.getElementById("message-intel-champions");
   var refreshBtn = document.getElementById("message-intel-trending-refresh");
+  var feedHint = document.getElementById("message-intel-feed-hint");
   if (!feed) return;
 
   var lastStatus = null;
   var refreshTimer = null;
+  var GROUP_URL = "https://t.me/OfficialSubnetSummer";
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -25,11 +29,10 @@
     return t.slice(0, n) + "…";
   }
 
-  function sentimentLabel(analysis) {
-    if (!analysis || typeof analysis !== "object") return "—";
-    var s = String(analysis.sentiment || "").toLowerCase();
-    if (s === "bullish" || s === "positive") return "bullish";
-    if (s === "bearish" || s === "negative") return "bearish";
+  function sentimentLabel(analysis, verdict) {
+    var s = String((verdict && verdict.verdict) || (analysis && analysis.sentiment) || "").toLowerCase();
+    if (s === "bullish" || s === "positive" || s === "buy" || s === "long") return "bullish";
+    if (s === "bearish" || s === "negative" || s === "sell" || s === "short") return "bearish";
     return "neutral";
   }
 
@@ -94,6 +97,40 @@
     );
   }
 
+  function parseEntities(analysis) {
+    if (!analysis) return [];
+    var raw = analysis.entities_json;
+    var entities = analysis.entities;
+    try {
+      if (typeof raw === "string") entities = JSON.parse(raw);
+      else if (raw && typeof raw === "object") entities = raw;
+    } catch (e) {
+      entities = entities || {};
+    }
+    var out = [];
+    var seen = {};
+    ((entities && entities.subnets) || []).forEach(function (token) {
+      var n = Number(token);
+      if (!isNaN(n) && !seen[n]) {
+        seen[n] = true;
+        out.push(n);
+      }
+    });
+    return out;
+  }
+
+  function fmtTime(iso) {
+    if (!iso) return "";
+    var t = Date.parse(iso);
+    if (isNaN(t)) return String(iso).slice(0, 16);
+    var mins = Math.max(0, Math.floor((Date.now() - t) / 60000));
+    if (mins < 1) return "just now";
+    if (mins < 60) return mins + "m ago";
+    var hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + "h ago";
+    return Math.floor(hrs / 24) + "d ago";
+  }
+
   function renderTrending(rows, listener) {
     if (listenerIdle(listener)) {
       return (
@@ -132,7 +169,7 @@
         esc(row.mentions) +
         " mentions</span>" +
         (row.avg_conviction
-          ? '<span class="message-intel__conv">conv ' + esc(row.avg_conviction) + "</span>"
+          ? '<span class="message-intel__conv">' + esc(Math.round(row.avg_conviction)) + "% conv</span>"
           : "") +
         changeLabel(row.change_1h) +
         sparklineSvg(row.sparkline) +
@@ -147,7 +184,7 @@
       return '<p class="empty">Weekly champions API unavailable — redeploy to pick up the latest build.</p>';
     }
     if (!rows || !rows.length) {
-      return '<p class="empty">No contributor history yet — champions appear after a week of Telegram traffic.</p>';
+      return '<p class="empty">No contributor history yet — champions appear as Subnet Summers traffic grades.</p>';
     }
     var html = '<ul class="message-intel__champ-list">';
     rows.forEach(function (row, idx) {
@@ -181,10 +218,10 @@
           : "") +
         "</div>" +
         '<div class="message-intel__champ-meta">' +
-        '<span>' +
+        "<span>" +
         esc(row.message_count) +
         " msgs</span>" +
-        '<span>' +
+        "<span>" +
         esc(row.subnet_count) +
         " subnets</span>" +
         '<span class="message-intel__emoji">' +
@@ -197,32 +234,85 @@
     return html;
   }
 
+  function renderSubnetChips(netuids) {
+    if (!netuids || !netuids.length) return "";
+    return (
+      '<div class="message-intel__chips">' +
+      netuids
+        .slice(0, 4)
+        .map(function (n) {
+          return (
+            '<a class="message-intel__chip" href="/subnet/' +
+            esc(n) +
+            '">SN' +
+            esc(n) +
+            "</a>"
+          );
+        })
+        .join("") +
+      "</div>"
+    );
+  }
+
   function renderMessages(rows) {
     if (!rows || !rows.length) return "";
     var html = '<ul class="message-intel__list">';
     rows.forEach(function (row) {
-      var label = sentimentLabel(row.analysis);
-      var badge =
-        label === "bullish" ? "badge-buy" : label === "bearish" ? "badge-sell" : "badge-watch";
+      var verdict = row.verdict || {};
+      var analysis = row.analysis || {};
+      var label = sentimentLabel(analysis, verdict);
+      var badge = sentimentBadgeClass(label);
+      var conv = verdict.conviction != null ? Math.round(Number(verdict.conviction)) : null;
+      var direction = String(verdict.predicted_direction || "").toLowerCase();
+      var dirLabel =
+        direction === "up" || direction === "long" || direction === "buy"
+          ? "up"
+          : direction === "down" || direction === "short" || direction === "sell"
+            ? "down"
+            : "";
+      var author =
+        row.author_username
+          ? String(row.author_username).replace(/^@/, "@")
+          : row.author_name || "unknown";
+      if (author && author.charAt(0) !== "@" && row.author_username) {
+        author = "@" + String(row.author_username).replace(/^@/, "");
+      }
+      var chips = renderSubnetChips(parseEntities(analysis));
       html +=
         '<li class="message-intel__item">' +
         '<div class="message-intel__item-head">' +
         '<span class="message-intel__author">' +
-        esc(row.author_name || row.author_username || "unknown") +
+        esc(author) +
         "</span>" +
+        '<span class="message-intel__item-badges">' +
         '<span class="badge ' +
         badge +
         '">' +
         esc(label) +
         "</span>" +
-        "</div>" +
-        '<p class="message-intel__content">' +
-        esc(snippet(row.content, 280)) +
-        "</p>" +
-        (row.timestamp
-          ? '<span class="message-intel__time">' + esc(row.timestamp) + "</span>"
+        (conv != null
+          ? '<span class="message-intel__conv-pill">' + esc(conv) + "% conv</span>"
           : "") +
-        "</li>";
+        (dirLabel
+          ? '<span class="message-intel__dir message-intel__dir--' +
+            dirLabel +
+            '">' +
+            dirLabel +
+            "</span>"
+          : "") +
+        "</span></div>" +
+        '<p class="message-intel__content">' +
+        esc(snippet(row.content, 320)) +
+        "</p>" +
+        chips +
+        '<div class="message-intel__item-foot">' +
+        (row.timestamp
+          ? '<span class="message-intel__time">' + esc(fmtTime(row.timestamp)) + "</span>"
+          : "") +
+        (verdict.predicted_timeframe
+          ? '<span class="message-intel__horizon">' + esc(verdict.predicted_timeframe) + "</span>"
+          : "") +
+        "</div></li>";
     });
     html += "</ul>";
     return html;
@@ -232,8 +322,7 @@
     listener = listener || {};
     if (listener.live) {
       return (
-        '<p class="empty">Listener live — monitoring Telegram group traffic. ' +
-        "Messages appear here as they are ingested.</p>"
+        '<p class="empty">Listening to Subnet Summers — messages appear here as the group talks.</p>'
       );
     }
     if (listener.reason === "disabled") {
@@ -241,8 +330,7 @@
     }
     if (listener.reason === "missing_session") {
       return (
-        '<p class="empty">Telegram creds are set — run <code>python scripts/bootstrap_telegram_session.py</code> ' +
-        "on the Fly volume (see <code>DEPLOY.md</code>), then set <code>MESSAGE_INTEL_LISTENER=auto</code>.</p>"
+        '<p class="empty">Telegram creds are set — paste <code>TELEGRAM_SESSION_STRING</code> (see <code>DEPLOY.md</code>), then set <code>MESSAGE_INTEL_LISTENER=auto</code>.</p>'
       );
     }
     if (listener.reason === "telethon_unavailable") {
@@ -252,7 +340,7 @@
       return '<p class="empty">Telegram creds not configured — ingest via API only.</p>';
     }
     if (listener.reason === "idle_not_started") {
-      return '<p class="empty">Listener configured but not started yet — check worker process on Fly.</p>';
+      return '<p class="empty">Listener configured — warming up (~2 min after boot).</p>';
     }
     return '<p class="empty">No Telegram messages ingested yet.</p>';
   }
@@ -263,28 +351,49 @@
       (status && status.store && status.store.total_messages) ||
       (payload.meta && payload.meta.total_messages) ||
       0;
-    if (meta) {
-      var parts = ["telegram"];
-      if (listener.group_title || listener.monitored_group) {
-        parts.push(listener.group_title || listener.monitored_group);
-      }
-      if (listener.live) parts.push("listener live");
-      else if (listener.reason) parts.push(listener.reason);
-      parts.push(total + " stored");
-      meta.textContent = parts.join(" · ");
-      if (listener.hint && !listener.live) {
-        meta.title = listener.hint;
-      }
+    var highConv =
+      (status && status.store && status.store.high_conviction_count) ||
+      (payload.meta && payload.meta.high_conviction_count) ||
+      0;
+    var group = listener.group_title || listener.monitored_group || "OfficialSubnetSummer";
+
+    if (groupLink) {
+      groupLink.href = GROUP_URL;
+      groupLink.textContent = "Subnet Summers";
     }
+
+    if (meta) {
+      var parts = [];
+      parts.push(group);
+      if (listener.live) parts.push("listening");
+      else if (listener.reason) parts.push(listener.reason);
+      parts.push(total + " messages");
+      if (highConv) parts.push(highConv + " high conviction");
+      meta.textContent = parts.join(" · ");
+      if (listener.hint && !listener.live) meta.title = listener.hint;
+    }
+
+    if (pulse) {
+      pulse.hidden = !listener.live;
+    }
+
     if (sub) {
       if (listener.live) {
-        sub.textContent = "Live ingest from the monitored Telegram group — newest messages first.";
+        sub.innerHTML =
+          'Live read of <a class="message-intel__group-link" href="' +
+          GROUP_URL +
+          '" target="_blank" rel="noopener noreferrer">Subnet Summers</a> — trending names, top contributors, and jury-scored messages.';
       } else if (listener.hint) {
         sub.textContent = listener.hint;
       } else if (listener.reason === "idle_not_started") {
-        sub.textContent = "Credentials present — start the worker listener to begin ingest.";
+        sub.textContent = "Credentials present — listener starts ~2 min after worker boot.";
       }
     }
+
+    if (feedHint && listener.live) {
+      feedHint.textContent = "Newest first · jury conviction · updates ~60s";
+    }
+
     lastStatus = status;
   }
 
@@ -292,7 +401,7 @@
     try {
       var statusRes = await fetch("/api/message-intel/status");
       var status = statusRes.ok ? await statusRes.json() : null;
-      var listRes = await fetch("/api/message-intel?limit=20");
+      var listRes = await fetch("/api/message-intel?limit=24");
       if (!listRes.ok) throw new Error("HTTP " + listRes.status);
       var payload = await listRes.json();
       applyMeta(payload, status);
@@ -327,6 +436,7 @@
       }
     } catch (e) {
       if (meta) meta.textContent = "unavailable";
+      if (pulse) pulse.hidden = true;
       if (trendingEl) {
         trendingEl.innerHTML = '<p class="empty">Could not load trending.</p>';
       }

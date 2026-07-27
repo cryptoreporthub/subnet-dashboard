@@ -1,42 +1,48 @@
-<!-- §19.M1 — Telegram message-intel: trending, champions, live feed -->
-<section class="row" id="section-message-intel" aria-labelledby="message-intel-title">
-  <div class="section-label">Message Intel</div>
-  <h2 class="section-title" id="message-intel-title">Telegram desk</h2>
-  <p class="section-sub" id="message-intel-sub">Monitored group traffic — honest-empty until the listener ingests messages.</p>
+<!-- SS-TG W0 — Subnet Summers Telegram desk (first-class spine) -->
+<section class="row message-intel wrap-pad" id="section-message-intel" aria-labelledby="message-intel-title" data-home-live>
+  <div class="section-label">Subnet Summers</div>
+  <h2 class="section-title" id="message-intel-title">Telegram pulse</h2>
+  <p class="section-sub" id="message-intel-sub">
+    Live read of
+    <a class="message-intel__group-link" id="message-intel-group-link" href="https://t.me/OfficialSubnetSummer" target="_blank" rel="noopener noreferrer">Subnet Summers</a>
+    — trending names, top contributors, and jury-scored messages.
+  </p>
 
-  <div class="card card-muted message-intel__status-card">
-    <div class="message-intel__head">
-      <span class="src-tag" id="message-intel-meta">Loading…</span>
+  <div class="message-intel__status-rail" id="message-intel-status-rail" aria-live="polite">
+    <span class="src-tag" id="message-intel-meta">Connecting…</span>
+    <span class="message-intel__pulse" id="message-intel-pulse" hidden>Live</span>
+  </div>
+
+  <div class="message-intel__grid">
+    <div class="message-intel__panel" id="message-intel-trending-card">
+      <div class="message-intel__panel-head">
+        <h3 class="message-intel__panel-title">Currently trending</h3>
+        <button type="button" class="message-intel__refresh" id="message-intel-trending-refresh" aria-label="Refresh Telegram desk">Refresh</button>
+      </div>
+      <p class="message-intel__panel-sub">Subnets named in the last hour — ranked by chatter.</p>
+      <div id="message-intel-trending" class="message-intel__trending" aria-live="polite">
+        <p class="empty">No subnet chatter in the last hour yet.</p>
+      </div>
+    </div>
+
+    <div class="message-intel__panel" id="message-intel-champions-card">
+      <div class="message-intel__panel-head">
+        <h3 class="message-intel__panel-title">Weekly champions</h3>
+      </div>
+      <p class="message-intel__panel-sub">Top contributors · influence · reactions · hit-rate when graded.</p>
+      <div id="message-intel-champions" class="message-intel__champions" aria-live="polite">
+        <p class="empty">No contributor history yet.</p>
+      </div>
     </div>
   </div>
 
-  <div class="card card-muted message-intel__panel" id="message-intel-trending-card">
-    <div class="message-intel__panel-head">
-      <h3 class="message-intel__panel-title"><span aria-hidden="true">🔴</span> Currently trending</h3>
-      <button type="button" class="message-intel__refresh" id="message-intel-trending-refresh" aria-label="Refresh trending subnets">↻</button>
-    </div>
-    <p class="message-intel__panel-sub">Subnets mentioned in the last hour — ranked by chatter volume.</p>
-    <div id="message-intel-trending" class="message-intel__trending" aria-live="polite">
-      <p class="empty">No subnet chatter in the last hour yet.</p>
-    </div>
-  </div>
-
-  <div class="card card-muted message-intel__panel" id="message-intel-champions-card">
-    <div class="message-intel__panel-head">
-      <h3 class="message-intel__panel-title"><span aria-hidden="true">🏆</span> Weekly champions</h3>
-    </div>
-    <p class="message-intel__panel-sub">Top contributors over the last 7 days — influence, reactions, and graded hit-rate once price outcomes resolve.</p>
-    <div id="message-intel-champions" class="message-intel__champions" aria-live="polite">
-      <p class="empty">No contributor history yet.</p>
-    </div>
-  </div>
-
-  <div class="card card-muted message-intel__panel">
+  <div class="message-intel__panel message-intel__panel--feed">
     <div class="message-intel__panel-head">
       <h3 class="message-intel__panel-title">Live feed</h3>
+      <span class="message-intel__panel-hint" id="message-intel-feed-hint">Newest first · jury conviction</span>
     </div>
     <div id="message-intel-feed" class="message-intel__feed" aria-live="polite">
-      <p class="empty">Warming up message-intel API…</p>
+      <p class="empty">Warming up Telegram desk…</p>
     </div>
   </div>
 </section>

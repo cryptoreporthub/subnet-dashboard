@@ -812,7 +812,49 @@ button.home-cta {
   line-height: 1.45;
 }
 
-/* ---------- §19 message-intel feed ---------- */
+/* ---------- §19 / SS-TG message-intel — Subnet Summers desk ---------- */
+.message-intel {
+  margin-top: 0.5rem;
+}
+.message-intel__group-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(0, 255, 65, 0.35);
+}
+.message-intel__group-link:hover {
+  text-decoration-color: rgba(0, 255, 65, 0.7);
+}
+.message-intel__status-rail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 14px;
+}
+.message-intel__pulse {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  background: rgba(52, 211, 153, 0.1);
+  padding: 2px 8px;
+  border-radius: 2px;
+}
+.message-intel__grid {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+@media (min-width: 860px) {
+  .message-intel__grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
 .message-intel__head {
   margin-bottom: 10px;
 }
@@ -821,6 +863,13 @@ button.home-cta {
 }
 .message-intel__panel {
   margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(0, 255, 65, 0.12);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.18);
+}
+.message-intel__panel--feed {
+  margin-bottom: 0;
 }
 .message-intel__panel-head {
   display: flex;
@@ -835,6 +884,11 @@ button.home-cta {
   font-weight: 700;
   letter-spacing: 0.02em;
 }
+.message-intel__panel-hint {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: var(--stage-muted);
+}
 .message-intel__panel-sub {
   margin: 0 0 10px;
   font-size: 0.82rem;
@@ -844,13 +898,14 @@ button.home-cta {
   border: 1px solid rgba(0, 255, 65, 0.25);
   background: rgba(0, 0, 0, 0.2);
   color: var(--stage-muted);
-  border-radius: 4px;
+  border-radius: 2px;
   padding: 2px 8px;
   cursor: pointer;
   font-family: var(--font-mono, monospace);
+  font-size: 11px;
 }
 .message-intel__feed {
-  max-height: 360px;
+  max-height: 420px;
   overflow: auto;
 }
 .message-intel__trend-list,
@@ -870,7 +925,7 @@ button.home-cta {
   align-items: center;
   padding: 10px 12px;
   border: 1px solid rgba(0, 255, 65, 0.1);
-  border-radius: 4px;
+  border-radius: 2px;
   background: rgba(0, 0, 0, 0.15);
 }
 .message-intel__rank {
@@ -911,7 +966,7 @@ button.home-cta {
   color: var(--stage-muted);
 }
 .message-intel__mentions { color: rgba(232, 245, 233, 0.9); }
-.message-intel__conv { color: #c4b5fd; }
+.message-intel__conv { color: #a7f3d0; }
 .message-intel__delta--up { color: #34d399; }
 .message-intel__delta--down { color: #fb7185; }
 .message-intel__spark { color: #38bdf8; display: block; }
@@ -925,9 +980,9 @@ button.home-cta {
   font-family: var(--font-mono, monospace);
   font-size: 11px;
   font-weight: 700;
-  background: rgba(139, 92, 246, 0.18);
-  border: 1px solid rgba(139, 92, 246, 0.35);
-  color: #c4b5fd;
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  color: #a7f3d0;
 }
 .message-intel__champ-item {
   grid-template-columns: auto auto 1fr auto;
@@ -953,10 +1008,10 @@ button.home-cta {
   font-family: var(--font-mono, monospace);
   font-size: 10px;
   padding: 2px 6px;
-  border-radius: 4px;
-  color: #c4b5fd;
-  background: rgba(139, 92, 246, 0.12);
-  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 2px;
+  color: #a7f3d0;
+  background: rgba(52, 211, 153, 0.1);
+  border: 1px solid rgba(52, 211, 153, 0.28);
   width: fit-content;
 }
 .message-intel__hit {
@@ -966,7 +1021,7 @@ button.home-cta {
   font-family: var(--font-mono, monospace);
   font-size: 10px;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: 2px;
   color: #fde68a;
   background: rgba(251, 191, 36, 0.1);
   border: 1px solid rgba(251, 191, 36, 0.3);
@@ -983,9 +1038,9 @@ button.home-cta {
 }
 .message-intel__emoji { white-space: nowrap; }
 .message-intel__item {
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1px solid rgba(0, 255, 65, 0.1);
-  border-radius: 4px;
+  border-radius: 2px;
   background: rgba(0, 0, 0, 0.15);
 }
 .message-intel__item-head {
@@ -996,23 +1051,77 @@ button.home-cta {
   gap: 6px;
   margin-bottom: 6px;
 }
+.message-intel__item-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
 .message-intel__author {
   font-family: var(--font-mono, monospace);
   font-size: 11px;
   color: var(--stage-muted);
 }
+.message-intel__conv-pill {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 2px;
+  color: #a7f3d0;
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  background: rgba(52, 211, 153, 0.08);
+}
+.message-intel__dir {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--stage-muted);
+}
+.message-intel__dir--up { color: #34d399; }
+.message-intel__dir--down { color: #fb7185; }
 .message-intel__content {
   margin: 0;
   font-size: 0.9rem;
   line-height: 1.45;
   color: rgba(232, 245, 233, 0.92);
 }
+.message-intel__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.message-intel__chip {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 2px;
+  text-decoration: none;
+  color: rgba(232, 245, 233, 0.95);
+  border: 1px solid rgba(0, 255, 65, 0.28);
+  background: rgba(0, 255, 65, 0.06);
+}
+.message-intel__chip:hover {
+  border-color: rgba(0, 255, 65, 0.5);
+}
+.message-intel__item-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 8px;
+  align-items: center;
+}
 .message-intel__time {
-  display: block;
-  margin-top: 6px;
   font-family: var(--font-mono, monospace);
   font-size: 10px;
   color: rgba(138, 154, 142, 0.85);
+}
+.message-intel__horizon {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: var(--stage-muted);
 }
 
 /* ---------- Pro drawer (council bench demoted) ---------- */

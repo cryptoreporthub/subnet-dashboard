@@ -63,6 +63,8 @@
 {% with pump_compact=true %}
 {% include "partials/premium/pump_alert_scan.html" %}
 {% endwith %}
+{# SS-TG W0 — Subnet Summers Telegram desk first-class (not buried in More intel) #}
+{% include "partials/premium/message_intel_feed.html" %}
 <section class="sr-weighing-rib wrap-pad" id="section-strategic-weighing" aria-labelledby="sr-weighing-rib-title">
   <div class="sr-weighing-rib__head">
     <h2 class="sr-weighing-rib__title" id="sr-weighing-rib-title">Council weighing</h2>
@@ -121,7 +123,6 @@
 <details class="intel-ribs wrap-pad" id="intel-ribs">
   <summary class="intel-ribs__summary">More intel · movers · dev signals</summary>
   <div class="intel-ribs__body">
-    {% include "partials/premium/message_intel_feed.html" %}
     {% include "partials/premium/simileads.html" %}
     {% include "partials/premium/caution_cells.html" %}
     {% include "partials/premium/todays_intel.html" %}
