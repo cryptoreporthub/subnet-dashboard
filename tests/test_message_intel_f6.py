@@ -31,6 +31,18 @@ def test_listener_status_disabled(monkeypatch):
     assert "hint" in status
 
 
+def test_listener_status_session_string(monkeypatch):
+    monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "auto")
+    monkeypatch.setenv("TELEGRAM_API_ID", "12345")
+    monkeypatch.setenv("TELEGRAM_API_HASH", "deadbeef")
+    monkeypatch.setenv("TELEGRAM_SESSION_STRING", "1AgA...")
+    listener_service._listener = None
+    listener_service._clear_listener_heartbeat()
+    status = listener_service.listener_status()
+    assert status["has_session"] is True
+    assert status["reason"] == "idle_not_started"
+
+
 def test_listener_status_essential_missing_session(monkeypatch, tmp_path):
     monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "auto")
     monkeypatch.setenv("TELEGRAM_API_ID", "12345")

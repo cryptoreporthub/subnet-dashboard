@@ -37,6 +37,12 @@ async def _main() -> None:
     me = await client.get_me()
     label = getattr(me, "username", None) or getattr(me, "id", "?")
     print(f"OK — session saved to {session}.session (account: {label})")
+    from telethon.sessions import StringSession
+
+    session_string = StringSession.save(client.session)
+    print("\n--- Paste as Fly secret TELEGRAM_SESSION_STRING (no SSH needed) ---")
+    print(session_string)
+    print("--- https://fly.io/apps/subnet-dashboard/secrets ---")
     await client.disconnect()
 
 
