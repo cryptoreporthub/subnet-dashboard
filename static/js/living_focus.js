@@ -137,13 +137,45 @@
     if (ev.netuid != null && Number(ev.netuid) !== focusNetuid) return false;
     if (ev.event_type === 'prediction_resolved' || ev.event_type === 'weight_change') {
       if (ev.netuid == null) {
-        var pl = ev.payload || ev;
+        var pl = trailEvidence(ev);
         if (!pl || pl.netuid == null || Number(pl.netuid) !== focusNetuid) return false;
       }
       return true;
     }
-    var payload = ev.payload || ev;
+    var payload = trailEvidence(ev);
     return !!(payload && payload.netuid != null && Number(payload.netuid) === focusNetuid);
+  }
+
+  /** Trail rows store learn fields under evidence (trail_bus); fall back to payload/root. */
+  function trailEvidence(ev) {
+    if (!ev || typeof ev !== 'object') return {};
+    var evd = ev.evidence && typeof ev.evidence === 'object' ? ev.evidence : null;
+    var payload = ev.payload && typeof ev.payload === 'object' ? ev.payload : null;
+    var out = {};
+    [ev, payload, evd].forEach(function (src) {
+      if (!src) return;
+      Object.keys(src).forEach(function (k) {
+        if (k === 'evidence' || k === 'payload') return;
+        if (src[k] != null && out[k] == null) out[k] = src[k];
+      });
+    });
+    return out;
+  }
+
+  function pickLearnEvent(trail) {
+    var ranked = [];
+    (trail || []).forEach(function (ev) {
+      if (!trailMatchesFocus(ev)) return;
+      var et = String(ev.event_type || '');
+      var score = 0;
+      if (et === 'prediction_resolved') score = 3;
+      else if (et === 'weight_change') score = 2;
+      else if (et === 'accuracy_update') score = 0;
+      else score = 1;
+      if (score > 0) ranked.push({ score: score, ev: ev });
+    });
+    ranked.sort(function (a, b) { return b.score - a.score; });
+    return ranked.length ? ranked[0].ev : null;
   }
 
   function pickFocusNetuid(dailyPick) {
@@ -176,6 +208,7 @@
     document.dispatchEvent(new CustomEvent('living-focus:change', { detail: { netuid: focusNetuid, name: focusName } }));
     if (shareLinkEl) {
       shareLinkEl.href = '/subnet/' + focusNetuid;
+      shareLinkEl.textContent = 'Open subnet';
       shareLinkEl.hidden = false;
     }
   }
@@ -255,14 +288,9 @@
   }
 
   function weightNudgeFromTrail(trail, weights) {
-    var row = null;
-    (trail || []).some(function (ev) {
-      if (!trailMatchesFocus(ev)) return false;
-      row = ev;
-      return true;
-    });
+    var row = pickLearnEvent(trail);
     if (!row) return '';
-    var payload = row.payload || row;
+    var payload = trailEvidence(row);
     var expert = payload.expert || payload.signal || payload.dial || '';
     var before = payload.before;
     var after = payload.after;
@@ -290,7 +318,8 @@
         '<div class="living-focus__weight-row">' +
         '<span class="living-focus__weight-name">' + esc(e.name) + '</span>' +
         '<span class="living-focus__weight-val">' + e.w.toFixed(2) + '</span>' +
-        '<span class="living-focus__weight-bar" style="--pct:' + pct + '%"></span>' +
+        /* CSS: width: calc(var(--pct) * 1%) — bare number, not "72%" */
+        '<span class="living-focus__weight-bar" style="--pct:' + pct + '"></span>' +
         '</div>'
       );
     }).join('');
@@ -340,12 +369,7 @@
   }
 
   function buildLearnStripHtml(trail, weights) {
-    var row = null;
-    (trail || []).some(function (ev) {
-      if (!trailMatchesFocus(ev)) return false;
-      row = ev;
-      return true;
-    });
+    var row = pickLearnEvent(trail);
     if (!row) {
       return (
         '<div class="living-focus__learn-strip living-focus__learn-strip--empty">' +
@@ -354,7 +378,7 @@
         '</div>'
       );
     }
-    var payload = row.payload || row;
+    var payload = trailEvidence(row);
     var correct = payload.correct;
     var grade = correct === true ? 'HIT' : correct === false ? 'MISS' : 'GRADED';
     var expert = payload.expert || payload.signal || payload.dial || '';
@@ -362,9 +386,12 @@
     var after = payload.after;
     var delta = before != null && after != null ? (Number(after) - Number(before)).toFixed(2) : '';
     var predId = payload.prediction_id || row.prediction_id || row.id;
+    var shareUrl = payload.share_page_url || (predId ? '/share/call/' + predId : '');
     var move = '';
     if (payload.predicted_pct != null && payload.actual_pct != null) {
       move = ' · expected ' + Number(payload.predicted_pct).toFixed(1) + '% → actual ' + Number(payload.actual_pct).toFixed(1) + '%';
+    } else if (payload.actual_pct != null) {
+      move = ' · actual ' + Number(payload.actual_pct).toFixed(1) + '%';
     }
     var dial = expert && expert.indexOf(':') >= 0 ? expert.split(':').pop() : expert;
     var w = weights && dial ? weights[dial] : (weights && expert ? weights[expert] : null);
@@ -383,8 +410,8 @@
     if (predId) {
       html += '<button type="button" class="btn-secondary living-focus__replay" data-prediction-id="' + esc(predId) + '">Replay time capsule</button>';
     }
-    if (payload.share_page_url) {
-      html += '<button type="button" class="btn-secondary living-focus__share" data-share-url="' + esc(payload.share_page_url) + '">Share graded call</button>';
+    if (shareUrl) {
+      html += '<a class="btn-secondary living-focus__share" href="' + esc(shareUrl) + '">Open graded call</a>';
     }
     html += '</div></div>';
     return html;
@@ -397,14 +424,6 @@
         var id = btn.getAttribute('data-prediction-id');
         if (id && window.SimiTimeCapsule && window.SimiTimeCapsule.open) {
           window.SimiTimeCapsule.open(id);
-        }
-      });
-    });
-    container.querySelectorAll('.living-focus__share').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        var path = btn.getAttribute('data-share-url');
-        if (path && navigator.clipboard) {
-          navigator.clipboard.writeText(window.location.origin + path).catch(function () {});
         }
       });
     });
@@ -441,6 +460,18 @@
     }
   }
 
+  function focusActionBadge(dp, judges) {
+    var callSn = pickFocusNetuid(dp);
+    var callAction = String((dp && dp.action) || 'HOLD').toUpperCase();
+    if (callSn != null && focusNetuid != null && Number(callSn) === Number(focusNetuid)) {
+      return callAction;
+    }
+    var consensus = judges && judges.consensus;
+    var verdict = consensus && consensus.verdict ? String(consensus.verdict).toUpperCase() : '';
+    if (verdict === 'LONG' || verdict === 'SHORT' || verdict === 'HOLD') return verdict;
+    return 'WATCH';
+  }
+
   function renderJudges(data, action, weights, explain, trail) {
     if (!bodyEl) return;
     if (!data || data.error) {
@@ -456,19 +487,18 @@
     var html = (
       '<header class="living-focus__header">' +
       '<h3 class="living-focus__name"><a href="/subnet/' + focusNetuid + '" class="living-focus__link">' + esc(focusName) + '</a> <span class="living-focus__sn">SN' + focusNetuid + '</span></h3>' +
-      '<span class="living-focus__action badge-' + (action === 'LONG' ? 'buy' : action === 'SHORT' ? 'sell' : 'watch') + '">' + esc(action || 'HOLD') + '</span>' +
+      '<span class="living-focus__action badge-' + (action === 'LONG' ? 'buy' : action === 'SHORT' ? 'sell' : 'watch') + '">' + esc(action || 'WATCH') + '</span>' +
       '</header>'
     );
+    /* One dissent line — dial + bars already show contest; avoid triple stack on 390px */
     if (contested) {
-      html += '<p class="living-focus__contention">Council split — judges disagree on this subnet.</p>';
       var dissent = dissentSummary(data);
-      if (dissent) {
-        html += '<p class="living-focus__contention living-focus__contention--detail">' + esc(dissent) + '</p>';
-      }
+      html += '<p class="living-focus__contention">' +
+        esc(dissent || 'Council split — judges disagree on this subnet.') +
+        '</p>';
     }
     html += renderContestDial(consensus, contested);
     html += renderJudgeLanes(data, contested);
-    html += compactJudgeLine(data, contested);
     html += renderWhyNot(explain);
     bodyEl.innerHTML = html;
     showLearnStrip(trail, weights);
@@ -665,7 +695,7 @@
       var trail = (res[2] && res[2].trail) || [];
       var dp = res[3] || {};
       var explain = res[4] || {};
-      action = String(dp.action || 'HOLD').toUpperCase();
+      action = focusActionBadge(dp, judges);
       var weights = calibrationWeights(cal);
       updateIdentityChip(dp);
       renderJudges(judges, action, weights, explain, trail);

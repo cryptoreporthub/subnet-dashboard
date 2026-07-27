@@ -240,10 +240,6 @@ async def api_mindmap_summary():
     return {
         "status": "success",
         "data": {
-            "acknowledgment": "Dashboard data ready",
-            "noticed": ["Using safe cached subnet snapshot"],
-            "opinion_changes": ["No significant opinion changes"],
-            "technical_indicators": ["No strong technical signals"],
             "conviction": conviction_block,
             "expert_insights": [
                 {"expert": name.title(), "weight": weight}
@@ -251,11 +247,11 @@ async def api_mindmap_summary():
             ],
             "expert_weights": expert_weights,
             "resolved_predictions": {
-                "total": resolved.get("stats", {}).get("total", 0),
-                "correct": resolved.get("stats", {}).get("correct", 0),
-                "wrong": resolved.get("stats", {}).get("wrong", 0),
-                "pending": resolved.get("stats", {}).get("pending", 0),
-                "accuracy": resolved.get("stats", {}).get("accuracy", 0.0),
+                "total": resolved.get("stats", {}).get("total", resolved.get("total", 0)),
+                "correct": resolved.get("stats", {}).get("correct", resolved.get("correct", 0)),
+                "wrong": resolved.get("stats", {}).get("wrong", resolved.get("wrong", 0)),
+                "pending": resolved.get("stats", {}).get("pending", resolved.get("pending", 0)),
+                "accuracy": resolved.get("stats", {}).get("accuracy", resolved.get("accuracy")),
             },
             "scenario_memory": snap["scenario"],
             "rotation_tracker": _rotation_summary(),
@@ -263,9 +259,11 @@ async def api_mindmap_summary():
                 "enabled": True,
                 "records": stats.get("total_records", 0),
                 "last_updated": stats.get("last_updated")
-                or simivision.get("meta", {}).get("updated_at"),
+                or (simivision or {}).get("meta", {}).get("updated_at"),
             },
             "dpick": dpick_block,
+            "engine_stats": stats,
+            "simivision_meta": (simivision or {}).get("meta") or {},
         },
     }
 
