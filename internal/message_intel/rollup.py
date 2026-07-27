@@ -191,6 +191,62 @@ def build_trending_subnets(
     return out[:limit]
 
 
+def build_yesterday_leader(
+    *,
+    registry_names: Optional[Dict[int, str]] = None,
+    db=None,
+) -> Optional[Dict[str, Any]]:
+    """Subnet with the most mentions on the previous UTC calendar day."""
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today_start - timedelta(days=1)
+    registry_names = registry_names or {}
+
+    counts: Dict[int, Dict[str, Any]] = defaultdict(
+        lambda: {"mentions": 0, "sentiment_sum": 0.0, "sentiment_n": 0}
+    )
+
+    for row in _load_message_rows(db):
+        ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if ts is None or ts < yesterday_start or ts >= today_start:
+            continue
+        netuids = _netuids_from_row(row)
+        if not netuids:
+            continue
+        s_val = _sentiment_value(row.get("sentiment"))
+        for netuid in netuids:
+            c = counts[netuid]
+            c["mentions"] += 1
+            c["sentiment_sum"] += s_val
+            c["sentiment_n"] += 1
+
+    if not counts:
+        return None
+
+    ranked = sorted(
+        counts.items(),
+        key=lambda item: item[1]["mentions"],
+        reverse=True,
+    )
+    top_netuid, top = ranked[0]
+    avg = (top["sentiment_sum"] / top["sentiment_n"]) if top["sentiment_n"] else 0.0
+    out: Dict[str, Any] = {
+        "netuid": top_netuid,
+        "name": registry_names.get(top_netuid) or f"Subnet {top_netuid}",
+        "mentions": int(top["mentions"]),
+        "sentiment": _sentiment_tag(avg),
+        "date": yesterday_start.date().isoformat(),
+    }
+    if len(ranked) > 1:
+        ru_netuid, ru = ranked[1]
+        out["runner_up"] = {
+            "netuid": ru_netuid,
+            "name": registry_names.get(ru_netuid) or f"Subnet {ru_netuid}",
+            "mentions": int(ru["mentions"]),
+        }
+    return out
+
+
 def _author_outcome_stats(db=None) -> Dict[str, Dict[str, Any]]:
     """Map author_id → {graded, hits, hit_rate} from price_outcomes + verdicts."""
     database = db or get_db()

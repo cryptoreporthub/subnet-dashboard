@@ -33,7 +33,7 @@ Living Focus · Proof · Mindmap · Trail
 
 | Wave | What | Status |
 |------|------|--------|
-| **W0** | Promote onto spine · Summers brand · rich feed (conviction / direction / subnet chips) · live status rail | **BUILD** |
+| **W0** | Promote onto spine · Summers brand · rich feed · **yesterday's most talked about** | **BUILD** |
 | **W1** | Message expand / detail (verdict reasoning + price snapshot / outcome when graded) | next |
 | **W2** | High-conviction strip + “Open subnet” / Living Focus handoff | next |
 | **W3** | Outcomes proof band for Telegram calls (hit-rate story) | after soak |
@@ -43,6 +43,7 @@ Living Focus · Proof · Mindmap · Trail
 - [ ] `#section-message-intel` visible without opening any `<details>`
 - [ ] Title brands **Subnet Summers** + link to `https://t.me/OfficialSubnetSummer`
 - [ ] Status rail: live · group · N stored · high-conviction count
+- [ ] **Yesterday leader** card: prior UTC day top subnet + mentions + runner-up
 - [ ] Live feed rows show conviction %, direction, sentiment (not snippet-only)
 - [ ] Subnet chips link to `/subnet/{netuid}` when entities present
 - [ ] Trending + champions remain; no emoji title clutter

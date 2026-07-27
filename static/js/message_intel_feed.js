@@ -11,6 +11,10 @@
   var championsEl = document.getElementById("message-intel-champions");
   var refreshBtn = document.getElementById("message-intel-trending-refresh");
   var feedHint = document.getElementById("message-intel-feed-hint");
+  var yesterdayCard = document.getElementById("message-intel-yesterday");
+  var yesterdayLink = document.getElementById("message-intel-yesterday-link");
+  var yesterdayStats = document.getElementById("message-intel-yesterday-stats");
+  var yesterdayRunner = document.getElementById("message-intel-yesterday-runner");
   if (!feed) return;
 
   var lastStatus = null;
@@ -129,6 +133,41 @@
     var hrs = Math.floor(mins / 60);
     if (hrs < 24) return hrs + "h ago";
     return Math.floor(hrs / 24) + "d ago";
+  }
+
+  function renderYesterdayLeader(row) {
+    if (!yesterdayCard) return;
+    if (!row || row.netuid == null) {
+      yesterdayCard.hidden = true;
+      return;
+    }
+    yesterdayCard.hidden = false;
+    var name = row.name || "SN" + row.netuid;
+    if (yesterdayLink) {
+      yesterdayLink.href = "/subnet/" + encodeURIComponent(String(row.netuid));
+      yesterdayLink.textContent = name + " · SN" + row.netuid;
+    }
+    if (yesterdayStats) {
+      var parts = [row.mentions + " mentions"];
+      if (row.sentiment) parts.push(row.sentiment);
+      if (row.date) parts.push(row.date);
+      yesterdayStats.textContent = parts.join(" · ");
+    }
+    if (yesterdayRunner) {
+      var ru = row.runner_up;
+      if (ru && ru.netuid != null) {
+        yesterdayRunner.hidden = false;
+        yesterdayRunner.textContent =
+          "Runner-up: " +
+          (ru.name || "SN" + ru.netuid) +
+          " (" +
+          (ru.mentions || 0) +
+          " mentions)";
+      } else {
+        yesterdayRunner.hidden = true;
+        yesterdayRunner.textContent = "";
+      }
+    }
   }
 
   function renderTrending(rows, listener) {
@@ -408,6 +447,7 @@
 
       var listener = (status && status.listener) || (payload.meta && payload.meta.listener) || {};
       var trending = (payload.meta && payload.meta.trending) || [];
+      renderYesterdayLeader((payload.meta && payload.meta.yesterday_leader) || null);
       if (trendingEl) {
         trendingEl.innerHTML = renderTrending(trending, listener);
       }
