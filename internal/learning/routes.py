@@ -301,11 +301,14 @@ async def api_mindmap_state():
 
 
 @learning_router.get("/api/story-strip")
-async def api_story_strip(limit: int = Query(default=8, ge=1, le=20)):
+async def api_story_strip(
+    limit: int = Query(default=8, ge=1, le=20),
+    focus: int | None = Query(default=None, ge=1),
+):
     """Compact recent call outcomes for proof-band hydrate."""
     from internal.analytics.story_strip import build_story_strip
 
-    return build_story_strip(limit=limit)
+    return build_story_strip(limit=limit, focus_netuid=focus)
 
 
 @learning_router.get("/api/mindmap/story-path")

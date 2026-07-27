@@ -196,7 +196,12 @@
       }
     }
 
-    const api = root.dataset.api || '/api/mindmap/graph';
+    const base = root.dataset.api || '/api/mindmap/graph';
+    const focus =
+      window.LivingFocus && window.LivingFocus.netuid != null
+        ? window.LivingFocus.netuid
+        : null;
+    const api = focus != null ? base + '?focus=' + encodeURIComponent(focus) : base;
     try {
       const resp = await fetch(api, { headers: { Accept: 'application/json' } });
       if (!resp.ok) {
@@ -208,10 +213,9 @@
     }
   }
 
-  async function init() {
+  async function refreshGraph() {
     const root = document.getElementById('mindmap-graph-root');
     if (!root) return;
-
     const graph = await fetchGraph(root);
     if (graph.status === 'unavailable') {
       setEmptyMessage(
@@ -221,8 +225,19 @@
       );
       return;
     }
-
+    if (graph.scoped && !(graph.nodes || []).length) {
+      setEmptyMessage(root, 'No graph edges for this focus subnet yet — trail fills as picks resolve.', true);
+    } else {
+      setEmptyMessage(root, '', false);
+    }
     renderGraph(root, graph);
+  }
+
+  async function init() {
+    const root = document.getElementById('mindmap-graph-root');
+    if (!root) return;
+    await refreshGraph();
+    document.addEventListener('living-focus:change', refreshGraph);
   }
 
   if (document.readyState === 'loading') {
