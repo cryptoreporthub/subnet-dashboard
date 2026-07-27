@@ -13,6 +13,7 @@ def source_status() -> Dict[str, Any]:
         "configured": bool(os.environ.get("TELEGRAM_API_ID") and os.environ.get("TELEGRAM_API_HASH")),
         "session": os.path.isfile(f"{session_path}.session"),
         "channels": os.environ.get("TELEGRAM_CHANNELS", ""),
+        "group": os.environ.get("TELEGRAM_GROUP", "OfficialSubnetSummer"),
     }
     discord = {
         "configured": bool(os.environ.get("DISCORD_BOT_TOKEN")),
