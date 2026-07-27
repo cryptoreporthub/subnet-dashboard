@@ -285,26 +285,129 @@ def _row_copy(
 
 
 def _wallet_chip(netuid_int: Optional[int]) -> Optional[str]:
-    """Lead-wallet chip — honest-empty when no whale data."""
-    if netuid_int is None:
-        return None
-    try:
+    return whale_intel_line(netuid_int).get("wallet_chip")
+
+
+_whale_service_singleton: Any = None
+
+
+def _whale_service():
+    global _whale_service_singleton
+    if _whale_service_singleton is None:
         from internal.whales.service import WhaleIntelligenceService
 
-        flow = WhaleIntelligenceService().get_subnet_flow(netuid_int)
+        _whale_service_singleton = WhaleIntelligenceService()
+    return _whale_service_singleton
+
+
+def whale_intel_line(netuid_int: Optional[int]) -> Dict[str, Optional[str]]:
+    """Whale accumulation one-liner for desk cards and push alerts."""
+    out: Dict[str, Optional[str]] = {"wallet_chip": None, "whale_archetype": None}
+    if netuid_int is None:
+        return out
+    try:
+        flow = _whale_service().get_subnet_flow(netuid_int)
         if not flow.get("data_available"):
-            return None
+            return out
         by_class = flow.get("by_classification") if isinstance(flow.get("by_classification"), dict) else {}
-        early = by_class.get("early_movers") or []
-        alpha = by_class.get("alpha_whales") or []
-        n = len(early) + len(alpha)
-        if n > 0:
-            return f"{n} wallet{'s' if n != 1 else ''} bought before move"
+        alpha = len(by_class.get("alpha_whales") or [])
+        early = len(by_class.get("early_movers") or [])
+        conviction = len(by_class.get("conviction_holders") or [])
+        ruggers = len(by_class.get("ruggers") or [])
+        n_smart = alpha + early + conviction
+
+        if flow.get("avoid_follow") or (ruggers and not n_smart):
+            out["wallet_chip"] = "Rugger wallets active — caution"
+            out["whale_archetype"] = "Rug risk"
+            return out
+
+        if n_smart > 0:
+            out["wallet_chip"] = f"{n_smart} whale wallet{'s' if n_smart != 1 else ''} accumulating"
+            if alpha and early:
+                out["whale_archetype"] = "Smart money accumulation"
+            elif alpha:
+                out["whale_archetype"] = "Alpha whale accumulation"
+            elif early:
+                out["whale_archetype"] = "Early mover accumulation"
+            else:
+                out["whale_archetype"] = "Conviction holder accumulation"
+            return out
+
         if flow.get("smart_money_present"):
-            return "Smart money in"
+            out["wallet_chip"] = "Smart money in"
+            out["whale_archetype"] = "Smart money"
+            return out
+
+        open_pos = int(flow.get("open_positions") or 0)
+        if open_pos > 0:
+            out["wallet_chip"] = f"{open_pos} whale position{'s' if open_pos != 1 else ''} open"
+            out["whale_archetype"] = "Whale interest"
     except Exception:
-        return None
-    return None
+        pass
+    return out
+
+
+def public_subnet_url(netuid: int) -> str:
+    import os
+
+    base = os.environ.get("PUBLIC_APP_URL", "https://subnet-dashboard.fly.dev").rstrip("/")
+    return f"{base}/subnet/{int(netuid)}"
+
+
+def format_pump_phase_alert(
+    *,
+    netuid: int,
+    name: Optional[str],
+    badge: str,
+    phase: str,
+    signal_snapshot: Optional[Dict[str, Any]] = None,
+    composite_score: Optional[float] = None,
+) -> str:
+    """Rich Telegram push body for BUILDING / JUST STARTED entries."""
+    label = name or f"SN{netuid}"
+    badge_u = str(badge or "").upper()
+    lines = [f"🔥 Pump desk · {badge_u}", f"{label} SN{netuid}"]
+
+    whale = whale_intel_line(int(netuid))
+    if whale.get("wallet_chip"):
+        lines.append(f"→ {whale['wallet_chip']}")
+    if whale.get("whale_archetype"):
+        lines.append(f"→ {whale['whale_archetype']}")
+
+    snap = signal_snapshot if isinstance(signal_snapshot, dict) else {}
+    try:
+        buy_pct = int(round(float(snap.get("buy_ratio", 0)) * 100))
+        if buy_pct > 0:
+            lines.append(f"→ Buy pressure {buy_pct}%")
+    except (TypeError, ValueError):
+        pass
+    try:
+        vol_pct = int(round(float(snap.get("volume_intensity", 0)) * 100))
+        if vol_pct > 0:
+            lines.append(f"→ Volume intensity {vol_pct}%")
+    except (TypeError, ValueError):
+        pass
+    if composite_score is not None:
+        try:
+            setup_pct = int(round(float(composite_score) * 100))
+            lines.append(f"→ Setup index {setup_pct}%")
+        except (TypeError, ValueError):
+            pass
+
+    tg = _telegram_chip({"signal_snapshot": snap})
+    if tg:
+        lines.append(f"→ {tg}")
+
+    phase_u = str(phase or "").upper()
+    if badge_u == "BUILDING":
+        lines.append("Bullish setup — act before JUST STARTED.")
+    elif badge_u == "JUST STARTED":
+        lines.append("Move confirmed — size down; not early entry.")
+    else:
+        lines.append(f"Phase {phase_u or 'active'}.")
+
+    lines.append(public_subnet_url(int(netuid)))
+    return "\n".join(lines)
 
 
 def _telegram_chip(ladder_entry: Dict[str, Any]) -> Optional[str]:
@@ -680,8 +783,10 @@ def build_desk_row(
         score,
         metrics["trigger_score"],
     )
-    # Size cliff is cheap (subnet_row only). Skip wallet/whale chips here —
-    # WhaleIntelligenceService is too slow for the desk GET path.
+    # ponytail: one whale-service load per request; in-memory scan per netuid is cheap.
+    whale = whale_intel_line(netuid_int)
+    wallet_chip = whale.get("wallet_chip")
+    whale_archetype = whale.get("whale_archetype")
     size_line = _size_cliff_line(subnet_row)
     owner_chip = _owner_chip(netuid_int, subnet_row)
     telegram_chip = _telegram_chip(ladder_entry)
@@ -714,6 +819,8 @@ def build_desk_row(
         "size_line": size_line,
         "owner_chip": owner_chip,
         "telegram_chip": telegram_chip,
+        "wallet_chip": wallet_chip,
+        "whale_archetype": whale_archetype,
         "buy_pct": buy_pct,
         "vol_pct": vol_pct,
         "updated_at": ladder_entry.get("updated_at"),
