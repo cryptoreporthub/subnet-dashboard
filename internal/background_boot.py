@@ -198,6 +198,24 @@ def _start_score_snapshot_scheduler() -> None:
     defer_boot("score-snapshots", _run, delay=max(BOOT_DEFER_SECONDS + 45, 90))
 
 
+def _start_pick_audit_scheduler() -> None:
+    """Nightly selection oracle replay (evidence loop — Python only)."""
+
+    def _run() -> None:
+        from internal.council.pick_audit_scheduler import start_pick_audit_scheduler
+
+        immediate = os.environ.get("PICK_AUDIT_BOOT_IMMEDIATE", "off").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        start_pick_audit_scheduler(immediate=immediate)
+        logger.info("pick selection audit scheduler started (immediate=%s)", immediate)
+
+    defer_boot("pick-audit-scheduler", _run, delay=max(BOOT_DEFER_SECONDS + 50, 95))
+
+
 def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     """Start background schedulers.
 
@@ -231,6 +249,7 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _start_whale_warm_scheduler()
     _start_pick_schedulers()
     _start_score_snapshot_scheduler()
+    _start_pick_audit_scheduler()
 
     _maybe_start_message_intel()
 
@@ -283,6 +302,12 @@ def stop_background_workers() -> None:
         from internal.council.pick_scheduler import stop_pick_schedulers
 
         stop_pick_schedulers()
+    except Exception:
+        pass
+    try:
+        from internal.council.pick_audit_scheduler import stop_pick_audit_scheduler
+
+        stop_pick_audit_scheduler()
     except Exception:
         pass
     try:

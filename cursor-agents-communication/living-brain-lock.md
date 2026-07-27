@@ -26,9 +26,9 @@
 - `/api/story-strip?focus=` scopes resolved outcomes to focus netuid
 - `mindmap_graph.js` refetches on `living-focus:change`
 
-## Active — Track 1 (calibration + LONG publish)
+## Track 1 — DONE (#543 on `main`)
 
-**Branch:** `cursor/track1-long-unlock-4988` — stale boot HOLD regen, shortlist cache, HOLD-day alternatives UX (cherry from #487).
+Stale boot HOLD regen, shortlist cache, HOLD-day alternatives UX. Post-merge: verify `/api/daily-pick` after worker regen.
 - Cockpit story strip refetches on focus change
 - Honest empty when focus has no trail/outcomes yet
 

@@ -1,8 +1,14 @@
 # Subnet Dashboard Coordination Board
 
+<<<<<<< HEAD
+**Last updated:** 2026-07-27T17:21:00Z  
+**main:** `df214c6` (#543 Track 1 LONG unlock merged) · learning loop **green**  
+**in flight:** post-#543 prod verify (daily pick regen on worker tick)
+=======
 **Last updated:** 2026-07-27T18:35:00Z  
 **main:** `f59747b` — #544 Brain Trio DONE · #543 Track 1 LONG  
 **Handoff:** `ditto-cursor-handoff.md`
+>>>>>>> origin/main
 
 ## Brain Trio Revision — DONE
 
