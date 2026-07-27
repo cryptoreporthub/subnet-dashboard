@@ -198,3 +198,22 @@ def test_write_snapshot_prefers_registry_when_enabled(monkeypatch, tmp_path):
     out = snaps.write_full_universe_snapshot()
     assert out["ok"] is True
     assert path.is_file()
+
+
+def test_write_snapshot_times_out(monkeypatch, tmp_path):
+    path = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", 1)
+    hydrate = [{"netuid": 5, "name": "Five"}]
+    monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+
+    def _hang(*_args, **_kwargs):
+        time.sleep(3)
+        return {"count": 1, "written_at": "t", "hour": [], "day": []}
+
+    monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
+    monkeypatch.setattr(snaps, "build_full_universe_snapshot", _hang)
+    out = snaps.write_full_universe_snapshot()
+    assert out["ok"] is False
+    assert "write_timeout" in out.get("error", "")
+    assert not path.is_file()

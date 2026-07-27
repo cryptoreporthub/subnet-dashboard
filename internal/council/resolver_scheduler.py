@@ -350,18 +350,26 @@ class PredictionResolverScheduler:
 
 
 def _default_subnets() -> Any:
-    """Return the live subnet snapshot, falling back to an empty list.
+    """Return subnet rows for resolver ticks — bounded live fetch, registry fallback.
 
     Imported lazily so this module never creates a circular import with
     ``server`` (which imports the scheduler on startup).
     """
     try:
-        from server import _get_subnets_with_source
+        from server import _get_subnets_hydrate, _get_subnets_with_source
 
-        subnets, _ = _get_subnets_with_source()
+        subnets, _ = _get_subnets_with_source(timeout=15)
+        if not subnets:
+            subnets, _ = _get_subnets_hydrate()
         return subnets
     except Exception:
-        return []
+        try:
+            from server import _get_subnets_hydrate
+
+            subnets, _ = _get_subnets_hydrate()
+            return subnets
+        except Exception:
+            return []
 
 
 # ------------------------------------------------------------------------------
