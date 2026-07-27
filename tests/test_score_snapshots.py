@@ -200,6 +200,13 @@ def test_write_snapshot_prefers_registry_when_enabled(monkeypatch, tmp_path):
     assert path.is_file()
 
 
+def test_snapshot_subnet_cap_defaults_on_worker(monkeypatch):
+    monkeypatch.delenv("SCORE_SNAPSHOT_MAX_SUBNETS", raising=False)
+    monkeypatch.setenv("TOP_SCORING_UNIVERSE", "5")
+    monkeypatch.setattr("internal.run_mode.is_worker_mode", lambda: True)
+    assert snaps._snapshot_subnet_cap() == 5
+
+
 def test_write_snapshot_times_out(monkeypatch, tmp_path):
     path = tmp_path / "score_snapshots.json"
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
