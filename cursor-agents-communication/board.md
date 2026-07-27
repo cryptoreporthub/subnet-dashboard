@@ -1,7 +1,16 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-26T19:30:00Z  
-**main:** `6daefbf` — #518–#520 merged (verify_prod, learning babysit, essential hotfix)
+**Last updated:** 2026-07-27T02:30:00Z  
+**main:** `6daefbf` — #518–#520 merged (verify_prod, learning babysit, essential hotfix)  
+**Handoff:** `ditto-cursor-handoff.md` — **Ditto reviews must promote to git locks before Cursor builds**
+
+## Pump desk — DONE
+
+| Item | PR |
+|------|-----|
+| SCAN home + `/pump` flagship | #480, #511 |
+| Whale line + BUILDING Telegram | #528 |
+| Ditto full UI checklist (triad grid, mobile polish) | Deferred — reopen only with new lock |
 
 ## Post-stability sprint (`post-stability-sprint-plan.md`)
 
@@ -38,6 +47,22 @@ Close superseded PRs — agent token lacks `closePullRequest`:
 ## Out of scope (skipped)
 
 - Chutes billing / live LLM chat replies (human Fly secrets)
+
+## Active (next phases — need lock before build)
+
+| Track | Plan / lock | Gate |
+|-------|-------------|------|
+| Telegram ingest proof | ops | Human test message + group verify |
+| Living brain graph-lite | `post-s30-living-brain-plan.md` | **Create `living-brain-lock.md` from Ditto** |
+| H1 hour watch | `h1-hour-watch-live-lock.md` | Board clear + G0 |
+| Council automations | Ditto Settings | Manual create (not chat proposals) |
+
+## Communication (mandatory)
+
+1. Ditto review → promote to `cursor-agents-communication/<topic>-lock.md`
+2. Cursor boot: `board.md` → `STATUS.md` → lock → Ditto STATUS search only
+3. After merge: update board + `save_memory` with `main=<sha>` and `LOCK_PATH`
+4. **Never** rely on pasting Ditto prose into agent chat as the only handoff
 
 ## Ops optional
 
