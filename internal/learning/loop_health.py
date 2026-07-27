@@ -18,6 +18,9 @@ SCORE_SNAPSHOTS_PATH = os.environ.get(
 )
 # Stall if pending work and resolver quieter than 2x refresh (default 30m).
 _STALL_MULTIPLIER = 2
+# Snapshot grace after worker boot before reporting stale (seconds).
+_SNAPSHOT_BOOT_GRACE_S = int(os.environ.get("LEARNING_SNAPSHOT_BOOT_GRACE_SECONDS", "900"))
+_SNAPSHOT_STALE_S = int(os.environ.get("LEARNING_SNAPSHOT_STALE_SECONDS", "2700"))
 
 
 def _utcnow() -> datetime:
@@ -154,8 +157,66 @@ def _score_snapshot_meta(
         "age_seconds": age,
         "file_present": file_ok,
         "last_cycle": last_cycle if isinstance(last_cycle, dict) else {},
-        "scheduler": sched_state,
+        "scheduler": _merge_snapshot_scheduler_state(sched_state, last_cycle, soul_path),
     }
+
+
+def _merge_snapshot_scheduler_state(
+    mem_state: Dict[str, Any],
+    soul_last_cycle: Dict[str, Any],
+    soul_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Cross-process: worker runs scheduler; web reads soul_map + worker heartbeat."""
+    enabled = bool(mem_state.get("enabled"))
+    if not enabled:
+        try:
+            from internal.council.score_snapshots import _enabled
+
+            enabled = _enabled()
+        except Exception:
+            enabled = False
+    mem_running = bool(mem_state.get("running"))
+    peer = _worker_peer()
+    running = mem_running
+    if inline_worker_expected() and not is_worker_mode():
+        running = bool(peer.get("alive")) or mem_running
+    tick_at = soul_last_cycle.get("run_at") or mem_state.get("last_run_at")
+    return {
+        **mem_state,
+        "enabled": enabled,
+        "running": running,
+        "last_run_at": tick_at,
+        "last_run_ok": soul_last_cycle.get("ok") if soul_last_cycle else mem_state.get("last_run_ok"),
+        "last_run_error": soul_last_cycle.get("error") if soul_last_cycle else mem_state.get("last_run_error"),
+        "last_cycle": soul_last_cycle,
+        "peer": peer.get("peer"),
+    }
+
+
+def _snapshot_stale(
+    worker_peer: Dict[str, Any],
+    snapshot_age: Optional[float],
+    sched: Dict[str, Any],
+) -> bool:
+    """True when snapshot scheduler is enabled but volume has no fresh file/cycle."""
+    if not sched.get("enabled"):
+        return False
+    if not inline_worker_expected():
+        return False
+    if not worker_peer.get("alive"):
+        return False
+    hb_age = _heartbeat_age_seconds(worker_peer)
+    if hb_age is not None and hb_age < _SNAPSHOT_BOOT_GRACE_S:
+        return False
+    if snapshot_age is not None and snapshot_age <= _SNAPSHOT_STALE_S:
+        return False
+    last = sched.get("last_cycle") if isinstance(sched.get("last_cycle"), dict) else {}
+    tick = _parse_iso(last.get("run_at") or sched.get("last_run_at"))
+    if tick is not None:
+        cycle_age = max(0.0, (_utcnow() - tick).total_seconds())
+        if cycle_age <= _SNAPSHOT_STALE_S:
+            return False
+    return True
 
 
 def _worker_peer() -> Dict[str, Any]:
@@ -336,6 +397,8 @@ def build_learning_loop_health(
         else:
             status = "stalled"
     elif not resolver.get("running") or tick_at is None:
+        status = "degraded"
+    elif _snapshot_stale(worker_peer, snapshot_age, score_snapshot.get("scheduler") or {}):
         status = "degraded"
 
     return {

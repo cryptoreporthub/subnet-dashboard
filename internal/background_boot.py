@@ -180,15 +180,17 @@ def _start_score_snapshot_scheduler() -> None:
 
     def _run() -> None:
         from internal.council.score_snapshots import start_score_snapshot_scheduler
+        from internal.run_mode import is_worker_mode
 
-        immediate = os.environ.get("SCORE_SNAPSHOT_BOOT_IMMEDIATE", "off").strip().lower() in (
+        default_immediate = "on" if is_worker_mode() else "off"
+        immediate = os.environ.get("SCORE_SNAPSHOT_BOOT_IMMEDIATE", default_immediate).strip().lower() in (
             "1",
             "true",
             "yes",
             "on",
         )
         start_score_snapshot_scheduler(immediate=immediate)
-        logger.info("score snapshot scheduler started")
+        logger.info("score snapshot scheduler started (immediate=%s)", immediate)
 
     # After pick schedulers; full score is heavier.
     defer_boot("score-snapshots", _run, delay=max(BOOT_DEFER_SECONDS + 45, 90))

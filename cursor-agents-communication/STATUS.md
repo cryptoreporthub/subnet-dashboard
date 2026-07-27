@@ -1,42 +1,51 @@
 # STATUS
 
-**Updated:** 2026-07-26T19:30:00Z  
-**main:** `6daefbf` (#518–#520)  
-**active plan:** Babysit complete — Wave F housekeeping (human PR closes)  
-**previous plan:** `post-stability-sprint-plan.md` waves A–E ✅ **COMPLETE**
+**Updated:** 2026-07-27T02:15:00Z  
+**main:** `9e7b4ee` (#530 learning-loop audit) · **in flight:** `cursor/score-snapshot-babysit-4988`  
+**active plan:** Learning loop babysit → §30 docs closure
 
 ---
 
-## Shipped this session
+## Shipped recently
 
 | PR | What |
 |----|------|
-| #518 | `verify_prod.sh` wedge hardening + G0 pump tail + STATUS sync |
-| #519 | Learning loop cross-process health, inline worker supervisor, score snapshot soul_map |
-| #520 | Hotfix: `WORKER_HEAVY=essential` (#517 `full` wedged 2GB VM) |
+| #527 | Learning health snapshot meta + §30-9 trail dedupe |
+| #528 | Pump whale alerts |
+| #529 | §30-2 focus chips + §30-8 RF-2 KPI honesty |
+| #530 | Learning loop audit: heavy_job_gate, health executor, plan doc fix |
 
 ---
 
-## Prod (2026-07-26 post-#520)
+## Prod babysit (2026-07-27)
 
-- `verify_prod.sh` — **OK**
-- `/api/learning/health` — worker alive, `resolver.running: true`; may show `stalled` until resolver tick after machine restart
-- `WORKER_HEAVY=full` + Telegram — **do not** on single 2GB machine without split VM
+- Intermittent `/api/learning/health` timeouts when VM wedged — re-run after deploy
+- Core loop when healthy: `status=ok`, worker alive, resolver running, HOLD daily
+- **Open:** `score_snapshots.json` not on volume — L1 babysit branch addresses scheduler + cross-process health
+
+**After every merge:**
+
+```bash
+./scripts/check_learning_loop.sh
+APP_BASE_URL=https://subnet-dashboard.fly.dev ./scripts/verify_prod.sh
+```
+
+---
+
+## §30 queue (synced)
+
+| Slice | Status |
+|-------|--------|
+| §30-1–3, §30-6–10 | ✅ main |
+| §30-2, §30-8 | ✅ #529 |
+| §30-4/5 | ✅ code + tests (self_learning nudge, alignment_nudge) |
+| §30-0 docs | in babysit PR |
 
 ---
 
 ## Human only
 
-1. Close superseded PRs: #455, #491, #487, #474, #449 (agent token lacks `closePullRequest`)
-2. G0 human 390px sign-off if not recorded
-3. Telegram ingest: split VM or future lighter path — not `WORKER_HEAVY=full` on current layout
-
----
-
-## Gameplan
-
-| ID | Status |
-|----|--------|
-| Post-stability A–E | ✅ |
-| Learning loop babysit | ✅ #519 (ops tuning continues) |
-| Prod verify scripts | ✅ #518 |
+1. Close superseded PRs: #455, #491, #487, #474, #449
+2. G0 human 390px sign-off
+3. Telegram session bootstrap if `check_telegram_ready.sh` not OK
+4. **Never** `WORKER_HEAVY=full` on single 2GB Fly VM
