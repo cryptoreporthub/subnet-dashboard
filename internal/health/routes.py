@@ -29,6 +29,14 @@ async def api_ops_readiness():
     return build_readiness_report()
 
 
+@health_router.get("/api/ops/evidence")
+async def api_ops_evidence():
+    """Ops evidence bundle: pick audit + pump desk + learning outcomes artifacts."""
+    from internal.ops.evidence import build_evidence_report
+
+    return build_evidence_report()
+
+
 @health_router.get("/api/ops/desearch-spend")
 async def api_desearch_spend(recent: int = 25):
     """Rolling DeSearch API spend from X-Desearch-* response headers."""

@@ -1,0 +1,43 @@
+# Ops evidence check — prod artifact probe (no wedge; read-only GET).
+
+name: Ops Evidence Check
+
+on:
+  schedule:
+    # After nightly pick audit (23:45 UTC) + outcome snapshot slot (04:50 UTC)
+    - cron: "35 0 * * *"
+    - cron: "10 5 * * 0,3"
+  workflow_dispatch:
+
+concurrency:
+  group: ops-evidence-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evidence:
+    name: prod-evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe /api/ops/evidence
+        env:
+          BASE_URL: https://subnet-dashboard.fly.dev
+        run: |
+          set -euo pipefail
+          json="$(curl -fsS --max-time 25 "${BASE_URL}/api/ops/evidence")"
+          echo "$json" | python3 -m json.tool
+          status="$(echo "$json" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','ok'))")"
+          if [[ "$status" == "alert" ]]; then
+            echo "::error::ops evidence status=alert"
+            exit 2
+          fi
+          echo "ops evidence status=$status"
+
+      - name: Learning health smoke
+        run: |
+          curl -fsS --max-time 20 https://subnet-dashboard.fly.dev/api/learning/health | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          assert d.get('status') in ('ok', 'degraded'), d
+          print('learning health', d.get('status'))
+          "
