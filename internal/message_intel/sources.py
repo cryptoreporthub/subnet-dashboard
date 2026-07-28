@@ -8,10 +8,13 @@ from typing import Any, Dict
 
 def source_status() -> Dict[str, Any]:
     """Report which social ingest sources are configured vs unreachable."""
+    from internal.message_intel.session import has_telegram_session
+
     telegram = {
         "configured": bool(os.environ.get("TELEGRAM_API_ID") and os.environ.get("TELEGRAM_API_HASH")),
-        "session": bool(os.environ.get("TELEGRAM_SESSION") or os.environ.get("TELEGRAM_SESSION_PATH")),
+        "session": has_telegram_session(),
         "channels": os.environ.get("TELEGRAM_CHANNELS", ""),
+        "group": os.environ.get("TELEGRAM_GROUP", "OfficialSubnetSummer"),
     }
     discord = {
         "configured": bool(os.environ.get("DISCORD_BOT_TOKEN")),

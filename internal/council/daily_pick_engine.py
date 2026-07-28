@@ -8,6 +8,7 @@ and rotation summary so the daily pick is deterministic and auditable.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -16,7 +17,9 @@ from internal.council.daily_pick import select_daily_pick
 from internal.council.scenario_memory import classify_regime
 from internal.council.rotation_tracker import get_rotation_summary
 from internal.council.publish_gate import publish_gate_fraction, publish_gate_label
-from internal.subnets.tradable import is_tradable_subnet, subnet_netuid, tradable_subnets
+from internal.subnets.tradable import is_tradable_subnet, subnet_netuid, subnet_volume, tradable_subnets
+
+logger = logging.getLogger(__name__)
 
 DAILY_PICKS_PATH = os.path.join("data", "daily_picks.json")
 
@@ -52,6 +55,70 @@ def _find_today(records: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         if rec.get("date") == today:
             return rec
     return None
+
+
+def _upsert_today(records: List[Dict[str, Any]], payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Replace any same-day row so scheduler regen does not duplicate dates."""
+    today = _today_str()
+    kept = [r for r in records if r.get("date") != today]
+    kept.append(payload)
+    return kept
+
+
+def _subnets_have_prices(subnets: List[Dict[str, Any]]) -> bool:
+    for sn in subnets:
+        try:
+            if float(sn.get("price") or 0) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
+
+
+def _hold_from_stale_boot_data(
+    existing: Dict[str, Any],
+    subnets: List[Dict[str, Any]],
+) -> bool:
+    """HOLD scored before subnet hydrate (missing price/volume) should regen once live."""
+    if str(existing.get("action", "")).upper() != "HOLD":
+        return False
+    if not _subnets_have_prices(subnets):
+        return False
+    cand = existing.get("candidate")
+    if not isinstance(cand, dict):
+        return False
+    sn_block = cand.get("subnet") if isinstance(cand.get("subnet"), dict) else {}
+    netuid = sn_block.get("netuid") or cand.get("netuid")
+    audit = cand.get("audit") if isinstance(cand.get("audit"), dict) else {}
+    concerns = audit.get("concerns") or []
+    if any("Missing critical field" in str(c) for c in concerns):
+        return True
+    try:
+        cand_price = float(sn_block.get("price") or cand.get("price") or 0)
+    except (TypeError, ValueError):
+        cand_price = 0.0
+    if cand_price <= 0 and subnet_volume(sn_block) <= 0:
+        if netuid is not None:
+            live = next((s for s in subnets if s.get("netuid") == netuid), None)
+            if isinstance(live, dict):
+                try:
+                    live_price = float(live.get("price") or 0)
+                except (TypeError, ValueError):
+                    live_price = 0.0
+                if live_price > 0 or subnet_volume(live) > 0:
+                    return True
+        return True
+    return False
+
+
+def _subnets_for_pick_creation(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Same scoring universe as pick_scheduler — never select_daily_pick on full hydrate list."""
+    from internal.subnets.scoring_cap import cap_subnets_for_scoring
+
+    sched_cap = int(os.environ.get("PICK_SCHEDULER_UNIVERSE_CAP", "24"))
+    top = int(os.environ.get("TOP_SCORING_UNIVERSE", "40"))
+    limit = min(sched_cap, top)
+    return cap_subnets_for_scoring(subnets, limit=limit)
 
 
 def _payload_uses_root(payload: Dict[str, Any]) -> bool:
@@ -100,7 +167,10 @@ def get_or_create_today_pick(
                 # single-worker Fly (/api/daily-pick 0-byte timeouts). Candidate is
                 # optional display sugar; dossier hydrates without it.
                 return existing
-            return existing
+            if _hold_from_stale_boot_data(existing, subnets):
+                logger.info("daily pick: regen stale boot HOLD once subnets hydrated")
+            else:
+                return existing
         # Stale Root-era cache: fall through and regenerate.
 
     if not subnets:
@@ -116,17 +186,18 @@ def get_or_create_today_pick(
             "rotation_summary": get_rotation_summary(subnets),
             "market_context": market_context,
         }
-        records.append(payload)
+        records = _upsert_today(records, payload)
         _save(records)
         try:
             from internal.learning.prediction_loop import record_hold_decision
 
             record_hold_decision(reason="No subnets available", horizon_type="day")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("record_hold_decision failed (no subnets): %s", exc)
         return payload
 
-    pick = select_daily_pick(subnets, market_context)
+    pick_subnets = _subnets_for_pick_creation(subnets)
+    pick = select_daily_pick(pick_subnets, market_context)
     final_confidence = float(pick.get("final_confidence", 0.0))
     gate = publish_gate_fraction()
 
@@ -149,7 +220,7 @@ def get_or_create_today_pick(
         "date": _today_str(),
         "timestamp_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "regime": classify_regime(market_context),
-        "rotation_summary": get_rotation_summary(subnets),
+        "rotation_summary": get_rotation_summary(pick_subnets),
         "action": action,
         "pick": stored_pick,
         "candidate": candidate,
@@ -157,7 +228,7 @@ def get_or_create_today_pick(
         "market_context": market_context,
     }
 
-    records.append(payload)
+    records = _upsert_today(records, payload)
     _save(records)
 
     if stored_pick is not None:
@@ -174,19 +245,32 @@ def get_or_create_today_pick(
                     horizon_type="day",
                     market_context=market_context,
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+                "record_pick_prediction failed for daily pick netuid=%s: %s",
+                (stored_pick.get("subnet") or {}).get("netuid") if isinstance(stored_pick, dict) else None,
+                exc,
+            )
     elif action == "HOLD":
         try:
             from internal.learning.prediction_loop import record_hold_decision
 
+            # Prefer live subnet row for shadow price when candidate has netuid.
+            subnet_row = None
+            if isinstance(candidate, dict):
+                sn = candidate.get("subnet") if isinstance(candidate.get("subnet"), dict) else {}
+                netuid = sn.get("netuid") or candidate.get("netuid")
+                if netuid is not None:
+                    subnet_row = next((s for s in subnets if s.get("netuid") == netuid), None)
             record_hold_decision(
                 candidate=candidate,
                 reason=reason,
                 horizon_type="day",
+                subnet=subnet_row,
+                market_context=market_context,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("record_hold_decision failed: %s", exc)
 
     return payload
 

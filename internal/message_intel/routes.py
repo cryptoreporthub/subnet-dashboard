@@ -62,6 +62,7 @@ async def api_message_intel(
 async def api_message_intel_status():
     """Listener + store health (no secrets). Honest when creds absent."""
     from internal.message_intel.listener_service import listener_status
+    from internal.message_intel.outcome_loop import outcome_loop_status
     from internal.message_intel.store import live_stats
     from internal.message_intel.sources import source_status
 
@@ -75,6 +76,7 @@ async def api_message_intel_status():
         "listener": listener,
         "store": stats,
         "sources": source_status(),
+        "outcomes": outcome_loop_status(),
         "live": bool(listener.get("live")),
         "empty": int(stats.get("total_messages") or 0) == 0,
     }
@@ -108,6 +110,19 @@ async def api_message_intel_chatter(
     except Exception as exc:
         logger.error("message-intel chatter failed: %s", exc)
         return {"status": "error", "messages": [], "error": str(exc)}
+
+
+@message_intel_router.get("/api/message-intel/authors")
+async def api_message_intel_authors(
+    days: int = Query(default=7, ge=1, le=30),
+    limit: int = Query(default=8, ge=1, le=50),
+):
+    return engine.list_authors(days=days, limit=limit)
+
+
+@message_intel_router.get("/api/message-intel/topics")
+async def api_message_intel_topics(limit: int = Query(default=12, ge=1, le=50)):
+    return engine.list_topics(limit=limit)
 
 
 @message_intel_router.get("/api/message-intel/patterns")

@@ -21,6 +21,10 @@ TELEGRAM_API_ID = os.environ.get("TELEGRAM_API_ID")
 TELEGRAM_API_HASH = os.environ.get("TELEGRAM_API_HASH")
 TELEGRAM_PHONE = os.environ.get("TELEGRAM_PHONE")
 TELEGRAM_GROUP = os.environ.get("TELEGRAM_GROUP", "OfficialSubnetSummer")
+try:
+    TELEGRAM_BACKFILL_LIMIT = max(0, int(os.environ.get("TELEGRAM_BACKFILL_LIMIT", "100") or "100"))
+except ValueError:
+    TELEGRAM_BACKFILL_LIMIT = 100
 INGEST_URL = os.environ.get(
     "INGEST_URL", "http://localhost:8080/api/message-intel/ingest"
 )
@@ -54,6 +58,7 @@ class TelegramListener:
         ingest_url: Optional[str] = None,
         on_message: Optional[Callable[[Dict[str, Any]], None]] = None,
         session_name: str = "telegram_listener",
+        session: Any = None,
         forward_to_ingest: bool = True,
     ):
         self.api_id = int(api_id or TELEGRAM_API_ID or 0)
@@ -63,11 +68,13 @@ class TelegramListener:
         self.ingest_url = ingest_url or INGEST_URL
         self.on_message = on_message
         self.forward_to_ingest = forward_to_ingest
-        self.session_name = session_name
+        self.session_name = session if session is not None else session_name
         self._client: Optional[Any] = None
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self.group_title: Optional[str] = None
+        self.group_connected: bool = False
 
     def start(self) -> bool:
         """
@@ -138,13 +145,21 @@ class TelegramListener:
                 # Resolve the group entity
                 try:
                     entity = await self._client.get_entity(self.group)
-                    logger.info("Monitoring group: %s", entity.title)
+                    title = getattr(entity, "title", None) or str(self.group)
+                    self.group_title = title
+                    self.group_connected = True
+                    logger.info("Monitoring group: %s", title)
                 except ValueError as e:
+                    self.group_connected = False
+                    self.group_title = None
                     logger.error(
                         "Could not find group '%s': %s", self.group, e
                     )
                     await asyncio.sleep(30)
                     continue
+
+                if TELEGRAM_BACKFILL_LIMIT > 0:
+                    await self._backfill_recent(entity, TELEGRAM_BACKFILL_LIMIT)
 
                 # Register the message handler
                 @self._client.on(events.NewMessage(chats=entity))
@@ -178,6 +193,25 @@ class TelegramListener:
                 )
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, max_retry_delay)
+
+    async def _backfill_recent(self, entity: Any, limit: int) -> None:
+        """Ingest recent history once on connect — live handler only sees new messages."""
+        ingested = 0
+        try:
+            async for msg in self._client.iter_messages(entity, limit=limit):
+                sender = await msg.get_sender()
+                normalized = self._normalize_message(msg, sender, msg.chat_id)
+                if normalized is None:
+                    continue
+                if self.on_message:
+                    self.on_message(normalized)
+                elif self.forward_to_ingest:
+                    await self._forward_to_ingest(normalized)
+                ingested += 1
+            if ingested:
+                logger.info("Telegram backfill ingested %s messages (limit=%s)", ingested, limit)
+        except Exception as exc:
+            logger.warning("Telegram backfill failed: %s", exc)
 
     async def _handle_event(self, event) -> None:
         """Normalize a Telegram message event and forward it."""

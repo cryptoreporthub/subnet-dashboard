@@ -55,7 +55,7 @@ def _context_tags(pred: Dict[str, Any]) -> List[str]:
     return out
 
 
-def build_story_strip(limit: int = 8) -> Dict[str, Any]:
+def build_story_strip(limit: int = 8, focus_netuid: int | None = None) -> Dict[str, Any]:
     """Last N gradeable resolved predictions with right/wrong labels."""
     try:
         from internal.council.grading import direction_correct
@@ -82,6 +82,12 @@ def build_story_strip(limit: int = 8) -> Dict[str, Any]:
             if correct is None:
                 continue
             netuid = pred.get("netuid")
+            if focus_netuid is not None:
+                try:
+                    if netuid is None or int(netuid) != int(focus_netuid):
+                        continue
+                except (TypeError, ValueError):
+                    continue
             pid = pred.get("id")
             display_name = pred.get("name") or (f"SN{netuid}" if netuid is not None else "—")
             if netuid is not None:
@@ -114,7 +120,8 @@ def build_story_strip(limit: int = 8) -> Dict[str, Any]:
         has_data = bool(items)
         return {
             "data_available": has_data,
-            "reason": None if has_data else "no_resolved_outcomes",
+            "focus_netuid": focus_netuid,
+            "reason": None if has_data else ("no_focus_outcomes" if focus_netuid else "no_resolved_outcomes"),
             "items": items,
             "stats": {
                 "correct": sum(1 for row in items if row["outcome"] == "correct"),

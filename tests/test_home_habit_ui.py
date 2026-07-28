@@ -50,7 +50,13 @@ def test_council_stage_learning_accuracy_uses_fraction():
     html = tmpl.render(
         dpick={"action": "HOLD", "pick": None, "candidate": None},
         hybrid_trust={"n": 454},
-        trust_banner={"graded": 454, "correct": 143, "wrong": 311, "accuracy": 0.315},
+        trust_banner={
+            "graded": 454,
+            "correct": 143,
+            "wrong": 311,
+            "accuracy": 0.315,
+            "ready": True,
+        },
         story_path={},
         habit_watchlist={},
         habit_alerts={"enabled": False},

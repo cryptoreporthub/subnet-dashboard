@@ -1,41 +1,43 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-24T04:10:00Z  
-**main:** `6ee7d0d` (#437 Fly Phase B · post-#410 pump/site waves)
+**Last updated:** 2026-07-27T22:55:00Z  
+**main:** `7584426` — #548 H1 · #546 pick audit · #545/#544 Brain Trio  
+**Handoff:** `ditto-cursor-handoff.md`
 
-## Active plan
+## Brain Trio Revision — DONE
 
-**Canonical:** `cursor-agents-communication/gameplan-pump-site-undeniable.md` (audited 2026-07-24)  
-**Status:** Waves **0–3 shipped** on `main` · Wave 4 YAGNI
+| Wave | Status | PR |
+|------|--------|-----|
+| W0-A…F | ✅ | **#544** |
+| Prod smoke | ✅ | graph 48 nodes · 0 hold wallpaper · mindmap on spine · loop OK · LONG published |
 
-| Wave | Status | Notes |
-|------|--------|-------|
-| 0 G0 | ⚠️ | `scripts/g0_phone_qa.sh` ✅ · human 390px QA open |
-| 1 P1–P3 | ✅ | Triad, hit-rate UI, size cliff (#410) |
-| 2 P4–P5 | ⚠️ | Phase notify ✅ · wallet + day-whale chips ⚠️ · founder chip open |
-| 3 S1–S8 | ⚠️ | All merged #410; S3 who-sold = Prove-it button only |
-| 4 | — | YAGNI |
+Lock: `brain-trio-revision-lock.md` → **DONE**
 
-**Execution history:** PR **#410** (Cursor Cloud Agent, 2026-07-22) + #430–#437 whale/Fly + #442–#446 site polish.
+## Learning loop
 
-## Next slice queue
+- `check_learning_loop.sh` OK post-#544
+- `daily_pick.action: LONG` (Track 1 + calibration live)
 
-1. ~~Slice A–B~~ — attribution + pump desk (#414–#418)
-2. ~~Slice R~~ — historical weight rebalance (#419)
-3. ~~Slice M~~ — α pump overlay (#419)
-4. ~~Full plan Waves 1–3~~ — #410 + follow-ups (#430–#446)
-5. **G0 human** — 390px phone QA sign-off (`./scripts/g0_phone_qa.sh` + manual)
-6. **Ops** — `fly scale count worker=1` when ready (#437 worker process)
-7. **Optional** — P5 founder/owner chip · publish gate 45%→40% experiment
-8. Wave 4 — YAGNI
+## Pump desk — DONE
 
-## Fix plan (done)
+#480, #511, #528, #533, #534
 
-`cursor-agents-communication/quant-pump-desk-fix-plan.md` — Slices A–B + R + M shipped (#414–#419).
+## H1 Hour watch — DONE
 
-## Human follow-up
+Lock: `h1-hour-watch-live-lock.md` → **DONE** · PR **#548**
 
-- `APP_BASE_URL=https://subnet-dashboard.fly.dev ./scripts/g0_phone_qa.sh`
-- Phone QA 390px (Call + Lead + trust line)
-- Optional: `fly scale count web=1 worker=1 --app subnet-dashboard`
-- Env: `CONVICTION_ALERTS_ENABLED` / Telegram (off by default)
+## Telegram ingest — LIVE
+
+- `TELEGRAM_SESSION_STRING` set · listener `running` · OfficialSubnetSummer ingesting
+
+## Active (next)
+
+| Track | Plan / lock | Gate |
+|-------|-------------|------|
+| **SS-TG Subnet Summers flagship** | `subnet-summers-telegram-lock.md` | W0 in flight |
+| Track 1 soak | #543 | 7–14d publish rate review |
+| Council automations | Ditto Settings | Manual create |
+
+## Out of scope
+
+- Chutes billing / live LLM chat replies

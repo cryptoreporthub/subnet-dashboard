@@ -52,6 +52,31 @@
     });
   }
 
+  function humanDetailLine(node) {
+    const kind = (node && node.kind) || '';
+    const metrics = (node && node.metrics) || {};
+    if (kind === 'disposition') {
+      return `Disposition · ${metrics.action || 'n/a'}${metrics.score != null ? ' · score ' + metrics.score : ''}`;
+    }
+    if (kind === 'prediction') {
+      return `Prediction · ${metrics.decision || node.label || 'tracked'}`;
+    }
+    if (kind === 'signal') {
+      return `Signal · ${node.label || kind}`;
+    }
+    if (kind === 'judge') {
+      return `Judge · ${node.label || kind}`;
+    }
+    if (kind === 'scenario') {
+      return `Scenario · ${node.label || kind}`;
+    }
+    if (kind === 'subnet') {
+      const n = metrics.event_count != null ? `${metrics.event_count} trail events` : 'subnet node';
+      return `${node.label || node.id} · ${n}`;
+    }
+    return node.label || node.id || '';
+  }
+
   function showDetail(panel, node) {
     if (!node) {
       panel.hidden = true;
@@ -60,8 +85,15 @@
     panel.hidden = false;
     panel.querySelector('#mindmap-detail-kind').textContent = node.kind || 'node';
     panel.querySelector('#mindmap-detail-title').textContent = node.label || node.id;
-    panel.querySelector('#mindmap-detail-id').textContent = node.id || '';
-    renderMetrics(panel.querySelector('#mindmap-detail-metrics'), node.metrics || {});
+    panel.querySelector('#mindmap-detail-id').textContent = humanDetailLine(node);
+    const metricsEl = panel.querySelector('#mindmap-detail-metrics');
+    // Prefer human line; only dump sparse metrics keys that help
+    const slim = {};
+    const m = node.metrics || {};
+    ['action', 'decision', 'event_count', 'last_event_type', 'score'].forEach(function (k) {
+      if (m[k] != null && m[k] !== '') slim[k] = m[k];
+    });
+    renderMetrics(metricsEl, slim);
     const updated = node.updated_at ? `Updated ${node.updated_at}` : '';
     panel.querySelector('#mindmap-detail-updated').textContent = updated;
   }
@@ -196,7 +228,12 @@
       }
     }
 
-    const api = root.dataset.api || '/api/mindmap/graph';
+    const base = root.dataset.api || '/api/mindmap/graph';
+    const focus =
+      window.LivingFocus && window.LivingFocus.netuid != null
+        ? window.LivingFocus.netuid
+        : null;
+    const api = focus != null ? base + '?focus=' + encodeURIComponent(focus) : base;
     try {
       const resp = await fetch(api, { headers: { Accept: 'application/json' } });
       if (!resp.ok) {
@@ -208,10 +245,9 @@
     }
   }
 
-  async function init() {
+  async function refreshGraph() {
     const root = document.getElementById('mindmap-graph-root');
     if (!root) return;
-
     const graph = await fetchGraph(root);
     if (graph.status === 'unavailable') {
       setEmptyMessage(
@@ -221,8 +257,19 @@
       );
       return;
     }
-
+    if (graph.scoped && !(graph.nodes || []).length) {
+      setEmptyMessage(root, 'No graph edges for this focus subnet yet — trail fills as picks resolve.', true);
+    } else {
+      setEmptyMessage(root, '', false);
+    }
     renderGraph(root, graph);
+  }
+
+  async function init() {
+    const root = document.getElementById('mindmap-graph-root');
+    if (!root) return;
+    await refreshGraph();
+    document.addEventListener('living-focus:change', refreshGraph);
   }
 
   if (document.readyState === 'loading') {

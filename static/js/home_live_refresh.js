@@ -301,6 +301,10 @@
     busy = true;
     try {
       var cache = window.HomeHydrateCache;
+      var picksFresh =
+        cache &&
+        cache.picksEmittedAt &&
+        (now - Date.parse(cache.picksEmittedAt)) < CACHE_TTL_MS;
       if (cacheFresh() && cache.dailyPick && cache.subnets) {
         patchHomeDailyCall(cache.dailyPick);
         if (cache.resolved) {
@@ -310,13 +314,23 @@
         lastRefreshAt = now;
         return;
       }
-      var results = await Promise.allSettled([
-        fetchJson("/api/daily-pick"),
+      var fetches = [
+        picksFresh ? Promise.resolve({ status: "skipped" }) : fetchJson("/api/daily-pick"),
         fetchJson("/api/predictions/resolved"),
         fetchJson("/api/subnets?fields=id,netuid,name,price_change_24h,apy,staking_data,total_stake,stake,emission,source,live,sources"),
-      ]);
-      if (results[0].status === "fulfilled") {
+      ];
+      var results = await Promise.allSettled(fetches);
+      if (results[0].status === "fulfilled" && results[0].value && results[0].value !== "skipped") {
         patchHomeDailyCall(results[0].value);
+        clearShellWarming();
+      } else if (picksFresh && cache && cache.dayPick) {
+        var day = cache.dayPick;
+        patchHomeDailyCall({
+          action: day.action,
+          pick: day.pick,
+          candidate: day.candidate,
+          reason: day.reason,
+        });
         clearShellWarming();
       }
       if (results[1].status === "fulfilled") {

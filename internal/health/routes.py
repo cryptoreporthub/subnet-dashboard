@@ -29,6 +29,14 @@ async def api_ops_readiness():
     return build_readiness_report()
 
 
+@health_router.get("/api/ops/evidence")
+async def api_ops_evidence():
+    """Ops evidence bundle: pick audit + pump desk + learning outcomes artifacts."""
+    from internal.ops.evidence import build_evidence_report
+
+    return build_evidence_report()
+
+
 @health_router.get("/api/ops/desearch-spend")
 async def api_desearch_spend(recent: int = 25):
     """Rolling DeSearch API spend from X-Desearch-* response headers."""
@@ -43,3 +51,11 @@ async def api_subnet_integrations():
     from internal.integrations.status import build_integrations_status
 
     return build_integrations_status()
+
+
+@health_router.get("/api/subnet-integrations/signals")
+async def api_subnet_integration_signals():
+    """Macro mood signals from connected subnet APIs (Wave E)."""
+    from internal.integrations.signals import build_macro_signals
+
+    return build_macro_signals()

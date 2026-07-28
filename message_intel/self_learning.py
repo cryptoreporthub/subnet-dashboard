@@ -192,6 +192,11 @@ class SelfLearning:
         Adjust council weights based on observed pattern performance.
         Routes through internal.council.weights so changes persist to
         soul_map.json and flow back into the next pick generation.
+
+        Quarantine (Phase 0 / LB-8): online weight authority is
+        ``nudge_expert`` (+ trail). This path must never renormalize
+        council weights to sum→1.0. ``start_background_learning`` is not
+        started from server/background_boot — keep it off the prod hot path.
         """
         if self.db is None:
             return
@@ -221,6 +226,7 @@ class SelfLearning:
         logger.info("Adjusted council weights via nudge_expert from %d patterns", len(patterns))
 
     def start_background_learning(self, interval: int = 600) -> None:
+        # Quarantined: do not call from server.py / background_boot (Phase 0).
         if self._running:
             return
         self._running = True

@@ -167,3 +167,23 @@ jobs:
         run: |
           chmod +x scripts/warm_prod.sh
           APP_BASE_URL=https://subnet-dashboard.fly.dev ./scripts/warm_prod.sh
+      - name: Learning loop post-deploy check
+        continue-on-error: false
+        run: |
+          set -e
+          chmod +x scripts/check_learning_loop.sh
+          # Sustained health: 3 spaced probes before learning check
+          ok=0
+          for i in 1 2 3; do
+            code=$(curl -sS -m 10 -o /dev/null -w "%{http_code}" https://subnet-dashboard.fly.dev/health || echo 000)
+            echo "sustained health $i: HTTP $code"
+            [ "$code" = "200" ] && ok=$((ok + 1)) || true
+            sleep 5
+          done
+          if [ "$ok" -lt 2 ]; then
+            echo "GUARD FAIL: sustained /health below 2/3"
+            exit 1
+          fi
+          APP_BASE_URL=https://subnet-dashboard.fly.dev ./scripts/check_learning_loop.sh
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

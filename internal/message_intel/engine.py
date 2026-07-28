@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from internal.message_intel.soul_sync import apply_batch_to_soul_map
@@ -22,7 +23,7 @@ def _load_pipeline():
         from message_intel.price_tracker import PriceTracker
     except ImportError as exc:
         raise MessageIntelUnavailable(str(exc)) from exc
-    return NLPAnalyzer(), PriceTracker
+    return NLPAnalyzer(), PriceTracker()
 
 
 def ingest_message(payload: Dict[str, Any], *, snapshot_price: bool = True) -> Dict[str, Any]:
@@ -53,17 +54,23 @@ def ingest_message(payload: Dict[str, Any], *, snapshot_price: bool = True) -> D
     price_result: Optional[Dict[str, Any]] = None
     if snapshot_price:
         try:
-            price_tracker.db = db
-            snap = price_tracker.snapshot(message_id)
-            if snap is not None:
-                price_result = {"tao_usd_price": snap}
             from internal.message_intel.soul_sync import _extract_netuids
 
-            for netuid in _extract_netuids(analysis)[:1]:
-                subnet_snap = price_tracker.snapshot_subnet(message_id, netuid)
-                if subnet_snap is not None and price_result is not None:
-                    price_result["subnet_netuid"] = netuid
-                    price_result["subnet_price"] = subnet_snap
+            price_tracker.db = db
+            # Prefer subnet alpha snapshot when NLP found a netuid — more relevant
+            # than TAO/USD and avoids an extra CoinGecko hit on every chat message.
+            netuids = _extract_netuids(analysis)[:1]
+            if netuids:
+                subnet_snap = price_tracker.snapshot_subnet(message_id, netuids[0])
+                if subnet_snap is not None:
+                    price_result = {
+                        "subnet_netuid": netuids[0],
+                        "subnet_price": subnet_snap,
+                    }
+            if price_result is None:
+                snap = price_tracker.snapshot(message_id)
+                if snap is not None:
+                    price_result = {"tao_usd_price": snap}
         except Exception as exc:
             logger.warning("Price snapshot skipped for message %s: %s", message_id, exc)
             price_result = {"error": str(exc)}
@@ -142,13 +149,90 @@ def ingest_batch(messages: List[Dict[str, Any]], *, snapshot_price: bool = False
     }
 
 
+def _registry_subnet_names() -> Dict[int, str]:
+    """Registry names for trending labels — no server import (avoids cycle)."""
+    import json
+    from pathlib import Path
+
+    try:
+        raw = json.loads(Path("config/registry.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError):
+        return {}
+    names: Dict[int, str] = {}
+    for key, row in raw.items():
+        if not isinstance(row, dict):
+            continue
+        try:
+            netuid = int(row.get("id", key))
+        except (TypeError, ValueError):
+            continue
+        names[netuid] = str(row.get("name") or f"Subnet {netuid}")
+    return names
+
+
+def _primary_netuid_from_message(row: Dict[str, Any]) -> Optional[int]:
+    import json
+
+    analysis = row.get("analysis") if isinstance(row.get("analysis"), dict) else {}
+    entities = analysis.get("entities") if isinstance(analysis.get("entities"), dict) else {}
+    if not entities and analysis.get("entities_json"):
+        try:
+            raw = analysis["entities_json"]
+            parsed = json.loads(raw) if isinstance(raw, str) else raw
+            if isinstance(parsed, dict):
+                entities = parsed
+        except (TypeError, ValueError, json.JSONDecodeError):
+            entities = {}
+    for token in entities.get("subnets") or []:
+        for num in re.findall(r"\d+", str(token)):
+            try:
+                return int(num)
+            except ValueError:
+                continue
+    snap = row.get("price_snapshot") if isinstance(row.get("price_snapshot"), dict) else {}
+    if snap.get("netuid") is not None:
+        try:
+            return int(snap["netuid"])
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def _enrich_message_row(row: Dict[str, Any], names: Optional[Dict[int, str]] = None) -> Dict[str, Any]:
+    """Attach top-level netuid/subnet_name so signal hub + UI can key off the row."""
+    out = dict(row)
+    if out.get("netuid") is None:
+        netuid = _primary_netuid_from_message(out)
+        if netuid is not None:
+            out["netuid"] = netuid
+            if names and not out.get("subnet_name"):
+                out["subnet_name"] = names.get(netuid)
+    return out
+
+
 def list_messages(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
     from internal.message_intel.listener_service import listener_status
+    from internal.message_intel.rollup import build_trending_subnets, build_yesterday_leader
 
     db = get_db()
-    messages = db.list_messages(limit=limit, offset=offset)
+    names = _registry_subnet_names()
+    messages = [_enrich_message_row(m, names) for m in db.list_messages(limit=limit, offset=offset)]
     meta = live_stats(db)
     meta["listener"] = listener_status()
+    try:
+        meta["trending"] = build_trending_subnets(
+            registry_names=names, limit=8, db=db
+        )
+    except Exception as exc:
+        logger.warning("message-intel trending rollup failed: %s", exc)
+        meta["trending"] = []
+    try:
+        meta["yesterday_leader"] = build_yesterday_leader(
+            registry_names=names, db=db
+        )
+    except Exception as exc:
+        logger.warning("message-intel yesterday leader failed: %s", exc)
+        meta["yesterday_leader"] = None
     return {
         "status": "success",
         "count": len(messages),
@@ -186,6 +270,39 @@ def list_patterns(limit: int = 20) -> Dict[str, Any]:
         "count": len(patterns),
         "patterns": patterns,
     }
+
+
+def list_authors(*, days: int = 7, limit: int = 8) -> Dict[str, Any]:
+    from internal.message_intel.rollup import build_weekly_authors
+
+    try:
+        authors = build_weekly_authors(days=days, limit=limit)
+        return {
+            "status": "success",
+            "days": days,
+            "count": len(authors),
+            "authors": authors,
+            "empty": len(authors) == 0,
+        }
+    except Exception as exc:
+        logger.error("message-intel authors failed: %s", exc)
+        return {"status": "error", "authors": [], "error": str(exc), "empty": True}
+
+
+def list_topics(*, limit: int = 12) -> Dict[str, Any]:
+    from internal.message_intel.rollup import build_topics
+
+    try:
+        topics = build_topics(limit=limit)
+        return {
+            "status": "success",
+            "count": len(topics),
+            "topics": topics,
+            "empty": len(topics) == 0,
+        }
+    except Exception as exc:
+        logger.error("message-intel topics failed: %s", exc)
+        return {"status": "error", "topics": [], "error": str(exc), "empty": True}
 
 
 def pipeline_health() -> Dict[str, Any]:

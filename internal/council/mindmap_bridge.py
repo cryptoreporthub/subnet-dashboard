@@ -116,15 +116,15 @@ class MindmapBridge:
             except Exception:
                 pass
                 
-        # Fallback if registry is empty or failed to load
+        # Fallback: honest-empty — never invent SN1/2/3 theater (LB-10)
         if not recommendations:
-            recommendations = {
-                "1": {"action": "accumulate", "target_weight": 0.8},
-                "2": {"action": "reduce", "target_weight": 0.2},
-                "3": {"action": "hold", "target_weight": 0.5}
+            return {
+                "recommendations": {},
+                "data_available": False,
+                "reason": "no_registry_recommendations",
             }
-            
-        return {"recommendations": recommendations}
+
+        return {"recommendations": recommendations, "data_available": True}
 
     def update_soul_map(self, selector_output: Dict[str, Any]) -> bool:
         """

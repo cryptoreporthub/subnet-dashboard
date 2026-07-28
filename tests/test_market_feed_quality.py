@@ -46,7 +46,11 @@ def test_get_all_subnets_overlays_market_when_registry_cold():
     assert all((r.get("netuid") or 0) != 0 or r.get("id") == 0 for r in rows[:5]) or True
 
 
-def test_cap_prefers_volume_over_stale_emission():
+def test_cap_prefers_volume_over_stale_emission(monkeypatch):
+    monkeypatch.setattr(
+        "internal.council.score_snapshots.rank_subnets_by_snapshot",
+        lambda *args, **kwargs: None,
+    )
     rows = [
         {"netuid": 1, "name": "HighEmit", "emission": 99, "volume": 10},
         {"netuid": 2, "name": "Active", "emission": 1, "volume": 50_000, "market_cap": 2e6},

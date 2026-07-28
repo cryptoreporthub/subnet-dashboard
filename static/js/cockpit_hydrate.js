@@ -737,17 +737,72 @@
     }
   }
 
-  function syncProofBandGraded(graded) {
-    if (!graded) return;
-    var meta = document.querySelector('#proof-band-score-hero .proof-band__meta');
-    if (!meta) return;
-    var accMatch = meta.textContent.match(/^([\d.]+)%/);
-    var acc = accMatch ? accMatch[1] : null;
-    if (acc != null) {
-      meta.textContent = graded + ' graded · ' + acc + '% dir. · published, not curated';
-    } else {
-      meta.textContent = graded + ' graded · published, not curated';
+  function syncProofBandFromTrust(tb) {
+    var hero = document.getElementById('proof-band-score-hero');
+    var section = document.getElementById('section-proof-band');
+    if (!hero) return;
+    var pctEl = document.getElementById('proof-band-pct');
+    var metaEl = document.getElementById('proof-band-meta');
+    var quietEl = document.getElementById('proof-band-quiet');
+    if (!quietEl) {
+      quietEl = hero.querySelector('.proof-band__quiet');
     }
+    var ready = !!(tb && tb.ready);
+    var graded = tb && tb.graded != null ? Number(tb.graded) : 0;
+    var minG = tb && tb.min_graded != null ? Number(tb.min_graded) : 30;
+    var accRaw = tb && tb.accuracy != null ? Number(tb.accuracy) : null;
+    var accPct = accRaw != null ? Math.round(accRaw * 100) : null;
+
+    if (section) section.setAttribute('data-brain-state', ready ? 'live' : 'building');
+
+    if (ready && accPct != null && graded > 0) {
+      if (!pctEl) {
+        pctEl = document.createElement('div');
+        pctEl.className = 'proof-band__pct';
+        pctEl.id = 'proof-band-pct';
+        hero.insertBefore(pctEl, hero.firstChild);
+      }
+      pctEl.hidden = false;
+      pctEl.textContent = accPct + '%';
+      if (!metaEl) {
+        metaEl = document.createElement('p');
+        metaEl.className = 'proof-band__meta';
+        metaEl.id = 'proof-band-meta';
+        pctEl.insertAdjacentElement('afterend', metaEl);
+      }
+      metaEl.hidden = false;
+      metaEl.textContent = graded + ' graded · published, not curated';
+      if (quietEl) quietEl.hidden = true;
+    } else {
+      if (pctEl) {
+        pctEl.hidden = true;
+        pctEl.textContent = '—';
+      }
+      if (metaEl) metaEl.hidden = true;
+      if (!quietEl) {
+        quietEl = document.createElement('p');
+        quietEl.className = 'proof-band__quiet';
+        quietEl.id = 'proof-band-quiet';
+        hero.appendChild(quietEl);
+      }
+      quietEl.hidden = false;
+      if (tb && tb.message) {
+        quietEl.textContent = tb.message;
+      } else if (graded > 0) {
+        quietEl.textContent = 'Building trust gate — ' + graded + '/' + minG + ' graded';
+      } else {
+        quietEl.textContent = 'Building graded history — scores appear after calls resolve.';
+      }
+    }
+  }
+
+  function syncProofBandGraded(graded) {
+    /* legacy callers — prefer syncProofBandFromTrust */
+    if (!graded) return;
+    var meta = document.getElementById('proof-band-meta') ||
+      document.querySelector('#proof-band-score-hero .proof-band__meta');
+    if (!meta || meta.hidden) return;
+    meta.textContent = graded + ' graded · published, not curated';
   }
 
   function patchK3ConvictionRing(confPct) {
@@ -1018,6 +1073,16 @@
         resolveCrumb.hidden = true;
       }
     }
+    var socialCrumb = document.getElementById('k3-social-crumb');
+    if (socialCrumb) {
+      if (brief.social_crumb) {
+        socialCrumb.textContent = brief.social_crumb;
+        socialCrumb.hidden = false;
+      } else {
+        socialCrumb.textContent = '';
+        socialCrumb.hidden = true;
+      }
+    }
     setText('k3-brief-thesis', brief.thesis || '');
     setText('k3-brief-vs', brief.vs || '');
     setText('k3-brief-vs-hold', brief.vs_hold_tao || '');
@@ -1149,30 +1214,35 @@
     var wrap = document.getElementById('pd-meta-wrap');
     if (!wrap) return;
     var census =
-      ' · <span id="pd-census-lead">' +
+      '<div class="pds-census" id="pd-census" aria-label="Desk census">' +
+      '<span class="pds-census__chip pds-census__chip--lead"><b id="pd-census-lead">' +
       early +
-      '</span> lead · <span id="pd-census-live">' +
+      '</b> lead</span>' +
+      '<span class="pds-census__chip pds-census__chip--live"><b id="pd-census-live">' +
       live +
-      '</span> live · <span id="pd-census-exit">' +
+      '</b> live</span>' +
+      '<span class="pds-census__chip pds-census__chip--exit"><b id="pd-census-exit">' +
       exitN +
-      '</span> exit';
+      '</b> exit</span></div>';
     if (trust && trust.ready && trust.headline_pct != null) {
       var n = trust.headline_n != null ? trust.headline_n : (trust.early && trust.early.n) || 0;
       wrap.innerHTML =
-        '<p class="pds-proof__line"><b>' +
+        '<div class="pds-proof__ready">' +
+        '<span class="pds-proof__pct">' +
         esc(trust.headline_pct) +
-        '%</b> hit +2% in 1h · n=' +
+        '%</span>' +
+        '<span class="pds-proof__copy">hit +2% in 1h · n=' +
         esc(n) +
-        census +
-        '</p>';
+        '</span></div>' +
+        census;
     } else {
       var line =
         (trust && trust.line) || 'Early alerts: grading starts once lead phase entries resolve (1h).';
       wrap.innerHTML =
         '<p class="pds-proof__line pds-proof__line--building" id="pump-alert-trust">' +
         esc(line) +
-        census +
-        '</p>';
+        '</p>' +
+        census;
     }
   }
 
@@ -1203,14 +1273,13 @@
       ['COOLING', 'Cool'],
     ];
     var phaseHtml = order
-      .map(function (pair, idx) {
+      .map(function (pair) {
         return (
-          (idx ? ' · ' : '') +
-          '<span' +
-          (phase === pair[0] ? ' class="pds-hero__phase-now"' : '') +
-          '>' +
+          '<li class="pds-phase__step' +
+          (phase === pair[0] ? ' pds-phase__step--now' : '') +
+          '">' +
           pair[1] +
-          '</span>'
+          '</li>'
         );
       })
       .join('');
@@ -1264,9 +1333,9 @@
       '%"></span>' +
       sparkHtml +
       '</div>' +
-      '<p class="pds-hero__phase" aria-label="Formation phase">' +
+      '<ol class="pds-phase" aria-label="Formation phase">' +
       phaseHtml +
-      '</p>' +
+      '</ol>' +
       (thesis ? '<p class="pds-hero__thesis">' + esc(thesis) + '</p>' : '') +
       (triggerCopy ? '<p class="pds-hero__trigger">' + esc(triggerCopy) + '</p>' : '') +
       '<div class="pds-strip" aria-label="Metrics and triad"><p class="pds-strip__metrics">' +
@@ -1288,6 +1357,18 @@
       esc(labels.coil || 'OPEN') +
       '</span></p></div>' +
       (row.size_line ? '<p class="pds-hero__chip">' + esc(row.size_line) + '</p>' : '') +
+      (row.whale_archetype
+        ? '<p class="pds-hero__chip pds-hero__chip--whale">' + esc(row.whale_archetype) + '</p>'
+        : '') +
+      (row.wallet_chip
+        ? '<p class="pds-hero__chip pds-hero__chip--wallet">' + esc(row.wallet_chip) + '</p>'
+        : '') +
+      (row.telegram_chip
+        ? '<p class="pds-hero__chip pds-hero__chip--tg">' + esc(row.telegram_chip) + '</p>'
+        : '') +
+      (row.owner_chip
+        ? '<p class="pds-hero__chip pds-hero__chip--owner">' + esc(row.owner_chip) + '</p>'
+        : '') +
       '<a class="pds-hero__cta home-cta home-cta--primary" href="/subnet/' +
       esc(row.netuid) +
       '">Open SN' +
@@ -1313,6 +1394,7 @@
         'JUST STARTED': 'JUST',
         'CHASE RISK': 'CHASE',
         FADING: 'FADE',
+        'NEAR GATE': 'NEAR',
       }[badge] || badge;
     var labels = row.triad_labels || {};
     var triad = row.triad || {};
@@ -1451,7 +1533,12 @@
     if (row.vol_pct != null) rawBits.push('<span>' + esc(row.vol_pct) + '% vol intensity</span>');
     var chipsHtml = '';
     if (row.size_line) chipsHtml += '<p class="pd-chip">' + esc(row.size_line) + '</p>';
+    if (row.whale_archetype)
+      chipsHtml += '<p class="pd-chip pd-chip--whale">' + esc(row.whale_archetype) + '</p>';
     if (row.wallet_chip) chipsHtml += '<p class="pd-chip pd-chip--wallet">' + esc(row.wallet_chip) + '</p>';
+    if (row.telegram_chip)
+      chipsHtml += '<p class="pd-chip pd-chip--tg">' + esc(row.telegram_chip) + '</p>';
+    if (row.owner_chip) chipsHtml += '<p class="pd-chip pd-chip--owner">' + esc(row.owner_chip) + '</p>';
     return (
       '<article class="pd-lead pd-lead--' +
       esc(timing) +
@@ -1532,6 +1619,7 @@
         'JUST STARTED': 'JUST',
         'CHASE RISK': 'CHASE',
         FADING: 'FADE',
+        'NEAR GATE': 'NEAR',
       }[badge] || badge;
     var why = row.trigger || row.subtitle || row.badge || '';
     if (why.length > 72) why = why.slice(0, 69).replace(/\s+\S*$/, '') + '…';
@@ -1583,6 +1671,20 @@
       return r.timing === 'exit';
     });
     if (!warm.length && !active.length) {
+      var watch = (payload && payload.watch) || [];
+      if (watch.length) {
+        var watchHtml =
+          '<p class="pds-empty-note">No lead alerts yet — these names are STIRRING below the gate.</p>' +
+          '<h3 class="pds-board__lbl pds-board__lbl--watch">Almost warming <span>' +
+          watch.length +
+          '</span></h3>';
+        watch.forEach(function (row) {
+          watchHtml += renderPumpScanRow(row, 'watch');
+        });
+        deskPanel.innerHTML = watchHtml;
+        if (typeof window.__paintSparks === 'function') window.__paintSparks();
+        return;
+      }
       deskPanel.innerHTML =
         '<p class="' +
         (isPumpScanMode() ? 'pds-empty' : 'pd-empty') +
@@ -1729,6 +1831,8 @@
       countEl.style.display = count > 0 ? '' : 'none';
     }
     if (!count && !exitCount) {
+      var watchRows = payload.watch || [];
+      if (!watchRows.length) {
       var deskPanel = document.getElementById('pump-desk-panel');
       if (deskPanel) {
         deskPanel.innerHTML =
@@ -1745,6 +1849,16 @@
       }
       var emptyMap = document.getElementById('pump-map-data');
       if (emptyMap) emptyMap.textContent = '[]';
+      if (window.PumpMap) window.PumpMap.refresh([]);
+      return;
+      }
+      renderPumpDeskPanel([], payload.empty_message, payload);
+      if (listPanel) {
+        listPanel.hidden = true;
+        listPanel.innerHTML = '';
+      }
+      var watchMap = document.getElementById('pump-map-data');
+      if (watchMap) watchMap.textContent = '[]';
       if (window.PumpMap) window.PumpMap.refresh([]);
       return;
     }
@@ -2108,29 +2222,42 @@
     var strip = section.querySelector('.kpi-strip');
     if (!strip) return;
 
-    var tb = stats.trust_banner || {};
-    var accRaw = tb.accuracy != null ? tb.accuracy : null;
-    var acc = Math.round((Number(accRaw) || 0) * 1000) / 10;
-    var graded = tb.graded != null ? tb.graded : (Number(stats.correct || 0) + Number(stats.wrong || 0));
-    var expired = Number(stats.expired != null ? stats.expired : tb.expired || 0);
-    var expiredRate = stats.expired_rate != null ? stats.expired_rate : tb.expired_rate;
+    var tb = stats.trust_banner;
+    var hasTrust = tb && typeof tb === 'object';
+    var accRaw = hasTrust && tb.accuracy != null ? tb.accuracy : null;
+    var acc = accRaw != null ? Math.round(Number(accRaw) * 1000) / 10 : null;
+    var graded = hasTrust && tb.graded != null ? Number(tb.graded) : 0;
+    var correct = hasTrust ? Number(tb.correct || 0) : 0;
+    var wrong = hasTrust ? Number(tb.wrong || 0) : 0;
+    var expired = hasTrust && tb.expired != null ? Number(tb.expired) : null;
+    var expiredRate = hasTrust && tb.expired_rate != null ? tb.expired_rate : null;
     var expiredPct = expiredRate != null ? Math.round(Number(expiredRate) * 1000) / 10 : null;
-    var wd = stats.watchdog || tb.watchdog || {};
-    var ready = stats.brain_ui_ready != null ? stats.brain_ui_ready : tb.ready;
+    var wd = hasTrust ? (tb.watchdog || stats.watchdog || {}) : (stats.watchdog || {});
+    var ready = hasTrust && tb.ready != null ? tb.ready : stats.brain_ui_ready;
 
     var accEl = document.getElementById('kpi-accuracy');
     if (accEl) {
-      accEl.textContent = graded > 0 ? acc + '%' : '—';
-      accEl.className = 'val' + (acc >= 50 ? ' pos' : acc > 0 ? ' neg' : '');
+      /* RF-2: never paint accuracy until integrity gate ready */
+      accEl.textContent = ready && acc != null && graded > 0 ? acc + '%' : '—';
+      accEl.className = 'val' + (ready && acc != null && acc >= 50 ? ' pos' : ready && acc != null && acc > 0 ? ' neg' : '');
     }
     var gradedEl = document.getElementById('kpi-graded');
     if (gradedEl) {
-      gradedEl.textContent = (stats.correct || 0) + '✓ / ' + (stats.wrong || 0) + '✗ graded (n=' + graded + ')';
+      if (hasTrust && ready && graded > 0) {
+        gradedEl.textContent = correct + '✓ / ' + wrong + '✗ graded (n=' + graded + ')';
+      } else if (hasTrust && tb.message) {
+        gradedEl.textContent = tb.message;
+      } else if (hasTrust && graded > 0) {
+        gradedEl.textContent = graded + ' graded · trust gate pending';
+      } else {
+        gradedEl.textContent = '— graded (trust banner building)';
+      }
     }
-    syncProofBandGraded(graded);
+    if (hasTrust) syncProofBandFromTrust(tb);
+    else syncProofBandGraded(0);
     var expEl = document.getElementById('kpi-expired');
     if (expEl) {
-      expEl.textContent = String(expired);
+      expEl.textContent = expired != null ? String(expired) : '—';
       expEl.className = 'val' + (expiredPct != null && expiredPct >= 10 ? ' neg' : '');
     }
     var expRateEl = document.getElementById('kpi-expired-rate');
@@ -2138,7 +2265,9 @@
       expRateEl.textContent = expiredPct != null ? expiredPct + '% of ledger' : 'resolver backlog';
     }
     var pendEl = document.getElementById('kpi-pending');
-    if (pendEl) pendEl.textContent = String(stats.pending || 0);
+    if (pendEl) {
+      pendEl.textContent = hasTrust && tb.pending != null ? String(tb.pending) : String(stats.pending || 0);
+    }
     var intEl = document.getElementById('kpi-integrity');
     if (intEl) {
       intEl.textContent = ready ? 'Ready' : 'Blocked';
@@ -2149,7 +2278,7 @@
     if (wdEl) {
       if (wd.warning) {
         wdEl.textContent = wd.reason || 'watchdog warning';
-      } else if (tb.message) {
+      } else if (hasTrust && tb.message) {
         wdEl.textContent = tb.message;
       } else if (ready) {
         wdEl.textContent = 'trust surfaces unlocked';
@@ -2158,7 +2287,7 @@
       }
     }
     var trustWhisper = document.getElementById('council-trust-whisper');
-    if (trustWhisper && graded > 0) {
+    if (trustWhisper && hasTrust && graded > 0 && acc != null) {
       var line = graded + ' graded · ' + acc + '% dir.';
       if (tb.streak_whisper) line += ' · ' + tb.streak_whisper;
       trustWhisper.textContent = line;
@@ -2779,9 +2908,27 @@
 
   var SUBNET_FIELDS = 'id,netuid,name,price_change_24h,apy,staking_data,total_stake,stake,emission,source,live,sources';
 
+  function storyStripUrl() {
+    var f = window.LivingFocus && window.LivingFocus.netuid;
+    return f != null ? '/api/story-strip?focus=' + encodeURIComponent(f) : '/api/story-strip';
+  }
+
+  async function refreshStoryStrip() {
+    try {
+      var strip = await fetchJsonRetry(storyStripUrl(), 22000, 2);
+      if (window.HomeLiveRefresh && window.HomeLiveRefresh.patchStoryStrip) {
+        window.HomeLiveRefresh.patchStoryStrip(strip);
+      }
+    } catch (e) {
+      console.warn('[cockpit_hydrate] story-strip refresh failed', e);
+    }
+  }
+
   async function run() {
     if (document.documentElement.dataset.hydrate !== '1') return;
     showHydrateSkeletons();
+    // H1: hour-watch rib via cockpit.picks — connect before deferred tier-3 panels
+    connectCockpitStream();
 
     var stats = null;
     var subnets = [];
@@ -2831,7 +2978,7 @@
           2
         ),
         loadLearningStats(),
-        fetchJsonRetry('/api/story-strip', 22000, 2).then(function (strip) {
+        fetchJsonRetry(storyStripUrl(), 22000, 2).then(function (strip) {
           if (window.HomeLiveRefresh && window.HomeLiveRefresh.patchStoryStrip) {
             window.HomeLiveRefresh.patchStoryStrip(strip);
           }
@@ -2882,7 +3029,7 @@
       window.HomeHydrateCache = {
         dailyPick: lastDailyPickPayload,
         simivision: lastSimivisionTop ? { top: lastSimivisionTop, meta: lastSimivisionMeta } : null,
-        trail: trail,
+        trail: null,
         subnets: subnets,
         subnetsMeta: subnetsMeta,
         at: Date.now(),
@@ -2944,6 +3091,11 @@
         trail = safePayload(trailPayload).trail || [];
         renderTrail(trail);
         patchK3LifecycleFromTrail(trail, lastDailyPickPayload);
+        if (window.HomeHydrateCache) {
+          window.HomeHydrateCache.trail = trail;
+          window.HomeHydrateCache.at = Date.now();
+        }
+        document.dispatchEvent(new CustomEvent('home:hydrate-trail', { detail: { trail: trail } }));
       } catch (e) {
         console.warn('[cockpit_hydrate] trail fetch failed', e);
       }
@@ -3049,6 +3201,10 @@
       });
     });
   }
+
+  document.addEventListener('living-focus:change', function () {
+    refreshStoryStrip();
+  });
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {

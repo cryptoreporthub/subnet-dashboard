@@ -23,6 +23,7 @@ import os
 import tempfile
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
 
@@ -40,6 +41,7 @@ except Exception:  # pragma: no cover - keep import-safe if file_utils is unavai
 RESOLVER_REFRESH_MINUTES = int(os.environ.get("RESOLVER_REFRESH_MINUTES", "15"))
 MAX_BACKOFF_MINUTES = int(os.environ.get("RESOLVER_MAX_BACKOFF_MINUTES", "240"))
 RESOLVER_BATCH_SIZE = int(os.environ.get("RESOLVER_BATCH_SIZE", "32"))
+RESOLVER_CYCLE_TIMEOUT_SECONDS = int(os.environ.get("RESOLVER_CYCLE_TIMEOUT_SECONDS", "120"))
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 JOB_ID = "prediction-resolver-scheduler"
 
@@ -219,7 +221,23 @@ class PredictionResolverScheduler:
 
     def _tick(self) -> Dict[str, Any]:
         """Run one resolution cycle and reschedule."""
-        result = self._run_refresh_cycle()
+        from internal.heavy_job_gate import heavy_job_slot
+
+        with heavy_job_slot("prediction_resolver") as acquired:
+            if not acquired:
+                skipped = {
+                    "ok": True,
+                    "run_at": _now_iso(),
+                    "skipped": "heavy_job_busy",
+                    "resolved_now": 0,
+                    "expired_now": 0,
+                    "pending": 0,
+                }
+                self._persist_cycle_summary(skipped)
+                if self._running:
+                    self._schedule_next(self.refresh_minutes)
+                return skipped
+            result = self._run_refresh_cycle_with_timeout()
 
         with self._lock:
             self._last_run_at = result["run_at"]
@@ -242,6 +260,29 @@ class PredictionResolverScheduler:
         if self._running:
             self._schedule_next(next_interval)
         return result
+
+    def _run_refresh_cycle_with_timeout(self) -> Dict[str, Any]:
+        timeout = RESOLVER_CYCLE_TIMEOUT_SECONDS
+        if timeout <= 0:
+            return self._run_refresh_cycle()
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
+            fut = pool.submit(self._run_refresh_cycle)
+            try:
+                return fut.result(timeout=timeout)
+            except FuturesTimeoutError:
+                result = {
+                    "ok": False,
+                    "run_at": _now_iso(),
+                    "resolved_now": 0,
+                    "expired_now": 0,
+                    "pending": 0,
+                    "error": f"cycle_timeout_{timeout}s",
+                }
+                self._persist_cycle_summary(result)
+                return result
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
 
     def _run_refresh_cycle(self) -> Dict[str, Any]:
         """Grade due predictions, expire stale ones, persist a cycle summary."""
@@ -317,6 +358,7 @@ class PredictionResolverScheduler:
             "expired_now": result.get("expired_now", 0),
             "pending": result.get("pending", 0),
             "error": result.get("error"),
+            "skipped": result.get("skipped"),
             "watchdog": result.get("watchdog"),
             "batch_size": result.get("batch_size", 0),
             "round_robin_cursor": result.get("round_robin_cursor"),
@@ -333,18 +375,26 @@ class PredictionResolverScheduler:
 
 
 def _default_subnets() -> Any:
-    """Return the live subnet snapshot, falling back to an empty list.
+    """Return subnet rows for resolver ticks — bounded live fetch, registry fallback.
 
     Imported lazily so this module never creates a circular import with
     ``server`` (which imports the scheduler on startup).
     """
     try:
-        from server import _get_subnets_with_source
+        from server import _get_subnets_hydrate, _get_subnets_with_source
 
-        subnets, _ = _get_subnets_with_source()
+        subnets, _ = _get_subnets_with_source(timeout=15)
+        if not subnets:
+            subnets, _ = _get_subnets_hydrate()
         return subnets
     except Exception:
-        return []
+        try:
+            from server import _get_subnets_hydrate
+
+            subnets, _ = _get_subnets_hydrate()
+            return subnets
+        except Exception:
+            return []
 
 
 # ------------------------------------------------------------------------------

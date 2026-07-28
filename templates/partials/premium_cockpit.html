@@ -19,13 +19,15 @@
 {% set focus_netuid = dp_subnet.netuid if dp_subnet and dp_subnet.netuid is not none else none %}
 {% set tb = trust_banner if trust_banner is mapping else {} %}
 {% set cal_n = tb.graded|default(0) %}
-{% if tb.accuracy is not none and cal_n|int > 0 %}
+{% set tb_ready = tb.ready|default(false) %}
+{% if tb_ready and tb.accuracy is not none and cal_n|int > 0 %}
   {% set cal_acc = (tb.accuracy|float * 100)|round(1) %}
-{% elif cal_n|int > 0 and tb.correct is defined and tb.correct is not none %}
+{% elif tb_ready and cal_n|int > 0 and tb.correct is defined and tb.correct is not none %}
   {% set cal_acc = ((tb.correct|float / cal_n|float) * 100)|round(1) %}
 {% else %}
   {% set cal_acc = none %}
 {% endif %}
+{% set tb_min = tb.min_graded|default(30) %}
 {% set wr_meta = simivision.meta if simivision is mapping and simivision.meta is mapping else {} %}
 {% set caution = wr_meta.caution_cells if wr_meta.caution_cells is iterable and wr_meta.caution_cells is not string else [] %}
 {% set pa = pump_alerts if pump_alerts is mapping else {} %}
@@ -61,6 +63,8 @@
 {% with pump_compact=true %}
 {% include "partials/premium/pump_alert_scan.html" %}
 {% endwith %}
+{# SS-TG W0 — Subnet Summers Telegram desk first-class (not buried in More intel) #}
+{% include "partials/premium/message_intel_feed.html" %}
 <section class="sr-weighing-rib wrap-pad" id="section-strategic-weighing" aria-labelledby="sr-weighing-rib-title">
   <div class="sr-weighing-rib__head">
     <h2 class="sr-weighing-rib__title" id="sr-weighing-rib-title">Council weighing</h2>
@@ -71,14 +75,16 @@
 {% include "partials/premium/living_focus.html" %}
 {% include "partials/premium/brain_letter.html" %}
 
-<section id="section-proof-band" class="proof-band wrap-pad" aria-labelledby="proof-band-title" data-brain-state="{{ 'live' if cal_n|int > 0 else 'building' }}">
+<section id="section-proof-band" class="proof-band wrap-pad" aria-labelledby="proof-band-title" data-brain-state="{{ 'live' if tb_ready else 'building' }}">
   <h2 id="proof-band-title" class="proof-band__title">What the loop learned</h2>
   <div class="proof-band__score-hero" id="proof-band-score-hero">
-    {% if cal_n|int > 0 and cal_acc is not none %}
-    <div class="proof-band__pct">{{ cal_acc|round(0) }}%</div>
-    <p class="proof-band__meta">{{ cal_n }} graded · published, not curated</p>
+    {% if tb_ready and cal_acc is not none %}
+    <div class="proof-band__pct" id="proof-band-pct">{{ cal_acc|round(0) }}%</div>
+    <p class="proof-band__meta" id="proof-band-meta">{{ cal_n }} graded · published, not curated</p>
     {% else %}
-    <p class="proof-band__quiet">Building graded history — scores appear after calls resolve.</p>
+    <div class="proof-band__pct" id="proof-band-pct" hidden>—</div>
+    <p class="proof-band__meta" id="proof-band-meta" hidden></p>
+    <p class="proof-band__quiet" id="proof-band-quiet">{% if tb.message %}{{ tb.message }}{% elif cal_n|int > 0 %}Building trust gate — {{ cal_n }}/{{ tb_min }} graded{% else %}Building graded history — scores appear after calls resolve.{% endif %}</p>
     {% endif %}
     {% if soul_weights_chip %}
     <a class="sr-weights-chip" id="proof-weights-chip" href="#pro-cockpit">Weights updated · {{ soul_weights_chip.ago }}</a>
@@ -110,6 +116,10 @@
   {% include "partials/premium/paper_portfolio.html" %}
 </section>
 
+{# Brain spine — mindmap + trail next to Focus/Proof (not Market landfill) #}
+{% include "partials/premium/mindmap.html" %}
+{% include "partials/premium/trail.html" %}
+
 <details class="intel-ribs wrap-pad" id="intel-ribs">
   <summary class="intel-ribs__summary">More intel · movers · dev signals</summary>
   <div class="intel-ribs__body">
@@ -130,7 +140,7 @@
 <details class="pro-drawer wrap-pad" id="pro-cockpit">
   <summary class="pro-drawer__summary">
     <span>Pro cockpit</span>
-    <span class="pro-drawer__hint">Council bench · KPI · backtest</span>
+    <span class="pro-drawer__hint">Story path · council bench · KPI · backtest</span>
   </summary>
   <div class="pro-drawer__body council-primary">
     {% include "partials/premium/story_path.html" %}
@@ -161,9 +171,6 @@
     {% include "partials/premium/undervalued.html" %}
     {% include "partials/premium/radar.html" %}
     {% include "partials/premium/subnet_groups.html" %}
-    {% include "partials/premium/mindmap.html" %}
-    {% include "partials/premium/trail.html" %}
-    {% include "partials/premium/message_intel_feed.html" %}
     {% include "partials/premium/social.html" %}
     {% include "partials/premium/chat.html" %}
   </div>

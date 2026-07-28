@@ -7,6 +7,7 @@ import logging
 import os
 import threading
 import time
+import asyncio
 from datetime import datetime, timezone
 from typing import Any, Dict, Tuple
 
@@ -166,6 +167,39 @@ def _compute_learning_metrics() -> Dict[str, Any]:
     }
 
 
+def _mindmap_conviction_block(daily_payload: Dict[str, Any] | None) -> Dict[str, Any]:
+    """RF-2: no fake 50% — daily pick conviction when present, else honest-empty."""
+    conf = None
+    if isinstance(daily_payload, dict):
+        for key in ("final_confidence", "confidence"):
+            raw = daily_payload.get(key)
+            if raw is not None:
+                conf = raw
+                break
+        if conf is None:
+            pick = daily_payload.get("pick") if isinstance(daily_payload.get("pick"), dict) else {}
+            cand = daily_payload.get("candidate") if isinstance(daily_payload.get("candidate"), dict) else {}
+            conf = pick.get("final_confidence") or pick.get("confidence") or cand.get("final_confidence")
+    if conf is not None:
+        try:
+            val = float(conf)
+            pct = round(val * 100, 1) if val <= 1.0 else round(val, 1)
+            return {
+                "data_available": True,
+                "current": pct,
+                "trend": "stable",
+                "explanation": "From today's daily call conviction",
+            }
+        except (TypeError, ValueError):
+            pass
+    return {
+        "data_available": False,
+        "current": None,
+        "trend": None,
+        "explanation": "No aggregated conviction — see daily call and Living Focus",
+    }
+
+
 @learning_router.get("/api/mindmap/summary")
 async def api_mindmap_summary():
     """Mindmap summary wired to expert weights and resolver stats."""
@@ -183,6 +217,7 @@ async def api_mindmap_summary():
     resolved = snap["resolved_payload"]
 
     dpick_block: Dict[str, Any] = {"shortlist": []}
+    daily_payload: Dict[str, Any] = {}
     try:
         from internal.council.daily_pick_engine import get_or_create_today_pick
         from internal.learning.dpick_shortlist import (
@@ -200,29 +235,23 @@ async def api_mindmap_summary():
         logger.warning("mindmap summary dpick.shortlist failed: %s", exc)
         dpick_block = {"shortlist": []}
 
+    conviction_block = _mindmap_conviction_block(daily_payload)
+
     return {
         "status": "success",
         "data": {
-            "acknowledgment": "Dashboard data ready",
-            "noticed": ["Using safe cached subnet snapshot"],
-            "opinion_changes": ["No significant opinion changes"],
-            "technical_indicators": ["No strong technical signals"],
-            "conviction": {
-                "current": 50.0,
-                "trend": "stable",
-                "explanation": f"Derived from {simivision.get('meta', {}).get('count', 0)} subnets",
-            },
+            "conviction": conviction_block,
             "expert_insights": [
                 {"expert": name.title(), "weight": weight}
                 for name, weight in expert_weights.items()
             ],
             "expert_weights": expert_weights,
             "resolved_predictions": {
-                "total": resolved.get("stats", {}).get("total", 0),
-                "correct": resolved.get("stats", {}).get("correct", 0),
-                "wrong": resolved.get("stats", {}).get("wrong", 0),
-                "pending": resolved.get("stats", {}).get("pending", 0),
-                "accuracy": resolved.get("stats", {}).get("accuracy", 0.0),
+                "total": resolved.get("stats", {}).get("total", resolved.get("total", 0)),
+                "correct": resolved.get("stats", {}).get("correct", resolved.get("correct", 0)),
+                "wrong": resolved.get("stats", {}).get("wrong", resolved.get("wrong", 0)),
+                "pending": resolved.get("stats", {}).get("pending", resolved.get("pending", 0)),
+                "accuracy": resolved.get("stats", {}).get("accuracy", resolved.get("accuracy")),
             },
             "scenario_memory": snap["scenario"],
             "rotation_tracker": _rotation_summary(),
@@ -230,9 +259,11 @@ async def api_mindmap_summary():
                 "enabled": True,
                 "records": stats.get("total_records", 0),
                 "last_updated": stats.get("last_updated")
-                or simivision.get("meta", {}).get("updated_at"),
+                or (simivision or {}).get("meta", {}).get("updated_at"),
             },
             "dpick": dpick_block,
+            "engine_stats": stats,
+            "simivision_meta": (simivision or {}).get("meta") or {},
         },
     }
 
@@ -268,11 +299,14 @@ async def api_mindmap_state():
 
 
 @learning_router.get("/api/story-strip")
-async def api_story_strip(limit: int = Query(default=8, ge=1, le=20)):
+async def api_story_strip(
+    limit: int = Query(default=8, ge=1, le=20),
+    focus: int | None = Query(default=None, ge=1),
+):
     """Compact recent call outcomes for proof-band hydrate."""
     from internal.analytics.story_strip import build_story_strip
 
-    return build_story_strip(limit=limit)
+    return build_story_strip(limit=limit, focus_netuid=focus)
 
 
 @learning_router.get("/api/mindmap/story-path")
@@ -406,6 +440,15 @@ async def share_call_page(prediction_id: str, request: Request):
     )
 
 
+@learning_router.get("/api/learning/health")
+async def api_learning_loop_health():
+    """Phase 0 — pick→ledger→resolver loop status (no scoring)."""
+    from internal.learning.loop_health import build_learning_loop_health
+
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, build_learning_loop_health)
+
+
 @learning_router.get("/api/learning/stats")
 async def api_learning_stats():
     snap = _learning_snapshot()
@@ -515,8 +558,17 @@ async def api_predictions_resolver_state():
     }
 
 
+def _resolver_allowed_on_this_process() -> bool:
+    """Prod web serves HTTP only — resolver runs on inline worker."""
+    from internal.run_mode import background_on_web, is_worker_mode
+
+    return is_worker_mode() or background_on_web()
+
+
 def _ensure_resolver_scheduler():
     """Start the resolver scheduler singleton if headless (tests / first trigger)."""
+    if not _resolver_allowed_on_this_process():
+        return None
     scheduler = get_prediction_resolver_scheduler()
     if scheduler is None:
         start_prediction_resolver_scheduler(immediate=False)
@@ -534,6 +586,11 @@ def _ensure_resolver_scheduler():
 @learning_router.post("/api/learning/trigger")
 async def api_learning_trigger():
     """Manually run a prediction-resolution cycle and return scheduler state."""
+    if not _resolver_allowed_on_this_process():
+        raise HTTPException(
+            status_code=503,
+            detail="prediction resolver runs on background worker only (BACKGROUND_ON_WEB=off)",
+        )
     scheduler = _ensure_resolver_scheduler()
     cycle: Dict[str, Any] = {}
     if scheduler is not None:
@@ -555,6 +612,11 @@ async def api_learning_trigger():
 @learning_router.post("/api/predictions/resolver/run")
 async def api_predictions_resolver_run():
     """Trigger a single prediction-resolution cycle on demand."""
+    if not _resolver_allowed_on_this_process():
+        raise HTTPException(
+            status_code=503,
+            detail="prediction resolver runs on background worker only (BACKGROUND_ON_WEB=off)",
+        )
     scheduler = _ensure_resolver_scheduler()
     if scheduler is None:
         return {

@@ -115,6 +115,47 @@ def test_build_story_strip_labels_outcomes(tmp_path, monkeypatch):
     assert strip["stats"]["wrong"] == 1
 
 
+def test_story_strip_focus_scopes_netuid(tmp_path, monkeypatch):
+    preds = tmp_path / "predictions.json"
+    preds.write_text(
+        json.dumps(
+            {
+                "predictions": [],
+                "resolved": [
+                    {
+                        "id": "a1",
+                        "netuid": 7,
+                        "name": "Sub7",
+                        "direction": "up",
+                        "predicted_pct": 5.0,
+                        "actual_pct": 6.0,
+                        "status": "resolved",
+                        "correct": True,
+                    },
+                    {
+                        "id": "a2",
+                        "netuid": 3,
+                        "name": "Sub3",
+                        "direction": "down",
+                        "predicted_pct": -4.0,
+                        "actual_pct": 2.0,
+                        "status": "resolved",
+                        "correct": False,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    import internal.learning.predictions_store as ps
+
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(preds))
+    strip = build_story_strip(limit=5, focus_netuid=7)
+    assert strip["focus_netuid"] == 7
+    assert len(strip["items"]) == 1
+    assert strip["items"][0]["netuid"] == 7
+
+
 def test_index_renders_story_strip_section():
     import server as srv
 

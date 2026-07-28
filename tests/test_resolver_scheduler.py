@@ -508,6 +508,33 @@ def test_default_subnets_fallback_returns_list():
     assert isinstance(result, list)
 
 
+def test_default_subnets_uses_bounded_live_fetch(monkeypatch):
+    seen_timeout = None
+
+    def _with_source(timeout=None):
+        nonlocal seen_timeout
+        seen_timeout = timeout
+        return [{"netuid": 7, "price": 1.0}], "live"
+
+    monkeypatch.setattr("server._get_subnets_with_source", _with_source)
+    result = resolver_scheduler._default_subnets()
+    assert seen_timeout == 15
+    assert result[0]["netuid"] == 7
+
+
+def test_default_subnets_hydrate_when_live_empty(monkeypatch):
+    monkeypatch.setattr(
+        "server._get_subnets_with_source",
+        lambda timeout=None: ([], "none"),
+    )
+    monkeypatch.setattr(
+        "server._get_subnets_hydrate",
+        lambda: ([{"netuid": 3, "price": 1.0}], "registry-fallback"),
+    )
+    result = resolver_scheduler._default_subnets()
+    assert result[0]["netuid"] == 3
+
+
 # ---------------------------------------------------------------------------
 # G11 — round-robin batching
 # ---------------------------------------------------------------------------
@@ -575,3 +602,56 @@ def test_scheduler_passes_full_subnet_list_to_resolve(monkeypatch, fresh_schedul
     sched.run_once()
 
     assert seen["subnet_len"] == 50
+
+
+def test_scheduler_skip_persists_last_cycle_when_heavy_job_busy(monkeypatch, fresh_scheduler):
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _always_busy(_name):
+        yield False
+
+    monkeypatch.setattr("internal.heavy_job_gate.heavy_job_slot", _always_busy)
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
+    )
+    sched._running = True
+    sched._tick()
+
+    with open(weights.SOUL_MAP_PATH, "r") as f:
+        soul = json.load(f)
+    last = soul["prediction_resolver_scheduler"]["last_cycle"]
+    assert last.get("skipped") == "heavy_job_busy"
+    assert last.get("run_at")
+
+
+def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler):
+    import time
+
+    def _hang(self):
+        time.sleep(5)
+        return {
+            "ok": True,
+            "run_at": _now_iso(),
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+        }
+
+    from internal.council.resolver_scheduler import _now_iso
+
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr(
+        resolver_scheduler.PredictionResolverScheduler,
+        "_run_refresh_cycle",
+        _hang,
+    )
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
+    )
+    sched._running = True
+    sched._tick()
+    with open(weights.SOUL_MAP_PATH, "r") as f:
+        soul = json.load(f)
+    last = soul["prediction_resolver_scheduler"]["last_cycle"]
+    assert "cycle_timeout" in str(last.get("error"))

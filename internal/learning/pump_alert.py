@@ -15,6 +15,7 @@ _EMPTY_MESSAGE = (
 _MAX_EARLY = 5
 _MAX_PUMPING = 3
 _MAX_COOLING = 2
+_MAX_WATCH = 5
 _EARLY_PHASES = frozenset({"STIRRING", "ACCUMULATING"})
 _BAD_NAME = re.compile(r"^(unknown|deprecated|none|snnone|unnamed)$", re.I)
 
@@ -206,6 +207,35 @@ def _move_line(prefix: str, name: str, netuid: Optional[int]) -> str:
     return f"{prefix} · {_display_label(name, netuid)}"
 
 
+def _watch_row_copy(
+    name: str,
+    buy_ratio: Optional[float],
+    volume_intensity: Optional[float],
+    netuid_int: Optional[int],
+) -> Dict[str, str]:
+    gates = _lead_thresholds()
+    br_min = float(gates["buy_ratio_min"])
+    vi_min = float(gates["volume_intensity_min"])
+    br = buy_ratio if buy_ratio is not None else 0.5
+    vi = volume_intensity if volume_intensity is not None else 0.0
+    gaps: List[str] = []
+    if br < br_min:
+        gaps.append(f"buy flow {br:.0%} (need {br_min:.0%})")
+    if vi < vi_min:
+        gaps.append(f"vol {vi:.0%} (need {vi_min:.0%})")
+    gap_txt = "; ".join(gaps) if gaps else "flow below lead gate"
+    return {
+        "move": _move_line("RADAR", name, netuid_int),
+        "badge": "NEAR GATE",
+        "timing": "watch",
+        "thesis": (
+            f"STIRRING on ladder but below lead gate — {gap_txt}. "
+            "Not a lead alert; watch the dossier if flow ticks up."
+        ),
+        "trigger": "Desk stays quiet until buy ratio and volume clear the gate.",
+    }
+
+
 def _row_copy(
     phase: str,
     name: str,
@@ -285,26 +315,145 @@ def _row_copy(
 
 
 def _wallet_chip(netuid_int: Optional[int]) -> Optional[str]:
-    """Lead-wallet chip — honest-empty when no whale data."""
-    if netuid_int is None:
-        return None
-    try:
+    return whale_intel_line(netuid_int).get("wallet_chip")
+
+
+_whale_service_singleton: Any = None
+
+
+def _whale_service():
+    global _whale_service_singleton
+    if _whale_service_singleton is None:
         from internal.whales.service import WhaleIntelligenceService
 
-        flow = WhaleIntelligenceService().get_subnet_flow(netuid_int)
+        _whale_service_singleton = WhaleIntelligenceService()
+    return _whale_service_singleton
+
+
+def whale_intel_line(netuid_int: Optional[int]) -> Dict[str, Optional[str]]:
+    """Whale accumulation one-liner for desk cards and push alerts."""
+    out: Dict[str, Optional[str]] = {"wallet_chip": None, "whale_archetype": None}
+    if netuid_int is None:
+        return out
+    try:
+        flow = _whale_service().get_subnet_flow(netuid_int)
         if not flow.get("data_available"):
-            return None
+            return out
         by_class = flow.get("by_classification") if isinstance(flow.get("by_classification"), dict) else {}
-        early = by_class.get("early_movers") or []
-        alpha = by_class.get("alpha_whales") or []
-        n = len(early) + len(alpha)
-        if n > 0:
-            return f"{n} wallet{'s' if n != 1 else ''} bought before move"
+        alpha = len(by_class.get("alpha_whales") or [])
+        early = len(by_class.get("early_movers") or [])
+        conviction = len(by_class.get("conviction_holders") or [])
+        ruggers = len(by_class.get("ruggers") or [])
+        n_smart = alpha + early + conviction
+
+        if flow.get("avoid_follow") or (ruggers and not n_smart):
+            out["wallet_chip"] = "Rugger wallets active — caution"
+            out["whale_archetype"] = "Rug risk"
+            return out
+
+        if n_smart > 0:
+            out["wallet_chip"] = f"{n_smart} whale wallet{'s' if n_smart != 1 else ''} accumulating"
+            if alpha and early:
+                out["whale_archetype"] = "Smart money accumulation"
+            elif alpha:
+                out["whale_archetype"] = "Alpha whale accumulation"
+            elif early:
+                out["whale_archetype"] = "Early mover accumulation"
+            else:
+                out["whale_archetype"] = "Conviction holder accumulation"
+            return out
+
         if flow.get("smart_money_present"):
-            return "Smart money in"
+            out["wallet_chip"] = "Smart money in"
+            out["whale_archetype"] = "Smart money"
+            return out
+
+        open_pos = int(flow.get("open_positions") or 0)
+        if open_pos > 0:
+            out["wallet_chip"] = f"{open_pos} whale position{'s' if open_pos != 1 else ''} open"
+            out["whale_archetype"] = "Whale interest"
     except Exception:
+        pass
+    return out
+
+
+def public_subnet_url(netuid: int) -> str:
+    import os
+
+    base = os.environ.get("PUBLIC_APP_URL", "https://subnet-dashboard.fly.dev").rstrip("/")
+    return f"{base}/subnet/{int(netuid)}"
+
+
+def format_pump_phase_alert(
+    *,
+    netuid: int,
+    name: Optional[str],
+    badge: str,
+    phase: str,
+    signal_snapshot: Optional[Dict[str, Any]] = None,
+    composite_score: Optional[float] = None,
+) -> str:
+    """Rich Telegram push body for BUILDING / JUST STARTED entries."""
+    label = name or f"SN{netuid}"
+    badge_u = str(badge or "").upper()
+    lines = [f"🔥 Pump desk · {badge_u}", f"{label} SN{netuid}"]
+
+    whale = whale_intel_line(int(netuid))
+    if whale.get("wallet_chip"):
+        lines.append(f"→ {whale['wallet_chip']}")
+    if whale.get("whale_archetype"):
+        lines.append(f"→ {whale['whale_archetype']}")
+
+    snap = signal_snapshot if isinstance(signal_snapshot, dict) else {}
+    try:
+        buy_pct = int(round(float(snap.get("buy_ratio", 0)) * 100))
+        if buy_pct > 0:
+            lines.append(f"→ Buy pressure {buy_pct}%")
+    except (TypeError, ValueError):
+        pass
+    try:
+        vol_pct = int(round(float(snap.get("volume_intensity", 0)) * 100))
+        if vol_pct > 0:
+            lines.append(f"→ Volume intensity {vol_pct}%")
+    except (TypeError, ValueError):
+        pass
+    if composite_score is not None:
+        try:
+            setup_pct = int(round(float(composite_score) * 100))
+            lines.append(f"→ Setup index {setup_pct}%")
+        except (TypeError, ValueError):
+            pass
+
+    tg = _telegram_chip({"signal_snapshot": snap})
+    if tg:
+        lines.append(f"→ {tg}")
+
+    phase_u = str(phase or "").upper()
+    if badge_u == "BUILDING":
+        lines.append("Bullish setup — act before JUST STARTED.")
+    elif badge_u == "JUST STARTED":
+        lines.append("Move confirmed — size down; not early entry.")
+    else:
+        lines.append(f"Phase {phase_u or 'active'}.")
+
+    lines.append(public_subnet_url(int(netuid)))
+    return "\n".join(lines)
+
+
+def _telegram_chip(ladder_entry: Dict[str, Any]) -> Optional[str]:
+    """Surface Telegram chatter intensity already baked into signal_snapshot."""
+    snap = ladder_entry.get("signal_snapshot") if isinstance(ladder_entry.get("signal_snapshot"), dict) else {}
+    try:
+        chatter = float(snap.get("chatter_intensity") or 0)
+    except (TypeError, ValueError):
         return None
-    return None
+    if chatter < 0.15:
+        return None
+    if chatter >= 0.65:
+        return f"Telegram hot · {chatter:.0%}"
+    if chatter >= 0.35:
+        return f"Telegram warming · {chatter:.0%}"
+    return f"Telegram chatter · {chatter:.0%}"
 
 
 def _abbrev_coldkey(addr: str) -> str:
@@ -432,6 +581,7 @@ def build_alert_row(
     size_line = _size_cliff_line(subnet_row)
     wallet_chip = _wallet_chip(netuid_int)
     owner_chip = _owner_chip(netuid_int, subnet_row)
+    telegram_chip = _telegram_chip(ladder_entry)
     day_chips = _whale_day_chips(netuid_int, subnet_row)
     snap = ladder_entry.get("signal_snapshot") if isinstance(ladder_entry.get("signal_snapshot"), dict) else {}
     src = subnet_row if isinstance(subnet_row, dict) else {}
@@ -493,6 +643,7 @@ def build_alert_row(
         "size_line": size_line,
         "wallet_chip": wallet_chip,
         "owner_chip": owner_chip,
+        "telegram_chip": telegram_chip,
         "whale_day_chips": day_chips,
         "fear_and_greed": fear,
         "buys_24hr": buys,
@@ -662,10 +813,13 @@ def build_desk_row(
         score,
         metrics["trigger_score"],
     )
-    # Size cliff is cheap (subnet_row only). Skip wallet/whale chips here —
-    # WhaleIntelligenceService is too slow for the desk GET path.
+    # ponytail: one whale-service load per request; in-memory scan per netuid is cheap.
+    whale = whale_intel_line(netuid_int)
+    wallet_chip = whale.get("wallet_chip")
+    whale_archetype = whale.get("whale_archetype")
     size_line = _size_cliff_line(subnet_row)
     owner_chip = _owner_chip(netuid_int, subnet_row)
+    telegram_chip = _telegram_chip(ladder_entry)
     lit = int(triad.get("lit_count") or 0) if isinstance(triad, dict) else 0
     buy_pct = int(round(leads["buy_ratio"] * 100)) if leads.get("buy_ratio") is not None else None
     vol_pct = (
@@ -694,11 +848,76 @@ def build_desk_row(
         "triad_lit": lit,
         "size_line": size_line,
         "owner_chip": owner_chip,
+        "telegram_chip": telegram_chip,
+        "wallet_chip": wallet_chip,
+        "whale_archetype": whale_archetype,
         "buy_pct": buy_pct,
         "vol_pct": vol_pct,
         "updated_at": ladder_entry.get("updated_at"),
         "updated_ago": _human_updated_ago(ladder_entry.get("updated_at")),
     }
+
+
+def build_watch_row(
+    ladder_entry: Dict[str, Any],
+    subnet_row: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """STIRRING below lead gate — honest radar row when the desk has no leads."""
+    row = build_desk_row(ladder_entry, subnet_row)
+    leads = _snapshot_lead_signals(ladder_entry)
+    copy = _watch_row_copy(row["name"], leads["buy_ratio"], leads["volume_intensity"], row["netuid"])
+    row.update(
+        {
+            "timing": "watch",
+            "badge": copy["badge"],
+            "move": copy["move"],
+            "thesis": copy["thesis"],
+            "trigger": copy["trigger"],
+            "subtitle": "Below lead gate — radar only",
+        }
+    )
+    return row
+
+
+def _collect_almost_warming(
+    state: Dict[str, Any],
+    subnets: List[Dict[str, Any]],
+) -> List[Tuple[float, Dict[str, Any], Optional[Dict[str, Any]]]]:
+    """STIRRING names on the ladder that have not cleared buy/vol lead gates."""
+    out: List[Tuple[float, Dict[str, Any], Optional[Dict[str, Any]]]] = []
+    for entry in (state.get("subnets") or {}).values():
+        if not isinstance(entry, dict):
+            continue
+        if str(entry.get("phase") or "").upper() != "STIRRING":
+            continue
+        netuid = entry.get("netuid")
+        subnet = _subnet_row(int(netuid), subnets) if netuid is not None else None
+        leads = _snapshot_lead_signals(entry)
+        if _lead_qualifies(leads["buy_ratio"], leads["volume_intensity"]):
+            continue
+        score = float(entry.get("composite_score") or 0.0)
+        try:
+            rank = float(entry.get("accum_score")) if entry.get("accum_score") is not None else score
+        except (TypeError, ValueError):
+            rank = score
+        out.append((rank, entry, subnet))
+    return out
+
+
+def _attach_watch_when_empty(
+    payload: Dict[str, Any],
+    state: Dict[str, Any],
+    subnets: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    if payload.get("status") != "empty" or payload.get("count"):
+        return payload
+    almost = _collect_almost_warming(state, subnets)
+    if not almost:
+        return payload
+    watch = _sort_bucket(almost, _MAX_WATCH, row_builder=build_watch_row)
+    payload["watch"] = watch
+    payload["watch_count"] = len(watch)
+    return payload
 
 
 def _collect_pump_buckets(
@@ -818,7 +1037,8 @@ def build_pump_alerts_desk(subnets: Optional[List[Dict[str, Any]]] = None) -> Di
         + _sort_bucket(pumping, _MAX_PUMPING, row_builder=build_desk_row)
         + _sort_bucket(cooling, _MAX_COOLING, row_builder=build_desk_row)
     )
-    return _finalize_pump_payload(alerts, desk=True)
+    payload = _finalize_pump_payload(alerts, desk=True)
+    return _attach_watch_when_empty(payload, state, rows)
 
 
 def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
@@ -861,4 +1081,5 @@ def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[st
     except Exception:
         pass
 
-    return _finalize_pump_payload(alerts, desk=False)
+    payload = _finalize_pump_payload(alerts, desk=False)
+    return _attach_watch_when_empty(payload, state, rows)

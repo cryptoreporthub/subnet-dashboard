@@ -167,6 +167,8 @@ def record_pump_lead_at_phase_entry(
             name=name,
             badge=badge,
             phase=phase,
+            signal_snapshot=frozen,
+            composite_score=float(composite_score),
         )
     except Exception:
         pass

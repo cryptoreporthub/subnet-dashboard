@@ -25,6 +25,8 @@ def maybe_notify_pump_phase_entry(
     name: Optional[str],
     badge: str,
     phase: str,
+    signal_snapshot: Optional[Dict[str, Any]] = None,
+    composite_score: Optional[float] = None,
 ) -> Optional[Dict[str, Any]]:
     """Notify on BUILDING / JUST STARTED phase entry only. Default off."""
     if not pump_phase_alerts_enabled():
@@ -42,14 +44,28 @@ def maybe_notify_pump_phase_entry(
     if now - last < _COOLDOWN_SEC:
         return {"skipped": True, "reason": "rate_limited", "netuid": nu}
 
-    label = name or f"SN{nu}"
-    message = f"Pump desk · {badge_u} · {label} SN{nu} — phase {str(phase or '').upper()}"
+    from internal.learning.pump_alert import format_pump_phase_alert
+
+    message = format_pump_phase_alert(
+        netuid=nu,
+        name=name,
+        badge=badge_u,
+        phase=str(phase or "").upper(),
+        signal_snapshot=signal_snapshot,
+        composite_score=composite_score,
+    )
     alert = {
         "source": "pump_phase",
         "subnet_id": nu,
         "message": message,
         "dedupe_key": f"pump_phase:{nu}:{badge_u}",
-        "details": {"badge": badge_u, "phase": phase, "name": label},
+        "details": {
+            "badge": badge_u,
+            "phase": phase,
+            "name": name or f"SN{nu}",
+            "signal_snapshot": signal_snapshot,
+            "composite_score": composite_score,
+        },
     }
 
     try:

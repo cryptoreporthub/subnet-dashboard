@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from internal.mindmap.graph import get_mindmap_graph
 
@@ -14,9 +14,9 @@ mindmap_graph_router = APIRouter(tags=["mindmap-graph"])
 
 
 @mindmap_graph_router.get("/api/mindmap/graph")
-async def api_mindmap_graph():
+async def api_mindmap_graph(focus: int | None = Query(default=None, ge=1)):
     try:
-        return get_mindmap_graph()
+        return get_mindmap_graph(focus_netuid=focus)
     except ImportError as exc:
         return {"status": "unavailable", "nodes": [], "edges": [], "detail": str(exc)}
     except Exception as exc:

@@ -21,17 +21,17 @@
 
 | # | Slice | Fixes | State |
 |---|-------|-------|-------|
-| **§30-0** | Docs: audit + board pointer | — | next |
-| **§30-1** | Living Focus calibration + learn filter + `?focus=` | LB-1, LB-2, LB-3 | pending |
-| **§30-2** | Focus-scoped chips + trail filter API helper | LB-4, LB-12 (thin) | pending |
-| **§30-3** | Trail emit: signal weights + feedback | LB-7, LB-9 | pending |
-| **§30-4** | Quarantine message-intel weight renormalize | LB-8 | pending |
-| **§30-5** | Alignment nudge → `nudge_expert` or shared helper | LB-8 | pending |
-| **§30-6** | Disposition soft-feature in scoring (capped) | LB-5 | pending |
-| **§30-7** | Scenario outcome soft-boost in scoring (capped) | LB-6 | pending |
-| **§30-8** | RF-2 cockpit KPI + mindmap summary honesty | LB-14, LB-15 | pending |
-| **§30-9** | Homepage fetch dedupe (Focus owns trail/pick) | LB-11 | pending |
-| **§30-10** | Shared subnet feed for picks + judges | LB-16 | pending |
+| **§30-0** | Docs: audit + board pointer | — | ✅ babysit |
+| **§30-1** | Living Focus calibration + learn filter + `?focus=` | LB-1, LB-2, LB-3 | ✅ main |
+| **§30-2** | Focus-scoped chips + trail filter API helper | LB-4, LB-12 (thin) | ✅ #529 |
+| **§30-3** | Trail emit: signal weights + feedback | LB-7, LB-9 | ✅ main (tests) |
+| **§30-4** | Quarantine message-intel weight renormalize | LB-8 | ✅ main + tests |
+| **§30-5** | Alignment nudge → `nudge_expert` or shared helper | LB-8 | ✅ main |
+| **§30-6** | Disposition soft-feature in scoring (capped) | LB-5 | ✅ main |
+| **§30-7** | Scenario outcome soft-boost in scoring (capped) | LB-6 | ✅ main |
+| **§30-8** | RF-2 cockpit KPI + mindmap summary honesty | LB-14, LB-15 | ✅ #529 |
+| **§30-9** | Homepage fetch dedupe (Focus owns trail/pick) | LB-11 | ✅ #526/#527 |
+| **§30-10** | Shared subnet feed for picks + judges | LB-16 | ✅ main (`internal/subnets/feed.py`) |
 
 **Defer unless asked:** LB-10 stub recs (or delete unused path), LB-13 dual portfolio, LB-17 pick_history scoring, full money-flow graph.
 

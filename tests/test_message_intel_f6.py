@@ -13,10 +13,12 @@ def test_listener_status_honest_without_creds(monkeypatch):
     monkeypatch.delenv("TELEGRAM_API_HASH", raising=False)
     monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "auto")
     listener_service._listener = None
+    listener_service._clear_listener_heartbeat()
     status = listener_service.listener_status()
     assert status["has_creds"] is False
     assert status["live"] is False
     assert status["reason"] == "missing_telegram_creds"
+    assert status["monitored_group"] == "OfficialSubnetSummer"
 
 
 def test_listener_status_disabled(monkeypatch):
@@ -26,6 +28,50 @@ def test_listener_status_disabled(monkeypatch):
     assert status["enabled"] is False
     assert status["reason"] == "disabled"
     assert status["live"] is False
+    assert "hint" in status
+
+
+def test_listener_status_session_string(monkeypatch):
+    monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "auto")
+    monkeypatch.setenv("TELEGRAM_API_ID", "12345")
+    monkeypatch.setenv("TELEGRAM_API_HASH", "deadbeef")
+    monkeypatch.setenv("TELEGRAM_SESSION_STRING", "1AgA...")
+    listener_service._listener = None
+    listener_service._clear_listener_heartbeat()
+    status = listener_service.listener_status()
+    assert status["has_session"] is True
+    assert status["reason"] == "idle_not_started"
+
+
+def test_listener_status_essential_missing_session(monkeypatch, tmp_path):
+    monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "auto")
+    monkeypatch.setenv("TELEGRAM_API_ID", "12345")
+    monkeypatch.setenv("TELEGRAM_API_HASH", "deadbeef")
+    monkeypatch.setenv("WORKER_HEAVY", "essential")
+    monkeypatch.setenv("TELEGRAM_SESSION_PATH", str(tmp_path / "telegram_listener"))
+    listener_service._listener = None
+    listener_service._clear_listener_heartbeat()
+    status = listener_service.listener_status()
+    assert status["reason"] == "missing_session"
+    assert status["worker_heavy"] is False
+    assert "bootstrap_telegram_session" in status["hint"]
+
+
+def test_listener_status_cross_process_running(monkeypatch, tmp_path):
+    hb = tmp_path / ".message_intel_listener"
+    monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "auto")
+    monkeypatch.setenv("TELEGRAM_API_ID", "12345")
+    monkeypatch.setenv("TELEGRAM_API_HASH", "deadbeef")
+    monkeypatch.setenv("WORKER_HEAVY", "full")
+    monkeypatch.setenv("MESSAGE_INTEL_LISTENER_HEARTBEAT", str(hb))
+    monkeypatch.setenv("TELEGRAM_SESSION_PATH", str(tmp_path / "telegram_listener"))
+    (tmp_path / "telegram_listener.session").write_text("stub", encoding="utf-8")
+    listener_service._listener = None
+    listener_service._touch_listener_heartbeat()
+    status = listener_service.listener_status()
+    assert status["running"] is True
+    assert status["reason"] == "running"
+    assert status["live"] is True
 
 
 def test_start_skipped_without_creds(monkeypatch):
@@ -33,6 +79,7 @@ def test_start_skipped_without_creds(monkeypatch):
     monkeypatch.delenv("TELEGRAM_API_ID", raising=False)
     monkeypatch.delenv("TELEGRAM_API_HASH", raising=False)
     listener_service._listener = None
+    listener_service._clear_listener_heartbeat()
     assert listener_service.start_message_intel_listeners() is False
     assert listener_service.listener_status()["running"] is False
 

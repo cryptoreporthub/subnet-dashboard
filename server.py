@@ -526,40 +526,10 @@ def _cap_subnets_for_scoring(
     subnets: List[Dict[str, Any]],
     limit: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    """Limit council scoring to the most active subnets (Fly single-worker safety).
+    """Limit council scoring — majors represented, mid-cap focus for the rest."""
+    from internal.subnets.scoring_cap import cap_subnets_for_scoring
 
-    Prefer live-priced market activity (volume, market_cap) when present; fall
-    back to emission so registry-only snapshots still produce a stable universe.
-    Unpriced emission-only rows rank below any row with a positive price.
-    """
-    from internal.subnets.tradable import subnet_volume
-
-    cap = limit if limit is not None else TOP_SCORING_UNIVERSE
-    if not subnets or len(subnets) <= cap:
-        return subnets
-
-    def _has_price(s: Dict[str, Any]) -> int:
-        try:
-            return 1 if float(s.get("price") or 0) > 0 else 0
-        except (TypeError, ValueError):
-            return 0
-
-    def _rank_key(s: Dict[str, Any]):
-        vol = subnet_volume(s)
-        mcap = float(s.get("market_cap", 0) or 0)
-        emission = float(s.get("emission", 0) or 0)
-        mcr = s.get("marketcap_rank")
-        try:
-            # Lower marketcap_rank is better when present and positive.
-            rank_bonus = -int(mcr) if mcr not in (None, "", 0, "0") else 0
-        except (TypeError, ValueError):
-            rank_bonus = 0
-        priced = _has_price(s)
-        if vol > 0 or mcap > 0:
-            return (priced, 1, vol, mcap, rank_bonus, emission)
-        return (priced, 0, 0.0, 0.0, 0, emission)
-
-    return sorted(subnets, key=_rank_key, reverse=True)[:cap]
+    return cap_subnets_for_scoring(subnets, limit, default_limit=TOP_SCORING_UNIVERSE)
 
 
 def _normalize_registry_subnet(sn: Dict[str, Any]) -> Dict[str, Any]:
@@ -1008,7 +978,12 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
     try:
         from internal.message_intel.context import build_message_intel_context
 
-        context.update(build_message_intel_context(subnets))
+        context.update(
+            build_message_intel_context(
+                subnets,
+                pick_netuid=_pick_netuid_from_daily_payload(context.get("daily_pick_stage")),
+            )
+        )
     except Exception as exc:
         logger.warning("Message intel context unavailable: %s", exc)
 
@@ -1555,6 +1530,40 @@ async def preview_k3_pump_alert_scan(request: Request):
     )
 
 
+@app.get("/preview/pump-desk-polish")
+async def preview_pump_desk_polish(request: Request):
+    """SSR preview — P1 polish: proof rail, phase bar, full-desk CTA (home scan)."""
+    from internal.preview.k3_pump_alert import build_k3_pump_alert_preview_context
+
+    return templates.TemplateResponse(
+        "preview/pump_desk_polish.html",
+        build_k3_pump_alert_preview_context(request),
+    )
+
+
+@app.get("/preview/pump-desk-full")
+async def preview_pump_desk_full(request: Request):
+    """SSR preview — flagship deep-dive (proposed /pump route)."""
+    from internal.preview.k3_pump_alert import build_k3_pump_alert_preview_context
+
+    return templates.TemplateResponse(
+        "preview/pump_desk_full.html",
+        build_k3_pump_alert_preview_context(request),
+    )
+
+
+@app.get("/pump")
+async def pump_desk_page(request: Request):
+    """Flagship pump desk — full Situation Room theater."""
+    subnets = _registry_shell_subnets()
+    context: Dict[str, Any] = {
+        "request": request,
+        "public_base_url": _public_base_url(request),
+    }
+    context.update(_pump_alerts_context(subnets))
+    return templates.TemplateResponse("pump.html", context)
+
+
 @app.get("/api/pump-alerts")
 async def api_pump_alerts():
     """Pump lane — file-backed ladder + registry enrichment; must stay sub-second."""
@@ -1687,7 +1696,17 @@ def _market_context_with_weights(subnets: List[Dict[str, Any]]) -> Dict[str, Any
     return {
         "tao_change_24h": tao_chg,
         "weights": effective_weights(market_data),
+        "macro_overlay": _safe_macro_overlay(),
     }
+
+
+def _safe_macro_overlay() -> Dict[str, Any]:
+    try:
+        from internal.integrations.macro_overlay import build_macro_overlay
+
+        return build_macro_overlay()
+    except Exception:
+        return {"mood": "unavailable", "tailwind": 0.0, "sources": [], "signal_count": 0}
 
 
 def _subnet_for_pick(subnets: List[Dict[str, Any]], pick: Dict[str, Any]) -> Dict[str, Any]:
@@ -1929,7 +1948,21 @@ def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[st
         ]
         scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
         for item in scored[: max(0, limit - len(picks))]:
-            picks.append(_unify(_build_hour_pick_payload(item["subnet"], item["score"]), item["subnet"]))
+            payload = _unify(_build_hour_pick_payload(item["subnet"], item["score"]), item["subnet"])
+            picks.append(payload)
+            # Phase 4 — near-miss hour picks as shadows (no RF-2 / no weight nudge).
+            try:
+                from internal.learning.prediction_loop import record_pick_prediction
+
+                record_pick_prediction(
+                    payload,
+                    item["subnet"],
+                    horizon_type="hour",
+                    market_context=market_context,
+                    shadow=True,
+                )
+            except Exception:
+                pass
 
     return picks[:limit]
 
@@ -2050,19 +2083,23 @@ def _daily_pick_weighed_shortlist(pick_payload: Optional[Dict[str, Any]]) -> Lis
     """Council deliberation rows for hero weighed-against — uses live subnet prices."""
     if not isinstance(pick_payload, dict):
         return []
+    from internal.council.shortlist_cache import cached_shortlist
     from internal.learning.dpick_shortlist import attach_shortlist_to_daily_pick
 
-    hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
-    subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
-    if not subnets:
-        subnets, _ = _get_subnets_hydrate()
-    subnets = _cap_subnets_for_scoring(subnets)
-    if not subnets:
-        return []
-    market_context = _market_context_with_weights(subnets)
-    enriched = attach_shortlist_to_daily_pick(dict(pick_payload), subnets, market_context)
-    shortlist = enriched.get("shortlist")
-    return shortlist if isinstance(shortlist, list) else []
+    def _build() -> List[Dict[str, Any]]:
+        hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
+        subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
+        if not subnets:
+            subnets, _ = _get_subnets_hydrate()
+        subnets = _cap_subnets_for_scoring(subnets)
+        if not subnets:
+            return []
+        market_context = _market_context_with_weights(subnets)
+        enriched = attach_shortlist_to_daily_pick(dict(pick_payload), subnets, market_context)
+        shortlist = enriched.get("shortlist")
+        return shortlist if isinstance(shortlist, list) else []
+
+    return cached_shortlist(pick_payload, _build)
 
 
 @app.get("/api/daily-pick/weighed")

@@ -73,15 +73,17 @@ def _start_pump_ladder() -> None:
 def _start_resolver() -> None:
     def _run() -> None:
         from internal.council.resolver_scheduler import start_prediction_resolver_scheduler
+        from internal.run_mode import is_worker_mode
 
-        immediate = os.environ.get("RESOLVER_BOOT_IMMEDIATE", "off").strip().lower() in (
+        default_immediate = "on" if is_worker_mode() else "off"
+        immediate = os.environ.get("RESOLVER_BOOT_IMMEDIATE", default_immediate).strip().lower() in (
             "1",
             "true",
             "yes",
             "on",
         )
         start_prediction_resolver_scheduler(immediate=immediate)
-        logger.info("prediction resolver scheduler started")
+        logger.info("prediction resolver scheduler started (immediate=%s)", immediate)
 
         def _recover() -> None:
             try:
@@ -130,13 +132,134 @@ def _start_whale_warm_scheduler() -> None:
     defer_boot("whale-warm-scheduler", _run, delay=max(BOOT_DEFER_SECONDS, 5))
 
 
+def _start_pick_schedulers() -> None:
+    """Phase 1 — traffic-independent daily + hour pick creation (essential)."""
+
+    def _run() -> None:
+        from internal.council.pick_scheduler import start_pick_schedulers
+
+        immediate = os.environ.get("PICK_SCHEDULER_BOOT_IMMEDIATE", "off").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        start_pick_schedulers(immediate=immediate)
+        logger.info("daily/hour pick schedulers started")
+
+    # After resolver (+10); avoid coinciding with pump first scan.
+    defer_boot("pick-schedulers", _run, delay=max(BOOT_DEFER_SECONDS + 20, 60))
+
+
+def _message_intel_enabled() -> bool:
+    flag = os.environ.get("MESSAGE_INTEL_LISTENER", "auto").strip().lower()
+    return flag not in ("off", "false", "0", "no")
+
+
+def _maybe_start_message_intel() -> None:
+    """Telegram ingest on essential worker — deferred so HTTP wins boot (ponytail)."""
+    if not _message_intel_enabled():
+        return
+
+    def _listeners() -> None:
+        from internal.message_intel.listener_service import start_message_intel_listeners
+
+        start_message_intel_listeners()
+
+    def _outcomes() -> None:
+        from internal.message_intel.outcome_loop import start_price_outcome_loop
+
+        start_price_outcome_loop()
+
+    # After pump first scan window — full heavy mode wedged prod with live subnets + Telegram.
+    delay = max(BOOT_DEFER_SECONDS + 60, 120)
+    defer_boot("message-intel-listeners", _listeners, delay=delay)
+    defer_boot("message-intel-outcomes", _outcomes, delay=max(delay + 30, 150))
+
+
+def _start_score_snapshot_scheduler() -> None:
+    """Phase 2 — full-universe scores off the hot path (essential / worker)."""
+
+    def _run() -> None:
+        from internal.council.score_snapshots import start_score_snapshot_scheduler
+        from internal.run_mode import is_worker_mode
+
+        default_immediate = "on" if is_worker_mode() else "off"
+        immediate = os.environ.get("SCORE_SNAPSHOT_BOOT_IMMEDIATE", default_immediate).strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        start_score_snapshot_scheduler(immediate=immediate)
+        logger.info("score snapshot scheduler started (immediate=%s)", immediate)
+
+    # After pick schedulers; full score is heavier.
+    defer_boot("score-snapshots", _run, delay=max(BOOT_DEFER_SECONDS + 45, 90))
+
+
+def _start_pick_audit_scheduler() -> None:
+    """Nightly selection oracle replay (evidence loop — Python only)."""
+
+    def _run() -> None:
+        from internal.council.pick_audit_scheduler import start_pick_audit_scheduler
+
+        immediate = os.environ.get("PICK_AUDIT_BOOT_IMMEDIATE", "off").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        start_pick_audit_scheduler(immediate=immediate)
+        logger.info("pick selection audit scheduler started (immediate=%s)", immediate)
+
+    defer_boot("pick-audit-scheduler", _run, delay=max(BOOT_DEFER_SECONDS + 50, 95))
+
+
+def _start_pump_desk_snapshot_scheduler() -> None:
+    """Periodic pump desk + learning health snapshot (replaces Ditto 15m fetch)."""
+
+    def _run() -> None:
+        from internal.pump.desk_snapshot_scheduler import start_pump_desk_snapshot_scheduler
+
+        immediate = os.environ.get("PUMP_DESK_SNAPSHOT_BOOT_IMMEDIATE", "off").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        start_pump_desk_snapshot_scheduler(immediate=immediate)
+        logger.info("pump desk snapshot scheduler started (immediate=%s)", immediate)
+
+    defer_boot("pump-desk-snapshot", _run, delay=max(BOOT_DEFER_SECONDS + 55, 100))
+
+
+def _start_outcome_snapshot_scheduler() -> None:
+    """Learning outcome + council health artifact (Ditto Health Monitor feed)."""
+
+    def _run() -> None:
+        from internal.learning.outcome_snapshot_scheduler import start_outcome_snapshot_scheduler
+
+        immediate = os.environ.get("OUTCOME_SNAPSHOT_BOOT_IMMEDIATE", "off").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        start_outcome_snapshot_scheduler(immediate=immediate)
+        logger.info("outcome snapshot scheduler started (immediate=%s)", immediate)
+
+    defer_boot("outcome-snapshot", _run, delay=max(BOOT_DEFER_SECONDS + 60, 105))
+
+
 def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     """Start background schedulers.
 
     * **essential** (default on web with ``BACKGROUND_ON_WEB=essential``): pump
-      ladder, resolver, whale warm, registry freshness — no live-subnet wedge.
-    * **heavy** (worker or ``BACKGROUND_ON_WEB=on``): also live subnets, feed,
-      message-intel listeners.
+      ladder, resolver, whale warm, registry freshness, and (when enabled)
+      deferred Telegram message-intel — no live-subnet wedge.
+    * **heavy** (worker or ``BACKGROUND_ON_WEB=on``): also live subnets and feed
+      warmup on top of essential.
     """
     from internal.run_mode import background_heavy_on_web, is_worker_mode
 
@@ -160,6 +283,13 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _start_pump_ladder()
     _start_resolver()
     _start_whale_warm_scheduler()
+    _start_pick_schedulers()
+    _start_score_snapshot_scheduler()
+    _start_pick_audit_scheduler()
+    _start_pump_desk_snapshot_scheduler()
+    _start_outcome_snapshot_scheduler()
+
+    _maybe_start_message_intel()
 
     if not heavy:
         logger.info("background workers: essential mode (heavy feeds skipped)")
@@ -179,12 +309,6 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
         logger.info("Subnet feed warmup deferred %ss", BOOT_DEFER_SECONDS)
     except Exception as exc:
         logger.warning("Subnet feed warmup failed to start: %s", exc)
-    try:
-        from internal.message_intel.listener_service import start_message_intel_listeners
-
-        start_message_intel_listeners()
-    except Exception as exc:
-        logger.warning("Message-intel listeners failed to start: %s", exc)
 
 
 def stop_background_workers() -> None:
@@ -192,6 +316,12 @@ def stop_background_workers() -> None:
         from internal.message_intel.listener_service import stop_message_intel_listeners
 
         stop_message_intel_listeners()
+    except Exception:
+        pass
+    try:
+        from internal.message_intel.outcome_loop import stop_price_outcome_loop
+
+        stop_price_outcome_loop()
     except Exception:
         pass
     try:
@@ -204,6 +334,36 @@ def stop_background_workers() -> None:
         from internal.pump.scheduler import stop_pump_ladder_scheduler
 
         stop_pump_ladder_scheduler()
+    except Exception:
+        pass
+    try:
+        from internal.council.pick_scheduler import stop_pick_schedulers
+
+        stop_pick_schedulers()
+    except Exception:
+        pass
+    try:
+        from internal.council.pick_audit_scheduler import stop_pick_audit_scheduler
+
+        stop_pick_audit_scheduler()
+    except Exception:
+        pass
+    try:
+        from internal.pump.desk_snapshot_scheduler import stop_pump_desk_snapshot_scheduler
+
+        stop_pump_desk_snapshot_scheduler()
+    except Exception:
+        pass
+    try:
+        from internal.learning.outcome_snapshot_scheduler import stop_outcome_snapshot_scheduler
+
+        stop_outcome_snapshot_scheduler()
+    except Exception:
+        pass
+    try:
+        from internal.council.score_snapshots import stop_score_snapshot_scheduler
+
+        stop_score_snapshot_scheduler()
     except Exception:
         pass
     try:

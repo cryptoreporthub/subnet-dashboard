@@ -1,11 +1,28 @@
-/** §19.M1 — live message-intel feed UI (GET /api/message-intel) */
+/** SS-TG W0 — Subnet Summers Telegram desk (trending, champions, rich live feed) */
 (function () {
   "use strict";
 
   var feed = document.getElementById("message-intel-feed");
   var meta = document.getElementById("message-intel-meta");
   var sub = document.getElementById("message-intel-sub");
+  var pulse = document.getElementById("message-intel-pulse");
+  var groupLink = document.getElementById("message-intel-group-link");
+  var trendingEl = document.getElementById("message-intel-trending");
+  var championsEl = document.getElementById("message-intel-champions");
+  var refreshBtn = document.getElementById("message-intel-trending-refresh");
+  var feedHint = document.getElementById("message-intel-feed-hint");
+  var yesterdayCard = document.getElementById("message-intel-yesterday");
+  var yesterdayLink = document.getElementById("message-intel-yesterday-link");
+  var yesterdayStats = document.getElementById("message-intel-yesterday-stats");
+  var yesterdayRunner = document.getElementById("message-intel-yesterday-runner");
+  var yesterdayIcon = document.getElementById("message-intel-yesterday-icon");
+  var yesterdayChips = document.getElementById("message-intel-yesterday-chips");
+  var liveTag = document.getElementById("message-intel-live-tag");
   if (!feed) return;
+
+  var lastStatus = null;
+  var refreshTimer = null;
+  var GROUP_URL = "https://t.me/OfficialSubnetSummer";
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -19,60 +36,417 @@
     return t.slice(0, n) + "…";
   }
 
-  function sentimentLabel(analysis) {
-    if (!analysis || typeof analysis !== "object") return "—";
-    var s = String(analysis.sentiment || "").toLowerCase();
-    if (s === "bullish" || s === "positive") return "bullish";
-    if (s === "bearish" || s === "negative") return "bearish";
+  function sentimentLabel(analysis, verdict) {
+    var s = String((verdict && verdict.verdict) || (analysis && analysis.sentiment) || "").toLowerCase();
+    if (s === "bullish" || s === "positive" || s === "buy" || s === "long") return "bullish";
+    if (s === "bearish" || s === "negative" || s === "sell" || s === "short") return "bearish";
     return "neutral";
+  }
+
+  function sentimentBadgeClass(tag) {
+    var t = String(tag || "").toLowerCase();
+    if (t === "bullish") return "badge-buy";
+    if (t === "bearish") return "badge-sell";
+    return "badge-watch";
+  }
+
+  function rankClass(rank) {
+    if (rank === 1) return "message-intel__rank--gold";
+    if (rank === 2) return "message-intel__rank--silver";
+    if (rank === 3) return "message-intel__rank--bronze";
+    return "";
+  }
+
+  function sparklineSvg(points) {
+    if (!points || !points.length) return "";
+    var w = 56;
+    var h = 18;
+    var max = Math.max.apply(null, points.concat([1]));
+    var step = w / Math.max(1, points.length - 1);
+    var coords = points
+      .map(function (v, i) {
+        var x = (i * step).toFixed(1);
+        var y = (h - (v / max) * (h - 2) - 1).toFixed(1);
+        return x + "," + y;
+      })
+      .join(" ");
+    return (
+      '<svg class="message-intel__spark" width="' +
+      w +
+      '" height="' +
+      h +
+      '" viewBox="0 0 ' +
+      w +
+      " " +
+      h +
+      '" aria-hidden="true"><polyline fill="none" stroke="currentColor" stroke-width="1.5" points="' +
+      coords +
+      '"/></svg>'
+    );
+  }
+
+  function changeLabel(delta) {
+    var n = Number(delta) || 0;
+    if (n > 0) return '<span class="message-intel__delta message-intel__delta--up">+' + n + " 1h</span>";
+    if (n < 0) return '<span class="message-intel__delta message-intel__delta--down">' + n + " 1h</span>";
+    return '<span class="message-intel__delta">flat 1h</span>';
+  }
+
+  function listenerIdle(listener) {
+    listener = listener || {};
+    if (listener.live) return false;
+    var reason = String(listener.reason || "");
+    return (
+      reason === "idle_not_started" ||
+      reason === "missing_session" ||
+      reason === "disabled" ||
+      reason === "missing_telegram_creds"
+    );
+  }
+
+  function parseEntities(analysis) {
+    if (!analysis) return [];
+    var raw = analysis.entities_json;
+    var entities = analysis.entities;
+    try {
+      if (typeof raw === "string") entities = JSON.parse(raw);
+      else if (raw && typeof raw === "object") entities = raw;
+    } catch (e) {
+      entities = entities || {};
+    }
+    var out = [];
+    var seen = {};
+    ((entities && entities.subnets) || []).forEach(function (token) {
+      var n = Number(token);
+      if (!isNaN(n) && !seen[n]) {
+        seen[n] = true;
+        out.push(n);
+      }
+    });
+    return out;
+  }
+
+  function fmtTime(iso) {
+    if (!iso) return "";
+    var t = Date.parse(iso);
+    if (isNaN(t)) return String(iso).slice(0, 16);
+    var mins = Math.max(0, Math.floor((Date.now() - t) / 60000));
+    if (mins < 1) return "just now";
+    if (mins < 60) return mins + "m ago";
+    var hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + "h ago";
+    return Math.floor(hrs / 24) + "d ago";
+  }
+
+  function initialLetter(name) {
+    var t = String(name || "").trim();
+    return t ? t.charAt(0).toUpperCase() : "?";
+  }
+
+  function sentimentTagClass(tag) {
+    var t = String(tag || "").toLowerCase();
+    if (t === "bullish") return "message-intel__tag--bull";
+    if (t === "bearish") return "message-intel__tag--bear";
+    return "message-intel__tag--neu";
+  }
+
+  function signalChips(analysis, verdict) {
+    var chips = [];
+    var reasoning = verdict && verdict.reasoning ? String(verdict.reasoning).trim() : "";
+    if (reasoning && reasoning !== "Adversarial jury verdict from signal vs outcome.") {
+      chips.push(reasoning);
+    }
+    try {
+      var raw = analysis && analysis.entities_json;
+      var entities = typeof raw === "string" ? JSON.parse(raw) : raw || {};
+      (entities.protocols || []).slice(0, 2).forEach(function (p) {
+        if (p) chips.push(String(p));
+      });
+    } catch (e) {
+      /* ignore */
+    }
+    if (verdict && verdict.predicted_timeframe) {
+      chips.push(verdict.predicted_timeframe + " lens");
+    }
+    return chips.slice(0, 3);
+  }
+
+  function renderYesterdayLeader(row) {
+    if (!yesterdayCard) return;
+    if (!row || row.netuid == null) {
+      yesterdayCard.hidden = true;
+      return;
+    }
+    yesterdayCard.hidden = false;
+    var name = row.name || "SN" + row.netuid;
+    if (yesterdayIcon) yesterdayIcon.textContent = initialLetter(name);
+    if (yesterdayLink) {
+      yesterdayLink.href = "/subnet/" + encodeURIComponent(String(row.netuid));
+      yesterdayLink.innerHTML =
+        esc(name) + ' <span class="message-intel__hero-sn">· SN' + esc(row.netuid) + "</span>";
+    }
+    if (yesterdayStats) {
+      var sent = row.sentiment || "Cautious";
+      var sentClass =
+        sent.toLowerCase() === "bullish"
+          ? "message-intel__sent--bull"
+          : sent.toLowerCase() === "bearish"
+            ? "message-intel__sent--bear"
+            : "";
+      yesterdayStats.innerHTML =
+        esc(row.mentions) +
+        " mentions · <span class=\"" +
+        sentClass +
+        '">' +
+        esc(sent) +
+        "</span>" +
+        (row.date ? " · " + esc(row.date) : "");
+    }
+    if (yesterdayChips) {
+      var chips = row.why_chips || [];
+      if (chips.length) {
+        yesterdayChips.hidden = false;
+        yesterdayChips.innerHTML = chips
+          .map(function (c, i) {
+            return (
+              '<span class="message-intel__chip' +
+              (i < 2 ? " message-intel__chip--hot" : "") +
+              '">' +
+              esc(c) +
+              "</span>"
+            );
+          })
+          .join("");
+      } else {
+        yesterdayChips.hidden = true;
+        yesterdayChips.innerHTML = "";
+      }
+    }
+    if (yesterdayRunner) {
+      var ru = row.runner_up;
+      if (ru && ru.netuid != null) {
+        yesterdayRunner.hidden = false;
+        yesterdayRunner.innerHTML =
+          "Runner-up: <b>" + esc(ru.name || "SN" + ru.netuid) + " SN" + esc(ru.netuid) + "</b> · " + esc(ru.mentions || 0) + " mentions";
+      } else {
+        yesterdayRunner.hidden = true;
+        yesterdayRunner.innerHTML = "";
+      }
+    }
+  }
+
+  function renderTrending(rows, listener) {
+    if (listenerIdle(listener)) {
+      return (
+        '<p class="empty">Telegram listener is not running yet — trending fills once messages are ingested.</p>'
+      );
+    }
+    if (!rows || !rows.length) {
+      return '<p class="empty">No subnet chatter in the last hour. Check back after the group warms up.</p>';
+    }
+    var html = '<div class="message-intel__trend-rows">';
+    rows.slice(0, 6).forEach(function (row, idx) {
+      var rank = idx + 1;
+      var tag = String(row.sentiment || "Cautious");
+      html +=
+        '<div class="message-intel__trend-row">' +
+        '<span class="message-intel__rank ' +
+        rankClass(rank) +
+        '">#' +
+        rank +
+        "</span>" +
+        '<span class="message-intel__t-icon" aria-hidden="true">' +
+        esc(initialLetter(row.name)) +
+        "</span>" +
+        '<div class="message-intel__t-body">' +
+        '<a class="message-intel__t-name" href="/subnet/' +
+        esc(row.netuid) +
+        '">' +
+        esc(row.name) +
+        '<span class="message-intel__t-sn">SN' +
+        esc(row.netuid) +
+        "</span></a>" +
+        '<div class="message-intel__t-count">' +
+        esc(row.mentions) +
+        " mentions</div></div>" +
+        '<div class="message-intel__t-right">' +
+        sparklineSvg(row.sparkline) +
+        '<span class="message-intel__tag ' +
+        sentimentTagClass(tag) +
+        '">' +
+        esc(tag.toUpperCase()) +
+        "</span></div></div>";
+    });
+    html += "</div>";
+    return html;
+  }
+
+  function renderChampions(rows, authorsUnavailable) {
+    if (authorsUnavailable) {
+      return '<p class="empty">Weekly champions API unavailable — redeploy to pick up the latest build.</p>';
+    }
+    if (!rows || !rows.length) {
+      return '<p class="empty">No contributor history yet — champions appear as Subnet Summers traffic grades.</p>';
+    }
+    var maxInf = Math.max.apply(
+      null,
+      rows.map(function (r) {
+        return Number(r.influence_score) || 0;
+      }).concat([1])
+    );
+    var html = '<div class="message-intel__champ-rows">';
+    rows.slice(0, 6).forEach(function (row, idx) {
+      var rank = idx + 1;
+      var handle = row.author_username ? "@" + String(row.author_username).replace(/^@/, "") : row.author_name;
+      var inf = Number(row.influence_score) || 0;
+      var pct = Math.round((inf / maxInf) * 100);
+      var basis =
+        row.hit_rate != null && row.graded
+          ? esc(row.hit_rate) + "% hit-rate · " + esc(row.message_count) + " calls"
+          : esc(row.message_count) + " msgs · " + esc(row.subnet_count) + " subnets";
+      html +=
+        '<div class="message-intel__champ-row">' +
+        '<span class="message-intel__rank ' +
+        rankClass(rank) +
+        '">#' +
+        rank +
+        "</span>" +
+        '<span class="message-intel__avatar" aria-hidden="true">' +
+        esc(row.initials || initialLetter(row.author_name)) +
+        "</span>" +
+        '<div class="message-intel__champ-body">' +
+        '<div class="message-intel__champ-name">' +
+        esc(handle || "Unknown") +
+        "</div>" +
+        '<div class="message-intel__champ-basis">' +
+        basis +
+        "</div></div>" +
+        '<div class="message-intel__champ-score">' +
+        '<div class="message-intel__champ-num">' +
+        esc(inf.toFixed ? inf.toFixed(1) : inf) +
+        "</div>" +
+        '<div class="message-intel__champ-bar"><div class="message-intel__champ-bar-fill" style="width:' +
+        pct +
+        '%"></div></div></div></div>';
+    });
+    html += "</div>";
+    return html;
+  }
+
+  function renderSubnetChips(netuids) {
+    if (!netuids || !netuids.length) return "";
+    return (
+      '<div class="message-intel__chips">' +
+      netuids
+        .slice(0, 4)
+        .map(function (n) {
+          return (
+            '<a class="message-intel__chip" href="/subnet/' +
+            esc(n) +
+            '">SN' +
+            esc(n) +
+            "</a>"
+          );
+        })
+        .join("") +
+      "</div>"
+    );
   }
 
   function renderMessages(rows) {
     if (!rows || !rows.length) return "";
-    var html = '<ul class="message-intel__list">';
+    var html = '<div class="message-intel__feed-rows">';
     rows.forEach(function (row) {
-      var label = sentimentLabel(row.analysis);
-      var badge =
-        label === "bullish" ? "badge-buy" : label === "bearish" ? "badge-sell" : "badge-watch";
+      var verdict = row.verdict || {};
+      var analysis = row.analysis || {};
+      var label = sentimentLabel(analysis, verdict);
+      var conv = verdict.conviction != null ? Math.round(Number(verdict.conviction)) : null;
+      var direction = String(verdict.predicted_direction || "").toLowerCase();
+      var dirArrow =
+        direction === "up" || direction === "long" || direction === "buy"
+          ? " ↑"
+          : direction === "down" || direction === "short" || direction === "sell"
+            ? " ↓"
+            : "";
+      var author = row.author_username
+        ? "@" + String(row.author_username).replace(/^@/, "")
+        : row.author_name || "unknown";
+      var netuids = parseEntities(analysis);
+      var why = signalChips(analysis, verdict);
       html +=
-        '<li class="message-intel__item">' +
-        '<div class="message-intel__item-head">' +
-        '<span class="message-intel__author">' +
-        esc(row.author_name || row.author_username || "unknown") +
+        '<article class="message-intel__feed-row">' +
+        '<div class="message-intel__feed-top">' +
+        '<span class="message-intel__f-avatar" aria-hidden="true">' +
+        esc(initialLetter(author)) +
         "</span>" +
-        '<span class="badge ' +
-        badge +
+        '<span class="message-intel__f-handle">' +
+        esc(author) +
+        "</span>" +
+        '<span class="message-intel__f-tag ' +
+        sentimentTagClass(label) +
         '">' +
-        esc(label) +
+        esc(label.toUpperCase()) +
         "</span>" +
-        "</div>" +
-        '<p class="message-intel__content">' +
-        esc(snippet(row.content, 280)) +
-        "</p>" +
-        (row.timestamp
-          ? '<span class="message-intel__time">' + esc(row.timestamp) + "</span>"
+        (conv != null
+          ? '<span class="message-intel__f-conv">' + esc(conv) + "% conv" + dirArrow + "</span>"
           : "") +
-        "</li>";
+        '<span class="message-intel__f-time">' +
+        esc(fmtTime(row.timestamp)) +
+        "</span></div>" +
+        '<p class="message-intel__f-text">' +
+        esc(snippet(row.content, 280));
+      if (netuids.length) {
+        html +=
+          '<span class="message-intel__sn-inline">SN' + esc(netuids[0]) + "</span>";
+      }
+      html += "</p>";
+      if (why.length) {
+        html +=
+          '<div class="message-intel__signal-strip"><span class="message-intel__why-label">Why:</span>' +
+          why
+            .map(function (c, i) {
+              return (
+                '<span class="message-intel__sig-chip' +
+                (i === 0 && label === "bearish" ? " message-intel__sig-chip--hit" : "") +
+                '">' +
+                esc(c) +
+                "</span>"
+              );
+            })
+            .join("") +
+          "</div>";
+      }
+      html += "</article>";
     });
-    html += "</ul>";
+    html += "</div>";
     return html;
   }
 
-  function renderEmpty(listener) {
+  function renderFeedEmpty(listener) {
     listener = listener || {};
     if (listener.live) {
       return (
-        '<p class="empty">Listener live — monitoring group traffic. ' +
-        "Messages appear here as they are ingested.</p>"
+        '<p class="empty">Listening to Subnet Summers — messages appear here as the group talks.</p>'
       );
     }
     if (listener.reason === "disabled") {
-      return '<p class="empty">Message-intel listener is off on this deploy.</p>';
+      return '<p class="empty">Telegram listener is off on this deploy (<code>MESSAGE_INTEL_LISTENER</code>).</p>';
+    }
+    if (listener.reason === "missing_session") {
+      return (
+        '<p class="empty">Telegram creds are set — paste <code>TELEGRAM_SESSION_STRING</code> (see <code>DEPLOY.md</code>), then set <code>MESSAGE_INTEL_LISTENER=auto</code>.</p>'
+      );
+    }
+    if (listener.reason === "telethon_unavailable") {
+      return '<p class="empty">Telethon missing in runtime image — ingest via API only.</p>';
     }
     if (listener.reason === "missing_telegram_creds") {
       return '<p class="empty">Telegram creds not configured — ingest via API only.</p>';
     }
-    return '<p class="empty">No messages ingested yet.</p>';
+    if (listener.reason === "idle_not_started") {
+      return '<p class="empty">Listener configured — warming up (~2 min after boot).</p>';
+    }
+    return '<p class="empty">No Telegram messages ingested yet.</p>';
   }
 
   function applyMeta(payload, status) {
@@ -81,43 +455,118 @@
       (status && status.store && status.store.total_messages) ||
       (payload.meta && payload.meta.total_messages) ||
       0;
+    var highConv =
+      (status && status.store && status.store.high_conviction_count) ||
+      (payload.meta && payload.meta.high_conviction_count) ||
+      0;
+    var group = listener.group_title || listener.monitored_group || "OfficialSubnetSummer";
+
+    if (groupLink) {
+      groupLink.href = GROUP_URL;
+      groupLink.textContent = "Subnet Summers";
+    }
+
     if (meta) {
-      var parts = [];
-      if (listener.live) parts.push("listener live");
-      else if (listener.reason) parts.push(listener.reason);
-      parts.push(total + " stored");
-      meta.textContent = parts.join(" · ");
+      var parts = ["<b>" + esc(group) + "</b>"];
+      if (listener.live) parts.push("listening");
+      else if (listener.reason) parts.push(esc(listener.reason));
+      parts.push(esc(total) + " messages");
+      if (highConv) parts.push(esc(highConv) + " high conviction");
+      meta.innerHTML = parts.join(" · ");
+      if (listener.hint && !listener.live) meta.title = listener.hint;
     }
-    if (sub && listener.live) {
-      sub.textContent = "Live ingest from Telegram — newest messages first.";
+
+    if (liveTag) liveTag.hidden = !listener.live;
+    if (pulse) pulse.hidden = !listener.live;
+
+    if (sub) {
+      if (listener.live) {
+        sub.innerHTML =
+          'Live read of <a class="message-intel__group-link" href="' +
+          GROUP_URL +
+          '" target="_blank" rel="noopener noreferrer">Subnet Summers</a> — trending names, top contributors, and jury-scored messages.';
+      } else if (listener.hint) {
+        sub.textContent = listener.hint;
+      } else if (listener.reason === "idle_not_started") {
+        sub.textContent = "Credentials present — listener starts ~2 min after worker boot.";
+      }
     }
+
+    if (feedHint && listener.live) {
+      feedHint.textContent = "Newest first · jury conviction · updates ~60s";
+    }
+
+    lastStatus = status;
   }
 
   async function hydrate() {
     try {
       var statusRes = await fetch("/api/message-intel/status");
       var status = statusRes.ok ? await statusRes.json() : null;
-      var listRes = await fetch("/api/message-intel?limit=20");
+      var listRes = await fetch("/api/message-intel?limit=24");
       if (!listRes.ok) throw new Error("HTTP " + listRes.status);
       var payload = await listRes.json();
       applyMeta(payload, status);
+
+      var listener = (status && status.listener) || (payload.meta && payload.meta.listener) || {};
+      var trending = (payload.meta && payload.meta.trending) || [];
+      renderYesterdayLeader((payload.meta && payload.meta.yesterday_leader) || null);
+      if (trendingEl) {
+        trendingEl.innerHTML = renderTrending(trending, listener);
+      }
+
+      var authorsUnavailable = false;
+      var authors = [];
+      try {
+        var authorsRes = await fetch("/api/message-intel/authors?limit=8");
+        if (authorsRes.ok) {
+          var authorsPayload = await authorsRes.json();
+          authors = authorsPayload.authors || [];
+        } else if (authorsRes.status === 404) {
+          authorsUnavailable = true;
+        }
+      } catch (e) {
+        authorsUnavailable = true;
+      }
+      if (championsEl) {
+        championsEl.innerHTML = renderChampions(authors, authorsUnavailable);
+      }
+
       if (payload.empty) {
-        feed.innerHTML = renderEmpty(status && status.listener);
+        feed.innerHTML = renderFeedEmpty(status && status.listener);
       } else {
         feed.innerHTML = renderMessages(payload.messages);
       }
     } catch (e) {
       if (meta) meta.textContent = "unavailable";
+      if (pulse) pulse.hidden = true;
+      if (trendingEl) {
+        trendingEl.innerHTML = '<p class="empty">Could not load trending.</p>';
+      }
+      if (championsEl) {
+        championsEl.innerHTML = '<p class="empty">Could not load champions.</p>';
+      }
       feed.innerHTML =
-        '<p class="empty">Could not load message intel — try again shortly.</p>';
+        '<p class="empty">Could not load Telegram message intel — try again shortly.</p>';
     }
   }
 
   document.addEventListener("home:cockpit-tick", hydrate);
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", hydrate);
+  }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", hydrate);
+    document.addEventListener("DOMContentLoaded", function () {
+      hydrate();
+      refreshTimer = window.setInterval(hydrate, 60000);
+    });
   } else {
     hydrate();
+    refreshTimer = window.setInterval(hydrate, 60000);
   }
+
+  window.addEventListener("pagehide", function () {
+    if (refreshTimer) window.clearInterval(refreshTimer);
+  });
 })();

@@ -193,6 +193,37 @@ def test_build_social_sentiment_rows(intel_env):
     assert rows[0]["mentions"] == 1
 
 
+def test_social_sentiment_for_home_prioritizes_pick_netuid(intel_env):
+    from internal.message_intel.context import social_sentiment_for_home
+    from internal.message_intel.store import get_db
+
+    db = get_db()
+    for nu, sentiment in ((7, "bullish"), (3, "bearish")):
+        mid, _ = db.save_message(
+            {
+                "source": "telegram",
+                "group_id": f"g{nu}",
+                "message_id": str(nu),
+                "content": f"Subnet {nu} chatter",
+            }
+        )
+        db.save_analysis(
+            mid,
+            {
+                "sentiment": sentiment,
+                "sentiment_confidence": 0.8,
+                "entities": {"subnets": [f"subnet {nu}"]},
+            },
+        )
+
+    rows = social_sentiment_for_home(
+        [{"netuid": 3, "name": "Gamma"}, {"netuid": 7, "name": "Delta"}],
+        pick_netuid=3,
+        limit=6,
+    )
+    assert rows[0]["netuid"] == 3
+
+
 def test_homepage_social_sentiment_from_message_intel(client):
     with patch("internal.message_intel.engine._load_pipeline") as mock_pipe:
         from message_intel.nlp_engine import NLPAnalyzer
