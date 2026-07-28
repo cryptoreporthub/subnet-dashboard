@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import json
 import logging
 import os
+import subprocess
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -15,6 +17,51 @@ from starlette.responses import JSONResponse, Response
 logger = logging.getLogger(__name__)
 
 _LAST_GOOD_BASE: Optional[str] = None
+_LAST_PROBE_ERROR: Optional[str] = None
+
+
+def last_worker_probe_error() -> Optional[str]:
+    return _LAST_PROBE_ERROR
+
+
+def _record_probe_error(exc: BaseException) -> None:
+    global _LAST_PROBE_ERROR
+    _LAST_PROBE_ERROR = str(exc)[:240]
+
+
+def _internal_transport() -> httpx.AsyncHTTPTransport:
+    # ponytail: Fly 6PN is IPv6; local :: avoids httpx failing .internal AAAA lookups.
+    return httpx.AsyncHTTPTransport(local_address="::")
+
+
+def _curl_json_sync(url: str, *, timeout: float) -> Dict[str, Any]:
+    """Fallback when httpx cannot reach 6PN (seen on some Fly web→worker paths)."""
+    try:
+        proc = subprocess.run(
+            [
+                "curl",
+                "-sfS",
+                "-m",
+                str(max(1, int(timeout))),
+                "-H",
+                "X-Worker-Proxy: 1",
+                url,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=timeout + 2,
+            check=False,
+        )
+    except Exception as exc:
+        raise OSError(f"curl failed: {exc}") from exc
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip() or f"exit {proc.returncode}"
+        raise OSError(detail[:240])
+    try:
+        data = json.loads(proc.stdout)
+        return data if isinstance(data, dict) else {}
+    except json.JSONDecodeError as exc:
+        raise OSError(f"curl json decode: {exc}") from exc
 
 
 def _record_good_base(base: str) -> None:
@@ -88,7 +135,7 @@ async def _fetch_worker_http(path: str, *, query: str = "", timeout: float) -> h
         if query:
             url = f"{url}?{query}"
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
+            async with httpx.AsyncClient(timeout=timeout, transport=_internal_transport()) as client:
                 resp = await client.get(url, headers={"X-Worker-Proxy": "1"})
             if resp.status_code in (404, 502, 503):
                 logger.debug("worker HTTP %s status %s", url, resp.status_code)
@@ -97,6 +144,7 @@ async def _fetch_worker_http(path: str, *, query: str = "", timeout: float) -> h
                     request=resp.request,
                     response=resp,
                 )
+                _record_probe_error(last_exc)
                 continue
             resp.raise_for_status()
             try:
@@ -108,20 +156,37 @@ async def _fetch_worker_http(path: str, *, query: str = "", timeout: float) -> h
                         request=resp.request,
                         response=resp,
                     )
+                    _record_probe_error(last_exc)
                     continue
             except Exception:
                 pass
             _record_good_base(base)
+            _LAST_PROBE_ERROR = None
             return resp
         except httpx.HTTPStatusError as exc:
             last_exc = exc
+            _record_probe_error(exc)
             if exc.response.status_code in (404, 502, 503):
                 logger.debug("worker HTTP %s status %s", url, exc.response.status_code)
                 continue
             logger.debug("worker HTTP %s failed: %s", url, exc)
         except Exception as exc:
             last_exc = exc
+            _record_probe_error(exc)
             logger.debug("worker HTTP %s failed: %s", url, exc)
+            try:
+                data = _curl_json_sync(url, timeout=timeout)
+                if _is_web_misroute(data, path):
+                    last_exc = OSError("web misroute (curl)")
+                    _record_probe_error(last_exc)
+                    continue
+                _record_good_base(base)
+                _LAST_PROBE_ERROR = None
+                return httpx.Response(200, json=data)
+            except Exception as curl_exc:
+                last_exc = curl_exc
+                _record_probe_error(curl_exc)
+                logger.debug("worker curl %s failed: %s", url, curl_exc)
     if last_exc is not None:
         raise last_exc
     raise OSError("no worker HTTP base succeeded")
