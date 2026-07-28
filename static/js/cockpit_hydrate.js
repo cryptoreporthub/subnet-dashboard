@@ -1307,6 +1307,9 @@
       ' pump-hero__card" id="pump-desk-hero" data-netuid="' +
       esc(row.netuid) +
       '">' +
+      '<div class="pds-hero__stage">' +
+      '<div class="pds-hero__visual" aria-hidden="true" data-slot="hero-visual"></div>' +
+      '<div class="pds-hero__copy">' +
       '<div class="pds-hero__top">' +
       '<span class="pds-hero__badge pds-hero__badge--' +
       esc(badgeSlug) +
@@ -1321,18 +1324,19 @@
       esc(row.netuid) +
       '</b></a>' +
       (row.updated_ago ? '<span class="pds-hero__ago">' + esc(row.updated_ago) + '</span>' : '') +
+      '</div>' +
       '<div class="pds-hero__headline" aria-label="' +
       trigPct +
       ' percent to trigger"><span class="pds-hero__pct">' +
       trigPct +
-      '<i>%</i></span><span class="pds-hero__pct-lbl">to trigger</span></div></div>' +
+      '<i>%</i></span><span class="pds-hero__pct-lbl">to trigger</span></div>' +
       '<div class="pds-hero__bar" role="progressbar" aria-valuenow="' +
       trigPct +
       '" aria-valuemin="0" aria-valuemax="100"><span class="pds-hero__bar-fill" style="width:' +
       trigPct +
       '%"></span>' +
       sparkHtml +
-      '</div>' +
+      '</div></div></div>' +
       '<ol class="pds-phase" aria-label="Formation phase">' +
       phaseHtml +
       '</ol>' +
@@ -1369,12 +1373,193 @@
       (row.owner_chip
         ? '<p class="pds-hero__chip pds-hero__chip--owner">' + esc(row.owner_chip) + '</p>'
         : '') +
+      renderAnglesBlock(row) +
       '<a class="pds-hero__cta home-cta home-cta--primary" href="/subnet/' +
       esc(row.netuid) +
       '">Open SN' +
       esc(row.netuid) +
       ' dossier</a></article>'
     );
+  }
+
+  function renderPeersBlock(row, prefix) {
+    var peers = row && row.peers;
+    if (!peers || (!peers.lane && !(peers.matches && peers.matches.length))) return '';
+    var cls = prefix || 'pds-peers';
+    var barCls = prefix && prefix.indexOf('pd-') === 0 ? 'pd-angles' : 'pds-angles';
+    var matches = Array.isArray(peers.matches) ? peers.matches : [];
+    var chips = '';
+    if (peers.lane) {
+      chips +=
+        '<span class="' + cls + '__lane" title="Pulse lane">' + esc(peers.lane) + '</span>';
+    }
+    if (peers.rarity != null) {
+      chips +=
+        '<span class="' +
+        cls +
+        '__rarity" title="Signature rarity">' +
+        esc(peers.rarity) +
+        ' rarity</span>';
+    }
+    var matchHtml = matches
+      .slice(0, 3)
+      .map(function (k) {
+        var lead = leadPctOf(k);
+        var shared = Array.isArray(k.shared) && k.shared.length ? k.shared.slice(0, 2).join(' · ') : '';
+        return (
+          '<a class="' +
+          cls +
+          '__match" href="/subnet/' +
+          esc(k.netuid) +
+          '" title="' +
+          esc(lead + '% of #1' + (shared ? ' · ' + shared : k.lane ? ' · ' + k.lane : '')) +
+          '"><span class="' +
+          cls +
+          '__match-head">' +
+          esc(k.name || 'SN' + k.netuid) +
+          ' <b>SN' +
+          esc(k.netuid) +
+          '</b>' +
+          (k.lane ? ' <i>' + esc(k.lane) + '</i>' : '') +
+          '</span><span class="' +
+          barCls +
+          '__chip-meta"><em>' +
+          lead +
+          '% of #1</em></span><span class="' +
+          barCls +
+          '__bar" role="progressbar" aria-valuenow="' +
+          lead +
+          '" aria-valuemin="0" aria-valuemax="100"><span class="' +
+          barCls +
+          '__bar-fill" style="width:' +
+          lead +
+          '%"></span></span></a>'
+        );
+      })
+      .join('');
+    return (
+      '<section class="' +
+      barCls +
+      '__section ' +
+      barCls +
+      '__section--peers ' +
+      cls +
+      '" aria-label="Peers">' +
+      '<header class="' +
+      barCls +
+      '__head ' +
+      cls +
+      '__meta"><h3 class="' +
+      barCls +
+      '__label ' +
+      cls +
+      '__label">Peers</h3>' +
+      chips +
+      '</header>' +
+      (matchHtml ? '<div class="' + barCls + '__list ' + cls + '__list">' + matchHtml + '</div>' : '') +
+      '</section>'
+    );
+  }
+
+  function leadPctOf(k) {
+    return Math.max(0, Math.min(100, Math.round(Number(k && k.to_lead_pct != null ? k.to_lead_pct : 0))));
+  }
+
+  function angleChipHtml(root, k, opts) {
+    opts = opts || {};
+    var lead = leadPctOf(k);
+    var extra = opts.extraLabel || '';
+    var combined = !!opts.combined;
+    return (
+      '<a class="' +
+      root +
+      '__chip' +
+      (combined ? ' ' + root + '__chip--combined' : '') +
+      '" href="/subnet/' +
+      esc(k.netuid) +
+      '" title="' +
+      esc(lead + '% of #1 heat' + (opts.titleSuffix ? ' · ' + opts.titleSuffix : '')) +
+      '"><span class="' +
+      root +
+      '__chip-head">' +
+      esc(k.name || 'SN' + k.netuid) +
+      ' <b>SN' +
+      esc(k.netuid) +
+      '</b></span><span class="' +
+      root +
+      '__chip-meta"><i>' +
+      lead +
+      '% of #1' +
+      (extra ? ' · ' + esc(extra) : '') +
+      '</i></span><span class="' +
+      root +
+      '__bar" role="progressbar" aria-valuenow="' +
+      lead +
+      '" aria-valuemin="0" aria-valuemax="100"><span class="' +
+      root +
+      '__bar-fill' +
+      (combined ? ' ' + root + '__bar-fill--combined' : '') +
+      '" style="width:' +
+      lead +
+      '%"></span></span></a>'
+    );
+  }
+
+  function renderAnglesBlock(row, prefix) {
+    var root = prefix || 'pds-angles';
+    var peerPrefix = root.indexOf('pd-') === 0 ? 'pd-peers' : 'pds-peers';
+    var nextUp = Array.isArray(row && row.next_up) ? row.next_up : [];
+    var combined = row && row.combined;
+    var peersHtml = renderPeersBlock(row, peerPrefix);
+    if (!nextUp.length && !peersHtml && !combined) return '';
+    var html = '<div class="' + root + '" aria-label="Next up, Peers, Combined">';
+    if (nextUp.length) {
+      html +=
+        '<section class="' +
+        root +
+        '__section ' +
+        root +
+        '__section--next"><header class="' +
+        root +
+        '__head"><h3 class="' +
+        root +
+        '__label">Next up</h3><a class="' +
+        root +
+        '__more" href="#pump-desk-more">View ladder</a></header><div class="' +
+        root +
+        '__list">';
+      nextUp.slice(0, 3).forEach(function (k) {
+        html += angleChipHtml(root, k);
+      });
+      html += '</div></section>';
+    }
+    if (peersHtml) html += peersHtml;
+    if (combined && combined.netuid != null) {
+      html +=
+        '<section class="' +
+        root +
+        '__section ' +
+        root +
+        '__section--combined"><header class="' +
+        root +
+        '__head"><h3 class="' +
+        root +
+        '__label">Combined <em>experimental</em></h3></header><div class="' +
+        root +
+        '__list">' +
+        angleChipHtml(root, combined, {
+          combined: true,
+          extraLabel:
+            't' +
+            Math.round(Number(combined.timing_pts || 0)) +
+            ' · p' +
+            Math.round(Number(combined.peer_pts || 0)),
+          titleSuffix: 'timing ' + combined.timing_pts + ' · peer ' + combined.peer_pts,
+        }) +
+        '</div></section>';
+    }
+    html += '</div>';
+    return html;
   }
 
   function renderPumpScanRow(row, tone) {
@@ -1592,6 +1777,7 @@
       (rawBits.length ? '<p class="pd-raw">' + rawBits.join('') + '</p>' : '') +
       _pdTriadLegs(triad, labels) +
       chipsHtml +
+      renderAnglesBlock(row, 'pd-angles') +
       '<div class="pd-cta" role="group" aria-label="Lead actions">' +
       '<a class="home-cta home-cta--primary" href="/subnet/' +
       esc(row.netuid) +

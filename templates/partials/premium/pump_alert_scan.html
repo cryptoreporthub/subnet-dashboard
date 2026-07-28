@@ -70,21 +70,26 @@
       {% set trigger = hero_row.trigger|default(hero_row.subtitle|default('')) %}
 
       <article class="pds-hero pds-hero--{{ timing }} pump-hero__card" id="pump-desk-hero" data-netuid="{{ hero_row.netuid }}">
-        <div class="pds-hero__top">
-          <span class="pds-hero__badge pds-hero__badge--{{ badge_slug }}">{{ hero_row.badge }}</span>
-          <a class="pds-hero__name" href="/subnet/{{ hero_row.netuid }}">{{ hero_row.name }} <b>SN{{ hero_row.netuid }}</b></a>
-          {% if hero_row.updated_ago %}<span class="pds-hero__ago">{{ hero_row.updated_ago }}</span>{% endif %}
-          <div class="pds-hero__headline" aria-label="{{ trig_pct }} percent to trigger">
-            <span class="pds-hero__pct">{{ trig_pct }}<i>%</i></span>
-            <span class="pds-hero__pct-lbl">to trigger</span>
+        <div class="pds-hero__stage">
+          {# Visual slot reserved — timer / art later; do not fill with clutter #}
+          <div class="pds-hero__visual" aria-hidden="true" data-slot="hero-visual"></div>
+          <div class="pds-hero__copy">
+            <div class="pds-hero__top">
+              <span class="pds-hero__badge pds-hero__badge--{{ badge_slug }}">{{ hero_row.badge }}</span>
+              <a class="pds-hero__name" href="/subnet/{{ hero_row.netuid }}">{{ hero_row.name }} <b>SN{{ hero_row.netuid }}</b></a>
+              {% if hero_row.updated_ago %}<span class="pds-hero__ago">{{ hero_row.updated_ago }}</span>{% endif %}
+            </div>
+            <div class="pds-hero__headline" aria-label="{{ trig_pct }} percent to trigger">
+              <span class="pds-hero__pct">{{ trig_pct }}<i>%</i></span>
+              <span class="pds-hero__pct-lbl">to trigger</span>
+            </div>
+            <div class="pds-hero__bar" role="progressbar" aria-valuenow="{{ trig_pct }}" aria-valuemin="0" aria-valuemax="100">
+              <span class="pds-hero__bar-fill" style="width: {{ trig_pct }}%"></span>
+              {% if progress_pts|length >= 2 %}
+              <span class="pds-hero__spark"><span class="pump-progress" data-progress="{{ progress_pts|join(',') }}" role="img" aria-label="Score trend"></span></span>
+              {% endif %}
+            </div>
           </div>
-        </div>
-
-        <div class="pds-hero__bar" role="progressbar" aria-valuenow="{{ trig_pct }}" aria-valuemin="0" aria-valuemax="100">
-          <span class="pds-hero__bar-fill" style="width: {{ trig_pct }}%"></span>
-          {% if progress_pts|length >= 2 %}
-          <span class="pds-hero__spark"><span class="pump-progress" data-progress="{{ progress_pts|join(',') }}" role="img" aria-label="Score trend"></span></span>
-          {% endif %}
         </div>
 
         <ol class="pds-phase" aria-label="Formation phase">
@@ -116,6 +121,67 @@
         {% if hero_row.size_line %}<p class="pds-hero__chip">{{ hero_row.size_line }}</p>{% endif %}
         {% if hero_row.telegram_chip %}<p class="pds-hero__chip pds-hero__chip--tg">{{ hero_row.telegram_chip }}</p>{% endif %}
         {% if hero_row.owner_chip %}<p class="pds-hero__chip pds-hero__chip--owner">{{ hero_row.owner_chip }}</p>{% endif %}
+        {% set next_up = hero_row.next_up if hero_row.next_up is iterable and hero_row.next_up is not string else [] %}
+        {% set peers = hero_row.peers if hero_row.peers is mapping else none %}
+        {% set combined = hero_row.combined if hero_row.combined is mapping else none %}
+        {% if next_up or (peers and (peers.lane or (peers.matches is iterable and peers.matches|length > 0))) or combined %}
+        <div class="pds-angles" aria-label="Next up, Peers, Combined">
+          {% if next_up and next_up|length > 0 %}
+          <section class="pds-angles__section pds-angles__section--next">
+            <header class="pds-angles__head">
+              <h3 class="pds-angles__label">Next up</h3>
+              <a class="pds-angles__more" href="#pump-desk-more">View ladder</a>
+            </header>
+            <div class="pds-angles__list">
+              {% for k in next_up[:3] %}
+              {% set lead_pct = k.to_lead_pct|default(0)|int %}
+              <a class="pds-angles__chip" href="/subnet/{{ k.netuid }}" title="{{ lead_pct }}% of #1 heat">
+                <span class="pds-angles__chip-head">{{ k.name }} <b>SN{{ k.netuid }}</b></span>
+                <span class="pds-angles__chip-meta"><i>{{ lead_pct }}% of #1</i></span>
+                <span class="pds-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ lead_pct }} percent of lead"><span class="pds-angles__bar-fill" style="width:{{ lead_pct }}%"></span></span>
+              </a>
+              {% endfor %}
+            </div>
+          </section>
+          {% endif %}
+          {% if peers and (peers.lane or (peers.matches is iterable and peers.matches|length > 0)) %}
+          <section class="pds-angles__section pds-angles__section--peers pds-peers">
+            <header class="pds-angles__head pds-peers__meta">
+              <h3 class="pds-angles__label pds-peers__label">Peers</h3>
+              {% if peers.lane %}<span class="pds-peers__lane" title="Pulse lane">{{ peers.lane }}</span>{% endif %}
+              {% if peers.rarity is not none %}<span class="pds-peers__rarity" title="Signature rarity">{{ peers.rarity }} rarity</span>{% endif %}
+            </header>
+            {% if peers.matches is iterable and peers.matches|length > 0 %}
+            <div class="pds-angles__list pds-peers__list">
+              {% for k in peers.matches[:3] %}
+              {% set lead_pct = k.to_lead_pct|default(0)|int %}
+              <a class="pds-peers__match" href="/subnet/{{ k.netuid }}" title="{{ lead_pct }}% of #1 · {{ (k.shared|default([]))[:2]|join(' · ') or k.lane|default('peer') }}">
+                <span class="pds-peers__match-head">{{ k.name }} <b>SN{{ k.netuid }}</b>{% if k.lane %} <i>{{ k.lane }}</i>{% endif %}</span>
+                <span class="pds-angles__chip-meta"><em>{{ lead_pct }}% of #1</em></span>
+                <span class="pds-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100"><span class="pds-angles__bar-fill" style="width:{{ lead_pct }}%"></span></span>
+              </a>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </section>
+          {% endif %}
+          {% if combined %}
+          {% set lead_pct = combined.to_lead_pct|default(0)|int %}
+          <section class="pds-angles__section pds-angles__section--combined">
+            <header class="pds-angles__head">
+              <h3 class="pds-angles__label">Combined <em>experimental</em></h3>
+            </header>
+            <div class="pds-angles__list">
+              <a class="pds-angles__chip pds-angles__chip--combined" href="/subnet/{{ combined.netuid }}" title="{{ lead_pct }}% of #1 · timing {{ combined.timing_pts }} · peer {{ combined.peer_pts }}">
+                <span class="pds-angles__chip-head">{{ combined.name }} <b>SN{{ combined.netuid }}</b></span>
+                <span class="pds-angles__chip-meta"><i>{{ lead_pct }}% of #1 · t{{ combined.timing_pts|int }} · p{{ combined.peer_pts|int }}</i></span>
+                <span class="pds-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100"><span class="pds-angles__bar-fill pds-angles__bar-fill--combined" style="width:{{ lead_pct }}%"></span></span>
+              </a>
+            </div>
+          </section>
+          {% endif %}
+        </div>
+        {% endif %}
 
         <a class="pds-hero__cta home-cta home-cta--primary" href="/subnet/{{ hero_row.netuid }}">Open SN{{ hero_row.netuid }} dossier</a>
       </article>
@@ -285,16 +351,31 @@
   .pds-hero--confirmed { border-color: rgba(251, 113, 133, 0.28); }
   .pds-hero--exit { border-color: rgba(52, 211, 153, 0.28); }
 
+  .pds-hero__stage {
+    position: relative;
+    margin-bottom: 10px;
+    min-height: 7.5rem;
+    overflow: hidden;
+  }
+  .pds-hero__visual {
+    position: absolute;
+    inset: -12% -6% -20% 42%;
+    pointer-events: none;
+    z-index: 0;
+    /* Reserved for timer / art later — empty on purpose */
+    background:
+      radial-gradient(ellipse 60% 55% at 68% 42%, rgba(56, 189, 248, 0.16), transparent 68%),
+      radial-gradient(ellipse 45% 40% at 92% 18%, rgba(14, 165, 233, 0.1), transparent 62%);
+  }
+  .pds-hero__copy { position: relative; z-index: 1; }
   .pds-hero__top {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    grid-template-rows: auto auto;
-    gap: 2px 10px;
-    align-items: start;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 10px;
+    margin-bottom: 6px;
   }
   .pds-hero__badge {
-    grid-row: 1 / 3;
-    align-self: center;
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-size: 9px;
     font-weight: 700;
@@ -310,7 +391,6 @@
     color: #fecdd3; background: rgba(251, 113, 133, 0.12); border-color: rgba(251, 113, 133, 0.28);
   }
   .pds-hero__name {
-    grid-column: 2;
     font-size: 17px;
     font-weight: 700;
     color: var(--pds-ink);
@@ -323,32 +403,29 @@
     color: var(--pds-dim);
   }
   .pds-hero__ago {
-    grid-column: 2;
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-size: 10px;
     color: var(--pds-dim);
   }
   .pds-hero__headline {
-    grid-column: 3;
-    grid-row: 1 / 3;
-    text-align: right;
+    margin: 4px 0 0;
   }
   .pds-hero__pct {
     display: block;
     font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 34px;
+    font-size: 40px;
     font-weight: 800;
     line-height: 1;
-    color: #fbbf24;
+    color: #38bdf8;
   }
   .pds-hero--confirmed .pds-hero__pct { color: #fb7185; }
-  .pds-hero__pct i { font-size: 15px; font-style: normal; opacity: 0.55; }
+  .pds-hero__pct i { font-size: 16px; font-style: normal; opacity: 0.55; }
   .pds-hero__pct-lbl {
     display: block;
     margin-top: 2px;
     font-family: 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 8px;
-    letter-spacing: 0.06em;
+    font-size: 9px;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--pds-dim);
   }
@@ -474,6 +551,142 @@
   .pds-hero__chip--tg { color: #7dd3fc; }
   .pds-hero__chip--whale { color: #fbbf24; }
   .pds-hero__chip--wallet { color: #a7f3d0; }
+  .pds-peers {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(148, 163, 184, 0.12);
+  }
+  .pds-angles {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(148, 163, 184, 0.12);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .pds-angles__section { display: flex; flex-direction: column; gap: 8px; }
+  .pds-angles__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .pds-angles__label {
+    margin: 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    font-weight: 600;
+  }
+  .pds-angles__label em {
+    font-style: normal;
+    text-transform: none;
+    letter-spacing: 0.02em;
+    color: #a8a29e;
+    font-weight: 500;
+  }
+  .pds-angles__more {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #64748b;
+    text-decoration: none;
+  }
+  .pds-angles__more:hover { color: #7dd3fc; }
+  .pds-angles__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+    gap: 8px;
+  }
+  .pds-angles__chip {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    background: rgba(15, 23, 42, 0.55);
+    color: #e2e8f0;
+    text-decoration: none;
+    font-size: 12px;
+  }
+  .pds-angles__chip-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; }
+  .pds-angles__chip-meta {
+    font-size: 10px;
+    color: #94a3b8;
+  }
+  .pds-angles__chip-meta i,
+  .pds-angles__chip-meta em { font-style: normal; }
+  .pds-angles__chip b { font-weight: 600; color: #86efac; }
+  .pds-angles__chip--combined {
+    border-color: rgba(252, 211, 77, 0.35);
+    background: rgba(120, 53, 15, 0.22);
+  }
+  .pds-angles__chip--combined b { color: #fcd34d; }
+  .pds-angles__bar {
+    display: block;
+    height: 3px;
+    width: 100%;
+    background: rgba(148, 163, 184, 0.18);
+    overflow: hidden;
+  }
+  .pds-angles__bar-fill {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #38bdf8, #4ade80);
+  }
+  .pds-angles__bar-fill--combined {
+    background: linear-gradient(90deg, #f59e0b, #fcd34d);
+  }
+  .pds-peers {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+  .pds-peers__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .pds-peers__label {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
+  .pds-peers__lane,
+  .pds-peers__rarity {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: #7dd3fc;
+  }
+  .pds-peers__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+    gap: 8px;
+    margin-top: 0;
+  }
+  .pds-peers__match {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid rgba(56, 189, 248, 0.28);
+    background: rgba(14, 165, 233, 0.1);
+    color: #e2e8f0;
+    text-decoration: none;
+    font-size: 12px;
+  }
+  .pds-peers__match-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; }
+  .pds-peers__match b { font-weight: 600; color: #7dd3fc; }
+  .pds-peers__match i { font-style: normal; color: #94a3b8; font-size: 10px; }
   .pds-hero__cta {
     display: block;
     margin-top: 12px;

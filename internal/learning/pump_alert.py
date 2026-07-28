@@ -1034,7 +1034,19 @@ def build_pump_alerts_desk(subnets: Optional[List[Dict[str, Any]]] = None) -> Di
         + _sort_bucket(cooling, _MAX_COOLING, row_builder=build_desk_row)
     )
     payload = _finalize_pump_payload(alerts, desk=True)
-    return _attach_watch_when_empty(payload, state, rows)
+    payload = _attach_watch_when_empty(payload, state, rows)
+    try:
+        from internal.pump.combined import attach_angles_to_desk
+
+        attach_angles_to_desk(payload, state)
+    except Exception:
+        try:
+            from internal.pump.peers import attach_peers_to_desk
+
+            attach_peers_to_desk(payload, state)
+        except Exception:
+            pass
+    return payload
 
 
 def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:

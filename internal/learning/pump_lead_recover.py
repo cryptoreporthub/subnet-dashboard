@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from internal.council.grading import (
     compute_actual_pct,
     grade_prediction,
+    is_pump_desk_claim,
     is_pump_lead,
 )
 from internal.council.price_reference import PRICE_CACHE_PATH, price_at_resolve_at
@@ -61,6 +62,10 @@ def sample_quality_ok(prediction: Dict[str, Any]) -> Tuple[bool, str]:
         ref = 0.0
     if ref <= 0:
         return False, "bad_reference_price"
+
+    # Experimental combined — ranker already filtered; only need price + netuid.
+    if str(prediction.get("pick_source") or "").lower() == "pump_combined_exp":
+        return True, "ok"
 
     phase = str(prediction.get("pump_phase") or "").upper()
     badge = str(prediction.get("pump_badge") or "").upper()
@@ -247,7 +252,7 @@ def hydrate_overdue_pump_lead_netuids(
     seen: Set[str] = set()
     results: List[Dict[str, Any]] = []
     for pred in predictions:
-        if not isinstance(pred, dict) or not is_pump_lead(pred):
+        if not isinstance(pred, dict) or not is_pump_desk_claim(pred):
             continue
         ok, _reason = sample_quality_ok(pred)
         if not ok:
@@ -283,8 +288,8 @@ def grade_pump_lead_at_resolve_candle(
     When hydrate=True, attempt OHLCV fill for this netuid before lookup.
     """
     now = now or _utcnow()
-    if not is_pump_lead(prediction):
-        return _mark_ungradeable(prediction, reason="not_pump_lead", now=now)
+    if not is_pump_desk_claim(prediction):
+        return _mark_ungradeable(prediction, reason="not_pump_desk_claim", now=now)
 
     ok, reason = sample_quality_ok(prediction)
     if not ok:
@@ -353,7 +358,7 @@ def recover_overdue_pump_leads(
         would: List[Any] = []
         seen: Set[str] = set()
         for pred in pending:
-            if not isinstance(pred, dict) or not is_pump_lead(pred):
+            if not isinstance(pred, dict) or not is_pump_desk_claim(pred):
                 continue
             ok, _ = sample_quality_ok(pred)
             if not ok:
@@ -379,7 +384,7 @@ def recover_overdue_pump_leads(
     cache = _load_cache(PRICE_CACHE_PATH)
 
     for pred in pending:
-        if not isinstance(pred, dict) or not is_pump_lead(pred):
+        if not isinstance(pred, dict) or not is_pump_desk_claim(pred):
             still.append(pred)
             continue
         resolve_at = _parse_ts(pred.get("resolve_at"))
@@ -406,7 +411,7 @@ def recover_overdue_pump_leads(
         "hydrate": hydrate_summary,
         "graded": len(graded),
         "rejected_ungradeable": len(rejected),
-        "still_pending": sum(1 for p in still if isinstance(p, dict) and is_pump_lead(p)),
+        "still_pending": sum(1 for p in still if isinstance(p, dict) and is_pump_desk_claim(p)),
         "hits": sum(1 for r in graded if r.get("correct") is True),
         "misses": sum(1 for r in graded if r.get("correct") is False),
         "reject_reasons": {},

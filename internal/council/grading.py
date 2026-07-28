@@ -49,6 +49,15 @@ def is_pump_lead(prediction: Dict[str, Any]) -> bool:
     return str(prediction.get("pick_source") or "").lower() == "pump_lead"
 
 
+def is_pump_combined_exp(prediction: Dict[str, Any]) -> bool:
+    """Experimental combined next-up+peer claim — same grade rule, no council learn."""
+    return str(prediction.get("pick_source") or "").lower() == "pump_combined_exp"
+
+
+def is_pump_desk_claim(prediction: Dict[str, Any]) -> bool:
+    return is_pump_lead(prediction) or is_pump_combined_exp(prediction)
+
+
 def pump_lead_hit(prediction: Dict[str, Any], actual_pct: float) -> bool:
     """Grade pump desk claim — not council direction-only.
 
@@ -77,7 +86,7 @@ def classify_outcome_pump_lead(prediction: Dict[str, Any], actual_pct: float) ->
 
 def grade_prediction(prediction: Dict[str, Any], actual_pct: float) -> Tuple[bool, str]:
     """Return (correct, outcome) using the right rule for pick_source."""
-    if is_pump_lead(prediction):
+    if is_pump_desk_claim(prediction):
         return pump_lead_hit(prediction, actual_pct), classify_outcome_pump_lead(
             prediction, actual_pct
         )

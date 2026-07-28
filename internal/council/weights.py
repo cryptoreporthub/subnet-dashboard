@@ -147,7 +147,7 @@ def replay_weights_from_predictions(
     predictions_path: Optional[str] = None,
 ) -> Dict[str, float]:
     """Rebuild council weights by replaying graded prediction nudges from defaults."""
-    from internal.council.grading import is_pump_lead
+    from internal.council.grading import is_pump_desk_claim
     from internal.council.signal_expert import expert_for_replay_row
 
     path = predictions_path or os.path.join("data", "predictions.json")
@@ -166,7 +166,7 @@ def replay_weights_from_predictions(
         if isinstance(row, dict)
         and row.get("correct") is not None
         and row.get("outcome") not in _SKIP_OUTCOMES
-        and not is_pump_lead(row)
+        and not is_pump_desk_claim(row)
     ]
     rows.sort(key=lambda row: str(row.get("resolved_at") or row.get("created_at") or ""))
 
@@ -210,7 +210,7 @@ def rebalance_council_weights(
     save: bool = True,
 ) -> Dict[str, Any]:
     """Slice R — replay ledger with re-attribution, soft-blend, optional persist."""
-    from internal.council.grading import is_pump_lead
+    from internal.council.grading import is_pump_desk_claim
     from internal.council.signal_expert import expert_for_replay_row
 
     path = predictions_path or os.path.join("data", "predictions.json")
@@ -229,7 +229,7 @@ def rebalance_council_weights(
                 continue
             if row.get("outcome") in _SKIP_OUTCOMES:
                 continue
-            if is_pump_lead(row):
+            if is_pump_desk_claim(row):
                 rows_skipped_pump += 1
                 continue
             if expert_for_replay_row(row):
