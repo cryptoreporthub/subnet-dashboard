@@ -30,10 +30,33 @@ def test_needs_worker_volume_proxy_split_v2_web_with_local_data(tmp_path, monkey
     monkeypatch.setenv("RUN_MODE", "web")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.delenv("DATA_DIR_IS_VOLUME", raising=False)
+    (tmp_path / "soul_map.json").write_text("{}")
+    from internal.data_volume import needs_worker_volume_proxy
+
+    # Orphan JSON without a volume mount — still proxy to worker.
+    assert needs_worker_volume_proxy() is True
+
+
+def test_needs_worker_volume_proxy_false_when_volume_mounted(tmp_path, monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("DATA_DIR_IS_VOLUME", "1")
     (tmp_path / "soul_map.json").write_text("{}")
     from internal.data_volume import needs_worker_volume_proxy
 
     assert needs_worker_volume_proxy() is False
+
+
+def test_should_proxy_learning_health(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("DATA_DIR", "/nonexistent")
+    from internal.worker_proxy import should_proxy_path
+
+    assert should_proxy_path("/api/learning/health") is True
+    assert should_proxy_path("/api/pump-alerts") is True
 
 
 def test_listener_status_proxies_to_worker(monkeypatch):
