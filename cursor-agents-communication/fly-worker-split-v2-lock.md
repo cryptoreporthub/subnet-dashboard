@@ -12,12 +12,13 @@
 | #576–#577 | Volume proxy web → worker |
 | #578 | `internal/worker_peer.py` HTTP probe (`1d2f`) |
 | #579+ | Worker flycast `[[services]]` + `/api/ops/worker-peer` |
+| #581–#584 | Process DNS peer routing, volume repair script, local fallback |
 
 ## Prod
 
 - `worker_mode: split_v2` · `web=1 worker=1`
-- Web proxies `/api/pump-alerts` + `/api/message-intel*` to worker
-- Web probes worker via `http://subnet-dashboard.flycast:8080/api/ops/worker-peer`
+- Web proxies volume APIs to worker when web has no local volume data
+- Web probes worker via `worker.process.subnet-dashboard.internal:8080/api/ops/worker-peer`
 
 ## Do not
 
