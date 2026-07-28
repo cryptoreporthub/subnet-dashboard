@@ -17,24 +17,24 @@ def volume_on_web(vol_id: str, attached: str, web_id: str, worker_id: str) -> bo
     return bool(vol_id and attached and web_id and worker_id and attached == web_id)
 
 
-def worker_vm_internal_url(machine_id: str, app: str) -> str:
-    return f"http://{machine_id}.vm.{app}.internal:8080"
+def worker_vm_internal_url(machine_id: str, app: str, port: str = "8081") -> str:
+    return f"http://{machine_id}.vm.{app}.internal:{port}"
 
 
-def worker_private_ip_url(private_ip: str) -> str:
-    return f"http://[{private_ip}]:8080"
+def worker_private_ip_url(private_ip: str, port: str = "8081") -> str:
+    return f"http://[{private_ip}]:{port}"
 
 
-def pick_worker_internal_url(machines: list, app: str) -> str | None:
+def pick_worker_internal_url(machines: list, app: str, port: str = "8081") -> str | None:
     workers = [m for m in machines if machine_process_group(m) == "worker"]
     if not workers:
         return None
     m = workers[0]
     ip = (m.get("private_ip") or "").strip()
     if ip:
-        return worker_private_ip_url(ip)
+        return worker_private_ip_url(ip, port)
     mid = m.get("id") or ""
-    return worker_vm_internal_url(mid, app) if mid else None
+    return worker_vm_internal_url(mid, app, port) if mid else None
 
 
 def test_machine_process_group_from_metadata():
@@ -68,4 +68,4 @@ def test_pick_worker_internal_url():
         },
     ]
     url = pick_worker_internal_url(machines, "subnet-dashboard")
-    assert url == "http://[fdaa:0:3b99:a7b:8aeb:fea3:148b:2]:8080"
+    assert url == "http://[fdaa:0:3b99:a7b:8aeb:fea3:148b:2]:8081"
