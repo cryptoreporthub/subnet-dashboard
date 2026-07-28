@@ -46,6 +46,27 @@ def _daily_pick_summary() -> Dict[str, Any]:
     return out
 
 
+def _learning_loop_health() -> Dict[str, Any]:
+    """Volume truth on split_v2 web — proxy worker /api/learning/health when local data is orphan."""
+    try:
+        from internal.data_volume import needs_worker_volume_proxy
+
+        if needs_worker_volume_proxy():
+            from internal.worker_proxy import fetch_worker_json_sync
+
+            remote = fetch_worker_json_sync("/api/learning/health")
+            if isinstance(remote, dict) and remote.get("status"):
+                return remote
+    except Exception:
+        pass
+    try:
+        from internal.learning.loop_health import build_learning_loop_health
+
+        return build_learning_loop_health()
+    except Exception:
+        return {}
+
+
 def _learning_summary() -> Dict[str, Any]:
     try:
         from internal.learning.routes import _learning_snapshot
@@ -112,17 +133,11 @@ def build_readiness_report() -> Dict[str, Any]:
     learning = _learning_summary()
     daily = _daily_pick_summary()
 
-    loop_health: Dict[str, Any] = {}
-    try:
-        from internal.learning.loop_health import build_learning_loop_health
-
-        loop_health = build_learning_loop_health()
-        if loop_health.get("status") == "stalled":
-            issues.append("learning_loop_stalled")
-        elif loop_health.get("ledger", {}).get("gap"):
-            issues.append("daily_pick_ledger_gap")
-    except Exception:
-        loop_health = {}
+    loop_health = _learning_loop_health()
+    if loop_health.get("status") == "stalled":
+        issues.append("learning_loop_stalled")
+    elif loop_health.get("ledger", {}).get("gap"):
+        issues.append("daily_pick_ledger_gap")
 
     from internal.run_mode import inline_worker_expected, is_worker_mode, split_worker_v2_enabled, worker_mode_label
     from internal.worker_peer import get_worker_peer
