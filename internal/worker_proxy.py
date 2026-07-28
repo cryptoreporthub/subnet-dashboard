@@ -14,18 +14,21 @@ logger = logging.getLogger(__name__)
 
 
 def worker_internal_bases() -> List[str]:
-    """Ordered URLs for worker HTTP — flycast first when [[services]] worker is declared."""
+    """Ordered URLs for worker HTTP — process-group DNS first (avoids flycast hitting web)."""
     app = os.environ.get("FLY_APP_NAME", "subnet-dashboard").strip() or "subnet-dashboard"
     bases: List[str] = []
     custom = os.environ.get("WORKER_INTERNAL_URL", "").strip()
     if custom:
         bases.append(custom.rstrip("/"))
-    bases.extend(
-        [
-            f"http://{app}.flycast:8080",
-            f"http://worker.process.{app}.internal:8080",
-        ]
-    )
+    bases.append(f"http://worker.process.{app}.internal:8080")
+    # flycast load-balances all machines on 8080 — can hit web and break peer probe.
+    if os.environ.get("WORKER_INTERNAL_USE_FLYCAST", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    ):
+        bases.append(f"http://{app}.flycast:8080")
     seen: set[str] = set()
     out: List[str] = []
     for base in bases:
@@ -62,6 +65,12 @@ def fetch_worker_json_sync(path: str, *, timeout: Optional[float] = None) -> Dic
             resp.raise_for_status()
             data = resp.json()
             return data if isinstance(data, dict) else {}
+        except httpx.HTTPStatusError as exc:
+            last_exc = exc
+            if exc.response.status_code in (404, 502, 503):
+                logger.debug("worker HTTP %s status %s", url, exc.response.status_code)
+                continue
+            logger.debug("worker HTTP %s failed: %s", url, exc)
         except Exception as exc:
             last_exc = exc
             logger.debug("worker HTTP %s failed: %s", url, exc)

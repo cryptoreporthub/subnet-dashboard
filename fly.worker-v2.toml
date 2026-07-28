@@ -79,8 +79,7 @@ primary_region = "sjc"
   OUTCOME_SNAPSHOT_INTERVAL_HOURS = "6"
   WHALE_LEDGER_WARM_INTERVAL_MINUTES = "20"
   ALLOWED_ORIGINS = "https://subnet-dashboard.fly.dev,https://dashboard.cryptoreporthub.com,https://cryptoreporthub.com"
-  # Web → worker HTTP (flycast preferred; see [[services]] worker below).
-  WORKER_INTERNAL_URL = "http://subnet-dashboard.flycast:8080"
+  # Web probes worker via worker.process.<app>.internal (not flycast — flycast can hit web).
 
 [mounts]
   source = "data_volume"
