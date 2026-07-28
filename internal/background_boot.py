@@ -156,8 +156,26 @@ def _message_intel_enabled() -> bool:
     return flag not in ("off", "false", "0", "no")
 
 
+def _message_intel_outcomes_enabled() -> bool:
+    """Outcome grading runs even when Telegram listener is off (grades existing rows)."""
+    flag = os.environ.get("MESSAGE_INTEL_OUTCOMES", "on").strip().lower()
+    return flag not in ("off", "false", "0", "no")
+
+
 def _maybe_start_message_intel() -> None:
     """Telegram ingest on essential worker — deferred so HTTP wins boot (ponytail)."""
+
+    def _outcomes() -> None:
+        from internal.message_intel.outcome_loop import start_price_outcome_loop
+
+        start_price_outcome_loop()
+
+    outcome_delay = int(
+        os.environ.get("MESSAGE_INTEL_OUTCOME_DEFER_SECONDS", str(max(BOOT_DEFER_SECONDS + 30, 90)))
+    )
+    if _message_intel_outcomes_enabled():
+        defer_boot("message-intel-outcomes", _outcomes, delay=outcome_delay)
+
     if not _message_intel_enabled():
         return
 
@@ -166,18 +184,9 @@ def _maybe_start_message_intel() -> None:
 
         start_message_intel_listeners()
 
-    def _outcomes() -> None:
-        from internal.message_intel.outcome_loop import start_price_outcome_loop
-
-        start_price_outcome_loop()
-
     # After pump first scan window — full heavy mode wedged prod with live subnets + Telegram.
     listener_delay = int(os.environ.get("MESSAGE_INTEL_LISTENER_DEFER_SECONDS", str(max(BOOT_DEFER_SECONDS + 60, 120))))
-    outcome_delay = int(
-        os.environ.get("MESSAGE_INTEL_OUTCOME_DEFER_SECONDS", str(max(BOOT_DEFER_SECONDS + 30, 90)))
-    )
     defer_boot("message-intel-listeners", _listeners, delay=listener_delay)
-    defer_boot("message-intel-outcomes", _outcomes, delay=outcome_delay)
 
 
 def _start_score_snapshot_scheduler() -> None:
