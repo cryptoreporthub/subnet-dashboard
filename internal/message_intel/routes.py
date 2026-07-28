@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query, Request
 
@@ -44,10 +44,17 @@ async def api_message_intel_ingest(request: Request):
 async def api_message_intel(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    min_conviction: Optional[float] = Query(default=None, ge=0),
+    netuid: Optional[int] = Query(default=None, ge=0),
 ):
     """Primary message-intel list endpoint (honest-empty when no messages)."""
     try:
-        return engine.list_messages(limit=limit, offset=offset)
+        return engine.list_messages(
+            limit=limit,
+            offset=offset,
+            min_conviction=min_conviction,
+            netuid=netuid,
+        )
     except Exception as exc:
         logger.error("message-intel list failed: %s", exc)
         from internal.message_intel.listener_service import listener_status
@@ -87,9 +94,19 @@ async def api_message_intel_status():
 
 
 @message_intel_router.get("/api/message-intel/list")
-async def api_message_intel_list(limit: int = Query(default=50, ge=1, le=200), offset: int = Query(default=0, ge=0)):
+async def api_message_intel_list(
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    min_conviction: Optional[float] = Query(default=None, ge=0),
+    netuid: Optional[int] = Query(default=None, ge=0),
+):
     try:
-        return engine.list_messages(limit=limit, offset=offset)
+        return engine.list_messages(
+            limit=limit,
+            offset=offset,
+            min_conviction=min_conviction,
+            netuid=netuid,
+        )
     except Exception as exc:
         logger.error("message-intel list failed: %s", exc)
         return {"status": "error", "messages": [], "error": str(exc)}

@@ -80,6 +80,23 @@
       <h3 class="message-intel__panel-title"><span aria-hidden="true">((•))</span> Live feed</h3>
       <span class="message-intel__panel-unit" id="message-intel-feed-hint">newest first</span>
     </div>
+    <div class="message-intel__filter-bar" id="message-intel-filter-bar" aria-label="Feed filters">
+      <div class="message-intel__filter-group">
+        <span class="message-intel__filter-label">Min conviction</span>
+        <div class="message-intel__filter-chips" id="message-intel-conv-filters" role="group" aria-label="Minimum conviction">
+          <button type="button" class="message-intel__filter-chip message-intel__filter-chip--active" data-min-conv="">All</button>
+          <button type="button" class="message-intel__filter-chip" data-min-conv="60">60%+</button>
+          <button type="button" class="message-intel__filter-chip" data-min-conv="70">70%+</button>
+          <button type="button" class="message-intel__filter-chip" data-min-conv="80">80%+</button>
+        </div>
+      </div>
+      <div class="message-intel__filter-group">
+        <span class="message-intel__filter-label">Subnet</span>
+        <div class="message-intel__filter-chips" id="message-intel-subnet-filters" role="group" aria-label="Subnet filter">
+          <button type="button" class="message-intel__filter-chip message-intel__filter-chip--active" data-netuid="">All</button>
+        </div>
+      </div>
+    </div>
     <div id="message-intel-feed" class="message-intel__feed" aria-live="polite">
       <p class="empty">Warming up Telegram desk…</p>
     </div>
