@@ -18,6 +18,7 @@ from internal.council.deduplication import dedupe_predictions
 from internal.council.grading import (
     compute_actual_pct,
     grade_prediction,
+    is_pump_desk_claim,
     is_pump_lead,
 )
 from internal.council.price_reference import CANDLE_LOOKUP_MINUTES, price_at_resolve_at
@@ -77,7 +78,7 @@ def _in_replay_mode() -> bool:
 
 def _skip_council_learning(prediction: Dict[str, Any]) -> bool:
     """Pump desk + HOLD counterfactual shadows must not nudge council weights."""
-    if is_pump_lead(prediction):
+    if is_pump_desk_claim(prediction):
         return True
     return bool(prediction.get("shadow") or prediction.get("counterfactual"))
 
@@ -687,7 +688,7 @@ def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
         r for r in resolved
         if r.get("outcome") not in {"duplicate", "expired", "ungradeable"}
         and r.get("correct") is not None
-        and not is_pump_lead(r)
+        and not is_pump_desk_claim(r)
         and not _is_shadow(r)
     ]
     correct = sum(1 for r in gradable if r.get("correct") is True)
@@ -695,14 +696,14 @@ def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
     expired = sum(
         1
         for r in resolved
-        if r.get("outcome") == "expired" and not is_pump_lead(r) and not _is_shadow(r)
+        if r.get("outcome") == "expired" and not is_pump_desk_claim(r) and not _is_shadow(r)
     )
     duplicates = sum(1 for r in resolved if r.get("outcome") == "duplicate")
     council_pending = sum(
-        1 for r in pending if not is_pump_lead(r) and not _is_shadow(r)
+        1 for r in pending if not is_pump_desk_claim(r) and not _is_shadow(r)
     )
     total = (
-        len([r for r in resolved if not is_pump_lead(r) and not _is_shadow(r)])
+        len([r for r in resolved if not is_pump_desk_claim(r) and not _is_shadow(r)])
         + council_pending
     )
     stats: Dict[str, Any] = {
@@ -844,7 +845,7 @@ def resolve_due_predictions(
         if _is_expired(pred, resolve_at, now):
             # Pump leads past grace: candle-grade if quality sample, else ungradeable.
             # Never expire with a late live price (would falsify +2%/1h).
-            if is_pump_lead(pred):
+            if is_pump_desk_claim(pred):
                 try:
                     from internal.learning.pump_lead_recover import (
                         grade_pump_lead_at_resolve_candle,

@@ -23,3 +23,7 @@
 2. Attach to desk hero as `peers` / `lane` / `signature_rarity`
 3. Homepage + `/pump` UI + hydrate
 4. Tests: `tests/test_peers.py`
+
+## Follow-on
+
+**Next up + Combined (experimental):** see `combined-angles-lock.md` — separate UI lines; combined equation tracks a multi-candidate slate.

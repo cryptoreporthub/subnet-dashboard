@@ -115,10 +115,10 @@ def expert_from_signal_impact(signal_impact: Optional[Dict[str, Any]]) -> str:
 def expert_for_replay_row(row: Dict[str, Any]) -> Optional[str]:
     """Re-derive council expert for historical replay (new map, skip pump desk)."""
     try:
-        from internal.council.grading import is_pump_lead
+        from internal.council.grading import is_pump_desk_claim
     except Exception:
-        is_pump_lead = lambda _r: False  # type: ignore
-    if is_pump_lead(row):
+        is_pump_desk_claim = lambda _r: False  # type: ignore
+    if is_pump_desk_claim(row):
         return None
     si = row.get("signal_impact")
     if isinstance(si, dict):

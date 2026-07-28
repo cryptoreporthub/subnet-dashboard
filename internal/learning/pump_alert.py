@@ -1036,11 +1036,16 @@ def build_pump_alerts_desk(subnets: Optional[List[Dict[str, Any]]] = None) -> Di
     payload = _finalize_pump_payload(alerts, desk=True)
     payload = _attach_watch_when_empty(payload, state, rows)
     try:
-        from internal.pump.peers import attach_peers_to_desk
+        from internal.pump.combined import attach_angles_to_desk
 
-        attach_peers_to_desk(payload, state)
+        attach_angles_to_desk(payload, state)
     except Exception:
-        pass
+        try:
+            from internal.pump.peers import attach_peers_to_desk
+
+            attach_peers_to_desk(payload, state)
+        except Exception:
+            pass
     return payload
 
 

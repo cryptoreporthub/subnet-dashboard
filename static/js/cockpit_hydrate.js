@@ -1369,7 +1369,7 @@
       (row.owner_chip
         ? '<p class="pds-hero__chip pds-hero__chip--owner">' + esc(row.owner_chip) + '</p>'
         : '') +
-      renderPeersBlock(row) +
+      renderAnglesBlock(row) +
       '<a class="pds-hero__cta home-cta home-cta--primary" href="/subnet/' +
       esc(row.netuid) +
       '">Open SN' +
@@ -1430,9 +1430,86 @@
       chips +
       '</div>' +
       (matchHtml ? '<div class="' + cls + '__list">' + matchHtml + '</div>' : '') +
-      (peers.why ? '<p class="' + cls + '__why">' + esc(peers.why) + '</p>' : '') +
       '</div>'
     );
+  }
+
+  function renderAnglesBlock(row, prefix) {
+    var root = prefix || 'pds-angles';
+    var peerPrefix = root.indexOf('pd-') === 0 ? 'pd-peers' : 'pds-peers';
+    var nextUp = Array.isArray(row && row.next_up) ? row.next_up : [];
+    var combined = row && row.combined;
+    var peersHtml = renderPeersBlock(row, peerPrefix);
+    if (!nextUp.length && !peersHtml && !combined) return '';
+    var html = '<div class="' + root + '" aria-label="Next up, Peers, Combined">';
+    if (nextUp.length) {
+      html +=
+        '<div class="' +
+        root +
+        '__row ' +
+        root +
+        '__row--next"><span class="' +
+        root +
+        '__label">Next up</span><div class="' +
+        root +
+        '__list">';
+      nextUp.slice(0, 3).forEach(function (k) {
+        html +=
+          '<a class="' +
+          root +
+          '__chip" href="/subnet/' +
+          esc(k.netuid) +
+          '">' +
+          esc(k.name || 'SN' + k.netuid) +
+          ' <b>SN' +
+          esc(k.netuid) +
+          '</b>' +
+          (k.timing_pts != null ? ' <i>' + esc(Math.round(Number(k.timing_pts))) + '</i>' : '') +
+          '</a>';
+      });
+      html += '</div></div>';
+    }
+    if (peersHtml) {
+      html +=
+        '<div class="' +
+        root +
+        '__row ' +
+        root +
+        '__row--peers">' +
+        peersHtml +
+        '</div>';
+    }
+    if (combined && combined.netuid != null) {
+      html +=
+        '<div class="' +
+        root +
+        '__row ' +
+        root +
+        '__row--combined"><span class="' +
+        root +
+        '__label">Combined <em>experimental</em></span>' +
+        '<a class="' +
+        root +
+        '__chip ' +
+        root +
+        '__chip--combined" href="/subnet/' +
+        esc(combined.netuid) +
+        '" title="timing ' +
+        esc(combined.timing_pts) +
+        ' · peer ' +
+        esc(combined.peer_pts) +
+        '">' +
+        esc(combined.name || 'SN' + combined.netuid) +
+        ' <b>SN' +
+        esc(combined.netuid) +
+        '</b> <i>t' +
+        esc(Math.round(Number(combined.timing_pts || 0))) +
+        ' · p' +
+        esc(Math.round(Number(combined.peer_pts || 0))) +
+        '</i></a></div>';
+    }
+    html += '</div>';
+    return html;
   }
 
   function renderPumpScanRow(row, tone) {
@@ -1650,7 +1727,7 @@
       (rawBits.length ? '<p class="pd-raw">' + rawBits.join('') + '</p>' : '') +
       _pdTriadLegs(triad, labels) +
       chipsHtml +
-      renderPeersBlock(row, 'pd-peers') +
+      renderAnglesBlock(row, 'pd-angles') +
       '<div class="pd-cta" role="group" aria-label="Lead actions">' +
       '<a class="home-cta home-cta--primary" href="/subnet/' +
       esc(row.netuid) +
