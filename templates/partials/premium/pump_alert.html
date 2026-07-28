@@ -154,48 +154,58 @@
         {% if next_up or (peers and (peers.lane or (peers.matches is iterable and peers.matches|length > 0))) or combined %}
         <div class="pd-angles" aria-label="Next up, Peers, Combined">
           {% if next_up and next_up|length > 0 %}
-          <div class="pd-angles__row">
-            <span class="pd-angles__label">Next up</span>
+          <section class="pd-angles__section">
+            <header class="pd-angles__head">
+              <h3 class="pd-angles__label">Next up</h3>
+              <a class="pd-angles__more" href="#pump-desk-more">View ladder</a>
+            </header>
             <div class="pd-angles__list">
               {% for k in next_up[:3] %}
               {% set lead_pct = k.to_lead_pct|default(0)|int %}
               <a class="pd-angles__chip" href="/subnet/{{ k.netuid }}" title="{{ lead_pct }}% of #1 heat">
-                <span class="pd-angles__chip-head">{{ k.name }} <b>SN{{ k.netuid }}</b> <i>{{ lead_pct }}%</i></span>
+                <span class="pd-angles__chip-head">{{ k.name }} <b>SN{{ k.netuid }}</b></span>
+                <span class="pd-angles__chip-meta"><i>{{ lead_pct }}% of #1</i></span>
                 <span class="pd-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100"><span class="pd-angles__bar-fill" style="width:{{ lead_pct }}%"></span></span>
               </a>
               {% endfor %}
             </div>
-          </div>
+          </section>
           {% endif %}
           {% if peers and (peers.lane or (peers.matches is iterable and peers.matches|length > 0)) %}
-          <div class="pd-angles__row pd-peers">
-            <div class="pd-peers__meta">
-              <span class="pd-peers__label">Peers</span>
+          <section class="pd-angles__section pd-peers">
+            <header class="pd-angles__head pd-peers__meta">
+              <h3 class="pd-angles__label pd-peers__label">Peers</h3>
               {% if peers.lane %}<span class="pd-peers__lane">{{ peers.lane }}</span>{% endif %}
               {% if peers.rarity is not none %}<span class="pd-peers__rarity">{{ peers.rarity }} rarity</span>{% endif %}
-            </div>
+            </header>
             {% if peers.matches is iterable and peers.matches|length > 0 %}
-            <div class="pd-peers__list">
+            <div class="pd-angles__list pd-peers__list">
               {% for k in peers.matches[:3] %}
               {% set lead_pct = k.to_lead_pct|default(0)|int %}
               <a class="pd-peers__match" href="/subnet/{{ k.netuid }}" title="{{ lead_pct }}% of #1">
-                <span class="pd-peers__match-head">{{ k.name }} <b>SN{{ k.netuid }}</b>{% if k.lane %} <i>{{ k.lane }}</i>{% endif %} <em>{{ lead_pct }}%</em></span>
+                <span class="pd-peers__match-head">{{ k.name }} <b>SN{{ k.netuid }}</b>{% if k.lane %} <i>{{ k.lane }}</i>{% endif %}</span>
+                <span class="pd-angles__chip-meta"><em>{{ lead_pct }}% of #1</em></span>
                 <span class="pd-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100"><span class="pd-angles__bar-fill" style="width:{{ lead_pct }}%"></span></span>
               </a>
               {% endfor %}
             </div>
             {% endif %}
-          </div>
+          </section>
           {% endif %}
           {% if combined %}
           {% set lead_pct = combined.to_lead_pct|default(0)|int %}
-          <div class="pd-angles__row">
-            <span class="pd-angles__label">Combined <em>experimental</em></span>
-            <a class="pd-angles__chip pd-angles__chip--combined" href="/subnet/{{ combined.netuid }}" title="{{ lead_pct }}% of #1 · timing {{ combined.timing_pts }} · peer {{ combined.peer_pts }}">
-              <span class="pd-angles__chip-head">{{ combined.name }} <b>SN{{ combined.netuid }}</b> <i>{{ lead_pct }}% · t{{ combined.timing_pts|int }} · p{{ combined.peer_pts|int }}</i></span>
-              <span class="pd-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100"><span class="pd-angles__bar-fill pd-angles__bar-fill--combined" style="width:{{ lead_pct }}%"></span></span>
-            </a>
-          </div>
+          <section class="pd-angles__section">
+            <header class="pd-angles__head">
+              <h3 class="pd-angles__label">Combined <em>experimental</em></h3>
+            </header>
+            <div class="pd-angles__list">
+              <a class="pd-angles__chip pd-angles__chip--combined" href="/subnet/{{ combined.netuid }}" title="{{ lead_pct }}% of #1 · timing {{ combined.timing_pts }} · peer {{ combined.peer_pts }}">
+                <span class="pd-angles__chip-head">{{ combined.name }} <b>SN{{ combined.netuid }}</b></span>
+                <span class="pd-angles__chip-meta"><i>{{ lead_pct }}% of #1 · t{{ combined.timing_pts|int }} · p{{ combined.peer_pts|int }}</i></span>
+                <span class="pd-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100"><span class="pd-angles__bar-fill pd-angles__bar-fill--combined" style="width:{{ lead_pct }}%"></span></span>
+              </a>
+            </div>
+          </section>
           {% endif %}
         </div>
         {% endif %}
@@ -746,17 +756,24 @@
     border-top: 1px solid rgba(148, 163, 184, 0.14);
     display: flex;
     flex-direction: column;
+    gap: 14px;
+  }
+  .pd-angles__section { display: flex; flex-direction: column; gap: 8px; }
+  .pd-angles__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
     gap: 8px;
   }
-  .pd-angles__row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
-  .pd-angles__row.pd-peers { margin-top: 0; padding-top: 0; border-top: 0; }
   .pd-angles__label {
+    margin: 0;
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-size: 10px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: #94a3b8;
-    min-width: 5.5rem;
+    font-weight: 600;
   }
   .pd-angles__label em {
     font-style: normal;
@@ -765,44 +782,61 @@
     color: #a8a29e;
     font-weight: 500;
   }
-  .pd-angles__list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pd-angles__more {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #64748b;
+    text-decoration: none;
+  }
+  .pd-angles__more:hover { color: #7dd3fc; }
+  .pd-angles__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+    gap: 8px;
+  }
   .pd-angles__chip {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    min-width: 7.5rem;
-    max-width: 11rem;
-    padding: 6px 8px;
+    gap: 5px;
+    min-width: 0;
+    padding: 8px 10px;
     border: 1px solid rgba(148, 163, 184, 0.22);
-    background: rgba(15, 23, 42, 0.45);
+    background: rgba(15, 23, 42, 0.55);
     color: #e2e8f0;
     text-decoration: none;
     font-size: 12px;
   }
   .pd-angles__chip-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; }
+  .pd-angles__chip-meta { font-size: 10px; color: #94a3b8; }
+  .pd-angles__chip-meta i,
+  .pd-angles__chip-meta em { font-style: normal; }
   .pd-angles__chip b { color: #86efac; }
-  .pd-angles__chip i { font-style: normal; color: #94a3b8; font-size: 10px; }
   .pd-angles__chip--combined {
     border-color: rgba(252, 211, 77, 0.35);
     background: rgba(120, 53, 15, 0.22);
   }
   .pd-angles__chip--combined b { color: #fcd34d; }
-  .pd-angles__bar,
-  .pds-angles__bar {
+  .pd-angles__bar {
     display: block;
     height: 3px;
     width: 100%;
     background: rgba(148, 163, 184, 0.18);
     overflow: hidden;
   }
-  .pd-angles__bar-fill,
-  .pds-angles__bar-fill {
+  .pd-angles__bar-fill {
     display: block;
     height: 100%;
-    background: linear-gradient(90deg, #4ade80, #86efac);
+    background: linear-gradient(90deg, #38bdf8, #4ade80);
   }
   .pd-angles__bar-fill--combined {
     background: linear-gradient(90deg, #f59e0b, #fcd34d);
+  }
+  .pd-peers {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
   }
   .pd-peers__meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .pd-peers__label {
@@ -817,14 +851,18 @@
     font-size: 10px;
     color: #7dd3fc;
   }
-  .pd-peers__list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .pd-peers__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+    gap: 8px;
+    margin-top: 0;
+  }
   .pd-peers__match {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    min-width: 7.5rem;
-    max-width: 11rem;
-    padding: 6px 8px;
+    gap: 5px;
+    min-width: 0;
+    padding: 8px 10px;
     border: 1px solid rgba(56, 189, 248, 0.28);
     background: rgba(14, 165, 233, 0.1);
     color: #e2e8f0;
@@ -834,7 +872,6 @@
   .pd-peers__match-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; }
   .pd-peers__match b { color: #7dd3fc; }
   .pd-peers__match i { font-style: normal; color: #94a3b8; font-size: 10px; }
-  .pd-peers__match em { font-style: normal; color: #94a3b8; font-size: 10px; }
   .pd-peers__why { margin: 8px 0 0; font-size: 12px; line-height: 1.4; color: rgba(226, 232, 240, 0.72); }
   .pd-cta .home-cta { flex: 1 1 auto; text-align: center; min-width: 140px; }
 

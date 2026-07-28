@@ -1307,6 +1307,9 @@
       ' pump-hero__card" id="pump-desk-hero" data-netuid="' +
       esc(row.netuid) +
       '">' +
+      '<div class="pds-hero__stage">' +
+      '<div class="pds-hero__visual" aria-hidden="true" data-slot="hero-visual"></div>' +
+      '<div class="pds-hero__copy">' +
       '<div class="pds-hero__top">' +
       '<span class="pds-hero__badge pds-hero__badge--' +
       esc(badgeSlug) +
@@ -1321,18 +1324,19 @@
       esc(row.netuid) +
       '</b></a>' +
       (row.updated_ago ? '<span class="pds-hero__ago">' + esc(row.updated_ago) + '</span>' : '') +
+      '</div>' +
       '<div class="pds-hero__headline" aria-label="' +
       trigPct +
       ' percent to trigger"><span class="pds-hero__pct">' +
       trigPct +
-      '<i>%</i></span><span class="pds-hero__pct-lbl">to trigger</span></div></div>' +
+      '<i>%</i></span><span class="pds-hero__pct-lbl">to trigger</span></div>' +
       '<div class="pds-hero__bar" role="progressbar" aria-valuenow="' +
       trigPct +
       '" aria-valuemin="0" aria-valuemax="100"><span class="pds-hero__bar-fill" style="width:' +
       trigPct +
       '%"></span>' +
       sparkHtml +
-      '</div>' +
+      '</div></div></div>' +
       '<ol class="pds-phase" aria-label="Formation phase">' +
       phaseHtml +
       '</ol>' +
@@ -1393,14 +1397,14 @@
       chips +=
         '<span class="' +
         cls +
-        '__rarity" title="Signature rarity on the live ladder">' +
+        '__rarity" title="Signature rarity">' +
         esc(peers.rarity) +
         ' rarity</span>';
     }
     var matchHtml = matches
       .slice(0, 3)
       .map(function (k) {
-        var lead = Math.max(0, Math.min(100, Math.round(Number(k.to_lead_pct != null ? k.to_lead_pct : 0))));
+        var lead = leadPctOf(k);
         var shared = Array.isArray(k.shared) && k.shared.length ? k.shared.slice(0, 2).join(' · ') : '';
         return (
           '<a class="' +
@@ -1417,9 +1421,11 @@
           esc(k.netuid) +
           '</b>' +
           (k.lane ? ' <i>' + esc(k.lane) + '</i>' : '') +
-          ' <em>' +
+          '</span><span class="' +
+          barCls +
+          '__chip-meta"><em>' +
           lead +
-          '%</em></span><span class="' +
+          '% of #1</em></span><span class="' +
           barCls +
           '__bar" role="progressbar" aria-valuenow="' +
           lead +
@@ -1432,19 +1438,26 @@
       })
       .join('');
     return (
-      '<div class="' +
+      '<section class="' +
+      barCls +
+      '__section ' +
+      barCls +
+      '__section--peers ' +
       cls +
       '" aria-label="Peers">' +
-      '<div class="' +
+      '<header class="' +
+      barCls +
+      '__head ' +
       cls +
-      '__meta">' +
-      '<span class="' +
+      '__meta"><h3 class="' +
+      barCls +
+      '__label ' +
       cls +
-      '__label">Peers</span>' +
+      '__label">Peers</h3>' +
       chips +
-      '</div>' +
-      (matchHtml ? '<div class="' + cls + '__list">' + matchHtml + '</div>' : '') +
-      '</div>'
+      '</header>' +
+      (matchHtml ? '<div class="' + barCls + '__list ' + cls + '__list">' + matchHtml + '</div>' : '') +
+      '</section>'
     );
   }
 
@@ -1472,9 +1485,11 @@
       esc(k.name || 'SN' + k.netuid) +
       ' <b>SN' +
       esc(k.netuid) +
-      '</b> <i>' +
+      '</b></span><span class="' +
+      root +
+      '__chip-meta"><i>' +
       lead +
-      '%' +
+      '% of #1' +
       (extra ? ' · ' + esc(extra) : '') +
       '</i></span><span class="' +
       root +
@@ -1500,39 +1515,38 @@
     var html = '<div class="' + root + '" aria-label="Next up, Peers, Combined">';
     if (nextUp.length) {
       html +=
-        '<div class="' +
+        '<section class="' +
         root +
-        '__row ' +
+        '__section ' +
         root +
-        '__row--next"><span class="' +
+        '__section--next"><header class="' +
         root +
-        '__label">Next up</span><div class="' +
+        '__head"><h3 class="' +
+        root +
+        '__label">Next up</h3><a class="' +
+        root +
+        '__more" href="#pump-desk-more">View ladder</a></header><div class="' +
         root +
         '__list">';
       nextUp.slice(0, 3).forEach(function (k) {
         html += angleChipHtml(root, k);
       });
-      html += '</div></div>';
+      html += '</div></section>';
     }
-    if (peersHtml) {
-      html +=
-        '<div class="' +
-        root +
-        '__row ' +
-        root +
-        '__row--peers">' +
-        peersHtml +
-        '</div>';
-    }
+    if (peersHtml) html += peersHtml;
     if (combined && combined.netuid != null) {
       html +=
-        '<div class="' +
+        '<section class="' +
         root +
-        '__row ' +
+        '__section ' +
         root +
-        '__row--combined"><span class="' +
+        '__section--combined"><header class="' +
         root +
-        '__label">Combined <em>experimental</em></span>' +
+        '__head"><h3 class="' +
+        root +
+        '__label">Combined <em>experimental</em></h3></header><div class="' +
+        root +
+        '__list">' +
         angleChipHtml(root, combined, {
           combined: true,
           extraLabel:
@@ -1540,10 +1554,9 @@
             Math.round(Number(combined.timing_pts || 0)) +
             ' · p' +
             Math.round(Number(combined.peer_pts || 0)),
-          titleSuffix:
-            'timing ' + combined.timing_pts + ' · peer ' + combined.peer_pts,
+          titleSuffix: 'timing ' + combined.timing_pts + ' · peer ' + combined.peer_pts,
         }) +
-        '</div>';
+        '</div></section>';
     }
     html += '</div>';
     return html;

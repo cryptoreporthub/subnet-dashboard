@@ -14,6 +14,8 @@
 
 Each chip bar = **`to_lead_pct`** = candidate composite ÷ hero composite (capped 0–100) — how close they are to taking the **#1** spot, not absolute trigger %.
 
+Hero **visual slot** (`pds-hero__visual`) is reserved empty for a future timer/art — do not stuff with clutter.
+
 Copy must say **experimental** on Combined — not a settled claim.
 
 ## Backend tracking
