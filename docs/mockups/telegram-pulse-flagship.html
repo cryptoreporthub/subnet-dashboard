@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Telegram Pulse — Flagship Preview (color-corrected)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg: #030405;
+    --bg-card: #090d0b;
+    --line: rgba(255,255,255,0.07);
+    --line-soft: rgba(255,255,255,0.045);
+
+    --green: #39ff9e;
+    --green-dim: #12653f;
+    --green-glow: rgba(57,255,158,0.4);
+
+    --pink: #ff3d9a;
+    --pink-dim: #6e1c47;
+    --pink-glow: rgba(255,61,154,0.35);
+
+    --blue: #3fc9ff;
+    --blue-dim: #16577a;
+    --blue-glow: rgba(63,201,255,0.4);
+
+    --orange: #ff9f3f;
+    --orange-dim: #7a4315;
+    --orange-glow: rgba(255,159,63,0.4);
+
+    --text: #eef7f1;
+    --text-dim: #8ba598;
+    --text-faint: #4f6459;
+
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
+  }
+
+  *{ box-sizing:border-box; }
+  html{ background:var(--bg); }
+  body{
+    margin:0;
+    background:
+      radial-gradient(ellipse 700px 480px at 100% 0%, rgba(63,201,255,0.10), transparent 55%),
+      radial-gradient(ellipse 620px 420px at 0% 8%, rgba(57,255,158,0.08), transparent 58%),
+      radial-gradient(ellipse 500px 400px at 70% 100%, rgba(255,159,63,0.04), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+    padding:0 0 80px;
+  }
+  .wrap{ max-width:520px; margin:0 auto; padding:18px 16px 0; }
+  ::selection{ background:rgba(57,255,158,0.25); }
+
+  .preview-banner{
+    font-family:var(--mono); font-size:9.5px; letter-spacing:0.05em;
+    color:var(--text-faint); border:1px dashed rgba(255,255,255,0.05); border-radius:8px;
+    padding:7px 10px; margin-bottom:14px; line-height:1.5;
+  }
+  .preview-banner b{ color:var(--text-dim); font-weight:600; }
+
+  .topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; gap:10px; }
+  .brand{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:0.16em; font-weight:600;
+    color:var(--text-dim); min-width:0;
+  }
+  .brand em{ color:var(--green); font-style:normal; }
+  .live-pill{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    min-width:92px;
+    font-family:var(--mono); font-size:10.5px; letter-spacing:0.1em; font-weight:600;
+    color:var(--green); border:1px solid rgba(57,255,158,0.3);
+    padding:6px 11px; border-radius:20px;
+    box-shadow:0 0 16px -6px var(--green-glow) inset;
+    background:transparent; cursor:pointer; flex-shrink:0;
+  }
+  .live-pill.is-off{ color:var(--text-faint); border-color:var(--line); box-shadow:none; }
+  .live-pill.is-off .dot{ background:var(--text-faint); box-shadow:none; animation:none; }
+  .dot{ width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green-glow); animation:pulse 1.8s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1; transform:scale(1)} 50%{opacity:0.35; transform:scale(0.85)} }
+  @media (prefers-reduced-motion: reduce){
+    .dot{ animation:none; }
+  }
+
+  h1{
+    font-family:var(--mono); font-weight:800; font-size:34px; letter-spacing:-0.02em;
+    margin:0; line-height:1;
+    background:linear-gradient(92deg, var(--text) 25%, var(--green) 70%, var(--blue) 100%);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+  }
+  .page-sub{ font-size:13.5px; color:var(--text-dim); margin:8px 0 16px; line-height:1.5; max-width:40ch; }
+  .page-sub a{ color:var(--blue); text-decoration:none; border-bottom:1px solid rgba(63,201,255,0.35); }
+
+  .source-strip{
+    display:flex; align-items:center; gap:9px; flex-wrap:wrap;
+    border:1px solid var(--line); border-radius:11px;
+    padding:11px 13px; margin-bottom:12px;
+    background:linear-gradient(180deg, rgba(57,255,158,0.05), transparent);
+    font-family:var(--mono); font-size:11.5px; color:var(--text-dim);
+  }
+  .mini-wave{ display:flex; align-items:flex-end; gap:1.5px; height:12px; }
+  .mini-wave i{ width:2px; background:var(--green); border-radius:1px; display:block; }
+  .source-strip b{ color:var(--text); font-weight:600; }
+  .sep{ color:var(--text-faint); }
+  .live-tag{ background:rgba(57,255,158,0.12); color:var(--green); padding:2px 7px; border-radius:4px; font-size:9.5px; font-weight:700; }
+
+  .summary-24h, .proof, .hc-strip{
+    border:1px solid rgba(255,255,255,0.09); border-radius:11px; padding:12px 13px; margin-bottom:12px;
+    background:linear-gradient(180deg, rgba(255,255,255,0.025), rgba(0,0,0,0.18));
+  }
+  .block-label{
+    margin:0 0 8px; font-family:var(--mono); font-size:10px; font-weight:700;
+    letter-spacing:0.08em; text-transform:uppercase; color:var(--text-faint);
+  }
+  .summary-body, .proof-body{ font-size:12.5px; color:var(--text-dim); line-height:1.5; }
+  .summary-body b, .proof-body b{ color:var(--text); }
+  .chip-row{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .mini-chip{
+    font-family:var(--mono); font-size:10px; padding:3px 8px; border-radius:999px;
+    border:1px solid var(--line); color:var(--text); text-decoration:none; background:rgba(255,255,255,0.03);
+  }
+  .mini-chip:hover{ border-color:rgba(63,201,255,0.4); color:var(--blue); }
+  .proof-score{ margin:0; font-size:13px; }
+  .proof-score .hit{ color:var(--green); font-weight:700; }
+  .hc-row{
+    display:flex; gap:8px; align-items:center; padding:8px 0;
+    border-bottom:1px solid var(--line-soft); font-size:12.5px;
+  }
+  .hc-row:last-child{ border-bottom:0; padding-bottom:0; }
+  .hc-conv{ font-family:var(--mono); font-size:11px; color:var(--pink); min-width:42px; }
+  .hc-snip{ flex:1; color:var(--text-dim); min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hc-cta{
+    font-family:var(--mono); font-size:10px; color:var(--blue); background:none; border:none; cursor:pointer; padding:0;
+  }
+
+  .legend{
+    display:flex; gap:14px; flex-wrap:wrap;
+    font-family:var(--mono); font-size:10px; color:var(--text-faint);
+    padding:2px 4px 16px; line-height:1.6;
+  }
+  .legend-item{ display:flex; align-items:center; gap:5px; }
+  .sw{ width:7px; height:7px; border-radius:2px; flex-shrink:0; }
+  .legend-item b{ color:var(--text-dim); font-weight:600; }
+
+  .hero{
+    position:relative; overflow:hidden;
+    border:1px solid rgba(57,255,158,0.28);
+    border-radius:18px;
+    background:
+      linear-gradient(155deg, rgba(57,255,158,0.12), rgba(63,201,255,0.04) 60%),
+      var(--bg-card);
+    padding:22px 20px;
+    margin-bottom:14px;
+    box-shadow: 0 0 60px -30px var(--green-glow);
+  }
+  .hero::before{
+    content:""; position:absolute; inset:0; pointer-events:none; opacity:0.45;
+    background-image: linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 22px 22px;
+    mask-image: radial-gradient(ellipse 100% 100% at 100% 0%, black, transparent 70%);
+  }
+  .hero-eyebrow{
+    position:relative; font-family:var(--mono); font-size:10px; letter-spacing:0.18em; font-weight:600;
+    color:var(--green); margin-bottom:16px;
+  }
+  .hero-main{ position:relative; display:flex; align-items:center; gap:14px; margin-bottom:16px; }
+  .hero-icon{
+    width:54px; height:54px; border-radius:15px; flex-shrink:0;
+    background:linear-gradient(155deg, rgba(57,255,158,0.28), rgba(63,201,255,0.12));
+    border:1px solid rgba(57,255,158,0.4);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-weight:800; font-size:23px; color:var(--text);
+    box-shadow: 0 0 24px -8px var(--green-glow);
+  }
+  .hero-name{ font-family:var(--mono); font-weight:700; font-size:26px; color:var(--text); line-height:1.15; }
+  .hero-name span{ color:var(--text-faint); font-weight:500; font-size:16px; }
+  .hero-meta{ font-size:13px; color:var(--text-dim); margin-top:4px; display:flex; align-items:center; gap:6px; }
+  .hero-meta .bull{ color:var(--green); font-weight:600; }
+  .dot-sep{ width:3px; height:3px; border-radius:50%; background:var(--text-faint); }
+  .hero-why{ position:relative; border-top:1px solid var(--line); padding-top:14px; display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{
+    font-family:var(--mono); font-size:10px; color:var(--text-dim);
+    border:1px solid var(--line); border-radius:6px; padding:4px 9px;
+    background:rgba(255,255,255,0.02);
+  }
+  .chip.hot{ color:var(--pink); border-color:rgba(255,61,154,0.3); background:rgba(255,61,154,0.07); }
+  .hero-runnerup{ position:relative; font-size:12px; color:var(--text-faint); margin-top:13px; }
+  .hero-runnerup b{ color:var(--text-dim); font-weight:600; }
+
+  .sec-label{
+    display:flex; align-items:center; gap:8px;
+    font-family:var(--mono); font-size:11px; letter-spacing:0.1em; font-weight:600;
+    color:var(--text-dim); text-transform:uppercase;
+    margin:22px 2px 10px;
+  }
+  .sec-label .bar{ width:3px; height:12px; border-radius:2px; }
+  .sec-label .unit{ margin-left:auto; font-size:9.5px; color:var(--text-faint); text-transform:none; letter-spacing:0.02em; }
+
+  .grid2{ display:grid; grid-template-columns:1fr; gap:12px; }
+  @media(min-width:740px){ .grid2{ grid-template-columns:1fr 1fr; } }
+  .card{ border:1px solid var(--line); border-radius:15px; background:var(--bg-card); padding:15px 16px 4px; }
+
+  .trend-row, .champ-row{ display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line-soft); }
+  .trend-row:last-of-type, .champ-row:last-of-type{ border-bottom:none; }
+  .rank{ font-family:var(--mono); font-size:10.5px; color:var(--text-faint); width:16px; flex-shrink:0; }
+  .t-icon{
+    width:32px; height:32px; border-radius:9px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-weight:700; font-size:13px;
+    background:rgba(63,201,255,0.06); border:1px solid rgba(63,201,255,0.18); color:var(--blue);
+  }
+  .t-body, .champ-body{ flex:1; min-width:0; }
+  .t-name, .champ-name{ font-size:13px; font-weight:600; color:var(--text); }
+  .t-name .sn{ font-family:var(--mono); font-size:10px; color:var(--text-faint); font-weight:500; margin-left:4px; }
+  .t-count, .champ-basis{ font-size:11px; color:var(--text-faint); }
+  .t-right, .champ-score{ text-align:right; flex-shrink:0; }
+  .t-spark{ width:58px; height:18px; display:block; margin-bottom:2px; margin-left:auto; }
+  .t-tag{ font-family:var(--mono); font-size:9.5px; font-weight:700; letter-spacing:0.03em; }
+  .t-tag.bull{ color:var(--green); } .t-tag.bear{ color:var(--orange); } .t-tag.neu{ color:var(--blue); }
+  .champ-avatar{
+    width:30px; height:30px; border-radius:50%; flex-shrink:0;
+    background:linear-gradient(135deg, rgba(255,159,63,0.28), rgba(63,201,255,0.12));
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-size:11px; font-weight:700; color:var(--orange);
+    border:1px solid var(--line);
+  }
+  .champ-num{ font-family:var(--mono); font-weight:700; font-size:14px; color:var(--text); }
+  .champ-bar{ width:48px; height:3px; border-radius:2px; background:var(--line-soft); margin-top:5px; overflow:hidden; margin-left:auto; }
+  .champ-bar-fill{ height:100%; background:linear-gradient(90deg, var(--orange-dim), var(--orange)); }
+  .view-all{
+    display:block; width:100%; text-align:center; font-family:var(--mono); font-size:11px;
+    color:var(--text-dim); padding:13px 0 9px; letter-spacing:0.03em; border:none; border-top:1px solid var(--line-soft);
+    margin-top:2px; background:transparent; cursor:pointer;
+  }
+  .view-all:hover{ color:var(--blue); }
+
+  .feed-shell{
+    border:1px solid var(--line); border-radius:16px; background:var(--bg-card);
+    padding:16px 16px 6px; margin-top:4px; position:relative; overflow:hidden;
+  }
+  .feed-shell::before{
+    content:""; position:absolute; top:0; right:0; width:180px; height:120px;
+    background:radial-gradient(ellipse, rgba(63,201,255,0.08), transparent 70%);
+    pointer-events:none;
+  }
+
+  .filter-bar{ margin:4px 0 16px; position:relative; padding-top:4px; border-top:1px solid var(--line-soft); }
+  .filter-group{ margin-bottom:10px; }
+  .filter-label{ display:block; font-family:var(--mono); font-size:9.5px; color:var(--text-faint); letter-spacing:0.06em; margin-bottom:6px; text-transform:uppercase; }
+  .filter-chips{
+    display:flex; flex-wrap:nowrap; gap:6px; overflow-x:auto; -webkit-overflow-scrolling:touch;
+    padding-bottom:2px; scrollbar-width:none;
+  }
+  .filter-chips::-webkit-scrollbar{ display:none; }
+  @media(min-width:520px){ .filter-chips{ flex-wrap:wrap; overflow:visible; } }
+  .filter-chip{
+    font-family:var(--mono); font-size:10.5px; color:var(--text-dim);
+    border:1px solid var(--line); border-radius:999px; padding:5px 10px;
+    background:rgba(255,255,255,0.02); cursor:pointer; flex-shrink:0;
+  }
+  .filter-chip:hover{ border-color:rgba(63,201,255,0.35); color:var(--blue); background:rgba(255,255,255,0.05); }
+  .filter-chip.active{
+    color:var(--green); border-color:rgba(57,255,158,0.4);
+    background:rgba(57,255,158,0.08); box-shadow:0 0 14px -8px var(--green-glow);
+  }
+
+  .feed-row{
+    display:flex; gap:12px; padding:0 0 18px; position:relative; cursor:pointer;
+    border-radius:8px; transition:background .15s ease;
+  }
+  .feed-row:hover{ background:rgba(255,255,255,0.02); }
+  .feed-row:last-of-type{ padding-bottom:8px; }
+  .feed-row:not(:last-of-type)::before{
+    content:""; position:absolute; left:5px; top:22px; bottom:-4px; width:2px;
+    background:var(--rail-color, var(--green)); opacity:0.22; border-radius:2px;
+  }
+  .rail-node{
+    flex-shrink:0; width:12px; height:12px; border-radius:50%;
+    margin-top:4px;
+    background:var(--bg-card); border:2px solid var(--rail-color, var(--green));
+    box-shadow:0 0 10px -2px var(--rail-glow, var(--green-glow));
+  }
+  .feed-body{ flex:1; min-width:0; }
+  .feed-row.is-bear{ --rail-color: var(--orange); --rail-glow: var(--orange-glow); }
+  .feed-row.is-neu{ --rail-color: var(--blue); --rail-glow: var(--blue-glow); }
+  .feed-row.is-bull{ --rail-color: var(--green); --rail-glow: var(--green-glow); }
+
+  .feed-top{ display:flex; align-items:center; gap:8px; margin-bottom:7px; flex-wrap:wrap; }
+  .f-avatar{
+    width:24px; height:24px; border-radius:50%; flex-shrink:0;
+    background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-size:10px; font-weight:700; color:var(--text-dim);
+  }
+  .f-handle{ font-size:12px; font-weight:600; color:var(--text-dim); }
+  .f-tag{ font-family:var(--mono); font-size:9.5px; font-weight:700; letter-spacing:0.04em; padding:2px 7px; border-radius:5px; border:1px solid; }
+  .f-tag.bear{ color:var(--orange); border-color:rgba(255,159,63,0.35); background:rgba(255,159,63,0.07); }
+  .f-tag.bull{ color:var(--green); border-color:rgba(57,255,158,0.35); background:rgba(57,255,158,0.06); }
+  .f-tag.neu{ color:var(--blue); border-color:rgba(63,201,255,0.35); background:rgba(63,201,255,0.06); }
+  .f-conv{ font-family:var(--mono); font-size:10.5px; color:var(--text-dim); }
+  .f-conv.high{ color:var(--pink); }
+  .f-time{ margin-left:auto; font-family:var(--mono); font-size:10px; color:rgba(139,165,152,0.85); flex-shrink:0; }
+  .f-text{ font-size:13px; color:var(--text); line-height:1.5; margin:0 0 8px; }
+  .sn-inline{ font-family:var(--mono); font-size:10px; color:var(--blue); background:rgba(63,201,255,0.09); padding:1px 6px; border-radius:4px; margin-left:4px; }
+  .signal-strip{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .why-label{ font-family:var(--mono); font-size:9px; color:var(--text-faint); letter-spacing:0.05em; }
+  .sig-chip{ font-family:var(--mono); font-size:9px; color:var(--text-dim); border:1px solid var(--line-soft); border-radius:5px; padding:2px 6px; background:rgba(255,255,255,0.015); }
+  .sig-chip.hit-orange{ color:var(--orange); border-color:rgba(255,159,63,0.25); background:rgba(255,159,63,0.06); }
+  .sig-chip.hit-blue{ color:var(--blue); border-color:rgba(63,201,255,0.25); background:rgba(63,201,255,0.06); }
+
+  .detail{
+    margin:10px 0 4px; padding:12px 12px 12px 14px; border-radius:10px;
+    border:1px solid rgba(63,201,255,0.22); border-left:3px solid rgba(57,255,158,0.55);
+    background:rgba(63,201,255,0.05);
+    font-size:12.5px; color:#c8d9cf; line-height:1.55; display:none;
+  }
+  .detail.open{ display:block; }
+  .detail b{ color:var(--text); }
+  .detail-hint{
+    display:block; margin-top:10px; font-family:var(--mono); font-size:9.5px;
+    color:var(--text-faint); letter-spacing:0.04em;
+  }
+  .detail-actions{ display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+  .detail-btn{
+    font-family:var(--mono); font-size:11px; min-height:40px; padding:8px 12px; border-radius:8px; cursor:pointer;
+    border:1px solid rgba(63,201,255,0.35); color:var(--blue); background:transparent;
+  }
+  .detail-btn:hover{ background:rgba(63,201,255,0.08); }
+  .detail-btn.solid{ background:rgba(57,255,158,0.12); border-color:rgba(57,255,158,0.35); color:var(--green); }
+  .detail-btn.solid:hover{ background:rgba(57,255,158,0.18); }
+  @media(max-width:390px){
+    .detail-btn{ min-height:44px; flex:1 1 calc(50% - 10px); }
+  }
+
+  .empty{ font-size:12.5px; color:var(--text-dim); font-style:italic; padding:18px 8px 20px; display:none; text-align:center; }
+  .empty.show{ display:block; }
+
+  .foot-note{ font-family:var(--mono); font-size:9.5px; color:var(--text-faint); text-align:center; line-height:1.7; padding:18px 20px 0; }
+  .toast{
+    position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px);
+    background:#0e1612; border:1px solid rgba(57,255,158,0.35); color:var(--text);
+    font-family:var(--mono); font-size:11px; padding:10px 14px; border-radius:10px;
+    opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:20;
+    max-width:90vw;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="preview-banner">
+    <b>PREVIEW</b> · color-corrected flagship · green/blue/orange lead · pink sparse ·
+    try LIVE, filters, and tap a feed row
+  </div>
+
+  <div class="topbar">
+    <div class="brand">&gt;_ SUBNET SUMMERS · <em>SIMIVISION</em></div>
+    <button type="button" class="live-pill" id="livePill" aria-pressed="true"><span class="dot"></span>LIVE</button>
+  </div>
+
+  <h1>Telegram Pulse</h1>
+  <p class="page-sub">Real-time read on the <a href="https://t.me/OfficialSubnetSummer" target="_blank" rel="noopener">Subnet Summers</a> group — what's said, how sure we are, and why.</p>
+
+  <div class="source-strip">
+    <div class="mini-wave" aria-hidden="true">
+      <i style="height:4px"></i><i style="height:8px"></i><i style="height:5px"></i><i style="height:11px"></i><i style="height:6px"></i><i style="height:9px"></i><i style="height:4px"></i>
+    </div>
+    <span class="live-tag" id="liveTag">LIVE</span>
+    <span><b>OfficialSubnetSummer</b></span>
+    <span class="sep">·</span><span>91 msgs</span>
+    <span class="sep">·</span><span>18 high conviction</span>
+  </div>
+
+  <div class="summary-24h">
+    <p class="block-label">Last 24 hours</p>
+    <div class="summary-body">
+      <b>42</b> scored msgs · <b>7</b> high conviction · pulse <b>bullish lean</b>
+      <div class="chip-row">
+        <a class="mini-chip" href="#">SN14 · 12</a>
+        <a class="mini-chip" href="#">SN78 · 9</a>
+        <a class="mini-chip" href="#">SN19 · 6</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="sw" style="background:var(--blue)"></span><b>Conv.</b> keyword + reaction score</div>
+    <div class="legend-item"><span class="sw" style="background:var(--pink)"></span><b>High</b> ≥ 60%</div>
+    <div class="legend-item"><span class="sw" style="background:var(--orange)"></span><b>Influence</b> hit-rate × reach</div>
+  </div>
+
+  <div class="proof">
+    <p class="block-label">Telegram call proof</p>
+    <p class="proof-score proof-body"><b class="hit">61%</b> hit rate · 11 / 18 graded calls</p>
+  </div>
+
+  <div class="hc-strip">
+    <p class="block-label">High conviction</p>
+    <div class="hc-row"><span class="hc-conv">82%</span><span class="hc-snip">SN18 emissions look sticky into next epoch</span><button type="button" class="hc-cta" data-toast="Would open Living Focus · SN18">Open SN18</button></div>
+    <div class="hc-row"><span class="hc-conv">74%</span><span class="hc-snip">SN14 cut rumor gaining reactions</span><button type="button" class="hc-cta" data-toast="Would open Living Focus · SN14">Open SN14</button></div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-eyebrow">YESTERDAY'S MOST TALKED ABOUT</div>
+    <div class="hero-main">
+      <div class="hero-icon">T</div>
+      <div>
+        <div class="hero-name">TaoHash <span>· SN14</span></div>
+        <div class="hero-meta">47 mentions <span class="dot-sep"></span> <span class="bull">Bullish</span> <span class="dot-sep"></span> Jul 26</div>
+      </div>
+    </div>
+    <div class="hero-why">
+      <span class="chip hot">emission cut rumor</span>
+      <span class="chip">validator growth</span>
+      <span class="chip">"too high" ×6</span>
+    </div>
+    <div class="hero-runnerup">Runner-up: <b>Apex SN78</b> · 31 mentions</div>
+  </div>
+
+  <div class="grid2">
+    <div>
+      <div class="sec-label" style="margin-top:8px"><span class="bar" style="background:var(--blue)"></span>Currently trending<span class="unit">1H</span></div>
+      <div class="card">
+        <div class="trend-row">
+          <span class="rank">01</span>
+          <div class="t-icon">T</div>
+          <div class="t-body"><div class="t-name">TaoHash<span class="sn">SN14</span></div><div class="t-count">47 mentions</div></div>
+          <div class="t-right">
+            <svg class="t-spark" viewBox="0 0 58 18"><polyline points="0,14 9,12 18,13 27,8 36,9 45,4 58,2" fill="none" stroke="#39ff9e" stroke-width="2"/></svg>
+            <div class="t-tag bull">BULLISH</div>
+          </div>
+        </div>
+        <div class="trend-row">
+          <span class="rank">02</span>
+          <div class="t-icon">A</div>
+          <div class="t-body"><div class="t-name">Apex<span class="sn">SN78</span></div><div class="t-count">31 mentions</div></div>
+          <div class="t-right">
+            <svg class="t-spark" viewBox="0 0 58 18"><polyline points="0,13 9,14 18,9 27,10 36,6 45,7 58,3" fill="none" stroke="#39ff9e" stroke-width="2"/></svg>
+            <div class="t-tag bull">BULLISH</div>
+          </div>
+        </div>
+        <div class="trend-row">
+          <span class="rank">03</span>
+          <div class="t-icon">V</div>
+          <div class="t-body"><div class="t-name">VectorX<span class="sn">SN19</span></div><div class="t-count">22 mentions</div></div>
+          <div class="t-right">
+            <svg class="t-spark" viewBox="0 0 58 18"><polyline points="0,9 9,11 18,7 27,12 36,8 45,10 58,5" fill="none" stroke="#3fc9ff" stroke-width="2"/></svg>
+            <div class="t-tag neu">NEUTRAL</div>
+          </div>
+        </div>
+        <div class="trend-row">
+          <span class="rank">04</span>
+          <div class="t-icon">N</div>
+          <div class="t-body"><div class="t-name">Nexus<span class="sn">SN3</span></div><div class="t-count">15 mentions</div></div>
+          <div class="t-right">
+            <svg class="t-spark" viewBox="0 0 58 18"><polyline points="0,5 9,8 18,6 27,11 36,13 45,12 58,16" fill="none" stroke="#ff9f3f" stroke-width="2"/></svg>
+            <div class="t-tag bear">BEARISH</div>
+          </div>
+        </div>
+        <button type="button" class="view-all" data-toast="Would refresh trending from /api/message-intel">Refresh trending →</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-label" style="margin-top:8px"><span class="bar" style="background:var(--orange)"></span>Weekly champions<span class="unit">influence</span></div>
+      <div class="card">
+        <div class="champ-row">
+          <div class="champ-avatar">TB</div>
+          <div class="champ-body"><div class="champ-name">@taobro</div><div class="champ-basis">64% hit-rate · 47 calls</div></div>
+          <div class="champ-score"><div class="champ-num">92.1</div><div class="champ-bar"><div class="champ-bar-fill" style="width:92%"></div></div></div>
+        </div>
+        <div class="champ-row">
+          <div class="champ-avatar">CT</div>
+          <div class="champ-body"><div class="champ-name">@coldtao</div><div class="champ-basis">58% hit-rate · 39 calls</div></div>
+          <div class="champ-score"><div class="champ-num">88.7</div><div class="champ-bar"><div class="champ-bar-fill" style="width:88%"></div></div></div>
+        </div>
+        <div class="champ-row">
+          <div class="champ-avatar">SN</div>
+          <div class="champ-body"><div class="champ-name">@subnetnomad</div><div class="champ-basis">61% hit-rate · 22 calls</div></div>
+          <div class="champ-score"><div class="champ-num">81.3</div><div class="champ-bar"><div class="champ-bar-fill" style="width:81%"></div></div></div>
+        </div>
+        <div class="champ-row">
+          <div class="champ-avatar">BW</div>
+          <div class="champ-body"><div class="champ-name">@blockwraith</div><div class="champ-basis">52% hit-rate · 31 calls</div></div>
+          <div class="champ-score"><div class="champ-num">76.4</div><div class="champ-bar"><div class="champ-bar-fill" style="width:76%"></div></div></div>
+        </div>
+        <button type="button" class="view-all" data-toast="Champions stay influence-ranked (live API)">Weekly champions →</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-label"><span class="bar" style="background:var(--green)"></span>Live feed<span class="unit">NEWEST FIRST</span></div>
+  <div class="feed-shell">
+    <div class="filter-bar" aria-label="Feed filters">
+      <div class="filter-group">
+        <span class="filter-label">Min conviction</span>
+        <div class="filter-chips" id="convFilters">
+          <button type="button" class="filter-chip active" data-min="">All</button>
+          <button type="button" class="filter-chip" data-min="60">60%+</button>
+          <button type="button" class="filter-chip" data-min="70">70%+</button>
+          <button type="button" class="filter-chip" data-min="80">80%+</button>
+        </div>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Subnet</span>
+        <div class="filter-chips" id="subnetFilters">
+          <button type="button" class="filter-chip active" data-netuid="">All</button>
+          <button type="button" class="filter-chip" data-netuid="14">SN14</button>
+          <button type="button" class="filter-chip" data-netuid="78">SN78</button>
+          <button type="button" class="filter-chip" data-netuid="19">SN19</button>
+          <button type="button" class="filter-chip" data-netuid="3">SN3</button>
+          <button type="button" class="filter-chip" data-netuid="52">SN52</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="feed"></div>
+    <p class="empty" id="feedEmpty">No messages match these filters. Try a lower conviction threshold or clear the subnet filter.</p>
+  </div>
+
+  <p class="foot-note">Conviction is auto-scored from message text and author track record — not financial advice.<br>Interactive mock · color ratios locked for implement</p>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function () {
+  var MESSAGES = [
+    { id:1, dir:"bear", handle:"@cryptomage", initial:"C", tag:"BEARISH", conv:71, time:"14:32:11", netuid:14, text:"SN14 emissions are still way too high. Watch out.", why:[["hit-orange","\\\"too high\\\" ×1"],["hit-orange","caution phrasing"],["","64% hist. accuracy"]], detail:"Verdict: bearish lean on emission overshoot. Price snapshot at post: α −1.2% / 1h. Outcome: pending grade." },
+    { id:2, dir:"neu", handle:"@rektresearch", initial:"R", tag:"NEUTRAL", conv:42, time:"14:31:47", netuid:78, text:"Apex SN78 validator set is centralizing fast.", why:[["hit-blue","\\\"centralizing\\\" ×1"],["","no price reaction yet"]], detail:"Verdict: structure risk, no price call. Snapshot: flat. Outcome: not graded." },
+    { id:3, dir:"bear", handle:"@chainclinic", initial:"H", tag:"BEARISH", conv:64, time:"14:30:22", netuid:19, text:"VectorX SN19 TVL dropping for 3 days straight.", why:[["hit-orange","\\\"dropping\\\" ×1"],["hit-orange","3-day trend confirmed"]], detail:"Verdict: bearish on TVL trend. Snapshot: α −2.4% / 24h. Outcome: miss (−)." },
+    { id:4, dir:"neu", handle:"@node_ape", initial:"N", tag:"NEUTRAL", conv:33, time:"14:29:09", netuid:52, text:"Don't like the tokenomics update on SN52.", why:[["","opinion, no price/data signal"]], detail:"Verdict: opinion fluff filtered low. Outcome: n/a." },
+    { id:5, dir:"bear", handle:"@bearsignal", initial:"B", tag:"BEARISH", conv:46, time:"14:28:33", netuid:3, text:"Nexus SN3 bridging risk still unresolved.", why:[["hit-orange","\\\"risk\\\" ×1"],["","low-frequency author"]], detail:"Verdict: unresolved bridge risk. Snapshot: α −0.4% / 1h. Outcome: pending." },
+    { id:6, dir:"bull", handle:"@taobro", initial:"T", tag:"BULLISH", conv:81, time:"14:27:01", netuid:18, text:"SN18 emissions look sticky into next epoch — watching entries.", why:[["hit-blue","\\\"sticky\\\" ×1"],["","author 64% hit-rate"]], detail:"Verdict: bullish conviction on emission stickiness. Snapshot: α +1.8% / 1h. Outcome: hit (+)." }
+  ];
+
+  var filters = { min: null, netuid: null };
+  var openId = null;
+  var feed = document.getElementById("feed");
+  var empty = document.getElementById("feedEmpty");
+  var toastEl = document.getElementById("toast");
+  var toastTimer = null;
+
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 2200);
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  function render() {
+    var rows = MESSAGES.filter(function (m) {
+      if (filters.min != null && m.conv < filters.min) return false;
+      if (filters.netuid != null && m.netuid !== filters.netuid) return false;
+      return true;
+    });
+    empty.classList.toggle("show", rows.length === 0);
+    if (!rows.length) { feed.innerHTML = ""; return; }
+
+    feed.innerHTML = rows.map(function (m) {
+      var why = m.why.map(function (w) {
+        return '<span class="sig-chip' + (w[0] ? " " + w[0] : "") + '">' + w[1] + "</span>";
+      }).join("");
+      var highConv = m.conv >= 60 ? " high" : "";
+      return (
+        '<div class="feed-row is-' + m.dir + '" data-id="' + m.id + '">' +
+          '<div class="rail-node"></div>' +
+          '<div class="feed-body">' +
+            '<div class="feed-top">' +
+              '<div class="f-avatar">' + esc(m.initial) + "</div>" +
+              '<div class="f-handle">' + esc(m.handle) + "</div>" +
+              '<div class="f-tag ' + m.dir + '">' + m.tag + "</div>" +
+              '<div class="f-conv' + highConv + '">' + m.conv + "% conv</div>" +
+              '<div class="f-time">' + m.time + "</div>" +
+            "</div>" +
+            '<p class="f-text">' + esc(m.text) + '<span class="sn-inline">SN' + m.netuid + "</span></p>" +
+            '<div class="signal-strip"><span class="why-label">WHY</span>' + why + "</div>" +
+            '<div class="detail' + (openId === m.id ? " open" : "") + '" id="detail-' + m.id + '">' +
+              "<div>" + m.detail + "</div>" +
+              '<div class="detail-actions">' +
+                '<button type="button" class="detail-btn" data-toast="Would open /subnet/' + m.netuid + '">Open subnet</button>' +
+                '<button type="button" class="detail-btn solid" data-toast="Would pin to Living Focus">Prove it</button>' +
+              "</div>" +
+              '<span class="detail-hint">Tap row again to collapse</span>' +
+            "</div>" +
+          "</div>" +
+        "</div>"
+      );
+    }).join("");
+  }
+
+  function setActive(group, attr, value) {
+    group.querySelectorAll(".filter-chip").forEach(function (btn) {
+      var v = btn.getAttribute(attr);
+      var active = (value == null && v === "") || (value != null && String(value) === v);
+      btn.classList.toggle("active", active);
+    });
+  }
+
+  document.getElementById("convFilters").addEventListener("click", function (e) {
+    var btn = e.target.closest(".filter-chip");
+    if (!btn) return;
+    var v = btn.getAttribute("data-min");
+    filters.min = v === "" ? null : Number(v);
+    setActive(this, "data-min", filters.min);
+    openId = null;
+    render();
+  });
+
+  document.getElementById("subnetFilters").addEventListener("click", function (e) {
+    var btn = e.target.closest(".filter-chip");
+    if (!btn) return;
+    var v = btn.getAttribute("data-netuid");
+    filters.netuid = v === "" ? null : Number(v);
+    setActive(this, "data-netuid", filters.netuid);
+    openId = null;
+    render();
+  });
+
+  feed.addEventListener("click", function (e) {
+    var action = e.target.closest("[data-toast]");
+    if (action && action.classList.contains("detail-btn")) {
+      e.stopPropagation();
+      toast(action.getAttribute("data-toast"));
+      return;
+    }
+    var row = e.target.closest(".feed-row");
+    if (!row) return;
+    var id = Number(row.getAttribute("data-id"));
+    openId = openId === id ? null : id;
+    render();
+  });
+
+  document.getElementById("livePill").addEventListener("click", function () {
+    var on = this.getAttribute("aria-pressed") !== "true";
+    this.setAttribute("aria-pressed", on ? "true" : "false");
+    this.classList.toggle("is-off", !on);
+    this.innerHTML = on
+      ? '<span class="dot"></span>LIVE'
+      : '<span class="dot"></span>OFF';
+    document.getElementById("liveTag").hidden = !on;
+    toast(on ? "Listener pulse: live" : "Listener pulse: off (mock)");
+  });
+
+  document.body.addEventListener("click", function (e) {
+    var t = e.target.closest("[data-toast]");
+    if (!t || t.classList.contains("detail-btn") || t.id === "livePill") return;
+    if (t.classList.contains("hc-cta") || t.classList.contains("view-all")) {
+      toast(t.getAttribute("data-toast"));
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
