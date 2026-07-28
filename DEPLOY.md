@@ -94,7 +94,8 @@ curl -s https://subnet-dashboard.fly.dev/api/ops/readiness | jq '{worker_mode, w
 
 ### Worker split v2 (opt-in, not default)
 
-Set `WORKER_SPLIT_V2=on` only after attaching `data_volume` to the **worker** machine (web has no volume — read-only APIs).
+**v2 web proxy:** When `WORKER_SPLIT_V2=on`, the web machine has no volume. Volume-backed APIs (`/api/pump-alerts`, `/api/message-intel/*`) proxy to the worker machine via Fly private networking (`worker.process.subnet-dashboard.internal:8080`). The worker entrypoint runs background jobs plus internal HTTP (uvicorn).
+
 
 **One-command enable** (human, requires `flyctl auth`):
 

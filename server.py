@@ -256,6 +256,13 @@ try:
 except Exception as _load_shed_exc:  # pragma: no cover
     logger.warning("Load shed middleware unavailable: %s", _load_shed_exc)
 
+try:
+    from internal.worker_proxy_middleware import WorkerVolumeProxyMiddleware
+
+    app.add_middleware(WorkerVolumeProxyMiddleware)
+except Exception as _proxy_exc:  # pragma: no cover
+    logger.warning("Worker volume proxy middleware unavailable: %s", _proxy_exc)
+
 _ENABLE_METRICS = os.environ.get("ENABLE_METRICS", "1").strip().lower() not in ("0", "false", "no")
 if _ENABLE_METRICS:
     try:

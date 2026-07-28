@@ -91,6 +91,19 @@ def _listener_running_local() -> bool:
 
 def listener_status() -> Dict[str, Any]:
     """Honest listener health for APIs — no secrets, no fake 'live' without creds."""
+    from internal.data_volume import needs_worker_volume_proxy
+
+    if needs_worker_volume_proxy():
+        try:
+            from internal.worker_proxy import fetch_worker_json_sync
+
+            remote = fetch_worker_json_sync("/api/message-intel/status")
+            listener = remote.get("listener")
+            if isinstance(listener, dict):
+                return listener
+        except Exception as exc:
+            logger.debug("worker listener status proxy failed: %s", exc)
+
     enabled = _listener_enabled()
     has_creds = _has_telegram_creds()
     telethon = _telethon_available()
