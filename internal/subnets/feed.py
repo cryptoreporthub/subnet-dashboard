@@ -179,6 +179,16 @@ def get_council_subnet_feed(timeout: float | None = None) -> Tuple[List[Dict[str
     return [], "none"
 
 
+def load_subnets_for_display(timeout: float = 4.0) -> List[Dict[str, Any]]:
+    """TMC/live enriched rows for pump desk + hydrate; registry fallback when feeds timeout."""
+    from internal.subnet_names import enrich_subnet_rows
+
+    rows, _src = get_council_subnet_feed(timeout=timeout)
+    if rows:
+        return rows
+    return enrich_subnet_rows(registry_subnet_rows())
+
+
 def load_pick_subnets() -> List[Dict[str, Any]]:
     """Subnet rows for daily pick / story paths (§29-7)."""
     rows, _source = get_council_subnet_feed()

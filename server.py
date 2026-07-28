@@ -1573,7 +1573,13 @@ async def preview_pump_desk_full(request: Request):
 @app.get("/pump")
 async def pump_desk_page(request: Request):
     """Flagship pump desk — full Situation Room theater."""
-    subnets = _registry_shell_subnets()
+    from internal.subnets.feed import load_subnets_for_display
+
+    subnets = await _to_thread_timeout(
+        lambda: load_subnets_for_display(timeout=4.0),
+        5.0,
+        label="pump-page-subnets",
+    )
     context: Dict[str, Any] = {
         "request": request,
         "public_base_url": _public_base_url(request),
@@ -1594,10 +1600,9 @@ async def api_pump_alerts():
 
     def _build():
         from internal.learning.pump_alert import build_pump_alerts_desk
-        from internal.subnet_names import enrich_subnet_rows
-        from internal.subnets.feed import registry_subnet_rows
+        from internal.subnets.feed import load_subnets_for_display
 
-        subnets = enrich_subnet_rows(registry_subnet_rows())
+        subnets = load_subnets_for_display(timeout=4.0)
         return build_pump_alerts_desk(subnets)
 
     try:
@@ -1668,15 +1673,19 @@ def _get_subnets_with_source(*, timeout: float | None = None):
 
 
 def _get_subnets_hydrate():
-    """Registry-only rows for client hydrate — never blocks on live feeds."""
-    from internal.subnet_names import enrich_subnet_rows
-    from internal.subnets.feed import registry_subnet_rows
+    """Subnet rows for client hydrate — short TMC/live timeout, registry fallback."""
+    from internal.subnets.feed import load_subnets_for_display
     from internal.subnets.tradable import tradable_subnets
 
-    rows = enrich_subnet_rows(registry_subnet_rows())
+    rows = load_subnets_for_display(timeout=4.0)
     tradable = tradable_subnets(rows)
     if tradable:
-        return tradable, "registry-fallback"
+        meta_source = "taomarketcap" if any(
+            str(r.get("source") or "").lower() == "taomarketcap"
+            or (isinstance(r.get("sources"), list) and "taomarketcap" in r["sources"])
+            for r in tradable
+        ) else "registry-fallback"
+        return tradable, meta_source
     return tradable_subnets([dict(s) for s in _STATIC_SUBNETS]), "static-fallback"
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 import time
 from typing import Any, Dict, List, Optional
@@ -170,6 +171,59 @@ def resolve_subnet_name(
     return f"SN{n}"
 
 
+def is_generic_display_name(name: Any, netuid: int) -> bool:
+    """True when label is empty, bad registry, or bare SN{n} (no human name)."""
+    if _is_bad_name(name):
+        return True
+    label = str(name).strip()
+    if not label:
+        return True
+    return bool(re.match(rf"^SN{int(netuid)}$", label, re.I))
+
+
+def _subnet_row_name_trustworthy(subnet_row: Dict[str, Any]) -> bool:
+    src = str(subnet_row.get("source") or "").lower()
+    if src in ("taomarketcap", "blockmachine", "merged"):
+        return True
+    sources = subnet_row.get("sources")
+    if isinstance(sources, list):
+        return any(str(s).lower() in ("taomarketcap", "blockmachine") for s in sources)
+    return False
+
+
+def display_name_for_netuid(
+    netuid: int,
+    *,
+    subnet_row: Optional[Dict[str, Any]] = None,
+    ladder_hint: Optional[str] = None,
+    use_taostats_fallback: bool = True,
+) -> str:
+    """Canonical display name for UI cards (pump desk, picks, trail)."""
+    try:
+        n = int(netuid)
+    except (TypeError, ValueError):
+        return "SN?"
+
+    row_name = subnet_row.get("name") if isinstance(subnet_row, dict) else None
+    canon = resolve_subnet_name(n, tmc_name=None, use_taostats=False)
+    if row_name and not is_generic_display_name(row_name, n):
+        if isinstance(subnet_row, dict) and _subnet_row_name_trustworthy(subnet_row):
+            return str(row_name).strip()
+        if not is_generic_display_name(canon, n) and str(row_name).strip() != canon:
+            return canon
+
+    hint = ladder_hint
+    if not hint and isinstance(subnet_row, dict):
+        hint = subnet_row.get("name")
+    if hint and _is_bad_name(hint):
+        hint = None
+
+    name = resolve_subnet_name(n, tmc_name=hint, use_taostats=False)
+    if is_generic_display_name(name, n) and use_taostats_fallback:
+        name = resolve_subnet_name(n, tmc_name=hint, use_taostats=True)
+    return name
+
+
 def enrich_subnet_row(row: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
     """Return a copy with canonical ``name`` (and ``symbol`` when missing)."""
     out = dict(row)
@@ -282,11 +336,11 @@ def refresh_stored_names(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if netuid is None:
             netuid = item.get("subnet_id") or item.get("id")
         if netuid is not None:
-            item["name"] = name_for_netuid(netuid, use_taostats=False)
+            item["name"] = display_name_for_netuid(int(netuid), use_taostats_fallback=False)
         subnet = item.get("subnet")
         if isinstance(subnet, dict) and subnet.get("netuid") is not None:
             sub = dict(subnet)
-            sub["name"] = name_for_netuid(sub["netuid"], use_taostats=False)
+            sub["name"] = display_name_for_netuid(int(sub["netuid"]), use_taostats_fallback=False)
             item["subnet"] = sub
         out.append(item)
     return out

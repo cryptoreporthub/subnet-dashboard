@@ -150,9 +150,11 @@ def ingest_batch(messages: List[Dict[str, Any]], *, snapshot_price: bool = False
 
 
 def _registry_subnet_names() -> Dict[int, str]:
-    """Registry names for trending labels — no server import (avoids cycle)."""
+    """Canonical names for trending labels — no raw Unknown registry strings."""
     import json
     from pathlib import Path
+
+    from internal.subnet_names import display_name_for_netuid
 
     try:
         raw = json.loads(Path("config/registry.json").read_text(encoding="utf-8"))
@@ -166,7 +168,7 @@ def _registry_subnet_names() -> Dict[int, str]:
             netuid = int(row.get("id", key))
         except (TypeError, ValueError):
             continue
-        names[netuid] = str(row.get("name") or f"Subnet {netuid}")
+        names[netuid] = display_name_for_netuid(netuid, use_taostats_fallback=False)
     return names
 
 
