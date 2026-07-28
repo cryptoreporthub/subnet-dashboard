@@ -12,6 +12,11 @@ def test_is_generic_display_name():
     assert not is_generic_display_name("Loosh", 78)
 
 
+def test_display_name_override_sn16_fast_thinker():
+    name = display_name_for_netuid(16, use_taostats_fallback=False)
+    assert name == "Fast Thinker"
+
+
 def test_display_name_prefers_enriched_row():
     row = {"netuid": 40, "name": "Chunking", "source": "taomarketcap"}
     name = display_name_for_netuid(40, subnet_row=row, use_taostats_fallback=False)
