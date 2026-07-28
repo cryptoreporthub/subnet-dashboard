@@ -25,12 +25,132 @@
   var summary24hCard = document.getElementById("message-intel-summary-24h");
   var summary24hBody = document.getElementById("message-intel-summary-24h-body");
   var detailPanel = document.getElementById("message-intel-detail");
+  var convFiltersEl = document.getElementById("message-intel-conv-filters");
+  var subnetFiltersEl = document.getElementById("message-intel-subnet-filters");
   if (!feed) return;
+
+  var FILTER_KEY = "message-intel-filters";
+  var filters = loadFilters();
 
   var lastStatus = null;
   var refreshTimer = null;
   var openDetailId = null;
   var GROUP_URL = "https://t.me/OfficialSubnetSummer";
+
+  function loadFilters() {
+    try {
+      var raw = sessionStorage.getItem(FILTER_KEY);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        return {
+          minConviction: parsed.minConviction != null ? Number(parsed.minConviction) : null,
+          netuid: parsed.netuid != null ? Number(parsed.netuid) : null,
+        };
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    return { minConviction: null, netuid: null };
+  }
+
+  function saveFilters() {
+    try {
+      sessionStorage.setItem(FILTER_KEY, JSON.stringify(filters));
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function buildListUrl(limit) {
+    var url = "/api/message-intel?limit=" + encodeURIComponent(limit || 24);
+    if (filters.minConviction != null) {
+      url += "&min_conviction=" + encodeURIComponent(filters.minConviction);
+    }
+    if (filters.netuid != null) {
+      url += "&netuid=" + encodeURIComponent(filters.netuid);
+    }
+    return url;
+  }
+
+  function syncFilterChipStates() {
+    if (convFiltersEl) {
+      convFiltersEl.querySelectorAll("[data-min-conv]").forEach(function (btn) {
+        var val = btn.getAttribute("data-min-conv");
+        var active =
+          (val === "" && filters.minConviction == null) ||
+          (val !== "" && Number(val) === filters.minConviction);
+        btn.classList.toggle("message-intel__filter-chip--active", active);
+      });
+    }
+    if (subnetFiltersEl) {
+      subnetFiltersEl.querySelectorAll("[data-netuid]").forEach(function (btn) {
+        var val = btn.getAttribute("data-netuid");
+        var active =
+          (val === "" && filters.netuid == null) ||
+          (val !== "" && Number(val) === filters.netuid);
+        btn.classList.toggle("message-intel__filter-chip--active", active);
+      });
+    }
+  }
+
+  function renderSubnetFilterChips(trending) {
+    if (!subnetFiltersEl) return;
+    var html =
+      '<button type="button" class="message-intel__filter-chip' +
+      (filters.netuid == null ? " message-intel__filter-chip--active" : "") +
+      '" data-netuid="">All</button>';
+    (trending || []).slice(0, 6).forEach(function (row) {
+      if (row.netuid == null) return;
+      var active = filters.netuid === Number(row.netuid) ? " message-intel__filter-chip--active" : "";
+      html +=
+        '<button type="button" class="message-intel__filter-chip' +
+        active +
+        '" data-netuid="' +
+        esc(row.netuid) +
+        '">SN' +
+        esc(row.netuid) +
+        "</button>";
+    });
+    subnetFiltersEl.innerHTML = html;
+    bindFilterClicks();
+  }
+
+  function bindFilterClicks() {
+    if (convFiltersEl) {
+      convFiltersEl.querySelectorAll("[data-min-conv]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var val = btn.getAttribute("data-min-conv");
+          filters.minConviction = val === "" ? null : Number(val);
+          saveFilters();
+          syncFilterChipStates();
+          hydrate();
+        });
+      });
+    }
+    if (subnetFiltersEl) {
+      subnetFiltersEl.querySelectorAll("[data-netuid]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var val = btn.getAttribute("data-netuid");
+          filters.netuid = val === "" ? null : Number(val);
+          saveFilters();
+          syncFilterChipStates();
+          hydrate();
+        });
+      });
+    }
+  }
+
+  function renderFilterEmpty() {
+    var parts = [];
+    if (filters.minConviction != null) parts.push(filters.minConviction + "%+ conviction");
+    if (filters.netuid != null) parts.push("SN" + filters.netuid);
+    var label = parts.length ? parts.join(" · ") : "current filters";
+    return (
+      '<p class="empty">No messages match ' +
+      esc(label) +
+      ". Try a lower conviction threshold or clear the subnet filter.</p>"
+    );
+  }
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -805,7 +925,7 @@
     try {
       var statusRes = await fetch("/api/message-intel/status");
       var status = statusRes.ok ? await statusRes.json() : null;
-      var listRes = await fetch("/api/message-intel?limit=24");
+      var listRes = await fetch(buildListUrl(24));
       if (!listRes.ok) throw new Error("HTTP " + listRes.status);
       var payload = await listRes.json();
       applyMeta(payload, status);
@@ -816,6 +936,8 @@
       renderSummary24h((payload.meta && payload.meta.summary_24h) || null);
       renderTelegramProof((payload.meta && payload.meta.telegram_proof) || null);
       renderHighConvictionStrip((payload.meta && payload.meta.high_conviction_strip) || []);
+      renderSubnetFilterChips(trending);
+      syncFilterChipStates();
       if (trendingEl) {
         trendingEl.innerHTML = renderTrending(trending, listener);
       }
@@ -837,7 +959,9 @@
         championsEl.innerHTML = renderChampions(authors, authorsUnavailable);
       }
 
-      if (payload.empty) {
+      if (payload.filtered_empty) {
+        feed.innerHTML = renderFilterEmpty();
+      } else if (payload.empty) {
         feed.innerHTML = renderFeedEmpty(status && status.listener);
       } else {
         feed.innerHTML = renderMessages(payload.messages);
@@ -864,10 +988,14 @@
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", function () {
+      bindFilterClicks();
+      syncFilterChipStates();
       hydrate();
       refreshTimer = window.setInterval(hydrate, 60000);
     });
   } else {
+    bindFilterClicks();
+    syncFilterChipStates();
     hydrate();
     refreshTimer = window.setInterval(hydrate, 60000);
   }

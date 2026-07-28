@@ -212,7 +212,31 @@ def _enrich_message_row(row: Dict[str, Any], names: Optional[Dict[int, str]] = N
     return out
 
 
-def list_messages(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
+def _message_matches_filters(
+    row: Dict[str, Any],
+    *,
+    min_conviction: Optional[float],
+    netuid: Optional[int],
+) -> bool:
+    if min_conviction is not None:
+        verdict = row.get("verdict") if isinstance(row.get("verdict"), dict) else {}
+        conv = verdict.get("conviction")
+        if conv is None or float(conv) < min_conviction:
+            return False
+    if netuid is not None:
+        row_netuid = row.get("netuid")
+        if row_netuid is None or int(row_netuid) != int(netuid):
+            return False
+    return True
+
+
+def list_messages(
+    limit: int = 50,
+    offset: int = 0,
+    *,
+    min_conviction: Optional[float] = None,
+    netuid: Optional[int] = None,
+) -> Dict[str, Any]:
     from internal.message_intel.listener_service import listener_status
     from internal.message_intel.rollup import (
         build_24h_summary,
@@ -224,7 +248,19 @@ def list_messages(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
 
     db = get_db()
     names = _registry_subnet_names()
-    messages = [_enrich_message_row(m, names) for m in db.list_messages(limit=limit, offset=offset)]
+    filters_active = min_conviction is not None or netuid is not None
+    # ponytail: filtered queries scan recent 200 rows max — enough for desk feed, not full archive search
+    fetch_limit = min(200, max(limit + offset, limit)) if filters_active else limit
+    fetch_offset = 0 if filters_active else offset
+    raw = db.list_messages(limit=fetch_limit, offset=fetch_offset)
+    messages = [_enrich_message_row(m, names) for m in raw]
+    if filters_active:
+        messages = [
+            m
+            for m in messages
+            if _message_matches_filters(m, min_conviction=min_conviction, netuid=netuid)
+        ]
+        messages = messages[offset : offset + limit]
     meta = live_stats(db)
     meta["listener"] = listener_status()
     try:
@@ -261,6 +297,15 @@ def list_messages(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
             "window_hours": 24,
             "empty_reason": "Summary unavailable.",
         }
+    if filters_active:
+        applied: Dict[str, Any] = {}
+        if min_conviction is not None:
+            applied["min_conviction"] = min_conviction
+        if netuid is not None:
+            applied["netuid"] = netuid
+        meta["filters"] = applied
+    store_total = int(meta.get("total_messages") or 0)
+    filtered_empty = filters_active and len(messages) == 0 and store_total > 0
     return {
         "status": "success",
         "count": len(messages),
@@ -268,6 +313,7 @@ def list_messages(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
         "meta": meta,
         "sources": source_status(),
         "empty": len(messages) == 0,
+        "filtered_empty": filtered_empty,
     }
 
 
