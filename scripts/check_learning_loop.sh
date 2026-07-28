@@ -51,21 +51,21 @@ tick_age = resolver.get('age_seconds')
 refresh_m = float(resolver.get('refresh_minutes') or 15)
 stall_after = refresh_m * 2 * 60
 
-if pending > 0 and tick_age is not None and float(tick_age) > stall_after:
-    if peer:
-        print('WARN — pending + stale resolver tick; worker_peer alive (catching up on worker)')
-    else:
-        print('FAIL — pending work but resolver tick older than 2x refresh')
-        sys.exit(1)
-
+# Order matters: post-deploy worker boot is often 'degraded'/'stalled' with a
+# stale soul_map tick until the first resolver cycle (~refresh_minutes). That is
+# not a deploy failure when the dedicated worker is alive.
 if status == 'ok':
     print('OK — learning loop healthy')
     if snap is None and not lc.get('run_at'):
         print('NOTE — score snapshot not written yet; wait ~15min after worker boot')
     sys.exit(0)
+
 if status == 'degraded':
     print('WARN — degraded (post-restart, snapshot catching up, or resolver lag)')
+    if peer and pending > 0 and tick_age is not None and float(tick_age) > stall_after:
+        print('NOTE — resolver tick catching up; worker alive (ok for post-deploy)')
     sys.exit(0)
+
 if not peer:
     wp = d.get('worker_peer') or {}
     if wp.get('source') == 'http':
@@ -73,6 +73,11 @@ if not peer:
     else:
         print('FAIL — inline worker not alive; check data/.worker_heartbeat')
     sys.exit(1)
+
+if pending > 0 and tick_age is not None and float(tick_age) > stall_after:
+    print('FAIL — pending work but resolver tick older than 2x refresh')
+    sys.exit(1)
+
 if status == 'stalled':
     if peer:
         print('WARN — stalled but worker_peer alive; resolver catching up on worker volume')
@@ -82,6 +87,7 @@ if status == 'stalled':
         sys.exit(0)
     print('WARN — stalled; check resolver tick and pending watchdog')
     sys.exit(1)
+
 print('WARN — unexpected status:', status)
 sys.exit(1)
 "

@@ -9,6 +9,34 @@ def _data_dir() -> str:
     return os.environ.get("DATA_DIR", "data")
 
 
+def data_dir_is_mounted_volume() -> bool:
+    """True when DATA_DIR is a real mount (Fly volume), not ephemeral container FS."""
+    root = os.path.realpath(_data_dir())
+    try:
+        with open("/proc/mounts", "r", encoding="utf-8") as handle:
+            for line in handle:
+                parts = line.split()
+                if len(parts) < 2:
+                    continue
+                mount_point = parts[1]
+                if mount_point == root or root.startswith(mount_point.rstrip("/") + "/"):
+                    fstype = parts[2] if len(parts) > 2 else ""
+                    if fstype in {"overlay", "rootfs", "tmpfs", "proc", "sysfs", "devtmpfs"}:
+                        continue
+                    if mount_point in {"/", "/app"}:
+                        continue
+                    return True
+    except OSError:
+        pass
+    # Explicit opt-in for tests / non-Linux
+    return os.environ.get("DATA_DIR_IS_VOLUME", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
 def has_local_volume_data() -> bool:
     """True when soul_map, pump ladder, or a non-trivial message_intel DB is present."""
     root = _data_dir()
@@ -33,12 +61,16 @@ def has_local_volume_data() -> bool:
 
 
 def needs_worker_volume_proxy() -> bool:
-    """split_v2 web — proxy volume-backed APIs unless local volume data is present."""
+    """split_v2 web — proxy volume APIs unless *this* machine owns the Fly volume.
+
+    Orphan JSON under /app/data on web (no volume mount) must not disable proxy —
+    that caused stale July-era resolver ticks while the worker held the real volume.
+    """
     from internal.run_mode import is_worker_mode, split_worker_v2_enabled
 
     if not split_worker_v2_enabled() or is_worker_mode():
         return False
-    # ponytail: partial v2 migration may leave volume on web — read local until worker mounts it.
-    if has_local_volume_data():
+    if data_dir_is_mounted_volume() and has_local_volume_data():
+        # Partial migration: volume still attached to web — read local.
         return False
     return True
