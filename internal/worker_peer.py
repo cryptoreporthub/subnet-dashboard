@@ -26,12 +26,16 @@ def _remote_peer(*, max_age_seconds: int) -> Dict[str, Any]:
     try:
         from internal.worker_proxy import fetch_worker_json_sync
 
-        timeout = float(os.environ.get("WORKER_PEER_TIMEOUT_SECONDS", "8"))
-        remote = fetch_worker_json_sync("/api/ops/worker-peer", timeout=timeout)
+        timeout = float(os.environ.get("WORKER_PEER_TIMEOUT_SECONDS", "12"))
+        probe_path = os.environ.get("WORKER_PEER_PROBE_PATH", "/api/ops/live").strip()
+        if not probe_path.startswith("/"):
+            probe_path = f"/{probe_path}"
+        remote = fetch_worker_json_sync(probe_path, timeout=timeout)
         peer = remote.get("worker_peer")
         if isinstance(peer, dict):
             alive = peer.get("alive")
-            if alive is not None:
+            # Worker machine reports file heartbeat; ignore web misroute (http source).
+            if peer.get("source") == "file" and alive is not None:
                 return {
                     "expected": True,
                     "alive": bool(alive),

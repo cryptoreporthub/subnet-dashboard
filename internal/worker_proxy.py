@@ -12,6 +12,21 @@ from starlette.responses import JSONResponse, Response
 
 logger = logging.getLogger(__name__)
 
+_LAST_GOOD_BASE: Optional[str] = None
+
+
+def _record_good_base(base: str) -> None:
+    global _LAST_GOOD_BASE
+    _LAST_GOOD_BASE = base
+
+
+def _is_web_misroute(data: Dict[str, Any], path: str) -> bool:
+    """flycast can hit web — ops/live returns HTTP peer loop instead of file heartbeat."""
+    if "/api/ops/" not in path:
+        return False
+    wp = data.get("worker_peer")
+    return isinstance(wp, dict) and wp.get("source") == "http"
+
 
 def _flycast_opt_in() -> bool:
     return os.environ.get("WORKER_INTERNAL_USE_FLYCAST", "").strip().lower() in (
@@ -27,6 +42,8 @@ def worker_internal_bases() -> List[str]:
     app = os.environ.get("FLY_APP_NAME", "subnet-dashboard").strip() or "subnet-dashboard"
     flycast = f"http://{app}.flycast:8080"
     bases: List[str] = []
+    if _LAST_GOOD_BASE:
+        bases.append(_LAST_GOOD_BASE)
     custom = os.environ.get("WORKER_INTERNAL_URL", "").strip().rstrip("/")
     # ponytail: legacy fly secrets may still set flycast — ignore unless explicitly opted in.
     if custom and (custom != flycast or _flycast_opt_in()):
@@ -73,7 +90,18 @@ def fetch_worker_json_sync(path: str, *, timeout: Optional[float] = None) -> Dic
                 resp = client.get(url, headers={"X-Worker-Proxy": "1"})
             resp.raise_for_status()
             data = resp.json()
-            return data if isinstance(data, dict) else {}
+            if not isinstance(data, dict):
+                data = {}
+            if _is_web_misroute(data, path):
+                logger.debug("worker HTTP misroute (web) %s", url)
+                last_exc = httpx.HTTPStatusError(
+                    "web misroute",
+                    request=resp.request,
+                    response=resp,
+                )
+                continue
+            _record_good_base(base)
+            return data
         except httpx.HTTPStatusError as exc:
             last_exc = exc
             if exc.response.status_code in (404, 502, 503):
@@ -101,6 +129,13 @@ async def proxy_get_to_worker(request: Request) -> Response:
             async with httpx.AsyncClient(timeout=timeout) as client:
                 resp = await client.get(url, headers={"X-Worker-Proxy": "1"})
             media_type = resp.headers.get("content-type") or "application/json"
+            if resp.status_code == 200:
+                try:
+                    data = resp.json()
+                    if isinstance(data, dict) and not _is_web_misroute(data, path):
+                        _record_good_base(base)
+                except Exception:
+                    pass
             return Response(content=resp.content, status_code=resp.status_code, media_type=media_type)
         except Exception as exc:
             last_exc = exc

@@ -18,4 +18,4 @@ _start_worker() {
 
 _start_worker
 echo "starting internal HTTP on :8080 for split_v2 web volume proxy..."
-exec env RUN_MODE=worker WORKER_HEAVY="${WORKER_HEAVY:-essential}" uvicorn server:app --host 0.0.0.0 --port 8080
+exec env RUN_MODE=worker WORKER_HEAVY="${WORKER_HEAVY:-essential}" MESSAGE_INTEL_LISTENER="${MESSAGE_INTEL_LISTENER:-on}" uvicorn server:app --host 0.0.0.0 --port 8080
