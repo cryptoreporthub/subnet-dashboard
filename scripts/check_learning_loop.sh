@@ -5,6 +5,22 @@ set -euo pipefail
 BASE="${APP_BASE_URL:-https://subnet-dashboard.fly.dev}"
 
 echo "== learning loop health ($BASE) =="
+
+peer_ok=0
+for attempt in 1 2 3 4 5 6; do
+  peer_alive="$(curl -fsS --max-time 25 "$BASE/api/learning/health" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+print((d.get('worker_peer') or {}).get('alive'))
+" 2>/dev/null || echo "")"
+  echo "worker_peer probe attempt $attempt: alive=$peer_alive"
+  if [ "$peer_alive" = "True" ]; then
+    peer_ok=1
+    break
+  fi
+  sleep 15
+done
+
 curl -fsS --max-time 25 "$BASE/api/learning/health" | python3 -c "
 import json, sys
 

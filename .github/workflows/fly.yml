@@ -139,6 +139,13 @@ jobs:
           FLY_APP=subnet-dashboard ./scripts/fly_web_recover.sh
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Set worker internal URL (vm DNS)
+        run: |
+          chmod +x scripts/fly_set_worker_internal_url.sh
+          FLY_APP=subnet-dashboard ./scripts/fly_set_worker_internal_url.sh
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FORCE_WORKER_SPLIT_V2: "1"
       - name: Repair v2 volume placement (post-deploy if still on web)
         run: |
           chmod +x scripts/fly_v2_volume_repair.sh

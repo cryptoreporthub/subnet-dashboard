@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Query
 
 health_router = APIRouter(tags=["health"])
@@ -26,7 +28,7 @@ async def api_ops_live():
     """Ultra-fast liveness for Fly/monitors — no feed probes or network."""
     from internal.ops.readiness import build_liveness_report
 
-    return build_liveness_report()
+    return await asyncio.to_thread(build_liveness_report)
 
 
 @health_router.get("/api/ops/worker-peer")
