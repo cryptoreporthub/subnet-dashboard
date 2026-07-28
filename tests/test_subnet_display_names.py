@@ -17,6 +17,11 @@ def test_display_name_override_sn16_fast_thinker():
     assert name == "Fast Thinker"
 
 
+def test_display_name_override_sn23_trishool():
+    name = display_name_for_netuid(23, use_taostats_fallback=False)
+    assert name == "Trishool"
+
+
 def test_display_name_prefers_enriched_row():
     row = {"netuid": 40, "name": "Chunking", "source": "taomarketcap"}
     name = display_name_for_netuid(40, subnet_row=row, use_taostats_fallback=False)
