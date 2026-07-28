@@ -67,3 +67,11 @@ def test_evidence_report_empty():
     report = build_evidence_report()
     assert "status" in report
     assert "pick_audit" in report
+
+
+def test_evidence_ignores_stale_pump_alert():
+    from internal.ops.evidence import build_evidence_report
+
+    report = build_evidence_report()
+    if report["pump_desk"]["alert_level"] == "alert" and report["status"] == "alert":
+        assert "pump_desk alert" in report["alerts"]

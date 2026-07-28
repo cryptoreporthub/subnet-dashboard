@@ -8,6 +8,22 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 
+def _parse_utc_iso(ts: str) -> Optional[datetime]:
+    try:
+        raw = str(ts).replace("Z", "+00:00")
+        return datetime.fromisoformat(raw)
+    except Exception:
+        return None
+
+
+def _fresh_enough(ts: Optional[str], max_age_seconds: float = 1200.0) -> bool:
+    dt = _parse_utc_iso(ts or "")
+    if dt is None:
+        return False
+    age = (datetime.now(timezone.utc) - dt).total_seconds()
+    return age <= max_age_seconds
+
+
 def _read_json(path: str) -> Optional[Dict[str, Any]]:
     if not os.path.isfile(path):
         return None
@@ -35,9 +51,11 @@ def build_evidence_report() -> Dict[str, Any]:
     alerts: list[str] = []
     if pick and pick.get("verdict") == "MISS":
         alerts.append(f"pick_audit MISS category={pick.get('category')}")
-    if pump and pump.get("alert_level") == "alert":
+    pump_fresh = pump and _fresh_enough(pump.get("captured_at"))
+    if pump_fresh and pump.get("alert_level") == "alert":
         alerts.append("pump_desk alert")
-    if outcomes and outcomes.get("alert_level") == "alert":
+    outcomes_fresh = outcomes and _fresh_enough(outcomes.get("captured_at"))
+    if outcomes_fresh and outcomes.get("alert_level") == "alert":
         alerts.append("learning_outcomes alert")
 
     council = (outcomes or {}).get("council_health") or {}
@@ -50,7 +68,7 @@ def build_evidence_report() -> Dict[str, Any]:
     status = "ok"
     if any("MISS" in a or "alert" in a.lower() or "ALERT" in a for a in alerts):
         status = "alert"
-    elif escalation == "WATCH" or (pump and pump.get("alert_level") == "warn"):
+    elif escalation == "WATCH" or (pump_fresh and pump and pump.get("alert_level") == "warn"):
         status = "warn"
 
     return {

@@ -60,7 +60,8 @@ class OutcomeSnapshotScheduler:
         if immediate:
             threading.Thread(target=self._tick, daemon=True, name="outcome-snapshot-tick").start()
         else:
-            schedule_in_seconds(JOB_ID, self._tick, _seconds_until_slot())
+            # First tick soon after worker boot; then interval cadence.
+            schedule_in_seconds(JOB_ID, self._tick, min(120.0, _seconds_until_slot()))
         return {
             "started": True,
             "slot_utc": f"{SLOT_HOUR:02d}:{SLOT_MINUTE:02d}",
