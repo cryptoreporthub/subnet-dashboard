@@ -48,9 +48,16 @@ if status == 'degraded':
     print('WARN — degraded (post-restart, snapshot catching up, or resolver lag)')
     sys.exit(0)
 if not peer:
-    print('FAIL — inline worker not alive; check data/.worker_heartbeat')
+    wp = d.get('worker_peer') or {}
+    if wp.get('source') == 'http':
+        print('FAIL — split_v2 worker_peer not alive (HTTP probe)')
+    else:
+        print('FAIL — inline worker not alive; check data/.worker_heartbeat')
     sys.exit(1)
 if status == 'stalled':
+    if tick_age is not None and float(tick_age) < stall_after:
+        print('WARN — stalled label but resolver tick fresh; ok for post-restart')
+        sys.exit(0)
     print('WARN — stalled; check resolver tick and pending watchdog')
     sys.exit(1)
 print('WARN — unexpected status:', status)
