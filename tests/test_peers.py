@@ -1,10 +1,10 @@
-"""Echo Kin — pulse lookalikes that haven't moved yet."""
+"""Peers — quieter lookalikes that share this mover's pulse."""
 
 from __future__ import annotations
 
-from internal.pump.echo_kin import (
-    attach_echo_to_desk,
-    find_echo_kin,
+from internal.pump.peers import (
+    attach_peers_to_desk,
+    find_peers,
     lane_tag,
     pulse_distance,
     pulse_vector,
@@ -33,18 +33,18 @@ def test_lane_tag_quiet_load():
     assert lane_tag(entry) in ("Quiet Load", "Pressure", "Coil", "Lift")
 
 
-def test_find_echo_kin_prefers_quieter_peers():
+def test_find_peers_prefers_quieter_matches():
     focus = _entry(10, "PUMPING", 0.85, buy=0.62, vol=0.4, mom=0.004, chg=-0.03)
     quiet = _entry(11, "STIRRING", 0.4, buy=0.6, vol=0.35, mom=0.003, chg=-0.025)
     louder = _entry(12, "PUMPING", 0.9, buy=0.61, vol=0.38, mom=0.004, chg=-0.028)
     state = {"subnets": {"10": focus, "11": quiet, "12": louder}}
-    out = find_echo_kin(10, state, limit=3)
+    out = find_peers(10, state, limit=3)
     assert out["lane"]
     assert out["rarity"] is not None
-    ids = [k["netuid"] for k in out["kin"]]
+    ids = [k["netuid"] for k in out["matches"]]
     assert 11 in ids
-    assert 12 not in ids  # not quieter
-    assert "Echo Kin" in (out["why"] or "") or "Lane" in (out["why"] or "")
+    assert 12 not in ids
+    assert "Peers" in (out["why"] or "") or "Lane" in (out["why"] or "")
 
 
 def test_signature_rarity_higher_when_unique():
@@ -55,17 +55,17 @@ def test_signature_rarity_higher_when_unique():
     assert rare >= crowded
 
 
-def test_attach_echo_to_desk_hero():
+def test_attach_peers_to_desk_hero():
     focus = _entry(23, "ACCUMULATING", 0.7, buy=0.6, vol=0.3, mom=0.001, chg=-0.02)
-    kin = _entry(7, "STIRRING", 0.35, buy=0.58, vol=0.28, mom=0.001, chg=-0.018)
-    state = {"subnets": {"23": focus, "7": kin}}
+    quiet = _entry(7, "STIRRING", 0.35, buy=0.58, vol=0.28, mom=0.001, chg=-0.018)
+    state = {"subnets": {"23": focus, "7": quiet}}
     payload = {
         "hero": {"netuid": 23, "name": "Trishool", "timing": "lead"},
         "alerts": [],
     }
-    attach_echo_to_desk(payload, state)
-    assert payload["hero"]["echo"]["lane"]
-    assert payload["echo"]["focus_netuid"] == 23
+    attach_peers_to_desk(payload, state)
+    assert payload["hero"]["peers"]["lane"]
+    assert payload["peers"]["focus_netuid"] == 23
     assert payload["hero"].get("signature_rarity") is not None
 
 

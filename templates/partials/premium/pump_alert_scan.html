@@ -116,22 +116,22 @@
         {% if hero_row.size_line %}<p class="pds-hero__chip">{{ hero_row.size_line }}</p>{% endif %}
         {% if hero_row.telegram_chip %}<p class="pds-hero__chip pds-hero__chip--tg">{{ hero_row.telegram_chip }}</p>{% endif %}
         {% if hero_row.owner_chip %}<p class="pds-hero__chip pds-hero__chip--owner">{{ hero_row.owner_chip }}</p>{% endif %}
-        {% set echo = hero_row.echo if hero_row.echo is mapping else none %}
-        {% if echo and (echo.lane or (echo.kin is iterable and echo.kin|length > 0)) %}
-        <div class="pds-echo" aria-label="Echo Kin">
-          <div class="pds-echo__meta">
-            <span class="pds-echo__label">Echo Kin</span>
-            {% if echo.lane %}<span class="pds-echo__lane" title="Pulse lane">{{ echo.lane }}</span>{% endif %}
-            {% if echo.rarity is not none %}<span class="pds-echo__rarity" title="Signature rarity on the live ladder">{{ echo.rarity }} rarity</span>{% endif %}
+        {% set peers = hero_row.peers if hero_row.peers is mapping else none %}
+        {% if peers and (peers.lane or (peers.matches is iterable and peers.matches|length > 0)) %}
+        <div class="pds-peers" aria-label="Peers">
+          <div class="pds-peers__meta">
+            <span class="pds-peers__label">Peers</span>
+            {% if peers.lane %}<span class="pds-peers__lane" title="Pulse lane">{{ peers.lane }}</span>{% endif %}
+            {% if peers.rarity is not none %}<span class="pds-peers__rarity" title="Signature rarity on the live ladder">{{ peers.rarity }} rarity</span>{% endif %}
           </div>
-          {% if echo.kin is iterable and echo.kin|length > 0 %}
-          <div class="pds-echo__list">
-            {% for k in echo.kin[:3] %}
-            <a class="pds-echo__kin" href="/subnet/{{ k.netuid }}" title="{{ (k.shared|default([]))[:2]|join(' · ') or k.lane|default('echo kin') }}">{{ k.name }} <b>SN{{ k.netuid }}</b>{% if k.lane %} <i>{{ k.lane }}</i>{% endif %}</a>
+          {% if peers.matches is iterable and peers.matches|length > 0 %}
+          <div class="pds-peers__list">
+            {% for k in peers.matches[:3] %}
+            <a class="pds-peers__match" href="/subnet/{{ k.netuid }}" title="{{ (k.shared|default([]))[:2]|join(' · ') or k.lane|default('peer') }}">{{ k.name }} <b>SN{{ k.netuid }}</b>{% if k.lane %} <i>{{ k.lane }}</i>{% endif %}</a>
             {% endfor %}
           </div>
           {% endif %}
-          {% if echo.why %}<p class="pds-echo__why">{{ echo.why }}</p>{% endif %}
+          {% if peers.why %}<p class="pds-peers__why">{{ peers.why }}</p>{% endif %}
         </div>
         {% endif %}
 
@@ -492,37 +492,37 @@
   .pds-hero__chip--tg { color: #7dd3fc; }
   .pds-hero__chip--whale { color: #fbbf24; }
   .pds-hero__chip--wallet { color: #a7f3d0; }
-  .pds-echo {
+  .pds-peers {
     margin-top: 10px;
     padding-top: 10px;
     border-top: 1px solid rgba(148, 163, 184, 0.12);
   }
-  .pds-echo__meta {
+  .pds-peers__meta {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
   }
-  .pds-echo__label {
+  .pds-peers__label {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-size: 10px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: #94a3b8;
   }
-  .pds-echo__lane,
-  .pds-echo__rarity {
+  .pds-peers__lane,
+  .pds-peers__rarity {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-size: 10px;
     color: #7dd3fc;
   }
-  .pds-echo__list {
+  .pds-peers__list {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
     margin-top: 8px;
   }
-  .pds-echo__kin {
+  .pds-peers__match {
     display: inline-flex;
     align-items: baseline;
     gap: 4px;
@@ -533,9 +533,9 @@
     text-decoration: none;
     font-size: 12px;
   }
-  .pds-echo__kin b { font-weight: 600; color: #7dd3fc; }
-  .pds-echo__kin i { font-style: normal; color: #94a3b8; font-size: 10px; }
-  .pds-echo__why {
+  .pds-peers__match b { font-weight: 600; color: #7dd3fc; }
+  .pds-peers__match i { font-style: normal; color: #94a3b8; font-size: 10px; }
+  .pds-peers__why {
     margin: 8px 0 0;
     font-size: 12px;
     line-height: 1.4;

@@ -1,9 +1,8 @@
-"""Echo Kin — pulse lookalikes that haven't moved yet (SimiVision, not DNA clones).
+"""Peers — quieter lookalikes that share this mover's pulse (SimiVision).
 
-Inspired by competitor “who looks like the mover” framing, but our own terms:
+Inspired by competitor lookalike framing, with plain terms:
 
-- **Pulse** — triad + flow vector from the pump ladder (what rhymes on-chain)
-- **Echo Kin** — same pulse shape, quieter / earlier phase (opportunity angle)
+- **Peers** — same pulse shape, quieter / earlier phase
 - **Lane tag** — Coil · Quiet Load · Pressure · Lift · Drift · Hollow
 - **Signature rarity** — how uncommon this pulse is on the live ladder (0–100)
 
@@ -58,7 +57,6 @@ def pulse_vector(entry: Dict[str, Any]) -> Tuple[float, ...]:
     buy = max(0.0, min(1.0, _f(snap.get("buy_ratio"), 0.5)))
     vol = max(0.0, min(1.0, _f(snap.get("volume_intensity"))))
     mom = max(-1.0, min(1.0, _f(snap.get("momentum_1h"))))
-    # Map mom into 0..1 around flat for distance math.
     mom_u = (mom + 0.05) / 0.10
     mom_u = max(0.0, min(1.0, mom_u))
     return (float(bits[0]), float(bits[1]), float(bits[2]), buy, vol, mom_u)
@@ -73,7 +71,7 @@ def pulse_distance(a: Tuple[float, ...], b: Tuple[float, ...]) -> float:
 
 
 def lane_tag(entry: Dict[str, Any]) -> str:
-    """Our lane vocabulary — not competitor archetype names."""
+    """Lane vocabulary — not competitor archetype names."""
     phase = str(entry.get("phase") or "DORMANT").upper()
     bits = _triad_bits(entry)
     inflow, pressure, coil = bits
@@ -112,18 +110,16 @@ def signature_rarity(focus: Tuple[float, ...], universe: List[Tuple[float, ...]]
         return 50
     similar = 0
     for vec in universe:
-        # Hamming on triad bits only
         ham = sum(1 for i in range(3) if (focus[i] >= 0.5) != (vec[i] >= 0.5))
         if ham <= 1:
             similar += 1
-    # Exclude self-ish: similar always includes focus when in universe
     ratio = similar / max(1, len(universe))
     rarity = int(round((1.0 - min(1.0, ratio)) * 100))
     return max(0, min(100, rarity))
 
 
 def _quieter_than(focus: Dict[str, Any], other: Dict[str, Any]) -> bool:
-    """Kin should still be earlier / quieter than the focus mover."""
+    """Peers should still be earlier / quieter than the focus mover."""
     fp = _PHASE_RANK.get(str(focus.get("phase") or "").upper(), 0)
     op = _PHASE_RANK.get(str(other.get("phase") or "").upper(), 0)
     if op < fp:
@@ -143,17 +139,18 @@ def _entry_name(entry: Dict[str, Any]) -> str:
         return "subnet"
 
 
-def find_echo_kin(
+def find_peers(
     focus_netuid: int,
     state: Dict[str, Any],
     *,
     limit: int = 3,
     max_distance: float = 1.85,
 ) -> Dict[str, Any]:
-    """Return Echo Kin payload for a focus netuid from pump ladder state."""
+    """Return Peers payload for a focus netuid from pump ladder state."""
+    empty = {"lane": None, "rarity": None, "matches": [], "why": None}
     subnets = state.get("subnets") or {}
     if not isinstance(subnets, dict):
-        return {"lane": None, "rarity": None, "kin": [], "why": None}
+        return empty
 
     focus: Optional[Dict[str, Any]] = None
     for entry in subnets.values():
@@ -166,7 +163,7 @@ def find_echo_kin(
         except (TypeError, ValueError):
             continue
     if focus is None:
-        return {"lane": None, "rarity": None, "kin": [], "why": None}
+        return empty
 
     focus_vec = pulse_vector(focus)
     universe: List[Tuple[float, ...]] = []
@@ -193,14 +190,14 @@ def find_echo_kin(
             candidates.append((dist, entry))
 
     candidates.sort(key=lambda row: (row[0], -_f(row[1].get("composite_score"))))
-    kin: List[Dict[str, Any]] = []
+    matches: List[Dict[str, Any]] = []
     for dist, entry in candidates[: max(0, limit)]:
         try:
             nid = int(entry.get("netuid"))
         except (TypeError, ValueError):
             continue
         shared = _shared_pulse(focus_vec, pulse_vector(entry))
-        kin.append(
+        matches.append(
             {
                 "netuid": nid,
                 "name": _entry_name(entry),
@@ -214,29 +211,29 @@ def find_echo_kin(
 
     lane = lane_tag(focus)
     rarity = signature_rarity(focus_vec, universe)
-    if kin:
-        top = kin[0]
+    if matches:
+        top = matches[0]
         shared_txt = ", ".join(top["shared"][:3]) if top["shared"] else "similar pulse"
         why = (
-            f"Echo Kin: SN{top['netuid']} still quieter with {shared_txt} — "
+            f"Peers: SN{top['netuid']} still quieter with {shared_txt} — "
             f"same lane shape, less move."
         )
     else:
-        why = f"Lane {lane} · signature rarity {rarity} — no quieter kin on the ladder yet."
+        why = f"Lane {lane} · signature rarity {rarity} — no quieter peers on the ladder yet."
 
     return {
         "lane": lane,
         "rarity": rarity,
-        "kin": kin,
+        "matches": matches,
         "why": why,
     }
 
 
-def attach_echo_to_desk(
+def attach_peers_to_desk(
     payload: Dict[str, Any],
     state: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Attach echo block to hero (+ desk-level echo summary). Mutates payload."""
+    """Attach peers block to hero (+ desk-level summary). Mutates payload."""
     hero = payload.get("hero")
     if not isinstance(hero, dict) or hero.get("netuid") is None:
         return payload
@@ -244,15 +241,15 @@ def attach_echo_to_desk(
         netuid = int(hero["netuid"])
     except (TypeError, ValueError):
         return payload
-    echo = find_echo_kin(netuid, state)
-    hero["echo"] = echo
-    hero["lane"] = echo.get("lane")
-    hero["signature_rarity"] = echo.get("rarity")
-    payload["echo"] = {
+    peers = find_peers(netuid, state)
+    hero["peers"] = peers
+    hero["lane"] = peers.get("lane")
+    hero["signature_rarity"] = peers.get("rarity")
+    payload["peers"] = {
         "focus_netuid": netuid,
-        "lane": echo.get("lane"),
-        "rarity": echo.get("rarity"),
-        "kin_count": len(echo.get("kin") or []),
-        "why": echo.get("why"),
+        "lane": peers.get("lane"),
+        "rarity": peers.get("rarity"),
+        "match_count": len(peers.get("matches") or []),
+        "why": peers.get("why"),
     }
     return payload

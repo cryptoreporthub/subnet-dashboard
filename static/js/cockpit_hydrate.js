@@ -1369,7 +1369,7 @@
       (row.owner_chip
         ? '<p class="pds-hero__chip pds-hero__chip--owner">' + esc(row.owner_chip) + '</p>'
         : '') +
-      renderEchoKinBlock(row) +
+      renderPeersBlock(row) +
       '<a class="pds-hero__cta home-cta home-cta--primary" href="/subnet/' +
       esc(row.netuid) +
       '">Open SN' +
@@ -1378,35 +1378,35 @@
     );
   }
 
-  function renderEchoKinBlock(row, prefix) {
-    var echo = row && row.echo;
-    if (!echo || (!echo.lane && !(echo.kin && echo.kin.length))) return '';
-    var cls = prefix || 'pds-echo';
-    var kin = Array.isArray(echo.kin) ? echo.kin : [];
+  function renderPeersBlock(row, prefix) {
+    var peers = row && row.peers;
+    if (!peers || (!peers.lane && !(peers.matches && peers.matches.length))) return '';
+    var cls = prefix || 'pds-peers';
+    var matches = Array.isArray(peers.matches) ? peers.matches : [];
     var chips = '';
-    if (echo.lane) {
+    if (peers.lane) {
       chips +=
-        '<span class="' + cls + '__lane" title="Pulse lane">' + esc(echo.lane) + '</span>';
+        '<span class="' + cls + '__lane" title="Pulse lane">' + esc(peers.lane) + '</span>';
     }
-    if (echo.rarity != null) {
+    if (peers.rarity != null) {
       chips +=
         '<span class="' +
         cls +
         '__rarity" title="Signature rarity on the live ladder">' +
-        esc(echo.rarity) +
+        esc(peers.rarity) +
         ' rarity</span>';
     }
-    var kinHtml = kin
+    var matchHtml = matches
       .slice(0, 3)
       .map(function (k) {
         var shared = Array.isArray(k.shared) && k.shared.length ? k.shared.slice(0, 2).join(' · ') : '';
         return (
           '<a class="' +
           cls +
-          '__kin" href="/subnet/' +
+          '__match" href="/subnet/' +
           esc(k.netuid) +
           '" title="' +
-          esc(shared || k.lane || 'echo kin') +
+          esc(shared || k.lane || 'peer') +
           '">' +
           esc(k.name || 'SN' + k.netuid) +
           ' <b>SN' +
@@ -1420,17 +1420,17 @@
     return (
       '<div class="' +
       cls +
-      '" aria-label="Echo Kin">' +
+      '" aria-label="Peers">' +
       '<div class="' +
       cls +
       '__meta">' +
       '<span class="' +
       cls +
-      '__label">Echo Kin</span>' +
+      '__label">Peers</span>' +
       chips +
       '</div>' +
-      (kinHtml ? '<div class="' + cls + '__list">' + kinHtml + '</div>' : '') +
-      (echo.why ? '<p class="' + cls + '__why">' + esc(echo.why) + '</p>' : '') +
+      (matchHtml ? '<div class="' + cls + '__list">' + matchHtml + '</div>' : '') +
+      (peers.why ? '<p class="' + cls + '__why">' + esc(peers.why) + '</p>' : '') +
       '</div>'
     );
   }
@@ -1650,7 +1650,7 @@
       (rawBits.length ? '<p class="pd-raw">' + rawBits.join('') + '</p>' : '') +
       _pdTriadLegs(triad, labels) +
       chipsHtml +
-      renderEchoKinBlock(row, 'pd-echo') +
+      renderPeersBlock(row, 'pd-peers') +
       '<div class="pd-cta" role="group" aria-label="Lead actions">' +
       '<a class="home-cta home-cta--primary" href="/subnet/' +
       esc(row.netuid) +

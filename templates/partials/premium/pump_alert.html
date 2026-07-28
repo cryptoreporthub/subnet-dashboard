@@ -148,22 +148,22 @@
         {% if hero_row.size_line %}<p class="pd-chip">{{ hero_row.size_line }}</p>{% endif %}
         {% if hero_row.telegram_chip %}<p class="pd-chip pd-chip--tg">{{ hero_row.telegram_chip }}</p>{% endif %}
         {% if hero_row.owner_chip %}<p class="pd-chip pd-chip--owner">{{ hero_row.owner_chip }}</p>{% endif %}
-        {% set echo = hero_row.echo if hero_row.echo is mapping else none %}
-        {% if echo and (echo.lane or (echo.kin is iterable and echo.kin|length > 0)) %}
-        <div class="pd-echo" aria-label="Echo Kin">
-          <div class="pd-echo__meta">
-            <span class="pd-echo__label">Echo Kin</span>
-            {% if echo.lane %}<span class="pd-echo__lane">{{ echo.lane }}</span>{% endif %}
-            {% if echo.rarity is not none %}<span class="pd-echo__rarity">{{ echo.rarity }} rarity</span>{% endif %}
+        {% set peers = hero_row.peers if hero_row.peers is mapping else none %}
+        {% if peers and (peers.lane or (peers.matches is iterable and peers.matches|length > 0)) %}
+        <div class="pd-peers" aria-label="Peers">
+          <div class="pd-peers__meta">
+            <span class="pd-peers__label">Peers</span>
+            {% if peers.lane %}<span class="pd-peers__lane">{{ peers.lane }}</span>{% endif %}
+            {% if peers.rarity is not none %}<span class="pd-peers__rarity">{{ peers.rarity }} rarity</span>{% endif %}
           </div>
-          {% if echo.kin is iterable and echo.kin|length > 0 %}
-          <div class="pd-echo__list">
-            {% for k in echo.kin[:3] %}
-            <a class="pd-echo__kin" href="/subnet/{{ k.netuid }}">{{ k.name }} <b>SN{{ k.netuid }}</b>{% if k.lane %} <i>{{ k.lane }}</i>{% endif %}</a>
+          {% if peers.matches is iterable and peers.matches|length > 0 %}
+          <div class="pd-peers__list">
+            {% for k in peers.matches[:3] %}
+            <a class="pd-peers__match" href="/subnet/{{ k.netuid }}">{{ k.name }} <b>SN{{ k.netuid }}</b>{% if k.lane %} <i>{{ k.lane }}</i>{% endif %}</a>
             {% endfor %}
           </div>
           {% endif %}
-          {% if echo.why %}<p class="pd-echo__why">{{ echo.why }}</p>{% endif %}
+          {% if peers.why %}<p class="pd-peers__why">{{ peers.why }}</p>{% endif %}
         </div>
         {% endif %}
 
@@ -702,26 +702,26 @@
     gap: 8px;
     margin-top: 14px;
   }
-  .pd-echo {
+  .pd-peers {
     margin-top: 10px;
     padding-top: 10px;
     border-top: 1px solid rgba(148, 163, 184, 0.14);
   }
-  .pd-echo__meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .pd-echo__label {
+  .pd-peers__meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .pd-peers__label {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-size: 10px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: #94a3b8;
   }
-  .pd-echo__lane, .pd-echo__rarity {
+  .pd-peers__lane, .pd-peers__rarity {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-size: 10px;
     color: #7dd3fc;
   }
-  .pd-echo__list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-  .pd-echo__kin {
+  .pd-peers__list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .pd-peers__match {
     display: inline-flex;
     gap: 4px;
     align-items: baseline;
@@ -732,9 +732,9 @@
     text-decoration: none;
     font-size: 12px;
   }
-  .pd-echo__kin b { color: #7dd3fc; }
-  .pd-echo__kin i { font-style: normal; color: #94a3b8; font-size: 10px; }
-  .pd-echo__why { margin: 8px 0 0; font-size: 12px; line-height: 1.4; color: rgba(226, 232, 240, 0.72); }
+  .pd-peers__match b { color: #7dd3fc; }
+  .pd-peers__match i { font-style: normal; color: #94a3b8; font-size: 10px; }
+  .pd-peers__why { margin: 8px 0 0; font-size: 12px; line-height: 1.4; color: rgba(226, 232, 240, 0.72); }
   .pd-cta .home-cta { flex: 1 1 auto; text-align: center; min-width: 140px; }
 
   /* Board / ladder */
