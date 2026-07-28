@@ -1,48 +1,45 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-28T05:00:00Z  
-**main:** `31e84b1` — **#554 Phase 0** subnet names · #557 SS-TG W1 flags · ops evidence #546–#552  
-**Handoff:** `full-roadmap-master-plan.md` · `ditto-cursor-handoff.md`
+**Last updated:** 2026-07-28T06:30:00Z  
+**main:** `3ddc7e9` — #560 SN23 Trishool · #554 Phase 0 names · ops evidence #546–#552  
+**Plan:** `full-roadmap-master-plan.md`
 
-## Phase 0 — DONE (#554)
+## Phase 0 — DONE
 
-- Merged + deployed (Fly deploy OK; post-check failed resolver stale — app live)
-- SN16 → **Fast Thinker** override live (`/api/subnets` verified)
+- #554 merged + #560 SN16 Fast Thinker, SN23 Trishool overrides
 - Lock: `subnet-display-names-lock.md`
 
-**Review Gate 0 (human tick):**
-- [x] PR merged + deploy shipped code
-- [ ] Pump desk homepage + `/pump` names spot-check @390px
-- [ ] Council pick / weighed room no regression
-- [x] `/api/subnets` TMC feed + Fast Thinker SN16
-- [ ] Ditto: supersede Jul 27 pump-automation WARN memories
+## Phase 1 — IN PROGRESS (docs + human Ditto)
 
-## Ops evidence loop — DONE
+- Branch: `cursor/ditto-automation-playbook-4988`
+- Lock: `ditto-automation-migration-lock.md`
+- **Human:** disable Pump Desk Ditto fetch (`8afd9502…`); Health Monitor artifact mode
+
+## Phase 2 — PARALLEL (monitor doc)
+
+- Lock: `track1-soak-lock.md` — soak day 0 = 2026-07-28; review 2026-08-04 / 2026-08-11
+
+## Ops evidence — DONE
 
 | Piece | PR | Artifact |
 |-------|-----|----------|
-| Pick audit | **#546** | `data/pick_audits/` |
-| Pump desk snapshot | **#547** | `data/pump_desk/latest.json` |
-| Outcome snapshot | **#550** | `data/learning_outcomes/latest.json` |
-| Ops evidence API | **#550** | `GET /api/ops/evidence` |
-| Calibration | **#551** | rebase #491 |
+| Pick audit | #546 | `data/pick_audits/` |
+| Pump desk | #547 | `data/pump_desk/latest.json` |
+| Outcomes | #550 | `data/learning_outcomes/latest.json` |
+| API | #550 | `GET /api/ops/evidence` |
 
 ## Learning loop
 
-- Prod: may show `degraded` when resolver tick stale post-deploy — recovers on tick
-- LONG SN16 · worker alive
-
-## Next — Phase 1 (after Gate 0 tick)
-
-Ditto automation migration playbook — disable pump fetch automation; Health Monitor artifact mode. See `full-roadmap-master-plan.md` Phase 1.
+- Prod: monitor `degraded` when resolver stale — recovers on tick
+- Track 1 soak running under #551 calibration
 
 ## Active (monitor)
 
 | Track | Gate |
 |-------|------|
-| Track 1 soak | 7–14d (#543 + #551) |
 | Pick audit | 23:45 UTC nightly |
-| Wed Health Monitor | artifact mode |
+| Wed/Sun Health Monitor | Ditto artifact mode |
+| Track 1 soak | day 7 / day 14 sign-off |
 
 ## Out of scope
 
