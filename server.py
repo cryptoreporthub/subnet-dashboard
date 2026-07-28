@@ -1572,26 +1572,18 @@ async def preview_pump_desk_full(request: Request):
 
 @app.get("/pump")
 async def pump_desk_page(request: Request):
-    """Flagship pump desk — full Situation Room theater."""
-    from internal.subnets.feed import load_subnets_for_display
-
-    subnets = await _to_thread_timeout(
-        lambda: load_subnets_for_display(timeout=4.0),
-        5.0,
-        label="pump-page-subnets",
-    )
+    """Flagship pump desk — reuse cached pump-alerts payload (no extra subnet wedge)."""
+    payload = await _fetch_pump_alerts_payload()
     context: Dict[str, Any] = {
         "request": request,
         "public_base_url": _public_base_url(request),
+        "pump_alerts": payload,
     }
-    context.update(_pump_alerts_context(subnets))
     return templates.TemplateResponse("pump.html", context)
 
 
-@app.get("/api/pump-alerts")
-async def api_pump_alerts():
-    """Pump lane — file-backed ladder + registry enrichment; must stay sub-second."""
-
+async def _fetch_pump_alerts_payload() -> Dict[str, Any]:
+    """Shared pump desk payload — cached like GET /api/pump-alerts."""
     now = time.monotonic()
     with _PUMP_ALERTS_LOCK:
         cached = _PUMP_ALERTS_CACHE.get("payload")
@@ -1631,6 +1623,12 @@ async def api_pump_alerts():
         _PUMP_ALERTS_CACHE["at"] = time.monotonic()
         _PUMP_ALERTS_CACHE["payload"] = payload
     return payload
+
+
+@app.get("/api/pump-alerts")
+async def api_pump_alerts():
+    """Pump lane — file-backed ladder + registry enrichment; must stay sub-second."""
+    return await _fetch_pump_alerts_payload()
 
 
 # ---------------------------------------------------------------------------
