@@ -20,9 +20,20 @@ def test_has_local_volume_data_with_soul_map(tmp_path, monkeypatch):
 def test_needs_worker_volume_proxy_split_v2_web(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("DATA_DIR", "/nonexistent")
     from internal.data_volume import needs_worker_volume_proxy
 
     assert needs_worker_volume_proxy() is True
+
+
+def test_needs_worker_volume_proxy_split_v2_web_with_local_data(tmp_path, monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    (tmp_path / "soul_map.json").write_text("{}")
+    from internal.data_volume import needs_worker_volume_proxy
+
+    assert needs_worker_volume_proxy() is False
 
 
 def test_listener_status_proxies_to_worker(monkeypatch):

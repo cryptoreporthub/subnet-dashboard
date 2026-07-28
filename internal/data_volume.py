@@ -33,7 +33,12 @@ def has_local_volume_data() -> bool:
 
 
 def needs_worker_volume_proxy() -> bool:
-    """split_v2 web — always proxy volume-backed APIs to the worker machine."""
+    """split_v2 web — proxy volume-backed APIs unless local volume data is present."""
     from internal.run_mode import is_worker_mode, split_worker_v2_enabled
 
-    return split_worker_v2_enabled() and not is_worker_mode()
+    if not split_worker_v2_enabled() or is_worker_mode():
+        return False
+    # ponytail: partial v2 migration may leave volume on web — read local until worker mounts it.
+    if has_local_volume_data():
+        return False
+    return True
