@@ -20,6 +20,7 @@ SCORE_SNAPSHOTS_PATH = os.environ.get(
 _STALL_MULTIPLIER = 2
 # Snapshot grace after worker boot before reporting stale (seconds).
 _SNAPSHOT_BOOT_GRACE_S = int(os.environ.get("LEARNING_SNAPSHOT_BOOT_GRACE_SECONDS", "900"))
+_LOOP_BOOT_GRACE_S = int(os.environ.get("LEARNING_LOOP_BOOT_GRACE_SECONDS", "300"))
 _SNAPSHOT_STALE_S = int(os.environ.get("LEARNING_SNAPSHOT_STALE_SECONDS", "2700"))
 
 
@@ -381,18 +382,25 @@ def build_learning_loop_health(
     snapshot_age = score_snapshot.get("age_seconds")
     watchdog = check_resolver_watchdog(pending_rows)
     worker_peer = resolver.get("worker_peer") or {}
+    hb = worker_peer.get("heartbeat") if isinstance(worker_peer.get("heartbeat"), dict) else {}
+    hb_ts = _parse_iso(hb.get("ts"))
+    boot_grace = False
+    if hb_ts is not None:
+        boot_grace = (_utcnow() - hb_ts).total_seconds() < _LOOP_BOOT_GRACE_S
 
     status = "ok"
     if ledger["gap"]:
         status = "stalled"
     elif worker_peer.get("expected") and worker_peer.get("alive") is False:
-        status = "stalled"
+        status = "stalled" if not boot_grace else "degraded"
     elif watchdog.get("warning"):
-        status = "stalled"
+        status = "stalled" if not boot_grace else "degraded"
     elif pending > 0 and (
         tick_at is None or (tick_age_s is not None and tick_age_s > stall_after_s)
     ):
         if _machine_restarted_since_tick(worker_peer, tick_age_s) and not watchdog.get("warning"):
+            status = "degraded"
+        elif boot_grace:
             status = "degraded"
         else:
             status = "stalled"

@@ -172,9 +172,12 @@ def _maybe_start_message_intel() -> None:
         start_price_outcome_loop()
 
     # After pump first scan window — full heavy mode wedged prod with live subnets + Telegram.
-    delay = max(BOOT_DEFER_SECONDS + 60, 120)
-    defer_boot("message-intel-listeners", _listeners, delay=delay)
-    defer_boot("message-intel-outcomes", _outcomes, delay=max(delay + 30, 150))
+    listener_delay = int(os.environ.get("MESSAGE_INTEL_LISTENER_DEFER_SECONDS", str(max(BOOT_DEFER_SECONDS + 60, 120))))
+    outcome_delay = int(
+        os.environ.get("MESSAGE_INTEL_OUTCOME_DEFER_SECONDS", str(max(BOOT_DEFER_SECONDS + 30, 90)))
+    )
+    defer_boot("message-intel-listeners", _listeners, delay=listener_delay)
+    defer_boot("message-intel-outcomes", _outcomes, delay=outcome_delay)
 
 
 def _start_score_snapshot_scheduler() -> None:
@@ -240,7 +243,7 @@ def _start_outcome_snapshot_scheduler() -> None:
     def _run() -> None:
         from internal.learning.outcome_snapshot_scheduler import start_outcome_snapshot_scheduler
 
-        immediate = os.environ.get("OUTCOME_SNAPSHOT_BOOT_IMMEDIATE", "off").strip().lower() in (
+        immediate = os.environ.get("OUTCOME_SNAPSHOT_BOOT_IMMEDIATE", "on").strip().lower() in (
             "1",
             "true",
             "yes",
@@ -249,7 +252,7 @@ def _start_outcome_snapshot_scheduler() -> None:
         start_outcome_snapshot_scheduler(immediate=immediate)
         logger.info("outcome snapshot scheduler started (immediate=%s)", immediate)
 
-    defer_boot("outcome-snapshot", _run, delay=max(BOOT_DEFER_SECONDS + 60, 105))
+    defer_boot("outcome-snapshot", _run, delay=max(BOOT_DEFER_SECONDS + 30, 75))
 
 
 def start_background_workers(*, heavy: Optional[bool] = None) -> None:
