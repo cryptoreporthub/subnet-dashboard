@@ -1,7 +1,7 @@
-<!-- SS-TG final — Subnet Summers Telegram pulse (v2 layout) -->
+<!-- SS-TG flagship — Subnet Summers Telegram pulse (v2 + color-corrected cyberpunk) -->
 <section class="row message-intel message-intel--v2 wrap-pad" id="section-message-intel" aria-labelledby="message-intel-title" data-home-live>
   <div class="message-intel__topbar">
-    <span class="message-intel__brand">&gt;_ SUBNET SUMMERS</span>
+    <span class="message-intel__brand">&gt;_ SUBNET SUMMERS · <em>SIMIVISION</em></span>
     <span class="message-intel__live-pill" id="message-intel-pulse" hidden><span class="message-intel__dot" aria-hidden="true"></span>Live</span>
   </div>
 
@@ -13,7 +13,9 @@
   </p>
 
   <div class="message-intel__source-strip" id="message-intel-source-strip" aria-live="polite">
-    <span class="message-intel__wave" aria-hidden="true">∿∿∿</span>
+    <span class="message-intel__wave" aria-hidden="true">
+      <i style="height:4px"></i><i style="height:8px"></i><i style="height:5px"></i><i style="height:11px"></i><i style="height:6px"></i><i style="height:9px"></i><i style="height:4px"></i>
+    </span>
     <span class="message-intel__live-tag" id="message-intel-live-tag" hidden>Live</span>
     <span id="message-intel-meta">Loading desk…</span>
   </div>
@@ -24,9 +26,9 @@
   </div>
 
   <div class="message-intel__legend" aria-label="Scoring legend">
-    <span><b>Conv.</b> jury score 0–100%</span>
-    <span><b>High conviction</b> ≥ 60%</span>
-    <span><b>Influence</b> reach + reactions, 7d</span>
+    <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--blue" aria-hidden="true"></span><b>Conv.</b> jury score 0–100%</span>
+    <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--pink" aria-hidden="true"></span><b>High</b> ≥ 60%</span>
+    <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--orange" aria-hidden="true"></span><b>Influence</b> reach + reactions, 7d</span>
   </div>
 
   <div class="message-intel__proof" id="message-intel-proof" hidden aria-live="polite">
@@ -54,8 +56,9 @@
 
   <div class="message-intel__grid">
     <div class="message-intel__panel" id="message-intel-trending-card">
-      <div class="message-intel__panel-head">
-        <h3 class="message-intel__panel-title"><span aria-hidden="true">↗</span> Currently trending</h3>
+      <div class="message-intel__sec-label">
+        <span class="message-intel__sec-bar message-intel__sec-bar--blue" aria-hidden="true"></span>
+        <h3 class="message-intel__panel-title" id="message-intel-trending-title">Currently trending</h3>
         <span class="message-intel__panel-unit">1h</span>
       </div>
       <div id="message-intel-trending" class="message-intel__trending" aria-live="polite">
@@ -65,7 +68,8 @@
     </div>
 
     <div class="message-intel__panel" id="message-intel-champions-card">
-      <div class="message-intel__panel-head">
+      <div class="message-intel__sec-label">
+        <span class="message-intel__sec-bar message-intel__sec-bar--orange" aria-hidden="true"></span>
         <h3 class="message-intel__panel-title">Weekly champions</h3>
         <span class="message-intel__panel-unit">influence</span>
       </div>
@@ -76,8 +80,9 @@
   </div>
 
   <div class="message-intel__panel message-intel__panel--feed">
-    <div class="message-intel__panel-head">
-      <h3 class="message-intel__panel-title"><span aria-hidden="true">((•))</span> Live feed</h3>
+    <div class="message-intel__sec-label">
+      <span class="message-intel__sec-bar message-intel__sec-bar--green" aria-hidden="true"></span>
+      <h3 class="message-intel__panel-title">Live feed</h3>
       <span class="message-intel__panel-unit" id="message-intel-feed-hint">newest first</span>
     </div>
     <div class="message-intel__filter-bar" id="message-intel-filter-bar" aria-label="Feed filters">

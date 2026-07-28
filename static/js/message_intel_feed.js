@@ -643,7 +643,7 @@
           .map(function (c, i) {
             return (
               '<span class="message-intel__chip' +
-              (i < 2 ? " message-intel__chip--hot" : "") +
+              (i === 0 ? " message-intel__chip--hot" : "") +
               '">' +
               esc(c) +
               "</span>"
@@ -685,7 +685,8 @@
         '<div class="message-intel__trend-row">' +
         '<span class="message-intel__rank ' +
         rankClass(rank) +
-        '">#' +
+        '">' +
+        (rank < 10 ? "0" : "") +
         rank +
         "</span>" +
         '<span class="message-intel__t-icon" aria-hidden="true">' +
@@ -741,10 +742,11 @@
         '<div class="message-intel__champ-row">' +
         '<span class="message-intel__rank ' +
         rankClass(rank) +
-        '">#' +
+        '">' +
+        (rank < 10 ? "0" : "") +
         rank +
         "</span>" +
-        '<span class="message-intel__avatar" aria-hidden="true">' +
+        '<span class="message-intel__champ-avatar" aria-hidden="true">' +
         esc(row.initials || initialLetter(row.author_name)) +
         "</span>" +
         '<div class="message-intel__champ-body">' +
@@ -793,6 +795,8 @@
       var verdict = row.verdict || {};
       var analysis = row.analysis || {};
       var label = sentimentLabel(analysis, verdict);
+      var railClass =
+        label === "bullish" ? "is-bull" : label === "bearish" ? "is-bear" : "is-neu";
       var conv = verdict.conviction != null ? Math.round(Number(verdict.conviction)) : null;
       var direction = String(verdict.predicted_direction || "").toLowerCase();
       var dirArrow =
@@ -807,9 +811,13 @@
       var netuids = parseEntities(analysis);
       var why = signalChips(analysis, verdict);
       html +=
-        '<article class="message-intel__feed-row message-intel__feed-row--clickable" data-msg-id="' +
+        '<article class="message-intel__feed-row message-intel__feed-row--clickable ' +
+        railClass +
+        '" data-msg-id="' +
         esc(row.id) +
         '" tabindex="0" role="button">' +
+        '<div class="message-intel__rail-node" aria-hidden="true"></div>' +
+        '<div class="message-intel__feed-body">' +
         '<div class="message-intel__feed-top">' +
         '<span class="message-intel__f-avatar" aria-hidden="true">' +
         esc(initialLetter(author)) +
@@ -823,7 +831,13 @@
         esc(label.toUpperCase()) +
         "</span>" +
         (conv != null
-          ? '<span class="message-intel__f-conv">' + esc(conv) + "% conv" + dirArrow + "</span>"
+          ? '<span class="message-intel__f-conv' +
+            (conv >= 60 ? " message-intel__f-conv--high" : "") +
+            '">' +
+            esc(conv) +
+            "% conv" +
+            dirArrow +
+            "</span>"
           : "") +
         '<span class="message-intel__f-time">' +
         esc(fmtTime(row.timestamp)) +
@@ -837,12 +851,21 @@
       html += "</p>";
       if (why.length) {
         html +=
-          '<div class="message-intel__signal-strip"><span class="message-intel__why-label">Why:</span>' +
+          '<div class="message-intel__signal-strip"><span class="message-intel__why-label">WHY</span>' +
           why
             .map(function (c, i) {
+              var hitClass = "";
+              if (i === 0) {
+                hitClass =
+                  label === "bearish"
+                    ? " message-intel__sig-chip--hit-orange"
+                    : label === "bullish"
+                      ? " message-intel__sig-chip--hit-blue"
+                      : " message-intel__sig-chip--hit-blue";
+              }
               return (
                 '<span class="message-intel__sig-chip' +
-                (i === 0 && label === "bearish" ? " message-intel__sig-chip--hit" : "") +
+                hitClass +
                 '">' +
                 esc(c) +
                 "</span>"
@@ -851,7 +874,7 @@
             .join("") +
           "</div>";
       }
-      html += "</article>";
+      html += "</div></article>";
     });
     html += "</div>";
     return html;

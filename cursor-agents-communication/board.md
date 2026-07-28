@@ -61,6 +61,7 @@ Babysit: `./scripts/babysit_phase.sh <phase>`
 | Health Monitor | Ditto artifact mode |
 | Track 1 soak | day 7 / day 14 sign-off (`track-1-soak-review-lock.md`) |
 | SS-TG Gate 3 | 390px sign-off |
+| **SS-TG visual flagship** | P1–P4 in flight — green/blue/orange lead, pink sparse; sitewide color deferred |
 | **Phase C enable** | human: `./scripts/fly_enable_worker_v2.sh` after volume on worker |
 
 ## Out of scope
