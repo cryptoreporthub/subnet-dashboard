@@ -1316,7 +1316,7 @@
       '<a class="pds-hero__name" href="/subnet/' +
       esc(row.netuid) +
       '">' +
-      esc(row.name || '') +
+      esc(pumpRowDisplayName(row)) +
       ' <b>SN' +
       esc(row.netuid) +
       '</b></a>' +
@@ -1413,7 +1413,7 @@
       esc(shortBadge) +
       '</span>' +
       '<span class="pds-ladder__name">' +
-      esc(row.name || '') +
+      esc(pumpRowDisplayName(row)) +
       ' <b>SN' +
       esc(row.netuid) +
       '</b></span>' +
@@ -1554,7 +1554,7 @@
       '<div class="pd-lead__who"><a class="pd-lead__name" href="/subnet/' +
       esc(row.netuid) +
       '">' +
-      esc(row.name || '') +
+      esc(pumpRowDisplayName(row)) +
       ' <b class="pd-lead__sn">SN' +
       esc(row.netuid) +
       '</b></a>' +
@@ -1602,6 +1602,11 @@
     );
   }
 
+  function pumpRowDisplayName(row) {
+    if (!row) return '';
+    return resolveSubnetDisplayName({ name: row.name, netuid: row.netuid }, row.netuid);
+  }
+
   function renderPumpDeskRow(row, tone) {
     var formPct =
       row.formation_pct != null
@@ -1640,7 +1645,7 @@
       esc(shortBadge) +
       '</span>' +
       '<span class="pd-r__name">' +
-      esc(row.name || '') +
+      esc(pumpRowDisplayName(row)) +
       ' <b class="pd-r__sn">SN' +
       esc(row.netuid) +
       '</b></span></div>' +
@@ -1871,7 +1876,7 @@
       var timing = String(row.timing || 'confirmed');
       var phase = String(row.phase || '').toLowerCase();
       var badge = String(row.badge || '').toLowerCase().replace(/\s+/g, '-');
-      var name = esc(row.name || '');
+      var name = esc(pumpRowDisplayName(row));
       var sn = row.netuid != null ? ' <span class="pump-alert__sn">SN' + esc(row.netuid) + '</span>' : '';
       html +=
         '<article class="pump-alert__card pump-alert__card--' +

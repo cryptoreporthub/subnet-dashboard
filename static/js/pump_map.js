@@ -39,6 +39,16 @@
     return Math.max(0, Math.min(100, Math.round(Number(row.score) * 100)));
   }
 
+  function rowLabel(row) {
+    if (window.SubnetNameRegistry && window.SubnetNameRegistry.resolve) {
+      return window.SubnetNameRegistry.resolve(
+        { name: row.name, netuid: row.netuid },
+        row.netuid
+      );
+    }
+    return row.name || (row.netuid != null ? 'SN' + row.netuid : '');
+  }
+
   function deskRow(row, tone) {
     var pct = formationPct(row);
     var sn = row.netuid != null ? 'SN' + row.netuid : '';
@@ -66,7 +76,7 @@
       esc(shortBadge) +
       '</span>' +
       '<span class="pd-r__name">' +
-      esc(row.name || sn) +
+      esc(rowLabel(row)) +
       ' <b class="pd-r__sn">' +
       esc(sn) +
       '</b></span></div>' +

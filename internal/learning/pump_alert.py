@@ -64,18 +64,14 @@ def _resolve_name(
         return "subnet"
 
     try:
-        from internal.subnet_names import resolve_subnet_name
+        from internal.subnet_names import display_name_for_netuid
 
         ladder_hint = _label_hint(ladder_entry)
-        row_hint = _label_hint(subnet_row)
-        hint = ladder_hint or row_hint
-        resolved = resolve_subnet_name(netuid_int, tmc_name=hint, use_taostats=False)
-        if row_hint and not ladder_hint:
-            registry_only = resolve_subnet_name(netuid_int, tmc_name=None, use_taostats=False)
-            if row_hint != registry_only and not _BAD_NAME.match(row_hint):
-                return row_hint
-        if resolved and not _BAD_NAME.match(resolved):
-            return resolved
+        return display_name_for_netuid(
+            netuid_int,
+            subnet_row=subnet_row,
+            ladder_hint=ladder_hint,
+        )
     except Exception:
         pass
     return f"SN{netuid_int}"
