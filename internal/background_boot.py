@@ -189,6 +189,21 @@ def _maybe_start_message_intel() -> None:
     defer_boot("message-intel-listeners", _listeners, delay=listener_delay)
 
 
+def _maybe_start_summary_bot() -> None:
+    """SS-TG W6 — Bot API /summary (independent of Telethon MESSAGE_INTEL_LISTENER)."""
+    from internal.message_intel.summary_bot import summary_bot_enabled, start_summary_bot
+
+    if not summary_bot_enabled():
+        return
+    if not os.environ.get("TELEGRAM_BOT_TOKEN", "").strip():
+        return
+
+    def _run() -> None:
+        start_summary_bot()
+
+    defer_boot("telegram-summary-bot", _run, delay=max(BOOT_DEFER_SECONDS + 15, 60))
+
+
 def _start_score_snapshot_scheduler() -> None:
     """Phase 2 — full-universe scores off the hot path (essential / worker)."""
 
@@ -302,6 +317,7 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _start_outcome_snapshot_scheduler()
 
     _maybe_start_message_intel()
+    _maybe_start_summary_bot()
 
     if not heavy:
         logger.info("background workers: essential mode (heavy feeds skipped)")
@@ -324,6 +340,12 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
 
 
 def stop_background_workers() -> None:
+    try:
+        from internal.message_intel.summary_bot import stop_summary_bot
+
+        stop_summary_bot()
+    except Exception:
+        pass
     try:
         from internal.message_intel.listener_service import stop_message_intel_listeners
 
