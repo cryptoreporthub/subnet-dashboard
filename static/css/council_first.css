@@ -1266,7 +1266,7 @@ button.home-cta {
 }
 }
 
-/* SS-TG v2 — telegram-pulse flagship (green/blue/orange lead, pink sparse) */
+/* SS-TG v2 — telegram-pulse flagship (yellow board frame; green/blue/orange lead, pink sparse) */
 .message-intel--v2 {
   --mi-green: #1fd47c;
   --mi-green-dim: #0f5a38;
@@ -1279,12 +1279,26 @@ button.home-cta {
   --mi-orange-glow: rgba(255, 159, 63, 0.4);
   --mi-pink: #ff3d9a;
   --mi-pink-glow: rgba(255, 61, 154, 0.35);
+  --mi-yellow: #f5d547;
+  --mi-yellow-glow: rgba(245, 213, 71, 0.45);
   --mi-line: rgba(255, 255, 255, 0.07);
   --mi-line-soft: rgba(255, 255, 255, 0.045);
   --mi-text: #eef7f1;
   --mi-text-dim: #8ba598;
   --mi-text-faint: #4f6459;
   --mi-bg-card: #090d0b;
+  /* Flagship board — yellow frame separates Summers from green site chrome */
+  border: 2px solid rgba(245, 213, 71, 0.72);
+  border-radius: 18px;
+  padding: 20px clamp(14px, 3vw, 22px) 22px;
+  margin-top: 1.25rem;
+  margin-bottom: 1.75rem;
+  background:
+    linear-gradient(180deg, rgba(245, 213, 71, 0.07) 0%, transparent 32%),
+    rgba(6, 10, 8, 0.94);
+  box-shadow:
+    0 0 42px -16px var(--mi-yellow-glow),
+    0 0 0 1px rgba(245, 213, 71, 0.14) inset;
 }
 .message-intel--v2 .message-intel__group-link {
   color: var(--mi-blue);
@@ -1297,6 +1311,7 @@ button.home-cta {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 16px;
 }
@@ -1311,10 +1326,24 @@ button.home-cta {
   padding: 0;
   border-radius: 0;
   min-width: 0;
+  flex: 1 1 auto;
 }
 .message-intel--v2 .message-intel__brand em {
   color: var(--mi-green);
   font-style: normal;
+}
+.message-intel--v2 .message-intel__flagship-chip {
+  font-family: var(--font-mono, monospace);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--mi-yellow);
+  border: 1px solid rgba(245, 213, 71, 0.55);
+  background: rgba(245, 213, 71, 0.1);
+  padding: 4px 9px;
+  border-radius: 4px;
+  box-shadow: 0 0 14px -6px var(--mi-yellow-glow);
+  flex-shrink: 0;
 }
 .message-intel--v2 .message-intel__live-pill {
   display: inline-flex;

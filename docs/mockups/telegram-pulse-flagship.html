@@ -29,6 +29,9 @@
     --orange-dim: #7a4315;
     --orange-glow: rgba(255,159,63,0.4);
 
+    --yellow: #f5d547;
+    --yellow-glow: rgba(245,213,71,0.45);
+
     --text: #eef7f1;
     --text-dim: #8ba598;
     --text-faint: #4f6459;
@@ -61,12 +64,27 @@
   }
   .preview-banner b{ color:var(--text-dim); font-weight:600; }
 
-  .topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; gap:10px; }
+  .flagship-board{
+    border:2px solid rgba(245,213,71,0.72);
+    border-radius:18px;
+    padding:18px 14px 20px;
+    background:
+      linear-gradient(180deg, rgba(245,213,71,0.07) 0%, transparent 32%),
+      rgba(6,10,8,0.94);
+    box-shadow:0 0 42px -16px var(--yellow-glow), 0 0 0 1px rgba(245,213,71,0.14) inset;
+  }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:20px; gap:10px; }
   .brand{
     font-family:var(--mono); font-size:10.5px; letter-spacing:0.16em; font-weight:600;
-    color:var(--text-dim); min-width:0;
+    color:var(--text-dim); min-width:0; flex:1 1 auto;
   }
   .brand em{ color:var(--green); font-style:normal; }
+  .flagship-chip{
+    font-family:var(--mono); font-size:9.5px; font-weight:700; letter-spacing:0.12em;
+    color:var(--yellow); border:1px solid rgba(245,213,71,0.55);
+    background:rgba(245,213,71,0.1); padding:4px 9px; border-radius:4px;
+    box-shadow:0 0 14px -6px var(--yellow-glow); flex-shrink:0;
+  }
   .live-pill{
     display:inline-flex; align-items:center; justify-content:center; gap:6px;
     min-width:92px;
@@ -351,12 +369,14 @@
 <div class="wrap">
 
   <div class="preview-banner">
-    <b>PREVIEW</b> · color-corrected flagship · green/blue/orange lead · pink sparse ·
+    <b>PREVIEW</b> · yellow flagship board · green/blue/orange lead · pink sparse ·
     try LIVE, filters, and tap a feed row
   </div>
 
+  <div class="flagship-board">
   <div class="topbar">
     <div class="brand">&gt;_ SUBNET SUMMERS · <em>SIMIVISION</em></div>
+    <span class="flagship-chip">FLAGSHIP</span>
     <button type="button" class="live-pill" id="livePill" aria-pressed="true"><span class="dot"></span>LIVE</button>
   </div>
 
@@ -520,7 +540,8 @@
     <p class="empty" id="feedEmpty">No messages match these filters. Try a lower conviction threshold or clear the subnet filter.</p>
   </div>
 
-  <p class="foot-note">Conviction is auto-scored from message text and author track record — not financial advice.<br>Interactive mock · color ratios locked for implement</p>
+  <p class="foot-note">Conviction is auto-scored from message text and author track record — not financial advice.<br>Interactive mock · yellow flagship board · color ratios locked for implement</p>
+  </div><!-- /.flagship-board -->
 </div>
 
 <div class="toast" id="toast" role="status"></div>
