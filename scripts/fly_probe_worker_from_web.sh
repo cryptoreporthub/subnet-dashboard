@@ -47,12 +47,4 @@ else
   TARGET="http://${WORKER_ID}.vm.${APP}.internal:8080/api/ops/worker-peer"
 fi
 echo "fly_probe_worker_from_web: web=$WEB_ID worker=$WORKER_ID target=$TARGET"
-flyctl machine exec "$WEB_ID" -a "$APP" -- python -c "
-import requests
-url = '$TARGET'
-try:
-    r = requests.get(url, headers={'X-Worker-Proxy': '1'}, timeout=8)
-    print(r.status_code, r.text[:300])
-except Exception as e:
-    print('ERR', e)
-" || echo "WARN: exec probe failed"
+flyctl machine exec "$WEB_ID" -a "$APP" -- sh -c "python -c \"import requests; r=requests.get('$TARGET', headers={'X-Worker-Proxy':'1'}, timeout=8); print(r.status_code, r.text[:300])\"" || echo "WARN: exec probe failed"

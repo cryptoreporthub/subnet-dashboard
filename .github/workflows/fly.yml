@@ -139,27 +139,6 @@ jobs:
           FLY_APP=subnet-dashboard ./scripts/fly_web_recover.sh
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Set worker internal URL (vm DNS)
-        run: |
-          chmod +x scripts/fly_set_worker_internal_url.sh
-          FLY_APP=subnet-dashboard ./scripts/fly_set_worker_internal_url.sh
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FORCE_WORKER_SPLIT_V2: "1"
-      - name: Probe worker from web (diagnostic)
-        continue-on-error: true
-        run: |
-          chmod +x scripts/fly_probe_worker_from_web.sh
-          FLY_APP=subnet-dashboard ./scripts/fly_probe_worker_from_web.sh
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Probe worker HTTP from web machine
-        continue-on-error: true
-        run: |
-          chmod +x scripts/fly_probe_worker_from_web.sh
-          FLY_APP=subnet-dashboard ./scripts/fly_probe_worker_from_web.sh
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Repair v2 volume placement (post-deploy if still on web)
         run: |
           chmod +x scripts/fly_v2_volume_repair.sh
@@ -213,6 +192,20 @@ jobs:
             echo "GUARD FAIL: public /health did not return 200 within ~2.5m"
             exit 1
           fi
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Set worker internal URL (6PN private_ip)
+        run: |
+          chmod +x scripts/fly_set_worker_internal_url.sh
+          FLY_APP=subnet-dashboard ./scripts/fly_set_worker_internal_url.sh
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FORCE_WORKER_SPLIT_V2: "1"
+      - name: Probe worker from web (diagnostic)
+        continue-on-error: true
+        run: |
+          chmod +x scripts/fly_probe_worker_from_web.sh
+          FLY_APP=subnet-dashboard ./scripts/fly_probe_worker_from_web.sh
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Warm production caches
