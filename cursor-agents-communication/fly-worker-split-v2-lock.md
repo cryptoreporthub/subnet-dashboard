@@ -1,27 +1,28 @@
 # Fly worker split v2 — LOCK
 
-**Status:** PREP DONE (#566) · **enablement in flight** (`cursor/phase-c-enable-v2-4988`)  
-**Branch:** `cursor/phase-c-enable-v2-4988`  
-**Canon:** `docs/fly-web-worker-split.md` § v2 · `fly.worker-v2.toml`
+**Status:** **ENABLED on prod** · stabilize worker HTTP (#572–#578, #576–#577, this track)  
+**Canon:** `docs/fly-web-worker-split.md` § v2 · `fly.worker-v2.toml` · `split-v2-rollback-runbook.md` (Plan B only)
 
-## Scope
+## Shipped
 
-| Item | Detail |
-|------|--------|
-| C1 | `WORKER_SPLIT_V2=on` disables inline worker; `processes.worker` runs `fly_worker_entrypoint.sh` |
-| C2 | Volume attaches to **worker** only (`fly.worker-v2.toml` `[mounts]` processes) |
-| C3 | `worker_mode: split_v2` in readiness when flag on |
-| C4 | Rollback: `WORKER_SPLIT_V2=off`, scale `worker=0`, redeploy `fly.toml` |
-| C5 | GHA/recover skip worker destroy when `WORKER_SPLIT_V2` secret set |
+| PR | What |
+|----|------|
+| #566 | Prep env-gated |
+| #572–#574 | Enable workflow + plumbing |
+| #576–#577 | Volume proxy web → worker |
+| #578 | `internal/worker_peer.py` HTTP probe (`1d2f`) |
+| #579+ | Worker flycast `[[services]]` + `/api/ops/worker-peer` |
 
-## Prod default
+## Prod
 
-**v1 inline worker remains default** (`fly.toml`). Enable via human:
+- `worker_mode: split_v2` · `web=1 worker=1`
+- Web proxies `/api/pump-alerts` + `/api/message-intel*` to worker
+- Web probes worker via `http://subnet-dashboard.flycast:8080/api/ops/worker-peer`
 
-```bash
-chmod +x scripts/fly_enable_worker_v2.sh
-./scripts/fly_enable_worker_v2.sh
-```
+## Do not
+
+- Rollback without `split-v2-rollback-runbook.md` gates + human approve
+- Duplicate `worker_peer.py` or second heartbeat PR
 
 ## Babysit
 
@@ -29,4 +30,4 @@ chmod +x scripts/fly_enable_worker_v2.sh
 BASE=https://subnet-dashboard.fly.dev ./scripts/babysit_phase.sh c
 ```
 
-Expect `worker_mode: split_v2` on web after enable; `worker_peer.alive` may be `null` on web (no shared volume).
+Expect `worker_peer.alive: true` (source `http`) on web readiness.

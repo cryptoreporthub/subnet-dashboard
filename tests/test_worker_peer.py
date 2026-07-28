@@ -53,6 +53,41 @@ def test_worker_peer_dedicated_worker_reads_file(monkeypatch, tmp_path):
     assert peer["source"] == "file"
 
 
+def test_fetch_worker_json_sync_retries_second_base(monkeypatch):
+    monkeypatch.delenv("WORKER_INTERNAL_URL", raising=False)
+    calls = []
+
+    class _Resp:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True}
+
+    class _Client:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url, headers=None):
+            calls.append(url)
+            if len(calls) == 1:
+                raise OSError("first base failed")
+            return _Resp()
+
+    monkeypatch.setattr("httpx.Client", _Client)
+    from internal.worker_proxy import fetch_worker_json_sync
+
+    out = fetch_worker_json_sync("/api/ops/worker-peer", timeout=2)
+    assert out.get("ok") is True
+    assert len(calls) == 2
+
+
 def test_ops_live_split_v2_uses_http_peer(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")
