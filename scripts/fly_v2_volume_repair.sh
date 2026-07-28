@@ -55,8 +55,8 @@ if [ -z "$vol_id" ]; then
   exit 0
 fi
 
-if [ -z "$web_id" ] || [ -z "$worker_id" ]; then
-  echo "fly_v2_volume_repair: need web=1 worker=1 — skip"
+if [ -z "$web_id" ]; then
+  echo "fly_v2_volume_repair: no web machine — skip"
   exit 0
 fi
 
