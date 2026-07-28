@@ -118,6 +118,10 @@ def test_worker_mode_label_split(monkeypatch):
     monkeypatch.setenv("INLINE_WORKER", "1")
     assert worker_mode_label() == "split"
 
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("INLINE_WORKER", "0")
+    assert worker_mode_label() == "split_v2"
+
 
 def test_pump_inline_defer_seconds_default(monkeypatch):
     monkeypatch.delenv("PUMP_LADDER_INLINE_DEFER_SECONDS", raising=False)
@@ -172,4 +176,4 @@ def test_ops_readiness_worker_mode_field():
     resp = client.get("/api/ops/readiness")
     assert resp.status_code == 200
     body = resp.json()
-    assert body.get("worker_mode") in ("web", "worker", "combined", "split")
+    assert body.get("worker_mode") in ("web", "worker", "combined", "split", "split_v2")

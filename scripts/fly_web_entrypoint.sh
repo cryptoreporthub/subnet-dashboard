@@ -10,6 +10,12 @@ _start_inline_worker() {
   case "${ENABLE_INLINE_WORKER:-1}" in
     0|false|no|off) return 0 ;;
   esac
+  case "${WORKER_SPLIT_V2:-0}" in
+    1|true|yes|on)
+      echo "WORKER_SPLIT_V2=on — skipping inline worker (dedicated worker process group)"
+      return 0
+      ;;
+  esac
   if [ -f "$INLINE_WORKER_PIDFILE" ]; then
     old_pid="$(cat "$INLINE_WORKER_PIDFILE" 2>/dev/null || true)"
     if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then

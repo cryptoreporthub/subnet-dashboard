@@ -91,6 +91,24 @@ Verify after deploy:
 ```bash
 curl -s https://subnet-dashboard.fly.dev/api/ops/readiness | jq '{worker_mode, worker_peer, resolver}'
 # expect: worker_mode "split", worker_peer.alive true, resolver.running true
+
+### Worker split v2 (opt-in, not default)
+
+Set `WORKER_SPLIT_V2=on` only after attaching `data_volume` to the **worker** machine (web has no volume — read-only APIs).
+
+```bash
+# 1. Scale worker process group (after deploy with processes.worker in fly.toml)
+fly scale count web=1 worker=1 --app subnet-dashboard
+
+# 2. Enable v2 (disables inline worker on web)
+fly secrets set WORKER_SPLIT_V2=on --app subnet-dashboard
+
+# Rollback: scale worker=0, WORKER_SPLIT_V2=off, redeploy
+fly scale count worker=0 --app subnet-dashboard
+fly secrets set WORKER_SPLIT_V2=off --app subnet-dashboard
+```
+
+See `cursor-agents-communication/fly-worker-split-v2-lock.md`.
 ```
 
 ---

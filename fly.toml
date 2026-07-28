@@ -9,8 +9,9 @@ primary_region = "sjc"
 
 [processes]
   web = "./scripts/fly_web_entrypoint.sh"
-  # v1: inline worker subprocess in fly_web_entrypoint.sh (one machine, one volume).
-  # Do NOT add a separate worker process group — it steals HTTP without volume strategy.
+  # v2 (opt-in): dedicated worker machine — requires WORKER_SPLIT_V2=on + volume on worker only.
+  # Default prod stays v1 inline worker (one machine, one volume).
+  worker = "./scripts/fly_worker_entrypoint.sh"
 
 [http_service]
   internal_port = 8080
@@ -34,6 +35,8 @@ primary_region = "sjc"
   BACKGROUND_ON_WEB = "off"
   INLINE_WORKER = "1"
   ENABLE_INLINE_WORKER = "1"
+  # v2 split: off in prod until volume attach on worker machine is confirmed (see DEPLOY.md).
+  WORKER_SPLIT_V2 = "off"
   # essential = pump/resolver/whale on worker; full adds live-subnet wedge (2GB+ only).
   WORKER_HEAVY = "essential"
   # Keep prod boot light; Telegram needs a live session on the volume.
