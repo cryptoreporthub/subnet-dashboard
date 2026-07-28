@@ -1,8 +1,27 @@
 # Subnet Dashboard Coordination Board
 
+<<<<<<< HEAD
 **Last updated:** 2026-07-28T06:30:00Z  
 **main:** `3ddc7e9` — #560 SN23 Trishool · #554 Phase 0 names · ops evidence #546–#552  
 **Plan:** `full-roadmap-master-plan.md`
+=======
+**Last updated:** 2026-07-28T06:35:00Z  
+**main:** `ce41ed0` — sprint plan #559 · audit #555–#557 · SS-TG W0–W3  
+**Handoff:** `post-audit-sprint-plan.md` · `ditto-cursor-handoff.md`
+
+## Post-audit sprint — ACTIVE
+
+| Phase | Status | Lock |
+|-------|--------|------|
+| **A** Ops quick wins | **in flight** | `ops-quick-wins-lock.md` |
+| B Outcome boot polish | queued | `outcome-boot-polish-lock.md` |
+| C Worker split v2 | queued | `fly-worker-split-v2-lock.md` |
+| D Security housekeeping | queued | |
+| E–G SS-TG W4–W6 | queued | `subnet-summers-telegram-lock.md` |
+| H Soak review | monitor | |
+
+Babysit: `./scripts/babysit_phase.sh <phase>`
+>>>>>>> 804d0ee (docs: Phase A DEPLOY + board sync)
 
 ## Phase 0 — DONE
 
