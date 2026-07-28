@@ -37,7 +37,7 @@ def test_worker_peer_split_v2_web_http_unreachable(monkeypatch):
 
         peer = get_worker_peer()
     assert peer["alive"] is False
-    assert peer["note"] == "worker_http_unreachable"
+    assert peer["note"].startswith("worker_http_unreachable")
 
 
 def test_worker_peer_dedicated_worker_reads_file(monkeypatch, tmp_path):

@@ -45,12 +45,22 @@ def _remote_peer(*, max_age_seconds: int) -> Dict[str, Any]:
                 }
     except Exception as exc:
         logger.debug("worker peer HTTP probe failed: %s", exc)
+        from internal.worker_proxy import last_worker_probe_error
+
+        detail = last_worker_probe_error() or str(exc)
+        return {
+            "expected": True,
+            "alive": False,
+            "peer": "dedicated_worker",
+            "source": "http",
+            "note": f"worker_http_unreachable: {detail[:200]}",
+        }
     return {
         "expected": True,
         "alive": False,
         "peer": "dedicated_worker",
         "source": "http",
-        "note": "worker_http_unreachable",
+        "note": "worker_http_unreachable: unexpected_peer_response",
     }
 
 
