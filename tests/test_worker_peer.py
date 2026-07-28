@@ -54,34 +54,44 @@ def test_worker_peer_dedicated_worker_reads_file(monkeypatch, tmp_path):
     assert peer["source"] == "file"
 
 
+def _mock_async_client_factory(calls, handler):
+    class _Client:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url, headers=None):
+            return handler(calls, url)
+
+    return _Client
+
+
 def test_fetch_worker_json_sync_retries_second_base(monkeypatch):
     monkeypatch.setenv("WORKER_INTERNAL_URL", "http://bad.internal:8080")
     calls = []
 
     class _Resp:
+        status_code = 200
+        request = None
+
         def raise_for_status(self):
             return None
 
         def json(self):
             return {"ok": True}
 
-    class _Client:
-        def __init__(self, *a, **k):
-            pass
+    def _handler(calls, url):
+        calls.append(url)
+        if len(calls) == 1:
+            raise OSError("first base failed")
+        return _Resp()
 
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def get(self, url, headers=None):
-            calls.append(url)
-            if len(calls) == 1:
-                raise OSError("first base failed")
-            return _Resp()
-
-    monkeypatch.setattr("httpx.Client", _Client)
+    monkeypatch.setattr("httpx.AsyncClient", _mock_async_client_factory(calls, _handler))
     from internal.worker_proxy import fetch_worker_json_sync
 
     out = fetch_worker_json_sync("/api/ops/worker-peer", timeout=2)
@@ -104,6 +114,9 @@ def test_worker_peer_route_404_on_web(monkeypatch):
 def test_fetch_worker_json_sync_skips_web_misroute(monkeypatch):
     monkeypatch.setenv("WORKER_INTERNAL_URL", "http://bad.internal:8080")
     monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
+    import internal.worker_proxy as wp
+
+    wp._LAST_GOOD_BASE = None
     calls = []
 
     class _Resp:
@@ -122,32 +135,60 @@ def test_fetch_worker_json_sync_skips_web_misroute(monkeypatch):
                 }
             }
 
-    class _Client:
-        def __init__(self, *a, **k):
-            pass
+    def _handler(calls, url):
+        calls.append(url)
+        if "bad.internal" in url:
+            return _Resp()
+        good = _Resp()
+        good.json = lambda: {
+            "worker_peer": {"alive": True, "source": "file", "peer": "dedicated_worker"}
+        }
+        return good
 
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def get(self, url, headers=None):
-            calls.append(url)
-            if "bad.internal" in url:
-                return _Resp()
-            good = _Resp()
-            good.json = lambda: {
-                "worker_peer": {"alive": True, "source": "file", "peer": "dedicated_worker"}
-            }
-            return good
-
-    monkeypatch.setattr("httpx.Client", _Client)
+    monkeypatch.setattr("httpx.AsyncClient", _mock_async_client_factory(calls, _handler))
     from internal.worker_proxy import fetch_worker_json_sync
 
     out = fetch_worker_json_sync("/api/ops/live", timeout=2)
     assert out["worker_peer"]["alive"] is True
     assert len(calls) == 2
+
+
+def test_fetch_worker_json_sync_from_async_context(monkeypatch):
+    """Peer probe runs inside FastAPI async routes — must not call asyncio.run inline."""
+    monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
+    import internal.worker_proxy as wp
+
+    wp._LAST_GOOD_BASE = None
+    calls = []
+
+    class _Resp:
+        status_code = 200
+        request = None
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"worker_peer": {"alive": True, "source": "file", "peer": "dedicated_worker"}}
+
+    async def _handler(calls, url):
+        calls.append(url)
+        return _Resp()
+
+    async def _mock_fetch(path, query="", timeout=12):
+        return await _handler(calls, path)
+
+    monkeypatch.setattr(wp, "_fetch_worker_http", _mock_fetch)
+
+    async def _route():
+        from internal.worker_proxy import fetch_worker_json_sync
+
+        return fetch_worker_json_sync("/api/ops/live", timeout=2)
+
+    import asyncio
+
+    out = asyncio.run(_route())
+    assert out["worker_peer"]["alive"] is True
 
 
 def test_ops_live_split_v2_uses_http_peer(monkeypatch):

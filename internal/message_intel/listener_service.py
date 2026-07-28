@@ -43,7 +43,7 @@ def _has_telegram_creds() -> bool:
 
 def _worker_heavy_enabled() -> bool:
     flag = os.environ.get("WORKER_HEAVY", "essential").strip().lower()
-    return flag in ("1", "true", "yes", "on", "full")
+    return flag in ("1", "true", "yes", "on", "full", "essential")
 
 
 def _has_session_file() -> bool:

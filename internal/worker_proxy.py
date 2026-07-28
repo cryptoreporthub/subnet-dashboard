@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import logging
 import os
 from typing import Any, Dict, List, Optional
@@ -78,30 +80,39 @@ def should_proxy_path(path: str) -> bool:
     return path.startswith("/api/message-intel")
 
 
-def fetch_worker_json_sync(path: str, *, timeout: Optional[float] = None) -> Dict[str, Any]:
-    """Sync GET for listener_status and worker peer probes (retries alternate bases)."""
-    if timeout is None:
-        timeout = float(os.environ.get("WORKER_PROXY_TIMEOUT_SECONDS", "10"))
+async def _fetch_worker_http(path: str, *, query: str = "", timeout: float) -> httpx.Response:
+    """GET worker internal HTTP — same AsyncClient path as volume proxy middleware."""
     last_exc: Optional[BaseException] = None
     for base in worker_internal_bases():
         url = f"{base}{path}"
+        if query:
+            url = f"{url}?{query}"
         try:
-            with httpx.Client(timeout=timeout) as client:
-                resp = client.get(url, headers={"X-Worker-Proxy": "1"})
-            resp.raise_for_status()
-            data = resp.json()
-            if not isinstance(data, dict):
-                data = {}
-            if _is_web_misroute(data, path):
-                logger.debug("worker HTTP misroute (web) %s", url)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.get(url, headers={"X-Worker-Proxy": "1"})
+            if resp.status_code in (404, 502, 503):
+                logger.debug("worker HTTP %s status %s", url, resp.status_code)
                 last_exc = httpx.HTTPStatusError(
-                    "web misroute",
+                    f"status {resp.status_code}",
                     request=resp.request,
                     response=resp,
                 )
                 continue
+            resp.raise_for_status()
+            try:
+                data = resp.json()
+                if isinstance(data, dict) and _is_web_misroute(data, path):
+                    logger.debug("worker HTTP misroute (web) %s", url)
+                    last_exc = httpx.HTTPStatusError(
+                        "web misroute",
+                        request=resp.request,
+                        response=resp,
+                    )
+                    continue
+            except Exception:
+                pass
             _record_good_base(base)
-            return data
+            return resp
         except httpx.HTTPStatusError as exc:
             last_exc = exc
             if exc.response.status_code in (404, 502, 503):
@@ -113,39 +124,48 @@ def fetch_worker_json_sync(path: str, *, timeout: Optional[float] = None) -> Dic
             logger.debug("worker HTTP %s failed: %s", url, exc)
     if last_exc is not None:
         raise last_exc
-    return {}
+    raise OSError("no worker HTTP base succeeded")
+
+
+def _run_coro_sync(coro) -> Any:
+    """Run async fetch from sync or FastAPI async handlers (no nested asyncio.run)."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    # ponytail: ops/live is async — asyncio.run there raises; thread pool is the smallest fix.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
+def fetch_worker_json_sync(path: str, *, timeout: Optional[float] = None) -> Dict[str, Any]:
+    """Sync GET for listener_status and worker peer probes (retries alternate bases)."""
+    if timeout is None:
+        timeout = float(os.environ.get("WORKER_PROXY_TIMEOUT_SECONDS", "12"))
+
+    async def _load() -> Dict[str, Any]:
+        resp = await _fetch_worker_http(path, timeout=timeout)
+        data = resp.json()
+        return data if isinstance(data, dict) else {}
+
+    return _run_coro_sync(_load())
 
 
 async def proxy_get_to_worker(request: Request) -> Response:
     path = request.url.path
     query = request.url.query
     timeout = float(os.environ.get("WORKER_PROXY_TIMEOUT_SECONDS", "12"))
-    last_exc: Optional[BaseException] = None
-    for base in worker_internal_bases():
-        url = f"{base}{path}"
-        if query:
-            url = f"{url}?{query}"
-        try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                resp = await client.get(url, headers={"X-Worker-Proxy": "1"})
-            media_type = resp.headers.get("content-type") or "application/json"
-            if resp.status_code == 200:
-                try:
-                    data = resp.json()
-                    if isinstance(data, dict) and not _is_web_misroute(data, path):
-                        _record_good_base(base)
-                except Exception:
-                    pass
-            return Response(content=resp.content, status_code=resp.status_code, media_type=media_type)
-        except Exception as exc:
-            last_exc = exc
-            logger.debug("worker volume proxy %s failed: %s", url, exc)
-    logger.warning("worker volume proxy failed %s: %s", path, last_exc)
-    return JSONResponse(
-        status_code=503,
-        content={
-            "status": "error",
-            "error": "worker_volume_proxy_failed",
-            "path": path,
-        },
-    )
+    try:
+        resp = await _fetch_worker_http(path, query=query, timeout=timeout)
+        media_type = resp.headers.get("content-type") or "application/json"
+        return Response(content=resp.content, status_code=resp.status_code, media_type=media_type)
+    except Exception as exc:
+        logger.warning("worker volume proxy failed %s: %s", path, exc)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "error",
+                "error": "worker_volume_proxy_failed",
+                "path": path,
+            },
+        )
