@@ -438,6 +438,12 @@ async def add_cors_headers(request: Request, call_next):
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         else:
             response.headers["Cache-Control"] = "public, max-age=3600"
+    try:
+        from internal.security_headers import apply_security_headers
+
+        apply_security_headers(request, response)
+    except Exception as exc:  # pragma: no cover
+        logger.debug("security headers skipped: %s", exc)
     return response
 
 
