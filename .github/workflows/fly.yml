@@ -85,16 +85,16 @@ jobs:
           FLY_PRIMARY_REGION: sjc
           FORCE_WORKER_SPLIT_V2: "1"
       - name: Ensure private flycast IP
+        continue-on-error: true
         run: |
-          set -e
           COUNT=$(flyctl ips list -a subnet-dashboard --json 2>/dev/null | python3 -c "
           import json,sys
           rows=json.load(sys.stdin)
-          print(sum(1 for r in rows if r.get('type')=='private_v6' or r.get('kind')=='private'))
+          print(sum(1 for r in rows if 'private' in str(r.get('type','')).lower()))
           " 2>/dev/null || echo 0)
           if [ "$COUNT" -lt 1 ]; then
             echo "Allocating private flycast IPv6 for worker :8081 routing"
-            flyctl ips allocate-v6 --private -a subnet-dashboard --yes
+            flyctl ips allocate-v6 --private -a subnet-dashboard || true
           else
             echo "private flycast IP already present (count=$COUNT)"
           fi
