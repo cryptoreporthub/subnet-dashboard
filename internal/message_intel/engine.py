@@ -287,7 +287,6 @@ def list_messages(
     except Exception as exc:
         logger.warning("message-intel telegram proof failed: %s", exc)
         meta["telegram_proof"] = {"graded": 0, "hits": 0, "hit_rate": None, "ready": False}
-<<<<<<< HEAD
     try:
         meta["summary_24h"] = build_24h_summary(registry_names=names, db=db)
     except Exception as exc:
@@ -298,7 +297,6 @@ def list_messages(
             "window_hours": 24,
             "empty_reason": "Summary unavailable.",
         }
-=======
     if filters_active:
         applied: Dict[str, Any] = {}
         if min_conviction is not None:
@@ -308,7 +306,6 @@ def list_messages(
         meta["filters"] = applied
     store_total = int(meta.get("total_messages") or 0)
     filtered_empty = filters_active and len(messages) == 0 and store_total > 0
->>>>>>> 01b9f33 (Phase F: SS-TG W5 feed filters)
     return {
         "status": "success",
         "count": len(messages),
