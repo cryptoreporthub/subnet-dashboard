@@ -96,7 +96,7 @@ curl -s https://subnet-dashboard.fly.dev/api/ops/readiness | jq '{worker_mode, w
 
 **v2 web proxy:** When `WORKER_SPLIT_V2=on`, the web machine has no volume. Volume-backed APIs (`/api/pump-alerts`, `/api/message-intel/*`) proxy to the worker machine via Fly private networking (`worker.process.subnet-dashboard.internal:8080`). The worker entrypoint runs background jobs plus internal HTTP (uvicorn).
 
-**Worker peer probe:** Web checks `http://worker.process.subnet-dashboard.internal:8080/api/ops/worker-peer` (process-group DNS). Do not use app flycast for peer probes — it can route to the web machine.
+**Worker peer probe:** Web checks `http://worker.process.subnet-dashboard.internal:8080/api/ops/worker-peer` (process-group DNS). Do not use app flycast for peer probes — it can route to the web machine. If a legacy `WORKER_INTERNAL_URL` Fly secret still points at flycast, unset it: `fly secrets unset WORKER_INTERNAL_URL --app subnet-dashboard`.
 
 
 **One-command enable** (human, requires `flyctl auth`):

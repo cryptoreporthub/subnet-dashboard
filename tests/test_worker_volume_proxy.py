@@ -45,6 +45,27 @@ def test_listener_status_proxies_to_worker(monkeypatch):
     assert status["reason"] == "running"
 
 
+def test_worker_internal_bases_ignores_flycast_secret_without_opt_in(monkeypatch):
+    monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
+    monkeypatch.setenv("WORKER_INTERNAL_URL", "http://subnet-dashboard.flycast:8080")
+    monkeypatch.delenv("WORKER_INTERNAL_USE_FLYCAST", raising=False)
+    from internal.worker_proxy import worker_internal_bases
+
+    bases = worker_internal_bases()
+    assert "http://subnet-dashboard.flycast:8080" not in bases
+    assert "http://worker.process.subnet-dashboard.internal:8080" in bases
+
+
+def test_worker_internal_bases_includes_regional_dns(monkeypatch):
+    monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
+    monkeypatch.setenv("FLY_REGION", "sjc")
+    monkeypatch.delenv("WORKER_INTERNAL_URL", raising=False)
+    from internal.worker_proxy import worker_internal_bases
+
+    bases = worker_internal_bases()
+    assert "http://worker.process.sjc.subnet-dashboard.internal:8080" in bases
+
+
 def test_worker_proxy_middleware(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")
