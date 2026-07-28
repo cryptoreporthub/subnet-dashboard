@@ -13,6 +13,7 @@ def test_worker_peer_split_v2_web_http_alive(monkeypatch):
             "alive": True,
             "heartbeat": {"ts": "2026-07-28T16:00:00Z"},
             "peer": "dedicated_worker",
+            "source": "file",
         }
     }
     with patch("internal.worker_proxy.fetch_worker_json_sync", return_value=remote):
@@ -100,10 +101,65 @@ def test_worker_peer_route_404_on_web(monkeypatch):
     assert resp.json()["detail"] == "worker_peer_only_on_worker_machine"
 
 
+def test_fetch_worker_json_sync_skips_web_misroute(monkeypatch):
+    monkeypatch.setenv("WORKER_INTERNAL_URL", "http://bad.internal:8080")
+    monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
+    calls = []
+
+    class _Resp:
+        status_code = 200
+        request = None
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "worker_peer": {
+                    "alive": False,
+                    "source": "http",
+                    "note": "worker_http_unreachable",
+                }
+            }
+
+    class _Client:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get(self, url, headers=None):
+            calls.append(url)
+            if "bad.internal" in url:
+                return _Resp()
+            good = _Resp()
+            good.json = lambda: {
+                "worker_peer": {"alive": True, "source": "file", "peer": "dedicated_worker"}
+            }
+            return good
+
+    monkeypatch.setattr("httpx.Client", _Client)
+    from internal.worker_proxy import fetch_worker_json_sync
+
+    out = fetch_worker_json_sync("/api/ops/live", timeout=2)
+    assert out["worker_peer"]["alive"] is True
+    assert len(calls) == 2
+
+
 def test_ops_live_split_v2_uses_http_peer(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")
-    remote = {"worker_peer": {"alive": True, "heartbeat": {"ts": "2026-07-28T16:00:00Z"}}}
+    remote = {
+        "worker_peer": {
+            "alive": True,
+            "heartbeat": {"ts": "2026-07-28T16:00:00Z"},
+            "source": "file",
+        }
+    }
     with patch("internal.worker_proxy.fetch_worker_json_sync", return_value=remote):
         from internal.ops.readiness import build_liveness_report
 
