@@ -21,11 +21,19 @@ def worker_vm_internal_url(machine_id: str, app: str) -> str:
     return f"http://{machine_id}.vm.{app}.internal:8080"
 
 
+def worker_private_ip_url(private_ip: str) -> str:
+    return f"http://[{private_ip}]:8080"
+
+
 def pick_worker_internal_url(machines: list, app: str) -> str | None:
-    started = [m for m in machines if machine_process_group(m) == "worker"]
-    if not started:
+    workers = [m for m in machines if machine_process_group(m) == "worker"]
+    if not workers:
         return None
-    mid = started[0].get("id") or ""
+    m = workers[0]
+    ip = (m.get("private_ip") or "").strip()
+    if ip:
+        return worker_private_ip_url(ip)
+    mid = m.get("id") or ""
     return worker_vm_internal_url(mid, app) if mid else None
 
 
@@ -53,7 +61,11 @@ def test_volume_unattached():
 def test_pick_worker_internal_url():
     machines = [
         {"id": "web1", "config": {"metadata": {"fly_process_group": "web"}}},
-        {"id": "wrk1", "config": {"metadata": {"fly_process_group": "worker"}}},
+        {
+            "id": "wrk1",
+            "private_ip": "fdaa:0:3b99:a7b:8aeb:fea3:148b:2",
+            "config": {"metadata": {"fly_process_group": "worker"}},
+        },
     ]
     url = pick_worker_internal_url(machines, "subnet-dashboard")
-    assert url == "http://wrk1.vm.subnet-dashboard.internal:8080"
+    assert url == "http://[fdaa:0:3b99:a7b:8aeb:fea3:148b:2]:8080"

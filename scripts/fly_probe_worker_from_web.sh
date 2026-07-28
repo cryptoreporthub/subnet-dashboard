@@ -24,12 +24,28 @@ for m in json.load(sys.stdin):
         break
 ")"
 
+WORKER_IP="$(flyctl machines list -a "$APP" --json | python3 -c "
+import json, sys
+for m in json.load(sys.stdin):
+    meta = (m.get('config') or {}).get('metadata') or {}
+    pg = (meta.get('fly_process_group') or m.get('process_group') or 'web').lower()
+    if pg == 'worker':
+        ip = (m.get('private_ip') or '').strip()
+        if ip:
+            print(ip)
+        break
+")"
+
 if [ -z "$WEB_ID" ] || [ -z "$WORKER_ID" ]; then
   echo "fly_probe_worker_from_web: missing web=$WEB_ID worker=$WORKER_ID"
   exit 0
 fi
 
-TARGET="http://${WORKER_ID}.vm.${APP}.internal:8080/api/ops/worker-peer"
+if [ -n "$WORKER_IP" ]; then
+  TARGET="http://[${WORKER_IP}]:8080/api/ops/worker-peer"
+else
+  TARGET="http://${WORKER_ID}.vm.${APP}.internal:8080/api/ops/worker-peer"
+fi
 echo "fly_probe_worker_from_web: web=$WEB_ID worker=$WORKER_ID target=$TARGET"
 flyctl machine exec "$WEB_ID" -a "$APP" -- python -c "
 import requests
