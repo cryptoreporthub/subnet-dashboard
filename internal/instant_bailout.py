@@ -46,11 +46,15 @@ async def _send_response(
     content_type: str,
     extra_headers: Optional[list[tuple[bytes, bytes]]] = None,
 ) -> None:
+    from internal.security_headers import security_header_items
+
     headers: list[tuple[bytes, bytes]] = [
         (b"content-type", content_type.encode("ascii")),
         (b"content-length", str(len(body)).encode("ascii")),
         (b"cache-control", b"no-store, max-age=0"),
     ]
+    for name, value in security_header_items():
+        headers.append((name.lower().encode("ascii"), value.encode("utf-8")))
     if extra_headers:
         headers.extend(extra_headers)
     await send({"type": "http.response.start", "status": status, "headers": headers})
@@ -81,6 +85,13 @@ class InstantBailoutASGI:
 
         method = scope.get("method", "GET")
         path = scope.get("path", "")
+
+        if method == "GET" and path == "/api/ops/live":
+            from internal.ops.readiness import build_liveness_report
+
+            body = json.dumps(build_liveness_report()).encode("utf-8")
+            await _send_response(send, status=200, body=body, content_type="application/json; charset=utf-8")
+            return
 
         if method == "GET" and path == "/health":
             await _send_response(send, status=200, body=b"OK", content_type="text/plain; charset=utf-8")
