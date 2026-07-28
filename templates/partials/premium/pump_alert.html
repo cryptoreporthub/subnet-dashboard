@@ -158,7 +158,11 @@
             <span class="pd-angles__label">Next up</span>
             <div class="pd-angles__list">
               {% for k in next_up[:3] %}
-              <a class="pd-angles__chip" href="/subnet/{{ k.netuid }}">{{ k.name }} <b>SN{{ k.netuid }}</b>{% if k.timing_pts is not none %} <i>{{ k.timing_pts|int }}</i>{% endif %}</a>
+              {% set lead_pct = k.to_lead_pct|default(0)|int %}
+              <a class="pd-angles__chip" href="/subnet/{{ k.netuid }}" title="{{ lead_pct }}% of #1 heat">
+                <span class="pd-angles__chip-head">{{ k.name }} <b>SN{{ k.netuid }}</b> <i>{{ lead_pct }}%</i></span>
+                <span class="pd-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100"><span class="pd-angles__bar-fill" style="width:{{ lead_pct }}%"></span></span>
+              </a>
               {% endfor %}
             </div>
           </div>
@@ -173,16 +177,24 @@
             {% if peers.matches is iterable and peers.matches|length > 0 %}
             <div class="pd-peers__list">
               {% for k in peers.matches[:3] %}
-              <a class="pd-peers__match" href="/subnet/{{ k.netuid }}">{{ k.name }} <b>SN{{ k.netuid }}</b>{% if k.lane %} <i>{{ k.lane }}</i>{% endif %}</a>
+              {% set lead_pct = k.to_lead_pct|default(0)|int %}
+              <a class="pd-peers__match" href="/subnet/{{ k.netuid }}" title="{{ lead_pct }}% of #1">
+                <span class="pd-peers__match-head">{{ k.name }} <b>SN{{ k.netuid }}</b>{% if k.lane %} <i>{{ k.lane }}</i>{% endif %} <em>{{ lead_pct }}%</em></span>
+                <span class="pd-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100"><span class="pd-angles__bar-fill" style="width:{{ lead_pct }}%"></span></span>
+              </a>
               {% endfor %}
             </div>
             {% endif %}
           </div>
           {% endif %}
           {% if combined %}
+          {% set lead_pct = combined.to_lead_pct|default(0)|int %}
           <div class="pd-angles__row">
             <span class="pd-angles__label">Combined <em>experimental</em></span>
-            <a class="pd-angles__chip pd-angles__chip--combined" href="/subnet/{{ combined.netuid }}">{{ combined.name }} <b>SN{{ combined.netuid }}</b> <i>t{{ combined.timing_pts|int }} · p{{ combined.peer_pts|int }}</i></a>
+            <a class="pd-angles__chip pd-angles__chip--combined" href="/subnet/{{ combined.netuid }}" title="{{ lead_pct }}% of #1 · timing {{ combined.timing_pts }} · peer {{ combined.peer_pts }}">
+              <span class="pd-angles__chip-head">{{ combined.name }} <b>SN{{ combined.netuid }}</b> <i>{{ lead_pct }}% · t{{ combined.timing_pts|int }} · p{{ combined.peer_pts|int }}</i></span>
+              <span class="pd-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100"><span class="pd-angles__bar-fill pd-angles__bar-fill--combined" style="width:{{ lead_pct }}%"></span></span>
+            </a>
           </div>
           {% endif %}
         </div>
@@ -755,16 +767,19 @@
   }
   .pd-angles__list { display: flex; flex-wrap: wrap; gap: 6px; }
   .pd-angles__chip {
-    display: inline-flex;
+    display: flex;
+    flex-direction: column;
     gap: 4px;
-    align-items: baseline;
-    padding: 4px 8px;
+    min-width: 7.5rem;
+    max-width: 11rem;
+    padding: 6px 8px;
     border: 1px solid rgba(148, 163, 184, 0.22);
     background: rgba(15, 23, 42, 0.45);
     color: #e2e8f0;
     text-decoration: none;
     font-size: 12px;
   }
+  .pd-angles__chip-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; }
   .pd-angles__chip b { color: #86efac; }
   .pd-angles__chip i { font-style: normal; color: #94a3b8; font-size: 10px; }
   .pd-angles__chip--combined {
@@ -772,6 +787,23 @@
     background: rgba(120, 53, 15, 0.22);
   }
   .pd-angles__chip--combined b { color: #fcd34d; }
+  .pd-angles__bar,
+  .pds-angles__bar {
+    display: block;
+    height: 3px;
+    width: 100%;
+    background: rgba(148, 163, 184, 0.18);
+    overflow: hidden;
+  }
+  .pd-angles__bar-fill,
+  .pds-angles__bar-fill {
+    display: block;
+    height: 100%;
+    background: linear-gradient(90deg, #4ade80, #86efac);
+  }
+  .pd-angles__bar-fill--combined {
+    background: linear-gradient(90deg, #f59e0b, #fcd34d);
+  }
   .pd-peers__meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .pd-peers__label {
     font-family: 'JetBrains Mono', ui-monospace, monospace;
@@ -787,18 +819,22 @@
   }
   .pd-peers__list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .pd-peers__match {
-    display: inline-flex;
+    display: flex;
+    flex-direction: column;
     gap: 4px;
-    align-items: baseline;
-    padding: 4px 8px;
+    min-width: 7.5rem;
+    max-width: 11rem;
+    padding: 6px 8px;
     border: 1px solid rgba(56, 189, 248, 0.28);
     background: rgba(14, 165, 233, 0.1);
     color: #e2e8f0;
     text-decoration: none;
     font-size: 12px;
   }
+  .pd-peers__match-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; }
   .pd-peers__match b { color: #7dd3fc; }
   .pd-peers__match i { font-style: normal; color: #94a3b8; font-size: 10px; }
+  .pd-peers__match em { font-style: normal; color: #94a3b8; font-size: 10px; }
   .pd-peers__why { margin: 8px 0 0; font-size: 12px; line-height: 1.4; color: rgba(226, 232, 240, 0.72); }
   .pd-cta .home-cta { flex: 1 1 auto; text-align: center; min-width: 140px; }
 

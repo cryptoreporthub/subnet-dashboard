@@ -1382,6 +1382,7 @@
     var peers = row && row.peers;
     if (!peers || (!peers.lane && !(peers.matches && peers.matches.length))) return '';
     var cls = prefix || 'pds-peers';
+    var barCls = prefix && prefix.indexOf('pd-') === 0 ? 'pd-angles' : 'pds-angles';
     var matches = Array.isArray(peers.matches) ? peers.matches : [];
     var chips = '';
     if (peers.lane) {
@@ -1399,6 +1400,7 @@
     var matchHtml = matches
       .slice(0, 3)
       .map(function (k) {
+        var lead = Math.max(0, Math.min(100, Math.round(Number(k.to_lead_pct != null ? k.to_lead_pct : 0))));
         var shared = Array.isArray(k.shared) && k.shared.length ? k.shared.slice(0, 2).join(' · ') : '';
         return (
           '<a class="' +
@@ -1406,14 +1408,26 @@
           '__match" href="/subnet/' +
           esc(k.netuid) +
           '" title="' +
-          esc(shared || k.lane || 'peer') +
-          '">' +
+          esc(lead + '% of #1' + (shared ? ' · ' + shared : k.lane ? ' · ' + k.lane : '')) +
+          '"><span class="' +
+          cls +
+          '__match-head">' +
           esc(k.name || 'SN' + k.netuid) +
           ' <b>SN' +
           esc(k.netuid) +
           '</b>' +
           (k.lane ? ' <i>' + esc(k.lane) + '</i>' : '') +
-          '</a>'
+          ' <em>' +
+          lead +
+          '%</em></span><span class="' +
+          barCls +
+          '__bar" role="progressbar" aria-valuenow="' +
+          lead +
+          '" aria-valuemin="0" aria-valuemax="100"><span class="' +
+          barCls +
+          '__bar-fill" style="width:' +
+          lead +
+          '%"></span></span></a>'
         );
       })
       .join('');
@@ -1431,6 +1445,48 @@
       '</div>' +
       (matchHtml ? '<div class="' + cls + '__list">' + matchHtml + '</div>' : '') +
       '</div>'
+    );
+  }
+
+  function leadPctOf(k) {
+    return Math.max(0, Math.min(100, Math.round(Number(k && k.to_lead_pct != null ? k.to_lead_pct : 0))));
+  }
+
+  function angleChipHtml(root, k, opts) {
+    opts = opts || {};
+    var lead = leadPctOf(k);
+    var extra = opts.extraLabel || '';
+    var combined = !!opts.combined;
+    return (
+      '<a class="' +
+      root +
+      '__chip' +
+      (combined ? ' ' + root + '__chip--combined' : '') +
+      '" href="/subnet/' +
+      esc(k.netuid) +
+      '" title="' +
+      esc(lead + '% of #1 heat' + (opts.titleSuffix ? ' · ' + opts.titleSuffix : '')) +
+      '"><span class="' +
+      root +
+      '__chip-head">' +
+      esc(k.name || 'SN' + k.netuid) +
+      ' <b>SN' +
+      esc(k.netuid) +
+      '</b> <i>' +
+      lead +
+      '%' +
+      (extra ? ' · ' + esc(extra) : '') +
+      '</i></span><span class="' +
+      root +
+      '__bar" role="progressbar" aria-valuenow="' +
+      lead +
+      '" aria-valuemin="0" aria-valuemax="100"><span class="' +
+      root +
+      '__bar-fill' +
+      (combined ? ' ' + root + '__bar-fill--combined' : '') +
+      '" style="width:' +
+      lead +
+      '%"></span></span></a>'
     );
   }
 
@@ -1454,18 +1510,7 @@
         root +
         '__list">';
       nextUp.slice(0, 3).forEach(function (k) {
-        html +=
-          '<a class="' +
-          root +
-          '__chip" href="/subnet/' +
-          esc(k.netuid) +
-          '">' +
-          esc(k.name || 'SN' + k.netuid) +
-          ' <b>SN' +
-          esc(k.netuid) +
-          '</b>' +
-          (k.timing_pts != null ? ' <i>' + esc(Math.round(Number(k.timing_pts))) + '</i>' : '') +
-          '</a>';
+        html += angleChipHtml(root, k);
       });
       html += '</div></div>';
     }
@@ -1488,25 +1533,17 @@
         '__row--combined"><span class="' +
         root +
         '__label">Combined <em>experimental</em></span>' +
-        '<a class="' +
-        root +
-        '__chip ' +
-        root +
-        '__chip--combined" href="/subnet/' +
-        esc(combined.netuid) +
-        '" title="timing ' +
-        esc(combined.timing_pts) +
-        ' · peer ' +
-        esc(combined.peer_pts) +
-        '">' +
-        esc(combined.name || 'SN' + combined.netuid) +
-        ' <b>SN' +
-        esc(combined.netuid) +
-        '</b> <i>t' +
-        esc(Math.round(Number(combined.timing_pts || 0))) +
-        ' · p' +
-        esc(Math.round(Number(combined.peer_pts || 0))) +
-        '</i></a></div>';
+        angleChipHtml(root, combined, {
+          combined: true,
+          extraLabel:
+            't' +
+            Math.round(Number(combined.timing_pts || 0)) +
+            ' · p' +
+            Math.round(Number(combined.peer_pts || 0)),
+          titleSuffix:
+            'timing ' + combined.timing_pts + ' · peer ' + combined.peer_pts,
+        }) +
+        '</div>';
     }
     html += '</div>';
     return html;

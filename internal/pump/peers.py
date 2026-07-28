@@ -139,6 +139,15 @@ def _entry_name(entry: Dict[str, Any]) -> str:
         return "subnet"
 
 
+def _to_lead_pct(entry: Dict[str, Any], focus: Dict[str, Any]) -> int:
+    """0–100 — closeness to overtaking the focus (#1) by composite score."""
+    hero = _f(focus.get("composite_score"))
+    if hero <= 1e-9:
+        return 0
+    cand = _f(entry.get("composite_score"))
+    return int(max(0, min(100, round((cand / hero) * 100))))
+
+
 def find_peers(
     focus_netuid: int,
     state: Dict[str, Any],
@@ -206,6 +215,7 @@ def find_peers(
                 "distance": round(dist, 3),
                 "shared": shared,
                 "score": round(_f(entry.get("composite_score")), 2),
+                "to_lead_pct": _to_lead_pct(entry, focus),
             }
         )
 

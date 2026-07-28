@@ -12,7 +12,9 @@
 | **Peers** | Same pulse, quieter? | up to 3 |
 | **Combined · experimental** | Timing×0.7 + peer×0.3 | **1** pick |
 
-Copy must say **experimental** — not a settled claim.
+Each chip bar = **`to_lead_pct`** = candidate composite ÷ hero composite (capped 0–100) — how close they are to taking the **#1** spot, not absolute trigger %.
+
+Copy must say **experimental** on Combined — not a settled claim.
 
 ## Backend tracking
 

@@ -43,6 +43,17 @@ def test_timing_points_early_beats_cooling():
     assert timing_points(early) > timing_points(late)
 
 
+def test_to_lead_pct_relative_to_hero():
+    focus = _entry(23, "PUMPING", 0.80)
+    half = _entry(11, "ACCUMULATING", 0.40)
+    near = _entry(12, "ACCUMULATING", 0.72)
+    from internal.pump.combined import _to_lead_pct
+
+    assert _to_lead_pct(half, focus) == 50
+    assert _to_lead_pct(near, focus) == 90
+    assert _to_lead_pct(focus, focus) == 100
+
+
 def test_rank_keeps_separate_next_up_and_combined():
     focus = _entry(23, "PUMPING", 0.85, buy=0.62, vol=0.4, mom=0.004)
     near = _entry(11, "ACCUMULATING", 0.68, buy=0.55, vol=0.25, mom=0.001)  # timing

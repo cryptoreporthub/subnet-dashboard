@@ -87,26 +87,43 @@ def _price(entry: Dict[str, Any]) -> float:
     return 0.0
 
 
+def _to_lead_pct(entry: Dict[str, Any], focus: Dict[str, Any]) -> int:
+    """0–100 — how close this name is to taking the hero's #1 spot (by composite)."""
+    hero = _f(focus.get("composite_score"))
+    if hero <= 1e-9:
+        return 0
+    cand = _f(entry.get("composite_score"))
+    return int(max(0, min(100, round((cand / hero) * 100))))
+
+
 def _row(
     entry: Dict[str, Any],
     *,
     timing: float,
     peer: float,
     combined: float,
+    focus: Optional[Dict[str, Any]] = None,
+    trigger: Optional[float] = None,
 ) -> Dict[str, Any]:
     try:
         nid = int(entry.get("netuid"))
     except (TypeError, ValueError):
         nid = 0
+    trig = float(trigger if trigger is not None else _trigger())
+    score = _f(entry.get("composite_score"))
+    to_trigger = int(max(0, min(100, round((score / max(trig, 1e-6)) * 100))))
+    to_lead = _to_lead_pct(entry, focus) if isinstance(focus, dict) else to_trigger
     return {
         "netuid": nid,
         "name": _entry_name(entry),
         "lane": lane_tag(entry),
         "phase": str(entry.get("phase") or "").upper(),
-        "score": round(_f(entry.get("composite_score")), 2),
+        "score": round(score, 2),
         "timing_pts": timing,
         "peer_pts": peer,
         "combined_pts": combined,
+        "to_lead_pct": to_lead,
+        "to_trigger_pct": to_trigger,
         "price": _price(entry),
     }
 
@@ -181,12 +198,26 @@ def rank_desk_angles(
     combined_rows.sort(key=lambda r: (-r[0], -r[2], -r[3]))
 
     next_up = [
-        _row(entry, timing=t, peer=peer_points(focus_vec, entry), combined=combined_points(t, peer_points(focus_vec, entry)))
+        _row(
+            entry,
+            timing=t,
+            peer=peer_points(focus_vec, entry),
+            combined=combined_points(t, peer_points(focus_vec, entry)),
+            focus=focus,
+            trigger=trig,
+        )
         for t, entry in timing_rows[:NEXT_UP_UI]
     ]
 
     tracked = [
-        _row(entry, timing=t_pts, peer=p_pts, combined=c_pts)
+        _row(
+            entry,
+            timing=t_pts,
+            peer=p_pts,
+            combined=c_pts,
+            focus=focus,
+            trigger=trig,
+        )
         for c_pts, entry, t_pts, p_pts in combined_rows[: max(1, track_limit)]
     ]
     shown = tracked[0] if tracked else None
