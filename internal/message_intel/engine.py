@@ -212,7 +212,7 @@ def _enrich_message_row(row: Dict[str, Any], names: Optional[Dict[int, str]] = N
 
 def list_messages(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
     from internal.message_intel.listener_service import listener_status
-    from internal.message_intel.rollup import build_trending_subnets
+    from internal.message_intel.rollup import build_trending_subnets, build_yesterday_leader
 
     db = get_db()
     names = _registry_subnet_names()
@@ -226,6 +226,13 @@ def list_messages(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
     except Exception as exc:
         logger.warning("message-intel trending rollup failed: %s", exc)
         meta["trending"] = []
+    try:
+        meta["yesterday_leader"] = build_yesterday_leader(
+            registry_names=names, db=db
+        )
+    except Exception as exc:
+        logger.warning("message-intel yesterday leader failed: %s", exc)
+        meta["yesterday_leader"] = None
     return {
         "status": "success",
         "count": len(messages),

@@ -101,3 +101,20 @@ def test_trending_and_authors_after_ingest(client):
     topics = client.get("/api/message-intel/topics").json()
     assert topics["status"] == "success"
     assert any(t.get("kind") == "group" for t in topics.get("topics") or [])
+
+
+def test_yesterday_leader_in_meta(client, monkeypatch):
+    from internal.message_intel import rollup
+
+    fake = {
+        "netuid": 14,
+        "name": "TaoHash",
+        "mentions": 47,
+        "sentiment": "Bullish",
+        "date": "2026-07-26",
+        "runner_up": {"netuid": 78, "name": "Apex", "mentions": 31},
+    }
+    monkeypatch.setattr(rollup, "build_yesterday_leader", lambda **kw: fake)
+    listed = client.get("/api/message-intel").json()
+    assert listed["meta"]["yesterday_leader"]["netuid"] == 14
+    assert listed["meta"]["yesterday_leader"]["mentions"] == 47
