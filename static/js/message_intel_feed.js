@@ -515,6 +515,7 @@
   function listenerIdle(listener) {
     listener = listener || {};
     if (listener.live) return false;
+    if (listener.desk_ready) return false;
     var reason = String(listener.reason || "");
     return (
       reason === "idle_not_started" ||
@@ -522,6 +523,18 @@
       reason === "disabled" ||
       reason === "missing_telegram_creds"
     );
+  }
+
+  function deskLooksReady(listener, payload) {
+    listener = listener || {};
+    payload = payload || {};
+    if (listener.live) return true;
+    var meta = payload.meta || {};
+    var proof = meta.telegram_proof || {};
+    var total = meta.total_messages || 0;
+    if (proof.ready && (proof.graded || 0) > 0) return true;
+    if (total > 5) return true;
+    return false;
   }
 
   function parseEntities(analysis) {
@@ -882,6 +895,7 @@
       (payload.meta && payload.meta.high_conviction_count) ||
       0;
     var group = listener.group_title || listener.monitored_group || "OfficialSubnetSummer";
+    var deskReady = deskLooksReady(listener, payload);
 
     if (groupLink) {
       groupLink.href = GROUP_URL;
@@ -891,15 +905,16 @@
     if (meta) {
       var parts = ["<b>" + esc(group) + "</b>"];
       if (listener.live) parts.push("listening");
+      else if (deskReady) parts.push("desk ready");
       else if (listener.reason) parts.push(esc(listener.reason));
       parts.push(esc(total) + " messages");
       if (highConv) parts.push(esc(highConv) + " high conviction");
       meta.innerHTML = parts.join(" · ");
-      if (listener.hint && !listener.live) meta.title = listener.hint;
+      if (listener.hint && !listener.live && !deskReady) meta.title = listener.hint;
     }
 
-    if (liveTag) liveTag.hidden = !listener.live;
-    if (pulse) pulse.hidden = !listener.live;
+    if (liveTag) liveTag.hidden = !(listener.live || deskReady);
+    if (pulse) pulse.hidden = !(listener.live || deskReady);
 
     if (sub) {
       if (listener.live) {
@@ -907,6 +922,9 @@
           'Live read of <a class="message-intel__group-link" href="' +
           GROUP_URL +
           '" target="_blank" rel="noopener noreferrer">Subnet Summers</a> — trending names, top contributors, and jury-scored messages.';
+      } else if (deskReady) {
+        sub.textContent =
+          "Subnet Summers desk loaded from archive — listener runs on the worker machine.";
       } else if (listener.hint) {
         sub.textContent = listener.hint;
       } else if (listener.reason === "idle_not_started") {
@@ -914,7 +932,7 @@
       }
     }
 
-    if (feedHint && listener.live) {
+    if (feedHint && (listener.live || deskReady)) {
       feedHint.textContent = "Newest first · jury conviction · updates ~60s";
     }
 
