@@ -234,6 +234,24 @@ def _start_pump_desk_snapshot_scheduler() -> None:
     defer_boot("pump-desk-snapshot", _run, delay=max(BOOT_DEFER_SECONDS + 55, 100))
 
 
+def _start_outcome_snapshot_scheduler() -> None:
+    """Learning outcome + council health artifact (Ditto Health Monitor feed)."""
+
+    def _run() -> None:
+        from internal.learning.outcome_snapshot_scheduler import start_outcome_snapshot_scheduler
+
+        immediate = os.environ.get("OUTCOME_SNAPSHOT_BOOT_IMMEDIATE", "off").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        start_outcome_snapshot_scheduler(immediate=immediate)
+        logger.info("outcome snapshot scheduler started (immediate=%s)", immediate)
+
+    defer_boot("outcome-snapshot", _run, delay=max(BOOT_DEFER_SECONDS + 60, 105))
+
+
 def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     """Start background schedulers.
 
@@ -269,6 +287,7 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _start_score_snapshot_scheduler()
     _start_pick_audit_scheduler()
     _start_pump_desk_snapshot_scheduler()
+    _start_outcome_snapshot_scheduler()
 
     _maybe_start_message_intel()
 
@@ -333,6 +352,12 @@ def stop_background_workers() -> None:
         from internal.pump.desk_snapshot_scheduler import stop_pump_desk_snapshot_scheduler
 
         stop_pump_desk_snapshot_scheduler()
+    except Exception:
+        pass
+    try:
+        from internal.learning.outcome_snapshot_scheduler import stop_outcome_snapshot_scheduler
+
+        stop_outcome_snapshot_scheduler()
     except Exception:
         pass
     try:
