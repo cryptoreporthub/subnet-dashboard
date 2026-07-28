@@ -3,12 +3,6 @@
 set -euo pipefail
 
 APP="${FLY_APP:-subnet-dashboard}"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
-if ! "$SCRIPT_DIR/fly_worker_split_v2_guard.sh"; then
-  echo "fly_v2_volume_repair: WORKER_SPLIT_V2 not set — skip"
-  exit 0
-fi
 
 echo "=== fly_v2_volume_repair: check volume placement ==="
 read -r web_vol worker_vol web_id worker_id <<<"$(flyctl machines list -a "$APP" --json | python3 -c "
@@ -34,7 +28,7 @@ print(web_vol, worker_vol, web_id, worker_id)
 echo "web machine=$web_id volume=$web_vol"
 echo "worker machine=$worker_id volume=$worker_vol"
 
-if [ -n "$web_vol" ] && [ -z "$worker_vol" ] && [ -n "$web_id" ]; then
+if [ -n "$web_vol" ] && [ -z "$worker_vol" ] && [ -n "$web_id" ] && [ -n "$worker_id" ]; then
   echo "REPAIR: data_volume on web — destroy web machine to release for worker mount"
   flyctl machine destroy "$web_id" -a "$APP" --force
   echo "waiting 25s for volume detach..."
