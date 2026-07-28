@@ -25,6 +25,11 @@ def _hsts_enabled() -> bool:
     return flag not in ("0", "false", "no", "off")
 
 
+def _csp_enforced() -> bool:
+    flag = os.environ.get("CONTENT_SECURITY_POLICY_ENFORCE", "").strip().lower()
+    return flag in ("1", "true", "yes", "on")
+
+
 def security_header_items() -> list[tuple[str, str]]:
     """Return (name, value) pairs for security headers."""
     items: list[tuple[str, str]] = [
@@ -39,6 +44,8 @@ def security_header_items() -> list[tuple[str, str]]:
     csp_ro = os.environ.get("CONTENT_SECURITY_POLICY_REPORT_ONLY", _DEFAULT_CSP_REPORT_ONLY).strip()
     if csp:
         items.append(("Content-Security-Policy", csp))
+    elif _csp_enforced():
+        items.append(("Content-Security-Policy", _DEFAULT_CSP_REPORT_ONLY))
     elif csp_ro:
         items.append(("Content-Security-Policy-Report-Only", csp_ro))
     return items

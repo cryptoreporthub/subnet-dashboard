@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Query, Request
 from pydantic import BaseModel, Field
 
 from internal.investigation.service import (
@@ -57,5 +57,5 @@ async def api_owner_check(netuid: int, wallets: str = Query("", description="Com
 
 
 @investigation_router.post("/api/investigate/ask")
-async def api_investigate_ask(body: InvestigateAskIn):
-    return build_investigation_report(body.question, netuid=body.netuid, wallet=body.wallet)
+async def api_investigate_ask(ask_in: InvestigateAskIn):
+    return build_investigation_report(ask_in.question, netuid=ask_in.netuid, wallet=ask_in.wallet)

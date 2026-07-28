@@ -62,6 +62,8 @@ primary_region = "sjc"
   BRAIN_LETTER_TIMEOUT_SECONDS = "8"
   BRAIN_LETTER_CACHE_SECONDS = "60"
   ENABLE_METRICS = "1"
+  # Enforce CSP (same policy as prior report-only default).
+  CONTENT_SECURITY_POLICY_ENFORCE = "1"
   # Web process: keep CPU for GET / + hydrate; resolver/retrain belongs on worker.
   CALIBRATION_AUTO_RETRAIN = "off"
   SCORE_SNAPSHOT_MAX_SUBNETS = "40"

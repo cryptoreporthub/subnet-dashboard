@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, Query
+from fastapi import APIRouter, Body, Query, Request
 from pydantic import BaseModel, Field
 
+from internal.rate_limit import limit_or_noop, strict_limit
 from internal.ruggers.scanner import scan_subnet_delegations, scan_watchlist_netuids
 from internal.ruggers.watchlist import RuggerWatchlist
 
@@ -79,7 +80,9 @@ async def ruggers_record_event(event: RuggerEventIn):
 
 
 @ruggers_router.post("/api/ruggers/scan")
+@limit_or_noop(strict_limit(), override_defaults=True)
 async def ruggers_scan(
+    request: Request,
     netuids: Optional[List[int]] = Body(default=None),
     top_n: int = Body(default=20),
 ):

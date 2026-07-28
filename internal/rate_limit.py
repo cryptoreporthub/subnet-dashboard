@@ -17,6 +17,14 @@ _limiter: Optional[Limiter] = None
 F = TypeVar("F", bound=Callable)
 
 
+def _fly_client_ip(request) -> str:
+    """Trust Fly's X-Forwarded-For first hop when present."""
+    forwarded = request.headers.get("X-Forwarded-For", "").strip()
+    if forwarded:
+        return forwarded.split(",")[0].strip() or get_remote_address(request)
+    return get_remote_address(request)
+
+
 def rate_limit_enabled() -> bool:
     return os.environ.get("ENABLE_RATE_LIMIT", "1").strip().lower() not in ("0", "false", "no")
 
@@ -43,7 +51,7 @@ def get_limiter() -> Optional[Limiter]:
         return None
     if _limiter is None:
         _limiter = Limiter(
-            key_func=get_remote_address,
+            key_func=_fly_client_ip,
             default_limits=[default_limit()],
         )
     return _limiter

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
+from internal.rate_limit import limit_or_noop, strict_limit
 from internal.whales.enrichment_badge import whale_flow_badge
 from internal.whales.scanner import scan_netuids, scan_subnet_delegations
 from internal.whales.service import TRACKING_DIMENSIONS, WhaleIntelligenceService
@@ -148,7 +149,9 @@ async def whales_record_event(event: WhaleEventIn):
 
 
 @whales_router.post("/api/whales/scan")
+@limit_or_noop(strict_limit(), override_defaults=True)
 async def whales_scan(
+    request: Request,
     netuids: Optional[List[int]] = Body(default=None),
     top_n: int = Body(default=20),
 ):

@@ -14,6 +14,9 @@ from typing import Any, Dict, Tuple
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response
 
+from internal.api_errors import public_error
+from internal.rate_limit import limit_or_noop, strict_limit
+
 from datastore.learning_engine import LearningEngine, create_feedback_router
 from internal.council import pick_history, resolver, rotation_tracker, scenario_memory
 from internal.council.watchdog import check_resolver_watchdog
@@ -483,7 +486,9 @@ async def api_learning_stats():
 
 
 @learning_router.post("/api/learning/rebalance-weights")
+@limit_or_noop(strict_limit(), override_defaults=True)
 async def api_learning_rebalance_weights(
+    request: Request,
     replay_share: float = Query(default=0.7, ge=0.0, le=1.0),
     dry_run: bool = Query(default=False),
 ):
@@ -496,7 +501,7 @@ async def api_learning_rebalance_weights(
         return {"status": "success", "data": result}
     except Exception as exc:
         logger.error("rebalance-weights failed: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail=public_error(exc, code="rebalance_failed")["error"]) from exc
 
 
 @learning_router.get("/api/learning-metrics")
@@ -584,7 +589,8 @@ def _ensure_resolver_scheduler():
 
 
 @learning_router.post("/api/learning/trigger")
-async def api_learning_trigger():
+@limit_or_noop(strict_limit(), override_defaults=True)
+async def api_learning_trigger(request: Request):
     """Manually run a prediction-resolution cycle and return scheduler state."""
     if not _resolver_allowed_on_this_process():
         raise HTTPException(
@@ -597,7 +603,7 @@ async def api_learning_trigger():
         try:
             cycle = scheduler.run_once()
         except Exception as exc:
-            cycle = {"ok": False, "error": str(exc)}
+            cycle = {"ok": False, **public_error(exc, code="resolver_cycle_failed")}
 
     return {
         "status": "success",
@@ -610,7 +616,8 @@ async def api_learning_trigger():
 
 
 @learning_router.post("/api/predictions/resolver/run")
-async def api_predictions_resolver_run():
+@limit_or_noop(strict_limit(), override_defaults=True)
+async def api_predictions_resolver_run(request: Request):
     """Trigger a single prediction-resolution cycle on demand."""
     if not _resolver_allowed_on_this_process():
         raise HTTPException(
@@ -628,11 +635,12 @@ async def api_predictions_resolver_run():
         return {"status": "success", "data": result}
     except Exception as exc:
         logger.warning("Manual prediction resolver run failed: %s", exc)
-        return {"status": "error", "message": str(exc)}
+        return {"status": "error", **public_error(exc, code="resolver_run_failed")}
 
 
 @learning_router.post("/api/learning/pump-lead/recover")
-async def api_pump_lead_recover(dry_run: bool = False, hydrate: bool = True):
+@limit_or_noop(strict_limit(), override_defaults=True)
+async def api_pump_lead_recover(request: Request, dry_run: bool = False, hydrate: bool = True):
     """Candle-grade overdue pump_lead backlog (quality filter; no late live prices).
 
     hydrate=true (default): fetch OHLCV for overdue quality netuids before grading
@@ -647,7 +655,7 @@ async def api_pump_lead_recover(dry_run: bool = False, hydrate: bool = True):
         return {"status": "success", "data": summary}
     except Exception as exc:
         logger.warning("pump_lead recover failed: %s", exc)
-        return {"status": "error", "message": str(exc)}
+        return {"status": "error", **public_error(exc, code="pump_lead_recover_failed")}
 
 
 @learning_router.get("/api/learning/pump-lead/train-status")
@@ -663,7 +671,8 @@ async def api_pump_lead_train_status():
 
 
 @learning_router.post("/api/learning/pump-lead/train")
-async def api_pump_lead_train(dry_run: bool = True):
+@limit_or_noop(strict_limit(), override_defaults=True)
+async def api_pump_lead_train(request: Request, dry_run: bool = True):
     """Export train matrix; fit XGBoost stub only when n>=50 and package present.
 
     Never swaps prod hand score (ready_for_prod_replace still n>=100 + explicit).
@@ -675,7 +684,7 @@ async def api_pump_lead_train(dry_run: bool = True):
         return {"status": "success", "data": summary}
     except Exception as exc:
         logger.warning("pump_lead train failed: %s", exc)
-        return {"status": "error", "message": str(exc)}
+        return {"status": "error", **public_error(exc, code="pump_lead_train_failed")}
 
 
 @learning_router.get("/api/scenario-memory")
@@ -699,6 +708,7 @@ async def api_scenario_memory():
 
 
 @learning_router.post("/api/scenario-memory")
+@limit_or_noop(strict_limit(), override_defaults=True)
 async def api_scenario_memory_add(request: Request):
     """Record a new regime-aware scenario into persistent memory."""
     try:
