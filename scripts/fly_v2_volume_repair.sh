@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # ponytail: repair split_v2 when data_volume stuck on web instead of worker.
+# FLY_V2_REPAIR_MODE=destroy — only recycle machines (GHA pre-deploy; main deploy follows).
+# FLY_V2_REPAIR_MODE=full — destroy + deploy + scale (GHA post-deploy if still misplaced).
 set -euo pipefail
 
 APP="${FLY_APP:-subnet-dashboard}"
 REGION="${FLY_PRIMARY_REGION:-sjc}"
+MODE="${FLY_V2_REPAIR_MODE:-destroy}"
 
-echo "=== fly_v2_volume_repair: check volume placement ($APP) ==="
+echo "=== fly_v2_volume_repair: check volume placement ($APP) mode=$MODE ==="
 
 read -r vol_id attached_id web_id worker_id <<<"$(flyctl volumes list -a "$APP" --json | python3 -c "
 import json, subprocess, sys
@@ -74,11 +77,15 @@ sleep 25
 
 flyctl volumes list -a "$APP" || true
 
-# Existing worker has no mount; fly deploy often cannot attach volume to running worker.
 if [ -n "$worker_id" ]; then
-  echo "destroying worker $worker_id (no volume) before redeploy"
+  echo "destroying worker $worker_id before redeploy"
   flyctl machine destroy "$worker_id" -a "$APP" --force || true
   sleep 10
+fi
+
+if [ "$MODE" = "destroy" ]; then
+  echo "REPAIR: destroy-only — main deploy step will recreate machines"
+  exit 0
 fi
 
 echo "REPAIR: redeploy fly.worker-v2.toml (worker process owns [mounts])"

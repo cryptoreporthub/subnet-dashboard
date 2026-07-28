@@ -76,10 +76,10 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_PRIMARY_REGION: sjc
-      - name: Repair v2 volume placement (web must not hold data_volume)
+      - name: Repair v2 volume placement (pre-deploy, destroy only)
         run: |
-          chmod +x scripts/fly_v2_volume_repair.sh scripts/fly_worker_split_v2_guard.sh
-          FLY_APP=subnet-dashboard ./scripts/fly_v2_volume_repair.sh
+          chmod +x scripts/fly_v2_volume_repair.sh
+          FLY_V2_REPAIR_MODE=destroy FLY_APP=subnet-dashboard ./scripts/fly_v2_volume_repair.sh
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_PRIMARY_REGION: sjc
@@ -135,6 +135,15 @@ jobs:
           FLY_APP=subnet-dashboard ./scripts/fly_web_recover.sh
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Repair v2 volume placement (post-deploy if still on web)
+        run: |
+          chmod +x scripts/fly_v2_volume_repair.sh scripts/fly_worker_split_v2_guard.sh
+          if ./scripts/fly_worker_split_v2_guard.sh; then
+            FLY_V2_REPAIR_MODE=full FLY_APP=subnet-dashboard ./scripts/fly_v2_volume_repair.sh
+          fi
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_PRIMARY_REGION: sjc
       # flyctl treats "stopped" as a good post-deploy state; a started machine
       # with critical checks is also unreachable (proxy: no good candidate).
       # Force start/restart + verify public /health before declaring success.
