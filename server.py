@@ -275,6 +275,18 @@ if _ENABLE_METRICS:
 
 mount_rate_limit(app)
 
+try:
+    from internal.write_auth import check_write_auth
+
+    @app.middleware("http")
+    async def _write_auth_middleware(request, call_next):
+        denied = check_write_auth(request)
+        if denied is not None:
+            return denied
+        return await call_next(request)
+except Exception as _write_auth_exc:  # pragma: no cover
+    logger.warning("Write auth middleware unavailable: %s", _write_auth_exc)
+
 app.include_router(whales_router)
 app.include_router(watchlist_router)
 app.include_router(portfolio_router)
@@ -426,6 +438,12 @@ async def add_cors_headers(request: Request, call_next):
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         else:
             response.headers["Cache-Control"] = "public, max-age=3600"
+    try:
+        from internal.security_headers import apply_security_headers
+
+        apply_security_headers(request, response)
+    except Exception as exc:  # pragma: no cover
+        logger.debug("security headers skipped: %s", exc)
     return response
 
 

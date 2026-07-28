@@ -3,6 +3,9 @@ __pycache__/
 *.pyc
 .venv/
 *.db
+.env
+.env.*
+*.session
 data/watchlist.json
 data/watchlist.json.tmp
 

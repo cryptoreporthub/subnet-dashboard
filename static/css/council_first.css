@@ -1163,6 +1163,108 @@ button.home-cta {
   font-size: 10px;
   color: var(--stage-muted);
 }
+.message-intel__proof {
+  margin: 12px 0 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(52, 211, 153, 0.22);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.2);
+}
+.message-intel__proof-label,
+.message-intel__hc-label {
+  margin: 0 0 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--stage-muted);
+}
+.message-intel__proof-score {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+.message-intel__proof-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+  color: rgba(232, 245, 233, 0.88);
+}
+.message-intel__proof-hit { color: #34d399; font-weight: 700; }
+.message-intel__proof-miss { color: #fb7185; font-weight: 700; }
+.message-intel__hc-strip {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 255, 65, 0.15);
+  border-radius: 2px;
+  background: rgba(0, 255, 65, 0.04);
+}
+.message-intel__hc-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.message-intel__hc-row:last-child { border-bottom: 0; }
+.message-intel__hc-conv {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 700;
+  color: #a7f3d0;
+  min-width: 2.5rem;
+}
+.message-intel__hc-snippet {
+  flex: 1 1 120px;
+  font-size: 0.85rem;
+  color: rgba(232, 245, 233, 0.9);
+}
+.message-intel__hc-cta {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 255, 65, 0.35);
+  background: rgba(0, 0, 0, 0.25);
+  color: #e8f5e9;
+  text-decoration: none;
+  cursor: pointer;
+}
+.message-intel__hc-cta--lf { border-color: rgba(96, 165, 250, 0.35); }
+.message-intel__feed-row--clickable { cursor: pointer; }
+.message-intel__feed-row--clickable:hover { background: rgba(0, 255, 65, 0.04); }
+.message-intel__detail {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  border-radius: 2px;
+  background: rgba(0, 0, 0, 0.25);
+}
+.message-intel__detail-close {
+  float: right;
+  font-size: 10px;
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: var(--stage-muted);
+  cursor: pointer;
+}
+.message-intel__detail-text { margin: 0 0 10px; line-height: 1.45; }
+.message-intel__detail-reason,
+.message-intel__detail-snap,
+.message-intel__detail-outcome {
+  margin: 0 0 8px;
+  font-size: 0.88rem;
+  color: rgba(232, 245, 233, 0.9);
+}
+.message-intel__detail-outcome--pending { color: var(--stage-muted); font-style: italic; }
+.message-intel__detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+}
 
 /* SS-TG v2 — telegram-pulse layout */
 .message-intel--v2 .message-intel__topbar {
