@@ -9,7 +9,7 @@
   --sr-panel: rgba(9, 13, 11, 0.84);
   --sr-hairline: rgba(255, 255, 255, 0.07);
   --sr-glow-live: rgba(63, 201, 255, 0.22);
-  --sr-glow-pos: rgba(57, 255, 158, 0.22);
+  --sr-glow-pos: rgba(31, 212, 124, 0.22);
   --sr-glow-warn: rgba(255, 159, 63, 0.2);
   --sr-glow-neg: rgba(255, 159, 63, 0.18);
 }
@@ -17,7 +17,7 @@
 body.council-first-theme {
   background-color: var(--sr-bg-deep);
   background-image:
-    linear-gradient(rgba(57, 255, 158, 0.02) 1px, transparent 1px),
+    linear-gradient(rgba(31, 212, 124, 0.02) 1px, transparent 1px),
     linear-gradient(90deg, rgba(63, 201, 255, 0.02) 1px, transparent 1px),
     var(--bg-atmosphere);
   background-size: 28px 28px, 28px 28px, auto;
@@ -40,7 +40,7 @@ body.council-first-theme {
 }
 
 .sr-panel--live {
-  border-left: 3px solid #39ff9e;
+  border-left: 3px solid #1fd47c;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -63,11 +63,11 @@ body.council-first-theme {
   font-weight: 500;
 }
 .sr-hud .logo-mark {
-  box-shadow: 0 0 12px rgba(63, 201, 255, 0.3), 0 0 20px rgba(57, 255, 158, 0.22);
+  box-shadow: 0 0 12px rgba(63, 201, 255, 0.3), 0 0 20px rgba(31, 212, 124, 0.22);
 }
 .sr-hud .live-pill--live {
   box-shadow: 0 0 14px var(--sr-glow-pos);
-  border-color: rgba(57, 255, 158, 0.4);
+  border-color: rgba(31, 212, 124, 0.4);
 }
 .sr-hud-status {
   display: flex;
