@@ -11,7 +11,7 @@ from starlette.requests import Request
 from starlette.responses import PlainTextResponse, Response
 
 # GET / bypasses so a cold hydrate storm cannot 503 the shell into a blank phone screen.
-_BYPASS_PATHS = frozenset({"/", "/health", "/api/health", "/metrics"})
+_BYPASS_PATHS = frozenset({"/", "/health", "/api/health", "/api/ops/live", "/metrics"})
 _BYPASS_PREFIXES = ("/static/",)
 # Above-fold hydrate reads — never 503 these while GET / holds a slot.
 _LIGHT_API_PREFIXES = (

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 health_router = APIRouter(tags=["health"])
 
@@ -21,12 +21,20 @@ async def api_health_check():
     return {"status": "ok"}
 
 
-@health_router.get("/api/ops/readiness")
-async def api_ops_readiness():
-    """Single prod readiness probe: volume, scheduler, feed, creds (§33)."""
-    from internal.ops.readiness import build_readiness_report
+@health_router.get("/api/ops/live")
+async def api_ops_live():
+    """Ultra-fast liveness for Fly/monitors — no feed probes or network."""
+    from internal.ops.readiness import build_liveness_report
 
-    return build_readiness_report()
+    return build_liveness_report()
+
+
+@health_router.get("/api/ops/readiness")
+async def api_ops_readiness(refresh: bool = Query(default=False)):
+    """Single prod readiness probe: volume, scheduler, feed, creds (§33)."""
+    from internal.ops.readiness_cache import get_readiness_report
+
+    return await get_readiness_report(force=refresh)
 
 
 @health_router.get("/api/ops/evidence")

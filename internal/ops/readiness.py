@@ -77,6 +77,34 @@ def _learning_summary() -> Dict[str, Any]:
         return {"graded": 0, "pending": 0, "accuracy": None, "trust_ready": None}
 
 
+def build_liveness_report() -> Dict[str, Any]:
+    """Fast liveness probe — file/heartbeat only; safe under worker wedge."""
+    from internal.run_mode import inline_worker_expected, worker_mode_label
+
+    inline_worker = inline_worker_expected()
+    worker_peer: Dict[str, Any] = {"expected": inline_worker, "alive": False}
+    if inline_worker:
+        from internal.worker_heartbeat import is_alive, read_heartbeat
+
+        worker_peer = {
+            "expected": True,
+            "alive": is_alive(),
+            "heartbeat": read_heartbeat(),
+        }
+
+    data_dir = os.environ.get("DATA_DIR", "data")
+    volume_ok = os.path.isdir(data_dir) and os.access(data_dir, os.W_OK)
+
+    return {
+        "status": "ok" if volume_ok else "degraded",
+        "checked_at": _utcnow_z(),
+        "live": True,
+        "volume": {"path": data_dir, "writable": volume_ok},
+        "worker_mode": worker_mode_label(),
+        "worker_peer": worker_peer,
+    }
+
+
 def build_readiness_report() -> Dict[str, Any]:
     """Aggregate scheduler, volume, feed, and cred signals for operators."""
     issues: List[str] = []

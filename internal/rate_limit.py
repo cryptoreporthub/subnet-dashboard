@@ -9,7 +9,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 _STRICT_LIMIT = "30/minute"
-_EXEMPT_EXACT = frozenset({"/health", "/api/health", "/metrics"})
+_EXEMPT_EXACT = frozenset({"/health", "/api/health", "/api/ops/live", "/metrics"})
 _EXEMPT_PREFIXES = ("/static/",)
 
 _limiter: Optional[Limiter] = None
