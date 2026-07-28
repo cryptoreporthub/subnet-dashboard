@@ -147,6 +147,22 @@ def test_pump_inline_scheduler_env_on(monkeypatch):
     assert _pump_inline_scheduler_enabled() is True
 
 
+def test_outcomes_start_when_listener_off(monkeypatch):
+    monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "off")
+    monkeypatch.setenv("MESSAGE_INTEL_OUTCOMES", "on")
+    scheduled = {}
+
+    def _defer(name, fn, delay=0):
+        scheduled[name] = delay
+
+    monkeypatch.setattr("internal.background_boot.defer_boot", _defer)
+    from internal.background_boot import _maybe_start_message_intel
+
+    _maybe_start_message_intel()
+    assert "message-intel-outcomes" in scheduled
+    assert "message-intel-listeners" not in scheduled
+
+
 def test_ops_readiness_worker_mode_field():
     from fastapi.testclient import TestClient
 
