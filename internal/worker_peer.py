@@ -26,8 +26,8 @@ def _remote_peer(*, max_age_seconds: int) -> Dict[str, Any]:
     try:
         from internal.worker_proxy import fetch_worker_json_sync
 
-        timeout = float(os.environ.get("WORKER_PEER_TIMEOUT_SECONDS", "6"))
-        remote = fetch_worker_json_sync("/api/ops/live", timeout=timeout)
+        timeout = float(os.environ.get("WORKER_PEER_TIMEOUT_SECONDS", "8"))
+        remote = fetch_worker_json_sync("/api/ops/worker-peer", timeout=timeout)
         peer = remote.get("worker_peer")
         if isinstance(peer, dict):
             alive = peer.get("alive")

@@ -29,6 +29,14 @@ async def api_ops_live():
     return build_liveness_report()
 
 
+@health_router.get("/api/ops/worker-peer")
+async def api_ops_worker_peer():
+    """Minimal worker liveness for split_v2 web HTTP probe (file heartbeat only)."""
+    from internal.worker_peer import get_worker_peer
+
+    return {"worker_peer": get_worker_peer()}
+
+
 @health_router.get("/api/ops/readiness")
 async def api_ops_readiness(refresh: bool = Query(default=False)):
     """Single prod readiness probe: volume, scheduler, feed, creds (§33)."""
