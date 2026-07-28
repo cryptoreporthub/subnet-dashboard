@@ -387,3 +387,113 @@ def build_topics(*, limit: int = 12, db=None) -> List[Dict[str, Any]]:
         topics.append({"kind": "subnet", "label": f"SN{netuid}", "netuid": netuid, "mentions": count})
     topics.sort(key=lambda r: r["mentions"], reverse=True)
     return topics[:limit]
+
+
+def _outcome_hit(direction: str, outcome: str) -> bool:
+    direction = str(direction or "").lower()
+    outcome = str(outcome or "").lower()
+    if direction in ("up", "bullish", "long", "buy") and outcome in ("pump", "mild_pump"):
+        return True
+    if direction in ("down", "bearish", "short", "sell") and outcome in ("dump", "mild_dump"):
+        return True
+    if direction in ("flat", "sideways", "neutral", "") and outcome == "stable":
+        return True
+    if outcome in ("pump", "mild_pump") and not direction:
+        return True
+    return False
+
+
+def build_telegram_proof_band(*, db=None) -> Dict[str, Any]:
+    """SS-TG W3 — graded Telegram call hit-rate for proof strip."""
+    database = db or get_db()
+    graded = 0
+    hits = 0
+    recent: List[Dict[str, Any]] = []
+    try:
+        with database._connect() as conn:
+            rows = conn.execute(
+                """SELECT m.id, m.author_name, m.timestamp, v.predicted_direction, v.conviction,
+                          po.outcome, po.pump_pct_max, ps.netuid
+                   FROM messages m
+                   JOIN price_outcomes po ON po.message_id = m.id
+                   LEFT JOIN message_verdicts v ON v.message_id = m.id
+                   LEFT JOIN price_snapshots ps ON ps.message_id = m.id
+                   WHERE m.source = 'telegram'
+                   ORDER BY m.id DESC
+                   LIMIT 200"""
+            ).fetchall()
+    except Exception:
+        return {"graded": 0, "hits": 0, "hit_rate": None, "ready": False, "recent": []}
+
+    for row in rows:
+        graded += 1
+        direction = str(row["predicted_direction"] or "")
+        outcome = str(row["outcome"] or "")
+        if _outcome_hit(direction, outcome):
+            hits += 1
+        if len(recent) < 4:
+            recent.append(
+                {
+                    "id": int(row["id"]),
+                    "author_name": row["author_name"],
+                    "outcome": outcome,
+                    "pump_pct_max": row["pump_pct_max"],
+                    "netuid": row["netuid"],
+                    "hit": _outcome_hit(direction, outcome),
+                }
+            )
+
+    hit_rate = round((hits / graded) * 100.0, 1) if graded else None
+    return {
+        "graded": graded,
+        "hits": hits,
+        "hit_rate": hit_rate,
+        "ready": graded >= 3,
+        "recent": recent,
+    }
+
+
+def build_high_conviction_strip(
+    *,
+    limit: int = 5,
+    min_conviction: float = 60.0,
+    db=None,
+    registry_names: Optional[Dict[int, str]] = None,
+) -> List[Dict[str, Any]]:
+    """SS-TG W2 — top high-conviction Telegram rows for the strip."""
+    database = db or get_db()
+    names = registry_names or {}
+    try:
+        rows = database.list_high_conviction_messages(min_conviction=min_conviction)
+    except Exception:
+        return []
+
+    out: List[Dict[str, Any]] = []
+    for row in rows[:limit]:
+        verdict = row.get("verdict") if isinstance(row.get("verdict"), dict) else {}
+        analysis = row.get("analysis") if isinstance(row.get("analysis"), dict) else {}
+        conviction = verdict.get("conviction") if verdict else row.get("conviction")
+        direction = verdict.get("predicted_direction") if verdict else row.get("predicted_direction")
+        netuid = None
+        try:
+            entities = json.loads(analysis.get("entities_json") or "{}")
+            for token in entities.get("subnets") or []:
+                for num in re.findall(r"\d+", str(token)):
+                    netuid = int(num)
+                    break
+                if netuid is not None:
+                    break
+        except Exception:
+            pass
+        out.append(
+            {
+                "id": row.get("id"),
+                "author_name": row.get("author_name"),
+                "content": row.get("content"),
+                "conviction": conviction,
+                "direction": direction,
+                "netuid": netuid,
+                "subnet_name": names.get(netuid) if netuid is not None else None,
+            }
+        )
+    return out
