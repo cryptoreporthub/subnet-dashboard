@@ -2,63 +2,60 @@
 /* Fonts loaded via <link> in templates (§31-2 O4) — no blocking @import here */
 
 :root {
-  /* Backgrounds — midnight base with smoky slate atmosphere */
-  --bg-base: #04060e;
+  /* Backgrounds — near-void with mild cyberpunk atmosphere (blue/green lead) */
+  --bg-base: #030405;
   --bg-edge: #020308;
-  --bg-midnight: #050a14;
-  --bg-surface: rgba(10, 14, 24, 0.78);
-  --bg-card: rgba(12, 16, 26, 0.62);
-  --bg-elevated: rgba(16, 20, 32, 0.85);
-  --bg-header: rgba(6, 10, 18, 0.9);
+  --bg-midnight: #070a09;
+  --bg-surface: rgba(9, 13, 11, 0.82);
+  --bg-card: rgba(9, 13, 11, 0.72);
+  --bg-elevated: rgba(12, 18, 16, 0.88);
+  --bg-header: rgba(6, 10, 9, 0.92);
   --bg-atmosphere:
-    radial-gradient(ellipse 110% 72% at 50% -18%, rgba(148, 163, 184, 0.2) 0%, transparent 58%),
-    radial-gradient(ellipse 62% 48% at 10% 26%, rgba(100, 116, 139, 0.15) 0%, transparent 54%),
-    radial-gradient(ellipse 58% 44% at 92% 18%, rgba(148, 163, 184, 0.12) 0%, transparent 52%),
-    radial-gradient(ellipse 78% 58% at 72% 70%, rgba(71, 85, 105, 0.18) 0%, transparent 56%),
-    radial-gradient(ellipse 68% 52% at 22% 84%, rgba(148, 163, 184, 0.11) 0%, transparent 50%),
-    radial-gradient(ellipse 52% 38% at 48% 42%, rgba(203, 213, 225, 0.05) 0%, transparent 62%),
-    radial-gradient(ellipse 95% 65% at 50% 108%, rgba(15, 23, 42, 0.85) 0%, transparent 54%),
-    linear-gradient(168deg, var(--bg-midnight) 0%, var(--bg-base) 42%, var(--bg-edge) 100%);
+    radial-gradient(ellipse 90% 60% at 100% 0%, rgba(63, 201, 255, 0.10) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 50% at 0% 12%, rgba(57, 255, 158, 0.08) 0%, transparent 55%),
+    radial-gradient(ellipse 55% 45% at 78% 88%, rgba(255, 159, 63, 0.05) 0%, transparent 58%),
+    radial-gradient(ellipse 40% 30% at 18% 92%, rgba(255, 61, 154, 0.03) 0%, transparent 50%),
+    linear-gradient(168deg, var(--bg-midnight) 0%, var(--bg-base) 48%, var(--bg-edge) 100%);
 
-  /* Accents — green primary, blue logo, pink outlines, orange highlights */
-  --accent-primary: #00ff41;
-  --accent-bright: #5cff7a;
-  --accent-blue: #00c8ff;
-  --accent-secondary: #ff2bd6;
-  --accent-magenta: #ff2bd6;
-  --accent-orange: #ff7a1a;
-  --accent-purple: #9b59ff;
-  --accent-dim: rgba(0, 255, 65, 0.12);
-  --accent-glow: rgba(0, 255, 65, 0.35);
-  --accent-glow-blue: rgba(0, 200, 255, 0.35);
-  --accent-glow-magenta: rgba(255, 43, 214, 0.45);
-  --accent-glow-orange: rgba(255, 122, 26, 0.4);
-  --accent-glow-purple: rgba(155, 89, 255, 0.22);
+  /* Accents — green primary, blue secondary, orange tertiary, pink sparse */
+  --accent-primary: #39ff9e;
+  --accent-bright: #6affb5;
+  --accent-blue: #3fc9ff;
+  --accent-secondary: #ff3d9a;
+  --accent-magenta: #ff3d9a;
+  --accent-orange: #ff9f3f;
+  --accent-purple: #5a6b8a;
+  --accent-dim: rgba(57, 255, 158, 0.12);
+  --accent-glow: rgba(57, 255, 158, 0.35);
+  --accent-glow-blue: rgba(63, 201, 255, 0.35);
+  --accent-glow-magenta: rgba(255, 61, 154, 0.28);
+  --accent-glow-orange: rgba(255, 159, 63, 0.35);
+  --accent-glow-purple: rgba(90, 107, 138, 0.18);
 
   /* Signals */
-  --signal-buy: #39ff14;
-  --signal-sell: #ff1744;
-  --signal-hold: #ff2bd6;
+  --signal-buy: #39ff9e;
+  --signal-sell: #ff9f3f;
+  --signal-hold: #ff3d9a;
   --signal-watch: var(--accent-orange);
   --signal-amber: var(--accent-orange);
 
   /* Text */
-  --text-primary: #e8f7ff;
-  --text-secondary: #8aa0b8;
-  --text-muted: #8a9a9e;
+  --text-primary: #eef7f1;
+  --text-secondary: #8ba598;
+  --text-muted: #4f6459;
 
-  /* Borders — slate hairlines; accent on interactive only */
-  --border-subtle: rgba(148, 163, 184, 0.12);
-  --border-default: rgba(148, 163, 184, 0.2);
-  --border-bright: rgba(56, 189, 248, 0.45);
-  --border-magenta: rgba(255, 43, 214, 0.55);
-  --border-important: rgba(255, 43, 214, 0.65);
+  /* Borders — hairlines; pink only on truly important */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-bright: rgba(63, 201, 255, 0.4);
+  --border-magenta: rgba(255, 61, 154, 0.4);
+  --border-important: rgba(57, 255, 158, 0.55);
   --border-width: 2px;
   --border-width-important: 3px;
-  --board-border-gradient: linear-gradient(135deg, #00c8ff 0%, #3dffa8 52%, #00ff41 100%);
-  --important-border-gradient: linear-gradient(135deg, #ff7a1a 0%, #ff4dc4 52%, #ff2bd6 100%);
-  --card-panel-fill: linear-gradient(rgba(10, 12, 18, 0.96), rgba(10, 12, 18, 0.96));
-  --card-panel-shine: linear-gradient(180deg, rgba(0, 200, 255, 0.06) 0%, rgba(0, 255, 65, 0.04) 38%, transparent 72%);
+  --board-border-gradient: linear-gradient(135deg, #3fc9ff 0%, #39ff9e 55%, #ff9f3f 100%);
+  --important-border-gradient: linear-gradient(135deg, #39ff9e 0%, #3fc9ff 55%, #ff3d9a 100%);
+  --card-panel-fill: linear-gradient(rgba(9, 13, 11, 0.96), rgba(9, 13, 11, 0.96));
+  --card-panel-shine: linear-gradient(180deg, rgba(63, 201, 255, 0.06) 0%, rgba(57, 255, 158, 0.05) 38%, transparent 72%);
 
   /* Radius */
   --radius-sm: 8px;
@@ -66,13 +63,13 @@
   --radius-lg: 16px;
   --radius-pill: 9999px;
 
-  /* Shadows / bloom */
-  --shadow-card: 0 8px 28px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(0, 255, 65, 0.06) inset;
-  --shadow-important: 0 0 24px rgba(255, 43, 214, 0.18), 0 0 48px rgba(255, 43, 214, 0.08);
+  /* Shadows / bloom — mild glow; pink not dominant */
+  --shadow-card: 0 8px 28px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(57, 255, 158, 0.05) inset;
+  --shadow-important: 0 0 22px rgba(57, 255, 158, 0.16), 0 0 40px rgba(63, 201, 255, 0.08);
   --shadow-elevated: 0 14px 48px rgba(0, 0, 0, 0.85);
-  --shadow-glow: 0 0 18px var(--accent-glow), 0 0 40px var(--accent-glow-purple);
-  --shadow-glow-magenta: 0 0 16px var(--accent-glow-magenta), 0 0 36px rgba(255, 43, 214, 0.2);
-  --shadow-bloom: 0 0 8px currentColor, 0 0 22px currentColor;
+  --shadow-glow: 0 0 18px var(--accent-glow), 0 0 36px var(--accent-glow-blue);
+  --shadow-glow-magenta: 0 0 14px var(--accent-glow-magenta);
+  --shadow-bloom: 0 0 8px currentColor, 0 0 20px currentColor;
 
   /* Typography */
   --font-display: 'Rajdhani', system-ui, sans-serif;
@@ -117,9 +114,9 @@ a:hover { color: var(--accent-orange); text-shadow: 0 0 12px var(--accent-glow-o
 .mono { font-family: var(--font-mono); }
 .display { font-family: var(--font-display); }
 
-.pos, .buy { color: var(--signal-buy); text-shadow: 0 0 10px rgba(57, 255, 20, 0.45); }
-.neg, .sell { color: var(--signal-sell); text-shadow: 0 0 10px rgba(255, 23, 68, 0.4); }
-.neu, .hold { color: var(--signal-hold); text-shadow: 0 0 10px rgba(255, 43, 214, 0.35); }
+.pos, .buy { color: var(--signal-buy); text-shadow: 0 0 10px rgba(57, 255, 158, 0.4); }
+.neg, .sell { color: var(--signal-sell); text-shadow: 0 0 10px rgba(255, 159, 63, 0.35); }
+.neu, .hold { color: var(--signal-hold); text-shadow: 0 0 8px rgba(255, 61, 154, 0.28); }
 .watch { color: var(--signal-watch); }
 
 /* Accessibility + numeric alignment (visual upgrade) */

@@ -2,23 +2,23 @@
 
 /* ---------- Atmosphere overlay (masked grid) ---------- */
 .council-first-theme {
-  --sr-bg-deep: #04060e;
+  --sr-bg-deep: #030405;
   --sr-bg-edge: #020308;
-  --sr-slate: #94a3b8;
-  --sr-muted: #64748b;
-  --sr-panel: rgba(10, 14, 24, 0.82);
-  --sr-hairline: rgba(148, 163, 184, 0.14);
-  --sr-glow-live: rgba(56, 189, 248, 0.22);
-  --sr-glow-pos: rgba(52, 211, 153, 0.2);
-  --sr-glow-warn: rgba(251, 191, 36, 0.18);
-  --sr-glow-neg: rgba(248, 113, 113, 0.18);
+  --sr-slate: #8ba598;
+  --sr-muted: #4f6459;
+  --sr-panel: rgba(9, 13, 11, 0.84);
+  --sr-hairline: rgba(255, 255, 255, 0.07);
+  --sr-glow-live: rgba(63, 201, 255, 0.22);
+  --sr-glow-pos: rgba(57, 255, 158, 0.22);
+  --sr-glow-warn: rgba(255, 159, 63, 0.2);
+  --sr-glow-neg: rgba(255, 159, 63, 0.18);
 }
 
 body.council-first-theme {
   background-color: var(--sr-bg-deep);
   background-image:
-    linear-gradient(rgba(148, 163, 184, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.025) 1px, transparent 1px),
+    linear-gradient(rgba(57, 255, 158, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(63, 201, 255, 0.02) 1px, transparent 1px),
     var(--bg-atmosphere);
   background-size: 28px 28px, 28px 28px, auto;
 }
@@ -40,7 +40,7 @@ body.council-first-theme {
 }
 
 .sr-panel--live {
-  border-left: 3px solid #38bdf8;
+  border-left: 3px solid #39ff9e;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -63,11 +63,11 @@ body.council-first-theme {
   font-weight: 500;
 }
 .sr-hud .logo-mark {
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35), 0 0 20px rgba(52, 211, 153, 0.2);
+  box-shadow: 0 0 12px rgba(63, 201, 255, 0.3), 0 0 20px rgba(57, 255, 158, 0.22);
 }
 .sr-hud .live-pill--live {
-  box-shadow: 0 0 14px var(--sr-glow-live);
-  border-color: rgba(56, 189, 248, 0.45);
+  box-shadow: 0 0 14px var(--sr-glow-pos);
+  border-color: rgba(57, 255, 158, 0.4);
 }
 .sr-hud-status {
   display: flex;

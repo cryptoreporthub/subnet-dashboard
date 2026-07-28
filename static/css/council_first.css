@@ -1,10 +1,10 @@
 /* Council-first composition — decision stage, then bench, market demoted */
 
 .council-first-theme {
-  --stage-ink: #e8f0e9;
-  --stage-muted: #94a3b8;
-  --stage-accent: #00ff41;
-  --stage-wash: #0a101c;
+  --stage-ink: #eef7f1;
+  --stage-muted: #8ba598;
+  --stage-accent: #39ff9e;
+  --stage-wash: #070a09;
 }
 
 .app-shell.council-first {
@@ -49,11 +49,11 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 88% 62% at 68% 36%, rgba(148, 163, 184, 0.16) 0%, transparent 56%),
-    radial-gradient(ellipse 54% 42% at 14% 78%, rgba(100, 116, 139, 0.13) 0%, transparent 52%),
-    radial-gradient(ellipse 46% 36% at 92% 12%, rgba(203, 213, 225, 0.07) 0%, transparent 48%),
-    radial-gradient(ellipse 72% 50% at 42% 58%, rgba(71, 85, 105, 0.12) 0%, transparent 54%),
-    linear-gradient(180deg, #030508 0%, var(--stage-wash) 48%, #020308 100%);
+    radial-gradient(ellipse 80% 55% at 72% 28%, rgba(63, 201, 255, 0.10) 0%, transparent 55%),
+    radial-gradient(ellipse 55% 42% at 12% 78%, rgba(57, 255, 158, 0.08) 0%, transparent 52%),
+    radial-gradient(ellipse 42% 32% at 92% 14%, rgba(255, 159, 63, 0.05) 0%, transparent 48%),
+    radial-gradient(ellipse 36% 28% at 40% 90%, rgba(255, 61, 154, 0.03) 0%, transparent 50%),
+    linear-gradient(180deg, #030405 0%, var(--stage-wash) 48%, #020308 100%);
   pointer-events: none;
 }
 
