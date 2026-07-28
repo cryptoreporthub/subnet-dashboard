@@ -20,7 +20,6 @@ def test_has_local_volume_data_with_soul_map(tmp_path, monkeypatch):
 def test_needs_worker_volume_proxy_split_v2_web(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")
-    monkeypatch.setenv("DATA_DIR", "/nonexistent")
     from internal.data_volume import needs_worker_volume_proxy
 
     assert needs_worker_volume_proxy() is True
