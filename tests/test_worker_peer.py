@@ -54,7 +54,7 @@ def test_worker_peer_dedicated_worker_reads_file(monkeypatch, tmp_path):
 
 
 def test_fetch_worker_json_sync_retries_second_base(monkeypatch):
-    monkeypatch.delenv("WORKER_INTERNAL_URL", raising=False)
+    monkeypatch.setenv("WORKER_INTERNAL_URL", "http://bad.internal:8080")
     calls = []
 
     class _Resp:
@@ -86,6 +86,18 @@ def test_fetch_worker_json_sync_retries_second_base(monkeypatch):
     out = fetch_worker_json_sync("/api/ops/worker-peer", timeout=2)
     assert out.get("ok") is True
     assert len(calls) == 2
+
+
+def test_worker_peer_route_404_on_web(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    from fastapi.testclient import TestClient
+
+    from server import app
+
+    with TestClient(app) as client:
+        resp = client.get("/api/ops/worker-peer")
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "worker_peer_only_on_worker_machine"
 
 
 def test_ops_live_split_v2_uses_http_peer(monkeypatch):

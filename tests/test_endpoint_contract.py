@@ -268,6 +268,10 @@ def test_contract_route_ok(client, method, path, body):
         raise AssertionError(f"Unsupported method {method}")
 
     # Route must exist (not 404) and must not error (no 5xx).
+    if path == "/api/ops/worker-peer" and resp.status_code == 404:
+        # ponytail: web machine returns 404 so flycast misroutes do not recurse peer probes.
+        assert resp.status_code < 500
+        return
     assert resp.status_code != 404, f"{method} {path} is missing (404)"
     assert resp.status_code < 500, f"{method} {path} returned {resp.status_code}"
     allowed = {200}

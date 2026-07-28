@@ -32,6 +32,13 @@ async def api_ops_live():
 @health_router.get("/api/ops/worker-peer")
 async def api_ops_worker_peer():
     """Minimal worker liveness for split_v2 web HTTP probe (file heartbeat only)."""
+    from fastapi import HTTPException
+
+    from internal.run_mode import is_worker_mode
+
+    if not is_worker_mode():
+        # ponytail: flycast can route to web — never recurse HTTP peer probe on web.
+        raise HTTPException(status_code=404, detail="worker_peer_only_on_worker_machine")
     from internal.worker_peer import get_worker_peer
 
     return {"worker_peer": get_worker_peer()}
