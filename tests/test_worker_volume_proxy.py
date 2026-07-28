@@ -64,7 +64,8 @@ def test_worker_internal_bases_ignores_flycast_secret_without_opt_in(monkeypatch
 
     bases = worker_internal_bases()
     assert "http://subnet-dashboard.flycast:8080" not in bases
-    assert "http://worker.process.subnet-dashboard.internal:8080" in bases
+    assert "http://subnet-dashboard.flycast:8081" in bases
+    assert "http://worker.process.subnet-dashboard.internal:8081" in bases
 
 
 def test_worker_internal_bases_includes_regional_dns(monkeypatch):
@@ -74,7 +75,7 @@ def test_worker_internal_bases_includes_regional_dns(monkeypatch):
     from internal.worker_proxy import worker_internal_bases
 
     bases = worker_internal_bases()
-    assert "http://worker.process.sjc.subnet-dashboard.internal:8080" in bases
+    assert "http://worker.process.sjc.subnet-dashboard.internal:8081" in bases
 
 
 def test_worker_proxy_middleware(monkeypatch):

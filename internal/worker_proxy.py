@@ -84,24 +84,34 @@ def _flycast_opt_in() -> bool:
     )
 
 
+def worker_http_port() -> int:
+    try:
+        return int(os.environ.get("WORKER_HTTP_PORT", "8081"))
+    except ValueError:
+        return 8081
+
+
 def worker_internal_bases() -> List[str]:
-    """Ordered URLs for worker HTTP — process-group DNS first (avoids flycast hitting web)."""
+    """Ordered URLs for worker HTTP — worker-only port avoids web 8080 collision."""
     app = os.environ.get("FLY_APP_NAME", "subnet-dashboard").strip() or "subnet-dashboard"
-    flycast = f"http://{app}.flycast:8080"
+    port = worker_http_port()
+    flycast_pub = f"http://{app}.flycast:8080"
+    flycast_worker = f"http://{app}.flycast:{port}"
     bases: List[str] = []
     if _LAST_GOOD_BASE:
         bases.append(_LAST_GOOD_BASE)
     custom = os.environ.get("WORKER_INTERNAL_URL", "").strip().rstrip("/")
-    # ponytail: legacy fly secrets may still set flycast — ignore unless explicitly opted in.
-    if custom and (custom != flycast or _flycast_opt_in()):
+    # ponytail: legacy fly secrets may still set flycast:8080 — ignore unless opted in.
+    if custom and (custom != flycast_pub or _flycast_opt_in()):
         bases.append(custom)
+    # flycast :8081 only hits worker [[services]] — safe default for split_v2.
+    bases.append(flycast_worker)
     region = os.environ.get("FLY_REGION", "").strip()
     if region:
-        bases.append(f"http://worker.process.{region}.{app}.internal:8080")
-    bases.append(f"http://worker.process.{app}.internal:8080")
-    # flycast load-balances all machines on 8080 — can hit web and break peer probe.
+        bases.append(f"http://worker.process.{region}.{app}.internal:{port}")
+    bases.append(f"http://worker.process.{app}.internal:{port}")
     if _flycast_opt_in():
-        bases.append(flycast)
+        bases.append(flycast_pub)
     seen: set[str] = set()
     out: List[str] = []
     for base in bases:
