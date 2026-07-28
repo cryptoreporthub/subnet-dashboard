@@ -79,27 +79,10 @@ def _learning_summary() -> Dict[str, Any]:
 
 def build_liveness_report() -> Dict[str, Any]:
     """Fast liveness probe — file/heartbeat only; safe under worker wedge."""
-    from internal.run_mode import inline_worker_expected, is_worker_mode, split_worker_v2_enabled, worker_mode_label
+    from internal.run_mode import worker_mode_label
+    from internal.worker_peer import get_worker_peer
 
-    inline_worker = inline_worker_expected()
-    worker_peer: Dict[str, Any] = {"expected": inline_worker, "alive": False}
-    if is_worker_mode():
-        worker_peer = {"expected": True, "alive": True, "peer": "dedicated_worker"}
-    elif split_worker_v2_enabled():
-        worker_peer = {
-            "expected": True,
-            "alive": None,
-            "peer": "dedicated_worker",
-            "note": "cross_machine_no_shared_volume",
-        }
-    elif inline_worker:
-        from internal.worker_heartbeat import is_alive, read_heartbeat
-
-        worker_peer = {
-            "expected": True,
-            "alive": is_alive(),
-            "heartbeat": read_heartbeat(),
-        }
+    worker_peer = get_worker_peer()
 
     data_dir = os.environ.get("DATA_DIR", "data")
     volume_ok = os.path.isdir(data_dir) and os.access(data_dir, os.W_OK)
@@ -142,33 +125,16 @@ def build_readiness_report() -> Dict[str, Any]:
         loop_health = {}
 
     from internal.run_mode import inline_worker_expected, is_worker_mode, split_worker_v2_enabled, worker_mode_label
+    from internal.worker_peer import get_worker_peer
 
     inline_worker = inline_worker_expected()
     split_v2 = split_worker_v2_enabled()
-    worker_peer_alive = False
-    worker_peer: Dict[str, Any] = {"expected": inline_worker, "alive": False}
-    if is_worker_mode():
-        worker_peer = {"expected": True, "alive": True, "peer": "dedicated_worker"}
-        worker_peer_alive = True
+    worker_peer = get_worker_peer()
+    worker_peer_alive = bool(worker_peer.get("alive"))
+    if is_worker_mode() and worker_peer_alive:
         resolver = {**resolver, "running": True, "peer": "dedicated_worker"}
-    elif split_v2:
-        worker_peer = {
-            "expected": True,
-            "alive": None,
-            "peer": "dedicated_worker",
-            "note": "cross_machine_no_shared_volume",
-        }
-    elif inline_worker:
-        from internal.worker_heartbeat import is_alive, read_heartbeat
-
-        worker_peer_alive = is_alive()
-        worker_peer = {
-            "expected": True,
-            "alive": worker_peer_alive,
-            "heartbeat": read_heartbeat(),
-        }
-        if worker_peer_alive:
-            resolver = {**resolver, "running": True, "peer": "inline_worker"}
+    elif inline_worker and worker_peer_alive:
+        resolver = {**resolver, "running": True, "peer": "inline_worker"}
 
     try:
         from fetchers.taostats_client import is_available as taostats_available
@@ -181,6 +147,8 @@ def build_readiness_report() -> Dict[str, Any]:
         issues.append("learning_loop_has_no_graded_picks")
     if inline_worker and not worker_peer_alive:
         issues.append("inline_worker_not_running")
+    if split_v2 and not is_worker_mode() and worker_peer.get("alive") is False:
+        issues.append("dedicated_worker_not_running")
     if not resolver.get("running") and not (split_v2 and not is_worker_mode()):
         issues.append("prediction_resolver_not_running")
     if feed.get("likely_total", 0) <= 0:
@@ -243,6 +211,9 @@ def _next_levers(issues: List[str], taostats: bool) -> List[str]:
         levers.append("check_resolver_at_GET_/api/predictions/resolver")
     if "inline_worker_not_running" in issues:
         levers.append("check_inline_worker_heartbeat_data/.worker_heartbeat")
+    if "dedicated_worker_not_running" in issues:
+        levers.append("check_worker_machine_fly_scale_count_worker_1")
+        levers.append("check_worker_logs_fly_logs_p_worker")
     if "daily_pick_hold_no_published_long" in issues:
         levers.append("hold_is_honest_when_below_audit_gate_not_a_feed_outage")
     if "learning_loop_stalled" in issues or "daily_pick_ledger_gap" in issues:
