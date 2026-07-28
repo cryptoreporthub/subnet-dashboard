@@ -23,9 +23,19 @@ attached = data.get('attached_machine_id') or ''
 machines = json.loads(
     subprocess.check_output(['flyctl', 'machines', 'list', '-a', app, '--json'], text=True)
 )
+
+def process_group(m):
+    meta = (m.get('config') or {}).get('metadata') or {}
+    return (
+        meta.get('fly_process_group')
+        or meta.get('process_group')
+        or m.get('process_group')
+        or 'web'
+    ).lower()
+
 web_id = worker_id = ''
 for m in machines:
-    pg = (m.get('process_group') or 'web').lower()
+    pg = process_group(m)
     mid = m.get('id') or ''
     if pg == 'web':
         web_id = mid
