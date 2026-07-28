@@ -179,7 +179,7 @@ def _merge_snapshot_scheduler_state(
     mem_running = bool(mem_state.get("running"))
     peer = _worker_peer()
     running = mem_running
-    if inline_worker_expected() and not is_worker_mode():
+    if (inline_worker_expected() or split_worker_v2_enabled()) and not is_worker_mode():
         running = bool(peer.get("alive")) or mem_running
     tick_at = soul_last_cycle.get("run_at") or mem_state.get("last_run_at")
     return {
@@ -202,7 +202,7 @@ def _snapshot_stale(
     """True when snapshot scheduler is enabled but volume has no fresh file/cycle."""
     if not sched.get("enabled"):
         return False
-    if not inline_worker_expected():
+    if not inline_worker_expected() and not split_worker_v2_enabled():
         return False
     if not worker_peer.get("alive"):
         return False
@@ -221,30 +221,10 @@ def _snapshot_stale(
 
 
 def _worker_peer() -> Dict[str, Any]:
-    """Inline Fly worker liveness (web reads heartbeat file on shared volume)."""
-    if is_worker_mode():
-        return {"expected": True, "alive": True, "peer": "dedicated_worker"}
-    if split_worker_v2_enabled():
-        # ponytail: web machine has no shared volume — cross-machine liveness is unknown here.
-        return {
-            "expected": True,
-            "alive": None,
-            "peer": "dedicated_worker",
-            "note": "cross_machine_no_shared_volume",
-        }
-    if not inline_worker_expected():
-        return {"expected": False, "alive": None, "peer": "in_process"}
-    try:
-        from internal.worker_heartbeat import is_alive, read_heartbeat
+    """Worker liveness — file heartbeat (inline) or HTTP probe (split v2 web)."""
+    from internal.worker_peer import get_worker_peer
 
-        return {
-            "expected": True,
-            "alive": is_alive(max_age_seconds=180),
-            "heartbeat": read_heartbeat(),
-            "peer": "inline_worker",
-        }
-    except Exception:
-        return {"expected": True, "alive": False, "peer": "inline_worker"}
+    return get_worker_peer()
 
 
 def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
@@ -290,7 +270,7 @@ def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
         _, tick, ok, mem_running = candidates[0]
     peer = _worker_peer()
     running = mem_running
-    if inline_worker_expected() and not is_worker_mode():
+    if (inline_worker_expected() or split_worker_v2_enabled()) and not is_worker_mode():
         running = bool(peer.get("alive")) or mem_running
     else:
         running = bool(mem_running)
@@ -323,7 +303,7 @@ def _machine_restarted_since_tick(
     window_s: int = 900,
 ) -> bool:
     """True when inline worker heartbeat is fresh but soul_map tick predates this boot."""
-    if not inline_worker_expected() or is_worker_mode():
+    if is_worker_mode() or (not inline_worker_expected() and not split_worker_v2_enabled()):
         return False
     if not worker_peer.get("alive") or tick_age_s is None:
         return False

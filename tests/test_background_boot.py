@@ -1,6 +1,6 @@
 """Phase B — web/worker split boot gating."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -173,18 +173,24 @@ def test_worker_peer_split_v2_web(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")
     monkeypatch.setenv("INLINE_WORKER", "0")
-    peer = _worker_peer()
+    remote = {"worker_peer": {"alive": True, "heartbeat": {"ts": "2026-07-28T16:00:00Z"}}}
+    with patch("internal.worker_proxy.fetch_worker_json_sync", return_value=remote):
+        peer = _worker_peer()
     assert peer["peer"] == "dedicated_worker"
     assert peer["expected"] is True
-    assert peer["alive"] is None
-    assert peer.get("note") == "cross_machine_no_shared_volume"
+    assert peer["alive"] is True
+    assert peer.get("source") == "http"
 
 
-def test_worker_peer_split_v2_worker(monkeypatch):
+def test_worker_peer_split_v2_worker(monkeypatch, tmp_path):
     from internal.learning.loop_health import _worker_peer
 
     monkeypatch.setenv("RUN_MODE", "worker")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("WORKER_HEARTBEAT_PATH", str(tmp_path / ".worker_heartbeat"))
+    from internal.worker_heartbeat import touch_heartbeat
+
+    touch_heartbeat()
     peer = _worker_peer()
     assert peer["peer"] == "dedicated_worker"
     assert peer["alive"] is True
