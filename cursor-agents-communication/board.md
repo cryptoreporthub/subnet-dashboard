@@ -1,17 +1,11 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-28T06:50:00Z  
-<<<<<<< HEAD
-**main:** `41bdf12` — #563 Phase B · #562 Phase A · #561 locks · #560 names · SS-TG #557  
+**Last updated:** 2026-07-28T09:30:00Z  
+**main:** `2ffd728` — post-audit A–H (#562–#571) · Phase C prep #566 · names #554/#560  
 **Plans:** `full-roadmap-master-plan.md` · `post-audit-sprint-plan.md`
-=======
-**main:** `41bdf12` — sprint plan #559 · audit #555–#557 · SS-TG W0–W3  
-**Handoff:** `post-audit-sprint-plan.md` · `ditto-cursor-handoff.md`
->>>>>>> 9a81a0e (Phase H: Track 1 soak review checkpoint doc)
 
 ## Full roadmap
 
-<<<<<<< HEAD
 | Phase | Status |
 |-------|--------|
 | **0** Names | DONE (#554, #560) |
@@ -19,20 +13,6 @@
 | **2** Track 1 soak | ACTIVE — review 2026-08-04 / 2026-08-11 |
 | **3** SS-TG W1–W3 | **on main** (#557) — human 390px gate pending |
 | **4** Accuracy lift | gated post-soak |
-
-## Phase 1 — DONE
-=======
-| Phase | Status | Lock |
-|-------|--------|------|
-| **A** Ops quick wins | **in flight** | `ops-quick-wins-lock.md` |
-| B Outcome boot polish | queued | `outcome-boot-polish-lock.md` |
-| C Worker split v2 | queued | `fly-worker-split-v2-lock.md` |
-| D Security housekeeping | queued | |
-| E–G SS-TG W4–W6 | queued | `subnet-summers-telegram-lock.md` |
-| H Soak review | monitor | `track-1-soak-review-lock.md` |
-
-Babysit: `./scripts/babysit_phase.sh <phase>`
->>>>>>> 9a81a0e (Phase H: Track 1 soak review checkpoint doc)
 
 - Human: pump Ditto fetch disabled · Health Monitor artifact mode · stale memories superseded
 - Lock: `ditto-automation-migration-lock.md` (Gate 1 cleared)
@@ -42,19 +22,22 @@ Babysit: `./scripts/babysit_phase.sh <phase>`
 - W0 #549 · W1–W3 #557 on prod (HTML markers live)
 - **You:** 390px Subnet Summers desk — tap message expand, HC strip, proof band
 
-## Post-audit sprint (parallel track)
+## Post-audit sprint
 
-| Phase | Status |
-|-------|--------|
-| A Ops quick wins | DONE #562 |
-| B Outcome boot | DONE #563 |
-| C–H | see `post-audit-sprint-plan.md` |
+| Phase | Status | Lock |
+|-------|--------|------|
+| A Ops quick wins | DONE #562 | `ops-quick-wins-lock.md` |
+| B Outcome boot | DONE #563 | `outcome-boot-polish-lock.md` |
+| **C Worker split v2** | **PREP #566 · enablement in flight** | `fly-worker-split-v2-lock.md` |
+| D Security | DONE #567 | `security-housekeeping-lock.md` |
+| E SS-TG W4 | DONE #570 | `subnet-summers-telegram-lock.md` |
+| F SS-TG W5 | DONE #571 | |
+| G SS-TG W6 | DONE #569 (env-gated) | |
+| H Soak review | monitor #568 | `track-1-soak-review-lock.md` |
 
-<<<<<<< HEAD
-## Ops evidence — DONE (#546–#552)
-=======
+Babysit: `./scripts/babysit_phase.sh <phase>`
+
 - Lock: `track1-soak-lock.md` — soak day 0 = 2026-07-28; review 2026-08-04 / 2026-08-11
-- Phase H checkpoint: `track-1-soak-review-lock.md` (GO/HOLD at day 7 / day 14)
 
 ## Ops evidence — DONE
 
@@ -69,22 +52,16 @@ Babysit: `./scripts/babysit_phase.sh <phase>`
 
 - Prod: monitor `degraded` when resolver stale — recovers on tick
 - Track 1 soak running under #551 calibration
->>>>>>> 9a81a0e (Phase H: Track 1 soak review checkpoint doc)
 
 ## Active (monitor)
 
 | Track | Gate |
 |-------|------|
-<<<<<<< HEAD
-| Pick audit | 23:45 UTC |
-| Health Monitor | Ditto artifact mode |
-| Track 1 soak | day 7 / day 14 |
-| SS-TG Gate 3 | 390px sign-off |
-=======
 | Pick audit | 23:45 UTC nightly |
-| Wed/Sun Health Monitor | Ditto artifact mode |
+| Health Monitor | Ditto artifact mode |
 | Track 1 soak | day 7 / day 14 sign-off (`track-1-soak-review-lock.md`) |
->>>>>>> 9a81a0e (Phase H: Track 1 soak review checkpoint doc)
+| SS-TG Gate 3 | 390px sign-off |
+| **Phase C enable** | human: `./scripts/fly_enable_worker_v2.sh` after volume on worker |
 
 ## Out of scope
 

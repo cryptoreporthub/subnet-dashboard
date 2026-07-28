@@ -1,10 +1,19 @@
 #!/bin/sh
-# Ensure only the web process group serves HTTP — destroy orphan worker machines.
+# Ensure web serves HTTP; destroy orphan worker machines unless v2 split is enabled.
 set -eu
 APP="${FLY_APP:-subnet-dashboard}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "=== fly_web_recover: machines before ==="
 flyctl machines list -a "$APP" || true
+
+if "$SCRIPT_DIR/fly_worker_split_v2_guard.sh"; then
+  echo "WORKER_SPLIT_V2 secret present — keeping worker process group"
+  flyctl scale count web=1 worker=1 --app "$APP" --yes || true
+  echo "=== fly_web_recover: machines after (v2) ==="
+  flyctl machines list -a "$APP" || true
+  exit 0
+fi
 
 flyctl machines list -a "$APP" --json 2>/dev/null | python3 -c "
 import json, subprocess, sys

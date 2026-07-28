@@ -106,13 +106,19 @@ jobs:
           exit 1
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Scale to one web machine (avoid split-brain on volume)
-        run: flyctl scale count web=1 --app subnet-dashboard --yes
+      - name: Scale machines (v1 web-only, or v2 web+worker)
+        run: |
+          chmod +x scripts/fly_worker_split_v2_guard.sh
+          if ./scripts/fly_worker_split_v2_guard.sh; then
+            flyctl scale count web=1 worker=1 --app subnet-dashboard --yes
+          else
+            flyctl scale count web=1 --app subnet-dashboard --yes
+          fi
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Destroy orphan worker machines
+      - name: Reconcile process groups (destroy orphan workers unless v2)
         run: |
-          chmod +x scripts/fly_web_recover.sh
+          chmod +x scripts/fly_web_recover.sh scripts/fly_worker_split_v2_guard.sh
           FLY_APP=subnet-dashboard ./scripts/fly_web_recover.sh
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
