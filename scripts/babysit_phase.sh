@@ -58,6 +58,9 @@ import json,sys
 d=json.load(sys.stdin)
 print('worker_mode:', d.get('worker_mode'))
 print('worker_peer:', d.get('worker_peer'))
+wp=d.get('worker_peer') or {}
+if wp.get('expected') and not wp.get('alive'):
+    print('WARN: worker_peer not alive — volume may still be on web')
 "
     for i in 1 2 3; do
       curl -fsS --max-time 10 -w "pump-alerts $i: %{http_code} %{time_total}s\n" -o /dev/null "$BASE/api/pump-alerts" || echo "pump-alerts $i: FAIL"

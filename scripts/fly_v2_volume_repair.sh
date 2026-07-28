@@ -3,40 +3,79 @@
 set -euo pipefail
 
 APP="${FLY_APP:-subnet-dashboard}"
+REGION="${FLY_PRIMARY_REGION:-sjc}"
 
-echo "=== fly_v2_volume_repair: check volume placement ==="
-read -r web_vol worker_vol web_id worker_id <<<"$(flyctl machines list -a "$APP" --json | python3 -c "
-import json,sys
-web_vol=''
-worker_vol=''
-web_id=''
-worker_id=''
-for m in json.load(sys.stdin):
-    pg=(m.get('process_group') or 'web').lower()
-    vol=(m.get('config',{}).get('mounts') or [])
-    vid=vol[0].get('volume') if vol else ''
-    mid=m.get('id') or ''
-    if pg=='web':
-        web_id=mid
-        web_vol=vid or ''
-    elif pg=='worker':
-        worker_id=mid
-        worker_vol=vid or ''
-print(web_vol, worker_vol, web_id, worker_id)
-")"
+echo "=== fly_v2_volume_repair: check volume placement ($APP) ==="
 
-echo "web machine=$web_id volume=$web_vol"
-echo "worker machine=$worker_id volume=$worker_vol"
+read -r vol_id attached_id web_id worker_id <<<"$(flyctl volumes list -a "$APP" --json | python3 -c "
+import json, subprocess, sys
 
-if [ -n "$web_vol" ] && [ -z "$worker_vol" ] && [ -n "$web_id" ] && [ -n "$worker_id" ]; then
-  echo "REPAIR: data_volume on web — destroy web machine to release for worker mount"
-  flyctl machine destroy "$web_id" -a "$APP" --force
-  echo "waiting 25s for volume detach..."
-  sleep 25
-  flyctl volumes list -a "$APP" || true
-  echo "REPAIR: redeploy so worker attaches data_volume (web recreated without mount)"
-  flyctl deploy --config fly.worker-v2.toml --remote-only --no-cache --yes --regions "${FLY_PRIMARY_REGION:-sjc}" --ha=false
-  flyctl scale count web=1 worker=1 --app "$APP" --yes
-else
-  echo "fly_v2_volume_repair: no web-only volume misplacement detected"
+app = sys.argv[1]
+vols = json.load(sys.stdin)
+data = next((v for v in vols if v.get('name') == 'data_volume'), None)
+if not data:
+    print('', '', '', '')
+    raise SystemExit(0)
+
+vol_id = data.get('id') or ''
+attached = data.get('attached_machine_id') or ''
+
+machines = json.loads(
+    subprocess.check_output(['flyctl', 'machines', 'list', '-a', app, '--json'], text=True)
+)
+web_id = worker_id = ''
+for m in machines:
+    pg = (m.get('process_group') or 'web').lower()
+    mid = m.get('id') or ''
+    if pg == 'web':
+        web_id = mid
+    elif pg == 'worker':
+        worker_id = mid
+
+print(vol_id, attached, web_id, worker_id)
+" "$APP")"
+
+echo "data_volume=$vol_id attached_to=$attached_id web=$web_id worker=$worker_id"
+
+if [ -z "$vol_id" ]; then
+  echo "fly_v2_volume_repair: no data_volume — skip"
+  exit 0
 fi
+
+if [ -z "$web_id" ] || [ -z "$worker_id" ]; then
+  echo "fly_v2_volume_repair: need web=1 worker=1 — skip"
+  exit 0
+fi
+
+if [ "$attached_id" != "$web_id" ]; then
+  if [ -n "$attached_id" ] && [ "$attached_id" = "$worker_id" ]; then
+    echo "fly_v2_volume_repair: volume already on worker — ok"
+  else
+    echo "fly_v2_volume_repair: volume not on web (attached_to=$attached_id) — skip"
+  fi
+  exit 0
+fi
+
+echo "REPAIR: data_volume on web — recycle machines so worker mounts volume"
+
+flyctl machine destroy "$web_id" -a "$APP" --force
+echo "destroyed web $web_id — waiting 25s for volume detach..."
+sleep 25
+
+flyctl volumes list -a "$APP" || true
+
+# Existing worker has no mount; fly deploy often cannot attach volume to running worker.
+if [ -n "$worker_id" ]; then
+  echo "destroying worker $worker_id (no volume) before redeploy"
+  flyctl machine destroy "$worker_id" -a "$APP" --force || true
+  sleep 10
+fi
+
+echo "REPAIR: redeploy fly.worker-v2.toml (worker process owns [mounts])"
+flyctl deploy --config fly.worker-v2.toml --remote-only --no-cache --yes --regions "$REGION" --ha=false
+flyctl scale count web=1 worker=1 --app "$APP" --yes
+
+echo "waiting 45s for worker boot + volume attach..."
+sleep 45
+flyctl machines list -a "$APP" || true
+flyctl volumes list -a "$APP" || true
