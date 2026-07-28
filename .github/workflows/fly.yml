@@ -76,11 +76,17 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_PRIMARY_REGION: sjc
-      - name: Deploy to Fly (region sjc, single machine)
+      - name: Deploy to Fly (region sjc)
         run: |
           set -e
+          chmod +x scripts/fly_worker_split_v2_guard.sh
+          FLY_CONFIG=fly.toml
+          if ./scripts/fly_worker_split_v2_guard.sh; then
+            FLY_CONFIG=fly.worker-v2.toml
+            echo "WORKER_SPLIT_V2 secret set — deploying $FLY_CONFIG"
+          fi
           deploy_once() {
-            flyctl deploy --remote-only --no-cache --yes --regions sjc --ha=false
+            flyctl deploy --config "$FLY_CONFIG" --remote-only --no-cache --yes --regions sjc --ha=false
           }
           # ponytail: never destroy healthy machines up front — a failed recreate
           # leaves zero candidates and the edge shows a TLS error in browsers.
