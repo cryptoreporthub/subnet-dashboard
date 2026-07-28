@@ -1333,6 +1333,88 @@ button.home-cta {
   font-weight: 700;
   flex-shrink: 0;
 }
+.message-intel__summary-24h {
+  border: 1px solid rgba(53, 255, 160, 0.18);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: rgba(0, 0, 0, 0.18);
+}
+.message-intel__summary-24h-label {
+  margin: 0 0 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(138, 154, 142, 0.9);
+}
+.message-intel__summary-24h-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--stage-muted);
+}
+.message-intel__summary-24h-pulse {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+}
+.message-intel__summary-24h-pulse b { color: #e8f5e9; }
+.message-intel__summary-24h-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: baseline;
+}
+.message-intel__summary-24h-kicker {
+  flex: 0 0 auto;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(138, 154, 142, 0.85);
+  min-width: 4.5rem;
+}
+.message-intel__summary-24h-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.message-intel__summary-24h-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 11px;
+  color: #e8f5e9;
+  text-decoration: none;
+  max-width: 100%;
+}
+a.message-intel__summary-24h-chip:hover {
+  border-color: rgba(53, 255, 160, 0.35);
+  color: #35ffa0;
+}
+.message-intel__summary-24h-chip--up { border-color: rgba(52, 211, 153, 0.35); }
+.message-intel__summary-24h-chip--down { border-color: rgba(251, 113, 133, 0.35); }
+.message-intel__summary-24h-empty {
+  margin: 0;
+  font-size: 0.82rem;
+  color: rgba(138, 154, 142, 0.9);
+  font-style: italic;
+}
+@media (max-width: 390px) {
+  .message-intel__summary-24h-row {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .message-intel__summary-24h-kicker { min-width: 0; }
+}
 .message-intel__legend {
   display: flex;
   flex-wrap: wrap;

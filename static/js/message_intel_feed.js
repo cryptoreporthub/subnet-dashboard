@@ -22,6 +22,8 @@
   var hcRows = document.getElementById("message-intel-hc-rows");
   var proofCard = document.getElementById("message-intel-proof");
   var proofBody = document.getElementById("message-intel-proof-body");
+  var summary24hCard = document.getElementById("message-intel-summary-24h");
+  var summary24hBody = document.getElementById("message-intel-summary-24h-body");
   var detailPanel = document.getElementById("message-intel-detail");
   if (!feed) return;
 
@@ -46,6 +48,99 @@
         new CustomEvent("living-focus:change", { detail: { netuid: Number(netuid) } })
       );
     }
+  }
+
+  function renderSummary24h(summary) {
+    if (!summary24hCard || !summary24hBody) return;
+    summary = summary || {};
+    summary24hCard.hidden = false;
+    if (!summary.ready) {
+      summary24hBody.innerHTML =
+        '<p class="message-intel__summary-24h-empty">' +
+        esc(summary.empty_reason || "Not enough Telegram traffic in the last 24 hours yet.") +
+        "</p>";
+      return;
+    }
+
+    var pulse = summary.group_pulse || {};
+    var sent = pulse.sentiment || "Cautious";
+    var sentClass =
+      sent.toLowerCase() === "bullish"
+        ? "message-intel__sent--bull"
+        : sent.toLowerCase() === "bearish"
+          ? "message-intel__sent--bear"
+          : "";
+    var html =
+      '<p class="message-intel__summary-24h-pulse"><b>' +
+      esc(pulse.messages || summary.message_count || 0) +
+      "</b> messages · <b>" +
+      esc(summary.high_conviction_count != null ? summary.high_conviction_count : pulse.high_conviction || 0) +
+      "</b> high conviction · <span class=\"" +
+      sentClass +
+      '">' +
+      esc(sent) +
+      "</span>" +
+      (pulse.avg_conviction != null ? " · " + esc(pulse.avg_conviction) + "% avg conv" : "") +
+      (pulse.group ? " · " + esc(pulse.group) : "") +
+      "</p>";
+
+    function chipRow(label, rows, kind) {
+      if (!rows || !rows.length) return "";
+      var chips = rows
+        .map(function (row) {
+          var netuid = row.netuid;
+          var name = row.name || (netuid != null ? "SN" + netuid : "—");
+          var deltaVal = row.change != null ? row.change : row.delta;
+          var extra =
+            kind === "mover" && deltaVal != null
+              ? " " + (deltaVal > 0 ? "+" : "") + esc(deltaVal)
+              : row.mentions != null
+                ? " ×" + esc(row.mentions)
+                : "";
+          var cls =
+            kind === "mover"
+              ? deltaVal > 0
+                ? " message-intel__summary-24h-chip--up"
+                : deltaVal < 0
+                  ? " message-intel__summary-24h-chip--down"
+                  : ""
+              : "";
+          if (netuid == null) {
+            return (
+              '<span class="message-intel__summary-24h-chip' +
+              cls +
+              '">' +
+              esc(name) +
+              extra +
+              "</span>"
+            );
+          }
+          return (
+            '<a class="message-intel__summary-24h-chip' +
+            cls +
+            '" href="/subnet/' +
+            esc(netuid) +
+            '">' +
+            esc(name) +
+            extra +
+            "</a>"
+          );
+        })
+        .join("");
+      return (
+        '<div class="message-intel__summary-24h-row">' +
+        '<span class="message-intel__summary-24h-kicker">' +
+        esc(label) +
+        "</span>" +
+        '<div class="message-intel__summary-24h-chips">' +
+        chips +
+        "</div></div>"
+      );
+    }
+
+    html += chipRow("Top", summary.top_subnets || [], "top");
+    html += chipRow("Movers", summary.movers || [], "mover");
+    summary24hBody.innerHTML = html;
   }
 
   function renderTelegramProof(proof) {
@@ -718,6 +813,7 @@
       var listener = (status && status.listener) || (payload.meta && payload.meta.listener) || {};
       var trending = (payload.meta && payload.meta.trending) || [];
       renderYesterdayLeader((payload.meta && payload.meta.yesterday_leader) || null);
+      renderSummary24h((payload.meta && payload.meta.summary_24h) || null);
       renderTelegramProof((payload.meta && payload.meta.telegram_proof) || null);
       renderHighConvictionStrip((payload.meta && payload.meta.high_conviction_strip) || []);
       if (trendingEl) {

@@ -215,6 +215,7 @@ def _enrich_message_row(row: Dict[str, Any], names: Optional[Dict[int, str]] = N
 def list_messages(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
     from internal.message_intel.listener_service import listener_status
     from internal.message_intel.rollup import (
+        build_24h_summary,
         build_high_conviction_strip,
         build_telegram_proof_band,
         build_trending_subnets,
@@ -250,6 +251,16 @@ def list_messages(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
     except Exception as exc:
         logger.warning("message-intel telegram proof failed: %s", exc)
         meta["telegram_proof"] = {"graded": 0, "hits": 0, "hit_rate": None, "ready": False}
+    try:
+        meta["summary_24h"] = build_24h_summary(registry_names=names, db=db)
+    except Exception as exc:
+        logger.warning("message-intel 24h summary failed: %s", exc)
+        meta["summary_24h"] = {
+            "ready": False,
+            "message_count": 0,
+            "window_hours": 24,
+            "empty_reason": "Summary unavailable.",
+        }
     return {
         "status": "success",
         "count": len(messages),

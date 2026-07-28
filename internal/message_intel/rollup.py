@@ -453,6 +453,127 @@ def build_telegram_proof_band(*, db=None) -> Dict[str, Any]:
     }
 
 
+_MIN_24H_SUMMARY_MESSAGES = 10
+
+
+def build_24h_summary(
+    *,
+    registry_names: Optional[Dict[int, str]] = None,
+    limit: int = 5,
+    min_conviction: float = 60.0,
+    db=None,
+) -> Dict[str, Any]:
+    """SS-TG W4 — last-24h rollup: top subnets, movers, HC count, group pulse."""
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(hours=24)
+    prev_start = now - timedelta(hours=48)
+    registry_names = registry_names or {}
+
+    message_count = 0
+    hc_count = 0
+    sentiment_sum = 0.0
+    sentiment_n = 0
+    conviction_sum = 0.0
+    subnet_counts: Dict[int, int] = defaultdict(int)
+    prev_subnet_counts: Dict[int, int] = defaultdict(int)
+    group_counts: Dict[str, int] = defaultdict(int)
+
+    for row in _load_message_rows(db):
+        ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if ts is None or ts < prev_start:
+            continue
+        in_current = ts >= window_start
+        in_prev = prev_start <= ts < window_start
+        if not in_current and not in_prev:
+            continue
+
+        if in_current:
+            message_count += 1
+            s_val = _sentiment_value(row.get("sentiment"))
+            sentiment_sum += s_val
+            sentiment_n += 1
+            try:
+                conviction = float(row.get("conviction") or 0)
+            except (TypeError, ValueError):
+                conviction = 0.0
+            conviction_sum += conviction
+            if conviction >= min_conviction:
+                hc_count += 1
+            group = str(row.get("group_name") or "").strip()
+            if group:
+                group_counts[group] += 1
+            for netuid in _netuids_from_row(row):
+                subnet_counts[netuid] += 1
+
+        if in_prev:
+            for netuid in _netuids_from_row(row):
+                prev_subnet_counts[netuid] += 1
+
+    base: Dict[str, Any] = {
+        "window_hours": 24,
+        "message_count": message_count,
+        "ready": message_count >= _MIN_24H_SUMMARY_MESSAGES,
+    }
+    if message_count < _MIN_24H_SUMMARY_MESSAGES:
+        base["empty_reason"] = (
+            f"Only {message_count} message{'s' if message_count != 1 else ''} in the last 24h — "
+            f"summary needs at least {_MIN_24H_SUMMARY_MESSAGES}."
+        )
+        base["min_messages"] = _MIN_24H_SUMMARY_MESSAGES
+        return base
+
+    avg_sent = (sentiment_sum / sentiment_n) if sentiment_n else 0.0
+    avg_conv = (conviction_sum / message_count) if message_count else 0.0
+
+    top_subnets: List[Dict[str, Any]] = []
+    for netuid, mentions in sorted(subnet_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]:
+        top_subnets.append(
+            {
+                "netuid": netuid,
+                "name": registry_names.get(netuid) or f"Subnet {netuid}",
+                "mentions": int(mentions),
+            }
+        )
+
+    movers: List[Dict[str, Any]] = []
+    for netuid in set(subnet_counts) | set(prev_subnet_counts):
+        cur = int(subnet_counts.get(netuid, 0))
+        prev = int(prev_subnet_counts.get(netuid, 0))
+        if cur <= 0:
+            continue
+        movers.append(
+            {
+                "netuid": netuid,
+                "name": registry_names.get(netuid) or f"Subnet {netuid}",
+                "mentions": cur,
+                "prev_mentions": prev,
+                "change": cur - prev,
+            }
+        )
+    movers.sort(key=lambda r: (r["change"], r["mentions"]), reverse=True)
+
+    group_pulse: Dict[str, Any] = {
+        "messages": message_count,
+        "high_conviction": hc_count,
+        "sentiment": _sentiment_tag(avg_sent),
+        "avg_conviction": round(avg_conv, 1),
+    }
+    if group_counts:
+        top_group, top_count = max(group_counts.items(), key=lambda kv: kv[1])
+        group_pulse["group"] = top_group
+        group_pulse["top_group_messages"] = int(top_count)
+        group_pulse["groups_active"] = len(group_counts)
+
+    return {
+        **base,
+        "top_subnets": top_subnets,
+        "movers": movers[:limit],
+        "high_conviction_count": hc_count,
+        "group_pulse": group_pulse,
+        "generated_at": now.isoformat().replace("+00:00", "Z"),
+    }
+
+
 def build_high_conviction_strip(
     *,
     limit: int = 5,
