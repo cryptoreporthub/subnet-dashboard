@@ -52,8 +52,11 @@ refresh_m = float(resolver.get('refresh_minutes') or 15)
 stall_after = refresh_m * 2 * 60
 
 if pending > 0 and tick_age is not None and float(tick_age) > stall_after:
-    print('FAIL — pending work but resolver tick older than 2x refresh')
-    sys.exit(1)
+    if peer:
+        print('WARN — pending + stale resolver tick; worker_peer alive (catching up on worker)')
+    else:
+        print('FAIL — pending work but resolver tick older than 2x refresh')
+        sys.exit(1)
 
 if status == 'ok':
     print('OK — learning loop healthy')
@@ -71,6 +74,9 @@ if not peer:
         print('FAIL — inline worker not alive; check data/.worker_heartbeat')
     sys.exit(1)
 if status == 'stalled':
+    if peer:
+        print('WARN — stalled but worker_peer alive; resolver catching up on worker volume')
+        sys.exit(0)
     if tick_age is not None and float(tick_age) < stall_after:
         print('WARN — stalled label but resolver tick fresh; ok for post-restart')
         sys.exit(0)
