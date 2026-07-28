@@ -275,6 +275,18 @@ if _ENABLE_METRICS:
 
 mount_rate_limit(app)
 
+try:
+    from internal.write_auth import check_write_auth
+
+    @app.middleware("http")
+    async def _write_auth_middleware(request, call_next):
+        denied = check_write_auth(request)
+        if denied is not None:
+            return denied
+        return await call_next(request)
+except Exception as _write_auth_exc:  # pragma: no cover
+    logger.warning("Write auth middleware unavailable: %s", _write_auth_exc)
+
 app.include_router(whales_router)
 app.include_router(watchlist_router)
 app.include_router(portfolio_router)

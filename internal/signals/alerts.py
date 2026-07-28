@@ -72,9 +72,9 @@ class AlertEngine:
         safe_write_json(self.subscriptions_path, data)
 
     def subscribe_webhook(self, url: str) -> Dict[str, Any]:
-        url = (url or "").strip()
-        if not url.startswith(("http://", "https://")):
-            raise ValueError("webhook url must start with http:// or https://")
+        from internal.webhook_url import validate_webhook_url
+
+        url = validate_webhook_url(url)
         data = self.load_subscriptions()
         hooks = list(data.get("webhooks") or [])
         if url not in hooks:
