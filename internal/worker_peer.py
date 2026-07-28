@@ -27,7 +27,7 @@ def _remote_peer(*, max_age_seconds: int) -> Dict[str, Any]:
         from internal.worker_proxy import fetch_worker_json_sync
 
         timeout = float(os.environ.get("WORKER_PEER_TIMEOUT_SECONDS", "12"))
-        probe_path = os.environ.get("WORKER_PEER_PROBE_PATH", "/api/ops/live").strip()
+        probe_path = os.environ.get("WORKER_PEER_PROBE_PATH", "/api/ops/worker-peer").strip()
         if not probe_path.startswith("/"):
             probe_path = f"/{probe_path}"
         remote = fetch_worker_json_sync(probe_path, timeout=timeout)

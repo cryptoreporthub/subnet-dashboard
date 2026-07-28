@@ -17,6 +17,18 @@ def volume_on_web(vol_id: str, attached: str, web_id: str, worker_id: str) -> bo
     return bool(vol_id and attached and web_id and worker_id and attached == web_id)
 
 
+def worker_vm_internal_url(machine_id: str, app: str) -> str:
+    return f"http://{machine_id}.vm.{app}.internal:8080"
+
+
+def pick_worker_internal_url(machines: list, app: str) -> str | None:
+    started = [m for m in machines if machine_process_group(m) == "worker"]
+    if not started:
+        return None
+    mid = started[0].get("id") or ""
+    return worker_vm_internal_url(mid, app) if mid else None
+
+
 def test_machine_process_group_from_metadata():
     m = {"id": "w1", "config": {"metadata": {"fly_process_group": "worker"}}}
     assert machine_process_group(m) == "worker"
@@ -36,3 +48,12 @@ def test_volume_on_worker_ok():
 
 def test_volume_unattached():
     assert not volume_on_web("vol1", "", "webmachine", "workermachine")
+
+
+def test_pick_worker_internal_url():
+    machines = [
+        {"id": "web1", "config": {"metadata": {"fly_process_group": "web"}}},
+        {"id": "wrk1", "config": {"metadata": {"fly_process_group": "worker"}}},
+    ]
+    url = pick_worker_internal_url(machines, "subnet-dashboard")
+    assert url == "http://wrk1.vm.subnet-dashboard.internal:8080"
