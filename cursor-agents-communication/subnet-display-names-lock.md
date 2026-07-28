@@ -1,6 +1,6 @@
 # LOCK — Subnet display names
 
-**Status:** ACTIVE (pending PR)  
+**Status:** DONE (2026-07-28, #554 merged `31e84b1`)  
 **Branch:** `cursor/subnet-name-fix-4988`  
 **Plan:** `full-roadmap-master-plan.md` Phase 0
 
