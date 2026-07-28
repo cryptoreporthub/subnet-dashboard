@@ -153,6 +153,44 @@ def test_fetch_worker_json_sync_skips_web_misroute(monkeypatch):
     assert len(calls) == 2
 
 
+def test_fetch_worker_json_sync_from_async_context(monkeypatch):
+    """Peer probe runs inside FastAPI async routes — must not call asyncio.run inline."""
+    monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
+    import internal.worker_proxy as wp
+
+    wp._LAST_GOOD_BASE = None
+    calls = []
+
+    class _Resp:
+        status_code = 200
+        request = None
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"worker_peer": {"alive": True, "source": "file", "peer": "dedicated_worker"}}
+
+    async def _handler(calls, url):
+        calls.append(url)
+        return _Resp()
+
+    async def _mock_fetch(path, query="", timeout=12):
+        return await _handler(calls, path)
+
+    monkeypatch.setattr(wp, "_fetch_worker_http", _mock_fetch)
+
+    async def _route():
+        from internal.worker_proxy import fetch_worker_json_sync
+
+        return fetch_worker_json_sync("/api/ops/live", timeout=2)
+
+    import asyncio
+
+    out = asyncio.run(_route())
+    assert out["worker_peer"]["alive"] is True
+
+
 def test_ops_live_split_v2_uses_http_peer(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")

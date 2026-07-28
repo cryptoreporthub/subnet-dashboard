@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
 import os
 from typing import Any, Dict, List, Optional
@@ -126,6 +127,17 @@ async def _fetch_worker_http(path: str, *, query: str = "", timeout: float) -> h
     raise OSError("no worker HTTP base succeeded")
 
 
+def _run_coro_sync(coro) -> Any:
+    """Run async fetch from sync or FastAPI async handlers (no nested asyncio.run)."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    # ponytail: ops/live is async — asyncio.run there raises; thread pool is the smallest fix.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
 def fetch_worker_json_sync(path: str, *, timeout: Optional[float] = None) -> Dict[str, Any]:
     """Sync GET for listener_status and worker peer probes (retries alternate bases)."""
     if timeout is None:
@@ -136,8 +148,7 @@ def fetch_worker_json_sync(path: str, *, timeout: Optional[float] = None) -> Dic
         data = resp.json()
         return data if isinstance(data, dict) else {}
 
-    # ponytail: AsyncClient matches working volume proxy; sync Client can fail on 6PN.
-    return asyncio.run(_load())
+    return _run_coro_sync(_load())
 
 
 async def proxy_get_to_worker(request: Request) -> Response:
