@@ -1,4 +1,4 @@
-/** SS-TG W0 — Subnet Summers Telegram desk (trending, champions, rich live feed) */
+/** SS-TG W0–W3 — Subnet Summers Telegram desk */
 (function () {
   "use strict";
 
@@ -18,15 +18,220 @@
   var yesterdayIcon = document.getElementById("message-intel-yesterday-icon");
   var yesterdayChips = document.getElementById("message-intel-yesterday-chips");
   var liveTag = document.getElementById("message-intel-live-tag");
+  var hcStrip = document.getElementById("message-intel-hc-strip");
+  var hcRows = document.getElementById("message-intel-hc-rows");
+  var proofCard = document.getElementById("message-intel-proof");
+  var proofBody = document.getElementById("message-intel-proof-body");
+  var detailPanel = document.getElementById("message-intel-detail");
   if (!feed) return;
 
   var lastStatus = null;
   var refreshTimer = null;
+  var openDetailId = null;
   var GROUP_URL = "https://t.me/OfficialSubnetSummer";
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function openLivingFocus(netuid) {
+    if (netuid == null) return;
+    var root = document.getElementById("section-living-focus");
+    if (root) {
+      root.setAttribute("data-focus-netuid", String(netuid));
+      root.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.dispatchEvent(
+        new CustomEvent("living-focus:change", { detail: { netuid: Number(netuid) } })
+      );
+    }
+  }
+
+  function renderTelegramProof(proof) {
+    if (!proofCard || !proofBody) return;
+    proof = proof || {};
+    if (!proof.ready && !(proof.graded > 0)) {
+      proofCard.hidden = true;
+      proofBody.innerHTML = "";
+      return;
+    }
+    proofCard.hidden = false;
+    var rate = proof.hit_rate != null ? esc(proof.hit_rate) + "%" : "—";
+    var html =
+      '<p class="message-intel__proof-score"><b>' +
+      rate +
+      "</b> hit-rate · " +
+      esc(proof.hits || 0) +
+      "/" +
+      esc(proof.graded || 0) +
+      " graded Telegram calls</p>";
+    if (proof.recent && proof.recent.length) {
+      html += '<ul class="message-intel__proof-list">';
+      proof.recent.forEach(function (r) {
+        var label = r.hit ? "hit" : "miss";
+        html +=
+          "<li><span class=\"message-intel__proof-" +
+          label +
+          '">' +
+          esc(label.toUpperCase()) +
+          "</span> " +
+          esc(r.author_name || "anon") +
+          (r.netuid != null ? " · SN" + esc(r.netuid) : "") +
+          (r.pump_pct_max != null ? " · " + esc(r.pump_pct_max) + "% max" : "") +
+          "</li>";
+      });
+      html += "</ul>";
+    } else {
+      html += '<p class="empty">Graded outcomes appear after price snapshots resolve.</p>';
+    }
+    proofBody.innerHTML = html;
+  }
+
+  function renderHighConvictionStrip(rows) {
+    if (!hcStrip || !hcRows) return;
+    if (!rows || !rows.length) {
+      hcStrip.hidden = true;
+      hcRows.innerHTML = "";
+      return;
+    }
+    hcStrip.hidden = false;
+    hcRows.innerHTML = rows
+      .map(function (row) {
+        var conv = row.conviction != null ? Math.round(Number(row.conviction)) : "—";
+        var netuid = row.netuid;
+        var sn = row.subnet_name || (netuid != null ? "SN" + netuid : "");
+        return (
+          '<div class="message-intel__hc-row">' +
+          '<span class="message-intel__hc-conv">' +
+          esc(conv) +
+          "%</span>" +
+          '<span class="message-intel__hc-snippet">' +
+          esc(snippet(row.content, 48)) +
+          "</span>" +
+          (netuid != null
+            ? '<button type="button" class="message-intel__hc-cta" data-netuid="' +
+              esc(netuid) +
+              '">Open SN' +
+              esc(netuid) +
+              "</button>"
+            : "") +
+          '<button type="button" class="message-intel__hc-cta message-intel__hc-cta--lf" data-lf-netuid="' +
+          esc(netuid || "") +
+          '" data-msg-id="' +
+          esc(row.id) +
+          '">Living Focus</button>' +
+          "</div>"
+        );
+      })
+      .join("");
+    hcRows.querySelectorAll("[data-netuid]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        window.location.href = "/subnet/" + btn.getAttribute("data-netuid");
+      });
+    });
+    hcRows.querySelectorAll("[data-lf-netuid]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var nu = btn.getAttribute("data-lf-netuid");
+        if (nu) openLivingFocus(nu);
+        else {
+          var mid = btn.getAttribute("data-msg-id");
+          if (mid) toggleMessageDetail(mid);
+        }
+      });
+    });
+  }
+
+  function renderDetailPanel(detail, message) {
+    if (!detailPanel) return;
+    detail = detail || {};
+    message = message || {};
+    var outcome = detail.price_outcome || {};
+    var snap = detail.price_snapshot || {};
+    var graded = detail.graded;
+    var html =
+      '<div class="message-intel__detail-card">' +
+      '<button type="button" class="message-intel__detail-close" id="message-intel-detail-close">Close</button>' +
+      '<p class="message-intel__detail-text">' +
+      esc(message.content || "") +
+      "</p>";
+    if (detail.reasoning) {
+      html +=
+        '<p class="message-intel__detail-reason"><b>Verdict:</b> ' + esc(detail.reasoning) + "</p>";
+    }
+    if (snap && snap.tao_usd_price != null) {
+      html +=
+        '<p class="message-intel__detail-snap">Price at message: <b>' +
+        esc(snap.tao_usd_price) +
+        "</b>" +
+        (snap.netuid != null ? " · SN" + esc(snap.netuid) : "") +
+        "</p>";
+    }
+    if (graded && outcome.outcome) {
+      html +=
+        '<p class="message-intel__detail-outcome"><b>Outcome:</b> ' +
+        esc(outcome.outcome) +
+        (outcome.pump_pct_max != null ? " · " + esc(outcome.pump_pct_max) + "% max move" : "") +
+        "</p>";
+    } else {
+      html += '<p class="message-intel__detail-outcome message-intel__detail-outcome--pending">Outcome pending — grading runs every ~5 min.</p>';
+    }
+    if (detail.netuid != null) {
+      html +=
+        '<div class="message-intel__detail-actions">' +
+        '<a class="message-intel__hc-cta" href="/subnet/' +
+        esc(detail.netuid) +
+        '">Open SN' +
+        esc(detail.netuid) +
+        "</a>" +
+        '<button type="button" class="message-intel__hc-cta message-intel__hc-cta--lf" id="message-intel-detail-lf">Living Focus</button>' +
+        "</div>";
+    }
+    html += "</div>";
+    detailPanel.innerHTML = html;
+    detailPanel.hidden = false;
+    var closeBtn = document.getElementById("message-intel-detail-close");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", function () {
+        detailPanel.hidden = true;
+        openDetailId = null;
+      });
+    }
+    var lfBtn = document.getElementById("message-intel-detail-lf");
+    if (lfBtn && detail.netuid != null) {
+      lfBtn.addEventListener("click", function () {
+        openLivingFocus(detail.netuid);
+      });
+    }
+  }
+
+  async function toggleMessageDetail(msgId) {
+    if (!detailPanel) return;
+    if (openDetailId === String(msgId)) {
+      detailPanel.hidden = true;
+      openDetailId = null;
+      return;
+    }
+    openDetailId = String(msgId);
+    detailPanel.hidden = false;
+    detailPanel.innerHTML = '<p class="empty">Loading message detail…</p>';
+    try {
+      var res = await fetch("/api/message-intel/detail/" + encodeURIComponent(msgId));
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      var payload = await res.json();
+      if (payload.status !== "success") throw new Error(payload.error || "detail failed");
+      renderDetailPanel(payload.detail, payload.message);
+    } catch (e) {
+      detailPanel.innerHTML = '<p class="empty">Could not load message detail.</p>';
+    }
+  }
+
+  function bindFeedClicks() {
+    feed.querySelectorAll("[data-msg-id]").forEach(function (row) {
+      row.addEventListener("click", function (ev) {
+        if (ev.target.closest("a")) return;
+        toggleMessageDetail(row.getAttribute("data-msg-id"));
+      });
     });
   }
 
@@ -374,7 +579,9 @@
       var netuids = parseEntities(analysis);
       var why = signalChips(analysis, verdict);
       html +=
-        '<article class="message-intel__feed-row">' +
+        '<article class="message-intel__feed-row message-intel__feed-row--clickable" data-msg-id="' +
+        esc(row.id) +
+        '" tabindex="0" role="button">' +
         '<div class="message-intel__feed-top">' +
         '<span class="message-intel__f-avatar" aria-hidden="true">' +
         esc(initialLetter(author)) +
@@ -511,6 +718,8 @@
       var listener = (status && status.listener) || (payload.meta && payload.meta.listener) || {};
       var trending = (payload.meta && payload.meta.trending) || [];
       renderYesterdayLeader((payload.meta && payload.meta.yesterday_leader) || null);
+      renderTelegramProof((payload.meta && payload.meta.telegram_proof) || null);
+      renderHighConvictionStrip((payload.meta && payload.meta.high_conviction_strip) || []);
       if (trendingEl) {
         trendingEl.innerHTML = renderTrending(trending, listener);
       }
@@ -536,6 +745,7 @@
         feed.innerHTML = renderFeedEmpty(status && status.listener);
       } else {
         feed.innerHTML = renderMessages(payload.messages);
+        bindFeedClicks();
       }
     } catch (e) {
       if (meta) meta.textContent = "unavailable";

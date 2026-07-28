@@ -212,7 +212,12 @@ def _enrich_message_row(row: Dict[str, Any], names: Optional[Dict[int, str]] = N
 
 def list_messages(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
     from internal.message_intel.listener_service import listener_status
-    from internal.message_intel.rollup import build_trending_subnets, build_yesterday_leader
+    from internal.message_intel.rollup import (
+        build_high_conviction_strip,
+        build_telegram_proof_band,
+        build_trending_subnets,
+        build_yesterday_leader,
+    )
 
     db = get_db()
     names = _registry_subnet_names()
@@ -233,6 +238,16 @@ def list_messages(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
     except Exception as exc:
         logger.warning("message-intel yesterday leader failed: %s", exc)
         meta["yesterday_leader"] = None
+    try:
+        meta["high_conviction_strip"] = build_high_conviction_strip(limit=5, db=db, registry_names=names)
+    except Exception as exc:
+        logger.warning("message-intel high conviction strip failed: %s", exc)
+        meta["high_conviction_strip"] = []
+    try:
+        meta["telegram_proof"] = build_telegram_proof_band(db=db)
+    except Exception as exc:
+        logger.warning("message-intel telegram proof failed: %s", exc)
+        meta["telegram_proof"] = {"graded": 0, "hits": 0, "hit_rate": None, "ready": False}
     return {
         "status": "success",
         "count": len(messages),
@@ -248,7 +263,26 @@ def get_message_detail(msg_id: int) -> Dict[str, Any]:
     message = db.get_message(msg_id)
     if message is None:
         return {"status": "error", "error": "Message not found"}
-    return {"status": "success", "message": message}
+    names = _registry_subnet_names()
+    enriched = _enrich_message_row(message, names)
+    verdict = enriched.get("verdict") if isinstance(enriched.get("verdict"), dict) else {}
+    outcome = enriched.get("price_outcome") if isinstance(enriched.get("price_outcome"), dict) else {}
+    snapshot = enriched.get("price_snapshot") if isinstance(enriched.get("price_snapshot"), dict) else {}
+    graded = bool(outcome)
+    return {
+        "status": "success",
+        "message": enriched,
+        "detail": {
+            "reasoning": verdict.get("reasoning"),
+            "conviction": verdict.get("conviction"),
+            "direction": verdict.get("predicted_direction"),
+            "price_snapshot": snapshot,
+            "price_outcome": outcome,
+            "graded": graded,
+            "netuid": enriched.get("netuid"),
+            "subnet_name": enriched.get("subnet_name"),
+        },
+    }
 
 
 def list_chatter(min_conviction: float = 60.0, limit: int = 50) -> Dict[str, Any]:

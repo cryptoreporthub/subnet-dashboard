@@ -33,10 +33,10 @@ Living Focus · Proof · Mindmap · Trail
 
 | Wave | What | Status |
 |------|------|--------|
-| **W0** | Promote onto spine · Summers brand · rich feed · **yesterday's most talked about** | **BUILD** |
-| **W1** | Message expand / detail (verdict reasoning + price snapshot / outcome when graded) | next |
-| **W2** | High-conviction strip + “Open subnet” / Living Focus handoff | next |
-| **W3** | Outcomes proof band for Telegram calls (hit-rate story) | after soak |
+| **W0** | Promote onto spine · Summers brand · rich feed · **yesterday's most talked about** | **DONE** (#549) |
+| **W1** | Message expand / detail (verdict reasoning + price snapshot / outcome when graded) | **BUILD** (#557) |
+| **W2** | High-conviction strip + “Open subnet” / Living Focus handoff | **BUILD** (#557) |
+| **W3** | Outcomes proof band for Telegram calls (hit-rate story) | **BUILD** (#557) |
 
 ## W0 acceptance
 

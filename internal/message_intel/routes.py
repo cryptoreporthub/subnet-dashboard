@@ -30,10 +30,14 @@ async def api_message_intel_ingest(request: Request):
             return engine.ingest_batch(payload)
         return engine.ingest_message(payload if isinstance(payload, dict) else {})
     except engine.MessageIntelUnavailable as exc:
-        return {"status": "error", "error": f"Message intelligence package unavailable: {exc}"}
+        from internal.api_errors import public_error
+
+        return public_error(exc, code="message_intel_unavailable", log="message-intel ingest unavailable")
     except Exception as exc:
         logger.error("message-intel ingest failed: %s", exc)
-        return {"status": "error", "error": str(exc)}
+        from internal.api_errors import public_error
+
+        return public_error(exc, code="ingest_failed", log="message-intel ingest failed")
 
 
 @message_intel_router.get("/api/message-intel")
@@ -97,7 +101,9 @@ async def api_message_intel_detail(msg_id: int):
         return engine.get_message_detail(msg_id)
     except Exception as exc:
         logger.error("message-intel detail failed: %s", exc)
-        return {"status": "error", "error": str(exc)}
+        from internal.api_errors import public_error
+
+        return public_error(exc, code="detail_failed", log="message-intel detail failed")
 
 
 @message_intel_router.get("/api/message-intel/chatter")
