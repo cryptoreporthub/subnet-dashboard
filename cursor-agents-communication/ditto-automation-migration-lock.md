@@ -1,6 +1,6 @@
 # LOCK — Ditto automation migration (Phase 1)
 
-**Status:** ACTIVE — human executes in Ditto Settings  
+**Status:** DONE (2026-07-28 — human confirmed Ditto playbook executed)  
 **Plan:** `full-roadmap-master-plan.md` Phase 1  
 **Branch:** `cursor/ditto-automation-playbook-4988` (docs only)
 
@@ -91,11 +91,10 @@ curl -fsS https://subnet-dashboard.fly.dev/api/ops/evidence | jq '.paths'
 
 ## AC (Phase 1)
 
-- [ ] Pump Desk Ditto automation **disabled**
-- [ ] Health Monitor prompt updated to artifact-first
-- [ ] Stale pump-automation WARN memories superseded
-- [ ] Docs PR merged (`ditto-automation-migration-lock.md` + `docs/ditto-council-health-artifacts.md`)
-- [ ] Ditto `save_memory` STATUS posted with `LOCK_PATH` pointer
+- [x] Pump Desk Ditto automation **disabled** (human 2026-07-28)
+- [x] Health Monitor prompt updated to artifact-first
+- [x] Stale pump-automation WARN memories superseded
+- [x] Docs PR merged (#561)
 
 ## NON-GOALS
 
@@ -103,8 +102,8 @@ curl -fsS https://subnet-dashboard.fly.dev/api/ops/evidence | jq '.paths'
 - Merging all automations into one job
 - Changing app scoring or council logic
 
-## Review Gate 1 (human — before Phase 2)
+## Review Gate 1 — CLEARED (2026-07-28)
 
-- [ ] Ditto confirms playbook executed
-- [ ] Docs PR merged
-- [ ] No duplicate 15m pump fetches in automation logs
+- [x] Ditto confirms playbook executed
+- [x] Docs PR merged
+- [x] No duplicate 15m pump fetches (human verified)

@@ -1,6 +1,6 @@
 # LOCK — Subnet Summers Telegram Flagship
 
-**Status:** IN PROGRESS — W0  
+**Status:** W1–W3 on main (#557) — human 390px gate pending  
 **Approved:** 2026-07-27 (human: “flagship for Subnet Summers launch”)  
 **Slice ID:** SS-TG  
 **Viewport:** 390px primary  
@@ -34,9 +34,9 @@ Living Focus · Proof · Mindmap · Trail
 | Wave | What | Status |
 |------|------|--------|
 | **W0** | Promote onto spine · Summers brand · rich feed · **yesterday's most talked about** | **DONE** (#549) |
-| **W1** | Message expand / detail (verdict reasoning + price snapshot / outcome when graded) | **BUILD** (#557) |
-| **W2** | High-conviction strip + “Open subnet” / Living Focus handoff | **BUILD** (#557) |
-| **W3** | Outcomes proof band for Telegram calls (hit-rate story) | **BUILD** (#557) |
+| **W1** | Message expand / detail (verdict reasoning + price snapshot / outcome when graded) | **DONE** (#557) |
+| **W2** | High-conviction strip + “Open subnet” / Living Focus handoff | **DONE** (#557) |
+| **W3** | Outcomes proof band for Telegram calls (hit-rate story) | **DONE** (#557) |
 
 ## W0 acceptance
 
