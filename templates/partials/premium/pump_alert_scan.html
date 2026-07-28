@@ -116,6 +116,24 @@
         {% if hero_row.size_line %}<p class="pds-hero__chip">{{ hero_row.size_line }}</p>{% endif %}
         {% if hero_row.telegram_chip %}<p class="pds-hero__chip pds-hero__chip--tg">{{ hero_row.telegram_chip }}</p>{% endif %}
         {% if hero_row.owner_chip %}<p class="pds-hero__chip pds-hero__chip--owner">{{ hero_row.owner_chip }}</p>{% endif %}
+        {% set echo = hero_row.echo if hero_row.echo is mapping else none %}
+        {% if echo and (echo.lane or (echo.kin is iterable and echo.kin|length > 0)) %}
+        <div class="pds-echo" aria-label="Echo Kin">
+          <div class="pds-echo__meta">
+            <span class="pds-echo__label">Echo Kin</span>
+            {% if echo.lane %}<span class="pds-echo__lane" title="Pulse lane">{{ echo.lane }}</span>{% endif %}
+            {% if echo.rarity is not none %}<span class="pds-echo__rarity" title="Signature rarity on the live ladder">{{ echo.rarity }} rarity</span>{% endif %}
+          </div>
+          {% if echo.kin is iterable and echo.kin|length > 0 %}
+          <div class="pds-echo__list">
+            {% for k in echo.kin[:3] %}
+            <a class="pds-echo__kin" href="/subnet/{{ k.netuid }}" title="{{ (k.shared|default([]))[:2]|join(' · ') or k.lane|default('echo kin') }}">{{ k.name }} <b>SN{{ k.netuid }}</b>{% if k.lane %} <i>{{ k.lane }}</i>{% endif %}</a>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% if echo.why %}<p class="pds-echo__why">{{ echo.why }}</p>{% endif %}
+        </div>
+        {% endif %}
 
         <a class="pds-hero__cta home-cta home-cta--primary" href="/subnet/{{ hero_row.netuid }}">Open SN{{ hero_row.netuid }} dossier</a>
       </article>
@@ -474,6 +492,55 @@
   .pds-hero__chip--tg { color: #7dd3fc; }
   .pds-hero__chip--whale { color: #fbbf24; }
   .pds-hero__chip--wallet { color: #a7f3d0; }
+  .pds-echo {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(148, 163, 184, 0.12);
+  }
+  .pds-echo__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .pds-echo__label {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #94a3b8;
+  }
+  .pds-echo__lane,
+  .pds-echo__rarity {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    color: #7dd3fc;
+  }
+  .pds-echo__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .pds-echo__kin {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    padding: 4px 8px;
+    border: 1px solid rgba(56, 189, 248, 0.28);
+    background: rgba(14, 165, 233, 0.1);
+    color: #e2e8f0;
+    text-decoration: none;
+    font-size: 12px;
+  }
+  .pds-echo__kin b { font-weight: 600; color: #7dd3fc; }
+  .pds-echo__kin i { font-style: normal; color: #94a3b8; font-size: 10px; }
+  .pds-echo__why {
+    margin: 8px 0 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--pds-sub);
+  }
   .pds-hero__cta {
     display: block;
     margin-top: 12px;

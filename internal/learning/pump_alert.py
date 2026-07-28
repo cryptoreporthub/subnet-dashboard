@@ -1034,7 +1034,14 @@ def build_pump_alerts_desk(subnets: Optional[List[Dict[str, Any]]] = None) -> Di
         + _sort_bucket(cooling, _MAX_COOLING, row_builder=build_desk_row)
     )
     payload = _finalize_pump_payload(alerts, desk=True)
-    return _attach_watch_when_empty(payload, state, rows)
+    payload = _attach_watch_when_empty(payload, state, rows)
+    try:
+        from internal.pump.echo_kin import attach_echo_to_desk
+
+        attach_echo_to_desk(payload, state)
+    except Exception:
+        pass
+    return payload
 
 
 def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
