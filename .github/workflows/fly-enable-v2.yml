@@ -7,12 +7,15 @@ on:
         description: "Type enable to run Phase C worker split v2 on prod"
         required: true
         default: ""
+  push:
+    branches:
+      - ops/trigger-enable-worker-v2
 
 jobs:
   enable-v2:
     name: Enable worker split v2
     runs-on: ubuntu-latest
-    if: github.event.inputs.confirm == 'enable'
+    if: github.event_name == 'push' || github.event.inputs.confirm == 'enable'
     concurrency: deploy-group
     steps:
       - uses: actions/checkout@v4
