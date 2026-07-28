@@ -361,11 +361,35 @@ On the current **one 2GB machine** (web + inline essential worker), `MESSAGE_INT
 - Pump / score-snapshot / resolver jobs are staggered (see `internal/heavy_job_gate.py`).
 - Score snapshots default to **registry-only** subnet rows on the worker (`SCORE_SNAPSHOT_REGISTRY_ONLY=on`) so the first cycle completes without live-feed wedge; full-universe scoring runs **outside** the heavy-job mutex so resolver can grade while snapshot scores. Day-only scoring on worker (`SCORE_SNAPSHOT_SCORE_HOUR=off` default) halves CPU; resolver boot immediate on worker clears pending after deploy.
 
-If prod flaps (TLS OK but `/health` 0 bytes), **disable Telegram first** (`MESSAGE_INTEL_LISTENER=off`) before scaling VM or splitting processes. Fly **secrets override** `fly.toml` — verify with `flyctl secrets list`.
+If prod flaps (TLS OK but `/health` 0 bytes), **disable Telegram first** (`MESSAGE_INTEL_LISTENER=off`) before scaling VM or splitting processes. Fly **secrets override** `fly.toml` — verify with `flyctl secrets set WRITE_API_TOKEN=…` when ready to lock down write APIs.
+
+### Write API token + metrics (post-audit Phase A)
+
+Optional hardening for mutating routes (`POST /api/message-intel/ingest`, scans, etc.). **Off by default** until the secret is set — CI and local dev unchanged.
+
+```bash
+chmod +x scripts/set_write_api_token.sh
+./scripts/set_write_api_token.sh                    # generates + flyctl secrets set
+# Or: ./scripts/set_write_api_token.sh 'your-token'
+```
+
+Clients must send: `Authorization: Bearer <WRITE_API_TOKEN>` on protected writes.
+
+Prometheus metrics: `ENABLE_METRICS=1` in `fly.toml` (default on prod). Verify:
+
+```bash
+curl -fsS https://subnet-dashboard.fly.dev/metrics | head
+./scripts/babysit_phase.sh a
+```
 
 ---
 
 ## Environment reference
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `WRITE_API_TOKEN` | unset | Bearer token for mutating API routes (optional) |
+| `ENABLE_METRICS` | **1** (fly.toml) | Expose `GET /metrics` (Prometheus) |
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
