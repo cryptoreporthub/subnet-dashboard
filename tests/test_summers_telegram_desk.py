@@ -19,6 +19,8 @@ def test_summers_desk_first_class_on_home():
     assert "Subnet Summers" in html
     assert "t.me/OfficialSubnetSummer" in html
     assert "message_intel_feed.js" in html
+    assert "message-intel__hero" in html
+    assert "message-intel__legend" in html
 
     # Must sit on the spine — not only inside the More intel drawer
     mi = html.find('id="section-message-intel"')

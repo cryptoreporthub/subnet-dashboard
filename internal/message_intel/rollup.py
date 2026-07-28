@@ -230,12 +230,33 @@ def build_yesterday_leader(
     )
     top_netuid, top = ranked[0]
     avg = (top["sentiment_sum"] / top["sentiment_n"]) if top["sentiment_n"] else 0.0
+    why_chips: List[str] = []
+    proto_counts: Dict[str, int] = defaultdict(int)
+    for row in _load_message_rows(db):
+        ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if ts is None or ts < yesterday_start or ts >= today_start:
+            continue
+        if top_netuid not in _netuids_from_row(row):
+            continue
+        raw = row.get("entities_json")
+        try:
+            entities = json.loads(raw) if isinstance(raw, str) else (raw or {})
+        except (TypeError, json.JSONDecodeError):
+            entities = {}
+        for p in (entities or {}).get("protocols") or []:
+            label = str(p).strip()
+            if label:
+                proto_counts[label] += 1
+    for label, count in sorted(proto_counts.items(), key=lambda x: (-x[1], x[0]))[:3]:
+        why_chips.append(label if count <= 1 else f"{label} ×{count}")
+
     out: Dict[str, Any] = {
         "netuid": top_netuid,
         "name": registry_names.get(top_netuid) or f"Subnet {top_netuid}",
         "mentions": int(top["mentions"]),
         "sentiment": _sentiment_tag(avg),
         "date": yesterday_start.date().isoformat(),
+        "why_chips": why_chips,
     }
     if len(ranked) > 1:
         ru_netuid, ru = ranked[1]
