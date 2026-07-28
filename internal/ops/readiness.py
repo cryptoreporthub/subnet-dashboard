@@ -79,11 +79,20 @@ def _learning_summary() -> Dict[str, Any]:
 
 def build_liveness_report() -> Dict[str, Any]:
     """Fast liveness probe — file/heartbeat only; safe under worker wedge."""
-    from internal.run_mode import inline_worker_expected, worker_mode_label
+    from internal.run_mode import inline_worker_expected, is_worker_mode, split_worker_v2_enabled, worker_mode_label
 
     inline_worker = inline_worker_expected()
     worker_peer: Dict[str, Any] = {"expected": inline_worker, "alive": False}
-    if inline_worker:
+    if is_worker_mode():
+        worker_peer = {"expected": True, "alive": True, "peer": "dedicated_worker"}
+    elif split_worker_v2_enabled():
+        worker_peer = {
+            "expected": True,
+            "alive": None,
+            "peer": "dedicated_worker",
+            "note": "cross_machine_no_shared_volume",
+        }
+    elif inline_worker:
         from internal.worker_heartbeat import is_alive, read_heartbeat
 
         worker_peer = {
@@ -132,12 +141,24 @@ def build_readiness_report() -> Dict[str, Any]:
     except Exception:
         loop_health = {}
 
-    from internal.run_mode import inline_worker_expected, worker_mode_label
+    from internal.run_mode import inline_worker_expected, is_worker_mode, split_worker_v2_enabled, worker_mode_label
 
     inline_worker = inline_worker_expected()
+    split_v2 = split_worker_v2_enabled()
     worker_peer_alive = False
     worker_peer: Dict[str, Any] = {"expected": inline_worker, "alive": False}
-    if inline_worker:
+    if is_worker_mode():
+        worker_peer = {"expected": True, "alive": True, "peer": "dedicated_worker"}
+        worker_peer_alive = True
+        resolver = {**resolver, "running": True, "peer": "dedicated_worker"}
+    elif split_v2:
+        worker_peer = {
+            "expected": True,
+            "alive": None,
+            "peer": "dedicated_worker",
+            "note": "cross_machine_no_shared_volume",
+        }
+    elif inline_worker:
         from internal.worker_heartbeat import is_alive, read_heartbeat
 
         worker_peer_alive = is_alive()
@@ -160,7 +181,7 @@ def build_readiness_report() -> Dict[str, Any]:
         issues.append("learning_loop_has_no_graded_picks")
     if inline_worker and not worker_peer_alive:
         issues.append("inline_worker_not_running")
-    if not resolver.get("running"):
+    if not resolver.get("running") and not (split_v2 and not is_worker_mode()):
         issues.append("prediction_resolver_not_running")
     if feed.get("likely_total", 0) <= 0:
         issues.append("subnet_feed_empty")

@@ -11,7 +11,7 @@ from internal.council.resolver_scheduler import RESOLVER_REFRESH_MINUTES
 from internal.council.watchdog import check_resolver_watchdog
 from internal.council.weights import SOUL_MAP_PATH, _load_raw
 from internal.learning.predictions_store import PREDICTIONS_PATH, load_predictions
-from internal.run_mode import inline_worker_expected, is_worker_mode
+from internal.run_mode import inline_worker_expected, is_worker_mode, split_worker_v2_enabled
 
 SCORE_SNAPSHOTS_PATH = os.environ.get(
     "SCORE_SNAPSHOTS_PATH", os.path.join("data", "score_snapshots.json")
@@ -222,8 +222,18 @@ def _snapshot_stale(
 
 def _worker_peer() -> Dict[str, Any]:
     """Inline Fly worker liveness (web reads heartbeat file on shared volume)."""
-    if not inline_worker_expected() or is_worker_mode():
-        return {"expected": inline_worker_expected(), "alive": None, "peer": "in_process"}
+    if is_worker_mode():
+        return {"expected": True, "alive": True, "peer": "dedicated_worker"}
+    if split_worker_v2_enabled():
+        # ponytail: web machine has no shared volume — cross-machine liveness is unknown here.
+        return {
+            "expected": True,
+            "alive": None,
+            "peer": "dedicated_worker",
+            "note": "cross_machine_no_shared_volume",
+        }
+    if not inline_worker_expected():
+        return {"expected": False, "alive": None, "peer": "in_process"}
     try:
         from internal.worker_heartbeat import is_alive, read_heartbeat
 

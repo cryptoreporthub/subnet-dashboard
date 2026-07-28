@@ -96,6 +96,15 @@ curl -s https://subnet-dashboard.fly.dev/api/ops/readiness | jq '{worker_mode, w
 
 Set `WORKER_SPLIT_V2=on` only after attaching `data_volume` to the **worker** machine (web has no volume — read-only APIs).
 
+**One-command enable** (human, requires `flyctl auth`):
+
+```bash
+chmod +x scripts/fly_enable_worker_v2.sh
+./scripts/fly_enable_worker_v2.sh
+```
+
+Manual steps (same as script):
+
 ```bash
 # 1. Scale worker process group (after deploy with processes.worker in fly.toml)
 fly scale count web=1 worker=1 --app subnet-dashboard

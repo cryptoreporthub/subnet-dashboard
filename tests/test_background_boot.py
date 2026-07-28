@@ -167,6 +167,29 @@ def test_outcomes_start_when_listener_off(monkeypatch):
     assert "message-intel-listeners" not in scheduled
 
 
+def test_worker_peer_split_v2_web(monkeypatch):
+    from internal.learning.loop_health import _worker_peer
+
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("INLINE_WORKER", "0")
+    peer = _worker_peer()
+    assert peer["peer"] == "dedicated_worker"
+    assert peer["expected"] is True
+    assert peer["alive"] is None
+    assert peer.get("note") == "cross_machine_no_shared_volume"
+
+
+def test_worker_peer_split_v2_worker(monkeypatch):
+    from internal.learning.loop_health import _worker_peer
+
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    peer = _worker_peer()
+    assert peer["peer"] == "dedicated_worker"
+    assert peer["alive"] is True
+
+
 def test_ops_readiness_worker_mode_field():
     from fastapi.testclient import TestClient
 
