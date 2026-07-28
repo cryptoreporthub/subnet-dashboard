@@ -41,6 +41,8 @@ primary_region = "sjc"
   WORKER_HEAVY = "essential"
   # Keep prod boot light; Telegram needs a live session on the volume.
   MESSAGE_INTEL_LISTENER = "off"
+  # SS-TG W6: Bot API /summary in group — separate from Telethon user-session listener.
+  TELEGRAM_SUMMARY_BOT = "off"
   RESOLVER_REFRESH_MINUTES = "15"
   # Defer heavy resolver tick on boot — immediate=True wedges single-worker Fly.
   RESOLVER_BOOT_IMMEDIATE = "off"
