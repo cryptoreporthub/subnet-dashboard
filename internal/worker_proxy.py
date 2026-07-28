@@ -13,22 +13,31 @@ from starlette.responses import JSONResponse, Response
 logger = logging.getLogger(__name__)
 
 
-def worker_internal_bases() -> List[str]:
-    """Ordered URLs for worker HTTP — process-group DNS first (avoids flycast hitting web)."""
-    app = os.environ.get("FLY_APP_NAME", "subnet-dashboard").strip() or "subnet-dashboard"
-    bases: List[str] = []
-    custom = os.environ.get("WORKER_INTERNAL_URL", "").strip()
-    if custom:
-        bases.append(custom.rstrip("/"))
-    bases.append(f"http://worker.process.{app}.internal:8080")
-    # flycast load-balances all machines on 8080 — can hit web and break peer probe.
-    if os.environ.get("WORKER_INTERNAL_USE_FLYCAST", "").strip().lower() in (
+def _flycast_opt_in() -> bool:
+    return os.environ.get("WORKER_INTERNAL_USE_FLYCAST", "").strip().lower() in (
         "1",
         "true",
         "yes",
         "on",
-    ):
-        bases.append(f"http://{app}.flycast:8080")
+    )
+
+
+def worker_internal_bases() -> List[str]:
+    """Ordered URLs for worker HTTP — process-group DNS first (avoids flycast hitting web)."""
+    app = os.environ.get("FLY_APP_NAME", "subnet-dashboard").strip() or "subnet-dashboard"
+    flycast = f"http://{app}.flycast:8080"
+    bases: List[str] = []
+    custom = os.environ.get("WORKER_INTERNAL_URL", "").strip().rstrip("/")
+    # ponytail: legacy fly secrets may still set flycast — ignore unless explicitly opted in.
+    if custom and (custom != flycast or _flycast_opt_in()):
+        bases.append(custom)
+    region = os.environ.get("FLY_REGION", "").strip()
+    if region:
+        bases.append(f"http://worker.process.{region}.{app}.internal:8080")
+    bases.append(f"http://worker.process.{app}.internal:8080")
+    # flycast load-balances all machines on 8080 — can hit web and break peer probe.
+    if _flycast_opt_in():
+        bases.append(flycast)
     seen: set[str] = set()
     out: List[str] = []
     for base in bases:

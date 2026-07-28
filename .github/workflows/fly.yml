@@ -141,7 +141,7 @@ jobs:
           import json,sys
           for m in json.load(sys.stdin):
               pg = (m.get('process_group') or 'web').lower()
-              if pg == 'web' and m.get('id'):
+              if pg in ('web', 'worker') and m.get('id'):
                   print(m.get('id'))
           "); do
             [ -n "$id" ] || continue
