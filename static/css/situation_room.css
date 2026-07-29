@@ -825,6 +825,49 @@ body.council-first-theme {
 }
 
 /* Spine polish — compact pulse, weighing rib, demoted intel */
+.sr-pulse-ribbon {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0 20px 10px;
+  border-bottom: 1px solid var(--sr-hairline);
+  background: rgba(5, 5, 8, 0.65);
+}
+.sr-pulse--oneline {
+  padding-top: 8px;
+  padding-bottom: 4px;
+  border-bottom: none;
+  background: transparent;
+}
+.sr-pulse__oneline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.5rem;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+.sr-pulse__oneline-sep {
+  color: var(--sr-muted);
+  opacity: 0.55;
+  user-select: none;
+}
+.sr-pulse__oneline-part--bullish { color: #34d399; }
+.sr-pulse__oneline-part--bearish { color: #f87171; }
+.sr-pulse__oneline-part--neutral { color: #94a3b8; }
+.sr-pulse__oneline-part--cyan { color: #38bdf8; }
+.sr-pulse__oneline-part.pos { color: #34d399; }
+.sr-pulse__oneline-part.neg { color: #f87171; }
+@media (max-width: 480px) {
+  .sr-pulse__oneline {
+    font-size: 10px;
+    gap: 0.2rem 0.35rem;
+  }
+}
+
 .sr-pulse--compact {
   padding-top: 8px;
   padding-bottom: 8px;

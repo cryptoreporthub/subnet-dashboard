@@ -150,12 +150,28 @@ def test_thirty_spokes_falls_back_to_chutes_when_router_unreachable(monkeypatch)
 
 
 def test_strip_markup_on_homepage():
-    with TestClient(app) as client:
-        html = client.get("/").text
+    from types import SimpleNamespace
+
+    from server import _integrations_strip_ssr, templates
+
+    tpl = templates.env.get_template("partials/premium/pulse_strip.html")
+    html = tpl.render(
+        mi_breadth="neutral",
+        mi_total=10,
+        mi_ns=SimpleNamespace(gainers=5, losers=5),
+        mi_avg_chg=0.0,
+        sig_list=[],
+        alert_list=[],
+        **_integrations_strip_ssr(),
+    )
     assert 'id="subnetIntegrationsBar"' in html
-    assert "subnet_integrations.js" in html
+    assert "subnet-int-strip" in html
+    assert "Built on Bittensor" in html
+    assert "sr-pulse-ribbon" in html
+    assert "sr-pulse__oneline" in html
     js = open("static/js/subnet_integrations.js").read()
     assert "subnet-int-item" in js
+    assert "subnet-int-strip--stale" in js
     assert "SN" in js
 
 

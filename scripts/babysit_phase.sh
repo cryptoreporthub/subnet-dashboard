@@ -136,4 +136,25 @@ assert src, 'missing effective_source'
     ;;
 esac
 
+case "$PHASE" in
+  lb|LB|integrations|pulse|all)
+    echo "== Phase LB: integrations + pulse rail =="
+    curl -fsS --max-time 15 "$BASE/api/subnet-integrations" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+rows=d.get('integrations') or []
+connected=d.get('connected_count', 0)
+print('integrations:', connected, '/', d.get('integration_total', len(rows)))
+chutes=next((r for r in rows if r.get('slug')=='chutes'), {})
+print('chutes:', chutes.get('status'), (chutes.get('detail') or '')[:60])
+assert len(rows) >= 4, rows
+"
+    html=$(curl -fsS --max-time 15 "$BASE/")
+    echo "$html" | grep -q 'subnet-int-strip' && echo "integrations strip SSR: present" || echo "WARN: integrations strip missing"
+    echo "$html" | grep -q 'sr-pulse-ribbon' && echo "pulse ribbon: present" || echo "WARN: pulse ribbon missing"
+    echo "$html" | grep -qi 'built on bittensor' && echo "brand line: present" || echo "WARN: Built on Bittensor missing"
+    echo "$html" | grep -q 'sr-pulse__oneline' && echo "compact pulse: present" || echo "WARN: oneline pulse missing"
+  ;;
+esac
+
 echo "== babysit phase=$PHASE OK =="

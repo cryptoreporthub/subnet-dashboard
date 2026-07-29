@@ -1,43 +1,45 @@
-{# Market Pulse — breadth / avg 24h / alerts / risk from mi_* context #}
-<section class="sr-pulse sr-pulse--compact" id="section-market-pulse" aria-label="Market pulse">
-  <div class="sr-pulse__grid">
-    <div class="sr-pulse__cell sr-pulse__cell--{% if mi_breadth == 'bullish' %}bullish{% elif mi_breadth == 'bearish' %}bearish{% else %}neutral{% endif %}">
-      <span class="sr-pulse__lbl">Breadth</span>
-      <span class="sr-pulse__val">{{ mi_breadth|default('neutral')|title }}</span>
-      {% if mi_total %}
-      <span class="sr-pulse__sub">{{ mi_ns.gainers }}↑ · {{ mi_ns.losers }}↓</span>
-      {% else %}
-      <span class="sr-pulse__sub">Registry loading</span>
-      {% endif %}
-    </div>
-    <div class="sr-pulse__cell sr-pulse__cell--{% if mi_avg_chg > 0 %}bullish{% elif mi_avg_chg < 0 %}bearish{% else %}neutral{% endif %}">
-      <span class="sr-pulse__lbl">Avg 24h</span>
-      <span class="sr-pulse__val {% if mi_avg_chg > 0 %}pos{% elif mi_avg_chg < 0 %}neg{% endif %}">
-        {% if mi_total %}{{ '%+.2f'|format(mi_avg_chg) }}%{% else %}—{% endif %}
+{# Market pulse (one line) + Bittensor integrations — compact ribbon below hero #}
+{% set integ = integrations_strip if integrations_strip is mapping else {} %}
+{% set int_rows = integ.integrations if integ.integrations is iterable and integ.integrations is not string else [] %}
+<section class="sr-pulse-ribbon" id="section-market-pulse" aria-label="Market pulse and integrations">
+  <div class="sr-pulse sr-pulse--compact sr-pulse--oneline">
+    <p class="sr-pulse__oneline" role="status">
+      <span class="sr-pulse__oneline-part sr-pulse__oneline-part--{% if mi_breadth == 'bullish' %}bullish{% elif mi_breadth == 'bearish' %}bearish{% else %}neutral{% endif %}">
+        Breadth {{ mi_breadth|default('neutral')|title }}{% if mi_total %} · {{ mi_ns.gainers }}↑ {{ mi_ns.losers }}↓{% else %} · loading{% endif %}
       </span>
-      {% if mi_avg_apy %}
-      <span class="sr-pulse__sub">Avg APY {{ mi_avg_apy }}%</span>
-      {% endif %}
-    </div>
-    <div class="sr-pulse__cell sr-pulse__cell--cyan">
-      <span class="sr-pulse__lbl">Signals</span>
-      <span class="sr-pulse__val">{{ sig_list|length if sig_list else 0 }}</span>
-      <span class="sr-pulse__sub">{{ alert_list|length if alert_list else 0 }} alerts</span>
-    </div>
-    <div class="sr-pulse__cell sr-pulse__cell--amber">
-      <span class="sr-pulse__lbl">Risk watch</span>
-      {% if caution is defined and caution and caution|length > 0 %}
-      <span class="sr-pulse__val">{{ caution[0].name|default(caution[0].line)|truncate(18, True) }}</span>
-      <span class="sr-pulse__sub">{{ caution|length }} caution cell{{ 's' if caution|length != 1 else '' }}</span>
-      {% elif mi_breadth == 'bearish' %}
-      <span class="sr-pulse__val neg">Bearish breadth</span>
-      <span class="sr-pulse__sub">More losers than gainers</span>
-      {% elif mi_top_loser and (mi_top_loser.price_change_24h|default(0)|float) < -5 %}
-      <span class="sr-pulse__val neg">{{ mi_top_loser.name|default('SN' ~ mi_top_loser.netuid)|truncate(18, True) }}</span>
-      <span class="sr-pulse__sub">{{ '%.1f'|format(mi_top_loser.price_change_24h|float) }}% 24h</span>
-      {% else %}
-      <span class="sr-pulse__val">Quiet</span>
-      <span class="sr-pulse__sub">No active caution</span>
+      <span class="sr-pulse__oneline-sep" aria-hidden="true">·</span>
+      <span class="sr-pulse__oneline-part{% if mi_avg_chg > 0 %} pos{% elif mi_avg_chg < 0 %} neg{% endif %}">
+        Avg 24h {% if mi_total %}{{ '%+.2f'|format(mi_avg_chg) }}%{% else %}—{% endif %}
+      </span>
+      <span class="sr-pulse__oneline-sep" aria-hidden="true">·</span>
+      <span class="sr-pulse__oneline-part sr-pulse__oneline-part--cyan">
+        {{ sig_list|length if sig_list else 0 }} signals · {{ alert_list|length if alert_list else 0 }} alerts
+      </span>
+    </p>
+  </div>
+  <div class="subnet-integrations-bar" id="subnetIntegrationsBar" aria-label="Bittensor subnet integrations">
+    <div class="subnet-integrations-bar__inner" id="subnetIntegrationsBarInner">
+      {% if int_rows %}
+      <div class="subnet-int-strip subnet-int-strip--ssr" role="list" aria-label="Bittensor subnet integrations: checking">
+        <span class="subnet-int-strip__brand">Built on Bittensor</span>
+        <span class="subnet-int-strip__items">
+          {% for row in int_rows %}
+          <span class="subnet-int-item subnet-int-item--checking" title="{{ row.name|default(row.slug) }} — checking">
+            <span class="subnet-int-dot subnet-int-dot--checking" aria-hidden="true"></span>
+            <span class="subnet-int-label">
+              {% if row.slug == 'bittensor' %}Finney (mainnet)
+              {% elif row.slug == 'blockmachine' %}Blockmachine (SN{{ row.netuid }})
+              {% elif row.slug == 'desearch' %}DeSearch (SN{{ row.netuid }})
+              {% elif row.slug == 'chutes' %}Chutes (SN{{ row.netuid }})
+              {% elif row.slug == 'thirty_spokes' %}Thirty Spokes (SN{{ row.netuid }})
+              {% elif row.slug == 'ditto' %}Ditto (SN{{ row.netuid }})
+              {% else %}{{ row.name|default(row.slug) }}{% endif %}
+            </span>
+          </span>
+          {% endfor %}
+        </span>
+        <span class="subnet-int-strip__count" id="subnetIntegrationsCount">checking…</span>
+      </div>
       {% endif %}
     </div>
   </div>
