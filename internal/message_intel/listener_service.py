@@ -251,7 +251,7 @@ def _start_heartbeat_loop() -> None:
     _heartbeat_stop = stop
 
     def _loop() -> None:
-        while not stop.wait(45):
+        while True:
             if not _listener_running_local():
                 break
             try:
@@ -259,6 +259,8 @@ def _start_heartbeat_loop() -> None:
                 _maybe_backfill_if_stale()
             except Exception as exc:
                 logger.debug("listener heartbeat refresh failed: %s", exc)
+            if _heartbeat_stop.wait(45):
+                break
 
     threading.Thread(target=_loop, daemon=True, name="mi-listener-heartbeat").start()
 
