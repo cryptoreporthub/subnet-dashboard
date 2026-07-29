@@ -157,4 +157,146 @@ assert len(rows) >= 4, rows
   ;;
 esac
 
+case "$PHASE" in
+  lc|LC|legal|trust|seo|all|sprint)
+    echo "== Phase LC: legal / trust / SEO =="
+    code=$(curl -sS -m 8 -o /dev/null -w "%{http_code}" "$BASE/robots.txt" 2>/dev/null || echo 000)
+    echo "robots.txt: HTTP $code"
+    [ "$code" = "200" ] || echo "WARN: robots.txt not 200"
+    html=$(curl -fsS --max-time 15 "$BASE/" 2>/dev/null || true)
+    echo "$html" | grep -qi 'not financial advice' && echo "NFA disclaimer: present" || echo "WARN: NFA disclaimer missing"
+    echo "$html" | grep -q 'og-share.png\|og:image' && echo "og:image: present" || echo "WARN: og:image missing"
+    curl -sS -m 8 -D - -o /dev/null "$BASE/" 2>/dev/null | grep -iE 'content-security|strict-transport' || echo "WARN: security headers"
+    ;;
+esac
+
+case "$PHASE" in
+  ld|LD|surface|honesty|all|sprint)
+    echo "== Phase LD: surface honesty =="
+    html=$(curl -fsS --max-time 15 "$BASE/" 2>/dev/null || true)
+    if echo "$html" | grep -q 'id="habit-alert-btn"'; then
+      if echo "$html" | grep -q 'data-enabled="0"'; then
+        echo "$html" | grep -q 'habit-alert-btn.*hidden\|display:\s*none' && echo "alerts btn: hidden when disabled" || echo "WARN: alert btn visible while disabled"
+      else
+        echo "alerts btn: present (enabled deploy)"
+      fi
+    else
+      echo "alerts btn: absent (ok when disabled)"
+    fi
+    curl -fsS --max-time 12 -o /dev/null -w "portfolio/status: %{http_code}\n" "$BASE/api/portfolio/status" 2>/dev/null || echo "WARN: portfolio/status failed"
+    curl -fsS --max-time 12 "$BASE/api/daily-pick" 2>/dev/null | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print('daily-pick action=', str(d.get('action') or 'HOLD').upper())
+" || echo "WARN: daily-pick failed"
+    ;;
+esac
+
+case "$PHASE" in
+  acc0|ACC0|acc-0|all|sprint)
+    echo "== Phase Acc-0: ledger plumbing =="
+    case "$PHASE" in acc0|ACC0|acc-0) export BABYSIT_STRICT_ACC0=1 ;; *) export BABYSIT_STRICT_ACC0=0 ;; esac
+    curl -fsS --max-time 12 "$BASE/api/learning/health" | python3 -c "
+import json,sys,os
+d=json.load(sys.stdin)
+lg=d.get('ledger') or {}
+strict=os.environ.get('BABYSIT_STRICT_ACC0')=='1'
+print('status=', d.get('status'), 'ledger.gap=', lg.get('gap'), 'required=', lg.get('required'))
+if lg.get('required') and lg.get('gap'):
+    if strict:
+        raise SystemExit('ledger gap still true for published LONG')
+    print('WARN: ledger gap (Acc-0 not shipped or heal pending)')
+"
+    ;;
+esac
+
+case "$PHASE" in
+  acc1|ACC1|acc-1|all|sprint)
+    echo "== Phase Acc-1: archive measurement =="
+    curl -fsS --max-time 12 "$BASE/api/ops/evidence" | python3 -c "
+import json,sys; d=json.load(sys.stdin); print('ops/evidence:', d.get('status', 'ok'))
+"
+    test -f scripts/measure_accuracy_archive.py && echo "archive script: present" || echo "WARN: measure_accuracy_archive.py missing (local/PR artifact)"
+    ;;
+esac
+
+case "$PHASE" in
+  acc2|ACC2|acc-2|all|sprint)
+    echo "== Phase Acc-2: accuracy experiment =="
+    curl -fsS --max-time 12 "$BASE/api/learning/stats" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print('graded=', d.get('graded'), 'accuracy=', d.get('accuracy'))
+"
+    curl -fsS --max-time 12 "$BASE/api/daily-pick" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+pred=d.get('prediction') or {}
+print('horizon_hours=', pred.get('horizon_hours'), 'action=', d.get('action'))
+"
+    ;;
+esac
+
+case "$PHASE" in
+  pp0|PP0|pp-0|all|sprint)
+    echo "== Phase PP-0: segment ledger =="
+    curl -fsS --max-time 12 "$BASE/api/pump-patterns/15" 2>/dev/null | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print('segments=', len(d.get('segments') or []), 'waveform=', 'yes' if d.get('waveform') else 'no')
+" || echo "WARN: /api/pump-patterns/15 not live yet"
+    ;;
+esac
+
+case "$PHASE" in
+  pp1|PP1|pp-1|all|sprint)
+    echo "== Phase PP-1: pattern classes =="
+    curl -fsS --max-time 12 "$BASE/api/pump-patterns/15" 2>/dev/null | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print('pattern_class=', d.get('pattern_class'), 'label=', (d.get('pattern_label') or '')[:40])
+" 2>/dev/null || echo "WARN: pattern API not live yet"
+    ;;
+esac
+
+case "$PHASE" in
+  pp2|PP2|pp-2|all|sprint)
+    echo "== Phase PP-2: pump desk + council surfaces =="
+    html=$(curl -fsS --max-time 15 "$BASE/pump-desk" 2>/dev/null || curl -fsS --max-time 15 "$BASE/")
+    echo "$html" | grep -q 'pump-pattern' && echo "pattern chip: present" || echo "WARN: pump-pattern chip missing"
+    curl -fsS --max-time 12 "$BASE/api/pump-patterns/active" 2>/dev/null | python3 -c "
+import json,sys; d=json.load(sys.stdin); print('active patterns:', len(d.get('items') or []))
+" || echo "WARN: /api/pump-patterns/active not live yet"
+    ;;
+esac
+
+case "$PHASE" in
+  fq4|FQ4|finish|all|sprint)
+    echo "== Phase FQ-4: combined angles effectiveness =="
+    case "$PHASE" in fq4|FQ4|finish) export BABYSIT_STRICT_FQ4=1 ;; *) export BABYSIT_STRICT_FQ4=0 ;; esac
+    curl -fsS --max-time 12 "$BASE/api/learning/stats" | python3 -c "
+import json,sys,os
+d=json.load(sys.stdin)
+g=d.get('graded', 0) or 0
+strict=os.environ.get('BABYSIT_STRICT_FQ4')=='1'
+print('graded=', g)
+if int(g) <= 0:
+    if strict:
+        raise SystemExit('graded still 0 — Slice 4 blocked')
+    print('WARN: graded=0 (FQ-4 blocked until picks resolve)')
+"
+    curl -fsS --max-time 12 "$BASE/api/ops/evidence" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print('ops/evidence keys:', list(d.keys())[:8])
+"
+    ;;
+esac
+
+case "$PHASE" in
+  sprint|SPRINT)
+    echo "== Sprint rollup: LA LB C LC LD Acc PP =="
+    ;;
+esac
+
 echo "== babysit phase=$PHASE OK =="

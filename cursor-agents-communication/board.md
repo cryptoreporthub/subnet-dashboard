@@ -1,8 +1,8 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-29T15:10:00Z  
-**main:** `0ba03c0` — #630 TaoStats web wedge · #632 SS-TG reaction crowns · #631 audit honesty · #629 live_subnets sync lock · finish-queue Slices 0–3 (#609–#610, worker hotfix #619–#626)  
-**Plans:** `finish-queue-plan.md` · `full-roadmap-master-plan.md` · `post-audit-sprint-plan.md`
+**Last updated:** 2026-07-29T22:45:00Z  
+**main:** `2ee0512` — LA #640 · LB #645 · violet accent #643 · audit honesty #631  
+**Plans:** `master-sprint-execution-plan.md` · `launch-lc-ld-plan.md` · `accuracy-pump-pattern-plan.md` · `finish-queue-plan.md`
 
 ## Full roadmap
 
@@ -12,7 +12,7 @@
 | **1** Ditto playbook | **DONE** (human 2026-07-28) |
 | **2** Track 1 soak | ACTIVE — review 2026-08-04 / 2026-08-11 |
 | **3** SS-TG W1–W3 | **on main** (#557) — human 390px gate pending |
-| **4** Accuracy lift | gated post-soak |
+| **4** Accuracy lift | **Acc-0 NEXT** (ledger gap) — do not wait for soak | `accuracy-pump-pattern-plan.md` |
 
 - Human: pump Ditto fetch disabled · Health Monitor artifact mode · stale memories superseded
 - Lock: `ditto-automation-migration-lock.md` (Gate 1 cleared)
@@ -21,6 +21,49 @@
 
 - W0 #549 · W1–W3 #557 on prod (HTML markers live)
 - **You:** 390px Subnet Summers desk — tap message expand, HC strip, proof band
+
+## Master sprint (LC/LD + Acc + PP)
+
+**Lock:** `master-sprint-execution-plan.md` — merge → babysit → human review between every step
+
+| Step | Phase | Status |
+|------|-------|--------|
+| M0 | Merge plan PRs #647 + #646 | **NEXT** |
+| 1 | Acc-0 ledger plumbing | queued |
+| 2 | PP-0 segment ledger | queued |
+| 3 | LC legal/trust/SEO | queued |
+| 4 | LD surface honesty | queued |
+| 5 | Acc-1 archive measure | gated |
+| 6 | PP-1 pattern classes | gated |
+| 7 | Acc-2 one experiment | gated |
+| 8 | PP-2 desk + council | gated |
+| 9 | FQ-4 combined angles | gated (`graded>0`) |
+
+Babysit: `./scripts/babysit_phase.sh <phase>` · rollup: `./scripts/babysit_phase.sh sprint`
+
+## Launch readiness (hero + integrations)
+
+| Phase | Status | Lock |
+|-------|--------|------|
+| **LA** Hero source-of-truth | **DONE** #640 | — |
+| **LB** Integrations + pulse rail | **DONE** #645 | — |
+| **LC** Legal / trust / SEO | **NEXT** | `launch-lc-ld-plan.md` |
+| **LD** Surface honesty | gated on LC | same |
+
+## Accuracy + pump pattern (parallel tracks)
+
+| Phase | Status | Lock |
+|-------|--------|------|
+| **Acc-0** Ledger plumbing + epoch footgun | **NEXT** (urgent — `ledger.gap`) | `accuracy-pump-pattern-plan.md` |
+| **Acc-1** Archive measurement | gated on Acc-0 | same |
+| **Acc-2** One evidence-backed experiment | gated on Acc-1 report | same |
+| **PP-0** Segment ledger (waveform) | **NEXT** (parallel to Acc-0) | same |
+| **PP-1** Pattern taxonomy + classifier | gated on PP-0 | same |
+| **PP-2** Pump desk + council surfaces | gated on PP-1 | same |
+
+Babysit: `./scripts/babysit_phase.sh acc0` · `acc1` · `pp0` · `pp1` · `pp2`
+
+- Prod epoch reset 2026-07-29: prior 496 graded @ 33.7%; current graded=0; today's LONG has ledger gap until Acc-0
 
 ## Post-audit sprint
 
