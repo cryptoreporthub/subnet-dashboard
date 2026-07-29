@@ -429,10 +429,11 @@ class ChainClient:
                     "buy_volume_24h": row[2], "sell_volume_24h": row[3]}
         return {"buys_24h": 0, "sells_24h": 0, "buy_volume_24h": 0.0, "sell_volume_24h": 0.0}
 
-    def get_all_subnet_data(self):
+    def get_all_subnet_data(self, netuids=None):
         if not self.is_healthy():
             return []
-        netuids = self.get_all_netuids()
+        if netuids is None:
+            netuids = self.get_all_netuids()
         if not netuids:
             return []
         subnets = []
@@ -466,6 +467,29 @@ class ChainClient:
                                 "source": "blockmachine", "degraded": True})
         logger.info("get_all_subnet_data: fetched %d subnets from Blockmachine", len(subnets))
         return subnets
+
+    def get_subnet_price_rows(self, netuids):
+        """Fast path for live_subnets cache — price only (~0.2s/SN vs ~30s full)."""
+        if not self.is_healthy():
+            return []
+        rows = []
+        for netuid in netuids:
+            try:
+                price = self.get_alpha_price(netuid)
+                if price is not None:
+                    rows.append(
+                        {
+                            "netuid": netuid,
+                            "name": f"SN{netuid}",
+                            "price": price,
+                            "source": "blockmachine",
+                        }
+                    )
+                time.sleep(BATCH_DELAY)
+            except Exception as exc:
+                logger.debug("price fetch netuid %d: %s", netuid, exc)
+        logger.info("get_subnet_price_rows: %d subnets", len(rows))
+        return rows
 
 
 _default_client = None

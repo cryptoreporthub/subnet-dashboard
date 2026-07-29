@@ -150,6 +150,16 @@ def _merge_into_registry(live: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return out
 
 
+def _registry_netuids() -> List[int]:
+    """Committed registry netuids — avoids 200-netuid RPC probe fallback."""
+    out = []
+    for rec in _registry_list():
+        n = _netuid_of(rec)
+        if n is not None:
+            out.append(n)
+    return sorted(set(out))
+
+
 def _fetch_chain_data():
     result = {}
     err = {}
@@ -158,7 +168,12 @@ def _fetch_chain_data():
         try:
             from internal.chain_client import get_default_client
             client = get_default_client()
-            result["data"] = client.get_all_subnet_data()
+            netuids = _registry_netuids()
+            mode = os.environ.get("LIVE_SUBNETS_FETCH_MODE", "lite").strip().lower()
+            if mode in ("lite", "price"):
+                result["data"] = client.get_subnet_price_rows(netuids)
+            else:
+                result["data"] = client.get_all_subnet_data(netuids=netuids or None)
         except Exception as exc:
             err["exc"] = exc
 
