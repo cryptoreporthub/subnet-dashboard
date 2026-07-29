@@ -619,7 +619,15 @@
   }
 
   function friendlySourceLabel(raw, meta) {
-    var feed = meta && meta.source ? String(meta.source) : '';
+    meta = meta || {};
+    if (meta.stale === true) return 'Stale';
+    var eff = meta.effective_source || meta.source;
+    if (eff && String(eff) !== 'none') {
+      var name = String(eff).replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+      if (meta.stale === false) return 'Live · ' + name;
+      return name;
+    }
+    var feed = meta.source ? String(meta.source) : '';
     if (feed && feed !== 'none') {
       return feed.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
     }
@@ -959,14 +967,91 @@
     if (!subnets || !subnets.length) return;
     var el = document.getElementById('dataFreshnessBadge');
     if (!el) return;
-    var source = String((meta && meta.source) || subnets[0].source || 'registry').toLowerCase();
+    meta = meta || {};
+    var stale = meta.stale === true;
+    var source = String(meta.effective_source || meta.source || subnets[0].source || 'registry').toLowerCase();
     var label = source.replace(/_/g, ' ') + ' · ' + subnets.length + ' subnets';
-    el.className = 'data-freshness-badge data-freshness-snapshot';
-    el.textContent = label;
+    var state = stale ? 'stale' : (source === 'registry' || source === 'snapshot' ? 'snapshot' : 'live');
+    var prefix = stale ? 'STALE · ' : state === 'live' ? 'LIVE · ' : '';
+    el.className = 'data-freshness-badge data-freshness-' + state;
+    el.textContent = prefix + label;
     var pill = document.getElementById('liveFeedPill');
     if (pill) {
-      pill.className = 'live-pill live-pill--snapshot';
-      pill.innerHTML = '<span class="live-dot" aria-hidden="true"></span>SNAPSHOT';
+      var pillLabel = stale ? 'STALE' : state === 'live' ? 'LIVE' : 'SNAPSHOT';
+      var pillCls =
+        'live-pill live-pill--' + (stale ? 'stale' : state === 'live' ? 'live' : 'snapshot');
+      pill.className = pillCls;
+      pill.innerHTML = '<span class="live-dot" aria-hidden="true"></span>' + pillLabel;
+    }
+  }
+
+  function dailyPickGeneratedAt(payload) {
+    if (!payload) return null;
+    var meta = payload._meta || {};
+    return payload.generated_at || payload.timestamp_utc || meta.generated_at || null;
+  }
+
+  function parseIsoMs(iso) {
+    if (!iso) return 0;
+    var t = Date.parse(iso);
+    return isNaN(t) ? 0 : t;
+  }
+
+  function ssrDailyPickMeta() {
+    var dossier = document.getElementById('k3-dossier');
+    if (!dossier) return { generatedAt: null, action: null };
+    return {
+      generatedAt: dossier.getAttribute('data-generated-at') || null,
+      action: String(dossier.getAttribute('data-action') || '').toUpperCase() || null,
+    };
+  }
+
+  function shouldApplyDailyPickPayload(payload) {
+    if (!payload || typeof payload !== 'object') return false;
+    var status = String(payload.status || 'ok').toLowerCase();
+    if (status === 'pending' || status === 'timeout' || status === 'error') return false;
+    var ssr = ssrDailyPickMeta();
+    var incomingAt = parseIsoMs(dailyPickGeneratedAt(payload));
+    var ssrAt = parseIsoMs(ssr.generatedAt);
+    if (ssrAt && incomingAt && incomingAt < ssrAt) return false;
+    var act = String(payload.action || 'HOLD').toUpperCase();
+    if (act === 'BUY') act = 'LONG';
+    if (ssr.action === 'LONG' && act === 'HOLD' && !payload.pick && ssrAt && (!incomingAt || incomingAt <= ssrAt)) {
+      return false;
+    }
+    return true;
+  }
+
+  function syncDailyPickSsrMeta(payload) {
+    var dossier = document.getElementById('k3-dossier');
+    if (!dossier || !payload) return;
+    var ga = dailyPickGeneratedAt(payload);
+    if (ga) dossier.setAttribute('data-generated-at', ga);
+    var act = String(payload.action || 'HOLD').toUpperCase();
+    if (act === 'BUY') act = 'LONG';
+    dossier.setAttribute('data-action', act);
+  }
+
+  function patchK3DegradedNote(payload) {
+    var tags = payload.scenario_tags || {};
+    var isDegraded = !!(payload.hold_reason || tags.fallback);
+    var note = document.getElementById('k3-degraded-note');
+    var claim = document.getElementById('k3-claim');
+    if (!isDegraded) {
+      if (note) note.hidden = true;
+      if (claim) claim.classList.remove('k3-claim--degraded');
+      return;
+    }
+    if (claim) claim.classList.add('k3-claim--degraded');
+    if (!note && claim) {
+      note = document.createElement('p');
+      note.id = 'k3-degraded-note';
+      note.className = 'pick-degraded-note pick-degraded-note--hold';
+      claim.appendChild(note);
+    }
+    if (note) {
+      note.textContent = payload.hold_reason || 'Council fallback — not a scored call';
+      note.hidden = false;
     }
   }
 
@@ -1002,6 +1087,7 @@
 
   function patchK3DossierFromPayload(payload) {
     if (!payload || !document.getElementById('k3-dossier')) return false;
+    if (!shouldApplyDailyPickPayload(payload)) return false;
     var brief = payload.brief || {};
     var pick = payload.pick;
     var cand = payload.candidate;
@@ -1010,12 +1096,22 @@
     var confSrc = active || payload;
     var finalConf = confSrc.final_confidence != null ? confSrc.final_confidence : confSrc.confidence;
     var fc = confTier(finalConf != null ? finalConf : 0);
+    var actRaw = String(payload.action || 'HOLD').toUpperCase();
+    if (actRaw === 'BUY') actRaw = 'LONG';
+    var snLabel = sn.name || (sn.netuid != null ? 'SN' + sn.netuid : '');
 
-    if (brief.move) {
+    if (brief.move && actRaw === 'LONG') {
       setText('k3-call-headline', brief.move);
       var headline = document.getElementById('k3-call-headline');
       if (headline) {
         headline.className = 'k3-call-headline k3-call-headline--' + (brief.tone || 'neutral');
+      }
+    } else if (snLabel) {
+      var headlineEl = document.getElementById('k3-call-headline');
+      if (headlineEl) {
+        headlineEl.textContent = (actRaw === 'LONG' ? 'LONG' : 'HOLD') + ' · ' + snLabel;
+        headlineEl.className =
+          'k3-call-headline k3-call-headline--' + (actRaw === 'LONG' ? 'go' : 'hold');
       }
     }
     var claimName = document.getElementById('k3-claim-name');
@@ -1023,7 +1119,6 @@
     var claimDesc = document.getElementById('k3-claim-desc');
     var claimIdentity = document.getElementById('k3-claim-identity');
     var claimHeadName = document.getElementById('k3-claim-head-name');
-    var snLabel = sn.name || (sn.netuid != null ? 'SN' + sn.netuid : '');
     if (claimHeadName && snLabel) {
       claimHeadName.textContent = snLabel;
     }
@@ -1056,8 +1151,6 @@
     }
     var actionBadge = document.getElementById('k3-action-badge');
     if (actionBadge) {
-      var actRaw = String(payload.action || 'HOLD').toUpperCase();
-      if (actRaw === 'BUY') actRaw = 'LONG';
       actionBadge.hidden = false;
       actionBadge.textContent = actRaw === 'LONG' ? 'LONG' : actRaw === 'SHORT' ? 'SHORT' : actRaw || 'HOLD';
       actionBadge.className =
@@ -1159,6 +1252,8 @@
     renderStageWhyNot(sn.netuid, payload.action || 'HOLD');
     patchK3Evidence(payload);
     patchK3WeighedAgainst(payload.shortlist || []);
+    patchK3DegradedNote(payload);
+    syncDailyPickSsrMeta(payload);
     return true;
   }
 
@@ -2164,6 +2259,10 @@
   function renderDailyPick(payload) {
     // §34-1 / K3-7: patch K3 dossier fields — never wipe #k3-dossier via innerHTML
     if (!payload) return;
+    if (!shouldApplyDailyPickPayload(payload)) {
+      console.warn('[cockpit_hydrate] daily-pick patch skipped (stale/pending)');
+      return;
+    }
     lastDailyPickPayload = payload;
     if (patchK3DossierFromPayload(payload)) return;
 

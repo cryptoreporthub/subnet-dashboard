@@ -133,6 +133,7 @@ def should_proxy_path(path: str) -> bool:
     if path == "/api/pump-alerts":
         return True
     if path in (
+        "/api/daily-pick",
         "/api/learning/health",
         "/api/learning/stats",
         "/api/learning-metrics",

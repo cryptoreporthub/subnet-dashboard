@@ -109,4 +109,31 @@ print('hc_strip:', len(m.get('high_conviction_strip') or []))
     ;;
 esac
 
+case "$PHASE" in
+  la|LA|hero|all)
+    echo "== Phase LA: hero source-of-truth =="
+    for i in 1 2 3; do
+      curl -fsS --max-time 12 "$BASE/api/daily-pick" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+act=str(d.get('action') or 'HOLD').upper()
+assert act in ('LONG','HOLD','SHORT'), act
+ga=d.get('generated_at') or d.get('timestamp_utc')
+print('daily-pick action=', act, 'generated_at=', 'yes' if ga else 'no')
+" || echo "daily-pick $i: FAIL"
+    done
+    curl -fsS --max-time 12 "$BASE/api/data-freshness" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+src=d.get('effective_source') or d.get('source') or ''
+print('data-freshness effective_source:', src or '(empty)')
+assert src, 'missing effective_source'
+"
+    html=$(curl -fsS --max-time 15 "$BASE/")
+    echo "$html" | grep -q 'k3-action-badge' && echo "hero badge: present" || echo "WARN: k3-action-badge missing"
+    echo "$html" | grep -q 'k3-call-headline' && echo "hero headline: present" || echo "WARN: k3-call-headline missing"
+    echo "$html" | grep -q 'data-generated-at' && echo "hero SSR meta: present" || echo "WARN: data-generated-at missing"
+    ;;
+esac
+
 echo "== babysit phase=$PHASE OK =="
