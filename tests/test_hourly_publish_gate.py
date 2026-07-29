@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 from internal.council.hourly_pick import clear_hourly_pick_cache, select_hourly_pick
 from internal.council.pick_scheduler import _record_hour_pick
 from server import _highest_emission_pick, _record_pick_in_learning_loop
