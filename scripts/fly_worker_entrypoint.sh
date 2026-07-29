@@ -12,8 +12,16 @@ _start_worker() {
   if [ -f "$WORKER_PIDFILE" ]; then
     old_pid="$(cat "$WORKER_PIDFILE" 2>/dev/null || true)"
     if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
-      return 0
+      echo "stopping stale background worker pid=${old_pid}..."
+      kill "$old_pid" 2>/dev/null || true
+      # ponytail: wait up to 10s — do not skip fresh worker on deploy when pidfile survives
+      i=0
+      while kill -0 "$old_pid" 2>/dev/null && [ "$i" -lt 10 ]; do
+        sleep 1
+        i=$((i + 1))
+      done
     fi
+    rm -f "$WORKER_PIDFILE"
   fi
   echo "starting background worker (RUN_MODE=worker, WORKER_HEAVY=${DEDICATED_WORKER_HEAVY}, MESSAGE_INTEL_LISTENER=${MESSAGE_INTEL_LISTENER:-on})..."
   env RUN_MODE=worker WORKER_HEAVY="${DEDICATED_WORKER_HEAVY}" LIVE_SUBNETS_BOOT_IMMEDIATE="${DEDICATED_BOOT_IMMEDIATE}" MESSAGE_INTEL_LISTENER="${MESSAGE_INTEL_LISTENER:-on}" python -m internal.worker &
