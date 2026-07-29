@@ -203,6 +203,50 @@ class TelegramListener:
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, max_retry_delay)
 
+    async def _forum_backfill_targets(self, entity: Any) -> list[Optional[int]]:
+        """Forum supergroups need per-topic reply_to — main iter_messages misses topic threads."""
+        targets: list[Optional[int]] = [None]
+        if not getattr(entity, "forum", False):
+            return targets
+        try:
+            from telethon.tl.functions.messages import GetForumTopicsRequest
+
+            offset_topic = 0
+            while True:
+                result = await self._client(
+                    GetForumTopicsRequest(
+                        peer=entity,
+                        q=None,
+                        offset_date=None,
+                        offset_id=0,
+                        offset_topic=offset_topic,
+                        limit=50,
+                    )
+                )
+                topics = getattr(result, "topics", None) or []
+                for topic in topics:
+                    tid = getattr(topic, "id", None)
+                    if tid is not None:
+                        targets.append(int(tid))
+                if len(topics) < 50:
+                    break
+                offset_topic = int(topics[-1].id)
+            logger.info("forum backfill targets=%s topics=%s", len(targets), targets[1:])
+        except Exception as exc:
+            logger.warning("forum topics lookup failed (general stream only): %s", exc)
+        return targets
+
+    async def _backfill_gap(self, entity: Any, limit: int, min_id: Optional[int]) -> None:
+        targets = await self._forum_backfill_targets(entity)
+        per_target = max(50, limit // max(1, len(targets)))
+        for reply_to in targets:
+            await self._backfill_recent(
+                entity,
+                per_target,
+                min_id=min_id,
+                reply_to=reply_to,
+            )
+
     async def _backfill_on_connect(self, entity: Any) -> None:
         """Gap-aware backfill — min_id skips already-ingested rows (dedup alone is not enough)."""
         try:
@@ -222,7 +266,7 @@ class TelegramListener:
                 limit = TELEGRAM_BACKFILL_LIMIT
             else:
                 return
-            await self._backfill_recent(entity, limit, min_id=last_ext)
+            await self._backfill_gap(entity, limit, last_ext)
         except Exception as exc:
             logger.warning("Telegram connect backfill failed: %s", exc)
 
@@ -231,14 +275,18 @@ class TelegramListener:
         entity: Any,
         limit: int,
         min_id: Optional[int] = None,
+        reply_to: Optional[int] = None,
     ) -> None:
-        """Ingest Telegram history — skip msg.id <= min_id client-side (Telethon min_id is flaky on forums)."""
+        """Ingest Telegram history — skip msg.id <= min_id client-side (forum-safe)."""
         new_count = 0
         deduped = 0
         skipped = 0
         skipped_old = 0
         try:
-            async for msg in self._client.iter_messages(entity, limit=limit):
+            kw: Dict[str, Any] = {"limit": limit}
+            if reply_to is not None:
+                kw["reply_to"] = reply_to
+            async for msg in self._client.iter_messages(entity, **kw):
                 if min_id is not None and min_id > 0 and int(msg.id) <= min_id:
                     skipped_old += 1
                     continue
@@ -259,7 +307,8 @@ class TelegramListener:
                     await self._forward_to_ingest(normalized)
                     new_count += 1
             logger.info(
-                "Telegram backfill min_id=%s limit=%s new=%s deduped=%s skipped=%s skipped_old=%s",
+                "Telegram backfill reply_to=%s min_id=%s limit=%s new=%s deduped=%s skipped=%s skipped_old=%s",
+                reply_to,
                 min_id,
                 limit,
                 new_count,
@@ -435,7 +484,7 @@ class TelegramListener:
             return False
 
         async def _do() -> None:
-            await self._backfill_recent(self._monitor_entity, lim, min_id=last_ext)
+            await self._backfill_gap(self._monitor_entity, lim, last_ext)
 
         try:
             fut = asyncio.run_coroutine_threadsafe(_do(), self._loop)
