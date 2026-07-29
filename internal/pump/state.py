@@ -230,19 +230,24 @@ def transition_subnet(
 
 def scan_all_subnets(state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Scan ~129 subnets, apply ladder transitions, persist + Soul-Map/trail."""
+    # ponytail: fetch before scan lock — long signal fetch was wedging concurrent scans.
+    signal_rows = fetch_all_subnet_signals()
+    if not signal_rows:
+        return {"ok": False, "error": "no subnet signals", "scanned": 0, "transitions": []}
     if not _scan_lock.acquire(blocking=False):
         return {"ok": False, "error": "scan_in_progress", "scanned": 0, "transitions": []}
     try:
-        return _scan_all_subnets_locked(state)
+        return _scan_all_subnets_locked(state, signal_rows)
     finally:
         _scan_lock.release()
 
 
-def _scan_all_subnets_locked(state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    # ponytail: fetch signals OUTSIDE the state lock — scan can take 30s+ and was
-    # wedging GET /api/pump-alerts (load_state blocked behind worker scan).
-    signal_rows = fetch_all_subnet_signals()
-    if not signal_rows:
+def _scan_all_subnets_locked(
+    state: Optional[Dict[str, Any]] = None,
+    signal_rows: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    rows = signal_rows or []
+    if not rows:
         return {"ok": False, "error": "no subnet signals", "scanned": 0, "transitions": []}
 
     with _lock:
@@ -257,7 +262,7 @@ def _scan_all_subnets_locked(state: Optional[Dict[str, Any]] = None) -> Dict[str
         data.setdefault("meta", {})
 
         transitions: List[Dict[str, Any]] = []
-        for row in signal_rows:
+        for row in rows:
             event, changed = transition_subnet(data, row)
             if changed and event:
                 transitions.append(event)
@@ -279,7 +284,7 @@ def _scan_all_subnets_locked(state: Optional[Dict[str, Any]] = None) -> Dict[str
 
         return {
             "ok": True,
-            "scanned": len(signal_rows),
+            "scanned": len(rows),
             "transitions": transitions,
             "phase_counts": phase_counts,
             "soul_map": soul,

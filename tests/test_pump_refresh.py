@@ -116,24 +116,39 @@ def test_scan_all_subnets_skips_when_already_running(tmp_path, monkeypatch):
 
     monkeypatch.setattr(constants, "STATE_PATH", str(tmp_path / "pump_ladder.json"))
 
+    stub_signal = {
+        "netuid": 1,
+        "name": "A",
+        "price_change_24h": 0.05,
+        "momentum_1h": 0.01,
+        "volume_intensity": 0.3,
+        "buy_ratio": 0.6,
+        "chatter_intensity": 0,
+        "emission": 1.0,
+    }
+
     started = threading.Event()
     release = threading.Event()
 
-    def slow_fetch():
+    def slow_locked(state=None, signal_rows=None):
         started.set()
         release.wait(timeout=2.0)
-        return []
+        return {"ok": True, "scanned": len(signal_rows or []), "transitions": []}
 
     import internal.pump.state as pump_state
 
-    with patch("internal.pump.state.fetch_all_subnet_signals", side_effect=slow_fetch):
-        t = threading.Thread(target=pump_state.scan_all_subnets, daemon=True)
-        t.start()
-        assert started.wait(timeout=2.0)
-        dup = pump_state.scan_all_subnets()
-        assert dup.get("error") == "scan_in_progress"
-        release.set()
-        t.join(timeout=3.0)
+    with patch(
+        "internal.pump.state.fetch_all_subnet_signals",
+        return_value=[stub_signal],
+    ):
+        with patch("internal.pump.state._scan_all_subnets_locked", side_effect=slow_locked):
+            t = threading.Thread(target=pump_state.scan_all_subnets, daemon=True)
+            t.start()
+            assert started.wait(timeout=2.0)
+            dup = pump_state.scan_all_subnets()
+            assert dup.get("error") == "scan_in_progress"
+            release.set()
+            t.join(timeout=3.0)
 
 
 def test_ladder_age_minutes_missing_meta(tmp_path, monkeypatch):
