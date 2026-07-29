@@ -109,4 +109,50 @@ print('hc_strip:', len(m.get('high_conviction_strip') or []))
     ;;
 esac
 
+case "$PHASE" in
+  la|LA|hero|all)
+    echo "== Phase LA: hero source-of-truth =="
+    for i in 1 2 3; do
+      curl -fsS --max-time 12 "$BASE/api/daily-pick" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+act=str(d.get('action') or 'HOLD').upper()
+assert act in ('LONG','HOLD','SHORT'), act
+ga=d.get('generated_at') or d.get('timestamp_utc')
+print('daily-pick action=', act, 'generated_at=', 'yes' if ga else 'no')
+" || echo "daily-pick $i: FAIL"
+    done
+    curl -fsS --max-time 12 "$BASE/api/data-freshness" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+src=d.get('effective_source') or d.get('source') or ''
+print('data-freshness effective_source:', src or '(empty)')
+assert src, 'missing effective_source'
+"
+    html=$(curl -fsS --max-time 15 "$BASE/")
+    echo "$html" | grep -q 'k3-action-badge' && echo "hero badge: present" || echo "WARN: k3-action-badge missing"
+    echo "$html" | grep -q 'k3-call-headline' && echo "hero headline: present" || echo "WARN: k3-call-headline missing"
+    ;;
+esac
+
+case "$PHASE" in
+  lb|LB|integrations|pulse|all)
+    echo "== Phase LB: integrations + pulse rail =="
+    curl -fsS --max-time 15 "$BASE/api/subnet-integrations" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+rows=d.get('integrations') or []
+connected=d.get('connected_count', 0)
+print('integrations:', connected, '/', d.get('integration_total', len(rows)))
+chutes=next((r for r in rows if r.get('slug')=='chutes'), {})
+print('chutes:', chutes.get('status'), chutes.get('detail','')[:60])
+assert len(rows) >= 4, rows
+"
+    html=$(curl -fsS --max-time 15 "$BASE/")
+    echo "$html" | grep -q 'subnet-int-strip\|subnet-integrations-bar' && echo "integrations strip SSR: present" || echo "WARN: integrations strip missing in HTML"
+    echo "$html" | grep -q 'section-market-pulse' && echo "market pulse: present" || echo "WARN: market pulse missing"
+    echo "$html" | grep -qi 'built on bittensor' && echo "brand line: present" || echo "WARN: Built on Bittensor line missing"
+    ;;
+esac
+
 echo "== babysit phase=$PHASE OK =="

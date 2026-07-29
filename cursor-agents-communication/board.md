@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-07-29T09:15:00Z  
 **main:** `597a6bd` — #628 telegram session fallback · #627 entity resolve audit · finish-queue Slices 0–3 merged (#609–#610, worker hotfix #619–#626)  
-**Plans:** `finish-queue-plan.md` · `full-roadmap-master-plan.md` · `post-audit-sprint-plan.md`
+**Plans:** `finish-queue-plan.md` · `full-roadmap-master-plan.md` · `post-audit-sprint-plan.md` · `launch-hero-integrations-plan.md`
 
 ## Full roadmap
 
@@ -21,6 +21,15 @@
 
 - W0 #549 · W1–W3 #557 on prod (HTML markers live)
 - **You:** 390px Subnet Summers desk — tap message expand, HC strip, proof band
+
+## Launch readiness (hero + integrations)
+
+| Phase | Status | Lock |
+|-------|--------|------|
+| **LA** Hero source-of-truth | **NEXT** | `launch-hero-integrations-plan.md` |
+| **LB** Integrations + pulse rail | gated on LA | same |
+
+Babysit: `./scripts/babysit_phase.sh la` · `./scripts/babysit_phase.sh lb`
 
 ## Post-audit sprint
 
