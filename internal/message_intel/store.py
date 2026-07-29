@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
@@ -43,6 +44,9 @@ def live_stats(db: Optional[Database] = None) -> Dict[str, Any]:
                    LEFT JOIN message_verdicts v ON v.message_id = m.id
                    ORDER BY m.id DESC LIMIT 5"""
             ).fetchall()
+            last_row = conn.execute(
+                "SELECT timestamp FROM messages ORDER BY id DESC LIMIT 1"
+            ).fetchone()
     except Exception as exc:
         return {"ok": False, "error": str(exc), "total_messages": 0}
 
@@ -50,10 +54,30 @@ def live_stats(db: Optional[Database] = None) -> Dict[str, Any]:
     for row in by_source:
         channels.append({"source": row["source"], "count": int(row["n"])})
 
-    return {
+    last_message_at: Optional[str] = None
+    last_message_age_seconds: Optional[float] = None
+    if last_row and last_row["timestamp"]:
+        last_message_at = str(last_row["timestamp"])
+        try:
+            from internal.message_intel.rollup import _parse_ts
+
+            ts = _parse_ts(last_message_at)
+            if ts is not None:
+                last_message_age_seconds = (
+                    datetime.now(timezone.utc) - ts.astimezone(timezone.utc)
+                ).total_seconds()
+        except Exception:
+            pass
+
+    out: Dict[str, Any] = {
         "ok": True,
         "total_messages": int(total),
         "high_conviction_count": int(high_conv or 0),
         "channels": channels,
         "recent": [dict(r) for r in recent],
     }
+    if last_message_at:
+        out["last_message_at"] = last_message_at
+    if last_message_age_seconds is not None:
+        out["last_message_age_seconds"] = round(last_message_age_seconds, 1)
+    return out

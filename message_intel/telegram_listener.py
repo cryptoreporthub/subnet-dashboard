@@ -75,6 +75,7 @@ class TelegramListener:
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self.group_title: Optional[str] = None
         self.group_connected: bool = False
+        self._monitor_entity: Optional[Any] = None
 
     def start(self) -> bool:
         """
@@ -148,10 +149,12 @@ class TelegramListener:
                     title = getattr(entity, "title", None) or str(self.group)
                     self.group_title = title
                     self.group_connected = True
+                    self._monitor_entity = entity
                     logger.info("Monitoring group: %s", title)
                 except ValueError as e:
                     self.group_connected = False
                     self.group_title = None
+                    self._monitor_entity = None
                     logger.error(
                         "Could not find group '%s': %s", self.group, e
                     )
@@ -345,6 +348,25 @@ class TelegramListener:
             )
         except Exception as e:
             logger.warning("Urllib forward failed: %s", e)
+
+    def trigger_backfill(self, limit: Optional[int] = None) -> bool:
+        """Re-pull recent Telegram history (deduped) — recovers quiet disconnect gaps."""
+        if not self._running or not self._loop or not self._monitor_entity or not self._client:
+            return False
+        lim = limit if limit is not None else TELEGRAM_BACKFILL_LIMIT
+        if lim <= 0:
+            return False
+
+        async def _do() -> None:
+            await self._backfill_recent(self._monitor_entity, lim)
+
+        try:
+            fut = asyncio.run_coroutine_threadsafe(_do(), self._loop)
+            fut.result(timeout=120)
+            return True
+        except Exception as exc:
+            logger.warning("Telegram backfill trigger failed: %s", exc)
+            return False
 
     def stop(self) -> None:
         """Stop the listener gracefully."""

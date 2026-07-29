@@ -26,6 +26,7 @@ def test_summers_desk_first_class_on_home():
     assert "message-intel__sw--pink" in html
     assert "message-intel__flagship-chip" in html
     assert "FLAGSHIP" in html
+    assert "Loading live feed" in html or "Warming up Telegram" in html
 
     # Must sit on the spine — not only inside the More intel drawer
     mi = html.find('id="section-message-intel"')
