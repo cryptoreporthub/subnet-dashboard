@@ -201,11 +201,40 @@ def _registry_name_boot_sync() -> None:
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    """Boot background workers on web only when BACKGROUND_ON_WEB allows it."""
-    from internal.run_mode import background_boot_allowed, background_on_web, is_worker_mode
+    """Boot background workers on web when BACKGROUND_ON_WEB allows; on dedicated worker VM too."""
+    from internal.run_mode import (
+        background_boot_allowed,
+        background_on_web,
+        is_worker_mode,
+        worker_heavy_feeds_enabled,
+    )
 
     if is_worker_mode():
+        if background_boot_allowed():
+            from internal.background_boot import start_background_workers, stop_background_workers
+            from internal.worker_heartbeat import touch_heartbeat
+
+            heavy = worker_heavy_feeds_enabled()
+            start_background_workers(heavy=heavy)
+            touch_heartbeat()
+
+            def _beat() -> None:
+                import time
+
+                while True:
+                    time.sleep(30)
+                    try:
+                        touch_heartbeat()
+                    except Exception as exc:
+                        logger.debug("worker heartbeat tick failed: %s", exc)
+
+            threading.Thread(target=_beat, daemon=True, name="worker-heartbeat").start()
+            logger.info("dedicated worker lifespan boot (heavy=%s)", heavy)
         yield
+        if background_boot_allowed():
+            from internal.background_boot import stop_background_workers
+
+            stop_background_workers()
         return
 
     # Never block lifespan on Jinja — Fly health checks fail and edge returns 0 bytes.
