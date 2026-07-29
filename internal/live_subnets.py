@@ -189,13 +189,45 @@ def _fetch_chain_data():
     return result.get("data")
 
 
+def _boot_status_path() -> str:
+    return os.path.join(os.path.dirname(_cache_path()), "live_subnets_boot.json")
+
+
+def _record_boot_status(**fields: Any) -> None:
+    try:
+        payload = {"at": _now_iso(), **fields}
+        path = _boot_status_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(payload, f)
+        os.replace(tmp, path)
+    except Exception as exc:
+        logger.debug("live_subnets boot status write failed: %s", exc)
+
+
+def _read_boot_status() -> Dict[str, Any]:
+    try:
+        path = _boot_status_path()
+        if os.path.isfile(path):
+            with open(path, "r") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        pass
+    return {}
+
+
 def _sync_once() -> bool:
+    _record_boot_status(phase="sync_start")
     raw = _fetch_chain_data()
     if raw is None:
         logger.warning("live_subnets sync: chain fetch failed or timed out")
+        _record_boot_status(phase="sync_done", ok=False, reason="timeout")
         return False
     if not raw:
         logger.warning("live_subnets sync: chain fetch returned 0 subnets (RPC degraded?)")
+        _record_boot_status(phase="sync_done", ok=False, reason="empty", rows=0)
         return False
     merged = _merge_into_registry(raw)
     payload = {
@@ -211,9 +243,11 @@ def _sync_once() -> bool:
             json.dump(payload, f)
         os.replace(tmp, _cache_path())
         logger.info("live_subnets sync OK: %d subnets", len(merged))
+        _record_boot_status(phase="sync_done", ok=True, rows=len(merged))
         return True
     except Exception as exc:
         logger.warning("live_subnets cache write failed: %s", exc)
+        _record_boot_status(phase="sync_done", ok=False, reason=f"write:{exc}")
         return False
 
 
@@ -223,13 +257,13 @@ def bootstrap_live_subnets_cache() -> bool:
         return False
     if _in_ci_or_test:
         return False
-    flag = os.environ.get("LIVE_SUBNETS_BOOT_IMMEDIATE", "off").strip().lower()
-    if flag not in ("1", "true", "yes", "on"):
-        return False
     from internal.run_mode import is_worker_mode
 
+    # Dedicated worker always syncs on boot — do not gate on LIVE_SUBNETS_BOOT_IMMEDIATE.
     if not is_worker_mode():
-        return False
+        flag = os.environ.get("LIVE_SUBNETS_BOOT_IMMEDIATE", "off").strip().lower()
+        if flag not in ("1", "true", "yes", "on"):
+            return False
     logger.info("live_subnets bootstrap immediate sync")
     return _sync_once()
 
@@ -346,4 +380,15 @@ def live_data_freshness() -> Dict[str, Any]:
         info["worker_heavy"] = worker_heavy_feeds_enabled()
     except Exception:
         pass
+    boot = _read_boot_status()
+    if boot:
+        info["boot_status"] = boot
+    if info.get("run_mode") == "worker":
+        try:
+            from internal.chain_client import get_default_client
+
+            info["sample_price_sn1"] = get_default_client().get_alpha_price(1)
+        except Exception as exc:
+            info["sample_price_sn1"] = None
+            info["sample_price_error"] = str(exc)[:120]
     return info
