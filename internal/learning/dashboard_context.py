@@ -47,28 +47,52 @@ def fast_shell_dashboard_context() -> Dict[str, Any]:
     except Exception as exc:
         logger.warning("fast shell weights failed: %s", exc)
     try:
-        from internal.learning.routes import _learning_snapshot
+        from internal.data_volume import needs_worker_volume_proxy
 
-        snap = _learning_snapshot()
-        engine_stats = snap["engine_stats"]
-        resolver_stats = snap["resolver_stats"]
-        trust_banner = snap["trust_banner"]
-        ctx["learning_metrics"] = {
-            "expert_weights": engine_stats.get("expert_weights", {}),
-            "total_records": resolver_stats.get("total", engine_stats.get("total_records", 0)),
-            "predictions_pending": resolver_stats.get("pending", engine_stats.get("pending", 0)),
-            "predictions_resolved": resolver_stats.get("total", 0),
-            "correct": resolver_stats.get("correct", 0),
-            "wrong": resolver_stats.get("wrong", 0),
-            "accuracy": resolver_stats.get("accuracy", engine_stats.get("accuracy", 0.0)),
-            "expired": resolver_stats.get("expired", 0),
-            "expired_rate": trust_banner.get("expired_rate"),
-            "graded": trust_banner.get("graded"),
-            "trust_banner": trust_banner,
-            "watchdog": snap.get("watchdog"),
-            "brain_ui_ready": trust_banner.get("ready"),
-            "last_updated": engine_stats.get("last_updated"),
-        }
+        if needs_worker_volume_proxy():
+            from internal.worker_proxy import fetch_learning_stats_sync
+
+            data = fetch_learning_stats_sync()
+            trust_banner = data.get("trust_banner") or {}
+            ctx["learning_metrics"] = {
+                "expert_weights": data.get("expert_weights", {}),
+                "total_records": data.get("total_records", 0),
+                "predictions_pending": data.get("pending", 0),
+                "predictions_resolved": data.get("total_records", 0),
+                "correct": data.get("correct", 0),
+                "wrong": data.get("wrong", 0),
+                "accuracy": data.get("accuracy", 0.0),
+                "expired": data.get("expired", 0),
+                "expired_rate": trust_banner.get("expired_rate"),
+                "graded": trust_banner.get("graded"),
+                "trust_banner": trust_banner,
+                "watchdog": data.get("watchdog"),
+                "brain_ui_ready": trust_banner.get("ready"),
+                "last_updated": data.get("last_updated"),
+            }
+        else:
+            from internal.learning.routes import _learning_snapshot
+
+            snap = _learning_snapshot()
+            engine_stats = snap["engine_stats"]
+            resolver_stats = snap["resolver_stats"]
+            trust_banner = snap["trust_banner"]
+            ctx["learning_metrics"] = {
+                "expert_weights": engine_stats.get("expert_weights", {}),
+                "total_records": resolver_stats.get("total", engine_stats.get("total_records", 0)),
+                "predictions_pending": resolver_stats.get("pending", engine_stats.get("pending", 0)),
+                "predictions_resolved": resolver_stats.get("total", 0),
+                "correct": resolver_stats.get("correct", 0),
+                "wrong": resolver_stats.get("wrong", 0),
+                "accuracy": resolver_stats.get("accuracy", engine_stats.get("accuracy", 0.0)),
+                "expired": resolver_stats.get("expired", 0),
+                "expired_rate": trust_banner.get("expired_rate"),
+                "graded": trust_banner.get("graded"),
+                "trust_banner": trust_banner,
+                "watchdog": snap.get("watchdog"),
+                "brain_ui_ready": trust_banner.get("ready"),
+                "last_updated": engine_stats.get("last_updated"),
+            }
     except Exception as exc:
         logger.warning("fast shell learning metrics failed: %s", exc)
     _FAST_SHELL_CACHE["at"] = now

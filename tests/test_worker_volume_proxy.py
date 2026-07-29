@@ -54,8 +54,39 @@ def test_should_proxy_learning_health(monkeypatch):
     from internal.worker_proxy import should_proxy_path
 
     assert should_proxy_path("/api/learning/health") is True
+    assert should_proxy_path("/api/learning/stats") is True
+    assert should_proxy_path("/api/learning-metrics") is True
     assert should_proxy_path("/api/data-freshness") is True
     assert should_proxy_path("/api/pump-alerts") is True
+    assert should_proxy_path("/api/predictions") is True
+    assert should_proxy_path("/api/predictions/resolved") is True
+    assert should_proxy_path("/api/mindmap/trail") is True
+    assert should_proxy_path("/api/mindmap/graph") is True
+    assert should_proxy_path("/api/council") is False
+
+
+def test_learning_stats_proxy_middleware(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("DATA_DIR", "/nonexistent")
+
+    from starlette.responses import JSONResponse
+
+    async def _fake_proxy(_request):
+        return JSONResponse(
+            {
+                "status": "success",
+                "data": {"graded": 12, "accuracy": 0.5, "trust_banner": {"graded": 12}},
+            }
+        )
+
+    with patch("internal.worker_proxy.proxy_get_to_worker", _fake_proxy):
+        from server import app
+
+        client = TestClient(app)
+        r = client.get("/api/learning/stats")
+    assert r.status_code == 200
+    assert r.json()["data"]["graded"] == 12
 
 
 def test_listener_status_proxies_to_worker(monkeypatch):

@@ -132,9 +132,29 @@ def should_proxy_path(path: str) -> bool:
         return False
     if path == "/api/pump-alerts":
         return True
-    if path in ("/api/learning/health", "/api/ops/evidence", "/api/data-freshness"):
+    if path in (
+        "/api/learning/health",
+        "/api/learning/stats",
+        "/api/learning-metrics",
+        "/api/ops/evidence",
+        "/api/data-freshness",
+    ):
         return True
-    return path.startswith("/api/message-intel")
+    if path.startswith("/api/message-intel"):
+        return True
+    # Volume-backed learning ledger + mindmap (GET only — middleware skips POST).
+    if path.startswith("/api/mindmap"):
+        return True
+    if path == "/api/predictions" or path.startswith("/api/predictions/"):
+        return True
+    return False
+
+
+def fetch_learning_stats_sync(*, timeout: Optional[float] = None) -> Dict[str, Any]:
+    """split_v2 web — resolver stats from worker-owned predictions.json."""
+    remote = fetch_worker_json_sync("/api/learning/stats", timeout=timeout)
+    data = remote.get("data")
+    return data if isinstance(data, dict) else {}
 
 
 async def _fetch_worker_http(path: str, *, query: str = "", timeout: float) -> httpx.Response:

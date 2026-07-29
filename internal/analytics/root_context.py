@@ -235,6 +235,16 @@ def _safe_story_strip(limit: int = 8) -> Dict[str, Any]:
 
 def _safe_trust_banner() -> Dict[str, Any]:
     try:
+        from internal.data_volume import needs_worker_volume_proxy
+
+        if needs_worker_volume_proxy():
+            from internal.worker_proxy import fetch_learning_stats_sync
+
+            data = fetch_learning_stats_sync()
+            trust_banner = data.get("trust_banner")
+            if isinstance(trust_banner, dict):
+                return trust_banner
+
         from internal.council import resolver
         from internal.council.watchdog import check_resolver_watchdog
         from internal.learning.predictions_store import load_predictions
