@@ -88,6 +88,7 @@ class TelegramListener:
         self.telegram_user_label: Optional[str] = None
         self.entity_resolve_error: Optional[str] = None
         self.entity_resolve_attempts: list[str] = []
+        self.session_mode: Optional[str] = None
 
     def start(self) -> bool:
         """
@@ -208,8 +209,9 @@ class TelegramListener:
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, max_retry_delay)
             except Exception as e:
+                self.entity_resolve_error = f"connect: {type(e).__name__}: {e}"
                 logger.error(
-                    "Unexpected error: %s. Retrying in %ds...", e, retry_delay
+                    "Telegram listener error: %s. Retrying in %ds...", e, retry_delay
                 )
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, max_retry_delay)
@@ -218,16 +220,30 @@ class TelegramListener:
         """Connect without blocking on interactive login when StringSession is set."""
         from telethon.sessions import StringSession
 
+        from internal.message_intel.session import _session_base, telegram_session_mode
+
+        self.session_mode = telegram_session_mode()
         uses_string = isinstance(self.session_name, StringSession) or bool(
             os.environ.get("TELEGRAM_SESSION_STRING", "").strip()
         )
         if uses_string:
             await self._client.connect()
             if not await self._client.is_user_authorized():
-                raise RuntimeError(
-                    "TELEGRAM_SESSION_STRING unauthorized — re-bootstrap with "
-                    "scripts/bootstrap_telegram_session.py"
-                )
+                path = _session_base()
+                if os.path.isfile(f"{path}.session"):
+                    logger.warning(
+                        "TELEGRAM_SESSION_STRING unauthorized — falling back to volume file %s",
+                        path,
+                    )
+                    await self._client.disconnect()
+                    self._client = TelegramClient(path, self.api_id, self.api_hash)
+                    self.session_mode = "file_fallback"
+                    await self._client.connect()
+                if not await self._client.is_user_authorized():
+                    raise RuntimeError(
+                        "Telegram session unauthorized (string + volume file) — "
+                        "re-bootstrap or unset stale TELEGRAM_SESSION_STRING"
+                    )
         elif self.phone:
             await self._client.start(phone=self.phone)
         else:
