@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-28T09:30:00Z  
-**main:** `2ffd728` — post-audit A–H (#562–#571) · Phase C prep #566 · names #554/#560  
+**Last updated:** 2026-07-28T23:35:00Z  
+**main:** `93a61d0` — Phase C **DONE** (#598–#601) · post-audit A–H (#562–#571)  
 **Plans:** `full-roadmap-master-plan.md` · `post-audit-sprint-plan.md`
 
 ## Full roadmap
@@ -28,7 +28,7 @@
 |-------|--------|------|
 | A Ops quick wins | DONE #562 | `ops-quick-wins-lock.md` |
 | B Outcome boot | DONE #563 | `outcome-boot-polish-lock.md` |
-| **C Worker split v2** | **PREP #566 · enablement in flight** | `fly-worker-split-v2-lock.md` |
+| **C Worker split v2** | **DONE** (#598–#601 · peer alive · GHA green) | `fly-worker-split-v2-lock.md` |
 | D Security | DONE #567 | `security-housekeeping-lock.md` |
 | E SS-TG W4 | DONE #570 | `subnet-summers-telegram-lock.md` |
 | F SS-TG W5 | DONE #571 | |
@@ -50,7 +50,8 @@ Babysit: `./scripts/babysit_phase.sh <phase>`
 
 ## Learning loop
 
-- Prod: monitor `degraded` when resolver stale — recovers on tick
+- Prod: `/api/learning/health` **ok** — resolver tick live on worker volume (proxy from web)
+- Readiness `learning_loop_health` fix in flight (#602 track) — was reading orphan web `soul_map`
 - Track 1 soak running under #551 calibration
 
 ## Active (monitor)
@@ -62,7 +63,7 @@ Babysit: `./scripts/babysit_phase.sh <phase>`
 | Track 1 soak | day 7 / day 14 sign-off (`track-1-soak-review-lock.md`) |
 | SS-TG Gate 3 | 390px sign-off |
 | **SS-TG visual flagship** | P1–P4 in flight — green/blue/orange lead, pink sparse; sitewide color deferred |
-| **Phase C enable** | human: `./scripts/fly_enable_worker_v2.sh` after volume on worker |
+| **Phase C** | **DONE** — `worker_peer.alive: true` · worker HTTP `:8081` · flycast `:8081` |
 
 ## Out of scope
 
