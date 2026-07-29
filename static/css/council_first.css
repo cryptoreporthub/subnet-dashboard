@@ -1266,7 +1266,7 @@ button.home-cta {
 }
 }
 
-/* SS-TG v2 — telegram-pulse flagship (yellow board frame; green/blue/orange lead, pink sparse) */
+/* SS-TG v2 — telegram-pulse flagship (yellow board frame; green/blue/orange lead, violet accents) */
 .message-intel--v2 {
   --mi-green: #1fd47c;
   --mi-green-dim: #0f5a38;
@@ -1277,8 +1277,10 @@ button.home-cta {
   --mi-orange: #ff9f3f;
   --mi-orange-dim: #7a4315;
   --mi-orange-glow: rgba(255, 159, 63, 0.4);
-  --mi-pink: #ff3d9a;
-  --mi-pink-glow: rgba(255, 61, 154, 0.35);
+  --mi-violet: #a78bfa;
+  --mi-violet-glow: rgba(167, 139, 250, 0.32);
+  --mi-lilac: #9d8ee8;
+  --mi-lilac-glow: rgba(157, 142, 232, 0.28);
   --mi-yellow: #f5d547;
   --mi-yellow-glow: rgba(245, 213, 71, 0.45);
   --mi-line: rgba(255, 255, 255, 0.07);
@@ -1545,7 +1547,8 @@ button.home-cta {
   flex-shrink: 0;
 }
 .message-intel--v2 .message-intel__sw--blue { background: var(--mi-blue); }
-.message-intel--v2 .message-intel__sw--pink { background: var(--mi-pink); }
+.message-intel--v2 .message-intel__sw--violet { background: var(--mi-violet); }
+.message-intel--v2 .message-intel__sw--lilac { background: var(--mi-lilac); }
 .message-intel--v2 .message-intel__sw--orange { background: var(--mi-orange); }
 .message-intel--v2 .message-intel__proof-score {
   margin: 0 0 8px;
@@ -1574,7 +1577,7 @@ button.home-cta {
   font-family: var(--font-mono, monospace);
   font-size: 11px;
   font-weight: 700;
-  color: var(--mi-pink);
+  color: var(--mi-violet);
   min-width: 2.5rem;
 }
 .message-intel--v2 .message-intel__hc-snippet {
@@ -1699,9 +1702,9 @@ button.home-cta {
   background: rgba(255, 255, 255, 0.02);
 }
 .message-intel--v2 .message-intel__chip--hot {
-  color: var(--mi-pink) !important;
-  border-color: rgba(255, 61, 154, 0.3) !important;
-  background: rgba(255, 61, 154, 0.07) !important;
+  color: var(--mi-violet) !important;
+  border-color: rgba(167, 139, 250, 0.32) !important;
+  background: rgba(167, 139, 250, 0.08) !important;
 }
 .message-intel--v2 .message-intel__hero-runner {
   position: relative;
@@ -1758,7 +1761,7 @@ button.home-cta {
 .message-intel--v2 .message-intel__sec-bar--blue { background: var(--mi-blue); }
 .message-intel--v2 .message-intel__sec-bar--orange { background: var(--mi-orange); }
 .message-intel--v2 .message-intel__sec-bar--green { background: var(--mi-green); }
-.message-intel--v2 .message-intel__sec-bar--pink { background: var(--mi-pink); }
+.message-intel--v2 .message-intel__sec-bar--lilac { background: var(--mi-lilac); }
 .message-intel--v2 .message-intel__panel-title {
   margin: 0;
   font-family: var(--font-mono, monospace);
@@ -1952,7 +1955,7 @@ button.home-cta {
   font-family: var(--font-mono, monospace);
   font-weight: 700;
   font-size: 13px;
-  color: var(--mi-pink);
+  color: var(--mi-lilac);
   flex-shrink: 0;
 }
 .message-intel--v2 .message-intel__view-all {
@@ -2148,7 +2151,7 @@ button.home-cta {
   font-size: 10.5px;
   color: var(--mi-text-dim);
 }
-.message-intel--v2 .message-intel__f-conv--high { color: var(--mi-pink); }
+.message-intel--v2 .message-intel__f-conv--high { color: var(--mi-violet); }
 .message-intel--v2 .message-intel__f-time {
   margin-left: auto;
   font-family: var(--font-mono, monospace);
