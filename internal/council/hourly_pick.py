@@ -18,6 +18,7 @@ from internal.council.state_vector import (
     unpack_score_learning_fields,
 )
 from internal.council.red_team import audit_daily_pick
+from internal.council.publish_gate import publish_gate_fraction, publish_gate_label
 from internal.subnets.tradable import tradable_subnets
 
 try:
@@ -78,7 +79,8 @@ def select_hourly_pick(
                 "adjusted_confidence": 0.0,
             },
             "final_confidence": 0.0,
-            "action": "long",
+            "action": "HOLD",
+            "hold_reason": "No tradable subnets available",
             "prediction": None,
             "reasons": [],
             "signal_impact": None,
@@ -124,6 +126,17 @@ def select_hourly_pick(
         impact = None
     reasons = pick_reasons(candidate, learning["signal_impact"])
 
+    gate = publish_gate_fraction()
+    hold_reason = None
+    if final_confidence < gate:
+        action = "HOLD"
+        hold_reason = (
+            f"Confidence {final_confidence:.0%} below {publish_gate_label()} — "
+            "no long call published"
+        )
+    else:
+        action = "long"
+
     result = {
         "subnet": {
             "netuid": candidate.get("netuid"),
@@ -136,7 +149,8 @@ def select_hourly_pick(
         "scenario_tags": score_payload["scenario_tags"],
         "audit": audit,
         "final_confidence": final_confidence,
-        "action": "long",
+        "action": action,
+        "hold_reason": hold_reason,
         "tie_break": tie_break,
         "impact": impact,
         "reasons": reasons,

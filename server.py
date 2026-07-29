@@ -1827,6 +1827,20 @@ def _record_pick_in_learning_loop(
     """Pick → prediction → resolver → weights (closes the learning loop)."""
     if not pick:
         return
+    if str(pick.get("action") or "").upper() == "HOLD":
+        try:
+            from internal.learning.prediction_loop import record_hold_decision
+
+            record_hold_decision(
+                candidate=pick,
+                reason=pick.get("hold_reason") or pick.get("reason"),
+                horizon_type=horizon_type,
+                subnet=_subnet_for_pick(subnets, pick) or None,
+                market_context=market_context,
+            )
+        except Exception as exc:
+            logger.warning("HOLD learning record failed (%s): %s", horizon_type, exc)
+        return
     try:
         from internal.learning.prediction_loop import record_pick_prediction
 
@@ -1869,7 +1883,9 @@ def _highest_emission_pick(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
             "apy": best.get("apy"),
             "volume": best.get("volume"),
         },
-        "action": "long",
+        "action": "HOLD",
+        "hold_reason": "Council scoring unavailable — showing highest-emission subnet only",
+        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
 
 
