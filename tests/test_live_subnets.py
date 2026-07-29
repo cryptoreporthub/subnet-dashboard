@@ -1,6 +1,7 @@
 """Live subnets cache path + worker bootstrap."""
 
 import json
+import threading
 from unittest.mock import patch
 
 import pytest
@@ -90,6 +91,33 @@ def test_registry_netuids_from_committed_registry():
     ids = live_subnets._registry_netuids()
     assert len(ids) >= 100
     assert 1 in ids
+
+
+def test_sync_once_skips_concurrent_call(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    from internal import live_subnets
+
+    started = threading.Event()
+    release = threading.Event()
+    fetch_count = {"n": 0}
+
+    def slow_fetch():
+        fetch_count["n"] += 1
+        started.set()
+        release.wait(timeout=5)
+        return [{"netuid": 1, "price": 1.0}]
+
+    with patch.object(live_subnets, "_fetch_chain_data", side_effect=slow_fetch):
+        t1 = threading.Thread(target=live_subnets._sync_once)
+        t2 = threading.Thread(target=live_subnets._sync_once)
+        t1.start()
+        assert started.wait(timeout=2)
+        t2.start()
+        t2.join(timeout=2)
+        release.set()
+        t1.join(timeout=5)
+
+    assert fetch_count["n"] == 1
 
 
 def test_fetch_chain_data_passes_registry_netuids(monkeypatch):

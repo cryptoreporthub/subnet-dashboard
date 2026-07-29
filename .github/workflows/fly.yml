@@ -236,16 +236,24 @@ jobs:
         continue-on-error: true
         run: |
           BASE=https://subnet-dashboard.fly.dev
-          for i in $(seq 1 24); do
-            count=$(curl -fsS -m 15 "$BASE/api/data-freshness" | python3 -c "import json,sys; print(json.load(sys.stdin).get('subnet_count') or 0)" 2>/dev/null || echo 0)
-            echo "live_subnets attempt $i: subnet_count=$count"
-            if [ "$count" -gt 0 ] 2>/dev/null; then
-              echo "live_subnets cache warm"
-              exit 0
-            fi
+          for i in $(seq 1 48); do
+            body=$(curl -fsS -m 15 "$BASE/api/data-freshness" 2>/dev/null || echo '{}')
+            echo "$body" | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)
+          count=d.get('subnet_count') or 0
+          stale=d.get('stale')
+          boot=d.get('boot_status') or {}
+          phase=boot.get('phase')
+          ok=boot.get('ok')
+          print(f'live_subnets attempt {sys.argv[1]}: subnet_count={count} stale={stale} boot={phase} ok={ok}')
+          warm=count>0 and (stale is False or (phase=='sync_done' and ok is True))
+          sys.exit(0 if warm else 1)
+          " "$i" && { echo "live_subnets cache warm"; exit 0; }
             sleep 10
           done
-          echo "WARN: live_subnets cache still empty after ~4m (check worker logs)"
+          echo "WARN: live_subnets not fresh after ~8m (check worker logs)"
+          curl -fsS -m 15 "$BASE/api/data-freshness" | python3 -m json.tool || true
       - name: Learning loop post-deploy check
         continue-on-error: false
         run: |
