@@ -27,6 +27,14 @@ Define **GO / HOLD / adjust** at the **day 7** (2026-08-04) and **day 14** (2026
 
 ## Queries (copy-paste)
 
+**One-shot snapshot (Slice 3):**
+
+```bash
+./scripts/soak_review_snapshot.sh | jq .
+```
+
+Manual queries:
+
 ```bash
 BASE=https://subnet-dashboard.fly.dev
 
