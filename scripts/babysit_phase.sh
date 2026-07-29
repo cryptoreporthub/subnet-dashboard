@@ -157,4 +157,61 @@ assert len(rows) >= 4, rows
   ;;
 esac
 
+case "$PHASE" in
+  acc0|ACC0|acc-0)
+    echo "== Phase Acc-0: ledger plumbing =="
+    curl -fsS --max-time 12 "$BASE/api/learning/health" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+lg=d.get('ledger') or {}
+print('status=', d.get('status'), 'ledger.gap=', lg.get('gap'), 'required=', lg.get('required'))
+if lg.get('required'):
+    assert lg.get('gap') is not True, 'ledger gap still true for published LONG'
+"
+    ;;
+esac
+
+case "$PHASE" in
+  acc1|ACC1|acc-1)
+    echo "== Phase Acc-1: archive measurement =="
+    curl -fsS --max-time 12 "$BASE/api/ops/evidence" | python3 -c "
+import json,sys; d=json.load(sys.stdin); print('ops/evidence:', d.get('status', 'ok'))
+"
+    test -f scripts/measure_accuracy_archive.py && echo "archive script: present" || echo "WARN: measure_accuracy_archive.py missing (local/PR artifact)"
+    ;;
+esac
+
+case "$PHASE" in
+  pp0|PP0|pp-0)
+    echo "== Phase PP-0: segment ledger =="
+    curl -fsS --max-time 12 "$BASE/api/pump-patterns/15" 2>/dev/null | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print('segments=', len(d.get('segments') or []), 'waveform=', 'yes' if d.get('waveform') else 'no')
+" || echo "WARN: /api/pump-patterns/15 not live yet"
+    ;;
+esac
+
+case "$PHASE" in
+  pp1|PP1|pp-1)
+    echo "== Phase PP-1: pattern classes =="
+    curl -fsS --max-time 12 "$BASE/api/pump-patterns/15" 2>/dev/null | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print('pattern_class=', d.get('pattern_class'), 'label=', (d.get('pattern_label') or '')[:40])
+" || echo "WARN: pattern API not live yet"
+    ;;
+esac
+
+case "$PHASE" in
+  pp2|PP2|pp-2)
+    echo "== Phase PP-2: pump desk + council surfaces =="
+    html=$(curl -fsS --max-time 15 "$BASE/pump-desk" 2>/dev/null || curl -fsS --max-time 15 "$BASE/")
+    echo "$html" | grep -q 'pump-pattern' && echo "pattern chip: present" || echo "WARN: pump-pattern chip missing"
+    curl -fsS --max-time 12 "$BASE/api/pump-patterns/active" 2>/dev/null | python3 -c "
+import json,sys; d=json.load(sys.stdin); print('active patterns:', len(d.get('items') or []))
+" || echo "WARN: /api/pump-patterns/active not live yet"
+    ;;
+esac
+
 echo "== babysit phase=$PHASE OK =="
