@@ -329,13 +329,20 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
 
     try:
         from internal.live_subnets import bootstrap_live_subnets_cache, get_live_subnets
+        from internal.run_mode import is_worker_mode
 
         def _live_subnets_boot() -> None:
             bootstrap_live_subnets_cache()
             get_live_subnets()
 
-        defer_boot("live-subnets-boot", _live_subnets_boot, delay=max(BOOT_DEFER_SECONDS, 5))
-        logger.info("Live subnets sync scheduled (deferred %ss)", BOOT_DEFER_SECONDS)
+        # Dedicated worker :8081 — no public /health race; start sync immediately.
+        boot_delay = 0 if is_worker_mode() else max(BOOT_DEFER_SECONDS, 5)
+        defer_boot("live-subnets-boot", _live_subnets_boot, delay=boot_delay)
+        logger.info(
+            "Live subnets sync scheduled (deferred %ss, worker=%s)",
+            boot_delay,
+            is_worker_mode(),
+        )
     except Exception as exc:
         logger.warning("Live subnets sync failed to start: %s", exc)
     try:
