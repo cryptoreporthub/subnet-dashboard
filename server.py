@@ -845,9 +845,9 @@ def _public_base_url(request: Request) -> str:
 
 def _pump_alerts_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     try:
-        from internal.learning.pump_alert import build_pump_alerts_desk
+        from internal.pump.desk_payload import load_pump_alerts_desk_payload
 
-        return {"pump_alerts": build_pump_alerts_desk(subnets)}
+        return {"pump_alerts": load_pump_alerts_desk_payload(subnets)}
     except Exception as exc:
         logger.warning("pump alerts context failed: %s", exc)
         return {
@@ -1663,11 +1663,9 @@ async def _fetch_pump_alerts_payload() -> Dict[str, Any]:
             return cached
 
     def _build():
-        from internal.learning.pump_alert import build_pump_alerts_desk
-        from internal.subnets.feed import load_subnets_for_display
+        from internal.pump.desk_payload import load_pump_alerts_desk_payload
 
-        subnets = load_subnets_for_display(timeout=4.0)
-        return build_pump_alerts_desk(subnets)
+        return load_pump_alerts_desk_payload()
 
     try:
         payload = await _to_thread_timeout(_build, 6.0, label="pump-alerts")
