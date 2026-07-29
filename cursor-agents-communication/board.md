@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-29T09:15:00Z  
-**main:** `597a6bd` — #628 telegram session fallback · #627 entity resolve audit · finish-queue Slices 0–3 merged (#609–#610, worker hotfix #619–#626)  
+**Last updated:** 2026-07-29T15:10:00Z  
+**main:** `0ba03c0` — #630 TaoStats web wedge · #632 SS-TG reaction crowns · #631 audit honesty · #629 live_subnets sync lock · finish-queue Slices 0–3 (#609–#610, worker hotfix #619–#626)  
 **Plans:** `finish-queue-plan.md` · `full-roadmap-master-plan.md` · `post-audit-sprint-plan.md`
 
 ## Full roadmap
@@ -64,13 +64,13 @@ Babysit: `./scripts/babysit_phase.sh <phase>`
 | SS-TG Gate 3 | 390px sign-off (H1) |
 | **SS-TG visual flagship** | DONE #590 + #605 stale feed backfill · #596 sitewide palette |
 | **Phase C** | **DONE** — `worker_peer.alive: true` · worker HTTP `:8081` · flycast `:8081` |
-| **Finish queue** | Slices 0–3 **DONE** · cache preventive fix **#629** (sync lock + deploy poll) · Slice 4 gated (`finish-queue-plan.md`) |
+| **Finish queue** | Slices 0–3 **DONE** · #629 sync lock + deploy poll · #630 TaoStats wedge **DONE** · Slice 4 **HOLD** (graded=0, calls=12) · Slices 5–7 gated (`finish-queue-plan.md`) |
 
-## Prod cache (2026-07-29)
+## Prod cache (2026-07-29 post-#630)
 
-- `subnet_count=128` · `effective_source=blockmachine` · `stale=false` · `boot_status=sync_done ok:true`
-- Babysit phase C + learning loop **green**
-- Human: H1 390px SS-TG · H2 soak Aug 4 · H3 soak Aug 11 · Telegram session re-bootstrap (`AuthKeyDuplicatedError`)
+- `subnet_count=128` · `effective_source=blockmachine` · `stale=false` · `rpc_healthy=true`
+- Babysit phase C + learning loop **green** (verified after #630 deploy)
+- Human: H1 390px SS-TG · H2 soak Aug 4 · H3 soak Aug 11 · Telegram session re-bootstrap if `AuthKeyDuplicatedError` recurs
 
 ## Out of scope
 
