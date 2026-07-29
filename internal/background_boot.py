@@ -330,8 +330,11 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     try:
         from internal.live_subnets import bootstrap_live_subnets_cache, get_live_subnets
 
-        bootstrap_live_subnets_cache()
-        defer_boot("live-subnets-boot", get_live_subnets)
+        def _live_subnets_boot() -> None:
+            bootstrap_live_subnets_cache()
+            get_live_subnets()
+
+        defer_boot("live-subnets-boot", _live_subnets_boot, delay=max(BOOT_DEFER_SECONDS, 5))
         logger.info("Live subnets sync scheduled (deferred %ss)", BOOT_DEFER_SECONDS)
     except Exception as exc:
         logger.warning("Live subnets sync failed to start: %s", exc)
