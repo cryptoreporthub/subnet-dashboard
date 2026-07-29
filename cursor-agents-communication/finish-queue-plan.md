@@ -60,20 +60,20 @@ Structural rebuild is **done** (post-audit A–H, worker split v2, pump peers/co
 ## Agent execution order
 
 ```text
-Slice 0  Doc hygiene (board conflict, lock sync)           ← do first
-Slice 1  Blockmachine cache on worker (WORKER_HEAVY bug)   ← highest ops value
-Slice 2  Freshness badge UX (honest LIVE/STALE)            ← after Slice 1 or parallel copy
-Slice 3  Soak snapshot script (day 7/14 prep)              ← no product experiments
-Slice 4  Combined angles effectiveness artifact            ← wait for graded n
-Slice 5  SS-TG 390px fixes                                  ← only after human H1 fails items
-Slice 6  Hero visual slot                                   ← human decides timer vs art
-Slice 7  Phase 4 accuracy lift                              ← GATED 2026-08-04
-Optional Ops paging, pick-audit automation, draft PR triage
+Slice 0–3  DONE (board, blockmachine, freshness, soak snapshot)
+Slice 4–7 + polish  → see pre-aug4-polish-plan.md (active execution plan)
+  PR1  Slice 4 combined effectiveness
+  PR2–10  SS-TG V5 · listener+empty kit · topic chips · hero D+C-lite
+           · sticky spine · evidence panels · /pump parity · mindmap · LF CTAs
+  PR-R Slice 5 (only after H1 fails)
+  Aug 4 H2 → PR11+ Slice 7a (gated)
 ```
+
+**Active plan:** `pre-aug4-polish-plan.md` (branch suffix `-6063`).
 
 **Merge cadence:** one PR per slice → merge → `./scripts/babysit_phase.sh c` + `./scripts/check_learning_loop.sh` → Ditto STATUS.
 
-**Branch naming:** `cursor/<slice-slug>-1d2f`
+**Branch naming:** `cursor/<slice-slug>-6063` (this wave)
 
 ---
 
@@ -156,44 +156,15 @@ curl -fsS https://subnet-dashboard.fly.dev/api/ops/readiness | jq '{ready,issues
 
 ---
 
-## Slice 4 — Combined angles effectiveness
+## Slice 4–6 + polish — superseded by active plan
 
-**Status:** Shipped experimental (`combined-angles-lock.md`). **Do not tune 0.70/0.30 weights** until graded n ≥ 20 (or human says tune).
+**See:** `pre-aug4-polish-plan.md` (full AC, PR1–10, Aug 4 gate).
 
-| Work | Files |
-|------|-------|
-| Expose combined vs next_up vs peer hit rate in ops evidence | `internal/pump/combined_ledger.py`, `internal/ops/evidence.py` |
-| Threshold doc in lock | `combined-angles-lock.md` |
-
-**Branch:** `cursor/finish-slice4-combined-effectiveness-1d2f`  
-**Gate:** ≥7 days of `pump_combined_calls.json` OR explicit human “tune now”
-
----
-
-## Slice 5 — SS-TG 390px polish (reactive)
-
-**Gate:** **Only after human H1** — fix items that fail sign-off.
-
-| Work | Files |
-|------|-------|
-| Layout/copy fixes from QA | `templates/partials/premium/*`, `static/js/cockpit_hydrate.js`, CSS |
-| Run `scripts/g0_phone_qa.sh` | fix failures |
-
-**Branch:** `cursor/finish-slice5-ss-tg-390px-1d2f`  
-**AC:** Human ticks W0–W3 AC in lock
-
----
-
-## Slice 6 — Hero visual slot (deferred)
-
-**Gate:** Human decides timer vs art.
-
-| Work | Files |
-|------|-------|
-| Reserved `pds-hero__visual` slot — minimal timer stub or empty placeholder | pump desk templates + `cockpit_hydrate.js` |
-
-**Branch:** `cursor/finish-slice6-hero-visual-1d2f`  
-**Do not start** until human specifies content.
+| Old slice | Now |
+|-----------|-----|
+| Slice 4 combined effectiveness | **PR1** — ship measurement now (weights frozen) |
+| Slice 5 SS-TG 390px | **PR-R** — only after H1 fails |
+| Slice 6 hero visual | **PR5** — locked **D + C-lite** (phase mesh + progress arc) |
 
 ---
 

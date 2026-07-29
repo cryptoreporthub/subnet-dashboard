@@ -1,8 +1,8 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-29T09:15:00Z  
-**main:** `597a6bd` — #628 telegram session fallback · #627 entity resolve audit · finish-queue Slices 0–3 merged (#609–#610, worker hotfix #619–#626)  
-**Plans:** `finish-queue-plan.md` · `full-roadmap-master-plan.md` · `post-audit-sprint-plan.md`
+**Last updated:** 2026-07-29T20:40:00Z  
+**main:** `c8a1146` — #632 reaction crowns · #638 resolver badge · finish-queue Slices 0–3 · worker hotfixes  
+**Plans:** `pre-aug4-polish-plan.md` (**active**) · `finish-queue-plan.md` · `full-roadmap-master-plan.md`
 
 ## Full roadmap
 
@@ -64,7 +64,8 @@ Babysit: `./scripts/babysit_phase.sh <phase>`
 | SS-TG Gate 3 | 390px sign-off (H1) |
 | **SS-TG visual flagship** | DONE #590 + #605 stale feed backfill · #596 sitewide palette |
 | **Phase C** | **DONE** — `worker_peer.alive: true` · worker HTTP `:8081` · flycast `:8081` |
-| **Finish queue** | Slices 0–3 **DONE** · cache preventive fix **#629** (sync lock + deploy poll) · Slice 4 gated (`finish-queue-plan.md`) |
+| **Finish queue** | Slices 0–3 **DONE** · #629 · #632 crowns · **Pre–Aug 4 wave** → `pre-aug4-polish-plan.md` (PR1–10 then H2 → Slice 7) |
+| **Pre–Aug 4 polish** | Plan locked — await **EXECUTE** · PR1 Slice 4 evidence → PR2–10 visuals/UX · Aug 4 H2 gate |
 
 ## Prod cache (2026-07-29)
 
