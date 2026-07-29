@@ -39,7 +39,13 @@ logger = logging.getLogger("live_subnets")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(BASE_DIR)
 REGISTRY_PATH = os.path.join(REPO_ROOT, "config", "registry.json")
-CACHE_PATH = os.path.join(REPO_ROOT, "data", "live_subnets.json")
+
+
+def _cache_path() -> str:
+    data_dir = os.environ.get("DATA_DIR", "data")
+    if not os.path.isabs(data_dir):
+        data_dir = os.path.join(REPO_ROOT, data_dir)
+    return os.path.join(data_dir, "live_subnets.json")
 
 SYNC_INTERVAL_SECONDS = int(os.environ.get("LIVE_SUBNETS_SYNC_INTERVAL_SECONDS", "300"))
 MAX_STALE_SECONDS = int(os.environ.get("LIVE_SUBNETS_MAX_STALE_SECONDS", "1800"))
@@ -180,11 +186,11 @@ def _sync_once() -> bool:
         "subnets": merged,
     }
     try:
-        os.makedirs(os.path.dirname(CACHE_PATH), exist_ok=True)
-        tmp = CACHE_PATH + ".tmp"
+        os.makedirs(os.path.dirname(_cache_path()), exist_ok=True)
+        tmp = _cache_path() + ".tmp"
         with open(tmp, "w") as f:
             json.dump(payload, f)
-        os.replace(tmp, CACHE_PATH)
+        os.replace(tmp, _cache_path())
         logger.info("live_subnets sync OK: %d subnets", len(merged))
         return True
     except Exception as exc:
@@ -192,10 +198,27 @@ def _sync_once() -> bool:
         return False
 
 
+def bootstrap_live_subnets_cache() -> bool:
+    """One-shot chain sync on dedicated worker boot (LIVE_SUBNETS_BOOT_IMMEDIATE=on)."""
+    if not AUTO_SYNC:
+        return False
+    if _in_ci_or_test:
+        return False
+    flag = os.environ.get("LIVE_SUBNETS_BOOT_IMMEDIATE", "off").strip().lower()
+    if flag not in ("1", "true", "yes", "on"):
+        return False
+    from internal.run_mode import is_worker_mode
+
+    if not is_worker_mode():
+        return False
+    logger.info("live_subnets bootstrap immediate sync")
+    return _sync_once()
+
+
 def get_live_subnets() -> List[Dict[str, Any]]:
     try:
-        if os.path.exists(CACHE_PATH):
-            with open(CACHE_PATH, "r") as f:
+        if os.path.exists(_cache_path()):
+            with open(_cache_path(), "r") as f:
                 data = json.load(f)
             subnets = data.get("subnets", [])
             if subnets:
@@ -267,11 +290,11 @@ def live_data_freshness() -> Dict[str, Any]:
         "age_seconds": None,
         "subnet_count": 0,
         "stale": True,
-        "cache_path": CACHE_PATH,
+        "cache_path": _cache_path(),
     }
     try:
-        if os.path.exists(CACHE_PATH):
-            with open(CACHE_PATH, "r") as f:
+        if os.path.exists(_cache_path()):
+            with open(_cache_path(), "r") as f:
                 data = json.load(f)
             info["last_sync"] = data.get("synced_at")
             info["subnet_count"] = data.get("count", 0)

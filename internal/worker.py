@@ -33,8 +33,9 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
 
-    heavy_flag = os.environ.get("WORKER_HEAVY", "essential").strip().lower()
-    heavy = heavy_flag in ("1", "true", "yes", "on", "full", "essential")
+    from internal.run_mode import worker_heavy_feeds_enabled
+
+    heavy = worker_heavy_feeds_enabled()
     start_background_workers(heavy=heavy)
     touch_heartbeat()
 

@@ -61,3 +61,9 @@ def background_boot_allowed() -> bool:
         return False
     flag = os.environ.get("DISABLE_BACKGROUND_SCANS", "").strip().lower()
     return flag not in ("1", "true", "yes", "on")
+
+
+def worker_heavy_feeds_enabled() -> bool:
+    """True when live-subnet sync + feed warmup should run (WORKER_HEAVY=full)."""
+    flag = os.environ.get("WORKER_HEAVY", "essential").strip().lower()
+    return flag in ("1", "true", "yes", "on", "full")

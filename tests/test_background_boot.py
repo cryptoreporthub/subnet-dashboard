@@ -53,7 +53,13 @@ def test_worker_mode_label(monkeypatch):
     assert worker_mode_label() == "combined"
 
 
-def test_background_on_web_essential(monkeypatch):
+def test_worker_heavy_feeds_full_only(monkeypatch):
+    from internal.run_mode import worker_heavy_feeds_enabled
+
+    monkeypatch.setenv("WORKER_HEAVY", "essential")
+    assert worker_heavy_feeds_enabled() is False
+    monkeypatch.setenv("WORKER_HEAVY", "full")
+    assert worker_heavy_feeds_enabled() is True
     monkeypatch.setenv("BACKGROUND_ON_WEB", "essential")
     monkeypatch.setenv("RUN_MODE", "web")
 
@@ -75,7 +81,9 @@ def test_background_heavy_on_full(monkeypatch):
 
 def test_start_background_workers_essential_skips_live_subnets(monkeypatch):
     live = MagicMock()
+    bootstrap = MagicMock()
     monkeypatch.setattr("internal.live_subnets.get_live_subnets", live)
+    monkeypatch.setattr("internal.live_subnets.bootstrap_live_subnets_cache", bootstrap)
     monkeypatch.setattr("internal.freshness.start_background_sync", MagicMock())
     monkeypatch.setattr(
         "internal.council.resolver_scheduler.start_prediction_resolver_scheduler",
@@ -90,6 +98,25 @@ def test_start_background_workers_essential_skips_live_subnets(monkeypatch):
 
     start_background_workers(heavy=False)
     live.assert_not_called()
+    bootstrap.assert_not_called()
+
+
+def test_start_background_workers_heavy_bootstraps_live_subnets(monkeypatch):
+    live = MagicMock()
+    bootstrap = MagicMock(return_value=True)
+    monkeypatch.setattr("internal.live_subnets.get_live_subnets", live)
+    monkeypatch.setattr("internal.live_subnets.bootstrap_live_subnets_cache", bootstrap)
+    monkeypatch.setattr("internal.freshness.start_background_sync", MagicMock())
+    monkeypatch.setattr("internal.background_boot._start_pump_ladder", MagicMock())
+    monkeypatch.setattr("internal.background_boot._start_resolver", MagicMock())
+    monkeypatch.setattr("internal.background_boot._start_whale_warm_scheduler", MagicMock())
+    monkeypatch.setattr("internal.background_boot.defer_boot", MagicMock())
+
+    from internal.background_boot import start_background_workers
+
+    start_background_workers(heavy=True)
+    bootstrap.assert_called_once()
+    live.assert_not_called()  # defer_boot mocked; bootstrap is sync path
 
 
 def test_start_background_workers_starts_resolver(monkeypatch):
