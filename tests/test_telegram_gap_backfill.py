@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Optional
 
 import pytest
 
@@ -62,6 +63,39 @@ def test_normalize_message_uses_telegram_date():
     assert out["message_id"] == "208800"
 
 
+def test_forum_backfill_scans_topics(monkeypatch):
+    import asyncio
+
+    from message_intel.telegram_listener import TelegramListener
+
+    seen_reply_to: list[Optional[int]] = []
+
+    class _Entity:
+        forum = True
+
+    class _IterClient:
+        async def iter_messages(self, entity, limit=100, reply_to=None, **kw):
+            seen_reply_to.append(reply_to)
+            return
+            yield  # pragma: no cover
+
+    listener = TelegramListener(forward_to_ingest=False)
+    listener.on_message = lambda _n: None
+    listener._client = _IterClient()
+
+    async def _fake_targets(entity):
+        return [None, 42, 99]
+
+    async def _fake_ingest(payload, snapshot_price=True):
+        return {"deduped": False}
+
+    monkeypatch.setattr(listener, "_forum_backfill_targets", _fake_targets)
+    monkeypatch.setattr("internal.message_intel.engine.ingest_message", _fake_ingest)
+
+    asyncio.run(listener._backfill_gap(_Entity(), 150, 208736))
+    assert seen_reply_to == [None, 42, 99]
+
+
 def test_backfill_recent_uses_min_id(monkeypatch):
     import asyncio
 
@@ -106,4 +140,4 @@ def test_backfill_recent_uses_min_id(monkeypatch):
         await listener._backfill_recent(object(), 50, min_id=208736)
 
     asyncio.run(_run())
-    assert seen == []  # no min_id passed to Telethon — filter is client-side
+    assert seen == [{"limit": 50}]
