@@ -170,7 +170,11 @@ def build_readiness_report() -> Dict[str, Any]:
         issues.append("subnet_feed_empty")
     elif feed.get("effective_source") == "registry":
         issues.append("subnet_feed_registry_only")
-    if live.get("stale") and live.get("subnet_count", 0) == 0:
+    feed_ok = feed.get("likely_total", 0) > 0 and feed.get("effective_source") not in (
+        "none",
+        "registry",
+    )
+    if live.get("stale") and live.get("subnet_count", 0) == 0 and not feed_ok:
         issues.append("live_subnets_cache_empty")
     if not taostats:
         issues.append("taostats_api_key_missing")

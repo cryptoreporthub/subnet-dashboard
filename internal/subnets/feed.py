@@ -102,8 +102,38 @@ def load_subnets_source(timeout: float | None = None) -> List[Dict[str, Any]]:
         return _registry_rows()
 
 
+def _feed_layers_from_freshness(remote: Dict[str, Any]) -> Dict[str, Any]:
+    """Map worker /api/data-freshness into probe_feed_layers shape."""
+    subnet_count = int(remote.get("subnet_count") or 0)
+    tmc_count = int(remote.get("tmc_cache_count") or 0)
+    registry_count = int(remote.get("registry_count") or 0)
+    effective = str(remote.get("effective_source") or "none")
+    return {
+        "effective_source": effective,
+        "registry_count": registry_count,
+        "live_cache": {
+            "exists": subnet_count > 0 or bool(remote.get("last_sync")),
+            "count": subnet_count,
+            "synced_at": remote.get("last_sync"),
+            "stale": bool(remote.get("stale")),
+        },
+        "tmc_cache": {"exists": tmc_count > 0, "count": tmc_count},
+        "likely_total": int(
+            remote.get("effective_total") or max(subnet_count, tmc_count, registry_count)
+        ),
+    }
+
+
 def probe_feed_layers() -> Dict[str, Any]:
     """Cheap, non-blocking probe of subnet feed layers (no outbound network)."""
+    try:
+        from internal.data_volume import worker_data_freshness
+
+        remote = worker_data_freshness()
+        if remote:
+            return _feed_layers_from_freshness(remote)
+    except Exception:
+        pass
     from internal.live_subnets import CACHE_PATH
 
     registry_count = len(_registry_rows())
