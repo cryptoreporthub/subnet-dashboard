@@ -232,6 +232,20 @@ jobs:
         run: |
           chmod +x scripts/warm_prod.sh
           APP_BASE_URL=https://subnet-dashboard.fly.dev ./scripts/warm_prod.sh
+      - name: Wait for live_subnets cache (lite bootstrap)
+        continue-on-error: true
+        run: |
+          BASE=https://subnet-dashboard.fly.dev
+          for i in $(seq 1 24); do
+            count=$(curl -fsS -m 15 "$BASE/api/data-freshness" | python3 -c "import json,sys; print(json.load(sys.stdin).get('subnet_count') or 0)" 2>/dev/null || echo 0)
+            echo "live_subnets attempt $i: subnet_count=$count"
+            if [ "$count" -gt 0 ] 2>/dev/null; then
+              echo "live_subnets cache warm"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "WARN: live_subnets cache still empty after ~4m (check worker logs)"
       - name: Learning loop post-deploy check
         continue-on-error: false
         run: |
