@@ -87,6 +87,14 @@ def _start_resolver() -> None:
 
         def _recover() -> None:
             try:
+                from internal.learning.ledger_heal import heal_daily_pick_ledger
+
+                summary = heal_daily_pick_ledger(dry_run=False)
+                logger.info("daily pick ledger heal on boot: %s", summary)
+            except Exception as exc:
+                logger.warning("daily pick ledger heal boot failed: %s", exc)
+
+            try:
                 from internal.learning.pump_lead_recover import recover_overdue_pump_leads
 
                 summary = recover_overdue_pump_leads(dry_run=False)

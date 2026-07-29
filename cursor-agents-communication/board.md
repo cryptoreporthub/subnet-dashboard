@@ -54,7 +54,7 @@ Babysit: `./scripts/babysit_phase.sh <phase>` · rollup: `./scripts/babysit_phas
 
 | Phase | Status | Lock |
 |-------|--------|------|
-| **Acc-0** Ledger plumbing + epoch footgun | **NEXT** (urgent — `ledger.gap`) | `accuracy-pump-pattern-plan.md` |
+| **Acc-0** Ledger plumbing + epoch footgun | **IN PR** | `accuracy-pump-pattern-plan.md` |
 | **Acc-1** Archive measurement | gated on Acc-0 | same |
 | **Acc-2** One evidence-backed experiment | gated on Acc-1 report | same |
 | **PP-0** Segment ledger (waveform) | **NEXT** (parallel to Acc-0) | same |
