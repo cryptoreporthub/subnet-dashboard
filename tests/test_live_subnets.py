@@ -65,3 +65,33 @@ def test_sync_writes_under_data_dir(monkeypatch, tmp_path):
     assert cache_file.is_file()
     data = json.loads(cache_file.read_text(encoding="utf-8"))
     assert data.get("count", 0) >= 1
+
+
+def test_registry_netuids_from_committed_registry():
+    from internal import live_subnets
+
+    ids = live_subnets._registry_netuids()
+    assert len(ids) >= 100
+    assert 1 in ids
+
+
+def test_fetch_chain_data_passes_registry_netuids(monkeypatch):
+    from internal import live_subnets
+
+    seen = {}
+
+    class _Client:
+        def get_subnet_price_rows(self, netuids):
+            seen["netuids"] = netuids
+            return [{"netuid": 1, "price": 1.0}]
+
+        def get_all_subnet_data(self, netuids=None):
+            seen["full"] = netuids
+            return []
+
+    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
+    monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 5.0)
+    with patch("internal.chain_client.get_default_client", return_value=_Client()):
+        out = live_subnets._fetch_chain_data()
+    assert out and out[0]["netuid"] == 1
+    assert seen["netuids"] and len(seen["netuids"]) >= 100
