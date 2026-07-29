@@ -756,6 +756,24 @@ def _enrich_daily_pick_payload_lite(
     return attach_pump_chip_to_daily_pick(out, [])
 
 
+def _attach_daily_pick_meta(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Hydrate monotonicity + footer honesty keys for GET /api/daily-pick."""
+    if not isinstance(payload, dict):
+        return {}
+    from internal.data_volume import needs_worker_volume_proxy
+
+    out = dict(payload)
+    generated_at = out.get("generated_at") or out.get("timestamp_utc")
+    if generated_at and not out.get("generated_at"):
+        out["generated_at"] = generated_at
+    meta = dict(out.get("_meta") or {})
+    meta.setdefault("generated_at", generated_at)
+    meta.setdefault("data_source", "volume" if needs_worker_volume_proxy() else "local")
+    meta.setdefault("stale", str(out.get("status") or "ok").lower() in ("timeout", "error"))
+    out["_meta"] = meta
+    return out
+
+
 def _enrich_daily_pick_payload(
     pick_payload: Optional[Dict[str, Any]],
     subnets: List[Dict[str, Any]],
@@ -2261,36 +2279,42 @@ async def api_daily_pick(full: bool = False):
             else:
                 result = _enrich_daily_pick_payload_lite(result)
                 result["enrichment_badge"] = empty_whale_flow_badge("lite_read")
-            return result
+            return _attach_daily_pick_meta(result)
 
         # ponytail: never run pick engine on hydrate API — wedges single-worker Fly.
-        return {
+        return _attach_daily_pick_meta(
+            {
             "status": "pending",
             "date": datetime.utcnow().date().isoformat(),
             "action": "HOLD",
             "reason": "today's pick forming",
             "pick": None,
-        }
+            }
+        )
 
     try:
         return await _to_thread_timeout(_build, PICK_HANDLER_TIMEOUT, label="daily-pick")
     except asyncio.TimeoutError:
-        return {
+        return _attach_daily_pick_meta(
+            {
             "status": "timeout",
             "date": datetime.utcnow().date().isoformat(),
             "action": "HOLD",
             "reason": "pick handler busy — retry shortly",
             "pick": None,
-        }
+            }
+        )
     except Exception as e:
         logger.error("Error fetching daily pick: %s", e)
-        return {
+        return _attach_daily_pick_meta(
+            {
             "status": "error",
             "date": datetime.utcnow().date().isoformat(),
             "action": "HOLD",
             "reason": str(e),
             "pick": None,
-        }
+            }
+        )
 
 
 @app.get("/api/pick-explain/{netuid}")

@@ -36,6 +36,33 @@ def _f(raw: Any, default: float = 0.0) -> float:
         return default
 
 
+def _rows_lack_pump_flow_fields(rows: List[Dict[str, Any]]) -> bool:
+    """True when most rows lack buy/sell flow and 24h change (pump classifier needs these)."""
+    sample = [r for r in rows if isinstance(r, dict) and r.get("netuid") is not None][:30]
+    if not sample:
+        return True
+    lacking = 0
+    for row in sample:
+        flow = _f(row.get("buy_volume_24h")) + _f(row.get("sell_volume_24h"))
+        vol = _f(row.get("volume"))
+        chg = row.get("price_change_24h")
+        if flow <= 0 and vol <= 0 and chg in (None, "", 0, 0.0):
+            lacking += 1
+    return lacking >= max(1, (len(sample) + 1) // 2)
+
+
+def _overlay_tmc_market_fields(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    try:
+        from fetchers.taomarketcap import _get_all_subnets_tao, _overlay_market_fields
+
+        tmc = _get_all_subnets_tao()
+        if tmc:
+            return _overlay_market_fields(subnets, tmc)
+    except Exception as exc:
+        logger.debug("TMC overlay for pump signals failed: %s", exc)
+    return subnets
+
+
 def active_ladder_netuids(path: Optional[str] = None) -> List[int]:
     """Non-dormant ladder netuids — highest priority for TaoStats rotation."""
     try:
@@ -179,6 +206,12 @@ def load_subnets_for_pump_signals() -> List[Dict[str, Any]]:
         except Exception as exc:
             logger.warning("TMC feed unavailable for pump: %s", exc)
             return []
+
+    if _rows_lack_pump_flow_fields(subnets):
+        subnets = _overlay_tmc_market_fields(subnets)
+        logger.info(
+            "pump signals: overlaid TaoMarketCap market fields (flow/change were missing on feed)"
+        )
 
     netuids = []
     for row in subnets:

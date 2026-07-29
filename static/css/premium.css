@@ -1093,6 +1093,18 @@ footer.status[data-source*="fallback"] .st-dot {
   background: var(--neu-dim);
 }
 
+.k3-claim--degraded {
+  opacity: 0.9;
+}
+.k3-claim--degraded::before {
+  content: '';
+  display: block;
+  height: 3px;
+  margin: 0 0 8px;
+  border-radius: 2px;
+  background: repeating-linear-gradient(90deg, #ffb347 0, #ffb347 6px, transparent 6px, transparent 12px);
+}
+
 /* Important sections — orange → pink gradient borders */
 #section-daily-pick .hero-card {
   border-width: var(--border-width-important);
