@@ -464,7 +464,7 @@
       {% if sn %}
       {% set glow_tier = 'cool' if (act == 'HOLD' and not audit_pick) or conviction_pct < 45 else 'hot' %}
       <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
-        <div class="k3-dossier" id="k3-dossier">
+        <div class="k3-dossier" id="k3-dossier" data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}" data-action="{{ act }}">
           <div class="k3-layer open" id="k3-layer-claim">
             <div class="k3-claim k3-claim--glow-{{ glow_tier }}{% if not audit_pick and act == 'HOLD' %} k3-claim--hold{% endif %}" id="k3-claim" data-glow="{{ glow_tier }}">
               <div class="k3-claim-head">
@@ -612,7 +612,7 @@
       </div>
       {% else %}
       <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
-        <div class="k3-dossier" id="k3-dossier">
+        <div class="k3-dossier" id="k3-dossier" data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}" data-action="HOLD">
           <div class="k3-layer open" id="k3-layer-claim">
             <div class="k3-claim k3-claim--hold k3-claim--glow-cool" id="k3-claim" data-glow="cool">
               <div class="k3-claim-head">
