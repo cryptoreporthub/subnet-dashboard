@@ -179,9 +179,13 @@ def _fetch_chain_data():
 
     worker = threading.Thread(target=_run, daemon=True, name="live-subnets-fetch")
     worker.start()
-    worker.join(timeout=SYNC_TIMEOUT_SECONDS)
+    timeout = float(os.environ.get("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", str(SYNC_TIMEOUT_SECONDS)))
+    worker.join(timeout=timeout)
     if worker.is_alive():
-        logger.warning("live_subnets sync timed out after %.0fs (worker still running in background)", SYNC_TIMEOUT_SECONDS)
+        logger.warning(
+            "live_subnets sync timed out after %.0fs (worker still running in background)",
+            timeout,
+        )
         return None
     if "exc" in err:
         logger.warning("live_subnets sync failed: %s", err["exc"])
