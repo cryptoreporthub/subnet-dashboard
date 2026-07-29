@@ -888,10 +888,45 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
     ctx.update(_safe_brain_letter_context(timeout_s=2.0))
     ctx.update(_shell_pump_and_picks(shell_subnets, include_picks=True))
     ctx.update(_simileads_context(shell_subnets, simivision_data))
+    ctx.update(_message_intel_shell_context(shell_subnets))
     stash = {k: v for k, v in ctx.items() if k != "request"}
     _DEGRADED_INDEX_CACHE["at"] = now
     _DEGRADED_INDEX_CACHE["ctx"] = stash
     return ctx
+
+
+def _message_intel_shell_context(
+    subnets: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Summers desk SSR for degraded/emergency homepage shells (worker proxy on split_v2)."""
+    try:
+        from internal.data_volume import needs_worker_volume_proxy
+
+        if needs_worker_volume_proxy():
+            from internal.worker_proxy import fetch_worker_json_sync
+
+            listed = fetch_worker_json_sync("/api/message-intel?limit=8")
+            return {
+                "message_intel": {
+                    "messages": listed.get("messages") or [],
+                    "meta": listed.get("meta") or {},
+                    "sources": listed.get("sources") or {},
+                    "summary": {},
+                }
+            }
+        from internal.message_intel.context import build_message_intel_context
+
+        return build_message_intel_context(subnets or [], limit=8)
+    except Exception as exc:
+        logger.debug("message_intel shell context unavailable: %s", exc)
+        return {
+            "message_intel": {
+                "messages": [],
+                "meta": {"total_messages": 0, "ok": False},
+                "sources": {},
+                "summary": {},
+            }
+        }
 
 
 def _minimal_index_context(request: Request) -> Dict[str, Any]:
@@ -935,6 +970,7 @@ def _minimal_index_context(request: Request) -> Dict[str, Any]:
             "empty_message": "Loading pump desk…",
         },
     }
+    ctx.update(_message_intel_shell_context(shell_subnets))
     return ctx
 
 
