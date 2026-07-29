@@ -19,6 +19,18 @@ def has_telegram_session() -> bool:
     return os.path.isfile(f"{_session_base()}.session")
 
 
+def telegram_session_mode() -> str:
+    """How Telethon will authenticate — for honest status (no secrets)."""
+    raw = os.environ.get("TELEGRAM_SESSION_STRING", "").strip()
+    if raw:
+        if os.path.isfile(f"{_session_base()}.session"):
+            return "string+file"
+        return "string"
+    if os.path.isfile(f"{_session_base()}.session"):
+        return "file"
+    return "none"
+
+
 def telegram_session_arg() -> SessionArg:
     """Telethon session: StringSession from env, else SQLite path base."""
     raw = os.environ.get("TELEGRAM_SESSION_STRING", "").strip()

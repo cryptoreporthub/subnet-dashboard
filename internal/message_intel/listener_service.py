@@ -226,6 +226,8 @@ def listener_status() -> Dict[str, Any]:
         total_messages = 0
     desk_ready = total_messages > 5
 
+    from internal.message_intel.session import telegram_session_mode
+
     out = {
         "enabled": enabled,
         "has_creds": has_creds,
@@ -238,11 +240,15 @@ def listener_status() -> Dict[str, Any]:
         "desk_ready": desk_ready,
         "monitored_group": os.environ.get("TELEGRAM_GROUP", "officialsubnetsummer"),
         "group_connected": group_connected,
+        "session_mode": telegram_session_mode(),
     }
     if _listener is not None:
         title = getattr(_listener, "group_title", None)
         if title:
             out["group_title"] = title
+        mode = getattr(_listener, "session_mode", None)
+        if mode:
+            out["active_session_mode"] = mode
         label = getattr(_listener, "telegram_user_label", None)
         if label:
             out["telegram_user"] = label
@@ -253,6 +259,12 @@ def listener_status() -> Dict[str, Any]:
         if attempts:
             out["entity_resolve_attempts"] = list(attempts)[-8:]
     if not group_connected and running and has_creds:
+        err = out.get("entity_resolve_error") or ""
+        if "unauthorized" in err.lower():
+            hint = (
+                "Stale TELEGRAM_SESSION_STRING Fly secret — unset it to use volume .session "
+                "or paste a fresh string from bootstrap_telegram_session.py"
+            )
         out["hint"] = hint or "Listener thread up but group not resolved — check TELEGRAM_GROUP / TELEGRAM_GROUP_ID"
     elif hint:
         out["hint"] = hint
