@@ -13,7 +13,7 @@
     if (row.slug === 'bittensor') return 'Finney';
     if (row.slug === 'blockmachine') return 'Blockmachine';
     if (row.slug === 'desearch') return 'DeSearch';
-    if row.slug === 'chutes') return 'Chutes';
+    if (row.slug === 'chutes') return 'Chutes';
     if (row.slug === 'thirty_spokes') return 'Thirty Spokes';
     if (row.slug === 'ditto') return 'Ditto';
     return name;
@@ -31,6 +31,7 @@
   function statusWord(status) {
     if (status === 'connected') return 'live';
     if (status === 'reachable') return 'reachable';
+    if (status === 'checking') return 'checking';
     return 'offline';
   }
 
@@ -59,7 +60,7 @@
     );
   }
 
-  function buildStrip(payload) {
+  function buildStrip(payload, extraClass) {
     var rows = (payload && payload.integrations) || [];
     var connected = payload.connected_count != null ? payload.connected_count : 0;
     var total = payload.integration_total != null ? payload.integration_total : rows.length;
@@ -71,6 +72,7 @@
     return (
       '<div class="subnet-int-strip' +
       (live ? ' subnet-int-strip--live' : '') +
+      (extraClass ? ' ' + extraClass : '') +
       '" role="list" aria-label="Bittensor subnet integrations: ' +
       esc(countLabel) +
       '">' +
@@ -78,11 +80,22 @@
       '<span class="subnet-int-strip__items">' +
       items +
       '</span>' +
-      '<span class="subnet-int-strip__count">' +
+      '<span class="subnet-int-strip__count" id="subnetIntegrationsCount">' +
       esc(countLabel) +
       '</span>' +
       '</div>'
     );
+  }
+
+  function markStripStale() {
+    var barInner = document.getElementById('subnetIntegrationsBarInner');
+    if (!barInner) return;
+    var strip = barInner.querySelector('.subnet-int-strip');
+    if (strip) strip.classList.add('subnet-int-strip--stale');
+    var count = document.getElementById('subnetIntegrationsCount');
+    if (count && /checking/i.test(count.textContent)) {
+      count.textContent = 'stale — retrying';
+    }
   }
 
   function render(payload) {
@@ -98,15 +111,16 @@
       corner.innerHTML = '';
     }
 
+    if (!bar || !barInner) return;
+
+    bar.hidden = false;
+
     if (!rows.length) {
-      if (bar) bar.hidden = true;
+      markStripStale();
       return;
     }
 
-    if (bar && barInner) {
-      bar.hidden = false;
-      barInner.innerHTML = buildStrip(payload);
-    }
+    barInner.innerHTML = buildStrip(payload);
     if (footerCount) {
       var total = payload.integration_total != null ? payload.integration_total : rows.length;
       footerCount.textContent = String(connected) + '/' + String(total);
@@ -133,10 +147,7 @@
       })
       .then(render)
       .catch(function () {
-        var bar = document.getElementById('subnetIntegrationsBar');
-        var corner = document.getElementById('subnetIntegrationsCorner');
-        if (bar) bar.hidden = true;
-        if (corner) corner.hidden = true;
+        markStripStale();
       })
       .finally(function () {
         if (timer) clearTimeout(timer);
