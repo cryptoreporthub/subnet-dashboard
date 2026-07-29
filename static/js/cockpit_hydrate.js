@@ -1988,18 +1988,28 @@
     if (typeof window.__paintSparks === 'function') window.__paintSparks();
   }
 
+  function pumpDeskHasSnapshot() {
+    return !!(
+      document.querySelector('.pump-desk__row') ||
+      document.querySelector('.pump-hero__card') ||
+      document.querySelector('.pd-lead') ||
+      document.querySelector('.pds-hero') ||
+      document.querySelector('.pd-row') ||
+      document.querySelector('.pds-ladder')
+    );
+  }
+
   function renderPumpAlerts(payload) {
     var body = document.getElementById('pump-alert-body');
     if (!body || !payload) return;
-    if (payload.status === 'timeout') {
-      if (
-        body.querySelector('.pump-desk__row') ||
-        body.querySelector('.pump-hero__card') ||
-        body.querySelector('.pd-lead') ||
-        body.querySelector('.pds-hero') ||
-        body.querySelector('.pd-row')
-      )
-        return;
+    var payloadStatus = String(payload.status || '').toLowerCase();
+    if (
+      payloadStatus === 'timeout' ||
+      payloadStatus === 'error' ||
+      payloadStatus === 'unavailable' ||
+      payload.error === 'worker_volume_proxy_failed'
+    ) {
+      if (pumpDeskHasSnapshot()) return;
     }
     var listPanel = document.getElementById('pump-list-panel');
     var trust = payload.trust || {};
@@ -2026,6 +2036,7 @@
     if (!count && !exitCount) {
       var watchRows = payload.watch || [];
       if (!watchRows.length) {
+        if (pumpDeskHasSnapshot()) return;
       var deskPanel = document.getElementById('pump-desk-panel');
       if (deskPanel) {
         deskPanel.innerHTML =

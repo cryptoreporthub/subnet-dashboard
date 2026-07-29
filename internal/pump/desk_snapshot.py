@@ -37,11 +37,9 @@ def _latest_path() -> str:
 
 def _collect_pump_desk() -> Dict[str, Any]:
     try:
-        from internal.learning.pump_alert import build_pump_alerts_desk
-        from internal.subnets.feed import load_subnets_for_display
+        from internal.pump.desk_payload import load_pump_alerts_desk_payload
 
-        subnets = load_subnets_for_display(timeout=4.0)
-        return build_pump_alerts_desk(subnets)
+        return load_pump_alerts_desk_payload()
     except Exception as exc:
         logger.warning("pump desk snapshot: pump_alerts failed: %s", exc)
         return {
