@@ -17,3 +17,17 @@ data/watchlist.json.tmp
 .ruff_cache/
 htmlcov/
 .coverage
+
+# Fly.io redeploy-trigger scratch files and AI-agent line-dump artifacts —
+# these should never be committed to repo root. If you need to force a
+# redeploy, use `fly deploy --no-cache` instead of touching a root file.
+/REDEPLOY*.txt
+/REDEPLOY*.md
+/DEPLOY_TRIGGER.*
+/ping.txt
+/test.txt
+/test.json
+/lines_*.txt
+/routes_*.txt
+/line[0-9]*.txt
+/DIAGNOSTIC.md

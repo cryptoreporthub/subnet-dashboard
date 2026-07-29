@@ -564,8 +564,9 @@ table.tbl td.mono { font-family: var(--font-mono); }
   border-radius: var(--radius-pill);
   margin-top: 2px;
 }
-.expert .bias.pos { color: var(--cockpit-green); background: var(--cockpit-green-soft); }
-.expert .bias.neu { color: var(--neu); background: var(--neu-dim); }
+.expert .bias.trend-up { color: var(--cockpit-green); background: var(--cockpit-green-soft); }
+.expert .bias.trend-down { color: #ff6b6b; background: rgba(255, 107, 107, 0.12); }
+.expert .bias.trend-even { color: var(--neu); background: var(--neu-dim); }
 
 /* ---------- Pills (HOT / SELL ALERT) ---------- */
 .pill-hot, .pill-sell {
@@ -1067,6 +1068,29 @@ footer.status[data-source*="fallback"] .st-dot {
 .pick-card::before {
   height: 4px;
   background: linear-gradient(90deg, #00c8ff, #00ff41);
+}
+
+/* Degraded / fallback picks — not a real scored council call */
+.pick-card--degraded {
+  opacity: 0.85;
+}
+.pick-card--degraded::before {
+  background: repeating-linear-gradient(90deg, #ffb347 0, #ffb347 6px, transparent 6px, transparent 12px);
+}
+.pick-degraded-note {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #ffb347;
+  background: rgba(255, 179, 71, 0.1);
+  border-radius: var(--radius-sm, 8px);
+  padding: 4px 8px;
+}
+.pick-degraded-note--hold {
+  color: var(--neu);
+  background: var(--neu-dim);
 }
 
 /* Important sections — orange → pink gradient borders */

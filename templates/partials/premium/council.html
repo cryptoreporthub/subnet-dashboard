@@ -7,13 +7,13 @@
   <div class="council-grid">
     {% for cw in council_weights %}
     {% set w = (cw.weight|default(0))|float %}
-    {% set bias = (cw.bias|default('neutral'))|string|lower %}
+    {% set trend = (cw.trend|default('even'))|string|lower %}
     <div class="expert card-soft card">
       <div class="avatar">{{ (cw.expert|default('?'))[0]|upper }}</div>
       <div class="name">{{ cw.expert|default('expert') }}</div>
       <div class="w">{{ "%.3f"|format(w) }}</div>
       <div class="wbar"><div class="wfill" style="width: {{ ([w / 2 * 100, 100]|min)|round }}%;"></div></div>
-      <span class="bias {% if bias in ['bullish', 'long', 'buy', 'pos'] %}pos{% elif bias in ['bearish', 'short', 'sell', 'neg'] %}neg{% else %}neu{% endif %}">{{ bias|upper }}</span>
+      <span class="bias trend-{{ trend }}">{% if trend == 'up' %}▲ LEARNED UP{% elif trend == 'down' %}▼ LEARNED DOWN{% else %}EVEN{% endif %}</span>
     </div>
     {% endfor %}
   </div>
