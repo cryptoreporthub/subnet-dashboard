@@ -20,8 +20,10 @@ logger = logging.getLogger(__name__)
 TELEGRAM_API_ID = os.environ.get("TELEGRAM_API_ID")
 TELEGRAM_API_HASH = os.environ.get("TELEGRAM_API_HASH")
 TELEGRAM_PHONE = os.environ.get("TELEGRAM_PHONE")
-TELEGRAM_GROUP = os.environ.get("TELEGRAM_GROUP", "OfficialSubnetSummer")
+TELEGRAM_GROUP = os.environ.get("TELEGRAM_GROUP", "officialsubnetsummer")
 TELEGRAM_GROUP_ID = os.environ.get("TELEGRAM_GROUP_ID", "").strip()
+# Canonical public link username (Telegram is case-insensitive; Telethon cache is not).
+TELEGRAM_GROUP_USERNAME = "officialsubnetsummer"
 try:
     TELEGRAM_BACKFILL_LIMIT = max(0, int(os.environ.get("TELEGRAM_BACKFILL_LIMIT", "100") or "100"))
 except ValueError:
@@ -83,6 +85,9 @@ class TelegramListener:
         self.group_title: Optional[str] = None
         self.group_connected: bool = False
         self._monitor_entity: Optional[Any] = None
+        self.telegram_user_label: Optional[str] = None
+        self.entity_resolve_error: Optional[str] = None
+        self.entity_resolve_attempts: list[str] = []
 
     def start(self) -> bool:
         """
@@ -146,10 +151,10 @@ class TelegramListener:
 
         while self._running:
             try:
-                await self._client.start(phone=self.phone)
-                logger.info(
-                    "Connected to Telegram as %s", await self._client.get_me()
-                )
+                me = await self._connect_telegram()
+                label = getattr(me, "username", None) or getattr(me, "id", "?")
+                self.telegram_user_label = str(label)
+                logger.info("Connected to Telegram as %s", me)
 
                 # Resolve the group entity (username can fail when session cache is cold)
                 try:
@@ -157,14 +162,19 @@ class TelegramListener:
                     title = getattr(entity, "title", None) or str(self.group)
                     self.group_title = title
                     self.group_connected = True
+                    self.entity_resolve_error = None
                     self._monitor_entity = entity
                     logger.info("Monitoring group: %s (via %s)", title, via)
                 except Exception as e:
                     self.group_connected = False
                     self.group_title = None
                     self._monitor_entity = None
+                    self.entity_resolve_error = str(e)
                     logger.error(
-                        "Could not find group '%s': %s", self.group, e
+                        "Could not find group '%s' (attempts=%s): %s",
+                        self.group,
+                        self.entity_resolve_attempts[-8:],
+                        e,
                     )
                     await asyncio.sleep(30)
                     continue
@@ -204,8 +214,32 @@ class TelegramListener:
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, max_retry_delay)
 
+    async def _connect_telegram(self) -> Any:
+        """Connect without blocking on interactive login when StringSession is set."""
+        from telethon.sessions import StringSession
+
+        uses_string = isinstance(self.session_name, StringSession) or bool(
+            os.environ.get("TELEGRAM_SESSION_STRING", "").strip()
+        )
+        if uses_string:
+            await self._client.connect()
+            if not await self._client.is_user_authorized():
+                raise RuntimeError(
+                    "TELEGRAM_SESSION_STRING unauthorized — re-bootstrap with "
+                    "scripts/bootstrap_telegram_session.py"
+                )
+        elif self.phone:
+            await self._client.start(phone=self.phone)
+        else:
+            await self._client.connect()
+            if not await self._client.is_user_authorized():
+                raise RuntimeError(
+                    "Telegram session unauthorized — set TELEGRAM_SESSION_STRING or TELEGRAM_PHONE"
+                )
+        return await self._client.get_me()
+
     def _entity_lookup_keys(self) -> list[Any]:
-        """Keys for get_entity — numeric id from env/DB beats cold username cache."""
+        """Keys for get_entity — DB peer id first, then canonical lowercase username."""
         keys: list[Any] = []
         seen: set[str] = set()
 
@@ -216,13 +250,6 @@ class TelegramListener:
             seen.add(token)
             keys.append(key)
 
-        raw_id = (os.environ.get("TELEGRAM_GROUP_ID") or TELEGRAM_GROUP_ID or "").strip()
-        if raw_id:
-            try:
-                add(int(raw_id))
-            except ValueError:
-                add(raw_id)
-
         try:
             from internal.message_intel.store import last_telegram_group_id
 
@@ -232,37 +259,77 @@ class TelegramListener:
         except Exception:
             pass
 
+        canonical = TELEGRAM_GROUP_USERNAME
+        add(canonical)
+        add(f"@{canonical}")
+        add(f"https://t.me/{canonical}")
+
+        raw_id = (os.environ.get("TELEGRAM_GROUP_ID") or TELEGRAM_GROUP_ID or "").strip()
+        if raw_id:
+            try:
+                add(int(raw_id))
+            except ValueError:
+                add(raw_id)
+
         group = (self.group or "").strip()
         if group:
-            add(group)
             bare = group.lstrip("@")
+            add(bare)
             add(f"@{bare}")
-            add(f"https://t.me/{bare}")
+            add(f"https://t.me/{bare.lower()}")
+            if bare.lower() != bare:
+                add(bare.lower())
+                add(f"@{bare.lower()}")
         return keys
 
+    async def _resolve_via_username(self, username: str) -> tuple[Any, str]:
+        from telethon.tl.functions.contacts import ResolveUsernameRequest
+
+        bare = username.lstrip("@").lower()
+        result = await self._client(ResolveUsernameRequest(username=bare))
+        peer = getattr(result, "peer", None)
+        if peer is None:
+            raise ValueError(f"ResolveUsername returned no peer for {bare!r}")
+        entity = await self._client.get_entity(peer)
+        return entity, f"ResolveUsername({bare})"
+
     async def _resolve_monitor_entity(self) -> tuple[Any, str]:
+        self.entity_resolve_attempts = []
+        errors: list[str] = []
+
         for key in self._entity_lookup_keys():
+            self.entity_resolve_attempts.append(f"get_entity({key})")
             try:
                 entity = await self._client.get_entity(key)
                 return entity, f"get_entity({key})"
             except Exception as exc:
-                logger.debug("Telegram get_entity(%s) failed: %s", key, exc)
+                errors.append(f"{key}: {type(exc).__name__}: {exc}")
+                logger.warning("Telegram get_entity(%s) failed: %s", key, exc)
+
+        self.entity_resolve_attempts.append(f"ResolveUsername({TELEGRAM_GROUP_USERNAME})")
+        try:
+            return await self._resolve_via_username(TELEGRAM_GROUP_USERNAME)
+        except Exception as exc:
+            errors.append(f"ResolveUsername: {type(exc).__name__}: {exc}")
+            logger.warning("Telegram ResolveUsername failed: %s", exc)
 
         want = (self.group or "").strip().lower().lstrip("@")
         aliases = {
             want,
-            "officialsubnetsummer",
+            TELEGRAM_GROUP_USERNAME,
             "subnet summer",
             "subnet summers",
         }
-        async for dialog in self._client.iter_dialogs(limit=250):
+        self.entity_resolve_attempts.append("iter_dialogs(500)")
+        async for dialog in self._client.iter_dialogs(limit=500):
             ent = dialog.entity
             username = (getattr(ent, "username", "") or "").lower()
             title = (getattr(ent, "title", "") or "").lower()
-            if username in aliases or title in aliases:
+            if username in aliases or title in aliases or title.startswith("subnet summer"):
                 return ent, f"dialog({username or title})"
 
-        raise ValueError(f"no Telegram entity for group {self.group!r}")
+        detail = "; ".join(errors[-6:]) if errors else "no attempts logged"
+        raise ValueError(f"no Telegram entity for {self.group!r} — {detail}")
 
     async def _forum_backfill_targets(self, entity: Any) -> list[Optional[int]]:
         """Forum supergroups need per-topic reply_to — main iter_messages misses topic threads."""

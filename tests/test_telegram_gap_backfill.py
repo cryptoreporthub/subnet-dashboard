@@ -57,13 +57,36 @@ def test_last_telegram_group_id_from_db(tmp_path, monkeypatch):
     assert last_telegram_group_id() == -1002480957486
 
 
-def test_entity_lookup_keys_prefers_numeric_id(monkeypatch):
-    monkeypatch.setenv("TELEGRAM_GROUP_ID", "-1002480957486")
-    from message_intel.telegram_listener import TelegramListener
+def test_entity_lookup_keys_db_id_first(tmp_path, monkeypatch):
+    monkeypatch.setenv("MESSAGE_INTEL_DB", str(tmp_path / "mi.db"))
+    from internal.message_intel.store import get_db, reset_db_cache
+    from message_intel.telegram_listener import TelegramListener, TELEGRAM_GROUP_USERNAME
 
+    reset_db_cache()
+    get_db().save_message(
+        {
+            "source": "telegram",
+            "group_id": "-1002480957486",
+            "group_name": "OfficialSubnetSummer",
+            "content": "x",
+            "timestamp": "2026-07-28T05:56:00",
+            "message_id": "1",
+        }
+    )
     keys = TelegramListener(group="OfficialSubnetSummer")._entity_lookup_keys()
     assert keys[0] == -1002480957486
-    assert "OfficialSubnetSummer" in keys
+    assert TELEGRAM_GROUP_USERNAME in keys
+
+
+def test_entity_lookup_keys_canonical_username_without_db(monkeypatch, tmp_path):
+    monkeypatch.setenv("MESSAGE_INTEL_DB", str(tmp_path / "empty.db"))
+    from internal.message_intel.store import reset_db_cache
+    from message_intel.telegram_listener import TelegramListener, TELEGRAM_GROUP_USERNAME
+
+    reset_db_cache()
+    monkeypatch.delenv("TELEGRAM_GROUP_ID", raising=False)
+    keys = TelegramListener(group="OfficialSubnetSummer")._entity_lookup_keys()
+    assert keys[0] == TELEGRAM_GROUP_USERNAME
 
 
 def test_resolve_monitor_entity_uses_db_group_id(monkeypatch, tmp_path):
@@ -95,7 +118,7 @@ def test_resolve_monitor_entity_uses_db_group_id(monkeypatch, tmp_path):
                 return _Entity()
             raise ValueError("not found")
 
-        async def iter_dialogs(self, limit=250):
+        async def iter_dialogs(self, limit=500):
             return
             yield  # pragma: no cover
 
