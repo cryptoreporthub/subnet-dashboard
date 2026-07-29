@@ -264,12 +264,20 @@ def list_messages(
     meta = live_stats(db)
     meta["listener"] = listener_status()
     try:
-        meta["trending"] = build_trending_subnets(
-            registry_names=names, limit=8, db=db
-        )
+        trending = build_trending_subnets(registry_names=names, limit=8, db=db)
+        trending_window = "1h"
+        # Quiet hours: prefer a filled 24h board over an empty 1h panel.
+        if not trending:
+            trending = build_trending_subnets(
+                registry_names=names, limit=8, db=db, rank_hours=24, window_hours=24
+            )
+            trending_window = "24h" if trending else "1h"
+        meta["trending"] = trending
+        meta["trending_window"] = trending_window
     except Exception as exc:
         logger.warning("message-intel trending rollup failed: %s", exc)
         meta["trending"] = []
+        meta["trending_window"] = "1h"
     try:
         meta["yesterday_leader"] = build_yesterday_leader(
             registry_names=names, db=db
