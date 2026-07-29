@@ -55,11 +55,8 @@
 
 {% include "partials/premium/header.html" %}
 {% include "partials/premium/council_stage.html" %}
-{# Market pulse + integrations demoted — dossier is the sole first-viewport hero (K3-7) #}
+{# Market pulse + integrations ribbon — below hero (K3-7) #}
 {% include "partials/premium/pulse_strip.html" %}
-<section class="subnet-integrations-bar" id="subnetIntegrationsBar" aria-label="Bittensor subnet integrations" hidden>
-  <div class="subnet-integrations-bar__inner" id="subnetIntegrationsBarInner"></div>
-</section>
 {% with pump_compact=true %}
 {% include "partials/premium/pump_alert_scan.html" %}
 {% endwith %}

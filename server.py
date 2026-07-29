@@ -686,6 +686,20 @@ def _shell_pump_and_picks(
     return out
 
 
+def _integrations_strip_ssr() -> Dict[str, Any]:
+    """Static integration rows for SSR skeleton — JS poll upgrades live status."""
+    from internal.integrations.status import INTEGRATIONS
+
+    return {
+        "integrations_strip": {
+            "integrations": [{**spec, "status": "checking"} for spec in INTEGRATIONS],
+            "connected_count": 0,
+            "integration_total": len(INTEGRATIONS),
+            "ssr_skeleton": True,
+        }
+    }
+
+
 def _fast_home_hero_context(trust_banner: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Cheap hero keys for degraded GET / — local pick read, hydrate upgrades live."""
     from internal.analytics.home_habit import (
@@ -731,6 +745,7 @@ def _fast_home_hero_context(trust_banner: Optional[Dict[str, Any]] = None) -> Di
             ctx["story_path"] = build_story_path(pick_payload)
     except Exception:
         ctx["story_path"] = {"data_available": False, "steps": []}
+    ctx.update(_integrations_strip_ssr())
     return ctx
 
 
@@ -850,6 +865,7 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         hero.update(soul_weights_chip_context())
     except Exception:
         hero["soul_weights_chip"] = None
+    hero.update(_integrations_strip_ssr())
     return hero
 
 

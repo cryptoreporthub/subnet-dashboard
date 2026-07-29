@@ -853,6 +853,27 @@ footer.status[data-source*="fallback"] .st-dot {
 .subnet-int-dot--offline {
   background: rgba(100, 116, 139, 0.55);
 }
+.subnet-int-dot--checking {
+  background: rgba(148, 163, 184, 0.65);
+  animation: subnet-int-pulse 1.2s ease-in-out infinite;
+}
+.subnet-int-item--checking {
+  color: var(--txt-3, #64748b);
+}
+.subnet-int-strip--stale .subnet-int-strip__count {
+  color: var(--signal-amber, #fbbf24);
+}
+.subnet-int-strip--ssr .subnet-int-strip__count {
+  color: var(--txt-3, #64748b);
+}
+@keyframes subnet-int-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+.sr-pulse-ribbon .subnet-integrations-bar {
+  border-top: none;
+  padding: 0.25rem 0 0.35rem;
+}
 .subnet-int-strip__count {
   margin-left: auto;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
