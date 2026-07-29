@@ -950,7 +950,7 @@ footer.status[data-source*="fallback"] .st-dot {
 .phase-badge.phase-markup { background:rgba(57,255,20,0.15); color:#39ff14; }
 .phase-badge.phase-parabolic { background:linear-gradient(90deg,rgba(255,51,102,0.25),rgba(0,240,255,0.25)); color:#ffe6f0; }
 .phase-badge.phase-distribution { background:rgba(255,0,153,0.15); color:#ff99cc; }
-.phase-badge.phase-decline { background:rgba(255,51,102,0.15); color:#ff6699; }
+.phase-badge.phase-decline { background:rgba(255,159,63,0.15); color:var(--signal-sell); }
 .phase-badge.phase-re_accumulation { background:rgba(0,200,255,0.15); color:#00c8ff; }
 .proneness-bar { position:relative; height:18px; background:rgba(255,255,255,0.05); border-radius:var(--radius-pill); overflow:hidden; margin:8px 0; }
 .proneness-bar-sm { height:14px; min-width:90px; }
@@ -966,8 +966,8 @@ footer.status[data-source*="fallback"] .st-dot {
 .pump-signal-tag { display:inline-block; padding:2px 7px; border-radius:var(--radius-pill); font-size:11px; font-weight:700; white-space:nowrap; }
 .pump-signal-vol { background:rgba(0,200,255,0.15); color:#00c8ff; }
 .pump-signal-sent-pos { background:rgba(57,255,20,0.15); color:#39ff14; }
-.pump-signal-sent-neg { background:rgba(255,51,102,0.15); color:#ff6699; }
-.pump-signal-adapted { background:rgba(255,0,255,0.15); color:#ff00ff; }
+.pump-signal-sent-neg { background:rgba(255,159,63,0.15); color:var(--signal-sell); }
+.pump-signal-adapted { background:rgba(157,140,255,0.15); color:var(--accent-violet); }
 .convergence-bar { position:relative; height:14px; min-width:80px; background:rgba(255,255,255,0.05); border-radius:var(--radius-pill); overflow:hidden; }
 .convergence-fill { position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg,#ff3366 0%,#ff7a1a 50%,#00ff41 100%); border-radius:var(--radius-pill); }
 .convergence-label { position:absolute; right:6px; top:50%; transform:translateY(-50%); font-size:10px; font-weight:700; color:var(--text-secondary); text-shadow:0 1px 2px rgba(0,0,0,0.6); }

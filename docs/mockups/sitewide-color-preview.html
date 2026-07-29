@@ -19,8 +19,9 @@
     --blue-glow: rgba(63,201,255,0.4);
     --orange: #ff9f3f;
     --orange-glow: rgba(255,159,63,0.38);
-    --pink: #ff3d9a;
-    --pink-glow: rgba(255,61,154,0.28);
+    --violet: #9d8cff;
+    --violet-glow: rgba(157,140,255,0.28);
+    --lilac: #b8a8f0;
 
     --text: #e8f6ee;
     --text-dim: #7f9a8c;
@@ -38,7 +39,7 @@
       radial-gradient(ellipse 90% 60% at 100% 0%, rgba(63,201,255,0.14), transparent 55%),
       radial-gradient(ellipse 70% 50% at 0% 12%, rgba(31,212,124,0.12), transparent 55%),
       radial-gradient(ellipse 55% 45% at 78% 88%, rgba(255,159,63,0.06), transparent 58%),
-      radial-gradient(ellipse 40% 30% at 18% 92%, rgba(255,61,154,0.03), transparent 50%),
+      radial-gradient(ellipse 40% 30% at 18% 92%, rgba(157,140,255,0.04), transparent 50%),
       linear-gradient(168deg, var(--bg-mid), var(--bg));
     min-height:100vh; padding:28px 18px 80px;
     position:relative;
@@ -95,7 +96,7 @@
   .g{ background:var(--green); box-shadow:inset 0 0 40px var(--green-glow), 0 0 28px -8px var(--green-glow); }
   .b{ background:var(--blue); box-shadow:inset 0 0 40px var(--blue-glow), 0 0 28px -8px var(--blue-glow); }
   .o{ background:var(--orange); box-shadow:inset 0 0 40px var(--orange-glow); }
-  .p{ background:var(--pink); box-shadow:inset 0 0 40px var(--pink-glow); }
+  .p{ background:var(--violet); box-shadow:inset 0 0 40px var(--violet-glow); }
 
   .sec{ margin:30px 0 12px; font-family:var(--mono); font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); display:flex; align-items:center; gap:8px; }
   .sec .bar{ width:3px; height:12px; border-radius:2px; box-shadow:0 0 8px currentColor; }
@@ -139,7 +140,7 @@
   .hero p{ margin:8px 0 0; color:var(--text-dim); font-size:13px; }
   .tags{ display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
   .tag{ font-family:var(--mono); font-size:10px; padding:4px 8px; border-radius:3px; border:1px solid var(--line); color:var(--text-dim); }
-  .tag.hot{ color:var(--pink); border-color:rgba(255,61,154,0.3); background:rgba(255,61,154,0.07); box-shadow:0 0 12px -6px var(--pink-glow); }
+  .tag.hot{ color:var(--violet); border-color:rgba(157,140,255,0.32); background:rgba(157,140,255,0.08); box-shadow:0 0 12px -6px var(--violet-glow); }
   .tag.bull{ color:var(--green); border-color:rgba(31,212,124,0.4); background:rgba(31,212,124,0.08); box-shadow:0 0 14px -6px var(--green-glow); }
   .tag.bear{ color:var(--orange); border-color:rgba(255,159,63,0.3); }
   .tag.neu{ color:var(--blue); border-color:rgba(63,201,255,0.3); box-shadow:0 0 12px -6px var(--blue-glow); }
@@ -167,12 +168,12 @@
 
   <div class="banner">
     <b>PREVIEW v2 — darker green + cyberpunk HUD</b><br>
-    Green moved <span class="delta">#39ff9e → #1fd47c</span> (same hue, less mint-bright). Neon glow, grid, scanlines, clipped LIVE chip, corner brackets — pink still sparse.
+    Green leads · cyan secondary · orange tertiary · <b>violet aurora</b> replaces hot magenta for HOLD / high-conviction / social accents.
     <em>Add notes before merge of PR #596.</em>
   </div>
 
   <h1>Simi<span style="color:var(--green)">Vision</span> color lock</h1>
-  <p class="sub">Cyberpunk neon on void black · mild bloom · green leads · pink is sparse accent only. Aligned with Telegram Pulse roles.</p>
+  <p class="sub">Cyberpunk neon on void black · mild bloom · green leads · violet aurora for HOLD + high-conviction. Aligned with Telegram Pulse roles.</p>
 
   <div class="sec"><span class="bar" style="background:var(--green);color:var(--green)"></span>Ratio (intended usage weight)</div>
   <div class="ratio">
@@ -204,8 +205,8 @@
       <div class="chip p"></div>
       <div class="meta">
         <div class="role">Accent ≤10%</div>
-        <div class="hex">#ff3d9a pink</div>
-        <div class="use">HOLD · high-conviction · rare “hot” chips only</div>
+        <div class="hex">#9d8cff violet</div>
+        <div class="use">HOLD · high-conviction · crowns / social</div>
       </div>
     </div>
   </div>
@@ -238,7 +239,7 @@
         <h3><span class="bar" style="display:inline-block;width:3px;height:11px;background:var(--orange);border-radius:2px"></span> Signals</h3>
         <div class="row"><span>BUY</span><span class="muted" style="color:var(--green)">#1fd47c</span></div>
         <div class="row"><span>SELL / BEAR</span><span class="muted" style="color:var(--orange)">orange (not red)</span></div>
-        <div class="row"><span>HOLD</span><span class="muted" style="color:var(--pink)">pink sparse</span></div>
+        <div class="row"><span>HOLD</span><span class="muted" style="color:var(--violet)">violet aurora</span></div>
       </div>
     </div>
   </div>
@@ -248,7 +249,7 @@
     <ul>
       <li><b>Green:</b> darkened to <span class="delta">#1fd47c</span>. Want one more step darker / brighter?</li>
       <li><b>Sell color:</b> orange (Pulse bear) vs classic red?</li>
-      <li><b>HOLD pink:</b> keep on HOLD + high-conviction, or demote HOLD to muted?</li>
+      <li><b>HOLD violet:</b> cool pause between green LONG and orange caution — OK or prefer amber?</li>
       <li><b>Cyberpunk intensity:</b> grid + scanlines + corner brackets in preview — keep mild on live site or push harder?</li>
       <li><b>Fonts:</b> Rajdhani display + JetBrains mono (Space Grotesk in this preview body only).</li>
     </ul>

@@ -52,7 +52,7 @@
     radial-gradient(ellipse 80% 55% at 72% 28%, rgba(63, 201, 255, 0.10) 0%, transparent 55%),
     radial-gradient(ellipse 55% 42% at 12% 78%, rgba(31, 212, 124, 0.08) 0%, transparent 52%),
     radial-gradient(ellipse 42% 32% at 92% 14%, rgba(255, 159, 63, 0.05) 0%, transparent 48%),
-    radial-gradient(ellipse 36% 28% at 40% 90%, rgba(255, 61, 154, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse 36% 28% at 40% 90%, rgba(157, 140, 255, 0.04) 0%, transparent 50%),
     linear-gradient(180deg, #030405 0%, var(--stage-wash) 48%, #020308 100%);
   pointer-events: none;
 }
@@ -1277,10 +1277,10 @@ button.home-cta {
   --mi-orange: #ff9f3f;
   --mi-orange-dim: #7a4315;
   --mi-orange-glow: rgba(255, 159, 63, 0.4);
-  --mi-violet: #a78bfa;
-  --mi-violet-glow: rgba(167, 139, 250, 0.32);
-  --mi-lilac: #9d8ee8;
-  --mi-lilac-glow: rgba(157, 142, 232, 0.28);
+  --mi-violet: var(--accent-violet, #9d8cff);
+  --mi-violet-glow: var(--accent-glow-violet, rgba(157, 140, 255, 0.32));
+  --mi-lilac: var(--accent-lilac, #b8a8f0);
+  --mi-lilac-glow: rgba(184, 168, 240, 0.28);
   --mi-yellow: #f5d547;
   --mi-yellow-glow: rgba(245, 213, 71, 0.45);
   --mi-line: rgba(255, 255, 255, 0.07);
@@ -1703,8 +1703,8 @@ button.home-cta {
 }
 .message-intel--v2 .message-intel__chip--hot {
   color: var(--mi-violet) !important;
-  border-color: rgba(167, 139, 250, 0.32) !important;
-  background: rgba(167, 139, 250, 0.08) !important;
+  border-color: var(--border-violet) !important;
+  background: rgba(157, 140, 255, 0.08) !important;
 }
 .message-intel--v2 .message-intel__hero-runner {
   position: relative;

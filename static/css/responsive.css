@@ -187,8 +187,8 @@ header.top {
   z-index: 2;
 }
 
-.vol-bar-high { background: linear-gradient(90deg, #ff3366, #ff6699); }
-.vol-bar-core { background: linear-gradient(90deg, #ff0099, #ff00ff); }
+.vol-bar-high { background: linear-gradient(90deg, #7c6ee8, var(--accent-violet, #9d8cff)); }
+.vol-bar-core { background: linear-gradient(90deg, var(--accent-blue, #3fc9ff), var(--accent-lilac, #b8a8f0)); }
 .vol-bar-low  { background: linear-gradient(90deg, #39ff14, #00ff41); }
 
 .vol-cluster-value {
