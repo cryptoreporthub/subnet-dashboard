@@ -28,6 +28,9 @@ body {
   background-color: var(--bg-cockpit);
   background-image: var(--bg-atmosphere);
   background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: cover, auto, auto, auto, auto, auto, auto, auto;
+  background-position: center;
   color: var(--txt);
 }
 
