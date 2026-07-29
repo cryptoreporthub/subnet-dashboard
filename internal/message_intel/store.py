@@ -25,6 +25,23 @@ def reset_db_cache() -> None:
     get_db.cache_clear()
 
 
+def last_telegram_external_id(db: Optional[Database] = None) -> Optional[int]:
+    """Highest Telegram message_id we have ingested (for gap-aware backfill)."""
+    database = db or get_db()
+    try:
+        with database._connect() as conn:
+            row = conn.execute(
+                """SELECT external_message_id FROM messages
+                   WHERE source = 'telegram' AND external_message_id IS NOT NULL
+                   ORDER BY CAST(external_message_id AS INTEGER) DESC LIMIT 1"""
+            ).fetchone()
+        if not row or not row["external_message_id"]:
+            return None
+        return int(row["external_message_id"])
+    except (TypeError, ValueError, Exception):
+        return None
+
+
 def live_stats(db: Optional[Database] = None) -> Dict[str, Any]:
     """Aggregate counts from the SQLite store for summaries and health."""
     database = db or get_db()

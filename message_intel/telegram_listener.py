@@ -12,7 +12,7 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -25,6 +25,12 @@ try:
     TELEGRAM_BACKFILL_LIMIT = max(0, int(os.environ.get("TELEGRAM_BACKFILL_LIMIT", "100") or "100"))
 except ValueError:
     TELEGRAM_BACKFILL_LIMIT = 100
+try:
+    TELEGRAM_BACKFILL_STALE_LIMIT = max(
+        1, int(os.environ.get("TELEGRAM_BACKFILL_STALE_LIMIT", "500") or "500")
+    )
+except ValueError:
+    TELEGRAM_BACKFILL_STALE_LIMIT = 500
 INGEST_URL = os.environ.get(
     "INGEST_URL", "http://localhost:8080/api/message-intel/ingest"
 )
@@ -162,8 +168,7 @@ class TelegramListener:
                     await asyncio.sleep(30)
                     continue
 
-                if TELEGRAM_BACKFILL_LIMIT > 0:
-                    await self._backfill_recent(entity, TELEGRAM_BACKFILL_LIMIT)
+                await self._backfill_on_connect(entity)
 
                 # Register the message handler
                 @self._client.on(events.NewMessage(chats=entity))
@@ -198,24 +203,76 @@ class TelegramListener:
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, max_retry_delay)
 
-    async def _backfill_recent(self, entity: Any, limit: int) -> None:
-        """Ingest recent history once on connect — live handler only sees new messages."""
-        ingested = 0
+    async def _backfill_on_connect(self, entity: Any) -> None:
+        """Gap-aware backfill — min_id skips already-ingested rows (dedup alone is not enough)."""
+        from internal.message_intel.store import last_telegram_external_id, live_stats
+
+        last_ext = last_telegram_external_id()
+        stats = live_stats()
+        age = stats.get("last_message_age_seconds")
         try:
-            async for msg in self._client.iter_messages(entity, limit=limit):
+            stale_threshold = float(os.environ.get("TELEGRAM_FEED_STALE_SECONDS", "7200"))
+        except ValueError:
+            stale_threshold = 7200.0
+        stale = age is not None and float(age) > stale_threshold
+        if stale and last_ext:
+            limit = TELEGRAM_BACKFILL_STALE_LIMIT
+        elif TELEGRAM_BACKFILL_LIMIT > 0:
+            limit = TELEGRAM_BACKFILL_LIMIT
+        else:
+            return
+        await self._backfill_recent(entity, limit, min_id=last_ext)
+
+    async def _backfill_recent(
+        self,
+        entity: Any,
+        limit: int,
+        min_id: Optional[int] = None,
+    ) -> None:
+        """Ingest Telegram history — min_id fetches only messages newer than our last row."""
+        new_count = 0
+        deduped = 0
+        skipped = 0
+        try:
+            kw: Dict[str, Any] = {"limit": limit}
+            if min_id is not None and min_id > 0:
+                kw["min_id"] = min_id
+            async for msg in self._client.iter_messages(entity, **kw):
                 sender = await msg.get_sender()
                 normalized = self._normalize_message(msg, sender, msg.chat_id)
                 if normalized is None:
+                    skipped += 1
                     continue
                 if self.on_message:
-                    self.on_message(normalized)
+                    from internal.message_intel.engine import ingest_message
+
+                    result = ingest_message(normalized, snapshot_price=True)
+                    if result.get("deduped"):
+                        deduped += 1
+                    else:
+                        new_count += 1
                 elif self.forward_to_ingest:
                     await self._forward_to_ingest(normalized)
-                ingested += 1
-            if ingested:
-                logger.info("Telegram backfill ingested %s messages (limit=%s)", ingested, limit)
+                    new_count += 1
+            if new_count or deduped:
+                logger.info(
+                    "Telegram backfill min_id=%s limit=%s new=%s deduped=%s skipped=%s",
+                    min_id,
+                    limit,
+                    new_count,
+                    deduped,
+                    skipped,
+                )
         except Exception as exc:
             logger.warning("Telegram backfill failed: %s", exc)
+
+    def _message_timestamp(self, msg: Any) -> str:
+        dt = getattr(msg, "date", None)
+        if dt is not None:
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.isoformat()
+        return datetime.now(timezone.utc).isoformat()
 
     async def _handle_event(self, event) -> None:
         """Normalize a Telegram message event and forward it."""
@@ -277,7 +334,7 @@ class TelegramListener:
                 f"@{sender.username}" if sender and getattr(sender, "username", None) else None
             ),
             "content": content.strip(),
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": self._message_timestamp(msg),
             "message_id": str(msg.id),
         }
 
@@ -350,20 +407,35 @@ class TelegramListener:
         except Exception as e:
             logger.warning("Urllib forward failed: %s", e)
 
-    def trigger_backfill(self, limit: Optional[int] = None) -> bool:
-        """Re-pull recent Telegram history (deduped) — recovers quiet disconnect gaps."""
+    def trigger_backfill(self, limit: Optional[int] = None, min_id: Optional[int] = None) -> bool:
+        """Re-pull Telegram history newer than min_id (gap recovery after disconnect)."""
         if not self._running or not self._loop or not self._monitor_entity or not self._client:
             return False
-        lim = limit if limit is not None else TELEGRAM_BACKFILL_LIMIT
+        from internal.message_intel.store import last_telegram_external_id, live_stats
+
+        last_ext = min_id if min_id is not None else last_telegram_external_id()
+        stats = live_stats()
+        age = stats.get("last_message_age_seconds")
+        try:
+            stale_threshold = float(os.environ.get("TELEGRAM_FEED_STALE_SECONDS", "7200"))
+        except ValueError:
+            stale_threshold = 7200.0
+        stale = age is not None and float(age) > stale_threshold
+        if limit is not None:
+            lim = limit
+        elif stale:
+            lim = TELEGRAM_BACKFILL_STALE_LIMIT
+        else:
+            lim = TELEGRAM_BACKFILL_LIMIT
         if lim <= 0:
             return False
 
         async def _do() -> None:
-            await self._backfill_recent(self._monitor_entity, lim)
+            await self._backfill_recent(self._monitor_entity, lim, min_id=last_ext)
 
         try:
             fut = asyncio.run_coroutine_threadsafe(_do(), self._loop)
-            fut.result(timeout=120)
+            fut.result(timeout=180)
             return True
         except Exception as exc:
             logger.warning("Telegram backfill trigger failed: %s", exc)
