@@ -62,6 +62,7 @@ if _in_ci_or_test:
     logger.info("live_subnets: sync disabled in CI/test environment (AUTO_SYNC=False)")
 
 _lock = threading.Lock()
+_sync_lock = threading.Lock()
 _sync_loop_running = False
 
 
@@ -223,36 +224,47 @@ def _read_boot_status() -> Dict[str, Any]:
 
 
 def _sync_once() -> bool:
+    # ponytail: bootstrap + sync loop can both call _sync_once — one guard here.
+    if not _sync_lock.acquire(blocking=False):
+        logger.debug("live_subnets sync skipped — already in flight")
+        return False
     _record_boot_status(phase="sync_start")
-    raw = _fetch_chain_data()
-    if raw is None:
-        logger.warning("live_subnets sync: chain fetch failed or timed out")
-        _record_boot_status(phase="sync_done", ok=False, reason="timeout")
-        return False
-    if not raw:
-        logger.warning("live_subnets sync: chain fetch returned 0 subnets (RPC degraded?)")
-        _record_boot_status(phase="sync_done", ok=False, reason="empty", rows=0)
-        return False
-    merged = _merge_into_registry(raw)
-    payload = {
-        "synced_at": _now_iso(),
-        "source": "blockmachine",
-        "count": len(merged),
-        "subnets": merged,
-    }
     try:
-        os.makedirs(os.path.dirname(_cache_path()), exist_ok=True)
-        tmp = _cache_path() + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump(payload, f)
-        os.replace(tmp, _cache_path())
-        logger.info("live_subnets sync OK: %d subnets", len(merged))
-        _record_boot_status(phase="sync_done", ok=True, rows=len(merged))
-        return True
+        raw = _fetch_chain_data()
+        if raw is None:
+            logger.warning("live_subnets sync: chain fetch failed or timed out")
+            _record_boot_status(phase="sync_done", ok=False, reason="timeout")
+            return False
+        if not raw:
+            logger.warning("live_subnets sync: chain fetch returned 0 subnets (RPC degraded?)")
+            _record_boot_status(phase="sync_done", ok=False, reason="empty", rows=0)
+            return False
+        merged = _merge_into_registry(raw)
+        payload = {
+            "synced_at": _now_iso(),
+            "source": "blockmachine",
+            "count": len(merged),
+            "subnets": merged,
+        }
+        try:
+            os.makedirs(os.path.dirname(_cache_path()), exist_ok=True)
+            tmp = _cache_path() + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump(payload, f)
+            os.replace(tmp, _cache_path())
+            logger.info("live_subnets sync OK: %d subnets", len(merged))
+            _record_boot_status(phase="sync_done", ok=True, rows=len(merged))
+            return True
+        except Exception as exc:
+            logger.warning("live_subnets cache write failed: %s", exc)
+            _record_boot_status(phase="sync_done", ok=False, reason=f"write:{exc}")
+            return False
     except Exception as exc:
-        logger.warning("live_subnets cache write failed: %s", exc)
-        _record_boot_status(phase="sync_done", ok=False, reason=f"write:{exc}")
+        logger.warning("live_subnets sync unexpected error: %s", exc)
+        _record_boot_status(phase="sync_done", ok=False, reason=f"error:{exc}")
         return False
+    finally:
+        _sync_lock.release()
 
 
 def bootstrap_live_subnets_cache() -> bool:
