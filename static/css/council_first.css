@@ -1,10 +1,10 @@
 /* Council-first composition — decision stage, then bench, market demoted */
 
 .council-first-theme {
-  --stage-ink: #e8f0e9;
-  --stage-muted: #94a3b8;
-  --stage-accent: #00ff41;
-  --stage-wash: #0a101c;
+  --stage-ink: #eef7f1;
+  --stage-muted: #8ba598;
+  --stage-accent: #1fd47c;
+  --stage-wash: #070a09;
 }
 
 .app-shell.council-first {
@@ -49,11 +49,11 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 88% 62% at 68% 36%, rgba(148, 163, 184, 0.16) 0%, transparent 56%),
-    radial-gradient(ellipse 54% 42% at 14% 78%, rgba(100, 116, 139, 0.13) 0%, transparent 52%),
-    radial-gradient(ellipse 46% 36% at 92% 12%, rgba(203, 213, 225, 0.07) 0%, transparent 48%),
-    radial-gradient(ellipse 72% 50% at 42% 58%, rgba(71, 85, 105, 0.12) 0%, transparent 54%),
-    linear-gradient(180deg, #030508 0%, var(--stage-wash) 48%, #020308 100%);
+    radial-gradient(ellipse 80% 55% at 72% 28%, rgba(63, 201, 255, 0.10) 0%, transparent 55%),
+    radial-gradient(ellipse 55% 42% at 12% 78%, rgba(31, 212, 124, 0.08) 0%, transparent 52%),
+    radial-gradient(ellipse 42% 32% at 92% 14%, rgba(255, 159, 63, 0.05) 0%, transparent 48%),
+    radial-gradient(ellipse 36% 28% at 40% 90%, rgba(255, 61, 154, 0.03) 0%, transparent 50%),
+    linear-gradient(180deg, #030405 0%, var(--stage-wash) 48%, #020308 100%);
   pointer-events: none;
 }
 
@@ -1266,11 +1266,11 @@ button.home-cta {
 }
 }
 
-/* SS-TG v2 — telegram-pulse flagship (green/blue/orange lead, pink sparse) */
+/* SS-TG v2 — telegram-pulse flagship (yellow board frame; green/blue/orange lead, pink sparse) */
 .message-intel--v2 {
-  --mi-green: #39ff9e;
-  --mi-green-dim: #12653f;
-  --mi-green-glow: rgba(57, 255, 158, 0.4);
+  --mi-green: #1fd47c;
+  --mi-green-dim: #0f5a38;
+  --mi-green-glow: rgba(31, 212, 124, 0.4);
   --mi-blue: #3fc9ff;
   --mi-blue-dim: #16577a;
   --mi-blue-glow: rgba(63, 201, 255, 0.4);
@@ -1279,12 +1279,26 @@ button.home-cta {
   --mi-orange-glow: rgba(255, 159, 63, 0.4);
   --mi-pink: #ff3d9a;
   --mi-pink-glow: rgba(255, 61, 154, 0.35);
+  --mi-yellow: #f5d547;
+  --mi-yellow-glow: rgba(245, 213, 71, 0.45);
   --mi-line: rgba(255, 255, 255, 0.07);
   --mi-line-soft: rgba(255, 255, 255, 0.045);
   --mi-text: #eef7f1;
   --mi-text-dim: #8ba598;
   --mi-text-faint: #4f6459;
   --mi-bg-card: #090d0b;
+  /* Flagship board — yellow frame separates Summers from green site chrome */
+  border: 2px solid rgba(245, 213, 71, 0.72);
+  border-radius: 18px;
+  padding: 20px clamp(14px, 3vw, 22px) 22px;
+  margin-top: 1.25rem;
+  margin-bottom: 1.75rem;
+  background:
+    linear-gradient(180deg, rgba(245, 213, 71, 0.07) 0%, transparent 32%),
+    rgba(6, 10, 8, 0.94);
+  box-shadow:
+    0 0 42px -16px var(--mi-yellow-glow),
+    0 0 0 1px rgba(245, 213, 71, 0.14) inset;
 }
 .message-intel--v2 .message-intel__group-link {
   color: var(--mi-blue);
@@ -1297,6 +1311,7 @@ button.home-cta {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 16px;
 }
@@ -1311,10 +1326,24 @@ button.home-cta {
   padding: 0;
   border-radius: 0;
   min-width: 0;
+  flex: 1 1 auto;
 }
 .message-intel--v2 .message-intel__brand em {
   color: var(--mi-green);
   font-style: normal;
+}
+.message-intel--v2 .message-intel__flagship-chip {
+  font-family: var(--font-mono, monospace);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--mi-yellow);
+  border: 1px solid rgba(245, 213, 71, 0.55);
+  background: rgba(245, 213, 71, 0.1);
+  padding: 4px 9px;
+  border-radius: 4px;
+  box-shadow: 0 0 14px -6px var(--mi-yellow-glow);
+  flex-shrink: 0;
 }
 .message-intel--v2 .message-intel__live-pill {
   display: inline-flex;
@@ -1327,7 +1356,7 @@ button.home-cta {
   letter-spacing: 0.1em;
   font-weight: 600;
   color: var(--mi-green);
-  border: 1px solid rgba(57, 255, 158, 0.3);
+  border: 1px solid rgba(31, 212, 124, 0.3);
   padding: 6px 11px;
   border-radius: 20px;
   box-shadow: 0 0 16px -6px var(--mi-green-glow) inset;
@@ -1373,7 +1402,7 @@ button.home-cta {
   border-radius: 11px;
   padding: 11px 13px;
   margin-bottom: 12px;
-  background: linear-gradient(180deg, rgba(57, 255, 158, 0.05), transparent);
+  background: linear-gradient(180deg, rgba(31, 212, 124, 0.05), transparent);
   font-family: var(--font-mono, monospace);
   font-size: 11.5px;
   color: var(--mi-text-dim);
@@ -1395,7 +1424,7 @@ button.home-cta {
 }
 .message-intel--v2 .message-intel__source-strip b { color: var(--mi-text); font-weight: 600; }
 .message-intel--v2 .message-intel__live-tag {
-  background: rgba(57, 255, 158, 0.12);
+  background: rgba(31, 212, 124, 0.12);
   color: var(--mi-green);
   padding: 2px 7px;
   border-radius: 4px;
@@ -1474,7 +1503,7 @@ button.home-cta {
   border-color: rgba(63, 201, 255, 0.4);
   color: var(--mi-blue);
 }
-.message-intel--v2 .message-intel__summary-24h-chip--up { border-color: rgba(57, 255, 158, 0.35); }
+.message-intel--v2 .message-intel__summary-24h-chip--up { border-color: rgba(31, 212, 124, 0.35); }
 .message-intel--v2 .message-intel__summary-24h-chip--down { border-color: rgba(255, 159, 63, 0.35); }
 .message-intel--v2 .message-intel__summary-24h-empty {
   margin: 0;
@@ -1566,17 +1595,17 @@ button.home-cta {
   cursor: pointer;
 }
 .message-intel--v2 .message-intel__hc-cta--lf {
-  border-color: rgba(57, 255, 158, 0.35);
-  background: rgba(57, 255, 158, 0.1);
+  border-color: rgba(31, 212, 124, 0.35);
+  background: rgba(31, 212, 124, 0.1);
   color: var(--mi-green);
 }
 .message-intel--v2 .message-intel__hero {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(57, 255, 158, 0.28);
+  border: 1px solid rgba(31, 212, 124, 0.28);
   border-radius: 18px;
   background:
-    linear-gradient(155deg, rgba(57, 255, 158, 0.12), rgba(63, 201, 255, 0.04) 60%),
+    linear-gradient(155deg, rgba(31, 212, 124, 0.12), rgba(63, 201, 255, 0.04) 60%),
     var(--mi-bg-card);
   padding: 20px 18px;
   margin-bottom: 14px;
@@ -1623,8 +1652,8 @@ button.home-cta {
   font-weight: 800;
   font-size: 22px;
   color: var(--mi-text);
-  border: 1px solid rgba(57, 255, 158, 0.4);
-  background: linear-gradient(155deg, rgba(57, 255, 158, 0.28), rgba(63, 201, 255, 0.12));
+  border: 1px solid rgba(31, 212, 124, 0.4);
+  background: linear-gradient(155deg, rgba(31, 212, 124, 0.28), rgba(63, 201, 255, 0.12));
   box-shadow: 0 0 24px -8px var(--mi-green-glow);
 }
 .message-intel--v2 .message-intel__hero-name {
@@ -1940,8 +1969,8 @@ button.home-cta {
   background: rgba(255, 255, 255, 0.05);
 }
 .message-intel--v2 .message-intel__filter-chip--active {
-  border-color: rgba(57, 255, 158, 0.4);
-  background: rgba(57, 255, 158, 0.08);
+  border-color: rgba(31, 212, 124, 0.4);
+  background: rgba(31, 212, 124, 0.08);
   color: var(--mi-green);
   box-shadow: 0 0 14px -8px var(--mi-green-glow);
 }
@@ -2038,8 +2067,8 @@ button.home-cta {
 }
 .message-intel--v2 .message-intel__f-tag.message-intel__tag--bull {
   color: var(--mi-green);
-  border-color: rgba(57, 255, 158, 0.35);
-  background: rgba(57, 255, 158, 0.06);
+  border-color: rgba(31, 212, 124, 0.35);
+  background: rgba(31, 212, 124, 0.06);
 }
 .message-intel--v2 .message-intel__f-tag.message-intel__tag--bear {
   color: var(--mi-orange);
@@ -2119,7 +2148,7 @@ button.home-cta {
   margin-top: 10px;
   padding: 12px 12px 12px 14px;
   border: 1px solid rgba(63, 201, 255, 0.22);
-  border-left: 3px solid rgba(57, 255, 158, 0.55);
+  border-left: 3px solid rgba(31, 212, 124, 0.55);
   border-radius: 10px;
   background: rgba(63, 201, 255, 0.05);
 }

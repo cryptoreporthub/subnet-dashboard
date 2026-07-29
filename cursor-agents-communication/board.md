@@ -62,8 +62,14 @@ Babysit: `./scripts/babysit_phase.sh <phase>`
 | Health Monitor | Ditto artifact mode |
 | Track 1 soak | day 7 / day 14 sign-off (`track-1-soak-review-lock.md`) |
 | SS-TG Gate 3 | 390px sign-off |
+<<<<<<< HEAD
 | **SS-TG visual flagship** | P1–P4 in flight — green/blue/orange lead, pink sparse; sitewide color deferred |
 | **Phase C** | **DONE** — `worker_peer.alive: true` · worker HTTP `:8081` · flycast `:8081` |
+=======
+| **SS-TG visual flagship** | DONE #590 — live markers OK; desk empty until worker/listener |
+| **Sitewide cyberpunk colors** | in flight — root tokens align to Pulse palette (pink sparse) |
+| **Phase C / worker peer** | stabilize — `worker_peer.alive` still false on prod |
+>>>>>>> b0f7384 (feat(ui): sitewide cyberpunk palette aligned to Pulse lock)
 
 ## Out of scope
 

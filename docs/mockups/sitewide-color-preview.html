@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimiVision — Sitewide Color Preview (for feedback)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap');
+
+  :root{
+    --bg: #020304;
+    --bg-mid: #050807;
+    --card: #080c0a;
+    --line: rgba(255,255,255,0.08);
+
+    --green: #1fd47c;
+    --green-glow: rgba(31,212,124,0.45);
+    --blue: #3fc9ff;
+    --blue-glow: rgba(63,201,255,0.4);
+    --orange: #ff9f3f;
+    --orange-glow: rgba(255,159,63,0.38);
+    --pink: #ff3d9a;
+    --pink-glow: rgba(255,61,154,0.28);
+
+    --text: #e8f6ee;
+    --text-dim: #7f9a8c;
+    --text-faint: #455a50;
+
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
+    --display: 'Rajdhani', sans-serif;
+  }
+
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; color:var(--text); font-family:var(--sans);
+    background:
+      radial-gradient(ellipse 90% 60% at 100% 0%, rgba(63,201,255,0.14), transparent 55%),
+      radial-gradient(ellipse 70% 50% at 0% 12%, rgba(31,212,124,0.12), transparent 55%),
+      radial-gradient(ellipse 55% 45% at 78% 88%, rgba(255,159,63,0.06), transparent 58%),
+      radial-gradient(ellipse 40% 30% at 18% 92%, rgba(255,61,154,0.03), transparent 50%),
+      linear-gradient(168deg, var(--bg-mid), var(--bg));
+    min-height:100vh; padding:28px 18px 80px;
+    position:relative;
+  }
+  /* cyberpunk HUD grid + scanlines */
+  body::before{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background-image:
+      linear-gradient(rgba(31,212,124,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(63,201,255,0.03) 1px, transparent 1px);
+    background-size: 28px 28px;
+    mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 40%, transparent 85%);
+  }
+  body::after{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:0.35;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.12) 2px,
+      rgba(0,0,0,0.12) 3px
+    );
+  }
+  .wrap{ max-width:980px; margin:0 auto; position:relative; z-index:1; }
+
+  .banner{
+    font-family:var(--mono); font-size:11px; color:var(--text-dim);
+    border:1px dashed rgba(31,212,124,0.35); border-radius:10px; padding:12px 14px; margin-bottom:22px; line-height:1.55;
+    background:rgba(31,212,124,0.04); box-shadow:0 0 24px -12px var(--green-glow);
+  }
+  .banner b{ color:var(--green); text-shadow:0 0 12px var(--green-glow); }
+  .banner em{ color:var(--text-faint); font-style:normal; }
+
+  h1{
+    font-family:var(--display); font-size:clamp(2.2rem,5vw,3.4rem); font-weight:700;
+    letter-spacing:-0.03em; margin:0 0 8px; line-height:0.95;
+    text-shadow:0 0 28px rgba(31,212,124,0.25);
+  }
+  .sub{ color:var(--text-dim); max-width:54ch; margin:0 0 28px; line-height:1.5; }
+
+  .ratio{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:28px;
+  }
+  @media(max-width:640px){ .ratio{ grid-template-columns:1fr 1fr; } }
+  .swatch{
+    border:1px solid var(--line); border-radius:14px; overflow:hidden; background:var(--card);
+    box-shadow:0 0 0 1px rgba(0,0,0,0.4) inset;
+  }
+  .swatch .chip{ height:72px; }
+  .swatch .meta{ padding:10px 12px; font-family:var(--mono); font-size:10.5px; }
+  .swatch .role{ color:var(--text-faint); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:4px; }
+  .swatch .hex{ color:var(--text); font-weight:600; }
+  .swatch .use{ color:var(--text-dim); margin-top:6px; line-height:1.4; }
+  .g{ background:var(--green); box-shadow:inset 0 0 40px var(--green-glow), 0 0 28px -8px var(--green-glow); }
+  .b{ background:var(--blue); box-shadow:inset 0 0 40px var(--blue-glow), 0 0 28px -8px var(--blue-glow); }
+  .o{ background:var(--orange); box-shadow:inset 0 0 40px var(--orange-glow); }
+  .p{ background:var(--pink); box-shadow:inset 0 0 40px var(--pink-glow); }
+
+  .sec{ margin:30px 0 12px; font-family:var(--mono); font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--text-dim); display:flex; align-items:center; gap:8px; }
+  .sec .bar{ width:3px; height:12px; border-radius:2px; box-shadow:0 0 8px currentColor; }
+
+  .mock{
+    border:1px solid rgba(31,212,124,0.22); border-radius:18px; background:rgba(6,10,9,0.9);
+    padding:18px; margin-bottom:16px;
+    box-shadow:0 0 40px -20px var(--green-glow), 0 0 60px -36px var(--blue-glow), inset 0 1px 0 rgba(63,201,255,0.08);
+  }
+  .hud{
+    display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:18px;
+  }
+  .logo{ font-family:var(--display); font-weight:700; font-size:1.6rem; letter-spacing:-0.02em; }
+  .logo span{ color:var(--green); text-shadow:0 0 16px var(--green-glow); }
+  .live{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:0.1em; color:var(--green);
+    border:1px solid rgba(31,212,124,0.45); padding:6px 11px; border-radius:4px;
+    box-shadow:0 0 18px -4px var(--green-glow), inset 0 0 12px rgba(31,212,124,0.08);
+    display:inline-flex; gap:6px; align-items:center;
+    clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+  }
+  .dot{ width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:0 0 10px var(--green-glow); animation:pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse{ 50%{ opacity:0.45; box-shadow:0 0 4px var(--green-glow); } }
+  @media (prefers-reduced-motion: reduce){ .dot{ animation:none; } }
+
+  .hero{
+    border:1px solid rgba(31,212,124,0.35); border-radius:4px; padding:18px;
+    background:
+      linear-gradient(90deg, rgba(31,212,124,0.18), transparent 2px) 0 0 / 100% 100%,
+      linear-gradient(155deg, rgba(31,212,124,0.14), rgba(63,201,255,0.06) 55%, rgba(0,0,0,0.2) 100%);
+    box-shadow:0 0 50px -22px var(--green-glow), inset 0 0 40px rgba(31,212,124,0.04); margin-bottom:14px;
+    position:relative;
+  }
+  .hero::before, .hero::after{
+    content:""; position:absolute; width:10px; height:10px; border-color:var(--green); border-style:solid; opacity:0.7;
+  }
+  .hero::before{ top:6px; left:6px; border-width:2px 0 0 2px; }
+  .hero::after{ bottom:6px; right:6px; border-width:0 2px 2px 0; }
+  .hero .eyebrow{ font-family:var(--mono); font-size:10px; letter-spacing:0.16em; color:var(--green); margin-bottom:10px; text-shadow:0 0 10px var(--green-glow); }
+  .hero h2{ margin:0; font-family:var(--mono); font-size:1.35rem; text-shadow:0 0 18px rgba(31,212,124,0.2); }
+  .hero p{ margin:8px 0 0; color:var(--text-dim); font-size:13px; }
+  .tags{ display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+  .tag{ font-family:var(--mono); font-size:10px; padding:4px 8px; border-radius:3px; border:1px solid var(--line); color:var(--text-dim); }
+  .tag.hot{ color:var(--pink); border-color:rgba(255,61,154,0.3); background:rgba(255,61,154,0.07); box-shadow:0 0 12px -6px var(--pink-glow); }
+  .tag.bull{ color:var(--green); border-color:rgba(31,212,124,0.4); background:rgba(31,212,124,0.08); box-shadow:0 0 14px -6px var(--green-glow); }
+  .tag.bear{ color:var(--orange); border-color:rgba(255,159,63,0.3); }
+  .tag.neu{ color:var(--blue); border-color:rgba(63,201,255,0.3); box-shadow:0 0 12px -6px var(--blue-glow); }
+
+  .grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media(max-width:700px){ .grid{ grid-template-columns:1fr; } }
+  .panel{ border:1px solid var(--line); border-radius:4px; padding:14px; background:rgba(8,12,10,0.95); box-shadow:inset 0 0 24px rgba(63,201,255,0.03); }
+  .panel h3{ margin:0 0 10px; font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-dim); display:flex; align-items:center; gap:8px; }
+  .row{ display:flex; justify-content:space-between; gap:8px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.045); font-size:13px; }
+  .row:last-child{ border-bottom:0; }
+  .muted{ color:var(--text-faint); font-family:var(--mono); font-size:11px; }
+
+  .notes{
+    margin-top:28px; border:1px solid rgba(63,201,255,0.22); border-radius:14px; padding:16px;
+    background:rgba(0,0,0,0.35); box-shadow:0 0 30px -20px var(--blue-glow);
+  }
+  .notes h3{ margin:0 0 10px; font-family:var(--mono); font-size:12px; letter-spacing:0.08em; color:var(--blue); text-shadow:0 0 12px var(--blue-glow); }
+  .notes ul{ margin:0; padding-left:1.1rem; color:var(--text-dim); line-height:1.65; font-size:13.5px; }
+  .notes li b{ color:var(--text); }
+  .delta{ color:var(--green); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="banner">
+    <b>PREVIEW v2 — darker green + cyberpunk HUD</b><br>
+    Green moved <span class="delta">#39ff9e → #1fd47c</span> (same hue, less mint-bright). Neon glow, grid, scanlines, clipped LIVE chip, corner brackets — pink still sparse.
+    <em>Add notes before merge of PR #596.</em>
+  </div>
+
+  <h1>Simi<span style="color:var(--green)">Vision</span> color lock</h1>
+  <p class="sub">Cyberpunk neon on void black · mild bloom · green leads · pink is sparse accent only. Aligned with Telegram Pulse roles.</p>
+
+  <div class="sec"><span class="bar" style="background:var(--green);color:var(--green)"></span>Ratio (intended usage weight)</div>
+  <div class="ratio">
+    <div class="swatch">
+      <div class="chip g"></div>
+      <div class="meta">
+        <div class="role">Primary ~40%</div>
+        <div class="hex">#1fd47c green</div>
+        <div class="use">LIVE · brand · bull · primary CTAs · important borders</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="chip b"></div>
+      <div class="meta">
+        <div class="role">Secondary ~30%</div>
+        <div class="hex">#3fc9ff blue</div>
+        <div class="use">Links · analytical · neu · live wash · HUD accents</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="chip o"></div>
+      <div class="meta">
+        <div class="role">Tertiary ~20%</div>
+        <div class="hex">#ff9f3f orange</div>
+        <div class="use">Bear / sell · warn · champion bars · caution chips</div>
+      </div>
+    </div>
+    <div class="swatch">
+      <div class="chip p"></div>
+      <div class="meta">
+        <div class="role">Accent ≤10%</div>
+        <div class="hex">#ff3d9a pink</div>
+        <div class="use">HOLD · high-conviction · rare “hot” chips only</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec"><span class="bar" style="background:var(--blue);color:var(--blue)"></span>Composition sample — HUD + call hero</div>
+  <div class="mock">
+    <div class="hud">
+      <div class="logo">Simi<span>Vision</span></div>
+      <div class="live"><span class="dot"></span>LIVE</div>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">TODAY'S CALL</div>
+      <h2>SN14 · TaoHash</h2>
+      <p>Conviction 62% · LONG lean · neon green frame (not pink signature)</p>
+      <div class="tags">
+        <span class="tag bull">BULLISH</span>
+        <span class="tag neu">ANALYTICAL</span>
+        <span class="tag hot">HIGH CONV</span>
+        <span class="tag bear">CAUTION</span>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="panel">
+        <h3><span class="bar" style="display:inline-block;width:3px;height:11px;background:var(--blue);border-radius:2px;box-shadow:0 0 8px var(--blue)"></span> Market pulse</h3>
+        <div class="row"><span>Breadth</span><span class="muted" style="color:var(--blue)">+12</span></div>
+        <div class="row"><span>Avg 24h</span><span class="muted" style="color:var(--green)">+1.8%</span></div>
+        <div class="row"><span>Alerts</span><span class="muted" style="color:var(--orange)">3 warn</span></div>
+      </div>
+      <div class="panel">
+        <h3><span class="bar" style="display:inline-block;width:3px;height:11px;background:var(--orange);border-radius:2px"></span> Signals</h3>
+        <div class="row"><span>BUY</span><span class="muted" style="color:var(--green)">#1fd47c</span></div>
+        <div class="row"><span>SELL / BEAR</span><span class="muted" style="color:var(--orange)">orange (not red)</span></div>
+        <div class="row"><span>HOLD</span><span class="muted" style="color:var(--pink)">pink sparse</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h3>Still open — add your notes</h3>
+    <ul>
+      <li><b>Green:</b> darkened to <span class="delta">#1fd47c</span>. Want one more step darker / brighter?</li>
+      <li><b>Sell color:</b> orange (Pulse bear) vs classic red?</li>
+      <li><b>HOLD pink:</b> keep on HOLD + high-conviction, or demote HOLD to muted?</li>
+      <li><b>Cyberpunk intensity:</b> grid + scanlines + corner brackets in preview — keep mild on live site or push harder?</li>
+      <li><b>Fonts:</b> Rajdhani display + JetBrains mono (Space Grotesk in this preview body only).</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>

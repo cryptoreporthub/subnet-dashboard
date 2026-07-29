@@ -13,9 +13,9 @@
     --line: rgba(255,255,255,0.07);
     --line-soft: rgba(255,255,255,0.045);
 
-    --green: #39ff9e;
+    --green: #1fd47c;
     --green-dim: #12653f;
-    --green-glow: rgba(57,255,158,0.4);
+    --green-glow: rgba(31,212,124,0.4);
 
     --pink: #ff3d9a;
     --pink-dim: #6e1c47;
@@ -28,6 +28,9 @@
     --orange: #ff9f3f;
     --orange-dim: #7a4315;
     --orange-glow: rgba(255,159,63,0.4);
+
+    --yellow: #f5d547;
+    --yellow-glow: rgba(245,213,71,0.45);
 
     --text: #eef7f1;
     --text-dim: #8ba598;
@@ -43,7 +46,7 @@
     margin:0;
     background:
       radial-gradient(ellipse 700px 480px at 100% 0%, rgba(63,201,255,0.10), transparent 55%),
-      radial-gradient(ellipse 620px 420px at 0% 8%, rgba(57,255,158,0.08), transparent 58%),
+      radial-gradient(ellipse 620px 420px at 0% 8%, rgba(31,212,124,0.08), transparent 58%),
       radial-gradient(ellipse 500px 400px at 70% 100%, rgba(255,159,63,0.04), transparent 60%),
       var(--bg);
     color:var(--text);
@@ -52,7 +55,7 @@
     padding:0 0 80px;
   }
   .wrap{ max-width:520px; margin:0 auto; padding:18px 16px 0; }
-  ::selection{ background:rgba(57,255,158,0.25); }
+  ::selection{ background:rgba(31,212,124,0.25); }
 
   .preview-banner{
     font-family:var(--mono); font-size:9.5px; letter-spacing:0.05em;
@@ -61,17 +64,32 @@
   }
   .preview-banner b{ color:var(--text-dim); font-weight:600; }
 
-  .topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; gap:10px; }
+  .flagship-board{
+    border:2px solid rgba(245,213,71,0.72);
+    border-radius:18px;
+    padding:18px 14px 20px;
+    background:
+      linear-gradient(180deg, rgba(245,213,71,0.07) 0%, transparent 32%),
+      rgba(6,10,8,0.94);
+    box-shadow:0 0 42px -16px var(--yellow-glow), 0 0 0 1px rgba(245,213,71,0.14) inset;
+  }
+  .topbar{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-bottom:20px; gap:10px; }
   .brand{
     font-family:var(--mono); font-size:10.5px; letter-spacing:0.16em; font-weight:600;
-    color:var(--text-dim); min-width:0;
+    color:var(--text-dim); min-width:0; flex:1 1 auto;
   }
   .brand em{ color:var(--green); font-style:normal; }
+  .flagship-chip{
+    font-family:var(--mono); font-size:9.5px; font-weight:700; letter-spacing:0.12em;
+    color:var(--yellow); border:1px solid rgba(245,213,71,0.55);
+    background:rgba(245,213,71,0.1); padding:4px 9px; border-radius:4px;
+    box-shadow:0 0 14px -6px var(--yellow-glow); flex-shrink:0;
+  }
   .live-pill{
     display:inline-flex; align-items:center; justify-content:center; gap:6px;
     min-width:92px;
     font-family:var(--mono); font-size:10.5px; letter-spacing:0.1em; font-weight:600;
-    color:var(--green); border:1px solid rgba(57,255,158,0.3);
+    color:var(--green); border:1px solid rgba(31,212,124,0.3);
     padding:6px 11px; border-radius:20px;
     box-shadow:0 0 16px -6px var(--green-glow) inset;
     background:transparent; cursor:pointer; flex-shrink:0;
@@ -97,14 +115,14 @@
     display:flex; align-items:center; gap:9px; flex-wrap:wrap;
     border:1px solid var(--line); border-radius:11px;
     padding:11px 13px; margin-bottom:12px;
-    background:linear-gradient(180deg, rgba(57,255,158,0.05), transparent);
+    background:linear-gradient(180deg, rgba(31,212,124,0.05), transparent);
     font-family:var(--mono); font-size:11.5px; color:var(--text-dim);
   }
   .mini-wave{ display:flex; align-items:flex-end; gap:1.5px; height:12px; }
   .mini-wave i{ width:2px; background:var(--green); border-radius:1px; display:block; }
   .source-strip b{ color:var(--text); font-weight:600; }
   .sep{ color:var(--text-faint); }
-  .live-tag{ background:rgba(57,255,158,0.12); color:var(--green); padding:2px 7px; border-radius:4px; font-size:9.5px; font-weight:700; }
+  .live-tag{ background:rgba(31,212,124,0.12); color:var(--green); padding:2px 7px; border-radius:4px; font-size:9.5px; font-weight:700; }
 
   .summary-24h, .proof, .hc-strip{
     border:1px solid rgba(255,255,255,0.09); border-radius:11px; padding:12px 13px; margin-bottom:12px;
@@ -146,10 +164,10 @@
 
   .hero{
     position:relative; overflow:hidden;
-    border:1px solid rgba(57,255,158,0.28);
+    border:1px solid rgba(31,212,124,0.28);
     border-radius:18px;
     background:
-      linear-gradient(155deg, rgba(57,255,158,0.12), rgba(63,201,255,0.04) 60%),
+      linear-gradient(155deg, rgba(31,212,124,0.12), rgba(63,201,255,0.04) 60%),
       var(--bg-card);
     padding:22px 20px;
     margin-bottom:14px;
@@ -168,8 +186,8 @@
   .hero-main{ position:relative; display:flex; align-items:center; gap:14px; margin-bottom:16px; }
   .hero-icon{
     width:54px; height:54px; border-radius:15px; flex-shrink:0;
-    background:linear-gradient(155deg, rgba(57,255,158,0.28), rgba(63,201,255,0.12));
-    border:1px solid rgba(57,255,158,0.4);
+    background:linear-gradient(155deg, rgba(31,212,124,0.28), rgba(63,201,255,0.12));
+    border:1px solid rgba(31,212,124,0.4);
     display:flex; align-items:center; justify-content:center;
     font-family:var(--mono); font-weight:800; font-size:23px; color:var(--text);
     box-shadow: 0 0 24px -8px var(--green-glow);
@@ -262,8 +280,8 @@
   }
   .filter-chip:hover{ border-color:rgba(63,201,255,0.35); color:var(--blue); background:rgba(255,255,255,0.05); }
   .filter-chip.active{
-    color:var(--green); border-color:rgba(57,255,158,0.4);
-    background:rgba(57,255,158,0.08); box-shadow:0 0 14px -8px var(--green-glow);
+    color:var(--green); border-color:rgba(31,212,124,0.4);
+    background:rgba(31,212,124,0.08); box-shadow:0 0 14px -8px var(--green-glow);
   }
 
   .feed-row{
@@ -296,7 +314,7 @@
   .f-handle{ font-size:12px; font-weight:600; color:var(--text-dim); }
   .f-tag{ font-family:var(--mono); font-size:9.5px; font-weight:700; letter-spacing:0.04em; padding:2px 7px; border-radius:5px; border:1px solid; }
   .f-tag.bear{ color:var(--orange); border-color:rgba(255,159,63,0.35); background:rgba(255,159,63,0.07); }
-  .f-tag.bull{ color:var(--green); border-color:rgba(57,255,158,0.35); background:rgba(57,255,158,0.06); }
+  .f-tag.bull{ color:var(--green); border-color:rgba(31,212,124,0.35); background:rgba(31,212,124,0.06); }
   .f-tag.neu{ color:var(--blue); border-color:rgba(63,201,255,0.35); background:rgba(63,201,255,0.06); }
   .f-conv{ font-family:var(--mono); font-size:10.5px; color:var(--text-dim); }
   .f-conv.high{ color:var(--pink); }
@@ -311,7 +329,7 @@
 
   .detail{
     margin:10px 0 4px; padding:12px 12px 12px 14px; border-radius:10px;
-    border:1px solid rgba(63,201,255,0.22); border-left:3px solid rgba(57,255,158,0.55);
+    border:1px solid rgba(63,201,255,0.22); border-left:3px solid rgba(31,212,124,0.55);
     background:rgba(63,201,255,0.05);
     font-size:12.5px; color:#c8d9cf; line-height:1.55; display:none;
   }
@@ -327,8 +345,8 @@
     border:1px solid rgba(63,201,255,0.35); color:var(--blue); background:transparent;
   }
   .detail-btn:hover{ background:rgba(63,201,255,0.08); }
-  .detail-btn.solid{ background:rgba(57,255,158,0.12); border-color:rgba(57,255,158,0.35); color:var(--green); }
-  .detail-btn.solid:hover{ background:rgba(57,255,158,0.18); }
+  .detail-btn.solid{ background:rgba(31,212,124,0.12); border-color:rgba(31,212,124,0.35); color:var(--green); }
+  .detail-btn.solid:hover{ background:rgba(31,212,124,0.18); }
   @media(max-width:390px){
     .detail-btn{ min-height:44px; flex:1 1 calc(50% - 10px); }
   }
@@ -339,7 +357,7 @@
   .foot-note{ font-family:var(--mono); font-size:9.5px; color:var(--text-faint); text-align:center; line-height:1.7; padding:18px 20px 0; }
   .toast{
     position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px);
-    background:#0e1612; border:1px solid rgba(57,255,158,0.35); color:var(--text);
+    background:#0e1612; border:1px solid rgba(31,212,124,0.35); color:var(--text);
     font-family:var(--mono); font-size:11px; padding:10px 14px; border-radius:10px;
     opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:20;
     max-width:90vw;
@@ -351,12 +369,14 @@
 <div class="wrap">
 
   <div class="preview-banner">
-    <b>PREVIEW</b> · color-corrected flagship · green/blue/orange lead · pink sparse ·
+    <b>PREVIEW</b> · yellow flagship board · green/blue/orange lead · pink sparse ·
     try LIVE, filters, and tap a feed row
   </div>
 
+  <div class="flagship-board">
   <div class="topbar">
     <div class="brand">&gt;_ SUBNET SUMMERS · <em>SIMIVISION</em></div>
+    <span class="flagship-chip">FLAGSHIP</span>
     <button type="button" class="live-pill" id="livePill" aria-pressed="true"><span class="dot"></span>LIVE</button>
   </div>
 
@@ -428,7 +448,7 @@
           <div class="t-icon">T</div>
           <div class="t-body"><div class="t-name">TaoHash<span class="sn">SN14</span></div><div class="t-count">47 mentions</div></div>
           <div class="t-right">
-            <svg class="t-spark" viewBox="0 0 58 18"><polyline points="0,14 9,12 18,13 27,8 36,9 45,4 58,2" fill="none" stroke="#39ff9e" stroke-width="2"/></svg>
+            <svg class="t-spark" viewBox="0 0 58 18"><polyline points="0,14 9,12 18,13 27,8 36,9 45,4 58,2" fill="none" stroke="#1fd47c" stroke-width="2"/></svg>
             <div class="t-tag bull">BULLISH</div>
           </div>
         </div>
@@ -437,7 +457,7 @@
           <div class="t-icon">A</div>
           <div class="t-body"><div class="t-name">Apex<span class="sn">SN78</span></div><div class="t-count">31 mentions</div></div>
           <div class="t-right">
-            <svg class="t-spark" viewBox="0 0 58 18"><polyline points="0,13 9,14 18,9 27,10 36,6 45,7 58,3" fill="none" stroke="#39ff9e" stroke-width="2"/></svg>
+            <svg class="t-spark" viewBox="0 0 58 18"><polyline points="0,13 9,14 18,9 27,10 36,6 45,7 58,3" fill="none" stroke="#1fd47c" stroke-width="2"/></svg>
             <div class="t-tag bull">BULLISH</div>
           </div>
         </div>
@@ -520,7 +540,8 @@
     <p class="empty" id="feedEmpty">No messages match these filters. Try a lower conviction threshold or clear the subnet filter.</p>
   </div>
 
-  <p class="foot-note">Conviction is auto-scored from message text and author track record — not financial advice.<br>Interactive mock · color ratios locked for implement</p>
+  <p class="foot-note">Conviction is auto-scored from message text and author track record — not financial advice.<br>Interactive mock · yellow flagship board · color ratios locked for implement</p>
+  </div><!-- /.flagship-board -->
 </div>
 
 <div class="toast" id="toast" role="status"></div>

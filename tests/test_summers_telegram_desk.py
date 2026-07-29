@@ -24,6 +24,8 @@ def test_summers_desk_first_class_on_home():
     assert "message-intel__legend" in html
     assert "message-intel__sec-bar" in html
     assert "message-intel__sw--pink" in html
+    assert "message-intel__flagship-chip" in html
+    assert "FLAGSHIP" in html
 
     # Must sit on the spine — not only inside the More intel drawer
     mi = html.find('id="section-message-intel"')
@@ -48,5 +50,8 @@ def test_summers_flagship_css_tokens():
     assert "--mi-blue:" in css
     assert "--mi-orange:" in css
     assert "--mi-pink:" in css
+    assert "--mi-yellow: #f5d547" in css
+    assert "rgba(245, 213, 71, 0.72)" in css  # yellow flagship board border
+    assert ".message-intel__flagship-chip" in css
     assert ".message-intel__rail-node" in css
     assert ".message-intel__sec-bar--green" in css
