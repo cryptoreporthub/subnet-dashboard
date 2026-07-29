@@ -288,10 +288,10 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     * **heavy** (worker or ``BACKGROUND_ON_WEB=on``): also live subnets and feed
       warmup on top of essential.
     """
-    from internal.run_mode import background_heavy_on_web, is_worker_mode
+    from internal.run_mode import background_heavy_on_web, is_worker_mode, worker_heavy_feeds_enabled
 
     if heavy is None:
-        heavy = is_worker_mode() or background_heavy_on_web()
+        heavy = worker_heavy_feeds_enabled() if is_worker_mode() else background_heavy_on_web()
 
     try:
         from internal.freshness import start_background_sync
@@ -324,8 +324,9 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
         return
 
     try:
-        from internal.live_subnets import get_live_subnets
+        from internal.live_subnets import bootstrap_live_subnets_cache, get_live_subnets
 
+        bootstrap_live_subnets_cache()
         defer_boot("live-subnets-boot", get_live_subnets)
         logger.info("Live subnets sync scheduled (deferred %ss)", BOOT_DEFER_SECONDS)
     except Exception as exc:

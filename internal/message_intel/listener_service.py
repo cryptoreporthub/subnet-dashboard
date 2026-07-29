@@ -43,8 +43,9 @@ def _has_telegram_creds() -> bool:
 
 
 def _worker_heavy_enabled() -> bool:
-    flag = os.environ.get("WORKER_HEAVY", "essential").strip().lower()
-    return flag in ("1", "true", "yes", "on", "full", "essential")
+    from internal.run_mode import worker_heavy_feeds_enabled
+
+    return worker_heavy_feeds_enabled()
 
 
 def _has_session_file() -> bool:

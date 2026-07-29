@@ -134,8 +134,9 @@ def probe_feed_layers() -> Dict[str, Any]:
             return _feed_layers_from_freshness(remote)
     except Exception:
         pass
-    from internal.live_subnets import CACHE_PATH
+    from internal.live_subnets import _cache_path
 
+    cache_file = _cache_path()
     registry_count = len(_registry_rows())
     live_cache = {
         "exists": False,
@@ -144,8 +145,8 @@ def probe_feed_layers() -> Dict[str, Any]:
         "stale": True,
     }
     try:
-        if os.path.exists(CACHE_PATH):
-            with open(CACHE_PATH, "r") as f:
+        if os.path.exists(cache_file):
+            with open(cache_file, "r") as f:
                 data = json.load(f)
             live_cache["exists"] = True
             live_cache["count"] = int(data.get("count") or len(data.get("subnets") or []))
