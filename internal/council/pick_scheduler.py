@@ -85,7 +85,7 @@ def _record_hour_pick(pick: Dict[str, Any], subnets: Any, market_context: Dict[s
         return
     try:
         from internal.council import pick_history
-        from internal.learning.prediction_loop import record_pick_prediction
+        from internal.learning.prediction_loop import record_hold_decision, record_pick_prediction
 
         netuid = None
         sn = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
@@ -99,6 +99,17 @@ def _record_hour_pick(pick: Dict[str, Any], subnets: Any, market_context: Dict[s
             subnet_row = dict(sn) if sn else {}
             if netuid is not None:
                 subnet_row.setdefault("netuid", netuid)
+
+        if str(pick.get("action") or "").upper() == "HOLD":
+            record_hold_decision(
+                candidate=pick,
+                reason=pick.get("hold_reason") or pick.get("reason"),
+                horizon_type="hour",
+                subnet=subnet_row or None,
+                market_context=market_context,
+            )
+            return
+
         if float(subnet_row.get("price", 0) or 0) <= 0:
             return
         stored = record_pick_prediction(

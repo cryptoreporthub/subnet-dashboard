@@ -211,10 +211,27 @@ def _learning_metrics() -> Dict[str, Any]:
 
 
 def _council_weights_list(weights: Dict[str, Any]) -> List[Dict[str, Any]]:
-    return [
-        {"expert": name, "weight": float(value), "bias": 0.0}
-        for name, value in (weights or {}).items()
-    ]
+    """Shape learned weights for the Bench UI.
+
+    ``trend`` reflects real movement vs. the neutral default (1.0) — not a
+    fabricated directional bias. "even" means the learning loop hasn't
+    nudged this expert away from baseline yet; that's an honest state, not
+    a missing value.
+    """
+    from internal.council.weights import DEFAULT_WEIGHTS
+
+    out: List[Dict[str, Any]] = []
+    for name, value in (weights or {}).items():
+        w = float(value)
+        base = float(DEFAULT_WEIGHTS.get(name, 1.0))
+        if w > base + 0.005:
+            trend = "up"
+        elif w < base - 0.005:
+            trend = "down"
+        else:
+            trend = "even"
+        out.append({"expert": name, "weight": w, "trend": trend})
+    return out
 
 
 def _predictions_panel() -> List[Dict[str, Any]]:

@@ -241,6 +241,7 @@ def list_messages(
     from internal.message_intel.rollup import (
         build_24h_summary,
         build_high_conviction_strip,
+        build_reaction_crowns,
         build_telegram_proof_band,
         build_trending_subnets,
         build_yesterday_leader,
@@ -305,6 +306,12 @@ def list_messages(
             "window_hours": 24,
             "empty_reason": "Summary unavailable.",
         }
+    try:
+        # Side feature — per-emoji weekly leaders; not call grading.
+        meta["reaction_crowns"] = build_reaction_crowns(days=7, db=db)
+    except Exception as exc:
+        logger.warning("message-intel reaction crowns failed: %s", exc)
+        meta["reaction_crowns"] = []
     if filters_active:
         applied: Dict[str, Any] = {}
         if min_conviction is not None:
@@ -374,20 +381,32 @@ def list_patterns(limit: int = 20) -> Dict[str, Any]:
 
 
 def list_authors(*, days: int = 7, limit: int = 8) -> Dict[str, Any]:
-    from internal.message_intel.rollup import build_weekly_authors
+    from internal.message_intel.rollup import build_reaction_crowns, build_weekly_authors
 
     try:
         authors = build_weekly_authors(days=days, limit=limit)
+        try:
+            crowns = build_reaction_crowns(days=days)
+        except Exception as crown_exc:
+            logger.warning("message-intel reaction crowns failed: %s", crown_exc)
+            crowns = []
         return {
             "status": "success",
             "days": days,
             "count": len(authors),
             "authors": authors,
+            "reaction_crowns": crowns,
             "empty": len(authors) == 0,
         }
     except Exception as exc:
         logger.error("message-intel authors failed: %s", exc)
-        return {"status": "error", "authors": [], "error": str(exc), "empty": True}
+        return {
+            "status": "error",
+            "authors": [],
+            "reaction_crowns": [],
+            "error": str(exc),
+            "empty": True,
+        }
 
 
 def list_topics(*, limit: int = 12) -> Dict[str, Any]:

@@ -40,14 +40,19 @@ def test_top_pick_hour_returns_picks_list(client):
         assert "expert_contributions" in pick
         assert "scenario_tags" in pick
         assert "signals" in pick
-        assert set(pick["signals"].keys()) >= {
-            "price_change_24h",
-            "price_change_7d",
-            "emission",
-            "apy",
-            "volume",
-        }
-        assert pick.get("action") == "long"
+        assert isinstance(pick["signals"], dict)
+        # Market snapshot metrics OR scored signal_impact payload
+        if "impacts" not in pick["signals"]:
+            assert set(pick["signals"].keys()) >= {
+                "price_change_24h",
+                "price_change_7d",
+                "emission",
+                "apy",
+                "volume",
+            }
+        assert pick.get("action") in ("long", "HOLD")
+        if str(pick.get("action") or "").upper() == "HOLD":
+            assert pick.get("hold_reason") or pick.get("scenario_tags", {}).get("fallback")
 
 
 def test_daily_pick_returns_structured_payload(client):

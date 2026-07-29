@@ -51,6 +51,7 @@ def test_api_message_intel_authors_and_topics(client):
     topics = client.get("/api/message-intel/topics").json()
     assert authors["status"] == "success"
     assert "authors" in authors
+    assert "reaction_crowns" in authors
     assert topics["status"] == "success"
     assert "topics" in topics
 
@@ -88,6 +89,17 @@ def test_trending_and_authors_after_ingest(client):
         assert "netuid" in trending[0]
         assert "mentions" in trending[0]
         assert "sparkline" in trending[0]
+    crowns = listed.get("meta", {}).get("reaction_crowns") or []
+    assert isinstance(crowns, list)
+    fire = next((c for c in crowns if c.get("key") == "fire"), None)
+    thumbs = next((c for c in crowns if c.get("key") == "thumbs"), None)
+    assert fire is not None
+    assert fire["author_username"] == "alpha"
+    assert fire["count"] == 5
+    assert fire["emoji"] == "🔥"
+    assert thumbs is not None
+    assert thumbs["author_username"] == "beta"
+    assert thumbs["count"] == 2
 
     authors = client.get("/api/message-intel/authors?days=7&limit=8").json()
     assert authors["status"] == "success"
@@ -97,10 +109,64 @@ def test_trending_and_authors_after_ingest(client):
     assert top["message_count"] >= 1
     assert "influence_score" in top
     assert "reactions" in top
+    assert top["reactions"].get("fire", 0) >= 5
+    # Light reaction boost raises Alpha above Beta even with similar base influence.
+    assert top["author_username"] == "alpha"
+    assert any(c.get("key") == "fire" for c in authors.get("reaction_crowns") or [])
 
     topics = client.get("/api/message-intel/topics").json()
     assert topics["status"] == "success"
     assert any(t.get("kind") == "group" for t in topics.get("topics") or [])
+
+
+def test_reaction_crowns_unit(monkeypatch):
+    """Per-emoji winners; hit-rate fields never appear on crowns."""
+    from datetime import datetime, timezone
+
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc).isoformat()
+    rows = [
+        {
+            "timestamp": now,
+            "author_id": "a",
+            "author_name": "Fire Queen",
+            "author_username": "fq",
+            "reactions": [{"emoji": "🔥", "count": 9}, {"emoji": "❤️", "count": 1}],
+            "influence_score": 1.0,
+        },
+        {
+            "timestamp": now,
+            "author_id": "b",
+            "author_name": "Heart King",
+            "author_username": "hk",
+            "reactions": [{"emoji": "❤️", "count": 4}],
+            "influence_score": 1.0,
+        },
+        {
+            "timestamp": now,
+            "author_id": "a",
+            "author_name": "Fire Queen",
+            "author_username": "fq",
+            "reactions": [{"emoji": "🔥", "count": 2}],
+            "influence_score": 1.0,
+        },
+    ]
+    monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
+    crowns = rollup.build_reaction_crowns(days=7)
+    by_key = {c["key"]: c for c in crowns}
+    assert by_key["fire"]["count"] == 11
+    assert by_key["fire"]["author_username"] == "fq"
+    assert by_key["heart"]["count"] == 4
+    assert by_key["heart"]["author_username"] == "hk"
+    for c in crowns:
+        assert "hit_rate" not in c
+        assert "graded" not in c
+
+    authors = rollup.build_weekly_authors(days=7, limit=8)
+    # Optional boost: fire reactions should lift fq influence above hk.
+    assert authors[0]["author_username"] == "fq"
+    assert authors[0]["influence_score"] > authors[1]["influence_score"]
 
 
 def test_yesterday_leader_in_meta(client, monkeypatch):

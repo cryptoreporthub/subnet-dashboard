@@ -65,8 +65,18 @@ def _sentiment_tag(avg: float) -> str:
     return "Cautious"
 
 
+# Plus-feature crowns + light influence boost — not call grading.
+_REACTION_KEYS = (
+    ("fire", "🔥", "Hype"),
+    ("hundred", "💯", "Facts"),
+    ("heart", "❤️", "Love"),
+    ("thumbs", "👍", "Agree"),
+    ("rocket", "🚀", "Moon"),
+)
+
+
 def _reaction_score(raw: Any) -> Dict[str, int]:
-    counts = {"fire": 0, "heart": 0, "thumbs": 0}
+    counts = {key: 0 for key, _, _ in _REACTION_KEYS}
     items: List[Any] = []
     if isinstance(raw, str) and raw.strip():
         try:
@@ -86,14 +96,34 @@ def _reaction_score(raw: Any) -> Dict[str, int]:
         if not isinstance(item, dict):
             continue
         emoji = str(item.get("emoji") or item.get("emoticon") or "")
-        count = int(item.get("count") or 0)
+        try:
+            count = int(item.get("count") or 0)
+        except (TypeError, ValueError):
+            count = 0
+        if count <= 0:
+            continue
         if "🔥" in emoji:
             counts["fire"] += count
+        elif "💯" in emoji or "100" in emoji:
+            counts["hundred"] += count
+        elif "🚀" in emoji:
+            counts["rocket"] += count
         elif "❤" in emoji:
             counts["heart"] += count
         elif "👍" in emoji:
             counts["thumbs"] += count
     return counts
+
+
+def _reaction_influence_boost(rx: Dict[str, int]) -> float:
+    """Light social bump for champions — does not affect call hit-rate grading."""
+    return float(
+        rx.get("fire", 0) * 3
+        + rx.get("hundred", 0) * 2
+        + rx.get("rocket", 0) * 2
+        + rx.get("heart", 0) * 2
+        + rx.get("thumbs", 0) * 1
+    )
 
 
 def _load_message_rows(db=None) -> List[Dict[str, Any]]:
@@ -333,7 +363,7 @@ def build_weekly_authors(*, days: int = 7, limit: int = 8, db=None) -> List[Dict
                 "message_count": 0,
                 "influence_score": 0.0,
                 "subnets": set(),
-                "reactions": {"fire": 0, "heart": 0, "thumbs": 0},
+                "reactions": {key: 0 for key, _, _ in _REACTION_KEYS},
             },
         )
         entry["message_count"] += 1
@@ -341,9 +371,10 @@ def build_weekly_authors(*, days: int = 7, limit: int = 8, db=None) -> List[Dict
         for netuid in _netuids_from_row(row):
             entry["subnets"].add(netuid)
         rx = _reaction_score(row.get("reactions"))
-        for key in ("fire", "heart", "thumbs"):
+        for key, _, _ in _REACTION_KEYS:
             entry["reactions"][key] += rx[key]
-        entry["influence_score"] += rx["fire"] * 3 + rx["heart"] * 2 + rx["thumbs"] * 1
+        # Optional light boost only — call hit-rate stays separate.
+        entry["influence_score"] += _reaction_influence_boost(rx)
 
     out: List[Dict[str, Any]] = []
     for entry in authors.values():
@@ -370,6 +401,70 @@ def build_weekly_authors(*, days: int = 7, limit: int = 8, db=None) -> List[Dict
 
     out.sort(key=lambda r: (r["influence_score"], r["message_count"]), reverse=True)
     return out[:limit]
+
+
+def build_reaction_crowns(*, days: int = 7, db=None) -> List[Dict[str, Any]]:
+    """Per-emoji weekly leaders — social plus feature, not call grading."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    # key → author_id → {count, author_name, author_username}
+    tallies: Dict[str, Dict[str, Dict[str, Any]]] = {
+        key: {} for key, _, _ in _REACTION_KEYS
+    }
+
+    for row in _load_message_rows(db):
+        ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if ts is None or ts < cutoff:
+            continue
+        rx = _reaction_score(row.get("reactions"))
+        if not any(rx.values()):
+            continue
+        author_id = str(
+            row.get("author_id") or row.get("author_username") or row.get("author_name") or "unknown"
+        )
+        name = row.get("author_name") or "Unknown"
+        username = row.get("author_username") or ""
+        for key, _, _ in _REACTION_KEYS:
+            n = int(rx.get(key) or 0)
+            if n <= 0:
+                continue
+            entry = tallies[key].setdefault(
+                author_id,
+                {
+                    "author_id": author_id,
+                    "author_name": name,
+                    "author_username": username,
+                    "count": 0,
+                },
+            )
+            entry["count"] += n
+            entry["author_name"] = name or entry["author_name"]
+            if username:
+                entry["author_username"] = username
+
+    crowns: List[Dict[str, Any]] = []
+    for key, emoji, label in _REACTION_KEYS:
+        bucket = tallies[key]
+        if not bucket:
+            continue
+        winner = max(bucket.values(), key=lambda e: (int(e["count"]), str(e["author_name"])))
+        if int(winner["count"]) <= 0:
+            continue
+        handle = str(winner.get("author_username") or "").lstrip("@")
+        display = f"@{handle}" if handle else str(winner.get("author_name") or "Unknown")
+        crowns.append(
+            {
+                "key": key,
+                "emoji": emoji,
+                "label": label,
+                "author_id": winner["author_id"],
+                "author_name": winner["author_name"],
+                "author_username": winner.get("author_username") or "",
+                "display_name": display,
+                "count": int(winner["count"]),
+                "days": days,
+            }
+        )
+    return crowns
 
 
 def build_topics(*, limit: int = 12, db=None) -> List[Dict[str, Any]]:

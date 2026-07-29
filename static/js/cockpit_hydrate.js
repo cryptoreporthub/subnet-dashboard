@@ -830,15 +830,17 @@
     if (!claim) return;
     var pct = confPct == null || isNaN(confPct) ? 0 : Number(confPct);
     var act = String(action || '').toUpperCase();
-    var cool = act === 'HOLD' || pct < 45;
+    // Single source of truth for tier cutoffs — keep in sync with conviction_tiers.js (75/55/35).
+    var t = confTier(pct > 1 ? pct / 100 : pct);
+    var cool = act === 'HOLD' || t.tier === 'tier-gold' || t.tier === 'tier-red';
     claim.classList.remove('k3-claim--glow-hot', 'k3-claim--glow-cool');
     claim.classList.add(cool ? 'k3-claim--glow-cool' : 'k3-claim--glow-hot');
     claim.setAttribute('data-glow', cool ? 'cool' : 'hot');
     var label = document.getElementById('k3-orb-label');
     if (label) {
-      if (pct >= 70) label.textContent = 'high';
-      else if (pct >= 45) label.textContent = 'mid';
-      else if (pct > 0) label.textContent = 'low';
+      if (t.tier === 'tier-cyan') label.textContent = 'high';
+      else if (t.tier === 'tier-lime') label.textContent = 'mid';
+      else if (t.conf > 0) label.textContent = 'low';
       else label.textContent = 'conviction';
     }
   }
@@ -2273,12 +2275,23 @@
 
   function renderPickCards(picks) {
     return (picks || []).map(function (pick, idx) {
+      var isFallback = !!(pick.scenario_tags && pick.scenario_tags.fallback);
+      var isHold = String(pick.action || '').toUpperCase() === 'HOLD';
       var t = confTier(pick.confidence || 0);
+      var statusLine = '';
+      if (isFallback) {
+        statusLine = '<div class="pick-degraded-note">⚠ Council scoring unavailable — not a scored call</div>';
+      } else if (isHold) {
+        statusLine = '<div class="pick-degraded-note pick-degraded-note--hold">HOLD' + (pick.hold_reason ? ' · ' + esc(pick.hold_reason) : '') + '</div>';
+      }
       return (
-        '<div class="pick-card"><div class="pick-rank">#' + (idx + 1) + '</div>' +
+        '<div class="pick-card' + (isFallback ? ' pick-card--degraded' : '') + '">' +
+        '<div class="pick-rank">#' + (idx + 1) + '</div>' +
         '<div class="pick-name">' + esc(pickName(pick)) + '</div>' +
         '<div class="pick-meta">SN' + esc(pickNetuid(pick)) + ' · score <b class="accent-bright">' + fmt(pick.score, 1) + '</b></div>' +
-        '<div class="conviction-bar"><div class="conviction-fill ' + t.tier + '" style="width:' + t.conf + '%;"></div></div></div>'
+        '<div class="conviction-bar"><div class="conviction-fill ' + t.tier + '" style="width:' + t.conf + '%;"></div></div>' +
+        statusLine +
+        '</div>'
       );
     }).join('');
   }

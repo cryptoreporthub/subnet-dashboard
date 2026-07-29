@@ -30,7 +30,8 @@
   <div class="message-intel__legend" aria-label="Scoring legend">
     <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--blue" aria-hidden="true"></span><b>Conv.</b> jury score 0–100%</span>
     <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--pink" aria-hidden="true"></span><b>High</b> ≥ 60%</span>
-    <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--orange" aria-hidden="true"></span><b>Influence</b> reach + reactions, 7d</span>
+    <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--orange" aria-hidden="true"></span><b>Influence</b> reach + light reaction bump, 7d</span>
+    <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--pink" aria-hidden="true"></span><b>Crowns</b> weekly emoji leaders (side)</span>
   </div>
 
   <div class="message-intel__proof" id="message-intel-proof" hidden aria-live="polite">
@@ -73,11 +74,23 @@
       <div class="message-intel__sec-label">
         <span class="message-intel__sec-bar message-intel__sec-bar--orange" aria-hidden="true"></span>
         <h3 class="message-intel__panel-title">Weekly champions</h3>
-        <span class="message-intel__panel-unit">influence</span>
+        <span class="message-intel__panel-unit">hit-rate first</span>
       </div>
       <div id="message-intel-champions" class="message-intel__champions" aria-live="polite">
         <p class="empty">No contributor history yet.</p>
       </div>
+    </div>
+  </div>
+
+  <div class="message-intel__panel" id="message-intel-crowns-card">
+    <div class="message-intel__sec-label">
+      <span class="message-intel__sec-bar message-intel__sec-bar--pink" aria-hidden="true"></span>
+      <h3 class="message-intel__panel-title">Reaction crowns</h3>
+      <span class="message-intel__panel-unit">7d · social</span>
+    </div>
+    <p class="message-intel__panel-hint">Per-emoji leaders — fun side board, not call grading.</p>
+    <div id="message-intel-crowns" class="message-intel__crowns" aria-live="polite">
+      <p class="empty">No reaction crowns yet.</p>
     </div>
   </div>
 
