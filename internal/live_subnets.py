@@ -191,7 +191,11 @@ def _fetch_chain_data():
 
 def _sync_once() -> bool:
     raw = _fetch_chain_data()
+    if raw is None:
+        logger.warning("live_subnets sync: chain fetch failed or timed out")
+        return False
     if not raw:
+        logger.warning("live_subnets sync: chain fetch returned 0 subnets (RPC degraded?)")
         return False
     merged = _merge_into_registry(raw)
     payload = {
@@ -329,4 +333,10 @@ def live_data_freshness() -> Dict[str, Any]:
         info["tmc_cache_count"] = (probe.get("tmc_cache") or {}).get("count", 0)
     except Exception as exc:
         logger.debug("effective feed probe failed: %s", exc)
+    try:
+        from internal.chain_client import get_default_client
+
+        info["rpc_healthy"] = get_default_client().is_healthy()
+    except Exception:
+        info["rpc_healthy"] = None
     return info

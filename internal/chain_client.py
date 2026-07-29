@@ -470,8 +470,9 @@ class ChainClient:
 
     def get_subnet_price_rows(self, netuids):
         """Fast path for live_subnets cache — price only (~0.2s/SN vs ~30s full)."""
+        # ponytail: do not bail on cold-boot health TTL — lite fetch is the real probe.
         if not self.is_healthy():
-            return []
+            logger.warning("RPC health false-negative — attempting lite price fetch anyway")
         rows = []
         for netuid in netuids:
             try:
