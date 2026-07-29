@@ -297,6 +297,16 @@ class PredictionResolverScheduler:
         }
 
         try:
+            try:
+                from internal.learning.ledger_heal import heal_daily_pick_ledger
+
+                heal_daily_pick_ledger(dry_run=False)
+            except Exception as heal_exc:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "ledger heal in resolver tick failed: %s", heal_exc
+                )
+
             subnets = self._subnet_provider() or []
 
             soul_data = _load_json(self.soul_map_path)

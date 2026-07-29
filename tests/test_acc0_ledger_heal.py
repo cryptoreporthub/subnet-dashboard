@@ -70,6 +70,28 @@ def test_heal_backfills_gap(tmp_path, monkeypatch):
     assert report["ledger"]["gap"] is False
 
 
+def test_heal_uses_prediction_reference_price(tmp_path, monkeypatch):
+    daily = tmp_path / "daily_picks.json"
+    preds = tmp_path / "predictions.json"
+    pick = {
+        "action": "long",
+        "subnet": {"netuid": 15, "name": "SN15"},
+        "prediction": {"reference_price": 0.0198846, "predicted_pct": 2.5, "horizon_hours": 4},
+    }
+    _write_json(
+        daily,
+        [{"date": _today(), "action": "long", "pick": pick, "market_context": {}}],
+    )
+    _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
+
+    monkeypatch.setattr("internal.learning.predictions_store.PREDICTIONS_PATH", str(preds))
+    monkeypatch.setattr("internal.learning.ledger_heal.DAILY_PICKS_PATH", str(daily))
+
+    summary = heal_daily_pick_ledger(dry_run=False, daily_picks_path=str(daily))
+    assert summary["healed"] is True
+    assert summary["netuid"] == 15
+
+
 def test_heal_idempotent(tmp_path, monkeypatch):
     daily = tmp_path / "daily_picks.json"
     preds = tmp_path / "predictions.json"
@@ -156,3 +178,25 @@ def test_epoch_reset_reheals_or_downgrades(tmp_path, monkeypatch):
         soul_path=str(tmp_path / "missing_soul.json"),
     )
     assert report["ledger"]["gap"] is False
+
+
+def test_heal_uses_prediction_reference_price(tmp_path, monkeypatch):
+    daily = tmp_path / "daily_picks.json"
+    preds = tmp_path / "predictions.json"
+    pick = {
+        "action": "long",
+        "subnet": {"netuid": 15, "name": "SN15"},
+        "prediction": {"reference_price": 0.0198846, "predicted_pct": 2.5, "horizon_hours": 4},
+    }
+    _write_json(
+        daily,
+        [{"date": _today(), "action": "long", "pick": pick, "market_context": {}}],
+    )
+    _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
+
+    monkeypatch.setattr("internal.learning.predictions_store.PREDICTIONS_PATH", str(preds))
+    monkeypatch.setattr("internal.learning.ledger_heal.DAILY_PICKS_PATH", str(daily))
+
+    summary = heal_daily_pick_ledger(dry_run=False, daily_picks_path=str(daily))
+    assert summary["healed"] is True
+    assert summary["netuid"] == 15
