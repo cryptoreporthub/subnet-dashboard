@@ -1,8 +1,8 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-28T23:35:00Z  
-**main:** `93a61d0` — Phase C **DONE** (#598–#601) · post-audit A–H (#562–#571)  
-**Plans:** `full-roadmap-master-plan.md` · `post-audit-sprint-plan.md`
+**Last updated:** 2026-07-29T03:10:00Z  
+**main:** `c0585ee` — #605 SS-TG stale feed backfill · #604 trending · #603 live-cache proxy · #602 readiness proxy · #601 learning deploy check  
+**Plans:** `finish-queue-plan.md` · `full-roadmap-master-plan.md` · `post-audit-sprint-plan.md`
 
 ## Full roadmap
 
@@ -51,7 +51,7 @@ Babysit: `./scripts/babysit_phase.sh <phase>`
 ## Learning loop
 
 - Prod: `/api/learning/health` **ok** — resolver tick live on worker volume (proxy from web)
-- Readiness `learning_loop_health` fix in flight (#602 track) — was reading orphan web `soul_map`
+- Readiness `learning_loop_health` fix **DONE** (#602) — orphan web `soul_map` no longer disables proxy
 - Track 1 soak running under #551 calibration
 
 ## Active (monitor)
@@ -61,15 +61,10 @@ Babysit: `./scripts/babysit_phase.sh <phase>`
 | Pick audit | 23:45 UTC nightly |
 | Health Monitor | Ditto artifact mode |
 | Track 1 soak | day 7 / day 14 sign-off (`track-1-soak-review-lock.md`) |
-| SS-TG Gate 3 | 390px sign-off |
-<<<<<<< HEAD
-| **SS-TG visual flagship** | P1–P4 in flight — green/blue/orange lead, pink sparse; sitewide color deferred |
+| SS-TG Gate 3 | 390px sign-off (H1) |
+| **SS-TG visual flagship** | DONE #590 + #605 stale feed backfill · #596 sitewide palette |
 | **Phase C** | **DONE** — `worker_peer.alive: true` · worker HTTP `:8081` · flycast `:8081` |
-=======
-| **SS-TG visual flagship** | DONE #590 — live markers OK; desk empty until worker/listener |
-| **Sitewide cyberpunk colors** | in flight — root tokens align to Pulse palette (pink sparse) |
-| **Phase C / worker peer** | stabilize — `worker_peer.alive` still false on prod |
->>>>>>> b0f7384 (feat(ui): sitewide cyberpunk palette aligned to Pulse lock)
+| **Finish queue** | Slice 0 board sync · Slice 1 `live_subnets_cache_empty` (`finish-queue-plan.md`) |
 
 ## Out of scope
 
