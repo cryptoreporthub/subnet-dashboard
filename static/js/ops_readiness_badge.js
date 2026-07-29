@@ -31,6 +31,15 @@
     var resOk = resolver.running ? 'resolver on' : 'resolver off';
     var ready = payload.ready;
     var alertCount = (whaleAlerts && whaleAlerts.total) || 0;
+    var splitWeb =
+      payload.worker_mode === 'split_v2' &&
+      payload.worker_peer &&
+      payload.worker_peer.expected;
+    if (splitWeb && resolver.running) {
+      resOk = 'resolver on (worker)';
+    } else if (splitWeb && !resolver.running && payload.worker_peer.alive) {
+      resOk = 'resolver check worker';
+    }
     var webSnapshot = payload.worker_mode === 'web' && !resolver.running;
     if (webSnapshot && !ready) {
       el.hidden = true;

@@ -121,7 +121,7 @@
         try {
           ctrl.abort();
         } catch (e) {}
-      }, 8000);
+      }, 15000);
     }
     fetch('/api/subnet-integrations', {
       headers: { Accept: 'application/json' },

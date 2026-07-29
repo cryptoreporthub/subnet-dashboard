@@ -19,9 +19,11 @@ from internal.integrations.taonsquare import catalog_summary, recommend_candidat
 logger = logging.getLogger(__name__)
 
 _PROBE_TIMEOUT = 3
+_CONNECT_TIMEOUT = 2
 _CACHE_TTL_SEC = 60.0
 _cache_lock = threading.Lock()
 _cache: Dict[str, Any] = {"at": 0.0, "payload": None}
+_probe_session = None
 _BLOCKMACHINE_RPC = os.environ.get("BLOCKMACHINE_RPC_URL", "https://rpc.blockmachine.io").rstrip("/")
 _BITTENSOR_RPC = os.environ.get("BITTENSOR_RPC_URL", _BLOCKMACHINE_RPC).rstrip("/")
 _BITTENSOR_NETWORK = os.environ.get("BITTENSOR_NETWORK", "finney").strip().lower() or "finney"
@@ -74,6 +76,21 @@ INTEGRATIONS: List[Dict[str, Any]] = [
 ]
 
 
+def _probe_session():
+    """HTTP session without urllib3 retries — probes must fail fast under Fly load."""
+    global _probe_session
+    if _probe_session is None:
+        import requests
+        from requests.adapters import HTTPAdapter
+
+        session = requests.Session()
+        adapter = HTTPAdapter(max_retries=0)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        _probe_session = session
+    return _probe_session
+
+
 def _http_probe(
     method: str,
     url: str,
@@ -83,14 +100,12 @@ def _http_probe(
 ) -> tuple[bool, int, str]:
     """Return (ok, status_code, detail). ok means HTTP response received."""
     try:
-        import requests
-
-        resp = requests.request(
+        resp = _probe_session().request(
             method,
             url,
             headers=headers or {},
             json=json_body,
-            timeout=_PROBE_TIMEOUT,
+            timeout=(_CONNECT_TIMEOUT, _PROBE_TIMEOUT),
         )
         if "desearch.ai" in url:
             record_desearch_response(resp, path=url, label="probe")
@@ -103,12 +118,10 @@ def _http_probe(
 def _rpc_chain_healthy(endpoint: str) -> tuple[bool, str]:
     """JSON-RPC chain_getBlockHash — shared health check for Bittensor nodes."""
     try:
-        import requests
-
-        resp = requests.post(
+        resp = _probe_session().post(
             endpoint,
             json={"jsonrpc": "2.0", "method": "chain_getBlockHash", "params": [0], "id": 1},
-            timeout=_PROBE_TIMEOUT,
+            timeout=(_CONNECT_TIMEOUT, _PROBE_TIMEOUT),
         )
         if resp.status_code != 200:
             return False, f"HTTP {resp.status_code}"
@@ -269,6 +282,15 @@ def _probe_thirty_spokes(api_key: Optional[str] = None) -> Dict[str, Any]:
     probe = _probe_openai_models(base, key)
     if probe.get("connected"):
         probe["detail"] = "models ok · model router"
+        return probe
+    # ponytail: router host often down while Chutes carries council chat on the same key.
+    if key:
+        chutes = _probe_openai_models(_chutes_base_url(), key)
+        if chutes.get("connected"):
+            return {
+                **chutes,
+                "detail": "Chutes fallback · council chat",
+            }
     return probe
 
 

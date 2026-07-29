@@ -10,6 +10,7 @@ def test_bypass_paths():
     assert bypass_path("/api/letter/brain")
     assert bypass_path("/api/story-strip")
     assert bypass_path("/api/data-freshness")
+    assert bypass_path("/api/subnet-integrations")
     assert bypass_path("/api/subnets")
     assert bypass_path("/api/mindmap/trail")
     assert bypass_path("/api/judges/28")
