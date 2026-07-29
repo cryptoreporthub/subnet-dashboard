@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-07-29T15:10:00Z  
 **main:** `0ba03c0` — #630 TaoStats web wedge · #632 SS-TG reaction crowns · #631 audit honesty · #629 live_subnets sync lock · finish-queue Slices 0–3 (#609–#610, worker hotfix #619–#626)  
-**Plans:** `finish-queue-plan.md` · `full-roadmap-master-plan.md` · `post-audit-sprint-plan.md`
+**Plans:** `finish-queue-plan.md` · `full-roadmap-master-plan.md` · `post-audit-sprint-plan.md` · `launch-lc-ld-plan.md`
 
 ## Full roadmap
 
@@ -21,6 +21,17 @@
 
 - W0 #549 · W1–W3 #557 on prod (HTML markers live)
 - **You:** 390px Subnet Summers desk — tap message expand, HC strip, proof band
+
+## Launch readiness (hero + integrations)
+
+| Phase | Status | Lock |
+|-------|--------|------|
+| **LA** Hero source-of-truth | **DONE** #640 | — |
+| **LB** Integrations + pulse rail | **DONE** #645 | — |
+| **LC** Legal / trust / SEO | **NEXT** | `launch-lc-ld-plan.md` |
+| **LD** Surface honesty | gated on LC | same |
+
+Babysit: `./scripts/babysit_phase.sh la` · `lb` · `lc` · `ld`
 
 ## Post-audit sprint
 

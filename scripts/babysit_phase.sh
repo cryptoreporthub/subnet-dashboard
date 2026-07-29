@@ -154,7 +154,46 @@ assert len(rows) >= 4, rows
     echo "$html" | grep -q 'sr-pulse-ribbon' && echo "pulse ribbon: present" || echo "WARN: pulse ribbon missing"
     echo "$html" | grep -qi 'built on bittensor' && echo "brand line: present" || echo "WARN: Built on Bittensor missing"
     echo "$html" | grep -q 'sr-pulse__oneline' && echo "compact pulse: present" || echo "WARN: oneline pulse missing"
-  ;;
+    ;;
+esac
+
+case "$PHASE" in
+  lc|LC|legal|trust|seo|all)
+    echo "== Phase LC: legal / trust / SEO =="
+    code=$(curl -sS -m 8 -o /dev/null -w "%{http_code}" "$BASE/robots.txt" 2>/dev/null || echo 000)
+    echo "robots.txt: HTTP $code"
+    [ "$code" = "200" ] || echo "WARN: robots.txt not 200"
+    html=$(curl -fsS --max-time 15 "$BASE/" 2>/dev/null || true)
+    echo "$html" | grep -qi 'not financial advice' && echo "NFA disclaimer: present" || echo "WARN: NFA disclaimer missing"
+    echo "$html" | grep -q 'og-share.png\|og:image' && echo "og:image: present" || echo "WARN: og:image missing"
+    curl -sS -m 8 -D - -o /dev/null "$BASE/" 2>/dev/null | grep -iE 'content-security|strict-transport' || echo "WARN: security headers"
+    ;;
+esac
+
+case "$PHASE" in
+  ld|LD|surface|honesty|all)
+    echo "== Phase LD: surface honesty =="
+    html=$(curl -fsS --max-time 15 "$BASE/" 2>/dev/null || true)
+    if echo "$html" | grep -q 'id="habit-alert-btn"'; then
+      if echo "$html" | grep -q 'data-enabled="0"'; then
+        echo "$html" | grep -q 'habit-alert-btn.*hidden\|display:\s*none' && echo "alerts btn: hidden when disabled" || echo "WARN: alert btn visible while disabled"
+      else
+        echo "alerts btn: enabled on deploy"
+      fi
+    else
+      echo "alerts btn: absent (ok if alerts off)"
+    fi
+    curl -fsS --max-time 12 "$BASE/api/portfolio/status" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print('portfolio status:', d.get('status', 'ok'))
+" || echo "WARN: portfolio status failed"
+    curl -fsS --max-time 12 "$BASE/api/daily-pick" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print('daily-pick action:', d.get('action'))
+" || echo "WARN: daily-pick failed"
+    ;;
 esac
 
 echo "== babysit phase=$PHASE OK =="
