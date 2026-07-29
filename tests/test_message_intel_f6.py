@@ -74,6 +74,22 @@ def test_listener_status_cross_process_running(monkeypatch, tmp_path):
     assert status["live"] is True
 
 
+def test_listener_status_stopped_when_heartbeat_stale(monkeypatch, tmp_path):
+    hb = tmp_path / ".message_intel_listener"
+    monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "auto")
+    monkeypatch.setenv("TELEGRAM_API_ID", "12345")
+    monkeypatch.setenv("TELEGRAM_API_HASH", "deadbeef")
+    monkeypatch.setenv("MESSAGE_INTEL_LISTENER_HEARTBEAT", str(hb))
+    monkeypatch.setenv("TELEGRAM_SESSION_PATH", str(tmp_path / "telegram_listener"))
+    (tmp_path / "telegram_listener.session").write_text("stub", encoding="utf-8")
+    hb.write_text('{"pid":1,"ts":"2020-01-01T00:00:00Z"}', encoding="utf-8")
+    listener_service._listener = None
+    status = listener_service.listener_status()
+    assert status["running"] is False
+    assert status["reason"] == "listener_stopped"
+    assert "watchdog" in status["hint"]
+
+
 def test_start_skipped_without_creds(monkeypatch):
     monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "auto")
     monkeypatch.delenv("TELEGRAM_API_ID", raising=False)

@@ -119,6 +119,7 @@ class TelegramListener:
         except Exception as e:
             logger.error("Telegram listener error: %s", e)
         finally:
+            self._running = False
             self._loop.close()
 
     async def _run_client(self) -> None:
