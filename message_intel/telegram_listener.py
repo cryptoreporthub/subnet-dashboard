@@ -168,12 +168,12 @@ class TelegramListener:
                     await asyncio.sleep(30)
                     continue
 
-                await self._backfill_on_connect(entity)
-
-                # Register the message handler
+                # Register handler first — gap backfill async so live ingest isn't blocked
                 @self._client.on(events.NewMessage(chats=entity))
                 async def handler(event) -> None:  # noqa: F811
                     await self._handle_event(event)
+
+                asyncio.create_task(self._backfill_on_connect(entity))
 
                 # Reset retry delay on successful connection
                 retry_delay = 1
