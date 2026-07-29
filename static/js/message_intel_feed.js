@@ -9,6 +9,7 @@
   var groupLink = document.getElementById("message-intel-group-link");
   var trendingEl = document.getElementById("message-intel-trending");
   var championsEl = document.getElementById("message-intel-champions");
+  var crownsEl = document.getElementById("message-intel-crowns");
   var refreshBtn = document.getElementById("message-intel-trending-refresh");
   var feedHint = document.getElementById("message-intel-feed-hint");
   var yesterdayCard = document.getElementById("message-intel-yesterday");
@@ -768,6 +769,38 @@
     return html;
   }
 
+  function renderReactionCrowns(rows) {
+    if (!rows || !rows.length) {
+      return '<p class="empty">No reaction crowns yet — they appear as the group reacts.</p>';
+    }
+    var html = '<div class="message-intel__crown-rows">';
+    rows.forEach(function (row) {
+      var handle =
+        row.display_name ||
+        (row.author_username
+          ? "@" + String(row.author_username).replace(/^@/, "")
+          : row.author_name) ||
+        "Unknown";
+      html +=
+        '<div class="message-intel__crown-row">' +
+        '<span class="message-intel__crown-emoji" aria-hidden="true">' +
+        esc(row.emoji || "") +
+        "</span>" +
+        '<div class="message-intel__crown-body">' +
+        '<div class="message-intel__crown-label">' +
+        esc(row.label || row.key || "") +
+        "</div>" +
+        '<div class="message-intel__crown-name">' +
+        esc(handle) +
+        "</div></div>" +
+        '<div class="message-intel__crown-count">' +
+        esc(row.count) +
+        "</div></div>";
+    });
+    html += "</div>";
+    return html;
+  }
+
   function renderSubnetChips(netuids) {
     if (!netuids || !netuids.length) return "";
     return (
@@ -999,11 +1032,15 @@
 
       var authorsUnavailable = false;
       var authors = [];
+      var crowns = (payload.meta && payload.meta.reaction_crowns) || [];
       try {
         var authorsRes = await fetch("/api/message-intel/authors?limit=8");
         if (authorsRes.ok) {
           var authorsPayload = await authorsRes.json();
           authors = authorsPayload.authors || [];
+          if (authorsPayload.reaction_crowns && authorsPayload.reaction_crowns.length) {
+            crowns = authorsPayload.reaction_crowns;
+          }
         } else if (authorsRes.status === 404) {
           authorsUnavailable = true;
         }
@@ -1012,6 +1049,9 @@
       }
       if (championsEl) {
         championsEl.innerHTML = renderChampions(authors, authorsUnavailable);
+      }
+      if (crownsEl) {
+        crownsEl.innerHTML = renderReactionCrowns(crowns);
       }
 
       if (payload.filtered_empty) {
@@ -1030,6 +1070,9 @@
       }
       if (championsEl) {
         championsEl.innerHTML = '<p class="empty">Could not load champions.</p>';
+      }
+      if (crownsEl) {
+        crownsEl.innerHTML = '<p class="empty">Could not load reaction crowns.</p>';
       }
       feed.innerHTML =
         '<p class="empty">Could not load Telegram message intel — try again shortly.</p>';

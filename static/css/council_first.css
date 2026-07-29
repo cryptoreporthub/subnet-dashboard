@@ -1758,6 +1758,7 @@ button.home-cta {
 .message-intel--v2 .message-intel__sec-bar--blue { background: var(--mi-blue); }
 .message-intel--v2 .message-intel__sec-bar--orange { background: var(--mi-orange); }
 .message-intel--v2 .message-intel__sec-bar--green { background: var(--mi-green); }
+.message-intel--v2 .message-intel__sec-bar--pink { background: var(--mi-pink); }
 .message-intel--v2 .message-intel__panel-title {
   margin: 0;
   font-family: var(--font-mono, monospace);
@@ -1891,6 +1892,68 @@ button.home-cta {
 .message-intel--v2 .message-intel__champ-bar-fill {
   height: 100%;
   background: linear-gradient(90deg, var(--mi-orange-dim), var(--mi-orange));
+}
+.message-intel--v2 #message-intel-crowns-card {
+  margin-bottom: 12px;
+}
+.message-intel--v2 #message-intel-crowns-card .message-intel__panel-hint {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: var(--mi-text-faint);
+}
+.message-intel--v2 .message-intel__crown-rows {
+  display: grid;
+  gap: 0;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 560px) {
+  .message-intel--v2 .message-intel__crown-rows {
+    grid-template-columns: 1fr 1fr;
+    gap: 0 16px;
+  }
+}
+.message-intel--v2 .message-intel__crown-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--mi-line-soft);
+}
+.message-intel--v2 .message-intel__crown-row:last-child { border-bottom: none; }
+@media (min-width: 560px) {
+  .message-intel--v2 .message-intel__crown-row:nth-last-child(2):nth-child(odd) {
+    border-bottom: none;
+  }
+}
+.message-intel--v2 .message-intel__crown-emoji {
+  font-size: 1.25rem;
+  line-height: 1;
+  width: 1.6rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+.message-intel--v2 .message-intel__crown-body { flex: 1; min-width: 0; }
+.message-intel--v2 .message-intel__crown-label {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mi-text-faint);
+}
+.message-intel--v2 .message-intel__crown-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--mi-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.message-intel--v2 .message-intel__crown-count {
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--mi-pink);
+  flex-shrink: 0;
 }
 .message-intel--v2 .message-intel__view-all {
   display: block;
