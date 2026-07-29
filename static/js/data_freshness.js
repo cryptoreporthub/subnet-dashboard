@@ -38,20 +38,60 @@
     el.innerHTML = '<span class="live-dot" aria-hidden="true"></span>' + label;
   }
 
+  function effectiveMeta(payload) {
+    var eff = payload.effective_source || 'blockmachine';
+    var total =
+      payload.effective_total != null
+        ? payload.effective_total
+        : payload.subnet_count || 0;
+    return { eff: eff, total: total };
+  }
+
+  /** Single source of truth — pill + badge must match (§27-1). */
   function feedState(payload) {
     if (!payload || typeof payload !== 'object') return 'unknown';
     if (payload.ci_or_test || !payload.sync_enabled) return 'snapshot';
-    // Prefer effective feed (TMC / registry) over empty blockmachine cache
-    var eff = payload.effective_source;
-    var total = payload.effective_total != null ? payload.effective_total : payload.subnet_count;
-    if (eff && eff !== 'none' && total > 0) {
-      if (eff === 'blockmachine' && !payload.stale) return 'live';
-      if (eff === 'blockmachine' && payload.stale) return 'stale';
-      return 'snapshot'; // taomarketcap / registry — honest live economics
-    }
+
+    var meta = effectiveMeta(payload);
+    var eff = meta.eff;
+    var total = meta.total;
+    var chainLive =
+      eff === 'blockmachine' && total > 0 && payload.last_sync && !payload.stale;
+
+    if (chainLive) return 'live';
+    if (eff === 'blockmachine' && payload.stale) return 'stale';
+    if (total > 0 && eff !== 'none') return 'snapshot';
     if (!payload.last_sync) return 'warming';
     if (payload.stale) return 'stale';
-    return 'live';
+    return 'snapshot';
+  }
+
+  function badgeLabel(payload, state) {
+    if (!payload || typeof payload !== 'object') return 'Feed: unavailable';
+    if (payload.ci_or_test) return 'Data: registry snapshot';
+    if (!payload.sync_enabled) return 'Data: sync paused';
+
+    var meta = effectiveMeta(payload);
+    var age = formatAge(payload.age_seconds);
+
+    if (state === 'live') {
+      return 'Live · ' + (age || 'just now') + ' · ' + meta.total + ' subnets';
+    }
+    if (state === 'stale') {
+      return (
+        'Stale chain · ' +
+        (age || 'unknown') +
+        (meta.total ? ' · feed ' + meta.total + ' SN' : '')
+      );
+    }
+    if (state === 'warming') {
+      if (meta.total > 0) return meta.eff + ' · ' + meta.total + ' subnets';
+      return 'Chain feed: warming';
+    }
+    if (meta.total > 0) {
+      return meta.eff.replace(/_/g, ' ') + ' · ' + meta.total + ' subnets';
+    }
+    return 'Chain feed: registry snapshot';
   }
 
   function render(payload) {
@@ -61,54 +101,7 @@
     applyLivePill(state);
 
     if (!el) return;
-
-    if (!payload || typeof payload !== 'object') {
-      applyBadge(el, 'unknown', 'Feed: unavailable');
-      return;
-    }
-
-    if (payload.ci_or_test) {
-      applyBadge(el, 'snapshot', 'Data: registry snapshot');
-      return;
-    }
-
-    if (!payload.sync_enabled) {
-      applyBadge(el, 'snapshot', 'Data: sync paused');
-      return;
-    }
-
-    var age = formatAge(payload.age_seconds);
-    var eff = payload.effective_source || 'blockmachine';
-    var count =
-      payload.effective_total != null
-        ? payload.effective_total
-        : payload.subnet_count || 0;
-
-    // Blockmachine cache empty but TMC/registry serving — show real feed, not "loading"
-    if ((!payload.last_sync || payload.subnet_count === 0) && count > 0 && eff !== 'blockmachine') {
-      applyBadge(el, 'snapshot', eff + ' · ' + count + ' subnets');
-      return;
-    }
-
-    if (!payload.last_sync) {
-      if (count > 0) {
-        applyBadge(el, 'snapshot', eff + ' · ' + count + ' subnets');
-      } else {
-        applyBadge(el, 'snapshot', 'Chain feed: registry snapshot');
-      }
-      return;
-    }
-
-    if (payload.stale) {
-      applyBadge(
-        el,
-        'stale',
-        'Stale chain · ' + (age || 'unknown') + (count ? ' · feed ' + count + ' SN' : '')
-      );
-      return;
-    }
-
-    applyBadge(el, 'live', 'Live · ' + (age || 'just now') + ' · ' + count + ' subnets');
+    applyBadge(el, state, badgeLabel(payload, state));
   }
 
   function ssrBootstrap() {
@@ -118,10 +111,12 @@
     var raw = (chip && chip.textContent ? chip.textContent : '').trim().toLowerCase();
     if (raw && raw !== 'cache') {
       applyBadge(el, 'snapshot', 'Chain feed: ' + raw.replace(/_/g, ' '));
+      applyLivePill('snapshot');
       return;
     }
     if (/loading/i.test(el.textContent || '')) {
       applyBadge(el, 'snapshot', 'Chain feed: registry snapshot');
+      applyLivePill('snapshot');
     }
   }
 
@@ -141,6 +136,7 @@
             effective_total: cache.subnets.length,
             subnet_count: 0,
             last_sync: null,
+            stale: false,
           });
           return;
         }
