@@ -251,6 +251,14 @@ def _sync_loop() -> None:
 
 
 def live_data_freshness() -> Dict[str, Any]:
+    try:
+        from internal.data_volume import worker_data_freshness
+
+        remote = worker_data_freshness()
+        if remote:
+            return remote
+    except Exception:
+        pass
     info = {
         "source": "blockmachine",
         "sync_enabled": AUTO_SYNC,

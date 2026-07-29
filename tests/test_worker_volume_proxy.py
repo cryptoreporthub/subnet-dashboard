@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from unittest.mock import patch
-
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -56,6 +54,7 @@ def test_should_proxy_learning_health(monkeypatch):
     from internal.worker_proxy import should_proxy_path
 
     assert should_proxy_path("/api/learning/health") is True
+    assert should_proxy_path("/api/data-freshness") is True
     assert should_proxy_path("/api/pump-alerts") is True
 
 

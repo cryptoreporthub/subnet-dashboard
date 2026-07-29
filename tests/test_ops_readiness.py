@@ -9,6 +9,90 @@ from server import app
 client = TestClient(app)
 
 
+def test_worker_data_freshness_proxies(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("DATA_DIR", "/nonexistent")
+    remote = {
+        "source": "blockmachine",
+        "subnet_count": 128,
+        "stale": False,
+        "last_sync": "2026-07-29T00:00:00+00:00",
+        "effective_source": "blockmachine",
+        "effective_total": 128,
+        "registry_count": 128,
+        "tmc_cache_count": 129,
+    }
+    with patch("internal.worker_proxy.fetch_worker_json_sync", return_value=remote):
+        from internal.data_volume import worker_data_freshness
+
+        out = worker_data_freshness()
+    assert out["subnet_count"] == 128
+    assert out["effective_source"] == "blockmachine"
+
+
+def test_live_data_freshness_uses_worker_on_split_v2_web(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("DATA_DIR", "/nonexistent")
+    remote = {
+        "source": "blockmachine",
+        "subnet_count": 120,
+        "stale": False,
+        "effective_source": "blockmachine",
+        "effective_total": 120,
+    }
+    with patch("internal.worker_proxy.fetch_worker_json_sync", return_value=remote):
+        from internal.live_subnets import live_data_freshness
+
+        info = live_data_freshness()
+    assert info["subnet_count"] == 120
+    assert info["stale"] is False
+
+
+def test_probe_feed_layers_uses_worker_on_split_v2_web(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("DATA_DIR", "/nonexistent")
+    remote = {
+        "subnet_count": 120,
+        "stale": False,
+        "last_sync": "2026-07-29T00:00:00+00:00",
+        "effective_source": "blockmachine",
+        "effective_total": 120,
+        "registry_count": 128,
+        "tmc_cache_count": 129,
+    }
+    with patch("internal.worker_proxy.fetch_worker_json_sync", return_value=remote):
+        from internal.subnets.feed import probe_feed_layers
+
+        feed = probe_feed_layers()
+    assert feed["effective_source"] == "blockmachine"
+    assert feed["live_cache"]["count"] == 120
+    assert feed["likely_total"] == 120
+
+
+def test_readiness_skips_live_cache_empty_when_feed_ok(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("DATA_DIR", "/nonexistent")
+    remote = {
+        "source": "blockmachine",
+        "subnet_count": 0,
+        "stale": True,
+        "effective_source": "taomarketcap",
+        "effective_total": 129,
+        "registry_count": 128,
+        "tmc_cache_count": 129,
+    }
+    with patch("internal.worker_proxy.fetch_worker_json_sync", return_value=remote):
+        from internal.ops.readiness import build_readiness_report
+
+        report = build_readiness_report()
+    assert "live_subnets_cache_empty" not in report["issues"]
+    assert report["subnet_feed"]["effective_source"] == "taomarketcap"
+
+
 def test_readiness_proxies_learning_loop_health(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")

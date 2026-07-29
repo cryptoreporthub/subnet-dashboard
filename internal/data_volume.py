@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from typing import Any, Dict, Optional
 
 
 def _data_dir() -> str:
@@ -58,6 +59,21 @@ def has_local_volume_data() -> bool:
     except OSError:
         pass
     return False
+
+
+def worker_data_freshness() -> Optional[Dict[str, Any]]:
+    """split_v2 web — worker owns live_subnets.json + TMC SQLite on the Fly volume."""
+    if not needs_worker_volume_proxy():
+        return None
+    try:
+        from internal.worker_proxy import fetch_worker_json_sync
+
+        remote = fetch_worker_json_sync("/api/data-freshness")
+        if isinstance(remote, dict) and "effective_source" in remote:
+            return remote
+    except Exception:
+        pass
+    return None
 
 
 def needs_worker_volume_proxy() -> bool:
