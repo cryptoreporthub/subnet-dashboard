@@ -2,20 +2,24 @@
 /* Fonts loaded via <link> in templates (§31-2 O4) — no blocking @import here */
 
 :root {
-  /* Backgrounds — near-void with mild cyberpunk atmosphere (blue/green lead) */
-  --bg-base: #030405;
+  /* Backgrounds — midnight base with bold smoky slate atmosphere (Claude bolder recipe) */
+  --bg-base: #04060e;
   --bg-edge: #020308;
-  --bg-midnight: #070a09;
-  --bg-surface: rgba(9, 13, 11, 0.82);
-  --bg-card: rgba(9, 13, 11, 0.72);
-  --bg-elevated: rgba(12, 18, 16, 0.88);
-  --bg-header: rgba(6, 10, 9, 0.92);
+  --bg-midnight: #050a14;
+  --bg-surface: rgba(10, 14, 24, 0.82);
+  --bg-card: rgba(12, 16, 26, 0.72);
+  --bg-elevated: rgba(16, 20, 32, 0.88);
+  --bg-header: rgba(6, 10, 18, 0.92);
+  /* 6 grey smoke blobs — peak opacity ~0.45–0.55, greys #3f–#6b + SVG fallback layer */
   --bg-atmosphere:
-    radial-gradient(ellipse 90% 60% at 100% 0%, rgba(63, 201, 255, 0.14) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 50% at 0% 12%, rgba(31, 212, 124, 0.11) 0%, transparent 55%),
-    radial-gradient(ellipse 55% 45% at 78% 88%, rgba(255, 159, 63, 0.06) 0%, transparent 58%),
-    radial-gradient(ellipse 40% 30% at 18% 92%, rgba(157, 140, 255, 0.04) 0%, transparent 50%),
-    linear-gradient(168deg, var(--bg-midnight) 0%, var(--bg-base) 48%, var(--bg-edge) 100%);
+    url("/static/img/simivision-smoke-bg.svg"),
+    radial-gradient(ellipse 70% 65% at 20% 10%, rgba(107, 116, 128, 0.62) 0%, rgba(69, 77, 88, 0.38) 40%, transparent 72%),
+    radial-gradient(ellipse 60% 58% at 85% 22%, rgba(92, 101, 112, 0.55) 0%, rgba(60, 67, 78, 0.32) 45%, transparent 74%),
+    radial-gradient(ellipse 72% 68% at 42% 92%, rgba(82, 91, 102, 0.56) 0%, rgba(54, 61, 71, 0.34) 45%, transparent 74%),
+    radial-gradient(ellipse 50% 48% at 78% 80%, rgba(72, 79, 90, 0.48) 0%, transparent 72%),
+    radial-gradient(ellipse 46% 44% at 8% 65%, rgba(63, 70, 80, 0.44) 0%, transparent 72%),
+    radial-gradient(ellipse 40% 38% at 55% 45%, rgba(86, 95, 106, 0.36) 0%, transparent 70%),
+    linear-gradient(168deg, var(--bg-midnight) 0%, var(--bg-base) 42%, var(--bg-edge) 100%);
 
   /* Accents — green primary, cyan secondary, orange tertiary, violet aurora (replaces magenta) */
   --accent-primary: #1fd47c;
@@ -59,8 +63,8 @@
   --border-width-important: 3px;
   --board-border-gradient: linear-gradient(135deg, #3fc9ff 0%, #1fd47c 55%, #ff9f3f 100%);
   --important-border-gradient: linear-gradient(135deg, #1fd47c 0%, #3fc9ff 55%, #9d8cff 100%);
-  --card-panel-fill: linear-gradient(rgba(9, 13, 11, 0.96), rgba(9, 13, 11, 0.96));
-  --card-panel-shine: linear-gradient(180deg, rgba(63, 201, 255, 0.06) 0%, rgba(31, 212, 124, 0.05) 38%, transparent 72%);
+  --card-panel-fill: linear-gradient(rgba(10, 14, 24, 0.96), rgba(10, 14, 24, 0.96));
+  --card-panel-shine: linear-gradient(180deg, rgba(148, 163, 184, 0.06) 0%, rgba(100, 116, 139, 0.04) 38%, transparent 72%);
 
   /* Radius */
   --radius-sm: 8px;
@@ -110,7 +114,30 @@ body {
   background-color: var(--bg-base);
   background-image: var(--bg-atmosphere);
   background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: cover, auto, auto, auto, auto, auto, auto, auto;
+  background-position: center;
   padding-bottom: 64px;
+  isolation: isolate;
+}
+
+/* Coarse + fine grain over smoke — static, no drift (Claude recipe) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.55;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='280'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.012' numOctaves='3' stitchTiles='stitch' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0.75 0 0 0 0 0.78 0 0 0 0 0.82 0 0 0 0.10 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 180px 180px, 280px 280px;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  body::before { opacity: 0.25; }
 }
 
 a { color: var(--accent-blue); text-decoration: none; }

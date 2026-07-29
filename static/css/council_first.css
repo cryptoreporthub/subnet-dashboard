@@ -2,9 +2,9 @@
 
 .council-first-theme {
   --stage-ink: #eef7f1;
-  --stage-muted: #8ba598;
+  --stage-muted: #8aa0b8;
   --stage-accent: #1fd47c;
-  --stage-wash: #070a09;
+  --stage-wash: #04060e;
 }
 
 .app-shell.council-first {
@@ -49,11 +49,12 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 80% 55% at 72% 28%, rgba(63, 201, 255, 0.10) 0%, transparent 55%),
-    radial-gradient(ellipse 55% 42% at 12% 78%, rgba(31, 212, 124, 0.08) 0%, transparent 52%),
-    radial-gradient(ellipse 42% 32% at 92% 14%, rgba(255, 159, 63, 0.05) 0%, transparent 48%),
-    radial-gradient(ellipse 36% 28% at 40% 90%, rgba(157, 140, 255, 0.04) 0%, transparent 50%),
-    linear-gradient(180deg, #030405 0%, var(--stage-wash) 48%, #020308 100%);
+    url("/static/img/simivision-smoke-bg.svg") center / cover no-repeat,
+    radial-gradient(ellipse 65% 58% at 20% 12%, rgba(107, 116, 128, 0.55) 0%, transparent 64%),
+    radial-gradient(ellipse 55% 50% at 88% 20%, rgba(92, 101, 112, 0.48) 0%, transparent 62%),
+    radial-gradient(ellipse 68% 58% at 40% 90%, rgba(72, 79, 90, 0.45) 0%, transparent 60%),
+    radial-gradient(ellipse 42% 38% at 55% 48%, rgba(86, 95, 106, 0.30) 0%, transparent 66%),
+    linear-gradient(180deg, #04060e 0%, #050a14 48%, #020308 100%);
   pointer-events: none;
 }
 
@@ -3474,10 +3475,11 @@ button.home-cta {
 }
 .council-stage__atmosphere {
   background:
-    radial-gradient(ellipse 70% 55% at 18% 22%, rgba(0, 212, 255, 0.08) 0%, transparent 55%),
-    radial-gradient(ellipse 58% 48% at 88% 18%, rgba(57, 255, 20, 0.06) 0%, transparent 50%),
-    radial-gradient(ellipse 80% 60% at 50% 100%, rgba(15, 23, 42, 0.9) 0%, transparent 60%),
-    linear-gradient(180deg, #02040a 0%, #060a14 42%, #030508 100%);
+    url("/static/img/simivision-smoke-bg.svg") center / cover no-repeat,
+    radial-gradient(ellipse 65% 55% at 18% 22%, rgba(107, 116, 128, 0.50) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 50% at 88% 18%, rgba(92, 101, 112, 0.42) 0%, transparent 58%),
+    radial-gradient(ellipse 70% 55% at 50% 100%, rgba(15, 23, 42, 0.75) 0%, transparent 58%),
+    linear-gradient(180deg, #02040a 0%, #060a14 42%, #04060e 100%);
 }
 .council-stage__atmosphere::after {
   content: "";
