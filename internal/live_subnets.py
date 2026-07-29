@@ -141,7 +141,7 @@ def _merge_into_registry(live: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             merged["netuid"] = n
         try:
             from internal.subnet_names import enrich_subnet_row
-            merged = enrich_subnet_row(merged)
+            merged = enrich_subnet_row(merged, use_taostats=False)
         except Exception:
             pass
         out.append(merged)

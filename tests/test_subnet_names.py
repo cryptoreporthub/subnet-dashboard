@@ -114,6 +114,13 @@ def test_enrich_subnet_row_sets_netuid():
     assert row["name"] == "SN8" or row["name"] != "deprecated"
 
 
+def test_enrich_subnet_row_skips_taostats_by_default():
+    with patch("fetchers.taostats_client.get_subnet_identity") as identity:
+        row = enrich_subnet_row({"netuid": 99, "name": "SN99"})
+    identity.assert_not_called()
+    assert row["name"] == "SN99"
+
+
 def test_registry_and_subnets_names_agree():
     from fastapi.testclient import TestClient
     from server import app

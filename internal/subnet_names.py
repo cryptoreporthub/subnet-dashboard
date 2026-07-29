@@ -130,7 +130,7 @@ def resolve_subnet_name(
     local: Optional[Dict[str, Any]] = None,
     remote: Optional[Dict[str, Any]] = None,
     tmc_name: Optional[str] = None,
-    use_taostats: bool = True,
+    use_taostats: bool = False,
 ) -> str:
     """Priority: curator override → taostat remote → TaoStats identity → local → TMC → SN{n}."""
     if netuid is None:
@@ -196,7 +196,7 @@ def display_name_for_netuid(
     *,
     subnet_row: Optional[Dict[str, Any]] = None,
     ladder_hint: Optional[str] = None,
-    use_taostats_fallback: bool = True,
+    use_taostats_fallback: bool = False,
 ) -> str:
     """Canonical display name for UI cards (pump desk, picks, trail)."""
     try:
