@@ -147,6 +147,18 @@ def build_social_sentiment_rows(
     return rows
 
 
+def _listed_messages_for_home(limit: int) -> Dict[str, Any]:
+    from internal.data_volume import needs_worker_volume_proxy
+
+    if needs_worker_volume_proxy():
+        from internal.worker_proxy import fetch_worker_json_sync
+
+        return fetch_worker_json_sync(f"/api/message-intel?limit={limit}")
+    from internal.message_intel.engine import list_messages
+
+    return list_messages(limit=limit, offset=0)
+
+
 def build_message_intel_context(
     subnets: Optional[List[Dict[str, Any]]] = None,
     *,
@@ -156,10 +168,9 @@ def build_message_intel_context(
     """Return message_intel panel data for GET /."""
     social_sentiment = social_sentiment_for_home(subnets, pick_netuid=pick_netuid, limit=6)
     try:
-        from internal.message_intel.engine import list_messages
         from internal.message_intel.summary import summarize_message_intel
 
-        listed = list_messages(limit=limit, offset=0)
+        listed = _listed_messages_for_home(limit)
         return {
             "message_intel": {
                 "messages": listed.get("messages") or [],

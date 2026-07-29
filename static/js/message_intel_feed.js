@@ -932,8 +932,14 @@
       else if (listener.reason) parts.push(esc(listener.reason));
       parts.push(esc(total) + " messages");
       if (highConv) parts.push(esc(highConv) + " high conviction");
+      if (listener.feed_stale) {
+        parts.push("feed quiet — backfill on");
+      }
       meta.innerHTML = parts.join(" · ");
       if (listener.hint && !listener.live && !deskReady) meta.title = listener.hint;
+      else if (listener.feed_stale && listener.last_message_at) {
+        meta.title = "Last message " + listener.last_message_at + " — polling Telegram history";
+      }
     }
 
     if (liveTag) liveTag.hidden = !(listener.live || deskReady);

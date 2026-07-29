@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 _listener: Any = None
 _heartbeat_stop: Optional[Any] = None
+_last_backfill_attempt: float = 0.0
 _DEFAULT_HEARTBEAT = "data/.message_intel_listener"
 
 
@@ -89,6 +90,60 @@ def _listener_running_local() -> bool:
     return _listener is not None and bool(getattr(_listener, "_running", True))
 
 
+def _feed_stale_threshold_seconds() -> float:
+    try:
+        return float(os.environ.get("TELEGRAM_FEED_STALE_SECONDS", "7200"))
+    except ValueError:
+        return 7200.0
+
+
+def _backfill_interval_seconds() -> float:
+    try:
+        return float(os.environ.get("TELEGRAM_BACKFILL_INTERVAL_SECONDS", "1800"))
+    except ValueError:
+        return 1800.0
+
+
+def _feed_stale_fields() -> Dict[str, Any]:
+    from internal.message_intel.store import live_stats
+
+    stats = live_stats()
+    age = stats.get("last_message_age_seconds")
+    threshold = _feed_stale_threshold_seconds()
+    stale = age is not None and float(age) > threshold
+    out: Dict[str, Any] = {}
+    if stats.get("last_message_at"):
+        out["last_message_at"] = stats["last_message_at"]
+    if age is not None:
+        out["last_message_age_seconds"] = age
+    out["feed_stale"] = stale
+    return out
+
+
+def _maybe_backfill_if_stale() -> None:
+    """ponytail: periodic backfill when feed quiet — live handler misses disconnect gaps."""
+    global _last_backfill_attempt
+    import time
+
+    now = time.time()
+    if now - _last_backfill_attempt < _backfill_interval_seconds():
+        return
+    if _listener is None or not _listener_running_local():
+        return
+    stats = _feed_stale_fields()
+    age = stats.get("last_message_age_seconds")
+    threshold = _feed_stale_threshold_seconds()
+    if age is not None and float(age) <= threshold:
+        return
+    _last_backfill_attempt = now
+    ok = bool(_listener.trigger_backfill())
+    logger.info(
+        "telegram stale-feed backfill age=%s ok=%s",
+        age if age is not None else "none",
+        ok,
+    )
+
+
 def listener_status() -> Dict[str, Any]:
     """Honest listener health for APIs — no secrets, no fake 'live' without creds."""
     from internal.data_volume import needs_worker_volume_proxy
@@ -151,6 +206,7 @@ def listener_status() -> Dict[str, Any]:
         out["group_connected"] = bool(getattr(_listener, "group_connected", False))
     if hint:
         out["hint"] = hint
+    out.update(_feed_stale_fields())
     return out
 
 
@@ -180,6 +236,7 @@ def _start_heartbeat_loop() -> None:
                 break
             try:
                 _touch_listener_heartbeat()
+                _maybe_backfill_if_stale()
             except Exception as exc:
                 logger.debug("listener heartbeat refresh failed: %s", exc)
 

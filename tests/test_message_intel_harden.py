@@ -79,3 +79,55 @@ def test_heartbeat_touch_on_ingest_path(monkeypatch, tmp_path):
     second = hb.read_text(encoding="utf-8")
     assert "ts" in second
     assert first  # file still valid JSON payload
+
+
+def test_live_stats_includes_last_message_age(client):
+    payload = {
+        "source": "telegram",
+        "group_name": "SubnetAlpha",
+        "content": "Subnet 7 is extremely bullish!",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "message_id": "9001",
+        "group_id": "-1001",
+    }
+    with patch("internal.message_intel.engine._load_pipeline") as mock_pipe:
+        from message_intel.nlp_engine import NLPAnalyzer
+
+        mock_pipe.return_value = (
+            NLPAnalyzer(),
+            type("PT", (), {"db": None, "snapshot": lambda *a, **k: None})(),
+        )
+        client.post("/api/message-intel/ingest", json=payload)
+    from internal.message_intel.store import live_stats
+
+    stats = live_stats()
+    assert stats.get("last_message_at")
+    assert stats.get("last_message_age_seconds") is not None
+
+
+def test_listener_backfill_when_feed_stale(monkeypatch):
+    from internal.message_intel import listener_service
+
+    monkeypatch.setenv("TELEGRAM_FEED_STALE_SECONDS", "60")
+    monkeypatch.setenv("TELEGRAM_BACKFILL_INTERVAL_SECONDS", "0")
+    listener_service._last_backfill_attempt = 0.0
+
+    class _Fake:
+        _running = True
+        called = False
+
+        def trigger_backfill(self, limit=None):
+            self.called = True
+            return True
+
+    fake = _Fake()
+    listener_service._listener = fake
+    monkeypatch.setattr(
+        listener_service,
+        "_feed_stale_fields",
+        lambda: {"feed_stale": True, "last_message_age_seconds": 9999.0},
+    )
+    listener_service._maybe_backfill_if_stale()
+    assert fake.called
+    listener_service._listener = None
+
