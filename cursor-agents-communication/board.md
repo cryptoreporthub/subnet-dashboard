@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-07-29T22:45:00Z  
 **main:** `2ee0512` — LA #640 · LB #645 · violet accent #643 · audit honesty #631  
-**Plans:** `finish-queue-plan.md` · `launch-lc-ld-plan.md` · `accuracy-pump-pattern-plan.md` · `full-roadmap-master-plan.md`
+**Plans:** `master-sprint-execution-plan.md` · `launch-lc-ld-plan.md` · `accuracy-pump-pattern-plan.md` · `finish-queue-plan.md`
 
 ## Full roadmap
 
@@ -21,6 +21,25 @@
 
 - W0 #549 · W1–W3 #557 on prod (HTML markers live)
 - **You:** 390px Subnet Summers desk — tap message expand, HC strip, proof band
+
+## Master sprint (LC/LD + Acc + PP)
+
+**Lock:** `master-sprint-execution-plan.md` — merge → babysit → human review between every step
+
+| Step | Phase | Status |
+|------|-------|--------|
+| M0 | Merge plan PRs #647 + #646 | **NEXT** |
+| 1 | Acc-0 ledger plumbing | queued |
+| 2 | PP-0 segment ledger | queued |
+| 3 | LC legal/trust/SEO | queued |
+| 4 | LD surface honesty | queued |
+| 5 | Acc-1 archive measure | gated |
+| 6 | PP-1 pattern classes | gated |
+| 7 | Acc-2 one experiment | gated |
+| 8 | PP-2 desk + council | gated |
+| 9 | FQ-4 combined angles | gated (`graded>0`) |
+
+Babysit: `./scripts/babysit_phase.sh <phase>` · rollup: `./scripts/babysit_phase.sh sprint`
 
 ## Launch readiness (hero + integrations)
 
