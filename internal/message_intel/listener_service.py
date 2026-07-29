@@ -236,13 +236,22 @@ def listener_status() -> Dict[str, Any]:
         "reason": reason,
         "live": bool(running and has_creds and group_connected),
         "desk_ready": desk_ready,
-        "monitored_group": os.environ.get("TELEGRAM_GROUP", "OfficialSubnetSummer"),
+        "monitored_group": os.environ.get("TELEGRAM_GROUP", "officialsubnetsummer"),
         "group_connected": group_connected,
     }
     if _listener is not None:
         title = getattr(_listener, "group_title", None)
         if title:
             out["group_title"] = title
+        label = getattr(_listener, "telegram_user_label", None)
+        if label:
+            out["telegram_user"] = label
+        err = getattr(_listener, "entity_resolve_error", None)
+        if err:
+            out["entity_resolve_error"] = err
+        attempts = getattr(_listener, "entity_resolve_attempts", None)
+        if attempts:
+            out["entity_resolve_attempts"] = list(attempts)[-8:]
     if not group_connected and running and has_creds:
         out["hint"] = hint or "Listener thread up but group not resolved — check TELEGRAM_GROUP / TELEGRAM_GROUP_ID"
     elif hint:

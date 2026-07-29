@@ -18,7 +18,7 @@ def test_listener_status_honest_without_creds(monkeypatch):
     assert status["has_creds"] is False
     assert status["live"] is False
     assert status["reason"] == "missing_telegram_creds"
-    assert status["monitored_group"] == "OfficialSubnetSummer"
+    assert status["monitored_group"] == "officialsubnetsummer"
 
 
 def test_listener_status_disabled(monkeypatch):
