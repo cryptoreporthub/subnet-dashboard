@@ -23,7 +23,7 @@ _CONNECT_TIMEOUT = 2
 _CACHE_TTL_SEC = 60.0
 _cache_lock = threading.Lock()
 _cache: Dict[str, Any] = {"at": 0.0, "payload": None}
-_probe_session = None
+_probe_http = None
 _BLOCKMACHINE_RPC = os.environ.get("BLOCKMACHINE_RPC_URL", "https://rpc.blockmachine.io").rstrip("/")
 _BITTENSOR_RPC = os.environ.get("BITTENSOR_RPC_URL", _BLOCKMACHINE_RPC).rstrip("/")
 _BITTENSOR_NETWORK = os.environ.get("BITTENSOR_NETWORK", "finney").strip().lower() or "finney"
@@ -76,10 +76,10 @@ INTEGRATIONS: List[Dict[str, Any]] = [
 ]
 
 
-def _probe_session():
+def _get_probe_session():
     """HTTP session without urllib3 retries — probes must fail fast under Fly load."""
-    global _probe_session
-    if _probe_session is None:
+    global _probe_http
+    if _probe_http is None:
         import requests
         from requests.adapters import HTTPAdapter
 
@@ -87,8 +87,8 @@ def _probe_session():
         adapter = HTTPAdapter(max_retries=0)
         session.mount("https://", adapter)
         session.mount("http://", adapter)
-        _probe_session = session
-    return _probe_session
+        _probe_http = session
+    return _probe_http
 
 
 def _http_probe(
@@ -100,7 +100,7 @@ def _http_probe(
 ) -> tuple[bool, int, str]:
     """Return (ok, status_code, detail). ok means HTTP response received."""
     try:
-        resp = _probe_session().request(
+        resp = _get_probe_session().request(
             method,
             url,
             headers=headers or {},
@@ -118,7 +118,7 @@ def _http_probe(
 def _rpc_chain_healthy(endpoint: str) -> tuple[bool, str]:
     """JSON-RPC chain_getBlockHash — shared health check for Bittensor nodes."""
     try:
-        resp = _probe_session().post(
+        resp = _get_probe_session().post(
             endpoint,
             json={"jsonrpc": "2.0", "method": "chain_getBlockHash", "params": [0], "id": 1},
             timeout=(_CONNECT_TIMEOUT, _PROBE_TIMEOUT),
