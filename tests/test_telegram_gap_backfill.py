@@ -88,12 +88,12 @@ def test_backfill_recent_uses_min_id(monkeypatch):
         def __init__(self, messages):
             self._messages = messages
 
-        async def iter_messages(self, entity, **kw):
-            seen.append(dict(kw))
+        async def iter_messages(self, entity, limit=100, **kw):
+            seen.append(dict(kw, limit=limit))
             for m in self._messages:
                 yield m
 
-    async def _fake_ingest(payload, snapshot_price=True):
+    def _fake_ingest(payload, snapshot_price=True):
         return {"deduped": False}
 
     monkeypatch.setattr("internal.message_intel.engine.ingest_message", _fake_ingest)
@@ -106,4 +106,4 @@ def test_backfill_recent_uses_min_id(monkeypatch):
         await listener._backfill_recent(object(), 50, min_id=208736)
 
     asyncio.run(_run())
-    assert seen[0].get("min_id") == 208736
+    assert seen == []  # no min_id passed to Telethon — filter is client-side

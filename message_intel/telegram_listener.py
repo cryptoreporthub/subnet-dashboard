@@ -205,23 +205,26 @@ class TelegramListener:
 
     async def _backfill_on_connect(self, entity: Any) -> None:
         """Gap-aware backfill — min_id skips already-ingested rows (dedup alone is not enough)."""
-        from internal.message_intel.store import last_telegram_external_id, live_stats
-
-        last_ext = last_telegram_external_id()
-        stats = live_stats()
-        age = stats.get("last_message_age_seconds")
         try:
-            stale_threshold = float(os.environ.get("TELEGRAM_FEED_STALE_SECONDS", "7200"))
-        except ValueError:
-            stale_threshold = 7200.0
-        stale = age is not None and float(age) > stale_threshold
-        if stale and last_ext:
-            limit = TELEGRAM_BACKFILL_STALE_LIMIT
-        elif TELEGRAM_BACKFILL_LIMIT > 0:
-            limit = TELEGRAM_BACKFILL_LIMIT
-        else:
-            return
-        await self._backfill_recent(entity, limit, min_id=last_ext)
+            from internal.message_intel.store import last_telegram_external_id, live_stats
+
+            last_ext = last_telegram_external_id()
+            stats = live_stats()
+            age = stats.get("last_message_age_seconds")
+            try:
+                stale_threshold = float(os.environ.get("TELEGRAM_FEED_STALE_SECONDS", "7200"))
+            except ValueError:
+                stale_threshold = 7200.0
+            stale = age is not None and float(age) > stale_threshold
+            if stale and last_ext:
+                limit = TELEGRAM_BACKFILL_STALE_LIMIT
+            elif TELEGRAM_BACKFILL_LIMIT > 0:
+                limit = TELEGRAM_BACKFILL_LIMIT
+            else:
+                return
+            await self._backfill_recent(entity, limit, min_id=last_ext)
+        except Exception as exc:
+            logger.warning("Telegram connect backfill failed: %s", exc)
 
     async def _backfill_recent(
         self,
@@ -229,15 +232,16 @@ class TelegramListener:
         limit: int,
         min_id: Optional[int] = None,
     ) -> None:
-        """Ingest Telegram history — min_id fetches only messages newer than our last row."""
+        """Ingest Telegram history — skip msg.id <= min_id client-side (Telethon min_id is flaky on forums)."""
         new_count = 0
         deduped = 0
         skipped = 0
+        skipped_old = 0
         try:
-            kw: Dict[str, Any] = {"limit": limit}
-            if min_id is not None and min_id > 0:
-                kw["min_id"] = min_id
-            async for msg in self._client.iter_messages(entity, **kw):
+            async for msg in self._client.iter_messages(entity, limit=limit):
+                if min_id is not None and min_id > 0 and int(msg.id) <= min_id:
+                    skipped_old += 1
+                    continue
                 sender = await msg.get_sender()
                 normalized = self._normalize_message(msg, sender, msg.chat_id)
                 if normalized is None:
@@ -246,7 +250,7 @@ class TelegramListener:
                 if self.on_message:
                     from internal.message_intel.engine import ingest_message
 
-                    result = ingest_message(normalized, snapshot_price=True)
+                    result = ingest_message(normalized, snapshot_price=False)
                     if result.get("deduped"):
                         deduped += 1
                     else:
@@ -254,15 +258,15 @@ class TelegramListener:
                 elif self.forward_to_ingest:
                     await self._forward_to_ingest(normalized)
                     new_count += 1
-            if new_count or deduped:
-                logger.info(
-                    "Telegram backfill min_id=%s limit=%s new=%s deduped=%s skipped=%s",
-                    min_id,
-                    limit,
-                    new_count,
-                    deduped,
-                    skipped,
-                )
+            logger.info(
+                "Telegram backfill min_id=%s limit=%s new=%s deduped=%s skipped=%s skipped_old=%s",
+                min_id,
+                limit,
+                new_count,
+                deduped,
+                skipped,
+                skipped_old,
+            )
         except Exception as exc:
             logger.warning("Telegram backfill failed: %s", exc)
 
