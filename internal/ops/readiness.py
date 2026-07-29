@@ -150,6 +150,18 @@ def build_readiness_report() -> Dict[str, Any]:
         resolver = {**resolver, "running": True, "peer": "dedicated_worker"}
     elif inline_worker and worker_peer_alive:
         resolver = {**resolver, "running": True, "peer": "inline_worker"}
+    elif split_v2 and not is_worker_mode() and worker_peer_alive:
+        worker_resolver = (
+            loop_health.get("resolver") if isinstance(loop_health, dict) else {}
+        ) or {}
+        resolver = {
+            **resolver,
+            "running": bool(worker_resolver.get("running", True)),
+            "peer": worker_resolver.get("peer") or "dedicated_worker",
+            "last_run_ok": worker_resolver.get("last_ok", resolver.get("last_run_ok")),
+            "last_run_at": loop_health.get("last_resolver_tick") or resolver.get("last_run_at"),
+            "age_seconds": worker_resolver.get("age_seconds"),
+        }
 
     try:
         from fetchers.taostats_client import is_available as taostats_available

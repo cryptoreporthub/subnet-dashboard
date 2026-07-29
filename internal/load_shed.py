@@ -20,6 +20,7 @@ _LIGHT_API_PREFIXES = (
     "/api/story-strip",
     "/api/data-freshness",
     "/api/ops/",
+    "/api/subnet-integrations",
     "/api/letter/",
     "/api/portfolio/",
     "/api/market-drivers",

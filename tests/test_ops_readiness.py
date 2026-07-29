@@ -110,6 +110,33 @@ def test_readiness_proxies_learning_loop_health(monkeypatch):
     assert report["learning_loop_health"]["status"] == "ok"
 
 
+def test_readiness_split_v2_web_shows_worker_resolver_running(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("DATA_DIR", "/nonexistent")
+    remote_health = {
+        "status": "ok",
+        "last_resolver_tick": "2026-07-29T12:00:00+00:00",
+        "resolver": {"running": True, "last_ok": True, "peer": "dedicated_worker"},
+        "ledger": {"gap": False},
+    }
+    with patch("internal.worker_proxy.fetch_worker_json_sync", return_value=remote_health):
+        with patch(
+            "internal.worker_peer.get_worker_peer",
+            return_value={"expected": True, "alive": True, "peer": "dedicated_worker"},
+        ):
+            with patch(
+                "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
+                return_value={"running": False, "refresh_minutes": 15},
+            ):
+                from internal.ops.readiness import build_readiness_report
+
+                report = build_readiness_report()
+    assert report["resolver"]["running"] is True
+    assert report["resolver"]["peer"] == "dedicated_worker"
+    assert "prediction_resolver_not_running" not in report["issues"]
+
+
 def test_ops_readiness_contract():
     resp = client.get("/api/ops/readiness")
     assert resp.status_code == 200

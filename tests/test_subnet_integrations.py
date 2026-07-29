@@ -127,6 +127,28 @@ def test_chutes_uses_thirty_spokes_when_chutes_models_fail(monkeypatch):
     assert thirty["netuid"] == 99
 
 
+def test_thirty_spokes_falls_back_to_chutes_when_router_unreachable(monkeypatch):
+    monkeypatch.setenv("CHUTES_API_KEY", "test-key")
+
+    def fake_probe(method, url, **kwargs):
+        if "thirtyspokes.ai" in url:
+            return False, 0, "connection error"
+        if "llm.chutes.ai" in url:
+            if kwargs.get("headers", {}).get("Authorization"):
+                return True, 200, '{"data":[]}'
+            return True, 200, '{"data":[]}'
+        if "desearch.ai" in url:
+            return True, 200, "ok"
+        return True, 200, "ok"
+
+    with patch("internal.integrations.status._http_probe", side_effect=fake_probe):
+        with patch("internal.integrations.status._rpc_chain_healthy", return_value=(True, "ok")):
+            payload = build_integrations_status(force=True)
+    thirty = next(r for r in payload["integrations"] if r["slug"] == "thirty_spokes")
+    assert thirty["connected"] is True
+    assert "Chutes fallback" in thirty["detail"]
+
+
 def test_strip_markup_on_homepage():
     with TestClient(app) as client:
         html = client.get("/").text
