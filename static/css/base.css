@@ -14,28 +14,32 @@
     radial-gradient(ellipse 90% 60% at 100% 0%, rgba(63, 201, 255, 0.14) 0%, transparent 55%),
     radial-gradient(ellipse 70% 50% at 0% 12%, rgba(31, 212, 124, 0.11) 0%, transparent 55%),
     radial-gradient(ellipse 55% 45% at 78% 88%, rgba(255, 159, 63, 0.06) 0%, transparent 58%),
-    radial-gradient(ellipse 40% 30% at 18% 92%, rgba(255, 61, 154, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse 40% 30% at 18% 92%, rgba(157, 140, 255, 0.04) 0%, transparent 50%),
     linear-gradient(168deg, var(--bg-midnight) 0%, var(--bg-base) 48%, var(--bg-edge) 100%);
 
-  /* Accents — green primary, blue secondary, orange tertiary, pink sparse */
+  /* Accents — green primary, cyan secondary, orange tertiary, violet aurora (replaces magenta) */
   --accent-primary: #1fd47c;
   --accent-bright: #4aef9a;
   --accent-blue: #3fc9ff;
-  --accent-secondary: #ff3d9a;
-  --accent-magenta: #ff3d9a;
+  --accent-violet: #9d8cff;
+  --accent-lilac: #b8a8f0;
+  --accent-violet-dim: #5b4d8a;
+  --accent-secondary: var(--accent-violet);
+  --accent-magenta: var(--accent-violet);
   --accent-orange: #ff9f3f;
-  --accent-purple: #5a6b8a;
+  --accent-purple: #7c6ee8;
   --accent-dim: rgba(31, 212, 124, 0.12);
   --accent-glow: rgba(31, 212, 124, 0.35);
   --accent-glow-blue: rgba(63, 201, 255, 0.35);
-  --accent-glow-magenta: rgba(255, 61, 154, 0.28);
+  --accent-glow-violet: rgba(157, 140, 255, 0.28);
+  --accent-glow-magenta: var(--accent-glow-violet);
   --accent-glow-orange: rgba(255, 159, 63, 0.35);
-  --accent-glow-purple: rgba(90, 107, 138, 0.18);
+  --accent-glow-purple: rgba(124, 110, 232, 0.22);
 
   /* Signals */
   --signal-buy: #1fd47c;
   --signal-sell: #ff9f3f;
-  --signal-hold: #ff3d9a;
+  --signal-hold: var(--accent-violet);
   --signal-watch: var(--accent-orange);
   --signal-amber: var(--accent-orange);
 
@@ -44,16 +48,17 @@
   --text-secondary: #8ba598;
   --text-muted: #4f6459;
 
-  /* Borders — hairlines; pink only on truly important */
+  /* Borders — hairlines; violet on secondary emphasis */
   --border-subtle: rgba(255, 255, 255, 0.06);
   --border-default: rgba(255, 255, 255, 0.1);
   --border-bright: rgba(63, 201, 255, 0.4);
-  --border-magenta: rgba(255, 61, 154, 0.4);
+  --border-violet: rgba(157, 140, 255, 0.38);
+  --border-magenta: var(--border-violet);
   --border-important: rgba(31, 212, 124, 0.55);
   --border-width: 2px;
   --border-width-important: 3px;
   --board-border-gradient: linear-gradient(135deg, #3fc9ff 0%, #1fd47c 55%, #ff9f3f 100%);
-  --important-border-gradient: linear-gradient(135deg, #1fd47c 0%, #3fc9ff 55%, #ff3d9a 100%);
+  --important-border-gradient: linear-gradient(135deg, #1fd47c 0%, #3fc9ff 55%, #9d8cff 100%);
   --card-panel-fill: linear-gradient(rgba(9, 13, 11, 0.96), rgba(9, 13, 11, 0.96));
   --card-panel-shine: linear-gradient(180deg, rgba(63, 201, 255, 0.06) 0%, rgba(31, 212, 124, 0.05) 38%, transparent 72%);
 
@@ -63,12 +68,12 @@
   --radius-lg: 16px;
   --radius-pill: 9999px;
 
-  /* Shadows / bloom — mild glow; pink not dominant */
+  /* Shadows / bloom — mild glow; violet secondary, not dominant */
   --shadow-card: 0 8px 28px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(31, 212, 124, 0.05) inset;
   --shadow-important: 0 0 22px rgba(31, 212, 124, 0.16), 0 0 40px rgba(63, 201, 255, 0.08);
   --shadow-elevated: 0 14px 48px rgba(0, 0, 0, 0.85);
   --shadow-glow: 0 0 18px var(--accent-glow), 0 0 36px var(--accent-glow-blue);
-  --shadow-glow-magenta: 0 0 14px var(--accent-glow-magenta);
+  --shadow-glow-magenta: 0 0 14px var(--accent-glow-violet);
   --shadow-bloom: 0 0 8px currentColor, 0 0 20px currentColor;
 
   /* Typography */
@@ -116,7 +121,7 @@ a:hover { color: var(--accent-orange); text-shadow: 0 0 12px var(--accent-glow-o
 
 .pos, .buy { color: var(--signal-buy); text-shadow: 0 0 10px rgba(31, 212, 124, 0.4); }
 .neg, .sell { color: var(--signal-sell); text-shadow: 0 0 10px rgba(255, 159, 63, 0.35); }
-.neu, .hold { color: var(--signal-hold); text-shadow: 0 0 8px rgba(255, 61, 154, 0.28); }
+.neu, .hold { color: var(--signal-hold); text-shadow: 0 0 8px var(--accent-glow-violet); }
 .watch { color: var(--signal-watch); }
 
 /* Accessibility + numeric alignment (visual upgrade) */
