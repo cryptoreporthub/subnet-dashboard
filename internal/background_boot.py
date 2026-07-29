@@ -323,28 +323,35 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _maybe_start_message_intel()
     _maybe_start_summary_bot()
 
-    if not heavy:
+    # Dedicated worker always owns live_subnets on the volume — not gated on WORKER_HEAVY.
+    run_live_subnets = is_worker_mode() or heavy
+    if not run_live_subnets and not heavy:
         logger.info("background workers: essential mode (heavy feeds skipped)")
         return
 
-    try:
-        from internal.live_subnets import bootstrap_live_subnets_cache, get_live_subnets
-        from internal.run_mode import is_worker_mode
+    if run_live_subnets:
+        try:
+            from internal.live_subnets import bootstrap_live_subnets_cache, get_live_subnets
 
-        def _live_subnets_boot() -> None:
-            bootstrap_live_subnets_cache()
-            get_live_subnets()
+            def _live_subnets_boot() -> None:
+                bootstrap_live_subnets_cache()
+                get_live_subnets()
 
-        # Dedicated worker :8081 — no public /health race; start sync immediately.
-        boot_delay = 0 if is_worker_mode() else max(BOOT_DEFER_SECONDS, 5)
-        defer_boot("live-subnets-boot", _live_subnets_boot, delay=boot_delay)
-        logger.info(
-            "Live subnets sync scheduled (deferred %ss, worker=%s)",
-            boot_delay,
-            is_worker_mode(),
-        )
-    except Exception as exc:
-        logger.warning("Live subnets sync failed to start: %s", exc)
+            # Dedicated worker :8081 — no public /health race; start sync immediately.
+            boot_delay = 0 if is_worker_mode() else max(BOOT_DEFER_SECONDS, 5)
+            defer_boot("live-subnets-boot", _live_subnets_boot, delay=boot_delay)
+            logger.info(
+                "Live subnets sync scheduled (deferred %ss, worker=%s, heavy=%s)",
+                boot_delay,
+                is_worker_mode(),
+                heavy,
+            )
+        except Exception as exc:
+            logger.warning("Live subnets sync failed to start: %s", exc)
+
+    if not heavy:
+        return
+
     try:
         from internal.subnets.feed import warm_subnet_feed
 

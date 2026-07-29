@@ -339,4 +339,11 @@ def live_data_freshness() -> Dict[str, Any]:
         info["rpc_healthy"] = get_default_client().is_healthy()
     except Exception:
         info["rpc_healthy"] = None
+    try:
+        from internal.run_mode import get_run_mode, worker_heavy_feeds_enabled
+
+        info["run_mode"] = get_run_mode()
+        info["worker_heavy"] = worker_heavy_feeds_enabled()
+    except Exception:
+        pass
     return info
