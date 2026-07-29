@@ -1,7 +1,7 @@
 # Learning loop verdict fix — orphan web data + deploy check
 
-**Status:** SHIP  
-**Branch:** `cursor/learning-loop-verdict-fix-1d2f`  
+**Status:** **DONE** (merged #602, main `c0585ee`)  
+**Branch:** `cursor/readiness-worker-health-proxy-4988` (was `cursor/learning-loop-verdict-fix-1d2f`)  
 **Symptom:** Fly Deploy failed `Learning loop post-deploy check` with  
 `FAIL — pending work but resolver tick older than 2x refresh` even when  
 `worker_peer.alive: true` and status `degraded`.

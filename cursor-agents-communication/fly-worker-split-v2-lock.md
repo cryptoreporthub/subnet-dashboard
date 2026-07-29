@@ -48,5 +48,5 @@ curl -s "$BASE/api/learning/health" | jq '{status, last_resolver_tick, score_sna
 
 ## Open (not infra-blocked)
 
-- `live_subnets_cache_empty` on readiness (taostats / blockmachine sync)
-- Telegram listener `idle_not_started` on worker (`MESSAGE_INTEL_LISTENER=on` in worker entrypoint)
+- `live_subnets_cache_empty` on readiness — **Slice 1 in flight** (`finish-queue-plan.md`: WORKER_HEAVY=full + bootstrap live_subnets cache)
+- Telegram listener on worker — `MESSAGE_INTEL_LISTENER=on` in worker entrypoint (prod: running per finish-queue snapshot)
