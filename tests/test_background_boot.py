@@ -104,19 +104,26 @@ def test_start_background_workers_essential_skips_live_subnets(monkeypatch):
 def test_start_background_workers_heavy_bootstraps_live_subnets(monkeypatch):
     live = MagicMock()
     bootstrap = MagicMock(return_value=True)
+    scheduled = {}
+
+    def _defer(name, fn, delay=0):
+        scheduled[name] = fn
+
     monkeypatch.setattr("internal.live_subnets.get_live_subnets", live)
     monkeypatch.setattr("internal.live_subnets.bootstrap_live_subnets_cache", bootstrap)
     monkeypatch.setattr("internal.freshness.start_background_sync", MagicMock())
     monkeypatch.setattr("internal.background_boot._start_pump_ladder", MagicMock())
     monkeypatch.setattr("internal.background_boot._start_resolver", MagicMock())
     monkeypatch.setattr("internal.background_boot._start_whale_warm_scheduler", MagicMock())
-    monkeypatch.setattr("internal.background_boot.defer_boot", MagicMock())
+    monkeypatch.setattr("internal.background_boot.defer_boot", _defer)
 
     from internal.background_boot import start_background_workers
 
     start_background_workers(heavy=True)
+    assert "live-subnets-boot" in scheduled
+    scheduled["live-subnets-boot"]()
     bootstrap.assert_called_once()
-    live.assert_not_called()  # defer_boot mocked; bootstrap is sync path
+    live.assert_called_once()
 
 
 def test_start_background_workers_starts_resolver(monkeypatch):
