@@ -180,8 +180,12 @@ def _maybe_start_message_intel() -> None:
         return
 
     def _listeners() -> None:
-        from internal.message_intel.listener_service import start_message_intel_listeners
+        from internal.message_intel.listener_service import (
+            _start_listener_watchdog,
+            start_message_intel_listeners,
+        )
 
+        _start_listener_watchdog()
         start_message_intel_listeners()
 
     # After pump first scan window — full heavy mode wedged prod with live subnets + Telegram.

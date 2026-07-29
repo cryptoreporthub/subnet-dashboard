@@ -669,7 +669,7 @@
   }
 
   function renderTrending(rows, listener, windowLabel) {
-    if (listenerIdle(listener)) {
+    if (listenerIdle(listener) && (!rows || !rows.length)) {
       return (
         '<p class="empty">Telegram listener is not running yet — trending fills once messages are ingested.</p>'
       );
@@ -904,6 +904,9 @@
     if (listener.reason === "idle_not_started") {
       return '<p class="empty">Listener configured — warming up (~2 min after boot).</p>';
     }
+    if (listener.reason === "listener_stopped") {
+      return '<p class="empty">Listener restarting — archived messages stay visible; live feed resumes shortly.</p>';
+    }
     return '<p class="empty">No Telegram messages ingested yet.</p>';
   }
 
@@ -958,6 +961,8 @@
         sub.textContent = listener.hint;
       } else if (listener.reason === "idle_not_started") {
         sub.textContent = "Credentials present — listener starts ~2 min after worker boot.";
+      } else if (listener.reason === "listener_stopped") {
+        sub.textContent = "Listener stopped — watchdog is restarting Telegram ingest on the worker.";
       }
     }
 

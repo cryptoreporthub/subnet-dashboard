@@ -74,21 +74,28 @@ def _clear_listener_heartbeat() -> None:
         logger.debug("listener heartbeat clear failed: %s", exc)
 
 
-def _listener_alive_cross_process(*, max_age_seconds: int = 120) -> bool:
+def _heartbeat_age_seconds() -> Optional[float]:
     try:
         with open(_heartbeat_path(), "r", encoding="utf-8") as fh:
             raw = json.load(fh)
         if not isinstance(raw, dict) or not raw.get("ts"):
-            return False
+            return None
         ts = datetime.fromisoformat(str(raw["ts"]).replace("Z", "+00:00"))
-        age = (datetime.now(timezone.utc) - ts.astimezone(timezone.utc)).total_seconds()
-        return age <= max_age_seconds
+        return (datetime.now(timezone.utc) - ts.astimezone(timezone.utc)).total_seconds()
     except Exception:
-        return False
+        return None
+
+
+def _listener_alive_cross_process(*, max_age_seconds: int = 120) -> bool:
+    age = _heartbeat_age_seconds()
+    return age is not None and age <= max_age_seconds
 
 
 def _listener_running_local() -> bool:
-    return _listener is not None and bool(getattr(_listener, "_running", True))
+    if _listener is None or not getattr(_listener, "_running", False):
+        return False
+    thread = getattr(_listener, "_thread", None)
+    return thread is None or thread.is_alive()
 
 
 def _feed_stale_threshold_seconds() -> float:
@@ -185,9 +192,20 @@ def listener_status() -> Dict[str, Any]:
             "Run scripts/bootstrap_telegram_session.py locally, then set "
             "TELEGRAM_SESSION_STRING in Fly secrets (or save .session on the volume)"
         )
+    elif os.path.isfile(_heartbeat_path()) and not running:
+        reason = "listener_stopped"
+        hint = "Listener thread stopped — watchdog will restart it automatically"
     else:
         reason = "idle_not_started"
         hint = "Listener should start on next worker boot; check fly logs for Telegram errors"
+
+    try:
+        from internal.message_intel.store import live_stats
+
+        total_messages = int((live_stats() or {}).get("total_messages") or 0)
+    except Exception:
+        total_messages = 0
+    desk_ready = total_messages > 5
 
     out = {
         "enabled": enabled,
@@ -198,6 +216,7 @@ def listener_status() -> Dict[str, Any]:
         "running": running,
         "reason": reason,
         "live": bool(running and has_creds),
+        "desk_ready": desk_ready,
         "monitored_group": os.environ.get("TELEGRAM_GROUP", "OfficialSubnetSummer"),
     }
     if _listener is not None:
@@ -251,6 +270,52 @@ def _stop_heartbeat_loop() -> None:
         _heartbeat_stop = None
 
 
+def _reset_listener_if_dead() -> None:
+    """Clear stale listener handle when the background thread exited."""
+    global _listener
+    if _listener is None:
+        return
+    if _listener_running_local():
+        return
+    logger.warning("Telegram listener thread stopped — clearing stale handle")
+    try:
+        _listener.stop()
+    except Exception as exc:
+        logger.debug("listener stop during reset failed: %s", exc)
+    _listener = None
+    _stop_heartbeat_loop()
+
+
+def _listener_watchdog_interval_seconds() -> float:
+    try:
+        return float(os.environ.get("MESSAGE_INTEL_LISTENER_WATCHDOG_SECONDS", "300"))
+    except ValueError:
+        return 300.0
+
+
+def _start_listener_watchdog() -> None:
+    """Restart Telegram listener when its thread or cross-process heartbeat goes stale."""
+    import threading
+    import time
+
+    def _loop() -> None:
+        while True:
+            time.sleep(_listener_watchdog_interval_seconds())
+            if not _listener_enabled():
+                continue
+            if _listener_running_local() or _listener_alive_cross_process():
+                if _listener_running_local():
+                    _maybe_backfill_if_stale()
+                continue
+            if not _has_telegram_creds() or not _has_session_file():
+                continue
+            logger.info("message-intel listener watchdog: restarting listener")
+            _reset_listener_if_dead()
+            start_message_intel_listeners()
+
+    threading.Thread(target=_loop, daemon=True, name="mi-listener-watchdog").start()
+
+
 def start_message_intel_listeners() -> bool:
     """Start configured social listeners (Telegram when creds present)."""
     global _listener
@@ -258,7 +323,9 @@ def start_message_intel_listeners() -> bool:
         logger.info("Message-intel listeners disabled (MESSAGE_INTEL_LISTENER=off)")
         return False
     if _listener is not None:
-        return True
+        if _listener_running_local():
+            return True
+        _reset_listener_if_dead()
 
     if not _has_telegram_creds():
         logger.info("Telegram listener skipped — TELEGRAM_API_ID/HASH not set")
