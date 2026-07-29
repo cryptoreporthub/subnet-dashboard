@@ -42,6 +42,23 @@ def last_telegram_external_id(db: Optional[Database] = None) -> Optional[int]:
         return None
 
 
+def last_telegram_group_id(db: Optional[Database] = None) -> Optional[int]:
+    """Most recent Telegram group_id in the store — entity fallback when username lookup fails."""
+    database = db or get_db()
+    try:
+        with database._connect() as conn:
+            row = conn.execute(
+                """SELECT group_id FROM messages
+                   WHERE source = 'telegram' AND group_id IS NOT NULL AND group_id != ''
+                   ORDER BY id DESC LIMIT 1"""
+            ).fetchone()
+        if not row or not row["group_id"]:
+            return None
+        return int(str(row["group_id"]).strip())
+    except (TypeError, ValueError, Exception):
+        return None
+
+
 def live_stats(db: Optional[Database] = None) -> Dict[str, Any]:
     """Aggregate counts from the SQLite store for summaries and health."""
     database = db or get_db()

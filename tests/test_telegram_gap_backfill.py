@@ -38,6 +38,76 @@ def test_last_telegram_external_id_from_db(tmp_path, monkeypatch):
     assert last_telegram_external_id() == 208736
 
 
+def test_last_telegram_group_id_from_db(tmp_path, monkeypatch):
+    monkeypatch.setenv("MESSAGE_INTEL_DB", str(tmp_path / "mi.db"))
+    from internal.message_intel.store import get_db, last_telegram_group_id, reset_db_cache
+
+    reset_db_cache()
+    db = get_db()
+    db.save_message(
+        {
+            "source": "telegram",
+            "group_id": "-1002480957486",
+            "group_name": "OfficialSubnetSummer",
+            "content": "hello",
+            "timestamp": "2026-07-28T05:56:00",
+            "message_id": "208736",
+        }
+    )
+    assert last_telegram_group_id() == -1002480957486
+
+
+def test_entity_lookup_keys_prefers_numeric_id(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_GROUP_ID", "-1002480957486")
+    from message_intel.telegram_listener import TelegramListener
+
+    keys = TelegramListener(group="OfficialSubnetSummer")._entity_lookup_keys()
+    assert keys[0] == -1002480957486
+    assert "OfficialSubnetSummer" in keys
+
+
+def test_resolve_monitor_entity_uses_db_group_id(monkeypatch, tmp_path):
+    import asyncio
+
+    monkeypatch.setenv("MESSAGE_INTEL_DB", str(tmp_path / "mi.db"))
+    from internal.message_intel.store import get_db, reset_db_cache
+
+    reset_db_cache()
+    get_db().save_message(
+        {
+            "source": "telegram",
+            "group_id": "-1002480957486",
+            "group_name": "OfficialSubnetSummer",
+            "content": "stored",
+            "timestamp": "2026-07-28T05:56:00",
+            "message_id": "1",
+        }
+    )
+
+    class _Entity:
+        id = -1002480957486
+        title = "Subnet Summer"
+        forum = False
+
+    class _Client:
+        async def get_entity(self, key):
+            if key == -1002480957486:
+                return _Entity()
+            raise ValueError("not found")
+
+        async def iter_dialogs(self, limit=250):
+            return
+            yield  # pragma: no cover
+
+    from message_intel.telegram_listener import TelegramListener
+
+    listener = TelegramListener(group="bad_username", forward_to_ingest=False)
+    listener._client = _Client()
+    entity, via = asyncio.run(listener._resolve_monitor_entity())
+    assert entity.title == "Subnet Summer"
+    assert "get_entity" in via
+
+
 def test_normalize_message_uses_telegram_date():
     from message_intel.telegram_listener import TelegramListener
 

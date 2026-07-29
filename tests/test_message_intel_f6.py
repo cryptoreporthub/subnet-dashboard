@@ -70,8 +70,19 @@ def test_listener_status_cross_process_running(monkeypatch, tmp_path):
     listener_service._touch_listener_heartbeat()
     status = listener_service.listener_status()
     assert status["running"] is True
-    assert status["reason"] == "running"
+    assert status["reason"] == "group_not_connected"
+    assert status["live"] is False
+    assert status["group_connected"] is False
+
+    hb.write_text(
+        '{"pid":1,"ts":"'
+        + listener_service.datetime.now(listener_service.timezone.utc).isoformat().replace("+00:00", "Z")
+        + '","group_connected":true}',
+        encoding="utf-8",
+    )
+    status = listener_service.listener_status()
     assert status["live"] is True
+    assert status["reason"] == "running"
 
 
 def test_listener_status_stopped_when_heartbeat_stale(monkeypatch, tmp_path):
@@ -108,6 +119,7 @@ def test_start_with_mocked_listener(monkeypatch):
 
     class _Fake:
         _running = True
+        group_connected = True
 
         def start(self):
             return True

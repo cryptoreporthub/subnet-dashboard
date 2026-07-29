@@ -57,10 +57,12 @@ def _has_session_file() -> bool:
 def _touch_listener_heartbeat() -> None:
     path = _heartbeat_path()
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    payload = {
+    payload: Dict[str, Any] = {
         "pid": os.getpid(),
         "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
+    if _listener is not None:
+        payload["group_connected"] = bool(getattr(_listener, "group_connected", False))
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(payload, fh)
 
@@ -72,6 +74,17 @@ def _clear_listener_heartbeat() -> None:
         pass
     except Exception as exc:
         logger.debug("listener heartbeat clear failed: %s", exc)
+
+
+def _heartbeat_group_connected() -> bool:
+    try:
+        with open(_heartbeat_path(), "r", encoding="utf-8") as fh:
+            raw = json.load(fh)
+        if isinstance(raw, dict) and "group_connected" in raw:
+            return bool(raw.get("group_connected"))
+    except Exception:
+        pass
+    return False
 
 
 def _heartbeat_age_seconds() -> Optional[float]:
@@ -175,8 +188,14 @@ def listener_status() -> Dict[str, Any]:
     running = _listener_running_local() or _listener_alive_cross_process()
     hint = None
 
+    group_connected = False
+    if _listener is not None:
+        group_connected = bool(getattr(_listener, "group_connected", False))
+    elif running and _listener_alive_cross_process():
+        group_connected = _heartbeat_group_connected()
+
     if running:
-        reason = "running"
+        reason = "group_not_connected" if has_creds and not group_connected else "running"
     elif not enabled:
         reason = "disabled"
         hint = "Set MESSAGE_INTEL_LISTENER=auto after session bootstrap"
@@ -215,16 +234,18 @@ def listener_status() -> Dict[str, Any]:
         "has_session": has_session,
         "running": running,
         "reason": reason,
-        "live": bool(running and has_creds),
+        "live": bool(running and has_creds and group_connected),
         "desk_ready": desk_ready,
         "monitored_group": os.environ.get("TELEGRAM_GROUP", "OfficialSubnetSummer"),
+        "group_connected": group_connected,
     }
     if _listener is not None:
         title = getattr(_listener, "group_title", None)
         if title:
             out["group_title"] = title
-        out["group_connected"] = bool(getattr(_listener, "group_connected", False))
-    if hint:
+    if not group_connected and running and has_creds:
+        out["hint"] = hint or "Listener thread up but group not resolved — check TELEGRAM_GROUP / TELEGRAM_GROUP_ID"
+    elif hint:
         out["hint"] = hint
     out.update(_feed_stale_fields())
     return out
