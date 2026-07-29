@@ -473,23 +473,38 @@ class ChainClient:
         # ponytail: do not bail on cold-boot health TTL — lite fetch is the real probe.
         if not self.is_healthy():
             logger.warning("RPC health false-negative — attempting lite price fetch anyway")
-        rows = []
-        for netuid in netuids:
+
+        def _one(netuid: int):
             try:
                 price = self.get_alpha_price(netuid)
                 if price is not None:
-                    rows.append(
-                        {
-                            "netuid": netuid,
-                            "name": f"SN{netuid}",
-                            "price": price,
-                            "source": "blockmachine",
-                        }
-                    )
-                time.sleep(BATCH_DELAY)
+                    return {
+                        "netuid": netuid,
+                        "name": f"SN{netuid}",
+                        "price": price,
+                        "source": "blockmachine",
+                    }
             except Exception as exc:
                 logger.debug("price fetch netuid %d: %s", netuid, exc)
-        logger.info("get_subnet_price_rows: %d subnets", len(rows))
+            return None
+
+        try:
+            workers = int(os.environ.get("LIVE_SUBNETS_LITE_WORKERS", "8"))
+        except ValueError:
+            workers = 8
+        workers = max(1, min(workers, 16, len(netuids) or 1))
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        rows = []
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [pool.submit(_one, n) for n in netuids]
+            for fut in as_completed(futures):
+                row = fut.result()
+                if row:
+                    rows.append(row)
+        rows.sort(key=lambda r: r["netuid"])
+        logger.info("get_subnet_price_rows: %d subnets (workers=%d)", len(rows), workers)
         return rows
 
 
