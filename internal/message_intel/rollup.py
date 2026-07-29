@@ -118,13 +118,16 @@ def build_trending_subnets(
     registry_names: Optional[Dict[int, str]] = None,
     limit: int = 8,
     window_hours: int = 6,
+    rank_hours: int = 1,
     db=None,
 ) -> List[Dict[str, Any]]:
-    """Top subnets by mention volume in the last hour with sparkline buckets."""
+    """Top subnets by mention volume in the rank window (default last hour) with sparkline buckets."""
     now = datetime.now(timezone.utc)
+    rank_hours = max(1, int(rank_hours or 1))
+    window_hours = max(rank_hours, int(window_hours or rank_hours))
     window_start = now - timedelta(hours=window_hours)
-    hour_ago = now - timedelta(hours=1)
-    two_hours_ago = now - timedelta(hours=2)
+    rank_ago = now - timedelta(hours=rank_hours)
+    prev_rank_ago = now - timedelta(hours=rank_hours * 2)
     registry_names = registry_names or {}
 
     buckets: Dict[int, Dict[str, Any]] = defaultdict(
@@ -155,12 +158,12 @@ def build_trending_subnets(
         for netuid in netuids:
             b = buckets[netuid]
             b["spark"][hour_idx] += 1
-            if ts >= hour_ago:
+            if ts >= rank_ago:
                 b["mentions_1h"] += 1
                 b["sentiment_sum"] += s_val
                 b["sentiment_n"] += 1
                 b["conviction_sum"] += conviction
-            elif ts >= two_hours_ago:
+            elif ts >= prev_rank_ago:
                 b["mentions_prev_1h"] += 1
 
     out: List[Dict[str, Any]] = []
@@ -184,6 +187,7 @@ def build_trending_subnets(
                 "avg_conviction": round(avg_conv, 1),
                 "heat": round(heat, 3),
                 "sparkline": list(b["spark"]),
+                "window": f"{rank_hours}h",
             }
         )
 

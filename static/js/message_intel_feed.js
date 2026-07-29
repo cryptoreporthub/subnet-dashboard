@@ -668,14 +668,14 @@
     }
   }
 
-  function renderTrending(rows, listener) {
+  function renderTrending(rows, listener, windowLabel) {
     if (listenerIdle(listener)) {
       return (
         '<p class="empty">Telegram listener is not running yet — trending fills once messages are ingested.</p>'
       );
     }
     if (!rows || !rows.length) {
-      return '<p class="empty">No subnet chatter in the last hour. Check back after the group warms up.</p>';
+      return '<p class="empty">No subnet chatter in the last day. Check back after the group warms up.</p>';
     }
     var html = '<div class="message-intel__trend-rows">';
     rows.slice(0, 6).forEach(function (row, idx) {
@@ -973,6 +973,9 @@
 
       var listener = (status && status.listener) || (payload.meta && payload.meta.listener) || {};
       var trending = (payload.meta && payload.meta.trending) || [];
+      var trendingWindow = (payload.meta && payload.meta.trending_window) || "1h";
+      var trendingUnit = document.querySelector("#message-intel-trending-card .message-intel__panel-unit");
+      if (trendingUnit) trendingUnit.textContent = trendingWindow;
       renderYesterdayLeader((payload.meta && payload.meta.yesterday_leader) || null);
       renderSummary24h((payload.meta && payload.meta.summary_24h) || null);
       renderTelegramProof((payload.meta && payload.meta.telegram_proof) || null);
@@ -980,7 +983,7 @@
       renderSubnetFilterChips(trending);
       syncFilterChipStates();
       if (trendingEl) {
-        trendingEl.innerHTML = renderTrending(trending, listener);
+        trendingEl.innerHTML = renderTrending(trending, listener, trendingWindow);
       }
 
       var authorsUnavailable = false;

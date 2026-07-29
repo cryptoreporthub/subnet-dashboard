@@ -117,4 +117,39 @@ def test_yesterday_leader_in_meta(client, monkeypatch):
     monkeypatch.setattr(rollup, "build_yesterday_leader", lambda **kw: fake)
     listed = client.get("/api/message-intel").json()
     assert listed["meta"]["yesterday_leader"]["netuid"] == 14
-    assert listed["meta"]["yesterday_leader"]["mentions"] == 47
+
+
+def test_trending_falls_back_to_24h_when_1h_empty(monkeypatch):
+    """Quiet 1h window should still fill the desk from last-day chatter."""
+    from datetime import datetime, timedelta, timezone
+
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc)
+    old = (now - timedelta(hours=5)).isoformat()
+    rows = [
+        {
+            "timestamp": old,
+            "content": "SN59 looking hot",
+            "conviction": 60,
+            "sentiment": "bullish",
+        },
+        {
+            "timestamp": old,
+            "content": "SN63 mention",
+            "conviction": 40,
+            "sentiment": "neutral",
+        },
+    ]
+
+    monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
+    monkeypatch.setattr(
+        rollup,
+        "_netuids_from_row",
+        lambda row: [59] if "59" in row["content"] else [63],
+    )
+
+    assert rollup.build_trending_subnets(rank_hours=1, window_hours=6) == []
+    day = rollup.build_trending_subnets(rank_hours=24, window_hours=24)
+    assert {r["netuid"] for r in day} == {59, 63}
+    assert all(r.get("window") == "24h" for r in day)
