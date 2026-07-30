@@ -46,6 +46,7 @@ async def api_message_intel(
     offset: int = Query(default=0, ge=0),
     min_conviction: Optional[float] = Query(default=None, ge=0),
     netuid: Optional[int] = Query(default=None, ge=0),
+    topic: Optional[str] = Query(default=None, min_length=1, max_length=32),
 ):
     """Primary message-intel list endpoint (honest-empty when no messages)."""
     try:
@@ -54,6 +55,7 @@ async def api_message_intel(
             offset=offset,
             min_conviction=min_conviction,
             netuid=netuid,
+            topic=topic,
         )
     except Exception as exc:
         logger.error("message-intel list failed: %s", exc)
@@ -99,6 +101,7 @@ async def api_message_intel_list(
     offset: int = Query(default=0, ge=0),
     min_conviction: Optional[float] = Query(default=None, ge=0),
     netuid: Optional[int] = Query(default=None, ge=0),
+    topic: Optional[str] = Query(default=None, min_length=1, max_length=32),
 ):
     try:
         return engine.list_messages(
@@ -106,6 +109,7 @@ async def api_message_intel_list(
             offset=offset,
             min_conviction=min_conviction,
             netuid=netuid,
+            topic=topic,
         )
     except Exception as exc:
         logger.error("message-intel list failed: %s", exc)
