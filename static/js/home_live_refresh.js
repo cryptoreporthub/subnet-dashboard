@@ -199,7 +199,7 @@
       }
       html +=
         '<p class="home-job__why">' +
-        esc(why || "Council waits until confidence clears the audit gate.") +
+        esc(why || ("Council waits until confidence clears the " + (window.PUBLISH_GATE_LABEL || "40% audit gate") + ".")) +
         "</p></div>";
     }
     host.innerHTML = html;

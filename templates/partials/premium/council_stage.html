@@ -528,6 +528,14 @@
                     {% endfor %}
                   </div>
                   {% if brief.trigger %}<p class="k3-brief-trigger" id="k3-brief-trigger"><span class="k3-brief-trigger__kicker">FLIP</span>{{ brief.trigger|replace('Flip to LONG when ', 'Long when ', 1) }}</p>{% endif %}
+                  {% set scenario_tags = dpick.scenario_tags if dpick.scenario_tags is mapping else {} %}
+                  {% if scenario_tags.fallback %}
+                  <p id="k3-degraded-note" class="pick-degraded-note">Council fallback — not a scored call</p>
+                  {% elif act == 'HOLD' and not audit_pick %}
+                  <p id="k3-degraded-note" class="pick-degraded-note pick-degraded-note--hold">HOLD{% if dpick.hold_reason %} · {{ dpick.hold_reason }}{% elif dpick.reason %} · {{ dpick.reason }}{% else %} · below {{ publish_gate_label() }}{% endif %}</p>
+                  {% elif dpick.hold_reason %}
+                  <p id="k3-degraded-note" class="pick-degraded-note pick-degraded-note--hold">{{ dpick.hold_reason }}</p>
+                  {% endif %}
                 </div>
               </div>
               <div class="k3-claim-foot">
@@ -845,6 +853,7 @@
           class="home-cta home-cta--ghost"
           id="habit-alert-btn"
           data-enabled="{{ '1' if habit_alerts.enabled else '0' }}"
+          {% if not habit_alerts.enabled %}hidden{% endif %}
         >Run conviction check</button>
         <a class="home-cta home-cta--ghost" href="#pro-cockpit">Open depth</a>
       </div>
@@ -862,7 +871,7 @@
         </span>
         {% else %}
         <span class="home-habit-status__alerts home-habit-status__alerts--off" id="habit-alerts-summary">
-          Conviction alerts disabled on this deploy
+          Conviction alerts off on this deploy
         </span>
         {% endif %}
       </div>

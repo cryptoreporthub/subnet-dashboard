@@ -389,6 +389,10 @@ def _jinja_shorten(value: Any, places: int = 1) -> str:
 templates.env.filters["safe_list"] = _jinja_safe_list
 templates.env.filters["shorten"] = _jinja_shorten
 
+from internal.council.publish_gate import publish_gate_label
+
+templates.env.globals["publish_gate_label"] = publish_gate_label
+
 _static_dir = os.path.join(BASE_DIR, "static")
 if os.path.isdir(_static_dir):
     app.mount("/static", StaticFiles(directory=_static_dir), name="static")

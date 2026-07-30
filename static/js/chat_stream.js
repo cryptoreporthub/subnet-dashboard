@@ -8,6 +8,35 @@
   var meta = document.getElementById("chatMeta");
   if (!log || !input || !btn) return;
 
+  var PARTIAL_MSG =
+    "Partial context — council data loaded, live feeds still warming. Try again shortly.";
+  var chatReady = false;
+
+  function setChatReady(ready) {
+    chatReady = !!ready;
+    btn.disabled = !chatReady;
+    if (meta && chatReady) meta.textContent = "LLM: ready";
+  }
+
+  function warmChatContext() {
+    setChatReady(false);
+    if (meta) meta.textContent = "LLM: warming…";
+    var probe = window.apiFetchJson
+      ? window.apiFetchJson("/api/daily-pick", 8000)
+      : fetch("/api/daily-pick", { headers: { Accept: "application/json" } }).then(function (r) {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.json();
+        });
+    probe
+      .then(function () {
+        setChatReady(true);
+      })
+      .catch(function () {
+        setChatReady(true);
+        if (meta) meta.textContent = "LLM: partial context";
+      });
+  }
+
   function appendMsg(who) {
     var row = document.createElement("div");
     row.className = "chat-msg " + (who === "user" ? "user" : "bot");
@@ -45,16 +74,29 @@
   }
 
   function formatChatMeta(model, status) {
-    if (status === "timeout") return "LLM: busy (timeout)";
-    if (status === "error") return "LLM: unreachable";
+    if (status === "partial") return "LLM: partial context";
+    if (status === "timeout") return "LLM: partial context";
+    if (status === "error") return "LLM: partial context";
     if (model === "local-fallback" || status === "local-fallback") return "LLM: local fallback";
     if (model) return "LLM: " + model;
     return "LLM: ok";
   }
 
+  function isPartialChatStatus(status) {
+    return status === "partial" || status === "timeout" || status === "error" || status === "offline";
+  }
+
   function applyJsonReply(botBody, j) {
+    var status = j.status || (j.data && j.data.status);
+    if (isPartialChatStatus(status)) {
+      botBody.textContent = PARTIAL_MSG;
+      if (meta) meta.textContent = formatChatMeta(j.model || (j.data && j.data.model), status);
+      setChatReady(false);
+      return;
+    }
     botBody.textContent = j.reply || (j.data && j.data.reply) || "No response.";
-    if (meta) meta.textContent = formatChatMeta(j.model || (j.data && j.data.model), j.status || (j.data && j.data.status));
+    if (meta) meta.textContent = formatChatMeta(j.model || (j.data && j.data.model), status);
+    setChatReady(true);
   }
 
   async function readStream(resp, botBody) {
@@ -71,6 +113,7 @@
           try {
             var m = JSON.parse(ev.data);
             if (meta) meta.textContent = formatChatMeta(m.model, m.status);
+            if (isPartialChatStatus(m.status)) setChatReady(false);
           } catch (e) {
             /* ignore */
           }
@@ -126,11 +169,13 @@
     }
     if (!resp.body || !resp.body.getReader) throw new Error("no stream");
     await readStream(resp, botBody);
+    if (botBody.textContent !== PARTIAL_MSG) setChatReady(true);
+    else setChatReady(false);
   }
 
   async function send() {
     var msg = (input.value || "").trim();
-    if (!msg) return;
+    if (!msg || !chatReady) return;
     appendMsg("user").textContent = msg;
     input.value = "";
     btn.disabled = true;
@@ -146,13 +191,11 @@
         await deliverChat(msg, botBody, false);
       }
     } catch (e) {
-      botBody.textContent =
-        e && String(e.message || e).indexOf("HTTP") >= 0
-          ? "Chat request failed — try again in a moment."
-          : "Connection error — check network or retry.";
-      if (meta) meta.textContent = "LLM: offline";
+      botBody.textContent = PARTIAL_MSG;
+      if (meta) meta.textContent = "LLM: partial context";
+      setChatReady(false);
     } finally {
-      btn.disabled = false;
+      if (chatReady) btn.disabled = false;
       input.focus();
     }
   }
@@ -161,6 +204,8 @@
   input.addEventListener("keydown", function (e) {
     if (e.key === "Enter") send();
   });
+
+  warmChatContext();
 
   var presets = document.getElementById("chatPresets");
   if (presets) {
