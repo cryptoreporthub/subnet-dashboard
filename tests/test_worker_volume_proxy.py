@@ -57,6 +57,7 @@ def test_should_proxy_learning_health(monkeypatch):
     assert should_proxy_path("/api/learning/stats") is True
     assert should_proxy_path("/api/learning-metrics") is True
     assert should_proxy_path("/api/data-freshness") is True
+    assert should_proxy_path("/api/dev-radar") is True
     assert should_proxy_path("/api/pump-alerts") is True
     assert should_proxy_path("/api/daily-pick") is True
     assert should_proxy_path("/api/pump-ladder/state") is True

@@ -163,6 +163,7 @@ def should_proxy_path(path: str) -> bool:
         "/api/learning-metrics",
         "/api/ops/evidence",
         "/api/data-freshness",
+        "/api/dev-radar",
     ):
         return True
     if path.startswith("/api/message-intel"):
