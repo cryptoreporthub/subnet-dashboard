@@ -324,6 +324,28 @@ def _start_outcome_snapshot_scheduler() -> None:
     defer_boot("outcome-snapshot", _run, delay=max(BOOT_DEFER_SECONDS + 30, 75))
 
 
+def _start_dev_radar_github_scheduler() -> None:
+    """Dev Pulse v2 — GitHub velocity cache on worker volume."""
+
+    def _run() -> None:
+        from internal.dev_radar.github_sync import start_dev_radar_github_scheduler
+        from internal.run_mode import is_worker_mode
+
+        if not is_worker_mode():
+            logger.info("dev radar github sync skipped (not worker mode)")
+            return
+        immediate = os.environ.get("DEV_RADAR_GITHUB_BOOT_IMMEDIATE", "off").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        result = start_dev_radar_github_scheduler(immediate=immediate)
+        logger.info("dev radar github scheduler: %s", result)
+
+    defer_boot("dev-radar-github", _run, delay=max(BOOT_DEFER_SECONDS + 60, 120))
+
+
 def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     """Start background schedulers.
 
@@ -362,6 +384,7 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _start_pick_audit_scheduler()
     _start_pump_desk_snapshot_scheduler()
     _start_outcome_snapshot_scheduler()
+    _start_dev_radar_github_scheduler()
 
     _maybe_start_message_intel()
     _maybe_start_summary_bot()

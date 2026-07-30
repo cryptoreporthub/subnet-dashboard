@@ -56,6 +56,24 @@
             esc(repoHost(row.github)) +
             "</a>"
           : '<span class="sr-dev-pulse__repo sr-dev-pulse__repo--missing">—</span>';
+        var velBar =
+          row.velocity_score != null
+            ? '<div class="sr-dev-pulse__vel" aria-hidden="true"><span style="width:' +
+              Math.max(0, Math.min(100, Number(row.velocity_score))) +
+              '%"></span></div>'
+            : "";
+        var gapBadge =
+          row.gap_signal === "dev_ahead_of_price"
+            ? '<span class="sr-dev-pulse__badge sr-dev-pulse__badge--gap">Dev ahead of price</span>'
+            : "";
+        var shipped =
+          row.commits_7d != null
+            ? '<p class="sr-dev-pulse__shipped">Shipped: ' +
+              esc(row.commits_7d) +
+              " commits · " +
+              esc(row.authors_7d || 0) +
+              " authors (7d)</p>"
+            : "";
         return (
           '<li class="sr-dev-pulse__card sr-glow-live">' +
           '<div class="sr-dev-pulse__top">' +
@@ -65,8 +83,11 @@
           esc(row.netuid) +
           "</span></span>" +
           badge +
+          gapBadge +
           "</div>" +
           repo +
+          velBar +
+          shipped +
           '<p class="sr-dev-pulse__grade">' +
           esc(row.graded_snippet || "No graded call on this SN yet.") +
           "</p>" +
