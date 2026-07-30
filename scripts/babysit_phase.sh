@@ -288,7 +288,12 @@ if int(g) <= 0:
     curl -fsS --max-time 12 "$BASE/api/ops/evidence" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
-print('ops/evidence keys:', list(d.keys())[:8])
+ca=d.get('combined_angles') or {}
+print('ops/evidence keys:', list(d.keys())[:10])
+print('combined_angles:', 'present' if ca else 'missing')
+if ca:
+    ps=ca.get('pick_source') or {}
+    print('pick_source buckets:', list(ps.keys()))
 "
     ;;
 esac

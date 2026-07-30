@@ -43,10 +43,23 @@ def build_evidence_report() -> Dict[str, Any]:
     pick_path = os.path.join("data", "pick_audits", f"{_today()}.json")
     pump_path = os.path.join("data", "pump_desk", "latest.json")
     outcomes_path = os.path.join("data", "learning_outcomes", "latest.json")
+    combined_path = os.path.join("data", "learning_outcomes", "combined_angles_effectiveness.json")
 
     pick = _read_json(pick_path)
     pump = _read_json(pump_path)
     outcomes = _read_json(outcomes_path)
+    combined_angles = _read_json(combined_path)
+    if combined_angles is None:
+        try:
+            from internal.pump.combined_ledger import (
+                build_effectiveness_summary,
+                save_effectiveness_artifact,
+            )
+
+            combined_angles = build_effectiveness_summary()
+            save_effectiveness_artifact(combined_angles)
+        except Exception:
+            combined_angles = None
 
     alerts: list[str] = []
     if pick and pick.get("verdict") == "MISS":
@@ -79,7 +92,9 @@ def build_evidence_report() -> Dict[str, Any]:
             "pick_audit": pick_path if pick else None,
             "pump_desk": pump_path if pump else None,
             "learning_outcomes": outcomes_path if outcomes else None,
+            "combined_angles": combined_path if combined_angles else None,
         },
+        "combined_angles": combined_angles,
         "pick_audit": {
             "verdict": pick.get("verdict") if pick else None,
             "category": pick.get("category") if pick else None,
