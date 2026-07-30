@@ -119,11 +119,57 @@ def test_learning_loop_weight_nudge_viz_hook_present():
     assert "k3-weight-bar-fill" in src
 
 
+def test_hero_palette_maps_onto_site_accent_tokens():
+    src = open("templates/partials/premium/council_stage.html", encoding="utf-8").read()
+    assert "--k3-pink: var(--accent-violet" in src
+    assert "--k3-green: var(--accent-primary" in src
+    assert "#ff69b4" not in src
+    assert 'stop-color="#9d8cff"' in src
+
+
+def test_learning_loop_shows_quiet_empty_state_when_no_deltas():
+    html = _render_council_stage(82)
+    assert "No weight shift this window" in html
+    src = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()
+    assert "No weight shift this window" in src
+
+
+def test_soul_map_hydrate_trend_matches_ssr_baseline():
+    src = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()
+    assert "soulTrendFromWeight" in src
+    assert "SOUL_WEIGHT_BASELINE" in src
+    # Must not derive orb trend from ephemeral deltas (SSR uses weight vs 1.0)
+    assert "function soulTrendFromWeight" in src
+    idx = src.index("function renderCouncilWeights")
+    body = src[idx : idx + 1200]
+    assert "soulTrendFromWeight(w)" in body
+    assert "delta > 0.005 ? 'up'" not in body
+
+
+def test_empty_hold_shell_emits_identity_band():
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    from internal.council.publish_gate import publish_gate_label
+
+    env.globals["publish_gate_label"] = publish_gate_label
+    html = env.get_template("partials/premium/council_stage.html").render(
+        dpick={"action": "HOLD", "brief": {"move": "HOLD · no long", "tone": "hold"}},
+        hybrid_trust={},
+        trust_banner={},
+        story_path={},
+        habit_watchlist={"netuids": []},
+        habit_alerts={"enabled": False},
+    )
+    assert 'data-band="0"' in html
+    assert "k3-claim--band-0" in html
+
+
 def test_mindmap_uses_concentric_brain_layout_not_flat_circle():
     src = open("static/js/mindmap_graph.js", encoding="utf-8").read()
     assert "RING_RADIUS" in src
     assert "mindmap-core" in src
-    # judges/disposition sit closer to the core than raw subnet/signal evidence
     assert "disposition: 0.24" in src
     assert "subnet: 1.0" in src
     assert "function ringRadiusFraction" in src

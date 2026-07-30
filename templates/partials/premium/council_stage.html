@@ -111,8 +111,13 @@
       {# ---- v5 dossier styles ---- #}
       <style>
       :root {
-        --k3-bg: transparent; --k3-surface: rgba(14, 18, 30, 0.62); --k3-line: rgba(148, 163, 184, 0.14); --k3-accent: #00ff41;
-        --k3-green: #39ff14; --k3-blue: #00d4ff; --k3-pink: #ff69b4; --k3-orange: #ffa500;
+        --k3-bg: transparent; --k3-surface: rgba(14, 18, 30, 0.62); --k3-line: rgba(148, 163, 184, 0.14);
+        /* Map onto site accent tokens — no disconnected hot-pink neon quartet. */
+        --k3-accent: var(--accent-primary, #1fd47c);
+        --k3-green: var(--accent-primary, #1fd47c);
+        --k3-blue: var(--accent-blue, #3fc9ff);
+        --k3-pink: var(--accent-violet, #9d8cff);
+        --k3-orange: var(--accent-orange, #ff9f3f);
         --k3-text: #e2e8f0; --k3-muted: #64748b;
       }
       /* Subnet identity — 6 vivid hues so every subnet has its own hero personality
@@ -161,7 +166,7 @@
       }
       .k3-claim-head .k3-badge { margin: 0; flex-shrink: 0; }
       .k3-badge.hold { background: transparent; color: var(--k3-orange); border: 1px solid rgba(255, 165, 0, 0.55); }
-      .k3-badge.buy { box-shadow: 0 0 18px rgba(57, 255, 20, 0.45), 0 0 36px rgba(57, 255, 20, 0.2); }
+      .k3-badge.buy { box-shadow: 0 0 18px color-mix(in srgb, var(--k3-green) 45%, transparent), 0 0 36px color-mix(in srgb, var(--k3-green) 20%, transparent); }
       .k3-claim-main {
         display: flex; flex-direction: row; align-items: flex-start; gap: 14px;
         position: relative; z-index: 1; width: 100%;
@@ -234,7 +239,7 @@
       .k3-orb-particles span:nth-child(9) { top: 58%; left: 96%; width: 2px; height: 2px; opacity: 0.55; animation-duration: 18s; }
       .k3-orb-particles span:nth-child(10) { top: 4%; left: 30%; width: 2px; height: 2px; opacity: 0.65; animation-duration: 11s; }
       .k3-claim--glow-hot .k3-orb-particles span {
-        background: #39ff14; box-shadow: 0 0 6px 1px rgba(57, 255, 20, 0.95), 0 0 14px var(--sn-accent-glow);
+        background: var(--k3-green); box-shadow: 0 0 6px 1px color-mix(in srgb, var(--k3-green) 95%, transparent), 0 0 14px var(--sn-accent-glow);
       }
       @keyframes k3-particle-drift { to { transform: rotate(360deg); } }
       /* Additive one-shot flourish — fires once when the ring finishes filling,
@@ -254,7 +259,7 @@
         filter: drop-shadow(0 0 6px rgba(0, 212, 255, 0.45));
       }
       .k3-orb.k3-ring--fresh .ring-fill {
-        stroke: #39ff14;
+        stroke: var(--k3-green);
         filter: drop-shadow(0 0 6px rgba(57, 255, 20, 0.5));
       }
       .k3-orb.k3-ring--aging .ring-fill {
@@ -347,13 +352,14 @@
       {# ---- Learning Loop: weight-shift visualization (Track record peel) ---- #}
       .k3-weight-nudge-viz { margin-top: 12px; }
       .k3-weight-nudge-viz__title { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+      .k3-weight-nudge-viz__empty { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--k3-muted); margin: 0; line-height: 1.45; }
       .k3-weight-bar-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
       .k3-weight-bar-name { font-size: 12px; color: var(--k3-text); min-width: 78px; flex-shrink: 0; }
       .k3-weight-bar-track { position: relative; flex: 1; height: 8px; border-radius: 4px; background: rgba(148, 163, 184, 0.12); overflow: visible; }
       .k3-weight-bar-track::after { content: ''; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: rgba(148, 163, 184, 0.3); }
       .k3-weight-bar-fill { position: absolute; top: 0; bottom: 0; border-radius: 4px; transition: width 0.7s cubic-bezier(0.2, 0.8, 0.2, 1); animation: k3-weight-bar-glow 2.2s ease-in-out infinite; }
       .k3-weight-bar-fill--up { left: 50%; background: var(--k3-green); box-shadow: 0 0 8px rgba(57, 255, 20, 0.55); }
-      .k3-weight-bar-fill--down { right: 50%; background: var(--k3-pink); box-shadow: 0 0 8px rgba(255, 105, 180, 0.5); }
+      .k3-weight-bar-fill--down { right: 50%; background: var(--k3-pink); box-shadow: 0 0 8px color-mix(in srgb, var(--k3-pink) 50%, transparent); }
       @keyframes k3-weight-bar-glow {
         0%, 100% { filter: brightness(1); }
         50% { filter: brightness(1.25); }
@@ -421,8 +427,8 @@
         width: 8px;
         height: 8px;
         border-radius: 50%;
-        background: #39ff14;
-        box-shadow: 0 0 6px rgba(57, 255, 20, 0.6);
+        background: var(--k3-green);
+        box-shadow: 0 0 6px color-mix(in srgb, var(--k3-green) 60%, transparent);
       }
       {# ---- K3-6: horizon selector chips ---- #}
       .k3-horizon-chips { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 8px 0 4px; z-index: 1; }
@@ -484,7 +490,7 @@
       .k3-claim-name--sub { font-size: 17px; margin: 0 0 2px; animation: none; background: none; -webkit-text-fill-color: var(--k3-text); color: var(--k3-text); font-weight: 600; letter-spacing: 0.02em; }
       .k3-claim-desc { font-size: 12px; line-height: 1.45; color: var(--k3-muted); margin: 0 auto 6px; max-width: 300px; }
       .k3-resolve-crumb { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-blue); margin: 0 0 8px; letter-spacing: 0.03em; }
-      .k3-social-crumb { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-pink, #ff69b4); margin: 0 0 8px; letter-spacing: 0.03em; }
+      .k3-social-crumb { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-pink); margin: 0 0 8px; letter-spacing: 0.03em; }
       .k3-brief { text-align: left; width: 100%; max-width: 340px; margin: 0 auto 8px; padding: 0; z-index: 1; }
       .k3-brief-thesis {
         font-family: 'Rajdhani', system-ui, sans-serif;
@@ -503,7 +509,7 @@
       .k3-claim-foot { display: flex; flex-direction: column; align-items: center; width: 100%; margin-top: 10px; z-index: 1; }
       .k3-pump-chip { display: inline-block; margin: 4px 0 8px; padding: 4px 10px; border-radius: 12px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; z-index: 1; max-width: 320px; line-height: 1.35; }
       .k3-pump-chip--stirring { color: #ffa500; border: 1px solid rgba(255, 165, 0, 0.35); background: rgba(255, 165, 0, 0.08); }
-      .k3-pump-chip--accumulating { color: var(--k3-pink); border: 1px solid rgba(255, 105, 180, 0.35); background: rgba(255, 105, 180, 0.08); }
+      .k3-pump-chip--accumulating { color: var(--k3-pink); border: 1px solid color-mix(in srgb, var(--k3-pink) 35%, transparent); background: color-mix(in srgb, var(--k3-pink) 8%, transparent); }
       .k3-pump-trigger { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.4; color: var(--k3-muted); margin: -4px auto 10px; max-width: 320px; text-align: left; z-index: 1; }
       .home-job__signals--demoted { margin-top: 12px; opacity: 0.88; }
       .home-job__signals--demoted .home-band,
@@ -539,7 +545,7 @@
                   </div>
                   <div class="k3-orb k3-ring--{{ ring_state }}"{% if resolve_at_iso %} data-resolve-at="{{ resolve_at_iso }}"{% endif %}>
                     <svg viewBox="0 0 148 148">
-                      <defs><linearGradient id="k3-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#39ff14"/><stop offset="33%" stop-color="#00d4ff"/><stop offset="66%" stop-color="#ff69b4"/><stop offset="100%" stop-color="#ffa500"/></linearGradient></defs>
+                      <defs><linearGradient id="k3-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1fd47c"/><stop offset="33%" stop-color="#3fc9ff"/><stop offset="66%" stop-color="#9d8cff"/><stop offset="100%" stop-color="#ff9f3f"/></linearGradient></defs>
                       <circle class="ring-track" cx="74" cy="74" r="62"/>
                       <circle class="ring-fill" cx="74" cy="74" r="62" style="--ring-offset: {{ ring_offset }}"/>
                     </svg>
@@ -678,7 +684,7 @@
       <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
         <div class="k3-dossier" id="k3-dossier" data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}" data-action="HOLD">
           <div class="k3-layer open" id="k3-layer-claim">
-            <div class="k3-claim k3-claim--hold k3-claim--glow-cool" id="k3-claim" data-glow="cool">
+            <div class="k3-claim k3-claim--hold k3-claim--glow-cool k3-claim--band-0" id="k3-claim" data-glow="cool" data-band="0">
               <div class="k3-claim-head">
                 <p class="k3-claim-name" id="k3-claim-head-name">No call yet</p>
                 <div class="k3-badge hold" id="k3-action-badge">HOLD</div>
@@ -695,7 +701,7 @@
                   </div>
                   <div class="k3-orb k3-ring--{{ ring_state }}">
                     <svg viewBox="0 0 148 148">
-                      <defs><linearGradient id="k3-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#39ff14"/><stop offset="33%" stop-color="#00d4ff"/><stop offset="66%" stop-color="#ff69b4"/><stop offset="100%" stop-color="#ffa500"/></linearGradient></defs>
+                      <defs><linearGradient id="k3-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1fd47c"/><stop offset="33%" stop-color="#3fc9ff"/><stop offset="66%" stop-color="#9d8cff"/><stop offset="100%" stop-color="#ff9f3f"/></linearGradient></defs>
                       <circle class="ring-track" cx="74" cy="74" r="62"/>
                       <circle class="ring-fill" cx="74" cy="74" r="62" style="--ring-offset: 389.56"/>
                     </svg>
@@ -876,7 +882,10 @@
           <p class="k3-track-footnote">Graded outcomes will appear here as picks resolve. Published, not curated.</p>
           {% endif %}
           <p class="k3-weight-nudge" id="k3-weight-nudge-line" hidden></p>
-          <div class="k3-weight-nudge-viz" id="k3-weight-nudge-viz" hidden aria-hidden="true"></div>
+          <div class="k3-weight-nudge-viz" id="k3-weight-nudge-viz" aria-hidden="false">
+            <div class="k3-weight-nudge-viz__title">Council weights</div>
+            <p class="k3-weight-nudge-viz__empty">No weight shift this window — bars appear when grading nudges an expert.</p>
+          </div>
           <div class="k3-lifecycle" id="k3-lifecycle-learning" hidden>
             {% if sp.data_available and lifecycle_steps|length > 4 %}
             {% set learn_step = lifecycle_steps[4] %}

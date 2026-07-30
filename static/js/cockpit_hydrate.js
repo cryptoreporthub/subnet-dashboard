@@ -1020,7 +1020,13 @@
     }).slice(0, 4);
     if (!ranked.length) {
       if (el) { el.hidden = true; el.textContent = ''; }
-      if (viz) { viz.hidden = true; viz.innerHTML = ''; }
+      if (viz) {
+        viz.hidden = false;
+        viz.setAttribute('aria-hidden', 'false');
+        viz.innerHTML =
+          '<div class="k3-weight-nudge-viz__title">Council weights</div>' +
+          '<p class="k3-weight-nudge-viz__empty">No weight shift this window — bars appear when grading nudges an expert.</p>';
+      }
       return;
     }
     if (el) {
@@ -1045,6 +1051,7 @@
       }).join('');
       viz.innerHTML = '<div class="k3-weight-nudge-viz__title">Council weights shifted</div>' + rows;
       viz.hidden = false;
+      viz.setAttribute('aria-hidden', 'false');
     }
   }
 
@@ -2670,6 +2677,16 @@
 
   var SOUL_ORB_COLORS = { quant: '#3fc9ff', hype: '#ff5fa8', dark_horse: '#a78bfa', technical: '#ffb74a' };
   var SOUL_ORB_FALLBACK = ['#3fc9ff', '#a78bfa', '#ffb74a', '#ff5fa8', '#34d399', '#60a5fa'];
+  // Match SSR `_council_weights_list`: trend vs neutral default 1.0, not ephemeral deltas.
+  var SOUL_WEIGHT_BASELINE = 1.0;
+
+  function soulTrendFromWeight(w) {
+    var n = Number(w);
+    if (isNaN(n)) return 'even';
+    if (n > SOUL_WEIGHT_BASELINE + 0.005) return 'up';
+    if (n < SOUL_WEIGHT_BASELINE - 0.005) return 'down';
+    return 'even';
+  }
 
   function renderCouncilWeights(weights, deltas) {
     var normalized = normalizeWeights(weights);
@@ -2680,8 +2697,7 @@
     var top = ranked[0];
     var cards = keys.map(function (name, index) {
       var w = Number(normalized[name]) || 0;
-      var delta = Number(deltaMap[name]) || 0;
-      var trend = delta > 0.005 ? 'up' : delta < -0.005 ? 'down' : 'even';
+      var trend = soulTrendFromWeight(w);
       var biasLabel = trend === 'up' ? '\u25B2 LEARNED UP' : trend === 'down' ? '\u25BC LEARNED DOWN' : 'EVEN';
       var orbColor = SOUL_ORB_COLORS[name] || SOUL_ORB_FALLBACK[index % SOUL_ORB_FALLBACK.length];
       var orbPx = Math.round(58 + Math.min(w, 2.0) / 2.0 * 46);
