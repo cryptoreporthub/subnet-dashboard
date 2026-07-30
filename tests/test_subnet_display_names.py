@@ -12,12 +12,33 @@ def test_is_generic_display_name():
     assert not is_generic_display_name("Loosh", 78)
 
 
-def test_display_name_override_sn16_fast_thinker():
+def test_display_name_tmc_sn6_numinous(monkeypatch):
+    monkeypatch.setattr(
+        "internal.subnet_names._tmc_display_names",
+        lambda: {6: "Numinous"},
+    )
+    monkeypatch.setattr(
+        "internal.subnet_names._remote_registry",
+        lambda: {"6": {"name": "Infinite Games"}},
+    )
+    name = display_name_for_netuid(6, use_taostats_fallback=False)
+    assert name == "Numinous"
+
+
+def test_display_name_tmc_sn16_fast_thinker(monkeypatch):
+    monkeypatch.setattr(
+        "internal.subnet_names._tmc_display_names",
+        lambda: {16: "Fast Thinker"},
+    )
     name = display_name_for_netuid(16, use_taostats_fallback=False)
     assert name == "Fast Thinker"
 
 
-def test_display_name_override_sn23_trishool():
+def test_display_name_tmc_sn23_trishool(monkeypatch):
+    monkeypatch.setattr(
+        "internal.subnet_names._tmc_display_names",
+        lambda: {23: "Trishool"},
+    )
     name = display_name_for_netuid(23, use_taostats_fallback=False)
     assert name == "Trishool"
 

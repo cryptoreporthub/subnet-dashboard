@@ -53,7 +53,7 @@ def _resolve_name(
     ladder_entry: Dict[str, Any],
     subnet_row: Optional[Dict[str, Any]],
 ) -> str:
-    """Display name for a pump desk card (override → registry → live hint)."""
+    """Display name for a pump desk card (override → TMC → registry → live hint)."""
     netuid = ladder_entry.get("netuid")
     try:
         netuid_int = int(netuid) if netuid is not None else None

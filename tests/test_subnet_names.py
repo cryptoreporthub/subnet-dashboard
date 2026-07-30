@@ -5,16 +5,23 @@ from unittest.mock import patch
 from internal.subnet_names import enrich_subnet_row, resolve_subnet_name
 
 
-def test_resolve_prefers_remote_over_tmc():
-    remote = {"40": {"name": "Chunking"}}
-    local = {"40": {"id": 40, "name": "Chunking"}}
+def test_resolve_prefers_tmc_over_stale_remote():
+    """TMC is live authority; GitHub taostat JSON can lag rebrands (e.g. SN6)."""
+    remote = {"6": {"name": "Infinite Games"}}
+    local = {"6": {"name": "Infinite Games"}}
     name = resolve_subnet_name(
-        40,
+        6,
         local=local,
         remote=remote,
-        tmc_name="Ralph",
+        tmc_name="Numinous",
         use_taostats=False,
     )
+    assert name == "Numinous"
+
+
+def test_sn40_override_beats_stale_tmc_ralph():
+    """SN40 TMC still lists Ralph; curator override until TMC updates."""
+    name = resolve_subnet_name(40, tmc_name="Ralph", use_taostats=False)
     assert name == "Chunking"
 
 
@@ -22,7 +29,7 @@ def test_sn40_not_ralph():
     """SN40 must not display TaoMarketCap's stale 'Ralph' label."""
     name = resolve_subnet_name(40, tmc_name="Ralph", use_taostats=False)
     assert name != "Ralph"
-    assert name == "Chunking" or name == "SN40"
+    assert name == "Chunking"
 
 
 def test_refresh_stored_names():
@@ -78,23 +85,27 @@ def test_dpick_shortlist_uses_canonical_names():
         assert out["alternatives"][0]["name"] != "Stale" or out["alternatives"][0]["netuid"] != 41
 
 
-def test_sn28_override_beats_on_chain_lol():
-    """SN28 on-chain/taostat identity is 'LOL'; display as gm."""
+def test_sn28_tmc_beats_on_chain_lol():
+    """SN28 on-chain/taostat identity is 'LOL'; TMC lists gm."""
     remote = {"28": {"name": "LOL", "bittensor_id": "dalet"}}
-    name = resolve_subnet_name(28, remote=remote, local={"28": {"name": "LOL"}}, tmc_name="LOL", use_taostats=False)
+    name = resolve_subnet_name(28, remote=remote, local={"28": {"name": "LOL"}}, tmc_name="gm", use_taostats=False)
     assert name == "gm"
 
 
-def test_sn15_override_beats_stale_de_val():
-    """SN15 is ORO; taostat still lists previous occupant De-Val."""
+def test_sn15_tmc_beats_stale_remote_de_val():
+    """SN15 is ORO on TMC; taostat GitHub still lists De-Val."""
     remote = {"15": {"name": "De-Val", "bittensor_id": "omicron"}}
-    name = resolve_subnet_name(15, remote=remote, local={"15": {"name": "De-Val"}}, tmc_name="De-Val", use_taostats=False)
+    name = resolve_subnet_name(15, remote=remote, local={"15": {"name": "De-Val"}}, tmc_name="ORO", use_taostats=False)
     assert name == "ORO"
 
 
-def test_pump_alert_resolves_sn28_not_lol():
+def test_pump_alert_resolves_sn28_not_lol(monkeypatch):
     from internal.learning.pump_alert import build_alert_row
 
+    monkeypatch.setattr(
+        "internal.subnet_names._tmc_display_names",
+        lambda: {28: "gm"},
+    )
     row = build_alert_row(
         {"netuid": 28, "name": "LOL", "phase": "PUMPING", "composite_score": 0.75},
         {"netuid": 28, "name": "LOL", "market_cap": 60000, "price": 0.015},

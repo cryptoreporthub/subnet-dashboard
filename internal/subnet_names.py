@@ -157,6 +157,17 @@ def _taostats_identity(netuid: int) -> Optional[str]:
     return None
 
 
+def _tmc_label(netuid: int, tmc_name: Optional[str] = None) -> Optional[str]:
+    """Row hint or cached TaoMarketCap table name when not generic."""
+    if tmc_name and not _is_bad_name(tmc_name):
+        cleaned = str(tmc_name).strip()
+        if cleaned.lower() != "snnone" and not cleaned.startswith("SNNone"):
+            if not re.match(rf"^SN{netuid}$", cleaned, re.I):
+                return cleaned
+    hit = _tmc_display_names().get(netuid)
+    return hit if hit else None
+
+
 def resolve_subnet_name(
     netuid: int,
     *,
@@ -165,7 +176,7 @@ def resolve_subnet_name(
     tmc_name: Optional[str] = None,
     use_taostats: bool = False,
 ) -> str:
-    """Priority: curator override → taostat remote → TaoStats identity → local → TMC → SN{n}."""
+    """Priority: override → TMC → local registry → TaoStats identity → GitHub taostat → SN{n}."""
     if netuid is None:
         return "SN?"
     try:
@@ -177,17 +188,9 @@ def resolve_subnet_name(
     if override and not _is_bad_name(override):
         return override
 
-    remote = remote if remote is not None else _remote_registry()
-    remote_item = remote.get(str(n)) if isinstance(remote, dict) else None
-    if isinstance(remote_item, dict):
-        rname = remote_item.get("name")
-        if not _is_bad_name(rname):
-            return str(rname).strip()
-
-    if use_taostats:
-        ts_name = _taostats_identity(n)
-        if ts_name:
-            return ts_name
+    tmc_hit = _tmc_label(n, tmc_name)
+    if tmc_hit:
+        return tmc_hit
 
     local = local if local is not None else _load_local_registry()
     local_item = local.get(str(n)) if isinstance(local, dict) else None
@@ -196,15 +199,17 @@ def resolve_subnet_name(
         if not _is_bad_name(lname):
             return str(lname).strip()
 
-    if tmc_name and not _is_bad_name(tmc_name):
-        cleaned = str(tmc_name).strip()
-        if cleaned.lower() != "snnone" and not cleaned.startswith("SNNone"):
-            if not re.match(rf"^SN{n}$", cleaned, re.I):
-                return cleaned
+    if use_taostats:
+        ts_name = _taostats_identity(n)
+        if ts_name:
+            return ts_name
 
-    tmc_hit = _tmc_display_names().get(n)
-    if tmc_hit:
-        return tmc_hit
+    remote = remote if remote is not None else _remote_registry()
+    remote_item = remote.get(str(n)) if isinstance(remote, dict) else None
+    if isinstance(remote_item, dict):
+        rname = remote_item.get("name")
+        if not _is_bad_name(rname):
+            return str(rname).strip()
 
     return f"SN{n}"
 
