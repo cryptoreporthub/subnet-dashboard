@@ -58,11 +58,15 @@ def _subnet_row_for_heal(stored_pick: Dict[str, Any], netuid: Any) -> Optional[D
     pred = stored_pick.get("prediction") if isinstance(stored_pick.get("prediction"), dict) else {}
     snap = pred.get("subnet_snapshot") if isinstance(pred.get("subnet_snapshot"), dict) else {}
     try:
-        snap_price = float(snap.get("price") or pred.get("reference_price") or 0)
+        snap_price = float(
+            snap.get("price") or pred.get("reference_price") or stored_pick.get("reference_price") or 0
+        )
     except (TypeError, ValueError):
         snap_price = 0.0
     if snap_price > 0:
         row["price"] = snap_price
+        if not row.get("name"):
+            row["name"] = snap.get("name") or f"SN{netuid}"
         return row
 
     try:
