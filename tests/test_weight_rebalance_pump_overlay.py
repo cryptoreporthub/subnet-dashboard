@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from unittest.mock import patch
 
 from internal.council.pump_overlay import apply_pump_score_overlay, pump_prior_0_1
@@ -10,6 +11,7 @@ from internal.council.signal_expert import expert_for_replay_row
 from internal.council.state_vector import score_subnet_for_day
 from internal.council.weights import (
     DEFAULT_WEIGHTS,
+    merged_replay_rows,
     rebalance_council_weights,
     replay_weights_from_predictions,
     soft_blend_weights,
@@ -67,6 +69,42 @@ def test_soft_blend_pulls_quant_off_ceiling():
     assert blended["quant"] > 1.0
 
 
+def test_replay_includes_archive_when_current_epoch_thin(tmp_path, monkeypatch):
+    preds = tmp_path / "predictions.json"
+    archive_dir = tmp_path / "archive"
+    archive_dir.mkdir()
+    (archive_dir / "pre-epoch-2026-07-29").write_text(
+        Path("tests/fixtures/acc1_archive_sample.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("internal.council.weights.PREDICTIONS_ARCHIVE_DIR", str(archive_dir))
+    preds.write_text(
+        json.dumps(
+            {
+                "predictions": [],
+                "resolved": [
+                    {
+                        "id": "current-1",
+                        "expert": "technical",
+                        "signal_source": "rsi_crossover",
+                        "correct": True,
+                        "outcome": "hit",
+                        "resolved_at": "2026-07-30T00:00:00Z",
+                    },
+                ],
+            }
+        )
+    )
+    rows, meta = merged_replay_rows(str(preds), archive_dir=str(archive_dir))
+    assert meta["current_graded"] == 1
+    assert meta["archive_used"] is True
+    assert len(rows) == 6
+
+    weights = replay_weights_from_predictions(str(preds))
+    assert weights["quant"] != 1.0
+    assert weights["hype"] != 1.0
+
+
 def test_rebalance_dry_run_does_not_require_soul_write(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
     preds = tmp_path / "predictions.json"
@@ -108,6 +146,44 @@ def test_rebalance_dry_run_does_not_require_soul_write(tmp_path, monkeypatch):
     assert stored["adversarial_state"]["council_weights"]["quant"] == 2.0
 
 
+def test_rebalance_reports_archive_usage(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    preds = tmp_path / "predictions.json"
+    archive_dir = tmp_path / "archive"
+    archive_dir.mkdir()
+    (archive_dir / "pre-epoch-2026-07-29").write_text(
+        Path("tests/fixtures/acc1_archive_sample.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    soul.write_text(json.dumps({"adversarial_state": {"council_weights": dict(DEFAULT_WEIGHTS)}}))
+    preds.write_text(
+        json.dumps(
+            {
+                "predictions": [],
+                "resolved": [
+                    {
+                        "id": "current-1",
+                        "expert": "technical",
+                        "signal_source": "rsi_crossover",
+                        "correct": True,
+                        "resolved_at": "2026-07-30T00:00:00Z",
+                    },
+                ],
+            }
+        )
+    )
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.council.weights.PREDICTIONS_ARCHIVE_DIR", str(archive_dir))
+    result = rebalance_council_weights(
+        predictions_path=str(preds),
+        soul_map_path=str(soul),
+        save=False,
+    )
+    assert result["archive_used"] is True
+    assert result["rows_replayed"] >= 5
+    assert result["after"]["quant"] != 1.0
+
+
 def test_pump_prior_early_phase():
     prior = pump_prior_0_1({"phase": "ACCUMULATING", "composite_score": 0.5})
     assert prior is not None
@@ -115,16 +191,6 @@ def test_pump_prior_early_phase():
 
 
 def test_pump_score_overlay_blends_total(monkeypatch):
-    monkeypatch.setenv("PUMP_SCORE_OVERLAY_ALPHA", "0.10")
-    entry = {"phase": "ACCUMULATING", "composite_score": 0.6}
-    with patch("internal.council.pump_overlay.pump_ladder_entry", return_value=entry):
-        after, meta = apply_pump_score_overlay(50.0, {"netuid": 28})
-    assert meta is not None
-    assert meta["after"] != 50.0
-    assert meta["alpha"] == 0.1
-
-
-def test_score_subnet_applies_pump_overlay(monkeypatch):
     monkeypatch.setenv("PUMP_SCORE_OVERLAY_ALPHA", "0.10")
     sn = {
         "netuid": 28,
