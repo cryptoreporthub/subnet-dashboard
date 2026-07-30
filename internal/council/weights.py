@@ -145,6 +145,8 @@ def _raw_has_legacy_contrarian(data: Dict[str, Any]) -> bool:
 
 ARCHIVE_REPLAY_MIN_CURRENT = 5
 PREDICTIONS_ARCHIVE_DIR = os.environ.get("PREDICTIONS_ARCHIVE_DIR", "data/predictions_archive")
+# ponytail: ±6% from 1.0 still reads as EVEN in UI after a single nudge (e.g. quant 1.04)
+NEAR_FLAT_MAX_DEVIATION = 0.06
 
 
 def _row_replay_key(row: Dict[str, Any]) -> str:
@@ -399,6 +401,49 @@ def weights_are_default_flat(weights: Optional[Dict[str, float]] = None) -> bool
     """True when every expert is still at the neutral 1.0 baseline."""
     src = weights if isinstance(weights, dict) else load_weights()
     return all(abs(float(src.get(name, 1.0)) - DEFAULT_WEIGHTS[name]) < 0.001 for name in DEFAULT_WEIGHTS)
+
+
+def weights_are_near_flat(
+    weights: Optional[Dict[str, float]] = None,
+    *,
+    max_deviation: float = NEAR_FLAT_MAX_DEVIATION,
+) -> bool:
+    """True when all experts are within max_deviation of the 1.0 baseline."""
+    src = weights if isinstance(weights, dict) else load_weights()
+    band = max(0.0, float(max_deviation))
+    return all(abs(float(src.get(name, 1.0)) - DEFAULT_WEIGHTS[name]) <= band for name in DEFAULT_WEIGHTS)
+
+
+def maybe_rebalance_council_weights_on_boot() -> Optional[Dict[str, Any]]:
+    """One-shot archive-aware rebalance on the volume owner (worker / inline volume).
+
+    Runs when weights still look EVEN (near-flat) and the merged ledger has enough
+    graded rows — including archive backfill when the current epoch is thin.
+    """
+    from internal.data_volume import data_dir_is_mounted_volume, has_local_volume_data
+    from internal.run_mode import is_worker_mode
+
+    owns_volume = is_worker_mode() or (
+        data_dir_is_mounted_volume() and has_local_volume_data()
+    )
+    if not owns_volume:
+        return None
+
+    flag = os.environ.get("COUNCIL_WEIGHT_REBALANCE_ON_BOOT", "off").strip().lower()
+    force = flag in ("1", "true", "yes", "on")
+
+    _, merge_meta = merged_replay_rows()
+    graded = int(merge_meta.get("total_graded") or 0)
+    if graded < 5:
+        return None
+
+    if not force:
+        if not weights_are_near_flat():
+            return None
+        if not merge_meta.get("archive_used"):
+            return None
+
+    return rebalance_council_weights(save=True)
 
 
 def save_weights(weights: Dict[str, float], path: Optional[str] = None) -> None:

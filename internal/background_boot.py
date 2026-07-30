@@ -102,6 +102,20 @@ def _start_resolver() -> None:
             except Exception as exc:
                 logger.warning("pump_lead recover boot failed: %s", exc)
 
+            try:
+                from internal.council.weights import maybe_rebalance_council_weights_on_boot
+
+                summary = maybe_rebalance_council_weights_on_boot()
+                if summary:
+                    logger.info(
+                        "council weight rebalance on worker boot: archive_used=%s rows=%s after=%s",
+                        summary.get("archive_used"),
+                        summary.get("rows_replayed"),
+                        summary.get("after"),
+                    )
+            except Exception as exc:
+                logger.warning("council weight rebalance boot failed: %s", exc)
+
         threading.Thread(target=_recover, daemon=True, name="pump-lead-recover").start()
 
     defer_boot("prediction-resolver", _run, delay=max(BOOT_DEFER_SECONDS + 10, 15))
