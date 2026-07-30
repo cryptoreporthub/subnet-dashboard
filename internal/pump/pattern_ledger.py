@@ -242,6 +242,96 @@ def _waveform_label(entry: Dict[str, Any]) -> str:
     return " → ".join(parts) if parts else ""
 
 
+def _segment_directions(segments: List[Dict[str, Any]], *, max_legs: int = 5) -> List[str]:
+    dirs: List[str] = []
+    for seg in segments[-max_legs:]:
+        if not isinstance(seg, dict):
+            continue
+        direction = str(seg.get("direction") or "flat")
+        if direction == "flat" and dirs and dirs[-1] == "flat":
+            continue
+        dirs.append(direction)
+    return [d for d in dirs if d != "flat"] or [d for d in dirs]
+
+
+def _shape_hash(directions: List[str]) -> str:
+    return "-".join(directions) if directions else ""
+
+
+def classify_waveform(segments: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Classify recent segment directions into v1 pump pattern taxonomy."""
+    legs = _segment_directions(segments)
+    if len(legs) < 2:
+        return {
+            "pattern_class": "insufficient_data",
+            "pattern_label": "",
+            "confidence": 0.0,
+            "shape_hash": _shape_hash(legs),
+        }
+
+    seq = tuple(legs[-5:])
+    net_up = sum(float(s.get("magnitude_pct") or 0) for s in segments if s.get("direction") == "up")
+    net_mag = sum(float(s.get("magnitude_pct") or 0) for s in segments[-5:])
+
+    pattern_class = "CHOP"
+    confidence = 0.55
+    if seq == ("up",):
+        pattern_class, confidence = "PUMP_ONLY", 0.9
+    elif seq[:2] == ("up", "down") and len(seq) == 2:
+        pattern_class, confidence = "PUMP_DROP", 0.85
+    elif seq[:3] == ("up", "down", "up"):
+        pattern_class, confidence = "PUMP_DROP_RE_PUMP", 0.88
+    elif seq[:2] == ("down", "up"):
+        pattern_class, confidence = "DROP_RELIEF", 0.8
+    elif legs.count("up") >= 3 and net_up > 3.0:
+        pattern_class, confidence = "GRIND_UP", 0.75
+    elif len(legs) >= 4 and abs(net_mag) < 1.0:
+        pattern_class, confidence = "CHOP", 0.7
+    elif "flat" in [s.get("direction") for s in segments[-3:]] and legs[-1] == "up":
+        pattern_class, confidence = "FLAT_COIL", 0.72
+
+    label_parts = []
+    for seg in segments[-5:]:
+        if not isinstance(seg, dict):
+            continue
+        direction = seg.get("direction")
+        arrow = "↑" if direction == "up" else "↓" if direction == "down" else "→"
+        dur = float(seg.get("duration_min") or 0)
+        label_parts.append(f"{arrow}{_bucket_duration(dur)}")
+    pattern_label = " → ".join(label_parts)
+
+    return {
+        "pattern_class": pattern_class,
+        "pattern_label": pattern_label,
+        "confidence": round(confidence, 3),
+        "shape_hash": _shape_hash(list(seq)),
+    }
+
+
+def typical_pattern_class(netuid: Any, path: Optional[str] = None) -> str:
+    """Rolling typical class — ponytail: current classifier output until history accrues."""
+    payload = pattern_payload(netuid, path=path)
+    return str(payload.get("pattern_class") or "insufficient_data")
+
+
+def _re_pump_from_match(match: Dict[str, Any]) -> float:
+    cls = match.get("pattern_class")
+    conf = float(match.get("confidence") or 0)
+    if cls == "PUMP_DROP_RE_PUMP":
+        return round(min(0.85, 0.55 + conf * 0.3), 4)
+    if cls in {"FLAT_COIL", "GRIND_UP"}:
+        return round(min(0.6, 0.35 + conf * 0.25), 4)
+    return 0.0
+
+
+def re_pump_prob_from_pattern(netuid: Any, path: Optional[str] = None) -> float:
+    """Pattern-aware re-pump hint for ladder surfaces (PP-1)."""
+    data = load_ledger(path)
+    entry = (data.get("subnets") or {}).get(str(int(netuid))) or {}
+    segments = list(entry.get("segments") or [])
+    return _re_pump_from_match(classify_waveform(segments))
+
+
 def pattern_payload(netuid: Any, path: Optional[str] = None) -> Dict[str, Any]:
     try:
         nu = int(netuid)
@@ -261,12 +351,19 @@ def pattern_payload(netuid: Any, path: Optional[str] = None) -> Dict[str, Any]:
         if start_price > 0:
             live["magnitude_pct"] = round((last_price - start_price) / start_price * 100.0, 4)
         segments = segments + [live]
+    match = classify_waveform(segments)
     return {
         "netuid": nu,
         "name": entry.get("name"),
         "segments": segments,
         "waveform": _waveform_label(entry),
         "segment_count": len(entry.get("segments") or []),
+        "pattern_class": match["pattern_class"],
+        "pattern_label": match["pattern_label"] or _waveform_label(entry),
+        "confidence": match["confidence"],
+        "shape_hash": match["shape_hash"],
+        "typical_pattern": match["pattern_class"],
+        "re_pump_prob": _re_pump_from_match(match),
     }
 
 
