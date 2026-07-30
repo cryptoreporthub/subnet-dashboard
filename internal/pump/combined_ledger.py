@@ -219,3 +219,196 @@ def ledger_stats() -> Dict[str, Any]:
         "experimental": True,
         "path": LEDGER_PATH,
     }
+
+
+EFFECTIVENESS_PATH = os.environ.get(
+    "COMBINED_ANGLES_EFFECTIVENESS_PATH",
+    os.path.join("data", "learning_outcomes", "combined_angles_effectiveness.json"),
+)
+_MIN_TUNE_N = 20
+_SKIP_OUTCOMES = frozenset({"duplicate", "expired", "ungradeable"})
+
+
+def _bucket_hits(hits: List[bool]) -> Dict[str, Any]:
+    n = len(hits)
+    h = sum(1 for x in hits if x)
+    rate = round(h / n, 4) if n else None
+    return {"n": n, "hits": h, "hit_rate": rate}
+
+
+def _resolved_index() -> Dict[str, Dict[str, Any]]:
+    try:
+        from internal.learning.predictions_store import load_predictions
+
+        rows = load_predictions().get("resolved") or []
+    except Exception:
+        return {}
+    out: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        pid = str(row.get("id") or "")
+        if pid:
+            out[pid] = row
+    return out
+
+
+def _gradeable_pump_row(row: Dict[str, Any]) -> bool:
+    from internal.council.grading import is_pump_desk_claim
+
+    if not is_pump_desk_claim(row):
+        return False
+    if row.get("outcome") in _SKIP_OUTCOMES:
+        return False
+    if row.get("sample_quality") == "reject":
+        return False
+    if row.get("correct") is None and row.get("actual_pct") is None:
+        return False
+    return True
+
+
+def _pick_source_buckets(resolved: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    from internal.council.grading import is_pump_combined_exp, is_pump_lead
+
+    combined_hits: List[bool] = []
+    lead_hits: List[bool] = []
+    for row in resolved.values():
+        if not _gradeable_pump_row(row):
+            continue
+        hit = row.get("correct") is True
+        if is_pump_combined_exp(row):
+            combined_hits.append(hit)
+        elif is_pump_lead(row):
+            lead_hits.append(hit)
+    return {
+        "pump_combined_exp": _bucket_hits(combined_hits),
+        "pump_lead": _bucket_hits(lead_hits),
+    }
+
+
+def _grade_candidate_at_call(
+    candidate: Optional[Dict[str, Any]],
+    *,
+    created_at: Optional[datetime],
+    claim_pct: float = CLAIM_PCT,
+) -> Optional[bool]:
+    """Grade +claim_pct within HORIZON_HOURS for a slate candidate (next_up / peer)."""
+    if not isinstance(candidate, dict) or not created_at:
+        return None
+    try:
+        netuid = int(candidate.get("netuid"))
+        ref = float(candidate.get("price") or 0)
+    except (TypeError, ValueError):
+        return None
+    if netuid < 1 or ref <= 0:
+        return None
+    resolve_at = created_at + timedelta(hours=HORIZON_HOURS)
+    try:
+        from internal.council.grading import compute_actual_pct, pump_lead_hit
+        from internal.council.price_reference import price_at_resolve_at
+
+        status, resolved_price, _meta = price_at_resolve_at(netuid, resolve_at)
+        if status != "ok" or resolved_price <= 0:
+            return None
+        actual_pct = compute_actual_pct(ref, resolved_price)
+        pred = {"predicted_pct": claim_pct, "pump_claim": "COMBINED_EXP", "pump_badge": "COMBINED EXP"}
+        return pump_lead_hit(pred, actual_pct)
+    except Exception:
+        return None
+
+
+def _call_outcomes(
+    call: Dict[str, Any],
+    resolved: Dict[str, Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """Per-call angle outcomes — stored dict wins; else backfill from predictions/candles."""
+    stored = call.get("outcomes")
+    if isinstance(stored, dict) and any(
+        isinstance(stored.get(k), dict) and stored[k].get("hit") is not None
+        for k in ("combined", "next_up", "peer")
+    ):
+        return stored
+
+    created = _parse_ts(call.get("created_at"))
+    claim = float(call.get("claim_pct") or CLAIM_PCT)
+    out: Dict[str, Any] = {}
+
+    pid = str(call.get("prediction_id") or "")
+    pred = resolved.get(pid) if pid else None
+    if pred and _gradeable_pump_row(pred):
+        out["combined"] = {"hit": pred.get("correct") is True, "source": "prediction"}
+
+    nu_hit = _grade_candidate_at_call(call.get("next_up_top"), created_at=created, claim_pct=claim)
+    if nu_hit is not None:
+        out["next_up"] = {"hit": nu_hit, "source": "candle"}
+
+    peer_hit = _grade_candidate_at_call(call.get("peer_top"), created_at=created, claim_pct=claim)
+    if peer_hit is not None:
+        out["peer"] = {"hit": peer_hit, "source": "candle"}
+
+    return out or None
+
+
+def build_effectiveness_summary() -> Dict[str, Any]:
+    """Combined vs next_up vs peer hit rates + pick_source buckets for ops evidence."""
+    data = _load()
+    calls = [c for c in (data.get("calls") or []) if isinstance(c, dict)]
+    resolved = _resolved_index()
+
+    combined_hits: List[bool] = []
+    next_up_hits: List[bool] = []
+    peer_hits: List[bool] = []
+    graded_calls = 0
+
+    for call in calls:
+        outcomes = _call_outcomes(call, resolved)
+        if not outcomes:
+            continue
+        graded_calls += 1
+        for key, bucket in (
+            ("combined", combined_hits),
+            ("next_up", next_up_hits),
+            ("peer", peer_hits),
+        ):
+            row = outcomes.get(key)
+            if isinstance(row, dict) and row.get("hit") is not None:
+                bucket.append(bool(row["hit"]))
+
+    pick_sources = _pick_source_buckets(resolved)
+    combined_n = pick_sources["pump_combined_exp"]["n"]
+    graded_predictions = sum(row["n"] for row in pick_sources.values())
+
+    return {
+        "generated_at": _iso(_utcnow()),
+        "experimental": True,
+        "ledger": {
+            "calls": len(calls),
+            "graded_calls": graded_calls,
+            "path": LEDGER_PATH,
+        },
+        "angles": {
+            "combined": _bucket_hits(combined_hits),
+            "next_up": _bucket_hits(next_up_hits),
+            "peer": _bucket_hits(peer_hits),
+        },
+        "pick_source": pick_sources,
+        "gates": {
+            "graded_predictions": graded_predictions,
+            "tune_ready": combined_n >= _MIN_TUNE_N,
+            "min_tune_n": _MIN_TUNE_N,
+            "weights_locked": combined_n < _MIN_TUNE_N,
+        },
+        "weights": {"timing": 0.70, "peer": 0.30},
+    }
+
+
+def save_effectiveness_artifact(summary: Optional[Dict[str, Any]] = None) -> str:
+    """Write effectiveness JSON for Ditto / GHA probes."""
+    payload = summary if summary is not None else build_effectiveness_summary()
+    path = EFFECTIVENESS_PATH
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    os.replace(tmp, path)
+    return path
