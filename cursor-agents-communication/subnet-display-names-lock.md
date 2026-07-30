@@ -10,9 +10,9 @@ Pump desk used `registry_subnet_rows()` → 61× `Unknown` in local registry; ta
 
 ## DECISIONS
 
-- Curator override **SN16 → Fast Thinker** (TMC/taostat remote still say BitAds; on-chain/taostats explorer is correct)
-- Curator override **SN23 → Trishool** (TMC/taostat remote still say SocialTensor)
 - Single resolver: `display_name_for_netuid()` in `subnet_names.py`
+- Priority LOCK: override → TMC → local → TaoStats API → GitHub taostat last
+- Overrides only for stale TMC (SN40 Chunking) — rebrands from TMC, not override file
 - Pump + hydrate: `load_subnets_for_display(timeout=4)` (TMC/live first)
 - TaoStats identity fallback only when still generic after remote + row
 - Client pump rows: `resolveSubnetDisplayName` / `SubnetNameRegistry`

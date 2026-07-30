@@ -80,9 +80,9 @@ Names must be trustworthy (wrong label = broken trust on an action surface). Not
 
 **Pipeline:** `internal/subnet_names.py` — resolve at read time; never trust frozen JSON labels on live surfaces.
 
-**Priority (today):** curator override → GitHub `taostat/subnets-infos` `subnets.json` → TaoStats API (when enabled) → local registry → TMC → `SN{n}`.
+**Priority (today):** curator override → TaoMarketCap → local registry → TaoStats API (when enabled) → GitHub `taostat/subnets-infos` `subnets.json` → `SN{n}`.
 
-**Why overrides exist:** TaoStats **website** can be correct while the **GitHub JSON** we fetch still lists the previous occupant (e.g. SN15 `De-Val` vs **ORO**). Overrides in `config/subnet_name_overrides.json` until upstream catches up.
+**Overrides:** only when TMC is stale (e.g. SN40 **Chunking** vs TMC **Ralph**) or display differs from on-chain meme placeholders. Rebrands like SN6 **Numinous** come from TMC — no override needed.
 
 **When names drift:** add override + test in `test_subnet_names.py`; spot-check hero + pump + recent calls after deploy.
 
