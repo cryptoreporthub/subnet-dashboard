@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-30T01:00:00Z  
-**main:** `2123b9c` — PP-1 #656 · Acc-1 #655 · LD #654 · LC #652 · PP-0 #651+#653 · Acc-0 #649+#651  
+**Last updated:** 2026-07-30T02:00:00Z  
+**main:** `b2e520b` — Acc-2 #659 · PP-2 #661 · PP-1 #656 · Acc-1 #655 · LD #654  
 **Plans:** `master-sprint-execution-plan.md` · `launch-lc-ld-plan.md` · `accuracy-pump-pattern-plan.md` · `finish-queue-plan.md`
 
 ## Full roadmap
@@ -28,15 +28,15 @@
 
 | Step | Phase | Status |
 |------|-------|--------|
-| M0 | Merge plan PRs #647 + #646 | **NEXT** |
-| 1 | Acc-0 ledger plumbing | queued |
-| 2 | PP-0 segment ledger | queued |
-| 3 | LC legal/trust/SEO | queued |
-| 4 | LD surface honesty | queued |
-| 5 | Acc-1 archive measure | gated |
-| 6 | PP-1 pattern classes | gated |
-| 7 | Acc-2 one experiment | gated |
-| 8 | PP-2 desk + council | gated |
+| M0 | Merge plan PRs | **DONE** #647 |
+| 1 | Acc-0 ledger plumbing | **DONE** #649+#651 |
+| 2 | PP-0 segment ledger | **DONE** #651+#653 |
+| 3 | LC legal/trust/SEO | **DONE** #652 |
+| 4 | LD surface honesty | **DONE** #654 |
+| 5 | Acc-1 archive measure | **DONE** #655 |
+| 6 | PP-1 pattern classes | **DONE** #656 |
+| 7 | Acc-2 experiment (A+D blend) | **DONE** #659 |
+| 8 | PP-2 desk + council | **DONE** #661 |
 | 9 | FQ-4 combined angles | gated (`graded>0`) |
 
 Babysit: `./scripts/babysit_phase.sh <phase>` · rollup: `./scripts/babysit_phase.sh sprint`
@@ -47,19 +47,19 @@ Babysit: `./scripts/babysit_phase.sh <phase>` · rollup: `./scripts/babysit_phas
 |-------|--------|------|
 | **LA** Hero source-of-truth | **DONE** #640 | — |
 | **LB** Integrations + pulse rail | **DONE** #645 | — |
-| **LC** Legal / trust / SEO | **IN PR** | `launch-lc-ld-plan.md` |
-| **LD** Surface honesty | gated on LC | same |
+| **LC** Legal / trust / SEO | **DONE** #652 | — |
+| **LD** Surface honesty | **DONE** #654 | — |
 
 ## Accuracy + pump pattern (parallel tracks)
 
 | Phase | Status | Lock |
 |-------|--------|------|
 | **Acc-0** Ledger plumbing + epoch footgun | **DONE** #649+#650 (in PP-0 PR) | `accuracy-pump-pattern-plan.md` |
-| **Acc-1** Archive measurement | gated on Acc-0 | same |
-| **Acc-2** One evidence-backed experiment | gated on Acc-1 report | same |
-| **PP-0** Segment ledger (waveform) | **IN PR** | same |
-| **PP-1** Pattern taxonomy + classifier | gated on PP-0 | same |
-| **PP-2** Pump desk + council surfaces | gated on PP-1 | same |
+| **Acc-1** Archive measurement | **DONE** #655 | `accuracy-pump-pattern-plan.md` |
+| **Acc-2** Horizon 24h + gate 50% | **DONE** #659 | same |
+| **PP-0** Segment ledger (waveform) | **DONE** #651+#653 | same |
+| **PP-1** Pattern taxonomy + classifier | **DONE** #656 | same |
+| **PP-2** Pump desk + council surfaces | **DONE** #661 | same |
 
 Babysit: `./scripts/babysit_phase.sh acc0` · `acc1` · `pp0` · `pp1` · `pp2`
 
