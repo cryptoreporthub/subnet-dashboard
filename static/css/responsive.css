@@ -302,6 +302,50 @@ header.top {
   .live-pill { padding: 4px 10px; font-size: 10px; }
 }
 
+/* PR6 — sticky spine + status rail @390px */
+@media (max-width: 390px) {
+  .top-nav {
+    top: 0;
+    z-index: 1001;
+    padding: 6px 8px;
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .top-nav::-webkit-scrollbar { display: none; }
+  .top-nav a {
+    font-size: 11px;
+    padding: 6px 8px;
+    flex-shrink: 0;
+  }
+  .council-first-theme .top-nav a {
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+  .data-freshness-badge,
+  .ops-readiness-badge {
+    font-size: 11px;
+    max-width: 42vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    vertical-align: bottom;
+  }
+  .header-actions .live-pill,
+  .header-actions .utc-clock {
+    font-size: 11px;
+  }
+  .message-intel--v2 .message-intel__status-rail {
+    font-size: 11px;
+  }
+  .message-intel--v2 .message-intel__pulse,
+  .message-intel--v2 .message-intel__live-tag {
+    font-size: 11px;
+  }
+}
+
 /* ---------- Full mobile responsiveness (Task 4) ---------- */
 @media (max-width: 768px) {
   /* Stack every grid column to full width (overrides inline grid-template
