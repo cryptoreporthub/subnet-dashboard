@@ -129,20 +129,28 @@
       }
       .council-stage:has(#k3-claim-identity:not([hidden])) .council-stage__inner { padding-top: 4px; }
       .k3-claim {
+        --sn-accent: var(--k3-blue);
+        --sn-accent-glow: rgba(0, 212, 255, 0.35);
         position: relative; padding: 8px 4px 12px; text-align: center; min-height: 0;
         display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;
         border: none; border-radius: 0;
         background: transparent;
         box-shadow: none;
       }
+      /* Identity bands: floor(netuid/32)%4 — cyan / violet / amber / green */
+      .k3-claim[data-band="0"] { --sn-accent: #3fc9ff; --sn-accent-glow: rgba(63, 201, 255, 0.35); }
+      .k3-claim[data-band="1"] { --sn-accent: #9d8cff; --sn-accent-glow: rgba(157, 140, 255, 0.32); }
+      .k3-claim[data-band="2"] { --sn-accent: #ff9f3f; --sn-accent-glow: rgba(255, 159, 63, 0.35); }
+      .k3-claim[data-band="3"] { --sn-accent: #39ff14; --sn-accent-glow: rgba(57, 255, 20, 0.32); }
       .k3-claim-head {
         display: flex; align-items: center; justify-content: space-between; gap: 10px;
         margin-bottom: 12px; z-index: 2; text-align: left;
       }
       .k3-claim-head .k3-claim-name {
         font-size: 18px; font-weight: 700; margin: 0; animation: none;
-        background: none; -webkit-text-fill-color: var(--k3-text); color: var(--k3-text);
+        background: none; -webkit-text-fill-color: var(--sn-accent); color: var(--sn-accent);
         letter-spacing: 0.01em; line-height: 1.2;
+        text-shadow: 0 0 12px var(--sn-accent-glow);
       }
       .k3-claim-head .k3-badge { margin: 0; flex-shrink: 0; }
       .k3-badge.hold { background: transparent; color: var(--k3-orange); border: 1px solid rgba(255, 165, 0, 0.55); }
@@ -157,32 +165,32 @@
       }
       .k3-orb-bg {
         position: absolute; width: 160px; height: 160px; border-radius: 50%;
-        background: conic-gradient(var(--k3-blue), var(--k3-green), var(--k3-blue));
+        background: conic-gradient(var(--sn-accent), var(--k3-green), var(--sn-accent));
         animation: k3-spin 28s linear infinite; opacity: 0.14; filter: blur(28px); z-index: 0;
         pointer-events: none;
       }
       .k3-orb-glow {
         position: absolute; width: 140px; height: 140px; border-radius: 50%;
         background:
-          radial-gradient(circle, rgba(0, 212, 255, 0.32) 0%, transparent 58%),
-          radial-gradient(circle at 40% 35%, rgba(57, 255, 20, 0.18) 0%, transparent 62%);
+          radial-gradient(circle, var(--sn-accent-glow) 0%, transparent 58%),
+          radial-gradient(circle at 40% 35%, rgba(57, 255, 20, 0.12) 0%, transparent 62%);
         animation: k3-pulse 4s ease-in-out infinite; opacity: 0.55; filter: blur(18px); z-index: 0;
         pointer-events: none;
       }
       .k3-claim--glow-hot .k3-orb-glow {
         background:
-          radial-gradient(circle, rgba(57, 255, 20, 0.38) 0%, transparent 55%),
-          radial-gradient(circle at 60% 40%, rgba(0, 212, 255, 0.22) 0%, transparent 62%);
-        opacity: 0.65; filter: blur(16px);
+          radial-gradient(circle, var(--sn-accent-glow) 0%, transparent 52%),
+          radial-gradient(circle at 60% 40%, rgba(57, 255, 20, 0.22) 0%, transparent 62%);
+        opacity: 0.7; filter: blur(16px);
       }
       .k3-claim--glow-cool .k3-orb-glow {
         background:
-          radial-gradient(circle, rgba(0, 212, 255, 0.4) 0%, transparent 52%),
-          radial-gradient(circle at 55% 45%, rgba(255, 165, 0, 0.12) 0%, transparent 65%);
+          radial-gradient(circle, var(--sn-accent-glow) 0%, transparent 52%),
+          radial-gradient(circle at 55% 45%, rgba(255, 165, 0, 0.1) 0%, transparent 65%);
         opacity: 0.6;
       }
       .k3-claim--glow-hot .k3-orb-bg {
-        background: conic-gradient(var(--k3-green), var(--k3-blue), var(--k3-green));
+        background: conic-gradient(var(--sn-accent), var(--k3-green), var(--sn-accent));
         opacity: 0.18;
       }
       @keyframes k3-spin { to { transform: rotate(360deg); } }
@@ -196,7 +204,7 @@
       }
       .k3-orb-particles span {
         position: absolute; width: 3px; height: 3px; border-radius: 50%;
-        background: #7df9ff; box-shadow: 0 0 6px 1px rgba(0, 212, 255, 0.9), 0 0 12px rgba(57, 255, 20, 0.35);
+        background: var(--sn-accent); box-shadow: 0 0 6px 1px var(--sn-accent-glow), 0 0 12px rgba(57, 255, 20, 0.25);
         opacity: 0.85;
       }
       .k3-orb-particles span:nth-child(1) { top: 8%; left: 48%; }
@@ -208,7 +216,7 @@
       .k3-orb-particles span:nth-child(7) { top: 38%; left: 4%; }
       .k3-orb-particles span:nth-child(8) { top: 14%; left: 18%; width: 2px; height: 2px; opacity: 0.7; }
       .k3-claim--glow-hot .k3-orb-particles span {
-        background: #39ff14; box-shadow: 0 0 6px 1px rgba(57, 255, 20, 0.95), 0 0 14px rgba(0, 212, 255, 0.35);
+        background: var(--sn-accent); box-shadow: 0 0 6px 1px var(--sn-accent-glow), 0 0 14px rgba(57, 255, 20, 0.35);
       }
       @keyframes k3-particle-drift { to { transform: rotate(360deg); } }
       .k3-orb { position: relative; width: 108px; height: 108px; z-index: 2; margin: 0; }
@@ -234,8 +242,8 @@
       .k3-orb.k3-ring--resolved .ring-fill { stroke: #64748b; animation: none; filter: none; }
       .k3-claim--hold .k3-orb .ring-fill,
       .k3-claim--glow-cool .k3-orb .ring-fill {
-        stroke: var(--k3-blue);
-        filter: drop-shadow(0 0 7px rgba(0, 212, 255, 0.55));
+        stroke: var(--sn-accent);
+        filter: drop-shadow(0 0 7px var(--sn-accent-glow));
       }
       .k3-claim--glow-hot .k3-orb .ring-fill {
         filter: drop-shadow(0 0 7px rgba(57, 255, 20, 0.55));
@@ -250,21 +258,15 @@
       .k3-orb-score { font-family: 'JetBrains Mono', monospace; font-size: 32px; font-weight: 700; line-height: 1; display: flex; }
       .k3-orb-score .digit-tens,
       .k3-orb-score .digit-ones {
-        color: #9ae8ff;
-        text-shadow: 0 0 10px rgba(0, 212, 255, 0.35);
+        color: var(--sn-accent);
+        text-shadow: 0 0 10px var(--sn-accent-glow);
       }
-      .k3-claim--glow-hot .k3-orb-score .digit-tens {
-        color: var(--k3-green);
-        text-shadow: 0 0 10px rgba(57, 255, 20, 0.4);
-      }
-      .k3-claim--glow-hot .k3-orb-score .digit-ones {
-        color: #c8ff9a;
-        text-shadow: 0 0 8px rgba(57, 255, 20, 0.35);
-      }
+      .k3-claim--glow-hot .k3-orb-score .digit-tens,
+      .k3-claim--glow-hot .k3-orb-score .digit-ones,
       .k3-claim--glow-cool .k3-orb-score .digit-tens,
       .k3-claim--glow-cool .k3-orb-score .digit-ones {
-        color: #7dd3fc;
-        text-shadow: 0 0 8px rgba(0, 212, 255, 0.35);
+        color: var(--sn-accent);
+        text-shadow: 0 0 10px var(--sn-accent-glow);
       }
       .k3-orb-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
       .k3-claim-name { font-size: 28px; font-weight: 700; background: linear-gradient(90deg, var(--k3-green), var(--k3-blue), var(--k3-pink), var(--k3-orange)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: k3-shimmer 3s ease-in-out infinite; margin: 8px 0 4px; z-index: 1; background-size: 200% 100%; }
@@ -463,10 +465,11 @@
       {# ---- CLAIM LAYER (inside home-daily-call for live-refresh) ---- #}
       {% if sn %}
       {% set glow_tier = 'cool' if (act == 'HOLD' and not audit_pick) or conviction_pct < 45 else 'hot' %}
+      {% set sn_band = ((sn.netuid|int) // 32) % 4 if sn.netuid is not none else 0 %}
       <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
         <div class="k3-dossier" id="k3-dossier" data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}" data-action="{{ act }}">
           <div class="k3-layer open" id="k3-layer-claim">
-            <div class="k3-claim k3-claim--glow-{{ glow_tier }}{% if not audit_pick and act == 'HOLD' %} k3-claim--hold{% endif %}" id="k3-claim" data-glow="{{ glow_tier }}">
+            <div class="k3-claim k3-claim--glow-{{ glow_tier }} k3-claim--band-{{ sn_band }}{% if not audit_pick and act == 'HOLD' %} k3-claim--hold{% endif %}" id="k3-claim" data-glow="{{ glow_tier }}" data-band="{{ sn_band }}"{% if sn.netuid is not none %} data-netuid="{{ sn.netuid }}"{% endif %}>
               <div class="k3-claim-head">
                 <p class="k3-claim-name" id="k3-claim-head-name">{{ sn.name|default('SN' ~ sn.netuid) }}</p>
                 {% if act == 'LONG' %}<div class="k3-badge buy" id="k3-action-badge">LONG</div>
@@ -1047,6 +1050,9 @@ function k3SwitchHorizon(chipId) {
   var identityEl = document.getElementById('k3-claim-identity');
   if (identityEl) identityEl.hidden = false;
   k3SyncFocusNetuid(sn.netuid, sn.name);
+  if (typeof window.syncK3NetuidBand === 'function') {
+    window.syncK3NetuidBand(sn.netuid);
+  }
   k3RenderConviction(view.conviction);
   k3SetActionBadge(view.action);
   var orbLabel = document.getElementById('k3-orb-label');

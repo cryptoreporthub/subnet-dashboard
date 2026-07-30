@@ -3685,13 +3685,15 @@ button.home-cta {
   }
 }
 
-/* Claim head: quieter name, stronger action badge */
+/* Claim head: subnet identity accent (netuid band --sn-accent); action badge separate */
 .k3-claim-head .k3-claim-name {
   font-family: 'Rajdhani', system-ui, sans-serif;
   font-size: clamp(1.15rem, 3.5vw, 1.45rem);
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: #94a3b8;
+  color: var(--sn-accent, #94a3b8);
+  -webkit-text-fill-color: var(--sn-accent, #94a3b8);
+  text-shadow: 0 0 12px var(--sn-accent-glow, transparent);
 }
 .k3-badge {
   border-radius: 4px;
@@ -3703,10 +3705,10 @@ button.home-cta {
   border: 1px solid rgba(125, 211, 252, 0.4);
 }
 
-/* Particles softer — presence without noise */
+/* Particles softer — presence without noise; hue from --sn-accent */
 .k3-orb-particles { opacity: 0.45; }
 .k3-orb-particles span {
-  box-shadow: 0 0 4px rgba(0, 212, 255, 0.45) !important;
+  box-shadow: 0 0 4px var(--sn-accent-glow, rgba(0, 212, 255, 0.45)) !important;
 }
 
 /* Evidence drivers: less pill-cluster */

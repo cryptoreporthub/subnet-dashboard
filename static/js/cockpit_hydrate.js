@@ -47,6 +47,29 @@
     return sn.netuid != null ? sn.netuid : sn.id;
   }
 
+  /** floor(netuid/32)%4 — cyan / violet / amber / green identity bands */
+  function k3NetuidBand(netuid) {
+    var n = parseInt(netuid, 10);
+    if (isNaN(n) || n < 0) return 0;
+    return Math.floor(n / 32) % 4;
+  }
+
+  function syncK3NetuidBand(netuid) {
+    var claim = document.getElementById('k3-claim');
+    if (!claim) return;
+    var band = k3NetuidBand(netuid);
+    claim.setAttribute('data-band', String(band));
+    if (netuid != null && netuid !== '') {
+      claim.setAttribute('data-netuid', String(netuid));
+    } else {
+      claim.removeAttribute('data-netuid');
+    }
+    for (var i = 0; i < 4; i++) claim.classList.remove('k3-claim--band-' + i);
+    claim.classList.add('k3-claim--band-' + band);
+  }
+  window.k3NetuidBand = k3NetuidBand;
+  window.syncK3NetuidBand = syncK3NetuidBand;
+
   function isBadSubnetName(name) {
     if (!name) return true;
     var s = String(name).trim();
@@ -1210,6 +1233,7 @@
     if (claimHeadName && snLabel) {
       claimHeadName.textContent = snLabel;
     }
+    syncK3NetuidBand(sn.netuid);
     if (claimName) {
       // Featured Call shows name in the card head; keep identity name for hydrate IDs only
       claimName.textContent = snLabel || '';
