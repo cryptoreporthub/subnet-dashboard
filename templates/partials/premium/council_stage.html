@@ -378,18 +378,43 @@
       .k3-brief-trigger { text-align: left; font-size: 10px; padding: 6px 8px; }
       .k3-claim-identity { text-align: left; }
       .k3-claim-meta { font-size: 10px; margin-bottom: 4px; }
+      @media (max-width: 640px) {
+        .k3-claim { overflow: hidden; max-width: 100%; }
+        .k3-claim-main { gap: 12px; }
+        .k3-call-lead { min-width: 0; }
+        .k3-brief-thesis, .k3-call-headline {
+          font-size: clamp(1.05rem, 5.2vw, 1.35rem);
+          line-height: 1.2;
+          overflow-wrap: anywhere;
+        }
+        .k3-layer-header {
+          min-height: 48px;
+          padding: 12px 14px;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .k3-weight-nudge-viz { margin-top: 10px; }
+        .k3-orb-particles { opacity: 0.35; }
+        .k3-orb-halo { filter: blur(28px); opacity: 0.14; }
+      }
       @media (max-width: 400px) {
-        .k3-orb-wrap, .k3-orb { width: 100px; height: 100px; }
-        .k3-orb-bg { width: 150px; height: 150px; }
-        .k3-orb-glow { width: 130px; height: 130px; }
-        .k3-orb-score { font-size: 28px; }
-        .k3-claim-head .k3-claim-name { font-size: 16px; }
-        .k3-claim { padding: 12px 10px 10px; }
+        .k3-orb-wrap, .k3-orb { width: 96px; height: 96px; }
+        .k3-orb-bg { width: 140px; height: 140px; }
+        .k3-orb-glow { width: 120px; height: 120px; }
+        .k3-orb-score { font-size: 26px; }
+        .k3-claim-head { margin-bottom: 12px; gap: 8px; }
+        .k3-claim-head .k3-claim-name { font-size: 15px; }
+        .k3-claim { padding: 10px 8px 10px; }
+        .k3-badge { font-size: 11px; padding: 5px 10px; min-height: 28px; }
+        .k3-claim-desc { max-width: none; padding: 0 2px; }
+        .k3-brief { max-width: none; }
       }
       @media (max-width: 360px) {
-        .k3-orb-wrap, .k3-orb { width: 92px; height: 92px; }
-        .k3-orb-score { font-size: 26px; }
-        .k3-claim-stats { gap: 10px; }
+        .k3-claim-main { flex-direction: column; align-items: center; text-align: center; }
+        .k3-call-lead, .k3-brief-thesis, .k3-brief-vs, .k3-brief-vs-hold, .k3-call-headline,
+        .k3-claim-identity { text-align: center; }
+        .k3-orb-wrap, .k3-orb { width: 100px; height: 100px; }
+        .k3-orb-score { font-size: 28px; }
+        .k3-claim-stats { gap: 10px; justify-content: center; }
         .k3-stat { min-width: 50px; }
         .k3-stat-value { font-size: 14px; }
       }

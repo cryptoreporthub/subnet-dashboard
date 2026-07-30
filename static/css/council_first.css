@@ -1596,6 +1596,52 @@ button.home-cta {
     font-size: 0.88rem;
     line-height: 1.4;
   }
+  .message-intel--v2 .message-intel__brand {
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+  .message-intel--v2 .message-intel__week-top {
+    padding: 12px;
+  }
+  .message-intel--v2 .message-intel__week-top-quote {
+    font-size: 0.92rem;
+  }
+  .message-intel--v2 .message-intel__week-top-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .message-intel--v2 .message-intel__week-top-stats {
+    width: 100%;
+  }
+  .message-intel--v2 .message-intel__week-top-stat {
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .message-intel--v2 .message-intel__hero-main {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .message-intel--v2 .message-intel__hero-name {
+    font-size: 1.2rem;
+  }
+  .message-intel--v2 .message-intel__hero {
+    padding: 16px 14px;
+  }
+  .message-intel--v2 .message-intel__panel {
+    padding: 12px 12px 6px;
+  }
+  .message-intel--v2 .message-intel__filter-chip {
+    min-height: 44px;
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+  .message-intel--v2 .message-intel__view-all {
+    min-height: 44px;
+  }
 }
 .message-intel--v2 .message-intel__legend {
   display: flex;
@@ -2177,6 +2223,10 @@ button.home-cta {
   color: var(--mi-text-dim);
   cursor: pointer;
   flex-shrink: 0;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .message-intel--v2 .message-intel__filter-chip:hover {
   border-color: rgba(63, 201, 255, 0.35);
@@ -3944,5 +3994,41 @@ button.home-cta {
   .logo-mark,
   .live-dot {
     animation: none !important;
+  }
+}
+
+/* ---------- Mobile polish (≤640) — polished surfaces stay usable at ~390 ---------- */
+@media (max-width: 640px) {
+  .message-intel--v2 {
+    padding-left: max(0px, env(safe-area-inset-left, 0px));
+    padding-right: max(0px, env(safe-area-inset-right, 0px));
+    overflow-x: clip;
+  }
+  .message-intel--v2 .message-intel__page-title {
+    font-size: clamp(1.35rem, 7vw, 1.85rem);
+    line-height: 1.12;
+  }
+  .message-intel--v2 .message-intel__hero-main {
+    gap: 12px;
+  }
+  .message-intel--v2 .message-intel__week-top-meta {
+    gap: 8px;
+  }
+  .message-intel--v2 .message-intel__filter-chip {
+    min-height: 40px;
+    padding: 8px 12px;
+  }
+  .council-first-theme .top-nav a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .k3-layer-header {
+    min-height: 48px;
+  }
+  .home-job__cta a,
+  .home-job__cta button,
+  .home-cta {
+    min-height: 44px;
   }
 }

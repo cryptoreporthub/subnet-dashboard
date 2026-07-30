@@ -165,8 +165,22 @@
   @media (prefers-reduced-motion: reduce) {
     .mindmap-core, .mindmap-core-glow, .mindmap-node-circle--core, .mindmap-edge { animation: none !important; }
   }
+  @media (max-width: 640px) {
+    .mindmap-graph-section { margin-bottom: 1.25rem; padding: 0 2px; }
+    .mindmap-detail-panel {
+      padding: 12px;
+      min-height: 0;
+    }
+    .mindmap-node text { font-size: 11px; }
+  }
   @media (max-width: 480px) {
-    .mindmap-graph-mobile-toggle { display: block; }
+    .mindmap-graph-mobile-toggle {
+      display: block;
+      min-height: 48px;
+      padding: 14px 16px;
+      font-size: 13px;
+      -webkit-tap-highlight-color: transparent;
+    }
     .mindmap-graph-root {
       min-height: 0;
       max-height: 0;
@@ -176,14 +190,18 @@
       transition: max-height 0.25s ease, opacity 0.2s ease;
     }
     .mindmap-graph-root.is-expanded {
-      min-height: 360px;
-      max-height: 480px;
+      min-height: 280px;
+      max-height: min(70vh, 420px);
       border: 1px solid var(--border-subtle, #374151);
       opacity: 1;
       pointer-events: auto;
+      /* Coarse pointers: keep selected node labels visible (no hover) */
     }
     .mindmap-graph-root.is-expanded .mindmap-graph-svg {
-      height: 360px;
+      height: min(70vh, 360px);
+    }
+    .mindmap-graph-root.is-expanded .mindmap-node.is-selected text {
+      opacity: 1;
     }
     .mindmap-graph-layout {
       grid-template-columns: 1fr;
@@ -191,6 +209,9 @@
     .mindmap-detail-panel {
       margin-top: 10px;
     }
+  }
+  @media (hover: none) and (pointer: coarse) {
+    .mindmap-node.is-selected text { opacity: 1; }
   }
 </style>
 

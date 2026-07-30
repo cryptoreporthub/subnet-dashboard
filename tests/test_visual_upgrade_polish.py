@@ -173,3 +173,23 @@ def test_mindmap_uses_concentric_brain_layout_not_flat_circle():
     assert "disposition: 0.24" in src
     assert "subnet: 1.0" in src
     assert "function ringRadiusFraction" in src
+
+
+def test_mobile_soulmap_stays_two_by_two_not_stacked():
+    """responsive.css forced 1-col grids at ≤768; soul orbs must stay 2×2."""
+    responsive = open("static/css/responsive.css", encoding="utf-8").read()
+    premium = open("static/css/premium.css", encoding="utf-8").read()
+    assert "soulmap-constellation" in responsive
+    assert "repeat(2, minmax(0, 1fr))" in responsive
+    assert "soulmap-constellation" in premium
+    assert "min(var(--orb-px" in premium
+
+
+def test_mobile_telegram_touch_targets_and_week_top():
+    css = open("static/css/council_first.css", encoding="utf-8").read()
+    assert "message-intel__filter-chip" in css
+    assert "min-height: 44px" in css
+    assert "message-intel__week-top-meta" in css
+    # week-top stacks author/stats on narrow phones
+    assert ".message-intel__week-top-meta" in css
+    assert "flex-direction: column" in css
