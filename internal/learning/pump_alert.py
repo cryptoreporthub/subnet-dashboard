@@ -1074,11 +1074,12 @@ def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[st
     """Return predictive pump lane payload for SSR + GET /api/pump-alerts."""
     rows = subnets if isinstance(subnets, list) else []
     try:
-        from internal.pump.refresh import kick_ladder_fresh
+        from internal.pump.refresh import kick_ladder_fresh, ladder_age_minutes, STALE_MINUTES
         from internal.pump.state import load_state
 
         # Don't block the request on a full ladder rescan — chips/UI need to stay snappy.
-        kick_ladder_fresh()
+        age = ladder_age_minutes()
+        kick_ladder_fresh(force=age is None or age > float(STALE_MINUTES))
         state = load_state()
     except Exception as exc:
         return {
