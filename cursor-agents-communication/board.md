@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
 **Last updated:** 2026-07-30T02:30:00Z  
-**main:** `4d58d66` — FQ-4 in flight · Acc-2 #659 · PP-2 #661 · LD #654  
+**main:** `3ea0697` — FQ-4 in flight · Acc-2 #659 · PP-2 #661 · LD #654  
 **Plans:** `master-sprint-execution-plan.md` · `launch-lc-ld-plan.md` · `accuracy-pump-pattern-plan.md` · `finish-queue-plan.md`
 
 ## Full roadmap
@@ -37,7 +37,7 @@
 | 6 | PP-1 pattern classes | **DONE** #656 |
 | 7 | Acc-2 experiment (A+D blend) | **DONE** #659 |
 | 8 | PP-2 desk + council | **DONE** #661 |
-| 9 | FQ-4 combined angles | **IN PR** — artifact + ops/evidence (strict babysit gated `graded>0`) |
+| 9 | FQ-4 combined angles | **DONE** #664+#665 — artifact + ops/evidence (strict babysit gated `graded>0`) |
 
 Babysit: `./scripts/babysit_phase.sh <phase>` · rollup: `./scripts/babysit_phase.sh sprint`
 
@@ -107,7 +107,7 @@ Babysit: `./scripts/babysit_phase.sh <phase>`
 | SS-TG Gate 3 | 390px sign-off (H1) |
 | **SS-TG visual flagship** | DONE #590 + #605 stale feed backfill · #596 sitewide palette |
 | **Phase C** | **DONE** — `worker_peer.alive: true` · worker HTTP `:8081` · flycast `:8081` |
-| **Finish queue** | Slices 0–3 **DONE** · Slice 4 **IN PR** (artifact wiring; strict gate `graded>0`) · Slices 5–7 gated (`finish-queue-plan.md`) |
+| **Finish queue** | Slices 0–3 **DONE** · Slice 4 **DONE** #664 (artifact wiring; strict gate `graded>0`) · Slices 5–7 gated (`finish-queue-plan.md`) |
 
 ## Prod cache (2026-07-29 post-#630)
 
