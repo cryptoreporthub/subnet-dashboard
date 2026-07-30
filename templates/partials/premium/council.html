@@ -1,18 +1,25 @@
 <!-- 6. Council -->
+{% set soul_orb_colors = {'quant': '#3fc9ff', 'hype': '#ff5fa8', 'dark_horse': '#a78bfa', 'technical': '#ffb74a'} %}
+{% set soul_orb_fallback = ['#3fc9ff', '#a78bfa', '#ffb74a', '#ff5fa8', '#34d399', '#60a5fa'] %}
 <section class="row" id="section-council" aria-labelledby="council-title">
   <div class="section-label">Bench</div>
   <h2 class="section-title" id="council-title">Expert weights</h2>
   <p class="section-sub">Council weights (soul map) — quant, hype, dark horse, technical move when predictions resolve.</p>
   {% if council_weights %}
-  <div class="council-grid">
+  <div class="council-grid soulmap-constellation">
     {% for cw in council_weights %}
     {% set w = (cw.weight|default(0))|float %}
     {% set trend = (cw.trend|default('even'))|string|lower %}
-    <div class="expert card-soft card">
-      <div class="avatar">{{ (cw.expert|default('?'))[0]|upper }}</div>
-      <div class="name">{{ cw.expert|default('expert') }}</div>
-      <div class="w">{{ "%.3f"|format(w) }}</div>
-      <div class="wbar"><div class="wfill" style="width: {{ ([w / 2 * 100, 100]|min)|round }}%;"></div></div>
+    {% set orb_color = soul_orb_colors.get(cw.expert, soul_orb_fallback[loop.index0 % soul_orb_fallback|length]) %}
+    {% set orb_px = (58 + ([w, 2.0]|min / 2.0 * 46))|round|int %}
+    <div class="expert card-soft card soul-orb-card" style="--soulmap-delay: {{ (loop.index0 * 0.35)|round(2) }}s;">
+      <div class="soul-orb-wrap">
+        <div class="soul-orb soul-orb--{{ trend }}" style="--orb-accent: {{ orb_color }}; --orb-px: {{ orb_px }}px;">
+          <span class="soul-orb-core"></span>
+          <span class="soul-orb-value">{{ "%.2f"|format(w) }}</span>
+        </div>
+      </div>
+      <div class="name">{{ cw.expert|default('expert')|replace('_', ' ')|title }}</div>
       <span class="bias trend-{{ trend }}">{% if trend == 'up' %}▲ LEARNED UP{% elif trend == 'down' %}▼ LEARNED DOWN{% else %}EVEN{% endif %}</span>
     </div>
     {% endfor %}
