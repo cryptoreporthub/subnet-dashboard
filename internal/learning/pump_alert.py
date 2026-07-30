@@ -1026,24 +1026,16 @@ def _finalize_pump_payload(
 
 
 def _pump_subnet_rows(subnets: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
-    """Subnet rows for name hints — fast TMC list, not full council feed wedge."""
+    """Optional enriched rows for name hints; empty list is fine — resolve uses TMC cache."""
     rows = subnets if isinstance(subnets, list) else []
     if not rows:
-        try:
-            from fetchers.taomarketcap import get_all_subnets
-            from internal.subnet_names import enrich_subnet_rows
+        return []
+    try:
+        from internal.subnet_names import enrich_subnet_rows
 
-            rows = enrich_subnet_rows(list(get_all_subnets() or []))
-        except Exception:
-            rows = []
-    elif rows:
-        try:
-            from internal.subnet_names import enrich_subnet_rows
-
-            return enrich_subnet_rows(rows)
-        except Exception:
-            return rows
-    return rows
+        return enrich_subnet_rows(rows)
+    except Exception:
+        return rows
 
 
 def build_pump_alerts_desk(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
