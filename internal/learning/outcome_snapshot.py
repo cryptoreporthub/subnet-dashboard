@@ -175,6 +175,15 @@ def run_snapshot(*, save: bool = True) -> Dict[str, Any]:
     payload = build_outcome_snapshot()
     if save:
         payload["path"] = save_snapshot(payload)
+        try:
+            from internal.pump.combined_ledger import (
+                build_effectiveness_summary,
+                save_effectiveness_artifact,
+            )
+
+            save_effectiveness_artifact(build_effectiveness_summary())
+        except Exception as exc:
+            logger.warning("combined angles effectiveness snapshot failed: %s", exc)
     return payload
 
 
