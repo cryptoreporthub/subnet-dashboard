@@ -1269,6 +1269,9 @@ button.home-cta {
 
 /* SS-TG v2 — telegram-pulse flagship (yellow board frame; green/blue/orange lead, violet accents) */
 .message-intel--v2 {
+  --mi-font-display: 'Cabinet Grotesk', 'Rajdhani', system-ui, sans-serif;
+  --mi-font-body: 'Chillax', 'Rajdhani', system-ui, sans-serif;
+  font-family: var(--mi-font-body);
   --mi-green: #1fd47c;
   --mi-green-dim: #0f5a38;
   --mi-green-glow: rgba(31, 212, 124, 0.4);
@@ -1383,7 +1386,7 @@ button.home-cta {
 }
 .message-intel--v2 .message-intel__page-title {
   margin-bottom: 6px;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--mi-font-display);
   font-weight: 800;
   letter-spacing: -0.02em;
   background: linear-gradient(92deg, var(--mi-text) 25%, var(--mi-green) 70%, var(--mi-blue) 100%);
@@ -1520,6 +1523,38 @@ button.home-cta {
     gap: 4px;
   }
   .message-intel--v2 .message-intel__summary-24h-kicker { min-width: 0; }
+  .message-intel--v2 .message-intel__topbar {
+    flex-wrap: wrap;
+    gap: 6px 8px;
+  }
+  .message-intel--v2 .message-intel__flagship-chip {
+    font-size: 9px;
+    padding: 2px 6px;
+  }
+  .message-intel--v2 .message-intel__page-title {
+    font-size: 1.35rem;
+    line-height: 1.15;
+  }
+  .message-intel--v2 .message-intel__source-strip {
+    font-size: 11px;
+    line-height: 1.45;
+  }
+  .message-intel--v2 .message-intel__legend {
+    gap: 8px 10px;
+    font-size: 9px;
+    padding-bottom: 12px;
+  }
+  .message-intel--v2 .message-intel__hc-row {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .message-intel--v2 .message-intel__feed-row {
+    padding-right: 2px;
+  }
+  .message-intel--v2 .message-intel__f-text {
+    font-size: 0.88rem;
+    line-height: 1.4;
+  }
 }
 .message-intel--v2 .message-intel__legend {
   display: flex;

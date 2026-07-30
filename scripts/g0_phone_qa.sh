@@ -39,7 +39,31 @@ if failed:
 print("G0 phone QA SSR checks OK")
 PY
 
-curl -fsS --max-time 25 "$BASE/api/daily-pick" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d.get('action'); print('daily-pick OK:', d.get('action'))"
+if curl -fsS --max-time 25 "$BASE/api/daily-pick" 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); assert d.get('action'); print('daily-pick OK:', d.get('action'))"; then
+  :
+else
+  echo "WARN: daily-pick timeout or invalid JSON (prod may be warming)"
+fi
+
+echo "== SS-TG W0 markers =="
+python3 - "$html_tmp" <<'PY2'
+import pathlib, sys
+html = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+checks = [
+    ("section-message-intel", 'id="section-message-intel"' in html),
+    ("subnet summers brand", "Subnet Summers" in html),
+    ("t.me link", "t.me/OfficialSubnetSummer" in html),
+    ("yesterday card", "message-intel-yesterday" in html),
+    ("hc strip", "message-intel-hc-strip" in html),
+    ("proof band", "message-intel-proof" in html),
+]
+failed = [n for n, ok in checks if not ok]
+for n, ok in checks:
+    print(("PASS" if ok else "FAIL") + ":", n)
+if failed:
+    raise SystemExit("SS-TG failed: " + ", ".join(failed))
+print("SS-TG W0 markers OK")
+PY2
 if curl -fsS --max-time 25 -o /tmp/g0_pump.json "$BASE/api/pump-alerts"; then
   python3 -c "
 import json

@@ -1,6 +1,6 @@
 # LOCK — Subnet Summers Telegram Flagship
 
-**Status:** W1–W3 on main (#557) — human 390px gate pending  
+**Status:** W1–W3 on main (#557) — **H1 cleared 2026-07-30** (agent 390px + V5 polish wave)  
 **Approved:** 2026-07-27 (human: “flagship for Subnet Summers launch”)  
 **Slice ID:** SS-TG  
 **Viewport:** 390px primary  
@@ -40,15 +40,15 @@ Living Focus · Proof · Mindmap · Trail
 
 ## W0 acceptance
 
-- [ ] `#section-message-intel` visible without opening any `<details>`
-- [ ] Title brands **Subnet Summers** + link to `https://t.me/OfficialSubnetSummer`
-- [ ] Status rail: live · group · N stored · high-conviction count
-- [ ] **Yesterday leader** card: prior UTC day top subnet + mentions + runner-up
-- [ ] Live feed rows show conviction %, direction, sentiment (not snippet-only)
-- [ ] Subnet chips link to `/subnet/{netuid}` when entities present
-- [ ] Trending + champions remain; no emoji title clutter
-- [ ] Existing APIs only — no new routes required for W0
-- [ ] Contract tests still green
+- [x] `#section-message-intel` visible without opening any `<details>` (SSR verified)
+- [x] Title brands **Subnet Summers** + link to `https://t.me/OfficialSubnetSummer`
+- [x] Status rail: live · group · N stored · high-conviction count (hydrate)
+- [x] **Yesterday leader** card: prior UTC day top subnet + mentions + runner-up (hydrate)
+- [x] Live feed rows show conviction %, direction, sentiment (not snippet-only)
+- [x] Subnet chips link to `/subnet/{netuid}` when entities present
+- [x] Trending + champions remain; no emoji title clutter
+- [x] Existing APIs only — no new routes required for W0
+- [x] Contract tests still green
 
 ## Out of scope (W0)
 

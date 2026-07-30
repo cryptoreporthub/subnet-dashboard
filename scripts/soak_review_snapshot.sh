@@ -93,6 +93,14 @@ checks = {
         "present": telegram is not None,
         "value": telegram,
     },
+    "combined_angles": {
+        "pass": True,
+        "present": bool(evidence.get("combined_angles")),
+        "graded_predictions": (evidence.get("combined_angles") or {}).get("gates", {}).get(
+            "graded_predictions"
+        ),
+        "ledger_calls": ((evidence.get("combined_angles") or {}).get("ledger") or {}).get("calls"),
+    },
 }
 
 all_auto = all(
