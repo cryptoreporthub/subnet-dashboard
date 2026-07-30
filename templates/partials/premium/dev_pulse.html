@@ -1,0 +1,13 @@
+{# Dev Pulse — registry repo awareness + council graded snippet (hydrated via JS) #}
+<link rel="stylesheet" href="/static/css/dev_pulse.css">
+<section class="sr-dev-pulse" id="section-dev-pulse" aria-labelledby="dev-pulse-title">
+  <div class="sr-dev-pulse__head">
+    <h2 class="sr-dev-pulse__title" id="dev-pulse-title">Dev Pulse</h2>
+    <p class="sr-dev-pulse__sub">Public repos from registry · council graded track record per subnet.</p>
+  </div>
+  <div class="sr-dev-pulse__summary" id="dev-pulse-summary" hidden></div>
+  <ul class="sr-dev-pulse__list" id="dev-pulse-list" aria-live="polite">
+    <li class="sr-dev-pulse__empty">Loading dev pulse…</li>
+  </ul>
+</section>
+<script src="/static/js/dev_pulse.js" defer></script>
