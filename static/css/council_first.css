@@ -1794,6 +1794,73 @@ button.home-cta {
   color: var(--mi-text-faint);
 }
 .message-intel--v2 .message-intel__hero-runner b { color: var(--mi-text-dim); font-weight: 600; }
+
+/* Comment of the week — most viewed / reacted / replied */
+.message-intel--v2 .message-intel__week-top {
+  margin-bottom: 12px;
+  padding: 15px 16px 14px;
+  border: 1px solid rgba(157, 140, 255, 0.28);
+  border-radius: 15px;
+  background:
+    radial-gradient(ellipse 80% 70% at 100% 0%, rgba(157, 140, 255, 0.1), transparent 55%),
+    var(--mi-bg-card);
+  box-shadow: 0 0 28px -16px var(--mi-violet-glow);
+}
+.message-intel--v2 .message-intel__week-top-why {
+  margin: 0 0 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mi-violet);
+}
+.message-intel--v2 .message-intel__week-top-quote {
+  margin: 0 0 12px;
+  padding: 0;
+  border: none;
+  font-family: var(--mi-font-body, inherit);
+  font-size: 1rem;
+  line-height: 1.45;
+  color: var(--mi-text);
+  font-weight: 500;
+}
+.message-intel--v2 .message-intel__week-top-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.message-intel--v2 .message-intel__week-top-author {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mi-text-dim);
+}
+.message-intel--v2 .message-intel__week-top-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.message-intel--v2 .message-intel__week-top-stat {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--mi-line);
+  color: var(--mi-text-dim);
+  background: rgba(255, 255, 255, 0.03);
+}
+.message-intel--v2 .message-intel__week-top-stat--hot {
+  color: var(--mi-violet);
+  border-color: rgba(157, 140, 255, 0.4);
+  background: rgba(157, 140, 255, 0.08);
+  box-shadow: 0 0 12px -6px var(--mi-violet-glow);
+}
+
 .message-intel--v2 .message-intel__grid {
   display: grid;
   gap: 12px;
@@ -1843,6 +1910,7 @@ button.home-cta {
 .message-intel--v2 .message-intel__sec-bar--orange { background: var(--mi-orange); }
 .message-intel--v2 .message-intel__sec-bar--green { background: var(--mi-green); }
 .message-intel--v2 .message-intel__sec-bar--lilac { background: var(--mi-lilac); }
+.message-intel--v2 .message-intel__sec-bar--violet { background: var(--mi-violet); }
 .message-intel--v2 .message-intel__panel-title {
   margin: 0;
   font-family: var(--font-mono, monospace);
