@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-30T04:00:00Z  
-**main:** `0d52516` — PR3 in flight · runbook: `completion-runbook.md`  
+**Last updated:** 2026-07-30T04:30:00Z  
+**main:** `5c8f9cc` — PR4–PR10 PRs open (#672–#674) · runbook: `completion-runbook.md`  
 **Plans:** `completion-runbook.md` · `pre-aug4-polish-plan.md` · `finish-queue-plan.md`
 
 ## Full roadmap
