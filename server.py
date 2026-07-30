@@ -170,17 +170,38 @@ except Exception:
 
 
 def _council_weight_rebalance_boot() -> None:
-    """Optional one-shot Slice R on boot (env-gated)."""
+    """One-shot rebalance on volume owner (worker or inline volume), not split_v2 web."""
     import os
     import time
 
-    flag = os.environ.get("COUNCIL_WEIGHT_REBALANCE_ON_BOOT", "off").strip().lower()
-    if flag not in ("1", "true", "yes", "on"):
-        return
     time.sleep(18)
-    try:
-        from internal.council.weights import rebalance_council_weights
+    from internal.data_volume import data_dir_is_mounted_volume, has_local_volume_data
+    from internal.run_mode import is_worker_mode
 
+    owns_volume = is_worker_mode() or (
+        data_dir_is_mounted_volume() and has_local_volume_data()
+    )
+    if not owns_volume:
+        return
+
+    flag = os.environ.get("COUNCIL_WEIGHT_REBALANCE_ON_BOOT", "off").strip().lower()
+    force = flag in ("1", "true", "yes", "on")
+    try:
+        from internal.council.weights import (
+            load_weights,
+            rebalance_council_weights,
+            weights_are_default_flat,
+        )
+
+        if not force and not weights_are_default_flat():
+            return
+        if not force:
+            from internal.council import resolver
+
+            stats = resolver.get_resolved_predictions().get("stats", {}) or {}
+            graded = int(stats.get("correct") or 0) + int(stats.get("wrong") or 0)
+            if graded < 5:
+                return
         rebalance_council_weights(save=True)
     except Exception as exc:
         logger.debug("council weight rebalance boot skipped: %s", exc)

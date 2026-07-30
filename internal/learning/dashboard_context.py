@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from datastore.learning_engine import LearningEngine
 from internal.council import pick_history, rotation_tracker, scenario_memory
-from internal.council.weights import load_weights
+from internal.council.weights import load_weights, load_weights_for_ui
 from internal.learning.predictions_store import load_predictions, update_stats
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ def fast_shell_dashboard_context() -> Dict[str, Any]:
 
     ctx = default_learning_dashboard_context()
     try:
-        weights = load_weights() or {}
+        weights = load_weights_for_ui() or {}
         ctx["expert_weights"] = weights
         ctx["council_weights"] = _council_weights_list(weights)
     except Exception as exc:
@@ -367,14 +367,14 @@ def build_learning_dashboard_context(
     subnets = subnets if isinstance(subnets, list) else []
     market_context = market_context if isinstance(market_context, dict) else {"tao_change_24h": 0.0}
 
-    weights = load_weights()
+    weights = load_weights_for_ui()
     try:
         from internal.council.weights import load_impact_strength
 
         impact_strength = load_impact_strength()
     except Exception:
         impact_strength = 1.0
-    expert_weights = _learning_stats().get("expert_weights", weights)
+    expert_weights = weights
     picks = _pick_sections(subnets, market_context)
     rotation = _rotation_panel(subnets)
 

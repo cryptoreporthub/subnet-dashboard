@@ -299,6 +299,29 @@ def load_weights(path: Optional[str] = None) -> Dict[str, float]:
     return dict(DEFAULT_WEIGHTS)
 
 
+def load_weights_for_ui(path: Optional[str] = None) -> Dict[str, float]:
+    """split_v2 web — read council weights from worker volume when local data is absent."""
+    from internal.data_volume import needs_worker_volume_proxy
+
+    if needs_worker_volume_proxy():
+        try:
+            from internal.worker_proxy import fetch_learning_stats_sync
+
+            data = fetch_learning_stats_sync()
+            expert_weights = data.get("expert_weights")
+            if isinstance(expert_weights, dict) and expert_weights:
+                return normalize_council_weights(expert_weights)
+        except Exception:
+            pass
+    return load_weights(path)
+
+
+def weights_are_default_flat(weights: Optional[Dict[str, float]] = None) -> bool:
+    """True when every expert is still at the neutral 1.0 baseline."""
+    src = weights if isinstance(weights, dict) else load_weights()
+    return all(abs(float(src.get(name, 1.0)) - DEFAULT_WEIGHTS[name]) < 0.001 for name in DEFAULT_WEIGHTS)
+
+
 def save_weights(weights: Dict[str, float], path: Optional[str] = None) -> None:
     """Persist weights to adversarial_state.council_weights (canonical slot)
     AND mirror to root expert_weights for legacy compatibility."""

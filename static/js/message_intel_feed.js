@@ -1006,13 +1006,59 @@
     lastStatus = status;
   }
 
+  async function fetchJsonWithRetry(url, attempts) {
+    var tries = attempts || 3;
+    var lastErr = null;
+    for (var i = 0; i < tries; i++) {
+      try {
+        var res = await fetch(url);
+        if (res.ok) return await res.json();
+        if (res.status === 503 && i < tries - 1) {
+          await new Promise(function (r) {
+            setTimeout(r, 600 * (i + 1));
+          });
+          continue;
+        }
+        throw new Error("HTTP " + res.status);
+      } catch (err) {
+        lastErr = err;
+        if (i < tries - 1) {
+          await new Promise(function (r) {
+            setTimeout(r, 600 * (i + 1));
+          });
+        }
+      }
+    }
+    throw lastErr || new Error("fetch failed");
+  }
+
   async function hydrate() {
     try {
-      var statusRes = await fetch("/api/message-intel/status");
-      var status = statusRes.ok ? await statusRes.json() : null;
-      var listRes = await fetch(buildListUrl(24));
-      if (!listRes.ok) throw new Error("HTTP " + listRes.status);
-      var payload = await listRes.json();
+      var status = null;
+      var payload = null;
+      try {
+        status = await fetchJsonWithRetry("/api/message-intel/status");
+      } catch (statusErr) {
+        status = null;
+      }
+      try {
+        payload = await fetchJsonWithRetry(buildListUrl(24));
+      } catch (listErr) {
+        payload = null;
+      }
+      if (!payload) {
+        if (status && status.listener && (status.listener.live || status.store)) {
+          applyMeta({ messages: [], meta: { total_messages: 0 }, empty: true }, status);
+          if (meta) meta.textContent = "reconnecting";
+          if (feed) {
+            feed.innerHTML =
+              '<p class="empty">Desk warming — feed will retry shortly.</p>';
+          }
+          return;
+        }
+        throw new Error("message-intel unavailable");
+      }
+
       applyMeta(payload, status);
 
       var listener = (status && status.listener) || (payload.meta && payload.meta.listener) || {};
