@@ -192,9 +192,13 @@ def load_subnets_for_pump_signals() -> List[Dict[str, Any]]:
     """Merged feed when possible, else TMC — then warm TaoStats for actives."""
     subnets: List[Dict[str, Any]] = []
     try:
-        from fetchers.merged_data import get_merged_subnet_data
+        from fetchers.merged_data import _get_cached, get_merged_subnet_data
 
-        subnets = list(get_merged_subnet_data() or [])
+        cached = _get_cached("all_merged")
+        if isinstance(cached, dict):
+            subnets = list(cached.get("subnets") or [])
+        if not subnets:
+            subnets = list(get_merged_subnet_data() or [])
     except Exception as exc:
         logger.debug("merged feed unavailable for pump: %s", exc)
 

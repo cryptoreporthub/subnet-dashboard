@@ -51,7 +51,7 @@ def test_should_proxy_learning_health(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")
     monkeypatch.setenv("DATA_DIR", "/nonexistent")
-    from internal.worker_proxy import should_proxy_path
+    from internal.worker_proxy import should_proxy_path, should_proxy_write_path
 
     assert should_proxy_path("/api/learning/health") is True
     assert should_proxy_path("/api/learning/stats") is True
@@ -60,6 +60,8 @@ def test_should_proxy_learning_health(monkeypatch):
     assert should_proxy_path("/api/pump-alerts") is True
     assert should_proxy_path("/api/daily-pick") is True
     assert should_proxy_path("/api/pump-ladder/state") is True
+    assert should_proxy_write_path("POST", "/api/pump-ladder/scan") is True
+    assert should_proxy_write_path("GET", "/api/pump-ladder/scan") is False
     assert should_proxy_path("/api/predictions") is True
     assert should_proxy_path("/api/predictions/resolved") is True
     assert should_proxy_path("/api/mindmap/trail") is True

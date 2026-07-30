@@ -5,7 +5,10 @@ from __future__ import annotations
 import logging
 import threading
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
+
+import concurrent.futures
+import os
 
 from internal.file_utils import safe_read_json, safe_write_json
 from internal.pump.constants import (
@@ -246,10 +249,26 @@ def transition_subnet(
     )
 
 
+def _fetch_signal_rows_with_timeout() -> List[Dict[str, Any]]:
+    """Bound signal gather so a hung merged/TMC fetch cannot wedgie ladder scans."""
+    try:
+        timeout = float(os.environ.get("PUMP_LADDER_FETCH_TIMEOUT_SECONDS", "90"))
+    except ValueError:
+        timeout = 90.0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        fut = pool.submit(fetch_all_subnet_signals)
+        try:
+            rows = fut.result(timeout=timeout)
+            return rows if isinstance(rows, list) else []
+        except concurrent.futures.TimeoutError:
+            logger.warning("pump ladder signal fetch timed out after %.0fs", timeout)
+            return []
+
+
 def scan_all_subnets(state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Scan ~129 subnets, apply ladder transitions, persist + Soul-Map/trail."""
     # ponytail: fetch before scan lock — long signal fetch was wedging concurrent scans.
-    signal_rows = fetch_all_subnet_signals()
+    signal_rows = _fetch_signal_rows_with_timeout()
     if not signal_rows:
         return {"ok": False, "error": "no subnet signals", "scanned": 0, "transitions": []}
     if not _scan_lock.acquire(blocking=False):

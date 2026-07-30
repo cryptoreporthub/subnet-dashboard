@@ -62,6 +62,27 @@ async def _httpx_get(url: str, *, timeout: float) -> httpx.Response:
     raise OSError("httpx failed")
 
 
+async def _httpx_post(url: str, *, timeout: float, content: bytes, headers: Dict[str, str]) -> httpx.Response:
+    last_exc: Optional[BaseException] = None
+    first = True
+    hdrs = dict(headers)
+    hdrs.setdefault("X-Worker-Proxy", "1")
+    for transport in (None, _internal_transport()):
+        try:
+            client_kw: Dict[str, Any] = {"timeout": timeout}
+            if transport is not None:
+                client_kw["transport"] = transport
+            async with httpx.AsyncClient(**client_kw) as client:
+                return await client.post(url, content=content, headers=hdrs)
+        except Exception as exc:
+            last_exc = exc
+            _record_probe_error(exc, overwrite=first)
+            first = False
+    if last_exc is not None:
+        raise last_exc
+    raise OSError("httpx post failed")
+
+
 def _record_good_base(base: str) -> None:
     global _LAST_GOOD_BASE
     _LAST_GOOD_BASE = base
@@ -152,6 +173,16 @@ def should_proxy_path(path: str) -> bool:
     if path == "/api/predictions" or path.startswith("/api/predictions/"):
         return True
     return False
+
+
+def should_proxy_write_path(method: str, path: str) -> bool:
+    from internal.data_volume import needs_worker_volume_proxy
+
+    if not needs_worker_volume_proxy():
+        return False
+    if method != "POST":
+        return False
+    return path == "/api/pump-ladder/scan" or path.startswith("/api/pump-ladder/")
 
 
 def fetch_learning_stats_sync(*, timeout: Optional[float] = None) -> Dict[str, Any]:
@@ -267,3 +298,34 @@ async def proxy_get_to_worker(request: Request) -> Response:
                 "path": path,
             },
         )
+
+
+async def proxy_post_to_worker(request: Request) -> Response:
+    path = request.url.path
+    query = request.url.query
+    timeout = float(os.environ.get("WORKER_PROXY_POST_TIMEOUT_SECONDS", "120"))
+    body = await request.body()
+    headers = {
+        k: v for k, v in request.headers.items() if k.lower() not in ("host", "content-length")
+    }
+    last_exc: Optional[BaseException] = None
+    for base in worker_internal_bases():
+        url = f"{base}{path}"
+        if query:
+            url = f"{url}?{query}"
+        try:
+            resp = await _httpx_post(url, timeout=timeout, content=body, headers=headers)
+            media_type = resp.headers.get("content-type") or "application/json"
+            return Response(content=resp.content, status_code=resp.status_code, media_type=media_type)
+        except Exception as exc:
+            last_exc = exc
+            logger.debug("worker HTTP POST %s failed: %s", url, exc)
+    logger.warning("worker volume proxy POST failed %s: %s", path, last_exc)
+    return JSONResponse(
+        status_code=503,
+        content={
+            "status": "error",
+            "error": "worker_volume_proxy_failed",
+            "path": path,
+        },
+    )
