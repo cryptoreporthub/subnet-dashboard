@@ -73,7 +73,7 @@ def test_select_daily_pick_never_returns_root():
     assert pick["subnet"]["name"] != "Root"
     assert pick.get("prediction") is not None
     assert "predicted to move" in pick["prediction"]["statement"]
-    assert 1 <= pick["prediction"]["horizon_hours"] <= 4
+    assert pick["prediction"]["horizon_hours"] == 24
 
 
 def test_select_hourly_pick_never_returns_root():

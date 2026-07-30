@@ -21,10 +21,10 @@ def isolate_predictions(tmp_path, monkeypatch):
     yield pred_path
 
 
-def test_publish_gate_defaults_to_40(monkeypatch):
+def test_publish_gate_defaults_to_50(monkeypatch):
     monkeypatch.delenv("DAILY_PICK_PUBLISH_GATE", raising=False)
-    assert publish_gate_fraction() == pytest.approx(0.40)
-    assert publish_gate_percent() == 40
+    assert publish_gate_fraction() == pytest.approx(0.50)
+    assert publish_gate_percent() == 50
 
 
 def test_publish_gate_env_override(monkeypatch):

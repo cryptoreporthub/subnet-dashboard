@@ -223,7 +223,9 @@ def record_pick_prediction(
         )
     else:
         predicted_pct, magnitude_source = _predicted_pct_from_pick(pick, subnet)
-    horizon_hours = 1 if horizon_type == "hour" else 4
+    from internal.learning.pick_horizon import day_horizon_hours
+
+    horizon_hours = 1 if horizon_type == "hour" else day_horizon_hours()
     if existing_pred and existing_pred.get("horizon_hours") is not None:
         try:
             horizon_hours = int(existing_pred["horizon_hours"])
