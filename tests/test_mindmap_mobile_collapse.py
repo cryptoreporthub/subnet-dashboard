@@ -15,3 +15,8 @@ def test_mindmap_js_wires_mobile_toggle():
     js = Path("static/js/mindmap_graph.js").read_text(encoding="utf-8")
     assert "mindmap-graph-mobile-toggle" in js
     assert "is-expanded" in js
+
+def test_mindmap_mobile_toggle_has_touch_height():
+    html = open("templates/partials/mindmap_graph.html", encoding="utf-8").read()
+    assert "min-height: 48px" in html
+    assert "max-height: min(70vh" in html

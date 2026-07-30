@@ -576,6 +576,33 @@ table.tbl td.mono { font-family: var(--font-mono); }
 @media (prefers-reduced-motion: reduce) {
   .soul-orb, .soul-orb--up, .soul-orb--down { animation: none !important; }
 }
+@media (max-width: 640px) {
+  #section-council .council-grid.soulmap-constellation {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 10px;
+  }
+  #section-council .expert.card-soft.soul-orb-card {
+    padding: 10px 8px;
+  }
+  .soul-orb-wrap { height: 78px; margin-bottom: 4px; }
+  .soul-orb {
+    /* Cap orb size on phones so 2×2 fits without clipping glow */
+    width: min(var(--orb-px, 72px), 68px) !important;
+    height: min(var(--orb-px, 72px), 68px) !important;
+  }
+  .soul-orb-value { font-size: 13px; }
+  #section-council .expert .name { font-size: 12px; }
+  #section-council .expert .bias { font-size: 9px; padding: 2px 6px; }
+}
+@media (max-width: 360px) {
+  .soul-orb {
+    width: min(var(--orb-px, 72px), 58px) !important;
+    height: min(var(--orb-px, 72px), 58px) !important;
+  }
+  .soul-orb-wrap { height: 68px; }
+  .soul-orb-value { font-size: 12px; }
+}
 .expert .bias {
   display: inline-block;
   font-family: var(--font-mono);
@@ -1535,14 +1562,26 @@ footer.status[data-source*="fallback"] .st-dot {
   box-shadow: 0 0 4px rgba(255, 255, 255, 0.35);
 }
 .weighing-room .conv-ring { width: 44px; height: 44px; }
+@media (max-width: 640px) {
+  .weighing-room { padding: 0 10px; }
+  .wr-row__face {
+    min-height: 52px;
+    padding: 12px 10px;
+    gap: 8px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wr-peel__grid { grid-template-columns: 1fr; }
+}
 @media (max-width: 420px) {
   .weighing-room .section-sub { font-size: 12px; }
   .wr-row__face {
-    padding: 10px;
+    padding: 12px 10px;
     gap: 8px;
-    grid-template-columns: auto 1fr auto auto;
+    grid-template-columns: auto 1fr auto;
     align-items: start;
+    min-height: 52px;
   }
+  .wr-row__face .wr-chevron { display: none; }
   .weighing-room .conv-ring {
     width: 40px;
     height: 40px;
@@ -1552,4 +1591,5 @@ footer.status[data-source*="fallback"] .st-dot {
   .wr-chevron { align-self: center; }
   .wr-reason { -webkit-line-clamp: 3; }
   .wr-near-strip { margin: 0 10px 10px; font-size: 11px; }
+  .wr-name { font-size: 14px; }
 }
