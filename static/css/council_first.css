@@ -2519,6 +2519,48 @@ button.home-cta {
   line-height: 1.45;
 }
 
+/* Shared quiet / error / warming shells for homepage desks */
+.desk-empty {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px dashed var(--sr-hairline, rgba(148, 163, 184, 0.14));
+  border-radius: var(--radius-md, 12px);
+  background: rgba(10, 14, 24, 0.35);
+  color: var(--stage-muted, #8aa0b8);
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+}
+.desk-empty--error {
+  border-style: solid;
+  border-color: rgba(251, 191, 36, 0.32);
+  background: rgba(251, 191, 36, 0.06);
+  color: #cbd5e1;
+}
+.desk-empty--warming {
+  border-style: solid;
+  border-color: rgba(56, 189, 248, 0.28);
+  background: rgba(56, 189, 248, 0.05);
+  color: #94a3b8;
+}
+.proof-band[data-brain-state="building"] .proof-band__title {
+  margin-bottom: 10px;
+}
+.proof-band[data-brain-state="building"] .proof-band__score-hero {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+}
+.brain-letter[data-brain-state="quiet"] .brain-letter__desk-strip:empty {
+  display: none;
+}
+.brain-letter[data-brain-state="quiet"] .weekly-letter__actions {
+  margin-bottom: 4px;
+}
+.weighing-room .wr-empty.card {
+  border: 1px dashed var(--sr-hairline, rgba(148, 163, 184, 0.14));
+  background: rgba(10, 14, 24, 0.35);
+}
+
 /* §21 — market drivers UI */
 .driver-card {
   margin-top: 16px;

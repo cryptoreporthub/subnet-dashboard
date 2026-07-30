@@ -28,6 +28,8 @@
       <span class="brain-letter__desk-lbl">Next</span>
       <p class="brain-letter__desk-val">{{ bl.outlook|default('Watching the desk into resolve.', true)|truncate(90, True) }}</p>
     </article>
+    {% else %}
+    <p class="brain-letter__desk-val desk-empty">Morning brief lands after graded calls resolve.</p>
     {% endif %}
   </div>
   <details class="brain-letter__full" id="brain-letter-full">

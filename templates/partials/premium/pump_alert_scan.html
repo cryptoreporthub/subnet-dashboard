@@ -219,7 +219,7 @@
       {% include "partials/premium/pump_desk_row_scan.html" %}
       {% endfor %}
       {% else %}
-      <p class="pds-empty pump-desk__empty">Quiet — no warming or active names on the ladder right now.</p>
+      <p class="pds-empty desk-empty pump-desk__empty">Quiet — no warming or active names on the ladder right now.</p>
       {% endif %}
     </div>
     <script type="application/json" id="pump-map-data">{{ map_ns.rows|tojson }}</script>
@@ -783,5 +783,9 @@
     color: var(--pds-sub);
     border: 1px dashed var(--pds-line);
     border-radius: 10px;
+  }
+  .pds-empty.desk-empty,
+  .pds-empty {
+    background: rgba(10, 14, 24, 0.35);
   }
 </style>
