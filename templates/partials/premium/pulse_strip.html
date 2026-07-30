@@ -1,7 +1,7 @@
 {# Market pulse (one line) + Bittensor integrations — compact ribbon below hero #}
 {% set integ = integrations_strip if integrations_strip is mapping else {} %}
 {% set int_rows = integ.integrations if integ.integrations is iterable and integ.integrations is not string else [] %}
-<section class="sr-pulse-ribbon" id="section-market-pulse" aria-label="Market pulse and integrations">
+<section class="sr-pulse-ribbon desk-zone" id="section-market-pulse" aria-label="Market pulse and integrations">
   <div class="sr-pulse sr-pulse--compact sr-pulse--oneline">
     <p class="sr-pulse__oneline" role="status">
       <span class="sr-pulse__oneline-part sr-pulse__oneline-part--{% if mi_breadth == 'bullish' %}bullish{% elif mi_breadth == 'bearish' %}bearish{% else %}neutral{% endif %}">

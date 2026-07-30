@@ -2,7 +2,7 @@
 {% set bl = brain_letter if brain_letter is mapping else {} %}
 {% set bl_ok = bl.status == 'ok' and not bl.empty %}
 {% set pick = bl.pick if bl_ok and bl.pick is mapping else {} %}
-<section class="brain-letter wrap-pad" id="section-brain-letter" aria-labelledby="brain-letter-title" data-brain-state="{{ 'live' if bl_ok else 'quiet' }}"{% if bl_ok %} data-ssr="1"{% endif %}>
+<section class="brain-letter desk-zone wrap-pad" id="section-brain-letter" aria-labelledby="brain-letter-title" data-brain-state="{{ 'live' if bl_ok else 'quiet' }}"{% if bl_ok %} data-ssr="1"{% endif %}>
   <div class="brain-letter__head weekly-letter__head">
     <h2 class="brain-letter__title weekly-letter__title" id="brain-letter-title">Brain letter</h2>
     <p class="brain-letter__meta weekly-letter__meta" id="brain-letter-date">Morning brief · graded memory{% if bl.date %} · {{ bl.date }}{% endif %}</p>

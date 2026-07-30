@@ -62,7 +62,7 @@
 {% endwith %}
 {# SS-TG W0 — Subnet Summers Telegram desk first-class (not buried in More intel) #}
 {% include "partials/premium/message_intel_feed.html" %}
-<section class="sr-weighing-rib wrap-pad" id="section-strategic-weighing" aria-labelledby="sr-weighing-rib-title">
+<section class="sr-weighing-rib desk-zone wrap-pad" id="section-strategic-weighing" aria-labelledby="sr-weighing-rib-title">
   <div class="sr-weighing-rib__head">
     <h2 class="sr-weighing-rib__title" id="sr-weighing-rib-title">Council weighing</h2>
     <a class="sr-weighing-rib__link" href="#section-proof-band">Proof</a>
@@ -72,7 +72,7 @@
 {% include "partials/premium/living_focus.html" %}
 {% include "partials/premium/brain_letter.html" %}
 
-<section id="section-proof-band" class="proof-band wrap-pad" aria-labelledby="proof-band-title" data-brain-state="{{ 'live' if tb_ready else 'building' }}">
+<section id="section-proof-band" class="proof-band desk-zone wrap-pad" aria-labelledby="proof-band-title" data-brain-state="{{ 'live' if tb_ready else 'building' }}">
   <h2 id="proof-band-title" class="proof-band__title">What the loop learned</h2>
   <div class="proof-band__score-hero" id="proof-band-score-hero">
     {% if tb_ready and cal_acc is not none %}

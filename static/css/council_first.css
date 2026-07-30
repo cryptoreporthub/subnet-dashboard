@@ -2975,6 +2975,12 @@ button.home-cta {
 /* §21 L11 — brain letter */
 .brain-letter {
   margin: 8px auto 24px;
+  padding: 16px 20px;
+  border: 1px solid var(--sr-hairline, rgba(148, 163, 184, 0.12));
+  border-radius: var(--radius-md, 12px);
+  background: var(--sr-panel, rgba(10, 14, 24, 0.45));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .brain-letter__steps {
@@ -3079,8 +3085,11 @@ button.home-cta {
   margin: 24px 0;
   padding: 20px;
   border-radius: 12px;
-  border: 1px solid rgba(138, 154, 142, 0.25);
-  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--sr-hairline, rgba(148, 163, 184, 0.12));
+  background: var(--sr-panel, rgba(10, 14, 24, 0.52));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.22);
 }
 .proof-band__title { font-size: 1.25rem; margin: 0 0 16px; }
 .proof-band__score-hero { text-align: center; margin-bottom: 20px; padding: 16px; border-radius: 10px; background: rgba(0, 255, 65, 0.06); border: 1px solid rgba(0, 255, 65, 0.15); }
@@ -3099,7 +3108,7 @@ button.home-cta {
   padding: 8px 16px;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.25);
-  background: rgba(10, 14, 22, 0.9);
+  background: rgba(14, 18, 30, 0.55);
   color: var(--stage-muted);
   font-family: var(--font-mono, monospace);
   font-size: 11px;
@@ -3588,7 +3597,7 @@ button.home-cta {
 /* Pulse after hero — thin ribbon, not a dashboard strip */
 #section-market-pulse.sr-pulse--compact {
   border-top: 1px solid rgba(148, 163, 184, 0.1);
-  background: rgba(2, 4, 10, 0.65);
+  background: transparent;
   padding: 10px var(--space-5, 24px) 14px;
 }
 #section-market-pulse.sr-pulse--compact .sr-pulse__cell {
@@ -3602,6 +3611,59 @@ button.home-cta {
 /* Integrations strip lives below pulse — corner panel retired in premium.css */
 #section-market-pulse.sr-pulse--compact + .subnet-integrations-bar {
   margin-top: 0;
+}
+
+/* ---------- Desk zones + sleek panels (no flat #000 stacks) ---------- */
+.desk-zone {
+  padding-block: var(--desk-zone-pad, 16px);
+  border-top: 1px solid var(--sr-hairline, rgba(148, 163, 184, 0.12));
+}
+@media (max-width: 480px) {
+  .desk-zone { --desk-zone-pad: 12px; }
+}
+
+.k3-dossier {
+  border: 1px solid var(--sr-hairline, rgba(148, 163, 184, 0.12));
+  border-radius: var(--radius-md, 12px);
+  background: var(--sr-panel, rgba(10, 14, 24, 0.52));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
+}
+.k3-layer {
+  border-top-color: var(--sr-hairline, rgba(148, 163, 184, 0.12));
+}
+.k3-layer-header {
+  background: rgba(14, 18, 30, 0.42);
+  min-height: 52px;
+  transition: background 0.15s ease;
+}
+.k3-layer-header:hover {
+  background: rgba(20, 26, 42, 0.55);
+}
+.k3-layer-header:active {
+  background: rgba(24, 32, 50, 0.62);
+}
+.k3-layer-body {
+  background: rgba(6, 10, 18, 0.24);
+  border-top: 1px solid rgba(148, 163, 184, 0.08);
+}
+.k3-layer.open .k3-layer-header {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+.k3-dossier .k3-considered-card,
+.k3-dossier .k3-lifecycle-step,
+.k3-dossier .k3-track-window,
+.k3-dossier .k3-outcome-status,
+.k3-dossier .k3-temporal-badge,
+.k3-dossier .k3-temporal,
+.k3-dossier .k3-horizon-chip {
+  background: rgba(14, 18, 30, 0.48);
+  border-color: rgba(148, 163, 184, 0.14);
+}
+.k3-dossier .k3-considered-card:active {
+  background: rgba(20, 26, 42, 0.62);
 }
 
 
