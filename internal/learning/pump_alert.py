@@ -822,6 +822,23 @@ def build_desk_row(
     vol_pct = (
         int(round(leads["volume_intensity"] * 100)) if leads.get("volume_intensity") is not None else None
     )
+    pattern_class = None
+    pattern_label = None
+    pattern_highlight = False
+    if netuid_int is not None:
+        try:
+            from internal.pump.pattern_ledger import pattern_payload
+
+            pat = pattern_payload(netuid_int)
+            pattern_class = pat.get("pattern_class")
+            pattern_label = pat.get("pattern_label") or pat.get("waveform")
+            if pattern_class in {"PUMP_DROP_RE_PUMP", "FLAT_COIL"} and phase in {
+                "STIRRING",
+                "ACCUMULATING",
+            }:
+                pattern_highlight = True
+        except Exception:
+            pass
     return {
         "netuid": netuid_int,
         "name": name,
@@ -852,6 +869,9 @@ def build_desk_row(
         "vol_pct": vol_pct,
         "updated_at": ladder_entry.get("updated_at"),
         "updated_ago": _human_updated_ago(ladder_entry.get("updated_at")),
+        "pattern_class": pattern_class,
+        "pattern_label": pattern_label,
+        "pattern_highlight": pattern_highlight,
     }
 
 

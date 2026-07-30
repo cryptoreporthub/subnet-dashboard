@@ -86,8 +86,10 @@ def select_daily_pick(
     audit = audit_daily_pick(audit_candidate, subnets)
     final_confidence = audit["adjusted_confidence"]
     learning = unpack_score_learning_fields(score_payload)
+    from internal.learning.pick_horizon import day_horizon_hours
+
     prediction = attach_council_prediction(
-        candidate, score_payload, final_confidence, horizon_type="day", horizon_hours=4
+        candidate, score_payload, final_confidence, horizon_type="day", horizon_hours=day_horizon_hours()
     )
     reasons = pick_reasons(candidate, learning["signal_impact"])
     try:

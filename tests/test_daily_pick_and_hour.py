@@ -108,7 +108,7 @@ def test_daily_pick_never_publishes_root(client):
         pred = data["pick"].get("prediction")
         assert isinstance(pred, dict)
         assert "statement" in pred
-        assert pred.get("horizon_hours", 0) <= 4
+        assert pred.get("horizon_hours", 0) == 24
 
 
 def test_daily_pick_is_deterministic_and_cached(client):

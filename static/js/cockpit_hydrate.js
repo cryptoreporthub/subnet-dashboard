@@ -1821,9 +1821,24 @@
     if (row.telegram_chip)
       chipsHtml += '<p class="pd-chip pd-chip--tg">' + esc(row.telegram_chip) + '</p>';
     if (row.owner_chip) chipsHtml += '<p class="pd-chip pd-chip--owner">' + esc(row.owner_chip) + '</p>';
+    var patternChip = '';
+    if (
+      row.pattern_label &&
+      row.pattern_class &&
+      row.pattern_class !== 'insufficient_data'
+    ) {
+      patternChip =
+        '<span class="pump-pattern-chip" title="' +
+        esc(row.pattern_class) +
+        '">' +
+        esc(row.pattern_label) +
+        '</span>';
+    }
+    var highlightCls = row.pattern_highlight ? ' pd-lead--pattern-highlight' : '';
     return (
       '<article class="pd-lead pd-lead--' +
       esc(timing) +
+      highlightCls +
       ' pump-hero__card" id="pump-desk-hero" data-netuid="' +
       esc(row.netuid) +
       '">' +
@@ -1833,6 +1848,7 @@
       '">' +
       esc(row.badge || '') +
       '</span>' +
+      patternChip +
       '<div class="pd-lead__who"><a class="pd-lead__name" href="/subnet/' +
       esc(row.netuid) +
       '">' +
@@ -1932,6 +1948,13 @@
       ' <b class="pd-r__sn">SN' +
       esc(row.netuid) +
       '</b></span></div>' +
+      (row.pattern_label && row.pattern_class && row.pattern_class !== 'insufficient_data'
+        ? '<span class="pump-pattern-chip pump-pattern-chip--row" title="' +
+          esc(row.pattern_class) +
+          '">' +
+          esc(row.pattern_label) +
+          '</span>'
+        : '') +
       (why ? '<p class="pd-r__why">' + esc(why) + '</p>' : '') +
       _pdTriadLegs(row.triad, row.triad_labels, 'pd-r__leg') +
       '</div>' +
