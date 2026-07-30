@@ -1287,7 +1287,6 @@ button.home-cta {
   gap: 8px;
   margin-top: 10px;
 }
-}
 
 /* SS-TG v2 — telegram-pulse flagship (yellow board frame; green/blue/orange lead, violet accents) */
 .message-intel--v2 {
@@ -1319,7 +1318,7 @@ button.home-cta {
   --mi-text-faint: #4f6459;
   --mi-bg-card: #090d0b;
   /* Flagship board — yellow frame separates Summers from green site chrome */
-  border: 2px solid rgba(245, 213, 71, 0.72);
+  border: 2px solid rgba(245, 213, 71, 0.9) !important;
   border-radius: 18px;
   padding: 20px clamp(14px, 3vw, 22px) 22px;
   margin-top: 1.25rem;
@@ -1429,11 +1428,18 @@ button.home-cta {
   font-size: clamp(1.85rem, 7vw, 2.15rem) !important;
   letter-spacing: -0.02em;
   line-height: 1.02;
+  color: var(--mi-text);
   background: linear-gradient(92deg, var(--mi-text) 25%, var(--mi-green) 70%, var(--mi-blue) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  color: transparent;
+}
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .message-intel--v2 .message-intel__page-title {
+    -webkit-text-fill-color: unset;
+    color: var(--mi-green);
+    background: none;
+  }
 }
 .message-intel--v2 .message-intel__page-sub {
   color: var(--mi-text-dim);
