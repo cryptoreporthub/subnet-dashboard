@@ -973,17 +973,17 @@ def _dominant_signal_label(signal_impact: Optional[Dict[str, Any]]) -> Optional[
 
 
 
-def clamp_prediction_horizon(horizon: int, predicted_pct: Optional[float] = None) -> int:
-    """Clamp a prediction horizon to a HARD 4-hour maximum.
+def clamp_prediction_horizon(
+    horizon: int,
+    predicted_pct: Optional[float] = None,
+    *,
+    horizon_type: str = "day",
+) -> int:
+    """Clamp prediction horizon — hour picks ≤4h; day picks use ``day_horizon_hours()``."""
+    from internal.learning.pick_horizon import day_horizon_hours
 
-    All predictions surfaced to users (API responses, homepage rendering, pick
-    generation, signal-impact framing) must resolve within at most 4 hours.
-    The previous magnitude-based banding (up to 168h) is intentionally removed
-    so no prediction can ever advertise a horizon greater than 4 hours.
-
-    Returns a horizon in ``[1, 4]``.
-    """
-    return max(1, min(int(horizon), 4))
+    cap = 4 if horizon_type == "hour" else day_horizon_hours()
+    return max(1, min(int(horizon), cap))
 
 
 def build_prediction_statement(
@@ -999,7 +999,7 @@ def build_prediction_statement(
     active_signals: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Build a predictive forecast dict without persisting it."""
-    horizon = clamp_prediction_horizon(horizon, predicted_pct)
+    horizon = clamp_prediction_horizon(horizon, predicted_pct, horizon_type=horizon_type)
     prediction: Dict[str, Any] = {
         "id": _uuid.uuid4().hex[:10],
         "netuid": sn.get("netuid"),
@@ -1097,7 +1097,11 @@ def attach_council_prediction(
     predicted_pct = predicted_pct_from_score(score_payload, candidate, final_confidence)
     si = fields["signal_impact"] or {}
     source = _dominant_signal_label(si) or si.get("net_direction") or f"council_{horizon_type}_pick"
-    hours = horizon_hours if horizon_hours is not None else (1 if horizon_type == "hour" else 4)
+    from internal.learning.pick_horizon import day_horizon_hours
+
+    hours = horizon_hours if horizon_hours is not None else (
+        1 if horizon_type == "hour" else day_horizon_hours()
+    )
     return build_prediction_statement(
         sn=candidate,
         predicted_pct=predicted_pct,

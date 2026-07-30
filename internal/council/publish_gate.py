@@ -1,14 +1,14 @@
 """Central publish gate for council daily picks (env-tunable).
 
-Human-locked 2026-07-26: default 40%. Wait on sub-40 until prod data at 40%
-is reviewed (red-team was often the binding constraint, not the gate).
+Human-locked 2026-07-26: default was 40%. Acc-2 (2026-07-30) raised to 50% after
+archive review — sub-45% bucket net-negative. Rollback: DAILY_PICK_PUBLISH_GATE=0.40.
 """
 
 from __future__ import annotations
 
 import os
 
-_DEFAULT_GATE = 0.40
+_DEFAULT_GATE = 0.50
 
 
 def publish_gate_fraction() -> float:
