@@ -9,7 +9,7 @@
     {% for row in simileads_rows %}
     <li class="sr-simileads__row sr-glow-live">
       <div class="sr-simileads__top">
-        <a class="sr-simileads__name" href="/subnet/{{ row.netuid }}">{{ row.name }} <span class="sr-simileads__sn">SN{{ row.netuid }}</span></a>
+        <a class="sr-simileads__name" href="/subnet/{{ row.netuid }}">{{ row.name|default('SN' ~ row.netuid) }} <span class="sr-simileads__sn">SN{{ row.netuid }}</span></a>
         <span class="sr-simileads__lag" title="Lag index">λ {{ row.lag_index }}</span>
       </div>
       <div class="sr-simileads__bars" aria-hidden="true">

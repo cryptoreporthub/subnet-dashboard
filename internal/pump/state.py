@@ -201,7 +201,7 @@ def transition_subnet(
     try:
         from internal.subnet_names import resolve_subnet_name
 
-        entry["name"] = resolve_subnet_name(int(netuid), tmc_name=raw_name, use_taostats=False)
+        entry["name"] = resolve_subnet_name(int(netuid), tmc_name=raw_name, use_taostats=True)
     except Exception:
         entry["name"] = raw_name
     entry["composite_score"] = score
@@ -363,6 +363,20 @@ def _normalize_ladder_subnet(entry: Dict[str, Any]) -> Dict[str, Any]:
     confirm = float(entry.get("confirm_score") or 0.0)
     netuid = entry.get("netuid")
     try:
+        from internal.subnet_names import display_name_for_netuid
+
+        nu = int(netuid) if netuid is not None else None
+        if nu is not None:
+            name = display_name_for_netuid(
+                nu,
+                ladder_hint=entry.get("name"),
+                use_taostats_fallback=True,
+            )
+        else:
+            name = entry.get("name") or "SN?"
+    except Exception:
+        name = entry.get("name") or f"SN{netuid}"
+    try:
         from internal.pump.pattern_ledger import re_pump_prob_from_pattern
 
         re_pump = re_pump_prob_from_pattern(netuid)
@@ -370,7 +384,7 @@ def _normalize_ladder_subnet(entry: Dict[str, Any]) -> Dict[str, Any]:
         re_pump = 0.0
     return {
         "netuid": netuid,
-        "name": entry.get("name") or f"SN{netuid}",
+        "name": name,
         "current_phase": phase,
         "phase": phase,
         "composite_score": score,

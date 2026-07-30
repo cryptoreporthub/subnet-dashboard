@@ -9,6 +9,19 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 
+def _signal_display_name(subnet: Dict[str, Any], netuid: Any) -> str:
+    try:
+        from internal.subnet_names import display_name_for_netuid
+
+        return display_name_for_netuid(
+            int(netuid),
+            subnet_row=subnet,
+            use_taostats_fallback=True,
+        )
+    except Exception:
+        return str(subnet.get("name") or f"SN{netuid}")
+
+
 def _subnet_netuids_from_entities(entities: Any) -> List[int]:
     if not isinstance(entities, dict):
         return []
@@ -127,7 +140,7 @@ def build_subnet_signals(
 
     base = {
         "netuid": netuid,
-        "name": subnet.get("name") or f"SN{netuid}",
+        "name": _signal_display_name(subnet, netuid),
         "price": price,
         "price_change_24h": price_change,
         "momentum_1h": momentum_1h,

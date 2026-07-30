@@ -88,7 +88,7 @@
           <span class="pump-pattern-chip" title="{{ hero_row.pattern_class }}">{{ hero_row.pattern_label }}</span>
           {% endif %}
           <div class="pd-lead__who">
-            <a class="pd-lead__name" href="/subnet/{{ hero_row.netuid }}">{{ hero_row.name }} <b class="pd-lead__sn">SN{{ hero_row.netuid }}</b></a>
+            <a class="pd-lead__name" href="/subnet/{{ hero_row.netuid }}">{{ hero_row.name|default('SN' ~ hero_row.netuid) }} <b class="pd-lead__sn">SN{{ hero_row.netuid }}</b></a>
             {% if hero_row.updated_ago %}<span class="pd-lead__ago">{{ hero_row.updated_ago }}</span>{% endif %}
           </div>
           <div class="pd-lead__meter" aria-label="{{ trig_pct }} percent of the way to trigger">
@@ -179,7 +179,7 @@
               {% for k in next_up[:3] %}
               {% set lead_pct = k.to_lead_pct|default(0)|int %}
               <a class="pd-angles__chip" href="/subnet/{{ k.netuid }}" title="{{ lead_pct }}% of #1 heat">
-                <span class="pd-angles__chip-head">{{ k.name }} <b>SN{{ k.netuid }}</b></span>
+                <span class="pd-angles__chip-head">{{ k.name|default('SN' ~ k.netuid) }} <b>SN{{ k.netuid }}</b></span>
                 <span class="pd-angles__chip-meta"><i>{{ lead_pct }}% of #1</i></span>
                 <span class="pd-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100"><span class="pd-angles__bar-fill" style="width:{{ lead_pct }}%"></span></span>
               </a>
@@ -199,7 +199,7 @@
               {% for k in peers.matches[:3] %}
               {% set lead_pct = k.to_lead_pct|default(0)|int %}
               <a class="pd-peers__match" href="/subnet/{{ k.netuid }}" title="{{ lead_pct }}% of #1">
-                <span class="pd-peers__match-head">{{ k.name }} <b>SN{{ k.netuid }}</b>{% if k.lane %} <i>{{ k.lane }}</i>{% endif %}</span>
+                <span class="pd-peers__match-head">{{ k.name|default('SN' ~ k.netuid) }} <b>SN{{ k.netuid }}</b>{% if k.lane %} <i>{{ k.lane }}</i>{% endif %}</span>
                 <span class="pd-angles__chip-meta"><em>{{ lead_pct }}% of #1</em></span>
                 <span class="pd-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100"><span class="pd-angles__bar-fill" style="width:{{ lead_pct }}%"></span></span>
               </a>
@@ -216,7 +216,7 @@
             </header>
             <div class="pd-angles__list">
               <a class="pd-angles__chip pd-angles__chip--combined" href="/subnet/{{ combined.netuid }}" title="{{ lead_pct }}% of #1 · timing {{ combined.timing_pts }} · peer {{ combined.peer_pts }}">
-                <span class="pd-angles__chip-head">{{ combined.name }} <b>SN{{ combined.netuid }}</b></span>
+                <span class="pd-angles__chip-head">{{ combined.name|default('SN' ~ combined.netuid) }} <b>SN{{ combined.netuid }}</b></span>
                 <span class="pd-angles__chip-meta"><i>{{ lead_pct }}% of #1 · t{{ combined.timing_pts|int }} · p{{ combined.peer_pts|int }}</i></span>
                 <span class="pd-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100"><span class="pd-angles__bar-fill pd-angles__bar-fill--combined" style="width:{{ lead_pct }}%"></span></span>
               </a>
@@ -304,7 +304,7 @@
       {% if row.timing == 'lead' or row.timing == 'confirmed' or row.timing == 'exit' %}
       <article class="pump-alert__card pump-alert__card--{{ row.timing }} pump-alert__card--{{ row.phase|lower }}" role="listitem" data-netuid="{{ row.netuid }}" data-timing="{{ row.timing }}">
         <div class="pump-alert__card-top">
-          <a class="pump-alert__name" href="/subnet/{{ row.netuid }}">{{ row.name }}{% if row.netuid is not none %} <span class="pump-alert__sn">SN{{ row.netuid }}</span>{% endif %}</a>
+          <a class="pump-alert__name" href="/subnet/{{ row.netuid }}">{{ row.name|default('SN' ~ row.netuid) }}{% if row.netuid is not none %} <span class="pump-alert__sn">SN{{ row.netuid }}</span>{% endif %}</a>
           <span class="pump-alert__badge pump-alert__badge--{{ row.badge|lower|replace(' ', '-') }}">{{ row.badge }}</span>
         </div>
         {% if row.score is not none %}

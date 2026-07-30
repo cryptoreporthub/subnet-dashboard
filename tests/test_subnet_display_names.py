@@ -48,6 +48,22 @@ def test_load_subnets_for_display_uses_council_feed(monkeypatch):
     assert rows[0]["name"] == "BitKoop"
 
 
+def test_resolve_subnet_name_uses_tmc_when_registry_unknown(monkeypatch):
+    monkeypatch.setattr(
+        "internal.subnet_names._load_local_registry",
+        lambda: {"93": {"name": "Unknown"}},
+    )
+    monkeypatch.setattr("internal.subnet_names._remote_registry", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
+    monkeypatch.setattr(
+        "internal.subnet_names._tmc_display_names",
+        lambda: {93: "Bitcast"},
+    )
+    from internal.subnet_names import resolve_subnet_name
+
+    assert resolve_subnet_name(93, use_taostats=False) == "Bitcast"
+
+
 def test_load_subnets_for_display_registry_fallback(monkeypatch):
     monkeypatch.setattr(
         "internal.subnets.feed.get_council_subnet_feed",
