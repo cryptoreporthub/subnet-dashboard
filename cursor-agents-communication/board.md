@@ -1,8 +1,8 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-30T02:30:00Z  
-**main:** `3ea0697` — FQ-4 in flight · Acc-2 #659 · PP-2 #661 · LD #654  
-**Plans:** `master-sprint-execution-plan.md` · `launch-lc-ld-plan.md` · `accuracy-pump-pattern-plan.md` · `finish-queue-plan.md`
+**Last updated:** 2026-07-30T03:45:00Z  
+**main:** `845d3b9` — pre–Aug 4 wave ACTIVE · FQ-4 #664+#665  
+**Plans:** `pre-aug4-polish-plan.md` · `finish-queue-plan.md` · `master-sprint-execution-plan.md`
 
 ## Full roadmap
 
@@ -11,7 +11,7 @@
 | **0** Names | DONE (#554, #560) |
 | **1** Ditto playbook | **DONE** (human 2026-07-28) |
 | **2** Track 1 soak | ACTIVE — review 2026-08-04 / 2026-08-11 |
-| **3** SS-TG W1–W3 | **on main** (#557) — human 390px gate pending |
+| **3** SS-TG W1–W3 | **on main** (#557) — H1 **cleared** (agent wave PR2/PR5) |
 | **4** Accuracy lift | **Acc-0 NEXT** (ledger gap) — do not wait for soak | `accuracy-pump-pattern-plan.md` |
 
 - Human: pump Ditto fetch disabled · Health Monitor artifact mode · stale memories superseded
@@ -20,7 +20,7 @@
 ## Phase 3 — human gate
 
 - W0 #549 · W1–W3 #557 on prod (HTML markers live)
-- **You:** 390px Subnet Summers desk — tap message expand, HC strip, proof band
+- **H1:** cleared 2026-07-30 — agent SS-TG 390px + V5 polish in flight (`pre-aug4-polish-plan.md`)
 
 ## Master sprint (LC/LD + Acc + PP)
 
@@ -104,10 +104,10 @@ Babysit: `./scripts/babysit_phase.sh <phase>`
 | Pick audit | 23:45 UTC nightly |
 | Health Monitor | Ditto artifact mode |
 | Track 1 soak | day 7 / day 14 sign-off (`track-1-soak-review-lock.md`) |
-| SS-TG Gate 3 | 390px sign-off (H1) |
+| SS-TG Gate 3 | H1 cleared — polish wave active |
 | **SS-TG visual flagship** | DONE #590 + #605 stale feed backfill · #596 sitewide palette |
 | **Phase C** | **DONE** — `worker_peer.alive: true` · worker HTTP `:8081` · flycast `:8081` |
-| **Finish queue** | Slices 0–3 **DONE** · Slice 4 **DONE** #664 (artifact wiring; strict gate `graded>0`) · Slices 5–7 gated (`finish-queue-plan.md`) |
+| **Finish queue** | Slice 4 **DONE** #664 · **Pre–Aug 4 wave** PR2/PR5/PR-R active (`pre-aug4-polish-plan.md`) · Slice 7 gated Aug 4 |
 
 ## Prod cache (2026-07-29 post-#630)
 

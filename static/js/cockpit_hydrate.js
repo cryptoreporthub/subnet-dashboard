@@ -1343,6 +1343,39 @@
     }
   }
 
+  function buildPumpHeroVisual(phase, progress) {
+    var phaseSlug = String(phase || 'STIRRING').toLowerCase();
+    var arc = '';
+    var pts = Array.isArray(progress)
+      ? progress
+          .map(function (v) {
+            return Number(v);
+          })
+          .filter(function (n) {
+            return !isNaN(n);
+          })
+      : [];
+    if (pts.length >= 2) {
+      var lo = Math.min.apply(null, pts);
+      var hi = Math.max.apply(null, pts);
+      var span = hi - lo;
+      var arcPct = Math.min(92, Math.max(28, Math.round((span / Math.max(hi, 1)) * 100 + 20)));
+      arc =
+        '<svg class="pds-hero__arc" viewBox="0 0 120 72" aria-hidden="true">' +
+        '<path class="pds-hero__arc-track" d="M8 64 A52 52 0 0 1 112 64" fill="none"/>' +
+        '<path class="pds-hero__arc-fill" d="M8 64 A52 52 0 0 1 112 64" fill="none" pathLength="100" stroke-dasharray="' +
+        arcPct +
+        ' 100"/></svg>';
+    }
+    return (
+      '<div class="pds-hero__visual pds-hero__visual--' +
+      esc(phaseSlug) +
+      '" data-slot="hero-visual">' +
+      arc +
+      '</div>'
+    );
+  }
+
   function renderPumpScanHeroCard(row) {
     if (!row || row.netuid == null) return '';
     var triad = row.triad || {};
@@ -1405,7 +1438,7 @@
       esc(row.netuid) +
       '">' +
       '<div class="pds-hero__stage">' +
-      '<div class="pds-hero__visual" aria-hidden="true" data-slot="hero-visual"></div>' +
+      buildPumpHeroVisual(phase, progress) +
       '<div class="pds-hero__copy">' +
       '<div class="pds-hero__top">' +
       '<span class="pds-hero__badge pds-hero__badge--' +

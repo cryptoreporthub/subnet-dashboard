@@ -71,8 +71,19 @@
 
       <article class="pds-hero pds-hero--{{ timing }} pump-hero__card" id="pump-desk-hero" data-netuid="{{ hero_row.netuid }}">
         <div class="pds-hero__stage">
-          {# Visual slot reserved — timer / art later; do not fill with clutter #}
-          <div class="pds-hero__visual" aria-hidden="true" data-slot="hero-visual"></div>
+          <div class="pds-hero__visual pds-hero__visual--{{ phase|lower }}" aria-hidden="true" data-slot="hero-visual">
+            {% if progress_pts|length >= 2 %}
+            {% set arc_first = progress_pts[0]|float %}
+            {% set arc_last = progress_pts[-1]|float %}
+            {% set arc_span = (arc_last - arc_first)|abs %}
+            {% set arc_hi = [arc_last, 1.0]|max %}
+            {% set arc_pct = [[((arc_span / arc_hi * 100 + 20)|round(0)|int), 28]|max, 92]|min %}
+            <svg class="pds-hero__arc" viewBox="0 0 120 72" aria-hidden="true">
+              <path class="pds-hero__arc-track" d="M8 64 A52 52 0 0 1 112 64" fill="none"/>
+              <path class="pds-hero__arc-fill" d="M8 64 A52 52 0 0 1 112 64" fill="none" pathLength="100" stroke-dasharray="{{ arc_pct }} 100"/>
+            </svg>
+            {% endif %}
+          </div>
           <div class="pds-hero__copy">
             <div class="pds-hero__top">
               <span class="pds-hero__badge pds-hero__badge--{{ badge_slug }}">{{ hero_row.badge }}</span>
@@ -362,11 +373,46 @@
     inset: -12% -6% -20% 42%;
     pointer-events: none;
     z-index: 0;
-    /* Reserved for timer / art later — empty on purpose */
+    overflow: hidden;
     background:
       radial-gradient(ellipse 60% 55% at 68% 42%, rgba(56, 189, 248, 0.16), transparent 68%),
       radial-gradient(ellipse 45% 40% at 92% 18%, rgba(14, 165, 233, 0.1), transparent 62%);
   }
+  .pds-hero__visual--accumulating {
+    background:
+      radial-gradient(ellipse 58% 52% at 70% 40%, rgba(251, 191, 36, 0.18), transparent 68%),
+      radial-gradient(ellipse 42% 38% at 90% 16%, rgba(245, 158, 11, 0.12), transparent 62%);
+  }
+  .pds-hero__visual--pumping {
+    background:
+      radial-gradient(ellipse 58% 52% at 70% 40%, rgba(251, 113, 133, 0.2), transparent 68%),
+      radial-gradient(ellipse 42% 38% at 90% 16%, rgba(244, 63, 94, 0.12), transparent 62%);
+  }
+  .pds-hero__visual--cooling {
+    background:
+      radial-gradient(ellipse 58% 52% at 70% 40%, rgba(52, 211, 153, 0.16), transparent 68%),
+      radial-gradient(ellipse 42% 38% at 90% 16%, rgba(16, 185, 129, 0.1), transparent 62%);
+  }
+  .pds-hero__arc {
+    position: absolute;
+    right: 4%;
+    top: 8%;
+    width: min(42%, 7rem);
+    height: auto;
+    opacity: 0.85;
+  }
+  .pds-hero__arc-track {
+    stroke: rgba(148, 163, 184, 0.2);
+    stroke-width: 3;
+    stroke-linecap: round;
+  }
+  .pds-hero__arc-fill {
+    stroke: rgba(56, 189, 248, 0.55);
+    stroke-width: 3;
+    stroke-linecap: round;
+  }
+  .pds-hero--confirmed .pds-hero__arc-fill { stroke: rgba(251, 113, 133, 0.6); }
+  .pds-hero--exit .pds-hero__arc-fill { stroke: rgba(52, 211, 153, 0.55); }
   .pds-hero__copy { position: relative; z-index: 1; }
   .pds-hero__top {
     display: flex;
