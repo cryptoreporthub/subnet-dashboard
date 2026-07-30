@@ -708,7 +708,7 @@
   function renderTrending(rows, listener, windowLabel) {
     if (listenerIdle(listener) && (!rows || !rows.length)) {
       return (
-        '<p class="empty">Telegram listener is not running yet — trending fills once messages are ingested.</p>'
+        '<p class="empty">Quiet — Telegram ingest is warming up. Trending fills as Subnet Summers messages land.</p>'
       );
     }
     if (!rows || !rows.length) {

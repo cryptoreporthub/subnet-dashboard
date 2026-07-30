@@ -23,7 +23,7 @@ def test_summers_desk_first_class_on_home():
     assert "message-intel__hero" in html
     assert "message-intel__legend" in html
     assert "message-intel__sec-bar" in html
-    assert "message-intel__sw--pink" in html
+    assert "message-intel__sw--violet" in html
     assert "message-intel__flagship-chip" in html
     assert "FLAGSHIP" in html
     assert "Loading live feed" in html or "Warming up Telegram" in html
@@ -50,9 +50,13 @@ def test_summers_flagship_css_tokens():
     assert "--mi-green:" in css
     assert "--mi-blue:" in css
     assert "--mi-orange:" in css
-    assert "--mi-pink:" in css
+    assert "--mi-violet:" in css
+    # Compat: --mi-pink aliases onto violet after sitewide magenta→violet migration
+    assert "--mi-pink: var(--mi-violet)" in css
     assert "--mi-yellow: #f5d547" in css
     assert "rgba(245, 213, 71, 0.72)" in css  # yellow flagship board border
     assert ".message-intel__flagship-chip" in css
     assert ".message-intel__rail-node" in css
     assert ".message-intel__sec-bar--green" in css
+    assert "message-intel-wave" in css
+    assert "message-intel-conv-glow" in css
