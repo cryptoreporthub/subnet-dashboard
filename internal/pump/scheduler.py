@@ -14,6 +14,7 @@ from internal.pump.state import scan_all_subnets
 logger = logging.getLogger(__name__)
 
 PUMP_LADDER_REFRESH_MINUTES = int(os.environ.get("PUMP_LADDER_REFRESH_MINUTES", "20"))
+PUMP_LADDER_RETRY_MINUTES = int(os.environ.get("PUMP_LADDER_RETRY_MINUTES", "3"))
 JOB_ID = "pump-ladder-scheduler"
 
 _scheduler: Optional["PumpLadderScheduler"] = None
@@ -74,6 +75,19 @@ def _read_persisted_scheduler_meta() -> Dict[str, Any]:
         }
     except Exception:
         return {}
+
+
+def _needs_fast_retry(result: Dict[str, Any]) -> bool:
+    if result.get("ok"):
+        return False
+    blob = " ".join(str(result.get(k) or "") for k in ("error", "skipped")).lower()
+    needles = (
+        "interpreter shutdown",
+        "scan_in_progress",
+        "heavy_job_busy",
+        "no subnet signals",
+    )
+    return any(n in blob for n in needles)
 
 
 def record_ladder_scan_run(
@@ -161,6 +175,12 @@ class PumpLadderScheduler:
                 return
         schedule_in_seconds(JOB_ID, self._tick, minutes * 60)
 
+    def _schedule_next(self, result: Dict[str, Any]) -> None:
+        if _needs_fast_retry(result):
+            self._schedule(PUMP_LADDER_RETRY_MINUTES)
+        else:
+            self._schedule(self.refresh_minutes)
+
     def _tick(self) -> Dict[str, Any]:
         from internal.heavy_job_gate import heavy_job_slot
 
@@ -168,8 +188,7 @@ class PumpLadderScheduler:
             if not acquired:
                 result = {"ok": True, "run_at": _now_iso(), "skipped": "heavy_job_busy"}
                 record_ladder_scan_run(result, sched=self)
-                if self._running:
-                    self._schedule(self.refresh_minutes)
+                self._schedule_next(result)
                 return result
             return self._tick_body()
 
@@ -186,8 +205,7 @@ class PumpLadderScheduler:
         if not result.get("ok"):
             record_ladder_scan_run(result, sched=self)
 
-        if self._running:
-            self._schedule(self.refresh_minutes)
+        self._schedule_next(result)
         return result
 
 

@@ -20,11 +20,31 @@ def test_heavy_job_skip_records_last_run_at():
 
     with patch("internal.heavy_job_gate.heavy_job_slot", _busy):
         with patch("internal.pump.scheduler._persist_scheduler_meta") as persist:
-            result = sched._tick()
+            with patch.object(sched, "_schedule_next") as schedule_next:
+                result = sched._tick()
 
     assert result.get("skipped") == "heavy_job_busy"
     assert sched._last_run_at is not None
     persist.assert_called_once()
+    schedule_next.assert_called_once_with(result)
+
+
+def test_fast_retry_on_shutdown_error():
+    from internal.pump.scheduler import _needs_fast_retry
+
+    assert _needs_fast_retry({"ok": False, "error": "cannot schedule new futures after interpreter shutdown"})
+    assert not _needs_fast_retry({"ok": True})
+    assert not _needs_fast_retry({"ok": False, "error": "disk full"})
+
+
+def test_schedule_next_uses_retry_minutes_on_transient_failure():
+    from internal.pump.scheduler import PumpLadderScheduler
+
+    sched = PumpLadderScheduler(refresh_minutes=20)
+    sched._running = True
+    with patch.object(sched, "_schedule") as schedule:
+        sched._schedule_next({"ok": False, "error": "scan_in_progress"})
+    schedule.assert_called_once_with(3)
 
 
 def test_get_scheduler_state_falls_back_to_persisted_meta(tmp_path, monkeypatch):

@@ -255,7 +255,8 @@ def _fetch_signal_rows_with_timeout() -> List[Dict[str, Any]]:
         timeout = float(os.environ.get("PUMP_LADDER_FETCH_TIMEOUT_SECONDS", "90"))
     except ValueError:
         timeout = 90.0
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    try:
         fut = pool.submit(fetch_all_subnet_signals)
         try:
             rows = fut.result(timeout=timeout)
@@ -263,6 +264,9 @@ def _fetch_signal_rows_with_timeout() -> List[Dict[str, Any]]:
         except concurrent.futures.TimeoutError:
             logger.warning("pump ladder signal fetch timed out after %.0fs", timeout)
             return []
+    finally:
+        # wait=False: never wedge shutdown; avoids "schedule futures after shutdown".
+        pool.shutdown(wait=False, cancel_futures=True)
 
 
 def scan_all_subnets(state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
