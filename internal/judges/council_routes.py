@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter
@@ -133,7 +133,7 @@ def _api_council_sync():
                 "status": "degraded",
                 "subnets": [],
                 "judges": [],
-                "meta": {"count": 0, "source": "none", "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")},
+                "meta": {"count": 0, "source": "none", "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")},
             }
 
         merged = _cap_subnets_for_judges(merged)
@@ -153,7 +153,7 @@ def _api_council_sync():
                 "count": len(merged),
                 "judged": len(scored) if scored else 0,
                 "source": source,
-                "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             },
         }
     except Exception as e:
@@ -182,7 +182,7 @@ def _api_judges_sync():
                 "meta": {
                     "count": len(result),
                     "degraded_sources": [],
-                    "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 },
             }
 

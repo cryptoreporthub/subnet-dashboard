@@ -54,7 +54,10 @@ jobs:
           python -m pytest tests/test_endpoint_contract.py tests/test_server.py \
             tests/test_learning_loop_health.py \
             tests/test_prediction_loop_closure.py \
-            tests/test_learning_loop_impact.py -q
+            tests/test_learning_loop_impact.py \
+            tests/test_audit_remediation.py \
+            tests/test_phase_f_sqlite_store.py \
+            tests/test_council_side_effect_honesty.py -q
 
       - name: Security scan (bandit high)
         run: bandit -q -r server.py internal tests --severity-level high

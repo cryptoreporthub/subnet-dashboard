@@ -1,10 +1,17 @@
-"""SQLite engine for durable trace / disposition / lineage storage (Phase F)."""
+"""SQLite engine for durable trace / disposition / lineage storage (Phase F).
+
+Uses shared WAL connections + per-path locking via fetchers._sqlite (§31-8).
+"""
 
 from __future__ import annotations
 
 import os
 import sqlite3
-from typing import Optional
+from contextlib import contextmanager
+from typing import Iterator, Optional
+
+from fetchers._sqlite import db_conn as _shared_db_conn
+from fetchers._sqlite import get_connection
 
 STORE_DB_PATH = os.environ.get("STORE_DB_PATH", "data/store.db")
 
@@ -47,9 +54,21 @@ def ensure_db_dir(path: Optional[str] = None) -> str:
     return db_path
 
 
-def connect(path: Optional[str] = None) -> sqlite3.Connection:
+@contextmanager
+def db_conn(path: Optional[str] = None) -> Iterator[sqlite3.Connection]:
+    """Shared WAL connection with per-path lock. Do not close the connection."""
     db_path = ensure_db_dir(path)
-    conn = sqlite3.connect(db_path, check_same_thread=False)
+    with _shared_db_conn(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        yield conn
+
+
+def connect(path: Optional[str] = None) -> sqlite3.Connection:
+    """Return shared WAL connection (prefer ``db_conn`` context manager)."""
+    db_path = ensure_db_dir(path)
+    # Acquire via helper so lock+WAL apply; caller using bare connect() without
+    # the lock is discouraged — use db_conn().
+    conn = get_connection(db_path)
     conn.row_factory = sqlite3.Row
     return conn
 

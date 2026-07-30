@@ -7,14 +7,18 @@ import threading
 from contextlib import contextmanager
 from typing import Iterator
 
+_meta_lock = threading.Lock()
 _locks: dict[str, threading.Lock] = {}
 _conns: dict[str, sqlite3.Connection] = {}
 
 
 def _lock_for(path: str) -> threading.Lock:
-    if path not in _locks:
-        _locks[path] = threading.Lock()
-    return _locks[path]
+    with _meta_lock:
+        lock = _locks.get(path)
+        if lock is None:
+            lock = threading.Lock()
+            _locks[path] = lock
+        return lock
 
 
 def get_connection(path: str) -> sqlite3.Connection:

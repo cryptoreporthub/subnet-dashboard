@@ -4,7 +4,7 @@
 
 ### Fixed
 - Homepage now fetches live data from API endpoints
-- React frontend uses `useApiData` hook for `/api/subnets`
+- Jinja templates + vanilla JS fetch `/api/subnets` for live homepage data
 - Auto-refresh every 30 seconds for live updates
 
 ### API Endpoints

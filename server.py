@@ -1599,7 +1599,7 @@ async def post_feedback(request: Request):
             bridge = MindmapBridge()
             bridge.append_learning_trail(
                 {
-                    "time": datetime.utcnow().isoformat() + "Z",
+                    "time": datetime.now(timezone.utc).isoformat() + "Z",
                     "subnet": payload.get("subnet") or payload.get("name"),
                     "evidence": {"note": note},
                     "signal": "user_feedback",
@@ -1955,7 +1955,7 @@ def _safe_simivision_payload(
         subnets, daily_pick, market_context
     )
     board_source = "council-shortlist" if raw_top else "council-shortlist-empty"
-    updated_at = datetime.utcnow().isoformat() + "Z"
+    updated_at = datetime.now(timezone.utc).isoformat() + "Z"
     top, weigh_meta = shape_weighing_board(
         raw_top,
         pool_count=total_considered,
@@ -2313,7 +2313,7 @@ async def api_daily_pick(full: bool = False):
         return _attach_daily_pick_meta(
             {
             "status": "pending",
-            "date": datetime.utcnow().date().isoformat(),
+            "date": datetime.now(timezone.utc).date().isoformat(),
             "action": "HOLD",
             "reason": "today's pick forming",
             "pick": None,
@@ -2326,7 +2326,7 @@ async def api_daily_pick(full: bool = False):
         return _attach_daily_pick_meta(
             {
             "status": "timeout",
-            "date": datetime.utcnow().date().isoformat(),
+            "date": datetime.now(timezone.utc).date().isoformat(),
             "action": "HOLD",
             "reason": "pick handler busy — retry shortly",
             "pick": None,
@@ -2337,7 +2337,7 @@ async def api_daily_pick(full: bool = False):
         return _attach_daily_pick_meta(
             {
             "status": "error",
-            "date": datetime.utcnow().date().isoformat(),
+            "date": datetime.now(timezone.utc).date().isoformat(),
             "action": "HOLD",
             "reason": str(e),
             "pick": None,

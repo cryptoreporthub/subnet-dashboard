@@ -14,8 +14,11 @@ resolve (Option C — two-tier weighted scoring architecture).
 from __future__ import annotations
 
 import json
+import logging
 import os
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_WEIGHTS = {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
 SOUL_MAP_PATH = os.path.join("data", "soul_map.json")
@@ -323,6 +326,8 @@ def rebalance_council_weights(
 
     rows_replayed = sum(1 for row in merged_rows if expert_for_replay_row(row))
 
+    trail_emitted = True
+    warnings: List[str] = []
     if save:
         save_weights(blended, soul)
         try:
@@ -337,11 +342,15 @@ def rebalance_council_weights(
                         reason="council_rebalance",
                     )
         except Exception:
-            pass
+            logger.exception("rebalance_council_weights: emit_weight_change failed")
+            trail_emitted = False
+            warnings.append("emit_weight_change")
 
     return {
         "ok": True,
         "saved": bool(save),
+        "trail_emitted": trail_emitted if save else None,
+        "warnings": warnings,
         "replay_share": replay_share,
         "rows_replayed": len(merged_rows),
         "rows_skipped_pump": rows_skipped_pump,
