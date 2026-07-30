@@ -200,7 +200,11 @@ def merged_replay_rows(
     min_current_for_archive: int = ARCHIVE_REPLAY_MIN_CURRENT,
 ) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Current-epoch rows plus archive backfill when graded count is below threshold."""
-    path = predictions_path or os.path.join("data", "predictions.json")
+    path = predictions_path
+    if path is None:
+        from internal.learning.predictions_store import PREDICTIONS_PATH
+
+        path = PREDICTIONS_PATH
     current = _replay_rows_from_blob(_load_predictions_blob(path))
     meta: Dict[str, Any] = {
         "current_graded": len(current),
@@ -293,7 +297,11 @@ def rebalance_council_weights(
     from internal.council.grading import is_pump_desk_claim
     from internal.council.signal_expert import expert_for_replay_row
 
-    path = predictions_path or os.path.join("data", "predictions.json")
+    path = predictions_path
+    if path is None:
+        from internal.learning.predictions_store import PREDICTIONS_PATH
+
+        path = PREDICTIONS_PATH
     soul = soul_map_path or SOUL_MAP_PATH
     before = load_weights(soul)
     merged_rows, merge_meta = merged_replay_rows(path)
@@ -440,7 +448,10 @@ def maybe_rebalance_council_weights_on_boot() -> Optional[Dict[str, Any]]:
     if not force:
         if not weights_are_near_flat():
             return None
-        if not merge_meta.get("archive_used"):
+        current = load_weights()
+        replayed = replay_weights_from_predictions()
+        blended = soft_blend_weights(replayed, prior=dict(DEFAULT_WEIGHTS), replay_share=0.7)
+        if all(abs(float(blended.get(name, 1.0)) - float(current.get(name, 1.0))) < 0.02 for name in DEFAULT_WEIGHTS):
             return None
 
     return rebalance_council_weights(save=True)
