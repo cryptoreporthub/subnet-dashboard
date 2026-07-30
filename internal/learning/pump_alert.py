@@ -1026,16 +1026,17 @@ def _finalize_pump_payload(
 
 
 def _pump_subnet_rows(subnets: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
-    """Enriched subnet rows for name resolution on pump desk cards."""
+    """Subnet rows for name hints — fast TMC list, not full council feed wedge."""
     rows = subnets if isinstance(subnets, list) else []
     if not rows:
         try:
-            from internal.subnets.feed import load_subnets_for_display
+            from fetchers.taomarketcap import get_all_subnets
+            from internal.subnet_names import enrich_subnet_rows
 
-            rows = load_subnets_for_display(timeout=4.0)
+            rows = enrich_subnet_rows(list(get_all_subnets() or []))
         except Exception:
             rows = []
-    if rows:
+    elif rows:
         try:
             from internal.subnet_names import enrich_subnet_rows
 
