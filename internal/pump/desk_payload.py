@@ -18,7 +18,7 @@ def _local_pump_alerts_desk(
 
         age = ladder_age_minutes()
         if age is None or age > float(STALE_MINUTES):
-            kick_ladder_fresh()
+            kick_ladder_fresh(force=True)
     except Exception as exc:
         logger.debug("pump desk ladder kick skipped: %s", exc)
 

@@ -11,13 +11,19 @@ from starlette.responses import Response
 
 class WorkerVolumeProxyMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
-        if request.method != "GET":
-            return await call_next(request)
         flag = os.environ.get("DISABLE_WORKER_PROXY", "").strip().lower()
         if flag in ("1", "true", "yes", "on"):
             return await call_next(request)
-        from internal.worker_proxy import proxy_get_to_worker, should_proxy_path
+        from internal.worker_proxy import (
+            proxy_get_to_worker,
+            proxy_post_to_worker,
+            should_proxy_path,
+            should_proxy_write_path,
+        )
 
-        if should_proxy_path(request.url.path):
+        path = request.url.path
+        if request.method == "GET" and should_proxy_path(path):
             return await proxy_get_to_worker(request)
+        if should_proxy_write_path(request.method, path):
+            return await proxy_post_to_worker(request)
         return await call_next(request)
