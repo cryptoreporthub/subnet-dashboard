@@ -21,6 +21,11 @@ from internal.integrations.clients import (
     thirty_spokes_base_url,
     thirty_spokes_chat_model,
 )
+from internal.simivision.graded_context import (
+    build_graded_context,
+    build_offline_graded_reply,
+    format_graded_prompt_block,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +70,7 @@ def build_simivision_prompt(message: str, context: Dict[str, Any]) -> str:
         inv_block = f"\nOn-chain investigation data (cite wallets/amounts from this):\n{json.dumps(payload, default=str)[:5000]}\n"
         if tools:
             inv_block += f"Tool results:\n{json.dumps(tools, default=str)[:2000]}\n"
+    graded_block = format_graded_prompt_block(context.get("graded") or {})
     return (
         "You are SimiVision, an AI analyst for Bittensor subnets with on-chain investigation. "
         "When investigation data is present, answer wallet/sell/transfer questions from those facts. "
@@ -74,6 +80,7 @@ def build_simivision_prompt(message: str, context: Dict[str, Any]) -> str:
         f"Source: {context.get('source', 'unknown')}\n"
         f"Council expert weights (self-learning loop): {weights_str}\n"
         f"{inv_block}"
+        f"{graded_block}"
         "Answer concisely and tie the reasoning back to the picks and expert weights when relevant."
     )
 
@@ -311,6 +318,10 @@ def call_llm(prompt: str, message: str, context: Dict[str, Any]) -> Tuple[str, b
         except Exception as exc:
             logger.warning("LLM API call errored (%s); falling back to local explainer", exc)
 
+    offline = build_offline_graded_reply(message, context)
+    if offline:
+        return offline, False, ""
+
     try:
         from internal.llm.explainer import generate_ai_response
 
@@ -381,6 +392,15 @@ def build_chat_context() -> Dict[str, Any]:
     return dict(ctx)
 
 
+def _chat_sources_enabled() -> bool:
+    return os.environ.get("SIMIVISION_CHAT_SOURCES", "1").lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
 def _display_model(llm_used: bool, provider: str) -> str:
     if not llm_used:
         return "local-fallback"
@@ -393,12 +413,14 @@ def _display_model(llm_used: bool, provider: str) -> str:
     return f"chutes/{model_tag.split('/')[-1].lower()}"
 
 
-def _run_chat_sync(message: str) -> Dict[str, str]:
+def _run_chat_sync(message: str) -> Dict[str, Any]:
     """Blocking chat path — run in a worker thread with a hard timeout."""
     if not message.strip():
         return {"reply": "Please provide a question in the `message` field.", "model": ""}
 
     context = build_chat_context()
+    graded = build_graded_context(message, context.get("daily_pick"))
+    context["graded"] = graded
     inv = _maybe_investigation_context(message)
     if inv:
         context["investigation"] = inv
@@ -411,10 +433,17 @@ def _run_chat_sync(message: str) -> Dict[str, str]:
         status = "offline"
     else:
         status = "local-fallback"
-    return {"reply": sanitize_reply(reply), "model": model, "status": status}
+    out: Dict[str, Any] = {
+        "reply": sanitize_reply(reply),
+        "model": model,
+        "status": status,
+    }
+    if _chat_sources_enabled():
+        out["sources"] = graded.get("sources") or []
+    return out
 
 
-async def handle_simivision_chat(message: str) -> Dict[str, str]:
+async def handle_simivision_chat(message: str) -> Dict[str, Any]:
     """Run SimiVision chat and return ``{reply, model}`` (XSS-escaped reply)."""
     try:
         return await asyncio.wait_for(
@@ -452,7 +481,11 @@ async def iter_simivision_chat_chunks(message: str) -> AsyncIterator[str]:
     reply = result.get("reply") or ""
     model = result.get("model") or ""
     status = result.get("status") or ("ok" if model and model != "local-fallback" else "local-fallback")
-    yield f"event: meta\ndata: {json.dumps({'model': model, 'status': status})}\n\n"
+    meta_payload: Dict[str, Any] = {"model": model, "status": status}
+    sources = result.get("sources")
+    if isinstance(sources, list) and sources:
+        meta_payload["sources"] = sources
+    yield f"event: meta\ndata: {json.dumps(meta_payload)}\n\n"
     if not reply:
         yield "event: done\ndata: {}\n\n"
         return
