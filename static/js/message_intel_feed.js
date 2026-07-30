@@ -1051,8 +1051,8 @@
           applyMeta({ messages: [], meta: { total_messages: 0 }, empty: true }, status);
           if (meta) meta.textContent = "reconnecting";
           if (feed) {
-            feed.innerHTML =
-              '<p class="empty">Desk warming — feed will retry shortly.</p>';
+          feed.innerHTML =
+            '<p class="desk-empty desk-empty--warming">Desk warming — feed will retry shortly.</p>';
           }
           return;
         }
@@ -1112,16 +1112,16 @@
       if (meta) meta.textContent = "unavailable";
       if (pulse) pulse.hidden = true;
       if (trendingEl) {
-        trendingEl.innerHTML = '<p class="empty">Could not load trending.</p>';
+        trendingEl.innerHTML = '<p class="desk-empty desk-empty--error">Trending temporarily unavailable.</p>';
       }
       if (championsEl) {
-        championsEl.innerHTML = '<p class="empty">Could not load champions.</p>';
+        championsEl.innerHTML = '<p class="desk-empty desk-empty--error">Champions temporarily unavailable.</p>';
       }
       if (crownsEl) {
-        crownsEl.innerHTML = '<p class="empty">Could not load reaction crowns.</p>';
+        crownsEl.innerHTML = '<p class="desk-empty desk-empty--error">Reaction crowns temporarily unavailable.</p>';
       }
       feed.innerHTML =
-        '<p class="empty">Could not load Telegram message intel — try again shortly.</p>';
+        '<p class="desk-empty desk-empty--error">Telegram desk unreachable — will retry shortly.</p>';
     }
   }
 
