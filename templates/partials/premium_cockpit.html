@@ -91,6 +91,32 @@
     <button type="button" class="proof-band__tab proof-band__tab--active" data-proof-tab="council" role="tab" aria-selected="true">Council accuracy</button>
     <button type="button" class="proof-band__tab" data-proof-tab="pump" role="tab" aria-selected="false">Pump early hit-rate</button>
   </div>
+  <div class="proof-band__subpanels" id="proof-band-subpanels" aria-label="Evidence at a glance">
+    <article class="proof-band__subpanel proof-band__subpanel--council">
+      <span class="proof-band__subpanel-bar proof-band__subpanel-bar--green" aria-hidden="true"></span>
+      <h3 class="proof-band__subpanel-label">Council accuracy</h3>
+      <p class="proof-band__subpanel-val" id="proof-sub-council-val">—</p>
+      <p class="proof-band__subpanel-meta desk-empty" id="proof-sub-council-meta">Building graded history</p>
+    </article>
+    <article class="proof-band__subpanel proof-band__subpanel--telegram">
+      <span class="proof-band__subpanel-bar proof-band__subpanel-bar--blue" aria-hidden="true"></span>
+      <h3 class="proof-band__subpanel-label">Telegram proof</h3>
+      <p class="proof-band__subpanel-val" id="proof-sub-telegram-val">—</p>
+      <p class="proof-band__subpanel-meta desk-empty" id="proof-sub-telegram-meta">Call proof grades after resolve</p>
+    </article>
+    <article class="proof-band__subpanel proof-band__subpanel--resolver">
+      <span class="proof-band__subpanel-bar proof-band__subpanel-bar--orange" aria-hidden="true"></span>
+      <h3 class="proof-band__subpanel-label">Resolver</h3>
+      <p class="proof-band__subpanel-val" id="proof-sub-resolver-val">—</p>
+      <p class="proof-band__subpanel-meta desk-empty" id="proof-sub-resolver-meta">Backlog clears as picks grade</p>
+    </article>
+    <article class="proof-band__subpanel proof-band__subpanel--loop">
+      <span class="proof-band__subpanel-bar proof-band__subpanel-bar--lilac" aria-hidden="true"></span>
+      <h3 class="proof-band__subpanel-label">Loop learned</h3>
+      <p class="proof-band__subpanel-val" id="proof-sub-loop-val">—</p>
+      <p class="proof-band__subpanel-meta desk-empty" id="proof-sub-loop-meta">Signal rankings fill after grades</p>
+    </article>
+  </div>
   <div id="proof-tab-council" class="proof-band__panel">
     <div class="whats-working" id="section-whats-working" aria-labelledby="whats-working-title">
     <h3 class="whats-working__title" id="whats-working-title">What&apos;s working</h3>

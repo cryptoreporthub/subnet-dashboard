@@ -1,7 +1,7 @@
 # Completion runbook — merge → babysit → next
 
 **Created:** 2026-07-30  
-**main:** `0d52516` (post #670 pre–Aug 4 unblock)  
+**main:** `5c8f9cc` (post #671 listener + empty kit)  
 **Cadence:** one PR → merge → `./scripts/babysit_phase.sh sprint` + `./scripts/check_learning_loop.sh` → Ditto STATUS → next PR
 
 ---
@@ -11,7 +11,7 @@
 | Track | Status |
 |-------|--------|
 | Master sprint (M0–FQ-4) | **DONE** |
-| Pre–Aug 4 wave (PR1–PR10) | **IN PROGRESS** — PR1/2/5/R partial in #664–#670 |
+| Pre–Aug 4 wave (PR1–PR10) | **PRs OPEN** — #672–#674 (merge → babysit) |
 | Wave 3 (Slice 7 accuracy lift) | **GATED** — H2 soak GO **2026-08-04** |
 | Human lanes H2–H7 | Parallel (never block agent PRs) |
 
@@ -68,14 +68,14 @@ Branch prefix: `cursor/<slug>-7728`
 |---|-----|-------------|--------|------|
 | 1 | Combined effectiveness | — | **DONE** #664+#665 | `combined-angles-lock.md` |
 | 2 | SS-TG V5 visual (lite) | — | **DONE** #670 | fonts + 390px |
-| 3 | Listener reconnect + empty kit | `ss-tg-listener-empty-kit` | **NEXT** | PR3 below |
-| 4 | Topic chips v1 | `ss-tg-topic-chips-v1` | pending | |
+| 3 | Listener reconnect + empty kit | `ss-tg-listener-empty-kit` | **DONE** #671 | |
+| 4 | Topic chips v1 | `ss-tg-topic-chips-v1` | **OPEN** #672 | |
 | 5 | Pump hero D+C-lite | — | **DONE** #670 | |
-| 6 | Sticky spine + status rail | `visual-sticky-spine` | partial (sticky exists; badge 390px) | |
-| 7 | Evidence sub-panels | `visual-evidence-panels` | pending | |
-| 8 | `/pump` desk parity | `pump-full-desk-parity` | pending | |
-| 9 | Mind map mobile collapse | `mindmap-mobile-collapse` | pending | |
-| 10 | Living Focus CTA polish | `lf-cta-polish` | pending | |
+| 6 | Sticky spine + status rail | `visual-sticky-spine` | **OPEN** #673 | |
+| 7 | Evidence sub-panels | `visual-evidence-panels` | **OPEN** #674 (bundled w/ PR8–10) | |
+| 8 | `/pump` desk parity | `pump-full-desk-parity` | **OPEN** #674 | |
+| 9 | Mind map mobile collapse | `mindmap-mobile-collapse` | **OPEN** #674 | |
+| 10 | Living Focus CTA polish | `lf-cta-polish` | **OPEN** #674 | |
 | R | SS-TG 390px reactive | `finish-slice5-ss-tg-390px` | only if g0 fails | |
 
 **Detail:** `pre-aug4-polish-plan.md` (per-PR AC)
@@ -127,7 +127,7 @@ curl -fsS https://subnet-dashboard.fly.dev/api/ops/evidence | jq '.combined_angl
 
 ## Definition of done (this runbook)
 
-- [ ] PR3–PR10 merged + babysit green (WARN-only gates OK)
+- [ ] PR3–PR10 merged + babysit green (WARN-only gates OK) — **PRs #672–#674 open**
 - [ ] `g0_phone_qa.sh` exit 0 on prod
 - [ ] Strict `fq4` passes when `graded > 0` (monitor; no code change)
 - [ ] Aug 4 checkpoint run; H2 decision recorded

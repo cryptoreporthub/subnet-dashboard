@@ -629,6 +629,28 @@ button.home-cta {
   width: 100%;
 }
 
+.brain-letter__actions .brain-letter__action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.15);
+}
+
+.brain-letter__actions .brain-letter__action:not(:disabled) {
+  opacity: 1;
+  cursor: pointer;
+}
+
+.brain-letter__full-summary.home-cta {
+  display: inline-flex;
+  margin-top: 10px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.brain-letter__full-summary::-webkit-details-marker {
+  display: none;
+}
+
 .weekly-letter__actions .tab-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -3221,6 +3243,54 @@ button.home-cta {
   border-color: rgba(57, 255, 20, 0.45);
   background: rgba(57, 255, 20, 0.08);
   box-shadow: 0 0 12px rgba(57, 255, 20, 0.12);
+}
+.proof-band__subpanels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 16px;
+}
+@media (max-width: 390px) {
+  .proof-band__subpanels { grid-template-columns: 1fr; }
+}
+.proof-band__subpanel {
+  position: relative;
+  padding: 12px 12px 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(14, 18, 30, 0.45);
+  overflow: hidden;
+}
+.proof-band__subpanel-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+}
+.proof-band__subpanel-bar--green { background: #39ff14; }
+.proof-band__subpanel-bar--blue { background: #38bdf8; }
+.proof-band__subpanel-bar--orange { background: #fb923c; }
+.proof-band__subpanel-bar--lilac { background: #c4b5fd; }
+.proof-band__subpanel-label {
+  margin: 0 0 4px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--stage-muted);
+}
+.proof-band__subpanel-val {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #e8f5e9;
+}
+.proof-band__subpanel-meta {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--stage-muted);
 }
 .proof-band .whats-working { margin: 16px 0; padding: 0; }
 .proof-band .whats-working__title { font-size: 1rem; margin: 0 0 4px; }

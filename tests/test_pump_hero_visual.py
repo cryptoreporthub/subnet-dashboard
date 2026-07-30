@@ -11,6 +11,14 @@ def test_pump_scan_template_has_phase_visual():
     assert "pds-hero__arc" in html
 
 
+def test_pump_full_desk_template_has_phase_visual():
+    from pathlib import Path
+
+    html = Path("templates/partials/premium/pump_alert.html").read_text(encoding="utf-8")
+    assert "pd-lead__visual--" in html
+    assert "pd-lead__arc" in html
+
+
 def test_hydrate_has_build_pump_hero_visual():
     from pathlib import Path
 

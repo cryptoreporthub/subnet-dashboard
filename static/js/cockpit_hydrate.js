@@ -813,6 +813,94 @@
     meta.textContent = graded + ' graded · published, not curated';
   }
 
+  function syncProofEvidencePanels(tb, extras) {
+    extras = extras || {};
+    var councilVal = document.getElementById('proof-sub-council-val');
+    var councilMeta = document.getElementById('proof-sub-council-meta');
+    var tgVal = document.getElementById('proof-sub-telegram-val');
+    var tgMeta = document.getElementById('proof-sub-telegram-meta');
+    var resVal = document.getElementById('proof-sub-resolver-val');
+    var resMeta = document.getElementById('proof-sub-resolver-meta');
+    var loopVal = document.getElementById('proof-sub-loop-val');
+    var loopMeta = document.getElementById('proof-sub-loop-meta');
+    if (!councilVal) return;
+
+    tb = tb || {};
+    var ready = !!tb.ready;
+    var graded = tb.graded != null ? Number(tb.graded) : 0;
+    var accRaw = tb.accuracy != null ? Number(tb.accuracy) : null;
+    var accPct = accRaw != null ? Math.round(accRaw * 100) : null;
+    if (ready && accPct != null && graded > 0) {
+      councilVal.textContent = accPct + '%';
+      if (councilMeta) {
+        councilMeta.textContent = graded + ' graded picks';
+        councilMeta.classList.remove('desk-empty');
+      }
+    } else {
+      councilVal.textContent = '—';
+      if (councilMeta) {
+        councilMeta.textContent =
+          tb.message || (graded > 0 ? 'Building trust gate' : 'Building graded history');
+        councilMeta.classList.add('desk-empty');
+      }
+    }
+
+    var tgProof = extras.telegram_proof || {};
+    var tgGraded = Number(tgProof.graded || 0);
+    var tgRate = tgProof.hit_rate;
+    if (tgProof.ready && tgRate != null && tgGraded > 0) {
+      if (tgVal) tgVal.textContent = Math.round(Number(tgRate) * 100) + '%';
+      if (tgMeta) {
+        tgMeta.textContent = tgGraded + ' graded calls';
+        tgMeta.classList.remove('desk-empty');
+      }
+    } else {
+      if (tgVal) tgVal.textContent = '—';
+      if (tgMeta) {
+        tgMeta.textContent = 'Telegram call proof grades after resolve';
+        tgMeta.classList.add('desk-empty');
+      }
+    }
+
+    var expiredRate = tb.expired_rate != null ? Number(tb.expired_rate) : null;
+    var resolvedPct =
+      expiredRate != null ? Math.max(0, Math.round((1 - expiredRate) * 100)) : null;
+    if (resolvedPct != null && graded > 0) {
+      if (resVal) resVal.textContent = resolvedPct + '%';
+      if (resMeta) {
+        resMeta.textContent = 'Resolved vs expired backlog';
+        resMeta.classList.remove('desk-empty');
+      }
+    } else {
+      if (resVal) resVal.textContent = '—';
+      if (resMeta) {
+        resMeta.textContent = 'Resolver backlog clears as picks grade';
+        resMeta.classList.add('desk-empty');
+      }
+    }
+
+    var working = extras.working_count;
+    if (working != null && Number(working) > 0) {
+      if (loopVal) loopVal.textContent = String(working);
+      if (loopMeta) {
+        loopMeta.textContent = 'Signals with graded hit-rate';
+        loopMeta.classList.remove('desk-empty');
+      }
+    } else if (graded > 0) {
+      if (loopVal) loopVal.textContent = String(graded);
+      if (loopMeta) {
+        loopMeta.textContent = 'Graded picks in ledger';
+        loopMeta.classList.remove('desk-empty');
+      }
+    } else {
+      if (loopVal) loopVal.textContent = '—';
+      if (loopMeta) {
+        loopMeta.textContent = 'Signal rankings fill after grades';
+        loopMeta.classList.add('desk-empty');
+      }
+    }
+  }
+
   function patchK3ConvictionRing(confPct) {
     if (confPct == null || isNaN(confPct)) return;
     var ring = document.querySelector('#k3-dossier .ring-fill');
@@ -2626,6 +2714,11 @@
     }
     if (hasTrust) syncProofBandFromTrust(tb);
     else syncProofBandGraded(0);
+    syncProofEvidencePanels(tb, {
+      working_count: stats.working && stats.working.top_price_signals
+        ? stats.working.top_price_signals.length
+        : null,
+    });
     var expEl = document.getElementById('kpi-expired');
     if (expEl) {
       expEl.textContent = expired != null ? String(expired) : '—';
@@ -3384,6 +3477,17 @@
         if (stats.trust_banner && window.SimiTrustBanner && window.SimiTrustBanner.render) {
           window.SimiTrustBanner.render(stats.trust_banner);
         }
+        fetchJsonRetry('/api/message-intel?limit=1', 12000, 1)
+          .then(function (mi) {
+            syncProofEvidencePanels(stats.trust_banner, {
+              telegram_proof: (mi && mi.meta && mi.meta.telegram_proof) || {},
+              working_count:
+                stats.working && stats.working.top_price_signals
+                  ? stats.working.top_price_signals.length
+                  : null,
+            });
+          })
+          .catch(function () {});
       } else {
         markSectionFailed('section-kpi', 'Quiet — learning stats unavailable. KPIs stay on last SSR snapshot.');
         markSectionFailed('section-council', 'Quiet — council weights unavailable. Expert cards stay on last SSR snapshot.');

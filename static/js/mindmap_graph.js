@@ -216,6 +216,7 @@
       if (only) only.classList.add('is-selected');
       showDetail(panel, nodes[0]);
     }
+    root.dataset.rendered = '1';
   }
 
   async function fetchGraph(root) {
@@ -268,7 +269,20 @@
   async function init() {
     const root = document.getElementById('mindmap-graph-root');
     if (!root) return;
-    await refreshGraph();
+    const toggle = document.getElementById('mindmap-graph-mobile-toggle');
+    if (toggle) {
+      toggle.addEventListener('click', function () {
+        const expanded = root.classList.toggle('is-expanded');
+        toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        toggle.textContent = expanded ? 'Close mind map' : 'Open mind map';
+        if (expanded && !root.dataset.rendered) {
+          refreshGraph();
+        }
+      });
+    }
+    if (window.matchMedia && window.matchMedia('(min-width: 481px)').matches) {
+      await refreshGraph();
+    }
     document.addEventListener('living-focus:change', refreshGraph);
   }
 
