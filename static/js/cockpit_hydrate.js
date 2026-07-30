@@ -2330,7 +2330,7 @@
       }
       html +=
         '<p class="home-job__why">' +
-        esc(why || 'Council waits until confidence clears the audit gate.') +
+        esc(why || ('Council waits until confidence clears the ' + (window.PUBLISH_GATE_LABEL || '40% audit gate') + '.')) +
         '</p>';
       if (concerns.length) {
         html +=
@@ -2385,7 +2385,8 @@
 
   function renderPickCards(picks) {
     return (picks || []).map(function (pick, idx) {
-      var isFallback = !!(pick.scenario_tags && pick.scenario_tags.fallback);
+      var tags = pick.scenario_tags || {};
+      var isFallback = !!tags.fallback;
       var isHold = String(pick.action || '').toUpperCase() === 'HOLD';
       var t = confTier(pick.confidence || 0);
       var statusLine = '';

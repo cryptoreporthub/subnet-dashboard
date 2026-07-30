@@ -150,17 +150,18 @@
   function render(root, payload) {
     if (!root) return;
     if (!payload || payload.status !== "ok") {
-      if (!root.querySelector(".paper-portfolio__compare")) {
-        root.innerHTML =
-          '<p class="paper-portfolio__empty">Paper portfolio unavailable right now.</p>';
-      }
+      root.classList.remove("is-error");
+      root.innerHTML =
+        '<p class="paper-portfolio__empty empty--quiet">Paper portfolio unavailable right now.</p>';
       return;
     }
     if (payload.empty) {
+      root.classList.remove("is-error");
       root.innerHTML =
-        '<p class="paper-portfolio__empty">No council paper trades yet — P&amp;L appears after resolved picks are graded.</p>';
+        '<p class="paper-portfolio__empty empty--quiet">No council paper trades yet — P&amp;L appears after resolved picks are graded.</p>';
       return;
     }
+    root.classList.remove("is-error");
     root.innerHTML =
       renderSummary(payload.summary) +
       renderPositions(payload.closed_positions, payload.open_positions);
@@ -184,11 +185,9 @@
       }
       render(root, data);
     } catch (e) {
-      if (!root.querySelector(".paper-portfolio__compare")) {
-        root.classList.add("is-error");
-        root.innerHTML =
-          '<p class="paper-portfolio__empty is-error">Could not load paper portfolio — try again shortly.</p>';
-      }
+      root.classList.add("is-error");
+      root.innerHTML =
+        '<p class="paper-portfolio__empty empty--quiet is-error">Could not load paper portfolio — try again shortly.</p>';
     }
   }
 

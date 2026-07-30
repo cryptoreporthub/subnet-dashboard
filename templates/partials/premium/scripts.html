@@ -16,6 +16,7 @@
         throw err;
       });
   };
+  g.PUBLISH_GATE_LABEL = {{ publish_gate_label()|tojson }};
 })(window);
 </script>
 <script type="application/json" id="subnet-group-data">{{ {

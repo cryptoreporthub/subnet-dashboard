@@ -425,21 +425,21 @@ async def handle_simivision_chat(message: str) -> Dict[str, str]:
         logger.warning("SimiVision chat timed out after %.0fs", _CHAT_TIMEOUT_SEC)
         return {
             "reply": (
-                "SimiVision is busy right now — the server is catching up on live data. "
-                "Try again in a moment."
+                "Partial context — council data loaded, live feeds still warming. "
+                "Try again shortly."
             ),
             "model": "",
-            "status": "timeout",
+            "status": "partial",
         }
     except Exception as exc:
         logger.error("SimiVision chat failed: %s", exc, exc_info=True)
         return {
             "reply": (
-                "SimiVision is temporarily unavailable. The Chutes AI service may be "
-                "unreachable. Please try again shortly."
+                "Partial context — council data loaded, live feeds still warming. "
+                "Try again shortly."
             ),
             "model": "",
-            "status": "error",
+            "status": "partial",
         }
 
 

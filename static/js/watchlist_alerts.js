@@ -70,7 +70,23 @@
 
   function updateWatchSummary(count) {
     const el = $("habit-watchlist-summary");
-    if (el) el.textContent = "Watchlist: " + count + " pinned";
+    if (!el) return;
+    if (count > 0) {
+      el.textContent = "Watchlist: " + count + " pinned";
+    } else {
+      el.textContent = "No pinned subnets";
+    }
+  }
+
+  async function refreshWatchlistSummary() {
+    const el = $("habit-watchlist-summary");
+    if (!el) return;
+    try {
+      const wl = await loadWatchlist();
+      updateWatchSummary((wl.netuids || []).length);
+    } catch (e) {
+      el.textContent = "Watchlist unavailable";
+    }
   }
 
   function initPin() {
@@ -92,6 +108,11 @@
   function initAlerts() {
     const btn = $("habit-alert-btn");
     if (!btn) return;
+
+    if (btn.dataset.enabled !== "1") {
+      btn.hidden = true;
+      return;
+    }
 
     function setAlertDot(show) {
       if (show) btn.classList.add("habit-alert-btn--dot");
@@ -161,9 +182,11 @@
     document.addEventListener("DOMContentLoaded", function () {
       initPin();
       initAlerts();
+      refreshWatchlistSummary();
     });
   } else {
     initPin();
     initAlerts();
+    refreshWatchlistSummary();
   }
 })();
