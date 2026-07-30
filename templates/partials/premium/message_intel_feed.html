@@ -17,36 +17,38 @@
     </p>
   </div><!-- /.message-intel__masthead -->
 
-  <!-- Pulse ribbon: live source indicator -->
-  <div class="message-intel__source-strip" id="message-intel-source-strip" aria-live="polite">
-    <span class="message-intel__wave" aria-hidden="true">
-      <i style="height:4px"></i><i style="height:8px"></i><i style="height:5px"></i><i style="height:11px"></i><i style="height:6px"></i><i style="height:9px"></i><i style="height:4px"></i>
-    </span>
-    <span class="message-intel__live-tag" id="message-intel-live-tag" {% if not message_intel or not message_intel.meta or not message_intel.meta.total_messages %}hidden{% endif %}>Live</span>
-    <span id="message-intel-meta">{% if message_intel and message_intel.meta and message_intel.meta.total_messages %}<b>OfficialSubnetSummer</b> · {{ message_intel.meta.total_messages }} messages graded{% else %}Loading desk…{% endif %}</span>
-  </div>
+  <!-- Pulse stage: source + 24h + proof + high-conviction as one command ribbon -->
+  <div class="message-intel__pulse-stage">
+    <div class="message-intel__source-strip" id="message-intel-source-strip" aria-live="polite">
+      <span class="message-intel__wave" aria-hidden="true">
+        <i style="height:4px"></i><i style="height:8px"></i><i style="height:5px"></i><i style="height:11px"></i><i style="height:6px"></i><i style="height:9px"></i><i style="height:4px"></i>
+      </span>
+      <span class="message-intel__live-tag" id="message-intel-live-tag" {% if not message_intel or not message_intel.meta or not message_intel.meta.total_messages %}hidden{% endif %}>Live</span>
+      <span id="message-intel-meta">{% if message_intel and message_intel.meta and message_intel.meta.total_messages %}<b>OfficialSubnetSummer</b> · {{ message_intel.meta.total_messages }} messages graded{% else %}Loading desk…{% endif %}</span>
+    </div>
 
-  <div class="message-intel__summary-24h" id="message-intel-summary-24h" hidden aria-live="polite">
-    <p class="message-intel__summary-24h-label">Last 24 hours</p>
-    <div class="message-intel__summary-24h-body" id="message-intel-summary-24h-body"></div>
-  </div>
+    <div class="message-intel__summary-24h" id="message-intel-summary-24h" hidden aria-live="polite">
+      <p class="message-intel__summary-24h-label">Last 24 hours</p>
+      <div class="message-intel__summary-24h-body" id="message-intel-summary-24h-body"></div>
+    </div>
 
-  <div class="message-intel__legend" aria-label="Scoring legend">
-    <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--blue" aria-hidden="true"></span><b>Conv.</b> jury score 0–100%</span>
-    <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--violet" aria-hidden="true"></span><b>High</b> ≥ 60%</span>
-    <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--orange" aria-hidden="true"></span><b>Influence</b> reach + light reaction bump, 7d</span>
-    <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--lilac" aria-hidden="true"></span><b>Crowns</b> weekly emoji leaders (side)</span>
-  </div>
+    <div class="message-intel__legend" aria-label="Scoring legend">
+      <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--blue" aria-hidden="true"></span><b>Conv.</b> jury score 0–100%</span>
+      <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--violet" aria-hidden="true"></span><b>High</b> ≥ 60%</span>
+      <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--orange" aria-hidden="true"></span><b>Influence</b> reach + light reaction bump, 7d</span>
+      <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--lilac" aria-hidden="true"></span><b>Crowns</b> weekly emoji leaders (side)</span>
+    </div>
 
-  <div class="message-intel__proof" id="message-intel-proof" hidden aria-live="polite">
-    <p class="message-intel__proof-label">Telegram call proof</p>
-    <div class="message-intel__proof-body" id="message-intel-proof-body"></div>
-  </div>
+    <div class="message-intel__proof" id="message-intel-proof" hidden aria-live="polite">
+      <p class="message-intel__proof-label">Telegram call proof</p>
+      <div class="message-intel__proof-body" id="message-intel-proof-body"></div>
+    </div>
 
-  <div class="message-intel__hc-strip" id="message-intel-hc-strip" hidden aria-label="High conviction calls">
-    <p class="message-intel__hc-label">High conviction</p>
-    <div class="message-intel__hc-rows" id="message-intel-hc-rows"></div>
-  </div>
+    <div class="message-intel__hc-strip" id="message-intel-hc-strip" hidden aria-label="High conviction calls">
+      <p class="message-intel__hc-label">High conviction</p>
+      <div class="message-intel__hc-rows" id="message-intel-hc-rows"></div>
+    </div>
+  </div><!-- /.message-intel__pulse-stage -->
 
   <!-- Spotlight: yesterday hero + comment of the week side-by-side on desktop -->
   <div class="message-intel__spotlight">
@@ -103,17 +105,17 @@
     </div>
   </div>
 
-  <div class="message-intel__panel" id="message-intel-crowns-card">
-    <div class="message-intel__sec-label">
+  <details class="message-intel__panel message-intel__crowns-drawer" id="message-intel-crowns-card">
+    <summary class="message-intel__sec-label message-intel__crowns-summary">
       <span class="message-intel__sec-bar message-intel__sec-bar--lilac" aria-hidden="true"></span>
       <h3 class="message-intel__panel-title">Reaction crowns</h3>
-      <span class="message-intel__panel-unit">7d · social</span>
-    </div>
+      <span class="message-intel__panel-unit">7d · social · tap to open</span>
+    </summary>
     <p class="message-intel__panel-hint">Per-emoji leaders — fun side board, not call grading.</p>
     <div id="message-intel-crowns" class="message-intel__crowns" aria-live="polite">
       <p class="empty">No reaction crowns yet.</p>
     </div>
-  </div>
+  </details>
 
   <div class="message-intel__panel message-intel__panel--feed">
     <div class="message-intel__sec-label">

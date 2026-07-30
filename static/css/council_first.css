@@ -1325,8 +1325,11 @@ button.home-cta {
   margin-top: 1.25rem;
   margin-bottom: 1.75rem;
   background:
-    linear-gradient(180deg, rgba(245, 213, 71, 0.07) 0%, transparent 32%),
-    rgba(6, 10, 8, 0.94);
+    radial-gradient(ellipse 70% 45% at 100% 0%, rgba(63, 201, 255, 0.10), transparent 55%),
+    radial-gradient(ellipse 55% 40% at 0% 12%, rgba(31, 212, 124, 0.09), transparent 58%),
+    radial-gradient(ellipse 50% 35% at 80% 100%, rgba(255, 159, 63, 0.05), transparent 60%),
+    linear-gradient(180deg, rgba(245, 213, 71, 0.08) 0%, transparent 28%),
+    rgba(6, 10, 8, 0.96);
   box-shadow:
     0 0 42px -16px var(--mi-yellow-glow),
     0 0 0 1px rgba(245, 213, 71, 0.14) inset;
@@ -1419,10 +1422,12 @@ button.home-cta {
   .message-intel--v2 .message-intel__spotlight::after { animation: none !important; }
 }
 .message-intel--v2 .message-intel__page-title {
-  margin-bottom: 6px;
+  margin: 0 0 8px;
   font-family: var(--mi-font-display);
   font-weight: 800;
+  font-size: clamp(1.85rem, 7vw, 2.15rem);
   letter-spacing: -0.02em;
+  line-height: 1.02;
   background: linear-gradient(92deg, var(--mi-text) 25%, var(--mi-green) 70%, var(--mi-blue) 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -1578,8 +1583,8 @@ button.home-cta {
     padding: 2px 6px;
   }
   .message-intel--v2 .message-intel__page-title {
-    font-size: 1.35rem;
-    line-height: 1.15;
+    font-size: clamp(1.65rem, 8vw, 1.95rem);
+    line-height: 1.08;
   }
   .message-intel--v2 .message-intel__source-strip {
     font-size: 11px;
@@ -2522,6 +2527,134 @@ button.home-cta {
    3. Feed      — row slide-in cascade
    Plus board-breathe & spotlight-gleam animations (2 & 3 of 3).
    ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Pulse stage: one command ribbon, not a stack of grey boxes ─────────── */
+.message-intel--v2 .message-intel__pulse-stage {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 14px 14px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(31, 212, 124, 0.18);
+  background:
+    linear-gradient(165deg, rgba(31, 212, 124, 0.07), rgba(63, 201, 255, 0.03) 55%, transparent 85%),
+    rgba(4, 8, 6, 0.55);
+  box-shadow: 0 0 28px -18px var(--mi-green-glow);
+  overflow: hidden;
+}
+.message-intel--v2 .message-intel__pulse-stage::before {
+  content: "";
+  position: absolute;
+  inset: auto -10% -40% 40%;
+  height: 70%;
+  background: radial-gradient(ellipse, rgba(63, 201, 255, 0.08), transparent 70%);
+  pointer-events: none;
+}
+.message-intel--v2 .message-intel__pulse-stage > * {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 0 !important;
+}
+.message-intel--v2 .message-intel__pulse-stage .message-intel__source-strip {
+  border-color: rgba(31, 212, 124, 0.28);
+  background: linear-gradient(180deg, rgba(31, 212, 124, 0.08), transparent);
+  box-shadow: 0 0 18px -10px var(--mi-green-glow);
+}
+.message-intel--v2 .message-intel__pulse-stage .message-intel__summary-24h,
+.message-intel--v2 .message-intel__pulse-stage .message-intel__proof,
+.message-intel--v2 .message-intel__pulse-stage .message-intel__hc-strip {
+  border-color: rgba(255, 255, 255, 0.07);
+  background: rgba(0, 0, 0, 0.22);
+}
+.message-intel--v2 .message-intel__pulse-stage .message-intel__legend {
+  padding: 2px 2px 0;
+  border: none;
+}
+@media (min-width: 740px) {
+  .message-intel--v2 .message-intel__pulse-stage {
+    grid-template-columns: 1.15fr 1fr;
+    align-items: start;
+  }
+  .message-intel--v2 .message-intel__pulse-stage .message-intel__source-strip {
+    grid-column: 1 / -1;
+  }
+  .message-intel--v2 .message-intel__pulse-stage .message-intel__legend {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Week-top as marquee quote — flagship, not another panel */
+.message-intel--v2 .message-intel__week-top {
+  position: relative;
+  overflow: hidden;
+  padding: 18px 18px 16px;
+  border: 1px solid rgba(157, 140, 255, 0.38);
+  border-radius: 16px;
+  background:
+    radial-gradient(ellipse 90% 80% at 100% 0%, rgba(157, 140, 255, 0.16), transparent 55%),
+    radial-gradient(ellipse 60% 50% at 0% 100%, rgba(63, 201, 255, 0.06), transparent 50%),
+    var(--mi-bg-card);
+  box-shadow: 0 0 40px -14px var(--mi-violet-glow);
+}
+.message-intel--v2 .message-intel__week-top-quote {
+  margin: 0 0 14px;
+  font-family: var(--mi-font-display);
+  font-size: clamp(1.05rem, 3.4vw, 1.25rem);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--mi-text);
+  quotes: "“" "”";
+}
+.message-intel--v2 .message-intel__week-top-quote::before {
+  content: open-quote;
+  color: var(--mi-violet);
+  margin-right: 2px;
+}
+.message-intel--v2 .message-intel__week-top-quote::after {
+  content: close-quote;
+  color: var(--mi-violet);
+  margin-left: 2px;
+}
+
+/* Crowns demoted — side board, collapsed by default on phones */
+.message-intel--v2 .message-intel__crowns-drawer {
+  margin-bottom: 12px;
+}
+.message-intel--v2 .message-intel__crowns-summary {
+  list-style: none;
+  cursor: pointer;
+  margin: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.message-intel--v2 .message-intel__crowns-summary::-webkit-details-marker { display: none; }
+.message-intel--v2 .message-intel__crowns-drawer[open] .message-intel__panel-hint,
+.message-intel--v2 .message-intel__crowns-drawer[open] .message-intel__crowns {
+  margin-top: 8px;
+}
+@media (min-width: 740px) {
+  .message-intel--v2 .message-intel__crowns-drawer {
+    /* Desktop: open by default via CSS can't set open attr; leave user-toggled */
+  }
+}
+
+/* Feed climax shell */
+.message-intel--v2 .message-intel__panel--feed {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(63, 201, 255, 0.18);
+  box-shadow: 0 0 36px -22px var(--mi-blue-glow);
+}
+.message-intel--v2 .message-intel__panel--feed::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 200px;
+  height: 140px;
+  background: radial-gradient(ellipse, rgba(63, 201, 255, 0.12), transparent 70%);
+  pointer-events: none;
+}
 
 /* ── 1. Masthead zone ────────────────────────────────────────────────────── */
 .message-intel--v2 .message-intel__masthead {

@@ -64,3 +64,26 @@ def test_summers_flagship_css_tokens():
     assert ".message-intel__sec-bar--green" in css
     assert "message-intel-wave" in css
     assert "message-intel-conv-glow" in css
+    assert "message-intel__masthead" in css
+    assert "message-intel__spotlight" in css
+    assert "message-intel__pulse-stage" in css
+    assert "message-intel-board-breathe" in css
+    assert "message-intel-spotlight-gleam" in css
+
+
+def test_summers_flagship_composition_hooks():
+    html = open("templates/partials/premium/message_intel_feed.html", encoding="utf-8").read()
+    assert "message-intel__masthead" in html
+    assert "message-intel__pulse-stage" in html
+    assert "message-intel__spotlight" in html
+    assert "message-intel__crowns-drawer" in html
+    # IDs preserved for hydrate
+    for eid in (
+        "message-intel-week-top",
+        "message-intel-yesterday",
+        "message-intel-feed",
+        "message-intel-proof",
+        "message-intel-hc-strip",
+        "message-intel-crowns",
+    ):
+        assert f'id="{eid}"' in html
