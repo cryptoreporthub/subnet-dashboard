@@ -12,9 +12,11 @@ from internal.council.state_vector import score_subnet_for_day
 from internal.council.weights import (
     DEFAULT_WEIGHTS,
     merged_replay_rows,
+    maybe_rebalance_council_weights_on_boot,
     rebalance_council_weights,
     replay_weights_from_predictions,
     soft_blend_weights,
+    weights_are_near_flat,
 )
 
 
@@ -67,6 +69,90 @@ def test_soft_blend_pulls_quant_off_ceiling():
     blended = soft_blend_weights(replayed, replay_share=0.7)
     assert blended["quant"] < 2.0
     assert blended["quant"] > 1.0
+
+
+def test_weights_are_near_flat_allows_single_nudge():
+    assert weights_are_near_flat({**DEFAULT_WEIGHTS, "quant": 1.04}) is True
+    assert weights_are_near_flat({**DEFAULT_WEIGHTS, "quant": 0.85}) is False
+
+
+def test_maybe_rebalance_on_boot_uses_archive_when_near_flat(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    preds = tmp_path / "predictions.json"
+    archive_dir = tmp_path / "archive"
+    archive_dir.mkdir()
+    (archive_dir / "pre-epoch-2026-07-29").write_text(
+        Path("tests/fixtures/acc1_archive_sample.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    soul.write_text(
+        json.dumps(
+            {
+                "adversarial_state": {
+                    "council_weights": {"quant": 1.04, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
+                }
+            }
+        )
+    )
+    preds.write_text(
+        json.dumps(
+            {
+                "predictions": [],
+                "resolved": [
+                    {
+                        "id": "current-1",
+                        "expert": "technical",
+                        "signal_source": "rsi_crossover",
+                        "correct": True,
+                        "resolved_at": "2026-07-30T00:00:00Z",
+                    },
+                ],
+            }
+        )
+    )
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.council.weights.PREDICTIONS_ARCHIVE_DIR", str(archive_dir))
+    monkeypatch.setattr("internal.run_mode.is_worker_mode", lambda: True)
+
+    result = maybe_rebalance_council_weights_on_boot()
+    assert result is not None
+    assert result["archive_used"] is True
+    stored = json.loads(soul.read_text())
+    assert stored["adversarial_state"]["council_weights"]["quant"] != 1.04
+
+
+def test_maybe_rebalance_on_boot_skips_when_weights_spread(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    preds = tmp_path / "predictions.json"
+    soul.write_text(
+        json.dumps(
+            {
+                "adversarial_state": {
+                    "council_weights": {"quant": 1.5, "hype": 0.7, "dark_horse": 1.0, "technical": 1.0}
+                }
+            }
+        )
+    )
+    preds.write_text(
+        json.dumps(
+            {
+                "predictions": [],
+                "resolved": [
+                    {
+                        "id": "current-1",
+                        "expert": "technical",
+                        "signal_source": "rsi_crossover",
+                        "correct": True,
+                        "resolved_at": "2026-07-30T00:00:00Z",
+                    },
+                ],
+            }
+        )
+    )
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.run_mode.is_worker_mode", lambda: True)
+
+    assert maybe_rebalance_council_weights_on_boot() is None
 
 
 def test_replay_includes_archive_when_current_epoch_thin(tmp_path, monkeypatch):
