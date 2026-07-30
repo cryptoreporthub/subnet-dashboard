@@ -1425,7 +1425,8 @@ button.home-cta {
   margin: 0 0 8px;
   font-family: var(--mi-font-display);
   font-weight: 800;
-  font-size: clamp(1.85rem, 7vw, 2.15rem);
+  /* Beat responsive.css h2 { font-size: … !important } so the masthead stays flagship */
+  font-size: clamp(1.85rem, 7vw, 2.15rem) !important;
   letter-spacing: -0.02em;
   line-height: 1.02;
   background: linear-gradient(92deg, var(--mi-text) 25%, var(--mi-green) 70%, var(--mi-blue) 100%);
@@ -1583,7 +1584,7 @@ button.home-cta {
     padding: 2px 6px;
   }
   .message-intel--v2 .message-intel__page-title {
-    font-size: clamp(1.65rem, 8vw, 1.95rem);
+    font-size: clamp(1.65rem, 8vw, 1.95rem) !important;
     line-height: 1.08;
   }
   .message-intel--v2 .message-intel__source-strip {
@@ -4284,7 +4285,7 @@ button.home-cta {
     overflow-x: clip;
   }
   .message-intel--v2 .message-intel__page-title {
-    font-size: clamp(1.35rem, 7vw, 1.85rem);
+    font-size: clamp(1.55rem, 8vw, 1.9rem) !important;
     line-height: 1.12;
   }
   .message-intel--v2 .message-intel__hero-main {
