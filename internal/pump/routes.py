@@ -40,11 +40,9 @@ async def api_pump_ladder_scan(request: Request):
 
 @pump_ladder_router.get("/api/pump-patterns/active")
 async def api_pump_patterns_active():
-    ensure_pump_ladder_scheduler(immediate=False)
     return {"items": active_patterns()}
 
 
 @pump_ladder_router.get("/api/pump-patterns/{netuid}")
 async def api_pump_patterns_netuid(netuid: int):
-    ensure_pump_ladder_scheduler(immediate=False)
     return pattern_payload(netuid)
