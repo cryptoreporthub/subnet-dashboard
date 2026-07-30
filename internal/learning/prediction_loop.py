@@ -96,6 +96,25 @@ def _pump_phase_at_prediction(netuid: Any) -> Optional[str]:
         return None
 
 
+def _pattern_at_prediction(netuid: Any) -> Optional[Dict[str, Any]]:
+    """Stamp pump waveform pattern at pick time (PP-2)."""
+    try:
+        from internal.pump.pattern_ledger import pattern_payload
+
+        payload = pattern_payload(netuid)
+        cls = payload.get("pattern_class")
+        if not cls or cls == "insufficient_data":
+            return None
+        return {
+            "pattern_class": cls,
+            "pattern_label": payload.get("pattern_label") or payload.get("waveform"),
+            "shape_hash": payload.get("shape_hash"),
+        }
+    except Exception as exc:
+        logger.debug("pump pattern stamp skipped for SN%s: %s", netuid, exc)
+        return None
+
+
 def _signal_impact_from_pick(pick: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     for key in ("signal_impact", "signals"):
         raw = pick.get(key)
@@ -279,6 +298,13 @@ def record_pick_prediction(
     pump_phase = _pump_phase_at_prediction(netuid)
     if pump_phase:
         prediction["phase_at_prediction"] = pump_phase
+    pattern = _pattern_at_prediction(netuid)
+    if pattern:
+        prediction["pattern_at_prediction"] = pattern.get("pattern_class")
+        if pattern.get("pattern_label"):
+            prediction["pattern_label"] = pattern["pattern_label"]
+        if pattern.get("shape_hash"):
+            prediction["shape_hash"] = pattern["shape_hash"]
     try:
         from internal.council.weights import load_impact_strength
         from internal.subnets.impact import impact_profile
@@ -402,6 +428,8 @@ def _link_scenario_memory(
                 "relative_flow": (prediction.get("market_impact") or {}).get("relative_flow")
                 if isinstance(prediction.get("market_impact"), dict)
                 else None,
+                "pattern_at_prediction": prediction.get("pattern_at_prediction"),
+                "pattern_label": prediction.get("pattern_label"),
             },
             outcome=None,
         )

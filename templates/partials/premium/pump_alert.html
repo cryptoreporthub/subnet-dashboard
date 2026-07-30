@@ -68,9 +68,12 @@
       {% set thesis = hero_row.thesis|default('') %}
       {% set trigger = hero_row.trigger|default(hero_row.subtitle|default('')) %}
 
-      <article class="pd-lead pd-lead--{{ timing }} pump-hero__card" id="pump-desk-hero" data-netuid="{{ hero_row.netuid }}">
+      <article class="pd-lead pd-lead--{{ timing }}{% if hero_row.pattern_highlight %} pd-lead--pattern-highlight{% endif %} pump-hero__card" id="pump-desk-hero" data-netuid="{{ hero_row.netuid }}">
         <div class="pd-lead__identity">
           <span class="pd-lead__badge pd-lead__badge--{{ badge_slug }}">{{ hero_row.badge }}</span>
+          {% if hero_row.pattern_label and hero_row.pattern_class and hero_row.pattern_class != 'insufficient_data' %}
+          <span class="pump-pattern-chip" title="{{ hero_row.pattern_class }}">{{ hero_row.pattern_label }}</span>
+          {% endif %}
           <div class="pd-lead__who">
             <a class="pd-lead__name" href="/subnet/{{ hero_row.netuid }}">{{ hero_row.name }} <b class="pd-lead__sn">SN{{ hero_row.netuid }}</b></a>
             {% if hero_row.updated_ago %}<span class="pd-lead__ago">{{ hero_row.updated_ago }}</span>{% endif %}
@@ -492,6 +495,26 @@
     color: #a7f3d0;
     background: rgba(52, 211, 153, 0.14);
     border-color: rgba(52, 211, 153, 0.28);
+  }
+  .pump-pattern-chip {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 3px 8px;
+    border-radius: 999px;
+    color: #a5f3fc;
+    background: rgba(34, 211, 238, 0.12);
+    border: 1px solid rgba(34, 211, 238, 0.28);
+  }
+  .pump-pattern-chip--row { margin: 4px 0 0; max-width: 92%; }
+  .pd-lead--pattern-highlight {
+    box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.35), 0 8px 28px rgba(34, 211, 238, 0.08);
   }
   .pd-lead__who { flex: 1 1 auto; min-width: 0; }
   .pd-lead__name {
