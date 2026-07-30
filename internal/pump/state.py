@@ -210,6 +210,24 @@ def transition_subnet(
     entry["signal_snapshot"] = classification.get("signals")
     subnets[key] = entry
 
+    try:
+        from internal.pump.pattern_ledger import append_ladder_sample
+
+        sample_price = float(
+            signals.get("price")
+            or (classification.get("signals") or {}).get("price")
+            or 0
+        )
+        append_ladder_sample(
+            netuid,
+            price=sample_price,
+            phase=new_phase,
+            name=entry.get("name"),
+            now=now,
+        )
+    except Exception as exc:
+        logger.debug("pattern ledger sample skipped SN%s: %s", netuid, exc)
+
     return (
         {
             "netuid": netuid,

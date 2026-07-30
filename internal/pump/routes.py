@@ -7,6 +7,7 @@ import logging
 from fastapi import APIRouter, Request
 
 from internal.api_errors import public_error
+from internal.pump.pattern_ledger import active_patterns, pattern_payload
 from internal.pump.scheduler import ensure_pump_ladder_scheduler, get_pump_ladder_scheduler_state
 from internal.pump.state import get_ladder_snapshot, scan_all_subnets
 from internal.pump.summary import summarize_pump
@@ -35,3 +36,15 @@ async def api_pump_ladder_scan(request: Request):
     except Exception as exc:
         logger.warning("pump ladder manual scan failed: %s", exc)
         return {"ok": False, **public_error(exc, code="pump_scan_failed")}
+
+
+@pump_ladder_router.get("/api/pump-patterns/active")
+async def api_pump_patterns_active():
+    ensure_pump_ladder_scheduler(immediate=False)
+    return {"items": active_patterns()}
+
+
+@pump_ladder_router.get("/api/pump-patterns/{netuid}")
+async def api_pump_patterns_netuid(netuid: int):
+    ensure_pump_ladder_scheduler(immediate=False)
+    return pattern_payload(netuid)
