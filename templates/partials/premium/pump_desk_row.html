@@ -12,6 +12,9 @@
       <span class="pd-r__badge pd-r__badge--{{ badge_slug }}">{{ BADGE_ABBR.get(row.badge, row.badge) }}</span>
       <span class="pd-r__name">{{ row.name }} <b class="pd-r__sn">SN{{ row.netuid }}</b></span>
     </div>
+    {% if row.pattern_label and row.pattern_class and row.pattern_class != 'insufficient_data' %}
+    <span class="pump-pattern-chip pump-pattern-chip--row" title="{{ row.pattern_class }}">{{ row.pattern_label|truncate(28, True) }}</span>
+    {% endif %}
     {% if why %}<p class="pd-r__why">{{ why|truncate(72, True) }}</p>{% endif %}
     <div class="pd-r__legs" aria-label="Triad">
       <span class="pd-r__leg{% if triad.inflow_quiet_load %} pd-r__leg--on{% endif %}">In {{ labels.inflow|default('WATCH') }}</span>
