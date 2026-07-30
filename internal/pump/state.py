@@ -330,6 +330,12 @@ def _normalize_ladder_subnet(entry: Dict[str, Any]) -> Dict[str, Any]:
     accum = float(entry.get("accum_score") or score)
     confirm = float(entry.get("confirm_score") or 0.0)
     netuid = entry.get("netuid")
+    try:
+        from internal.pump.pattern_ledger import re_pump_prob_from_pattern
+
+        re_pump = re_pump_prob_from_pattern(netuid)
+    except Exception:
+        re_pump = 0.0
     return {
         "netuid": netuid,
         "name": entry.get("name") or f"SN{netuid}",
@@ -343,7 +349,7 @@ def _normalize_ladder_subnet(entry: Dict[str, Any]) -> Dict[str, Any]:
         "pump_score": score,
         "final_score": score,
         "pump_proneness": round(score * 100, 1),
-        "re_pump_prob": 0.0,
+        "re_pump_prob": re_pump,
         "since": entry.get("since"),
         "updated_at": entry.get("updated_at"),
         "last_transition": entry.get("last_transition"),
