@@ -28,6 +28,7 @@
   var detailPanel = document.getElementById("message-intel-detail");
   var convFiltersEl = document.getElementById("message-intel-conv-filters");
   var subnetFiltersEl = document.getElementById("message-intel-subnet-filters");
+  var topicFiltersEl = document.getElementById("message-intel-topic-filters");
   if (!feed) return;
 
   var FILTER_KEY = "message-intel-filters";
@@ -46,12 +47,13 @@
         return {
           minConviction: parsed.minConviction != null ? Number(parsed.minConviction) : null,
           netuid: parsed.netuid != null ? Number(parsed.netuid) : null,
+          topic: parsed.topic ? String(parsed.topic) : null,
         };
       }
     } catch (e) {
       /* ignore */
     }
-    return { minConviction: null, netuid: null };
+    return { minConviction: null, netuid: null, topic: null };
   }
 
   function saveFilters() {
@@ -69,6 +71,9 @@
     }
     if (filters.netuid != null) {
       url += "&netuid=" + encodeURIComponent(filters.netuid);
+    }
+    if (filters.topic) {
+      url += "&topic=" + encodeURIComponent(filters.topic);
     }
     return url;
   }
@@ -89,6 +94,14 @@
         var active =
           (val === "" && filters.netuid == null) ||
           (val !== "" && Number(val) === filters.netuid);
+        btn.classList.toggle("message-intel__filter-chip--active", active);
+      });
+    }
+    if (topicFiltersEl) {
+      topicFiltersEl.querySelectorAll("[data-topic]").forEach(function (btn) {
+        var val = btn.getAttribute("data-topic");
+        var active =
+          (val === "" && !filters.topic) || (val !== "" && val === filters.topic);
         btn.classList.toggle("message-intel__filter-chip--active", active);
       });
     }
@@ -139,17 +152,29 @@
         });
       });
     }
+    if (topicFiltersEl) {
+      topicFiltersEl.querySelectorAll("[data-topic]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var val = btn.getAttribute("data-topic");
+          filters.topic = val === "" ? null : val;
+          saveFilters();
+          syncFilterChipStates();
+          hydrate();
+        });
+      });
+    }
   }
 
   function renderFilterEmpty() {
     var parts = [];
     if (filters.minConviction != null) parts.push(filters.minConviction + "%+ conviction");
     if (filters.netuid != null) parts.push("SN" + filters.netuid);
+    if (filters.topic) parts.push(filters.topic);
     var label = parts.length ? parts.join(" · ") : "current filters";
     return (
       '<p class="empty">No messages match ' +
       esc(label) +
-      ". Try a lower conviction threshold or clear the subnet filter.</p>"
+      ". Try a lower conviction threshold or clear filters.</p>"
     );
   }
 
@@ -445,6 +470,17 @@
   function bindFeedClicks() {
     feed.querySelectorAll("[data-msg-id]").forEach(function (row) {
       row.addEventListener("click", function (ev) {
+        var topicBtn = ev.target.closest(".message-intel__topic-chip");
+        if (topicBtn) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          var topic = topicBtn.getAttribute("data-topic");
+          filters.topic = topic || null;
+          saveFilters();
+          syncFilterChipStates();
+          hydrate();
+          return;
+        }
         if (ev.target.closest("a")) return;
         toggleMessageDetail(row.getAttribute("data-msg-id"));
       });
@@ -821,6 +857,26 @@
     );
   }
 
+  function renderTopicChips(topics) {
+    if (!topics || !topics.length) return "";
+    return (
+      '<div class="message-intel__topic-chips">' +
+      topics
+        .slice(0, 4)
+        .map(function (t) {
+          return (
+            '<button type="button" class="message-intel__topic-chip" data-topic="' +
+            esc(t) +
+            '">' +
+            esc(t) +
+            "</button>"
+          );
+        })
+        .join("") +
+      "</div>"
+    );
+  }
+
   function renderMessages(rows) {
     if (!rows || !rows.length) return "";
     var html = '<div class="message-intel__feed-rows">';
@@ -906,6 +962,10 @@
             })
             .join("") +
           "</div>";
+      }
+      var topics = row.topics || [];
+      if (topics.length) {
+        html += renderTopicChips(topics);
       }
       html += "</div></article>";
     });

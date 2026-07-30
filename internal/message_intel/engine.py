@@ -202,6 +202,8 @@ def _primary_netuid_from_message(row: Dict[str, Any]) -> Optional[int]:
 
 def _enrich_message_row(row: Dict[str, Any], names: Optional[Dict[int, str]] = None) -> Dict[str, Any]:
     """Attach top-level netuid/subnet_name so signal hub + UI can key off the row."""
+    from internal.message_intel.topic_tags import classify_message_topics
+
     out = dict(row)
     if out.get("netuid") is None:
         netuid = _primary_netuid_from_message(out)
@@ -209,6 +211,9 @@ def _enrich_message_row(row: Dict[str, Any], names: Optional[Dict[int, str]] = N
             out["netuid"] = netuid
             if names and not out.get("subnet_name"):
                 out["subnet_name"] = names.get(netuid)
+    content = out.get("content")
+    if content and not out.get("topics"):
+        out["topics"] = classify_message_topics(str(content))
     return out
 
 
@@ -217,6 +222,7 @@ def _message_matches_filters(
     *,
     min_conviction: Optional[float],
     netuid: Optional[int],
+    topic: Optional[str] = None,
 ) -> bool:
     if min_conviction is not None:
         verdict = row.get("verdict") if isinstance(row.get("verdict"), dict) else {}
@@ -227,6 +233,10 @@ def _message_matches_filters(
         row_netuid = row.get("netuid")
         if row_netuid is None or int(row_netuid) != int(netuid):
             return False
+    if topic:
+        topics = row.get("topics") if isinstance(row.get("topics"), list) else []
+        if topic not in topics:
+            return False
     return True
 
 
@@ -236,6 +246,7 @@ def list_messages(
     *,
     min_conviction: Optional[float] = None,
     netuid: Optional[int] = None,
+    topic: Optional[str] = None,
 ) -> Dict[str, Any]:
     from internal.message_intel.listener_service import listener_status
     from internal.message_intel.rollup import (
@@ -249,7 +260,7 @@ def list_messages(
 
     db = get_db()
     names = _registry_subnet_names()
-    filters_active = min_conviction is not None or netuid is not None
+    filters_active = min_conviction is not None or netuid is not None or bool(topic)
     # ponytail: filtered queries scan recent 200 rows max — enough for desk feed, not full archive search
     fetch_limit = min(200, max(limit + offset, limit)) if filters_active else limit
     fetch_offset = 0 if filters_active else offset
@@ -259,7 +270,9 @@ def list_messages(
         messages = [
             m
             for m in messages
-            if _message_matches_filters(m, min_conviction=min_conviction, netuid=netuid)
+            if _message_matches_filters(
+                m, min_conviction=min_conviction, netuid=netuid, topic=topic
+            )
         ]
         messages = messages[offset : offset + limit]
     meta = live_stats(db)
@@ -318,6 +331,8 @@ def list_messages(
             applied["min_conviction"] = min_conviction
         if netuid is not None:
             applied["netuid"] = netuid
+        if topic:
+            applied["topic"] = topic
         meta["filters"] = applied
     store_total = int(meta.get("total_messages") or 0)
     filtered_empty = filters_active and len(messages) == 0 and store_total > 0
