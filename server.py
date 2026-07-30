@@ -143,6 +143,15 @@ except Exception as _signals_exc:  # pragma: no cover - defensive import guard
     signals_router = None  # type: ignore[assignment,misc]
     _SIGNALS_ROUTES = False
 
+try:
+    from internal.dev_radar.routes import dev_radar_router
+
+    _DEV_RADAR_ROUTES = True
+except Exception as _dev_radar_exc:  # pragma: no cover - defensive import guard
+    logger.warning("Dev radar routes unavailable: %s", _dev_radar_exc)
+    dev_radar_router = None  # type: ignore[assignment,misc]
+    _DEV_RADAR_ROUTES = False
+
 # Council pick engine (guarded so a broken/missing engine module can never stop
 # the app from booting — the picks endpoints degrade to a safe fallback).
 try:
@@ -347,6 +356,8 @@ if _MINDMAP_GRAPH_ROUTES:
     app.include_router(mindmap_graph_router)
 if _SIGNALS_ROUTES:
     app.include_router(signals_router)
+if _DEV_RADAR_ROUTES:
+    app.include_router(dev_radar_router)
 if _INVESTIGATION_ROUTES:
     app.include_router(investigation_router)
 if _SHARE_ROUTES:

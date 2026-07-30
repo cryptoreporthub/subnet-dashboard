@@ -70,6 +70,7 @@ CONTRACT = [
     ("GET", "/api/whales/alerts", None),
     ("GET", "/api/whales/subnet/1/flow", None),
     ("GET", "/api/whales/flow-signals", None),
+    ("GET", "/api/dev-radar", None),
     (
         "POST",
         "/api/whales/events",

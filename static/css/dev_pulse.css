@@ -1,0 +1,106 @@
+/* Dev Pulse — scoped BEM (standalone; not council_first.css) */
+.sr-dev-pulse {
+  max-width: 1440px;
+  margin: 20px auto 0;
+  padding: 0 20px 12px;
+}
+.sr-dev-pulse__head {
+  margin-bottom: 10px;
+}
+.sr-dev-pulse__title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #cbd5e1;
+  margin: 0 0 4px;
+}
+.sr-dev-pulse__sub {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 0;
+}
+.sr-dev-pulse__summary {
+  font-size: 11px;
+  color: #64748b;
+  margin: 0 0 8px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.sr-dev-pulse__list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sr-dev-pulse__card {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  background: rgba(10, 12, 18, 0.6);
+}
+.sr-dev-pulse__card.sr-glow-live:hover {
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.12);
+}
+.sr-dev-pulse__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.sr-dev-pulse__name {
+  font-weight: 600;
+  font-size: 13px;
+  color: #e2e8f0;
+}
+.sr-dev-pulse__sn {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 400;
+}
+.sr-dev-pulse__badge {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+.sr-dev-pulse__badge--ok {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.35);
+}
+.sr-dev-pulse__badge--risk {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.35);
+}
+.sr-dev-pulse__repo {
+  display: inline-block;
+  font-size: 11px;
+  color: #38bdf8;
+  text-decoration: none;
+  margin-bottom: 6px;
+  word-break: break-all;
+}
+.sr-dev-pulse__repo:hover {
+  text-decoration: underline;
+}
+.sr-dev-pulse__repo--missing {
+  color: #64748b;
+}
+.sr-dev-pulse__grade {
+  font-size: 12px;
+  color: #cbd5e1;
+  margin: 0;
+  line-height: 1.4;
+}
+.sr-dev-pulse__empty {
+  font-size: 12px;
+  color: #94a3b8;
+  padding: 12px 0;
+  list-style: none;
+}
