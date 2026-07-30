@@ -12,6 +12,11 @@ def test_is_generic_display_name():
     assert not is_generic_display_name("Loosh", 78)
 
 
+def test_display_name_override_sn6_numinous():
+    name = display_name_for_netuid(6, use_taostats_fallback=False)
+    assert name == "Numinous"
+
+
 def test_display_name_override_sn16_fast_thinker():
     name = display_name_for_netuid(16, use_taostats_fallback=False)
     assert name == "Fast Thinker"
