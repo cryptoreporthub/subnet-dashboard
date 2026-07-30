@@ -193,3 +193,7 @@ def test_mobile_telegram_touch_targets_and_week_top():
     # week-top stacks author/stats on narrow phones
     assert ".message-intel__week-top-meta" in css
     assert "flex-direction: column" in css
+    # Regression: a later ≤640px block once re-shrank the filter chip below the
+    # 44px touch target set by the ≤390px block earlier in the cascade.
+    chip_block = css.split(".message-intel--v2 .message-intel__filter-chip {")
+    assert not any("min-height: 40px" in block.split("}", 1)[0] for block in chip_block[1:])
