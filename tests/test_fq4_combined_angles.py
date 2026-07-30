@@ -103,15 +103,25 @@ def test_evidence_includes_combined_angles(tmp_path, monkeypatch):
             }
         )
     )
-    monkeypatch.setattr(
-        "internal.pump.combined_ledger.EFFECTIVENESS_PATH",
-        str(eff),
-    )
-    monkeypatch.setattr(
-        "internal.ops.evidence._read_json",
-        lambda path: json.loads(eff.read_text()) if "combined_angles" in path else None,
-    )
+
+    def _read(path: str):
+        if path.endswith("combined_angles_effectiveness.json"):
+            return json.loads(eff.read_text())
+        return None
+
+    monkeypatch.setattr("internal.ops.evidence._read_json", _read)
 
     report = build_evidence_report()
     assert "combined_angles" in report
     assert report["paths"]["combined_angles"] is not None
+
+
+def test_evidence_pending_stub_when_artifact_missing(monkeypatch):
+    monkeypatch.setattr("internal.ops.evidence._read_json", lambda _path: None)
+    monkeypatch.setattr(
+        "internal.pump.combined_ledger.ledger_stats",
+        lambda: {"calls": 3, "graded": 0, "experimental": True},
+    )
+    report = build_evidence_report()
+    assert report["combined_angles"]["artifact_pending"] is True
+    assert report["combined_angles"]["ledger"]["calls"] == 3

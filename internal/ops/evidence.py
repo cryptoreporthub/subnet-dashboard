@@ -51,13 +51,9 @@ def build_evidence_report() -> Dict[str, Any]:
     combined_angles = _read_json(combined_path)
     if combined_angles is None:
         try:
-            from internal.pump.combined_ledger import (
-                build_effectiveness_summary,
-                save_effectiveness_artifact,
-            )
+            from internal.pump.combined_ledger import ledger_stats
 
-            combined_angles = build_effectiveness_summary()
-            save_effectiveness_artifact(combined_angles)
+            combined_angles = {"ledger": ledger_stats(), "artifact_pending": True}
         except Exception:
             combined_angles = None
 
