@@ -6,10 +6,10 @@
   <div class="brain-letter__head weekly-letter__head">
     <h2 class="brain-letter__title weekly-letter__title" id="brain-letter-title">Brain letter</h2>
     <p class="brain-letter__meta weekly-letter__meta" id="brain-letter-date">Morning brief · graded memory{% if bl.date %} · {{ bl.date }}{% endif %}</p>
-    <div class="weekly-letter__actions">
-      <button type="button" class="tab-btn" id="brain-letter-copy-desk" disabled>Copy today&apos;s desk</button>
-      <button type="button" class="tab-btn" id="brain-letter-copy" disabled>Copy markdown</button>
-      <button type="button" class="tab-btn" id="brain-letter-download" disabled>Download</button>
+    <div class="weekly-letter__actions brain-letter__actions">
+      <button type="button" class="home-cta home-cta--ghost brain-letter__action" id="brain-letter-copy-desk" disabled>Copy today&apos;s desk</button>
+      <button type="button" class="home-cta home-cta--ghost brain-letter__action" id="brain-letter-copy" disabled>Copy markdown</button>
+      <button type="button" class="home-cta home-cta--primary brain-letter__action" id="brain-letter-download" disabled>Download</button>
     </div>
   </div>
   <div class="brain-letter__desk-strip" id="brain-letter-desk-strip" aria-label="Desk strip">
@@ -33,7 +33,7 @@
     {% endif %}
   </div>
   <details class="brain-letter__full" id="brain-letter-full">
-    <summary class="brain-letter__full-summary">Open full letter</summary>
+    <summary class="brain-letter__full-summary home-cta home-cta--ghost">Open full letter</summary>
   <div id="brain-letter-root" class="brain-letter__body weekly-letter__body" aria-live="polite">
     {% if bl_ok %}
     {% set tb = bl.trust_banner if bl.trust_banner is mapping else {} %}

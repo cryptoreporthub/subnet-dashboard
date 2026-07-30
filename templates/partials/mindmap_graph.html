@@ -106,6 +106,49 @@
     color: var(--text-muted, #6b7280);
     font-family: var(--font-mono, monospace);
   }
+  .mindmap-graph-mobile-toggle {
+    display: none;
+    width: 100%;
+    margin: 0 0 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(0, 255, 65, 0.28);
+    background: rgba(0, 255, 65, 0.06);
+    color: inherit;
+    font-family: var(--font-mono, monospace);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  @media (max-width: 480px) {
+    .mindmap-graph-mobile-toggle { display: block; }
+    .mindmap-graph-root {
+      min-height: 0;
+      max-height: 0;
+      border: none;
+      opacity: 0;
+      pointer-events: none;
+      transition: max-height 0.25s ease, opacity 0.2s ease;
+    }
+    .mindmap-graph-root.is-expanded {
+      min-height: 360px;
+      max-height: 480px;
+      border: 1px solid var(--border-subtle, #374151);
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .mindmap-graph-root.is-expanded .mindmap-graph-svg {
+      height: 360px;
+    }
+    .mindmap-graph-layout {
+      grid-template-columns: 1fr;
+    }
+    .mindmap-detail-panel {
+      margin-top: 10px;
+    }
+  }
 </style>
 
 <section class="cockpit mindmap-graph-section" id="mindmap-graph-section" aria-labelledby="mindmap-graph-heading">
@@ -117,6 +160,9 @@
   </div>
 
   <div class="mindmap-graph-layout">
+    <button type="button" class="mindmap-graph-mobile-toggle" id="mindmap-graph-mobile-toggle" aria-expanded="false" aria-controls="mindmap-graph-root">
+      Open mind map
+    </button>
     <div
       id="mindmap-graph-root"
       class="mindmap-graph-root"
