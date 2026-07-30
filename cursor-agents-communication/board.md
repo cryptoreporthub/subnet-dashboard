@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-29T22:45:00Z  
-**main:** `2ee0512` — LA #640 · LB #645 · violet accent #643 · audit honesty #631  
+**Last updated:** 2026-07-30T00:50:00Z  
+**main:** `ee46716` — LD #654 · LC #652 · PP-0 #651+#653 · Acc-0 #649+#651  
 **Plans:** `master-sprint-execution-plan.md` · `launch-lc-ld-plan.md` · `accuracy-pump-pattern-plan.md` · `finish-queue-plan.md`
 
 ## Full roadmap
