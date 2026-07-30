@@ -1,17 +1,36 @@
 (function () {
   'use strict';
 
+  // Vivid, brand-aligned identity per node kind — the "call" (disposition) is the
+  // hottest color since it's literally the outcome the whole graph builds toward.
   const KIND_COLORS = {
-    subnet: '#22D3EE',
-    signal: '#8B5CF6',
-    judge: '#F59E0B',
-    prediction: '#10B981',
-    scenario: '#F97316',
-    disposition: '#3B82F6',
+    subnet: '#3fc9ff',
+    signal: '#a78bfa',
+    judge: '#ffb74a',
+    prediction: '#34d399',
+    scenario: '#b8a8f0',
+    disposition: '#ff5fa8',
+  };
+
+  // Concentric "brain" layout — signals/evidence sit on the outer rim, judges
+  // deliberate in the middle, and the call (disposition/prediction) lands closest
+  // to the pulsing core. Every real edge already points source(subnet, outer) ->
+  // target(inner kind), so this reads as evidence flowing inward toward a decision.
+  const RING_RADIUS = {
+    subnet: 1.0,
+    scenario: 0.88,
+    signal: 0.76,
+    prediction: 0.6,
+    judge: 0.42,
+    disposition: 0.24,
   };
 
   function kindColor(kind) {
     return KIND_COLORS[kind] || '#9CA3AF';
+  }
+
+  function ringRadiusFraction(kind) {
+    return RING_RADIUS[kind] != null ? RING_RADIUS[kind] : 0.7;
   }
 
   function layoutNodes(nodes, width, height) {
@@ -19,14 +38,28 @@
     if (!count) return {};
     const cx = width / 2;
     const cy = height / 2;
-    const radius = Math.min(width, height) * 0.36;
+    const baseRadius = Math.min(width, height) * 0.44;
+    // Group by kind so each ring's members spread evenly around their own circle,
+    // with a stable per-kind angle offset so rings don't line up radially.
+    const byKind = {};
+    nodes.forEach((node) => {
+      const kind = node.kind || 'other';
+      if (!byKind[kind]) byKind[kind] = [];
+      byKind[kind].push(node);
+    });
+    const kindOffsets = { subnet: 0, scenario: 0.3, signal: 0.6, prediction: 0.15, judge: 0.45, disposition: 0.75 };
     const positions = {};
-    nodes.forEach((node, index) => {
-      const angle = (2 * Math.PI * index) / count - Math.PI / 2;
-      positions[node.id] = {
-        x: cx + radius * Math.cos(angle),
-        y: cy + radius * Math.sin(angle),
-      };
+    Object.keys(byKind).forEach((kind) => {
+      const members = byKind[kind];
+      const radius = baseRadius * ringRadiusFraction(kind);
+      const offset = (kindOffsets[kind] != null ? kindOffsets[kind] : 0) * Math.PI;
+      members.forEach((node, index) => {
+        const angle = offset + (2 * Math.PI * index) / members.length - Math.PI / 2;
+        positions[node.id] = {
+          x: cx + radius * Math.cos(angle),
+          y: cy + radius * Math.sin(angle),
+        };
+      });
     });
     return positions;
   }
@@ -133,16 +166,44 @@
       adjacency[edge.target].add(edge.source);
     });
 
+    const cx = width / 2;
+    const cy = height / 2;
+
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    const coreGradient = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
+    coreGradient.setAttribute('id', 'mindmap-core-gradient');
+    coreGradient.innerHTML =
+      '<stop offset="0%" stop-color="#eaf5ee" stop-opacity="0.9"/>' +
+      '<stop offset="100%" stop-color="#3fc9ff" stop-opacity="0"/>';
+    defs.appendChild(coreGradient);
+    svg.appendChild(defs);
+
+    // Pulsing "brain core" — always present, purely atmospheric (not a real node),
+    // it's the visual anchor every edge appears to flow toward.
+    const coreGlow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    coreGlow.setAttribute('cx', cx);
+    coreGlow.setAttribute('cy', cy);
+    coreGlow.setAttribute('r', 26);
+    coreGlow.setAttribute('class', 'mindmap-core-glow');
+    const core = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    core.setAttribute('cx', cx);
+    core.setAttribute('cy', cy);
+    core.setAttribute('r', 7);
+    core.setAttribute('class', 'mindmap-core');
+
     const edgeLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     edgeLayer.setAttribute('class', 'mindmap-edges');
     const nodeLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     nodeLayer.setAttribute('class', 'mindmap-nodes');
 
+    const maxWeight = edges.reduce((m, e) => Math.max(m, Number(e.weight) || 1), 1);
     const edgeEls = [];
     edges.forEach((edge) => {
       const from = positions[edge.source];
       const to = positions[edge.target];
       if (!from || !to) return;
+      const weight = Number(edge.weight) || 1;
+      const strength = Math.max(0.35, Math.min(1, weight / maxWeight));
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       line.setAttribute('x1', from.x);
       line.setAttribute('y1', from.y);
@@ -151,6 +212,10 @@
       line.setAttribute('class', 'mindmap-edge');
       line.dataset.source = edge.source;
       line.dataset.target = edge.target;
+      // Energy flow toward the core — brighter, faster for higher-weight evidence.
+      line.style.stroke = kindColor((nodeById[edge.target] || {}).kind);
+      line.style.opacity = String(0.25 + strength * 0.35);
+      line.style.animationDuration = (2.8 - strength * 1.4).toFixed(2) + 's';
       edgeLayer.appendChild(line);
       edgeEls.push(line);
     });
@@ -175,8 +240,13 @@
       const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       circle.setAttribute('cx', pos.x);
       circle.setAttribute('cy', pos.y);
-      circle.setAttribute('r', 14);
+      // Judges and the call (disposition) sit nearest the core and read as the
+      // "decision engine" — give them more visual weight than raw evidence nodes.
+      const isCore = node.kind === 'judge' || node.kind === 'disposition';
+      circle.setAttribute('r', isCore ? 17 : 13);
       circle.setAttribute('fill', kindColor(node.kind));
+      circle.classList.add('mindmap-node-circle');
+      if (isCore) circle.classList.add('mindmap-node-circle--core');
 
       const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       label.setAttribute('x', pos.x);
@@ -208,6 +278,8 @@
     });
 
     svg.appendChild(edgeLayer);
+    svg.appendChild(coreGlow);
+    svg.appendChild(core);
     svg.appendChild(nodeLayer);
 
     if (nodes.length === 1) {

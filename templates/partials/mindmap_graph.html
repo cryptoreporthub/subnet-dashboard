@@ -15,7 +15,9 @@
   .mindmap-graph-root {
     position: relative;
     min-height: 360px;
-    background: var(--bg-surface, #111827);
+    background:
+      radial-gradient(circle at 50% 50%, rgba(63, 201, 255, 0.06) 0%, transparent 55%),
+      var(--bg-surface, #111827);
     border: 1px solid var(--border-subtle, #374151);
     border-radius: var(--border-radius-card, 16px);
     overflow: hidden;
@@ -24,6 +26,43 @@
     width: 100%;
     height: 360px;
     display: block;
+  }
+  /* Living brain core — the pulsing anchor every edge visually flows toward */
+  .mindmap-core {
+    fill: #eaf5ee;
+    filter: drop-shadow(0 0 8px rgba(234, 245, 238, 0.85));
+    animation: mindmap-core-beat 2.6s ease-in-out infinite;
+  }
+  .mindmap-core-glow {
+    fill: url(#mindmap-core-gradient);
+    opacity: 0.55;
+    animation: mindmap-core-beat 2.6s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes mindmap-core-beat {
+    0%, 100% { transform: scale(0.94); opacity: 0.85; }
+    50% { transform: scale(1.08); opacity: 1; }
+  }
+  .mindmap-core, .mindmap-core-glow { transform-box: fill-box; transform-origin: center; }
+  /* Energy flow — evidence traveling inward toward the call, faster/brighter for
+     higher-weight connections (see mindmap_graph.js). */
+  .mindmap-edge {
+    stroke-width: 1.4;
+    stroke-dasharray: 3 7;
+    animation-name: mindmap-flow;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+  @keyframes mindmap-flow { to { stroke-dashoffset: -40; } }
+  .mindmap-node-circle {
+    transition: filter 150ms ease;
+    filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.15));
+  }
+  .mindmap-node-circle--core {
+    filter: drop-shadow(0 0 8px currentColor);
+    animation: mindmap-core-beat 3.2s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: center;
   }
   .mindmap-honest-empty {
     position: absolute;
@@ -49,14 +88,15 @@
     font-size: 10px;
     fill: var(--text-primary, #f9fafb);
     pointer-events: none;
+    opacity: 0;
+    transition: opacity 120ms ease;
   }
-  .mindmap-node.is-selected circle { stroke-width: 3; filter: drop-shadow(0 0 6px rgba(34,211,238,0.6)); }
+  /* Labels stay quiet until you explore — dozens of nodes with always-on text
+     turns the brain layout into noise, so reveal on hover/select instead. */
+  .mindmap-node.is-hovered text, .mindmap-node.is-selected text { opacity: 1; }
+  .mindmap-node.is-selected circle { stroke-width: 3; filter: drop-shadow(0 0 8px rgba(63, 201, 255, 0.75)); }
   .mindmap-node.is-hovered circle { stroke-width: 2.5; }
-  .mindmap-edge {
-    stroke: rgba(156, 163, 175, 0.45);
-    stroke-width: 1;
-  }
-  .mindmap-edge.is-highlight { stroke: rgba(34, 211, 238, 0.85); stroke-width: 2; }
+  .mindmap-edge.is-highlight { stroke: rgba(63, 201, 255, 0.95) !important; stroke-width: 2.4; opacity: 1 !important; }
   .mindmap-detail-panel {
     background: var(--bg-surface, #111827);
     border: 1px solid var(--border-subtle, #374151);
@@ -122,8 +162,25 @@
     text-transform: uppercase;
     cursor: pointer;
   }
+  @media (prefers-reduced-motion: reduce) {
+    .mindmap-core, .mindmap-core-glow, .mindmap-node-circle--core, .mindmap-edge { animation: none !important; }
+  }
+  @media (max-width: 640px) {
+    .mindmap-graph-section { margin-bottom: 1.25rem; padding: 0 2px; }
+    .mindmap-detail-panel {
+      padding: 12px;
+      min-height: 0;
+    }
+    .mindmap-node text { font-size: 11px; }
+  }
   @media (max-width: 480px) {
-    .mindmap-graph-mobile-toggle { display: block; }
+    .mindmap-graph-mobile-toggle {
+      display: block;
+      min-height: 48px;
+      padding: 14px 16px;
+      font-size: 13px;
+      -webkit-tap-highlight-color: transparent;
+    }
     .mindmap-graph-root {
       min-height: 0;
       max-height: 0;
@@ -133,14 +190,18 @@
       transition: max-height 0.25s ease, opacity 0.2s ease;
     }
     .mindmap-graph-root.is-expanded {
-      min-height: 360px;
-      max-height: 480px;
+      min-height: 280px;
+      max-height: min(70vh, 420px);
       border: 1px solid var(--border-subtle, #374151);
       opacity: 1;
       pointer-events: auto;
+      /* Coarse pointers: keep selected node labels visible (no hover) */
     }
     .mindmap-graph-root.is-expanded .mindmap-graph-svg {
-      height: 360px;
+      height: min(70vh, 360px);
+    }
+    .mindmap-graph-root.is-expanded .mindmap-node.is-selected text {
+      opacity: 1;
     }
     .mindmap-graph-layout {
       grid-template-columns: 1fr;
@@ -148,6 +209,9 @@
     .mindmap-detail-panel {
       margin-top: 10px;
     }
+  }
+  @media (hover: none) and (pointer: coarse) {
+    .mindmap-node.is-selected text { opacity: 1; }
   }
 </style>
 

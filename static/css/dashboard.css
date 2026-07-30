@@ -1079,16 +1079,17 @@ footer.status {
   color: var(--ring-color);
 }
 /* Color tiers by conviction level */
-.conv-ring.tier-red   { --ring-color: #ff3366; }
-.conv-ring.tier-gold  { --ring-color: #ff7a1a; }
-.conv-ring.tier-lime  { --ring-color: #39ff14; }
-.conv-ring.tier-cyan  { --ring-color: #00ff41; }
+/* Vivid, but on the site's real accent family (not the old hot-pink/alarm-red neon set) */
+.conv-ring.tier-red   { --ring-color: var(--accent-violet-dim, #5b4d8a); }
+.conv-ring.tier-gold  { --ring-color: var(--accent-orange, #ff9f3f); }
+.conv-ring.tier-lime  { --ring-color: var(--accent-blue, #3fc9ff); }
+.conv-ring.tier-cyan  { --ring-color: var(--accent-primary, #1fd47c); }
 /* Pulse/glow when conviction > 80% */
-.conv-ring.tier-cyan .conv-ring-fg { filter: drop-shadow(0 0 5px rgba(0, 255, 65, 0.85)); }
+.conv-ring.tier-cyan .conv-ring-fg { filter: drop-shadow(0 0 5px rgba(31, 212, 124, 0.85)); }
 .conv-ring.tier-cyan { animation: conv-pulse 1.8s ease-in-out infinite; }
 @keyframes conv-pulse {
-  0%, 100% { filter: drop-shadow(0 0 2px rgba(0, 255, 65, 0.35)); }
-  50%      { filter: drop-shadow(0 0 7px rgba(0, 255, 65, 0.7)); }
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(31, 212, 124, 0.35)); }
+  50%      { filter: drop-shadow(0 0 7px rgba(31, 212, 124, 0.7)); }
 }
 @media (max-width: 768px) {
   .conv-ring { width: 36px; height: 36px; }
