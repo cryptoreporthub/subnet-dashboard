@@ -49,7 +49,24 @@
     row.appendChild(body);
     log.appendChild(row);
     log.scrollTop = log.scrollHeight;
-    return body;
+    return { row: row, body: body };
+  }
+
+  function renderSourceChips(row, sources) {
+    if (!row || !sources || !sources.length) return;
+    var existing = row.querySelector(".chat-sources");
+    if (existing) existing.remove();
+    var wrap = document.createElement("div");
+    wrap.className = "chat-sources";
+    wrap.setAttribute("aria-label", "Cited sources");
+    sources.forEach(function (src) {
+      if (!src || !src.label) return;
+      var chip = document.createElement("span");
+      chip.className = "chat-source-chip";
+      chip.textContent = src.label;
+      wrap.appendChild(chip);
+    });
+    if (wrap.childNodes.length) row.appendChild(wrap);
   }
 
   function parseBlock(block) {
@@ -86,7 +103,8 @@
     return status === "partial" || status === "timeout" || status === "error" || status === "offline";
   }
 
-  function applyJsonReply(botBody, j) {
+  function applyJsonReply(botRow, j) {
+    var botBody = botRow.body || botRow;
     var status = j.status || (j.data && j.data.status);
     if (isPartialChatStatus(status)) {
       botBody.textContent = PARTIAL_MSG;
@@ -96,11 +114,14 @@
     }
     botBody.textContent = j.reply || (j.data && j.data.reply) || "No response.";
     if (meta) meta.textContent = formatChatMeta(j.model || (j.data && j.data.model), status);
+    renderSourceChips(botRow.row || botRow, j.sources || (j.data && j.data.sources));
     setChatReady(true);
   }
 
-  async function readStream(resp, botBody) {
+  async function readStream(resp, botRow) {
+    var botBody = botRow.body || botRow;
     var full = "";
+    var streamSources = null;
     var reader = resp.body.getReader();
     var decoder = new TextDecoder();
     var buf = "";
@@ -114,6 +135,7 @@
             var m = JSON.parse(ev.data);
             if (meta) meta.textContent = formatChatMeta(m.model, m.status);
             if (isPartialChatStatus(m.status)) setChatReady(false);
+            if (m.sources && m.sources.length) streamSources = m.sources;
           } catch (e) {
             /* ignore */
           }
@@ -147,10 +169,12 @@
       });
     }
     if (!full) botBody.textContent = "No response.";
+    renderSourceChips(botRow.row || botRow, streamSources);
     return full;
   }
 
-  async function deliverChat(msg, botBody, useStream) {
+  async function deliverChat(msg, botRow, useStream) {
+    var botBody = botRow.body || botRow;
     var url = useStream ? "/api/simivision/chat?stream=1" : "/api/simivision/chat";
     var body = useStream
       ? JSON.stringify({ message: msg, stream: true })
@@ -164,11 +188,11 @@
 
     var ct = resp.headers.get("content-type") || "";
     if (ct.indexOf("text/event-stream") < 0) {
-      applyJsonReply(botBody, await resp.json());
+      applyJsonReply(botRow, await resp.json());
       return;
     }
     if (!resp.body || !resp.body.getReader) throw new Error("no stream");
-    await readStream(resp, botBody);
+    await readStream(resp, botRow);
     if (botBody.textContent !== PARTIAL_MSG) setChatReady(true);
     else setChatReady(false);
   }
@@ -176,22 +200,22 @@
   async function send() {
     var msg = (input.value || "").trim();
     if (!msg || !chatReady) return;
-    appendMsg("user").textContent = msg;
+    appendMsg("user").body.textContent = msg;
     input.value = "";
     btn.disabled = true;
     if (meta) meta.textContent = "LLM: thinking…";
 
-    var botBody = appendMsg("bot");
+    var botRow = appendMsg("bot");
 
     try {
       try {
-        await deliverChat(msg, botBody, true);
+        await deliverChat(msg, botRow, true);
       } catch (streamErr) {
         if (meta) meta.textContent = "LLM: retrying…";
-        await deliverChat(msg, botBody, false);
+        await deliverChat(msg, botRow, false);
       }
     } catch (e) {
-      botBody.textContent = PARTIAL_MSG;
+      botRow.body.textContent = PARTIAL_MSG;
       if (meta) meta.textContent = "LLM: partial context";
       setChatReady(false);
     } finally {
