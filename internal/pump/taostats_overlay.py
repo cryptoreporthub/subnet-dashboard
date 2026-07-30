@@ -189,7 +189,7 @@ def apply_taostats_overlay(
 
 
 def load_subnets_for_pump_signals() -> List[Dict[str, Any]]:
-    """Merged feed when possible, else TMC — then warm TaoStats for actives."""
+    """Merged feed when cached, else fast TMC — then optional merge warm, TaoStats overlay."""
     subnets: List[Dict[str, Any]] = []
     try:
         from fetchers.merged_data import _get_cached, get_merged_subnet_data
@@ -197,6 +197,14 @@ def load_subnets_for_pump_signals() -> List[Dict[str, Any]]:
         cached = _get_cached("all_merged")
         if isinstance(cached, dict):
             subnets = list(cached.get("subnets") or [])
+        # ponytail: cold worker boot — TMC before blocking merge (90s scan timeout wedge).
+        if not subnets:
+            try:
+                from fetchers.taomarketcap import get_all_subnets
+
+                subnets = list(get_all_subnets() or [])
+            except Exception as exc:
+                logger.debug("TMC fast path for pump failed: %s", exc)
         if not subnets:
             subnets = list(get_merged_subnet_data() or [])
     except Exception as exc:
