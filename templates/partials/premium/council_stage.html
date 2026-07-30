@@ -108,7 +108,7 @@
       {# ---- v5 dossier styles ---- #}
       <style>
       :root {
-        --k3-bg: #000; --k3-surface: #0a0c10; --k3-accent: #00ff41;
+        --k3-bg: transparent; --k3-surface: rgba(14, 18, 30, 0.62); --k3-line: rgba(148, 163, 184, 0.14); --k3-accent: #00ff41;
         --k3-green: #39ff14; --k3-blue: #00d4ff; --k3-pink: #ff69b4; --k3-orange: #ffa500;
         --k3-text: #e2e8f0; --k3-muted: #64748b;
       }
@@ -283,7 +283,7 @@
       .k3-trust { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-muted); margin-top: 8px; z-index: 1; }
       .k3-layer { border-top: 1px solid #1a1d24; margin-top: 0; }
       .k3-layer-header { width: 100%; min-height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: var(--k3-surface); border: none; color: var(--k3-text); font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; -webkit-tap-highlight-color: transparent; letter-spacing: 0.08em; text-transform: uppercase; }
-      .k3-layer-header:active { background: #111420; }
+      .k3-layer-header:active { background: rgba(22, 28, 44, 0.72); }
       .k3-layer-icon { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--k3-muted); transition: transform 0.2s ease; }
       .k3-layer.open .k3-layer-icon { transform: rotate(90deg); }
       .k3-layer-body { display: none; padding: 16px; }

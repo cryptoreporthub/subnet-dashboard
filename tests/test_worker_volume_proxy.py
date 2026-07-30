@@ -64,6 +64,7 @@ def test_should_proxy_learning_health(monkeypatch):
     assert should_proxy_path("/api/predictions/resolved") is True
     assert should_proxy_path("/api/mindmap/trail") is True
     assert should_proxy_path("/api/mindmap/graph") is True
+    assert should_proxy_path("/api/council/weights") is True
     assert should_proxy_path("/api/council") is False
 
 
@@ -131,6 +132,33 @@ def test_worker_internal_bases_includes_regional_dns(monkeypatch):
 
     bases = worker_internal_bases()
     assert "http://worker.process.sjc.subnet-dashboard.internal:8081" in bases
+
+
+def test_load_weights_for_ui_proxies_worker(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("DATA_DIR", "/nonexistent")
+    remote = {
+        "expert_weights": {
+            "quant": 1.2,
+            "hype": 0.9,
+            "dark_horse": 1.0,
+            "technical": 0.8,
+        }
+    }
+    with patch("internal.worker_proxy.fetch_learning_stats_sync", return_value=remote):
+        from internal.council.weights import load_weights_for_ui
+
+        weights = load_weights_for_ui()
+    assert weights["quant"] == 1.2
+    assert weights["technical"] == 0.8
+
+
+def test_weights_are_default_flat():
+    from internal.council.weights import DEFAULT_WEIGHTS, weights_are_default_flat
+
+    assert weights_are_default_flat(dict(DEFAULT_WEIGHTS)) is True
+    assert weights_are_default_flat({"quant": 1.1, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}) is False
 
 
 def test_worker_proxy_middleware(monkeypatch):

@@ -833,7 +833,9 @@ body.council-first-theme {
   margin: 0 auto;
   padding: 0 20px 10px;
   border-bottom: 1px solid var(--sr-hairline);
-  background: rgba(5, 5, 8, 0.65);
+  background: rgba(10, 14, 24, 0.38);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 .sr-pulse--oneline {
   padding-top: 8px;
@@ -895,7 +897,6 @@ body.council-first-theme {
   margin: 0 auto;
   padding-top: 8px;
   padding-bottom: 8px;
-  border-top: 1px solid rgba(148, 163, 184, 0.12);
 }
 .sr-weighing-rib__head {
   display: flex;

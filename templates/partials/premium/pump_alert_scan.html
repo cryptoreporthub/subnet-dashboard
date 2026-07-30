@@ -28,7 +28,7 @@
 {% if pa_exit == 0 %}{% set pa_exit = exit_ns.rows|length %}{% endif %}
 {% set full_desk_href = pump_full_desk_href|default('/pump') %}
 
-<section class="pds pds--polish wrap-pad" id="section-pump-alert" aria-labelledby="pds-title" data-home-live="1" data-pump-compact="1" data-pump-scan="1" data-pump-polish="1">
+<section class="pds pds--polish desk-zone wrap-pad" id="section-pump-alert" aria-labelledby="pds-title" data-home-live="1" data-pump-compact="1" data-pump-scan="1" data-pump-polish="1">
   <div class="pds-atmosphere" aria-hidden="true"></div>
 
   <header class="pds-head">
@@ -232,10 +232,10 @@
     --pds-sub: #94a3b8;
     --pds-dim: #64748b;
     --pds-line: rgba(148, 163, 184, 0.14);
-    --pds-panel: rgba(10, 14, 24, 0.88);
+    --pds-panel: rgba(10, 14, 24, 0.52);
     position: relative;
     padding: 14px 0 24px;
-    border-top: 1px solid var(--pds-line);
+    border-top: none;
     border-left: 3px solid #38bdf8;
     padding-left: 12px;
     margin-left: -2px;

@@ -20,7 +20,7 @@ from internal.rate_limit import limit_or_noop, strict_limit
 from datastore.learning_engine import LearningEngine, create_feedback_router
 from internal.council import pick_history, resolver, rotation_tracker, scenario_memory
 from internal.council.watchdog import check_resolver_watchdog
-from internal.council.weights import load_impact_strength, load_weights
+from internal.council.weights import load_impact_strength, load_weights, load_weights_for_ui
 from internal.council.resolver_scheduler import (
     get_prediction_resolver_scheduler,
     get_prediction_resolver_scheduler_state,
@@ -782,7 +782,7 @@ async def api_freshness():
 async def api_council_weights():
     """Return the current Council expert weights."""
     try:
-        return {"status": "success", "data": load_weights()}
+        return {"status": "success", "data": load_weights_for_ui()}
     except Exception as exc:
         logger.warning("load_weights failed: %s", exc)
         return {
