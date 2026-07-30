@@ -1,7 +1,8 @@
 # Pre–Aug 4 polish + evidence wave (to completion)
 
 **Created:** 2026-07-29  
-**Status:** APPROVED TO PLAN — await human “execute” to start PRs  
+**Status:** EXECUTING — human cleared H1 2026-07-30  
+**Runbook:** `completion-runbook.md` (merge → babysit → next)  
 **Baseline main:** `c8a1146` (post #632 reaction crowns · #638 resolver badge)  
 **Canon:** `board.md` · `finish-queue-plan.md` · `combined-angles-lock.md` · `subnet-summers-telegram-lock.md` · `track-1-soak-review-lock.md`  
 **Branch prefix:** `cursor/<slug>-6063`  

@@ -149,6 +149,7 @@ class TelegramListener:
 
         retry_delay = 1
         max_retry_delay = 300  # 5 minutes
+        entity_retry_delay = 5
 
         while self._running:
             try:
@@ -177,7 +178,8 @@ class TelegramListener:
                         self.entity_resolve_attempts[-8:],
                         e,
                     )
-                    await asyncio.sleep(30)
+                    await asyncio.sleep(entity_retry_delay)
+                    entity_retry_delay = min(entity_retry_delay * 2, max_retry_delay)
                     continue
 
                 # Register handler first — gap backfill async so live ingest isn't blocked
@@ -189,6 +191,7 @@ class TelegramListener:
 
                 # Reset retry delay on successful connection
                 retry_delay = 1
+                entity_retry_delay = 5
 
                 # Keep running until stopped or disconnected
                 await self._client.run_until_disconnected()
@@ -200,6 +203,12 @@ class TelegramListener:
                 await asyncio.sleep(e.seconds)
             except RPCError as e:
                 logger.warning("RPC error: %s. Retrying in %ds...", e, retry_delay)
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, max_retry_delay)
+            except (EOFError, ConnectionResetError) as e:
+                logger.warning(
+                    "Telegram connection dropped (%s). Retrying in %ds...", type(e).__name__, retry_delay
+                )
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, max_retry_delay)
             except OSError as e:

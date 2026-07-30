@@ -1,8 +1,8 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-30T03:45:00Z  
-**main:** `845d3b9` — pre–Aug 4 wave ACTIVE · FQ-4 #664+#665  
-**Plans:** `pre-aug4-polish-plan.md` · `finish-queue-plan.md` · `master-sprint-execution-plan.md`
+**Last updated:** 2026-07-30T04:00:00Z  
+**main:** `0d52516` — PR3 in flight · runbook: `completion-runbook.md`  
+**Plans:** `completion-runbook.md` · `pre-aug4-polish-plan.md` · `finish-queue-plan.md`
 
 ## Full roadmap
 
@@ -107,7 +107,7 @@ Babysit: `./scripts/babysit_phase.sh <phase>`
 | SS-TG Gate 3 | H1 cleared — polish wave active |
 | **SS-TG visual flagship** | DONE #590 + #605 stale feed backfill · #596 sitewide palette |
 | **Phase C** | **DONE** — `worker_peer.alive: true` · worker HTTP `:8081` · flycast `:8081` |
-| **Finish queue** | Slice 4 **DONE** #664 · **Pre–Aug 4 wave** PR2/PR5/PR-R active (`pre-aug4-polish-plan.md`) · Slice 7 gated Aug 4 |
+| **Finish queue** | Slice 4 **DONE** #664 · **PR3 NEXT** (listener) · PR4–10 queue (`completion-runbook.md`) · Slice 7 gated Aug 4 |
 
 ## Prod cache (2026-07-29 post-#630)
 

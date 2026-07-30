@@ -955,6 +955,9 @@
       0;
     var group = listener.group_title || listener.monitored_group || "OfficialSubnetSummer";
     var deskReady = deskLooksReady(listener, payload);
+    var mode =
+      listener.display_mode ||
+      (listener.live && !listener.feed_stale ? "live" : deskReady ? "archive" : "warming");
 
     if (groupLink) {
       groupLink.href = GROUP_URL;
@@ -963,33 +966,49 @@
 
     if (meta) {
       var parts = ["<b>" + esc(group) + "</b>"];
-      if (listener.live) parts.push("listening");
+      if (mode === "live") parts.push("live");
+      else if (mode === "reconnecting") parts.push("reconnecting");
+      else if (mode === "archive") parts.push("archive");
       else if (deskReady) parts.push("desk ready");
       else if (listener.reason) parts.push(esc(listener.reason));
       parts.push(esc(total) + " messages");
       if (highConv) parts.push(esc(highConv) + " high conviction");
-      if (listener.feed_stale) {
+      if (mode === "archive" && listener.feed_stale) {
         parts.push("feed quiet — backfill on");
       }
       meta.innerHTML = parts.join(" · ");
-      if (listener.hint && !listener.live && !deskReady) meta.title = listener.hint;
+      if (listener.hint && mode === "warming") meta.title = listener.hint;
       else if (listener.feed_stale && listener.last_message_at) {
         meta.title = "Last message " + listener.last_message_at + " — polling Telegram history";
       }
     }
 
-    if (liveTag) liveTag.hidden = !(listener.live || deskReady);
-    if (pulse) pulse.hidden = !(listener.live || deskReady);
+    if (liveTag) {
+      if (mode === "live") {
+        liveTag.textContent = "Live";
+        liveTag.hidden = false;
+      } else if (mode === "reconnecting") {
+        liveTag.textContent = "Reconnecting";
+        liveTag.hidden = false;
+      } else if (mode === "archive") {
+        liveTag.textContent = "Archive";
+        liveTag.hidden = false;
+      } else {
+        liveTag.hidden = true;
+      }
+    }
+    if (pulse) pulse.hidden = mode !== "live";
 
     if (sub) {
-      if (listener.live) {
+      if (mode === "live") {
         sub.innerHTML =
           'Live read of <a class="message-intel__group-link" href="' +
           GROUP_URL +
           '" target="_blank" rel="noopener noreferrer">Subnet Summers</a> — trending names, top contributors, and jury-scored messages.';
-      } else if (deskReady) {
-        sub.textContent =
-          "Subnet Summers desk loaded from archive — listener runs on the worker machine.";
+      } else if (mode === "archive") {
+        sub.textContent = listener.feed_stale
+          ? "Subnet Summers archive — backfill polling Telegram history."
+          : "Subnet Summers desk loaded from archive — listener runs on the worker machine.";
       } else if (listener.hint) {
         sub.textContent = listener.hint;
       } else if (listener.reason === "idle_not_started") {
