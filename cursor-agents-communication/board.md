@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-30T00:50:00Z  
-**main:** `ee46716` — LD #654 · LC #652 · PP-0 #651+#653 · Acc-0 #649+#651  
+**Last updated:** 2026-07-30T01:00:00Z  
+**main:** `2123b9c` — PP-1 #656 · Acc-1 #655 · LD #654 · LC #652 · PP-0 #651+#653 · Acc-0 #649+#651  
 **Plans:** `master-sprint-execution-plan.md` · `launch-lc-ld-plan.md` · `accuracy-pump-pattern-plan.md` · `finish-queue-plan.md`
 
 ## Full roadmap
