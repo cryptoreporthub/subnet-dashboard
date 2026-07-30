@@ -113,9 +113,9 @@ def _tmc_display_names() -> Dict[int, str]:
                 return cached
     by: Dict[int, str] = {}
     try:
-        from fetchers.taomarketcap import get_all_subnets
+        from fetchers.taomarketcap import _get_all_subnets_tao
 
-        for row in get_all_subnets() or []:
+        for row in _get_all_subnets_tao() or []:
             try:
                 n = int(row.get("netuid"))
             except (TypeError, ValueError):

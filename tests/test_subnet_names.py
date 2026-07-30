@@ -116,8 +116,22 @@ def test_pump_alert_resolves_sn28_not_lol(monkeypatch):
 
 
 def test_resolve_bad_name_falls_back_to_sn():
-    name = resolve_subnet_name(63, local={"63": {"name": "Unknown"}}, remote={}, use_taostats=False)
+    with patch("internal.subnet_names._tmc_display_names", return_value={}):
+        name = resolve_subnet_name(63, local={"63": {"name": "Unknown"}}, remote={}, use_taostats=False)
     assert name == "SN63"
+
+
+def test_tmc_display_names_uses_tao_table_not_live_feed():
+    """Name cache must use TaoMarketCap table, not blockmachine live feed names."""
+    with patch("fetchers.taomarketcap._get_all_subnets_tao", return_value=[{"netuid": 6, "name": "Numinous"}]):
+        with patch("fetchers.taomarketcap.get_all_subnets", return_value=[{"netuid": 6, "name": "Infinite Games"}]):
+            from internal.subnet_names import _tmc_display_names
+
+            # bust module cache
+            import internal.subnet_names as sn
+
+            sn._tmc_name_cache["at"] = 0.0
+            assert _tmc_display_names().get(6) == "Numinous"
 
 
 def test_tmc_cache_beats_stale_row_hint():
