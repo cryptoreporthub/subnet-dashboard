@@ -143,23 +143,29 @@ def _raw_has_legacy_contrarian(data: Dict[str, Any]) -> bool:
     return False
 
 
-def replay_weights_from_predictions(
-    predictions_path: Optional[str] = None,
-) -> Dict[str, float]:
-    """Rebuild council weights by replaying graded prediction nudges from defaults."""
-    from internal.council.grading import is_pump_desk_claim
-    from internal.council.signal_expert import expert_for_replay_row
+ARCHIVE_REPLAY_MIN_CURRENT = 5
+PREDICTIONS_ARCHIVE_DIR = os.environ.get("PREDICTIONS_ARCHIVE_DIR", "data/predictions_archive")
 
-    path = predictions_path or os.path.join("data", "predictions.json")
+
+def _row_replay_key(row: Dict[str, Any]) -> str:
+    rid = row.get("id")
+    if rid is not None and str(rid).strip():
+        return str(rid)
+    return f"{row.get('netuid')}-{row.get('created_at')}-{row.get('resolved_at')}"
+
+
+def _load_predictions_blob(path: str) -> Dict[str, Any]:
     try:
         with open(path, "r", encoding="utf-8") as handle:
             data = json.load(handle)
     except Exception:
         data = {}
-    if not isinstance(data, dict):
-        data = {}
+    return data if isinstance(data, dict) else {}
 
-    weights = dict(DEFAULT_WEIGHTS)
+
+def _replay_rows_from_blob(data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    from internal.council.grading import is_pump_desk_claim
+
     rows = [
         row
         for row in (data.get("resolved") or [])
@@ -169,7 +175,79 @@ def replay_weights_from_predictions(
         and not is_pump_desk_claim(row)
     ]
     rows.sort(key=lambda row: str(row.get("resolved_at") or row.get("created_at") or ""))
+    return rows
 
+
+def _archive_replay_rows(archive_dir: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Load pre-epoch archive resolved rows for weight replay when current epoch is thin."""
+    root = archive_dir or PREDICTIONS_ARCHIVE_DIR
+    try:
+        from scripts.measure_accuracy_archive import load_archive
+
+        blob = load_archive(root)
+    except Exception:
+        return []
+    return _replay_rows_from_blob(blob)
+
+
+def merged_replay_rows(
+    predictions_path: Optional[str] = None,
+    *,
+    include_archive: bool = True,
+    archive_dir: Optional[str] = None,
+    min_current_for_archive: int = ARCHIVE_REPLAY_MIN_CURRENT,
+) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Current-epoch rows plus archive backfill when graded count is below threshold."""
+    path = predictions_path or os.path.join("data", "predictions.json")
+    current = _replay_rows_from_blob(_load_predictions_blob(path))
+    meta: Dict[str, Any] = {
+        "current_graded": len(current),
+        "archive_graded": 0,
+        "archive_used": False,
+        "total_graded": len(current),
+    }
+    if not include_archive or len(current) >= min_current_for_archive:
+        return current, meta
+
+    archive_rows = _archive_replay_rows(archive_dir)
+    meta["archive_graded"] = len(archive_rows)
+    if not archive_rows:
+        return current, meta
+
+    seen = {_row_replay_key(row) for row in current}
+    merged = list(current)
+    for row in archive_rows:
+        key = _row_replay_key(row)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(row)
+    merged.sort(key=lambda row: str(row.get("resolved_at") or row.get("created_at") or ""))
+    meta["archive_used"] = True
+    meta["total_graded"] = len(merged)
+    return merged, meta
+
+
+def count_merged_replay_rows(
+    predictions_path: Optional[str] = None,
+    *,
+    include_archive: bool = True,
+) -> int:
+    """Graded replay row count, including archive when current epoch is thin."""
+    _, meta = merged_replay_rows(predictions_path, include_archive=include_archive)
+    return int(meta.get("total_graded") or 0)
+
+
+def replay_weights_from_predictions(
+    predictions_path: Optional[str] = None,
+    *,
+    include_archive: bool = True,
+) -> Dict[str, float]:
+    """Rebuild council weights by replaying graded prediction nudges from defaults."""
+    from internal.council.signal_expert import expert_for_replay_row
+
+    rows, _ = merged_replay_rows(predictions_path, include_archive=include_archive)
+    weights = dict(DEFAULT_WEIGHTS)
     for row in rows:
         expert = expert_for_replay_row(row)
         if not expert or expert not in weights:
@@ -216,14 +294,13 @@ def rebalance_council_weights(
     path = predictions_path or os.path.join("data", "predictions.json")
     soul = soul_map_path or SOUL_MAP_PATH
     before = load_weights(soul)
+    merged_rows, merge_meta = merged_replay_rows(path)
     replayed = replay_weights_from_predictions(path)
     blended = soft_blend_weights(replayed, prior=dict(DEFAULT_WEIGHTS), replay_share=replay_share)
 
-    rows_replayed = 0
     rows_skipped_pump = 0
     try:
-        with open(path, "r", encoding="utf-8") as handle:
-            data = json.load(handle)
+        data = _load_predictions_blob(path)
         for row in (data.get("resolved") or []) if isinstance(data, dict) else []:
             if not isinstance(row, dict) or row.get("correct") is None:
                 continue
@@ -231,11 +308,10 @@ def rebalance_council_weights(
                 continue
             if is_pump_desk_claim(row):
                 rows_skipped_pump += 1
-                continue
-            if expert_for_replay_row(row):
-                rows_replayed += 1
     except Exception:
         pass
+
+    rows_replayed = sum(1 for row in merged_rows if expert_for_replay_row(row))
 
     if save:
         save_weights(blended, soul)
@@ -257,8 +333,11 @@ def rebalance_council_weights(
         "ok": True,
         "saved": bool(save),
         "replay_share": replay_share,
-        "rows_replayed": rows_replayed,
+        "rows_replayed": len(merged_rows),
         "rows_skipped_pump": rows_skipped_pump,
+        "archive_used": bool(merge_meta.get("archive_used")),
+        "current_graded": int(merge_meta.get("current_graded") or 0),
+        "archive_graded": int(merge_meta.get("archive_graded") or 0),
         "before": before,
         "replayed": replayed,
         "after": blended,

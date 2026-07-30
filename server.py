@@ -188,6 +188,7 @@ def _council_weight_rebalance_boot() -> None:
     force = flag in ("1", "true", "yes", "on")
     try:
         from internal.council.weights import (
+            count_merged_replay_rows,
             load_weights,
             rebalance_council_weights,
             weights_are_default_flat,
@@ -196,10 +197,7 @@ def _council_weight_rebalance_boot() -> None:
         if not force and not weights_are_default_flat():
             return
         if not force:
-            from internal.council import resolver
-
-            stats = resolver.get_resolved_predictions().get("stats", {}) or {}
-            graded = int(stats.get("correct") or 0) + int(stats.get("wrong") or 0)
+            graded = count_merged_replay_rows()
             if graded < 5:
                 return
         rebalance_council_weights(save=True)
