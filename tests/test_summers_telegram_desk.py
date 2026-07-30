@@ -22,6 +22,8 @@ def test_summers_desk_first_class_on_home():
     assert "message_intel_feed.js" in html
     assert "message-intel__hero" in html
     assert "message-intel__legend" in html
+    assert "message-intel__week-top" in html
+    assert "Comment of the week" in html
     assert "message-intel__sec-bar" in html
     assert "message-intel__sw--violet" in html
     assert "message-intel__flagship-chip" in html
@@ -43,6 +45,8 @@ def test_summers_desk_js_renders_conviction():
     assert "message-intel__rail-node" in src
     assert "is-bull" in src
     assert "message-intel__f-conv--high" in src
+    assert "renderWeekTopComment" in src
+    assert "week_top_comment" in src
 
 
 def test_summers_flagship_css_tokens():

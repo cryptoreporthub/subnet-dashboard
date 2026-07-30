@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from internal.message_intel.store import get_db
+
+logger = logging.getLogger(__name__)
 
 _EMOJI_WEIGHTS = {"🔥": 3, "❤": 2, "❤️": 2, "👍": 1, "🚀": 2, "💯": 2}
 _SENTIMENT_LABEL = {1.0: "Bullish", 0.0: "Cautious", -1.0: "Bearish"}
@@ -465,6 +468,118 @@ def build_reaction_crowns(*, days: int = 7, db=None) -> List[Dict[str, Any]]:
             }
         )
     return crowns
+
+
+def _reaction_total(raw: Any) -> int:
+    return int(sum(_reaction_score(raw).values()))
+
+
+def _top_reaction(raw: Any) -> Optional[Dict[str, Any]]:
+    rx = _reaction_score(raw)
+    if not any(rx.values()):
+        return None
+    key, count = max(rx.items(), key=lambda kv: kv[1])
+    emoji = next((e for k, e, _ in _REACTION_KEYS if k == key), "")
+    return {"key": key, "emoji": emoji, "count": int(count)}
+
+
+def _engagement_why(views: int, forwards: int, reaction_total: int, replies: int) -> str:
+    """Name the dominant engagement signal for the UI eyebrow."""
+    weighted = {
+        "Most reacted": reaction_total * 8,
+        "Most viewed": views,
+        "Most forwarded": forwards * 5,
+        "Most replied": replies * 12,
+    }
+    best = max(weighted.items(), key=lambda kv: kv[1])
+    if best[1] <= 0:
+        return "Most engaged"
+    return best[0]
+
+
+def build_week_top_comment(*, days: int = 7, db=None) -> Optional[Dict[str, Any]]:
+    """Single most-engaged Telegram message in the window (views/reactions/replies).
+
+    Side feature for the Summers desk — not call grading.
+    """
+    days = max(1, int(days or 7))
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    database = db or get_db()
+    try:
+        with database._connect() as conn:
+            rows = conn.execute(
+                """SELECT m.id, m.author_id, m.author_name, m.author_username, m.content,
+                          m.timestamp, m.created_at, m.source,
+                          mm.views, mm.forwards, mm.replies, mm.reactions
+                   FROM messages m
+                   LEFT JOIN message_metrics mm ON mm.message_id = m.id
+                   WHERE m.source = 'telegram'
+                   ORDER BY m.id DESC
+                   LIMIT 800"""
+            ).fetchall()
+    except Exception as exc:
+        logger.warning("week top comment query failed: %s", exc)
+        return None
+
+    best: Optional[Dict[str, Any]] = None
+    best_score = -1.0
+    for row in rows:
+        row = dict(row)
+        ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if ts is None or ts < cutoff:
+            continue
+        content = str(row.get("content") or "").strip()
+        if not content:
+            continue
+        try:
+            views = int(row.get("views") or 0)
+        except (TypeError, ValueError):
+            views = 0
+        try:
+            forwards = int(row.get("forwards") or 0)
+        except (TypeError, ValueError):
+            forwards = 0
+        try:
+            replies = int(row.get("replies") or 0)
+        except (TypeError, ValueError):
+            replies = 0
+        reaction_total = _reaction_total(row.get("reactions"))
+        if views <= 0 and forwards <= 0 and replies <= 0 and reaction_total <= 0:
+            continue
+        score = float(views + forwards * 5 + reaction_total * 8 + replies * 12)
+        if score < best_score:
+            continue
+        handle = str(row.get("author_username") or "").lstrip("@")
+        display = f"@{handle}" if handle else str(row.get("author_name") or "Unknown")
+        snippet = content if len(content) <= 220 else content[:217].rstrip() + "…"
+        candidate = {
+            "id": int(row["id"]),
+            "author_name": row.get("author_name") or "Unknown",
+            "author_username": row.get("author_username") or "",
+            "display_name": display,
+            "content": snippet,
+            "views": views,
+            "forwards": forwards,
+            "replies": replies,
+            "reaction_total": reaction_total,
+            "top_reaction": _top_reaction(row.get("reactions")),
+            "engagement_score": round(score, 1),
+            "why": _engagement_why(views, forwards, reaction_total, replies),
+            "days": days,
+            "timestamp": row.get("timestamp") or row.get("created_at") or "",
+        }
+        if score > best_score or (
+            score == best_score
+            and (reaction_total, views, replies)
+            > (
+                int((best or {}).get("reaction_total") or 0),
+                int((best or {}).get("views") or 0),
+                int((best or {}).get("replies") or 0),
+            )
+        ):
+            best = candidate
+            best_score = score
+    return best
 
 
 def build_topics(*, limit: int = 12, db=None) -> List[Dict[str, Any]]:
