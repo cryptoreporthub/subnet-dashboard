@@ -9,13 +9,14 @@ def test_resolve_prefers_tmc_over_stale_remote():
     """TMC is live authority; GitHub taostat JSON can lag rebrands (e.g. SN6)."""
     remote = {"6": {"name": "Infinite Games"}}
     local = {"6": {"name": "Infinite Games"}}
-    name = resolve_subnet_name(
-        6,
-        local=local,
-        remote=remote,
-        tmc_name="Numinous",
-        use_taostats=False,
-    )
+    with patch("internal.subnet_names._tmc_display_names", return_value={6: "Numinous"}):
+        name = resolve_subnet_name(
+            6,
+            local=local,
+            remote=remote,
+            tmc_name="Numinous",
+            use_taostats=False,
+        )
     assert name == "Numinous"
 
 
@@ -117,6 +118,16 @@ def test_pump_alert_resolves_sn28_not_lol(monkeypatch):
 def test_resolve_bad_name_falls_back_to_sn():
     name = resolve_subnet_name(63, local={"63": {"name": "Unknown"}}, remote={}, use_taostats=False)
     assert name == "SN63"
+
+
+def test_tmc_cache_beats_stale_row_hint():
+    """Blockmachine rows can carry stale names; TMC cache must win."""
+    with patch("internal.subnet_names._tmc_display_names", return_value={6: "Numinous"}):
+        row = enrich_subnet_row(
+            {"netuid": 6, "name": "Infinite Games", "source": "blockmachine"},
+            use_taostats=False,
+        )
+    assert row["name"] == "Numinous"
 
 
 def test_enrich_subnet_row_sets_netuid():

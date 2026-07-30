@@ -158,14 +158,16 @@ def _taostats_identity(netuid: int) -> Optional[str]:
 
 
 def _tmc_label(netuid: int, tmc_name: Optional[str] = None) -> Optional[str]:
-    """Row hint or cached TaoMarketCap table name when not generic."""
+    """Cached TaoMarketCap table first; row hint only when cache is cold."""
+    hit = _tmc_display_names().get(netuid)
+    if hit:
+        return hit
     if tmc_name and not _is_bad_name(tmc_name):
         cleaned = str(tmc_name).strip()
         if cleaned.lower() != "snnone" and not cleaned.startswith("SNNone"):
             if not re.match(rf"^SN{netuid}$", cleaned, re.I):
                 return cleaned
-    hit = _tmc_display_names().get(netuid)
-    return hit if hit else None
+    return None
 
 
 def resolve_subnet_name(
