@@ -101,6 +101,37 @@ def test_listener_status_stopped_when_heartbeat_stale(monkeypatch, tmp_path):
     assert "watchdog" in status["hint"]
 
 
+def test_listener_display_mode_archive_when_feed_stale(monkeypatch):
+    monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "auto")
+    monkeypatch.setenv("TELEGRAM_API_ID", "12345")
+    monkeypatch.setenv("TELEGRAM_API_HASH", "deadbeef")
+    monkeypatch.setenv("TELEGRAM_SESSION_PATH", "/tmp/none")
+
+    class _Fake:
+        _running = True
+        group_connected = True
+
+    listener_service._listener = _Fake()
+    monkeypatch.setattr(
+        listener_service,
+        "_has_session_file",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        listener_service,
+        "_feed_stale_fields",
+        lambda: {"feed_stale": True, "last_message_age_seconds": 9999.0},
+    )
+    monkeypatch.setattr(
+        "internal.message_intel.store.live_stats",
+        lambda: {"total_messages": 42},
+    )
+    status = listener_service.listener_status()
+    assert status["display_mode"] == "archive"
+    assert status["live"] is False
+    listener_service._listener = None
+
+
 def test_start_skipped_without_creds(monkeypatch):
     monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "auto")
     monkeypatch.delenv("TELEGRAM_API_ID", raising=False)

@@ -269,6 +269,20 @@ def listener_status() -> Dict[str, Any]:
     elif hint:
         out["hint"] = hint
     out.update(_feed_stale_fields())
+    feed_stale = bool(out.get("feed_stale"))
+    is_live = bool(out.get("live")) and not feed_stale
+    if is_live:
+        out["display_mode"] = "live"
+    elif out.get("reason") == "listener_stopped" or (
+        running and has_creds and not group_connected
+    ):
+        out["display_mode"] = "reconnecting"
+    elif desk_ready:
+        out["display_mode"] = "archive"
+    else:
+        out["display_mode"] = "warming"
+    # Never advertise live when feed is stale (honest status rail).
+    out["live"] = is_live
     return out
 
 
