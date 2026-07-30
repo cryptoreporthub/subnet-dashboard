@@ -1621,6 +1621,18 @@ async def health():
     return PlainTextResponse("OK")
 
 
+@app.get("/robots.txt", response_class=PlainTextResponse)
+async def robots_txt():
+    return PlainTextResponse(
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /api/\n"
+        "Disallow: /metrics\n"
+        "Disallow: /preview/\n",
+        media_type="text/plain",
+    )
+
+
 @app.get("/preview/k3-hold")
 async def preview_k3_hold(request: Request):
     """SSR preview for K3 HOLD+candidate — hydrate off for phone sign-off."""

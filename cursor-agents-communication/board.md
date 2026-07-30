@@ -47,7 +47,7 @@ Babysit: `./scripts/babysit_phase.sh <phase>` · rollup: `./scripts/babysit_phas
 |-------|--------|------|
 | **LA** Hero source-of-truth | **DONE** #640 | — |
 | **LB** Integrations + pulse rail | **DONE** #645 | — |
-| **LC** Legal / trust / SEO | **NEXT** | `launch-lc-ld-plan.md` |
+| **LC** Legal / trust / SEO | **IN PR** | `launch-lc-ld-plan.md` |
 | **LD** Surface honesty | gated on LC | same |
 
 ## Accuracy + pump pattern (parallel tracks)

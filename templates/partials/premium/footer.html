@@ -1,6 +1,10 @@
 {% set ds_raw = data_source|default('cache')|lower %}
-{% if 'timeout' in ds_raw or 'fallback' in ds_raw or ds_raw == 'snapshot' %}
+{% set freshness = data_freshness if data_freshness is defined and data_freshness else {} %}
+{% set eff_src = (freshness.effective_source or freshness.source or '')|lower %}
+{% if degraded or freshness.stale or 'timeout' in ds_raw or 'fallback' in ds_raw or ds_raw == 'snapshot' %}
   {% set footer_source_label = 'Snapshot' %}
+{% elif eff_src in ('blockmachine', 'taomarketcap', 'live') %}
+  {% set footer_source_label = eff_src|replace('_',' ')|title %}
 {% elif not ds_raw or ds_raw == 'cache' %}
   {% set footer_source_label = 'Live' %}
 {% else %}
@@ -35,5 +39,6 @@
   <div class="status-inner status-inner--meta">
     <span class="footer-tag footer-sn118" id="footerSubnetIntegrationsHint">Built on Bittensor · status bar above footer</span>
     <span class="footer-tag">UTC clock · Press <kbd>C</kbd> compact</span>
+    <span class="footer-tag footer-nfa">SimiVision calls are scored council output, not financial advice. Do your own research.</span>
   </div>
 </footer>
