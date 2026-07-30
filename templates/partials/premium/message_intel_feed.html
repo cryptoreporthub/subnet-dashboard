@@ -117,6 +117,17 @@
           <button type="button" class="message-intel__filter-chip message-intel__filter-chip--active" data-netuid="">All</button>
         </div>
       </div>
+      <div class="message-intel__filter-group">
+        <span class="message-intel__filter-label">Topic</span>
+        <div class="message-intel__filter-chips" id="message-intel-topic-filters" role="group" aria-label="Topic filter">
+          <button type="button" class="message-intel__filter-chip message-intel__filter-chip--active" data-topic="">All</button>
+          <button type="button" class="message-intel__filter-chip" data-topic="validator">Validator</button>
+          <button type="button" class="message-intel__filter-chip" data-topic="emissions">Emissions</button>
+          <button type="button" class="message-intel__filter-chip" data-topic="alpha">Alpha</button>
+          <button type="button" class="message-intel__filter-chip" data-topic="partnership">Partnership</button>
+          <button type="button" class="message-intel__filter-chip" data-topic="market">Market</button>
+        </div>
+      </div>
     </div>
     <div id="message-intel-feed" class="message-intel__feed" aria-live="polite">
       {% if message_intel and message_intel.messages %}

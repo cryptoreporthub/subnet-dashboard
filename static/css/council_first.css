@@ -2076,6 +2076,28 @@ button.home-cta {
   color: var(--mi-green);
   box-shadow: 0 0 14px -8px var(--mi-green-glow);
 }
+.message-intel--v2 .message-intel__topic-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.message-intel--v2 .message-intel__topic-chip {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(138, 154, 142, 0.35);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(232, 245, 233, 0.85);
+  cursor: pointer;
+}
+.message-intel--v2 .message-intel__topic-chip:hover {
+  border-color: rgba(31, 212, 124, 0.45);
+  color: var(--mi-green);
+}
 .message-intel--v2 .message-intel__feed {
   max-height: 480px;
   overflow: auto;
