@@ -10,9 +10,10 @@
     <meta property="og:url" content="{{ public_base_url }}/">
     <meta property="og:title" content="SimiVision — Council">
     <meta property="og:description" content="Subnet council picks, accountability, and live intelligence.">
-    <meta property="og:image" content="{{ public_base_url }}/static/favicon.svg">
+    <meta property="og:image" content="{{ public_base_url }}/static/og-share.png">
     <meta property="og:type" content="website">
-    <meta name="twitter:card" content="summary">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="{{ public_base_url }}/static/og-share.png">
     {% endif %}
     <meta name="theme-color" content="#04060e">
     <style>
@@ -39,6 +40,9 @@
 </head>
 <body class="council-first-theme">
     {% block content %}{% endblock %}
+    <p class="site-nfa" style="margin:12px auto 0;max-width:960px;padding:0 16px 8px;font-size:11px;line-height:1.4;color:#64748b;text-align:center;">
+      SimiVision calls are scored council output, not financial advice. Do your own research.
+    </p>
     <script src="/static/js/app.js" defer></script>
     <script src="/static/js/chat_stream.js" defer></script>
     <script src="/static/judge_panel.js" defer></script>
