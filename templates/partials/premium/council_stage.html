@@ -59,6 +59,9 @@
       {% set ring_circ = 389.56 %}
       {% set ring_offset = ring_circ - (ring_circ * conviction_pct / 100) %}
 
+      {# Subnet identity band — 6 vivid hues, keep in sync with k3NetuidBand() in cockpit_hydrate.js #}
+      {% set sn_band = ((sn.netuid|int * 47 + 11) % 6) if sn and sn.netuid is not none else 0 %}
+
       {# Temporal / resolution #}
       {% set outcome_status = dpick.outcome_status if dpick.outcome_status else 'pending' %}
       {% set outcome_note = dpick.outcome_note if dpick.outcome_note else '' %}
@@ -112,6 +115,17 @@
         --k3-green: #39ff14; --k3-blue: #00d4ff; --k3-pink: #ff69b4; --k3-orange: #ffa500;
         --k3-text: #e2e8f0; --k3-muted: #64748b;
       }
+      /* Subnet identity — 6 vivid hues so every subnet has its own hero personality
+         (was flat blue-hold/green-long). Hash: (netuid*47+11)%6, mirrored in JS via
+         k3NetuidBand(). Drives the orb, particles, hold-state ring, and claim name —
+         action badge (LONG/SHORT/HOLD) stays independently colored so meaning never blurs. */
+      .k3-claim { --sn-accent: #3fc9ff; --sn-accent-glow: rgba(63, 201, 255, 0.4); }
+      .k3-claim[data-band="0"] { --sn-accent: #3fc9ff; --sn-accent-glow: rgba(63, 201, 255, 0.4); }
+      .k3-claim[data-band="1"] { --sn-accent: #a78bfa; --sn-accent-glow: rgba(167, 139, 250, 0.4); }
+      .k3-claim[data-band="2"] { --sn-accent: #ffb74a; --sn-accent-glow: rgba(255, 183, 74, 0.38); }
+      .k3-claim[data-band="3"] { --sn-accent: #ff5fa8; --sn-accent-glow: rgba(255, 95, 168, 0.4); }
+      .k3-claim[data-band="4"] { --sn-accent: #34d399; --sn-accent-glow: rgba(52, 211, 153, 0.4); }
+      .k3-claim[data-band="5"] { --sn-accent: #60a5fa; --sn-accent-glow: rgba(96, 165, 250, 0.4); }
       .k3-dossier { color: var(--k3-text); padding: 0; margin: 0; max-width: 100%; overflow-x: hidden; }
       /* Quiet brand whisper when call is live — keep SimiVision, kill competing H1 chrome */
       .council-stage:has(#k3-claim-identity:not([hidden])) .council-stage__eyebrow,
@@ -136,35 +150,44 @@
         box-shadow: none;
       }
       .k3-claim-head {
-        display: flex; align-items: center; justify-content: space-between; gap: 10px;
-        margin-bottom: 12px; z-index: 2; text-align: left;
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        margin-bottom: 16px; z-index: 2; text-align: left;
       }
       .k3-claim-head .k3-claim-name {
         font-size: 18px; font-weight: 700; margin: 0; animation: none;
-        background: none; -webkit-text-fill-color: var(--k3-text); color: var(--k3-text);
+        background: none; -webkit-text-fill-color: var(--sn-accent); color: var(--sn-accent);
         letter-spacing: 0.01em; line-height: 1.2;
+        text-shadow: 0 0 14px var(--sn-accent-glow);
       }
       .k3-claim-head .k3-badge { margin: 0; flex-shrink: 0; }
       .k3-badge.hold { background: transparent; color: var(--k3-orange); border: 1px solid rgba(255, 165, 0, 0.55); }
       .k3-badge.buy { box-shadow: 0 0 18px rgba(57, 255, 20, 0.45), 0 0 36px rgba(57, 255, 20, 0.2); }
       .k3-claim-main {
-        display: flex; flex-direction: row; align-items: flex-start; gap: 10px;
+        display: flex; flex-direction: row; align-items: flex-start; gap: 14px;
         position: relative; z-index: 1; width: 100%;
       }
       .k3-orb-wrap {
         position: relative; width: 108px; height: 108px; flex-shrink: 0;
         display: flex; align-items: center; justify-content: center;
       }
+      /* Additive depth layer — slow counter-rotating halo behind the main orb-bg,
+         gives parallax depth without touching any of the existing loops. */
+      .k3-orb-halo {
+        position: absolute; width: 188px; height: 188px; border-radius: 50%;
+        background: conic-gradient(from 90deg, transparent, var(--sn-accent), transparent 55%);
+        animation: k3-spin-reverse 42s linear infinite; opacity: 0.16; filter: blur(34px); z-index: -1;
+        pointer-events: none;
+      }
       .k3-orb-bg {
         position: absolute; width: 160px; height: 160px; border-radius: 50%;
-        background: conic-gradient(var(--k3-blue), var(--k3-green), var(--k3-blue));
-        animation: k3-spin 28s linear infinite; opacity: 0.14; filter: blur(28px); z-index: 0;
+        background: conic-gradient(var(--sn-accent), var(--k3-green), var(--sn-accent));
+        animation: k3-spin 28s linear infinite; opacity: 0.16; filter: blur(28px); z-index: 0;
         pointer-events: none;
       }
       .k3-orb-glow {
         position: absolute; width: 140px; height: 140px; border-radius: 50%;
         background:
-          radial-gradient(circle, rgba(0, 212, 255, 0.32) 0%, transparent 58%),
+          radial-gradient(circle, var(--sn-accent-glow) 0%, transparent 58%),
           radial-gradient(circle at 40% 35%, rgba(57, 255, 20, 0.18) 0%, transparent 62%);
         animation: k3-pulse 4s ease-in-out infinite; opacity: 0.55; filter: blur(18px); z-index: 0;
         pointer-events: none;
@@ -172,20 +195,21 @@
       .k3-claim--glow-hot .k3-orb-glow {
         background:
           radial-gradient(circle, rgba(57, 255, 20, 0.38) 0%, transparent 55%),
-          radial-gradient(circle at 60% 40%, rgba(0, 212, 255, 0.22) 0%, transparent 62%);
-        opacity: 0.65; filter: blur(16px);
+          radial-gradient(circle at 60% 40%, var(--sn-accent-glow) 0%, transparent 62%);
+        opacity: 0.68; filter: blur(16px);
       }
       .k3-claim--glow-cool .k3-orb-glow {
         background:
-          radial-gradient(circle, rgba(0, 212, 255, 0.4) 0%, transparent 52%),
+          radial-gradient(circle, var(--sn-accent-glow) 0%, transparent 52%),
           radial-gradient(circle at 55% 45%, rgba(255, 165, 0, 0.12) 0%, transparent 65%);
-        opacity: 0.6;
+        opacity: 0.62;
       }
       .k3-claim--glow-hot .k3-orb-bg {
-        background: conic-gradient(var(--k3-green), var(--k3-blue), var(--k3-green));
-        opacity: 0.18;
+        background: conic-gradient(var(--k3-green), var(--sn-accent), var(--k3-green));
+        opacity: 0.2;
       }
       @keyframes k3-spin { to { transform: rotate(360deg); } }
+      @keyframes k3-spin-reverse { to { transform: rotate(-360deg); } }
       @keyframes k3-pulse {
         0%, 100% { opacity: 0.55; transform: scale(0.96); }
         50% { opacity: 0.95; transform: scale(1.04); }
@@ -196,7 +220,7 @@
       }
       .k3-orb-particles span {
         position: absolute; width: 3px; height: 3px; border-radius: 50%;
-        background: #7df9ff; box-shadow: 0 0 6px 1px rgba(0, 212, 255, 0.9), 0 0 12px rgba(57, 255, 20, 0.35);
+        background: var(--sn-accent); box-shadow: 0 0 6px 1px var(--sn-accent-glow), 0 0 12px rgba(57, 255, 20, 0.3);
         opacity: 0.85;
       }
       .k3-orb-particles span:nth-child(1) { top: 8%; left: 48%; }
@@ -207,10 +231,20 @@
       .k3-orb-particles span:nth-child(6) { top: 70%; left: 12%; width: 2px; height: 2px; }
       .k3-orb-particles span:nth-child(7) { top: 38%; left: 4%; }
       .k3-orb-particles span:nth-child(8) { top: 14%; left: 18%; width: 2px; height: 2px; opacity: 0.7; }
+      .k3-orb-particles span:nth-child(9) { top: 58%; left: 96%; width: 2px; height: 2px; opacity: 0.55; animation-duration: 18s; }
+      .k3-orb-particles span:nth-child(10) { top: 4%; left: 30%; width: 2px; height: 2px; opacity: 0.65; animation-duration: 11s; }
       .k3-claim--glow-hot .k3-orb-particles span {
-        background: #39ff14; box-shadow: 0 0 6px 1px rgba(57, 255, 20, 0.95), 0 0 14px rgba(0, 212, 255, 0.35);
+        background: #39ff14; box-shadow: 0 0 6px 1px rgba(57, 255, 20, 0.95), 0 0 14px var(--sn-accent-glow);
       }
       @keyframes k3-particle-drift { to { transform: rotate(360deg); } }
+      /* Additive one-shot flourish — fires once when the ring finishes filling,
+         a small "the read just landed" pop on the score digits. Not a new loop. */
+      @keyframes k3-score-pop {
+        0% { transform: scale(1); filter: drop-shadow(0 0 0 transparent); }
+        45% { transform: scale(1.12); filter: drop-shadow(0 0 14px var(--sn-accent-glow)); }
+        100% { transform: scale(1); filter: drop-shadow(0 0 0 transparent); }
+      }
+      .k3-orb-center { animation: k3-score-pop 0.6s ease-out 1.05s 1; }
       .k3-orb { position: relative; width: 108px; height: 108px; z-index: 2; margin: 0; }
       .k3-orb svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
       .k3-orb .ring-track { fill: none; stroke: rgba(26, 29, 36, 0.95); stroke-width: 9; }
@@ -234,8 +268,8 @@
       .k3-orb.k3-ring--resolved .ring-fill { stroke: #64748b; animation: none; filter: none; }
       .k3-claim--hold .k3-orb .ring-fill,
       .k3-claim--glow-cool .k3-orb .ring-fill {
-        stroke: var(--k3-blue);
-        filter: drop-shadow(0 0 7px rgba(0, 212, 255, 0.55));
+        stroke: var(--sn-accent);
+        filter: drop-shadow(0 0 7px var(--sn-accent-glow));
       }
       .k3-claim--glow-hot .k3-orb .ring-fill {
         filter: drop-shadow(0 0 7px rgba(57, 255, 20, 0.55));
@@ -250,8 +284,8 @@
       .k3-orb-score { font-family: 'JetBrains Mono', monospace; font-size: 32px; font-weight: 700; line-height: 1; display: flex; }
       .k3-orb-score .digit-tens,
       .k3-orb-score .digit-ones {
-        color: #9ae8ff;
-        text-shadow: 0 0 10px rgba(0, 212, 255, 0.35);
+        color: var(--sn-accent);
+        text-shadow: 0 0 10px var(--sn-accent-glow);
       }
       .k3-claim--glow-hot .k3-orb-score .digit-tens {
         color: var(--k3-green);
@@ -263,8 +297,8 @@
       }
       .k3-claim--glow-cool .k3-orb-score .digit-tens,
       .k3-claim--glow-cool .k3-orb-score .digit-ones {
-        color: #7dd3fc;
-        text-shadow: 0 0 8px rgba(0, 212, 255, 0.35);
+        color: var(--sn-accent);
+        text-shadow: 0 0 8px var(--sn-accent-glow);
       }
       .k3-orb-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
       .k3-claim-name { font-size: 28px; font-weight: 700; background: linear-gradient(90deg, var(--k3-green), var(--k3-blue), var(--k3-pink), var(--k3-orange)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: k3-shimmer 3s ease-in-out infinite; margin: 8px 0 4px; z-index: 1; background-size: 200% 100%; }
@@ -310,6 +344,26 @@
       .k3-learning-stat { text-align: center; }
       .k3-learning-value { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700; color: var(--k3-accent); }
       .k3-learning-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); text-transform: uppercase; }
+      {# ---- Learning Loop: weight-shift visualization (Track record peel) ---- #}
+      .k3-weight-nudge-viz { margin-top: 12px; }
+      .k3-weight-nudge-viz__title { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+      .k3-weight-bar-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+      .k3-weight-bar-name { font-size: 12px; color: var(--k3-text); min-width: 78px; flex-shrink: 0; }
+      .k3-weight-bar-track { position: relative; flex: 1; height: 8px; border-radius: 4px; background: rgba(148, 163, 184, 0.12); overflow: visible; }
+      .k3-weight-bar-track::after { content: ''; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: rgba(148, 163, 184, 0.3); }
+      .k3-weight-bar-fill { position: absolute; top: 0; bottom: 0; border-radius: 4px; transition: width 0.7s cubic-bezier(0.2, 0.8, 0.2, 1); animation: k3-weight-bar-glow 2.2s ease-in-out infinite; }
+      .k3-weight-bar-fill--up { left: 50%; background: var(--k3-green); box-shadow: 0 0 8px rgba(57, 255, 20, 0.55); }
+      .k3-weight-bar-fill--down { right: 50%; background: var(--k3-pink); box-shadow: 0 0 8px rgba(255, 105, 180, 0.5); }
+      @keyframes k3-weight-bar-glow {
+        0%, 100% { filter: brightness(1); }
+        50% { filter: brightness(1.25); }
+      }
+      .k3-weight-bar-delta { font-family: 'JetBrains Mono', monospace; font-size: 11px; min-width: 44px; text-align: right; flex-shrink: 0; }
+      .k3-weight-bar-delta.up { color: var(--k3-green); }
+      .k3-weight-bar-delta.down { color: var(--k3-pink); }
+      @media (prefers-reduced-motion: reduce) {
+        .k3-weight-bar-fill { animation: none !important; }
+      }
       .k3-empty { text-align: center; padding: 32px 16px; color: var(--k3-muted); max-width: 32em; margin: 0 auto; }
       .k3-empty-icon { font-size: 24px; margin-bottom: 8px; opacity: 0.5; }
       .k3-empty-text { font-size: 13px; line-height: 1.5; }
@@ -345,7 +399,7 @@
       }
       @media (min-width: 768px) { .k3-dossier { max-width: 640px; margin: 0 auto; } .k3-claim { padding: 12px 8px 16px; } }
       @media (prefers-reduced-motion: reduce) {
-        .k3-orb-bg, .k3-orb-glow, .k3-orb-particles, .k3-claim-name, .k3-orb .ring-fill { animation: none !important; }
+        .k3-orb-bg, .k3-orb-halo, .k3-orb-glow, .k3-orb-particles, .k3-claim-name, .k3-orb .ring-fill, .k3-orb-center { animation: none !important; }
         .k3-orb .ring-fill { stroke-dashoffset: var(--ring-offset, 389.56); }
         .k3-orb-glow { opacity: 0.75; transform: none; }
       }
@@ -466,7 +520,7 @@
       <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
         <div class="k3-dossier" id="k3-dossier" data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}" data-action="{{ act }}">
           <div class="k3-layer open" id="k3-layer-claim">
-            <div class="k3-claim k3-claim--glow-{{ glow_tier }}{% if not audit_pick and act == 'HOLD' %} k3-claim--hold{% endif %}" id="k3-claim" data-glow="{{ glow_tier }}">
+            <div class="k3-claim k3-claim--glow-{{ glow_tier }} k3-claim--band-{{ sn_band }}{% if not audit_pick and act == 'HOLD' %} k3-claim--hold{% endif %}" id="k3-claim" data-glow="{{ glow_tier }}" data-band="{{ sn_band }}"{% if sn.netuid is not none %} data-netuid="{{ sn.netuid }}"{% endif %}>
               <div class="k3-claim-head">
                 <p class="k3-claim-name" id="k3-claim-head-name">{{ sn.name|default('SN' ~ sn.netuid) }}</p>
                 {% if act == 'LONG' %}<div class="k3-badge buy" id="k3-action-badge">LONG</div>
@@ -475,11 +529,13 @@
               </div>
               <div class="k3-claim-main">
                 <div class="k3-orb-wrap" aria-hidden="false">
+                  <div class="k3-orb-halo"></div>
                   <div class="k3-orb-bg"></div>
                   <div class="k3-orb-glow"></div>
                   <div class="k3-orb-particles" aria-hidden="true">
                     <span></span><span></span><span></span><span></span>
                     <span></span><span></span><span></span><span></span>
+                    <span></span><span></span>
                   </div>
                   <div class="k3-orb k3-ring--{{ ring_state }}"{% if resolve_at_iso %} data-resolve-at="{{ resolve_at_iso }}"{% endif %}>
                     <svg viewBox="0 0 148 148">
@@ -629,11 +685,13 @@
               </div>
               <div class="k3-claim-main">
                 <div class="k3-orb-wrap">
+                  <div class="k3-orb-halo"></div>
                   <div class="k3-orb-bg"></div>
                   <div class="k3-orb-glow"></div>
                   <div class="k3-orb-particles" aria-hidden="true">
                     <span></span><span></span><span></span><span></span>
                     <span></span><span></span><span></span><span></span>
+                    <span></span><span></span>
                   </div>
                   <div class="k3-orb k3-ring--{{ ring_state }}">
                     <svg viewBox="0 0 148 148">
@@ -812,13 +870,13 @@
           {% endif %}
           {% if tb_ready and cal_n|int > 0 and cal_acc is not none %}
           <p class="k3-track-footnote">We keep score on every call. {{ cal_acc }}% directional accuracy across {{ cal_n }} graded windows — published, not curated.</p>
-          <p class="k3-weight-nudge" id="k3-weight-nudge-line" hidden></p>
           {% elif cal_n|int > 0 %}
           <p class="k3-track-footnote">{% if tb.message %}{{ tb.message }}{% else %}Trust gate pending — {{ cal_n }} graded so far. Accuracy publishes when integrity clears.{% endif %}</p>
-          <p class="k3-weight-nudge" id="k3-weight-nudge-line" hidden></p>
           {% else %}
           <p class="k3-track-footnote">Graded outcomes will appear here as picks resolve. Published, not curated.</p>
           {% endif %}
+          <p class="k3-weight-nudge" id="k3-weight-nudge-line" hidden></p>
+          <div class="k3-weight-nudge-viz" id="k3-weight-nudge-viz" hidden aria-hidden="true"></div>
           <div class="k3-lifecycle" id="k3-lifecycle-learning" hidden>
             {% if sp.data_available and lifecycle_steps|length > 4 %}
             {% set learn_step = lifecycle_steps[4] %}
@@ -950,6 +1008,25 @@ function k3RenderConviction(pct) {
   if (fill) fill.style.setProperty('--ring-offset', String(ringCirc - (ringCirc * val / 100)));
 }
 
+// Subnet identity band — keep in sync with the Jinja `sn_band` formula above
+function k3NetuidBand(netuid) {
+  var n = parseInt(netuid, 10);
+  if (isNaN(n) || n < 0) return 0;
+  return ((n * 47) + 11) % 6;
+}
+
+function k3SyncNetuidBand(netuid) {
+  var claim = document.getElementById('k3-claim');
+  if (!claim) return;
+  var band = k3NetuidBand(netuid);
+  for (var i = 0; i < 6; i++) claim.classList.remove('k3-claim--band-' + i);
+  claim.classList.add('k3-claim--band-' + band);
+  claim.setAttribute('data-band', String(band));
+  if (netuid != null && netuid !== '') claim.setAttribute('data-netuid', String(netuid));
+}
+window.k3NetuidBand = k3NetuidBand;
+window.k3SyncNetuidBand = k3SyncNetuidBand;
+
 function k3SetActionBadge(action) {
   var badge = document.getElementById('k3-action-badge');
   if (!badge) return;
@@ -1047,6 +1124,7 @@ function k3SwitchHorizon(chipId) {
   var identityEl = document.getElementById('k3-claim-identity');
   if (identityEl) identityEl.hidden = false;
   k3SyncFocusNetuid(sn.netuid, sn.name);
+  k3SyncNetuidBand(sn.netuid);
   k3RenderConviction(view.conviction);
   k3SetActionBadge(view.action);
   var orbLabel = document.getElementById('k3-orb-label');

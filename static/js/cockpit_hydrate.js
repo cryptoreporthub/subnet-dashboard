@@ -1007,7 +1007,8 @@
 
   function renderWeightNudgeLine(deltas) {
     var el = document.getElementById('k3-weight-nudge-line');
-    if (!el) return;
+    var viz = document.getElementById('k3-weight-nudge-viz');
+    if (!el && !viz) return;
     var deltaMap = deltas && typeof deltas === 'object' ? deltas : {};
     var ranked = CANONICAL_EXPERTS.map(function (name) {
       var d = Number(deltaMap[name]);
@@ -1016,17 +1017,35 @@
       return Math.abs(row.delta) > 0.001;
     }).sort(function (a, b) {
       return Math.abs(b.delta) - Math.abs(a.delta);
-    }).slice(0, 2);
+    }).slice(0, 4);
     if (!ranked.length) {
-      el.hidden = true;
-      el.textContent = '';
+      if (el) { el.hidden = true; el.textContent = ''; }
+      if (viz) { viz.hidden = true; viz.innerHTML = ''; }
       return;
     }
-    var parts = ranked.map(function (row) {
-      return expertLabel(row.name) + ' ' + (row.delta > 0 ? '+' : '') + fmt(row.delta, 2);
-    });
-    el.textContent = 'Council weights shifted: ' + parts.join(' · ');
-    el.hidden = false;
+    if (el) {
+      var parts = ranked.slice(0, 2).map(function (row) {
+        return expertLabel(row.name) + ' ' + (row.delta > 0 ? '+' : '') + fmt(row.delta, 2);
+      });
+      el.textContent = 'Council weights shifted: ' + parts.join(' · ');
+      el.hidden = false;
+    }
+    if (viz) {
+      var maxAbs = Math.max.apply(null, ranked.map(function (r) { return Math.abs(r.delta); })) || 1;
+      var rows = ranked.map(function (row) {
+        var up = row.delta > 0;
+        var pct = Math.min(48, (Math.abs(row.delta) / maxAbs) * 48);
+        return (
+          '<div class="k3-weight-bar-row">' +
+          '<span class="k3-weight-bar-name">' + esc(expertLabel(row.name)) + '</span>' +
+          '<div class="k3-weight-bar-track"><div class="k3-weight-bar-fill k3-weight-bar-fill--' + (up ? 'up' : 'down') + '" style="width:' + pct.toFixed(1) + '%"></div></div>' +
+          '<span class="k3-weight-bar-delta ' + (up ? 'up' : 'down') + '">' + (up ? '+' : '') + fmt(row.delta, 2) + '</span>' +
+          '</div>'
+        );
+      }).join('');
+      viz.innerHTML = '<div class="k3-weight-nudge-viz__title">Council weights shifted</div>' + rows;
+      viz.hidden = false;
+    }
   }
 
   function patchK3CouncilVotes(weights, deltas) {
@@ -1209,6 +1228,9 @@
     var claimHeadName = document.getElementById('k3-claim-head-name');
     if (claimHeadName && snLabel) {
       claimHeadName.textContent = snLabel;
+    }
+    if (typeof window.k3SyncNetuidBand === 'function') {
+      window.k3SyncNetuidBand(sn.netuid);
     }
     if (claimName) {
       // Featured Call shows name in the card head; keep identity name for hydrate IDs only
@@ -2646,6 +2668,9 @@
     );
   }
 
+  var SOUL_ORB_COLORS = { quant: '#3fc9ff', hype: '#ff5fa8', dark_horse: '#a78bfa', technical: '#ffb74a' };
+  var SOUL_ORB_FALLBACK = ['#3fc9ff', '#a78bfa', '#ffb74a', '#ff5fa8', '#34d399', '#60a5fa'];
+
   function renderCouncilWeights(weights, deltas) {
     var normalized = normalizeWeights(weights);
     var keys = CANONICAL_EXPERTS.filter(function (k) { return normalized[k] != null; });
@@ -2653,22 +2678,26 @@
     var deltaMap = deltas && typeof deltas === 'object' ? deltas : {};
     var ranked = keys.slice().sort(function (a, b) { return (normalized[b] || 0) - (normalized[a] || 0); });
     var top = ranked[0];
-    var maxW = Math.max.apply(null, keys.map(function (k) { return normalized[k]; })) || 1;
-    var cards = keys.map(function (name) {
+    var cards = keys.map(function (name, index) {
       var w = Number(normalized[name]) || 0;
+      var delta = Number(deltaMap[name]) || 0;
+      var trend = delta > 0.005 ? 'up' : delta < -0.005 ? 'down' : 'even';
+      var biasLabel = trend === 'up' ? '\u25B2 LEARNED UP' : trend === 'down' ? '\u25BC LEARNED DOWN' : 'EVEN';
+      var orbColor = SOUL_ORB_COLORS[name] || SOUL_ORB_FALLBACK[index % SOUL_ORB_FALLBACK.length];
+      var orbPx = Math.round(58 + Math.min(w, 2.0) / 2.0 * 46);
       return (
-        '<div class="expert card-soft card">' +
-        '<div class="avatar">' + esc(expertLabel(name).charAt(0)) + '</div>' +
+        '<div class="expert card-soft card soul-orb-card" style="--soulmap-delay:' + (index * 0.35).toFixed(2) + 's;">' +
+        '<div class="soul-orb-wrap"><div class="soul-orb soul-orb--' + trend + '" style="--orb-accent:' + orbColor + ';--orb-px:' + orbPx + 'px;">' +
+        '<span class="soul-orb-core"></span><span class="soul-orb-value">' + fmt(w, 2) + '</span>' +
+        '</div></div>' +
         '<div class="name">' + esc(expertLabel(name)) + '</div>' +
-        '<div class="w">' + fmt(w, 3) + '</div>' +
-        '<div class="wbar"><div class="wfill" style="width:' + Math.min((w / maxW) * 100, 100) + '%;"></div></div>' +
-        '<span class="bias neu">LEARNED</span></div>'
+        '<span class="bias trend-' + trend + '">' + biasLabel + '</span></div>'
       );
     }).join('');
     var lean = top
       ? '<p class="council-lean">Leaning <strong>' + esc(expertLabel(top)) + '</strong> · weight ' + fmt(normalized[top], 3) + '</p>'
       : '';
-    replaceSectionContent('section-council', lean + '<div class="council-grid">' + cards + '</div>', '.council-grid, .card-muted');
+    replaceSectionContent('section-council', lean + '<div class="council-grid soulmap-constellation">' + cards + '</div>', '.council-grid, .card-muted');
     patchK3CouncilVotes(weights, deltaMap);
     renderWeightNudgeLine(deltaMap);
   }
