@@ -87,7 +87,7 @@
           <div class="pds-hero__copy">
             <div class="pds-hero__top">
               <span class="pds-hero__badge pds-hero__badge--{{ badge_slug }}">{{ hero_row.badge }}</span>
-              <a class="pds-hero__name" href="/subnet/{{ hero_row.netuid }}">{{ hero_row.name }} <b>SN{{ hero_row.netuid }}</b></a>
+              <a class="pds-hero__name" href="/subnet/{{ hero_row.netuid }}">{{ hero_row.name|default('SN' ~ hero_row.netuid) }} <b>SN{{ hero_row.netuid }}</b></a>
               {% if hero_row.updated_ago %}<span class="pds-hero__ago">{{ hero_row.updated_ago }}</span>{% endif %}
             </div>
             <div class="pds-hero__headline" aria-label="{{ trig_pct }} percent to trigger">
@@ -147,7 +147,7 @@
               {% for k in next_up[:3] %}
               {% set lead_pct = k.to_lead_pct|default(0)|int %}
               <a class="pds-angles__chip" href="/subnet/{{ k.netuid }}" title="{{ lead_pct }}% of #1 heat">
-                <span class="pds-angles__chip-head">{{ k.name }} <b>SN{{ k.netuid }}</b></span>
+                <span class="pds-angles__chip-head">{{ k.name|default('SN' ~ k.netuid) }} <b>SN{{ k.netuid }}</b></span>
                 <span class="pds-angles__chip-meta"><i>{{ lead_pct }}% of #1</i></span>
                 <span class="pds-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ lead_pct }} percent of lead"><span class="pds-angles__bar-fill" style="width:{{ lead_pct }}%"></span></span>
               </a>
@@ -167,7 +167,7 @@
               {% for k in peers.matches[:3] %}
               {% set lead_pct = k.to_lead_pct|default(0)|int %}
               <a class="pds-peers__match" href="/subnet/{{ k.netuid }}" title="{{ lead_pct }}% of #1 · {{ (k.shared|default([]))[:2]|join(' · ') or k.lane|default('peer') }}">
-                <span class="pds-peers__match-head">{{ k.name }} <b>SN{{ k.netuid }}</b>{% if k.lane %} <i>{{ k.lane }}</i>{% endif %}</span>
+                <span class="pds-peers__match-head">{{ k.name|default('SN' ~ k.netuid) }} <b>SN{{ k.netuid }}</b>{% if k.lane %} <i>{{ k.lane }}</i>{% endif %}</span>
                 <span class="pds-angles__chip-meta"><em>{{ lead_pct }}% of #1</em></span>
                 <span class="pds-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100"><span class="pds-angles__bar-fill" style="width:{{ lead_pct }}%"></span></span>
               </a>
@@ -184,7 +184,7 @@
             </header>
             <div class="pds-angles__list">
               <a class="pds-angles__chip pds-angles__chip--combined" href="/subnet/{{ combined.netuid }}" title="{{ lead_pct }}% of #1 · timing {{ combined.timing_pts }} · peer {{ combined.peer_pts }}">
-                <span class="pds-angles__chip-head">{{ combined.name }} <b>SN{{ combined.netuid }}</b></span>
+                <span class="pds-angles__chip-head">{{ combined.name|default('SN' ~ combined.netuid) }} <b>SN{{ combined.netuid }}</b></span>
                 <span class="pds-angles__chip-meta"><i>{{ lead_pct }}% of #1 · t{{ combined.timing_pts|int }} · p{{ combined.peer_pts|int }}</i></span>
                 <span class="pds-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100"><span class="pds-angles__bar-fill pds-angles__bar-fill--combined" style="width:{{ lead_pct }}%"></span></span>
               </a>

@@ -10,7 +10,7 @@
   <div class="pd-r__main">
     <div class="pd-r__id">
       <span class="pd-r__badge pd-r__badge--{{ badge_slug }}">{{ BADGE_ABBR.get(row.badge, row.badge) }}</span>
-      <span class="pd-r__name">{{ row.name }} <b class="pd-r__sn">SN{{ row.netuid }}</b></span>
+      <span class="pd-r__name">{{ row.name|default('SN' ~ row.netuid) }} <b class="pd-r__sn">SN{{ row.netuid }}</b></span>
     </div>
     {% if row.pattern_label and row.pattern_class and row.pattern_class != 'insufficient_data' %}
     <span class="pump-pattern-chip pump-pattern-chip--row" title="{{ row.pattern_class }}">{{ row.pattern_label|truncate(28, True) }}</span>

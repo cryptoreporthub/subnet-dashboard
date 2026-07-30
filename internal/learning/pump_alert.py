@@ -71,7 +71,7 @@ def _resolve_name(
             netuid_int,
             subnet_row=subnet_row,
             ladder_hint=ladder_hint,
-            use_taostats_fallback=False,
+            use_taostats_fallback=True,
         )
     except Exception:
         pass
@@ -1025,9 +1025,29 @@ def _finalize_pump_payload(
     return payload
 
 
+def _pump_subnet_rows(subnets: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """Enriched subnet rows for name resolution on pump desk cards."""
+    rows = subnets if isinstance(subnets, list) else []
+    if not rows:
+        try:
+            from internal.subnets.feed import load_subnets_for_display
+
+            rows = load_subnets_for_display(timeout=4.0)
+        except Exception:
+            rows = []
+    if rows:
+        try:
+            from internal.subnet_names import enrich_subnet_rows
+
+            return enrich_subnet_rows(rows)
+        except Exception:
+            return rows
+    return rows
+
+
 def build_pump_alerts_desk(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Fast pump desk payload — file-backed ladder, no background kicks on GET."""
-    rows = subnets if isinstance(subnets, list) else []
+    rows = _pump_subnet_rows(subnets)
     try:
         from internal.pump.state import load_state
 
@@ -1072,7 +1092,7 @@ def build_pump_alerts_desk(subnets: Optional[List[Dict[str, Any]]] = None) -> Di
 
 def build_pump_alerts(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Return predictive pump lane payload for SSR + GET /api/pump-alerts."""
-    rows = subnets if isinstance(subnets, list) else []
+    rows = _pump_subnet_rows(subnets)
     try:
         from internal.pump.refresh import kick_ladder_fresh, ladder_age_minutes, STALE_MINUTES
         from internal.pump.state import load_state

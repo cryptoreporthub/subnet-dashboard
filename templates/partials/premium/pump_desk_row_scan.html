@@ -9,7 +9,7 @@
 <a class="pds-ladder pds-ladder--{{ tone }}" href="/subnet/{{ row.netuid }}" data-netuid="{{ row.netuid }}">
   <div class="pds-ladder__head">
     <span class="pds-ladder__badge pds-ladder__badge--{{ badge_slug }}">{{ BADGE_ABBR.get(row.badge, row.badge) }}</span>
-    <span class="pds-ladder__name">{{ row.name }} <b>SN{{ row.netuid }}</b></span>
+    <span class="pds-ladder__name">{{ row.name|default('SN' ~ row.netuid) }} <b>SN{{ row.netuid }}</b></span>
     <span class="pds-ladder__nums">
       <span class="pds-ladder__num"><i>Flow</i>{% if form_pct is not none %}{{ form_pct }}{% else %}—{% endif %}</span>
       <span class="pds-ladder__num pds-ladder__num--gap"><i>Gap</i>{% if row.distance is not none %}{{ row.distance }}{% else %}—{% endif %}</span>

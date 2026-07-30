@@ -26,6 +26,7 @@ _CACHE_TTL_SECONDS = int(os.environ.get("SUBNET_NAMES_CACHE_TTL", "300"))
 _lock = threading.Lock()
 _remote_cache: Dict[str, Any] = {"at": 0.0, "data": {}}
 _identity_cache: Dict[int, Dict[str, Any]] = {}
+_tmc_name_cache: Dict[str, Any] = {"at": 0.0, "by_netuid": {}}
 
 
 def _is_bad_name(name: Any) -> bool:
@@ -102,6 +103,38 @@ def _remote_registry() -> Dict[str, Any]:
         return cached if isinstance(cached, dict) else {}
 
 
+def _tmc_display_names() -> Dict[int, str]:
+    """Cached TaoMarketCap names — fallback when registry/taostat rows are Unknown."""
+    now = time.time()
+    with _lock:
+        if now - float(_tmc_name_cache.get("at") or 0) < _CACHE_TTL_SECONDS:
+            cached = _tmc_name_cache.get("by_netuid")
+            if isinstance(cached, dict):
+                return cached
+    by: Dict[int, str] = {}
+    try:
+        from fetchers.taomarketcap import get_all_subnets
+
+        for row in get_all_subnets() or []:
+            try:
+                n = int(row.get("netuid"))
+            except (TypeError, ValueError):
+                continue
+            nm = row.get("name")
+            if not nm or _is_bad_name(nm):
+                continue
+            label = str(nm).strip()
+            if re.match(rf"^SN{n}$", label, re.I):
+                continue
+            by[n] = label
+    except Exception as exc:
+        logger.debug("TMC name cache failed: %s", exc)
+    with _lock:
+        _tmc_name_cache["at"] = now
+        _tmc_name_cache["by_netuid"] = by
+    return by
+
+
 def _taostats_identity(netuid: int) -> Optional[str]:
     cached = _identity_cache.get(netuid)
     if cached and time.time() - cached.get("at", 0) < _CACHE_TTL_SECONDS:
@@ -166,7 +199,12 @@ def resolve_subnet_name(
     if tmc_name and not _is_bad_name(tmc_name):
         cleaned = str(tmc_name).strip()
         if cleaned.lower() != "snnone" and not cleaned.startswith("SNNone"):
-            return cleaned
+            if not re.match(rf"^SN{n}$", cleaned, re.I):
+                return cleaned
+
+    tmc_hit = _tmc_display_names().get(n)
+    if tmc_hit:
+        return tmc_hit
 
     return f"SN{n}"
 
