@@ -1330,6 +1330,8 @@ button.home-cta {
   box-shadow:
     0 0 42px -16px var(--mi-yellow-glow),
     0 0 0 1px rgba(245, 213, 71, 0.14) inset;
+  /* Intentional animation 1: flagship board frame breathes like a living brain heartbeat */
+  animation: message-intel-board-breathe 5s ease-in-out infinite;
 }
 .message-intel--v2 .message-intel__group-link {
   color: var(--mi-blue);
@@ -1407,11 +1409,14 @@ button.home-cta {
   50% { opacity: 0.35; transform: scale(0.85); }
 }
 @media (prefers-reduced-motion: reduce) {
+  .message-intel--v2,
   .message-intel--v2 .message-intel__dot,
   .message-intel--v2 .message-intel__wave i,
   .message-intel--v2 .message-intel__rail-node,
   .message-intel--v2 .message-intel__hero-icon,
-  .message-intel--v2 .message-intel__f-conv--high { animation: none !important; }
+  .message-intel--v2 .message-intel__f-conv--high,
+  .message-intel--v2 .message-intel__feed-row,
+  .message-intel--v2 .message-intel__spotlight::after { animation: none !important; }
 }
 .message-intel--v2 .message-intel__page-title {
   margin-bottom: 6px;
@@ -2278,6 +2283,8 @@ button.home-cta {
   border-bottom: none;
   border-radius: 8px;
   transition: background 0.15s ease;
+  /* Intentional animation 2: rows slide in as a living cascade when feed renders */
+  animation: message-intel-row-in 0.22s ease-out both;
 }
 .message-intel--v2 .message-intel__feed-row:last-of-type { padding-bottom: 8px; }
 .message-intel--v2 .message-intel__feed-row:not(:last-of-type)::before {
@@ -2506,6 +2513,145 @@ button.home-cta {
   font-style: italic;
   text-align: center;
   padding: 14px 8px;
+}
+
+/* ═══ SS-TG flagship composition additions ═══════════════════════════════════
+   Three design zones:
+   1. Masthead  — brand bar + title + sub, with living-brain grid texture
+   2. Spotlight — yesterday hero + comment-of-week side-by-side (desktop)
+   3. Feed      — row slide-in cascade
+   Plus board-breathe & spotlight-gleam animations (2 & 3 of 3).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Masthead zone ────────────────────────────────────────────────────── */
+.message-intel--v2 .message-intel__masthead {
+  position: relative;
+  overflow: hidden;
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+}
+/* Grid texture overlay — fades top-right, mirror of mockup hero::before */
+.message-intel--v2 .message-intel__masthead::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse 80% 110% at 70% 0%, black 0%, transparent 68%);
+  pointer-events: none;
+  z-index: 0;
+}
+.message-intel--v2 .message-intel__masthead > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── 2a. Board breathe keyframe (animation applied to root rule above) ────── */
+@keyframes message-intel-board-breathe {
+  0%, 100% {
+    box-shadow:
+      0 0 42px -16px rgba(245, 213, 71, 0.45),
+      0 0 0 1px rgba(245, 213, 71, 0.14) inset;
+  }
+  50% {
+    box-shadow:
+      0 0 66px -8px rgba(245, 213, 71, 0.72),
+      0 0 0 1px rgba(245, 213, 71, 0.28) inset;
+  }
+}
+
+/* ── 2b. Spotlight zone: hero + week-top ─────────────────────────────────── */
+.message-intel--v2 .message-intel__spotlight {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  position: relative;
+  overflow: hidden;
+}
+@media (min-width: 740px) {
+  .message-intel--v2 .message-intel__spotlight {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+/* Grid gap replaces individual bottom margins inside spotlight */
+.message-intel--v2 .message-intel__spotlight .message-intel__hero,
+.message-intel--v2 .message-intel__spotlight .message-intel__week-top {
+  margin-bottom: 0;
+}
+/* If only one child is visible the grid collapses gracefully */
+.message-intel--v2 .message-intel__spotlight > [hidden]:only-child {
+  display: none;
+}
+
+/* Intentional animation 3: diagonal gleam sweeps the spotlight (living-brain pulse) */
+.message-intel--v2 .message-intel__spotlight::after {
+  content: "";
+  position: absolute;
+  top: -60%;
+  left: -40%;
+  width: 55%;
+  height: 260%;
+  background: linear-gradient(
+    108deg,
+    transparent 28%,
+    rgba(31, 212, 124, 0.04) 46%,
+    rgba(63, 201, 255, 0.03) 54%,
+    transparent 72%
+  );
+  animation: message-intel-spotlight-gleam 11s linear infinite;
+  pointer-events: none;
+  z-index: 2;
+}
+@keyframes message-intel-spotlight-gleam {
+  0%   { transform: translateX(-15%); opacity: 0; }
+  8%   { opacity: 1; }
+  78%  { opacity: 1; }
+  100% { transform: translateX(380%); opacity: 0; }
+}
+
+/* ── 3. Feed row slide-in keyframe (animation applied to row rule above) ─── */
+@keyframes message-intel-row-in {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+/* Subtle stagger — gives the cascade a living-pulse feel without JS */
+.message-intel--v2 .message-intel__feed-rows .message-intel__feed-row:nth-child(2) { animation-delay: 0.05s; }
+.message-intel--v2 .message-intel__feed-rows .message-intel__feed-row:nth-child(3) { animation-delay: 0.10s; }
+.message-intel--v2 .message-intel__feed-rows .message-intel__feed-row:nth-child(4) { animation-delay: 0.14s; }
+.message-intel--v2 .message-intel__feed-rows .message-intel__feed-row:nth-child(n+5) { animation-delay: 0.18s; }
+
+/* ── Source strip: pulse ribbon visual polish ────────────────────────────── */
+.message-intel--v2 .message-intel__source-strip {
+  /* upgrade from plain border to a glowing pulse ribbon */
+  border-color: rgba(31, 212, 124, 0.22);
+  box-shadow: 0 0 18px -10px var(--mi-green-glow);
+  position: relative;
+}
+
+/* ── Section labels: slightly more desk-like weight ─────────────────────── */
+.message-intel--v2 .message-intel__sec-bar {
+  width: 3px;
+  height: 14px;
+}
+.message-intel--v2 .message-intel__panel-title {
+  font-size: 11.5px;
+  letter-spacing: 0.12em;
+}
+
+/* ── Week-top flagship treatment: violet glow on hover ──────────────────── */
+.message-intel--v2 .message-intel__week-top:hover {
+  box-shadow: 0 0 36px -14px var(--mi-violet-glow);
+  transition: box-shadow 0.3s ease;
+}
+
+/* ── Mobile spotlight: stack full-width ─────────────────────────────────── */
+@media (max-width: 739px) {
+  .message-intel--v2 .message-intel__spotlight {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ---------- Pro drawer (council bench demoted) ---------- */

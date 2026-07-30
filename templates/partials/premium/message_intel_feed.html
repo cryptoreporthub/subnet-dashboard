@@ -2,19 +2,22 @@
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,600,700&amp;f[]=chillax@400,500,600&amp;display=swap">
 <section class="row wrap-pad desk-zone" id="section-message-intel" aria-labelledby="message-intel-title" data-home-live>
 <div class="message-intel message-intel--v2">
-  <div class="message-intel__topbar">
-    <span class="message-intel__brand">&gt;_ SUBNET SUMMERS · <em>SIMIVISION</em></span>
-    <span class="message-intel__flagship-chip" title="Flagship desk">FLAGSHIP</span>
-    <span class="message-intel__live-pill" id="message-intel-pulse" {% if not message_intel or not message_intel.meta or not message_intel.meta.total_messages %}hidden{% endif %}><span class="message-intel__dot" aria-hidden="true"></span>Live</span>
-  </div>
+  <!-- Masthead: brand bar + big title + sub-line -->
+  <div class="message-intel__masthead">
+    <div class="message-intel__topbar">
+      <span class="message-intel__brand">&gt;_ SUBNET SUMMERS · <em>SIMIVISION</em></span>
+      <span class="message-intel__flagship-chip" title="Flagship desk">FLAGSHIP</span>
+      <span class="message-intel__live-pill" id="message-intel-pulse" {% if not message_intel or not message_intel.meta or not message_intel.meta.total_messages %}hidden{% endif %}><span class="message-intel__dot" aria-hidden="true"></span>Live</span>
+    </div>
+    <h2 class="section-title message-intel__page-title" id="message-intel-title">Telegram pulse</h2>
+    <p class="section-sub message-intel__page-sub" id="message-intel-sub">
+      Real-time intelligence from the
+      <a class="message-intel__group-link" id="message-intel-group-link" href="https://t.me/OfficialSubnetSummer" target="_blank" rel="noopener noreferrer">Subnet Summers</a>
+      Telegram group.
+    </p>
+  </div><!-- /.message-intel__masthead -->
 
-  <h2 class="section-title message-intel__page-title" id="message-intel-title">Telegram pulse</h2>
-  <p class="section-sub message-intel__page-sub" id="message-intel-sub">
-    Real-time intelligence from the
-    <a class="message-intel__group-link" id="message-intel-group-link" href="https://t.me/OfficialSubnetSummer" target="_blank" rel="noopener noreferrer">Subnet Summers</a>
-    Telegram group.
-  </p>
-
+  <!-- Pulse ribbon: live source indicator -->
   <div class="message-intel__source-strip" id="message-intel-source-strip" aria-live="polite">
     <span class="message-intel__wave" aria-hidden="true">
       <i style="height:4px"></i><i style="height:8px"></i><i style="height:5px"></i><i style="height:11px"></i><i style="height:6px"></i><i style="height:9px"></i><i style="height:4px"></i>
@@ -45,32 +48,35 @@
     <div class="message-intel__hc-rows" id="message-intel-hc-rows"></div>
   </div>
 
-  <div class="message-intel__hero" id="message-intel-yesterday" hidden>
-    <p class="message-intel__hero-eyebrow">Yesterday&apos;s most talked about</p>
-    <div class="message-intel__hero-main">
-      <span class="message-intel__hero-icon" id="message-intel-yesterday-icon" aria-hidden="true">—</span>
-      <div>
-        <a class="message-intel__hero-name" id="message-intel-yesterday-link" href="#">—</a>
-        <p class="message-intel__hero-meta" id="message-intel-yesterday-stats"></p>
+  <!-- Spotlight: yesterday hero + comment of the week side-by-side on desktop -->
+  <div class="message-intel__spotlight">
+    <div class="message-intel__hero" id="message-intel-yesterday" hidden>
+      <p class="message-intel__hero-eyebrow">Yesterday&apos;s most talked about</p>
+      <div class="message-intel__hero-main">
+        <span class="message-intel__hero-icon" id="message-intel-yesterday-icon" aria-hidden="true">—</span>
+        <div>
+          <a class="message-intel__hero-name" id="message-intel-yesterday-link" href="#">—</a>
+          <p class="message-intel__hero-meta" id="message-intel-yesterday-stats"></p>
+        </div>
+      </div>
+      <div class="message-intel__hero-why" id="message-intel-yesterday-chips" hidden></div>
+      <p class="message-intel__hero-runner" id="message-intel-yesterday-runner" hidden></p>
+    </div>
+
+    <div class="message-intel__week-top" id="message-intel-week-top" hidden aria-live="polite">
+      <div class="message-intel__sec-label">
+        <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
+        <h3 class="message-intel__panel-title" id="message-intel-week-top-title">Comment of the week</h3>
+        <span class="message-intel__panel-unit">7d · engagement</span>
+      </div>
+      <p class="message-intel__week-top-why" id="message-intel-week-top-why"></p>
+      <blockquote class="message-intel__week-top-quote" id="message-intel-week-top-quote"></blockquote>
+      <div class="message-intel__week-top-meta">
+        <span class="message-intel__week-top-author" id="message-intel-week-top-author"></span>
+        <div class="message-intel__week-top-stats" id="message-intel-week-top-stats" aria-label="Engagement stats"></div>
       </div>
     </div>
-    <div class="message-intel__hero-why" id="message-intel-yesterday-chips" hidden></div>
-    <p class="message-intel__hero-runner" id="message-intel-yesterday-runner" hidden></p>
-  </div>
-
-  <div class="message-intel__week-top" id="message-intel-week-top" hidden aria-live="polite">
-    <div class="message-intel__sec-label">
-      <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
-      <h3 class="message-intel__panel-title" id="message-intel-week-top-title">Comment of the week</h3>
-      <span class="message-intel__panel-unit">7d · engagement</span>
-    </div>
-    <p class="message-intel__week-top-why" id="message-intel-week-top-why"></p>
-    <blockquote class="message-intel__week-top-quote" id="message-intel-week-top-quote"></blockquote>
-    <div class="message-intel__week-top-meta">
-      <span class="message-intel__week-top-author" id="message-intel-week-top-author"></span>
-      <div class="message-intel__week-top-stats" id="message-intel-week-top-stats" aria-label="Engagement stats"></div>
-    </div>
-  </div>
+  </div><!-- /.message-intel__spotlight -->
 
   <div class="message-intel__grid">
     <div class="message-intel__panel" id="message-intel-trending-card">
