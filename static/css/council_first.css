@@ -1307,6 +1307,9 @@ button.home-cta {
   --mi-violet-glow: var(--accent-glow-violet, rgba(157, 140, 255, 0.32));
   --mi-lilac: var(--accent-lilac, #b8a8f0);
   --mi-lilac-glow: rgba(184, 168, 240, 0.28);
+  /* Compat alias — site dropped hot pink; pink token now resolves to violet. */
+  --mi-pink: var(--mi-violet);
+  --mi-pink-glow: var(--mi-violet-glow);
   --mi-yellow: #f5d547;
   --mi-yellow-glow: rgba(245, 213, 71, 0.45);
   --mi-line: rgba(255, 255, 255, 0.07);
@@ -1404,7 +1407,11 @@ button.home-cta {
   50% { opacity: 0.35; transform: scale(0.85); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .message-intel--v2 .message-intel__dot { animation: none; }
+  .message-intel--v2 .message-intel__dot,
+  .message-intel--v2 .message-intel__wave i,
+  .message-intel--v2 .message-intel__rail-node,
+  .message-intel--v2 .message-intel__hero-icon,
+  .message-intel--v2 .message-intel__f-conv--high { animation: none !important; }
 }
 .message-intel--v2 .message-intel__page-title {
   margin-bottom: 6px;
@@ -1449,6 +1456,18 @@ button.home-cta {
   background: var(--mi-green);
   border-radius: 1px;
   display: block;
+  transform-origin: bottom;
+  animation: message-intel-wave 1.4s ease-in-out infinite;
+}
+.message-intel--v2 .message-intel__wave i:nth-child(2) { animation-delay: 0.12s; }
+.message-intel--v2 .message-intel__wave i:nth-child(3) { animation-delay: 0.24s; }
+.message-intel--v2 .message-intel__wave i:nth-child(4) { animation-delay: 0.08s; }
+.message-intel--v2 .message-intel__wave i:nth-child(5) { animation-delay: 0.3s; }
+.message-intel--v2 .message-intel__wave i:nth-child(6) { animation-delay: 0.18s; }
+.message-intel--v2 .message-intel__wave i:nth-child(7) { animation-delay: 0.36s; }
+@keyframes message-intel-wave {
+  0%, 100% { transform: scaleY(0.55); opacity: 0.55; }
+  50% { transform: scaleY(1); opacity: 1; }
 }
 .message-intel--v2 .message-intel__source-strip b { color: var(--mi-text); font-weight: 600; }
 .message-intel--v2 .message-intel__live-tag {
@@ -1606,6 +1625,7 @@ button.home-cta {
 }
 .message-intel--v2 .message-intel__sw--blue { background: var(--mi-blue); }
 .message-intel--v2 .message-intel__sw--violet { background: var(--mi-violet); }
+.message-intel--v2 .message-intel__sw--pink { background: var(--mi-pink); } /* alias → violet */
 .message-intel--v2 .message-intel__sw--lilac { background: var(--mi-lilac); }
 .message-intel--v2 .message-intel__sw--orange { background: var(--mi-orange); }
 .message-intel--v2 .message-intel__proof-score {
@@ -1704,7 +1724,7 @@ button.home-cta {
 .message-intel--v2 .message-intel__hero-icon {
   width: 54px;
   height: 54px;
-  border-radius: 15px;
+  border-radius: 50%;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -1712,10 +1732,13 @@ button.home-cta {
   font-family: var(--font-mono, monospace);
   font-weight: 800;
   font-size: 22px;
-  color: var(--mi-text);
-  border: 1px solid rgba(31, 212, 124, 0.4);
-  background: linear-gradient(155deg, rgba(31, 212, 124, 0.28), rgba(63, 201, 255, 0.12));
-  box-shadow: 0 0 24px -8px var(--mi-green-glow);
+  color: #04060e;
+  border: 1px solid rgba(31, 212, 124, 0.45);
+  background:
+    radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--mi-green) 55%, white 20%) 0%, var(--mi-green) 48%, transparent 78%),
+    rgba(31, 212, 124, 0.2);
+  box-shadow: 0 0 24px -6px var(--mi-green-glow), 0 0 14px var(--mi-blue-glow);
+  animation: message-intel-node-beat 3.2s ease-in-out infinite;
 }
 .message-intel--v2 .message-intel__hero-name {
   position: relative;
@@ -2175,6 +2198,11 @@ button.home-cta {
   background: var(--mi-bg-card);
   border: 2px solid var(--rail-color, var(--mi-green));
   box-shadow: 0 0 10px -2px var(--rail-glow, var(--mi-green-glow));
+  animation: message-intel-node-beat 2.8s ease-in-out infinite;
+}
+@keyframes message-intel-node-beat {
+  0%, 100% { transform: scale(0.94); }
+  50% { transform: scale(1.08); }
 }
 .message-intel--v2 .message-intel__feed-body { flex: 1; min-width: 0; }
 .message-intel--v2 .message-intel__feed-top {
@@ -2231,7 +2259,15 @@ button.home-cta {
   font-size: 10.5px;
   color: var(--mi-text-dim);
 }
-.message-intel--v2 .message-intel__f-conv--high { color: var(--mi-violet); }
+.message-intel--v2 .message-intel__f-conv--high {
+  color: var(--mi-violet);
+  text-shadow: 0 0 10px var(--mi-violet-glow);
+  animation: message-intel-conv-glow 2.4s ease-in-out infinite;
+}
+@keyframes message-intel-conv-glow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.25); }
+}
 .message-intel--v2 .message-intel__f-time {
   margin-left: auto;
   font-family: var(--font-mono, monospace);
