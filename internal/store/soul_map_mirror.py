@@ -7,7 +7,7 @@ import logging
 import os
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from internal.store.db import connect, create_tables
+from internal.store.db import create_tables
 from internal.store.query import (
     _utcnow_z,
     upsert_decision_lineage_row,
@@ -148,11 +148,10 @@ def backfill_from_soul_map(*, db_path: Optional[str] = None) -> Dict[str, int]:
 
 def init_store(*, db_path: Optional[str] = None) -> None:
     """Idempotent: create tables + backfill from JSON trace + read-only Soul-Map mirror."""
-    conn = connect(db_path)
-    try:
+    from internal.store.db import db_conn
+
+    with db_conn(db_path) as conn:
         create_tables(conn)
-    finally:
-        conn.close()
 
     backfill_from_trace_json(db_path=db_path)
     backfill_from_soul_map(db_path=db_path)

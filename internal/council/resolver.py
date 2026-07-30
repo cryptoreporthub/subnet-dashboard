@@ -8,11 +8,14 @@ weights, atomic ledger resolution, and dedupe before resolve.
 from __future__ import annotations
 
 import json
+import logging
 import os
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterator, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 from internal.council.deduplication import dedupe_predictions
 from internal.council.grading import (
@@ -492,32 +495,40 @@ def atomic_finalize_resolution(
         prediction["price_source"] = price_meta.get("price_source")
         prediction["price_lag_seconds"] = price_meta.get("price_lag_seconds")
 
+    warnings: List[str] = []
+
     try:
         on_prediction_resolved(prediction)
     except Exception:
-        pass
+        logger.exception("atomic_finalize: on_prediction_resolved failed")
+        warnings.append("on_prediction_resolved")
 
     try:
         from internal.council.prediction_trace import record_prediction_resolved
 
         record_prediction_resolved(prediction)
     except Exception:
-        pass
+        logger.exception("atomic_finalize: record_prediction_resolved failed")
+        warnings.append("record_prediction_resolved")
 
     try:
         from internal.learning.trail_events import emit_prediction_resolved
 
         emit_prediction_resolved(prediction, prediction.get("expert"))
     except Exception:
-        pass
+        logger.exception("atomic_finalize: emit_prediction_resolved failed")
+        warnings.append("emit_prediction_resolved")
 
     try:
         from internal.council import pick_history
 
         pick_history.finalize_from_prediction(prediction)
     except Exception:
-        pass
+        logger.exception("atomic_finalize: pick_history.finalize_from_prediction failed")
+        warnings.append("pick_history_finalize")
 
+    if warnings:
+        prediction["side_effect_warnings"] = warnings
     return prediction
 
 

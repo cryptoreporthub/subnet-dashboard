@@ -104,6 +104,45 @@ def test_resolve_true_requires_token_when_enabled(monkeypatch):
     assert ok.status_code == 200
 
 
+def test_write_auth_default_deny_admin_posts(monkeypatch):
+    """Admin/state mutations require bearer when token is set."""
+    monkeypatch.setenv("WRITE_API_TOKEN", "admin-token")
+    headers = {"Authorization": "Bearer admin-token"}
+    with TestClient(app) as client:
+        for path, body in (
+            ("/api/learning/trigger", {}),
+            ("/api/predictions/resolver/run", {}),
+            ("/api/alerts", {"alert_type": "manual", "message": "t", "severity": "info"}),
+        ):
+            denied = client.post(path, json=body)
+            assert denied.status_code == 401, path
+            ok = client.post(path, json=body, headers=headers)
+            assert ok.status_code != 401, path
+
+
+def test_write_auth_public_writes_open_with_token_set(monkeypatch):
+    """Browser UX POSTs stay open without bearer when token is set."""
+    monkeypatch.setenv("WRITE_API_TOKEN", "admin-token")
+    with TestClient(app) as client:
+        for path, body in (
+            ("/api/mindmap/feedback", {"note": "public-ux"}),
+            ("/api/feedback", {"feedback": "public-ux"}),
+        ):
+            r = client.post(path, json=body)
+            assert r.status_code != 401, path
+
+
+def test_write_auth_wrong_token_rejected(monkeypatch):
+    monkeypatch.setenv("WRITE_API_TOKEN", "correct-token")
+    with TestClient(app) as client:
+        r = client.post(
+            "/api/message-intel/ingest",
+            json={"content": "hi"},
+            headers={"Authorization": "Bearer wrong-token"},
+        )
+    assert r.status_code == 401
+
+
 def test_webhook_subscribe_rejects_private_ip():
     from internal.webhook_url import validate_webhook_url
 

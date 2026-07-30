@@ -1,7 +1,13 @@
-"""Optional bearer token for mutating API routes (audit P1)."""
+"""Optional bearer token for mutating API routes (audit P1).
+
+Default-deny: when WRITE_API_TOKEN is set, all POST/PUT/PATCH/DELETE require
+the bearer unless the path is on the public-write allowlist (browser UX).
+Contract tests and local dev stay open when WRITE_API_TOKEN is unset.
+"""
 
 from __future__ import annotations
 
+import hmac
 import os
 from typing import Optional
 
@@ -9,27 +15,17 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 _WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
-# Contract tests and local dev stay open when WRITE_API_TOKEN is unset.
-_PROTECTED_EXACT = frozenset(
+
+# Browser UX writes — stay open when token is set so the public UI keeps working.
+_PUBLIC_WRITE_EXACT = frozenset(
     {
-        "/api/message-intel/ingest",
-        "/api/alerts/subscribe",
-        "/api/learning/rebalance-weights",
-        "/api/scenario-memory",
-        "/api/whales/events",
-        "/api/ruggers/events",
-        "/api/trace/record",
-        "/api/learning/pump-lead/recover",
-        "/api/learning/pump-lead/train",
-        "/api/conviction-alerts/notify",
-        "/api/calibration/retrain",
+        "/api/simivision/chat",
+        "/api/investigate/ask",
+        "/api/feedback",
+        "/api/mindmap/feedback",
     }
 )
-_PROTECTED_PREFIXES = (
-    "/api/whales/scan",
-    "/api/ruggers/scan",
-    "/api/pump-ladder/scan",
-)
+_PUBLIC_WRITE_PREFIXES: tuple[str, ...] = ()
 
 
 def write_token() -> str:
@@ -40,14 +36,17 @@ def write_auth_enabled() -> bool:
     return bool(write_token())
 
 
+def _is_public_write(path: str) -> bool:
+    return path in _PUBLIC_WRITE_EXACT or any(path.startswith(p) for p in _PUBLIC_WRITE_PREFIXES)
+
+
 def _path_protected(method: str, path: str, query: str) -> bool:
-    if method in _WRITE_METHODS and (path in _PROTECTED_EXACT or any(path.startswith(p) for p in _PROTECTED_PREFIXES)):
-        return True
+    """True when this request must present a valid write token."""
+    if method in _WRITE_METHODS:
+        return not _is_public_write(path)
     if method == "GET" and path == "/api/predictions/resolved":
         q = (query or "").lower()
         return "resolve=true" in q or "resolve=1" in q or "resolve=yes" in q
-    if method == "PUT" and path == "/api/watchlist":
-        return True
     return False
 
 
@@ -65,8 +64,9 @@ def check_write_auth(request: Request) -> Optional[JSONResponse]:
     path = request.url.path
     if not _path_protected(request.method, path, str(request.url.query)):
         return None
-    token = _extract_bearer(request)
-    if token != write_token():
+    token = _extract_bearer(request) or ""
+    expected = write_token()
+    if not token or not hmac.compare_digest(token, expected):
         return JSONResponse(
             status_code=401,
             content={"status": "error", "error": "write_api_token_required"},

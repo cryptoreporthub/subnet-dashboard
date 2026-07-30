@@ -5,7 +5,6 @@ Handles both list and dict ({"subnets": [...]}) API responses.
 Now paginates through all pages to get the full ~129 subnets.
 """
 import json
-import sqlite3
 import os
 import logging
 import time
@@ -279,11 +278,12 @@ def _get_all_subnets_tao() -> List[Dict]:
     if raw:
         set_cache("all_subnets", {"subnets": raw})
         return raw
-    conn = sqlite3.connect(DB_PATH, timeout=10)
-    c = conn.cursor()
-    c.execute("SELECT data FROM subnets_cache WHERE key = ?", ("all_subnets",))
-    row = c.fetchone()
-    conn.close()
+    from fetchers._sqlite import db_conn
+
+    with db_conn(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT data FROM subnets_cache WHERE key = ?", ("all_subnets",))
+        row = c.fetchone()
     if row:
         cached_data = json.loads(row[0]).get("subnets", [])
         if cached_data:

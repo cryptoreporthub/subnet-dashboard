@@ -7,7 +7,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from internal.store.db import STORE_DB_PATH, connect, create_tables
+from internal.store.db import STORE_DB_PATH, create_tables, db_conn
 
 MAX_TRAIL_ROWS = 500
 
@@ -43,8 +43,7 @@ def _row_to_record(row: sqlite3.Row) -> Dict[str, Any]:
 
 def record_trace_row(record: Dict[str, Any], *, db_path: Optional[str] = None) -> Dict[str, Any]:
     """Insert one trace row into SQLite (idempotent on duplicate id)."""
-    conn = connect(db_path)
-    try:
+    with db_conn(db_path) as conn:
         create_tables(conn)
         conn.execute(
             """
@@ -63,14 +62,11 @@ def record_trace_row(record: Dict[str, Any], *, db_path: Optional[str] = None) -
             ),
         )
         conn.commit()
-    finally:
-        conn.close()
     return record
 
 
 def get_trail_row(trace_id: str, *, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    conn = connect(db_path)
-    try:
+    with db_conn(db_path) as conn:
         create_tables(conn)
         row = conn.execute(
             """
@@ -82,8 +78,6 @@ def get_trail_row(trace_id: str, *, db_path: Optional[str] = None) -> Optional[D
         if row is None:
             return None
         return _row_to_record(row)
-    finally:
-        conn.close()
 
 
 def get_trail_rows(
@@ -93,8 +87,7 @@ def get_trail_rows(
     db_path: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Return newest trail rows first; optional signal type filter."""
-    conn = connect(db_path)
-    try:
+    with db_conn(db_path) as conn:
         create_tables(conn)
         params: List[Any] = []
         where = ""
@@ -113,13 +106,10 @@ def get_trail_rows(
             params,
         ).fetchall()
         return [_row_to_record(row) for row in rows]
-    finally:
-        conn.close()
 
 
 def get_dispositions(*, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
-    conn = connect(db_path)
-    try:
+    with db_conn(db_path) as conn:
         create_tables(conn)
         rows = conn.execute(
             "SELECT netuid, action, score, updated_at FROM dispositions ORDER BY netuid"
@@ -133,8 +123,6 @@ def get_dispositions(*, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
             }
             for row in rows
         ]
-    finally:
-        conn.close()
 
 
 def get_decision_lineage(
@@ -142,8 +130,7 @@ def get_decision_lineage(
     *,
     db_path: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    conn = connect(db_path)
-    try:
+    with db_conn(db_path) as conn:
         create_tables(conn)
         rows = conn.execute(
             """
@@ -166,38 +153,27 @@ def get_decision_lineage(
                 }
             )
         return out
-    finally:
-        conn.close()
 
 
 def count_trail(*, db_path: Optional[str] = None) -> int:
-    conn = connect(db_path)
-    try:
+    with db_conn(db_path) as conn:
         create_tables(conn)
         row = conn.execute("SELECT COUNT(*) AS c FROM trail_rows").fetchone()
         return int(row["c"] if row else 0)
-    finally:
-        conn.close()
 
 
 def count_dispositions(*, db_path: Optional[str] = None) -> int:
-    conn = connect(db_path)
-    try:
+    with db_conn(db_path) as conn:
         create_tables(conn)
         row = conn.execute("SELECT COUNT(*) AS c FROM dispositions").fetchone()
         return int(row["c"] if row else 0)
-    finally:
-        conn.close()
 
 
 def count_decision_lineage(*, db_path: Optional[str] = None) -> int:
-    conn = connect(db_path)
-    try:
+    with db_conn(db_path) as conn:
         create_tables(conn)
         row = conn.execute("SELECT COUNT(*) AS c FROM decision_lineage").fetchone()
         return int(row["c"] if row else 0)
-    finally:
-        conn.close()
 
 
 def get_store_stats(*, db_path: Optional[str] = None) -> Dict[str, Any]:
@@ -211,8 +187,7 @@ def get_store_stats(*, db_path: Optional[str] = None) -> Dict[str, Any]:
 
 def upsert_trail_row(record: Dict[str, Any], *, db_path: Optional[str] = None) -> None:
     """Idempotent insert — skip if id already present."""
-    conn = connect(db_path)
-    try:
+    with db_conn(db_path) as conn:
         create_tables(conn)
         row_id = str(record.get("id") or "")
         if not row_id:
@@ -237,8 +212,6 @@ def upsert_trail_row(record: Dict[str, Any], *, db_path: Optional[str] = None) -
             ),
         )
         conn.commit()
-    finally:
-        conn.close()
 
 
 def upsert_disposition(
@@ -249,8 +222,7 @@ def upsert_disposition(
     *,
     db_path: Optional[str] = None,
 ) -> None:
-    conn = connect(db_path)
-    try:
+    with db_conn(db_path) as conn:
         create_tables(conn)
         conn.execute(
             """
@@ -264,8 +236,6 @@ def upsert_disposition(
             (int(netuid), str(action), score, updated_at or _utcnow_z()),
         )
         conn.commit()
-    finally:
-        conn.close()
 
 
 def upsert_decision_lineage_row(
@@ -277,8 +247,7 @@ def upsert_decision_lineage_row(
     *,
     db_path: Optional[str] = None,
 ) -> None:
-    conn = connect(db_path)
-    try:
+    with db_conn(db_path) as conn:
         create_tables(conn)
         existing = conn.execute("SELECT 1 FROM decision_lineage WHERE id = ?", (row_id,)).fetchone()
         if existing:
@@ -298,5 +267,3 @@ def upsert_decision_lineage_row(
             ),
         )
         conn.commit()
-    finally:
-        conn.close()

@@ -31,3 +31,7 @@ htmlcov/
 /routes_*.txt
 /line[0-9]*.txt
 /DIAGNOSTIC.md
+/health_endpoint.txt
+/COPY-FOR-DITTO.txt
+/INTERNAL_COUNCIL_STATE_VECTOR_PY.txt
+/VERSION.txt
