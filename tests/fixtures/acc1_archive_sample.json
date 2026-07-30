@@ -1,0 +1,70 @@
+{
+  "predictions": [],
+  "resolved": [
+    {
+      "id": "a1",
+      "netuid": 15,
+      "direction": "up",
+      "predicted_pct": 3.0,
+      "horizon_hours": 4,
+      "actual_pct": 2.1,
+      "correct": true,
+      "expert": "quant",
+      "final_confidence": 0.52,
+      "pick_source": "council",
+      "phase_at_prediction": "BUILDING"
+    },
+    {
+      "id": "a2",
+      "netuid": 19,
+      "direction": "up",
+      "predicted_pct": 2.0,
+      "horizon_hours": 4,
+      "actual_pct": -0.4,
+      "correct": false,
+      "expert": "quant",
+      "final_confidence": 0.41,
+      "pick_source": "council",
+      "phase_at_prediction": "WARMING UP"
+    },
+    {
+      "id": "a3",
+      "netuid": 40,
+      "direction": "up",
+      "predicted_pct": 4.0,
+      "horizon_hours": 24,
+      "actual_pct": 5.0,
+      "correct": true,
+      "expert": "hype",
+      "final_confidence": 0.62,
+      "pick_source": "council",
+      "phase_at_prediction": "PUMPING"
+    },
+    {
+      "id": "a4",
+      "netuid": 64,
+      "direction": "down",
+      "predicted_pct": -3.0,
+      "horizon_hours": 24,
+      "actual_pct": 0.3,
+      "correct": false,
+      "expert": "technical",
+      "final_confidence": 0.33,
+      "pick_source": "council_shadow",
+      "phase_at_prediction": "FLAT"
+    },
+    {
+      "id": "a5",
+      "netuid": 120,
+      "direction": "up",
+      "predicted_pct": 1.5,
+      "horizon_hours": 24,
+      "actual_pct": -0.2,
+      "correct": false,
+      "expert": "quant",
+      "final_confidence": 0.38,
+      "pick_source": "council",
+      "phase_at_prediction": "BUILDING"
+    }
+  ]
+}
