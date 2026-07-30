@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-30T04:30:00Z  
-**main:** `5c8f9cc` — PR4–PR10 PRs open (#672–#674) · runbook: `completion-runbook.md`  
+**Last updated:** 2026-07-30T04:40:00Z  
+**main:** `7d6db4c` — pre–Aug 4 wave **DONE** (#672–#674 merged) · runbook: `completion-runbook.md`  
 **Plans:** `completion-runbook.md` · `pre-aug4-polish-plan.md` · `finish-queue-plan.md`
 
 ## Full roadmap
