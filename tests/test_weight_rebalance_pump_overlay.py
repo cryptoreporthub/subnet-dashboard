@@ -112,6 +112,7 @@ def test_maybe_rebalance_on_boot_uses_archive_when_near_flat(tmp_path, monkeypat
     )
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr("internal.council.weights.PREDICTIONS_ARCHIVE_DIR", str(archive_dir))
+    monkeypatch.setattr("internal.learning.predictions_store.PREDICTIONS_PATH", str(preds))
     monkeypatch.setattr("internal.run_mode.is_worker_mode", lambda: True)
 
     result = maybe_rebalance_council_weights_on_boot()
@@ -119,6 +120,32 @@ def test_maybe_rebalance_on_boot_uses_archive_when_near_flat(tmp_path, monkeypat
     assert result["archive_used"] is True
     stored = json.loads(soul.read_text())
     assert stored["adversarial_state"]["council_weights"]["quant"] != 1.04
+
+
+def test_maybe_rebalance_on_boot_replays_full_ledger_when_near_flat(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    preds = tmp_path / "predictions.json"
+    soul.write_text(
+        json.dumps(
+            {
+                "adversarial_state": {
+                    "council_weights": {"quant": 1.04, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
+                }
+            }
+        )
+    )
+    preds.write_text(
+        Path("tests/fixtures/acc1_archive_sample.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.learning.predictions_store.PREDICTIONS_PATH", str(preds))
+    monkeypatch.setattr("internal.run_mode.is_worker_mode", lambda: True)
+
+    result = maybe_rebalance_council_weights_on_boot()
+    assert result is not None
+    assert result["rows_replayed"] >= 5
+    assert result["after"]["quant"] != 1.04
 
 
 def test_maybe_rebalance_on_boot_skips_when_weights_spread(tmp_path, monkeypatch):
@@ -150,6 +177,7 @@ def test_maybe_rebalance_on_boot_skips_when_weights_spread(tmp_path, monkeypatch
         )
     )
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.learning.predictions_store.PREDICTIONS_PATH", str(preds))
     monkeypatch.setattr("internal.run_mode.is_worker_mode", lambda: True)
 
     assert maybe_rebalance_council_weights_on_boot() is None
