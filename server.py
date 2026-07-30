@@ -1714,7 +1714,8 @@ async def _fetch_pump_alerts_payload() -> Dict[str, Any]:
         return load_pump_alerts_desk_payload()
 
     try:
-        payload = await _to_thread_timeout(_build, 6.0, label="pump-alerts")
+        timeout = float(os.environ.get("PUMP_ALERTS_BUILD_TIMEOUT_SECONDS", "12"))
+        payload = await _to_thread_timeout(_build, timeout, label="pump-alerts")
     except asyncio.TimeoutError:
         with _PUMP_ALERTS_LOCK:
             stale = _PUMP_ALERTS_CACHE.get("payload")

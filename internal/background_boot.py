@@ -49,6 +49,16 @@ def _pump_inline_scheduler_enabled() -> bool:
     return flag in ("1", "true", "yes", "on")
 
 
+def _warm_subnet_name_cache() -> None:
+    try:
+        from internal.subnet_names import _tmc_display_names
+
+        _tmc_display_names()
+        logger.info("subnet name cache warmed (TMC)")
+    except Exception as exc:
+        logger.debug("subnet name cache warm skipped: %s", exc)
+
+
 def _start_pump_ladder() -> None:
     from internal.run_mode import inline_worker_expected
 
@@ -327,6 +337,8 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
 
     if heavy is None:
         heavy = worker_heavy_feeds_enabled() if is_worker_mode() else background_heavy_on_web()
+
+    defer_boot("subnet-name-cache", _warm_subnet_name_cache, delay=0)
 
     try:
         from internal.freshness import start_background_sync
