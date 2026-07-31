@@ -6,7 +6,7 @@ import sys
 
 
 def main() -> int:
-    import requests
+    import httpx
 
     app = os.environ.get("FLY_APP_NAME", "subnet-dashboard")
     port = os.environ.get("WORKER_HTTP_PORT", "8081")
@@ -20,6 +20,8 @@ def main() -> int:
     candidates.append(f"http://worker.process.{app}.internal:{port}")
     candidates.append(f"http://{app}.flycast:{port}")
 
+    # Fly 6PN is IPv6 — bind :: so *.internal resolves.
+    transport = httpx.HTTPTransport(local_address="::") if app else None
     seen = set()
     ok = 0
     for base in candidates:
@@ -29,7 +31,11 @@ def main() -> int:
         for path in ("/health", "/api/ops/worker-peer"):
             url = f"{base}{path}"
             try:
-                r = requests.get(url, headers={"X-Worker-Proxy": "1"}, timeout=3)
+                client_kw = {"timeout": 3.0}
+                if transport is not None:
+                    client_kw["transport"] = transport
+                with httpx.Client(**client_kw) as client:
+                    r = client.get(url, headers={"X-Worker-Proxy": "1"})
                 print(f"OK {r.status_code} {url} {r.text[:200]!r}")
                 if r.status_code == 200:
                     ok += 1

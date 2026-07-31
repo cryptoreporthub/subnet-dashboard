@@ -203,6 +203,54 @@ def test_candidate_bases_process_before_flycast(monkeypatch):
     assert bases[-1] == "http://subnet-dashboard.flycast:8081"
 
 
+def test_httpx_get_single_transport_uses_ipv6_on_fly(monkeypatch):
+    import internal.worker_proxy as wp
+
+    monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
+    seen = []
+
+    class _FakeTransport:
+        pass
+
+    monkeypatch.setattr(wp, "_internal_transport", lambda: _FakeTransport())
+
+    async def _run():
+        class _Client:
+            def __init__(self, **kw):
+                seen.append(kw.get("transport"))
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *a):
+                return False
+
+            async def get(self, url, headers=None):
+                class _R:
+                    status_code = 200
+                    content = b"OK"
+                    text = "OK"
+                    headers = {}
+                    request = None
+
+                    def raise_for_status(self):
+                        return None
+
+                    def json(self):
+                        return {}
+
+                return _R()
+
+        monkeypatch.setattr(wp.httpx, "AsyncClient", _Client)
+        return await wp._httpx_get("http://worker.process.subnet-dashboard.internal:8081/health", single_transport=True)
+
+    import asyncio
+
+    asyncio.run(_run())
+    assert len(seen) == 1
+    assert isinstance(seen[0], _FakeTransport)
+
+
 def test_load_weights_for_ui_proxies_worker(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")
