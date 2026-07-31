@@ -19,14 +19,31 @@ logger = logging.getLogger(__name__)
 cockpit_router = APIRouter(tags=["cockpit"])
 
 _PICKS_BUILD_TIMEOUT = float(os.environ.get("COCKPIT_PICKS_TIMEOUT", "8"))
+_SECTIONS_BUILD_TIMEOUT = float(os.environ.get("COCKPIT_SECTIONS_TIMEOUT", "8"))
 
 
 def _emitted_at_z() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _format_sections_event(emitted_at: str) -> str:
-    payload = get_cockpit_sections()
+async def _build_sections_payload() -> dict:
+    # get_cockpit_sections() -> _build_council_picks() -> select_hourly_pick()
+    # scores the full subnet universe synchronously. A live py-spy dump caught
+    # this exact call (via the SSE stream below) holding the event loop in
+    # production — dispatch off-thread with a bounded wait, same pattern as
+    # _build_picks_payload() above.
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(get_cockpit_sections),
+            timeout=_SECTIONS_BUILD_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("cockpit.sections build timed out after %.1fs", _SECTIONS_BUILD_TIMEOUT)
+        return {"status": "timeout", "sections": []}
+
+
+async def _format_sections_event(emitted_at: str) -> str:
+    payload = await _build_sections_payload()
     data = {
         "type": "cockpit.sections",
         "version": 1,
@@ -77,7 +94,7 @@ async def _cockpit_stream(request: Request, once: bool):
     yield _format_picks_event(picks, emitted_at)
     if once:
         return
-    yield _format_sections_event(emitted_at)
+    yield await _format_sections_event(emitted_at)
 
     elapsed = 0
     while True:
@@ -94,13 +111,13 @@ async def _cockpit_stream(request: Request, once: bool):
             picks = await _build_picks_payload()
             yield _format_picks_event(picks, _emitted_at_z())
         if elapsed % 300 == 0:
-            yield _format_sections_event(_emitted_at_z())
+            yield await _format_sections_event(_emitted_at_z())
 
 
 @cockpit_router.get("/api/cockpit/sections")
 async def api_cockpit_sections():
     """Return all 12 Premium Cockpit sections with live summaries."""
-    return get_cockpit_sections()
+    return await _build_sections_payload()
 
 
 @cockpit_router.get("/api/cockpit/stream")
