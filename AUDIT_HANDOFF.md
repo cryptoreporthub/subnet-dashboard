@@ -1,57 +1,109 @@
-# Audit handoff (2026-07-31)
+# Audit handoff (2026-07-31) — find the *real* fix
 
-**Repo tip:** `main` @ `181eb80` (#708)  
-**Live:** `https://subnet-dashboard.fly.dev`  
-**Product:** FastAPI Subnet Dashboard + SimiVision (Bittensor subnet analytics / council)
+**Repo tip:** `main` @ latest · Live: `https://subnet-dashboard.fly.dev`  
+**Product:** FastAPI Subnet Dashboard + SimiVision
 
-## What Claude should audit (prefer **repo**, not live-first)
+## Framing (important — do not rubber-stamp the rollback)
 
-**Primary: repository architecture + ops truth**
+Agents rolled prod from **split_v2 → v1** because web→worker private HTTP failed and volume UIs stayed empty. That was **operational triage**, not proof that v1 is the correct architecture.
 
-1. **Canon deploy path** — `.github/workflows/fly.yml` must deploy `fly.toml` (v1). Must **not** set `FORCE_WORKER_SPLIT_V2=1` or default to `fly.worker-v2.toml`.
-2. **Worker split history** — `docs/fly-web-worker-split.md`, `cursor-agents-communication/fly-worker-split-v2-lock.md`, `split-v2-rollback-runbook.md`.
-3. **Proxy leftovers** — `internal/worker_proxy.py` + middleware still exist for opt-in v2; soft-degraded stubs are defense, not product.
-4. **Single-foundation** — one `server:app`; no Flask / second server package.
-5. **Contract guard** — `tests/test_endpoint_contract.py` (Fly Deploy Gate).
-6. **Known debt** — many tests still reference `server_original` / unported slices (see `AGENTS.md`).
+**Honest read:**
+- We **upgraded to v2 for a real reason**: one machine doing HTTP + heavy background work was wedging `/health` and the site under load.
+- We **downgraded because the switch failed**, not because the goal was wrong.
+- Soft stubs, flycast/6PN thrash, and “local fallthrough” were **bandaids**. Rolling back to co-located volume is also a **bandaid** relative to the original goal — it restores data by abandoning load separation.
+- **The true problem was never solved:** reliable volume ownership on a dedicated worker *plus* a reliable path for web to read that volume without wedging HTTP.
 
-**Secondary: live site smoke** (product reality; flaky under load)
+Claude’s job: propose and justify the **correct** long-term fix — not “keep v1 forever” and not “more proxy timeouts.”
+
+## What “correct” must satisfy (acceptance)
+
+1. **HTTP stays responsive** under resolver/pump/telegram/hydrate load (`/health` and homepage do not wedge for minutes).
+2. **Volume-backed product data actually flows** — daily-pick, message-intel, mindmap/trail, learning/health, pump desk — real payloads, not `status: degraded` / empty stubs.
+3. **Deploys are deterministic** — no CI force-flag that silently re-breaks networking; volume attach strategy is explicit and tested.
+4. **One foundation** — still `server:app` only (no second server package).
+
+If a design fails (1) or (2), it is not done.
+
+## Why v2 was attempted (keep this)
+
+```
+Browser → web (HTTP only, no heavy jobs)
+              ↓ private HTTP / shared storage?
+         worker (owns data_volume + schedulers)
+```
+
+Intent: stop background CPU from starving uvicorn on a 2GB shared-cpu box.
+
+## What actually broke on v2 (root causes to investigate)
+
+Not “v2 is philosophically wrong” — the **implementation + Fly networking** failed:
+
+| Failure | Symptom |
+|---------|---------|
+| Web had **no volume**; all volume GETs **proxied** to worker | When private hop died, entire product desk went empty |
+| Private hop unreliable | 6PN connection refused, process DNS refused/NXDOMAIN, flycast flaky/intermittent |
+| CI **forced** `fly.worker-v2.toml` + `FORCE_WORKER_SPLIT_V2` every deploy | Made a broken topology permanent |
+| Soft-degraded JSON / fallthrough | UI stopped wedging on 503s but **lied** about having data |
+| Peer/probe PRs (#698–#704) | Tuned timeouts and stubs; **did not** prove a stable data plane |
+
+Learning/resolver could look “alive” on one probe and volume APIs still soft-fail the next — flaky, not fixed.
+
+## Current state after rollback (#706–#708)
+
+- Canon **in prod right now:** v1 — `fly.toml`, one web machine, `data_volume` + **inline worker**
+- Data can load again when the VM is healthy
+- **Known regression of the original pain:** single VM can still wedge (homepage/mindmap/pump under load) — deferred boots and skipping homepage warm are mitigations, not a structural fix
+- Proxy code paths remain in-tree for opt-in v2 (`internal/worker_proxy.py`, `fly.worker-v2.toml`, enable/disable scripts)
+
+## Design space Claude should evaluate (pick one, or a better hybrid)
+
+### A. Make split_v2 actually work (honor the upgrade)
+- Prove web→worker reachability (IPv6 6PN listen on `:8081`, service definition, no flycast-to-self)
+- Health: worker process + volume mount + internal `/health` before web serves traffic
+- Prefer **fail closed with retry** over soft-empty product APIs — or cache last-good volume snapshots on web with TTL honesty
+- CI must **not** force v2 until a probe soak is green
+- Document volume migrate: worker-only mount, never orphan web JSON disabling proxy
+
+### B. Shared storage without HTTP proxy
+- Same volume strategy Fly supports (or object store / LiteFS / rsync snapshot) so web reads files locally while worker writes
+- Removes the private HTTP SPOF while keeping CPU split
+
+### C. Bigger single machine / process priority (stay “one box” but fix wedging)
+- Only acceptable if (1)+(2) above are proven under hydrate + resolver + pump
+- e.g. dedicated CPU, stricter worker nice/cgroup, never block event loop on mindmap/homepage
+- This is “fix v1 properly,” not “pretend v2’s goal was wrong”
+
+### D. Edge/API split (Phase C in docs)
+- Static/CDN front + API Fly — only if it addresses load without inventing a new broken hop
+
+**Reject as “the fix”:** more soft `degraded` stubs, more fallthrough to empty local disk on web, more DNS/order thrash without a soak test.
+
+## Repo map (for investigation)
+
+| Area | Path |
+|------|------|
+| Deploy canon | `.github/workflows/fly.yml`, `fly.toml`, `fly.worker-v2.toml` |
+| Enable/disable v2 | `scripts/fly_enable_worker_v2.sh`, `scripts/fly_disable_worker_v2.sh` |
+| Proxy | `internal/worker_proxy.py`, `internal/worker_proxy_middleware.py` |
+| Volume detect | `internal/data_volume.py` |
+| Split docs | `docs/fly-web-worker-split.md` |
+| Locks / runbook | `cursor-agents-communication/fly-worker-split-v2-lock.md`, `split-v2-rollback-runbook.md` |
+| Contract | `tests/test_endpoint_contract.py` |
+
+## Live smoke (secondary — flaky when wedged)
 
 ```bash
 curl -sS -m 15 https://subnet-dashboard.fly.dev/health
 curl -sS -m 20 https://subnet-dashboard.fly.dev/api/ops/live | jq '{worker_mode,worker_peer,volume}'
-curl -sS -m 20 https://subnet-dashboard.fly.dev/api/daily-pick | jq '{status,action,pick:(.pick!=null)}'
-curl -sS -m 20 'https://subnet-dashboard.fly.dev/api/message-intel?limit=2' | jq '{status,empty,total:(.meta.total_messages)}'
+curl -sS -m 20 https://subnet-dashboard.fly.dev/api/daily-pick | jq '{status,action}'
+curl -sS -m 20 'https://subnet-dashboard.fly.dev/api/message-intel?limit=2' | jq '{status,total:(.meta.total_messages)}'
 ```
 
-Expect after healthy boot: `worker_mode` = `split` (inline), peer `inline_worker` alive — **not** `split_v2`.
+## Deliverable asked of Claude
 
-## Timeline (so the “we switched twice” story is clear)
+1. **Root-cause diagnosis** of why v2’s data plane failed (networking vs listen vs volume attach vs app bug).
+2. **Recommended architecture** (A/B/C/D or better) with tradeoffs.
+3. **Concrete implementation plan** (files, Fly config, probes, rollback gates) that meets acceptance (1)–(4).
+4. What to **delete** (stub paths, force flags) so we stop shipping bandaids.
 
-| Phase | Intent | Outcome |
-|-------|--------|---------|
-| **v1** | One machine: HTTP + volume + inline worker | Worked for data; could **wedge** `/health` under boot/hydrate load |
-| **v2** | Separate worker owns volume; web proxies volume APIs | Aimed to stop wedges; **private web→worker HTTP** stayed unreliable → hero/Telegram/mindmap/learning soft-degraded for weeks |
-| **Rollback (#706–#708)** | Co-locate volume again; stop CI forcing v2 | Data path works again; **single-machine wedge risk returns** (mitigate with boot defer / skip homepage warm / tighter health checks) |
-
-**Do not re-enable v2** without a proven web→worker probe soak + human approve.
-
-## What “good” looks like for launch
-
-- Homepage and core APIs respond without eternal “Loading desk…” / soft `status: degraded` on volume routes
-- Learning loop ticks on the volume (`/api/learning/health`)
-- Telegram desk shows real `message-intel` totals when session/listener configured
-- Daily pick is honest HOLD/pending or a real pick — not `worker_unreachable` stubs
-
-## Out of scope / noise for this audit
-
-- Stale open draft PRs (#692, #686, #675, …) — ignore unless asked
-- Runtime `data/*.json` / `.venv` churn in a local checkout — not source of truth; Fly volume is
-- Soft-proxy PRs #698–#705 — historical symptom treatment; #705 left closed/superseded after v1 rollback
-
-## Suggested audit questions for Claude
-
-1. Is v1 the right long-term architecture, or should v2 be rebuilt with a proven private network (or shared volume strategy)?
-2. Where do homepage / mindmap / pump still block the event loop on one 2GB VM?
-3. What is the smallest hardening path so deploys cannot wedge for >2 minutes?
-4. Which volume APIs still assume split_v2 proxy semantics incorrectly?
+Do **not** conclude “rollback to v1 is the fix” unless you can show the original wedge problem is solved another way and load separation is unnecessary.
