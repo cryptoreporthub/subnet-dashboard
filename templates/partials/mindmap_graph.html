@@ -35,6 +35,23 @@
   .mindmap-trail-group[data-band="4"] { --sn-accent: #34d399; }
   .mindmap-trail-group[data-band="5"] { --sn-accent: #60a5fa; }
 
+  /* The loop's own self-adjustment (judge/weight nudges with no netuid) isn't
+     any one subnet's card — it's the brain tuning itself, so it gets a
+     distinct glowing-white treatment and a slow breathing pulse instead of a
+     netuid hue, and always sorts first. */
+  .mindmap-trail-group[data-loop="1"] {
+    --sn-accent: #f8fafc;
+    background: rgba(248, 250, 252, 0.04);
+    animation: mindmap-loop-breathe 4.5s ease-in-out infinite;
+  }
+  @keyframes mindmap-loop-breathe {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(248, 250, 252, 0); }
+    50% { box-shadow: 0 0 14px 0 rgba(248, 250, 252, 0.12); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mindmap-trail-group[data-loop="1"] { animation: none; }
+  }
+
   .mindmap-trail-group {
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--border-subtle, #374151);
@@ -147,7 +164,7 @@
   <div class="cockpit-header">
     <div>
       <h2 id="mindmap-graph-heading" class="cockpit-title">Interactive Mindmap</h2>
-      <p class="cockpit-subtitle">The trail from evidence to the call, grouped by subnet.</p>
+      <p class="cockpit-subtitle">Every nudge, signal, and call — grouped by subnet, plus the Learning Loop's own weight adjustments.</p>
     </div>
   </div>
 

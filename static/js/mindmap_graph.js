@@ -10,10 +10,23 @@
     prediction: '#34d399',
     scenario: '#b8a8f0',
     disposition: '#ff5fa8',
+    indicator: '#2dd4bf',
+    whale: '#38bdf8',
+    risk: '#f87171',
+    loop: '#f8fafc',
   };
 
-  // Narrative order: evidence seen -> context -> judges weigh it -> forecast -> outcome.
-  const KIND_ORDER = { signal: 0, scenario: 1, judge: 2, prediction: 3, disposition: 4 };
+  // Narrative order: evidence seen -> market context -> judges weigh it -> forecast -> outcome.
+  const KIND_ORDER = {
+    signal: 0,
+    indicator: 0,
+    scenario: 1,
+    whale: 1,
+    risk: 1,
+    judge: 2,
+    prediction: 3,
+    disposition: 4,
+  };
 
   function kindColor(kind) {
     return KIND_COLORS[kind] || '#9CA3AF';
@@ -45,7 +58,16 @@
     if (kind === 'scenario') {
       return `Scenario · ${node.label || kind}`;
     }
-    if (kind === 'subnet') {
+    if (kind === 'indicator') {
+      return `Indicator · ${node.label || kind}`;
+    }
+    if (kind === 'whale') {
+      return `Whale · ${node.label || 'smart money entry'}`;
+    }
+    if (kind === 'risk') {
+      return `Risk · ${node.label || 'rugger exit warning'}`;
+    }
+    if (kind === 'subnet' || kind === 'loop') {
       const n = metrics.event_count != null ? `${metrics.event_count} trail events` : 'subnet node';
       return `${node.label || node.id} · ${n}`;
     }
@@ -58,6 +80,10 @@
     if (m.action != null && m.action !== '') parts.push(String(m.action));
     if (m.score != null && m.score !== '') parts.push('score ' + m.score);
     if (m.decision != null && m.decision !== '') parts.push(String(m.decision));
+    if (m.urgency != null && m.urgency !== '') parts.push(String(m.urgency) + ' urgency');
+    if (m.estimated_exit_in_hours != null) parts.push('exit in ~' + m.estimated_exit_in_hours + 'h');
+    if (m.win_rate != null) parts.push(Math.round(m.win_rate * 100) + '% win rate');
+    if (m.avg_return_pct != null) parts.push(m.avg_return_pct + '% avg return');
     return parts.join(' · ');
   }
 
@@ -71,12 +97,14 @@
     if (list) list.classList.toggle('hidden', show);
   }
 
-  // The graph is a star per subnet: every non-subnet node is reached by exactly
-  // one edge whose source is a subnet. So "group by subnet" is just "group by
-  // edge source" — no traversal, no cycles to worry about.
+  // The graph is a star per hub: every other node is reached by exactly one
+  // edge whose source is a hub. Hubs are usually a subnet, but judge/weight
+  // nudge events with no netuid attach to the single "loop:council" hub
+  // instead of a subnet — the loop tuning itself, not any one subnet's
+  // evidence chain. So "group by subnet" generalizes to "group by hub."
   function buildTrailGroups(nodes, edges) {
     const nodeById = Object.fromEntries(nodes.map((n) => [n.id, n]));
-    const subnets = nodes.filter((n) => n.kind === 'subnet');
+    const subnets = nodes.filter((n) => n.kind === 'subnet' || n.kind === 'loop');
     const rowsBySubnet = {};
     edges.forEach((edge) => {
       const target = nodeById[edge.target];
@@ -96,16 +124,22 @@
     });
 
     const groups = subnets.map((subnet) => {
+      const isLoop = subnet.kind === 'loop';
       const rows = (rowsBySubnet[subnet.id] || []).slice().sort((a, b) => {
         const oa = KIND_ORDER[a.kind] != null ? KIND_ORDER[a.kind] : 9;
         const ob = KIND_ORDER[b.kind] != null ? KIND_ORDER[b.kind] : 9;
         return oa - ob;
       });
-      const netuid = String(subnet.id).split(':')[1];
-      return { subnet, rows, netuid, freshestId };
+      const netuid = isLoop ? null : String(subnet.id).split(':')[1];
+      return { subnet, rows, netuid, freshestId, isLoop };
     });
 
-    groups.sort((a, b) => (b.subnet.updated_at || '').localeCompare(a.subnet.updated_at || ''));
+    // The loop's own self-adjustment leads — it's the brain tuning itself,
+    // not tied to any one subnet's recency.
+    groups.sort((a, b) => {
+      if (a.isLoop !== b.isLoop) return a.isLoop ? -1 : 1;
+      return (b.subnet.updated_at || '').localeCompare(a.subnet.updated_at || '');
+    });
     return groups;
   }
 
@@ -142,7 +176,11 @@
     const details = document.createElement('details');
     details.className = 'mindmap-trail-group';
     details.dataset.subnetId = group.subnet.id;
-    details.setAttribute('data-band', String(netuidBand(group.netuid)));
+    if (group.isLoop) {
+      details.setAttribute('data-loop', '1');
+    } else {
+      details.setAttribute('data-band', String(netuidBand(group.netuid)));
+    }
     if (index < 3) details.open = true;
 
     const summary = document.createElement('summary');

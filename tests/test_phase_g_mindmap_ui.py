@@ -83,6 +83,19 @@ def test_mindmap_js_asset_served():
     assert "buildTrailGroups" in resp.text
 
 
+def test_mindmap_js_covers_loop_hub_and_market_signals():
+    """Every nudge/signal, not just subnet-scoped trail rows: the loop hub
+    (netuid-less weight nudges) and whale/rugger/indicator kinds must be
+    recognized by the Trail renderer, not just the backend graph."""
+    client = TestClient(app)
+    resp = client.get("/static/js/mindmap_graph.js")
+    src = resp.text
+    assert "isLoop" in src
+    assert "data-loop" in src
+    for kind in ("loop", "whale", "risk", "indicator"):
+        assert f"{kind}:" in src
+
+
 def test_initial_graph_json_embedded_is_valid():
     html = TEMPLATES.get_template("partials/mindmap_graph.html").render(
         {"mindmap_graph": FAKE_GRAPH}
