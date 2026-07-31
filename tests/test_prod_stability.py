@@ -79,6 +79,42 @@ def test_scan_all_subnets_fetch_outside_state_lock(tmp_path, monkeypatch):
             assert not t.is_alive()
 
 
+def test_cockpit_sections_route_does_not_block_health():
+    """GET /api/cockpit/sections and the SSE stream's periodic sections event
+    both called get_cockpit_sections() -> select_hourly_pick() directly. A live
+    py-spy dump caught this holding the event loop via /api/cockpit/stream in
+    production. Must dispatch off-thread so /health stays responsive."""
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_get_cockpit_sections():
+        started.set()
+        release.wait(timeout=2.0)
+        return {"status": "success", "sections": []}
+
+    with patch("internal.cockpit.routes.get_cockpit_sections", side_effect=slow_get_cockpit_sections):
+        with TestClient(app) as client:
+            result = {}
+
+            def _call():
+                result["resp"] = client.get("/api/cockpit/sections")
+
+            t = threading.Thread(target=_call, daemon=True)
+            t.start()
+            assert started.wait(timeout=2.0)
+
+            t0 = time.monotonic()
+            health = client.get("/health")
+            elapsed = time.monotonic() - t0
+
+            release.set()
+            t.join(timeout=3.0)
+
+    assert health.status_code == 200
+    assert elapsed < 1.0
+    assert result["resp"].status_code == 200
+
+
 def test_mindmap_learning_routes_do_not_block_health(monkeypatch):
     """/api/mindmap/summary, /api/mindmap/state, and /api/mindmap/story-path
     each called a full subnet-universe scoring function directly in an async
