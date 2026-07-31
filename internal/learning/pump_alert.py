@@ -67,11 +67,12 @@ def _resolve_name(
         from internal.subnet_names import display_name_for_netuid
 
         ladder_hint = _label_hint(ladder_entry)
+        # Pump-alerts desk payload on every GET — must not block on live TaoStats.
         return display_name_for_netuid(
             netuid_int,
             subnet_row=subnet_row,
             ladder_hint=ladder_hint,
-            use_taostats_fallback=True,
+            use_taostats_fallback=False,
         )
     except Exception:
         pass
