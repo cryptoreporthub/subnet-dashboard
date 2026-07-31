@@ -643,6 +643,26 @@ def _safe_brain_letter_context(*, timeout_s: float = 1.5) -> Dict[str, Any]:
         pool.shutdown(wait=False, cancel_futures=True)
 
 
+def _safe_mindmap_graph_context(*, timeout_s: float = 2.0) -> Dict[str, Any]:
+    """Timeboxed mindmap SSR — split_v2 web proxies one fast flycast attempt."""
+    try:
+        from internal.data_volume import needs_worker_volume_proxy
+
+        if needs_worker_volume_proxy():
+            from internal.worker_proxy import fetch_worker_json_sync
+
+            graph = fetch_worker_json_sync("/api/mindmap/graph", timeout=timeout_s)
+            if isinstance(graph, dict) and graph.get("status") != "error":
+                return {"mindmap_graph": graph}
+            return {}
+        from internal.mindmap.graph import get_mindmap_graph
+
+        return {"mindmap_graph": get_mindmap_graph()}
+    except Exception as exc:
+        logger.debug("mindmap graph context skipped: %s", exc)
+        return {}
+
+
 def _read_shell_daily_pick() -> Dict[str, Any]:
     """Lite pick from local JSON — instant SSR, no scoring or live feeds."""
     try:
@@ -960,6 +980,7 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
     }
     ctx.update(_fast_home_hero_context(trust_banner))
     ctx.update(_safe_brain_letter_context(timeout_s=2.0))
+    ctx.update(_safe_mindmap_graph_context(timeout_s=2.0))
     ctx.update(_shell_pump_and_picks(shell_subnets, include_picks=True))
     ctx.update(_simileads_context(shell_subnets, simivision_data))
     ctx.update(_message_intel_shell_context(shell_subnets))
@@ -1140,6 +1161,7 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
 
     context.update(_pump_alerts_context(subnets))
     context.update(_simileads_context(subnets, context.get("simivision")))
+    context.update(_safe_mindmap_graph_context(timeout_s=2.0))
 
     return context
 

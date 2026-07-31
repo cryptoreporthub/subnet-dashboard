@@ -250,7 +250,14 @@
         : null;
     const api = focus != null ? base + '?focus=' + encodeURIComponent(focus) : base;
     try {
-      const resp = await fetch(api, { headers: { Accept: 'application/json' } });
+      const signal =
+        typeof AbortSignal !== 'undefined' && AbortSignal.timeout
+          ? AbortSignal.timeout(6000)
+          : undefined;
+      const resp = await fetch(api, {
+        headers: { Accept: 'application/json' },
+        signal: signal,
+      });
       if (!resp.ok) {
         return { status: 'unavailable', nodes: [], edges: [] };
       }

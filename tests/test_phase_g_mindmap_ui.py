@@ -92,6 +92,7 @@ def test_mindmap_js_covers_loop_hub_and_market_signals():
     src = resp.text
     assert "isLoop" in src
     assert "data-loop" in src
+    assert "AbortSignal.timeout" in src
     for kind in ("loop", "whale", "risk", "indicator"):
         assert f"{kind}:" in src
 

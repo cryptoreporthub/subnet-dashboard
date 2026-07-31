@@ -229,6 +229,46 @@ def test_bases_for_fetch_limited_when_circuit_open(monkeypatch):
     assert bases == ["http://subnet-dashboard.flycast:8081"]
 
 
+def test_mindmap_fast_path_uses_single_base(monkeypatch):
+    import internal.worker_proxy as wp
+
+    monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
+    monkeypatch.setenv("FLY_REGION", "sjc")
+    bases = wp.worker_internal_bases()
+    assert len(bases) >= 3
+    limited = wp._bases_for_fetch(circuit_limited=True)
+    assert limited == [bases[0]]
+
+
+def test_mindmap_proxy_timeout_shorter_than_default(monkeypatch):
+    import internal.worker_proxy as wp
+
+    monkeypatch.setenv("WORKER_PROXY_MINDMAP_TIMEOUT_SECONDS", "4")
+    t = wp._mindmap_proxy_timeout()
+    assert float(t.read) == 4.0
+    assert float(t.connect) <= 2.0
+
+
+def test_proxy_mindmap_fast_path_on_fetch(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("DATA_DIR", "/nonexistent")
+    calls: list[bool] = []
+
+    async def _track_fetch(path, *, query="", timeout=None, fast_path=False):
+        calls.append(fast_path)
+        raise OSError("worker down")
+
+    with patch("internal.worker_proxy._fetch_worker_http", _track_fetch):
+        from server import app
+
+        client = TestClient(app)
+        r = client.get("/api/mindmap/graph")
+    assert r.status_code == 200
+    assert calls == [True]
+    assert r.json().get("status") == "degraded"
+
+
 def test_worker_proxy_middleware(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")

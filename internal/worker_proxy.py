@@ -58,6 +58,19 @@ def _proxy_timeout() -> httpx.Timeout:
     return httpx.Timeout(connect=connect, read=read, write=read, pool=connect)
 
 
+def _mindmap_path(path: str) -> bool:
+    return path.startswith("/api/mindmap")
+
+
+def _mindmap_proxy_timeout() -> httpx.Timeout:
+    try:
+        read = float(os.environ.get("WORKER_PROXY_MINDMAP_TIMEOUT_SECONDS", "4"))
+    except ValueError:
+        read = 4.0
+    connect = min(2.0, read)
+    return httpx.Timeout(connect=connect, read=read, write=read, pool=connect)
+
+
 def _timeout_seconds(timeout: Optional[Union[float, httpx.Timeout]]) -> float:
     if isinstance(timeout, httpx.Timeout):
         return float(timeout.read or timeout.connect or 8.0)
@@ -290,11 +303,13 @@ async def _fetch_worker_http(
     *,
     query: str = "",
     timeout: Optional[Union[float, httpx.Timeout]] = None,
+    fast_path: bool = False,
 ) -> httpx.Response:
     """GET worker internal HTTP — same AsyncClient path as volume proxy middleware."""
     if timeout is None:
-        timeout = _proxy_timeout()
-    circuit_limited = _circuit_open()
+        timeout = _mindmap_proxy_timeout() if fast_path else _proxy_timeout()
+    # ponytail: mindmap always one flycast attempt — not 3× timeout before degrade.
+    circuit_limited = _circuit_open() or fast_path
     last_exc: Optional[BaseException] = None
     for base in _bases_for_fetch(circuit_limited=circuit_limited):
         url = f"{base}{path}"
@@ -339,6 +354,8 @@ async def _fetch_worker_http(
             last_exc = exc
             _record_probe_error(exc)
             logger.debug("worker HTTP %s failed: %s", url, exc)
+            if fast_path:
+                continue
             try:
                 data = _requests_json_sync(url, timeout=_timeout_seconds(timeout))
                 if _is_web_misroute(data, path):
@@ -385,7 +402,11 @@ def fetch_worker_json_sync(path: str, *, timeout: Optional[float] = None) -> Dic
             write=timeout,
             pool=min(3.0, timeout),
         )
-        resp = await _fetch_worker_http(path, timeout=peer_timeout)
+        resp = await _fetch_worker_http(
+            path,
+            timeout=peer_timeout,
+            fast_path=_mindmap_path(path),
+        )
         data = resp.json()
         return data if isinstance(data, dict) else {}
 
@@ -395,16 +416,17 @@ def fetch_worker_json_sync(path: str, *, timeout: Optional[float] = None) -> Dic
 async def proxy_get_to_worker(request: Request) -> Response:
     path = request.url.path
     query = request.url.query
-    if _circuit_open() and path.startswith("/api/mindmap"):
+    fast = _mindmap_path(path)
+    if _circuit_open() and fast:
         return _mindmap_degraded_response(path)
-    timeout = _proxy_timeout()
+    timeout = _mindmap_proxy_timeout() if fast else _proxy_timeout()
     try:
-        resp = await _fetch_worker_http(path, query=query, timeout=timeout)
+        resp = await _fetch_worker_http(path, query=query, timeout=timeout, fast_path=fast)
         media_type = resp.headers.get("content-type") or "application/json"
         return Response(content=resp.content, status_code=resp.status_code, media_type=media_type)
     except Exception as exc:
         logger.warning("worker volume proxy failed %s: %s", path, exc)
-        if path.startswith("/api/mindmap"):
+        if fast:
             return _mindmap_degraded_response(path)
         return JSONResponse(
             status_code=503,
