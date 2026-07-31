@@ -73,6 +73,11 @@ def _mock_async_client_factory(calls, handler):
 
 def test_fetch_worker_json_sync_retries_second_base(monkeypatch):
     monkeypatch.setenv("WORKER_INTERNAL_URL", "http://bad.internal:8080")
+    monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
+    monkeypatch.delenv("FLY_REGION", raising=False)
+    import internal.worker_proxy as wp
+
+    wp._LAST_GOOD_BASE = None
     calls = []
 
     class _Resp:
@@ -87,8 +92,10 @@ def test_fetch_worker_json_sync_retries_second_base(monkeypatch):
 
     def _handler(calls, url):
         calls.append(url)
-        if len(calls) == 1:
-            raise OSError("first base failed")
+        if "bad.internal" in url:
+            bad = _Resp()
+            bad.status_code = 503
+            return bad
         return _Resp()
 
     monkeypatch.setattr("httpx.AsyncClient", _mock_async_client_factory(calls, _handler))
@@ -96,7 +103,8 @@ def test_fetch_worker_json_sync_retries_second_base(monkeypatch):
 
     out = fetch_worker_json_sync("/api/ops/worker-peer", timeout=2)
     assert out.get("ok") is True
-    assert len(calls) == 2
+    assert len(calls) >= 2
+    assert "bad.internal" in calls[0]
 
 
 def test_worker_peer_route_404_on_web(monkeypatch):
@@ -114,6 +122,7 @@ def test_worker_peer_route_404_on_web(monkeypatch):
 def test_fetch_worker_json_sync_skips_web_misroute(monkeypatch):
     monkeypatch.setenv("WORKER_INTERNAL_URL", "http://bad.internal:8080")
     monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
+    monkeypatch.delenv("FLY_REGION", raising=False)
     import internal.worker_proxy as wp
 
     wp._LAST_GOOD_BASE = None
@@ -150,7 +159,8 @@ def test_fetch_worker_json_sync_skips_web_misroute(monkeypatch):
 
     out = fetch_worker_json_sync("/api/ops/live", timeout=2)
     assert out["worker_peer"]["alive"] is True
-    assert calls[0].startswith("http://subnet-dashboard.flycast:8081")
+    assert "bad.internal" in calls[0]
+    assert any("worker.process" in c for c in calls)
 
 
 def test_fetch_worker_json_sync_from_async_context(monkeypatch):
@@ -175,7 +185,7 @@ def test_fetch_worker_json_sync_from_async_context(monkeypatch):
         calls.append(url)
         return _Resp()
 
-    async def _mock_fetch(path, query="", timeout=12):
+    async def _mock_fetch(path, query="", timeout=12, fast_path=False):
         return await _handler(calls, path)
 
     monkeypatch.setattr(wp, "_fetch_worker_http", _mock_fetch)

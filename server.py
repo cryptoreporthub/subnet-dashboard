@@ -264,6 +264,16 @@ async def _lifespan(app: FastAPI):
         name="council-weight-rebalance",
     ).start()
 
+    try:
+        from internal.data_volume import needs_worker_volume_proxy
+
+        if needs_worker_volume_proxy():
+            from internal.worker_proxy import start_worker_base_discovery
+
+            start_worker_base_discovery()
+    except Exception as exc:
+        logger.debug("worker base discovery skipped: %s", exc)
+
     if background_on_web() and background_boot_allowed():
         from internal.background_boot import start_background_workers, stop_background_workers
 

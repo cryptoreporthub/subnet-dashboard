@@ -279,7 +279,7 @@
       );
       return;
     }
-    if (graph.status === 'degraded') {
+    if (graph.status === 'degraded' && !(graph.nodes || []).length) {
       setEmptyMessage(
         root,
         graph.detail ||
