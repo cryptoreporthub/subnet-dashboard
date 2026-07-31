@@ -84,7 +84,7 @@ primary_region = "sjc"
   ALLOWED_ORIGINS = "https://subnet-dashboard.fly.dev,https://dashboard.cryptoreporthub.com,https://cryptoreporthub.com"
   WORKER_HTTP_PORT = "8081"
   # Web probes worker on :8081 (worker-only Fly service — avoids 8080 collision with web).
-  WORKER_PROXY_TIMEOUT_SECONDS = "8"
+  WORKER_PROXY_TIMEOUT_SECONDS = "4"
   WORKER_PROXY_CONNECT_SECONDS = "3"
   WORKER_PEER_TIMEOUT_SECONDS = "4"
   WORKER_PROXY_CIRCUIT_OPEN_SECONDS = "30"
