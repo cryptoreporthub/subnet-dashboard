@@ -13,6 +13,7 @@ from typing import Any, Dict, Tuple
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response
+from starlette.concurrency import run_in_threadpool
 
 from internal.api_errors import public_error
 from internal.rate_limit import limit_or_noop, strict_limit
@@ -206,6 +207,15 @@ def _mindmap_conviction_block(daily_payload: Dict[str, Any] | None) -> Dict[str,
 @learning_router.get("/api/mindmap/summary")
 async def api_mindmap_summary():
     """Mindmap summary wired to expert weights and resolver stats."""
+    # get_or_create_today_pick()/build_deliberation_shortlist() below score the
+    # full subnet universe synchronously and have wedged the event loop (and
+    # therefore /health) when called inline from an async route elsewhere in
+    # this incident — dispatch through the thread pool so this route can never
+    # do that.
+    return await run_in_threadpool(_build_mindmap_summary)
+
+
+def _build_mindmap_summary() -> Dict[str, Any]:
     try:
         from server import _market_context_with_weights, _safe_simivision_payload
 
@@ -295,7 +305,10 @@ async def api_mindmap_state():
     try:
         from internal.learning.mindmap_aggregator import build_mindmap_state
 
-        return build_mindmap_state()
+        # build_mindmap_state() is the exact function that wedged the event
+        # loop via /api/mindmap/graph earlier in this incident (PR #712) — it
+        # is called directly here too, so it needs the same thread-pool guard.
+        return await run_in_threadpool(build_mindmap_state)
     except Exception as exc:
         logger.warning("mindmap state failed: %s", exc)
         return {"status": "error", "trail": [], "summaries": {}, "error": str(exc)}
@@ -316,12 +329,11 @@ async def api_story_strip(
 async def api_mindmap_story_path():
     """§21 L5 — linear cause chain for today's council pick."""
     try:
-        from internal.council.daily_pick_engine import get_or_create_today_pick
-        from internal.learning.story_path import build_story_path
-
-        subnets = _subnets_for_tracker()
-        payload = get_or_create_today_pick(subnets, {})
-        return {"status": "success", **build_story_path(payload)}
+        # Live py-spy caught this exact route holding the event loop: it
+        # calls get_or_create_today_pick() -> select_daily_pick() (scores the
+        # full subnet universe synchronously) directly. Same fix as the other
+        # mindmap routes in this incident: dispatch through the thread pool.
+        return await run_in_threadpool(_build_mindmap_story_path)
     except Exception as exc:
         logger.warning("mindmap story-path failed: %s", exc)
         return {
@@ -331,6 +343,15 @@ async def api_mindmap_story_path():
             "steps": [],
             "error": str(exc),
         }
+
+
+def _build_mindmap_story_path() -> Dict[str, Any]:
+    from internal.council.daily_pick_engine import get_or_create_today_pick
+    from internal.learning.story_path import build_story_path
+
+    subnets = _subnets_for_tracker()
+    payload = get_or_create_today_pick(subnets, {})
+    return {"status": "success", **build_story_path(payload)}
 
 
 @learning_router.get("/api/predictions/capsule/{prediction_id}")
