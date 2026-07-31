@@ -1006,28 +1006,33 @@ def _message_intel_shell_context(
     """Summers desk SSR for degraded/emergency homepage shells (worker proxy on split_v2)."""
     try:
         from internal.data_volume import needs_worker_volume_proxy
+        from internal.message_intel.context import build_message_intel_context
 
         if needs_worker_volume_proxy():
             from internal.worker_proxy import fetch_worker_json_sync
 
             listed = fetch_worker_json_sync("/api/message-intel?limit=8")
-            return {
-                "message_intel": {
-                    "messages": listed.get("messages") or [],
-                    "meta": listed.get("meta") or {},
-                    "sources": listed.get("sources") or {},
-                    "summary": {},
+            # Prefer real worker payload; soft-degraded / miss → local SQLite desk.
+            if (
+                isinstance(listed, dict)
+                and listed.get("status") != "degraded"
+                and listed.get("error") != "worker_unreachable"
+            ):
+                return {
+                    "message_intel": {
+                        "messages": listed.get("messages") or [],
+                        "meta": listed.get("meta") or {},
+                        "sources": listed.get("sources") or {},
+                        "summary": listed.get("summary") or {},
+                    }
                 }
-            }
-        from internal.message_intel.context import build_message_intel_context
-
         return build_message_intel_context(subnets or [], limit=8)
     except Exception as exc:
         logger.debug("message_intel shell context unavailable: %s", exc)
         return {
             "message_intel": {
                 "messages": [],
-                "meta": {"total_messages": 0, "ok": False},
+                "meta": {"total_messages": 0, "ok": False, "empty": True},
                 "sources": {},
                 "summary": {},
             }

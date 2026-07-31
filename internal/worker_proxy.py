@@ -384,15 +384,13 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
                 "detail": "Worker volume temporarily unavailable",
             },
         )
-    if path == "/api/daily-pick":
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "degraded",
-                "pick": None,
-                "detail": "Worker volume temporarily unavailable",
-            },
-        )
+    # Hero + Telegram: no soft stub — middleware falls through to local handlers
+    # (pending HOLD / honest empty desk) instead of a degraded JSON that leaves
+    # shell-warming and "Loading desk…" stuck on the homepage.
+    if path == "/api/daily-pick" or path.startswith("/api/daily-pick?"):
+        return None
+    if path.startswith("/api/message-intel"):
+        return None
     if path == "/api/pump-alerts":
         return JSONResponse(
             status_code=200,
@@ -400,17 +398,6 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
                 "status": "degraded",
                 "count": 0,
                 "alerts": [],
-                "detail": "Worker volume temporarily unavailable",
-            },
-        )
-    if path.startswith("/api/message-intel"):
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "degraded",
-                "messages": [],
-                "meta": {"total_messages": 0, "ok": False},
-                "sources": {},
                 "detail": "Worker volume temporarily unavailable",
             },
         )
@@ -618,13 +605,20 @@ def fetch_worker_json_sync(path: str, *, timeout: Optional[float] = None) -> Dic
     return _run_coro_sync(_load())
 
 
-async def proxy_get_to_worker(request: Request) -> Response:
+async def proxy_get_to_worker(request: Request) -> Optional[Response]:
+    """Proxy a volume GET to the worker.
+
+    Returns None when the caller should fall through to the local FastAPI
+    handler (hero daily-pick + Telegram message-intel when the worker is down).
+    """
     path = request.url.path
     query = request.url.query
     fast = _mindmap_path(path)
     degraded = _proxy_degraded_response(path)
-    if _circuit_open() and degraded is not None:
-        return degraded
+    if _circuit_open():
+        if degraded is not None:
+            return degraded
+        return None
     timeout = _mindmap_proxy_timeout() if fast else _proxy_timeout()
     try:
         resp = await _fetch_worker_http(path, query=query, timeout=timeout, fast_path=True)
@@ -634,14 +628,8 @@ async def proxy_get_to_worker(request: Request) -> Response:
         logger.warning("worker volume proxy failed %s: %s", path, exc)
         if degraded is not None:
             return degraded
-        return JSONResponse(
-            status_code=503,
-            content={
-                "status": "error",
-                "error": "worker_volume_proxy_failed",
-                "path": path,
-            },
-        )
+        # Fall through to local handlers when no soft stub (daily-pick / message-intel).
+        return None
 
 
 async def proxy_post_to_worker(request: Request) -> Response:

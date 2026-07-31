@@ -1200,6 +1200,31 @@
         throw new Error("message-intel unavailable");
       }
 
+      // Soft-degraded worker stub (or empty local desk): never leave "Loading desk…".
+      if (
+        payload.status === "degraded" ||
+        payload.error === "worker_unreachable" ||
+        payload.error === "worker_volume_proxy_failed"
+      ) {
+        payload = {
+          messages: [],
+          meta: Object.assign({}, payload.meta || {}, {
+            total_messages: 0,
+            ok: false,
+            empty: true,
+          }),
+          empty: true,
+          sources: payload.sources || {},
+        };
+      }
+      if (
+        !payload.empty &&
+        !(payload.messages && payload.messages.length) &&
+        !(payload.meta && payload.meta.total_messages)
+      ) {
+        payload.empty = true;
+      }
+
       applyMeta(payload, status);
 
       var listener = (status && status.listener) || (payload.meta && payload.meta.listener) || {};

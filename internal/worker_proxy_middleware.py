@@ -23,7 +23,11 @@ class WorkerVolumeProxyMiddleware(BaseHTTPMiddleware):
 
         path = request.url.path
         if request.method == "GET" and should_proxy_path(path):
-            return await proxy_get_to_worker(request)
+            proxied = await proxy_get_to_worker(request)
+            # None = no soft stub (hero / Telegram) → serve local handlers.
+            if proxied is None:
+                return await call_next(request)
+            return proxied
         if should_proxy_write_path(request.method, path):
             return await proxy_post_to_worker(request)
         return await call_next(request)

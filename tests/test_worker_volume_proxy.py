@@ -171,7 +171,8 @@ def test_record_good_base_allows_pinned_6pn(monkeypatch):
     assert wp._LAST_GOOD_BASE == pinned
 
 
-def test_proxy_daily_pick_degraded_on_failure(monkeypatch):
+def test_proxy_daily_pick_falls_through_to_local_on_failure(monkeypatch):
+    """Hero path: worker miss → local /api/daily-pick (pending HOLD), not soft degraded."""
     monkeypatch.setenv("RUN_MODE", "web")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")
     monkeypatch.setenv("DATA_DIR", "/nonexistent")
@@ -185,7 +186,43 @@ def test_proxy_daily_pick_degraded_on_failure(monkeypatch):
         client = TestClient(app)
         r = client.get("/api/daily-pick")
     assert r.status_code == 200
-    assert r.json().get("status") == "degraded"
+    body = r.json()
+    assert body.get("status") != "degraded"
+    assert body.get("action") == "HOLD"
+    assert body.get("pick") is None
+
+
+def test_proxy_message_intel_falls_through_to_local_on_failure(monkeypatch):
+    """Telegram desk: worker miss → local message-intel (honest empty), not soft degraded."""
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("DATA_DIR", "/nonexistent")
+
+    async def _fail_fetch(*_a, **_k):
+        raise OSError("worker down")
+
+    with patch("internal.worker_proxy._fetch_worker_http", _fail_fetch):
+        from server import app
+
+        client = TestClient(app)
+        r = client.get("/api/message-intel?limit=8")
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("status") != "degraded"
+    assert body.get("error") != "worker_unreachable"
+    assert isinstance(body.get("messages"), list)
+
+
+def test_proxy_degraded_skips_hero_and_telegram_stubs():
+    from internal.worker_proxy import _proxy_degraded_response
+
+    assert _proxy_degraded_response("/api/daily-pick") is None
+    assert _proxy_degraded_response("/api/message-intel") is None
+    assert _proxy_degraded_response("/api/message-intel/status") is None
+    pump = _proxy_degraded_response("/api/pump-alerts")
+    assert pump is not None
+    assert pump.status_code == 200
+
 
 
 def test_worker_internal_bases_includes_regional_dns(monkeypatch):

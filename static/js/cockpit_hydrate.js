@@ -1123,7 +1123,18 @@
   function shouldApplyDailyPickPayload(payload) {
     if (!payload || typeof payload !== 'object') return false;
     var status = String(payload.status || 'ok').toLowerCase();
-    if (status === 'pending' || status === 'timeout' || status === 'error') return false;
+    // Soft-degraded worker stubs must not wipe SSR or leave shell-warming stuck.
+    if (
+      status === 'pending' ||
+      status === 'timeout' ||
+      status === 'error' ||
+      status === 'degraded'
+    ) {
+      return false;
+    }
+    if (payload.error === 'worker_unreachable' || payload.error === 'worker_volume_proxy_failed') {
+      return false;
+    }
     var ssr = ssrDailyPickMeta();
     var incomingAt = parseIsoMs(dailyPickGeneratedAt(payload));
     var ssrAt = parseIsoMs(ssr.generatedAt);
@@ -2433,11 +2444,16 @@
     // §34-1 / K3-7: patch K3 dossier fields — never wipe #k3-dossier via innerHTML
     if (!payload) return;
     if (!shouldApplyDailyPickPayload(payload)) {
-      console.warn('[cockpit_hydrate] daily-pick patch skipped (stale/pending)');
+      console.warn('[cockpit_hydrate] daily-pick patch skipped (stale/pending/degraded)');
+      // Keep SSR claim visible; drop warming so hero is not stuck on "forming…".
+      clearShellWarming();
       return;
     }
     lastDailyPickPayload = payload;
-    if (patchK3DossierFromPayload(payload)) return;
+    if (patchK3DossierFromPayload(payload)) {
+      clearShellWarming();
+      return;
+    }
 
     var host = document.getElementById('home-daily-call');
     if (!host) host = document.getElementById('council-stage-body');
@@ -3451,6 +3467,15 @@
       try {
         var dpResult = await fetchJsonRetry('/api/daily-pick', 35000, 3);
         renderDailyPick(dpResult);
+        // Local pending HOLD (worker fallthrough) — surface quiet hero, clear warming.
+        if (
+          dpResult &&
+          !shouldApplyDailyPickPayload(dpResult) &&
+          String(dpResult.action || '').toUpperCase() === 'HOLD'
+        ) {
+          clearShellWarming();
+          maybeClearShellWarmingEarly();
+        }
         prefetchFocusJudges(dpResult);
         if (!dpResult.shortlist || !dpResult.shortlist.length) {
           fetchJsonRetry('/api/daily-pick/weighed', 22000, 2)
@@ -3463,6 +3488,7 @@
         }
       } catch (e) {
         console.warn('[cockpit_hydrate] daily-pick fetch failed', e);
+        clearShellWarming();
         markSectionFailed('section-daily-pick', 'Quiet — daily call delayed. Retry when /api/daily-pick responds.');
       }
 
