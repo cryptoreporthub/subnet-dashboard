@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 _LAST_GOOD_BASE: Optional[str] = None
 _LAST_PROBE_ERROR: Optional[str] = None
 _LAST_FAIL_MONO: float = 0.0
+_LAST_GOOD_MINDMAP: Optional[Dict[str, Any]] = None
+_DISCOVER_STARTED: bool = False
 
 
 def last_worker_probe_error() -> Optional[str]:
@@ -102,13 +104,25 @@ def _requests_json_sync(url: str, *, timeout: float) -> Dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-async def _httpx_get(url: str, *, timeout: Optional[Union[float, httpx.Timeout]] = None) -> httpx.Response:
-    """Try default transport then IPv6 :: bind (Fly 6PN paths differ per machine)."""
+async def _httpx_get(
+    url: str,
+    *,
+    timeout: Optional[Union[float, httpx.Timeout]] = None,
+    single_transport: bool = False,
+) -> httpx.Response:
+    """Try default transport then IPv6 :: bind (Fly 6PN paths differ per machine).
+
+    ``single_transport=True`` — one attempt only (hot proxy path; dual transport
+    doubles a 4s timeout into an 8s hang).
+    """
     if timeout is None:
         timeout = _proxy_timeout()
+    transports: List[Optional[httpx.AsyncHTTPTransport]] = [None]
+    if not single_transport:
+        transports.append(_internal_transport())
     last_exc: Optional[BaseException] = None
     first = True
-    for transport in (None, _internal_transport()):
+    for transport in transports:
         try:
             client_kw: Dict[str, Any] = {"timeout": timeout}
             if transport is not None:
@@ -185,21 +199,29 @@ def worker_http_port() -> int:
         return 8081
 
 
+def _candidate_bases() -> List[str]:
+    """Stable worker routes — process DNS first (flycast :8081 often unreachable)."""
+    app = os.environ.get("FLY_APP_NAME", "subnet-dashboard").strip() or "subnet-dashboard"
+    port = worker_http_port()
+    region = os.environ.get("FLY_REGION", "").strip()
+    process = f"http://worker.process.{app}.internal:{port}"
+    regional = f"http://worker.process.{region}.{app}.internal:{port}" if region else None
+    flycast_worker = f"http://{app}.flycast:{port}"
+    # Process-group DNS targets worker machines; flycast:8081 custom service is flaky.
+    out: List[str] = []
+    if regional:
+        out.append(regional)
+    out.append(process)
+    out.append(flycast_worker)
+    return out
+
+
 def worker_internal_bases() -> List[str]:
     """Ordered URLs for worker HTTP — worker-only port avoids web 8080 collision."""
     app = os.environ.get("FLY_APP_NAME", "subnet-dashboard").strip() or "subnet-dashboard"
     port = worker_http_port()
     flycast_pub = f"http://{app}.flycast:8080"
-    flycast_worker = f"http://{app}.flycast:{port}"
-    region = os.environ.get("FLY_REGION", "").strip()
-    regional = f"http://worker.process.{region}.{app}.internal:{port}" if region else None
-    process = f"http://worker.process.{app}.internal:{port}"
-
-    # Stable routes survive worker machine replacement; WORKER_INTERNAL_URL IP does not.
-    stable: List[str] = [flycast_worker]
-    if regional:
-        stable.append(regional)
-    stable.append(process)
+    stable = _candidate_bases()
 
     bases: List[str] = []
     if _LAST_GOOD_BASE and _LAST_GOOD_BASE in stable:
@@ -212,7 +234,11 @@ def worker_internal_bases() -> List[str]:
     # ponytail: legacy fly secrets may still set flycast:8080 — ignore unless opted in.
     if custom and (custom != flycast_pub or _flycast_opt_in()):
         if custom not in bases:
-            bases.append(custom)
+            # Prefer explicit secret (usually process DNS) ahead of flycast fallback.
+            if _is_machine_specific_base(custom):
+                bases.append(custom)
+            else:
+                bases.insert(1 if bases and bases[0] == _LAST_GOOD_BASE else 0, custom)
     if _flycast_opt_in() and flycast_pub not in bases:
         bases.append(flycast_pub)
     seen: set[str] = set()
@@ -279,13 +305,28 @@ def _bases_for_fetch(*, circuit_limited: bool = False) -> List[str]:
     bases = worker_internal_bases()
     if not circuit_limited:
         return bases
-    # ponytail: when circuit is open, one quick flycast attempt — not 3× timeout storm.
+    # ponytail: one base on the request path — discovery finds a working peer in background.
     if _LAST_GOOD_BASE:
         return [_LAST_GOOD_BASE]
     return bases[:1]
 
 
+def _store_mindmap_cache(payload: Dict[str, Any]) -> None:
+    global _LAST_GOOD_MINDMAP
+    nodes = payload.get("nodes")
+    if isinstance(nodes, list) and nodes:
+        _LAST_GOOD_MINDMAP = dict(payload)
+
+
 def _mindmap_degraded_response(path: str) -> JSONResponse:
+    if _LAST_GOOD_MINDMAP:
+        content = dict(_LAST_GOOD_MINDMAP)
+        content["status"] = "cached"
+        content["detail"] = (
+            "Serving last-good trail — worker reconnecting."
+        )
+        content["path"] = path
+        return JSONResponse(status_code=200, content=content)
     return JSONResponse(
         status_code=200,
         content={
@@ -334,15 +375,18 @@ async def _fetch_worker_http(
     """GET worker internal HTTP — same AsyncClient path as volume proxy middleware."""
     if timeout is None:
         timeout = _mindmap_proxy_timeout() if fast_path else _proxy_timeout()
-    # ponytail: one flycast attempt per request — multi-base retry wedges the web event loop.
-    circuit_limited = True
+    # Prefer pinned good base first; still walk candidates for fast HTTP failures
+    # (misroute/404). Stop after the first *timeout* so we never re-wedge the loop.
+    bases = worker_internal_bases()
+    if _LAST_GOOD_BASE and _LAST_GOOD_BASE in bases:
+        bases = [_LAST_GOOD_BASE] + [b for b in bases if b != _LAST_GOOD_BASE]
     last_exc: Optional[BaseException] = None
-    for base in _bases_for_fetch(circuit_limited=circuit_limited):
+    for base in bases:
         url = f"{base}{path}"
         if query:
             url = f"{url}?{query}"
         try:
-            resp = await _httpx_get(url, timeout=timeout)
+            resp = await _httpx_get(url, timeout=timeout, single_transport=True)
             if resp.status_code in (404, 502, 503):
                 logger.debug("worker HTTP %s status %s", url, resp.status_code)
                 last_exc = httpx.HTTPStatusError(
@@ -364,6 +408,8 @@ async def _fetch_worker_http(
                     )
                     _record_probe_error(last_exc)
                     continue
+                if isinstance(data, dict) and _mindmap_path(path):
+                    _store_mindmap_cache(data)
             except Exception:
                 pass
             _record_good_base(base)
@@ -376,30 +422,68 @@ async def _fetch_worker_http(
                 logger.debug("worker HTTP %s status %s", url, exc.response.status_code)
                 continue
             logger.debug("worker HTTP %s failed: %s", url, exc)
+            break
+        except (httpx.TimeoutException, httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
+            last_exc = exc
+            _record_probe_error(exc)
+            logger.debug("worker HTTP %s timeout: %s", url, exc)
+            # ponytail: one timeout is enough — discovery finds another base in background.
+            break
         except Exception as exc:
             last_exc = exc
             _record_probe_error(exc)
             logger.debug("worker HTTP %s failed: %s", url, exc)
-            if fast_path or circuit_limited:
-                continue
-            try:
-                data = _requests_json_sync(url, timeout=_timeout_seconds(timeout))
-                if _is_web_misroute(data, path):
-                    last_exc = OSError("web misroute (requests)")
-                    _record_probe_error(last_exc)
-                    continue
-                _record_good_base(base)
-                _mark_proxy_success()
-                return httpx.Response(200, json=data)
-            except Exception as req_exc:
-                last_exc = req_exc
-                _record_probe_error(req_exc, overwrite=False)
-                logger.debug("worker requests %s failed: %s", url, req_exc)
+            break
     if last_exc is not None:
         _mark_proxy_failure()
         raise last_exc
     _mark_proxy_failure()
     raise OSError("no worker HTTP base succeeded")
+
+
+def discover_worker_base_once() -> Optional[str]:
+    """Probe candidate bases with a short timeout; pin the first that answers /health."""
+    import requests
+
+    for base in _candidate_bases():
+        try:
+            resp = requests.get(
+                f"{base}/health",
+                headers={"X-Worker-Proxy": "1"},
+                timeout=2.0,
+            )
+            if resp.status_code == 200 and (resp.text or "").strip().upper().startswith("OK"):
+                _record_good_base(base)
+                _mark_proxy_success()
+                logger.info("worker base discovered: %s", base)
+                return base
+        except Exception as exc:
+            logger.debug("worker base probe failed %s: %s", base, exc)
+    return None
+
+
+def start_worker_base_discovery() -> None:
+    """Background peer finder for split_v2 web — does not block request path."""
+    global _DISCOVER_STARTED
+    if _DISCOVER_STARTED:
+        return
+    _DISCOVER_STARTED = True
+
+    def _loop() -> None:
+        while True:
+            try:
+                # Keep probing while circuit is open or no good base pinned yet.
+                if _circuit_open() or _LAST_GOOD_BASE is None:
+                    discover_worker_base_once()
+            except Exception as exc:
+                logger.debug("worker base discovery tick failed: %s", exc)
+            time.sleep(15)
+
+    import threading
+
+    threading.Thread(target=_loop, daemon=True, name="worker-base-discover").start()
+    # First probe immediately so LAST_GOOD_BASE is warm before the first user hit.
+    threading.Thread(target=discover_worker_base_once, daemon=True, name="worker-base-boot").start()
 
 
 def _run_coro_sync(coro) -> Any:

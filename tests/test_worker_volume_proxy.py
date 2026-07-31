@@ -125,6 +125,10 @@ def test_worker_internal_bases_ignores_flycast_secret_without_opt_in(monkeypatch
     assert "http://subnet-dashboard.flycast:8080" not in bases
     assert "http://subnet-dashboard.flycast:8081" in bases
     assert "http://worker.process.subnet-dashboard.internal:8081" in bases
+    # Process DNS preferred over flycast :8081 (custom service often unreachable).
+    assert bases.index("http://worker.process.subnet-dashboard.internal:8081") < bases.index(
+        "http://subnet-dashboard.flycast:8081"
+    )
 
 
 def test_worker_internal_bases_machine_ip_after_flycast(monkeypatch):
@@ -137,10 +141,12 @@ def test_worker_internal_bases_machine_ip_after_flycast(monkeypatch):
     from internal.worker_proxy import worker_internal_bases
 
     bases = worker_internal_bases()
+    process = "http://worker.process.subnet-dashboard.internal:8081"
     flycast = "http://subnet-dashboard.flycast:8081"
     machine = "http://[fdaa:80:e535:a7b:76d:4c6c:c6a8:2]:8081"
-    assert bases[0] == flycast
+    assert bases[0] == process
     assert machine in bases
+    assert bases.index(process) < bases.index(flycast)
     assert bases.index(flycast) < bases.index(machine)
 
 
@@ -161,7 +167,40 @@ def test_worker_internal_bases_includes_regional_dns(monkeypatch):
     from internal.worker_proxy import worker_internal_bases
 
     bases = worker_internal_bases()
-    assert "http://worker.process.sjc.subnet-dashboard.internal:8081" in bases
+    regional = "http://worker.process.sjc.subnet-dashboard.internal:8081"
+    assert regional in bases
+    assert bases[0] == regional
+
+
+def test_mindmap_cache_served_when_degraded(monkeypatch):
+    import internal.worker_proxy as wp
+
+    monkeypatch.setattr(
+        wp,
+        "_LAST_GOOD_MINDMAP",
+        {
+            "status": "success",
+            "nodes": [{"id": "subnet:1", "kind": "subnet", "label": "Alpha"}],
+            "edges": [],
+        },
+    )
+    resp = wp._mindmap_degraded_response("/api/mindmap/graph")
+    body = resp.body
+    import json
+
+    data = json.loads(body)
+    assert data["status"] == "cached"
+    assert len(data["nodes"]) == 1
+
+
+def test_candidate_bases_process_before_flycast(monkeypatch):
+    monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
+    monkeypatch.delenv("FLY_REGION", raising=False)
+    from internal.worker_proxy import _candidate_bases
+
+    bases = _candidate_bases()
+    assert bases[0] == "http://worker.process.subnet-dashboard.internal:8081"
+    assert bases[-1] == "http://subnet-dashboard.flycast:8081"
 
 
 def test_load_weights_for_ui_proxies_worker(monkeypatch):
@@ -223,10 +262,10 @@ def test_proxy_circuit_opens_after_failure(monkeypatch):
 def test_bases_for_fetch_limited_when_circuit_open(monkeypatch):
     import internal.worker_proxy as wp
 
-    monkeypatch.setattr(wp, "_LAST_GOOD_BASE", "http://subnet-dashboard.flycast:8081")
+    monkeypatch.setattr(wp, "_LAST_GOOD_BASE", "http://worker.process.subnet-dashboard.internal:8081")
     monkeypatch.setattr(wp, "_LAST_FAIL_MONO", wp.time.monotonic())
     bases = wp._bases_for_fetch(circuit_limited=True)
-    assert bases == ["http://subnet-dashboard.flycast:8081"]
+    assert bases == ["http://worker.process.subnet-dashboard.internal:8081"]
 
 
 def test_mindmap_fast_path_uses_single_base(monkeypatch):
@@ -234,10 +273,12 @@ def test_mindmap_fast_path_uses_single_base(monkeypatch):
 
     monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
     monkeypatch.setenv("FLY_REGION", "sjc")
+    monkeypatch.delenv("WORKER_INTERNAL_URL", raising=False)
     bases = wp.worker_internal_bases()
     assert len(bases) >= 3
     limited = wp._bases_for_fetch(circuit_limited=True)
     assert limited == [bases[0]]
+    assert "worker.process" in limited[0]
 
 
 def test_mindmap_proxy_timeout_shorter_than_default(monkeypatch):

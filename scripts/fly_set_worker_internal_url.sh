@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# split_v2 web → worker: prefer flycast :8081 (survives machine recreate).
-# Unset machine-specific WORKER_INTERNAL_URL — stale 6PN IPs wedge every proxy ~12s.
+# split_v2 web → worker: pin process-group DNS (survives machine recreate).
+# flycast :8081 custom service has been unreachable from web; process DNS works.
 set -euo pipefail
 
 APP="${FLY_APP:-subnet-dashboard}"
@@ -13,5 +13,6 @@ if ! "$SCRIPT_DIR/fly_worker_split_v2_guard.sh"; then
   exit 0
 fi
 
-echo "fly_set_worker_internal_url: unset machine-specific WORKER_INTERNAL_URL (use flycast :${PORT})"
-flyctl secrets unset WORKER_INTERNAL_URL --app "$APP" 2>/dev/null || true
+TARGET="http://worker.process.${APP}.internal:${PORT}"
+echo "fly_set_worker_internal_url: set WORKER_INTERNAL_URL=${TARGET}"
+flyctl secrets set "WORKER_INTERNAL_URL=${TARGET}" --app "$APP"
