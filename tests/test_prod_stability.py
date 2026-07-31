@@ -79,6 +79,43 @@ def test_scan_all_subnets_fetch_outside_state_lock(tmp_path, monkeypatch):
             assert not t.is_alive()
 
 
+def test_mindmap_graph_route_does_not_block_health():
+    """GET /api/mindmap/graph has repeatedly grown expensive synchronous work
+    (TaoStats calls, a soul_map.json rewrite, hourly-pick technical scoring)
+    that wedged the whole event loop when run inline in the async route. The
+    route must dispatch through the thread pool so /health stays responsive
+    even while a slow mindmap build is in flight."""
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_get_mindmap_graph(focus_netuid=None):
+        started.set()
+        release.wait(timeout=2.0)
+        return {"status": "success", "nodes": [], "edges": []}
+
+    with patch("internal.mindmap.routes.get_mindmap_graph", side_effect=slow_get_mindmap_graph):
+        with TestClient(app) as client:
+            result: dict = {}
+
+            def _call_mindmap():
+                result["resp"] = client.get("/api/mindmap/graph")
+
+            t = threading.Thread(target=_call_mindmap, daemon=True)
+            t.start()
+            assert started.wait(timeout=2.0)
+
+            t0 = time.monotonic()
+            health = client.get("/health")
+            elapsed = time.monotonic() - t0
+
+            release.set()
+            t.join(timeout=3.0)
+
+    assert health.status_code == 200
+    assert elapsed < 1.0
+    assert result["resp"].status_code == 200
+
+
 def test_scan_all_subnets_soul_map_write_outside_state_lock(tmp_path, monkeypatch):
     """load_state must not block on apply_phase_transitions' soul_map.json
     rewrite (Fly wedge: mindmap graph -> hourly pick -> pump overlay all call
