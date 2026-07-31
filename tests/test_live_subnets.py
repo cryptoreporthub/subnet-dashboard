@@ -53,7 +53,7 @@ def test_bootstrap_skipped_when_immediate_off(monkeypatch):
     sync.assert_not_called()
 
 
-def test_bootstrap_runs_on_worker_even_when_immediate_off(monkeypatch):
+def test_bootstrap_skipped_on_worker_when_immediate_off(monkeypatch):
     monkeypatch.delenv("CI", raising=False)
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
@@ -66,8 +66,8 @@ def test_bootstrap_runs_on_worker_even_when_immediate_off(monkeypatch):
     monkeypatch.setattr(live_subnets, "AUTO_SYNC", True)
     monkeypatch.setattr(live_subnets, "_in_ci_or_test", False)
     with patch.object(live_subnets, "_sync_once", return_value=True) as sync:
-        assert live_subnets.bootstrap_live_subnets_cache() is True
-    sync.assert_called_once()
+        assert live_subnets.bootstrap_live_subnets_cache() is False
+    sync.assert_not_called()
 
 
 def test_sync_writes_under_data_dir(monkeypatch, tmp_path):

@@ -273,13 +273,11 @@ def bootstrap_live_subnets_cache() -> bool:
         return False
     if _in_ci_or_test:
         return False
-    from internal.run_mode import is_worker_mode
 
-    # Dedicated worker always syncs on boot — do not gate on LIVE_SUBNETS_BOOT_IMMEDIATE.
-    if not is_worker_mode():
-        flag = os.environ.get("LIVE_SUBNETS_BOOT_IMMEDIATE", "off").strip().lower()
-        if flag not in ("1", "true", "yes", "on"):
-            return False
+    # Dedicated worker respects LIVE_SUBNETS_BOOT_IMMEDIATE like web inline worker.
+    flag = os.environ.get("LIVE_SUBNETS_BOOT_IMMEDIATE", "off").strip().lower()
+    if flag not in ("1", "true", "yes", "on"):
+        return False
     logger.info("live_subnets bootstrap immediate sync")
     return _sync_once()
 

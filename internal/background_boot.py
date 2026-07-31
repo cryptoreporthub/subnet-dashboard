@@ -407,8 +407,8 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
                 get_live_subnets()
                 _record_boot_status(phase="boot_done")
 
-            # Dedicated worker :8081 — no public /health race; start sync immediately.
-            boot_delay = 0 if is_worker_mode() else max(BOOT_DEFER_SECONDS, 5)
+            # ponytail: defer boot sync so :8081 serves health before chain I/O.
+            boot_delay = max(BOOT_DEFER_SECONDS, 5)
             defer_boot("live-subnets-boot", _live_subnets_boot, delay=boot_delay)
             logger.info(
                 "Live subnets sync scheduled (deferred %ss, worker=%s, heavy=%s)",
