@@ -153,27 +153,29 @@ jobs:
           echo "=== Machine status before recover ==="
           flyctl status -a subnet-dashboard || true
           flyctl machines list -a subnet-dashboard || true
-          for id in $(flyctl machines list -a subnet-dashboard --json | python3 -c "
+          # Prefer leave a healthy machine alone — blind restart after secrets
+          # churn was wedging v1 right after learning-loop green.
+          code=$(curl -sS -m 10 -o /tmp/health_body -w "%{http_code}" https://subnet-dashboard.fly.dev/health || echo 000)
+          body=$(cat /tmp/health_body 2>/dev/null || true)
+          echo "precheck health: HTTP $code body=$body"
+          if [ "$code" != "200" ]; then
+            for id in $(flyctl machines list -a subnet-dashboard --json | python3 -c "
           import json,sys
           for m in json.load(sys.stdin):
               pg = (m.get('process_group') or 'web').lower()
               if pg == 'web' and m.get('id'):
                   print(m.get('id'))
           "); do
-            [ -n "$id" ] || continue
-            state=$(flyctl machines list -a subnet-dashboard --json | python3 -c "
-          import json,sys
-          want='$id'
-          for m in json.load(sys.stdin):
-              if m.get('id')==want:
-                  print(m.get('state','')); break
-          ")
-            echo "Machine $id state=$state — restarting to clear critical checks / apply VM size"
-            flyctl machines restart "$id" -a subnet-dashboard || flyctl machines start "$id" -a subnet-dashboard || true
-          done
+              [ -n "$id" ] || continue
+              echo "Machine $id unhealthy — restarting"
+              flyctl machines restart "$id" -a subnet-dashboard || flyctl machines start "$id" -a subnet-dashboard || true
+            done
+          else
+            echo "Public health already OK — skip restart"
+          fi
           echo "=== Machine status after recover ==="
           flyctl machines list -a subnet-dashboard || true
-          for i in $(seq 1 30); do
+          for i in $(seq 1 36); do
             code=$(curl -sS -m 10 -o /tmp/health_body -w "%{http_code}" https://subnet-dashboard.fly.dev/health || echo 000)
             body=$(cat /tmp/health_body 2>/dev/null || true)
             echo "attempt $i: HTTP $code body=$body"
@@ -186,7 +188,7 @@ jobs:
           if [ "$code" != "200" ]; then
             echo "=== Recent logs (best effort) ==="
             flyctl logs -a subnet-dashboard --no-tail || true
-            echo "GUARD FAIL: public /health did not return 200 within ~2.5m"
+            echo "GUARD FAIL: public /health did not return 200 within ~3m"
             exit 1
           fi
         env:

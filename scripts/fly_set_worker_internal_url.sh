@@ -9,8 +9,18 @@ PORT="${WORKER_HTTP_PORT:-8081}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 if ! "$SCRIPT_DIR/fly_worker_split_v2_guard.sh"; then
-  echo "fly_set_worker_internal_url: split_v2 not enabled — unset legacy WORKER_INTERNAL_URL"
-  flyctl secrets unset WORKER_INTERNAL_URL --app "$APP" 2>/dev/null || true
+  # Only unset when present — blind unset still triggers a Fly rolling restart
+  # and can wedge the fresh v1 machine right after deploy.
+  if flyctl secrets list -a "$APP" --json 2>/dev/null | python3 -c "
+import json,sys
+rows=json.load(sys.stdin)
+sys.exit(0 if any(r.get('Name')=='WORKER_INTERNAL_URL' for r in rows) else 1)
+"; then
+    echo "fly_set_worker_internal_url: unsetting leftover WORKER_INTERNAL_URL"
+    flyctl secrets unset WORKER_INTERNAL_URL --app "$APP" 2>/dev/null || true
+  else
+    echo "fly_set_worker_internal_url: split_v2 off — no WORKER_INTERNAL_URL secret"
+  fi
   exit 0
 fi
 
