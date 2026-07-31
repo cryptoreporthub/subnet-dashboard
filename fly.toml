@@ -23,11 +23,11 @@ primary_region = "sjc"
   min_machines_running = 1
 
   [[http_service.checks]]
-    grace_period = "60s"
-    interval = "30s"
+    grace_period = "90s"
+    interval = "15s"
     method = "GET"
     path = "/health"
-    timeout = "10s"
+    timeout = "5s"
 
 [env]
   RUN_MODE = "web"
@@ -49,8 +49,8 @@ primary_region = "sjc"
   BOOT_BACKGROUND_SYNC_IMMEDIATE = "off"
   SUBNETS_LOAD_TIMEOUT_SECONDS = "6"
   HYDRATE_SUBNETS_TIMEOUT_SECONDS = "4"
-  # Defer live feed + subnet warmup so /health wins the first minute after deploy.
-  BOOT_DEFER_SECONDS = "45"
+  # Defer live feed + subnet warmup so /health wins the first minutes after deploy.
+  BOOT_DEFER_SECONDS = "90"
   MAX_IN_FLIGHT_REQUESTS = "12"
   LOAD_SHED_ACQUIRE_SECONDS = "2"
   HOMEPAGE_BUILD_TIMEOUT = "8"

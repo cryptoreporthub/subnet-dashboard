@@ -9,9 +9,8 @@ PATHS=(
   "/api/data-freshness"
   "/api/portfolio/status"
 )
-# Homepage SSR + heavy stats — optional after core paths are green
+# Homepage SSR can wedge a cold single-worker VM — leave it to real traffic later.
 OPTIONAL_PATHS=(
-  "/"
   "/api/learning/stats"
   "/api/daily-pick"
 )
