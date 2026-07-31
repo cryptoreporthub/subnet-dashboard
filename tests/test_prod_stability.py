@@ -79,6 +79,63 @@ def test_scan_all_subnets_fetch_outside_state_lock(tmp_path, monkeypatch):
             assert not t.is_alive()
 
 
+def test_mindmap_learning_routes_do_not_block_health(monkeypatch):
+    """/api/mindmap/summary, /api/mindmap/state, and /api/mindmap/story-path
+    each called a full subnet-universe scoring function directly in an async
+    route (get_or_create_today_pick / build_mindmap_state). A live py-spy dump
+    caught /api/mindmap/story-path holding the event loop in production. All
+    three must dispatch through the thread pool so /health stays responsive."""
+    import internal.learning.routes as learning_routes
+
+    def slow_build_mindmap_state():
+        release.wait(timeout=2.0)
+        return {"status": "success", "trail": [], "summaries": {}}
+
+    def slow_get_or_create_today_pick(subnets, market_context):
+        release.wait(timeout=2.0)
+        return {}
+
+    for path, patches in {
+        "/api/mindmap/state": [
+            ("internal.learning.mindmap_aggregator.build_mindmap_state", slow_build_mindmap_state),
+        ],
+        "/api/mindmap/story-path": [
+            (
+                "internal.council.daily_pick_engine.get_or_create_today_pick",
+                slow_get_or_create_today_pick,
+            ),
+        ],
+    }.items():
+        release = threading.Event()
+        ctx_managers = [patch(target, side_effect=fn) for target, fn in patches]
+        for cm in ctx_managers:
+            cm.__enter__()
+        try:
+            with TestClient(app) as client:
+                result = {}
+
+                def _call():
+                    result["resp"] = client.get(path)
+
+                t = threading.Thread(target=_call, daemon=True)
+                t.start()
+                time.sleep(0.2)
+
+                t0 = time.monotonic()
+                health = client.get("/health")
+                elapsed = time.monotonic() - t0
+
+                release.set()
+                t.join(timeout=3.0)
+        finally:
+            for cm in ctx_managers:
+                cm.__exit__(None, None, None)
+
+        assert health.status_code == 200
+        assert elapsed < 1.0, f"{path} blocked /health for {elapsed}s"
+        assert result["resp"].status_code == 200
+
+
 def test_mindmap_graph_route_does_not_block_health():
     """GET /api/mindmap/graph has repeatedly grown expensive synchronous work
     (TaoStats calls, a soul_map.json rewrite, hourly-pick technical scoring)
