@@ -110,16 +110,22 @@ async def _httpx_get(
     timeout: Optional[Union[float, httpx.Timeout]] = None,
     single_transport: bool = False,
 ) -> httpx.Response:
-    """Try default transport then IPv6 :: bind (Fly 6PN paths differ per machine).
+    """GET via httpx — Fly 6PN is IPv6, so bind ``::`` first (or only on hot path).
 
-    ``single_transport=True`` — one attempt only (hot proxy path; dual transport
-    doubles a 4s timeout into an 8s hang).
+    Dual default+IPv6 used to turn a 4s timeout into an 8s hang; hot path uses
+    IPv6-only. Offline/dev without FLY_APP_NAME keeps the default transport.
     """
     if timeout is None:
         timeout = _proxy_timeout()
-    transports: List[Optional[httpx.AsyncHTTPTransport]] = [None]
-    if not single_transport:
-        transports.append(_internal_transport())
+    on_fly = bool(os.environ.get("FLY_APP_NAME", "").strip())
+    if single_transport:
+        transports: List[Optional[httpx.AsyncHTTPTransport]] = (
+            [_internal_transport()] if on_fly else [None]
+        )
+    elif on_fly:
+        transports = [_internal_transport(), None]
+    else:
+        transports = [None, _internal_transport()]
     last_exc: Optional[BaseException] = None
     first = True
     for transport in transports:
@@ -143,7 +149,11 @@ async def _httpx_post(url: str, *, timeout: float, content: bytes, headers: Dict
     first = True
     hdrs = dict(headers)
     hdrs.setdefault("X-Worker-Proxy", "1")
-    for transport in (None, _internal_transport()):
+    on_fly = bool(os.environ.get("FLY_APP_NAME", "").strip())
+    transports: List[Optional[httpx.AsyncHTTPTransport]] = (
+        [_internal_transport(), None] if on_fly else [None, _internal_transport()]
+    )
+    for transport in transports:
         try:
             client_kw: Dict[str, Any] = {"timeout": timeout}
             if transport is not None:
@@ -443,15 +453,17 @@ async def _fetch_worker_http(
 
 def discover_worker_base_once() -> Optional[str]:
     """Probe candidate bases with a short timeout; pin the first that answers /health."""
-    import requests
-
+    # Fly 6PN requires IPv6 bind — plain requests often can't reach *.internal.
+    transport = None
+    if os.environ.get("FLY_APP_NAME", "").strip():
+        transport = httpx.HTTPTransport(local_address="::")
     for base in _candidate_bases():
         try:
-            resp = requests.get(
-                f"{base}/health",
-                headers={"X-Worker-Proxy": "1"},
-                timeout=2.0,
-            )
+            client_kw: Dict[str, Any] = {"timeout": 2.0}
+            if transport is not None:
+                client_kw["transport"] = transport
+            with httpx.Client(**client_kw) as client:
+                resp = client.get(f"{base}/health", headers={"X-Worker-Proxy": "1"})
             if resp.status_code == 200 and (resp.text or "").strip().upper().startswith("OK"):
                 _record_good_base(base)
                 _mark_proxy_success()
