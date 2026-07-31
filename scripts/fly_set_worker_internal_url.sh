@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# split_v2 web → worker: pin process-group DNS (survives machine recreate).
-# flycast :8081 custom service has been unreachable from web; process DNS works.
+# split_v2 web → worker: pin flycast :8081 (proven reachable with IPv6 bind).
+# process DNS returns connection refused from web; do not prefer it.
 set -euo pipefail
 
 APP="${FLY_APP:-subnet-dashboard}"
@@ -13,6 +13,6 @@ if ! "$SCRIPT_DIR/fly_worker_split_v2_guard.sh"; then
   exit 0
 fi
 
-TARGET="http://worker.process.${APP}.internal:${PORT}"
+TARGET="http://${APP}.flycast:${PORT}"
 echo "fly_set_worker_internal_url: set WORKER_INTERNAL_URL=${TARGET}"
 flyctl secrets set "WORKER_INTERNAL_URL=${TARGET}" --app "$APP"

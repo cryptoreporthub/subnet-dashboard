@@ -125,9 +125,9 @@ def test_worker_internal_bases_ignores_flycast_secret_without_opt_in(monkeypatch
     assert "http://subnet-dashboard.flycast:8080" not in bases
     assert "http://subnet-dashboard.flycast:8081" in bases
     assert "http://worker.process.subnet-dashboard.internal:8081" in bases
-    # Process DNS preferred over flycast :8081 (custom service often unreachable).
-    assert bases.index("http://worker.process.subnet-dashboard.internal:8081") < bases.index(
-        "http://subnet-dashboard.flycast:8081"
+    # flycast :8081 preferred (GHA probe: OK with IPv6; process DNS refused).
+    assert bases.index("http://subnet-dashboard.flycast:8081") < bases.index(
+        "http://worker.process.subnet-dashboard.internal:8081"
     )
 
 
@@ -144,10 +144,10 @@ def test_worker_internal_bases_machine_ip_after_flycast(monkeypatch):
     process = "http://worker.process.subnet-dashboard.internal:8081"
     flycast = "http://subnet-dashboard.flycast:8081"
     machine = "http://[fdaa:80:e535:a7b:76d:4c6c:c6a8:2]:8081"
-    assert bases[0] == process
+    assert bases[0] == flycast
     assert machine in bases
-    assert bases.index(process) < bases.index(flycast)
-    assert bases.index(flycast) < bases.index(machine)
+    assert bases.index(flycast) < bases.index(process)
+    assert bases.index(process) < bases.index(machine) or bases.index(flycast) < bases.index(machine)
 
 
 def test_record_good_base_skips_machine_ip(monkeypatch):
@@ -168,8 +168,9 @@ def test_worker_internal_bases_includes_regional_dns(monkeypatch):
 
     bases = worker_internal_bases()
     regional = "http://worker.process.sjc.subnet-dashboard.internal:8081"
+    flycast = "http://subnet-dashboard.flycast:8081"
     assert regional in bases
-    assert bases[0] == regional
+    assert bases[0] == flycast
 
 
 def test_mindmap_cache_served_when_degraded(monkeypatch):
@@ -193,14 +194,14 @@ def test_mindmap_cache_served_when_degraded(monkeypatch):
     assert len(data["nodes"]) == 1
 
 
-def test_candidate_bases_process_before_flycast(monkeypatch):
+def test_candidate_bases_flycast_before_process(monkeypatch):
     monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
     monkeypatch.delenv("FLY_REGION", raising=False)
     from internal.worker_proxy import _candidate_bases
 
     bases = _candidate_bases()
-    assert bases[0] == "http://worker.process.subnet-dashboard.internal:8081"
-    assert bases[-1] == "http://subnet-dashboard.flycast:8081"
+    assert bases[0] == "http://subnet-dashboard.flycast:8081"
+    assert bases[-1] == "http://worker.process.subnet-dashboard.internal:8081"
 
 
 def test_httpx_get_single_transport_uses_ipv6_on_fly(monkeypatch):
@@ -326,7 +327,7 @@ def test_mindmap_fast_path_uses_single_base(monkeypatch):
     assert len(bases) >= 3
     limited = wp._bases_for_fetch(circuit_limited=True)
     assert limited == [bases[0]]
-    assert "worker.process" in limited[0]
+    assert "flycast" in limited[0]
 
 
 def test_mindmap_proxy_timeout_shorter_than_default(monkeypatch):

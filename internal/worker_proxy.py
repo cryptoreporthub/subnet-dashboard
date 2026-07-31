@@ -210,19 +210,18 @@ def worker_http_port() -> int:
 
 
 def _candidate_bases() -> List[str]:
-    """Stable worker routes — process DNS first (flycast :8081 often unreachable)."""
+    """Stable worker routes — flycast :8081 first (proven on Fly 6PN + IPv6)."""
     app = os.environ.get("FLY_APP_NAME", "subnet-dashboard").strip() or "subnet-dashboard"
     port = worker_http_port()
     region = os.environ.get("FLY_REGION", "").strip()
     process = f"http://worker.process.{app}.internal:{port}"
     regional = f"http://worker.process.{region}.{app}.internal:{port}" if region else None
     flycast_worker = f"http://{app}.flycast:{port}"
-    # Process-group DNS targets worker machines; flycast:8081 custom service is flaky.
-    out: List[str] = []
+    # GHA probe 2026-07-31: flycast:8081 OK with IPv6; process DNS → connection refused.
+    out: List[str] = [flycast_worker]
     if regional:
         out.append(regional)
     out.append(process)
-    out.append(flycast_worker)
     return out
 
 
@@ -439,6 +438,12 @@ async def _fetch_worker_http(
             logger.debug("worker HTTP %s timeout: %s", url, exc)
             # ponytail: one timeout is enough — discovery finds another base in background.
             break
+        except (httpx.ConnectError, httpx.NetworkError, OSError) as exc:
+            # Connection refused / DNS miss are fast — try next candidate (flycast).
+            last_exc = exc
+            _record_probe_error(exc)
+            logger.debug("worker HTTP %s connect failed: %s", url, exc)
+            continue
         except Exception as exc:
             last_exc = exc
             _record_probe_error(exc)
