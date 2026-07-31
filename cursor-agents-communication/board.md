@@ -1,8 +1,17 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-30T04:30:00Z  
-**main:** `5c8f9cc` — PR4–PR10 PRs open (#672–#674) · runbook: `completion-runbook.md`  
-**Plans:** `completion-runbook.md` · `pre-aug4-polish-plan.md` · `finish-queue-plan.md`
+**Last updated:** 2026-07-31T08:15:00Z  
+**main:** see GitHub · **infra:** split_v2 **ROLLED BACK to v1 canon** (PR in flight `cursor/split-v1-rollback-canon-9a6d`)  
+**Plans:** `completion-runbook.md` · `split-v2-rollback-runbook.md` · `fly-worker-split-v2-lock.md`
+
+## Infra STATUS (launch blocker)
+
+| Item | Status |
+|------|--------|
+| **Root cause** | split_v2 web→worker private HTTP unreachable; volume APIs soft-degraded for weeks |
+| **Real fix** | Stop forcing `fly.worker-v2.toml` / `FORCE_WORKER_SPLIT_V2` in Fly Deploy; auto-rollback to `fly.toml` + inline worker |
+| **Bandaids** | Soft stubs / local fallthrough (#698–#705) — keep as defense only; do not treat as product fix |
+| **Do not** | Re-enable v2 without proven peer probe soak + human approve |
 
 ## Full roadmap
 

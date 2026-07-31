@@ -1,52 +1,38 @@
 # Fly worker split v2 — LOCK
 
-**Status:** **DONE on prod** (2026-07-28) · `worker_peer.alive: true` · GHA learning-loop check green  
-**Canon:** `docs/fly-web-worker-split.md` § v2 · `fly.worker-v2.toml` · `split-v2-rollback-runbook.md` (Plan B only)
+**Status:** **ROLLED BACK to v1 canon** (2026-07-31)  
+**Prod canon:** `fly.toml` · one web machine · `data_volume` + **inline worker** · `WORKER_SPLIT_V2` unset  
+**v2:** opt-in only via `scripts/fly_enable_worker_v2.sh` / workflow Enable Worker Split v2  
+**Rollback:** `scripts/fly_disable_worker_v2.sh` · `split-v2-rollback-runbook.md`
 
-## Shipped
+## Why rolled back
+
+split_v2 put volume APIs behind web→worker private HTTP. On this app that hop stayed unreliable (6PN refused, process DNS refused/NXDOMAIN, flycast flaky). Soft-degraded stubs and local fallthroughs kept the UI from wedging but **did not restore** daily-pick / Telegram / mindmap / learning volume data. Resolver tick age went stale for weeks while CI kept `FORCE_WORKER_SPLIT_V2=1` + `fly.worker-v2.toml` on every main deploy.
+
+## Shipped (historical)
 
 | PR | What |
 |----|------|
-| #566 | Prep env-gated |
-| #572–#574 | Enable workflow + plumbing |
-| #576–#577 | Volume proxy web → worker |
-| #578 | `internal/worker_peer.py` HTTP probe |
-| #579+ | Worker flycast `[[services]]` + `/api/ops/worker-peer` |
-| #581–#584 | Process DNS peer routing, volume repair script |
-| #591–#595 | Async/thread peer fetch, `private_ip` URL script |
-| #598 | Worker internal HTTP **:8081** (`WORKER_HTTP_PORT=8081`, flycast `:8081`) |
-| #599 | `flyctl ips allocate-v6` (no `--yes`) |
-| #600–#601 | Learning-loop deploy check + orphan web volume proxy + `/api/learning/health` proxy |
+| #566–#601 | v2 enablement, volume proxy, :8081, peer probes |
+| #696–#704 | Proxy resilience / soft degrade / 6PN pin (symptoms only) |
+| #705 | Hero/Telegram local fallthrough (defense in depth if v2 returns) |
+| **this** | Stop forcing v2 in Fly Deploy; auto-rollback to v1 |
 
-## Prod architecture
+## Prod architecture (canon)
 
-- `worker_mode: split_v2` · `web=1 worker=1`
-- **Web** (~1GB): HTTP `:8080`, no volume; proxies volume APIs to worker when `needs_worker_volume_proxy()`
-- **Worker** (~2GB): owns `data_volume`; background `python -m internal.worker`; uvicorn on **`:8081`**
-- Web probes worker: `WORKER_INTERNAL_URL=http://[fdaa:…]:8081` and/or `http://subnet-dashboard.flycast:8081`
-- Orphan JSON under `/app/data` on web (no mount) **must not** disable proxy — `data_dir_is_mounted_volume()`
-
-## Babysit
-
-```bash
-BASE=https://subnet-dashboard.fly.dev ./scripts/babysit_phase.sh c
-```
-
-Expect `worker_peer.alive: true` (source `http`) on web readiness.
-
-Resolver monitor (post-close-out):
-
-```bash
-curl -s "$BASE/api/learning/health" | jq '{status, last_resolver_tick, score_snapshot: .score_snapshot.file_present}'
-```
+- `worker_mode`: inline / `split` (not `split_v2`)
+- **Web** (2GB): HTTP `:8080` + `data_volume` at `/app/data` + inline `python -m internal.worker`
+- No web→worker volume proxy required for hero / Telegram / mindmap / learning
 
 ## Do not
 
-- Rollback without `split-v2-rollback-runbook.md` gates + human approve
-- Duplicate `worker_peer.py` or second heartbeat PR
-- Re-enable `./scripts/fly_enable_worker_v2.sh` — split v2 is live on prod
+- Re-add `FORCE_WORKER_SPLIT_V2=1` to `.github/workflows/fly.yml`
+- Deploy `fly.worker-v2.toml` from the default Fly Deploy workflow
+- Treat soft `status: degraded` stubs as a product fix for missing volume data
+- Re-enable v2 without a green web→worker probe soak and human approval
 
-## Open (not infra-blocked)
+## Re-enable v2 later
 
-- `live_subnets_cache_empty` on readiness — **Slice 1 in flight** (`finish-queue-plan.md`: WORKER_HEAVY=full + bootstrap live_subnets cache)
-- Telegram listener on worker — `MESSAGE_INTEL_LISTENER=on` in worker entrypoint (prod: running per finish-queue snapshot)
+1. Prove `scripts/fly_probe_worker_from_web.sh` from a temporary worker scale
+2. Human approve
+3. `./scripts/fly_enable_worker_v2.sh` or workflow **Enable Worker Split v2**
