@@ -116,6 +116,47 @@ def test_mindmap_graph_route_does_not_block_health():
     assert result["resp"].status_code == 200
 
 
+def test_mindmap_graph_route_dedupes_concurrent_slow_builds(monkeypatch):
+    """A slow build_mindmap_state() (repeatedly reloads council weight files
+    per subnet scored, easily minutes) must not fan out into N independent
+    computations under repeated polling - that exhausted the whole thread
+    pool in production and took down "/" and /api/pump-alerts even though
+    /health stayed up. Concurrent requests for the same focus must share one
+    in-flight build."""
+    import internal.mindmap.routes as routes
+
+    monkeypatch.setattr(routes, "_cache", {})
+    monkeypatch.setattr(routes, "_build_locks", {})
+
+    call_count = {"n": 0}
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_get_mindmap_graph(focus_netuid=None):
+        call_count["n"] += 1
+        started.set()
+        release.wait(timeout=2.0)
+        return {"status": "success", "nodes": [], "edges": []}
+
+    with patch("internal.mindmap.routes.get_mindmap_graph", side_effect=slow_get_mindmap_graph):
+        with TestClient(app) as client:
+            results = []
+
+            def _call():
+                results.append(client.get("/api/mindmap/graph"))
+
+            threads = [threading.Thread(target=_call, daemon=True) for _ in range(3)]
+            for t in threads:
+                t.start()
+            assert started.wait(timeout=2.0)
+            release.set()
+            for t in threads:
+                t.join(timeout=3.0)
+
+    assert all(r.status_code == 200 for r in results)
+    assert call_count["n"] == 1
+
+
 def test_scan_all_subnets_soul_map_write_outside_state_lock(tmp_path, monkeypatch):
     """load_state must not block on apply_phase_transitions' soul_map.json
     rewrite (Fly wedge: mindmap graph -> hourly pick -> pump overlay all call
