@@ -83,17 +83,28 @@ async def _httpx_post(url: str, *, timeout: float, content: bytes, headers: Dict
     raise OSError("httpx post failed")
 
 
-def _record_good_base(base: str) -> None:
-    global _LAST_GOOD_BASE
-    _LAST_GOOD_BASE = base
-
-
 def _is_web_misroute(data: Dict[str, Any], path: str) -> bool:
     """flycast can hit web — ops/live returns HTTP peer loop instead of file heartbeat."""
     if "/api/ops/" not in path:
         return False
     wp = data.get("worker_peer")
     return isinstance(wp, dict) and wp.get("source") == "http"
+
+
+def _is_machine_specific_base(base: str) -> bool:
+    """6PN literal / per-machine DNS — goes stale when the worker machine is recreated."""
+    if base.startswith("http://[fdaa:"):
+        return True
+    if ".vm." in base and ".internal" in base:
+        return True
+    return False
+
+
+def _record_good_base(base: str) -> None:
+    global _LAST_GOOD_BASE
+    if _is_machine_specific_base(base):
+        return
+    _LAST_GOOD_BASE = base
 
 
 def _flycast_opt_in() -> bool:
@@ -118,20 +129,29 @@ def worker_internal_bases() -> List[str]:
     port = worker_http_port()
     flycast_pub = f"http://{app}.flycast:8080"
     flycast_worker = f"http://{app}.flycast:{port}"
+    region = os.environ.get("FLY_REGION", "").strip()
+    regional = f"http://worker.process.{region}.{app}.internal:{port}" if region else None
+    process = f"http://worker.process.{app}.internal:{port}"
+
+    # Stable routes survive worker machine replacement; WORKER_INTERNAL_URL IP does not.
+    stable: List[str] = [flycast_worker]
+    if regional:
+        stable.append(regional)
+    stable.append(process)
+
     bases: List[str] = []
-    if _LAST_GOOD_BASE:
+    if _LAST_GOOD_BASE and _LAST_GOOD_BASE in stable:
         bases.append(_LAST_GOOD_BASE)
+    for base in stable:
+        if base not in bases:
+            bases.append(base)
+
     custom = os.environ.get("WORKER_INTERNAL_URL", "").strip().rstrip("/")
     # ponytail: legacy fly secrets may still set flycast:8080 — ignore unless opted in.
     if custom and (custom != flycast_pub or _flycast_opt_in()):
-        bases.append(custom)
-    # flycast :8081 only hits worker [[services]] — safe default for split_v2.
-    bases.append(flycast_worker)
-    region = os.environ.get("FLY_REGION", "").strip()
-    if region:
-        bases.append(f"http://worker.process.{region}.{app}.internal:{port}")
-    bases.append(f"http://worker.process.{app}.internal:{port}")
-    if _flycast_opt_in():
+        if custom not in bases:
+            bases.append(custom)
+    if _flycast_opt_in() and flycast_pub not in bases:
         bases.append(flycast_pub)
     seen: set[str] = set()
     out: List[str] = []

@@ -21,4 +21,4 @@ if [ -z "$WEB_ID" ]; then
 fi
 
 echo "fly_probe_worker_from_web: web=$WEB_ID port=$PORT"
-flyctl machine exec -a "$APP" "$WEB_ID" -- sh -c "python scripts/probe_worker_peer_once.py" || echo "WARN: exec probe failed"
+flyctl machine exec -a "$APP" "$WEB_ID" -- python scripts/probe_worker_peer_once.py || echo "WARN: exec probe failed"
