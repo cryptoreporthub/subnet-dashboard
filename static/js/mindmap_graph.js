@@ -2,7 +2,7 @@
   'use strict';
 
   // Vivid, brand-aligned identity per node kind — the "call" (disposition) is the
-  // hottest color since it's literally the outcome the whole graph builds toward.
+  // hottest color since it's literally the outcome the trail builds toward.
   const KIND_COLORS = {
     subnet: '#3fc9ff',
     signal: '#a78bfa',
@@ -12,77 +12,19 @@
     disposition: '#ff5fa8',
   };
 
-  // Concentric "brain" layout — signals/evidence sit on the outer rim, judges
-  // deliberate in the middle, and the call (disposition/prediction) lands closest
-  // to the pulsing core. Every real edge already points source(subnet, outer) ->
-  // target(inner kind), so this reads as evidence flowing inward toward a decision.
-  const RING_RADIUS = {
-    subnet: 1.0,
-    scenario: 0.88,
-    signal: 0.76,
-    prediction: 0.6,
-    judge: 0.42,
-    disposition: 0.24,
-  };
+  // Narrative order: evidence seen -> context -> judges weigh it -> forecast -> outcome.
+  const KIND_ORDER = { signal: 0, scenario: 1, judge: 2, prediction: 3, disposition: 4 };
 
   function kindColor(kind) {
     return KIND_COLORS[kind] || '#9CA3AF';
   }
 
-  function ringRadiusFraction(kind) {
-    return RING_RADIUS[kind] != null ? RING_RADIUS[kind] : 0.7;
-  }
-
-  function layoutNodes(nodes, width, height) {
-    const count = nodes.length;
-    if (!count) return {};
-    const cx = width / 2;
-    const cy = height / 2;
-    const baseRadius = Math.min(width, height) * 0.44;
-    // Group by kind so each ring's members spread evenly around their own circle,
-    // with a stable per-kind angle offset so rings don't line up radially.
-    const byKind = {};
-    nodes.forEach((node) => {
-      const kind = node.kind || 'other';
-      if (!byKind[kind]) byKind[kind] = [];
-      byKind[kind].push(node);
-    });
-    const kindOffsets = { subnet: 0, scenario: 0.3, signal: 0.6, prediction: 0.15, judge: 0.45, disposition: 0.75 };
-    const positions = {};
-    Object.keys(byKind).forEach((kind) => {
-      const members = byKind[kind];
-      const radius = baseRadius * ringRadiusFraction(kind);
-      const offset = (kindOffsets[kind] != null ? kindOffsets[kind] : 0) * Math.PI;
-      members.forEach((node, index) => {
-        const angle = offset + (2 * Math.PI * index) / members.length - Math.PI / 2;
-        positions[node.id] = {
-          x: cx + radius * Math.cos(angle),
-          y: cy + radius * Math.sin(angle),
-        };
-      });
-    });
-    return positions;
-  }
-
-  function setEmptyMessage(root, message, show) {
-    const empty = root.querySelector('#mindmap-graph-empty');
-    if (!empty) return;
-    if (message) empty.textContent = message;
-    empty.classList.toggle('hidden', !show);
-  }
-
-  function renderMetrics(container, metrics) {
-    container.innerHTML = '';
-    if (!metrics || typeof metrics !== 'object') return;
-    Object.entries(metrics).forEach(([key, value]) => {
-      if (value === null || value === undefined || value === '') return;
-      const dt = document.createElement('dt');
-      dt.textContent = key.replace(/_/g, ' ');
-      const dd = document.createElement('dd');
-      dd.textContent = typeof value === 'object' ? JSON.stringify(value) : String(value);
-      container.appendChild(dt);
-      container.appendChild(dd);
-    });
+  // Mirror of the Jinja `sn_band` formula and k3NetuidBand() in council_stage.html —
+  // keeps a subnet's Trail card the same hue as its Hero orb.
+  function netuidBand(netuid) {
+    const n = parseInt(netuid, 10);
+    if (isNaN(n) || n < 0) return 0;
+    return ((n * 47) + 11) % 6;
   }
 
   function humanDetailLine(node) {
@@ -110,184 +52,146 @@
     return node.label || node.id || '';
   }
 
-  function showDetail(panel, node) {
-    if (!node) {
-      panel.hidden = true;
-      return;
-    }
-    panel.hidden = false;
-    panel.querySelector('#mindmap-detail-kind').textContent = node.kind || 'node';
-    panel.querySelector('#mindmap-detail-title').textContent = node.label || node.id;
-    panel.querySelector('#mindmap-detail-id').textContent = humanDetailLine(node);
-    const metricsEl = panel.querySelector('#mindmap-detail-metrics');
-    // Prefer human line; only dump sparse metrics keys that help
-    const slim = {};
-    const m = node.metrics || {};
-    ['action', 'decision', 'event_count', 'last_event_type', 'score'].forEach(function (k) {
-      if (m[k] != null && m[k] !== '') slim[k] = m[k];
-    });
-    renderMetrics(metricsEl, slim);
-    const updated = node.updated_at ? `Updated ${node.updated_at}` : '';
-    panel.querySelector('#mindmap-detail-updated').textContent = updated;
+  function rowMetaLine(node) {
+    const m = (node && node.metrics) || {};
+    const parts = [];
+    if (m.action != null && m.action !== '') parts.push(String(m.action));
+    if (m.score != null && m.score !== '') parts.push('score ' + m.score);
+    if (m.decision != null && m.decision !== '') parts.push(String(m.decision));
+    return parts.join(' · ');
   }
 
-  function renderGraph(root, graph) {
-    const svg = root.querySelector('#mindmap-graph-svg');
-    const panel = document.getElementById('mindmap-detail-panel');
-    if (!svg) return;
+  function setEmptyMessage(root, message, show) {
+    const empty = root.querySelector('#mindmap-graph-empty');
+    const list = root.querySelector('#mindmap-trail-list');
+    if (empty) {
+      if (message) empty.textContent = message;
+      empty.classList.toggle('hidden', !show);
+    }
+    if (list) list.classList.toggle('hidden', show);
+  }
+
+  // The graph is a star per subnet: every non-subnet node is reached by exactly
+  // one edge whose source is a subnet. So "group by subnet" is just "group by
+  // edge source" — no traversal, no cycles to worry about.
+  function buildTrailGroups(nodes, edges) {
+    const nodeById = Object.fromEntries(nodes.map((n) => [n.id, n]));
+    const subnets = nodes.filter((n) => n.kind === 'subnet');
+    const rowsBySubnet = {};
+    edges.forEach((edge) => {
+      const target = nodeById[edge.target];
+      if (!target) return;
+      if (!rowsBySubnet[edge.source]) rowsBySubnet[edge.source] = [];
+      rowsBySubnet[edge.source].push(target);
+    });
+
+    let freshestId = null;
+    let freshestAt = '';
+    nodes.forEach((n) => {
+      const at = n.updated_at || '';
+      if (at > freshestAt) {
+        freshestAt = at;
+        freshestId = n.id;
+      }
+    });
+
+    const groups = subnets.map((subnet) => {
+      const rows = (rowsBySubnet[subnet.id] || []).slice().sort((a, b) => {
+        const oa = KIND_ORDER[a.kind] != null ? KIND_ORDER[a.kind] : 9;
+        const ob = KIND_ORDER[b.kind] != null ? KIND_ORDER[b.kind] : 9;
+        return oa - ob;
+      });
+      const netuid = String(subnet.id).split(':')[1];
+      return { subnet, rows, netuid, freshestId };
+    });
+
+    groups.sort((a, b) => (b.subnet.updated_at || '').localeCompare(a.subnet.updated_at || ''));
+    return groups;
+  }
+
+  function renderRow(row, freshestId) {
+    const li = document.createElement('li');
+    li.className = 'mindmap-trail-row' + (row.id === freshestId ? ' mindmap-trail-row--fresh' : '');
+    const dot = document.createElement('span');
+    dot.className = 'mindmap-trail-row__dot';
+    dot.style.background = kindColor(row.kind);
+    dot.style.color = kindColor(row.kind);
+    const body = document.createElement('div');
+    body.className = 'mindmap-trail-row__body';
+    const kindEl = document.createElement('p');
+    kindEl.className = 'mindmap-trail-row__kind';
+    kindEl.textContent = row.kind || '';
+    const line = document.createElement('p');
+    line.className = 'mindmap-trail-row__line';
+    line.textContent = humanDetailLine(row);
+    body.appendChild(kindEl);
+    body.appendChild(line);
+    const meta = rowMetaLine(row);
+    if (meta) {
+      const metaEl = document.createElement('p');
+      metaEl.className = 'mindmap-trail-row__meta';
+      metaEl.textContent = meta;
+      body.appendChild(metaEl);
+    }
+    li.appendChild(dot);
+    li.appendChild(body);
+    return li;
+  }
+
+  function renderGroup(group, index) {
+    const details = document.createElement('details');
+    details.className = 'mindmap-trail-group';
+    details.dataset.subnetId = group.subnet.id;
+    details.setAttribute('data-band', String(netuidBand(group.netuid)));
+    if (index < 3) details.open = true;
+
+    const summary = document.createElement('summary');
+    summary.className = 'mindmap-trail-group__summary';
+    const dot = document.createElement('span');
+    dot.className = 'mindmap-trail-group__dot';
+    const name = document.createElement('span');
+    name.className = 'mindmap-trail-group__name';
+    name.textContent = group.subnet.label || group.subnet.id;
+    const count = document.createElement('span');
+    count.className = 'mindmap-trail-group__count';
+    count.textContent = group.rows.length + (group.rows.length === 1 ? ' event' : ' events');
+    const chevron = document.createElement('span');
+    chevron.className = 'mindmap-trail-group__chevron';
+    chevron.textContent = '\u203a';
+    summary.appendChild(dot);
+    summary.appendChild(name);
+    summary.appendChild(count);
+    summary.appendChild(chevron);
+    details.appendChild(summary);
+
+    const rowsList = document.createElement('ul');
+    rowsList.className = 'mindmap-trail-rows';
+    group.rows.forEach((row) => rowsList.appendChild(renderRow(row, group.freshestId)));
+    details.appendChild(rowsList);
+
+    return details;
+  }
+
+  function renderTrail(root, graph) {
+    const list = root.querySelector('#mindmap-trail-list');
+    if (!list) return;
 
     const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
     const edges = Array.isArray(graph.edges) ? graph.edges : [];
 
-    svg.innerHTML = '';
+    list.innerHTML = '';
     if (!nodes.length) {
       setEmptyMessage(
         root,
         'Mindmap graph is empty — no trail, disposition, or scenario nodes yet. Data will appear as the learning loop records events.',
         true
       );
-      showDetail(panel, null);
       return;
     }
 
     setEmptyMessage(root, '', false);
-
-    const width = svg.clientWidth || 640;
-    const height = svg.clientHeight || 360;
-    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-
-    const positions = layoutNodes(nodes, width, height);
-    const nodeById = Object.fromEntries(nodes.map((n) => [n.id, n]));
-    const adjacency = {};
-    edges.forEach((edge) => {
-      if (!adjacency[edge.source]) adjacency[edge.source] = new Set();
-      if (!adjacency[edge.target]) adjacency[edge.target] = new Set();
-      adjacency[edge.source].add(edge.target);
-      adjacency[edge.target].add(edge.source);
-    });
-
-    const cx = width / 2;
-    const cy = height / 2;
-
-    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-    const coreGradient = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
-    coreGradient.setAttribute('id', 'mindmap-core-gradient');
-    coreGradient.innerHTML =
-      '<stop offset="0%" stop-color="#eaf5ee" stop-opacity="0.9"/>' +
-      '<stop offset="100%" stop-color="#3fc9ff" stop-opacity="0"/>';
-    defs.appendChild(coreGradient);
-    svg.appendChild(defs);
-
-    // Pulsing "brain core" — always present, purely atmospheric (not a real node),
-    // it's the visual anchor every edge appears to flow toward.
-    const coreGlow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    coreGlow.setAttribute('cx', cx);
-    coreGlow.setAttribute('cy', cy);
-    coreGlow.setAttribute('r', 26);
-    coreGlow.setAttribute('class', 'mindmap-core-glow');
-    const core = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    core.setAttribute('cx', cx);
-    core.setAttribute('cy', cy);
-    core.setAttribute('r', 7);
-    core.setAttribute('class', 'mindmap-core');
-
-    const edgeLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    edgeLayer.setAttribute('class', 'mindmap-edges');
-    const nodeLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    nodeLayer.setAttribute('class', 'mindmap-nodes');
-
-    const maxWeight = edges.reduce((m, e) => Math.max(m, Number(e.weight) || 1), 1);
-    const edgeEls = [];
-    edges.forEach((edge) => {
-      const from = positions[edge.source];
-      const to = positions[edge.target];
-      if (!from || !to) return;
-      const weight = Number(edge.weight) || 1;
-      const strength = Math.max(0.35, Math.min(1, weight / maxWeight));
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('x1', from.x);
-      line.setAttribute('y1', from.y);
-      line.setAttribute('x2', to.x);
-      line.setAttribute('y2', to.y);
-      line.setAttribute('class', 'mindmap-edge');
-      line.dataset.source = edge.source;
-      line.dataset.target = edge.target;
-      // Energy flow toward the core — brighter, faster for higher-weight evidence.
-      line.style.stroke = kindColor((nodeById[edge.target] || {}).kind);
-      line.style.opacity = String(0.25 + strength * 0.35);
-      line.style.animationDuration = (2.8 - strength * 1.4).toFixed(2) + 's';
-      edgeLayer.appendChild(line);
-      edgeEls.push(line);
-    });
-
-    let selectedId = null;
-
-    function highlightEdges(nodeId) {
-      edgeEls.forEach((line) => {
-        const connected =
-          line.dataset.source === nodeId || line.dataset.target === nodeId;
-        line.classList.toggle('is-highlight', connected);
-      });
-    }
-
-    nodes.forEach((node) => {
-      const pos = positions[node.id];
-      if (!pos) return;
-      const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      group.setAttribute('class', 'mindmap-node');
-      group.dataset.nodeId = node.id;
-
-      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      circle.setAttribute('cx', pos.x);
-      circle.setAttribute('cy', pos.y);
-      // Judges and the call (disposition) sit nearest the core and read as the
-      // "decision engine" — give them more visual weight than raw evidence nodes.
-      const isCore = node.kind === 'judge' || node.kind === 'disposition';
-      circle.setAttribute('r', isCore ? 17 : 13);
-      circle.setAttribute('fill', kindColor(node.kind));
-      circle.classList.add('mindmap-node-circle');
-      if (isCore) circle.classList.add('mindmap-node-circle--core');
-
-      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      label.setAttribute('x', pos.x);
-      label.setAttribute('y', pos.y + 28);
-      label.setAttribute('text-anchor', 'middle');
-      label.textContent = (node.label || node.id || '').slice(0, 18);
-
-      group.appendChild(circle);
-      group.appendChild(label);
-
-      group.addEventListener('mouseenter', () => {
-        group.classList.add('is-hovered');
-        highlightEdges(node.id);
-      });
-      group.addEventListener('mouseleave', () => {
-        group.classList.remove('is-hovered');
-        highlightEdges(selectedId);
-      });
-      group.addEventListener('click', () => {
-        selectedId = node.id;
-        nodeLayer.querySelectorAll('.mindmap-node').forEach((el) => {
-          el.classList.toggle('is-selected', el.dataset.nodeId === selectedId);
-        });
-        highlightEdges(selectedId);
-        showDetail(panel, node);
-      });
-
-      nodeLayer.appendChild(group);
-    });
-
-    svg.appendChild(edgeLayer);
-    svg.appendChild(coreGlow);
-    svg.appendChild(core);
-    svg.appendChild(nodeLayer);
-
-    if (nodes.length === 1) {
-      selectedId = nodes[0].id;
-      const only = nodeLayer.querySelector('.mindmap-node');
-      if (only) only.classList.add('is-selected');
-      showDetail(panel, nodes[0]);
-    }
+    const groups = buildTrailGroups(nodes, edges);
+    groups.forEach((group, index) => list.appendChild(renderGroup(group, index)));
     root.dataset.rendered = '1';
   }
 
@@ -333,28 +237,14 @@
     if (graph.scoped && !(graph.nodes || []).length) {
       setEmptyMessage(root, 'No graph edges for this focus subnet yet — trail fills as picks resolve.', true);
     } else {
-      setEmptyMessage(root, '', false);
+      renderTrail(root, graph);
     }
-    renderGraph(root, graph);
   }
 
   async function init() {
     const root = document.getElementById('mindmap-graph-root');
     if (!root) return;
-    const toggle = document.getElementById('mindmap-graph-mobile-toggle');
-    if (toggle) {
-      toggle.addEventListener('click', function () {
-        const expanded = root.classList.toggle('is-expanded');
-        toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-        toggle.textContent = expanded ? 'Close mind map' : 'Open mind map';
-        if (expanded && !root.dataset.rendered) {
-          refreshGraph();
-        }
-      });
-    }
-    if (window.matchMedia && window.matchMedia('(min-width: 481px)').matches) {
-      await refreshGraph();
-    }
+    await refreshGraph();
     document.addEventListener('living-focus:change', refreshGraph);
   }
 

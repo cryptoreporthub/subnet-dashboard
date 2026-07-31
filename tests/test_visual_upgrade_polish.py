@@ -166,13 +166,18 @@ def test_empty_hold_shell_emits_identity_band():
     assert "k3-claim--band-0" in html
 
 
-def test_mindmap_uses_concentric_brain_layout_not_flat_circle():
+def test_mindmap_is_grouped_trail_not_node_link_graph():
+    """Full replace: no SVG node-link graph — a subnet-grouped receipts list
+    reuses the star-shaped data (subnet -> its signal/judge/prediction/
+    scenario/disposition edges) instead of forcing it into a circle layout."""
     src = open("static/js/mindmap_graph.js", encoding="utf-8").read()
-    assert "RING_RADIUS" in src
-    assert "mindmap-core" in src
-    assert "disposition: 0.24" in src
-    assert "subnet: 1.0" in src
-    assert "function ringRadiusFraction" in src
+    assert "function buildTrailGroups" in src
+    assert "function renderTrail" in src
+    assert "KIND_ORDER" in src
+    # No leftover SVG graph/orbit code from the old node-link renderer.
+    assert "RING_RADIUS" not in src
+    assert "layoutNodes" not in src
+    assert "createElementNS" not in src
 
 
 def test_mobile_soulmap_stays_two_by_two_not_stacked():

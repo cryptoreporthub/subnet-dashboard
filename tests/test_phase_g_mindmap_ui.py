@@ -1,4 +1,5 @@
-"""Phase G — interactive Mindmap graph UI (Agent B)."""
+"""Phase G — interactive Mindmap trail UI (redesigned from node-link graph to a
+subnet-grouped receipts list; see cursor-agents-communication for rationale)."""
 
 from __future__ import annotations
 
@@ -32,20 +33,21 @@ FAKE_GRAPH = {
         },
     ],
     "edges": [
-        {"source": "signal:pick", "target": "subnet:1", "kind": "influences", "weight": 0.8},
+        {"source": "subnet:1", "target": "signal:pick", "kind": "hour_pick", "weight": 0.8},
     ],
 }
 
 EMPTY_GRAPH = {"status": "success", "nodes": [], "edges": []}
 
 
-def test_mindmap_partial_container_and_detail_panel_markup():
+def test_mindmap_partial_container_markup():
     html = TEMPLATES.get_template("partials/mindmap_graph.html").render({})
     assert 'id="mindmap-graph-root"' in html
-    assert 'id="mindmap-graph-svg"' in html
-    assert 'id="mindmap-detail-panel"' in html
-    assert 'id="mindmap-detail-metrics"' in html
+    assert 'id="mindmap-trail-list"' in html
     assert "/static/js/mindmap_graph.js" in html
+    # Full replace: no SVG node-link graph and no separate detail panel.
+    assert 'id="mindmap-graph-svg"' not in html
+    assert 'id="mindmap-detail-panel"' not in html
 
 
 def test_mindmap_partial_renders_with_fake_graph_payload():
@@ -63,14 +65,13 @@ def test_mindmap_partial_empty_graph_honest_empty_state():
     )
     assert 'id="mindmap-graph-empty"' in html
     assert "empty" in html.lower()
-    assert 'id="mindmap-detail-panel"' in html
 
 
 def test_index_includes_mindmap_section():
     client = TestClient(app)
     html = client.get("/").text
     assert 'id="mindmap-graph-section"' in html
-    assert 'id="mindmap-detail-panel"' in html
+    assert 'id="mindmap-trail-list"' in html
     assert "Interactive Mindmap" in html
 
 
@@ -78,7 +79,8 @@ def test_mindmap_js_asset_served():
     client = TestClient(app)
     resp = client.get("/static/js/mindmap_graph.js")
     assert resp.status_code == 200
-    assert "renderGraph" in resp.text or "mindmap-graph-root" in resp.text
+    assert "renderTrail" in resp.text
+    assert "buildTrailGroups" in resp.text
 
 
 def test_initial_graph_json_embedded_is_valid():
