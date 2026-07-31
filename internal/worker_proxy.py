@@ -188,7 +188,9 @@ def _is_machine_specific_base(base: str) -> bool:
 
 def _record_good_base(base: str) -> None:
     global _LAST_GOOD_BASE
-    if _is_machine_specific_base(base):
+    # Allow pinned WORKER_INTERNAL_URL 6PN — deploy refreshes it each ship.
+    custom = os.environ.get("WORKER_INTERNAL_URL", "").strip().rstrip("/")
+    if _is_machine_specific_base(base) and base.rstrip("/") != custom:
         return
     _LAST_GOOD_BASE = base
 
@@ -243,11 +245,8 @@ def worker_internal_bases() -> List[str]:
     # ponytail: legacy fly secrets may still set flycast:8080 — ignore unless opted in.
     if custom and (custom != flycast_pub or _flycast_opt_in()):
         if custom not in bases:
-            # Prefer explicit secret (usually process DNS) ahead of flycast fallback.
-            if _is_machine_specific_base(custom):
-                bases.append(custom)
-            else:
-                bases.insert(1 if bases and bases[0] == _LAST_GOOD_BASE else 0, custom)
+            # Deploy pins worker 6PN — prefer it over flycast (intermittent after restart).
+            bases.insert(0, custom)
     if _flycast_opt_in() and flycast_pub not in bases:
         bases.append(flycast_pub)
     seen: set[str] = set()
@@ -371,6 +370,78 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
                 "detail": "Worker volume temporarily unavailable",
             },
         )
+    if path == "/api/learning/stats" or path == "/api/learning-metrics":
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "degraded",
+                "data": {
+                    "graded": 0,
+                    "pending": 0,
+                    "accuracy": None,
+                    "brain_ui_ready": False,
+                },
+                "detail": "Worker volume temporarily unavailable",
+            },
+        )
+    if path == "/api/daily-pick":
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "degraded",
+                "pick": None,
+                "detail": "Worker volume temporarily unavailable",
+            },
+        )
+    if path == "/api/pump-alerts":
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "degraded",
+                "count": 0,
+                "alerts": [],
+                "detail": "Worker volume temporarily unavailable",
+            },
+        )
+    if path.startswith("/api/message-intel"):
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "degraded",
+                "messages": [],
+                "meta": {"total_messages": 0, "ok": False},
+                "sources": {},
+                "detail": "Worker volume temporarily unavailable",
+            },
+        )
+    if path == "/api/council/weights":
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "degraded",
+                "expert_weights": {},
+                "detail": "Worker volume temporarily unavailable",
+            },
+        )
+    if path == "/api/predictions" or path.startswith("/api/predictions/"):
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "degraded",
+                "predictions": [],
+                "resolved": [],
+                "detail": "Worker volume temporarily unavailable",
+            },
+        )
+    if path == "/api/dev-radar":
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "degraded",
+                "items": [],
+                "detail": "Worker volume temporarily unavailable",
+            },
+        )
     return None
 
 
@@ -384,12 +455,13 @@ async def _fetch_worker_http(
     """GET worker internal HTTP — same AsyncClient path as volume proxy middleware."""
     if timeout is None:
         timeout = _mindmap_proxy_timeout() if fast_path else _proxy_timeout()
-    # Prefer pinned good base first; still walk candidates for fast HTTP failures
-    # (misroute/404). Stop after the first *timeout* so we never re-wedge the loop.
+    # Prefer pinned good base first; walk candidates for fast failures.
+    # Allow one timeout failover (flycast→6PN) then stop — never 3×8s storms.
     bases = worker_internal_bases()
     if _LAST_GOOD_BASE and _LAST_GOOD_BASE in bases:
         bases = [_LAST_GOOD_BASE] + [b for b in bases if b != _LAST_GOOD_BASE]
     last_exc: Optional[BaseException] = None
+    saw_timeout = False
     for base in bases:
         url = f"{base}{path}"
         if query:
@@ -436,10 +508,12 @@ async def _fetch_worker_http(
             last_exc = exc
             _record_probe_error(exc)
             logger.debug("worker HTTP %s timeout: %s", url, exc)
-            # ponytail: one timeout is enough — discovery finds another base in background.
-            break
+            if saw_timeout:
+                break
+            saw_timeout = True
+            continue
         except (httpx.ConnectError, httpx.NetworkError, OSError) as exc:
-            # Connection refused / DNS miss are fast — try next candidate (flycast).
+            # Connection refused / DNS miss are fast — try next candidate.
             last_exc = exc
             _record_probe_error(exc)
             logger.debug("worker HTTP %s connect failed: %s", url, exc)
@@ -462,7 +536,11 @@ def discover_worker_base_once() -> Optional[str]:
     transport = None
     if os.environ.get("FLY_APP_NAME", "").strip():
         transport = httpx.HTTPTransport(local_address="::")
-    for base in _candidate_bases():
+    bases = list(_candidate_bases())
+    custom = os.environ.get("WORKER_INTERNAL_URL", "").strip().rstrip("/")
+    if custom and custom not in bases:
+        bases.insert(0, custom)
+    for base in bases:
         try:
             client_kw: Dict[str, Any] = {"timeout": 2.0}
             if transport is not None:
