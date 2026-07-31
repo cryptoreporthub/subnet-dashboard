@@ -191,6 +191,44 @@ def test_weights_are_default_flat():
     assert weights_are_default_flat({"quant": 1.1, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}) is False
 
 
+def test_proxy_mindmap_degraded_on_failure(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("DATA_DIR", "/nonexistent")
+
+    async def _fail_fetch(*_a, **_k):
+        raise OSError("worker down")
+
+    with patch("internal.worker_proxy._fetch_worker_http", _fail_fetch):
+        from server import app
+
+        client = TestClient(app)
+        r = client.get("/api/mindmap/graph")
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("status") == "degraded"
+    assert body.get("nodes") == []
+
+
+def test_proxy_circuit_opens_after_failure(monkeypatch):
+    import internal.worker_proxy as wp
+
+    monkeypatch.setattr(wp, "_LAST_FAIL_MONO", 0.0)
+    wp._mark_proxy_failure()
+    assert wp._circuit_open() is True
+    wp._mark_proxy_success()
+    assert wp._circuit_open() is False
+
+
+def test_bases_for_fetch_limited_when_circuit_open(monkeypatch):
+    import internal.worker_proxy as wp
+
+    monkeypatch.setattr(wp, "_LAST_GOOD_BASE", "http://subnet-dashboard.flycast:8081")
+    monkeypatch.setattr(wp, "_LAST_FAIL_MONO", wp.time.monotonic())
+    bases = wp._bases_for_fetch(circuit_limited=True)
+    assert bases == ["http://subnet-dashboard.flycast:8081"]
+
+
 def test_worker_proxy_middleware(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")

@@ -89,7 +89,7 @@ class InstantBailoutASGI:
         if method == "GET" and path == "/api/ops/live":
             from internal.ops.readiness import build_liveness_report
 
-            body = json.dumps(build_liveness_report()).encode("utf-8")
+            body = json.dumps(build_liveness_report(probe_worker=False)).encode("utf-8")
             await _send_response(send, status=200, body=body, content_type="application/json; charset=utf-8")
             return
 

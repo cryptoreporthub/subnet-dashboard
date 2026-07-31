@@ -6,7 +6,8 @@ import asyncio
 import concurrent.futures
 import logging
 import os
-from typing import Any, Dict, List, Optional
+import time
+from typing import Any, Dict, List, Optional, Union
 
 import httpx
 from starlette.requests import Request
@@ -16,10 +17,56 @@ logger = logging.getLogger(__name__)
 
 _LAST_GOOD_BASE: Optional[str] = None
 _LAST_PROBE_ERROR: Optional[str] = None
+_LAST_FAIL_MONO: float = 0.0
 
 
 def last_worker_probe_error() -> Optional[str]:
     return _LAST_PROBE_ERROR
+
+
+def _circuit_open_seconds() -> float:
+    try:
+        return float(os.environ.get("WORKER_PROXY_CIRCUIT_OPEN_SECONDS", "30"))
+    except ValueError:
+        return 30.0
+
+
+def _circuit_open() -> bool:
+    return (time.monotonic() - _LAST_FAIL_MONO) < _circuit_open_seconds()
+
+
+def _mark_proxy_failure() -> None:
+    global _LAST_FAIL_MONO
+    _LAST_FAIL_MONO = time.monotonic()
+
+
+def _mark_proxy_success() -> None:
+    global _LAST_FAIL_MONO, _LAST_PROBE_ERROR
+    _LAST_FAIL_MONO = 0.0
+    _LAST_PROBE_ERROR = None
+
+
+def _proxy_timeout() -> httpx.Timeout:
+    try:
+        read = float(os.environ.get("WORKER_PROXY_TIMEOUT_SECONDS", "8"))
+    except ValueError:
+        read = 8.0
+    try:
+        connect = float(os.environ.get("WORKER_PROXY_CONNECT_SECONDS", "3"))
+    except ValueError:
+        connect = 3.0
+    return httpx.Timeout(connect=connect, read=read, write=read, pool=connect)
+
+
+def _timeout_seconds(timeout: Optional[Union[float, httpx.Timeout]]) -> float:
+    if isinstance(timeout, httpx.Timeout):
+        return float(timeout.read or timeout.connect or 8.0)
+    if timeout is None:
+        try:
+            return float(os.environ.get("WORKER_PROXY_TIMEOUT_SECONDS", "8"))
+        except ValueError:
+            return 8.0
+    return float(timeout)
 
 
 def _record_probe_error(exc: BaseException, *, overwrite: bool = True) -> None:
@@ -42,8 +89,10 @@ def _requests_json_sync(url: str, *, timeout: float) -> Dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-async def _httpx_get(url: str, *, timeout: float) -> httpx.Response:
+async def _httpx_get(url: str, *, timeout: Optional[Union[float, httpx.Timeout]] = None) -> httpx.Response:
     """Try default transport then IPv6 :: bind (Fly 6PN paths differ per machine)."""
+    if timeout is None:
+        timeout = _proxy_timeout()
     last_exc: Optional[BaseException] = None
     first = True
     for transport in (None, _internal_transport()):
@@ -213,10 +262,41 @@ def fetch_learning_stats_sync(*, timeout: Optional[float] = None) -> Dict[str, A
     return data if isinstance(data, dict) else {}
 
 
-async def _fetch_worker_http(path: str, *, query: str = "", timeout: float) -> httpx.Response:
+def _bases_for_fetch(*, circuit_limited: bool = False) -> List[str]:
+    bases = worker_internal_bases()
+    if not circuit_limited:
+        return bases
+    # ponytail: when circuit is open, one quick flycast attempt — not 3× timeout storm.
+    if _LAST_GOOD_BASE:
+        return [_LAST_GOOD_BASE]
+    return bases[:1]
+
+
+def _mindmap_degraded_response(path: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "degraded",
+            "nodes": [],
+            "edges": [],
+            "detail": "Worker volume temporarily unavailable — trail will refill when the learning loop reconnects.",
+            "path": path,
+        },
+    )
+
+
+async def _fetch_worker_http(
+    path: str,
+    *,
+    query: str = "",
+    timeout: Optional[Union[float, httpx.Timeout]] = None,
+) -> httpx.Response:
     """GET worker internal HTTP — same AsyncClient path as volume proxy middleware."""
+    if timeout is None:
+        timeout = _proxy_timeout()
+    circuit_limited = _circuit_open()
     last_exc: Optional[BaseException] = None
-    for base in worker_internal_bases():
+    for base in _bases_for_fetch(circuit_limited=circuit_limited):
         url = f"{base}{path}"
         if query:
             url = f"{url}?{query}"
@@ -246,7 +326,7 @@ async def _fetch_worker_http(path: str, *, query: str = "", timeout: float) -> h
             except Exception:
                 pass
             _record_good_base(base)
-            _LAST_PROBE_ERROR = None
+            _mark_proxy_success()
             return resp
         except httpx.HTTPStatusError as exc:
             last_exc = exc
@@ -260,20 +340,22 @@ async def _fetch_worker_http(path: str, *, query: str = "", timeout: float) -> h
             _record_probe_error(exc)
             logger.debug("worker HTTP %s failed: %s", url, exc)
             try:
-                data = _requests_json_sync(url, timeout=timeout)
+                data = _requests_json_sync(url, timeout=_timeout_seconds(timeout))
                 if _is_web_misroute(data, path):
                     last_exc = OSError("web misroute (requests)")
                     _record_probe_error(last_exc)
                     continue
                 _record_good_base(base)
-                _LAST_PROBE_ERROR = None
+                _mark_proxy_success()
                 return httpx.Response(200, json=data)
             except Exception as req_exc:
                 last_exc = req_exc
                 _record_probe_error(req_exc, overwrite=False)
                 logger.debug("worker requests %s failed: %s", url, req_exc)
     if last_exc is not None:
+        _mark_proxy_failure()
         raise last_exc
+    _mark_proxy_failure()
     raise OSError("no worker HTTP base succeeded")
 
 
@@ -291,10 +373,19 @@ def _run_coro_sync(coro) -> Any:
 def fetch_worker_json_sync(path: str, *, timeout: Optional[float] = None) -> Dict[str, Any]:
     """Sync GET for listener_status and worker peer probes (retries alternate bases)."""
     if timeout is None:
-        timeout = float(os.environ.get("WORKER_PROXY_TIMEOUT_SECONDS", "12"))
+        try:
+            timeout = float(os.environ.get("WORKER_PEER_TIMEOUT_SECONDS", "4"))
+        except ValueError:
+            timeout = 4.0
 
     async def _load() -> Dict[str, Any]:
-        resp = await _fetch_worker_http(path, timeout=timeout)
+        peer_timeout = httpx.Timeout(
+            connect=min(3.0, timeout),
+            read=timeout,
+            write=timeout,
+            pool=min(3.0, timeout),
+        )
+        resp = await _fetch_worker_http(path, timeout=peer_timeout)
         data = resp.json()
         return data if isinstance(data, dict) else {}
 
@@ -304,13 +395,17 @@ def fetch_worker_json_sync(path: str, *, timeout: Optional[float] = None) -> Dic
 async def proxy_get_to_worker(request: Request) -> Response:
     path = request.url.path
     query = request.url.query
-    timeout = float(os.environ.get("WORKER_PROXY_TIMEOUT_SECONDS", "12"))
+    if _circuit_open() and path.startswith("/api/mindmap"):
+        return _mindmap_degraded_response(path)
+    timeout = _proxy_timeout()
     try:
         resp = await _fetch_worker_http(path, query=query, timeout=timeout)
         media_type = resp.headers.get("content-type") or "application/json"
         return Response(content=resp.content, status_code=resp.status_code, media_type=media_type)
     except Exception as exc:
         logger.warning("worker volume proxy failed %s: %s", path, exc)
+        if path.startswith("/api/mindmap"):
+            return _mindmap_degraded_response(path)
         return JSONResponse(
             status_code=503,
             content={
