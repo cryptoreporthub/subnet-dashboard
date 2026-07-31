@@ -321,24 +321,30 @@ def _scan_all_subnets_locked(
         data["meta"]["phase_counts"] = phase_counts
 
         safe_write_json(resolved, data)
-        soul = apply_phase_transitions(transitions, data)
+        run_at = data["meta"]["last_scan_at"]
 
-        result = {
-            "ok": True,
-            "run_at": data["meta"]["last_scan_at"],
-            "scanned": len(rows),
-            "transitions": transitions,
-            "phase_counts": phase_counts,
-            "soul_map": soul,
-        }
-        try:
-            from internal.pump.scheduler import record_ladder_scan_run
+    # Soul-Map / mindmap-trail write is a separate file (data/soul_map.json,
+    # can be large) and must not run inside the pump-ladder _lock — it wedged
+    # every load_state() caller (incl. live request paths like the mindmap
+    # graph -> hourly pick -> pump overlay) for the duration of that rewrite.
+    soul = apply_phase_transitions(transitions, data)
 
-            record_ladder_scan_run(result)
-        except Exception as exc:
-            logger.debug("pump ladder run record skipped: %s", exc)
+    result = {
+        "ok": True,
+        "run_at": run_at,
+        "scanned": len(rows),
+        "transitions": transitions,
+        "phase_counts": phase_counts,
+        "soul_map": soul,
+    }
+    try:
+        from internal.pump.scheduler import record_ladder_scan_run
 
-        return result
+        record_ladder_scan_run(result)
+    except Exception as exc:
+        logger.debug("pump ladder run record skipped: %s", exc)
+
+    return result
 
 
 def get_ladder_snapshot(path: Optional[str] = None) -> Dict[str, Any]:
