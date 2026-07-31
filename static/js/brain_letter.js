@@ -122,6 +122,9 @@
     } else {
       html += '<p class="weekly-letter__note">Not enough graded picks to quote accuracy yet.</p>';
     }
+    if (tb.streak_whisper) {
+      html += '<p class="weekly-letter__note">' + esc(tb.streak_whisper) + "</p>";
+    }
 
     var signals = working.top_price_signals || [];
     if (signals.length) {
@@ -141,6 +144,19 @@
     } else {
       html +=
         '<p class="weekly-letter__note">Signal rankings fill in as more picks grade on token price.</p>';
+    }
+    var scenarioTags = working.top_scenario_tags || [];
+    if (scenarioTags.length) {
+      var top = scenarioTags[0];
+      var scHr = top.hit_rate != null ? Math.round(top.hit_rate * 100) : "—";
+      html +=
+        '<p class="weekly-letter__note">Scenario tag <strong>' +
+        esc(top.tag || "scenario") +
+        "</strong> · " +
+        scHr +
+        "% hit · n=" +
+        esc(top.n) +
+        "</p>";
     }
     if (working.disclaimer) {
       html += '<p class="weekly-letter__note weekly-letter__disclaimer">' + esc(working.disclaimer) + "</p>";

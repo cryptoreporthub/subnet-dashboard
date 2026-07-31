@@ -255,6 +255,7 @@ def list_messages(
         build_reaction_crowns,
         build_telegram_proof_band,
         build_trending_subnets,
+        build_week_top_comment,
         build_yesterday_leader,
     )
 
@@ -325,6 +326,12 @@ def list_messages(
     except Exception as exc:
         logger.warning("message-intel reaction crowns failed: %s", exc)
         meta["reaction_crowns"] = []
+    try:
+        # Side feature — single most-engaged comment this week.
+        meta["week_top_comment"] = build_week_top_comment(days=7, db=db)
+    except Exception as exc:
+        logger.warning("message-intel week top comment failed: %s", exc)
+        meta["week_top_comment"] = None
     if filters_active:
         applied: Dict[str, Any] = {}
         if min_conviction is not None:

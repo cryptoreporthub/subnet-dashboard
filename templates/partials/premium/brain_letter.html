@@ -68,6 +68,9 @@
         {% else %}
         <p class="weekly-letter__note">Not enough graded picks to quote accuracy yet.</p>
         {% endif %}
+        {% if tb.streak_whisper %}
+        <p class="weekly-letter__note">{{ tb.streak_whisper }}</p>
+        {% endif %}
         {% set signals = working.top_price_signals if working.top_price_signals is iterable and working.top_price_signals is not string else [] %}
         {% if signals %}
         <ul class="weekly-letter__list">
@@ -80,6 +83,11 @@
         </ul>
         {% else %}
         <p class="weekly-letter__note">Signal rankings fill in as more picks grade on token price.</p>
+        {% endif %}
+        {% set scenario_tags = working.top_scenario_tags if working.top_scenario_tags is iterable and working.top_scenario_tags is not string else [] %}
+        {% if scenario_tags %}
+        {% set top_tag = scenario_tags[0] %}
+        <p class="weekly-letter__note">Scenario tag <strong>{{ top_tag.tag|default('scenario') }}</strong> · {% if top_tag.hit_rate is not none %}{{ (top_tag.hit_rate * 100)|round(0) }}% hit{% else %}—{% endif %} · n={{ top_tag.n|default(0) }}</p>
         {% endif %}
         {% if working.disclaimer %}<p class="weekly-letter__note weekly-letter__disclaimer">{{ working.disclaimer }}</p>{% endif %}
       </section>

@@ -22,8 +22,10 @@ def test_summers_desk_first_class_on_home():
     assert "message_intel_feed.js" in html
     assert "message-intel__hero" in html
     assert "message-intel__legend" in html
+    assert "message-intel__week-top" in html
+    assert "Comment of the week" in html
     assert "message-intel__sec-bar" in html
-    assert "message-intel__sw--pink" in html
+    assert "message-intel__sw--violet" in html
     assert "message-intel__flagship-chip" in html
     assert "FLAGSHIP" in html
     assert "Loading live feed" in html or "Warming up Telegram" in html
@@ -43,6 +45,8 @@ def test_summers_desk_js_renders_conviction():
     assert "message-intel__rail-node" in src
     assert "is-bull" in src
     assert "message-intel__f-conv--high" in src
+    assert "renderWeekTopComment" in src
+    assert "week_top_comment" in src
 
 
 def test_summers_flagship_css_tokens():
@@ -50,9 +54,36 @@ def test_summers_flagship_css_tokens():
     assert "--mi-green:" in css
     assert "--mi-blue:" in css
     assert "--mi-orange:" in css
-    assert "--mi-pink:" in css
+    assert "--mi-violet:" in css
+    # Compat: --mi-pink aliases onto violet after sitewide magenta→violet migration
+    assert "--mi-pink: var(--mi-violet)" in css
     assert "--mi-yellow: #f5d547" in css
     assert "rgba(245, 213, 71, 0.72)" in css  # yellow flagship board border
     assert ".message-intel__flagship-chip" in css
     assert ".message-intel__rail-node" in css
     assert ".message-intel__sec-bar--green" in css
+    assert "message-intel-wave" in css
+    assert "message-intel-conv-glow" in css
+    assert "message-intel__masthead" in css
+    assert "message-intel__spotlight" in css
+    assert "message-intel__pulse-stage" in css
+    assert "message-intel-board-breathe" in css
+    assert "message-intel-spotlight-gleam" in css
+
+
+def test_summers_flagship_composition_hooks():
+    html = open("templates/partials/premium/message_intel_feed.html", encoding="utf-8").read()
+    assert "message-intel__masthead" in html
+    assert "message-intel__pulse-stage" in html
+    assert "message-intel__spotlight" in html
+    assert "message-intel__crowns-drawer" in html
+    # IDs preserved for hydrate
+    for eid in (
+        "message-intel-week-top",
+        "message-intel-yesterday",
+        "message-intel-feed",
+        "message-intel-proof",
+        "message-intel-hc-strip",
+        "message-intel-crowns",
+    ):
+        assert f'id="{eid}"' in html

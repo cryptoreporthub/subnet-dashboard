@@ -92,22 +92,21 @@ def test_mindmap_graph_counts_logged():
 
 
 def test_mindmap_graph_skips_unscoped_hold_dispositions(monkeypatch):
+    import internal.learning.mindmap_aggregator as agg
     import internal.mindmap.graph as graph_mod
 
-    monkeypatch.setattr(
-        graph_mod,
-        "_collect_trail",
-        lambda limit=200: [
-            {
-                "netuid": 14,
-                "event_type": "prediction_resolved",
-                "subnet": "TaoHash",
-                "time": "2026-07-27T00:00:00Z",
-                "prediction": "long",
-                "decision": "hit",
-            }
-        ],
-    )
+    trail = [
+        {
+            "netuid": 14,
+            "event_type": "prediction_resolved",
+            "subnet": "TaoHash",
+            "time": "2026-07-27T00:00:00Z",
+            "prediction": "long",
+            "decision": "hit",
+        }
+    ]
+    monkeypatch.setattr(agg, "build_mindmap_state", lambda: {"status": "success", "trail": trail})
+    monkeypatch.setattr(graph_mod, "_collect_trail", lambda limit=200: trail)
     monkeypatch.setattr(
         graph_mod,
         "_load_dispositions",
@@ -122,6 +121,69 @@ def test_mindmap_graph_skips_unscoped_hold_dispositions(monkeypatch):
     assert any("accumulate" in n["label"] for n in disp)
     assert not any(n["metrics"].get("action") == "hold" for n in disp)
     assert len(graph["nodes"]) <= 48
+
+
+def test_mindmap_graph_netuidless_nudge_joins_loop_hub(monkeypatch):
+    """Judge/weight-nudge events without a netuid used to vanish silently
+    (the graph builder created the node but never an edge to reach it).
+    They should now attach to the loop:council hub instead."""
+    import internal.learning.mindmap_aggregator as agg
+    import internal.mindmap.graph as graph_mod
+
+    trail = [
+        {
+            "netuid": None,
+            "event_type": "weight_change",
+            "judge": "sentiment",
+            "time": "2026-07-27T00:00:00Z",
+        }
+    ]
+    monkeypatch.setattr(agg, "build_mindmap_state", lambda: {"status": "success", "trail": trail})
+    monkeypatch.setattr(graph_mod, "_collect_trail", lambda limit=200: trail)
+    monkeypatch.setattr(graph_mod, "_load_dispositions", lambda: [])
+    monkeypatch.setattr(graph_mod, "_load_indicator_alerts", lambda focus: [])
+    monkeypatch.setattr(graph_mod, "_load_whale_and_rugger_alerts", lambda focus: {})
+
+    graph = get_mindmap_graph()
+    node_ids = {n["id"] for n in graph["nodes"]}
+    assert "loop:council" in node_ids
+    assert "judge:sentiment" in node_ids
+    assert any(
+        e["source"] == "loop:council" and e["target"] == "judge:sentiment"
+        for e in graph["edges"]
+    )
+
+
+def test_mindmap_graph_wires_whale_rugger_indicator_signals(monkeypatch):
+    import internal.learning.mindmap_aggregator as agg
+    import internal.mindmap.graph as graph_mod
+
+    monkeypatch.setattr(agg, "build_mindmap_state", lambda: {"status": "success", "trail": []})
+    monkeypatch.setattr(graph_mod, "_collect_trail", lambda limit=200: [])
+    monkeypatch.setattr(graph_mod, "_load_dispositions", lambda: [])
+    monkeypatch.setattr(
+        graph_mod,
+        "_load_indicator_alerts",
+        lambda focus: [{"subnet_id": 64, "event_type": "rsi_bullish_cross"}],
+    )
+    monkeypatch.setattr(
+        graph_mod,
+        "_load_whale_and_rugger_alerts",
+        lambda focus: {
+            "rugger_alerts": [
+                {"netuid": 64, "wallet": "abc", "urgency": "high", "subnet_name": "Chutes"}
+            ],
+            "follow_alerts": [
+                {"netuid": 64, "wallet": "def", "win_rate": 0.7, "subnet_name": "Chutes"}
+            ],
+        },
+    )
+
+    graph = get_mindmap_graph()
+    kinds = {n["kind"] for n in graph["nodes"]}
+    assert {"indicator", "whale", "risk"} <= kinds
+    subnet_edges = {e["source"] for e in graph["edges"]}
+    assert "subnet:64" in subnet_edges
 
 
 def test_brain_recommendations_no_hardcoded_sn123(tmp_path):

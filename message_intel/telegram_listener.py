@@ -550,8 +550,16 @@ class TelegramListener:
             metrics["views"] = msg.views
         if hasattr(msg, "forwards") and msg.forwards is not None:
             metrics["forwards"] = msg.forwards
-        if hasattr(msg, "reply_to") and msg.reply_to:
-            metrics["replies"] = 1  # Indicates this is a reply
+        # Prefer Telegram's reply-count object when present; otherwise leave unset
+        # (do not store a boolean "is a reply" flag in the replies column).
+        reply_obj = getattr(msg, "replies", None)
+        if reply_obj is not None:
+            try:
+                reply_count = getattr(reply_obj, "replies", None)
+                if reply_count is not None:
+                    metrics["replies"] = int(reply_count)
+            except (TypeError, ValueError):
+                pass
 
         # Reactions
         if hasattr(msg, "reactions") and msg.reactions:

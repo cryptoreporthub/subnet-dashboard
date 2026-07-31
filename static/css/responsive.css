@@ -303,6 +303,26 @@ header.top {
 }
 
 /* PR6 — sticky spine + status rail @390px */
+@media (max-width: 640px) {
+  .top-nav {
+    justify-content: flex-start;
+    gap: 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-left: max(12px, env(safe-area-inset-left, 0px));
+    padding-right: max(12px, env(safe-area-inset-right, 0px));
+  }
+  .top-nav::-webkit-scrollbar { display: none; }
+  .top-nav a,
+  .council-first-theme .top-nav a {
+    flex-shrink: 0;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 12px;
+  }
+}
 @media (max-width: 390px) {
   .top-nav {
     top: 0;
@@ -316,12 +336,14 @@ header.top {
   .top-nav::-webkit-scrollbar { display: none; }
   .top-nav a {
     font-size: 11px;
-    padding: 6px 8px;
+    padding: 10px 10px;
     flex-shrink: 0;
+    min-height: 44px;
   }
   .council-first-theme .top-nav a {
     font-size: 11px;
-    padding: 6px 8px;
+    padding: 10px 10px;
+    min-height: 44px;
   }
   .data-freshness-badge,
   .ops-readiness-badge {
@@ -369,6 +391,12 @@ header.top {
   .council-grid, .soc-grid, .pump-candidate-cards, .pump-profile-grid, .picks {
     grid-template-columns: 1fr !important;
     flex-direction: column !important;
+  }
+  /* Soul map constellation stays 2×2 on phones — four stacked orbs waste the
+     viewport and bury the living-brain motif under scroll. */
+  #section-council .council-grid.soulmap-constellation {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
   }
 
   /* Scale down large headings and labels. */

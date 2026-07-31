@@ -185,6 +185,103 @@ def test_yesterday_leader_in_meta(client, monkeypatch):
     assert listed["meta"]["yesterday_leader"]["netuid"] == 14
 
 
+def test_week_top_comment_unit(monkeypatch):
+    """Most engaged message wins; why names the dominant signal."""
+    from datetime import datetime, timezone
+
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    class FakeConn:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def execute(self, *_a, **_k):
+            return self
+
+        def fetchall(self):
+            return self._rows
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_a):
+            return False
+
+    class FakeDb:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def _connect(self):
+            return FakeConn(self._rows)
+
+    rows = [
+        {
+            "id": 1,
+            "author_id": "a",
+            "author_name": "Quiet",
+            "author_username": "q",
+            "content": "low engagement note",
+            "timestamp": now,
+            "created_at": now,
+            "source": "telegram",
+            "views": 10,
+            "forwards": 0,
+            "replies": 0,
+            "reactions": json.dumps([{"emoji": "👍", "count": 1}]),
+        },
+        {
+            "id": 2,
+            "author_id": "b",
+            "author_name": "Viral",
+            "author_username": "viral",
+            "content": "SN14 just printed — watch the flow",
+            "timestamp": now,
+            "created_at": now,
+            "source": "telegram",
+            "views": 40,
+            "forwards": 2,
+            "replies": 6,
+            "reactions": json.dumps([{"emoji": "🔥", "count": 12}, {"emoji": "🚀", "count": 3}]),
+        },
+    ]
+    monkeypatch.setattr(rollup, "get_db", lambda: FakeDb(rows))
+    top = rollup.build_week_top_comment(days=7)
+    assert top is not None
+    assert top["id"] == 2
+    assert top["author_username"] == "viral"
+    assert top["reaction_total"] == 15
+    assert top["replies"] == 6
+    assert top["why"] in {"Most reacted", "Most replied", "Most viewed", "Most engaged", "Most forwarded"}
+    assert "SN14" in top["content"]
+
+
+def test_week_top_comment_in_meta(client, monkeypatch):
+    from internal.message_intel import rollup
+
+    fake = {
+        "id": 99,
+        "author_name": "Scout",
+        "author_username": "scout",
+        "display_name": "@scout",
+        "content": "Biggest thread of the week",
+        "views": 200,
+        "forwards": 4,
+        "replies": 11,
+        "reaction_total": 18,
+        "top_reaction": {"key": "fire", "emoji": "🔥", "count": 12},
+        "engagement_score": 400,
+        "why": "Most reacted",
+        "days": 7,
+        "timestamp": "2026-07-28T12:00:00Z",
+    }
+    monkeypatch.setattr(rollup, "build_week_top_comment", lambda **kw: fake)
+    listed = client.get("/api/message-intel").json()
+    assert listed["meta"]["week_top_comment"]["id"] == 99
+    assert listed["meta"]["week_top_comment"]["why"] == "Most reacted"
+
+
 def test_trending_falls_back_to_24h_when_1h_empty(monkeypatch):
     """Quiet 1h window should still fill the desk from last-day chatter."""
     from datetime import datetime, timedelta, timezone

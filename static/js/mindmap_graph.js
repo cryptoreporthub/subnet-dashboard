@@ -1,55 +1,43 @@
 (function () {
   'use strict';
 
+  // Vivid, brand-aligned identity per node kind — the "call" (disposition) is the
+  // hottest color since it's literally the outcome the trail builds toward.
   const KIND_COLORS = {
-    subnet: '#22D3EE',
-    signal: '#8B5CF6',
-    judge: '#F59E0B',
-    prediction: '#10B981',
-    scenario: '#F97316',
-    disposition: '#3B82F6',
+    subnet: '#3fc9ff',
+    signal: '#a78bfa',
+    judge: '#ffb74a',
+    prediction: '#34d399',
+    scenario: '#b8a8f0',
+    disposition: '#ff5fa8',
+    indicator: '#2dd4bf',
+    whale: '#38bdf8',
+    risk: '#f87171',
+    loop: '#f8fafc',
+  };
+
+  // Narrative order: evidence seen -> market context -> judges weigh it -> forecast -> outcome.
+  const KIND_ORDER = {
+    signal: 0,
+    indicator: 0,
+    scenario: 1,
+    whale: 1,
+    risk: 1,
+    judge: 2,
+    prediction: 3,
+    disposition: 4,
   };
 
   function kindColor(kind) {
     return KIND_COLORS[kind] || '#9CA3AF';
   }
 
-  function layoutNodes(nodes, width, height) {
-    const count = nodes.length;
-    if (!count) return {};
-    const cx = width / 2;
-    const cy = height / 2;
-    const radius = Math.min(width, height) * 0.36;
-    const positions = {};
-    nodes.forEach((node, index) => {
-      const angle = (2 * Math.PI * index) / count - Math.PI / 2;
-      positions[node.id] = {
-        x: cx + radius * Math.cos(angle),
-        y: cy + radius * Math.sin(angle),
-      };
-    });
-    return positions;
-  }
-
-  function setEmptyMessage(root, message, show) {
-    const empty = root.querySelector('#mindmap-graph-empty');
-    if (!empty) return;
-    if (message) empty.textContent = message;
-    empty.classList.toggle('hidden', !show);
-  }
-
-  function renderMetrics(container, metrics) {
-    container.innerHTML = '';
-    if (!metrics || typeof metrics !== 'object') return;
-    Object.entries(metrics).forEach(([key, value]) => {
-      if (value === null || value === undefined || value === '') return;
-      const dt = document.createElement('dt');
-      dt.textContent = key.replace(/_/g, ' ');
-      const dd = document.createElement('dd');
-      dd.textContent = typeof value === 'object' ? JSON.stringify(value) : String(value);
-      container.appendChild(dt);
-      container.appendChild(dd);
-    });
+  // Mirror of the Jinja `sn_band` formula and k3NetuidBand() in council_stage.html —
+  // keeps a subnet's Trail card the same hue as its Hero orb.
+  function netuidBand(netuid) {
+    const n = parseInt(netuid, 10);
+    if (isNaN(n) || n < 0) return 0;
+    return ((n * 47) + 11) % 6;
   }
 
   function humanDetailLine(node) {
@@ -70,152 +58,178 @@
     if (kind === 'scenario') {
       return `Scenario · ${node.label || kind}`;
     }
-    if (kind === 'subnet') {
+    if (kind === 'indicator') {
+      return `Indicator · ${node.label || kind}`;
+    }
+    if (kind === 'whale') {
+      return `Whale · ${node.label || 'smart money entry'}`;
+    }
+    if (kind === 'risk') {
+      return `Risk · ${node.label || 'rugger exit warning'}`;
+    }
+    if (kind === 'subnet' || kind === 'loop') {
       const n = metrics.event_count != null ? `${metrics.event_count} trail events` : 'subnet node';
       return `${node.label || node.id} · ${n}`;
     }
     return node.label || node.id || '';
   }
 
-  function showDetail(panel, node) {
-    if (!node) {
-      panel.hidden = true;
-      return;
-    }
-    panel.hidden = false;
-    panel.querySelector('#mindmap-detail-kind').textContent = node.kind || 'node';
-    panel.querySelector('#mindmap-detail-title').textContent = node.label || node.id;
-    panel.querySelector('#mindmap-detail-id').textContent = humanDetailLine(node);
-    const metricsEl = panel.querySelector('#mindmap-detail-metrics');
-    // Prefer human line; only dump sparse metrics keys that help
-    const slim = {};
-    const m = node.metrics || {};
-    ['action', 'decision', 'event_count', 'last_event_type', 'score'].forEach(function (k) {
-      if (m[k] != null && m[k] !== '') slim[k] = m[k];
-    });
-    renderMetrics(metricsEl, slim);
-    const updated = node.updated_at ? `Updated ${node.updated_at}` : '';
-    panel.querySelector('#mindmap-detail-updated').textContent = updated;
+  function rowMetaLine(node) {
+    const m = (node && node.metrics) || {};
+    const parts = [];
+    if (m.action != null && m.action !== '') parts.push(String(m.action));
+    if (m.score != null && m.score !== '') parts.push('score ' + m.score);
+    if (m.decision != null && m.decision !== '') parts.push(String(m.decision));
+    if (m.urgency != null && m.urgency !== '') parts.push(String(m.urgency) + ' urgency');
+    if (m.estimated_exit_in_hours != null) parts.push('exit in ~' + m.estimated_exit_in_hours + 'h');
+    if (m.win_rate != null) parts.push(Math.round(m.win_rate * 100) + '% win rate');
+    if (m.avg_return_pct != null) parts.push(m.avg_return_pct + '% avg return');
+    return parts.join(' · ');
   }
 
-  function renderGraph(root, graph) {
-    const svg = root.querySelector('#mindmap-graph-svg');
-    const panel = document.getElementById('mindmap-detail-panel');
-    if (!svg) return;
+  function setEmptyMessage(root, message, show) {
+    const empty = root.querySelector('#mindmap-graph-empty');
+    const list = root.querySelector('#mindmap-trail-list');
+    if (empty) {
+      if (message) empty.textContent = message;
+      empty.classList.toggle('hidden', !show);
+    }
+    if (list) list.classList.toggle('hidden', show);
+  }
+
+  // The graph is a star per hub: every other node is reached by exactly one
+  // edge whose source is a hub. Hubs are usually a subnet, but judge/weight
+  // nudge events with no netuid attach to the single "loop:council" hub
+  // instead of a subnet — the loop tuning itself, not any one subnet's
+  // evidence chain. So "group by subnet" generalizes to "group by hub."
+  function buildTrailGroups(nodes, edges) {
+    const nodeById = Object.fromEntries(nodes.map((n) => [n.id, n]));
+    const subnets = nodes.filter((n) => n.kind === 'subnet' || n.kind === 'loop');
+    const rowsBySubnet = {};
+    edges.forEach((edge) => {
+      const target = nodeById[edge.target];
+      if (!target) return;
+      if (!rowsBySubnet[edge.source]) rowsBySubnet[edge.source] = [];
+      rowsBySubnet[edge.source].push(target);
+    });
+
+    let freshestId = null;
+    let freshestAt = '';
+    nodes.forEach((n) => {
+      const at = n.updated_at || '';
+      if (at > freshestAt) {
+        freshestAt = at;
+        freshestId = n.id;
+      }
+    });
+
+    const groups = subnets.map((subnet) => {
+      const isLoop = subnet.kind === 'loop';
+      const rows = (rowsBySubnet[subnet.id] || []).slice().sort((a, b) => {
+        const oa = KIND_ORDER[a.kind] != null ? KIND_ORDER[a.kind] : 9;
+        const ob = KIND_ORDER[b.kind] != null ? KIND_ORDER[b.kind] : 9;
+        return oa - ob;
+      });
+      const netuid = isLoop ? null : String(subnet.id).split(':')[1];
+      return { subnet, rows, netuid, freshestId, isLoop };
+    });
+
+    // The loop's own self-adjustment leads — it's the brain tuning itself,
+    // not tied to any one subnet's recency.
+    groups.sort((a, b) => {
+      if (a.isLoop !== b.isLoop) return a.isLoop ? -1 : 1;
+      return (b.subnet.updated_at || '').localeCompare(a.subnet.updated_at || '');
+    });
+    return groups;
+  }
+
+  function renderRow(row, freshestId) {
+    const li = document.createElement('li');
+    li.className = 'mindmap-trail-row' + (row.id === freshestId ? ' mindmap-trail-row--fresh' : '');
+    const dot = document.createElement('span');
+    dot.className = 'mindmap-trail-row__dot';
+    dot.style.background = kindColor(row.kind);
+    dot.style.color = kindColor(row.kind);
+    const body = document.createElement('div');
+    body.className = 'mindmap-trail-row__body';
+    const kindEl = document.createElement('p');
+    kindEl.className = 'mindmap-trail-row__kind';
+    kindEl.textContent = row.kind || '';
+    const line = document.createElement('p');
+    line.className = 'mindmap-trail-row__line';
+    line.textContent = humanDetailLine(row);
+    body.appendChild(kindEl);
+    body.appendChild(line);
+    const meta = rowMetaLine(row);
+    if (meta) {
+      const metaEl = document.createElement('p');
+      metaEl.className = 'mindmap-trail-row__meta';
+      metaEl.textContent = meta;
+      body.appendChild(metaEl);
+    }
+    li.appendChild(dot);
+    li.appendChild(body);
+    return li;
+  }
+
+  function renderGroup(group, index) {
+    const details = document.createElement('details');
+    details.className = 'mindmap-trail-group';
+    details.dataset.subnetId = group.subnet.id;
+    if (group.isLoop) {
+      details.setAttribute('data-loop', '1');
+    } else {
+      details.setAttribute('data-band', String(netuidBand(group.netuid)));
+    }
+    if (index < 3) details.open = true;
+
+    const summary = document.createElement('summary');
+    summary.className = 'mindmap-trail-group__summary';
+    const dot = document.createElement('span');
+    dot.className = 'mindmap-trail-group__dot';
+    const name = document.createElement('span');
+    name.className = 'mindmap-trail-group__name';
+    name.textContent = group.subnet.label || group.subnet.id;
+    const count = document.createElement('span');
+    count.className = 'mindmap-trail-group__count';
+    count.textContent = group.rows.length + (group.rows.length === 1 ? ' event' : ' events');
+    const chevron = document.createElement('span');
+    chevron.className = 'mindmap-trail-group__chevron';
+    chevron.textContent = '\u203a';
+    summary.appendChild(dot);
+    summary.appendChild(name);
+    summary.appendChild(count);
+    summary.appendChild(chevron);
+    details.appendChild(summary);
+
+    const rowsList = document.createElement('ul');
+    rowsList.className = 'mindmap-trail-rows';
+    group.rows.forEach((row) => rowsList.appendChild(renderRow(row, group.freshestId)));
+    details.appendChild(rowsList);
+
+    return details;
+  }
+
+  function renderTrail(root, graph) {
+    const list = root.querySelector('#mindmap-trail-list');
+    if (!list) return;
 
     const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
     const edges = Array.isArray(graph.edges) ? graph.edges : [];
 
-    svg.innerHTML = '';
+    list.innerHTML = '';
     if (!nodes.length) {
       setEmptyMessage(
         root,
         'Mindmap graph is empty — no trail, disposition, or scenario nodes yet. Data will appear as the learning loop records events.',
         true
       );
-      showDetail(panel, null);
       return;
     }
 
     setEmptyMessage(root, '', false);
-
-    const width = svg.clientWidth || 640;
-    const height = svg.clientHeight || 360;
-    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-
-    const positions = layoutNodes(nodes, width, height);
-    const nodeById = Object.fromEntries(nodes.map((n) => [n.id, n]));
-    const adjacency = {};
-    edges.forEach((edge) => {
-      if (!adjacency[edge.source]) adjacency[edge.source] = new Set();
-      if (!adjacency[edge.target]) adjacency[edge.target] = new Set();
-      adjacency[edge.source].add(edge.target);
-      adjacency[edge.target].add(edge.source);
-    });
-
-    const edgeLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    edgeLayer.setAttribute('class', 'mindmap-edges');
-    const nodeLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    nodeLayer.setAttribute('class', 'mindmap-nodes');
-
-    const edgeEls = [];
-    edges.forEach((edge) => {
-      const from = positions[edge.source];
-      const to = positions[edge.target];
-      if (!from || !to) return;
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      line.setAttribute('x1', from.x);
-      line.setAttribute('y1', from.y);
-      line.setAttribute('x2', to.x);
-      line.setAttribute('y2', to.y);
-      line.setAttribute('class', 'mindmap-edge');
-      line.dataset.source = edge.source;
-      line.dataset.target = edge.target;
-      edgeLayer.appendChild(line);
-      edgeEls.push(line);
-    });
-
-    let selectedId = null;
-
-    function highlightEdges(nodeId) {
-      edgeEls.forEach((line) => {
-        const connected =
-          line.dataset.source === nodeId || line.dataset.target === nodeId;
-        line.classList.toggle('is-highlight', connected);
-      });
-    }
-
-    nodes.forEach((node) => {
-      const pos = positions[node.id];
-      if (!pos) return;
-      const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      group.setAttribute('class', 'mindmap-node');
-      group.dataset.nodeId = node.id;
-
-      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      circle.setAttribute('cx', pos.x);
-      circle.setAttribute('cy', pos.y);
-      circle.setAttribute('r', 14);
-      circle.setAttribute('fill', kindColor(node.kind));
-
-      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      label.setAttribute('x', pos.x);
-      label.setAttribute('y', pos.y + 28);
-      label.setAttribute('text-anchor', 'middle');
-      label.textContent = (node.label || node.id || '').slice(0, 18);
-
-      group.appendChild(circle);
-      group.appendChild(label);
-
-      group.addEventListener('mouseenter', () => {
-        group.classList.add('is-hovered');
-        highlightEdges(node.id);
-      });
-      group.addEventListener('mouseleave', () => {
-        group.classList.remove('is-hovered');
-        highlightEdges(selectedId);
-      });
-      group.addEventListener('click', () => {
-        selectedId = node.id;
-        nodeLayer.querySelectorAll('.mindmap-node').forEach((el) => {
-          el.classList.toggle('is-selected', el.dataset.nodeId === selectedId);
-        });
-        highlightEdges(selectedId);
-        showDetail(panel, node);
-      });
-
-      nodeLayer.appendChild(group);
-    });
-
-    svg.appendChild(edgeLayer);
-    svg.appendChild(nodeLayer);
-
-    if (nodes.length === 1) {
-      selectedId = nodes[0].id;
-      const only = nodeLayer.querySelector('.mindmap-node');
-      if (only) only.classList.add('is-selected');
-      showDetail(panel, nodes[0]);
-    }
+    const groups = buildTrailGroups(nodes, edges);
+    groups.forEach((group, index) => list.appendChild(renderGroup(group, index)));
     root.dataset.rendered = '1';
   }
 
@@ -261,28 +275,14 @@
     if (graph.scoped && !(graph.nodes || []).length) {
       setEmptyMessage(root, 'No graph edges for this focus subnet yet — trail fills as picks resolve.', true);
     } else {
-      setEmptyMessage(root, '', false);
+      renderTrail(root, graph);
     }
-    renderGraph(root, graph);
   }
 
   async function init() {
     const root = document.getElementById('mindmap-graph-root');
     if (!root) return;
-    const toggle = document.getElementById('mindmap-graph-mobile-toggle');
-    if (toggle) {
-      toggle.addEventListener('click', function () {
-        const expanded = root.classList.toggle('is-expanded');
-        toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-        toggle.textContent = expanded ? 'Close mind map' : 'Open mind map';
-        if (expanded && !root.dataset.rendered) {
-          refreshGraph();
-        }
-      });
-    }
-    if (window.matchMedia && window.matchMedia('(min-width: 481px)').matches) {
-      await refreshGraph();
-    }
+    await refreshGraph();
     document.addEventListener('living-focus:change', refreshGraph);
   }
 

@@ -189,3 +189,39 @@ def test_brain_letter_api_omits_story_path(monkeypatch):
 def test_outlook_quiet_desk():
     outlook = _outlook_sentence({"action": "HOLD", "published": False, "name": None})
     assert outlook == "No sized call this window — watching the desk into resolve."
+
+
+def test_brain_letter_surfaces_scenario_tags_and_streak_whisper(monkeypatch):
+    """learned_price_drivers() already computes top_scenario_tags, and
+    build_trust_banner() already computes streak_whisper — both used to be
+    silently dropped before reaching the letter's JSON/markdown."""
+    monkeypatch.setattr(
+        "internal.letter.brain_letter._today_pick_block",
+        lambda: {
+            "date": "2026-07-31",
+            "action": "HOLD",
+            "published": False,
+            "name": "Taoshi",
+            "outlook": "No sized call this window — watching the desk into resolve.",
+        },
+    )
+    banner = build_trust_banner({"correct": 5, "wrong": 5, "expired": 0, "total": 10})
+    banner["streak_whisper"] = "Quant · 4 in a row"
+    monkeypatch.setattr(
+        "internal.letter.brain_letter._trust_block",
+        lambda: {"trust_banner": banner, "brain_ui_ready": False, "watchdog": {}},
+    )
+    monkeypatch.setattr(
+        "internal.letter.brain_letter._working_block",
+        lambda: {
+            "ready": True,
+            "top_price_signals": [],
+            "top_scenario_tags": [{"tag": "yield_trap:True", "hit_rate": 0.62, "n": 9}],
+            "disclaimer": "",
+        },
+    )
+
+    out = build_brain_letter()
+    assert out["working"]["top_scenario_tags"] == [{"tag": "yield_trap:True", "hit_rate": 0.62, "n": 9}]
+    assert "yield_trap:True" in out["markdown"]
+    assert "Quant · 4 in a row" in out["markdown"]

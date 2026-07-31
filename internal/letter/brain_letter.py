@@ -318,6 +318,8 @@ def _render_markdown(
         lines.append(f"- {banner['message']}")
     else:
         lines.append("- Not enough graded picks to quote accuracy yet.")
+    if banner.get("streak_whisper"):
+        lines.append(f"- {banner['streak_whisper']}")
 
     signals = working.get("top_price_signals") or []
     if signals:
@@ -329,6 +331,13 @@ def _render_markdown(
                 lines.append(f"- Price signal **{sig}** · {round(hr * 100)}% hit (n={n})")
     else:
         lines.append("- Signal rankings fill in as more picks grade on token price.")
+    scenario_tags = working.get("top_scenario_tags") or []
+    if scenario_tags:
+        top = scenario_tags[0]
+        tag = top.get("tag") or "scenario"
+        hr = top.get("hit_rate")
+        if hr is not None:
+            lines.append(f"- Scenario tag **{tag}** · {round(hr * 100)}% hit (n={top.get('n', 0)})")
     if working.get("disclaimer"):
         lines.append(f"- _{working['disclaimer']}_")
     lines.append("")
@@ -435,6 +444,7 @@ def build_brain_letter() -> Dict[str, Any]:
         "working": {
             "ready": working.get("ready"),
             "top_price_signals": (working.get("top_price_signals") or [])[:5],
+            "top_scenario_tags": (working.get("top_scenario_tags") or [])[:5],
             "disclaimer": working.get("disclaimer"),
         },
         "markdown": markdown,

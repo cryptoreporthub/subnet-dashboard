@@ -10,6 +10,7 @@
   var trendingEl = document.getElementById("message-intel-trending");
   var championsEl = document.getElementById("message-intel-champions");
   var crownsEl = document.getElementById("message-intel-crowns");
+  var weekTopEl = document.getElementById("message-intel-week-top");
   var refreshBtn = document.getElementById("message-intel-trending-refresh");
   var feedHint = document.getElementById("message-intel-feed-hint");
   var yesterdayCard = document.getElementById("message-intel-yesterday");
@@ -708,7 +709,7 @@
   function renderTrending(rows, listener, windowLabel) {
     if (listenerIdle(listener) && (!rows || !rows.length)) {
       return (
-        '<p class="empty">Telegram listener is not running yet — trending fills once messages are ingested.</p>'
+        '<p class="empty">Quiet — Telegram ingest is warming up. Trending fills as Subnet Summers messages land.</p>'
       );
     }
     if (!rows || !rows.length) {
@@ -835,6 +836,67 @@
     });
     html += "</div>";
     return html;
+  }
+
+  function formatCompactCount(n) {
+    var v = Number(n) || 0;
+    if (v >= 1000) return (v / 1000).toFixed(v >= 10000 ? 0 : 1).replace(/\.0$/, "") + "k";
+    return String(v);
+  }
+
+  function renderWeekTopComment(row) {
+    if (!weekTopEl) return;
+    if (!row || !row.content) {
+      weekTopEl.hidden = true;
+      return;
+    }
+    var whyEl = document.getElementById("message-intel-week-top-why");
+    var quoteEl = document.getElementById("message-intel-week-top-quote");
+    var authorEl = document.getElementById("message-intel-week-top-author");
+    var statsEl = document.getElementById("message-intel-week-top-stats");
+    var handle =
+      row.display_name ||
+      (row.author_username
+        ? "@" + String(row.author_username).replace(/^@/, "")
+        : row.author_name) ||
+      "Unknown";
+    if (whyEl) whyEl.textContent = row.why || "Most engaged";
+    if (quoteEl) quoteEl.textContent = "“" + String(row.content) + "”";
+    if (authorEl) authorEl.textContent = handle;
+    if (statsEl) {
+      var parts = [];
+      var views = Number(row.views) || 0;
+      var replies = Number(row.replies) || 0;
+      var reacts = Number(row.reaction_total) || 0;
+      var forwards = Number(row.forwards) || 0;
+      var topRx = row.top_reaction || null;
+      var dominant = String(row.why || "");
+      if (reacts > 0) {
+        var rxLabel = topRx && topRx.emoji ? topRx.emoji + " " + formatCompactCount(reacts) : formatCompactCount(reacts) + " reacts";
+        parts.push({ label: rxLabel, hot: dominant.indexOf("reacted") !== -1 });
+      }
+      if (views > 0) {
+        parts.push({ label: formatCompactCount(views) + " views", hot: dominant.indexOf("viewed") !== -1 });
+      }
+      if (replies > 0) {
+        parts.push({ label: formatCompactCount(replies) + " replies", hot: dominant.indexOf("replied") !== -1 });
+      }
+      if (forwards > 0) {
+        parts.push({ label: formatCompactCount(forwards) + " forwards", hot: dominant.indexOf("forwarded") !== -1 });
+      }
+      statsEl.innerHTML = parts
+        .map(function (p) {
+          return (
+            '<span class="message-intel__week-top-stat' +
+            (p.hot ? " message-intel__week-top-stat--hot" : "") +
+            '">' +
+            esc(p.label) +
+            "</span>"
+          );
+        })
+        .join("");
+    }
+    weekTopEl.hidden = false;
   }
 
   function renderSubnetChips(netuids) {
@@ -1146,6 +1208,7 @@
       var trendingUnit = document.querySelector("#message-intel-trending-card .message-intel__panel-unit");
       if (trendingUnit) trendingUnit.textContent = trendingWindow;
       renderYesterdayLeader((payload.meta && payload.meta.yesterday_leader) || null);
+      renderWeekTopComment((payload.meta && payload.meta.week_top_comment) || null);
       renderSummary24h((payload.meta && payload.meta.summary_24h) || null);
       renderTelegramProof((payload.meta && payload.meta.telegram_proof) || null);
       renderHighConvictionStrip((payload.meta && payload.meta.high_conviction_strip) || []);
@@ -1199,6 +1262,7 @@
       if (crownsEl) {
         crownsEl.innerHTML = '<p class="desk-empty desk-empty--error">Reaction crowns temporarily unavailable.</p>';
       }
+      if (weekTopEl) weekTopEl.hidden = true;
       feed.innerHTML =
         '<p class="desk-empty desk-empty--error">Telegram desk unreachable — will retry shortly.</p>';
     }

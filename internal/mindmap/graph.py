@@ -17,6 +17,11 @@ def _empty_graph() -> Dict[str, Any]:
     return {"status": "success", "nodes": [], "edges": []}
 
 
+# Pseudo-subnet hub for judge/weight-nudge events that carry no netuid — the
+# loop tuning itself, not a specific subnet's evidence chain.
+_LOOP_NODE_ID = "loop:council"
+
+
 def _normalize_event_type(row: Dict[str, Any]) -> str:
     try:
         from internal.learning.trail_bus import normalize_event_type
@@ -88,6 +93,39 @@ def _collect_trail(limit: int = 200) -> List[Dict[str, Any]]:
 
     trail = collect_trail_events(limit=limit)
     return [dict(row) for row in trail if isinstance(row, dict)]
+
+
+def _load_indicator_alerts(focus_netuid: Optional[int]) -> List[Dict[str, Any]]:
+    """RSI/MACD/momentum crossovers — read the engine's own persisted state
+    directly rather than requiring indicators to push through the trail bus."""
+    try:
+        from internal.indicators.indicator_engine import IndicatorEngine
+
+        alerts = IndicatorEngine().get_active_alerts()
+    except Exception as exc:
+        logger.debug("indicator alerts unavailable: %s", exc)
+        return []
+    if focus_netuid is not None:
+        alerts = [a for a in alerts if a.get("subnet_id") == focus_netuid]
+    return alerts
+
+
+def _load_whale_and_rugger_alerts(focus_netuid: Optional[int]) -> Dict[str, List[Dict[str, Any]]]:
+    """Whale/rugger desk alerts — same read-only approach as indicators."""
+    try:
+        from internal.whales.service import WhaleIntelligenceService
+
+        alerts = WhaleIntelligenceService().get_active_alerts()
+    except Exception as exc:
+        logger.debug("whale/rugger alerts unavailable: %s", exc)
+        return {"rugger_alerts": [], "follow_alerts": []}
+    if focus_netuid is not None:
+        alerts = {
+            key: [a for a in rows if a.get("netuid") == focus_netuid]
+            for key, rows in alerts.items()
+            if isinstance(rows, list)
+        }
+    return alerts
 
 
 def _subnet_label(netuid: Any, name: Optional[str], labels: Dict[Any, str]) -> str:
@@ -222,38 +260,43 @@ def get_mindmap_graph(focus_netuid: Optional[int] = None) -> Dict[str, Any]:
             updated_at=event_time or None,
         )
 
-        if netuid is None:
-            continue
+        # Hub for this row: a real subnet when we have a netuid, otherwise the
+        # learning loop's own self-adjustment. Judge/weight-nudge events (most
+        # `weight_change`/`accuracy_update`/`conviction_update` rows) usually
+        # aren't about any one subnet, but they're still the loop tuning
+        # itself and deserve a home instead of being silently dropped.
+        if netuid is not None:
+            stats = subnet_stats.setdefault(
+                netuid,
+                {"event_count": 0, "last_event_type": event_type, "updated_at": event_time},
+            )
+            stats["event_count"] = int(stats.get("event_count", 0)) + 1
+            if event_time >= str(stats.get("updated_at") or ""):
+                stats["last_event_type"] = event_type
+                stats["updated_at"] = event_time
+            if subnet_name:
+                subnet_names[netuid] = str(subnet_name)
 
-        stats = subnet_stats.setdefault(
-            netuid,
-            {"event_count": 0, "last_event_type": event_type, "updated_at": event_time},
-        )
-        stats["event_count"] = int(stats.get("event_count", 0)) + 1
-        if event_time >= str(stats.get("updated_at") or ""):
-            stats["last_event_type"] = event_type
-            stats["updated_at"] = event_time
-        if subnet_name:
-            subnet_names[netuid] = str(subnet_name)
-
-        subnet_id = f"subnet:{netuid}"
-        label = _subnet_label(netuid, subnet_name, subnet_names)
-        _upsert_node(
-            nodes,
-            subnet_id,
-            label=label,
-            kind="subnet",
-            metrics={
-                "event_count": stats["event_count"],
-                "last_event_type": stats["last_event_type"],
-            },
-            updated_at=stats.get("updated_at"),
-        )
+            hub_id = f"subnet:{netuid}"
+            _upsert_node(
+                nodes,
+                hub_id,
+                label=_subnet_label(netuid, subnet_name, subnet_names),
+                kind="subnet",
+                metrics={
+                    "event_count": stats["event_count"],
+                    "last_event_type": stats["last_event_type"],
+                },
+                updated_at=stats.get("updated_at"),
+            )
+        else:
+            hub_id = _LOOP_NODE_ID
+            _upsert_node(nodes, hub_id, label="Learning Loop", kind="loop", updated_at=event_time or None)
 
         _append_edge(
             edges,
             edge_seen,
-            source=subnet_id,
+            source=hub_id,
             target=f"signal:{event_type}",
             kind=event_type,
             weight=1.0,
@@ -272,11 +315,16 @@ def get_mindmap_graph(focus_netuid: Optional[int] = None) -> Dict[str, Any]:
             _append_edge(
                 edges,
                 edge_seen,
-                source=subnet_id,
+                source=hub_id,
                 target=judge_id,
                 kind="judge_signal",
                 weight=1.0,
             )
+
+        if netuid is None:
+            continue
+
+        subnet_id = hub_id
 
         if row.get("prediction") or row.get("event_type") == "prediction_resolved":
             pred_id = f"prediction:{netuid}:{row.get('time') or len(edges)}"
@@ -362,6 +410,91 @@ def get_mindmap_graph(focus_netuid: Optional[int] = None) -> Dict[str, Any]:
             weight=weight,
         )
 
+    # Whale / rugger / indicator desks track their own subnets already — read
+    # them directly instead of asking three more subsystems to push through
+    # the trail bus (they're never wrong about the netuid, so this is honest).
+    for alert in _load_indicator_alerts(focus_netuid):
+        netuid = alert.get("subnet_id")
+        if netuid is None:
+            continue
+        event_type = str(alert.get("event_type") or "indicator_signal")
+        subnet_id = f"subnet:{netuid}"
+        if subnet_id not in nodes:
+            _upsert_node(
+                nodes,
+                subnet_id,
+                label=_subnet_label(netuid, None, subnet_names),
+                kind="subnet",
+                metrics={"event_count": 0, "last_event_type": None},
+                updated_at=_utcnow_z(),
+            )
+        indicator_id = f"indicator:{netuid}:{event_type}"
+        _upsert_node(
+            nodes,
+            indicator_id,
+            label=event_type.replace("_", " ").title(),
+            kind="indicator",
+            updated_at=_utcnow_z(),
+        )
+        _append_edge(edges, edge_seen, source=subnet_id, target=indicator_id, kind=event_type, weight=1.0)
+
+    whale_alerts = _load_whale_and_rugger_alerts(focus_netuid)
+    for alert in whale_alerts.get("rugger_alerts") or []:
+        netuid = alert.get("netuid")
+        if netuid is None:
+            continue
+        subnet_id = f"subnet:{netuid}"
+        if subnet_id not in nodes:
+            _upsert_node(
+                nodes,
+                subnet_id,
+                label=_subnet_label(netuid, alert.get("subnet_name"), subnet_names),
+                kind="subnet",
+                metrics={"event_count": 0, "last_event_type": None},
+                updated_at=_utcnow_z(),
+            )
+        risk_id = f"risk:{netuid}:{alert.get('wallet') or 'w'}"
+        _upsert_node(
+            nodes,
+            risk_id,
+            label="Rugger exit warning",
+            kind="risk",
+            metrics={
+                "urgency": alert.get("urgency"),
+                "estimated_exit_in_hours": alert.get("estimated_exit_in_hours"),
+            },
+            updated_at=str(alert.get("entry_ts") or _utcnow_z()),
+        )
+        _append_edge(edges, edge_seen, source=subnet_id, target=risk_id, kind="rugger_exit_warning", weight=1.0)
+
+    for alert in whale_alerts.get("follow_alerts") or []:
+        netuid = alert.get("netuid")
+        if netuid is None:
+            continue
+        subnet_id = f"subnet:{netuid}"
+        if subnet_id not in nodes:
+            _upsert_node(
+                nodes,
+                subnet_id,
+                label=_subnet_label(netuid, alert.get("subnet_name"), subnet_names),
+                kind="subnet",
+                metrics={"event_count": 0, "last_event_type": None},
+                updated_at=_utcnow_z(),
+            )
+        whale_id = f"whale:{netuid}:{alert.get('wallet') or 'w'}"
+        _upsert_node(
+            nodes,
+            whale_id,
+            label="Smart money entry",
+            kind="whale",
+            metrics={
+                "win_rate": alert.get("win_rate"),
+                "avg_return_pct": alert.get("avg_return_pct"),
+            },
+            updated_at=str(alert.get("entry_ts") or _utcnow_z()),
+        )
+        _append_edge(edges, edge_seen, source=subnet_id, target=whale_id, kind="smart_money_entry", weight=1.0)
+
     node_list = list(nodes.values())
     # Cap unscoped graphs — keep highest-degree nodes (readable ego clusters)
     _NODE_CAP = 48
@@ -372,9 +505,13 @@ def get_mindmap_graph(focus_netuid: Optional[int] = None) -> Dict[str, Any]:
             degree[s] = degree.get(s, 0) + 1
             degree[t] = degree.get(t, 0) + 1
         kind_boost = {
+            "loop": 4,
             "judge": 3,
             "prediction": 2,
             "signal": 2,
+            "risk": 2,
+            "whale": 1,
+            "indicator": 1,
             "scenario": 1,
             "disposition": 1,
             "subnet": 0,
