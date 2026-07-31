@@ -77,3 +77,46 @@ def test_scan_all_subnets_fetch_outside_state_lock(tmp_path, monkeypatch):
             release_fetch.set()
             t.join(timeout=3.0)
             assert not t.is_alive()
+
+
+def test_scan_all_subnets_soul_map_write_outside_state_lock(tmp_path, monkeypatch):
+    """load_state must not block on apply_phase_transitions' soul_map.json
+    rewrite (Fly wedge: mindmap graph -> hourly pick -> pump overlay all call
+    load_state() and got stuck behind a slow, unrelated Soul-Map write)."""
+    state_path = str(tmp_path / "pump_ladder.json")
+    monkeypatch.setenv("PUMP_LADDER_STATE_PATH", state_path)
+    from internal.pump import constants
+
+    monkeypatch.setattr(constants, "STATE_PATH", state_path)
+
+    apply_started = threading.Event()
+    release_apply = threading.Event()
+
+    def slow_apply_phase_transitions(transitions, ladder_state):
+        apply_started.set()
+        release_apply.wait(timeout=2.0)
+        return {"disposition_updates": 0, "trail_events": 0}
+
+    signal_row = {
+        "netuid": 29,
+        "name": "Coldint",
+        "buy_ratio": 0.6,
+        "volume_intensity": 0.4,
+        "price_change_24h": 5.0,
+        "price_change_1h": 2.0,
+    }
+
+    with patch("internal.pump.state.fetch_all_subnet_signals", return_value=[signal_row]):
+        with patch(
+            "internal.pump.state.apply_phase_transitions",
+            side_effect=slow_apply_phase_transitions,
+        ):
+            t = threading.Thread(target=scan_all_subnets, daemon=True)
+            t.start()
+            assert apply_started.wait(timeout=2.0)
+            t0 = time.monotonic()
+            load_state()
+            assert time.monotonic() - t0 < 0.25
+            release_apply.set()
+            t.join(timeout=3.0)
+            assert not t.is_alive()
