@@ -144,20 +144,48 @@ def test_worker_internal_bases_machine_ip_after_flycast(monkeypatch):
     process = "http://worker.process.subnet-dashboard.internal:8081"
     flycast = "http://subnet-dashboard.flycast:8081"
     machine = "http://[fdaa:80:e535:a7b:76d:4c6c:c6a8:2]:8081"
-    assert bases[0] == flycast
-    assert machine in bases
-    assert bases.index(flycast) < bases.index(process)
-    assert bases.index(process) < bases.index(machine) or bases.index(flycast) < bases.index(machine)
+    # Deploy-pinned 6PN is preferred first.
+    assert bases[0] == machine
+    assert flycast in bases
+    assert process in bases
 
 
 def test_record_good_base_skips_machine_ip(monkeypatch):
     import internal.worker_proxy as wp
 
+    monkeypatch.delenv("WORKER_INTERNAL_URL", raising=False)
     monkeypatch.setattr(wp, "_LAST_GOOD_BASE", None)
     wp._record_good_base("http://[fdaa::1]:8081")
     assert wp._LAST_GOOD_BASE is None
     wp._record_good_base("http://subnet-dashboard.flycast:8081")
     assert wp._LAST_GOOD_BASE == "http://subnet-dashboard.flycast:8081"
+
+
+def test_record_good_base_allows_pinned_6pn(monkeypatch):
+    import internal.worker_proxy as wp
+
+    pinned = "http://[fdaa:80:e535:a7b:76d:4c6c:c6a8:2]:8081"
+    monkeypatch.setenv("WORKER_INTERNAL_URL", pinned)
+    monkeypatch.setattr(wp, "_LAST_GOOD_BASE", None)
+    wp._record_good_base(pinned)
+    assert wp._LAST_GOOD_BASE == pinned
+
+
+def test_proxy_daily_pick_degraded_on_failure(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("DATA_DIR", "/nonexistent")
+
+    async def _fail_fetch(*_a, **_k):
+        raise OSError("worker down")
+
+    with patch("internal.worker_proxy._fetch_worker_http", _fail_fetch):
+        from server import app
+
+        client = TestClient(app)
+        r = client.get("/api/daily-pick")
+    assert r.status_code == 200
+    assert r.json().get("status") == "degraded"
 
 
 def test_worker_internal_bases_includes_regional_dns(monkeypatch):
