@@ -400,13 +400,21 @@ def _record_scenario_outcome(
             "avg_change_24h": actual_pct,
             "volatility": abs(actual_pct),
         })
-        scenario_memory.record_outcome(
+        scenario = scenario_memory.record_outcome(
             name=prediction.get("name", "unknown"),
             outcome="correct" if correct else "wrong",
             features=features,
             regime=regime,
             scenario_id=prediction.get("scenario_id"),
         )
+        # This grades a scenario every resolve, but was invisible to the
+        # trail/mindmap — the loop was learning silently.
+        try:
+            from internal.learning import trail_bus
+
+            trail_bus.emit_scenario_tagged(scenario, netuid=prediction.get("netuid"))
+        except Exception:
+            pass
     except Exception:
         pass
 

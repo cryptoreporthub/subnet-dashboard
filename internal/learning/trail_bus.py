@@ -137,10 +137,11 @@ def emit_disposition_shift(
     )
 
 
-def emit_scenario_tagged(scenario: Dict[str, Any]) -> None:
+def emit_scenario_tagged(scenario: Dict[str, Any], *, netuid: Optional[Any] = None) -> None:
     emit_trail_event(
         "scenario_tagged",
         subnet=scenario.get("name"),
+        netuid=netuid,
         evidence={
             "scenario_id": scenario.get("id"),
             "features": scenario.get("features"),

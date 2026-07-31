@@ -149,6 +149,37 @@ def test_resolver_writes_outcome_back_to_linked_scenario():
     assert linked and linked[0]["outcome"] == "correct"
 
 
+def test_resolver_scenario_outcome_reaches_trail(monkeypatch):
+    """Every resolve grades a scenario, but this used to be invisible to the
+    trail/mindmap — the loop was learning silently. Confirm the emit fires
+    with the resolved outcome and the prediction's netuid."""
+    from internal.learning import trail_bus
+
+    seen = []
+    monkeypatch.setattr(trail_bus, "emit_scenario_tagged", lambda scenario, **kw: seen.append((scenario, kw)))
+
+    pending = scenario_memory.add_scenario(
+        name="Subnet E", features={"direction": "up"}, outcome=None
+    )
+    now = datetime.now(timezone.utc)
+    prediction = {
+        "netuid": 42,
+        "name": "Subnet E",
+        "direction": "up",
+        "predicted_pct": 2.0,
+        "reference_price": 10.0,
+        "expert": "quant",
+        "scenario_id": pending["id"],
+        "resolve_at": (now - timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
+    }
+    resolver.resolve_prediction(prediction, current_price=10.5)
+
+    assert seen, "resolver did not emit a scenario_tagged trail event"
+    scenario, kwargs = seen[0]
+    assert scenario["outcome"] == "correct"
+    assert kwargs.get("netuid") == 42
+
+
 # ---------------------------------------------------------------------------
 # Fix 4 — accelerated learning loop
 # ---------------------------------------------------------------------------
