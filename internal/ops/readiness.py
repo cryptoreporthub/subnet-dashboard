@@ -98,12 +98,25 @@ def _learning_summary() -> Dict[str, Any]:
         return {"graded": 0, "pending": 0, "accuracy": None, "trust_ready": None}
 
 
-def build_liveness_report() -> Dict[str, Any]:
-    """Fast liveness probe — file/heartbeat only; safe under worker wedge."""
+def build_liveness_report(*, probe_worker: bool = True) -> Dict[str, Any]:
+    """Fast liveness probe — file/heartbeat only by default on hot paths.
+
+    ``probe_worker=False`` skips the split_v2 HTTP peer round-trip so
+    ``/api/ops/live`` (InstantBailoutASGI) never blocks the event loop ~36s.
+    """
     from internal.run_mode import worker_mode_label
     from internal.worker_peer import get_worker_peer
 
-    worker_peer = get_worker_peer()
+    if probe_worker:
+        worker_peer = get_worker_peer()
+    else:
+        from internal.run_mode import split_worker_v2_enabled
+
+        worker_peer = (
+            {"expected": True, "alive": None, "peer": "dedicated_worker", "source": "deferred"}
+            if split_worker_v2_enabled()
+            else get_worker_peer(max_age_seconds=180)
+        )
 
     data_dir = os.environ.get("DATA_DIR", "data")
     volume_ok = os.path.isdir(data_dir) and os.access(data_dir, os.W_OK)

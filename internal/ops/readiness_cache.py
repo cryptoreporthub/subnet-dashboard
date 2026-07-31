@@ -69,7 +69,7 @@ async def get_readiness_report(*, force: bool = False) -> Dict[str, Any]:
     except asyncio.TimeoutError:
         from internal.ops.readiness import build_liveness_report
 
-        lite = build_liveness_report()
+        lite = build_liveness_report(probe_worker=False)
         stale = _stale_copy()
         out: Dict[str, Any] = {
             **lite,

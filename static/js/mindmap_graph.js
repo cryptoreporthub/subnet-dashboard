@@ -272,6 +272,15 @@
       );
       return;
     }
+    if (graph.status === 'degraded') {
+      setEmptyMessage(
+        root,
+        graph.detail ||
+          'Worker volume temporarily unavailable — trail will refill when the learning loop reconnects.',
+        true
+      );
+      return;
+    }
     if (graph.scoped && !(graph.nodes || []).length) {
       setEmptyMessage(root, 'No graph edges for this focus subnet yet — trail fills as picks resolve.', true);
     } else {

@@ -207,3 +207,17 @@ def test_ops_live_split_v2_uses_http_peer(monkeypatch):
         report = build_liveness_report()
     assert report["worker_peer"]["alive"] is True
     assert report["worker_peer"]["source"] == "http"
+
+
+def test_build_liveness_report_fast_skips_worker_http(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+
+    def _boom(*_a, **_k):
+        raise AssertionError("worker HTTP probe should not run on fast liveness")
+
+    with patch("internal.worker_proxy.fetch_worker_json_sync", _boom):
+        from internal.ops.readiness import build_liveness_report
+
+        report = build_liveness_report(probe_worker=False)
+    assert report["worker_peer"]["source"] == "deferred"
