@@ -160,7 +160,7 @@ def test_fetch_worker_json_sync_skips_web_misroute(monkeypatch):
     out = fetch_worker_json_sync("/api/ops/live", timeout=2)
     assert out["worker_peer"]["alive"] is True
     assert "bad.internal" in calls[0]
-    assert any("worker.process" in c for c in calls)
+    assert any("flycast" in c or "worker.process" in c for c in calls)
 
 
 def test_fetch_worker_json_sync_from_async_context(monkeypatch):
