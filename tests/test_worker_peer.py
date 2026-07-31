@@ -150,7 +150,7 @@ def test_fetch_worker_json_sync_skips_web_misroute(monkeypatch):
 
     out = fetch_worker_json_sync("/api/ops/live", timeout=2)
     assert out["worker_peer"]["alive"] is True
-    assert len(calls) == 2
+    assert calls[0].startswith("http://subnet-dashboard.flycast:8081")
 
 
 def test_fetch_worker_json_sync_from_async_context(monkeypatch):

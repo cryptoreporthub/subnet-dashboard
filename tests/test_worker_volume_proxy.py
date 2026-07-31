@@ -127,6 +127,33 @@ def test_worker_internal_bases_ignores_flycast_secret_without_opt_in(monkeypatch
     assert "http://worker.process.subnet-dashboard.internal:8081" in bases
 
 
+def test_worker_internal_bases_machine_ip_after_flycast(monkeypatch):
+    monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
+    monkeypatch.setenv(
+        "WORKER_INTERNAL_URL",
+        "http://[fdaa:80:e535:a7b:76d:4c6c:c6a8:2]:8081",
+    )
+    monkeypatch.delenv("WORKER_INTERNAL_USE_FLYCAST", raising=False)
+    from internal.worker_proxy import worker_internal_bases
+
+    bases = worker_internal_bases()
+    flycast = "http://subnet-dashboard.flycast:8081"
+    machine = "http://[fdaa:80:e535:a7b:76d:4c6c:c6a8:2]:8081"
+    assert bases[0] == flycast
+    assert machine in bases
+    assert bases.index(flycast) < bases.index(machine)
+
+
+def test_record_good_base_skips_machine_ip(monkeypatch):
+    import internal.worker_proxy as wp
+
+    monkeypatch.setattr(wp, "_LAST_GOOD_BASE", None)
+    wp._record_good_base("http://[fdaa::1]:8081")
+    assert wp._LAST_GOOD_BASE is None
+    wp._record_good_base("http://subnet-dashboard.flycast:8081")
+    assert wp._LAST_GOOD_BASE == "http://subnet-dashboard.flycast:8081"
+
+
 def test_worker_internal_bases_includes_regional_dns(monkeypatch):
     monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
     monkeypatch.setenv("FLY_REGION", "sjc")
