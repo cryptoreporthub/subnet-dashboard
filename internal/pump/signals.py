@@ -13,10 +13,11 @@ def _signal_display_name(subnet: Dict[str, Any], netuid: Any) -> str:
     try:
         from internal.subnet_names import display_name_for_netuid
 
+        # Request-time signal paths (/api/pump-alerts, etc.) — no live TaoStats.
         return display_name_for_netuid(
             int(netuid),
             subnet_row=subnet,
-            use_taostats_fallback=True,
+            use_taostats_fallback=False,
         )
     except Exception:
         return str(subnet.get("name") or f"SN{netuid}")

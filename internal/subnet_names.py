@@ -22,6 +22,7 @@ REMOTE_REGISTRY_URL = os.environ.get(
 )
 _BAD_NAMES = frozenset({"", "unknown", "deprecated", "none", "unnamed", "snnone"})
 _CACHE_TTL_SECONDS = int(os.environ.get("SUBNET_NAMES_CACHE_TTL", "300"))
+_NEGATIVE_CACHE_TTL_SECONDS = int(os.environ.get("SUBNET_NAMES_NEGATIVE_CACHE_TTL", "120"))
 
 _lock = threading.Lock()
 _remote_cache: Dict[str, Any] = {"at": 0.0, "data": {}}
@@ -137,8 +138,10 @@ def _tmc_display_names() -> Dict[int, str]:
 
 def _taostats_identity(netuid: int) -> Optional[str]:
     cached = _identity_cache.get(netuid)
-    if cached and time.time() - cached.get("at", 0) < _CACHE_TTL_SECONDS:
-        return cached.get("name")
+    if cached is not None:
+        ttl = _CACHE_TTL_SECONDS if cached.get("name") else _NEGATIVE_CACHE_TTL_SECONDS
+        if time.time() - cached.get("at", 0) < ttl:
+            return cached.get("name")
     try:
         from fetchers.taostats_client import get_subnet_identity
 
@@ -152,8 +155,10 @@ def _taostats_identity(netuid: int) -> Optional[str]:
         if name and not _is_bad_name(name):
             _identity_cache[netuid] = {"at": time.time(), "name": str(name)}
             return str(name)
+        _identity_cache[netuid] = {"at": time.time(), "name": None}
     except Exception as exc:
         logger.debug("taostats identity for SN%d failed: %s", netuid, exc)
+        _identity_cache[netuid] = {"at": time.time(), "name": None}
     return None
 
 

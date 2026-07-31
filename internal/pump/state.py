@@ -367,10 +367,13 @@ def _normalize_ladder_subnet(entry: Dict[str, Any]) -> Dict[str, Any]:
 
         nu = int(netuid) if netuid is not None else None
         if nu is not None:
+            # Hot-path read (mindmap graph, homepage warm): name is resolved once in
+            # transition_subnet during background scan; live TaoStats here blocks the
+            # event loop (rate-limited time.sleep on the request thread).
             name = display_name_for_netuid(
                 nu,
                 ladder_hint=entry.get("name"),
-                use_taostats_fallback=True,
+                use_taostats_fallback=False,
             )
         else:
             name = entry.get("name") or "SN?"

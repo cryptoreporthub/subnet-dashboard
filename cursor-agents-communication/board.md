@@ -1,17 +1,19 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-31T08:15:00Z  
-**main:** see GitHub · **infra:** split_v2 **ROLLED BACK to v1 canon** (PR in flight `cursor/split-v1-rollback-canon-9a6d`)  
+**Last updated:** 2026-07-31T17:38:00Z  
+**main:** see GitHub · **infra:** v1 canon confirmed stable — real wedge root-caused + fixed (PR #710)  
 **Plans:** `completion-runbook.md` · `split-v2-rollback-runbook.md` · `fly-worker-split-v2-lock.md`
 
 ## Infra STATUS (launch blocker)
 
 | Item | Status |
 |------|--------|
-| **Root cause** | split_v2 web→worker private HTTP unreachable; volume APIs soft-degraded for weeks |
-| **Real fix** | Stop forcing `fly.worker-v2.toml` / `FORCE_WORKER_SPLIT_V2` in Fly Deploy; auto-rollback to `fly.toml` + inline worker |
+| **Root cause (v2 rollback)** | split_v2 web→worker private HTTP unreachable; volume APIs soft-degraded for weeks |
+| **Rollback fix** | Stop forcing `fly.worker-v2.toml` / `FORCE_WORKER_SPLIT_V2` in Fly Deploy; auto-rollback to `fly.toml` + inline worker |
 | **Bandaids** | Soft stubs / local fallthrough (#698–#705) — keep as defense only; do not treat as product fix |
 | **Do not** | Re-enable v2 without proven peer probe soak + human approve |
+| **Post-rollback wedge (AUDIT_HANDOFF #709)** | Root-caused live via `py-spy dump` on prod: `GET /api/mindmap/graph` walked the full pump ladder and re-resolved every subnet name with `use_taostats_fallback=True` — TaoStats is rate-limited to 5 calls/min and `_rate_limit()` sleeps synchronously, blocking the single asyncio event-loop thread (incl. `/health`) for minutes → Fly marks the machine unhealthy → 503 whole site. This was the "data isn't hydrating / empty spaces" bug. |
+| **Wedge fix** | PR #710 — dropped `use_taostats_fallback=True` from the 3 hot read paths (`internal/pump/state.py::_normalize_ladder_subnet`, `internal/pump/signals.py::_signal_display_name`, `internal/learning/pump_alert.py::_resolve_name`); names are already resolved once in the background by `transition_subnet`. Added negative-result caching in `internal/subnet_names.py`. This answers `AUDIT_HANDOFF.md` Option C ("fix v1 properly... never block event loop on mindmap/homepage") — **no worker-split/Fly topology change needed**, it was a code bug. |
 
 ## Full roadmap
 
