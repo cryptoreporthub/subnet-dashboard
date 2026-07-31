@@ -1,17 +1,19 @@
 # Fly web + worker split (Phase B)
 
 **Status:** **v1 in prod** — inline worker subprocess on one machine · **Phase A:** in prod (#332–#333) · **Owner:** infra slice  
-**Last updated:** 2026-07-24
+**Last updated:** 2026-07-31
 
 ## Why
 
-Production runs on a **single Fly machine** (`shared-cpu-1x`, 1GB) that does everything:
+Production runs on a **single Fly machine** (`shared-cpu-1x`, 2GB) that does everything:
 
 - Serves `GET /` + 40+ `/api/*` routes
-- Runs resolver, registry sync, live subnet feed, feed warmup on boot
+- Runs resolver, registry sync, live subnet feed, feed warmup on boot (via **inline worker** sibling process)
 - Absorbs a **hydrate storm** (10–20 parallel API calls per homepage visit)
 
-When the worker saturates, even `/health` stops responding. Phase A (#1) mitigates this on one machine (fast shell, load-shed bypass for light APIs, staggered hydrate, shell cache). **Phase B (#2)** is the structural fix: **split user traffic from background work**.
+When the worker saturates, even `/health` stops responding. Phase A (#1) mitigates this on one machine (fast shell, load-shed bypass for light APIs, staggered hydrate, shell cache). **Phase B (#2)** is the structural fix: **split user traffic from background work** on the **same** machine (inline worker), not a second machine.
+
+**Phase B v2 (dedicated worker machine) was tried on prod and rolled back (2026-07-31):** web→worker private HTTP stayed unreachable, so volume-backed surfaces (hero, Telegram, mindmap, learning) soft-degraded for weeks. Canon remains v1 until private networking is proven.
 
 ## Load-separation map
 
@@ -46,7 +48,7 @@ When the worker saturates, even `/health` stops responding. Phase A (#1) mitigat
 
 **v1 (shipped):** one Fly machine, one `web` process group. `fly_web_entrypoint.sh` forks the worker before `exec uvicorn`. Readiness reports `worker_mode: "split"` and checks `data/.worker_heartbeat`.
 
-**v2 (deferred):** second Fly machine with explicit volume attach strategy — do not scale `worker=1` without that plan.
+**v2 (rolled back / opt-in only):** second Fly machine + volume proxy — do not re-enable without a proven web→worker HTTP soak. Use `scripts/fly_disable_worker_v2.sh` to return to v1.
 
 Same Docker image, two commands. **No second codebase** (single-foundation rule unchanged).
 

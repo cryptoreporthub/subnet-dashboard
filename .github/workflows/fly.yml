@@ -76,40 +76,29 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_PRIMARY_REGION: sjc
-      - name: Repair v2 volume placement (pre-deploy, destroy only)
+      # Canon = v1 (fly.toml): one web machine, data_volume + inline worker.
+      # split_v2 left hero/Telegram/mindmap/learning stuck behind a broken
+      # web→worker private hop — do not force v2 from CI anymore.
+      - name: Rollback split_v2 → v1 when detected
         run: |
-          chmod +x scripts/fly_v2_volume_repair.sh
-          FLY_V2_REPAIR_MODE=destroy FLY_APP=subnet-dashboard ./scripts/fly_v2_volume_repair.sh
+          set -e
+          chmod +x scripts/fly_disable_worker_v2.sh scripts/fly_worker_split_v2_guard.sh
+          if ./scripts/fly_worker_split_v2_guard.sh; then
+            echo "split v2 detected (secret and/or worker machine) — rolling back to v1"
+            # Prepare only: unset secrets + free volume; deploy step uses fly.toml.
+            FLY_DISABLE_SKIP_DEPLOY=1 FLY_APP=subnet-dashboard FLY_PRIMARY_REGION=sjc \
+              ./scripts/fly_disable_worker_v2.sh
+          else
+            echo "v1 mode — skip rollback"
+          fi
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_PRIMARY_REGION: sjc
-          FORCE_WORKER_SPLIT_V2: "1"
-      - name: Ensure private flycast IP
-        continue-on-error: true
-        run: |
-          COUNT=$(flyctl ips list -a subnet-dashboard --json 2>/dev/null | python3 -c "
-          import json,sys
-          rows=json.load(sys.stdin)
-          print(sum(1 for r in rows if 'private' in str(r.get('type','')).lower()))
-          " 2>/dev/null || echo 0)
-          if [ "$COUNT" -lt 1 ]; then
-            echo "Allocating private flycast IPv6 for worker :8081 routing"
-            flyctl ips allocate-v6 --private -a subnet-dashboard || true
-          else
-            echo "private flycast IP already present (count=$COUNT)"
-          fi
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Deploy to Fly (region sjc)
+      - name: Deploy to Fly (v1 fly.toml, region sjc)
         run: |
           set -e
-          chmod +x scripts/fly_worker_split_v2_guard.sh
-          FLY_CONFIG=fly.worker-v2.toml
-          if ./scripts/fly_worker_split_v2_guard.sh; then
-            echo "split v2 guard ok — deploying $FLY_CONFIG"
-          else
-            echo "WARN: guard false — still deploying $FLY_CONFIG (Phase C prod)"
-          fi
+          FLY_CONFIG=fly.toml
+          echo "deploying $FLY_CONFIG (inline worker + volume on web)"
           deploy_once() {
             flyctl deploy --config "$FLY_CONFIG" --remote-only --no-cache --yes --regions sjc --ha=false
           }
@@ -137,32 +126,24 @@ jobs:
           exit 1
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FORCE_WORKER_SPLIT_V2: "1"
-      - name: Scale machines (v1 web-only, or v2 web+worker)
+      - name: Scale web=1 (no dedicated worker)
         run: |
-          chmod +x scripts/fly_worker_split_v2_guard.sh
-          if ./scripts/fly_worker_split_v2_guard.sh; then
-            flyctl scale count web=1 worker=1 --app subnet-dashboard --yes
-          else
-            flyctl scale count web=1 --app subnet-dashboard --yes
-          fi
+          flyctl scale count web=1 --app subnet-dashboard --yes
+          flyctl scale count worker=0 --app subnet-dashboard --yes || true
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FORCE_WORKER_SPLIT_V2: "1"
-      - name: Reconcile process groups (destroy orphan workers unless v2)
+      - name: Reconcile process groups (destroy orphan workers)
         run: |
           chmod +x scripts/fly_web_recover.sh scripts/fly_worker_split_v2_guard.sh
           FLY_APP=subnet-dashboard ./scripts/fly_web_recover.sh
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Repair v2 volume placement (post-deploy if still on web)
+      - name: Clear leftover v2 proxy URL secret
         run: |
-          chmod +x scripts/fly_v2_volume_repair.sh
-          FLY_V2_REPAIR_MODE=full FLY_APP=subnet-dashboard ./scripts/fly_v2_volume_repair.sh
+          chmod +x scripts/fly_set_worker_internal_url.sh scripts/fly_worker_split_v2_guard.sh
+          FLY_APP=subnet-dashboard ./scripts/fly_set_worker_internal_url.sh
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FLY_PRIMARY_REGION: sjc
-          FORCE_WORKER_SPLIT_V2: "1"
       # flyctl treats "stopped" as a good post-deploy state; a started machine
       # with critical checks is also unreachable (proxy: no good candidate).
       # Force start/restart + verify public /health before declaring success.
@@ -176,7 +157,7 @@ jobs:
           import json,sys
           for m in json.load(sys.stdin):
               pg = (m.get('process_group') or 'web').lower()
-              if pg in ('web', 'worker') and m.get('id'):
+              if pg == 'web' and m.get('id'):
                   print(m.get('id'))
           "); do
             [ -n "$id" ] || continue
@@ -210,24 +191,6 @@ jobs:
           fi
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Set worker internal URL (6PN private_ip)
-        run: |
-          chmod +x scripts/fly_set_worker_internal_url.sh
-          FLY_APP=subnet-dashboard WORKER_HTTP_PORT=8081 ./scripts/fly_set_worker_internal_url.sh
-          echo "waiting 75s for machines to restart with WORKER_INTERNAL_URL + :8081..."
-          sleep 75
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FORCE_WORKER_SPLIT_V2: "1"
-          WORKER_HTTP_PORT: "8081"
-      - name: Probe worker from web (diagnostic)
-        continue-on-error: true
-        run: |
-          chmod +x scripts/fly_probe_worker_from_web.sh
-          FLY_APP=subnet-dashboard WORKER_HTTP_PORT=8081 ./scripts/fly_probe_worker_from_web.sh
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          WORKER_HTTP_PORT: "8081"
       - name: Warm production caches
         run: |
           chmod +x scripts/warm_prod.sh

@@ -1,49 +1,52 @@
-# Split v2 rollback runbook (Plan B only)
+# Split v2 rollback runbook
 
-**Default:** stay on `split_v2` with volume proxy (#576/#577) and cross-machine HTTP heartbeat.
+**Canon (2026-07-31):** production runs **v1** — one web machine, `data_volume` + inline worker (`fly.toml`).
 
-**Do not run this** unless:
-1. Worker machine is scaled (`worker=1`) and warmed up (~5 min after boot), and
-2. `fly logs -p worker` still shows listener/resolver dead, and
-3. Human approves rollback.
+split_v2 (dedicated worker + web→worker volume proxy) is **opt-in only**. It left hero / Telegram / mindmap / learning stuck whenever private HTTP failed. Soft stubs and proxy fallthroughs are not a substitute for co-located volume.
 
-## Symptoms that justify rollback
+## When to roll back
 
-- `worker_peer.alive: false` with `note: worker_http_unreachable` for >10 min after worker restart
-- `/api/message-intel/status` returns 503 consistently (worker proxy down)
-- Learning loop stalled >2h with no resolver ticks after worker warm-up
-- Repeated VM wedge (503/timeout on `/health`) that restart does not fix
+Any of:
 
-## Rollback steps (v1 inline worker)
+- `worker_mode: split_v2` and `worker_peer.alive: false` / `worker_http_unreachable`
+- Volume APIs return soft `status: degraded` for >10 min after worker restart
+- Learning loop stalled (resolver tick age days/weeks)
+- Repeated proxy PRs without restoring real volume payloads
+
+## Preferred path (GitHub Actions)
+
+1. Merge a main deploy that uses `fly.toml` (no `FORCE_WORKER_SPLIT_V2`) — deploy workflow auto-detects v2 and runs `scripts/fly_disable_worker_v2.sh`.
+2. Or run workflow **Disable Worker Split v2** with confirm input `disable`.
+
+## Manual path (`flyctl`)
 
 ```bash
-# 1. Scale dedicated worker to zero
-fly scale count worker=0 --app subnet-dashboard
+chmod +x scripts/fly_disable_worker_v2.sh
+./scripts/fly_disable_worker_v2.sh
 
-# 2. Disable v2 split — restores inline worker on web machine
-fly secrets set WORKER_SPLIT_V2=off --app subnet-dashboard
-
-# 3. Redeploy (or restart web machine)
-fly apps restart subnet-dashboard
-
-# 4. Verify v1 inline worker
+# Verify — expect worker_mode NOT split_v2; inline peer alive after warm
 curl -s https://subnet-dashboard.fly.dev/api/ops/readiness | jq '{worker_mode, worker_peer, issues}'
-# expect: worker_mode "split", worker_peer.alive true, peer "inline_worker"
+curl -s https://subnet-dashboard.fly.dev/api/daily-pick | jq '{status, action, pick: (.pick!=null)}'
+curl -s 'https://subnet-dashboard.fly.dev/api/message-intel?limit=2' | jq '{status, n: (.messages|length), empty}'
 ```
 
-## Re-enable listener after rollback
+**Important:** `fly secrets unset WORKER_SPLIT_V2` — do not only set `=off`. The deploy guard treats **secret presence** as v2.
+
+## Re-enable Telegram after rollback
 
 ```bash
+# Only after telegram session exists on the volume
 fly secrets set MESSAGE_INTEL_LISTENER=auto --app subnet-dashboard
 ```
 
-## Re-enable v2 later
+## Re-enable v2 later (opt-in)
 
-See `DEPLOY.md` § Worker split v2 and `cursor-agents-communication/fly-worker-split-v2-lock.md`.
+Only after private HTTP is proven (probe from web machine succeeds for 24h):
 
 ```bash
-fly scale count web=1 worker=1 --app subnet-dashboard
-fly secrets set WORKER_SPLIT_V2=on --app subnet-dashboard
+# workflow: Enable Worker Split v2 (confirm=enable)
+# or:
+./scripts/fly_enable_worker_v2.sh
 ```
 
-Babysit: `BASE=https://subnet-dashboard.fly.dev ./scripts/babysit_phase.sh c`
+See `cursor-agents-communication/fly-worker-split-v2-lock.md` and `DEPLOY.md`.

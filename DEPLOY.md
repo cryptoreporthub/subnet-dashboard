@@ -91,13 +91,23 @@ Verify after deploy:
 ```bash
 curl -s https://subnet-dashboard.fly.dev/api/ops/readiness | jq '{worker_mode, worker_peer, resolver}'
 # expect: worker_mode "split", worker_peer.alive true, resolver.running true
+```
 
-### Worker split v2 (opt-in, not default)
+### Worker split v2 (opt-in only — not default)
 
-**v2 web proxy:** When `WORKER_SPLIT_V2=on`, the web machine has no volume. Volume-backed APIs (`/api/pump-alerts`, `/api/message-intel/*`) proxy to the worker machine via Fly private networking (`worker.process.subnet-dashboard.internal:8080`). The worker entrypoint runs background jobs plus internal HTTP (uvicorn).
+**Prod canon is v1** (`fly.toml`: one machine, volume + inline worker). split_v2 was enabled on prod and left volume APIs behind a broken web→worker private hop — hero, Telegram, mindmap, and learning degraded for extended periods. **Do not** set `FORCE_WORKER_SPLIT_V2` in CI.
 
-**Worker peer probe:** Web checks `http://worker.process.subnet-dashboard.internal:8080/api/ops/worker-peer` (process-group DNS). Do not use app flycast for peer probes — it can route to the web machine. If a legacy `WORKER_INTERNAL_URL` Fly secret still points at flycast, unset it: `fly secrets unset WORKER_INTERNAL_URL --app subnet-dashboard`.
+**Rollback to v1 (preferred):**
 
+```bash
+chmod +x scripts/fly_disable_worker_v2.sh
+./scripts/fly_disable_worker_v2.sh
+# or: GitHub Actions → Disable Worker Split v2 (confirm=disable)
+```
+
+Unset the secret (`fly secrets unset WORKER_SPLIT_V2`) — setting `=off` is not enough; the guard keys off secret **presence**.
+
+**v2 web proxy (only when intentionally enabled):** When the `WORKER_SPLIT_V2` secret exists, the web machine has no volume. Volume-backed APIs proxy to the worker via Fly private networking.
 
 **One-command enable** (human, requires `flyctl auth`):
 
@@ -115,13 +125,12 @@ fly scale count web=1 worker=1 --app subnet-dashboard
 # 2. Enable v2 (disables inline worker on web)
 fly secrets set WORKER_SPLIT_V2=on --app subnet-dashboard
 
-# Rollback: scale worker=0, WORKER_SPLIT_V2=off, redeploy
+# Rollback: prefer scripts/fly_disable_worker_v2.sh
 fly scale count worker=0 --app subnet-dashboard
-fly secrets set WORKER_SPLIT_V2=off --app subnet-dashboard
+fly secrets unset WORKER_SPLIT_V2 --app subnet-dashboard
 ```
 
-See `cursor-agents-communication/fly-worker-split-v2-lock.md`.
-```
+See `cursor-agents-communication/fly-worker-split-v2-lock.md` and `split-v2-rollback-runbook.md`.
 
 ---
 
