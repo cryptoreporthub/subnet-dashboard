@@ -127,7 +127,7 @@ async def api_message_intel_list(
 @message_intel_router.get("/api/message-intel/detail/{msg_id}")
 async def api_message_intel_detail(msg_id: int):
     try:
-        return engine.get_message_detail(msg_id)
+        return await run_in_threadpool(engine.get_message_detail, msg_id)
     except Exception as exc:
         logger.error("message-intel detail failed: %s", exc)
         from internal.api_errors import public_error
@@ -141,7 +141,10 @@ async def api_message_intel_chatter(
     limit: int = Query(default=50, ge=1, le=200),
 ):
     try:
-        return engine.list_chatter(min_conviction=min_conviction, limit=limit)
+        # Same SQLite/registry read path as list_messages() above — must not
+        # run on the event loop (a live py-spy dump caught the MainThread
+        # itself blocked here, not just a thread-pool worker).
+        return await run_in_threadpool(engine.list_chatter, min_conviction=min_conviction, limit=limit)
     except Exception as exc:
         logger.error("message-intel chatter failed: %s", exc)
         return {"status": "error", "messages": [], "error": str(exc)}
@@ -152,18 +155,21 @@ async def api_message_intel_authors(
     days: int = Query(default=7, ge=1, le=30),
     limit: int = Query(default=8, ge=1, le=50),
 ):
-    return engine.list_authors(days=days, limit=limit)
+    # build_weekly_authors() does synchronous JSON parsing over stored
+    # messages — a live py-spy dump caught this route blocking the
+    # MainThread/event loop directly (it was never dispatched off-thread).
+    return await run_in_threadpool(engine.list_authors, days=days, limit=limit)
 
 
 @message_intel_router.get("/api/message-intel/topics")
 async def api_message_intel_topics(limit: int = Query(default=12, ge=1, le=50)):
-    return engine.list_topics(limit=limit)
+    return await run_in_threadpool(engine.list_topics, limit=limit)
 
 
 @message_intel_router.get("/api/message-intel/patterns")
 async def api_message_intel_patterns(limit: int = Query(default=20, ge=1, le=100)):
     try:
-        return engine.list_patterns(limit=limit)
+        return await run_in_threadpool(engine.list_patterns, limit=limit)
     except Exception as exc:
         logger.error("message-intel patterns failed: %s", exc)
         return {"status": "error", "patterns": [], "error": str(exc)}
@@ -172,7 +178,8 @@ async def api_message_intel_patterns(limit: int = Query(default=20, ge=1, le=100
 @message_intel_router.get("/api/message-intel/summary")
 async def api_message_intel_summary():
     """Panel summary endpoint (also folded into /api/mindmap/state)."""
-    return {"status": "success", "summary": summarize_message_intel()}
+    summary = await run_in_threadpool(summarize_message_intel)
+    return {"status": "success", "summary": summary}
 
 
 @message_intel_router.get("/api/message-intel/social")
@@ -187,5 +194,5 @@ async def api_message_intel_social(limit: int = Query(default=6, ge=1, le=24)):
         subnets, _ = _get_subnets_with_source()
     except Exception:
         pass
-    rows = build_social_sentiment_rows(subnets, limit=limit)
+    rows = await run_in_threadpool(build_social_sentiment_rows, subnets, limit=limit)
     return {"status": "success", "rows": rows, "empty": len(rows) == 0}
