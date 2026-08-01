@@ -158,7 +158,68 @@
   @media (prefers-reduced-motion: reduce) {
     .mindmap-trail-row--fresh .mindmap-trail-row__dot { animation: none !important; }
   }
+
+  .mindmap-integration-status {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .mindmap-integration-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    line-height: 1.2;
+    border: 1px solid var(--border-subtle, #374151);
+    color: var(--text-muted, #6b7280);
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .mindmap-integration-badge__label { color: var(--text-secondary, #9ca3af); }
+  .mindmap-integration-badge__pill {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.62rem;
+    text-transform: lowercase;
+    letter-spacing: 0.02em;
+  }
+  .mindmap-integration-badge--closed {
+    border-color: rgba(31, 212, 124, 0.35);
+    background: rgba(31, 212, 124, 0.08);
+  }
+  .mindmap-integration-badge--closed .mindmap-integration-badge__pill { color: var(--accent-primary, #1fd47c); }
+  .mindmap-integration-badge--partial {
+    border-color: rgba(255, 159, 63, 0.35);
+    background: rgba(255, 159, 63, 0.08);
+  }
+  .mindmap-integration-badge--partial .mindmap-integration-badge__pill { color: var(--accent-orange, #ff9f3f); }
+  .mindmap-integration-badge--blocked {
+    border-color: rgba(248, 113, 113, 0.3);
+    background: rgba(248, 113, 113, 0.06);
+  }
+  .mindmap-integration-badge--blocked .mindmap-integration-badge__pill { color: #f87171; }
+  .mindmap-integration-badge--display_only {
+    border-color: var(--border-subtle, #374151);
+    background: rgba(255, 255, 255, 0.03);
+  }
+  .mindmap-integration-badge--display_only .mindmap-integration-badge__pill { color: var(--text-secondary, #9ca3af); }
+  .mindmap-integration-badge--read_only {
+    border-color: rgba(63, 201, 255, 0.25);
+    background: rgba(63, 201, 255, 0.06);
+  }
+  .mindmap-integration-badge--read_only .mindmap-integration-badge__pill { color: var(--accent-blue, #3fc9ff); }
 </style>
+
+{% set integration_labels = {
+  'council_trail': 'Council Trail',
+  'expert_weights': 'Expert Weights',
+  'judges': 'Judges',
+  'telegram_pulse': 'Telegram Pulse',
+  'dispositions': 'Dispositions',
+  'pump_desk': 'Pump Desk',
+  'whales_indicators': 'Whales & Indicators',
+} %}
 
 <section class="cockpit mindmap-graph-section" id="mindmap-graph-section" aria-labelledby="mindmap-graph-heading">
   <div class="cockpit-header">
@@ -176,6 +237,19 @@
     data-initial-graph='{{ mindmap_graph | tojson }}'
     {% endif %}
   >
+    <div id="mindmap-integration-status" class="mindmap-integration-status" aria-label="Data source integration status">
+    {% if mindmap_graph is defined and mindmap_graph and mindmap_graph.integration_status %}
+      {% for key, label in integration_labels.items() %}
+        {% set st = mindmap_graph.integration_status.get(key) %}
+        {% if st %}
+      <span class="mindmap-integration-badge mindmap-integration-badge--{{ st }}" data-source="{{ key }}" data-status="{{ st }}"{% if st == 'blocked' %} title="Not yet wired — pending activation"{% elif st == 'display_only' %} title="Shown for context — not yet actionable"{% elif st == 'read_only' %} title="Read-only feed — no write-back"{% endif %}>
+        <span class="mindmap-integration-badge__label">{{ label }}</span>
+        <span class="mindmap-integration-badge__pill">{{ st.replace('_', ' ') }}</span>
+      </span>
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+    </div>
     <p id="mindmap-graph-empty" class="mindmap-honest-empty">
       Mindmap graph is empty on this deploy — trail rows and dispositions will appear as the learning loop warms up.
     </p>
