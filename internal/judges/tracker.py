@@ -68,6 +68,16 @@ def on_prediction_resolved(prediction: Dict[str, Any]) -> Dict[str, Any]:
 
     for judge in all_judges():
         closed = judge.close_position(prediction, actual_pct=actual_pct, outcome=outcome)
+        if closed:
+            try:
+                from internal.judges.weights import nudge_judge
+
+                nudge_judge(
+                    judge.name,
+                    correct=float(closed.get("pnl_pct", 0) or 0) > 0,
+                )
+            except Exception:
+                pass
         postmortem = None
         if wrong:
             postmortem = judge.record_postmortem(prediction, actual_pct)

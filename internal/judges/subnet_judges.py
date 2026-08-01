@@ -253,7 +253,19 @@ def score_subnet(
         pulse_degraded = True
 
     scores = [oracle_score, echo_score, pulse_score]
-    consensus_score = oracle_score * 0.35 + echo_score * 0.30 + pulse_score * 0.35
+    try:
+        from internal.judges.weights import normalized_judge_weights
+
+        jw = normalized_judge_weights()
+    except Exception:
+        from internal.judges.weights import DEFAULT_JUDGE_WEIGHTS
+
+        jw = dict(DEFAULT_JUDGE_WEIGHTS)
+    consensus_score = (
+        oracle_score * jw["oracle"]
+        + echo_score * jw["echo"]
+        + pulse_score * jw["pulse"]
+    )
     if len(scores) > 1:
         stddev = statistics.stdev(scores)
         agreement = max(0.0, min(1.0, 1.0 - stddev / 0.5))
@@ -266,8 +278,10 @@ def score_subnet(
     else:
         verdict = "neutral"
     contested = agreement < 0.5
-    consensus_confidence = sum(
-        [oracle_confidence * 0.35, echo_confidence * 0.30, pulse_confidence * 0.35]
+    consensus_confidence = (
+        oracle_confidence * jw["oracle"]
+        + echo_confidence * jw["echo"]
+        + pulse_confidence * jw["pulse"]
     )
     return {
         "netuid": netuid,

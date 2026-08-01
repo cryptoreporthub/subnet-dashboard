@@ -48,9 +48,9 @@
   --signal-amber: var(--accent-orange);
 
   /* Text */
-  --text-primary: #eef7f1;
-  --text-secondary: #8ba598;
-  --text-muted: #4f6459;
+  --text-primary: #f5f7fa;
+  --text-secondary: #a3b5aa;
+  --text-muted: #7a9186;
 
   /* Borders — hairlines; violet on secondary emphasis */
   --border-subtle: rgba(255, 255, 255, 0.06);
@@ -119,6 +119,7 @@ body {
   background-position: center;
   padding-bottom: 64px;
   isolation: isolate;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 /* Coarse + fine grain over smoke — static, no drift (Claude recipe) */
@@ -136,8 +137,22 @@ body::before {
   background-size: 180px 180px, 280px 280px;
 }
 
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(4, 6, 14, 0.12) 0%,
+    rgba(4, 6, 14, 0.42) 100%
+  );
+}
+
 @media (prefers-reduced-transparency: reduce) {
   body::before { opacity: 0.25; }
+  body::after { opacity: 0.35; }
 }
 
 a { color: var(--accent-blue); text-decoration: none; }
