@@ -1,9 +1,9 @@
 # Model Guide — Composer vs Grok
 
-**Last updated:** 2026-07-15  
-**Applies to:** **One primary Cloud Agent** (Pro+; B UI tail) + Grok **subagent**. Agent A (`-843d`) **retired** — do not spawn.
+**Last updated:** 2026-08-01  
+**Applies to:** **One primary Cloud Agent** (Pro+) + Grok / Composer / Sonnet **subagents** by role. Agent A (`-843d`) **retired** — do not spawn.
 
-> **Mode:** One agent + Grok subagent only. Queue: B8 F3 UI → B9 F4 UI → B10 F5 UI. See `token-budget-rules.md` + `STATUS.md`.
+> **Mode:** One quarterback per session. Queue and plans cite this file — they must **not** invent a competing model pipeline. See `token-budget-rules.md` + `STATUS.md` / `board.md`.
 
 ## Models
 
@@ -17,15 +17,15 @@
 
 **Default build:** **Composer 2.5 (slow, `composer-2.5`)** preferred; use **`composer-2.5-fast`** only for mechanical builds where the fast pool is clearly sufficient.
 
-**Grok thinking policy (mandatory) — user 2026-07-15; budget update same day:**
-1. Prefer **slow + low**, else **slow + medium**. Never default to high / xhigh / fast-xhigh.
-2. Escalate to **high** only when medium fails or the result is not satisfactory.
+**Grok thinking policy (mandatory) — user 2026-07-15; updated 2026-08-01:**
+1. **Design / audit LOCKs:** start **slow + medium**; escalate to **high** only if medium FAIL / stuck / unsatisfactory. Never default to high / xhigh / fast-xhigh.
+2. **Tiny / path-already-clear chores:** **slow + low** is fine.
 3. Do **not** open `xhigh` or `fast-xhigh` “just in case.” Fast Grok variant only for light chores when able.
 4. Prefer a scoped read-only Grok **Task subagent** over switching the whole Cloud Agent run to Grok.
 5. Obey `.cursorignore` / `token-budget-rules.md` — do not pull `data/*.json` or superseded design dumps into context.
 
 **HARD RULE — Grok lock → Composer write (token-save on output) — user 2026-07-15:**
-1. When a slice needs design/thinking, **Grok slow+medium** does the reasoning and returns a **short structured LOCK only** (not a long markdown plan). Cap ~1 screen.
+1. When a slice needs design/thinking, **Grok** (medium; high if stuck) does the reasoning and returns a **short structured LOCK only** (not a long markdown plan). Cap ~1 screen.
 2. **Composer** expands that lock into the plan file / PR body / board lines, then **builds**.
 3. Grok must **not** author long prose plans. Composer must **not** invent design details missing from the lock.
 4. Lock template (Grok output shape):
@@ -39,8 +39,34 @@
    ```
 5. If an approved auto-plan already names the slice (e.g. `s16-s17-automated-build-plan.md`), **skip a new Grok lock** unless the plan marks DESIGN or the path is ambiguous — Composer builds from the locked plan.
 
-**Grok as reviewer:** Read-only pass — no edits unless findings require a follow-up Composer task. Save review conclusions to Ditto (`source: cursor-agents-communication`) or a PR comment.
+**HARD RULE — Exactly ONE Sonnet gate per slice (user 2026-08-01):**
 
+Sonnet is read-only (diffs / LOCK / risks / missing tests / lock drift). **Sonnet does not edit.** Sonnet effort: **low** first; **medium** only if low is unclear / incomplete / stuck. Never default Sonnet to high.
+
+**Do not “double-dip”:** never run Sonnet on both the LOCK *and* the post-Composer diff by default. Pick **one** gate per slice:
+
+| Slice type | Sonnet runs once on… | Who covers the other artifact |
+|------------|----------------------|-------------------------------|
+| **DESIGN-HEAVY** (ambiguous UI/architecture LOCK — e.g. hero/mindmap ground-up) | The **LOCK, before Composer** | Post-build review = **Grok** only (unless Grok escalates residual risk to a Sonnet spot-check — rare) |
+| **MECHANICAL** (clear files/AC — e.g. Phase C wiring, locked learning-loop patches) | The **diff, before push** | Pre-build LOCK = **Grok** only — skip Sonnet on the LOCK |
+
+```text
+Grok LOCK (medium → high if stuck)
+  → DESIGN-HEAVY: Sonnet (low→medium) on LOCK once → Composer
+  → MECHANICAL:     Composer directly
+  → orchestrator smoke-check (diff scope, rerun new tests)
+  → MECHANICAL (or Grok escalates residual risk): Sonnet (low→medium) on diff once before push
+  → Sonnet FAIL / must-fix CONDITIONAL:
+       Grok fix LOCK → Composer patch → Sonnet re-checks THAT SAME gate only
+  → push
+```
+
+1. Sonnet finds → **Grok** writes the fix LOCK → **Composer** patches → Sonnet re-reviews **the same gate**. Never let Sonnet implement.
+2. Re-review after FAIL is not double-dipping; running Sonnet on LOCK *and* code in the same slice by default is.
+3. Do not use Sonnet as the long primary babysitter or implementer (usage limit).
+4. Sprint plans cite this section — they must not invent a competing “always Sonnet before Composer” or “always Sonnet after Composer” rule.
+
+**Grok as reviewer:** Read-only pass — no edits unless findings require a follow-up Composer task. Save review conclusions to Ditto (`source: cursor-agents-communication`) or a PR comment.
 **Build caching (token discipline) — try during every slice:**
 1. **Read binding docs once per session** — `board.md`, `STATUS.md`, locked spec (`phase-*-step0-spec.md`, `gameplan-*.md`). After that, cite paths; do not re-paste full spec bodies into prompts or Ditto posts.
 2. **Stable prefix, variable tail** — when invoking Grok, put unchanged architecture/spec at the top and the slice-specific question at the end so provider prompt-cache can reuse the prefix across calls in the same build.

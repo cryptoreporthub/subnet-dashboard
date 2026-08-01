@@ -1,8 +1,21 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-07-31T17:38:00Z  
-**main:** see GitHub · **infra:** v1 canon confirmed stable — real wedge root-caused + fixed (PR #710)  
-**Plans:** `completion-runbook.md` · `split-v2-rollback-runbook.md` · `fly-worker-split-v2-lock.md`
+**Last updated:** 2026-08-01T14:45:00Z  
+**main:** `73a0736` (#718 soul_map I/O) · **infra:** v1 stable; wedges #710–#717 fixed  
+**Active handoff:** `handoff-learning-loop-mindmap-2026-08-01.md`  
+**Models:** ONE Sonnet gate/slice (`model-guide.md`) — DESIGN-HEAVY=Sonnet on LOCK; MECHANICAL=Sonnet on diff before push. Grok medium→high; Composer builds; Sonnet never implements.  
+**Plans:** `handoff-learning-loop-mindmap-2026-08-01.md` · `hero-mindmap-sprint-plan.md` (#723) · `completion-runbook.md`
+
+## STATUS SNAPSHOT (2026-08-01)
+
+| Item | Status |
+|------|--------|
+| Phase 1 soul_map writers gateway | **MERGED** #718 |
+| Phase 2 soul_map read cache | **OPEN** #719 MERGEABLE CI green — merge next |
+| Phase A Judges confidence weights | **OPEN** #720 MERGEABLE CI green |
+| Phase B Telegram author trust (LB-8 untouched) | **OPEN** #721 MERGEABLE CI green |
+| Phase C mindmap display wiring | **NEXT** after merges |
+| Trail ≠ learning loop audit | Council+Pump closed; Judges/Telegram closed in #720/#721; Dev Signals display-only |
 
 ## Infra STATUS (launch blocker)
 
