@@ -117,6 +117,42 @@ def test_message_intel_list_route_does_not_block_health():
     assert result["resp"].status_code == 200
 
 
+def test_message_intel_authors_route_does_not_block_health():
+    """GET /api/message-intel/authors called engine.list_authors() ->
+    build_weekly_authors() directly on the MainThread — a live py-spy dump
+    caught this route (not just list_messages) holding the event loop in
+    production. Must also dispatch off-thread."""
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_list_authors(**kwargs):
+        started.set()
+        release.wait(timeout=2.0)
+        return {"status": "success", "authors": []}
+
+    with patch("internal.message_intel.engine.list_authors", side_effect=slow_list_authors):
+        with TestClient(app) as client:
+            result = {}
+
+            def _call():
+                result["resp"] = client.get("/api/message-intel/authors")
+
+            t = threading.Thread(target=_call, daemon=True)
+            t.start()
+            assert started.wait(timeout=2.0)
+
+            t0 = time.monotonic()
+            health = client.get("/health")
+            elapsed = time.monotonic() - t0
+
+            release.set()
+            t.join(timeout=3.0)
+
+    assert health.status_code == 200
+    assert elapsed < 1.0
+    assert result["resp"].status_code == 200
+
+
 def test_cockpit_sections_route_does_not_block_health():
     """GET /api/cockpit/sections and the SSE stream's periodic sections event
     both called get_cockpit_sections() -> select_hourly_pick() directly. A live
