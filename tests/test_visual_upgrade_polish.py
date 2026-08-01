@@ -50,6 +50,78 @@ def _render_council_stage(netuid: int) -> str:
     )
 
 
+_SENTINEL = object()
+
+
+def _render_council_stage_confidence(
+    *,
+    final_confidence=_SENTINEL,
+    confidence=_SENTINEL,
+    conviction=_SENTINEL,
+    netuid: int = 82,
+) -> str:
+    """Render council_stage with explicit confidence fields for H1 three-state SSR checks."""
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    env.globals["publish_gate_label"] = publish_gate_label
+    cand = {"subnet": {"netuid": netuid, "name": f"SN{netuid}"}}
+    if final_confidence is not _SENTINEL:
+        cand["final_confidence"] = final_confidence
+    if confidence is not _SENTINEL:
+        cand["confidence"] = confidence
+    if conviction is not _SENTINEL:
+        cand["conviction"] = conviction
+    return env.get_template("partials/premium/council_stage.html").render(
+        dpick={"action": "HOLD", "pick": None, "candidate": cand},
+        hybrid_trust={},
+        trust_banner={},
+        story_path={},
+        habit_watchlist={"netuids": []},
+        habit_alerts={"enabled": False},
+    )
+
+
+def test_council_stage_h1_resolving_conf_state_ssr():
+    """H1: no confidence fields → resolving (not fabricated 0% conviction)."""
+    html = _render_council_stage_confidence(
+        final_confidence=None,
+        confidence=None,
+        conviction=None,
+    )
+    assert 'id="k3-dossier"' in html
+    assert 'data-conf-state="resolving"' in html
+    orb_html = html.split('id="k3-orb-score"')[1].split("</div>")[0]
+    assert 'digit-ones">—' in orb_html
+    assert ">0</span>" not in orb_html
+
+
+def test_council_stage_h1_zero_conf_state_ssr():
+    html = _render_council_stage_confidence(final_confidence=0)
+    assert 'data-conf-state="zero"' in html
+    orb_html = html.split('id="k3-orb-score"')[1].split("</div>")[0]
+    assert ">0</span>" in orb_html
+
+
+def test_council_stage_h1_value_conf_state_ssr():
+    html = _render_council_stage_confidence(final_confidence=0.5)
+    assert 'data-conf-state="value"' in html
+    orb_html = html.split('id="k3-orb-score"')[1].split("</div>")[0]
+    assert "digit-ones" in orb_html
+    assert "—" not in orb_html
+
+
+def test_cockpit_hydrate_h1_three_state_hooks_present():
+    """Client-side patchK3DossierFromPayload three-state logic — no JS test runner in repo."""
+    src = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()
+    assert "_k3ConfResolvingTimer" in src
+    assert "data-conf-state" in src
+    assert "confState = 'resolving'" in src
+    assert "confState = 'zero'" in src
+    assert "confState = 'value'" in src
+
+
 def test_council_stage_emits_identity_band_and_keeps_action_badge_separate():
     html = _render_council_stage(82)
     expected_band = netuid_band(82)

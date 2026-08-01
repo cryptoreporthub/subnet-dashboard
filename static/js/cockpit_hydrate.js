@@ -1199,17 +1199,54 @@
     body.innerHTML = html;
   }
 
+  var _k3ConfResolvingTimer = null;
+
   function patchK3DossierFromPayload(payload) {
     if (!payload || !document.getElementById('k3-dossier')) return false;
     if (!shouldApplyDailyPickPayload(payload)) return false;
+    if (_k3ConfResolvingTimer) {
+      clearTimeout(_k3ConfResolvingTimer);
+      _k3ConfResolvingTimer = null;
+    }
     var brief = payload.brief || {};
     var pick = payload.pick;
     var cand = payload.candidate;
     var active = pick || cand;
     var sn = (active && active.subnet) || {};
     var confSrc = active || payload;
-    var finalConf = confSrc.final_confidence != null ? confSrc.final_confidence : confSrc.confidence;
-    var fc = confTier(finalConf != null ? finalConf : 0);
+    // Resolve a single raw confidence value with the same field priority as
+    // the SSR twin's conviction_raw chain in council_stage.html, so JS and
+    // SSR always classify the same payload into the same conf-state.
+    var finalConf =
+      confSrc.final_confidence != null
+        ? confSrc.final_confidence
+        : confSrc.confidence != null
+        ? confSrc.confidence
+        : confSrc.conviction;
+    var confState;
+    var fc;
+    if (finalConf == null) {
+      confState = 'resolving';
+      fc = { tier: 'tier-gold', conf: null };
+    } else if (Number(finalConf) === 0) {
+      confState = 'zero';
+      finalConf = 0;
+      fc = confTier(0);
+    } else {
+      confState = 'value';
+      fc = confTier(finalConf);
+    }
+    var dossier = document.getElementById('k3-dossier');
+    if (dossier) dossier.setAttribute('data-conf-state', confState);
+    if (confState === 'resolving') {
+      _k3ConfResolvingTimer = setTimeout(function () {
+        _k3ConfResolvingTimer = null;
+        var el = document.getElementById('k3-dossier');
+        if (el && el.getAttribute('data-conf-state') === 'resolving') {
+          el.setAttribute('data-conf-state', 'delayed');
+        }
+      }, 15000);
+    }
     var actRaw = String(payload.action || 'HOLD').toUpperCase();
     if (actRaw === 'BUY') actRaw = 'LONG';
     var snLabel = sn.name || (sn.netuid != null ? 'SN' + sn.netuid : '');
@@ -1348,12 +1385,16 @@
     }
 
     var orb = k3OrbScoreEl();
-    if (orb && fc.conf != null) {
-      var tens = Math.floor(fc.conf / 10);
-      var ones = fc.conf % 10;
-      orb.innerHTML =
-        (tens > 0 ? '<span class="digit-tens">' + tens + '</span>' : '') +
-        '<span class="digit-ones">' + ones + '</span>';
+    if (orb) {
+      if (confState === 'resolving') {
+        orb.innerHTML = '<span class="digit-ones">—</span>';
+      } else if (fc.conf != null) {
+        var tens = Math.floor(fc.conf / 10);
+        var ones = fc.conf % 10;
+        orb.innerHTML =
+          (tens > 0 ? '<span class="digit-tens">' + tens + '</span>' : '') +
+          '<span class="digit-ones">' + ones + '</span>';
+      }
     }
     patchK3ConvictionRing(fc.conf);
 
@@ -2450,6 +2491,7 @@
     var active = pick || cand;
     var sn = (active && active.subnet) || {};
     var confSrc = active || payload;
+    // H1: intentionally out of scope — secondary council-call card, not hero orb
     var finalConf = confSrc.final_confidence != null ? confSrc.final_confidence : confSrc.confidence;
     var fc = confTier(finalConf != null ? finalConf : 0);
     var audit = (active && active.audit) || {};
