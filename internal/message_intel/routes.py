@@ -6,6 +6,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query, Request
+from starlette.concurrency import run_in_threadpool
 
 from internal.message_intel import engine
 from internal.message_intel.summary import summarize_message_intel
@@ -50,7 +51,13 @@ async def api_message_intel(
 ):
     """Primary message-intel list endpoint (honest-empty when no messages)."""
     try:
-        return engine.list_messages(
+        # engine.list_messages() -> build_telegram_proof_band() runs a SQLite
+        # query that can block on the DB's write lock while the Telegram
+        # listener is ingesting — a live py-spy dump caught this exact route
+        # (the most frequently polled endpoint in the app) holding the event
+        # loop. Dispatch off-thread so /health can never queue behind it.
+        return await run_in_threadpool(
+            engine.list_messages,
             limit=limit,
             offset=offset,
             min_conviction=min_conviction,
@@ -104,7 +111,8 @@ async def api_message_intel_list(
     topic: Optional[str] = Query(default=None, min_length=1, max_length=32),
 ):
     try:
-        return engine.list_messages(
+        return await run_in_threadpool(
+            engine.list_messages,
             limit=limit,
             offset=offset,
             min_conviction=min_conviction,
