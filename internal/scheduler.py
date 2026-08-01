@@ -16,13 +16,13 @@ Features:
 
 import json
 import os
-import tempfile
 import threading
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from internal.job_scheduler import cancel_job, schedule_in_seconds
+from internal.store.soul_map_io import write_soul_map
 
 # Ensure the data directory exists at module load time. Fly.io root filesystems
 # are ephemeral; without this the heartbeat write below silently fails. Uses the
@@ -235,22 +235,13 @@ class AdversarialScheduler:
                 ensure_data_dir()
             except Exception:
                 os.makedirs(os.path.dirname(self.soul_map_path) or "data", exist_ok=True)
-            data: Dict[str, Any] = {}
-            if os.path.exists(self.soul_map_path):
-                data = _load_json(self.soul_map_path) or {}
-            data.setdefault("adversarial_scheduler", {})["last_cycle"] = summary
-            if emissions:
-                data.setdefault("emission_monitor", {})["last_emissions"] = emissions
-                data["emission_monitor"]["snapshot_at"] = run_at
-            os.makedirs(os.path.dirname(self.soul_map_path) or ".", exist_ok=True)
-            fd, temp_path = tempfile.mkstemp(suffix=".tmp")
-            try:
-                with os.fdopen(fd, "w") as f:
-                    json.dump(data, f, indent=2)
-                os.replace(temp_path, self.soul_map_path)
-            finally:
-                if os.path.exists(temp_path):
-                    os.unlink(temp_path)
+            def _mutator(blob: Dict[str, Any]) -> None:
+                blob.setdefault("adversarial_scheduler", {})["last_cycle"] = summary
+                if emissions:
+                    blob.setdefault("emission_monitor", {})["last_emissions"] = emissions
+                    blob["emission_monitor"]["snapshot_at"] = run_at
+
+            write_soul_map(_mutator, self.soul_map_path)
         except Exception:
             pass
 

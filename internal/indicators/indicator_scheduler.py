@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, Optional
 
 from internal.indicators.indicator_engine import IndicatorEngine
 from internal.job_scheduler import cancel_job, schedule_in_seconds
+from internal.store.soul_map_io import write_soul_map
 
 # Ensure the data directory exists at module load time. Fly.io root filesystems
 # are ephemeral; without this the cycle-summary write below silently fails.
@@ -218,7 +219,6 @@ class IndicatorScheduler:
         return result
 
     def _persist_cycle_summary(self, result: Dict[str, Any]) -> None:
-        data = _load_json(self.soul_map_path)
         summary = {
             "run_at": result["run_at"],
             "ok": result["ok"],
@@ -226,8 +226,12 @@ class IndicatorScheduler:
             "signals_emitted": result.get("signals_emitted", 0),
             "error": result.get("error"),
         }
-        data.setdefault("indicator_scheduler", {})["last_cycle"] = summary
-        _save_json(self.soul_map_path, data)
+        write_soul_map(
+            lambda blob: blob.setdefault("indicator_scheduler", {}).__setitem__(
+                "last_cycle", summary
+            ),
+            self.soul_map_path,
+        )
 
 
 # ------------------------------------------------------------------------------

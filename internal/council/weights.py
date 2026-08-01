@@ -79,27 +79,15 @@ REGIME_ADJUSTMENTS: Dict[str, Dict[str, float]] = {
 
 
 def _load_raw(path: str = SOUL_MAP_PATH) -> Dict[str, Any]:
-    try:
-        with open(path, "r") as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {}
-    except Exception:
-        return {}
+    from internal.store.soul_map_io import read_soul_map
+
+    return read_soul_map(path)
 
 
 def _save_raw(data: Dict[str, Any], path: str = SOUL_MAP_PATH) -> None:
-    try:
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        tmp = path + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump(data, f, indent=2)
-        os.replace(tmp, path)
-    except Exception:
-        try:
-            with open(path, "w") as f:
-                json.dump(data, f, indent=2)
-        except Exception:
-            pass
+    from internal.store.soul_map_io import write_soul_map
+
+    write_soul_map(lambda blob: (blob.clear(), blob.update(data)), path)
 
 
 def normalize_council_weights(raw: Dict[str, float]) -> Dict[str, float]:
