@@ -56,6 +56,13 @@
       {% else %}
         {% set conviction_pct = 0 %}
       {% endif %}
+      {% if conviction_raw is none %}
+        {% set conf_state = 'resolving' %}
+      {% elif conviction_pct == 0 %}
+        {% set conf_state = 'zero' %}
+      {% else %}
+        {% set conf_state = 'value' %}
+      {% endif %}
       {% set ring_circ = 389.56 %}
       {% set ring_offset = ring_circ - (ring_circ * conviction_pct / 100) %}
 
@@ -118,8 +125,12 @@
         --k3-blue: var(--accent-blue, #3fc9ff);
         --k3-pink: var(--accent-violet, #9d8cff);
         --k3-orange: var(--accent-orange, #ff9f3f);
-        --k3-text: #e2e8f0; --k3-muted: #64748b;
+        --k3-text: #e2e8f0; --k3-muted: var(--text-muted);
       }
+      #k3-dossier[data-conf-state="resolving"] { opacity: 0.85; }
+      #k3-dossier[data-conf-state="delayed"] { opacity: 0.7; }
+      #k3-dossier[data-conf-state="zero"] { opacity: 1; }
+      #k3-dossier[data-conf-state="value"] { opacity: 1; }
       /* Subnet identity — 6 vivid hues so every subnet has its own hero personality
          (was flat blue-hold/green-long). Hash: (netuid*47+11)%6, mirrored in JS via
          k3NetuidBand(). Drives the orb, particles, hold-state ring, and claim name —
@@ -549,7 +560,7 @@
       {% if sn %}
       {% set glow_tier = 'cool' if (act == 'HOLD' and not audit_pick) or conviction_pct < 45 else 'hot' %}
       <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
-        <div class="k3-dossier" id="k3-dossier" data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}" data-action="{{ act }}">
+        <div class="k3-dossier" id="k3-dossier" data-conf-state="{{ conf_state }}" data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}" data-action="{{ act }}">
           <div class="k3-layer open" id="k3-layer-claim">
             <div class="k3-claim k3-claim--glow-{{ glow_tier }} k3-claim--band-{{ sn_band }}{% if not audit_pick and act == 'HOLD' %} k3-claim--hold{% endif %}" id="k3-claim" data-glow="{{ glow_tier }}" data-band="{{ sn_band }}"{% if sn.netuid is not none %} data-netuid="{{ sn.netuid }}"{% endif %}>
               <div class="k3-claim-head">
@@ -575,7 +586,9 @@
                       <circle class="ring-fill" cx="74" cy="74" r="62" style="--ring-offset: {{ ring_offset }}"/>
                     </svg>
                     <div class="k3-orb-center">
-                      {% if conviction_pct > 0 %}
+                      {% if conf_state == 'zero' %}
+                        <div class="k3-orb-score" id="k3-orb-score"><span class="digit-ones">0</span></div>
+                      {% elif conf_state == 'value' and conviction_pct > 0 %}
                         {% set tens = (conviction_pct // 10) %}
                         {% set ones = conviction_pct % 10 %}
                         <div class="k3-orb-score" id="k3-orb-score">
@@ -707,7 +720,7 @@
       </div>
       {% else %}
       <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
-        <div class="k3-dossier" id="k3-dossier" data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}" data-action="HOLD">
+        <div class="k3-dossier" id="k3-dossier" data-conf-state="{{ conf_state }}" data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}" data-action="HOLD">
           <div class="k3-layer open" id="k3-layer-claim">
             <div class="k3-claim k3-claim--hold k3-claim--glow-cool k3-claim--band-0" id="k3-claim" data-glow="cool" data-band="0">
               <div class="k3-claim-head">

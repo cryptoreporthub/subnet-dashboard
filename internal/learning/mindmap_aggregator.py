@@ -9,6 +9,34 @@ from internal.learning.trail_bus import CANONICAL_EVENT_TYPES, normalize_event_t
 
 logger = logging.getLogger(__name__)
 
+_INTEGRATION_STATUS_VALUES = frozenset(
+    {"closed", "partial", "blocked", "display_only", "read_only"}
+)
+
+
+def _judges_integration_status() -> str:
+    """judges wiring lands in a future PR (#720); flip JUDGES_ACTIVE env var
+    once that PR's activation mechanism exists — do not hand-edit this string."""
+    import os
+
+    return (
+        "closed"
+        if os.environ.get("JUDGES_ACTIVE", "").lower() in ("1", "true", "yes")
+        else "blocked"
+    )
+
+
+def _build_integration_status() -> Dict[str, str]:
+    return {
+        "council_trail": "closed",
+        "expert_weights": "closed",
+        "judges": _judges_integration_status(),
+        "telegram_pulse": "partial",
+        "dispositions": "display_only",
+        "pump_desk": "partial",
+        "whales_indicators": "read_only",
+    }
+
 
 def _parse_time(entry: Dict[str, Any]) -> str:
     return str(entry.get("time") or entry.get("created_at") or "")
@@ -250,4 +278,5 @@ def build_mindmap_state() -> Dict[str, Any]:
         "event_type_counts": event_type_counts(trail),
         "summaries": summaries,
         "schedulers": schedulers,
+        "integration_status": _build_integration_status(),
     }
