@@ -373,6 +373,26 @@ class PriceTracker:
             # Record the outcome if we have at least 1h data
             if outcome_data["price_1h"] is not None:
                 self.db.save_price_outcome(message_id, outcome_data)
+                try:
+                    verdict = msg.get("verdict")
+                    if verdict is not None:
+                        from message_intel.self_learning import SelfLearning
+                        direction = msg.get("predicted_direction") or "neutral"
+                        correct = SelfLearning._is_correct_prediction(
+                            verdict,
+                            direction,
+                            outcome_data["outcome"],
+                            outcome_data.get("pump_pct_max") or 0.0,
+                        )
+                        self.db.increment_author_reliability(
+                            msg.get("author_id") or "unknown",
+                            msg.get("author_name") or "Unknown",
+                            correct,
+                        )
+                except Exception:
+                    logger.exception(
+                        "Author reliability update failed for message %s", message_id
+                    )
                 logger.info(
                     "Outcome for message %d (netuid=%s): %s (%.2f%%)",
                     message_id,

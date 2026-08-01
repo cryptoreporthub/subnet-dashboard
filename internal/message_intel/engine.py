@@ -48,7 +48,7 @@ def ingest_message(payload: Dict[str, Any], *, snapshot_price: bool = True) -> D
     db.save_analysis(message_id, analysis)
     from internal.message_intel.jury import evaluate_message
 
-    verdict = evaluate_message(message_id, content, analysis)
+    verdict = evaluate_message(message_id, content, analysis, author_id=payload.get("author_id"))
     db.save_verdict(message_id, verdict)
 
     price_result: Optional[Dict[str, Any]] = None
@@ -125,7 +125,7 @@ def ingest_batch(messages: List[Dict[str, Any]], *, snapshot_price: bool = False
             content = str(payload.get("content") or "")
             analysis = nlp.analyze(content)
             db.save_analysis(message_id, analysis)
-            verdict = evaluate_message(message_id, content, analysis)
+            verdict = evaluate_message(message_id, content, analysis, author_id=payload.get("author_id"))
             db.save_verdict(message_id, verdict)
             processed.append(
                 {
