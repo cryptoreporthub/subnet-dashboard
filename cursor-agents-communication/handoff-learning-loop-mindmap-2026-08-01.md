@@ -1,19 +1,20 @@
 # Handoff — Learning loop + mindmap wiring (2026-08-01)
 
-**STATUS:** Phase A/B open PRs ready · Phase C NEXT · **models = Grok lock + Composer build only**  
+**STATUS:** Phase A/B open PRs ready · Phase C NEXT · **models = Grok lock → Composer build → Sonnet final review only**  
 **main:** `73a0736` (Phase 1 soul_map I/O gateway #718) · later commits may land as #719–#721 merge
 
 ## Model plan (HARD — usage limit)
 
 | Role | Model | Notes |
 |------|-------|-------|
-| Design LOCK | **Grok** slow + medium (`cursor-grok-4.5-high` / high only after FAIL) | Short structured lock only — no long prose plans |
-| Build / tests / PR | **Composer 2.5** (`composer-2.5`, not fast unless trivial) | Implements lock mechanically; expands lock into PR body |
-| Orchestrator | Prefer Composer or light Grok | **Do not** keep a heavy Sonnet/Claude primary for multi-hour babysitting — usage exhausted |
+| Design LOCK | **Grok** slow + medium (high only after FAIL) | Short structured lock only — no long prose plans |
+| Build / tests | **Composer 2.5** (`composer-2.5`, not fast unless trivial) | Implements lock mechanically; expands lock into PR body |
+| Final review (pre-push only) | **Sonnet** | Read-only reviewer: diffs, risks, missing tests, lock deviations. **Does not edit code.** |
+| Fix after Sonnet findings | **Grok lock → Composer build** again | Sonnet findings become a new Grok LOCK; Composer patches. Never let Sonnet author the fix itself. |
 
-Workflow: Grok produces LOCK → Composer implements → **orchestrator independently verifies** (diff scope, read high-risk files, rerun tests, stash before/after failure-NAME diff) → commit/push/PR.
+**Pipeline:** Grok LOCK → Composer build → orchestrator smoke-verify (diff scope / rerun new tests) → **Sonnet final review** → if findings: Grok LOCK → Composer fix → Sonnet re-review → only then commit/push/PR.
 
-Composer fast only for pure mechanical glue after lock is frozen. Do not invent design Composer-side.
+Composer fast only for pure mechanical glue after lock is frozen. Do not invent design Composer-side. Do not use Sonnet as the long primary babysitter or implementer.
 
 ## Open PRs (merge order)
 
@@ -21,7 +22,7 @@ Composer fast only for pure mechanical glue after lock is frozen. Do not invent 
 |---|--------|-------|----|-----------|-------|
 | **#719** | `cursor/soul-map-cache-6226` | Phase 2: cache soul_map.json reads | smoke SUCCESS | MERGEABLE | Rebased onto #718 squash. Ready. |
 | **#720** | `cursor/judge-confidence-weights-6226` | Phase A: Judges confidence weights | smoke SUCCESS | MERGEABLE | Rebased; stray MI-AR lock commit **removed** from tip. Ready. |
-| **#721** | `cursor/message-intel-author-reliability-6226` | Phase B: Telegram author trust | smoke SUCCESS | MERGEABLE | Still **draft** — mark ready then merge. Cut from `main` (independent of #720). |
+| **#721** | `cursor/message-intel-author-reliability-6226` | Phase B: Telegram author trust | smoke SUCCESS | MERGEABLE | Ready for review. Cut from `main` (independent of #720). |
 
 **Suggested merge order:** #719 → #720 → #721 (720 currently still contains rebased Phase 2 commit in its history if rebased onto pre-#719 tip — after #719 merges, rebase #720 onto new main if GitHub shows conflict). #721 was cut from main without Phase 2 / Judges and should merge cleanly either order vs those.
 
@@ -100,14 +101,16 @@ cursor-agents-communication/handoff-learning-loop-mindmap-2026-08-01.md
 
 MODELS (usage limit — mandatory):
 - Grok (Task subagent, slow+medium; high only after FAIL) → short structured LOCK only
-- Composer 2.5 (not fast unless trivial) → implement lock, tests, PR
-- Do NOT use Sonnet/Claude as the long primary babysitter
-- Orchestrator MUST independently verify Composer work (diff scope, read high-risk files, rerun tests, stash before/after failure-NAME diff) before commit
+- Composer 2.5 (not fast unless trivial) → implement lock + tests
+- Sonnet = FINAL REVIEWER ONLY before push (read-only: diffs/risks/missing tests/lock drift). Sonnet does NOT edit.
+- If Sonnet finds issues → Grok writes a fix LOCK → Composer implements (never Sonnet-as-implementer)
+- Do NOT use Sonnet as the long primary babysitter or coder
+- Before Sonnet review: orchestrator smoke-checks Composer (diff scope, rerun new tests). After green Sonnet (or Grok/Composer fix cycle): commit/push/PR
 
 OPEN PRs — merge via GitHub UI (agent cannot merge), babysit deploy after each:
 1. #719 Phase 2 soul_map cache — MERGEABLE, CI green (merge first)
 2. #720 Phase A Judges confidence weights — MERGEABLE, CI green (rebase onto main if conflict after #719)
-3. #721 Phase B Telegram author reliability — mark ready if still draft, then merge
+3. #721 Phase B Telegram author reliability — MERGEABLE, CI green
 
 After merges: Phase C NEXT — mindmap display wiring only (no weight math):
 - Dev Signals (dev_radar_cache.json)
@@ -122,5 +125,5 @@ HARD CONSTRAINTS:
 - Conflict surface only: server.py include_router + tests/test_endpoint_contract.py
 - Branch names: cursor/<name>-6226
 
-Read board.md + this handoff first. Search Ditto for "Cursor Agents Communication" STATUS. Then: merge babysit OR start Phase C Grok lock → Composer build.
+Read board.md + this handoff first. Search Ditto for "Cursor Agents Communication" STATUS. Then: merge babysit OR start Phase C (Grok lock → Composer build → Sonnet review → push).
 ```
