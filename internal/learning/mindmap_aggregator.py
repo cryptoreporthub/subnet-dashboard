@@ -15,15 +15,16 @@ _INTEGRATION_STATUS_VALUES = frozenset(
 
 
 def _judges_integration_status() -> str:
-    """judges wiring lands in a future PR (#720); flip JUDGES_ACTIVE env var
-    once that PR's activation mechanism exists — do not hand-edit this string."""
-    import os
+    """closed when #720's per-judge weights module is importable and wired into scoring."""
+    try:
+        from internal.judges.weights import normalized_judge_weights
+        from internal.judges import subnet_judges  # noqa: F401 — proves scoring module present
 
-    return (
-        "closed"
-        if os.environ.get("JUDGES_ACTIVE", "").lower() in ("1", "true", "yes")
-        else "blocked"
-    )
+        # Touch the public API so a stub module without the function fails closed→blocked
+        normalized_judge_weights  # reference only; don't call (avoids soul_map IO on every graph build)
+        return "closed"
+    except Exception:
+        return "blocked"
 
 
 def _build_integration_status() -> Dict[str, str]:

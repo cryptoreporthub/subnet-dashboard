@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import sys
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
-from internal.learning.mindmap_aggregator import _INTEGRATION_STATUS_VALUES
+from internal.learning.mindmap_aggregator import (
+    _INTEGRATION_STATUS_VALUES,
+    _judges_integration_status,
+)
 from server import app
 
 _EXPECTED_INTEGRATION_KEYS = frozenset(
@@ -19,9 +25,13 @@ _EXPECTED_INTEGRATION_KEYS = frozenset(
     }
 )
 
-# PR #720's JUDGES_ACTIVE toggle-and-confirm test is out of scope here: no judges
-# activation mechanism exists in this codebase yet, so we only assert the field
-# shape and enum membership on GET /api/mindmap/graph.
+def test_judges_integration_status_closed_when_weights_module_present():
+    assert _judges_integration_status() == "closed"
+
+
+def test_judges_integration_status_blocked_when_import_fails():
+    with patch.dict(sys.modules, {"internal.judges.weights": None}):
+        assert _judges_integration_status() == "blocked"
 
 
 def test_mindmap_graph_integration_status():
@@ -39,7 +49,7 @@ def test_mindmap_graph_integration_status():
     # Lock the documented current values so a silent drift is caught.
     assert status["council_trail"] == "closed"
     assert status["expert_weights"] == "closed"
-    assert status["judges"] == "blocked"  # placeholder until #720 wires JUDGES_ACTIVE
+    assert status["judges"] == "closed"  # #720 per-judge weights wired into scoring
     assert status["telegram_pulse"] == "partial"
     assert status["dispositions"] == "display_only"
     assert status["pump_desk"] == "partial"

@@ -53,6 +53,8 @@ CONTRACT = [
     ("GET", "/api/soul-map", None),
     ("GET", "/api/recommendations", None),
     ("POST", "/api/mindmap/feedback", {"note": "contract-test"}),
+    ("GET", "/api/mindmap/graph", None),
+    ("GET", "/api/mindmap/trail", None),
     # SimiVision picks (slice 2)
     ("GET", "/api/simivision", None),
     ("GET", "/api/top-picks", None),
