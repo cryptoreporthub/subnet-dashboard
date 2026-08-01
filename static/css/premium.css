@@ -852,7 +852,7 @@ footer.status[data-source*="fallback"] .st-dot {
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--txt-3, #64748b);
+  color: var(--txt-3, #8a9aab);
 }
 .subnet-int-strip__items {
   display: inline-flex;
@@ -880,7 +880,7 @@ footer.status[data-source*="fallback"] .st-dot {
   color: var(--signal-amber, #fbbf24);
 }
 .subnet-int-item--offline {
-  color: var(--txt-3, #64748b);
+  color: var(--txt-3, #8a9aab);
   opacity: 0.8;
 }
 .subnet-int-dot {
@@ -888,7 +888,7 @@ footer.status[data-source*="fallback"] .st-dot {
   height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: var(--txt-3, #64748b);
+  background: var(--txt-3, #8a9aab);
 }
 .subnet-int-dot--connected {
   background: var(--cockpit-green, #00ff41);
@@ -906,13 +906,13 @@ footer.status[data-source*="fallback"] .st-dot {
   animation: subnet-int-pulse 1.2s ease-in-out infinite;
 }
 .subnet-int-item--checking {
-  color: var(--txt-3, #64748b);
+  color: var(--txt-3, #8a9aab);
 }
 .subnet-int-strip--stale .subnet-int-strip__count {
   color: var(--signal-amber, #fbbf24);
 }
 .subnet-int-strip--ssr .subnet-int-strip__count {
-  color: var(--txt-3, #64748b);
+  color: var(--txt-3, #8a9aab);
 }
 @keyframes subnet-int-pulse {
   0%, 100% { opacity: 0.45; }
@@ -1242,11 +1242,11 @@ footer.status[data-source*="fallback"] .st-dot {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-size: 11px;
-  color: rgba(233, 247, 239, 0.45);
+  color: var(--text-muted);
 }
 .weighing-room .wr-updated {
   font-weight: 400;
-  color: rgba(233, 247, 239, 0.35);
+  color: var(--text-muted);
   text-transform: none;
   letter-spacing: 0;
 }
@@ -1257,14 +1257,14 @@ footer.status[data-source*="fallback"] .st-dot {
 .weighing-room .section-sub {
   font-size: 13px;
   line-height: 1.4;
-  color: rgba(233, 247, 239, 0.55);
+  color: var(--text-secondary);
   margin: 0 0 6px;
   max-width: 36em;
 }
 .wr-spine {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 11px;
-  color: rgba(233, 247, 239, 0.38);
+  color: var(--text-muted);
   margin: 0 0 10px;
   letter-spacing: 0.02em;
 }
@@ -1272,7 +1272,7 @@ footer.status[data-source*="fallback"] .st-dot {
 .wr-handoff {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 11px;
-  color: rgba(233, 247, 239, 0.45);
+  color: var(--text-muted);
   margin: 0 0 6px;
 }
 .wr-handoff { color: rgba(0, 212, 255, 0.75); }
@@ -1282,7 +1282,7 @@ footer.status[data-source*="fallback"] .st-dot {
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(233, 247, 239, 0.4);
+  color: var(--text-muted);
   margin: 0 0 8px;
 }
 .wr-band__label--near {
@@ -1295,7 +1295,7 @@ footer.status[data-source*="fallback"] .st-dot {
 .wr-band__label--in,
 .wr-band__label--buried {
   /* legacy aliases — same as LOCK bands */
-  color: rgba(233, 247, 239, 0.4);
+  color: var(--text-muted);
 }
 .wr-band__label--out { color: rgba(57, 255, 20, 0.72); }
 .wr-band__label--in { color: rgba(255, 184, 77, 0.75); }
@@ -1397,7 +1397,7 @@ footer.status[data-source*="fallback"] .st-dot {
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 11px;
   font-weight: 500;
-  color: rgba(233, 247, 239, 0.4);
+  color: var(--text-muted);
 }
 .wr-stitch {
   margin: 2px 0 0;
@@ -1408,7 +1408,7 @@ footer.status[data-source*="fallback"] .st-dot {
 .wr-gap-whisper {
   margin: 2px 0 0;
   font-size: 11px;
-  color: rgba(233, 247, 239, 0.48);
+  color: var(--text-muted);
   font-family: var(--font-mono, ui-monospace, monospace);
 }
 .wr-name__link {
@@ -1443,10 +1443,10 @@ footer.status[data-source*="fallback"] .st-dot {
 }
 .wr-delta--up { color: #39ff14; }
 .wr-delta--down { color: #ff6980; }
-.wr-delta--flat { color: rgba(233, 247, 239, 0.35); }
+.wr-delta--flat { color: var(--text-muted); }
 .wr-chevron {
   font-size: 18px;
-  color: rgba(233, 247, 239, 0.35);
+  color: var(--text-muted);
   transition: transform 0.2s ease;
 }
 .wr-row.is-open .wr-chevron { transform: rotate(90deg); }
@@ -1478,7 +1478,7 @@ footer.status[data-source*="fallback"] .st-dot {
   font-size: 9px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(233, 247, 239, 0.4);
+  color: var(--text-muted);
 }
 .wr-peel__grid {
   display: grid;
@@ -1495,12 +1495,12 @@ footer.status[data-source*="fallback"] .st-dot {
 .wr-peel__note {
   margin: 12px 0 0;
   font-size: 11px;
-  color: rgba(233, 247, 239, 0.4);
+  color: var(--text-muted);
 }
 .wr-footer {
   margin: 14px 0 0;
   font-size: 12px;
-  color: rgba(233, 247, 239, 0.42);
+  color: var(--text-muted);
   font-style: italic;
 }
 .caution-cells {

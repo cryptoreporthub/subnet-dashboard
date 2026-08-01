@@ -5,7 +5,7 @@
   --sr-bg-deep: #04060e;
   --sr-bg-edge: #020308;
   --sr-slate: #8aa0b8;
-  --sr-muted: #5a6478;
+  --sr-muted: #7a8699;
   --sr-panel: rgba(10, 14, 24, 0.84);
   --sr-hairline: rgba(148, 163, 184, 0.12);
   --sr-glow-live: rgba(63, 201, 255, 0.22);
@@ -833,7 +833,7 @@ body.council-first-theme {
   margin: 0 auto;
   padding: 0 20px 10px;
   border-bottom: 1px solid var(--sr-hairline);
-  background: rgba(10, 14, 24, 0.38);
+  background: var(--sr-panel);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
