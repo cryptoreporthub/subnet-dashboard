@@ -1,20 +1,26 @@
 # Handoff — Learning loop + mindmap wiring (2026-08-01)
 
-**STATUS:** Phase A/B open PRs ready · Phase C NEXT · **models = Grok lock → Composer build → Sonnet final review only**  
+**STATUS:** Phase A/B open PRs ready · Phase C NEXT · **models = see model-guide.md (ONE Sonnet gate per slice)**  
 **main:** `73a0736` (Phase 1 soul_map I/O gateway #718) · later commits may land as #719–#721 merge
 
 ## Model plan (HARD — usage limit)
 
+**Canonical source:** `model-guide.md` — do not fork a competing pipeline in this file.
+
 | Role | Model | Notes |
 |------|-------|-------|
-| Design LOCK | **Grok** slow + medium (high only after FAIL) | Short structured lock only — no long prose plans |
-| Build / tests | **Composer 2.5** (`composer-2.5`, not fast unless trivial) | Implements lock mechanically; expands lock into PR body |
-| Final review (pre-push only) | **Sonnet** | Read-only reviewer: diffs, risks, missing tests, lock deviations. **Does not edit code.** Start **low**; escalate to **medium** only if the low pass is unclear / incomplete / having trouble. Never default to high for review. |
-| Fix after Sonnet findings | **Grok lock → Composer build** again | Sonnet findings become a new Grok LOCK; Composer patches. Never let Sonnet author the fix itself. |
+| Design LOCK | **Grok** medium → high if stuck | Short structured lock only |
+| Build / tests | **Composer 2.5** | Implements lock; does not invent design |
+| Review | **Sonnet** low → medium if stuck | Read-only. **Exactly ONE gate per slice** |
 
-**Pipeline:** Grok LOCK → Composer build → orchestrator smoke-verify (diff scope / rerun new tests) → **Sonnet final review** → if findings: Grok LOCK → Composer fix → Sonnet re-review → only then commit/push/PR.
+**One Sonnet gate (no double-dip):**
+- This handoff’s remaining work (Phase C, merge babysit) = **MECHANICAL** → Sonnet once on the **diff before push**; skip Sonnet on the LOCK.
+- Hero/mindmap ground-up (`hero-mindmap-sprint-plan.md`) = **DESIGN-HEAVY** → Sonnet once on the **LOCK before Composer**; post-build = Grok only.
 
-Composer fast only for pure mechanical glue after lock is frozen. Do not invent design Composer-side. Do not use Sonnet as the long primary babysitter or implementer.
+Sonnet finds → Grok fix LOCK → Composer patch → Sonnet re-checks **that same gate** only. Sonnet never implements.
+
+**Pipeline (mechanical default for this handoff):**
+Grok LOCK → Composer build → orchestrator smoke-check → Sonnet (low→medium) on diff → push.
 
 ## Open PRs (merge order)
 
@@ -99,14 +105,14 @@ After every Composer build, orchestrator must:
 Continue subnet-dashboard work from handoff:
 cursor-agents-communication/handoff-learning-loop-mindmap-2026-08-01.md
 
-MODELS (usage limit — mandatory):
-- Grok (Task subagent, slow+medium; high only after FAIL) → short structured LOCK only
-- Composer 2.5 (not fast unless trivial) → implement lock + tests
-- Sonnet = FINAL REVIEWER ONLY before push (read-only: diffs/risks/missing tests/lock drift). Sonnet does NOT edit.
-- Sonnet effort: start **low**; escalate to **medium** only if low pass is unclear/incomplete/having trouble. Do not default to high for review.
-- If Sonnet finds issues → Grok writes a fix LOCK → Composer implements (never Sonnet-as-implementer)
-- Do NOT use Sonnet as the long primary babysitter or coder
-- Before Sonnet review: orchestrator smoke-checks Composer (diff scope, rerun new tests). After green Sonnet (or Grok/Composer fix cycle): commit/push/PR
+MODELS (canonical — `model-guide.md`; do not invent a competing pipeline):
+- Grok (medium → high if stuck) → short LOCK only
+- Composer 2.5 → implement lock + tests
+- Sonnet = exactly ONE gate per slice (low → medium if stuck). Read-only; never edits.
+  - MECHANICAL (Phase C / this handoff): Sonnet once on diff before push
+  - DESIGN-HEAVY (hero/mindmap sprint): Sonnet once on LOCK before Composer; post-build = Grok
+- Sonnet finds → Grok fix LOCK → Composer patch → Sonnet same-gate only (no LOCK+diff double-dip)
+- Orchestrator smoke-checks Composer before Sonnet / push
 
 OPEN PRs — merge via GitHub UI (agent cannot merge), babysit deploy after each:
 1. #719 Phase 2 soul_map cache — MERGEABLE, CI green (merge first)
