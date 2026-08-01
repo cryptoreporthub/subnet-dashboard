@@ -28,6 +28,30 @@
     disposition: 4,
   };
 
+  const INTEGRATION_SOURCES = [
+    { key: 'council_trail', label: 'Council Trail' },
+    { key: 'expert_weights', label: 'Expert Weights' },
+    { key: 'judges', label: 'Judges' },
+    { key: 'telegram_pulse', label: 'Telegram Pulse' },
+    { key: 'dispositions', label: 'Dispositions' },
+    { key: 'pump_desk', label: 'Pump Desk' },
+    { key: 'whales_indicators', label: 'Whales & Indicators' },
+  ];
+
+  const INTEGRATION_STATUS_VALUES = new Set([
+    'closed',
+    'partial',
+    'blocked',
+    'display_only',
+    'read_only',
+  ]);
+
+  const INTEGRATION_STATUS_TOOLTIPS = {
+    blocked: 'Not yet wired — pending activation',
+    display_only: 'Shown for context — not yet actionable',
+    read_only: 'Read-only feed — no write-back',
+  };
+
   function kindColor(kind) {
     return KIND_COLORS[kind] || '#9CA3AF';
   }
@@ -85,6 +109,53 @@
     if (m.win_rate != null) parts.push(Math.round(m.win_rate * 100) + '% win rate');
     if (m.avg_return_pct != null) parts.push(m.avg_return_pct + '% avg return');
     return parts.join(' · ');
+  }
+
+  function isValidIntegrationStatus(status) {
+    if (!status || typeof status !== 'object') return false;
+    return INTEGRATION_SOURCES.every(
+      (src) =>
+        typeof status[src.key] === 'string' && INTEGRATION_STATUS_VALUES.has(status[src.key])
+    );
+  }
+
+  function formatStatusPill(value) {
+    return String(value).replace(/_/g, ' ');
+  }
+
+  function renderIntegrationStatusLegend(graph) {
+    const container = document.getElementById('mindmap-integration-status');
+    if (!container) return;
+
+    const status = graph && graph.integration_status;
+    if (!isValidIntegrationStatus(status)) return;
+
+    INTEGRATION_SOURCES.forEach(({ key, label }) => {
+      const value = status[key];
+      let badge = container.querySelector('[data-source="' + key + '"]');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'mindmap-integration-badge';
+        badge.dataset.source = key;
+        const labelEl = document.createElement('span');
+        labelEl.className = 'mindmap-integration-badge__label';
+        const pillEl = document.createElement('span');
+        pillEl.className = 'mindmap-integration-badge__pill';
+        badge.appendChild(labelEl);
+        badge.appendChild(pillEl);
+        container.appendChild(badge);
+      }
+
+      INTEGRATION_STATUS_VALUES.forEach((v) => badge.classList.remove('mindmap-integration-badge--' + v));
+      badge.classList.add('mindmap-integration-badge--' + value);
+      badge.dataset.status = value;
+      badge.querySelector('.mindmap-integration-badge__label').textContent = label;
+      badge.querySelector('.mindmap-integration-badge__pill').textContent = formatStatusPill(value);
+
+      const tip = INTEGRATION_STATUS_TOOLTIPS[value];
+      if (tip) badge.title = tip;
+      else badge.removeAttribute('title');
+    });
   }
 
   function setEmptyMessage(root, message, show) {
@@ -271,6 +342,7 @@
     const root = document.getElementById('mindmap-graph-root');
     if (!root) return;
     const graph = await fetchGraph(root);
+    renderIntegrationStatusLegend(graph);
     if (graph.status === 'unavailable') {
       setEmptyMessage(
         root,
