@@ -112,6 +112,54 @@ def test_council_stage_h1_value_conf_state_ssr():
     assert "—" not in orb_html
 
 
+def _council_stage_style_block(html: str) -> str:
+    start = html.index("<style>")
+    end = html.index("</style>", start)
+    return html[start:end]
+
+
+def test_council_stage_h2_resolving_conf_state_visual_css():
+    """H2: resolving uses animated muted ring sweep, not opacity-only placeholder."""
+    html = _render_council_stage_confidence(
+        final_confidence=None,
+        confidence=None,
+        conviction=None,
+    )
+    css = _council_stage_style_block(html)
+    assert "[data-conf-state=\"resolving\"]" in css
+    assert "k3-resolving-ring-sweep" in css
+    assert "#k3-dossier[data-conf-state=\"resolving\"] .k3-orb .ring-fill" in css
+    assert "animation: k3-resolving-ring-sweep" in css
+    assert "#k3-dossier[data-conf-state=\"resolving\"] { opacity:" not in css
+
+
+def test_council_stage_h2_zero_conf_state_visual_css():
+    html = _render_council_stage_confidence(final_confidence=0)
+    css = _council_stage_style_block(html)
+    assert "#k3-dossier[data-conf-state=\"zero\"] .k3-orb .ring-fill" in css
+    zero_ring = css.split("#k3-dossier[data-conf-state=\"zero\"] .k3-orb .ring-fill", 1)[1][:400]
+    assert "stroke" in zero_ring
+    assert "k3-muted" in zero_ring
+
+
+def test_council_stage_h2_delayed_conf_state_visual_css():
+    css = _council_stage_style_block(_render_council_stage(82))
+    assert "k3-delayed-dot" in css
+    assert "#k3-dossier[data-conf-state=\"delayed\"] .k3-orb-wrap::after" in css
+    delayed_dot = css.split("#k3-dossier[data-conf-state=\"delayed\"] .k3-orb-wrap::after", 1)[1][:400]
+    assert "k3-orange" in delayed_dot
+    assert "animation" in delayed_dot
+
+
+def test_council_stage_h2_reduced_motion_disables_conf_state_animations():
+    css = _council_stage_style_block(_render_council_stage(82))
+    assert "prefers-reduced-motion" in css
+    reduced = css.split("prefers-reduced-motion", 1)[1]
+    assert "[data-conf-state=\"resolving\"]" in reduced
+    assert "[data-conf-state=\"delayed\"]" in reduced
+    assert "animation: none" in reduced
+
+
 def test_cockpit_hydrate_h1_three_state_hooks_present():
     """Client-side patchK3DossierFromPayload three-state logic — no JS test runner in repo."""
     src = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()
