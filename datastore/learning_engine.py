@@ -26,14 +26,6 @@ class LearningEngine:
     def __init__(self, soul_map_path: str = "data/soul_map.json"):
         self.soul_map_path = soul_map_path
 
-    def save_soul_map(self, soul_map: Dict[str, Any]) -> None:
-        """Persist a soul-map payload for backward compatibility."""
-        import json
-        import os
-        os.makedirs(os.path.dirname(self.soul_map_path) or ".", exist_ok=True)
-        with open(self.soul_map_path, "w", encoding="utf-8") as fh:
-            json.dump(soul_map, fh, indent=2)
-
     def load_soul_map(self) -> Dict[str, Any]:
         """Return a dict with live expert weights and resolver performance history."""
         weights = load_weights(self.soul_map_path)

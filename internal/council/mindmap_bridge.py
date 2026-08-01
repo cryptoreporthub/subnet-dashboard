@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from internal.file_utils import safe_write_json
+from internal.store.soul_map_io import read_soul_map, write_soul_map
 
 class MindmapBridge:
     def __init__(self, persistence_path: str = "data/soul_map.json", registry_path: str = "config/registry.json"):
@@ -21,32 +21,26 @@ class MindmapBridge:
         self._load_from_disk()
 
     def _load_from_disk(self):
-        if os.path.exists(self.persistence_path):
-            try:
-                with open(self.persistence_path, "r") as f:
-                    data = json.load(f)
-                    self.soul_map_state = data.get("soul_map_state", {})
-                    self.feedback_logs = data.get("feedback_logs", [])
-            except Exception:
-                self.soul_map_state = {}
-                self.feedback_logs = []
+        try:
+            data = read_soul_map(self.persistence_path)
+            self.soul_map_state = data.get("soul_map_state", {})
+            self.feedback_logs = data.get("feedback_logs", [])
+        except Exception:
+            self.soul_map_state = {}
+            self.feedback_logs = []
 
     def _save_to_disk(self):
         dir_name = os.path.dirname(self.persistence_path)
         if dir_name and not os.path.exists(dir_name):
             os.makedirs(dir_name, exist_ok=True)
         try:
-            # Merge into the full soul_map file so adversarial_state / expert
-            # weights written by the learning loop are never clobbered.
-            existing: Dict[str, Any] = {}
-            if os.path.exists(self.persistence_path):
-                with open(self.persistence_path, "r") as f:
-                    loaded = json.load(f)
-                    if isinstance(loaded, dict):
-                        existing = loaded
-            existing["soul_map_state"] = self.soul_map_state
-            existing["feedback_logs"] = self.feedback_logs
-            safe_write_json(self.persistence_path, existing)
+            write_soul_map(
+                lambda blob: (
+                    blob.__setitem__("soul_map_state", self.soul_map_state),
+                    blob.__setitem__("feedback_logs", self.feedback_logs),
+                ),
+                self.persistence_path,
+            )
         except Exception:
             pass
 

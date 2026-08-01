@@ -29,6 +29,7 @@ from typing import Any, Callable, Dict, Optional
 
 from internal.council import resolver
 from internal.job_scheduler import cancel_job, schedule_in_seconds
+from internal.store.soul_map_io import write_soul_map
 
 # Ensure the data directory exists at module load time. Fly.io root filesystems
 # are ephemeral; without this the cycle-summary write below silently fails.
@@ -373,13 +374,14 @@ class PredictionResolverScheduler:
             "batch_size": result.get("batch_size", 0),
             "round_robin_cursor": result.get("round_robin_cursor"),
         }
-        data = _load_json(self.soul_map_path)
-        sched = data.setdefault("prediction_resolver_scheduler", {})
-        sched["last_cycle"] = summary
-        if result.get("round_robin_cursor") is not None:
-            sched["round_robin_cursor"] = result["round_robin_cursor"]
+        def _mutator(data: Dict[str, Any]) -> None:
+            sched = data.setdefault("prediction_resolver_scheduler", {})
+            sched["last_cycle"] = summary
+            if result.get("round_robin_cursor") is not None:
+                sched["round_robin_cursor"] = result["round_robin_cursor"]
+
         try:
-            _save_json(self.soul_map_path, data)
+            write_soul_map(_mutator, self.soul_map_path)
         except Exception:
             pass
 
