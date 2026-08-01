@@ -3,7 +3,7 @@
 **Last updated:** 2026-08-01T14:45:00Z  
 **main:** `73a0736` (#718 soul_map I/O) · **infra:** v1 stable; wedges #710–#717 fixed  
 **Active handoff:** `handoff-learning-loop-mindmap-2026-08-01.md`  
-**Models:** Grok LOCK → Composer build → **Sonnet final review only** (findings → Grok lock again; never Sonnet implement)  
+**Models:** Grok LOCK → Composer build → **Sonnet final review only** (low first, medium if trouble; findings → Grok lock again; never Sonnet implement)  
 **Plans:** `handoff-learning-loop-mindmap-2026-08-01.md` · `completion-runbook.md` · `split-v2-rollback-runbook.md`
 
 ## STATUS SNAPSHOT (2026-08-01)

@@ -9,7 +9,7 @@
 |------|-------|-------|
 | Design LOCK | **Grok** slow + medium (high only after FAIL) | Short structured lock only — no long prose plans |
 | Build / tests | **Composer 2.5** (`composer-2.5`, not fast unless trivial) | Implements lock mechanically; expands lock into PR body |
-| Final review (pre-push only) | **Sonnet** | Read-only reviewer: diffs, risks, missing tests, lock deviations. **Does not edit code.** |
+| Final review (pre-push only) | **Sonnet** | Read-only reviewer: diffs, risks, missing tests, lock deviations. **Does not edit code.** Start **low**; escalate to **medium** only if the low pass is unclear / incomplete / having trouble. Never default to high for review. |
 | Fix after Sonnet findings | **Grok lock → Composer build** again | Sonnet findings become a new Grok LOCK; Composer patches. Never let Sonnet author the fix itself. |
 
 **Pipeline:** Grok LOCK → Composer build → orchestrator smoke-verify (diff scope / rerun new tests) → **Sonnet final review** → if findings: Grok LOCK → Composer fix → Sonnet re-review → only then commit/push/PR.
@@ -103,6 +103,7 @@ MODELS (usage limit — mandatory):
 - Grok (Task subagent, slow+medium; high only after FAIL) → short structured LOCK only
 - Composer 2.5 (not fast unless trivial) → implement lock + tests
 - Sonnet = FINAL REVIEWER ONLY before push (read-only: diffs/risks/missing tests/lock drift). Sonnet does NOT edit.
+- Sonnet effort: start **low**; escalate to **medium** only if low pass is unclear/incomplete/having trouble. Do not default to high for review.
 - If Sonnet finds issues → Grok writes a fix LOCK → Composer implements (never Sonnet-as-implementer)
 - Do NOT use Sonnet as the long primary babysitter or coder
 - Before Sonnet review: orchestrator smoke-checks Composer (diff scope, rerun new tests). After green Sonnet (or Grok/Composer fix cycle): commit/push/PR

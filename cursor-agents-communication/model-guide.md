@@ -42,8 +42,9 @@
 **HARD RULE — Sonnet final review only (user 2026-08-01):**
 1. **Sonnet** is the **final reviewer before push** — read-only: diffs, risks, missing tests, lock drift. Sonnet **does not edit**.
 2. Pipeline: Grok LOCK → Composer build → smoke-verify → **Sonnet review** → push.
-3. If Sonnet finds issues: **Grok** writes a fix LOCK → **Composer** patches → Sonnet re-reviews. Never let Sonnet implement the fix.
-4. Do not use Sonnet as the long primary babysitter or implementer (usage limit).
+3. **Sonnet effort:** start **low**; escalate to **medium** only if the low pass is unclear / incomplete / having trouble. Do not default to high for review.
+4. If Sonnet finds issues: **Grok** writes a fix LOCK → **Composer** patches → Sonnet re-reviews (low first again). Never let Sonnet implement the fix.
+5. Do not use Sonnet as the long primary babysitter or implementer (usage limit).
 
 **Grok as reviewer:** Read-only pass — no edits unless findings require a follow-up Composer task. Save review conclusions to Ditto (`source: cursor-agents-communication`) or a PR comment.
 
