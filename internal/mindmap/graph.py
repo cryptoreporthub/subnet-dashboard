@@ -14,7 +14,14 @@ def _utcnow_z() -> str:
 
 
 def _empty_graph() -> Dict[str, Any]:
-    return {"status": "success", "nodes": [], "edges": []}
+    from internal.learning.mindmap_aggregator import _build_integration_status
+
+    return {
+        "status": "success",
+        "nodes": [],
+        "edges": [],
+        "integration_status": _build_integration_status(),
+    }
 
 
 # Pseudo-subnet hub for judge/weight-nudge events that carry no netuid — the
@@ -526,10 +533,17 @@ def get_mindmap_graph(focus_netuid: Optional[int] = None) -> Dict[str, Any]:
         node_list = [n for n in node_list if n["id"] in keep_ids]
         edges = [e for e in edges if e.get("source") in keep_ids and e.get("target") in keep_ids]
 
+    integration_status = state.get("integration_status")
+    if not isinstance(integration_status, dict):
+        from internal.learning.mindmap_aggregator import _build_integration_status
+
+        integration_status = _build_integration_status()
+
     return {
         "status": "success",
         "focus_netuid": focus_netuid,
         "scoped": focus_netuid is not None,
         "nodes": node_list,
         "edges": edges,
+        "integration_status": integration_status,
     }
