@@ -9,6 +9,28 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+AUTHOR_TRUST_RAMP_N = 20
+AUTHOR_TRUST_MAX_SWING = 0.4
+
+
+def _author_trust_multiplier(author_id: Optional[str]) -> float:
+    """Return [0.8, 1.2]-bounded multiplier; 1.0 on cold start / error."""
+    if author_id is None or str(author_id).strip() == "":
+        return 1.0
+    try:
+        from internal.message_intel.store import get_db
+
+        row = get_db().get_author_reliability(str(author_id).strip())
+        if row is None or int(row.get("total_messages") or 0) == 0:
+            return 1.0
+        accuracy = float(row["accuracy_score"])
+        total = int(row["total_messages"])
+        ramp = min(total, AUTHOR_TRUST_RAMP_N) / AUTHOR_TRUST_RAMP_N
+        return 1.0 + (accuracy - 0.5) * AUTHOR_TRUST_MAX_SWING * ramp
+    except Exception as exc:
+        logger.debug("Author trust multiplier lookup failed: %s", exc)
+        return 1.0
+
 
 def _build_signal(content: str, analysis: Dict[str, Any]) -> Dict[str, Any]:
     sentiment = analysis.get("sentiment", "neutral")
@@ -61,10 +83,16 @@ def _map_verdict(analysis: Dict[str, Any], confidence: float) -> Dict[str, Any]:
     }
 
 
-def evaluate_message(message_id: int, content: str, analysis: Dict[str, Any]) -> Dict[str, Any]:
+def evaluate_message(
+    message_id: int,
+    content: str,
+    analysis: Dict[str, Any],
+    author_id: Optional[str] = None,
+) -> Dict[str, Any]:
     """Score a message and return a jury verdict dict."""
     signal = _build_signal(content, analysis)
     confidence = float(signal["consensus_score"])
+    multiplier = _author_trust_multiplier(author_id)
     jury_label = "validated"
     if signal["recommended_action"] == "reduce":
         jury_label = "contradicted"
@@ -89,6 +117,7 @@ def evaluate_message(message_id: int, content: str, analysis: Dict[str, Any]) ->
             verdict_str = {"validated": "bullish", "contradicted": "bearish", "neutral": "neutral"}.get(
                 label, "neutral"
             )
+            confidence = min(1.0, max(0.0, float(confidence) * multiplier))
             result = _map_verdict(analysis, confidence)
             result["verdict"] = verdict_str
             result["reasoning"] = raw.get("note", result["reasoning"])
@@ -102,6 +131,7 @@ def evaluate_message(message_id: int, content: str, analysis: Dict[str, Any]) ->
     except Exception as exc:
         logger.debug("AdversarialJudge unavailable, using NLP fallback: %s", exc)
 
+    confidence = min(1.0, max(0.0, float(confidence) * multiplier))
     result = _map_verdict(analysis, confidence)
     logger.info(
         "Jury verdict for message %d: %s (conviction=%.2f)",

@@ -328,6 +328,55 @@ class Database:
                 ),
             )
 
+    def get_author_reliability(self, author_id: str) -> Optional[Dict[str, Any]]:
+        """Return author_reliability row as dict, or None if missing."""
+        with self._connect() as conn:
+            row = conn.execute(
+                """SELECT author_id, author_name, total_messages, correct_predictions, accuracy_score
+                   FROM author_reliability WHERE author_id = ?""",
+                (author_id,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def increment_author_reliability(
+        self, author_id: str, author_name: str, correct: bool
+    ) -> Dict[str, Any]:
+        aid = (author_id or "").strip() or "unknown"
+        aname = (author_name or "").strip() or "Unknown"
+        # ponytail: SELECT-then-INSERT race acceptable — sole writer is
+        # PriceTracker.check_outcomes sequential loop (single bg thread). Ceiling:
+        # concurrent writers would need BEGIN IMMEDIATE; upgrade if a second writer appears.
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT total_messages, correct_predictions FROM author_reliability WHERE author_id = ?",
+                (aid,),
+            ).fetchone()
+            total = int(row["total_messages"]) if row else 0
+            correct_n = int(row["correct_predictions"]) if row else 0
+            total += 1
+            if correct:
+                correct_n += 1
+            accuracy = round(correct_n / total, 4) if total > 0 else 0.0
+            conn.execute(
+                """INSERT INTO author_reliability
+                       (author_id, author_name, total_messages, correct_predictions, accuracy_score)
+                   VALUES (?, ?, ?, ?, ?)
+                   ON CONFLICT(author_id) DO UPDATE SET
+                       author_name = ?,
+                       total_messages = ?,
+                       correct_predictions = ?,
+                       accuracy_score = ?""",
+                (aid, aname, total, correct_n, accuracy,
+                 aname, total, correct_n, accuracy),
+            )
+            return {
+                "author_id": aid,
+                "author_name": aname,
+                "total_messages": total,
+                "correct_predictions": correct_n,
+                "accuracy_score": accuracy,
+            }
+
     # ── Pattern Correlations ──────────────────────────────────────────
 
     def save_pattern(self, pattern: Dict[str, Any]) -> int:
@@ -369,10 +418,12 @@ class Database:
         """Return messages with a price snapshot but no 24h outcome yet."""
         with self._connect() as conn:
             rows = conn.execute(
-                """SELECT m.*, ps.tao_usd_price, ps.netuid, ps.snapshot_timestamp
+                """SELECT m.*, ps.tao_usd_price, ps.netuid, ps.snapshot_timestamp,
+                          v.verdict, v.predicted_direction
                    FROM messages m
                    JOIN price_snapshots ps ON ps.message_id = m.id
                    LEFT JOIN price_outcomes po ON po.message_id = m.id
+                   LEFT JOIN message_verdicts v ON v.message_id = m.id
                    WHERE po.id IS NULL
                    ORDER BY m.id""",
             ).fetchall()
