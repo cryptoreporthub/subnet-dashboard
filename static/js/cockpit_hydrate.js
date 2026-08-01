@@ -3624,6 +3624,22 @@
         renderRadar(subnets);
       }
 
+      // LB-11: trail before top-picks so Living Focus can reuse this fetch
+      // instead of racing a second /api/mindmap/trail behind a 30s picks call.
+      try {
+        var trailPayload = await fetchJsonRetry('/api/mindmap/trail?limit=20', 15000, 1);
+        trail = safePayload(trailPayload).trail || [];
+        renderTrail(trail);
+        patchK3LifecycleFromTrail(trail, lastDailyPickPayload);
+        if (window.HomeHydrateCache) {
+          window.HomeHydrateCache.trail = trail;
+          window.HomeHydrateCache.at = Date.now();
+        }
+        document.dispatchEvent(new CustomEvent('home:hydrate-trail', { detail: { trail: trail } }));
+      } catch (e) {
+        console.warn('[cockpit_hydrate] trail fetch failed', e);
+      }
+
       try {
         var pickPayload = safePayload(await fetchJsonRetry('/api/top-picks', 30000, 1));
         if (!cockpitPicksConnected) {
@@ -3645,21 +3661,6 @@
       }
       if (!cockpitPicksConnected) {
         renderHourDayPicks(hourPicks, dayPicks);
-      }
-
-      await pause(300);
-      try {
-        var trailPayload = await fetchJsonRetry('/api/mindmap/trail?limit=20', 15000, 1);
-        trail = safePayload(trailPayload).trail || [];
-        renderTrail(trail);
-        patchK3LifecycleFromTrail(trail, lastDailyPickPayload);
-        if (window.HomeHydrateCache) {
-          window.HomeHydrateCache.trail = trail;
-          window.HomeHydrateCache.at = Date.now();
-        }
-        document.dispatchEvent(new CustomEvent('home:hydrate-trail', { detail: { trail: trail } }));
-      } catch (e) {
-        console.warn('[cockpit_hydrate] trail fetch failed', e);
       }
 
       await pause(300);

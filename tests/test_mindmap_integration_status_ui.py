@@ -28,8 +28,7 @@ def test_mindmap_partial_renders_integration_status_legend():
     assert 'data-source="council_trail"' in html
     assert "Council Trail" in html
     assert 'mindmap-integration-badge--closed' in html
-    assert 'data-source="judges"' in html
-    assert 'title="Not yet wired — pending activation"' in html
+    assert 'data-source="judges" data-status="closed"' in html
 
 
 def test_index_includes_integration_status_legend():
@@ -50,3 +49,13 @@ def test_mindmap_js_updates_integration_status_legend():
     assert "renderIntegrationStatusLegend" in src
     assert "isValidIntegrationStatus" in src
     assert "council_trail" in src
+
+
+def test_living_focus_trail_promise_waits_for_hydrate_trail():
+    """LB-11: living_focus prefers HomeHydrateCache / home:hydrate-trail before self-fetch."""
+    client = TestClient(app)
+    src = client.get("/static/js/living_focus.js").text
+    assert "LB-11" in src
+    assert "home:hydrate-trail" in src
+    assert "HomeHydrateCache" in src
+    assert "function trailPromise()" in src

@@ -676,7 +676,43 @@
     if (cachedTrail != null) {
       return Promise.resolve({ trail: cachedTrail });
     }
-    return fetchJson('/api/mindmap/trail?limit=40', 10000).catch(function () { return { trail: [] }; });
+    // LB-11: prefer cockpit_hydrate's trail fetch — wait for home:hydrate-trail
+    // (deferred panels fire ~1.8s after hydrate-cache; trail is first in that batch)
+    // before issuing our own request.
+    return new Promise(function (resolve) {
+      var settled = false;
+      var waitTimer = null;
+      function done(trail) {
+        if (settled) return;
+        settled = true;
+        if (waitTimer != null) clearTimeout(waitTimer);
+        document.removeEventListener('home:hydrate-trail', onTrail);
+        resolve({ trail: trail || [] });
+      }
+      function onTrail(ev) {
+        var trail = ev && ev.detail && ev.detail.trail;
+        if (trail == null) return;
+        done(trail);
+      }
+      document.addEventListener('home:hydrate-trail', onTrail);
+      waitTimer = setTimeout(function () {
+        waitTimer = null;
+        if (settled) return;
+        // Fallback fetch only if hydrate never delivered
+        if (cachedTrail != null) {
+          done(cachedTrail);
+          return;
+        }
+        var late = window.HomeHydrateCache;
+        if (late && late.trail != null) {
+          done(late.trail);
+          return;
+        }
+        fetchJson('/api/mindmap/trail?limit=40', 10000)
+          .then(function (p) { done((p && p.trail) || []); })
+          .catch(function () { done([]); });
+      }, 8000);
+    });
   }
 
   function refreshFocus() {
