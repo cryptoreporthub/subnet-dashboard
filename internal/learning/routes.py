@@ -597,7 +597,31 @@ async def api_learning_loop_health():
     from internal.learning.loop_health import build_learning_loop_health
 
     try:
-        return build_learning_loop_health()
+        return await _to_thread_timeout(
+            build_learning_loop_health, LEARNING_HEALTH_TIMEOUT, label="learning-health"
+        )
+    except asyncio.TimeoutError:
+        return {
+            "status": "degraded",
+            "meta": {"source": "timeout"},
+            "checked_at": _utcnow_z(),
+            "pending": 0,
+            "last_resolver_tick": None,
+            "resolver": {
+                "running": False,
+                "last_ok": None,
+                "age_seconds": None,
+                "refresh_minutes": None,
+                "peer": None,
+            },
+            "worker_peer": {},
+            "watchdog": {},
+            "daily_pick": {},
+            "ledger": {"required": False, "present": False, "gap": False, "netuid": None},
+            "snapshot_age_seconds": None,
+            "score_snapshot": {},
+            "error": "timeout",
+        }
     except Exception as exc:
         logger.warning("learning health failed: %s", exc)
         return {
