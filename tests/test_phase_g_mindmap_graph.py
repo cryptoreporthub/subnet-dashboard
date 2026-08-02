@@ -37,16 +37,13 @@ def test_mindmap_graph_subnet_signal_edges_when_trail_present():
 
 def test_mindmap_graph_focus_scopes_trail(monkeypatch):
     import internal.learning.mindmap_aggregator as agg
+    import internal.mindmap.graph as graph_mod
 
     trail = [
         {"netuid": 42, "event_type": "weight_change", "time": "2026-07-27T00:00:00Z"},
         {"netuid": 99, "event_type": "weight_change", "time": "2026-07-27T00:01:00Z"},
     ]
     monkeypatch.setattr(agg, "collect_trail_events", lambda limit=100: trail)
-    monkeypatch.setattr(agg, "build_mindmap_state", lambda: {"status": "success", "trail": trail})
-
-    import internal.mindmap.graph as graph_mod
-
     monkeypatch.setattr(graph_mod, "_load_dispositions", lambda: [])
 
     graph = get_mindmap_graph(focus_netuid=42)
@@ -58,18 +55,35 @@ def test_mindmap_graph_focus_scopes_trail(monkeypatch):
 
 def test_mindmap_graph_empty_state_success(monkeypatch):
     import internal.learning.mindmap_aggregator as agg
-
-    monkeypatch.setattr(agg, "collect_trail_events", lambda limit=100: [])
-    monkeypatch.setattr(agg, "build_mindmap_state", lambda: {"status": "success", "trail": []})
-
     import internal.mindmap.graph as graph_mod
 
+    monkeypatch.setattr(agg, "collect_trail_events", lambda limit=100: [])
     monkeypatch.setattr(graph_mod, "_load_dispositions", lambda: [])
 
     graph = get_mindmap_graph()
     assert graph["status"] == "success"
     assert graph["nodes"] == []
     assert graph["edges"] == []
+
+
+def test_mindmap_graph_skips_full_build_mindmap_state(monkeypatch):
+    """Regression: cold graph must not run panel summaries / hourly pick."""
+    import internal.learning.mindmap_aggregator as agg
+    import internal.mindmap.graph as graph_mod
+
+    def _boom():
+        raise AssertionError("build_mindmap_state must not run for graph")
+
+    monkeypatch.setattr(agg, "build_mindmap_state", _boom)
+    monkeypatch.setattr(agg, "collect_trail_events", lambda limit=100: [])
+    monkeypatch.setattr(agg, "_build_integration_status", lambda: {"council": "closed"})
+    monkeypatch.setattr(graph_mod, "_load_dispositions", lambda: [])
+    monkeypatch.setattr(graph_mod, "_load_indicator_alerts", lambda focus: [])
+    monkeypatch.setattr(graph_mod, "_load_whale_and_rugger_alerts", lambda focus: {})
+
+    graph = get_mindmap_graph()
+    assert graph["status"] == "success"
+    assert graph["integration_status"]["council"] == "closed"
 
 
 def test_mindmap_graph_router_export():
@@ -92,7 +106,6 @@ def test_mindmap_graph_counts_logged():
 
 
 def test_mindmap_graph_skips_unscoped_hold_dispositions(monkeypatch):
-    import internal.learning.mindmap_aggregator as agg
     import internal.mindmap.graph as graph_mod
 
     trail = [
@@ -105,7 +118,6 @@ def test_mindmap_graph_skips_unscoped_hold_dispositions(monkeypatch):
             "decision": "hit",
         }
     ]
-    monkeypatch.setattr(agg, "build_mindmap_state", lambda: {"status": "success", "trail": trail})
     monkeypatch.setattr(graph_mod, "_collect_trail", lambda limit=200: trail)
     monkeypatch.setattr(
         graph_mod,
@@ -127,7 +139,6 @@ def test_mindmap_graph_netuidless_nudge_joins_loop_hub(monkeypatch):
     """Judge/weight-nudge events without a netuid used to vanish silently
     (the graph builder created the node but never an edge to reach it).
     They should now attach to the loop:council hub instead."""
-    import internal.learning.mindmap_aggregator as agg
     import internal.mindmap.graph as graph_mod
 
     trail = [
@@ -138,7 +149,6 @@ def test_mindmap_graph_netuidless_nudge_joins_loop_hub(monkeypatch):
             "time": "2026-07-27T00:00:00Z",
         }
     ]
-    monkeypatch.setattr(agg, "build_mindmap_state", lambda: {"status": "success", "trail": trail})
     monkeypatch.setattr(graph_mod, "_collect_trail", lambda limit=200: trail)
     monkeypatch.setattr(graph_mod, "_load_dispositions", lambda: [])
     monkeypatch.setattr(graph_mod, "_load_indicator_alerts", lambda focus: [])
@@ -155,10 +165,8 @@ def test_mindmap_graph_netuidless_nudge_joins_loop_hub(monkeypatch):
 
 
 def test_mindmap_graph_wires_whale_rugger_indicator_signals(monkeypatch):
-    import internal.learning.mindmap_aggregator as agg
     import internal.mindmap.graph as graph_mod
 
-    monkeypatch.setattr(agg, "build_mindmap_state", lambda: {"status": "success", "trail": []})
     monkeypatch.setattr(graph_mod, "_collect_trail", lambda limit=200: [])
     monkeypatch.setattr(graph_mod, "_load_dispositions", lambda: [])
     monkeypatch.setattr(

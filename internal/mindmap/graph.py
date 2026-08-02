@@ -216,22 +216,18 @@ def _trail_matches_netuid(row: Dict[str, Any], focus: int) -> bool:
 
 
 def get_mindmap_graph(focus_netuid: Optional[int] = None) -> Dict[str, Any]:
-    """Return node/edge graph for interactive Mindmap UI (never raises)."""
+    """Return node/edge graph for interactive Mindmap UI (never raises).
+
+    Intentionally does **not** call ``build_mindmap_state()`` — that runs every
+    panel summary + ``select_hourly_pick`` (full-universe scoring) and wedged
+    prod on cold ``GET /api/mindmap/graph``. Graph only needs trail +
+    ``integration_status``; full state stays on ``/api/mindmap/state``.
+    """
     try:
-        from internal.learning.mindmap_aggregator import build_mindmap_state
-
-        state = build_mindmap_state()
-        trail = state.get("trail") or _collect_trail()
-    except Exception as exc:
-        logger.warning("mindmap graph state read failed: %s", exc)
-        try:
-            trail = _collect_trail()
-            state = {}
-        except Exception:
-            return _empty_graph()
-
-    if not trail:
         trail = _collect_trail()
+    except Exception as exc:
+        logger.warning("mindmap graph trail read failed: %s", exc)
+        return _empty_graph()
 
     if focus_netuid is not None:
         try:
@@ -533,11 +529,13 @@ def get_mindmap_graph(focus_netuid: Optional[int] = None) -> Dict[str, Any]:
         node_list = [n for n in node_list if n["id"] in keep_ids]
         edges = [e for e in edges if e.get("source") in keep_ids and e.get("target") in keep_ids]
 
-    integration_status = state.get("integration_status")
-    if not isinstance(integration_status, dict):
-        from internal.learning.mindmap_aggregator import _build_integration_status
+    from internal.learning.mindmap_aggregator import _build_integration_status
 
+    try:
         integration_status = _build_integration_status()
+    except Exception as exc:
+        logger.warning("mindmap integration_status failed: %s", exc)
+        integration_status = {}
 
     return {
         "status": "success",
