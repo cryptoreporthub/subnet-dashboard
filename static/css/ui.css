@@ -338,7 +338,8 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   z-index: 1;
 }
 
-.proof-band__pct--ice {
+/* Double class beats legacy .proof-band__pct { color } (ui-legacy loads later) */
+.proof-band__pct.proof-band__pct--ice {
   color: #a5f3fc;
   text-shadow:
     0 0 18px rgba(103, 232, 249, 0.42),
@@ -361,7 +362,7 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .proof-band__pct--ice { text-shadow: none; }
+  .proof-band__pct.proof-band__pct--ice { text-shadow: none; }
 }
 
 /* ---------- Quiet motion (mist-drift LOCK) ---------- */
