@@ -8,7 +8,6 @@ import time
 from fastapi.testclient import TestClient
 
 from internal.judges import council_routes
-from internal.learning import routes as learning_routes
 from internal.letter import routes as letter_routes
 from server import app
 
@@ -73,6 +72,8 @@ def test_learning_health_ok_while_judges_blocked(monkeypatch):
 
 
 def test_api_mindmap_summary_timeout_returns_degraded(monkeypatch):
+    from internal.learning import routes as learning_routes
+
     monkeypatch.setattr(learning_routes, "MINDMAP_SUMMARY_TIMEOUT", 0.05)
     learning_routes._MINDMAP_SUMMARY_CACHE["payload"] = None
     learning_routes._MINDMAP_SUMMARY_CACHE["at"] = 0.0
