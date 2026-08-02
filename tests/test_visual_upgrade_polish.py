@@ -322,3 +322,51 @@ def test_mobile_telegram_touch_targets_and_week_top():
     # 44px touch target set by the ≤390px block earlier in the cascade.
     chip_block = css.split(".message-intel--v2 .message-intel__filter-chip {")
     assert not any("min-height: 40px" in block.split("}", 1)[0] for block in chip_block[1:])
+
+
+def test_hero_a_tier_stale_badge_markup_and_hydrate_hook():
+    html = _render_council_stage(82)
+    assert 'id="k3-stale-badge"' in html
+    assert "k3-stale-badge" in html
+    assert 'data-generated-at=' in html
+    src = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()
+    assert "patchK3StaleBadge" in src
+    assert "k3StaleBadgeState" in src
+
+
+def test_hero_a_tier_mobile_hierarchy_verb_before_orb_css():
+    css = _council_stage_style_block(_render_council_stage(82))
+    assert "Hero A-tier @390px" in css
+    assert "#k3-call-headline" in css and "order: 1" in css
+    assert ".k3-orb-wrap" in css and "order: 3" in css
+    assert "display: contents" in css
+    mobile = css.split("@media (max-width: 400px)", 1)[1].split("@media", 1)[0]
+    assert ".k3-claim-foot" in mobile and "order: 12" in mobile
+
+
+def test_hero_a_tier_touch_targets_at_390px():
+    css = _council_stage_style_block(_render_council_stage(82))
+    mobile = css.split("@media (max-width: 400px)", 1)[1].split("@media", 1)[0]
+    assert ".k3-horizon-chip" in mobile
+    assert "min-height: 44px" in mobile
+    assert "#k3-action-badge" in mobile or ".k3-badge" in mobile
+
+
+def test_hero_a_tier_empty_evidence_honesty_ssr_and_hydrate():
+    html = _render_council_stage(82)
+    assert 'id="k3-evidence-empty"' in html
+    assert "No evidence drivers on this call yet." in html
+    src = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()
+    assert "No evidence drivers on this call yet." in src
+    assert "No signals on this call yet." in src
+    evidence_idx = src.index("function patchK3Evidence")
+    evidence_body = src[evidence_idx : evidence_idx + 1400]
+    assert "No signals on this call yet." in evidence_body
+
+
+def test_hero_a_tier_canonical_dossier_writer_documented():
+    src = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()
+    assert "Canonical K3 dossier writer" in src
+    assert "patchK3DossierFromPayload" in src
+    live = open("static/js/home_live_refresh.js", encoding="utf-8").read()
+    assert "__cockpitHome.renderDailyPick" in live
