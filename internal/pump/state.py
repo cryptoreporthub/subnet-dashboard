@@ -201,7 +201,7 @@ def transition_subnet(
     try:
         from internal.subnet_names import resolve_subnet_name
 
-        entry["name"] = resolve_subnet_name(int(netuid), tmc_name=raw_name, use_taostats=True)
+        entry["name"] = resolve_subnet_name(int(netuid), tmc_name=raw_name, use_taostats=False)
     except Exception:
         entry["name"] = raw_name
     entry["composite_score"] = score

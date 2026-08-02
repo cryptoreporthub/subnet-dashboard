@@ -14,6 +14,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import threading
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -26,6 +28,13 @@ council_router = APIRouter()
 
 JUDGES_SCORING_UNIVERSE = int(os.environ.get("JUDGES_SCORING_UNIVERSE", "50"))
 JUDGES_HANDLER_TIMEOUT = float(os.environ.get("JUDGES_HANDLER_TIMEOUT_SECONDS", "8"))
+_JUDGES_TTL = float(os.environ.get("JUDGES_CACHE_SECONDS", "60"))
+_JUDGES_LOCK = threading.Lock()
+_JUDGES_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+_COUNCIL_TTL = float(os.environ.get("COUNCIL_CACHE_SECONDS", "60"))
+_COUNCIL_LOCK = threading.Lock()
+_COUNCIL_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+_HEAVY_SEM = threading.Semaphore(int(os.environ.get("JUDGES_HEAVY_CONCURRENCY", "2")))
 
 
 async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
@@ -65,15 +74,7 @@ def _deduplicate_subnets(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def _get_merged_data():
-    """Try to fetch merged subnet data. Returns (merged_list, source_str) or (None, 'none')."""
-    try:
-        from fetchers.merged_data import get_merged_subnet_data
-        merged = get_merged_subnet_data()
-        if merged:
-            merged = _deduplicate_subnets(merged)
-            return merged, "merged"
-    except Exception as e:
-        logger.warning("Merged data fetch failed: %s", e)
+    """Deprecated — request paths use live/TMC cache + registry only."""
     return None, "none"
 
 
@@ -82,13 +83,49 @@ def _get_subnets_for_scoring() -> tuple[List[Dict[str, Any]], str]:
     try:
         from internal.subnets.feed import get_council_subnet_feed
 
-        subnets, source = get_council_subnet_feed()
+        subnets, source = get_council_subnet_feed(timeout=2)
         subnets = _deduplicate_subnets(subnets)
         if subnets:
             return subnets, source
     except Exception as e:
         logger.warning("Council subnet feed failed: %s", e)
     return [], "none"
+
+
+def _cached_or_build(
+    cache: Dict[str, Any],
+    lock: threading.Lock,
+    ttl: float,
+    build,
+    *,
+    busy_fallback: Dict[str, Any],
+):
+    now = time.time()
+    cached = cache.get("payload")
+    if isinstance(cached, dict) and now - float(cache.get("at") or 0) < ttl:
+        return cached
+    if not lock.acquire(blocking=False):
+        if isinstance(cached, dict):
+            return cached
+        return busy_fallback
+    try:
+        now = time.time()
+        cached = cache.get("payload")
+        if isinstance(cached, dict) and now - float(cache.get("at") or 0) < ttl:
+            return cached
+        if not _HEAVY_SEM.acquire(blocking=False):
+            if isinstance(cached, dict):
+                return cached
+            return busy_fallback
+        try:
+            payload = build()
+            cache["payload"] = payload
+            cache["at"] = time.time()
+            return payload
+        finally:
+            _HEAVY_SEM.release()
+    finally:
+        lock.release()
 
 
 def _aggregate_portfolios(portfolios: Dict[str, Any]) -> Dict[str, Any]:
@@ -127,6 +164,9 @@ async def api_council():
     try:
         return await _to_thread_timeout(_api_council_sync, JUDGES_HANDLER_TIMEOUT, label="council")
     except asyncio.TimeoutError:
+        cached = _COUNCIL_CACHE.get("payload")
+        if isinstance(cached, dict):
+            return cached
         return {
             "status": "degraded",
             "subnets": [],
@@ -140,6 +180,25 @@ async def api_council():
 
 
 def _api_council_sync():
+    return _cached_or_build(
+        _COUNCIL_CACHE,
+        _COUNCIL_LOCK,
+        _COUNCIL_TTL,
+        _api_council_sync_inner,
+        busy_fallback={
+            "status": "degraded",
+            "subnets": [],
+            "judges": [],
+            "meta": {
+                "count": 0,
+                "source": "busy",
+                "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            },
+        },
+    )
+
+
+def _api_council_sync_inner():
     try:
         merged, source = _get_subnets_for_scoring()
         if not merged:
@@ -188,6 +247,9 @@ async def api_judges():
     try:
         return await _to_thread_timeout(_api_judges_sync, JUDGES_HANDLER_TIMEOUT, label="judges")
     except asyncio.TimeoutError:
+        cached = _JUDGES_CACHE.get("payload")
+        if isinstance(cached, dict):
+            return cached
         return {
             "success": False,
             "error": "timeout",
@@ -197,6 +259,21 @@ async def api_judges():
 
 
 def _api_judges_sync():
+    return _cached_or_build(
+        _JUDGES_CACHE,
+        _JUDGES_LOCK,
+        _JUDGES_TTL,
+        _api_judges_sync_inner,
+        busy_fallback={
+            "success": False,
+            "error": "busy",
+            "judges": [],
+            "count": 0,
+        },
+    )
+
+
+def _api_judges_sync_inner():
     try:
         subnets, source = _get_subnets_for_scoring()
         if subnets:
