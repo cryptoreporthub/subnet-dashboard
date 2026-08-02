@@ -11111,3 +11111,76 @@ header.top {
     display: none !important;
   }
 }
+
+/* ---------- driver.js onboarding tour — pewter/ice mist ---------- */
+.driver-popover {
+  background-color: rgba(16, 19, 26, 0.94);
+  background-image: var(--card-smoke);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(126, 200, 227, 0.28);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-elevated), 0 0 24px rgba(126, 200, 227, 0.08);
+  color: var(--text-primary);
+  padding: var(--space-4);
+  min-width: 260px;
+  max-width: 320px;
+}
+
+.driver-popover * {
+  font-family: var(--font-body);
+}
+
+.driver-popover-title {
+  font-family: var(--font-brand);
+  font-weight: 700;
+  font-size: 1.125rem;
+  color: #e8f4f8;
+  line-height: 1.35;
+  padding-right: 28px;
+}
+
+.driver-popover-description {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-top: var(--space-2);
+}
+
+.driver-popover-close-btn {
+  color: var(--text-muted);
+}
+
+.driver-popover-close-btn:hover,
+.driver-popover-close-btn:focus {
+  color: #c5e8f4;
+}
+
+.driver-popover-progress-text {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.driver-popover-footer button {
+  background: rgba(22, 25, 32, 0.9);
+  border: 1px solid rgba(126, 200, 227, 0.22);
+  border-radius: var(--radius-sm);
+  color: #e8f4f8;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  text-shadow: none;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.driver-popover-footer button:hover,
+.driver-popover-footer button:focus {
+  background: rgba(126, 200, 227, 0.12);
+  border-color: rgba(126, 200, 227, 0.38);
+  color: #f0f8fc;
+}
+
+.driver-popover-arrow {
+  border-color: rgba(16, 19, 26, 0.94);
+}

@@ -4,39 +4,54 @@
 
   var STORAGE_KEY = 'simivision_tour_done';
 
+  var TOUR_STEPS = [
+    {
+      element: '#section-daily-pick',
+      popover: {
+        title: 'Daily call',
+        description: 'Today\'s audited council decision — HOLD means the gate did not clear, not a broken page.',
+        side: 'bottom',
+      },
+    },
+    {
+      element: '#section-living-focus',
+      popover: {
+        title: 'Living Focus',
+        description: 'Four beats on the subnet in play: Focus · Contest · Prove it · Watch us update. Lane judges vs council weights are labeled separately.',
+        side: 'top',
+      },
+    },
+    {
+      element: '#section-brain-letter',
+      popover: {
+        title: 'Brain letter',
+        description: 'Morning brief from graded memory — what changed, today\'s call citation, and the Next outlook for this window.',
+        side: 'top',
+      },
+    },
+  ];
+
+  function resolveSteps() {
+    return TOUR_STEPS.filter(function (step) {
+      if (!step.element) return true;
+      try {
+        return !!document.querySelector(step.element);
+      } catch (e) {
+        return false;
+      }
+    });
+  }
+
   function startTour() {
     if (typeof window.driver === 'undefined' || !window.driver.js) return;
+    var steps = resolveSteps();
+    if (!steps.length) return;
     var driver = window.driver.js.driver;
     var d = driver({
       showProgress: true,
       animate: true,
-      overlayOpacity: 0.65,
-      steps: [
-        {
-          element: '#section-daily-pick',
-          popover: {
-            title: 'Daily call',
-            description: 'Today\'s audited council decision — HOLD means the gate did not clear, not a broken page.',
-            side: 'bottom',
-          },
-        },
-        {
-          element: '#section-living-focus',
-          popover: {
-            title: 'Living Focus',
-            description: 'Four beats on the subnet in play: Focus · Contest · Prove it · Watch us update. Lane judges vs council weights are labeled separately.',
-            side: 'top',
-          },
-        },
-        {
-          element: '#section-brain-letter',
-          popover: {
-            title: 'Brain letter',
-            description: 'Morning brief from graded memory — what changed, today\'s call citation, and the Next outlook for this window.',
-            side: 'top',
-          },
-        },
-      ],
+      overlayOpacity: 0.55,
+      steps: steps,
       onDestroyed: function () {
         try { localStorage.setItem(STORAGE_KEY, '1'); } catch (e) { /* ignore */ }
       },
