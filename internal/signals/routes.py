@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
@@ -17,6 +18,16 @@ from internal.signals.ws_hub import get_signal_hub
 logger = logging.getLogger(__name__)
 
 signals_router = APIRouter(tags=["signals"])
+
+SIGNALS_HANDLER_TIMEOUT = float(os.environ.get("SIGNALS_HANDLER_TIMEOUT_SECONDS", "8"))
+
+
+async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(fn), timeout=timeout_s)
+    except asyncio.TimeoutError:
+        logger.warning("%s timed out after %.1fs", label, timeout_s)
+        raise
 
 try:
     from internal.signal_hub.routes import signal_hub_router
@@ -79,15 +90,25 @@ class WebhookSubscribeIn(BaseModel):
 
 
 async def _refresh_and_broadcast() -> Dict[str, Any]:
-    result = await asyncio.to_thread(generate_signals, True)
-    engine = _get_alerts()
-    system = await asyncio.to_thread(engine.check_system_alerts)
-    signal_alerts = await asyncio.to_thread(
-        engine.record_signal_changes, result.get("changed_signals") or []
-    )
-    composites = await asyncio.to_thread(
-        engine.evaluate_correlation_alerts, result.get("signals") or []
-    )
+    def _build():
+        result = generate_signals(True)
+        engine = _get_alerts()
+        system = engine.check_system_alerts()
+        signal_alerts = engine.record_signal_changes(result.get("changed_signals") or [])
+        composites = engine.evaluate_correlation_alerts(result.get("signals") or [])
+        return result, system, signal_alerts, composites
+
+    try:
+        result, system, signal_alerts, composites = await _to_thread_timeout(
+            _build, SIGNALS_HANDLER_TIMEOUT, label="signals-refresh"
+        )
+    except asyncio.TimeoutError:
+        return {
+            "signals": [],
+            "meta": {"count": 0, "appended": 0, "cached": False, "source": "timeout"},
+            "changed_signals": [],
+        }
+
     hub = get_signal_hub()
     await hub.broadcast("signals", {"signals": result.get("signals", []), "meta": result.get("meta")})
     new_alerts = system + signal_alerts + composites
@@ -145,9 +166,16 @@ async def api_alerts(
 ):
     engine = _get_alerts()
     if refresh_checks:
-        await asyncio.to_thread(engine.check_system_alerts)
-        signals = _get_store().latest_all()
-        await asyncio.to_thread(engine.evaluate_correlation_alerts, signals)
+        try:
+            await _to_thread_timeout(engine.check_system_alerts, SIGNALS_HANDLER_TIMEOUT, label="alerts-system")
+            signals = _get_store().latest_all()
+            await _to_thread_timeout(
+                lambda: engine.evaluate_correlation_alerts(signals),
+                SIGNALS_HANDLER_TIMEOUT,
+                label="alerts-correlation",
+            )
+        except asyncio.TimeoutError:
+            pass
     return engine.recent_alerts(
         limit=limit,
         active_only=active_only,
