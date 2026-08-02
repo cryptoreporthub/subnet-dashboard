@@ -11,15 +11,27 @@ from typing import Any, Dict, Optional
 _CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 _CACHE_LOCK = threading.Lock()
 _BUILD_LOCK = threading.Lock()
+_BG_LOCK = threading.Lock()
+_BG_STARTED = False
 
 TTL = float(os.environ.get("READINESS_CACHE_SECONDS", "45"))
-BUILD_TIMEOUT = float(os.environ.get("READINESS_BUILD_TIMEOUT_SECONDS", "4"))
+# Prod builds (feed + loop_health + soul reads) routinely need >4s under load.
+BUILD_TIMEOUT = float(os.environ.get("READINESS_BUILD_TIMEOUT_SECONDS", "8"))
+
+
+class _BuildBusy(Exception):
+    """Another readiness build holds the lock; do not block inside wait_for."""
 
 
 def _stale_copy() -> Optional[Dict[str, Any]]:
     with _CACHE_LOCK:
         payload = _CACHE.get("payload")
         return dict(payload) if isinstance(payload, dict) else None
+
+
+def _cache_age() -> float:
+    with _CACHE_LOCK:
+        return time.time() - float(_CACHE.get("at") or 0)
 
 
 def _store(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -34,13 +46,13 @@ def _build_blocking(*, force: bool = False) -> Dict[str, Any]:
         stale = _stale_copy()
         if stale is not None and not force:
             return stale
-        _BUILD_LOCK.acquire(blocking=True)
+        # Never block wait_for callers behind a long in-flight build.
+        raise _BuildBusy()
     try:
         if not force:
             stale = _stale_copy()
             if stale is not None:
-                with _CACHE_LOCK:
-                    age = time.time() - float(_CACHE.get("at") or 0)
+                age = _cache_age()
                 if age < TTL:
                     return stale
         from internal.ops.readiness import build_readiness_report
@@ -48,6 +60,55 @@ def _build_blocking(*, force: bool = False) -> Dict[str, Any]:
         return _store(build_readiness_report())
     finally:
         _BUILD_LOCK.release()
+
+
+def _kick_background_build() -> None:
+    """Warm cache after a timeout without cancelling mid-build waiters."""
+    global _BG_STARTED
+    with _BG_LOCK:
+        if _BG_STARTED:
+            return
+        _BG_STARTED = True
+
+    def _run() -> None:
+        global _BG_STARTED
+        try:
+            _build_blocking(force=True)
+        except _BuildBusy:
+            pass
+        except Exception:
+            pass
+        finally:
+            with _BG_LOCK:
+                _BG_STARTED = False
+
+    threading.Thread(target=_run, name="readiness-cache-warm", daemon=True).start()
+
+
+def _busy_payload(*, stale: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    from internal.ops.readiness import build_liveness_report
+
+    if stale is not None:
+        issues = list(stale.get("issues") or [])
+        if "readiness_build_slow" not in issues:
+            issues = issues + ["readiness_build_slow"]
+        return {
+            **stale,
+            "cached": True,
+            "serving_stale": True,
+            "cache_age_seconds": round(_cache_age(), 1),
+            "issues": issues,
+        }
+
+    lite = build_liveness_report(probe_worker=False)
+    return {
+        **lite,
+        "status": "busy",
+        "ready": False,
+        "cached": False,
+        "issues": ["readiness_build_timeout"],
+        "next_levers": ["retry_after_worker_idle"],
+    }
 
 
 async def get_readiness_report(*, force: bool = False) -> Dict[str, Any]:
@@ -66,19 +127,9 @@ async def get_readiness_report(*, force: bool = False) -> Dict[str, Any]:
             timeout=BUILD_TIMEOUT + 0.5,
         )
         return {**payload, "cached": False}
+    except _BuildBusy:
+        _kick_background_build()
+        return _busy_payload(stale=_stale_copy())
     except asyncio.TimeoutError:
-        from internal.ops.readiness import build_liveness_report
-
-        lite = build_liveness_report(probe_worker=False)
-        stale = _stale_copy()
-        out: Dict[str, Any] = {
-            **lite,
-            "status": "busy",
-            "ready": False,
-            "cached": False,
-            "issues": ["readiness_build_timeout"],
-            "next_levers": ["retry_after_worker_idle"],
-        }
-        if stale is not None:
-            out["stale_report"] = stale
-        return out
+        _kick_background_build()
+        return _busy_payload(stale=_stale_copy())
