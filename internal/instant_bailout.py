@@ -16,7 +16,7 @@ HARDCODED_EMERGENCY_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#080a10">
 <title>SimiVision — Council</title>
 <style>
   html,body{margin:0;min-height:100%;background:#0a0a0f;color:#e8e8f0;

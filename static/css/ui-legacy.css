@@ -6666,7 +6666,7 @@ button.home-cta {
 }
 .proof-band__title { font-size: 1.25rem; margin: 0 0 16px; }
 .proof-band__score-hero { text-align: center; margin-bottom: 20px; padding: 16px; border-radius: 10px; background: rgba(126, 200, 227, 0.06); border: 1px solid rgba(126, 200, 227, 0.15); }
-.proof-band__pct { font-size: 2.5rem; font-weight: 700; color: #39ff14; line-height: 1.1; }
+.proof-band__pct { font-size: 2.5rem; font-weight: 700; color: #a5f3fc; line-height: 1.1; }
 .proof-band__meta { font-size: 13px; color: var(--stage-muted); margin: 6px 0 0; }
 .proof-band__quiet { font-size: 13px; color: var(--stage-muted); margin: 0; }
 .proof-band__tabs {
