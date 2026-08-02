@@ -25,7 +25,7 @@ body.council-first-theme {
   background-position: center;
 }
 
-/* Mist drift layer (gated below) */
+/* Page atmosphere mist overlay — drift gated in Quiet motion below */
 body.council-first-theme::before {
   content: "";
   position: fixed;
@@ -36,6 +36,7 @@ body.council-first-theme::before {
     radial-gradient(ellipse 50% 40% at 20% 30%, rgba(160, 168, 180, 0.08), transparent 70%),
     radial-gradient(ellipse 45% 35% at 80% 70%, rgba(140, 150, 164, 0.07), transparent 70%);
   opacity: 0.9;
+  transform-origin: center center;
 }
 
 body.council-first-theme > * {
@@ -146,9 +147,6 @@ nav.top-nav a:hover {
   border-color: rgba(126, 200, 227, 0.28);
 }
 
-nav.top-nav a:active {
-  transform: scale(0.96);
-}
 
 .live-pill {
   font-family: var(--font-mono);
@@ -210,11 +208,6 @@ button.home-cta {
   border: 0;
 }
 
-.home-cta--primary:active,
-.btn-primary:active {
-  transform: scale(0.97);
-  filter: brightness(0.95);
-}
 
 .home-cta--ghost {
   background: transparent;
@@ -269,7 +262,7 @@ html[data-hydrate="1"] .hydrate-skel .live-only { display: none !important; }
 html:not([data-hydrate="1"]) .hydrate-skel .skel-only,
 html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
 
-/* ---------- Quiet motion ---------- */
+/* ---------- Quiet motion (mist-drift LOCK) ---------- */
 @media (prefers-reduced-motion: no-preference) {
   body.council-first-theme::before {
     animation: mistDrift 28s ease-in-out infinite alternate;
@@ -278,6 +271,16 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   @keyframes mistDrift {
     from { transform: translate3d(-2%, -1%, 0) scale(1); }
     to { transform: translate3d(2%, 1.5%, 0) scale(1.04); }
+  }
+
+  nav.top-nav a:active {
+    transform: scale(0.96);
+  }
+
+  .home-cta--primary:active,
+  .btn-primary:active {
+    transform: scale(0.97);
+    filter: brightness(0.95);
   }
 
   .fade-up {
@@ -306,7 +309,10 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body.council-first-theme::before { animation: none; }
+  body.council-first-theme::before { animation: none; transform: none; }
+  nav.top-nav a:active,
+  .home-cta--primary:active,
+  .btn-primary:active { transform: none; filter: none; }
   .fade-up { opacity: 1; transform: none; }
   .skel { animation: none; }
 }
