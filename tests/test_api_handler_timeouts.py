@@ -77,6 +77,39 @@ def test_score_all_judges_request_path_use_chain_false(monkeypatch):
     assert seen.get("use_chain") is False
 
 
+def test_api_learning_health_timeout_returns_degraded(monkeypatch):
+    import asyncio
+
+    import httpx
+
+    import internal.learning.loop_health as loop_health
+    import internal.learning.routes as learning_routes
+
+    monkeypatch.setattr(learning_routes, "LEARNING_HEALTH_TIMEOUT", 0.05)
+
+    def _slow():
+        time.sleep(2)
+        return {"status": "ok", "pending": 0}
+
+    monkeypatch.setattr(loop_health, "build_learning_loop_health", _slow)
+
+    async def _fetch():
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            t0 = time.time()
+            resp = await client.get("/api/learning/health")
+            return resp, time.time() - t0
+
+    resp, elapsed = asyncio.run(_fetch())
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("status") == "degraded"
+    assert body.get("meta", {}).get("source") == "timeout"
+    assert body.get("error") == "timeout"
+    assert elapsed < 1.0
+
+
 def test_learning_health_ok_while_judges_blocked(monkeypatch):
     monkeypatch.setattr(council_routes, "JUDGES_HANDLER_TIMEOUT", 30.0)
     gate = threading.Event()
