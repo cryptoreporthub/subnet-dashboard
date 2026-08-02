@@ -101,6 +101,16 @@ checks = {
         ),
         "ledger_calls": ((evidence.get("combined_angles") or {}).get("ledger") or {}).get("calls"),
     },
+    "accuracy_lift": {
+        "pass": True,
+        "present": "accuracy_lift" in evidence,
+        "data_available": (evidence.get("accuracy_lift") or {}).get("data_available"),
+        "graded_7d": (evidence.get("accuracy_lift") or {}).get("graded_7d"),
+        "graded_30d": (evidence.get("accuracy_lift") or {}).get("graded_30d"),
+        "hit_rate_7d": (evidence.get("accuracy_lift") or {}).get("hit_rate_7d"),
+        "hit_rate_30d": (evidence.get("accuracy_lift") or {}).get("hit_rate_30d"),
+        "note": (evidence.get("accuracy_lift") or {}).get("note"),
+    },
 }
 
 all_auto = all(
@@ -124,6 +134,7 @@ print(
                     "status": evidence.get("status"),
                     "council_health": council,
                     "telegram_proof": telegram,
+                    "accuracy_lift": evidence.get("accuracy_lift"),
                 },
             },
         },
