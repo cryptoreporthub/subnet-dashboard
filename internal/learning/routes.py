@@ -40,14 +40,11 @@ learning_router = APIRouter(tags=["learning"])
 learning_router.include_router(create_feedback_router())
 
 LEARNING_HEALTH_TIMEOUT = float(os.environ.get("LEARNING_HEALTH_TIMEOUT_SECONDS", "8"))
-<<<<<<< HEAD
 MINDMAP_STATE_HANDLER_TIMEOUT = float(os.environ.get("MINDMAP_STATE_HANDLER_TIMEOUT_SECONDS", "12"))
-=======
 MINDMAP_SUMMARY_TIMEOUT = float(os.environ.get("MINDMAP_SUMMARY_TIMEOUT_SECONDS", "8"))
 _MINDMAP_SUMMARY_TTL = float(os.environ.get("MINDMAP_SUMMARY_CACHE_SECONDS", "60"))
 _MINDMAP_SUMMARY_LOCK = threading.Lock()
 _MINDMAP_SUMMARY_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
->>>>>>> eb6073d (fix(learning): timeout-wrap /api/mindmap/summary with degraded fallback)
 
 
 async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
