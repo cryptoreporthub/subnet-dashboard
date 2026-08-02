@@ -10956,3 +10956,64 @@ header.top {
   .pds-empty {
     background: rgba(10, 14, 24, 0.35);
   }
+
+/* ---------- Mobile thumb dock (LOCK 2026-08-02) ---------- */
+.thumb-dock {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  .app-shell.council-first {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .thumb-dock {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1002;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 6px max(12px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+    gap: 6px;
+    box-sizing: border-box;
+    background-image: var(--card-grain), var(--card-smoke);
+    background-size: 160px 160px, cover;
+    background-blend-mode: overlay, normal;
+    border-top: 1px solid var(--line-hi);
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
+  }
+
+  .thumb-dock__link {
+    flex: 1 1 0;
+    min-height: 44px;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 10px;
+    border-radius: 999px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 13px;
+    border: 1px solid transparent;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+
+  .thumb-dock__link[aria-current="location"],
+  .thumb-dock__link:hover,
+  .thumb-dock__link:focus-visible {
+    color: #e8f4f8;
+    background: rgba(126, 200, 227, 0.12);
+    border-color: rgba(126, 200, 227, 0.28);
+  }
+}
+
+@media (min-width: 900px) {
+  .thumb-dock {
+    display: none !important;
+  }
+}
