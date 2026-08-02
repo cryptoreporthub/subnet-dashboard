@@ -45,6 +45,11 @@ MINDMAP_SUMMARY_TIMEOUT = float(os.environ.get("MINDMAP_SUMMARY_TIMEOUT_SECONDS"
 _MINDMAP_SUMMARY_TTL = float(os.environ.get("MINDMAP_SUMMARY_CACHE_SECONDS", "60"))
 _MINDMAP_SUMMARY_LOCK = threading.Lock()
 _MINDMAP_SUMMARY_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+MINDMAP_STORY_PATH_HANDLER_TIMEOUT = float(
+    os.environ.get("MINDMAP_STORY_PATH_HANDLER_TIMEOUT_SECONDS", "12")
+)
+_STORY_PATH_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+_STORY_PATH_CACHE_TTL = float(os.environ.get("MINDMAP_STORY_PATH_CACHE_SECONDS", "30"))
 
 
 async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
@@ -409,11 +414,23 @@ async def api_story_strip(
 async def api_mindmap_story_path():
     """§21 L5 — linear cause chain for today's council pick."""
     try:
-        # Live py-spy caught this exact route holding the event loop: it
-        # calls get_or_create_today_pick() -> select_daily_pick() (scores the
-        # full subnet universe synchronously) directly. Same fix as the other
-        # mindmap routes in this incident: dispatch through the thread pool.
-        return await run_in_threadpool(_build_mindmap_story_path)
+        return await _to_thread_timeout(
+            _build_mindmap_story_path,
+            MINDMAP_STORY_PATH_HANDLER_TIMEOUT,
+            label="mindmap-story-path",
+        )
+    except asyncio.TimeoutError:
+        stale = _get_stale_story_path()
+        if stale:
+            out = dict(stale)
+            out["status"] = "cached"
+            return out
+        return {
+            "status": "timeout",
+            "data_available": False,
+            "reason": "timeout",
+            "steps": [],
+        }
     except Exception as exc:
         logger.warning("mindmap story-path failed: %s", exc)
         return {
@@ -425,13 +442,34 @@ async def api_mindmap_story_path():
         }
 
 
+def _load_today_pick_payload_lite() -> Dict[str, Any]:
+    """File-backed daily pick — no live subnet-universe scoring."""
+    from internal.council.daily_pick_engine import _find_today, _load
+
+    daily = _find_today(_load())
+    return daily if isinstance(daily, dict) else {}
+
+
+def _get_stale_story_path() -> Dict[str, Any] | None:
+    cached = _STORY_PATH_CACHE.get("payload")
+    if isinstance(cached, dict):
+        return dict(cached)
+    return None
+
+
 def _build_mindmap_story_path() -> Dict[str, Any]:
-    from internal.council.daily_pick_engine import get_or_create_today_pick
+    now = time.monotonic()
+    cached = _STORY_PATH_CACHE.get("payload")
+    if isinstance(cached, dict) and now - float(_STORY_PATH_CACHE.get("at") or 0) < _STORY_PATH_CACHE_TTL:
+        return dict(cached)
+
     from internal.learning.story_path import build_story_path
 
-    subnets = _subnets_for_tracker()
-    payload = get_or_create_today_pick(subnets, {})
-    return {"status": "success", **build_story_path(payload)}
+    payload = _load_today_pick_payload_lite()
+    out = {"status": "success", **build_story_path(payload)}
+    _STORY_PATH_CACHE["at"] = now
+    _STORY_PATH_CACHE["payload"] = out
+    return out
 
 
 @learning_router.get("/api/predictions/capsule/{prediction_id}")

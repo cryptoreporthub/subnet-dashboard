@@ -200,3 +200,53 @@ def test_api_mindmap_graph_timeout_serves_stale_cache(monkeypatch):
     body = resp.json()
     assert body["status"] == "cached"
     assert body["nodes"] == stale["nodes"]
+
+
+def test_api_mindmap_story_path_timeout_returns_degraded(monkeypatch):
+    import internal.learning.routes as learning_routes
+
+    monkeypatch.setattr(learning_routes, "_STORY_PATH_CACHE", {"at": 0.0, "payload": None})
+    monkeypatch.setattr(learning_routes, "MINDMAP_STORY_PATH_HANDLER_TIMEOUT", 0.05)
+
+    def _slow():
+        time.sleep(2)
+        return {
+            "status": "success",
+            "data_available": True,
+            "steps": [{"id": "signals"}],
+        }
+
+    monkeypatch.setattr(learning_routes, "_build_mindmap_story_path", _slow)
+    resp = TestClient(app).get("/api/mindmap/story-path")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "timeout"
+    assert body["data_available"] is False
+    assert body["steps"] == []
+
+
+def test_api_mindmap_story_path_timeout_serves_stale_cache(monkeypatch):
+    import internal.learning.routes as learning_routes
+
+    stale = {
+        "status": "success",
+        "data_available": True,
+        "steps": [{"id": "council", "title": "BUY Foo"}],
+    }
+    monkeypatch.setattr(
+        learning_routes,
+        "_STORY_PATH_CACHE",
+        {"at": time.time() - 999, "payload": stale},
+    )
+    monkeypatch.setattr(learning_routes, "MINDMAP_STORY_PATH_HANDLER_TIMEOUT", 0.05)
+
+    def _slow():
+        time.sleep(2)
+        return {"status": "success", "data_available": True, "steps": []}
+
+    monkeypatch.setattr(learning_routes, "_build_mindmap_story_path", _slow)
+    resp = TestClient(app).get("/api/mindmap/story-path")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "cached"
+    assert body["steps"] == stale["steps"]
