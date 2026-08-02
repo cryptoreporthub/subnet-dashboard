@@ -551,7 +551,7 @@
         (note ? ' · ' + esc(String(note).slice(0, 72)) : '') +
         '</li>';
     });
-    html += '</ol><p class="living-focus__trail-link"><a href="#section-trail">Full learning trail →</a></p>';
+    html += '</ol><p class="living-focus__trail-link"><a href="#mindmap-graph-section">Full learning trail →</a></p>';
     trailTeaserEl.innerHTML = html;
   }
 

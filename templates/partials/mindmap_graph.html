@@ -209,6 +209,35 @@
     background: rgba(63, 201, 255, 0.06);
   }
   .mindmap-integration-badge--read_only .mindmap-integration-badge__pill { color: var(--accent-blue, #3fc9ff); }
+
+  .mindmap-spine-chrome {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    align-items: center;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle, #374151);
+    background: rgba(255, 255, 255, 0.02);
+    font-size: 0.78rem;
+    color: var(--text-secondary, #9ca3af);
+  }
+  .mindmap-spine-chrome__conviction,
+  .mindmap-spine-chrome__learn {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.7rem;
+    line-height: 1.35;
+  }
+  .mindmap-spine-chrome__conviction[data-band] {
+    color: var(--sn-accent, var(--text-primary, #f9fafb));
+  }
+  .mindmap-spine-chrome__conviction[data-band="0"] { --sn-accent: #3fc9ff; }
+  .mindmap-spine-chrome__conviction[data-band="1"] { --sn-accent: #a78bfa; }
+  .mindmap-spine-chrome__conviction[data-band="2"] { --sn-accent: #ffb74a; }
+  .mindmap-spine-chrome__conviction[data-band="3"] { --sn-accent: #ff5fa8; }
+  .mindmap-spine-chrome__conviction[data-band="4"] { --sn-accent: #34d399; }
+  .mindmap-spine-chrome__conviction[data-band="5"] { --sn-accent: #60a5fa; }
 </style>
 
 {% set integration_labels = {
@@ -249,6 +278,10 @@
         {% endif %}
       {% endfor %}
     {% endif %}
+    </div>
+    <div id="mindmap-spine-chrome" class="mindmap-spine-chrome" aria-live="polite" aria-label="Focus spine summary">
+      <span class="mindmap-spine-chrome__conviction" data-spine="conviction">Focus conviction — loading</span>
+      <span class="mindmap-spine-chrome__learn" data-spine="learn">Last learn — loading</span>
     </div>
     <p id="mindmap-graph-empty" class="mindmap-honest-empty">
       Mindmap graph is empty on this deploy — trail rows and dispositions will appear as the learning loop warms up.

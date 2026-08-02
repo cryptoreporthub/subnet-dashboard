@@ -34,12 +34,15 @@ def test_mindmap_partial_renders_integration_status_legend():
 def test_index_includes_integration_status_legend():
     import server as srv
 
-    srv._prime_emergency_home_html()
+    srv._HOMEPAGE_HTML_CACHE.clear()
+    with srv._HOMEPAGE_WARM_LOCK:
+        srv._HOMEPAGE_WARMING = False
     srv._warm_homepage_cache(None)
     client = TestClient(app)
     html = client.get("/").text
     assert 'id="mindmap-integration-status"' in html
     assert "Council Trail" in html
+    assert 'id="mindmap-spine-chrome"' in html
     assert "Whales &amp; Indicators" in html or "Whales & Indicators" in html
 
 
@@ -51,6 +54,15 @@ def test_mindmap_js_updates_integration_status_legend():
     assert "council_trail" in src
 
 
+def test_mindmap_js_spine_chrome_listens_for_hydrate_and_focus():
+    client = TestClient(app)
+    src = client.get("/static/js/mindmap_graph.js").text
+    assert "mindmap-spine-chrome" in src
+    assert "living-focus:change" in src
+    assert "formatLearnLine" in src
+    assert "pickConvictionForFocus" in src
+
+
 def test_living_focus_trail_promise_waits_for_hydrate_trail():
     """LB-11: living_focus prefers HomeHydrateCache / home:hydrate-trail before self-fetch."""
     client = TestClient(app)
@@ -59,3 +71,4 @@ def test_living_focus_trail_promise_waits_for_hydrate_trail():
     assert "home:hydrate-trail" in src
     assert "HomeHydrateCache" in src
     assert "function trailPromise()" in src
+    assert "#mindmap-graph-section" in src
