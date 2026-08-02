@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from typing import Any, Dict, List, Tuple
 
@@ -74,11 +75,35 @@ def _load_subnets_inner() -> List[Dict[str, Any]]:
     return enrich_subnet_rows(_registry_rows())
 
 
+def _registry_fallback_rows() -> List[Dict[str, Any]]:
+    try:
+        from internal.subnet_names import enrich_subnet_rows
+
+        return enrich_subnet_rows(_registry_rows())
+    except Exception:
+        return _registry_rows()
+
+
+def _on_pool_thread() -> bool:
+    """True when already on a worker thread (e.g. asyncio.to_thread)."""
+    return threading.current_thread() is not threading.main_thread()
+
+
 def load_subnets_source(timeout: float | None = None) -> List[Dict[str, Any]]:
     """Return subnets for /api/subnets with a hard timeout and registry fallback."""
     limit = SUBNETS_LOAD_TIMEOUT if timeout is None else timeout
     if limit <= 0:
         return _load_subnets_inner()
+    # Outer asyncio.wait_for owns the deadline — avoid nested ThreadPoolExecutor.
+    if _on_pool_thread():
+        try:
+            return _load_subnets_inner()
+        except Exception as exc:
+            logger.warning(
+                "subnet feed load failed on worker thread: %s; using registry fallback",
+                exc,
+            )
+            return _registry_fallback_rows()
     pool = ThreadPoolExecutor(max_workers=1)
     try:
         fut = pool.submit(_load_subnets_inner)
@@ -94,12 +119,7 @@ def load_subnets_source(timeout: float | None = None) -> List[Dict[str, Any]]:
     finally:
         # wait=False: timed-out live fetch must not wedge hydrate APIs (Fly 1-worker).
         pool.shutdown(wait=False, cancel_futures=True)
-    try:
-        from internal.subnet_names import enrich_subnet_rows
-
-        return enrich_subnet_rows(_registry_rows())
-    except Exception:
-        return _registry_rows()
+    return _registry_fallback_rows()
 
 
 def _feed_layers_from_freshness(remote: Dict[str, Any]) -> Dict[str, Any]:
@@ -195,18 +215,9 @@ def get_council_subnet_feed(timeout: float | None = None) -> Tuple[List[Dict[str
     except Exception as exc:
         logger.debug("council feed unavailable: %s", exc)
 
-    try:
-        from fetchers.merged_data import get_merged_subnet_data
-        from internal.subnet_names import enrich_subnet_rows
-
-        merged = get_merged_subnet_data()
-        if merged:
-            rows = enrich_subnet_rows(merged)
-            if rows:
-                return rows, "merged"
-    except Exception as exc:
-        logger.warning("merged feed unavailable: %s", exc)
-
+    rows = _registry_fallback_rows()
+    if rows:
+        return rows, "registry"
     return [], "none"
 
 

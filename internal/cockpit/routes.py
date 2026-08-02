@@ -6,6 +6,8 @@ import asyncio
 import json
 import logging
 import os
+import threading
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Query, Request
@@ -20,10 +22,43 @@ cockpit_router = APIRouter(tags=["cockpit"])
 
 _PICKS_BUILD_TIMEOUT = float(os.environ.get("COCKPIT_PICKS_TIMEOUT", "8"))
 _SECTIONS_BUILD_TIMEOUT = float(os.environ.get("COCKPIT_SECTIONS_TIMEOUT", "8"))
+_SECTIONS_TTL = float(os.environ.get("COCKPIT_SECTIONS_CACHE_SECONDS", "60"))
+_SECTIONS_LOCK = threading.Lock()
+_SECTIONS_CACHE: dict = {"at": 0.0, "payload": None}
+_SECTIONS_SEM = threading.Semaphore(int(os.environ.get("COCKPIT_HEAVY_CONCURRENCY", "2")))
 
 
 def _emitted_at_z() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _build_sections_payload_sync() -> dict:
+    now = time.time()
+    cached = _SECTIONS_CACHE.get("payload")
+    if isinstance(cached, dict) and now - float(_SECTIONS_CACHE.get("at") or 0) < _SECTIONS_TTL:
+        return cached
+    if not _SECTIONS_LOCK.acquire(blocking=False):
+        if isinstance(cached, dict):
+            return cached
+        return {"status": "busy", "sections": []}
+    try:
+        now = time.time()
+        cached = _SECTIONS_CACHE.get("payload")
+        if isinstance(cached, dict) and now - float(_SECTIONS_CACHE.get("at") or 0) < _SECTIONS_TTL:
+            return cached
+        if not _SECTIONS_SEM.acquire(blocking=False):
+            if isinstance(cached, dict):
+                return cached
+            return {"status": "busy", "sections": []}
+        try:
+            payload = get_cockpit_sections()
+            _SECTIONS_CACHE["payload"] = payload
+            _SECTIONS_CACHE["at"] = time.time()
+            return payload
+        finally:
+            _SECTIONS_SEM.release()
+    finally:
+        _SECTIONS_LOCK.release()
 
 
 async def _build_sections_payload() -> dict:
@@ -34,11 +69,16 @@ async def _build_sections_payload() -> dict:
     # _build_picks_payload() above.
     try:
         return await asyncio.wait_for(
-            asyncio.to_thread(get_cockpit_sections),
+            asyncio.to_thread(_build_sections_payload_sync),
             timeout=_SECTIONS_BUILD_TIMEOUT,
         )
     except asyncio.TimeoutError:
         logger.warning("cockpit.sections build timed out after %.1fs", _SECTIONS_BUILD_TIMEOUT)
+        cached = _SECTIONS_CACHE.get("payload")
+        if isinstance(cached, dict):
+            stale = dict(cached)
+            stale["status"] = "stale"
+            return stale
         return {"status": "timeout", "sections": []}
 
 

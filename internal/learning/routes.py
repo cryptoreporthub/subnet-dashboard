@@ -480,12 +480,10 @@ async def api_learning_loop_health():
     """Phase 0 — pick→ledger→resolver loop status (no scoring)."""
     from internal.learning.loop_health import build_learning_loop_health
 
-    def _build():
-        return build_learning_loop_health()
-
     try:
-        return await _to_thread_timeout(_build, LEARNING_HEALTH_TIMEOUT, label="learning-health")
-    except asyncio.TimeoutError:
+        return build_learning_loop_health()
+    except Exception as exc:
+        logger.warning("learning health failed: %s", exc)
         return {
             "status": "degraded",
             "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -504,7 +502,7 @@ async def api_learning_loop_health():
             "ledger": {"required": False, "present": False, "gap": False, "netuid": None},
             "snapshot_age_seconds": None,
             "score_snapshot": {},
-            "error": "timeout",
+            "error": str(exc),
         }
 
 
