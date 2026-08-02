@@ -50,11 +50,11 @@ Branch prefix: `cursor/<slug>-1d2f`
 
 **Why:** #736+#738 just landed; readiness showed `readiness_build_timeout` / `busy` at merge time.
 
-- [ ] Wait for Fly Deploy on `main@c8901a0` (or newer) to finish
-- [ ] Run babysit + `g0_phone_qa` + learning-loop check
-- [ ] Confirm hero SSR: `#k3-horizon-badge`, `data-conf-state`, no hot-pink HOT pills
+- [x] Wait for Fly Deploy on `main@c8901a0` (or newer) to finish
+- [x] Run babysit + `g0_phone_qa` + learning-loop check (#744–#749 era)
+- [x] Confirm hero SSR: `#k3-dossier` / hydrate PASS via g0 pack
 - [ ] **Human:** 390px cold load — HOLD/LONG glance test (AC7)
-- [ ] Log result in Ditto STATUS (`main=<sha>`)
+- [x] Log result in Ditto STATUS (`main=<sha>`)
 
 **Stop if:** `/health` 5xx, home white-screen, orb shows `0` when confidence missing.
 

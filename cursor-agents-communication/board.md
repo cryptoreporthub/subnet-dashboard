@@ -1,21 +1,25 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-08-01T14:45:00Z  
-**main:** `73a0736` (#718 soul_map I/O) · **infra:** v1 stable; wedges #710–#717 fixed  
-**Active handoff:** `handoff-learning-loop-mindmap-2026-08-01.md`  
-**Models:** ONE Sonnet gate/slice (`model-guide.md`) — DESIGN-HEAVY=Sonnet on LOCK; MECHANICAL=Sonnet on diff before push. Grok medium→high; Composer builds; Sonnet never implements.  
-**Plans:** `handoff-learning-loop-mindmap-2026-08-01.md` · `hero-mindmap-sprint-plan.md` (#723) · `completion-runbook.md`
+**Last updated:** 2026-08-02T09:00:00Z  
+**main:** `62a3f02` (#749 390 sign-off pack) · **infra:** v1 stable; wedges #710–#717 + #743/#744  
+**Active plan:** `post-hero-finish-plan.md` (Steps 0–5 done on agent side; Step 7 soak gated Aug 4)  
+**Models:** `model-guide.md` — Grok LOCK/review; Composer implements; Sonnet optional on DESIGN-HEAVY LOCK only.  
+**Plans:** `post-hero-finish-plan.md` · `accuracy-lift-lock.md` · `hero-mindmap-sprint-plan.md` (#723) · `completion-runbook.md`
 
-## STATUS SNAPSHOT (2026-08-01)
+## STATUS SNAPSHOT (2026-08-02)
 
 | Item | Status |
 |------|--------|
-| Phase 1 soul_map writers gateway | **MERGED** #718 |
-| Phase 2 soul_map read cache | **OPEN** #719 MERGEABLE CI green — merge next |
-| Phase A Judges confidence weights | **OPEN** #720 MERGEABLE CI green |
-| Phase B Telegram author trust (LB-8 untouched) | **OPEN** #721 MERGEABLE CI green |
-| Phase C mindmap display wiring | **NEXT** after merges |
-| Trail ≠ learning loop audit | Council+Pump closed; Judges/Telegram closed in #720/#721; Dev Signals display-only |
+| Phase 1–2 soul_map I/O + read cache | **MERGED** #718 · #719 |
+| Phase A/B Judges + Telegram Pulse loops | **MERGED** #720 · #721 |
+| Phase C mindmap display wiring | **MERGED** #741 (+ M1–M5 #725–#735) |
+| Hero H1/H2 + A-tier ACs | **MERGED** #724 · #727 · #732 · #736 |
+| Mindmap graph wedge (full state on graph) | **MERGED** #744 — graph skips `build_mindmap_state` |
+| API unwedge (subnets/judges/simivision/cockpit) | **MERGED** #743 |
+| Finish queue Steps 1–5 | **MERGED** #745–#749 (tokens, badges, bridge honesty, LB-11, g0 pack) |
+| Human 390px glance (AC7) | **PENDING** — see `hero-mindmap-390-signoff-2026-08-02.md` |
+| Accuracy PREP (read-only evidence) | **MERGED** #740 — experiments **GATED** Aug 4 H2 soak GO |
+| Stale drafts (#686/#675/#692/#650) | **Do not blind-merge** — superseded / already on main |
 
 ## Infra STATUS (launch blocker)
 
@@ -34,9 +38,9 @@
 |-------|--------|
 | **0** Names | DONE (#554, #560) |
 | **1** Ditto playbook | **DONE** (human 2026-07-28) |
-| **2** Track 1 soak | ACTIVE — review 2026-08-04 / 2026-08-11 |
-| **3** SS-TG W1–W3 | **on main** (#557) — H1 **cleared** (agent wave PR2/PR5) |
-| **4** Accuracy lift | **Acc-0 NEXT** (ledger gap) — do not wait for soak | `accuracy-pump-pattern-plan.md` |
+| **2** Track 1 soak | ACTIVE — review **2026-08-04** / 2026-08-11 (`track1-soak-lock.md`) |
+| **3** SS-TG W1–W3 | **on main** (#557) — H1 **cleared** |
+| **4** Accuracy lift | Acc-0–2 **DONE**; PREP #740 on main; Slice 7b/7c + Combined tune **after H2 GO** | `accuracy-lift-lock.md` |
 
 - Human: pump Ditto fetch disabled · Health Monitor artifact mode · stale memories superseded
 - Lock: `ditto-automation-migration-lock.md` (Gate 1 cleared)
