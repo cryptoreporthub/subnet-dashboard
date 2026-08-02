@@ -77,7 +77,7 @@
   <h2 id="proof-band-title" class="proof-band__title">What the loop learned</h2>
   <div class="proof-band__score-hero" id="proof-band-score-hero">
     {% if tb_ready and cal_acc is not none %}
-    <div class="proof-band__pct" id="proof-band-pct">{{ cal_acc|round(0) }}%</div>
+    <div class="proof-band__pct proof-band__pct--ice" id="proof-band-pct">{{ cal_acc|round(0) }}%</div>
     <p class="proof-band__meta" id="proof-band-meta">{{ cal_n }} graded · published, not curated</p>
     {% else %}
     <div class="proof-band__pct" id="proof-band-pct" hidden>—</div>
