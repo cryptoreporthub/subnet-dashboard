@@ -50,7 +50,7 @@ def test_summers_desk_js_renders_conviction():
 
 
 def test_summers_flagship_css_tokens():
-    css = open("static/css/council_first.css", encoding="utf-8").read()
+    css = open("static/css/ui-legacy.css", encoding="utf-8").read()
     assert "--mi-green:" in css
     assert "--mi-blue:" in css
     assert "--mi-orange:" in css

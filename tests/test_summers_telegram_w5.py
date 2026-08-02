@@ -114,7 +114,7 @@ def test_list_route_accepts_same_filters(client, intel_env):
 def test_w5_template_and_client_markers():
     html = open("templates/partials/premium/message_intel_feed.html", encoding="utf-8").read()
     js = open("static/js/message_intel_feed.js", encoding="utf-8").read()
-    css = open("static/css/council_first.css", encoding="utf-8").read()
+    css = open("static/css/ui-legacy.css", encoding="utf-8").read()
     assert "message-intel-filter-bar" in html
     assert "message-intel-conv-filters" in html
     assert "message-intel-subnet-filters" in html

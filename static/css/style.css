@@ -1,7 +1,0 @@
-/* SimiVision — aggregated stylesheet (C1 split). Prefer linking files below directly. */
-@import url('base.css');
-@import url('layout.css');
-@import url('dashboard.css');
-@import url('chat.css');
-@import url('premium.css');
-@import url('responsive.css');

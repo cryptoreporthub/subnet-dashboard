@@ -42,7 +42,7 @@ H_FULL_SECTION_IDS = [
 def test_index_links_split_css():
     client = TestClient(app)
     html = client.get("/").text
-    for name in ("base", "layout", "dashboard", "chat", "premium", "responsive"):
+    for name in ("base", "ui", "ui-legacy", "chat"):
         assert f"/static/css/{name}.css" in html
 
 
@@ -82,7 +82,7 @@ def test_index_council_first_shell():
     html = client.get("/").text
     assert "council-stage" in html
     assert 'id="council-stage-body"' in html
-    assert "council_first.css" in html
+    assert "ui-legacy.css" in html
     assert 'id="market-drawer"' in html
     # Unicode apostrophe in “Today’s call” — match brand + stage title id
     assert "council-stage__title" in html
@@ -431,11 +431,9 @@ def test_c6_shared_conviction_thresholds_match_hydrate():
 
 
 def test_g7_section_titles_use_rajdhani():
-    premium = open("static/css/premium.css", encoding="utf-8").read()
-    dashboard = open("static/css/dashboard.css", encoding="utf-8").read()
-    assert ".section-title" in premium
-    assert "font-family: var(--font-body)" in premium
-    assert "font-family: var(--font-body)" in dashboard.split(".section-title")[1][:120]
+    legacy = open("static/css/ui-legacy.css", encoding="utf-8").read()
+    assert ".section-title" in legacy
+    assert "font-family: var(--font-body)" in legacy.split(".section-title")[1][:120]
 
 
 def test_g12_favicon_and_font_consolidation():

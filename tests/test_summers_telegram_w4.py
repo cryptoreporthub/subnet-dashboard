@@ -113,7 +113,7 @@ def test_list_meta_includes_summary_24h(client, intel_env):
 def test_summers_template_has_w4_markers():
     html = open("templates/partials/premium/message_intel_feed.html", encoding="utf-8").read()
     js = open("static/js/message_intel_feed.js", encoding="utf-8").read()
-    css = open("static/css/council_first.css", encoding="utf-8").read()
+    css = open("static/css/ui-legacy.css", encoding="utf-8").read()
     assert 'id="message-intel-summary-24h"' in html
     assert "message-intel__summary-24h" in html
     assert "renderSummary24h" in js
