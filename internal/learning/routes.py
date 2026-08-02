@@ -43,9 +43,6 @@ LEARNING_HEALTH_TIMEOUT = float(os.environ.get("LEARNING_HEALTH_TIMEOUT_SECONDS"
 MINDMAP_STATE_HANDLER_TIMEOUT = float(os.environ.get("MINDMAP_STATE_HANDLER_TIMEOUT_SECONDS", "12"))
 MINDMAP_SUMMARY_TIMEOUT = float(os.environ.get("MINDMAP_SUMMARY_TIMEOUT_SECONDS", "8"))
 _MINDMAP_SUMMARY_TTL = float(os.environ.get("MINDMAP_SUMMARY_CACHE_SECONDS", "60"))
-_MINDMAP_SUMMARY_LOCK = threading.Lock()
-_MINDMAP_SUMMARY_BG_LOCK = threading.Lock()
-_MINDMAP_SUMMARY_REFRESHING = False
 _MINDMAP_SUMMARY_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 MINDMAP_STORY_PATH_HANDLER_TIMEOUT = float(
     os.environ.get("MINDMAP_STORY_PATH_HANDLER_TIMEOUT_SECONDS", "12")
@@ -229,7 +226,7 @@ def _mindmap_conviction_block(daily_payload: Dict[str, Any] | None) -> Dict[str,
 
 def _mindmap_summary_degraded(*, source: str = "timeout") -> Dict[str, Any]:
     try:
-        expert_weights = _learning_snapshot().get("expert_weights", {})
+        expert_weights = load_weights_for_ui()
     except Exception:
         expert_weights = {}
     return {
@@ -255,37 +252,13 @@ def _mindmap_summary_degraded(*, source: str = "timeout") -> Dict[str, Any]:
 
 @learning_router.get("/api/mindmap/summary")
 async def api_mindmap_summary():
-    """Mindmap summary wired to expert weights and resolver stats."""
-    # ponytail: sync cache read + bg kick only — thread offload wedged under GIL
-    # when pick scoring runs in the background refresh thread.
+    """Mindmap summary — file-backed pick + soul_map weights only (no resolver/scoring)."""
     return _build_mindmap_summary_cached()
 
 
 def _kick_mindmap_summary_refresh() -> None:
-    global _MINDMAP_SUMMARY_REFRESHING
-    with _MINDMAP_SUMMARY_BG_LOCK:
-        if _MINDMAP_SUMMARY_REFRESHING:
-            return
-        _MINDMAP_SUMMARY_REFRESHING = True
-
-    def _run() -> None:
-        global _MINDMAP_SUMMARY_REFRESHING
-        try:
-            if not _MINDMAP_SUMMARY_LOCK.acquire(blocking=False):
-                return
-            try:
-                payload = _build_mindmap_summary()
-                _MINDMAP_SUMMARY_CACHE["payload"] = payload
-                _MINDMAP_SUMMARY_CACHE["at"] = time.time()
-            finally:
-                _MINDMAP_SUMMARY_LOCK.release()
-        except Exception as exc:
-            logger.warning("mindmap summary background refresh failed: %s", exc)
-        finally:
-            with _MINDMAP_SUMMARY_BG_LOCK:
-                _MINDMAP_SUMMARY_REFRESHING = False
-
-    threading.Thread(target=_run, name="mindmap-summary-refresh", daemon=True).start()
+    # ponytail: no-op — bg refresh held GIL (LearningEngine/resolver) and starved the event loop.
+    return
 
 
 def _build_mindmap_summary_cached() -> Dict[str, Any]:
@@ -293,31 +266,23 @@ def _build_mindmap_summary_cached() -> Dict[str, Any]:
     cached = _MINDMAP_SUMMARY_CACHE.get("payload")
     if isinstance(cached, dict) and now - float(_MINDMAP_SUMMARY_CACHE.get("at") or 0) < _MINDMAP_SUMMARY_TTL:
         return cached
-    _kick_mindmap_summary_refresh()
-    if isinstance(cached, dict):
-        return cached
-    return _mindmap_summary_degraded(source="busy")
+    payload = _build_mindmap_summary()
+    _MINDMAP_SUMMARY_CACHE["payload"] = payload
+    _MINDMAP_SUMMARY_CACHE["at"] = time.time()
+    return payload
 
 
 def _build_mindmap_summary() -> Dict[str, Any]:
-    try:
-        from server import _market_context_with_weights, _safe_simivision_payload
-
-        simivision = _safe_simivision_payload()["data"]
-    except Exception as exc:
-        logger.warning("SimiVision snapshot unavailable for mindmap: %s", exc)
-        simivision = {"meta": {"count": 0, "updated_at": _utcnow_z()}}
-
-    snap = _learning_snapshot()
-    stats = snap["engine_stats"]
-    expert_weights = snap["expert_weights"]
-    resolved = snap["resolved_payload"]
-
     daily_payload = _load_today_pick_payload_lite()
     shortlist = daily_payload.get("shortlist")
     dpick_block = {"shortlist": shortlist if isinstance(shortlist, list) else []}
-
     conviction_block = _mindmap_conviction_block(daily_payload)
+
+    try:
+        expert_weights = load_weights_for_ui()
+    except Exception as exc:
+        logger.warning("Could not load expert weights for mindmap summary: %s", exc)
+        expert_weights = {}
 
     return {
         "status": "success",
@@ -328,24 +293,13 @@ def _build_mindmap_summary() -> Dict[str, Any]:
                 for name, weight in expert_weights.items()
             ],
             "expert_weights": expert_weights,
-            "resolved_predictions": {
-                "total": resolved.get("stats", {}).get("total", resolved.get("total", 0)),
-                "correct": resolved.get("stats", {}).get("correct", resolved.get("correct", 0)),
-                "wrong": resolved.get("stats", {}).get("wrong", resolved.get("wrong", 0)),
-                "pending": resolved.get("stats", {}).get("pending", resolved.get("pending", 0)),
-                "accuracy": resolved.get("stats", {}).get("accuracy", resolved.get("accuracy")),
-            },
-            "scenario_memory": snap["scenario"],
-            "rotation_tracker": _rotation_summary(),
-            "learning_status": {
-                "enabled": True,
-                "records": stats.get("total_records", 0),
-                "last_updated": stats.get("last_updated")
-                or (simivision or {}).get("meta", {}).get("updated_at"),
-            },
+            "resolved_predictions": {},
+            "scenario_memory": {},
+            "rotation_tracker": {},
+            "learning_status": {"enabled": True, "records": 0, "last_updated": None},
             "dpick": dpick_block,
-            "engine_stats": stats,
-            "simivision_meta": (simivision or {}).get("meta") or {},
+            "engine_stats": {},
+            "simivision_meta": {},
         },
     }
 
