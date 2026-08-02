@@ -115,10 +115,15 @@ class MindmapBridge:
             return {
                 "recommendations": {},
                 "data_available": False,
+                "source": "registry_heuristic",
                 "reason": "no_registry_recommendations",
             }
 
-        return {"recommendations": recommendations, "data_available": True}
+        return {
+            "recommendations": recommendations,
+            "data_available": True,
+            "source": "registry_heuristic",
+        }
 
     def update_soul_map(self, selector_output: Dict[str, Any]) -> bool:
         """

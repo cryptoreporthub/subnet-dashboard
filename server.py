@@ -1249,13 +1249,15 @@ def daily_rotation():
     """Return the latest daily rotation decisions plus live recommendations."""
     soul_map = load_data("data/soul_map.json")
     last_output = soul_map.get("soul_map_state", {}).get("last_selector_output", {})
-    recommendations = MindmapBridge().get_brain_recommendations()
+    recs = MindmapBridge().get_brain_recommendations()
     return {
         "status": "success",
         "data": {
             "date": last_output.get("date"),
             "decisions": last_output.get("decisions", []),
-            "recommendations": recommendations.get("recommendations", {}),
+            "recommendations": recs.get("recommendations", {}),
+            "source": recs.get("source"),
+            "data_available": recs.get("data_available"),
             "updated_at": soul_map.get("soul_map_state", {}).get("updated_at"),
         },
     }
@@ -1655,7 +1657,7 @@ def get_soul_map():
 
 @app.get("/api/recommendations")
 def get_recommendations():
-    """Live Brain recommendations derived from the current registry."""
+    """Registry-heuristic recommendations (not live council output)."""
     bridge = MindmapBridge()
     return {"status": "success", "data": bridge.get_brain_recommendations()}
 
