@@ -34,6 +34,7 @@
     { key: 'judges', label: 'Judges' },
     { key: 'telegram_pulse', label: 'Telegram Pulse' },
     { key: 'dispositions', label: 'Dispositions' },
+    { key: 'scenario', label: 'Scenario' },
     { key: 'pump_desk', label: 'Pump Desk' },
     { key: 'whales_indicators', label: 'Whales & Indicators' },
   ];
@@ -54,6 +55,9 @@
 
   const INTEGRATION_SOURCE_TOOLTIPS = {
     dispositions: {
+      partial: 'Capped soft-tilt in pick score — not a hard gate',
+    },
+    scenario: {
       partial: 'Capped soft-tilt in pick score — not a hard gate',
     },
   };
