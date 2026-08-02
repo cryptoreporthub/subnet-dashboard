@@ -25,6 +25,21 @@ def test_display_name_tmc_sn6_numinous(monkeypatch):
     assert name == "Numinous"
 
 
+def test_display_name_override_sn6_numinous_when_tmc_empty(monkeypatch):
+    """Curator override wins over stale registry when TMC is empty."""
+    monkeypatch.setattr("internal.subnet_names._tmc_display_names", lambda: {})
+    monkeypatch.setattr(
+        "internal.subnet_names._remote_registry",
+        lambda: {"6": {"name": "Infinite Games"}},
+    )
+    monkeypatch.setattr(
+        "internal.subnet_names._load_local_registry",
+        lambda: {"6": {"name": "Infinite Games"}},
+    )
+    name = display_name_for_netuid(6, use_taostats_fallback=False)
+    assert name == "Numinous"
+
+
 def test_display_name_tmc_sn16_fast_thinker(monkeypatch):
     monkeypatch.setattr(
         "internal.subnet_names._tmc_display_names",
