@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import logging
+import os
+import time
 from typing import Any, Dict, List, Optional
 
 from internal.learning.trail_bus import CANONICAL_EVENT_TYPES, normalize_event_type
 
 logger = logging.getLogger(__name__)
+
+_STATE_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+_STATE_CACHE_TTL = float(os.environ.get("MINDMAP_STATE_CACHE_SECONDS", "30"))
 
 _INTEGRATION_STATUS_VALUES = frozenset(
     {"closed", "partial", "blocked", "display_only", "read_only"}
@@ -298,6 +303,11 @@ def event_type_counts(events: List[Dict[str, Any]]) -> Dict[str, int]:
 
 
 def build_mindmap_state() -> Dict[str, Any]:
+    now = time.monotonic()
+    cached = _STATE_CACHE.get("payload")
+    if isinstance(cached, dict) and now - float(_STATE_CACHE.get("at") or 0) < _STATE_CACHE_TTL:
+        return dict(cached)
+
     from internal.learning import panel_summaries
 
     trail = collect_trail_events()
@@ -305,7 +315,7 @@ def build_mindmap_state() -> Dict[str, Any]:
         "council": panel_summaries.summarize_council(),
         "judges": panel_summaries.summarize_judges(),
         "learning": panel_summaries.summarize_learning(),
-        "picks": panel_summaries.summarize_picks(),
+        "picks": panel_summaries.summarize_picks_lite(),
     }
     pump = panel_summaries.summarize_pump_guarded()
     if pump:
@@ -340,7 +350,7 @@ def build_mindmap_state() -> Dict[str, Any]:
     except Exception:
         schedulers = {}
 
-    return {
+    payload = {
         "status": "success",
         "trail": trail,
         "trail_count": len(trail),
@@ -349,3 +359,14 @@ def build_mindmap_state() -> Dict[str, Any]:
         "schedulers": schedulers,
         "integration_status": _build_integration_status(),
     }
+    _STATE_CACHE["at"] = now
+    _STATE_CACHE["payload"] = payload
+    return payload
+
+
+def get_stale_mindmap_state() -> Optional[Dict[str, Any]]:
+    """Last-good state payload for timeout fallback (any age)."""
+    cached = _STATE_CACHE.get("payload")
+    if isinstance(cached, dict):
+        return dict(cached)
+    return None

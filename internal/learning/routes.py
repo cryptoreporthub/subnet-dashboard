@@ -321,6 +321,13 @@ async def api_mindmap_state():
             build_mindmap_state, MINDMAP_STATE_HANDLER_TIMEOUT, label="mindmap-state"
         )
     except asyncio.TimeoutError:
+        from internal.learning.mindmap_aggregator import get_stale_mindmap_state
+
+        stale = get_stale_mindmap_state()
+        if stale:
+            out = dict(stale)
+            out["status"] = "cached"
+            return out
         try:
             from internal.learning.mindmap_aggregator import _build_integration_status
 
