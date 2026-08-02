@@ -134,6 +134,44 @@ def _trail_from_predictions() -> List[Dict[str, Any]]:
     return events
 
 
+def _trail_from_dev_signals() -> List[Dict[str, Any]]:
+    """Notable dev-ahead-of-price spikes from dev_radar_cache (display-only)."""
+    events: List[Dict[str, Any]] = []
+    try:
+        from internal.dev_radar.github_sync import load_dev_radar_cache
+
+        cache = load_dev_radar_cache()
+        subnets = cache.get("subnets") if isinstance(cache.get("subnets"), dict) else {}
+        for key, row in subnets.items():
+            if not isinstance(row, dict) or row.get("gap_signal") != "dev_ahead_of_price":
+                continue
+            try:
+                netuid = int(key)
+            except (TypeError, ValueError):
+                continue
+            events.append(
+                {
+                    "time": row.get("synced_at") or cache.get("updated_at"),
+                    "event_type": "signal_triggered",
+                    "netuid": netuid,
+                    "signal": "dev_radar",
+                    "decision": "dev_ahead_of_price",
+                    "evidence": {
+                        "gap_score": row.get("gap_score"),
+                        "velocity_score": row.get("velocity_score"),
+                        "commits_7d": row.get("commits_7d"),
+                    },
+                }
+            )
+        events.sort(
+            key=lambda r: float((r.get("evidence") or {}).get("gap_score") or 0),
+            reverse=True,
+        )
+    except Exception as exc:
+        logger.warning("dev signals trail derive failed: %s", exc)
+    return events[:10]
+
+
 def _trail_from_scenario_memory() -> List[Dict[str, Any]]:
     events: List[Dict[str, Any]] = []
     try:
@@ -240,6 +278,7 @@ def collect_trail_events(limit: int = 100) -> List[Dict[str, Any]]:
     merged: List[Dict[str, Any]] = []
     merged.extend(_trail_from_soul_map())
     merged.extend(_trail_from_predictions())
+    merged.extend(_trail_from_dev_signals())
     merged.extend(_trail_from_scenario_memory())
     merged = _dedupe_events(merged)
     if not merged:
@@ -283,6 +322,12 @@ def build_mindmap_state() -> Dict[str, Any]:
     pump_ladder = panel_summaries.summarize_pump_ladder_guarded()
     if pump_ladder:
         summaries["pump_ladder"] = pump_ladder
+    dev_signals = panel_summaries.summarize_dev_signals_guarded()
+    if dev_signals:
+        summaries["dev_signals"] = dev_signals
+    pump_desk_snapshots = panel_summaries.summarize_pump_desk_snapshots_guarded()
+    if pump_desk_snapshots:
+        summaries["pump_desk_snapshots"] = pump_desk_snapshots
 
     try:
         from internal.council.selector_scheduler import get_selector_scheduler_state
