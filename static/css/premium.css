@@ -682,10 +682,30 @@ table.tbl td.mono { font-family: var(--font-mono); }
   border-radius: var(--radius-pill);
   border: 1px solid;
 }
-.tag-buy   { color: var(--cockpit-green); background: var(--cockpit-green-soft); border-color: var(--cockpit-green-line); }
-.tag-hold  { color: var(--neu); background: var(--neu-dim); border-color: color-mix(in srgb, var(--accent-magenta) 32%, transparent); }
-.tag-sell  { color: var(--neg); background: var(--neg-dim); border-color: rgba(255, 77, 94, 0.35); }
-.tag-watch { color: var(--accent-orange); background: rgba(255, 122, 26, 0.1); border-color: rgba(255, 122, 26, 0.35); }
+.badge-buy, .tag-buy {
+  color: var(--cockpit-green);
+  background: var(--cockpit-green-soft);
+  border-color: var(--cockpit-green-line);
+  text-shadow: 0 0 10px rgba(57, 255, 20, 0.45);
+}
+.badge-hold, .tag-hold {
+  color: var(--neu);
+  background: var(--neu-dim);
+  border-color: color-mix(in srgb, var(--accent-magenta) 32%, transparent);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--accent-magenta) 40%, transparent);
+}
+.badge-sell, .tag-sell {
+  color: var(--neg);
+  background: var(--neg-dim);
+  border-color: rgba(255, 77, 94, 0.35);
+  text-shadow: 0 0 10px rgba(255, 23, 68, 0.4);
+}
+.badge-watch, .tag-watch {
+  color: var(--accent-orange);
+  background: rgba(255, 122, 26, 0.1);
+  border-color: rgba(255, 122, 26, 0.35);
+  text-shadow: 0 0 10px rgba(255, 122, 26, 0.45);
+}
 
 /* ---------- Yield bars ---------- */
 .yield-bar {
@@ -1066,23 +1086,6 @@ footer.status[data-source*="fallback"] .st-dot {
 
 .degen-theme .row {
   position: relative;
-}
-
-.badge-buy, .tag-buy {
-  color: var(--signal-buy) !important;
-  text-shadow: 0 0 10px rgba(57, 255, 20, 0.45);
-}
-.badge-sell, .tag-sell {
-  color: var(--signal-sell) !important;
-  text-shadow: 0 0 10px rgba(255, 23, 68, 0.4);
-}
-.badge-hold, .tag-hold {
-  color: var(--signal-hold) !important;
-  text-shadow: 0 0 10px color-mix(in srgb, var(--accent-magenta) 40%, transparent);
-}
-.badge-watch, .tag-watch {
-  color: var(--accent-orange) !important;
-  text-shadow: 0 0 10px rgba(255, 122, 26, 0.45);
 }
 
 .stake-badge, .badge-amber {
