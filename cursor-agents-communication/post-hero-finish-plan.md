@@ -53,7 +53,7 @@ Branch prefix: `cursor/<slug>-1d2f`
 - [x] Wait for Fly Deploy on `main@c8901a0` (or newer) to finish
 - [x] Run babysit + `g0_phone_qa` + learning-loop check (#744–#749 era)
 - [x] Confirm hero SSR: `#k3-dossier` / hydrate PASS via g0 pack
-- [ ] **Human:** 390px cold load — HOLD/LONG glance test (AC7)
+- [ ] **Human:** 390px cold load — HOLD/LONG glance test (AC7) — **after layout change**
 - [x] Log result in Ditto STATUS (`main=<sha>`)
 
 **Stop if:** `/health` 5xx, home white-screen, orb shows `0` when confidence missing.
@@ -131,9 +131,9 @@ Branch prefix: `cursor/<slug>-1d2f`
 **Branch:** `cursor/hero-mindmap-390-signoff-1d2f`  
 **Scope:** agent runs `g0_phone_qa` + notes; only ship fixes for failures found (no drive-by redesign).
 
-- [ ] Record checklist in PR body (hero ACs 1–7, mindmap graph/trail visible, focus strip)
-- [ ] Human signs H1-style 390px in PR comment or Ditto
-- [ ] Patch only regressions found
+- [x] Record checklist in PR body (hero ACs 1–7, mindmap graph/trail visible, focus strip) — `hero-mindmap-390-signoff-2026-08-02.md`
+- [ ] Human signs H1-style 390px in PR comment or Ditto — **deferred: layout change in progress**
+- [x] Patch only regressions found — none required (g0 PASS 2026-08-02)
 
 **Merge → babysit → next.**
 
@@ -141,12 +141,13 @@ Branch prefix: `cursor/<slug>-1d2f`
 
 ### Step 6 — Board STATUS sync (docs-only)
 
-**Branch:** `cursor/board-status-aug2-1d2f`  
-**Scope:** refresh `cursor-agents-communication/board.md` STATUS SNAPSHOT to current `main` (hero/mindmap/timeouts/magenta done; #719–#721 merged). Cite this plan for the remaining queue.
+**Branch:** `cursor/board-status-aug2-74b2`  
+**Scope:** refresh `cursor-agents-communication/board.md` STATUS SNAPSHOT to current `main` (`4cbfe94`); timeouts #734–#754; GIL unwedge #755–#765; babysit PASS.
+
+- [x] board.md + signoff doc + plan checkboxes updated
+- [x] Ditto STATUS post
 
 **Out:** rewriting roadmap phases unrelated to this finish queue.
-
-**Merge → Ditto STATUS post → next.**
 
 ---
 
@@ -187,8 +188,8 @@ Do **not** start Acc experiment PRs before H2 GO.
 
 ## Definition of done (this plan)
 
-- [ ] Steps 0–6 on `main` with babysit green (or documented WARN)
-- [ ] Human 390px hero glance recorded
+- [x] Steps 0–6 on `main` with babysit green (or documented WARN)
+- [ ] Human 390px hero glance recorded — **after layout**
 - [ ] Deferrals listed above remain tickets, not silent drops
 - [ ] Step 7 only after H2 soak GO
 - [ ] Ditto STATUS: `main=<sha>`, queue position, open PRs

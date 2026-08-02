@@ -1,8 +1,9 @@
 # Hero + mindmap 390px sign-off pack — 2026-08-02
 
-**main at run:** `9e80a1e` (#748 LB-11 harden)  
+**main at run:** `4cbfe94` (#765 soul_map deepcopy)  
 **Prod:** `https://subnet-dashboard.fly.dev`  
-**Agent script:** `BASE=… ./scripts/g0_phone_qa.sh`
+**Agent script:** `BASE=… ./scripts/g0_phone_qa.sh`  
+**Human sign-off:** deferred — layout change in progress; re-run g0 after layout lands
 
 ## Automated SSR / marker checks
 
@@ -17,7 +18,8 @@
 | Hour watch rib | PASS |
 | SS-TG W0 markers (section, brand, t.me, yesterday, HC, proof) | PASS |
 | `GET /api/daily-pick` | OK — HOLD |
-| `GET /api/pump-alerts` | WARN — `status=timeout` (homepage pump desk SSR remains G0 gate) |
+| `GET /api/pump-alerts` | OK — `status=success` count=8 desk=True |
+| `babysit_phase.sh sprint` | PASS — EXIT 0 (WARN: og:image, graded=0) |
 
 ## Hero ACs (agent SSR / API)
 
@@ -27,7 +29,7 @@
 | 4 Horizon / sample-size | Shipped #736 |
 | 5 Mindmap graph/trail | #744 graph no longer builds full state; trail LB-11 #748 |
 | 6 Focus strip | Living Focus PASS |
-| 7 390px human glance | **PENDING human** — LONG or honest HOLD + why |
+| 7 390px human glance | **PENDING human** — after layout change; agent g0 PASS |
 
 ## Human sign-off (required)
 
@@ -36,4 +38,4 @@
 - [ ] Mindmap integration-status legend visible when graph loads
 - [ ] Comment on this PR or Ditto: **H1-style GO** / HOLD with notes
 
-No code patches from this run — WARN-only pump-alerts timeout is known under load; desk SSR is the gate.
+No code patches from this run. Re-run g0 after layout PR merges, then human 390px glance.
