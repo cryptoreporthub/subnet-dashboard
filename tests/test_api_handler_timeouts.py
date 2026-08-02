@@ -239,6 +239,55 @@ def test_api_simivision_ttl_miss_serves_stale_immediately(monkeypatch):
     assert kicked["n"] == 1
 
 
+def test_simivision_bg_timeout_writes_degraded_and_clears_flag(monkeypatch):
+    """Hung build must not pin BG_REFRESHING — cache a degraded board and clear."""
+    import server as srv
+
+    srv._SIMIVISION_CACHE["payload"] = None
+    srv._SIMIVISION_CACHE["at"] = 0.0
+    srv._SIMIVISION_BG_REFRESHING = False
+    monkeypatch.setattr(srv, "_SIMIVISION_BG_BUILD_TIMEOUT", 0.05)
+
+    def _hang():
+        time.sleep(2)
+        return {"status": "success", "data": {"top": [{"netuid": 1}], "meta": {}}}
+
+    monkeypatch.setattr(srv, "_simivision_build_inner", _hang)
+
+    srv._kick_simivision_background_refresh()
+    deadline = time.time() + 3
+    while time.time() < deadline and srv._SIMIVISION_BG_REFRESHING:
+        time.sleep(0.05)
+
+    assert srv._SIMIVISION_BG_REFRESHING is False
+    cached = srv._SIMIVISION_CACHE.get("payload")
+    assert isinstance(cached, dict)
+    data = cached.get("data") if isinstance(cached.get("data"), dict) else cached
+    assert data.get("top") == []
+    assert (data.get("meta") or {}).get("source") == "bg-timeout"
+
+
+def test_simivision_bg_success_clears_flag(monkeypatch):
+    import server as srv
+
+    srv._SIMIVISION_CACHE["payload"] = None
+    srv._SIMIVISION_CACHE["at"] = 0.0
+    srv._SIMIVISION_BG_REFRESHING = False
+    warm = {
+        "status": "success",
+        "data": {"top": [{"netuid": 9, "name": "ok"}], "meta": {"count": 1, "source": "test"}},
+    }
+    monkeypatch.setattr(srv, "_simivision_build_inner", lambda: warm)
+
+    srv._kick_simivision_background_refresh()
+    deadline = time.time() + 3
+    while time.time() < deadline and srv._SIMIVISION_BG_REFRESHING:
+        time.sleep(0.05)
+
+    assert srv._SIMIVISION_BG_REFRESHING is False
+    assert srv._SIMIVISION_CACHE.get("payload") == warm
+
+
 def test_api_mindmap_summary_single_flight_busy(monkeypatch):
     from internal.learning import routes as learning_routes
 
