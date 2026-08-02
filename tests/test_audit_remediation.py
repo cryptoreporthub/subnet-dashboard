@@ -72,6 +72,58 @@ def test_readiness_refresh_bypasses_cache(monkeypatch):
     assert calls["n"] == 2
 
 
+def test_readiness_timeout_serves_stale_primary(monkeypatch):
+    """Under build timeout, return last good report — not a naked busy shell."""
+    _reset_readiness_cache()
+    import asyncio
+    import internal.ops.readiness_cache as cache
+
+    stale = {
+        "status": "ready",
+        "ready": True,
+        "issues": [],
+        "learning": {"graded": 1, "pending": 0},
+    }
+    with cache._CACHE_LOCK:
+        cache._CACHE["at"] = time.time() - 120.0
+        cache._CACHE["payload"] = dict(stale)
+
+    monkeypatch.setattr(cache, "TTL", 30.0)
+    monkeypatch.setattr(cache, "BUILD_TIMEOUT", 0.05)
+
+    def _slow_build(*, force: bool = False):
+        time.sleep(1.0)
+        return {"status": "ready", "ready": True, "issues": []}
+
+    monkeypatch.setattr(cache, "_build_blocking", _slow_build)
+
+    async def _run():
+        return await cache.get_readiness_report(force=True)
+
+    out = asyncio.run(_run())
+    assert out.get("ready") is True
+    assert out.get("serving_stale") is True
+    assert out.get("cached") is True
+    assert "readiness_build_slow" in (out.get("issues") or [])
+    assert out.get("status") == "ready"
+
+
+def test_readiness_busy_lock_does_not_block(monkeypatch):
+    _reset_readiness_cache()
+    import internal.ops.readiness_cache as cache
+
+    held = cache._BUILD_LOCK.acquire(blocking=False)
+    assert held
+    try:
+        with cache._CACHE_LOCK:
+            cache._CACHE["at"] = time.time() - 120.0
+            cache._CACHE["payload"] = {"status": "ready", "ready": True, "issues": []}
+        out = cache._build_blocking(force=False)
+        assert out.get("ready") is True
+    finally:
+        cache._BUILD_LOCK.release()
+
+
 def test_write_auth_blocks_ingest_when_token_set(monkeypatch):
     monkeypatch.setenv("WRITE_API_TOKEN", "secret-test-token")
     with TestClient(app) as client:

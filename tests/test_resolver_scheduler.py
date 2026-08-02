@@ -623,6 +623,8 @@ def test_scheduler_skip_persists_last_cycle_when_heavy_job_busy(monkeypatch, fre
     last = soul["prediction_resolver_scheduler"]["last_cycle"]
     assert last.get("skipped") == "heavy_job_busy"
     assert last.get("run_at")
+    assert sched._last_run_at == last.get("run_at")
+    assert sched._last_run_ok is True
 
 
 def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler):

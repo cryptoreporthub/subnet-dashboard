@@ -235,8 +235,14 @@ class PredictionResolverScheduler:
                     "pending": 0,
                 }
                 self._persist_cycle_summary(skipped)
+                # Keep tick freshness visible to loop_health even when skipped.
+                with self._lock:
+                    self._last_run_at = skipped["run_at"]
+                    self._last_run_ok = True
+                    self._last_run_error = None
                 if self._running:
-                    self._schedule_next(self.refresh_minutes)
+                    # Retry sooner so pending_past_grace doesn't rot behind long snapshots.
+                    self._schedule_next(min(2, max(1, self.refresh_minutes)))
                 return skipped
             result = self._run_refresh_cycle_with_timeout()
 
