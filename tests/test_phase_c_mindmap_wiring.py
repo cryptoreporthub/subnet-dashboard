@@ -19,11 +19,92 @@ def client():
 
 def test_mindmap_state_includes_phase_c_summaries(client):
     state = client.get("/api/mindmap/state").json()
-    assert state["status"] == "success"
+    assert state["status"] in ("success", "cached")
     summaries = state.get("summaries") or {}
     for key in ("dev_signals", "pump_desk_snapshots"):
         assert key in summaries
         assert summaries[key].get("sentences")
+
+
+def test_build_mindmap_state_uses_lite_picks_not_scoring(monkeypatch):
+    from internal.learning import panel_summaries
+    from internal.learning.mindmap_aggregator import build_mindmap_state
+
+    monkeypatch.setattr(
+        panel_summaries,
+        "summarize_picks",
+        lambda: (_ for _ in ()).throw(AssertionError("scoring path must not run")),
+    )
+    monkeypatch.setattr(
+        panel_summaries,
+        "summarize_picks_lite",
+        lambda: {"text": "lite picks", "sentences": ["lite picks"]},
+    )
+    monkeypatch.setattr(
+        panel_summaries,
+        "summarize_council",
+        lambda: {"text": "council", "sentences": ["council"]},
+    )
+    monkeypatch.setattr(
+        panel_summaries,
+        "summarize_judges",
+        lambda: {"text": "judges", "sentences": ["judges"]},
+    )
+    monkeypatch.setattr(
+        panel_summaries,
+        "summarize_learning",
+        lambda: {"text": "learning", "sentences": ["learning"]},
+    )
+    for fn in (
+        "summarize_pump_guarded",
+        "summarize_scenario_guarded",
+        "summarize_message_intel_guarded",
+        "summarize_pump_tracker_guarded",
+        "summarize_pump_ladder_guarded",
+        "summarize_dev_signals_guarded",
+        "summarize_pump_desk_snapshots_guarded",
+    ):
+        monkeypatch.setattr(panel_summaries, fn, lambda: None)
+
+    import internal.learning.mindmap_aggregator as agg
+
+    monkeypatch.setattr(agg, "_STATE_CACHE", {"at": 0.0, "payload": None})
+    state = build_mindmap_state()
+    assert state["summaries"]["picks"]["text"] == "lite picks"
+
+
+def test_mindmap_state_cache_reuses_payload(monkeypatch):
+    import internal.learning.mindmap_aggregator as agg
+
+    calls = {"n": 0}
+
+    def _council():
+        calls["n"] += 1
+        return {"text": "c", "sentences": ["c"]}
+
+    monkeypatch.setattr(agg, "_STATE_CACHE", {"at": 0.0, "payload": None})
+    monkeypatch.setattr(agg, "_STATE_CACHE_TTL", 60.0)
+
+    from internal.learning import panel_summaries
+
+    monkeypatch.setattr(panel_summaries, "summarize_council", _council)
+    monkeypatch.setattr(panel_summaries, "summarize_judges", lambda: {"text": "j", "sentences": ["j"]})
+    monkeypatch.setattr(panel_summaries, "summarize_learning", lambda: {"text": "l", "sentences": ["l"]})
+    monkeypatch.setattr(panel_summaries, "summarize_picks_lite", lambda: {"text": "p", "sentences": ["p"]})
+    for fn in (
+        "summarize_pump_guarded",
+        "summarize_scenario_guarded",
+        "summarize_message_intel_guarded",
+        "summarize_pump_tracker_guarded",
+        "summarize_pump_ladder_guarded",
+        "summarize_dev_signals_guarded",
+        "summarize_pump_desk_snapshots_guarded",
+    ):
+        monkeypatch.setattr(panel_summaries, fn, lambda: None)
+
+    agg.build_mindmap_state()
+    agg.build_mindmap_state()
+    assert calls["n"] == 1
 
 
 def test_summarize_judges_mentions_postmortems_and_weights():

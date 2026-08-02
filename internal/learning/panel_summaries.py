@@ -179,6 +179,41 @@ def summarize_picks() -> Dict[str, Any]:
     return _sentences(parts)
 
 
+def summarize_picks_lite() -> Dict[str, Any]:
+    """File-backed pick narrative for mindmap state — no hour/day scoring."""
+    try:
+        from internal.council.daily_pick_engine import _find_today, _load
+
+        daily = _find_today(_load()) or {}
+    except Exception as exc:
+        return _sentences([f"Pick snapshot unavailable: {exc}"])
+
+    parts: List[str] = []
+    pick = daily.get("pick") if isinstance(daily, dict) else None
+    action = str(daily.get("action") or "HOLD").upper() if isinstance(daily, dict) else "HOLD"
+    if pick and isinstance(pick, dict):
+        subnet = pick.get("subnet") or {}
+        name = subnet.get("name") or f"SN{subnet.get('netuid')}"
+        fc = float(pick.get("final_confidence", pick.get("confidence", 0)) or 0)
+        audit = pick.get("audit") or {}
+        approved = audit.get("approved", True)
+        badge = "RedTeam APPROVED" if approved else "RedTeam HOLD — concerns flagged"
+        parts.append(
+            f"Daily pick is {name} ({action}) with {fc * 100:.0f}% final confidence; audit badge: {badge}."
+        )
+        concerns = audit.get("concerns") or []
+        if concerns:
+            parts.append(f"RedTeam notes: {concerns[0]}.")
+    else:
+        parts.append(
+            f"Daily pick is on {action} today — stored snapshot has no published pick row yet."
+        )
+    parts.append(
+        "Hour pick and live scoring are omitted on this read path; use /api/daily-pick for fresh council scoring."
+    )
+    return _sentences(parts)
+
+
 def summarize_pump_guarded() -> Optional[Dict[str, Any]]:
     try:
         from internal.analytics.pump_summary import summarize_pump
