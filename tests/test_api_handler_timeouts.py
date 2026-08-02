@@ -295,6 +295,35 @@ def test_api_mindmap_summary_single_flight_serves_stale(monkeypatch):
     assert elapsed < 0.5
 
 
+def test_api_mindmap_summary_does_not_call_get_or_create_today_pick(monkeypatch):
+    from internal.learning import routes as learning_routes
+
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("get_or_create_today_pick must not run on mindmap summary")
+
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.get_or_create_today_pick",
+        _boom,
+    )
+    monkeypatch.setattr(
+        "internal.learning.dpick_shortlist.build_deliberation_shortlist",
+        _boom,
+    )
+
+    learning_routes._build_mindmap_summary()
+
+    learning_routes._MINDMAP_SUMMARY_CACHE["payload"] = None
+    learning_routes._MINDMAP_SUMMARY_CACHE["at"] = 0.0
+    learning_routes._MINDMAP_SUMMARY_REFRESHING = False
+    monkeypatch.setattr(learning_routes, "_kick_mindmap_summary_refresh", lambda: None)
+
+    resp = TestClient(app).get("/api/mindmap/summary")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("status") == "degraded"
+    assert body.get("meta", {}).get("source") == "busy"
+
+
 def test_api_mindmap_summary_cold_miss_returns_busy_immediately(monkeypatch):
     from internal.learning import routes as learning_routes
 
