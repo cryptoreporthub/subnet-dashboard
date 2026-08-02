@@ -126,7 +126,7 @@
       <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
         <div class="k3-dossier" id="k3-dossier" data-conf-state="{{ conf_state }}" data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}" data-action="{{ act }}">
           <div class="k3-layer open" id="k3-layer-claim">
-            <div class="k3-claim k3-claim--glow-{{ glow_tier }} k3-claim--band-{{ sn_band }}{% if not audit_pick and act == 'HOLD' %} k3-claim--hold{% endif %}" id="k3-claim" data-glow="{{ glow_tier }}" data-band="{{ sn_band }}"{% if sn.netuid is not none %} data-netuid="{{ sn.netuid }}"{% endif %}>
+            <div class="k3-claim surface-aurora rim-chroma k3-claim--glow-{{ glow_tier }} k3-claim--band-{{ sn_band }}{% if not audit_pick and act == 'HOLD' %} k3-claim--hold{% endif %}" id="k3-claim" data-glow="{{ glow_tier }}" data-band="{{ sn_band }}"{% if sn.netuid is not none %} data-netuid="{{ sn.netuid }}"{% endif %}>
               <div class="k3-claim-head">
                 <p class="k3-claim-name" id="k3-claim-head-name">{{ sn.name|default('SN' ~ sn.netuid) }}</p>
                 <div class="k3-claim-head__meta">
@@ -178,7 +178,10 @@
                   {% endif %}
                   <div class="k3-claim-identity" id="k3-claim-identity">
                     <p class="k3-claim-name k3-claim-name--sub" id="k3-claim-name" hidden>{{ sn.name|default('SN' ~ sn.netuid) }}</p>
-                    <p class="k3-claim-meta" id="k3-claim-meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}</p>
+                    <div class="hydrate-skel k3-claim-meta-wrap">
+                      <p class="k3-claim-meta skel-only" aria-hidden="true"><span class="skel skel-md" style="width:42%"></span></p>
+                      <p class="k3-claim-meta live-only" id="k3-claim-meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}</p>
+                    </div>
                     <p class="k3-claim-desc" id="k3-claim-desc"{% if not subnet_desc %} hidden{% endif %}>{{ subnet_desc|truncate(96, True) if subnet_desc else '' }}</p>
                   </div>
                   {% if resolves_in and outcome_status != 'resolved' %}
@@ -294,7 +297,7 @@
       <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
         <div class="k3-dossier" id="k3-dossier" data-conf-state="{{ conf_state }}" data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}" data-action="HOLD">
           <div class="k3-layer open" id="k3-layer-claim">
-            <div class="k3-claim k3-claim--hold k3-claim--glow-cool k3-claim--band-0" id="k3-claim" data-glow="cool" data-band="0">
+            <div class="k3-claim surface-aurora rim-chroma k3-claim--hold k3-claim--glow-cool k3-claim--band-0" id="k3-claim" data-glow="cool" data-band="0">
               <div class="k3-claim-head">
                 <p class="k3-claim-name" id="k3-claim-head-name">No call yet</p>
                 <div class="k3-claim-head__meta">
@@ -333,7 +336,10 @@
                   {% endif %}
                   <div class="k3-claim-identity" id="k3-claim-identity" hidden>
                     <p class="k3-claim-name k3-claim-name--sub" id="k3-claim-name" hidden></p>
-                    <p class="k3-claim-meta" id="k3-claim-meta" hidden></p>
+                    <div class="hydrate-skel k3-claim-meta-wrap">
+                      <p class="k3-claim-meta skel-only" aria-hidden="true"><span class="skel skel-md" style="width:38%"></span></p>
+                      <p class="k3-claim-meta live-only" id="k3-claim-meta" hidden></p>
+                    </div>
                     <p class="k3-claim-desc" id="k3-claim-desc" hidden></p>
                   </div>
                   <p class="k3-resolve-crumb" id="k3-resolve-crumb" hidden></p>

@@ -23,6 +23,12 @@
     if (banner) banner.hidden = true;
   }
 
+  function clearHydrateFlag() {
+    if (document.documentElement.dataset.hydrate === '1') {
+      document.documentElement.dataset.hydrate = '0';
+    }
+  }
+
   function maybeClearShellWarmingEarly() {
     if (
       document.getElementById('k3-claim') ||
@@ -772,6 +778,7 @@
       }
       pctEl.hidden = false;
       pctEl.textContent = accPct + '%';
+      pctEl.classList.add('proof-band__pct--ice');
       if (!metaEl) {
         metaEl = document.createElement('p');
         metaEl.className = 'proof-band__meta';
@@ -785,6 +792,7 @@
       if (pctEl) {
         pctEl.hidden = true;
         pctEl.textContent = '—';
+        pctEl.classList.remove('proof-band__pct--ice');
       }
       if (metaEl) metaEl.hidden = true;
       if (!quietEl) {
@@ -2221,9 +2229,15 @@
     );
   }
 
-  function renderPumpDeskPanel(alerts, emptyMessage, payload) {
+  function pumpDeskLiveHost() {
     var deskPanel = document.getElementById('pump-desk-panel');
-    if (!deskPanel) return;
+    if (!deskPanel) return null;
+    return deskPanel.querySelector('.pds-desk__live') || deskPanel;
+  }
+
+  function renderPumpDeskPanel(alerts, emptyMessage, payload) {
+    var liveHost = pumpDeskLiveHost();
+    if (!liveHost) return;
     var compact = !!document.querySelector('[data-pump-compact="1"]');
     var warm = (alerts || []).filter(function (r) {
       return r.timing === 'lead';
@@ -2245,11 +2259,11 @@
         watch.forEach(function (row) {
           watchHtml += renderPumpScanRow(row, 'watch');
         });
-        deskPanel.innerHTML = watchHtml;
+        liveHost.innerHTML = watchHtml;
         if (typeof window.__paintSparks === 'function') window.__paintSparks();
         return;
       }
-      deskPanel.innerHTML =
+      liveHost.innerHTML =
         '<p class="' +
         (isPumpScanMode() ? 'pds-empty' : 'pd-empty') +
         ' pump-desk__empty">' +
@@ -2292,7 +2306,7 @@
         }
         if (moreScan) html += '<div class="pds-board" id="pump-desk-more">' + moreScan + '</div>';
         renderPumpMetaWrap(payload && payload.trust, warm.length, active.length, exits.length);
-        deskPanel.innerHTML = html;
+        liveHost.innerHTML = html;
         if (typeof window.__paintSparks === 'function') window.__paintSparks();
         return;
       }
@@ -2330,7 +2344,7 @@
       }
       if (more) html += '<div class="pd-board" id="pump-desk-more">' + more + '</div>';
       renderPumpMetaWrap(payload && payload.trust, warm.length, active.length, exits.length);
-      deskPanel.innerHTML = html;
+      liveHost.innerHTML = html;
       if (typeof window.__paintSparks === 'function') window.__paintSparks();
       return;
     }
@@ -2355,7 +2369,7 @@
       });
       html += '</div>';
     }
-    deskPanel.innerHTML = html;
+    liveHost.innerHTML = html;
     if (typeof window.__paintSparks === 'function') window.__paintSparks();
   }
 
@@ -2408,9 +2422,9 @@
       var watchRows = payload.watch || [];
       if (!watchRows.length) {
         if (pumpDeskHasSnapshot()) return;
-      var deskPanel = document.getElementById('pump-desk-panel');
-      if (deskPanel) {
-        deskPanel.innerHTML =
+      var liveHost = pumpDeskLiveHost();
+      if (liveHost) {
+        liveHost.innerHTML =
           '<p class="pd-empty pump-desk__empty">' +
           esc(
             payload.empty_message ||
@@ -3664,6 +3678,7 @@
         detail: window.HomeHydrateCache,
       }));
       clearShellWarming();
+      clearHydrateFlag();
 
       console.log('[cockpit_hydrate] tier-1/2 panels updated');
 
@@ -3673,6 +3688,7 @@
       }, 1800);
     } catch (e) {
       console.error('[cockpit_hydrate] fatal', e);
+      clearHydrateFlag();
     }
   }
 

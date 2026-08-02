@@ -54,7 +54,13 @@
   </header>
 
   <div class="pds-body" id="pump-alert-body">
-    <div class="pds-desk" id="pump-desk-panel">
+    <div class="pds-desk hydrate-skel" id="pump-desk-panel">
+      <div class="pds-desk__skel skel-only" aria-hidden="true">
+        <div class="pds-skel-hero skel skel-kpi"></div>
+        <div class="pds-skel-row skel skel-md"></div>
+        <div class="pds-skel-row skel skel-md"></div>
+      </div>
+      <div class="pds-desk__live live-only">
       {% if compact and hero_row %}
       {% set triad = hero_row.triad if hero_row.triad is mapping else {} %}
       {% set labels = hero_row.triad_labels if hero_row.triad_labels is mapping else {} %}
@@ -232,6 +238,7 @@
       {% else %}
       <p class="pds-empty desk-empty pump-desk__empty">Quiet — no warming or active names on the ladder right now.</p>
       {% endif %}
+      </div>
     </div>
     <script type="application/json" id="pump-map-data">{{ map_ns.rows|tojson }}</script>
   </div>
