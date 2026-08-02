@@ -44,10 +44,22 @@ def test_mindmap_partial_container_markup():
     html = TEMPLATES.get_template("partials/mindmap_graph.html").render({})
     assert 'id="mindmap-graph-root"' in html
     assert 'id="mindmap-trail-list"' in html
+    assert 'id="mindmap-spine-chrome"' in html
+    assert 'aria-live="polite"' in html
     assert "/static/js/mindmap_graph.js" in html
     # Full replace: no SVG node-link graph and no separate detail panel.
     assert 'id="mindmap-graph-svg"' not in html
     assert 'id="mindmap-detail-panel"' not in html
+
+
+def test_mindmap_partial_spine_chrome_between_status_and_trail():
+    html = TEMPLATES.get_template("partials/mindmap_graph.html").render({})
+    status_pos = html.index('id="mindmap-integration-status"')
+    chrome_pos = html.index('id="mindmap-spine-chrome"')
+    trail_pos = html.index('id="mindmap-trail-list"')
+    assert status_pos < chrome_pos < trail_pos
+    assert 'data-spine="conviction"' in html
+    assert 'data-spine="learn"' in html
 
 
 def test_mindmap_partial_renders_with_fake_graph_payload():
@@ -68,10 +80,14 @@ def test_mindmap_partial_empty_graph_honest_empty_state():
 
 
 def test_index_includes_mindmap_section():
+    import server as srv
+
+    srv._prime_emergency_home_html()
     client = TestClient(app)
     html = client.get("/").text
     assert 'id="mindmap-graph-section"' in html
     assert 'id="mindmap-trail-list"' in html
+    assert 'id="mindmap-spine-chrome"' in html
     assert "Interactive Mindmap" in html
 
 
@@ -95,6 +111,23 @@ def test_mindmap_js_covers_loop_hub_and_market_signals():
     assert "AbortSignal.timeout" in src
     for kind in ("loop", "whale", "risk", "indicator"):
         assert f"{kind}:" in src
+
+
+def test_mindmap_js_focus_spine_sort_and_consume_initial_graph():
+    """Task 2b: focus group sorts after loop, data-focus=1, SSR graph consumed once."""
+    client = TestClient(app)
+    src = client.get("/static/js/mindmap_graph.js").text
+    assert "data-focus" in src
+    assert "getFocusNetuid" in src
+    assert "delete root.dataset.initialGraph" in src
+    assert "renderSpineChrome" in src
+    assert "home:hydrate-cache" in src
+    assert "home:hydrate-trail" in src
+
+
+def test_mindmap_partial_prefers_reduced_motion():
+    html = TEMPLATES.get_template("partials/mindmap_graph.html").render({})
+    assert "prefers-reduced-motion" in html
 
 
 def test_initial_graph_json_embedded_is_valid():

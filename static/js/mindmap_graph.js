@@ -173,7 +173,159 @@
   // nudge events with no netuid attach to the single "loop:council" hub
   // instead of a subnet — the loop tuning itself, not any one subnet's
   // evidence chain. So "group by subnet" generalizes to "group by hub."
-  function buildTrailGroups(nodes, edges) {
+  function getFocusNetuid() {
+    return window.LivingFocus && window.LivingFocus.netuid != null
+      ? String(window.LivingFocus.netuid)
+      : null;
+  }
+
+  function trailEvidence(ev) {
+    if (!ev || typeof ev !== 'object') return {};
+    const evd = ev.evidence && typeof ev.evidence === 'object' ? ev.evidence : null;
+    const payload = ev.payload && typeof ev.payload === 'object' ? ev.payload : null;
+    const out = {};
+    [ev, payload, evd].forEach((src) => {
+      if (!src) return;
+      Object.keys(src).forEach((k) => {
+        if (k === 'evidence' || k === 'payload') return;
+        if (src[k] != null && out[k] == null) out[k] = src[k];
+      });
+    });
+    return out;
+  }
+
+  function trailMatchesFocus(ev, focusNu) {
+    if (!ev || focusNu == null) return false;
+    const nu = Number(focusNu);
+    if (ev.netuid != null && Number(ev.netuid) !== nu) return false;
+    if (ev.event_type === 'prediction_resolved' || ev.event_type === 'weight_change') {
+      if (ev.netuid == null) {
+        const pl = trailEvidence(ev);
+        if (!pl || pl.netuid == null || Number(pl.netuid) !== nu) return false;
+      }
+      return true;
+    }
+    const payload = trailEvidence(ev);
+    return !!(payload && payload.netuid != null && Number(payload.netuid) === nu);
+  }
+
+  function pickLearnEvent(trail, focusNu) {
+    const ranked = [];
+    (trail || []).forEach((ev) => {
+      if (!trailMatchesFocus(ev, focusNu)) return;
+      const et = String(ev.event_type || '');
+      let score = 0;
+      if (et === 'prediction_resolved') score = 3;
+      else if (et === 'weight_change') score = 2;
+      else if (et === 'accuracy_update') score = 0;
+      else score = 1;
+      if (score > 0) ranked.push({ score: score, ev: ev });
+    });
+    ranked.sort((a, b) => b.score - a.score);
+    return ranked.length ? ranked[0].ev : null;
+  }
+
+  function pickConvictionForFocus(dailyPick, dayPick, focusNu) {
+    if (focusNu == null) return null;
+    const nu = Number(focusNu);
+    function fromBlock(block) {
+      if (!block || typeof block !== 'object') return null;
+      if (block.data_available === false) return { empty: true };
+      const sn = block.subnet || {};
+      const blockNu =
+        block.netuid != null
+          ? Number(block.netuid)
+          : sn.netuid != null
+            ? Number(sn.netuid)
+            : null;
+      if (blockNu !== nu) return null;
+      let conv = block.conviction;
+      if (conv == null) {
+        const fc = block.final_confidence != null ? block.final_confidence : block.confidence;
+        if (fc != null) {
+          conv = Number(fc) <= 1 ? Math.round(Number(fc) * 100) : Math.round(Number(fc));
+        }
+      } else {
+        conv = Math.round(Number(conv));
+      }
+      const delta =
+        block.conviction_delta != null ? parseInt(block.conviction_delta, 10) : null;
+      return { conviction: conv, delta: delta };
+    }
+    const dp = dailyPick || {};
+    if (dp.data_available === false) return { empty: true };
+    let hit = fromBlock(dp.pick) || fromBlock(dp.candidate);
+    if (hit) return hit;
+    const day = dayPick || {};
+    hit = fromBlock(day.pick) || fromBlock(day.candidate);
+    return hit;
+  }
+
+  function formatLearnLine(trail, focusNu) {
+    const row = pickLearnEvent(trail, focusNu);
+    if (!row) return 'Last learn — no graded beat on this SN yet';
+    const payload = trailEvidence(row);
+    const correct = payload.correct;
+    const grade = correct === true ? 'HIT' : correct === false ? 'MISS' : 'GRADED';
+    const expert = payload.expert || payload.signal || payload.dial || '';
+    const before = payload.before;
+    const after = payload.after;
+    let nudge = '';
+    if (expert && (before != null || after != null)) {
+      nudge =
+        expert +
+        ' ' +
+        (before != null ? Number(before).toFixed(2) : '?') +
+        ' → ' +
+        (after != null ? Number(after).toFixed(2) : '?');
+      if (before != null && after != null) {
+        const delta = (Number(after) - Number(before)).toFixed(2);
+        nudge += ' (' + (Number(delta) >= 0 ? '+' : '') + delta + ')';
+      }
+    }
+    return grade + (nudge ? ' · ' + nudge : '');
+  }
+
+  function formatConvictionLine(conv) {
+    if (!conv) return 'Conviction — not on today\u2019s call';
+    if (conv.empty) return 'Conviction — data not available yet';
+    if (conv.conviction == null) return 'Conviction — not on today\u2019s call';
+    let line = 'Conviction ' + conv.conviction + '%';
+    if (conv.delta != null && conv.delta !== 0) {
+      line += conv.delta > 0 ? ' (+' + conv.delta + ')' : ' (' + conv.delta + ')';
+    }
+    return line;
+  }
+
+  function renderSpineChrome() {
+    const chrome = document.getElementById('mindmap-spine-chrome');
+    if (!chrome) return;
+    const focusNu = getFocusNetuid();
+    const cache = window.HomeHydrateCache || {};
+    const convEl = chrome.querySelector('[data-spine="conviction"]');
+    const learnEl = chrome.querySelector('[data-spine="learn"]');
+    if (!focusNu) {
+      if (convEl) convEl.textContent = 'Focus conviction — pick a subnet in Living Focus';
+      if (learnEl) learnEl.textContent = 'Last learn — waiting for focus';
+      return;
+    }
+    const conv = pickConvictionForFocus(cache.dailyPick, cache.dayPick, focusNu);
+    if (convEl) {
+      convEl.textContent = formatConvictionLine(conv);
+      if (focusNu != null) convEl.setAttribute('data-band', String(netuidBand(focusNu)));
+    }
+    const trail = cache.trail || [];
+    if (learnEl) learnEl.textContent = formatLearnLine(trail, focusNu);
+  }
+
+  function initSpineChrome() {
+    renderSpineChrome();
+    document.addEventListener('home:hydrate-cache', renderSpineChrome);
+    document.addEventListener('home:hydrate-trail', renderSpineChrome);
+    document.addEventListener('living-focus:change', renderSpineChrome);
+  }
+
+  function buildTrailGroups(nodes, edges, focusNetuid) {
     const nodeById = Object.fromEntries(nodes.map((n) => [n.id, n]));
     const subnets = nodes.filter((n) => n.kind === 'subnet' || n.kind === 'loop');
     const rowsBySubnet = {};
@@ -206,9 +358,14 @@
     });
 
     // The loop's own self-adjustment leads — it's the brain tuning itself,
-    // not tied to any one subnet's recency.
+    // not tied to any one subnet's recency. Living Focus netuid sorts next.
     groups.sort((a, b) => {
       if (a.isLoop !== b.isLoop) return a.isLoop ? -1 : 1;
+      if (focusNetuid) {
+        const aFocus = !a.isLoop && a.netuid === focusNetuid;
+        const bFocus = !b.isLoop && b.netuid === focusNetuid;
+        if (aFocus !== bFocus) return aFocus ? -1 : 1;
+      }
       return (b.subnet.updated_at || '').localeCompare(a.subnet.updated_at || '');
     });
     return groups;
@@ -243,16 +400,19 @@
     return li;
   }
 
-  function renderGroup(group, index) {
+  function renderGroup(group, index, focusNetuid) {
     const details = document.createElement('details');
     details.className = 'mindmap-trail-group';
     details.dataset.subnetId = group.subnet.id;
+    const isFocus =
+      focusNetuid != null && !group.isLoop && group.netuid === focusNetuid;
     if (group.isLoop) {
       details.setAttribute('data-loop', '1');
     } else {
       details.setAttribute('data-band', String(netuidBand(group.netuid)));
     }
-    if (index < 3) details.open = true;
+    if (isFocus) details.setAttribute('data-focus', '1');
+    if (group.isLoop || index < 3 || isFocus) details.open = true;
 
     const summary = document.createElement('summary');
     summary.className = 'mindmap-trail-group__summary';
@@ -299,14 +459,16 @@
     }
 
     setEmptyMessage(root, '', false);
-    const groups = buildTrailGroups(nodes, edges);
-    groups.forEach((group, index) => list.appendChild(renderGroup(group, index)));
+    const focusNu = getFocusNetuid();
+    const groups = buildTrailGroups(nodes, edges, focusNu);
+    groups.forEach((group, index) => list.appendChild(renderGroup(group, index, focusNu)));
     root.dataset.rendered = '1';
   }
 
   async function fetchGraph(root) {
     const initial = root.dataset.initialGraph;
     if (initial) {
+      delete root.dataset.initialGraph;
       try {
         return JSON.parse(initial);
       } catch (_) {
@@ -370,6 +532,7 @@
   async function init() {
     const root = document.getElementById('mindmap-graph-root');
     if (!root) return;
+    initSpineChrome();
     await refreshGraph();
     document.addEventListener('living-focus:change', refreshGraph);
   }
