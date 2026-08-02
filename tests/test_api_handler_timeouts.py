@@ -140,6 +140,7 @@ def test_api_mindmap_summary_single_flight_busy(monkeypatch):
 
     learning_routes._MINDMAP_SUMMARY_CACHE["payload"] = None
     learning_routes._MINDMAP_SUMMARY_CACHE["at"] = 0.0
+    learning_routes._MINDMAP_SUMMARY_REFRESHING = False
     monkeypatch.setattr(learning_routes, "MINDMAP_SUMMARY_TIMEOUT", 30.0)
     gate = threading.Event()
 
@@ -177,6 +178,7 @@ def test_api_mindmap_summary_single_flight_serves_stale(monkeypatch):
     }
     learning_routes._MINDMAP_SUMMARY_CACHE["payload"] = stale
     learning_routes._MINDMAP_SUMMARY_CACHE["at"] = time.time() - 999
+    learning_routes._MINDMAP_SUMMARY_REFRESHING = False
     monkeypatch.setattr(learning_routes, "MINDMAP_SUMMARY_TIMEOUT", 30.0)
     gate = threading.Event()
 
@@ -191,32 +193,71 @@ def test_api_mindmap_summary_single_flight_serves_stale(monkeypatch):
     first.start()
     time.sleep(0.05)
 
+    t0 = time.time()
     resp = client.get("/api/mindmap/summary")
+    elapsed = time.time() - t0
     gate.set()
     first.join(timeout=5)
 
     assert resp.status_code == 200
     assert resp.json() == stale
+    assert elapsed < 0.5
 
 
-def test_api_mindmap_summary_timeout_returns_degraded(monkeypatch):
+def test_api_mindmap_summary_cold_miss_returns_busy_immediately(monkeypatch):
     from internal.learning import routes as learning_routes
 
-    monkeypatch.setattr(learning_routes, "MINDMAP_SUMMARY_TIMEOUT", 0.05)
     learning_routes._MINDMAP_SUMMARY_CACHE["payload"] = None
     learning_routes._MINDMAP_SUMMARY_CACHE["at"] = 0.0
+    learning_routes._MINDMAP_SUMMARY_REFRESHING = False
+    gate = threading.Event()
 
     def _slow():
-        time.sleep(2)
+        gate.wait(timeout=5)
         return {"status": "success", "data": {"dpick": {"shortlist": [{"netuid": 1}]}}}
 
     monkeypatch.setattr(learning_routes, "_build_mindmap_summary", _slow)
+
+    t0 = time.time()
     resp = TestClient(app).get("/api/mindmap/summary")
+    elapsed = time.time() - t0
+    gate.set()
+
     assert resp.status_code == 200
+    assert elapsed < 1.0
     body = resp.json()
     assert body.get("status") == "degraded"
+    assert body.get("meta", {}).get("source") == "busy"
     assert body.get("data", {}).get("dpick", {}).get("shortlist") == []
-    assert body.get("meta", {}).get("source") == "timeout"
+
+
+def test_api_mindmap_summary_ttl_miss_serves_stale_immediately(monkeypatch):
+    from internal.learning import routes as learning_routes
+
+    stale = {
+        "status": "success",
+        "data": {"dpick": {"shortlist": [{"netuid": 7}]}},
+        "meta": {"source": "cache"},
+    }
+    learning_routes._MINDMAP_SUMMARY_CACHE["payload"] = stale
+    learning_routes._MINDMAP_SUMMARY_CACHE["at"] = time.time() - 999
+    learning_routes._MINDMAP_SUMMARY_REFRESHING = False
+    gate = threading.Event()
+
+    def _slow():
+        gate.wait(timeout=5)
+        return {"status": "success", "data": {"dpick": {"shortlist": [{"netuid": 1}]}}}
+
+    monkeypatch.setattr(learning_routes, "_build_mindmap_summary", _slow)
+
+    t0 = time.time()
+    resp = TestClient(app).get("/api/mindmap/summary")
+    elapsed = time.time() - t0
+    gate.set()
+
+    assert resp.status_code == 200
+    assert resp.json() == stale
+    assert elapsed < 0.5
 
 
 def test_api_letter_weekly_timeout_returns_degraded(monkeypatch):
