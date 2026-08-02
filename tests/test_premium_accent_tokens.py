@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 PREMIUM = Path("static/css/premium.css")
@@ -22,3 +23,11 @@ def test_premium_css_has_no_hot_pink_magenta_literals():
     assert "var(--accent-magenta)" in text
     assert "var(--important-border-gradient)" in text
     assert "var(--board-border-gradient)" in text
+
+
+def test_premium_badge_tag_selectors_deduped():
+    text = PREMIUM.read_text(encoding="utf-8")
+    for tag in ("buy", "hold", "sell", "watch"):
+        assert len(re.findall(rf"\.badge-{tag},\s*\.tag-{tag}", text)) == 1
+        assert not re.search(rf"^\.tag-{tag}\s*\{{", text, re.MULTILINE)
+    assert "color: var(--signal-buy) !important" not in text
