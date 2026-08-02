@@ -40,6 +40,7 @@ learning_router = APIRouter(tags=["learning"])
 learning_router.include_router(create_feedback_router())
 
 LEARNING_HEALTH_TIMEOUT = float(os.environ.get("LEARNING_HEALTH_TIMEOUT_SECONDS", "8"))
+MINDMAP_STATE_HANDLER_TIMEOUT = float(os.environ.get("MINDMAP_STATE_HANDLER_TIMEOUT_SECONDS", "12"))
 
 
 async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
@@ -313,13 +314,28 @@ async def api_mindmap_trail(limit: int = Query(default=100, ge=1, le=500)):
 @learning_router.get("/api/mindmap/state")
 async def api_mindmap_state():
     """Aggregator: trail + plain-language panel summaries from live state."""
-    try:
-        from internal.learning.mindmap_aggregator import build_mindmap_state
+    from internal.learning.mindmap_aggregator import build_mindmap_state
 
-        # build_mindmap_state() is the exact function that wedged the event
-        # loop via /api/mindmap/graph earlier in this incident (PR #712) — it
-        # is called directly here too, so it needs the same thread-pool guard.
-        return await run_in_threadpool(build_mindmap_state)
+    try:
+        return await _to_thread_timeout(
+            build_mindmap_state, MINDMAP_STATE_HANDLER_TIMEOUT, label="mindmap-state"
+        )
+    except asyncio.TimeoutError:
+        try:
+            from internal.learning.mindmap_aggregator import _build_integration_status
+
+            integration_status = _build_integration_status()
+        except Exception:
+            integration_status = {}
+        return {
+            "status": "timeout",
+            "trail": [],
+            "trail_count": 0,
+            "event_type_counts": {},
+            "summaries": {},
+            "schedulers": {},
+            "integration_status": integration_status,
+        }
     except Exception as exc:
         logger.warning("mindmap state failed: %s", exc)
         return {"status": "error", "trail": [], "summaries": {}, "error": str(exc)}
