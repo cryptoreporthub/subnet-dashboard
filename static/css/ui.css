@@ -44,30 +44,38 @@ body.council-first-theme > * {
   z-index: 1;
 }
 
-/* ---------- Syne mist brand ---------- */
-.brand-mist,
-.logo-text.brand-mist,
-.council-stage__brand.brand-mist {
+/* ---------- Syne mist brand (body prefix beats legacy .logo-text / .council-stage__brand color) ---------- */
+body.council-first-theme .brand-mist,
+body.council-first-theme .logo-text.brand-mist,
+body.council-first-theme .council-stage__brand.brand-mist {
   font-family: var(--font-brand);
   font-weight: 700;
   letter-spacing: -0.02em;
   background: var(--brand-mist);
   -webkit-background-clip: text;
   background-clip: text;
-  color: transparent;
+  color: transparent !important;
   -webkit-text-fill-color: transparent;
+  text-shadow: none;
 }
 
-.council-stage__brand.brand-mist {
+body.council-first-theme .logo-text.brand-mist span,
+body.council-first-theme .council-stage__brand.brand-mist span {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+}
+
+body.council-first-theme .council-stage__brand.brand-mist {
   font-size: clamp(2rem, 8vw, 3.25rem);
   line-height: 1.05;
   filter: drop-shadow(0 4px 28px rgba(142, 197, 216, 0.22));
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .brand-mist,
-  .logo-text.brand-mist,
-  .council-stage__brand.brand-mist {
+  body.council-first-theme .brand-mist,
+  body.council-first-theme .logo-text.brand-mist,
+  body.council-first-theme .council-stage__brand.brand-mist {
     background-image:
       var(--brand-mist),
       linear-gradient(
@@ -557,6 +565,68 @@ body.wrap {
 :focus-visible {
   outline: 2px solid rgba(126, 200, 227, 0.65);
   outline-offset: 2px;
+}
+
+/* ---------- Mobile thumb dock (viewport-fixed; lives outside <main>) ---------- */
+.thumb-dock {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  .app-shell.council-first {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .thumb-dock {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1002;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 6px max(12px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+    gap: 6px;
+    box-sizing: border-box;
+    background-color: rgba(18, 22, 30, 0.94);
+    background-image: var(--card-grain), var(--card-smoke);
+    background-size: 160px 160px, cover;
+    background-blend-mode: overlay, normal;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 -10px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .thumb-dock__link {
+    flex: 1 1 0;
+    min-height: 44px;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 10px;
+    border-radius: 999px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 13px;
+    border: 1px solid transparent;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+
+  .thumb-dock__link[aria-current="location"],
+  .thumb-dock__link:hover,
+  .thumb-dock__link:focus-visible {
+    color: #e8f4f8;
+    background: rgba(126, 200, 227, 0.14);
+    border-color: rgba(126, 200, 227, 0.32);
+  }
+}
+
+@media (min-width: 900px) {
+  .thumb-dock {
+    display: none !important;
+  }
 }
 
 /* SimiVision ui.css — consolidated mobile-first (generated 2026-08-02) */
