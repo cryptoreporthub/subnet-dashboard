@@ -105,4 +105,22 @@ def build_evidence_report() -> Dict[str, Any]:
             "captured_at": outcomes.get("captured_at") if outcomes else None,
             "council_health": council if outcomes else None,
         },
+        "accuracy_lift": _build_accuracy_lift(),
     }
+
+
+def _build_accuracy_lift() -> Dict[str, Any]:
+    try:
+        from internal.accuracy_lift.measure import build_accuracy_lift_snapshot
+
+        return build_accuracy_lift_snapshot()
+    except Exception:
+        return {
+            "data_available": False,
+            "graded_7d": 0,
+            "graded_30d": 0,
+            "hit_rate_7d": None,
+            "hit_rate_30d": None,
+            "by_expert": {},
+            "note": "honest empty until graded>0",
+        }
