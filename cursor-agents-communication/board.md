@@ -1,9 +1,9 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-08-02T09:00:00Z  
-**main:** `62a3f02` (#749 390 sign-off pack) · **infra:** v1 stable; wedges #710–#717 + #743/#744  
-**Active plan:** `post-hero-finish-plan.md` (Steps 0–5 done on agent side; Step 7 soak gated Aug 4)  
-**Models:** `model-guide.md` — Grok LOCK/review; Composer implements; Sonnet optional on DESIGN-HEAVY LOCK only.  
+**Last updated:** 2026-08-02T11:40:00Z  
+**main:** `68682fd` (#763 health cache) · **infra:** v1 stable; GIL unwedge #755–#763  
+**Active plan:** `post-hero-finish-plan.md` (Steps 0–6 done; Step 7 soak gated Aug 4 / Aug 11)  
+**Models:** `model-guide.md` — Grok LOCK/review; Composer implements; Sonnet low reviews  
 **Plans:** `post-hero-finish-plan.md` · `accuracy-lift-lock.md` · `hero-mindmap-sprint-plan.md` (#723) · `completion-runbook.md`
 
 ## STATUS SNAPSHOT (2026-08-02)
@@ -15,8 +15,9 @@
 | Phase C mindmap display wiring | **MERGED** #741 (+ M1–M5 #725–#735) |
 | Hero H1/H2 + A-tier ACs | **MERGED** #724 · #727 · #732 · #736 |
 | Mindmap graph wedge (full state on graph) | **MERGED** #744 — graph skips `build_mindmap_state` |
-| API unwedge (subnets/judges/simivision/cockpit) | **MERGED** #743 |
-| Finish queue Steps 1–5 | **MERGED** #745–#749 (tokens, badges, bridge honesty, LB-11, g0 pack) |
+| API unwedge (subnets/judges/simivision/cockpit) | **MERGED** #743 · #759–#761 |
+| Finish queue Steps 1–6 | **MERGED** #745–#752 · #755–#763 (summary/health GIL unwedge) |
+| Mindmap summary / learning health | **PASS** — summary ~0.5s file-only; health cache+peer; Fly green |
 | Human 390px glance (AC7) | **PENDING** — see `hero-mindmap-390-signoff-2026-08-02.md` |
 | Accuracy PREP (read-only evidence) | **MERGED** #740 — experiments **GATED** Aug 4 H2 soak GO |
 | Stale drafts (#686/#675/#692/#650) | **Do not blind-merge** — superseded / already on main |
