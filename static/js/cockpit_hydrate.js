@@ -921,20 +921,30 @@
     syncK3GlowTier(fc.conf);
   }
 
-  function syncK3GlowTier(confPct, action) {
+  function syncK3GlowTier(confPct, action, confState) {
     var claim = document.getElementById('k3-claim');
     if (!claim) return;
+    var dossier = document.getElementById('k3-dossier');
+    var state = confState || (dossier ? dossier.getAttribute('data-conf-state') : '') || '';
     var pct = confPct == null || isNaN(confPct) ? 0 : Number(confPct);
     var act = String(action || '').toUpperCase();
     // Single source of truth for tier cutoffs — keep in sync with conviction_tiers.js (75/55/35).
     var t = confTier(pct > 1 ? pct / 100 : pct);
-    var cool = act === 'HOLD' || t.tier === 'tier-gold' || t.tier === 'tier-red';
+    var cool =
+      state === 'resolving' ||
+      state === 'delayed' ||
+      state === 'zero' ||
+      act === 'HOLD' ||
+      t.tier === 'tier-gold' ||
+      t.tier === 'tier-red';
     claim.classList.remove('k3-claim--glow-hot', 'k3-claim--glow-cool');
     claim.classList.add(cool ? 'k3-claim--glow-cool' : 'k3-claim--glow-hot');
     claim.setAttribute('data-glow', cool ? 'cool' : 'hot');
     var label = document.getElementById('k3-orb-label');
     if (label) {
-      if (t.tier === 'tier-cyan') label.textContent = 'high';
+      if (state === 'resolving' || state === 'delayed') label.textContent = state === 'delayed' ? 'delayed' : 'resolving';
+      else if (state === 'zero') label.textContent = 'zero';
+      else if (t.tier === 'tier-cyan') label.textContent = 'high';
       else if (t.tier === 'tier-lime') label.textContent = 'mid';
       else if (t.conf > 0) label.textContent = 'low';
       else label.textContent = 'conviction';
@@ -1285,8 +1295,10 @@
       _k3ConfResolvingTimer = setTimeout(function () {
         _k3ConfResolvingTimer = null;
         var el = document.getElementById('k3-dossier');
-        if (el && el.getAttribute('data-conf-state') === 'resolving') {
+    if (el && el.getAttribute('data-conf-state') === 'resolving') {
           el.setAttribute('data-conf-state', 'delayed');
+          var delayedLabel = document.getElementById('k3-orb-label');
+          if (delayedLabel) delayedLabel.textContent = 'delayed';
         }
       }, 15000);
     }
@@ -1353,7 +1365,12 @@
       actionBadge.className =
         'k3-badge ' + (actRaw === 'LONG' ? 'buy' : actRaw === 'SHORT' ? 'sell' : 'hold');
     }
-    syncK3GlowTier(fc.conf, payload.action);
+    syncK3GlowTier(fc.conf, payload.action, confState);
+    var horizonBadge = document.getElementById('k3-horizon-badge');
+    if (horizonBadge) {
+      horizonBadge.textContent = payload.time_horizon || payload.horizon || horizonBadge.textContent || '24h';
+      horizonBadge.hidden = false;
+    }
     var resolveCrumb = document.getElementById('k3-resolve-crumb');
     if (resolveCrumb) {
       if (payload.resolves_in && String(payload.outcome_status || 'pending') !== 'resolved') {

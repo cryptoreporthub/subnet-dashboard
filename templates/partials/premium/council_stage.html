@@ -411,6 +411,17 @@
         text-shadow: 0 0 8px var(--sn-accent-glow);
       }
       .k3-orb-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
+      #k3-dossier[data-conf-state="resolving"] .k3-orb-label,
+      #k3-dossier[data-conf-state="delayed"] .k3-orb-label { color: var(--k3-blue); }
+      #k3-dossier[data-conf-state="zero"] .k3-orb-label { color: var(--k3-orange); }
+      .k3-horizon-badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600;
+        letter-spacing: 0.06em; text-transform: uppercase;
+        color: var(--k3-blue); border: 1px solid rgba(63, 201, 255, 0.35);
+        background: rgba(63, 201, 255, 0.08); border-radius: 999px;
+        padding: 3px 8px; min-height: 24px; line-height: 1; white-space: nowrap;
+      }
       .k3-claim-name { font-size: 28px; font-weight: 700; background: linear-gradient(90deg, var(--k3-green), var(--k3-blue), var(--k3-pink), var(--k3-orange)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: k3-shimmer 3s ease-in-out infinite; margin: 8px 0 4px; z-index: 1; background-size: 200% 100%; }
       @keyframes k3-shimmer { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
       .k3-claim-meta { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--k3-muted); margin-bottom: 8px; z-index: 1; }
@@ -696,6 +707,7 @@
                 <p class="k3-claim-name" id="k3-claim-head-name">{{ sn.name|default('SN' ~ sn.netuid) }}</p>
                 <div class="k3-claim-head__meta">
                   <span id="k3-stale-badge" class="k3-temporal-badge k3-stale-badge" hidden aria-live="polite"></span>
+                  <span class="k3-horizon-badge" id="k3-horizon-badge" title="Call horizon">{{ horizon }}</span>
                   {% if act == 'LONG' %}<div class="k3-badge buy" id="k3-action-badge">LONG</div>
                   {% elif act == 'SHORT' %}<div class="k3-badge sell" id="k3-action-badge">SHORT</div>
                   {% else %}<div class="k3-badge hold" id="k3-action-badge">{{ act }}</div>{% endif %}
@@ -730,7 +742,7 @@
                       {% else %}
                         <div class="k3-orb-score" id="k3-orb-score"><span class="digit-ones">—</span></div>
                       {% endif %}
-                      <div class="k3-orb-label" id="k3-orb-label">{% if conviction_pct >= 70 %}high{% elif conviction_pct >= 45 %}mid{% elif conviction_pct > 0 %}low{% else %}conviction{% endif %}</div>
+                      <div class="k3-orb-label" id="k3-orb-label">{% if conf_state == 'resolving' %}resolving{% elif conf_state == 'zero' %}zero{% elif conviction_pct >= 70 %}high{% elif conviction_pct >= 45 %}mid{% else %}low{% endif %}</div>
                     </div>
                   </div>
                 </div>
@@ -863,6 +875,7 @@
                 <p class="k3-claim-name" id="k3-claim-head-name">No call yet</p>
                 <div class="k3-claim-head__meta">
                   <span id="k3-stale-badge" class="k3-temporal-badge k3-stale-badge" hidden aria-live="polite"></span>
+                  <span class="k3-horizon-badge" id="k3-horizon-badge" title="Call horizon">{{ horizon }}</span>
                   <div class="k3-badge hold" id="k3-action-badge">HOLD</div>
                 </div>
               </div>
@@ -884,7 +897,7 @@
                     </svg>
                     <div class="k3-orb-center">
                       <div class="k3-orb-score" id="k3-orb-score"><span class="digit-ones">—</span></div>
-                      <div class="k3-orb-label" id="k3-orb-label">conviction</div>
+                      <div class="k3-orb-label" id="k3-orb-label">{% if conf_state == 'zero' %}zero{% else %}resolving{% endif %}</div>
                     </div>
                   </div>
                 </div>
@@ -1044,7 +1057,10 @@
         <div class="k3-layer-body">
           <div class="k3-learning-stats">
             <div class="k3-learning-stat"><div class="k3-learning-value">{{ cal_n }}</div><div class="k3-learning-label">graded calls</div></div>
-            <div class="k3-learning-stat"><div class="k3-learning-value">{% if tb_ready and cal_acc is not none %}{{ '%.0f'|format(cal_acc|float) }}%{% else %}—{% endif %}</div><div class="k3-learning-label">directional accuracy</div></div>
+            <div class="k3-learning-stat">
+              <div class="k3-learning-value" id="k3-learning-acc">{% if tb_ready and cal_acc is not none %}{{ '%.0f'|format(cal_acc|float) }}%{% else %}—{% endif %}</div>
+              <div class="k3-learning-label" id="k3-learning-acc-label">{% if tb_ready and cal_acc is not none %}directional accuracy{% else %}building sample size{% endif %}</div>
+            </div>
           </div>
           {% if outcome_status == 'resolved' or resolves_in %}
           <div class="k3-track-window">
@@ -1058,9 +1074,9 @@
           {% if tb_ready and cal_n|int > 0 and cal_acc is not none %}
           <p class="k3-track-footnote">We keep score on every call. {{ cal_acc }}% directional accuracy across {{ cal_n }} graded windows — published, not curated.</p>
           {% elif cal_n|int > 0 %}
-          <p class="k3-track-footnote">{% if tb.message %}{{ tb.message }}{% else %}Trust gate pending — {{ cal_n }} graded so far. Accuracy publishes when integrity clears.{% endif %}</p>
+          <p class="k3-track-footnote">{% if tb.message %}{{ tb.message }}{% else %}Building sample size — {{ cal_n }} graded so far. Accuracy publishes when the trust gate clears.{% endif %}</p>
           {% else %}
-          <p class="k3-track-footnote">Graded outcomes will appear here as picks resolve. Published, not curated.</p>
+          <p class="k3-track-footnote">Building sample size — graded outcomes appear here as picks resolve. Accuracy stays hidden until the trust gate clears.</p>
           {% endif %}
           <p class="k3-weight-nudge" id="k3-weight-nudge-line" hidden></p>
           <div class="k3-weight-nudge-viz" id="k3-weight-nudge-viz" aria-hidden="false">

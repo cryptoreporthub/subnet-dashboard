@@ -170,6 +170,44 @@ def test_cockpit_hydrate_h1_three_state_hooks_present():
     assert "confState = 'value'" in src
 
 
+def test_council_stage_h1_resolving_orb_label_distinct_from_zero():
+    resolving = _render_council_stage_confidence(
+        final_confidence=None, confidence=None, conviction=None
+    )
+    zero = _render_council_stage_confidence(final_confidence=0)
+    assert 'id="k3-orb-label">resolving<' in resolving
+    assert 'id="k3-orb-label">zero<' in zero
+    assert 'id="k3-orb-label">conviction<' not in resolving
+    assert 'id="k3-orb-label">conviction<' not in zero
+
+
+def test_council_stage_horizon_badge_always_visible_ssr():
+    """AC4: horizon badge present without chip interaction / without resolves_in."""
+    html = _render_council_stage(82)
+    assert 'id="k3-horizon-badge"' in html
+    assert 'class="k3-horizon-badge"' in html
+    badge = html.split('id="k3-horizon-badge"', 1)[1].split("</span>", 1)[0]
+    assert "24h" in badge
+    assert "hidden" not in badge.lower()
+
+
+def test_council_stage_accuracy_building_sample_size_when_trust_not_ready():
+    """AC5: trust_banner.ready false → building sample size, not a fake accuracy %."""
+    html = _render_council_stage(82)
+    assert 'id="k3-learning-acc-label">building sample size<' in html
+    assert "Building sample size" in html
+    acc = html.split('id="k3-learning-acc"', 1)[1].split("</div>", 1)[0]
+    assert "%" not in acc
+
+
+def test_cockpit_hydrate_horizon_badge_and_conf_label_hooks():
+    src = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()
+    assert "k3-horizon-badge" in src
+    assert "syncK3GlowTier(fc.conf, payload.action, confState)" in src
+    assert "label.textContent = 'resolving'" in src or "delayed' : 'resolving'" in src
+    assert "label.textContent = 'zero'" in src
+
+
 def test_council_stage_emits_identity_band_and_keeps_action_badge_separate():
     html = _render_council_stage(82)
     expected_band = netuid_band(82)
