@@ -578,7 +578,7 @@ body.wrap {
   }
 
   .thumb-dock {
-    display: flex;
+    display: flex !important;
     position: fixed;
     left: 0;
     right: 0;

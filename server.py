@@ -492,7 +492,7 @@ async def add_cors_headers(request: Request, call_next):
         response.headers["Cache-Control"] = f"public, max-age={cache_ttl}"
     elif path.startswith("/static/"):
         if path.endswith((".js", ".css")):
-            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            response.headers["Cache-Control"] = "public, max-age=300, must-revalidate"
         else:
             response.headers["Cache-Control"] = "public, max-age=3600"
     try:
@@ -549,7 +549,7 @@ _INSTANT_HOME_SHELL = """<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SimiVision — Council</title>
-<meta name="theme-color" content="#04060e">
+<meta name="theme-color" content="#080a10">
 <style>html,body{margin:0;min-height:100%;background:#04060e;color:#e8f0e9;font-family:system-ui,sans-serif}</style>
 </head>
 <body><p style="padding:1.5rem;font-family:JetBrains Mono,monospace;font-size:14px;color:#8cb39f">Loading council desk…</p></body>
