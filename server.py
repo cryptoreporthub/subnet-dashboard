@@ -506,7 +506,7 @@ async def add_cors_headers(request: Request, call_next):
 
 HOMEPAGE_BUILD_TIMEOUT = int(os.environ.get("HOMEPAGE_BUILD_TIMEOUT", "12"))
 HOMEPAGE_SHELL_CACHE_SECONDS = float(os.environ.get("HOMEPAGE_SHELL_CACHE_SECONDS", "45"))
-TOP_SCORING_UNIVERSE = int(os.environ.get("TOP_SCORING_UNIVERSE", "40"))
+TOP_SCORING_UNIVERSE = int(os.environ.get("TOP_SCORING_UNIVERSE", "20"))
 PICK_HANDLER_TIMEOUT = float(os.environ.get("PICK_HANDLER_TIMEOUT_SECONDS", "8"))
 SUBNETS_HANDLER_TIMEOUT = float(os.environ.get("SUBNETS_HANDLER_TIMEOUT_SECONDS", "3"))
 _SUBNETS_TTL = float(os.environ.get("SUBNETS_CACHE_SECONDS", "30"))
@@ -2270,84 +2270,74 @@ def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[st
     return picks[:limit]
 
 
+def _simivision_build_inner():
+    hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
+    subnets, source = _get_subnets_with_source(timeout=hydrate_timeout)
+    if not subnets:
+        subnets, source = _get_subnets_hydrate()
+    subnets = _cap_subnets_for_scoring(subnets)
+    daily_pick: Optional[Dict[str, Any]] = None
+    market_context: Optional[Dict[str, Any]] = None
+    try:
+        if _PICKS_ENGINE:
+            market_context = _market_context_with_weights(subnets)
+            from internal.council.daily_pick_engine import _find_today, _load
+
+            existing = _find_today(_load())
+            daily_pick = existing if existing is not None else None
+    except Exception as exc:
+        logger.warning("simivision daily-pick context skipped: %s", exc)
+    return _safe_simivision_payload(
+        subnets=subnets,
+        source=source,
+        daily_pick=daily_pick,
+        market_context=market_context,
+    )
+
+
+def _kick_simivision_background_refresh() -> None:
+    global _SIMIVISION_BG_REFRESHING
+    with _SIMIVISION_BG_LOCK:
+        if _SIMIVISION_BG_REFRESHING:
+            return
+        _SIMIVISION_BG_REFRESHING = True
+
+    def _run() -> None:
+        global _SIMIVISION_BG_REFRESHING
+        try:
+            if not _SIMIVISION_LOCK.acquire(blocking=False):
+                return
+            try:
+                payload = _simivision_build_inner()
+                _SIMIVISION_CACHE["payload"] = payload
+                _SIMIVISION_CACHE["at"] = time.time()
+            finally:
+                _SIMIVISION_LOCK.release()
+        except Exception as exc:
+            logger.warning("simivision background refresh failed: %s", exc)
+        finally:
+            with _SIMIVISION_BG_LOCK:
+                _SIMIVISION_BG_REFRESHING = False
+
+    threading.Thread(target=_run, name="simivision-cache-refresh", daemon=True).start()
+
+
+def _build_simivision_cached():
+    now = time.time()
+    cached = _SIMIVISION_CACHE.get("payload")
+    if isinstance(cached, dict) and now - float(_SIMIVISION_CACHE.get("at") or 0) < _SIMIVISION_TTL:
+        return cached
+    _kick_simivision_background_refresh()
+    if isinstance(cached, dict):
+        return cached
+    return {"top": [], "meta": {"count": 0, "source": "busy"}}
+
+
 @app.get("/api/simivision")
 async def api_simivision():
     """SimiVision Weighing Room — deliberation board (Daily Call excluded)."""
-
-    def _simivision_build_inner():
-        hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
-        subnets, source = _get_subnets_with_source(timeout=hydrate_timeout)
-        if not subnets:
-            subnets, source = _get_subnets_hydrate()
-        subnets = _cap_subnets_for_scoring(subnets)
-        daily_pick: Optional[Dict[str, Any]] = None
-        market_context: Optional[Dict[str, Any]] = None
-        try:
-            if _PICKS_ENGINE:
-                market_context = _market_context_with_weights(subnets)
-                from internal.council.daily_pick_engine import _find_today, _load
-
-                existing = _find_today(_load())
-                daily_pick = existing if existing is not None else None
-        except Exception as exc:
-            logger.warning("simivision daily-pick context skipped: %s", exc)
-        return _safe_simivision_payload(
-            subnets=subnets,
-            source=source,
-            daily_pick=daily_pick,
-            market_context=market_context,
-        )
-
-    def _kick_simivision_background_refresh() -> None:
-        global _SIMIVISION_BG_REFRESHING
-        with _SIMIVISION_BG_LOCK:
-            if _SIMIVISION_BG_REFRESHING:
-                return
-            _SIMIVISION_BG_REFRESHING = True
-
-        def _run() -> None:
-            global _SIMIVISION_BG_REFRESHING
-            try:
-                if not _SIMIVISION_LOCK.acquire(blocking=False):
-                    return
-                try:
-                    payload = _simivision_build_inner()
-                    _SIMIVISION_CACHE["payload"] = payload
-                    _SIMIVISION_CACHE["at"] = time.time()
-                finally:
-                    _SIMIVISION_LOCK.release()
-            except Exception as exc:
-                logger.warning("simivision background refresh failed: %s", exc)
-            finally:
-                with _SIMIVISION_BG_LOCK:
-                    _SIMIVISION_BG_REFRESHING = False
-
-        threading.Thread(target=_run, name="simivision-cache-refresh", daemon=True).start()
-
-    def _build():
-        now = time.time()
-        cached = _SIMIVISION_CACHE.get("payload")
-        if isinstance(cached, dict) and now - float(_SIMIVISION_CACHE.get("at") or 0) < _SIMIVISION_TTL:
-            return cached
-        if isinstance(cached, dict):
-            _kick_simivision_background_refresh()
-            return cached
-        if not _SIMIVISION_LOCK.acquire(blocking=False):
-            return {"top": [], "meta": {"count": 0, "source": "busy"}}
-        try:
-            now = time.time()
-            cached = _SIMIVISION_CACHE.get("payload")
-            if isinstance(cached, dict) and now - float(_SIMIVISION_CACHE.get("at") or 0) < _SIMIVISION_TTL:
-                return cached
-            payload = _simivision_build_inner()
-            _SIMIVISION_CACHE["payload"] = payload
-            _SIMIVISION_CACHE["at"] = time.time()
-            return payload
-        finally:
-            _SIMIVISION_LOCK.release()
-
     try:
-        return await _to_thread_timeout(_build, _SIMIVISION_HANDLER_TIMEOUT, label="simivision")
+        return await _to_thread_timeout(_build_simivision_cached, _SIMIVISION_HANDLER_TIMEOUT, label="simivision")
     except asyncio.TimeoutError:
         logger.warning("simivision timed out after %.1fs", _SIMIVISION_HANDLER_TIMEOUT)
         cached = _SIMIVISION_CACHE.get("payload")

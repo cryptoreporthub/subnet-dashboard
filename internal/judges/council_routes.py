@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 council_router = APIRouter()
 
-JUDGES_SCORING_UNIVERSE = int(os.environ.get("JUDGES_SCORING_UNIVERSE", "50"))
+JUDGES_SCORING_UNIVERSE = int(os.environ.get("JUDGES_SCORING_UNIVERSE", "20"))
 JUDGES_HANDLER_TIMEOUT = float(os.environ.get("JUDGES_HANDLER_TIMEOUT_SECONDS", "3"))
 _JUDGES_TTL = float(os.environ.get("JUDGES_CACHE_SECONDS", "60"))
 _JUDGES_LOCK = threading.Lock()
@@ -137,31 +137,15 @@ def _cached_or_build(
     *,
     busy_fallback: Dict[str, Any],
 ):
+    """Request path never builds — cold miss kicks bg and returns busy; stale kicks bg + stale."""
     now = time.time()
     cached = cache.get("payload")
     if isinstance(cached, dict) and now - float(cache.get("at") or 0) < ttl:
         return cached
+    _kick_background_refresh(cache, lock, build)
     if isinstance(cached, dict):
-        _kick_background_refresh(cache, lock, build)
         return cached
-    if not lock.acquire(blocking=False):
-        return busy_fallback
-    try:
-        now = time.time()
-        cached = cache.get("payload")
-        if isinstance(cached, dict) and now - float(cache.get("at") or 0) < ttl:
-            return cached
-        if not _HEAVY_SEM.acquire(blocking=False):
-            return busy_fallback
-        try:
-            payload = build()
-            cache["payload"] = payload
-            cache["at"] = time.time()
-            return payload
-        finally:
-            _HEAVY_SEM.release()
-    finally:
-        lock.release()
+    return busy_fallback
 
 
 def _aggregate_portfolios(portfolios: Dict[str, Any]) -> Dict[str, Any]:

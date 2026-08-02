@@ -13,28 +13,39 @@ from server import app
 
 
 def test_api_judges_timeout_returns_degraded(monkeypatch):
+    """Cold miss returns busy immediately — request path never blocks on scoring."""
+    council_routes._JUDGES_CACHE["payload"] = None
+    council_routes._JUDGES_CACHE["at"] = 0.0
+    council_routes._BG_REFRESHING.clear()
     monkeypatch.setattr(council_routes, "JUDGES_HANDLER_TIMEOUT", 0.05)
+    kicked = {"n": 0}
 
-    def _slow():
-        time.sleep(2)
-        return {"success": True, "judges": [{"netuid": 1}], "count": 1}
+    def _kick(cache, lock, build):
+        kicked["n"] += 1
 
-    monkeypatch.setattr(council_routes, "_api_judges_sync_inner", _slow)
+    monkeypatch.setattr(council_routes, "_kick_background_refresh", _kick)
+
+    t0 = time.time()
     resp = TestClient(app).get("/api/judges")
+    elapsed = time.time() - t0
     assert resp.status_code == 200
+    assert elapsed < 1.0
     assert resp.json() == {
         "success": False,
-        "error": "timeout",
+        "error": "busy",
         "judges": [],
         "count": 0,
     }
+    assert kicked["n"] == 1
 
 
 def test_api_judges_timeout_returns_stale_cache(monkeypatch):
     monkeypatch.setattr(council_routes, "JUDGES_HANDLER_TIMEOUT", 0.05)
     stale = {"success": True, "judges": [{"netuid": 7}], "count": 1, "source": "registry"}
     council_routes._JUDGES_CACHE["payload"] = stale
-    council_routes._JUDGES_CACHE["at"] = time.time()
+    council_routes._JUDGES_CACHE["at"] = time.time() - 999
+    council_routes._BG_REFRESHING.clear()
+    monkeypatch.setattr(council_routes, "_kick_background_refresh", lambda *a, **k: None)
 
     def _slow():
         time.sleep(2)
@@ -51,6 +62,13 @@ def test_api_judges_ttl_miss_serves_stale_immediately(monkeypatch):
     stale = {"success": True, "judges": [{"netuid": 7}], "count": 1, "source": "registry"}
     council_routes._JUDGES_CACHE["payload"] = stale
     council_routes._JUDGES_CACHE["at"] = time.time() - 999
+    council_routes._BG_REFRESHING.clear()
+    kicked = {"n": 0}
+    monkeypatch.setattr(
+        council_routes,
+        "_kick_background_refresh",
+        lambda *a, **k: kicked.__setitem__("n", kicked["n"] + 1),
+    )
 
     def _slow():
         time.sleep(2)
@@ -63,6 +81,43 @@ def test_api_judges_ttl_miss_serves_stale_immediately(monkeypatch):
     assert resp.status_code == 200
     assert resp.json() == stale
     assert elapsed < 0.5
+    assert kicked["n"] == 1
+
+
+def test_api_judges_cold_miss_does_not_score_on_request_path(monkeypatch):
+    council_routes._JUDGES_CACHE["payload"] = None
+    council_routes._JUDGES_CACHE["at"] = 0.0
+    council_routes._BG_REFRESHING.clear()
+    called = {"score": 0}
+
+    def _score(*a, **k):
+        called["score"] += 1
+        return []
+
+    monkeypatch.setattr("internal.judges.subnet_judges.score_all_subnets", _score)
+    monkeypatch.setattr(council_routes, "_kick_background_refresh", lambda *a, **k: None)
+
+    resp = TestClient(app).get("/api/judges")
+    assert resp.status_code == 200
+    assert resp.json()["error"] == "busy"
+    assert called["score"] == 0
+
+
+def test_api_judges_fresh_cache_returns_without_scoring(monkeypatch):
+    cached = {"success": True, "judges": [{"netuid": 3}], "count": 1}
+    council_routes._JUDGES_CACHE["payload"] = cached
+    council_routes._JUDGES_CACHE["at"] = time.time()
+    called = {"score": 0}
+
+    def _score(*a, **k):
+        called["score"] += 1
+        return []
+
+    monkeypatch.setattr("internal.judges.subnet_judges.score_all_subnets", _score)
+    resp = TestClient(app).get("/api/judges")
+    assert resp.status_code == 200
+    assert resp.json() == cached
+    assert called["score"] == 0
 
 
 def test_score_all_judges_request_path_use_chain_false(monkeypatch):
@@ -111,7 +166,9 @@ def test_api_learning_health_timeout_returns_degraded(monkeypatch):
 
 
 def test_learning_health_ok_while_judges_blocked(monkeypatch):
-    monkeypatch.setattr(council_routes, "JUDGES_HANDLER_TIMEOUT", 30.0)
+    council_routes._JUDGES_CACHE["payload"] = None
+    council_routes._JUDGES_CACHE["at"] = 0.0
+    council_routes._BG_REFRESHING.clear()
     gate = threading.Event()
 
     def _block():
@@ -133,6 +190,53 @@ def test_learning_health_ok_while_judges_blocked(monkeypatch):
     body = health.json()
     assert "status" in body
     assert body.get("error") != "timeout"
+
+
+def test_api_simivision_cold_miss_returns_busy_immediately(monkeypatch):
+    import server as srv
+
+    srv._SIMIVISION_CACHE["payload"] = None
+    srv._SIMIVISION_CACHE["at"] = 0.0
+    srv._SIMIVISION_BG_REFRESHING = False
+    kicked = {"n": 0}
+
+    def _kick():
+        kicked["n"] += 1
+
+    monkeypatch.setattr(srv, "_kick_simivision_background_refresh", _kick)
+
+    t0 = time.time()
+    resp = TestClient(app).get("/api/simivision")
+    elapsed = time.time() - t0
+
+    assert resp.status_code == 200
+    assert elapsed < 1.0
+    body = resp.json()
+    assert body.get("meta", {}).get("source") == "busy"
+    assert body.get("top") == []
+    assert kicked["n"] == 1
+
+
+def test_api_simivision_ttl_miss_serves_stale_immediately(monkeypatch):
+    import server as srv
+
+    stale = {"top": [{"netuid": 7, "name": "cached"}], "meta": {"count": 1, "source": "cache"}}
+    srv._SIMIVISION_CACHE["payload"] = stale
+    srv._SIMIVISION_CACHE["at"] = time.time() - 999
+    srv._SIMIVISION_BG_REFRESHING = False
+    kicked = {"n": 0}
+    monkeypatch.setattr(
+        srv, "_kick_simivision_background_refresh", lambda: kicked.__setitem__("n", kicked["n"] + 1)
+    )
+
+    t0 = time.time()
+    resp = TestClient(app).get("/api/simivision")
+    elapsed = time.time() - t0
+
+    assert resp.status_code == 200
+    assert resp.json() == stale
+    assert elapsed < 0.5
+    assert kicked["n"] == 1
 
 
 def test_api_mindmap_summary_single_flight_busy(monkeypatch):
