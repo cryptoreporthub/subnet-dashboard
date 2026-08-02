@@ -85,3 +85,71 @@ def test_api_letter_weekly_timeout_returns_degraded(monkeypatch):
     assert body["status"] == "timeout"
     assert body["empty"] is True
     assert body["markdown"] == ""
+
+
+def test_api_mindmap_state_timeout_returns_degraded(monkeypatch):
+    import internal.learning.routes as learning_routes
+
+    monkeypatch.setattr(learning_routes, "MINDMAP_STATE_HANDLER_TIMEOUT", 0.05)
+
+    def _slow():
+        time.sleep(2)
+        return {"status": "success", "trail": [{"netuid": 1}], "trail_count": 1}
+
+    monkeypatch.setattr(
+        "internal.learning.mindmap_aggregator.build_mindmap_state", _slow
+    )
+    resp = TestClient(app).get("/api/mindmap/state")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "timeout"
+    assert body["trail"] == []
+    assert body["summaries"] == {}
+
+
+def test_api_mindmap_graph_timeout_returns_degraded(monkeypatch):
+    import internal.mindmap.routes as graph_routes
+
+    monkeypatch.setattr(graph_routes, "MINDMAP_GRAPH_HANDLER_TIMEOUT", 0.05)
+    monkeypatch.setattr(graph_routes, "_cache", {})
+    monkeypatch.setattr(graph_routes, "_build_locks", {})
+
+    def _slow(focus=None):
+        time.sleep(2)
+        return {"status": "success", "nodes": [{"id": "sn:1"}], "edges": []}
+
+    monkeypatch.setattr(graph_routes, "_cached_or_build", _slow)
+    resp = TestClient(app).get("/api/mindmap/graph")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "timeout"
+    assert body["nodes"] == []
+
+
+def test_api_mindmap_graph_timeout_serves_stale_cache(monkeypatch):
+    import internal.mindmap.routes as graph_routes
+
+    monkeypatch.setattr(graph_routes, "MINDMAP_GRAPH_HANDLER_TIMEOUT", 0.05)
+    stale = {
+        "status": "success",
+        "nodes": [{"id": "sn:7", "kind": "subnet"}],
+        "edges": [],
+        "integration_status": {"council_trail": "closed"},
+    }
+    monkeypatch.setattr(
+        graph_routes,
+        "_cache",
+        {None: {"at": time.time() - 999, "data": stale}},
+    )
+    monkeypatch.setattr(graph_routes, "_build_locks", {})
+
+    def _slow(focus=None):
+        time.sleep(2)
+        return {"status": "success", "nodes": [{"id": "sn:1"}], "edges": []}
+
+    monkeypatch.setattr(graph_routes, "_cached_or_build", _slow)
+    resp = TestClient(app).get("/api/mindmap/graph")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "cached"
+    assert body["nodes"] == stale["nodes"]
