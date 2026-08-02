@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from internal.learning.mindmap_aggregator import (
     _INTEGRATION_STATUS_VALUES,
+    _dispositions_integration_status,
     _judges_integration_status,
 )
 from server import app
@@ -34,6 +35,15 @@ def test_judges_integration_status_blocked_when_import_fails():
         assert _judges_integration_status() == "blocked"
 
 
+def test_dispositions_integration_status_partial_when_module_present():
+    assert _dispositions_integration_status() == "partial"
+
+
+def test_dispositions_integration_status_display_only_when_import_fails():
+    with patch.dict(sys.modules, {"internal.council.memory_scoring": None}):
+        assert _dispositions_integration_status() == "display_only"
+
+
 def test_mindmap_graph_integration_status():
     client = TestClient(app)
     resp = client.get("/api/mindmap/graph")
@@ -51,6 +61,6 @@ def test_mindmap_graph_integration_status():
     assert status["expert_weights"] == "closed"
     assert status["judges"] == "closed"  # #720 per-judge weights wired into scoring
     assert status["telegram_pulse"] == "partial"
-    assert status["dispositions"] == "display_only"
+    assert status["dispositions"] == "partial"  # §30-6 disposition_score_adjustment wired in scoring
     assert status["pump_desk"] == "partial"
     assert status["whales_indicators"] == "read_only"

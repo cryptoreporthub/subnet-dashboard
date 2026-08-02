@@ -27,13 +27,24 @@ def _judges_integration_status() -> str:
         return "blocked"
 
 
+def _dispositions_integration_status() -> str:
+    """partial when §30-6 disposition_score_adjustment is importable (wired in state_vector scoring)."""
+    try:
+        from internal.council.memory_scoring import disposition_score_adjustment
+
+        disposition_score_adjustment  # reference only; don't call (avoids soul_map IO)
+        return "partial"
+    except Exception:
+        return "display_only"
+
+
 def _build_integration_status() -> Dict[str, str]:
     return {
         "council_trail": "closed",
         "expert_weights": "closed",
         "judges": _judges_integration_status(),
         "telegram_pulse": "partial",
-        "dispositions": "display_only",
+        "dispositions": _dispositions_integration_status(),
         "pump_desk": "partial",
         "whales_indicators": "read_only",
     }
