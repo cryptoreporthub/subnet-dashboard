@@ -94,16 +94,32 @@ def load_subnets_source(timeout: float | None = None) -> List[Dict[str, Any]]:
     limit = SUBNETS_LOAD_TIMEOUT if timeout is None else timeout
     if limit <= 0:
         return _load_subnets_inner()
-    # Outer asyncio.wait_for owns the deadline — avoid nested ThreadPoolExecutor.
     if _on_pool_thread():
-        try:
-            return _load_subnets_inner()
-        except Exception as exc:
+        result: list[List[Dict[str, Any]]] = []
+        exc_holder: list[BaseException] = []
+
+        def _run() -> None:
+            try:
+                result.append(_load_subnets_inner())
+            except BaseException as exc:
+                exc_holder.append(exc)
+
+        worker = threading.Thread(target=_run, daemon=True)
+        worker.start()
+        worker.join(timeout=limit)
+        if worker.is_alive():
             logger.warning(
-                "subnet feed load failed on worker thread: %s; using registry fallback",
-                exc,
+                "subnet feed load timed out on worker thread after %.0fs; using registry fallback",
+                limit,
             )
             return _registry_fallback_rows()
+        if exc_holder:
+            logger.warning(
+                "subnet feed load failed on worker thread: %s; using registry fallback",
+                exc_holder[0],
+            )
+            return _registry_fallback_rows()
+        return result[0] if result else _registry_fallback_rows()
     pool = ThreadPoolExecutor(max_workers=1)
     try:
         fut = pool.submit(_load_subnets_inner)

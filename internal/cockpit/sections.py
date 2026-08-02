@@ -87,9 +87,9 @@ def _live_section(
 
 def _build_council_picks() -> Dict[str, Any]:
     try:
-        from internal.learning.panel_summaries import summarize_picks
+        from internal.learning.panel_summaries import summarize_picks_lite
 
-        raw = summarize_picks()
+        raw = summarize_picks_lite()
         summary = _summary_text(raw)
         if not summary or "could not load" in summary.lower():
             return _empty_copy(

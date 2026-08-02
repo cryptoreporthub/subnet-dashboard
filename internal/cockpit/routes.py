@@ -20,12 +20,46 @@ logger = logging.getLogger(__name__)
 
 cockpit_router = APIRouter(tags=["cockpit"])
 
-_PICKS_BUILD_TIMEOUT = float(os.environ.get("COCKPIT_PICKS_TIMEOUT", "8"))
-_SECTIONS_BUILD_TIMEOUT = float(os.environ.get("COCKPIT_SECTIONS_TIMEOUT", "8"))
+_PICKS_BUILD_TIMEOUT = float(os.environ.get("COCKPIT_PICKS_TIMEOUT", "3"))
+_SECTIONS_BUILD_TIMEOUT = float(os.environ.get("COCKPIT_SECTIONS_TIMEOUT", "3"))
 _SECTIONS_TTL = float(os.environ.get("COCKPIT_SECTIONS_CACHE_SECONDS", "60"))
 _SECTIONS_LOCK = threading.Lock()
 _SECTIONS_CACHE: dict = {"at": 0.0, "payload": None}
 _SECTIONS_SEM = threading.Semaphore(int(os.environ.get("COCKPIT_HEAVY_CONCURRENCY", "2")))
+_SECTIONS_BG_LOCK = threading.Lock()
+_SECTIONS_BG_REFRESHING = False
+
+
+def _kick_sections_background_refresh() -> None:
+    global _SECTIONS_BG_REFRESHING
+    with _SECTIONS_BG_LOCK:
+        if _SECTIONS_BG_REFRESHING:
+            return
+        _SECTIONS_BG_REFRESHING = True
+
+    def _run() -> None:
+        global _SECTIONS_BG_REFRESHING
+        try:
+            if not _SECTIONS_LOCK.acquire(blocking=False):
+                return
+            try:
+                if not _SECTIONS_SEM.acquire(blocking=False):
+                    return
+                try:
+                    payload = get_cockpit_sections()
+                    _SECTIONS_CACHE["payload"] = payload
+                    _SECTIONS_CACHE["at"] = time.time()
+                finally:
+                    _SECTIONS_SEM.release()
+            finally:
+                _SECTIONS_LOCK.release()
+        except Exception as exc:
+            logger.warning("cockpit sections background refresh failed: %s", exc)
+        finally:
+            with _SECTIONS_BG_LOCK:
+                _SECTIONS_BG_REFRESHING = False
+
+    threading.Thread(target=_run, name="cockpit-sections-refresh", daemon=True).start()
 
 
 def _emitted_at_z() -> str:
@@ -37,9 +71,10 @@ def _build_sections_payload_sync() -> dict:
     cached = _SECTIONS_CACHE.get("payload")
     if isinstance(cached, dict) and now - float(_SECTIONS_CACHE.get("at") or 0) < _SECTIONS_TTL:
         return cached
+    if isinstance(cached, dict):
+        _kick_sections_background_refresh()
+        return cached
     if not _SECTIONS_LOCK.acquire(blocking=False):
-        if isinstance(cached, dict):
-            return cached
         return {"status": "busy", "sections": []}
     try:
         now = time.time()
@@ -47,8 +82,6 @@ def _build_sections_payload_sync() -> dict:
         if isinstance(cached, dict) and now - float(_SECTIONS_CACHE.get("at") or 0) < _SECTIONS_TTL:
             return cached
         if not _SECTIONS_SEM.acquire(blocking=False):
-            if isinstance(cached, dict):
-                return cached
             return {"status": "busy", "sections": []}
         try:
             payload = get_cockpit_sections()
