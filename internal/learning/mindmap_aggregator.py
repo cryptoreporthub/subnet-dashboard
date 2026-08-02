@@ -38,6 +38,17 @@ def _dispositions_integration_status() -> str:
         return "display_only"
 
 
+def _scenario_integration_status() -> str:
+    """partial when §30-7 scenario_outcome_adjustment is importable (wired in state_vector scoring)."""
+    try:
+        from internal.council.memory_scoring import scenario_outcome_adjustment
+
+        scenario_outcome_adjustment  # reference only; don't call (avoids soul_map IO)
+        return "partial"
+    except Exception:
+        return "display_only"
+
+
 def _build_integration_status() -> Dict[str, str]:
     return {
         "council_trail": "closed",
@@ -45,6 +56,7 @@ def _build_integration_status() -> Dict[str, str]:
         "judges": _judges_integration_status(),
         "telegram_pulse": "partial",
         "dispositions": _dispositions_integration_status(),
+        "scenario": _scenario_integration_status(),
         "pump_desk": "partial",
         "whales_indicators": "read_only",
     }
