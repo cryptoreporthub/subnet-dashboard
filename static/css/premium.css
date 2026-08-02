@@ -151,7 +151,7 @@ header.top {
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #00c8ff, #00ff41, transparent);
+  background: var(--board-border-gradient);
   opacity: 0.75;
   pointer-events: none;
 }
@@ -159,7 +159,7 @@ header.top {
   background-image:
     linear-gradient(180deg, rgba(0, 200, 255, 0.08) 0%, rgba(0, 255, 65, 0.05) 42%, transparent 72%),
     var(--card-panel-fill),
-    linear-gradient(135deg, #33d4ff 0%, #5cff7a 52%, #39ff14 100%);
+    var(--board-border-gradient);
   box-shadow: var(--shadow-elevated), 0 0 28px var(--accent-glow), 0 0 36px var(--accent-glow-blue);
   transform: translateY(-2px);
 }
@@ -223,13 +223,13 @@ header.top {
   position: absolute;
   left: 0; top: 0; bottom: 0;
   width: 3px;
-  background: linear-gradient(180deg, #00ff41, #ff7a1a);
+  background: var(--board-border-gradient);
 }
 .kpi:hover {
   background-image:
     linear-gradient(180deg, rgba(0, 200, 255, 0.08) 0%, rgba(0, 255, 65, 0.07) 45%, transparent 72%),
     var(--card-panel-fill),
-    linear-gradient(135deg, #33d4ff 0%, #5cff7a 52%, #39ff14 100%);
+    var(--board-border-gradient);
   box-shadow: 0 0 18px var(--cockpit-green-glow), 0 0 24px var(--accent-glow-blue);
   transform: translateY(-1px);
 }
@@ -513,7 +513,7 @@ table.tbl td.mono { font-family: var(--font-mono); }
   background-image:
     linear-gradient(180deg, rgba(0, 200, 255, 0.06) 0%, rgba(0, 255, 65, 0.05) 45%, transparent 72%),
     var(--card-panel-fill),
-    linear-gradient(135deg, #33d4ff 0%, #5cff7a 52%, #39ff14 100%);
+    var(--board-border-gradient);
   box-shadow: 0 0 18px var(--cockpit-green-glow), 0 0 22px color-mix(in srgb, var(--accent-magenta) 18%, transparent);
   transform: translateY(-2px);
 }
@@ -1136,7 +1136,7 @@ footer.status[data-source*="fallback"] .st-dot {
 
 .pick-card::before {
   height: 4px;
-  background: linear-gradient(90deg, #00c8ff, #00ff41);
+  background: var(--board-border-gradient);
 }
 
 /* Degraded / fallback picks — not a real scored council call */
