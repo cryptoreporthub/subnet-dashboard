@@ -39,7 +39,10 @@ logger = logging.getLogger(__name__)
 learning_router = APIRouter(tags=["learning"])
 learning_router.include_router(create_feedback_router())
 
-LEARNING_HEALTH_TIMEOUT = float(os.environ.get("LEARNING_HEALTH_TIMEOUT_SECONDS", "8"))
+LEARNING_HEALTH_TIMEOUT = float(os.environ.get("LEARNING_HEALTH_TIMEOUT_SECONDS", "15"))
+_LEARNING_HEALTH_CACHE_TTL = float(os.environ.get("LEARNING_HEALTH_CACHE_SECONDS", "10"))
+_LEARNING_HEALTH_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+_LEARNING_HEALTH_CACHE_LOCK = threading.Lock()
 MINDMAP_STATE_HANDLER_TIMEOUT = float(os.environ.get("MINDMAP_STATE_HANDLER_TIMEOUT_SECONDS", "12"))
 MINDMAP_SUMMARY_TIMEOUT = float(os.environ.get("MINDMAP_SUMMARY_TIMEOUT_SECONDS", "8"))
 _MINDMAP_SUMMARY_TTL = float(os.environ.get("MINDMAP_SUMMARY_CACHE_SECONDS", "60"))
@@ -57,6 +60,59 @@ async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
     except asyncio.TimeoutError:
         logger.warning("%s timed out after %.1fs", label, timeout_s)
         raise
+
+
+def _learning_health_cacheable(payload: Any) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+    if meta.get("source") == "timeout":
+        return False
+    if payload.get("error") == "timeout":
+        return False
+    return True
+
+
+def _get_cached_learning_health() -> Dict[str, Any] | None:
+    now = time.time()
+    with _LEARNING_HEALTH_CACHE_LOCK:
+        cached = _LEARNING_HEALTH_CACHE.get("payload")
+        if isinstance(cached, dict) and now - float(_LEARNING_HEALTH_CACHE.get("at") or 0) < _LEARNING_HEALTH_CACHE_TTL:
+            return dict(cached)
+    return None
+
+
+def _set_learning_health_cache(payload: Dict[str, Any]) -> None:
+    if not _learning_health_cacheable(payload):
+        return
+    with _LEARNING_HEALTH_CACHE_LOCK:
+        _LEARNING_HEALTH_CACHE["at"] = time.time()
+        _LEARNING_HEALTH_CACHE["payload"] = dict(payload)
+
+
+def _cheap_worker_peer_hint() -> Dict[str, Any]:
+    """File/HTTP heartbeat only — safe on learning-health timeout path."""
+    try:
+        from internal.worker_peer import get_worker_peer
+
+        return get_worker_peer(max_age_seconds=120)
+    except Exception as exc:
+        logger.debug("cheap worker_peer hint failed: %s", exc)
+    try:
+        from internal.run_mode import inline_worker_expected
+        from internal.worker_heartbeat import is_alive, read_heartbeat
+
+        if inline_worker_expected():
+            return {
+                "expected": True,
+                "alive": is_alive(max_age_seconds=120),
+                "heartbeat": read_heartbeat(),
+                "peer": "inline_worker",
+                "source": "file",
+            }
+    except Exception:
+        pass
+    return {}
 
 
 _LEARNING_DELTA_CORRECT = 0.02
@@ -547,10 +603,17 @@ async def api_learning_loop_health():
     """Phase 0 — pick→ledger→resolver loop status (no scoring)."""
     from internal.learning.loop_health import build_learning_loop_health
 
+    cached = _get_cached_learning_health()
+    if cached is not None:
+        return cached
+
     try:
-        return await _to_thread_timeout(
+        payload = await _to_thread_timeout(
             build_learning_loop_health, LEARNING_HEALTH_TIMEOUT, label="learning-health"
         )
+        if isinstance(payload, dict):
+            _set_learning_health_cache(payload)
+        return payload
     except asyncio.TimeoutError:
         return {
             "status": "degraded",
@@ -565,7 +628,7 @@ async def api_learning_loop_health():
                 "refresh_minutes": None,
                 "peer": None,
             },
-            "worker_peer": {},
+            "worker_peer": _cheap_worker_peer_hint(),
             "watchdog": {},
             "daily_pick": {},
             "ledger": {"required": False, "present": False, "gap": False, "netuid": None},

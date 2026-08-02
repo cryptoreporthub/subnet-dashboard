@@ -140,6 +140,8 @@ def test_api_learning_health_timeout_returns_degraded(monkeypatch):
     import internal.learning.loop_health as loop_health
     import internal.learning.routes as learning_routes
 
+    learning_routes._LEARNING_HEALTH_CACHE["payload"] = None
+    learning_routes._LEARNING_HEALTH_CACHE["at"] = 0.0
     monkeypatch.setattr(learning_routes, "LEARNING_HEALTH_TIMEOUT", 0.05)
 
     def _slow():
@@ -163,6 +165,76 @@ def test_api_learning_health_timeout_returns_degraded(monkeypatch):
     assert body.get("meta", {}).get("source") == "timeout"
     assert body.get("error") == "timeout"
     assert elapsed < 1.0
+
+
+def test_api_learning_health_warm_cache_skips_builder(monkeypatch):
+    import internal.learning.loop_health as loop_health
+    import internal.learning.routes as learning_routes
+
+    learning_routes._LEARNING_HEALTH_CACHE["payload"] = None
+    learning_routes._LEARNING_HEALTH_CACHE["at"] = 0.0
+    monkeypatch.setattr(learning_routes, "_LEARNING_HEALTH_CACHE_TTL", 60.0)
+    calls = {"n": 0}
+
+    def _build_once():
+        calls["n"] += 1
+        if calls["n"] > 1:
+            raise AssertionError("cached health must not call builder twice")
+        return {"status": "ok", "pending": 3, "worker_peer": {"alive": True}}
+
+    monkeypatch.setattr(loop_health, "build_learning_loop_health", _build_once)
+
+    client = TestClient(app)
+    first = client.get("/api/learning/health")
+    second = client.get("/api/learning/health")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json() == second.json()
+    assert calls["n"] == 1
+
+
+def test_api_learning_health_timeout_includes_worker_peer(monkeypatch, tmp_path):
+    import asyncio
+
+    import httpx
+
+    import internal.learning.loop_health as loop_health
+    import internal.learning.routes as learning_routes
+
+    learning_routes._LEARNING_HEALTH_CACHE["payload"] = None
+    learning_routes._LEARNING_HEALTH_CACHE["at"] = 0.0
+    monkeypatch.setattr(learning_routes, "LEARNING_HEALTH_TIMEOUT", 0.05)
+    monkeypatch.setenv("WORKER_HEARTBEAT_PATH", str(tmp_path / ".worker_heartbeat"))
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("INLINE_WORKER", "1")
+    monkeypatch.delenv("WORKER_SPLIT_V2", raising=False)
+
+    from internal.worker_heartbeat import touch_heartbeat
+
+    touch_heartbeat()
+
+    def _slow():
+        time.sleep(2)
+        return {"status": "ok", "pending": 0}
+
+    monkeypatch.setattr(loop_health, "build_learning_loop_health", _slow)
+
+    async def _fetch():
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            return await client.get("/api/learning/health")
+
+    resp = asyncio.run(_fetch())
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("status") == "degraded"
+    assert body.get("meta", {}).get("source") == "timeout"
+    peer = body.get("worker_peer") or {}
+    assert peer.get("expected") is True
+    assert peer.get("alive") is True
+    assert peer.get("source") == "file"
+    assert peer.get("peer") == "inline_worker"
 
 
 def test_learning_health_ok_while_judges_blocked(monkeypatch):
