@@ -256,15 +256,9 @@ def _mindmap_summary_degraded(*, source: str = "timeout") -> Dict[str, Any]:
 @learning_router.get("/api/mindmap/summary")
 async def api_mindmap_summary():
     """Mindmap summary wired to expert weights and resolver stats."""
-    try:
-        return await _to_thread_timeout(
-            _build_mindmap_summary_cached, MINDMAP_SUMMARY_TIMEOUT, label="mindmap-summary"
-        )
-    except asyncio.TimeoutError:
-        cached = _MINDMAP_SUMMARY_CACHE.get("payload")
-        if isinstance(cached, dict):
-            return cached
-        return _mindmap_summary_degraded(source="timeout")
+    # ponytail: sync cache read + bg kick only — thread offload wedged under GIL
+    # when pick scoring runs in the background refresh thread.
+    return _build_mindmap_summary_cached()
 
 
 def _kick_mindmap_summary_refresh() -> None:
@@ -319,24 +313,9 @@ def _build_mindmap_summary() -> Dict[str, Any]:
     expert_weights = snap["expert_weights"]
     resolved = snap["resolved_payload"]
 
-    dpick_block: Dict[str, Any] = {"shortlist": []}
-    daily_payload: Dict[str, Any] = {}
-    try:
-        from internal.council.daily_pick_engine import get_or_create_today_pick
-        from internal.learning.dpick_shortlist import (
-            build_deliberation_shortlist,
-            shortlist_cards_for_template,
-        )
-
-        subnets = _subnets_for_tracker()
-        market_context = _market_context_with_weights(subnets)
-        daily_payload = get_or_create_today_pick(subnets, market_context)
-        deliberation = build_deliberation_shortlist(subnets, market_context, daily_payload)
-        cards = shortlist_cards_for_template(deliberation)
-        dpick_block = {"shortlist": cards if len(cards) >= 2 else []}
-    except Exception as exc:
-        logger.warning("mindmap summary dpick.shortlist failed: %s", exc)
-        dpick_block = {"shortlist": []}
+    daily_payload = _load_today_pick_payload_lite()
+    shortlist = daily_payload.get("shortlist")
+    dpick_block = {"shortlist": shortlist if isinstance(shortlist, list) else []}
 
     conviction_block = _mindmap_conviction_block(daily_payload)
 
