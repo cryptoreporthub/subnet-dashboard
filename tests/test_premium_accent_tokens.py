@@ -11,6 +11,7 @@ FORBIDDEN = (
     "rgba(255, 0, 255",
     "rgba(255,43,214",
     "rgba(255, 43, 214",
+    "linear-gradient(135deg, #33d4ff",
 )
 
 
@@ -20,3 +21,4 @@ def test_premium_css_has_no_hot_pink_magenta_literals():
         assert needle not in text, f"hot-pink literal still in premium.css: {needle}"
     assert "var(--accent-magenta)" in text
     assert "var(--important-border-gradient)" in text
+    assert "var(--board-border-gradient)" in text
