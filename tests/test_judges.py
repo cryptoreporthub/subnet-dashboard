@@ -111,7 +111,7 @@ def test_api_judges_returns_200(client, monkeypatch):
             {"netuid": 3, "name": "C", "price": 3.0, "apy": 0.3, "emission": 3.0, "volume": 3000000, "price_change_24h": 15.0, "social_mentions": 30, "social_sentiment": 0.8},
         ]
 
-    monkeypatch.setattr(council_routes, "_get_merged_data", lambda: (_fake_subnets(), "test"))
+    monkeypatch.setattr(council_routes, "_get_subnets_for_scoring", lambda: (_fake_subnets(), "test"))
     response = client.get("/api/judges")
     assert response.status_code == 200
     data = response.json()

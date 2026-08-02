@@ -25,6 +25,15 @@ logger = logging.getLogger(__name__)
 council_router = APIRouter()
 
 JUDGES_SCORING_UNIVERSE = int(os.environ.get("JUDGES_SCORING_UNIVERSE", "50"))
+JUDGES_HANDLER_TIMEOUT = float(os.environ.get("JUDGES_HANDLER_TIMEOUT_SECONDS", "8"))
+
+
+async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(fn), timeout=timeout_s)
+    except asyncio.TimeoutError:
+        logger.warning("%s timed out after %.1fs", label, timeout_s)
+        raise
 
 _TEMPLATES_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -115,7 +124,19 @@ def _score_all_judges(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 @council_router.get("/api/council")
 async def api_council():
     """Full merged data pipeline: Blockmachine + TaoStats + TaoMarketCap + judge scores."""
-    return await asyncio.to_thread(_api_council_sync)
+    try:
+        return await _to_thread_timeout(_api_council_sync, JUDGES_HANDLER_TIMEOUT, label="council")
+    except asyncio.TimeoutError:
+        return {
+            "status": "degraded",
+            "subnets": [],
+            "judges": [],
+            "meta": {
+                "count": 0,
+                "source": "timeout",
+                "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            },
+        }
 
 
 def _api_council_sync():
@@ -164,7 +185,15 @@ def _api_council_sync():
 @council_router.get("/api/judges")
 async def api_judges():
     """Score ALL subnets with the three-judge council + consensus."""
-    return await asyncio.to_thread(_api_judges_sync)
+    try:
+        return await _to_thread_timeout(_api_judges_sync, JUDGES_HANDLER_TIMEOUT, label="judges")
+    except asyncio.TimeoutError:
+        return {
+            "success": False,
+            "error": "timeout",
+            "judges": [],
+            "count": 0,
+        }
 
 
 def _api_judges_sync():
@@ -195,7 +224,13 @@ def _api_judges_sync():
 @council_router.get("/api/judges/{netuid}")
 async def api_judges_netuid(netuid: int):
     """Return detailed judge breakdown for one subnet."""
-    return await asyncio.to_thread(_api_judges_netuid_sync, netuid)
+    def _build():
+        return _api_judges_netuid_sync(netuid)
+
+    try:
+        return await _to_thread_timeout(_build, JUDGES_HANDLER_TIMEOUT, label="judges-netuid")
+    except asyncio.TimeoutError:
+        return {"error": "timeout", "netuid": netuid}
 
 
 def _api_judges_netuid_sync(netuid: int):

@@ -39,6 +39,17 @@ logger = logging.getLogger(__name__)
 learning_router = APIRouter(tags=["learning"])
 learning_router.include_router(create_feedback_router())
 
+LEARNING_HEALTH_TIMEOUT = float(os.environ.get("LEARNING_HEALTH_TIMEOUT_SECONDS", "8"))
+
+
+async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(fn), timeout=timeout_s)
+    except asyncio.TimeoutError:
+        logger.warning("%s timed out after %.1fs", label, timeout_s)
+        raise
+
+
 _LEARNING_DELTA_CORRECT = 0.02
 _LEARNING_DELTA_WRONG = -0.03
 _LEARNING_SNAPSHOT_TTL = 30.0
@@ -469,8 +480,32 @@ async def api_learning_loop_health():
     """Phase 0 — pick→ledger→resolver loop status (no scoring)."""
     from internal.learning.loop_health import build_learning_loop_health
 
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, build_learning_loop_health)
+    def _build():
+        return build_learning_loop_health()
+
+    try:
+        return await _to_thread_timeout(_build, LEARNING_HEALTH_TIMEOUT, label="learning-health")
+    except asyncio.TimeoutError:
+        return {
+            "status": "degraded",
+            "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "pending": 0,
+            "last_resolver_tick": None,
+            "resolver": {
+                "running": False,
+                "last_ok": None,
+                "age_seconds": None,
+                "refresh_minutes": None,
+                "peer": None,
+            },
+            "worker_peer": {},
+            "watchdog": {},
+            "daily_pick": {},
+            "ledger": {"required": False, "present": False, "gap": False, "netuid": None},
+            "snapshot_age_seconds": None,
+            "score_snapshot": {},
+            "error": "timeout",
+        }
 
 
 @learning_router.get("/api/learning/stats")
