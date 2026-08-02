@@ -41,6 +41,10 @@ learning_router.include_router(create_feedback_router())
 
 LEARNING_HEALTH_TIMEOUT = float(os.environ.get("LEARNING_HEALTH_TIMEOUT_SECONDS", "8"))
 MINDMAP_STATE_HANDLER_TIMEOUT = float(os.environ.get("MINDMAP_STATE_HANDLER_TIMEOUT_SECONDS", "12"))
+MINDMAP_SUMMARY_TIMEOUT = float(os.environ.get("MINDMAP_SUMMARY_TIMEOUT_SECONDS", "8"))
+_MINDMAP_SUMMARY_TTL = float(os.environ.get("MINDMAP_SUMMARY_CACHE_SECONDS", "60"))
+_MINDMAP_SUMMARY_LOCK = threading.Lock()
+_MINDMAP_SUMMARY_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 
 
 async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
@@ -216,15 +220,57 @@ def _mindmap_conviction_block(daily_payload: Dict[str, Any] | None) -> Dict[str,
     }
 
 
+def _mindmap_summary_degraded(*, source: str = "timeout") -> Dict[str, Any]:
+    try:
+        expert_weights = _learning_snapshot().get("expert_weights", {})
+    except Exception:
+        expert_weights = {}
+    return {
+        "status": "degraded",
+        "meta": {"source": source},
+        "data": {
+            "conviction": _mindmap_conviction_block(None),
+            "expert_insights": [
+                {"expert": name.title(), "weight": weight}
+                for name, weight in expert_weights.items()
+            ],
+            "expert_weights": expert_weights,
+            "resolved_predictions": {},
+            "scenario_memory": {},
+            "rotation_tracker": {},
+            "learning_status": {"enabled": True, "records": 0, "last_updated": None},
+            "dpick": {"shortlist": []},
+            "engine_stats": {},
+            "simivision_meta": {},
+        },
+    }
+
+
 @learning_router.get("/api/mindmap/summary")
 async def api_mindmap_summary():
     """Mindmap summary wired to expert weights and resolver stats."""
-    # get_or_create_today_pick()/build_deliberation_shortlist() below score the
-    # full subnet universe synchronously and have wedged the event loop (and
-    # therefore /health) when called inline from an async route elsewhere in
-    # this incident — dispatch through the thread pool so this route can never
-    # do that.
-    return await run_in_threadpool(_build_mindmap_summary)
+    try:
+        return await _to_thread_timeout(
+            _build_mindmap_summary_cached, MINDMAP_SUMMARY_TIMEOUT, label="mindmap-summary"
+        )
+    except asyncio.TimeoutError:
+        cached = _MINDMAP_SUMMARY_CACHE.get("payload")
+        if isinstance(cached, dict):
+            return cached
+        return _mindmap_summary_degraded(source="timeout")
+
+
+def _build_mindmap_summary_cached() -> Dict[str, Any]:
+    now = time.time()
+    with _MINDMAP_SUMMARY_LOCK:
+        cached = _MINDMAP_SUMMARY_CACHE.get("payload")
+        if isinstance(cached, dict) and now - float(_MINDMAP_SUMMARY_CACHE.get("at") or 0) < _MINDMAP_SUMMARY_TTL:
+            return cached
+    payload = _build_mindmap_summary()
+    with _MINDMAP_SUMMARY_LOCK:
+        _MINDMAP_SUMMARY_CACHE["payload"] = payload
+        _MINDMAP_SUMMARY_CACHE["at"] = time.time()
+    return payload
 
 
 def _build_mindmap_summary() -> Dict[str, Any]:

@@ -71,6 +71,26 @@ def test_learning_health_ok_while_judges_blocked(monkeypatch):
     assert body.get("error") != "timeout"
 
 
+def test_api_mindmap_summary_timeout_returns_degraded(monkeypatch):
+    from internal.learning import routes as learning_routes
+
+    monkeypatch.setattr(learning_routes, "MINDMAP_SUMMARY_TIMEOUT", 0.05)
+    learning_routes._MINDMAP_SUMMARY_CACHE["payload"] = None
+    learning_routes._MINDMAP_SUMMARY_CACHE["at"] = 0.0
+
+    def _slow():
+        time.sleep(2)
+        return {"status": "success", "data": {"dpick": {"shortlist": [{"netuid": 1}]}}}
+
+    monkeypatch.setattr(learning_routes, "_build_mindmap_summary", _slow)
+    resp = TestClient(app).get("/api/mindmap/summary")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("status") == "degraded"
+    assert body.get("data", {}).get("dpick", {}).get("shortlist") == []
+    assert body.get("meta", {}).get("source") == "timeout"
+
+
 def test_api_letter_weekly_timeout_returns_degraded(monkeypatch):
     monkeypatch.setattr(letter_routes, "LETTER_HANDLER_TIMEOUT", 0.05)
 
