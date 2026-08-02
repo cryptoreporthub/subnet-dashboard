@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="app-shell council-first wrap-pad" style="max-width:480px;margin:0 auto;">
-  <p style="margin:12px 0;font-family:'JetBrains Mono',monospace;font-size:11px;color:#64748b;">
-    <a href="/" style="color:#38bdf8;">← Home</a> · Flow before price · early vs chase
+<div class="app-shell council-first pump-page">
+  <p class="pump-page__back">
+    <a href="/">← Home</a> · Flow before price · early vs chase
   </p>
   {% if pump_alerts is defined and pump_alerts.get('status') in ('timeout', 'unavailable') %}
-  <p class="empty" style="margin:0 0 12px;color:#fbbf24;">Pump desk is warming up — retry in a moment or return home.</p>
+  <p class="empty">Pump desk is warming up — retry in a moment or return home.</p>
   {% endif %}
   {% with pump_compact=true %}
   {% include "partials/premium/pump_alert.html" %}

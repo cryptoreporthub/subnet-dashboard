@@ -30,6 +30,7 @@ CONTRACT = [
     ("GET", "/preview/pump-desk-polish", None),
     ("GET", "/preview/pump-desk-full", None),
     ("GET", "/pump", None),
+    ("GET", "/judge-council", None),
     ("GET", "/api/pump-alerts", None),
     ("GET", "/api/pump-patterns/15", None),
     ("GET", "/api/pump-patterns/active", None),
