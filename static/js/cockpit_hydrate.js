@@ -3650,6 +3650,8 @@
         predictions: stats && stats.total_records != null ? stats.total_records : null,
       });
 
+      // LB-11: hydrate owns the sole /api/mindmap/trail fetch on home cold load.
+      window.__homeTrailHydratePending = true;
       window.HomeHydrateCache = {
         dailyPick: lastDailyPickPayload,
         simivision: lastSimivisionTop ? { top: lastSimivisionTop, meta: lastSimivisionMeta } : null,
@@ -3700,6 +3702,8 @@
         document.dispatchEvent(new CustomEvent('home:hydrate-trail', { detail: { trail: trail } }));
       } catch (e) {
         console.warn('[cockpit_hydrate] trail fetch failed', e);
+      } finally {
+        window.__homeTrailHydratePending = false;
       }
 
       try {
@@ -3803,6 +3807,7 @@
       console.log('[cockpit_hydrate] deferred panels updated');
     } catch (e) {
       console.warn('[cockpit_hydrate] deferred tier failed', e);
+      window.__homeTrailHydratePending = false;
     }
   }
 

@@ -66,9 +66,16 @@ def test_mindmap_js_spine_chrome_listens_for_hydrate_and_focus():
 def test_living_focus_trail_promise_waits_for_hydrate_trail():
     """LB-11: living_focus prefers HomeHydrateCache / home:hydrate-trail before self-fetch."""
     client = TestClient(app)
-    src = client.get("/static/js/living_focus.js").text
-    assert "LB-11" in src
-    assert "home:hydrate-trail" in src
-    assert "HomeHydrateCache" in src
-    assert "function trailPromise()" in src
-    assert "#mindmap-graph-section" in src
+    lf = client.get("/static/js/living_focus.js").text
+    hydrate = client.get("/static/js/cockpit_hydrate.js").text
+    assert "LB-11" in lf
+    assert "home:hydrate-trail" in lf
+    assert "HomeHydrateCache" in lf
+    assert "function trailPromise()" in lf
+    assert "#mindmap-graph-section" in lf
+    assert "__homeTrailHydratePending" in hydrate
+    assert "__homeTrailHydratePending" in lf
+    # Fallback self-fetch must be gated while hydrate owns trail.
+    pending_guard = lf.index("__homeTrailHydratePending")
+    trail_fetch = lf.index("/api/mindmap/trail?limit=40")
+    assert pending_guard != -1 and trail_fetch != -1 and pending_guard < trail_fetch
