@@ -49,15 +49,17 @@ def _read_blob(path: str) -> Dict[str, Any]:
 
 
 def _cache_get_fresh(path: str, now: float) -> Optional[Dict[str, Any]]:
-    """Return a deep copy of the cached blob for `path` if it exists and is
-    younger than `_CACHE_TTL` seconds, else None. Caller MUST hold the lock
-    for `path` (via _lock_for) before calling this."""
+    """Return the cached blob for `path` if younger than `_CACHE_TTL`, else None.
+
+    Returns the live cache entry (not a copy). Caller MUST hold the lock for
+    `path` and MUST NOT mutate the returned dict unless it deep-copies first.
+    """
     entry = _cache.get(path)
     if entry is None:
         return None
     cached_at, blob = entry
     if now - cached_at < _CACHE_TTL:
-        return copy.deepcopy(blob)
+        return blob
     return None
 
 
@@ -67,23 +69,29 @@ def _cache_put(path: str, blob: Dict[str, Any], now: float) -> None:
     _cache[path] = (now, copy.deepcopy(blob))
 
 
-def read_soul_map(path: Optional[str] = None) -> Dict[str, Any]:
+def read_soul_map(path: Optional[str] = None, *, copy_blob: bool = True) -> Dict[str, Any]:
     """Thread-safe read of the whole soul_map blob.
 
     Resolves path=None to weights.SOUL_MAP_PATH (lazy import).
     Returns {} on missing/invalid/non-dict; never raises.
     May return a cached copy up to SOUL_MAP_CACHE_TTL seconds old; writes made
     through write_soul_map() are always immediately visible regardless of the cache.
+
+    copy_blob=True (default): return an independent deep copy (safe to mutate).
+    copy_blob=False: return the cached blob for read-only use. Scoring hot paths
+    must use this — deepcopy-per-subnet of soul_map starved Fly's single worker
+    (simivision/judges hung while deepcopy ran ~280× per universe score).
     """
     resolved = _resolve_path(path)
     with _lock_for(resolved):
         now = time.monotonic()
         hit = _cache_get_fresh(resolved, now)
         if hit is not None:
-            return hit
+            return copy.deepcopy(hit) if copy_blob else hit
         blob = _read_blob(resolved)
         _cache_put(resolved, blob, now)
-        return copy.deepcopy(blob)
+        cached = _cache[resolved][1]
+        return copy.deepcopy(cached) if copy_blob else cached
 
 
 def write_soul_map(
@@ -103,7 +111,8 @@ def write_soul_map(
     with _lock_for(resolved):
         now = time.monotonic()
         cached = _cache_get_fresh(resolved, now)
-        blob = cached if cached is not None else _read_blob(resolved)
+        # Always copy before mutate — cache holds the live blob for copy_blob=False readers.
+        blob = copy.deepcopy(cached) if cached is not None else _read_blob(resolved)
         mutator(blob)
         temp_path = ""
         try:

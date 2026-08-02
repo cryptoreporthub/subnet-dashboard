@@ -78,10 +78,10 @@ REGIME_ADJUSTMENTS: Dict[str, Dict[str, float]] = {
 }
 
 
-def _load_raw(path: str = SOUL_MAP_PATH) -> Dict[str, Any]:
+def _load_raw(path: str = SOUL_MAP_PATH, *, copy_blob: bool = True) -> Dict[str, Any]:
     from internal.store.soul_map_io import read_soul_map
 
-    return read_soul_map(path)
+    return read_soul_map(path, copy_blob=copy_blob)
 
 
 def _save_raw(data: Dict[str, Any], path: str = SOUL_MAP_PATH) -> None:
@@ -611,7 +611,7 @@ def _now_iso() -> str:
 
 def load_signal_weights(path: str = SOUL_MAP_PATH) -> Dict[str, Dict[str, float]]:
     """Read learned signal weights from soul_map.json, defaulting to DEFAULT_SIGNAL_WEIGHTS."""
-    data = _load_raw(path)
+    data = _load_raw(path, copy_blob=False)
     adv = data.get("adversarial_state")
     if isinstance(adv, dict) and isinstance(adv.get("signal_weights"), dict):
         raw = adv["signal_weights"]
@@ -681,7 +681,7 @@ def load_impact_strength(path: Optional[str] = None) -> float:
             return max(_IMPACT_STRENGTH_MIN, min(_IMPACT_STRENGTH_MAX, float(env)))
         except (TypeError, ValueError):
             pass
-    data = _load_raw(path)
+    data = _load_raw(path, copy_blob=False)
     adv = data.get("adversarial_state")
     if isinstance(adv, dict) and adv.get("impact_strength") is not None:
         try:
