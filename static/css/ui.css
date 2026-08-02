@@ -64,6 +64,29 @@ body.council-first-theme > * {
   filter: drop-shadow(0 4px 28px rgba(142, 197, 216, 0.22));
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .brand-mist,
+  .logo-text.brand-mist,
+  .council-stage__brand.brand-mist {
+    background-image:
+      var(--brand-mist),
+      linear-gradient(
+        105deg,
+        transparent 38%,
+        rgba(255, 255, 255, 0.4) 50%,
+        transparent 62%
+      );
+    background-size: 100% 100%, 240% 100%;
+    background-position: 0 0, -70% 0;
+    animation: brandMistSheen 1.5s ease-in-out 1 forwards;
+  }
+
+  @keyframes brandMistSheen {
+    0% { background-position: 0 0, -70% 0; }
+    100% { background-position: 0 0, 170% 0; }
+  }
+}
+
 .logo-mark.brand-mark {
   width: 20px;
   height: 20px;
