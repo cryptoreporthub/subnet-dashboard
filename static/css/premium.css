@@ -21,7 +21,7 @@
   --neg: var(--signal-sell);
   --neg-dim: rgba(255, 23, 68, 0.12);
   --neu: var(--accent-magenta);
-  --neu-dim: rgba(255, 43, 214, 0.12);
+  --neu-dim: color-mix(in srgb, var(--accent-magenta) 18%, transparent);
 }
 
 body {
@@ -129,7 +129,7 @@ header.top {
   left: 0; top: 3px; bottom: 3px;
   width: 3px;
   border-radius: 2px;
-  background: linear-gradient(180deg, #00ff41, #ff2bd6, #ff7a1a);
+  background: var(--important-border-gradient);
   box-shadow: 0 0 10px var(--accent-glow);
 }
 .section-sub { color: var(--txt-2); }
@@ -174,11 +174,11 @@ header.top {
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 3px;
-  background: linear-gradient(90deg, #00ff41, #ff7a1a, #ff2bd6);
+  background: linear-gradient(90deg, var(--cockpit-green), var(--accent-orange), var(--accent-magenta));
   z-index: 1;
 }
 .card.pick.sell-accent::before {
-  background: linear-gradient(90deg, var(--neg), #ff2bd6);
+  background: linear-gradient(90deg, var(--neg), var(--accent-magenta));
 }
 .card.pick.sell-accent {
   border-color: rgba(255, 23, 68, 0.4);
@@ -343,7 +343,7 @@ table.tbl tbody td {
 }
 table.tbl tbody tr:last-child td { border-bottom: none; }
 table.tbl tbody tr:hover td {
-  background: linear-gradient(90deg, rgba(0, 255, 65, 0.08), rgba(255, 43, 214, 0.04), transparent);
+  background: linear-gradient(90deg, rgba(0, 255, 65, 0.08), color-mix(in srgb, var(--accent-magenta) 8%, transparent), transparent);
   color: var(--txt);
 }
 table.tbl td.pos, table.tbl td .pos { color: var(--emerald-bright); }
@@ -514,7 +514,7 @@ table.tbl td.mono { font-family: var(--font-mono); }
     linear-gradient(180deg, rgba(0, 200, 255, 0.06) 0%, rgba(0, 255, 65, 0.05) 45%, transparent 72%),
     var(--card-panel-fill),
     linear-gradient(135deg, #33d4ff 0%, #5cff7a 52%, #39ff14 100%);
-  box-shadow: 0 0 18px var(--cockpit-green-glow), 0 0 22px rgba(255, 43, 214, 0.12);
+  box-shadow: 0 0 18px var(--cockpit-green-glow), 0 0 22px color-mix(in srgb, var(--accent-magenta) 18%, transparent);
   transform: translateY(-2px);
 }
 .expert .name {
@@ -632,8 +632,8 @@ table.tbl td.mono { font-family: var(--font-mono); }
 }
 .pill-hot {
   color: var(--neu);
-  background: rgba(255, 0, 255, 0.10);
-  border-color: rgba(255, 0, 255, 0.4);
+  background: color-mix(in srgb, var(--accent-magenta) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent-magenta) 40%, transparent);
   animation: hot-pulse 1.6s ease-in-out infinite;
 }
 .pill-sell {
@@ -643,8 +643,8 @@ table.tbl td.mono { font-family: var(--font-mono); }
   animation: sell-pulse 1.4s ease-in-out infinite;
 }
 @keyframes hot-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 0, 255, 0.4); }
-  50%      { box-shadow: 0 0 10px 2px rgba(255, 0, 255, 0.25); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-magenta) 40%, transparent); }
+  50%      { box-shadow: 0 0 10px 2px color-mix(in srgb, var(--accent-magenta) 28%, transparent); }
 }
 @keyframes sell-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 94, 0.4); }
@@ -655,8 +655,8 @@ table.tbl td.mono { font-family: var(--font-mono); }
   margin-top: 12px;
   padding: 10px 12px;
   border-radius: var(--radius-md);
-  background: rgba(255, 0, 255, 0.06);
-  border: 1px solid rgba(255, 0, 255, 0.22);
+  background: color-mix(in srgb, var(--accent-magenta) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-magenta) 24%, transparent);
 }
 .hot-sub.sell {
   background: rgba(255, 77, 94, 0.06);
@@ -683,7 +683,7 @@ table.tbl td.mono { font-family: var(--font-mono); }
   border: 1px solid;
 }
 .tag-buy   { color: var(--cockpit-green); background: var(--cockpit-green-soft); border-color: var(--cockpit-green-line); }
-.tag-hold  { color: var(--neu); background: var(--neu-dim); border-color: rgba(255, 0, 255, 0.3); }
+.tag-hold  { color: var(--neu); background: var(--neu-dim); border-color: color-mix(in srgb, var(--accent-magenta) 32%, transparent); }
 .tag-sell  { color: var(--neg); background: var(--neg-dim); border-color: rgba(255, 77, 94, 0.35); }
 .tag-watch { color: var(--accent-orange); background: rgba(255, 122, 26, 0.1); border-color: rgba(255, 122, 26, 0.35); }
 
@@ -1078,7 +1078,7 @@ footer.status[data-source*="fallback"] .st-dot {
 }
 .badge-hold, .tag-hold {
   color: var(--signal-hold) !important;
-  text-shadow: 0 0 10px rgba(255, 43, 214, 0.4);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--accent-magenta) 40%, transparent);
 }
 .badge-watch, .tag-watch {
   color: var(--accent-orange) !important;
@@ -1116,7 +1116,7 @@ footer.status[data-source*="fallback"] .st-dot {
 
 /* Multicolor brand rail under hero */
 #section-hero .section-title {
-  background: linear-gradient(90deg, #e8f7ff 0%, #00c8ff 28%, #00ff41 52%, #ff7a1a 72%, #ff2bd6 100%);
+  background: linear-gradient(90deg, #e8f7ff 0%, #00c8ff 28%, #00ff41 52%, #ff7a1a 72%, var(--accent-magenta) 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -1202,7 +1202,7 @@ footer.status[data-source*="fallback"] .st-dot {
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(90deg, #ff7a1a, #ff2bd6);
+  background: linear-gradient(90deg, var(--accent-orange), var(--accent-magenta));
   opacity: 1;
   pointer-events: none;
   z-index: 2;
@@ -1224,7 +1224,7 @@ footer.status[data-source*="fallback"] .st-dot {
 #section-kpi .kpi {
   border-width: var(--border-width);
   background-image:
-    linear-gradient(180deg, rgba(255, 122, 26, 0.05) 0%, rgba(255, 43, 214, 0.04) 45%, transparent 72%),
+    linear-gradient(180deg, rgba(255, 122, 26, 0.05) 0%, color-mix(in srgb, var(--accent-magenta) 8%, transparent) 45%, transparent 72%),
     var(--card-panel-fill),
     var(--board-border-gradient);
 }
