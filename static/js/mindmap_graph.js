@@ -52,6 +52,12 @@
     read_only: 'Read-only feed — no write-back',
   };
 
+  const INTEGRATION_SOURCE_TOOLTIPS = {
+    dispositions: {
+      partial: 'Capped soft-tilt in pick score — not a hard gate',
+    },
+  };
+
   function kindColor(kind) {
     return KIND_COLORS[kind] || '#9CA3AF';
   }
@@ -152,7 +158,8 @@
       badge.querySelector('.mindmap-integration-badge__label').textContent = label;
       badge.querySelector('.mindmap-integration-badge__pill').textContent = formatStatusPill(value);
 
-      const tip = INTEGRATION_STATUS_TOOLTIPS[value];
+      const sourceTip = (INTEGRATION_SOURCE_TOOLTIPS[key] || {})[value];
+      const tip = sourceTip || INTEGRATION_STATUS_TOOLTIPS[value];
       if (tip) badge.title = tip;
       else badge.removeAttribute('title');
     });
