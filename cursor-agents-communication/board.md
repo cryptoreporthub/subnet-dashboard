@@ -1,8 +1,8 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-08-02T11:40:00Z  
-**main:** `68682fd` (#763 health cache) · **infra:** v1 stable; GIL unwedge #755–#763  
-**Active plan:** `post-hero-finish-plan.md` (Steps 0–6 done; Step 7 soak gated Aug 4 / Aug 11)  
+**Last updated:** 2026-08-02T11:52:00Z  
+**main:** `4cbfe94` (#765 soul_map deepcopy) · **infra:** v1 stable; GIL unwedge #755–#763 · timeouts #734–#737 #751–#754  
+**Active plan:** `post-hero-finish-plan.md` (Steps 0–6 done; Step 5 human glance **after layout**; Step 7 soak gated Aug 4 / Aug 11)  
 **Models:** `model-guide.md` — Grok LOCK/review; Composer implements; Sonnet low reviews  
 **Plans:** `post-hero-finish-plan.md` · `accuracy-lift-lock.md` · `hero-mindmap-sprint-plan.md` (#723) · `completion-runbook.md`
 
@@ -16,9 +16,11 @@
 | Hero H1/H2 + A-tier ACs | **MERGED** #724 · #727 · #732 · #736 |
 | Mindmap graph wedge (full state on graph) | **MERGED** #744 — graph skips `build_mindmap_state` |
 | API unwedge (subnets/judges/simivision/cockpit) | **MERGED** #743 · #759–#761 |
+| API timeout wrappers + mindmap bounds | **MERGED** #734 · #737 · #751 · #753 · #754 |
 | Finish queue Steps 1–6 | **MERGED** #745–#752 · #755–#763 (summary/health GIL unwedge) |
 | Mindmap summary / learning health | **PASS** — summary ~0.5s file-only; health cache+peer; Fly green |
-| Human 390px glance (AC7) | **PENDING** — see `hero-mindmap-390-signoff-2026-08-02.md` |
+| Agent babysit + g0 (2026-08-02) | **PASS** — `babysit_phase.sh sprint` + `g0_phone_qa.sh` EXIT 0; mindmap non-5xx (slow 12–17s under load OK) |
+| Human 390px glance (AC7) | **PENDING** — human doing layout change; sign off after — `hero-mindmap-390-signoff-2026-08-02.md` |
 | Accuracy PREP (read-only evidence) | **MERGED** #740 — experiments **GATED** Aug 4 H2 soak GO |
 | Stale drafts (#686/#675/#692/#650) | **Do not blind-merge** — superseded / already on main |
 
@@ -138,11 +140,12 @@ Babysit: `./scripts/babysit_phase.sh <phase>`
 | **Phase C** | **DONE** — `worker_peer.alive: true` · worker HTTP `:8081` · flycast `:8081` |
 | **Finish queue** | Slice 4 **DONE** #664 · **PR3 NEXT** (listener) · PR4–10 queue (`completion-runbook.md`) · Slice 7 gated Aug 4 |
 
-## Prod cache (2026-07-29 post-#630)
+## Prod cache (2026-08-02 post-#765)
 
-- `subnet_count=128` · `effective_source=blockmachine` · `stale=false` · `rpc_healthy=true`
-- Babysit phase C + learning loop **green** (verified after #630 deploy)
-- Human: H1 390px SS-TG · H2 soak Aug 4 · H3 soak Aug 11 · Telegram session re-bootstrap if `AuthKeyDuplicatedError` recurs
+- Babysit sprint + g0 phone QA **green** (agent run ~11:35 UTC; g0 re-run ~11:51 UTC)
+- Mindmap graph/trail/state/story-path: **non-5xx**; latency 0.5–17s depending on cache warmth (timeouts serve degraded/cached JSON)
+- `daily-pick` HOLD · `pump-alerts` success · `ops/live` worker alive
+- Human: **390px sign-off after layout** · H2 soak Aug 4 · H3 soak Aug 11
 
 ## Out of scope
 
