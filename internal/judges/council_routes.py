@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 council_router = APIRouter()
 
 JUDGES_SCORING_UNIVERSE = int(os.environ.get("JUDGES_SCORING_UNIVERSE", "50"))
-JUDGES_HANDLER_TIMEOUT = float(os.environ.get("JUDGES_HANDLER_TIMEOUT_SECONDS", "8"))
+JUDGES_HANDLER_TIMEOUT = float(os.environ.get("JUDGES_HANDLER_TIMEOUT_SECONDS", "3"))
 _JUDGES_TTL = float(os.environ.get("JUDGES_CACHE_SECONDS", "60"))
 _JUDGES_LOCK = threading.Lock()
 _JUDGES_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
@@ -35,6 +35,8 @@ _COUNCIL_TTL = float(os.environ.get("COUNCIL_CACHE_SECONDS", "60"))
 _COUNCIL_LOCK = threading.Lock()
 _COUNCIL_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 _HEAVY_SEM = threading.Semaphore(int(os.environ.get("JUDGES_HEAVY_CONCURRENCY", "2")))
+_BG_LOCK = threading.Lock()
+_BG_REFRESHING: set[int] = set()
 
 
 async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
@@ -92,6 +94,41 @@ def _get_subnets_for_scoring() -> tuple[List[Dict[str, Any]], str]:
     return [], "none"
 
 
+def _kick_background_refresh(
+    cache: Dict[str, Any],
+    lock: threading.Lock,
+    build,
+) -> None:
+    key = id(cache)
+    with _BG_LOCK:
+        if key in _BG_REFRESHING:
+            return
+        _BG_REFRESHING.add(key)
+
+    def _run() -> None:
+        try:
+            if not lock.acquire(blocking=False):
+                return
+            try:
+                if not _HEAVY_SEM.acquire(blocking=False):
+                    return
+                try:
+                    payload = build()
+                    cache["payload"] = payload
+                    cache["at"] = time.time()
+                finally:
+                    _HEAVY_SEM.release()
+            finally:
+                lock.release()
+        except Exception as exc:
+            logger.warning("background judges/council refresh failed: %s", exc)
+        finally:
+            with _BG_LOCK:
+                _BG_REFRESHING.discard(key)
+
+    threading.Thread(target=_run, name="judges-cache-refresh", daemon=True).start()
+
+
 def _cached_or_build(
     cache: Dict[str, Any],
     lock: threading.Lock,
@@ -104,9 +141,10 @@ def _cached_or_build(
     cached = cache.get("payload")
     if isinstance(cached, dict) and now - float(cache.get("at") or 0) < ttl:
         return cached
+    if isinstance(cached, dict):
+        _kick_background_refresh(cache, lock, build)
+        return cached
     if not lock.acquire(blocking=False):
-        if isinstance(cached, dict):
-            return cached
         return busy_fallback
     try:
         now = time.time()
@@ -114,8 +152,6 @@ def _cached_or_build(
         if isinstance(cached, dict) and now - float(cache.get("at") or 0) < ttl:
             return cached
         if not _HEAVY_SEM.acquire(blocking=False):
-            if isinstance(cached, dict):
-                return cached
             return busy_fallback
         try:
             payload = build()
@@ -155,7 +191,7 @@ def _aggregate_portfolios(portfolios: Dict[str, Any]) -> Dict[str, Any]:
 def _score_all_judges(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     from internal.judges.subnet_judges import score_all_subnets
 
-    return _deduplicate_subnets(score_all_subnets(subnets))
+    return _deduplicate_subnets(score_all_subnets(subnets, use_chain=False))
 
 
 @council_router.get("/api/council")

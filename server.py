@@ -508,13 +508,18 @@ HOMEPAGE_BUILD_TIMEOUT = int(os.environ.get("HOMEPAGE_BUILD_TIMEOUT", "12"))
 HOMEPAGE_SHELL_CACHE_SECONDS = float(os.environ.get("HOMEPAGE_SHELL_CACHE_SECONDS", "45"))
 TOP_SCORING_UNIVERSE = int(os.environ.get("TOP_SCORING_UNIVERSE", "40"))
 PICK_HANDLER_TIMEOUT = float(os.environ.get("PICK_HANDLER_TIMEOUT_SECONDS", "8"))
-SUBNETS_HANDLER_TIMEOUT = float(os.environ.get("SUBNETS_HANDLER_TIMEOUT_SECONDS", "8"))
+SUBNETS_HANDLER_TIMEOUT = float(os.environ.get("SUBNETS_HANDLER_TIMEOUT_SECONDS", "3"))
 _SUBNETS_TTL = float(os.environ.get("SUBNETS_CACHE_SECONDS", "30"))
 _SUBNETS_LOCK = threading.Lock()
 _SUBNETS_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+_SUBNETS_BG_LOCK = threading.Lock()
+_SUBNETS_BG_REFRESHING = False
 _SIMIVISION_TTL = float(os.environ.get("SIMIVISION_CACHE_SECONDS", "60"))
 _SIMIVISION_LOCK = threading.Lock()
 _SIMIVISION_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+_SIMIVISION_HANDLER_TIMEOUT = float(os.environ.get("SIMIVISION_HANDLER_TIMEOUT_SECONDS", "3"))
+_SIMIVISION_BG_LOCK = threading.Lock()
+_SIMIVISION_BG_REFRESHING = False
 _HOUR_PICK_TTL = float(os.environ.get("HOUR_PICK_CACHE_SECONDS", "60"))
 _HOUR_PICK_LOCK = threading.Lock()
 _HOUR_PICK_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
@@ -1290,24 +1295,57 @@ def get_registry():
 async def list_subnets(request: Request):
     """List subnets with optional filtering, sorting, and pagination."""
 
+    def _kick_subnets_background_refresh() -> None:
+        global _SUBNETS_BG_REFRESHING
+        with _SUBNETS_BG_LOCK:
+            if _SUBNETS_BG_REFRESHING:
+                return
+            _SUBNETS_BG_REFRESHING = True
+
+        def _run() -> None:
+            global _SUBNETS_BG_REFRESHING
+            try:
+                if not _SUBNETS_LOCK.acquire(blocking=False):
+                    return
+                try:
+                    base = _list_subnets_base_rows()
+                    _SUBNETS_CACHE["payload"] = base
+                    _SUBNETS_CACHE["at"] = time.time()
+                finally:
+                    _SUBNETS_LOCK.release()
+            except Exception as exc:
+                logger.warning("subnets background refresh failed: %s", exc)
+            finally:
+                with _SUBNETS_BG_LOCK:
+                    _SUBNETS_BG_REFRESHING = False
+
+        threading.Thread(target=_run, name="subnets-cache-refresh", daemon=True).start()
+
     def _build():
         now = time.time()
         cached = _SUBNETS_CACHE.get("payload")
-        if isinstance(cached, dict) and now - float(_SUBNETS_CACHE.get("at") or 0) < _SUBNETS_TTL:
-            return cached
+        if isinstance(cached, dict) and isinstance(cached.get("items"), list):
+            if now - float(_SUBNETS_CACHE.get("at") or 0) < _SUBNETS_TTL:
+                return _apply_subnets_query(cached, request)
+            _kick_subnets_background_refresh()
+            return _apply_subnets_query(cached, request)
         if not _SUBNETS_LOCK.acquire(blocking=False):
-            if isinstance(cached, dict):
-                return cached
+            if isinstance(cached, dict) and isinstance(cached.get("items"), list):
+                return _apply_subnets_query(cached, request)
             return _list_subnets_registry_fallback(request)
         try:
             now = time.time()
             cached = _SUBNETS_CACHE.get("payload")
-            if isinstance(cached, dict) and now - float(_SUBNETS_CACHE.get("at") or 0) < _SUBNETS_TTL:
-                return cached
-            payload = _list_subnets_sync(request)
-            _SUBNETS_CACHE["payload"] = payload
+            if (
+                isinstance(cached, dict)
+                and isinstance(cached.get("items"), list)
+                and now - float(_SUBNETS_CACHE.get("at") or 0) < _SUBNETS_TTL
+            ):
+                return _apply_subnets_query(cached, request)
+            base = _list_subnets_base_rows()
+            _SUBNETS_CACHE["payload"] = base
             _SUBNETS_CACHE["at"] = time.time()
-            return payload
+            return _apply_subnets_query(base, request)
         finally:
             _SUBNETS_LOCK.release()
 
@@ -1315,40 +1353,15 @@ async def list_subnets(request: Request):
         return await _to_thread_timeout(_build, SUBNETS_HANDLER_TIMEOUT, label="subnets")
     except asyncio.TimeoutError:
         cached = _SUBNETS_CACHE.get("payload")
-        if isinstance(cached, dict):
-            return cached
+        if isinstance(cached, dict) and isinstance(cached.get("items"), list):
+            return _apply_subnets_query(cached, request, status="timeout")
         return _list_subnets_registry_fallback(request, status="timeout")
 
 
-def _list_subnets_registry_fallback(request: Request, *, status: str = "success") -> Dict[str, Any]:
-    """Instant registry rows when cache miss under load or handler timeout."""
+def _list_subnets_base_rows() -> Dict[str, Any]:
+    """Unfiltered enriched rows for /api/subnets cache (query applied per request)."""
     from internal.subnet_names import enrich_subnet_row
 
-    source_rows = registry_subnet_rows()
-    feed_meta = _subnet_feed_meta(source_rows)
-    items = []
-    for s in source_rows:
-        item = _tag_subnet_row(s, feed_meta)
-        item.setdefault("id", s.get("netuid", 0))
-        item.setdefault("netuid", item.get("id"))
-        items.append(enrich_subnet_row(item, use_taostats=False))
-    return {
-        "status": status,
-        "meta": {
-            "total": len(items),
-            "limit": 0,
-            "offset": 0,
-            "source": feed_meta.get("source", "registry"),
-            "sources": feed_meta.get("sources", ["registry"]),
-        },
-        "subnets": items,
-    }
-
-
-def _list_subnets_sync(request: Request):
-    from internal.subnet_names import enrich_subnet_row
-
-    # Short live/TMC attempt; registry fallback — outer wait_for owns the 8s budget.
     source_rows = load_subnets_source(timeout=2)
     if not source_rows:
         source_rows = registry_subnet_rows()
@@ -1359,7 +1372,17 @@ def _list_subnets_sync(request: Request):
         item.setdefault("id", s.get("netuid", 0))
         item.setdefault("netuid", item.get("id"))
         items.append(enrich_subnet_row(item, use_taostats=False))
+    return {"items": items, "feed_meta": feed_meta}
 
+
+def _apply_subnets_query(
+    base: Dict[str, Any],
+    request: Request,
+    *,
+    status: str = "success",
+) -> Dict[str, Any]:
+    items = list(base.get("items") or [])
+    feed_meta = base.get("feed_meta") or {}
     params = request.query_params
     status_filter = params.get("status")
     if status_filter:
@@ -1407,7 +1430,7 @@ def _list_subnets_sync(request: Request):
             ]
 
     return {
-        "status": "success",
+        "status": status,
         "meta": {
             "total": total,
             "limit": limit,
@@ -1417,6 +1440,21 @@ def _list_subnets_sync(request: Request):
         },
         "subnets": items,
     }
+
+
+def _list_subnets_registry_fallback(request: Request, *, status: str = "success") -> Dict[str, Any]:
+    """Instant registry rows when cache miss under load or handler timeout."""
+    from internal.subnet_names import enrich_subnet_row
+
+    source_rows = registry_subnet_rows()
+    feed_meta = _subnet_feed_meta(source_rows)
+    items = []
+    for s in source_rows:
+        item = _tag_subnet_row(s, feed_meta)
+        item.setdefault("id", s.get("netuid", 0))
+        item.setdefault("netuid", item.get("id"))
+        items.append(enrich_subnet_row(item, use_taostats=False))
+    return _apply_subnets_query({"items": items, "feed_meta": feed_meta}, request, status=status)
 
 
 @app.get("/api/subnet/{subnet_id}")
@@ -2236,42 +2274,72 @@ def _ordered_hour_picks(subnets, market_context, limit: int = 3) -> List[Dict[st
 async def api_simivision():
     """SimiVision Weighing Room — deliberation board (Daily Call excluded)."""
 
+    def _simivision_build_inner():
+        hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
+        subnets, source = _get_subnets_with_source(timeout=hydrate_timeout)
+        if not subnets:
+            subnets, source = _get_subnets_hydrate()
+        subnets = _cap_subnets_for_scoring(subnets)
+        daily_pick: Optional[Dict[str, Any]] = None
+        market_context: Optional[Dict[str, Any]] = None
+        try:
+            if _PICKS_ENGINE:
+                market_context = _market_context_with_weights(subnets)
+                from internal.council.daily_pick_engine import _find_today, _load
+
+                existing = _find_today(_load())
+                daily_pick = existing if existing is not None else None
+        except Exception as exc:
+            logger.warning("simivision daily-pick context skipped: %s", exc)
+        return _safe_simivision_payload(
+            subnets=subnets,
+            source=source,
+            daily_pick=daily_pick,
+            market_context=market_context,
+        )
+
+    def _kick_simivision_background_refresh() -> None:
+        global _SIMIVISION_BG_REFRESHING
+        with _SIMIVISION_BG_LOCK:
+            if _SIMIVISION_BG_REFRESHING:
+                return
+            _SIMIVISION_BG_REFRESHING = True
+
+        def _run() -> None:
+            global _SIMIVISION_BG_REFRESHING
+            try:
+                if not _SIMIVISION_LOCK.acquire(blocking=False):
+                    return
+                try:
+                    payload = _simivision_build_inner()
+                    _SIMIVISION_CACHE["payload"] = payload
+                    _SIMIVISION_CACHE["at"] = time.time()
+                finally:
+                    _SIMIVISION_LOCK.release()
+            except Exception as exc:
+                logger.warning("simivision background refresh failed: %s", exc)
+            finally:
+                with _SIMIVISION_BG_LOCK:
+                    _SIMIVISION_BG_REFRESHING = False
+
+        threading.Thread(target=_run, name="simivision-cache-refresh", daemon=True).start()
+
     def _build():
         now = time.time()
         cached = _SIMIVISION_CACHE.get("payload")
         if isinstance(cached, dict) and now - float(_SIMIVISION_CACHE.get("at") or 0) < _SIMIVISION_TTL:
             return cached
+        if isinstance(cached, dict):
+            _kick_simivision_background_refresh()
+            return cached
         if not _SIMIVISION_LOCK.acquire(blocking=False):
-            if isinstance(cached, dict):
-                return cached
             return {"top": [], "meta": {"count": 0, "source": "busy"}}
         try:
             now = time.time()
             cached = _SIMIVISION_CACHE.get("payload")
             if isinstance(cached, dict) and now - float(_SIMIVISION_CACHE.get("at") or 0) < _SIMIVISION_TTL:
                 return cached
-            hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
-            subnets, source = _get_subnets_with_source(timeout=hydrate_timeout)
-            if not subnets:
-                subnets, source = _get_subnets_hydrate()
-            subnets = _cap_subnets_for_scoring(subnets)
-            daily_pick: Optional[Dict[str, Any]] = None
-            market_context: Optional[Dict[str, Any]] = None
-            try:
-                if _PICKS_ENGINE:
-                    market_context = _market_context_with_weights(subnets)
-                    from internal.council.daily_pick_engine import _find_today, _load
-
-                    existing = _find_today(_load())
-                    daily_pick = existing if existing is not None else None
-            except Exception as exc:
-                logger.warning("simivision daily-pick context skipped: %s", exc)
-            payload = _safe_simivision_payload(
-                subnets=subnets,
-                source=source,
-                daily_pick=daily_pick,
-                market_context=market_context,
-            )
+            payload = _simivision_build_inner()
             _SIMIVISION_CACHE["payload"] = payload
             _SIMIVISION_CACHE["at"] = time.time()
             return payload
@@ -2279,9 +2347,9 @@ async def api_simivision():
             _SIMIVISION_LOCK.release()
 
     try:
-        return await _to_thread_timeout(_build, PICK_HANDLER_TIMEOUT, label="simivision")
+        return await _to_thread_timeout(_build, _SIMIVISION_HANDLER_TIMEOUT, label="simivision")
     except asyncio.TimeoutError:
-        logger.warning("simivision timed out after %.1fs", PICK_HANDLER_TIMEOUT)
+        logger.warning("simivision timed out after %.1fs", _SIMIVISION_HANDLER_TIMEOUT)
         cached = _SIMIVISION_CACHE.get("payload")
         if isinstance(cached, dict):
             return cached

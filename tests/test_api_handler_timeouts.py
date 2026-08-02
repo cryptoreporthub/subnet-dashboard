@@ -46,6 +46,37 @@ def test_api_judges_timeout_returns_stale_cache(monkeypatch):
     assert resp.json() == stale
 
 
+def test_api_judges_ttl_miss_serves_stale_immediately(monkeypatch):
+    monkeypatch.setattr(council_routes, "JUDGES_HANDLER_TIMEOUT", 0.05)
+    stale = {"success": True, "judges": [{"netuid": 7}], "count": 1, "source": "registry"}
+    council_routes._JUDGES_CACHE["payload"] = stale
+    council_routes._JUDGES_CACHE["at"] = time.time() - 999
+
+    def _slow():
+        time.sleep(2)
+        return {"success": True, "judges": [{"netuid": 1}], "count": 1}
+
+    monkeypatch.setattr(council_routes, "_api_judges_sync_inner", _slow)
+    started = time.time()
+    resp = TestClient(app).get("/api/judges")
+    elapsed = time.time() - started
+    assert resp.status_code == 200
+    assert resp.json() == stale
+    assert elapsed < 0.5
+
+
+def test_score_all_judges_request_path_use_chain_false(monkeypatch):
+    seen = {}
+
+    def _score(subnets, market_context=None, use_chain=True):
+        seen["use_chain"] = use_chain
+        return [{"netuid": 1, "consensus": {"score": 0.5}}]
+
+    monkeypatch.setattr("internal.judges.subnet_judges.score_all_subnets", _score)
+    council_routes._score_all_judges([{"netuid": 1, "emission": 1.0}])
+    assert seen.get("use_chain") is False
+
+
 def test_learning_health_ok_while_judges_blocked(monkeypatch):
     monkeypatch.setattr(council_routes, "JUDGES_HANDLER_TIMEOUT", 30.0)
     gate = threading.Event()
