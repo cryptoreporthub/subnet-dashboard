@@ -601,6 +601,7 @@ def _compute_technical_score(
     sn: Dict[str, Any],
     horizon_type: str = "day",
     indicators: Optional[Dict[str, Any]] = None,
+    market_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Compute weighted technical score for a specific horizon type.
 
@@ -623,7 +624,9 @@ def _compute_technical_score(
             "history_length": indicators.get("history_length", 0),
         }
 
-    signal_weights = load_signal_weights()
+    signal_weights = market_context.get("signal_weights") if isinstance(market_context, dict) else None
+    if not isinstance(signal_weights, dict):
+        signal_weights = load_signal_weights()
     horizon_weights = signal_weights.get(horizon_type, signal_weights.get("day", {}))
 
     signal_names = [
@@ -799,6 +802,7 @@ def _compute_signal_impact(
     sell: Dict[str, Any],
     *,
     horizon_type: str = "day",
+    market_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     impacts: List[Dict[str, Any]] = []
     chg = float(sn.get("price_change_24h", 0) or 0)
@@ -917,7 +921,9 @@ def _compute_signal_impact(
 
     from internal.council.weights import load_signal_weights
 
-    signal_weights = load_signal_weights()
+    signal_weights = market_context.get("signal_weights") if isinstance(market_context, dict) else None
+    if not isinstance(signal_weights, dict):
+        signal_weights = load_signal_weights()
     horizon_weights = signal_weights.get(horizon_type, signal_weights.get("day", {}))
     net = 0.0
     for impact in impacts:
@@ -1643,7 +1649,9 @@ def score_subnet_for_hour(
     convergence = _detect_oversold_convergence(indicators)
     hot = _compute_hot_signals(sn, indicators, convergence)
     sell = _compute_sell_signals(sn, indicators, convergence)
-    signal_impact = _compute_signal_impact(sn, indicators, hot, sell, horizon_type="hour")
+    signal_impact = _compute_signal_impact(
+        sn, indicators, hot, sell, horizon_type="hour", market_context=market_context
+    )
 
     experts = _expert_contributions(sn, indicators, signal_impact, hot, sell)
     try:
@@ -1705,7 +1713,7 @@ def score_subnet_for_hour(
     tags = _scenario_tags(sn, indicators, market_context)
 
     # Compute weighted technical score for hour horizon
-    tech_score = _compute_technical_score(sn, "hour", indicators)
+    tech_score = _compute_technical_score(sn, "hour", indicators, market_context)
 
     return {
         "total_score": total,
@@ -1735,7 +1743,9 @@ def score_subnet_for_day(
     convergence = _detect_oversold_convergence(indicators)
     hot = _compute_hot_signals(sn, indicators, convergence)
     sell = _compute_sell_signals(sn, indicators, convergence)
-    signal_impact = _compute_signal_impact(sn, indicators, hot, sell, horizon_type="day")
+    signal_impact = _compute_signal_impact(
+        sn, indicators, hot, sell, horizon_type="day", market_context=market_context
+    )
 
     experts = _expert_contributions(sn, indicators, signal_impact, hot, sell)
     try:
@@ -1773,11 +1783,16 @@ def score_subnet_for_day(
     # Day lens: relative flow favors names where capital actually moves the float.
     # ``impact_strength`` dial scales how hard we tilt (0=flat, 1=default, 2=aggressive).
     try:
-        from internal.council.weights import load_impact_strength
+        strength = float((market_context or {}).get("impact_strength"))
+    except (TypeError, ValueError):
+        strength = None
+    if strength is None:
+        try:
+            from internal.council.weights import load_impact_strength
 
-        strength = float(load_impact_strength())
-    except Exception:
-        strength = 1.0
+            strength = float(load_impact_strength())
+        except Exception:
+            strength = 1.0
     flow_boost = max(-0.05, min(0.08, relative_flow(sn) * 0.15)) * strength
     # Large caps stay eligible but score dampens vs mid/small for the same signals.
     size_tilt = max(-0.06, min(0.06, (impact_sensitivity(sn) - 1.0) * 0.04)) * strength
@@ -1807,7 +1822,7 @@ def score_subnet_for_day(
     tags = _scenario_tags(sn, indicators, market_context)
 
     # Compute weighted technical score for day horizon
-    tech_score = _compute_technical_score(sn, "day", indicators)
+    tech_score = _compute_technical_score(sn, "day", indicators, market_context)
 
     return {
         "total_score": total,

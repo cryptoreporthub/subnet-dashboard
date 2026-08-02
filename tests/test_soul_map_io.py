@@ -87,6 +87,17 @@ def test_read_soul_map_returns_independent_deep_copies(tmp_path):
     assert second == {"seed": True}
 
 
+def test_read_soul_map_copy_blob_false_shares_cache_entry(tmp_path):
+    """Read-only scoring path must not deepcopy the whole soul_map per call."""
+    soul_path = tmp_path / "soul_map.json"
+    write_soul_map(lambda blob: blob.update({"seed": True}), path=str(soul_path))
+
+    a = read_soul_map(str(soul_path), copy_blob=False)
+    b = read_soul_map(str(soul_path), copy_blob=False)
+    assert a is b
+    assert a == {"seed": True}
+
+
 def test_soul_map_cache_is_keyed_per_path(tmp_path):
     path_a = tmp_path / "a.json"
     path_b = tmp_path / "b.json"

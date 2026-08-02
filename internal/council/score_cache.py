@@ -44,7 +44,25 @@ def score_universe(
     score_day,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Score subnets once per TTL; return (hour_scored, day_scored) item lists."""
-    key = _universe_key(subnets, market_context)
+    ctx = dict(market_context or {})
+    # Hoist soul_map-backed dials once — scoring used to re-deepcopy soul_map
+    # per subnet via load_impact_strength / load_signal_weights.
+    if "impact_strength" not in ctx:
+        try:
+            from internal.council.weights import load_impact_strength
+
+            ctx["impact_strength"] = float(load_impact_strength())
+        except Exception:
+            ctx["impact_strength"] = 1.0
+    if "signal_weights" not in ctx:
+        try:
+            from internal.council.weights import load_signal_weights
+
+            ctx["signal_weights"] = load_signal_weights()
+        except Exception:
+            pass
+
+    key = _universe_key(subnets, ctx)
     now = time.time()
     if _store["key"] == key and now - float(_store["ts"]) < TTL_SEC:
         return _store["hour"], _store["day"]
@@ -53,8 +71,8 @@ def score_universe(
     day_scored: List[Dict[str, Any]] = []
     for sn in subnets:
         try:
-            hour_scored.append({"subnet": sn, "score": score_hour(sn, market_context)})
-            day_scored.append({"subnet": sn, "score": score_day(sn, market_context)})
+            hour_scored.append({"subnet": sn, "score": score_hour(sn, ctx)})
+            day_scored.append({"subnet": sn, "score": score_day(sn, ctx)})
         except Exception:
             continue
 

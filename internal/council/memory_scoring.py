@@ -27,7 +27,8 @@ def _load_disposition(netuid: int) -> Optional[Dict[str, Any]]:
     try:
         from internal.council.weights import _load_raw
 
-        raw = _load_raw()
+        # Read-only: avoid deepcopy-per-subnet of soul_map during score_universe.
+        raw = _load_raw(copy_blob=False)
         sms = raw.get("soul_map_state") or raw.get("adversarial_state") or {}
         for block_key in ("message_intel_dispositions", "pump_dispositions"):
             block = sms.get(block_key)

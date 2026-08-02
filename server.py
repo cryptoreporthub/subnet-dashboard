@@ -518,7 +518,6 @@ _SIMIVISION_TTL = float(os.environ.get("SIMIVISION_CACHE_SECONDS", "60"))
 _SIMIVISION_LOCK = threading.Lock()
 _SIMIVISION_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 _SIMIVISION_HANDLER_TIMEOUT = float(os.environ.get("SIMIVISION_HANDLER_TIMEOUT_SECONDS", "3"))
-_SIMIVISION_BG_BUILD_TIMEOUT = float(os.environ.get("SIMIVISION_BG_BUILD_TIMEOUT_SECONDS", "45"))
 _SIMIVISION_BG_LOCK = threading.Lock()
 _SIMIVISION_BG_REFRESHING = False
 _HOUR_PICK_TTL = float(os.environ.get("HOUR_PICK_CACHE_SECONDS", "60"))
@@ -2296,23 +2295,6 @@ def _simivision_build_inner():
     )
 
 
-def _simivision_bg_timeout_payload() -> Dict[str, Any]:
-    """Honest empty board so a hung build cannot leave the API permanently busy."""
-    updated_at = datetime.now(timezone.utc).isoformat() + "Z"
-    return {
-        "status": "success",
-        "data": {
-            "top": [],
-            "meta": {
-                "count": 0,
-                "source": "bg-timeout",
-                "updated_at": updated_at,
-                "caution_cells": [],
-            },
-        },
-    }
-
-
 def _kick_simivision_background_refresh() -> None:
     global _SIMIVISION_BG_REFRESHING
     with _SIMIVISION_BG_LOCK:
@@ -2326,22 +2308,11 @@ def _kick_simivision_background_refresh() -> None:
             if not _SIMIVISION_LOCK.acquire(blocking=False):
                 return
             try:
-                import concurrent.futures
-
-                # ponytail: wall-clock budget — hung score_universe must not pin
-                # _SIMIVISION_BG_REFRESHING forever (prod stayed busy after #759).
-                pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-                try:
-                    fut = pool.submit(_simivision_build_inner)
-                    payload = fut.result(timeout=_SIMIVISION_BG_BUILD_TIMEOUT)
-                except concurrent.futures.TimeoutError:
-                    logger.warning(
-                        "simivision background build timed out after %.0fs",
-                        _SIMIVISION_BG_BUILD_TIMEOUT,
-                    )
-                    payload = _simivision_bg_timeout_payload()
-                finally:
-                    pool.shutdown(wait=False, cancel_futures=True)
+                # Direct build on this thread — no nested ThreadPoolExecutor.
+                # Abandoned pool workers after #761 timeouts starved judges (GIL).
+                # Soul-map read path is now copy_blob=False for scoring, so this
+                # finishes in seconds instead of hanging on deepcopy storms.
+                payload = _simivision_build_inner()
                 _SIMIVISION_CACHE["payload"] = payload
                 _SIMIVISION_CACHE["at"] = time.time()
             finally:

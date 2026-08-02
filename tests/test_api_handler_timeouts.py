@@ -311,34 +311,6 @@ def test_api_simivision_ttl_miss_serves_stale_immediately(monkeypatch):
     assert kicked["n"] == 1
 
 
-def test_simivision_bg_timeout_writes_degraded_and_clears_flag(monkeypatch):
-    """Hung build must not pin BG_REFRESHING — cache a degraded board and clear."""
-    import server as srv
-
-    srv._SIMIVISION_CACHE["payload"] = None
-    srv._SIMIVISION_CACHE["at"] = 0.0
-    srv._SIMIVISION_BG_REFRESHING = False
-    monkeypatch.setattr(srv, "_SIMIVISION_BG_BUILD_TIMEOUT", 0.05)
-
-    def _hang():
-        time.sleep(2)
-        return {"status": "success", "data": {"top": [{"netuid": 1}], "meta": {}}}
-
-    monkeypatch.setattr(srv, "_simivision_build_inner", _hang)
-
-    srv._kick_simivision_background_refresh()
-    deadline = time.time() + 3
-    while time.time() < deadline and srv._SIMIVISION_BG_REFRESHING:
-        time.sleep(0.05)
-
-    assert srv._SIMIVISION_BG_REFRESHING is False
-    cached = srv._SIMIVISION_CACHE.get("payload")
-    assert isinstance(cached, dict)
-    data = cached.get("data") if isinstance(cached.get("data"), dict) else cached
-    assert data.get("top") == []
-    assert (data.get("meta") or {}).get("source") == "bg-timeout"
-
-
 def test_simivision_bg_success_clears_flag(monkeypatch):
     import server as srv
 
@@ -358,6 +330,60 @@ def test_simivision_bg_success_clears_flag(monkeypatch):
 
     assert srv._SIMIVISION_BG_REFRESHING is False
     assert srv._SIMIVISION_CACHE.get("payload") == warm
+
+
+def test_score_universe_avoids_soul_map_deepcopy_storm(tmp_path, monkeypatch):
+    """Scoring 20 subnets must not deepcopy soul_map hundreds of times."""
+    import copy
+
+    import internal.store.soul_map_io as soul_map_io
+    from internal.council.score_cache import clear_score_cache, score_universe
+    from internal.council.state_vector import score_subnet_for_day, score_subnet_for_hour
+    from internal.store.soul_map_io import write_soul_map
+
+    soul_path = tmp_path / "soul_map.json"
+    write_soul_map(
+        lambda blob: blob.update({"adversarial_state": {"impact_strength": 1.0}}),
+        path=str(soul_path),
+    )
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul_path))
+
+    deepcopies = {"n": 0}
+    real_deepcopy = copy.deepcopy
+
+    def counting_deepcopy(x, *a, **k):
+        if isinstance(x, dict) and ("adversarial_state" in x or "soul_map_state" in x):
+            deepcopies["n"] += 1
+        return real_deepcopy(x, *a, **k)
+
+    monkeypatch.setattr(soul_map_io.copy, "deepcopy", counting_deepcopy)
+    monkeypatch.setattr(copy, "deepcopy", counting_deepcopy)
+
+    clear_score_cache()
+    rows = [
+        {
+            "netuid": i,
+            "name": f"SN{i}",
+            "emission": 1.0,
+            "apy": 10.0,
+            "price_change_24h": 1.0,
+            "market_cap": 10000,
+        }
+        for i in range(1, 21)
+    ]
+    t0 = time.time()
+    hour, day = score_universe(
+        rows,
+        {"tao_change_24h": 0.0, "weights": {}},
+        score_hour=score_subnet_for_hour,
+        score_day=score_subnet_for_day,
+    )
+    elapsed = time.time() - t0
+    assert len(day) == 20
+    assert len(hour) == 20
+    # Before fix: ~280 soul_map deepcopies and multi-second CPU. Bound generously.
+    assert deepcopies["n"] < 20, deepcopies["n"]
+    assert elapsed < 5.0, elapsed
 
 
 def test_api_mindmap_summary_cold_miss_returns_success_quickly(monkeypatch):
