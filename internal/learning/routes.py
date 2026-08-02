@@ -44,6 +44,8 @@ MINDMAP_STATE_HANDLER_TIMEOUT = float(os.environ.get("MINDMAP_STATE_HANDLER_TIME
 MINDMAP_SUMMARY_TIMEOUT = float(os.environ.get("MINDMAP_SUMMARY_TIMEOUT_SECONDS", "8"))
 _MINDMAP_SUMMARY_TTL = float(os.environ.get("MINDMAP_SUMMARY_CACHE_SECONDS", "60"))
 _MINDMAP_SUMMARY_LOCK = threading.Lock()
+_MINDMAP_SUMMARY_BG_LOCK = threading.Lock()
+_MINDMAP_SUMMARY_REFRESHING = False
 _MINDMAP_SUMMARY_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 MINDMAP_STORY_PATH_HANDLER_TIMEOUT = float(
     os.environ.get("MINDMAP_STORY_PATH_HANDLER_TIMEOUT_SECONDS", "12")
@@ -265,26 +267,42 @@ async def api_mindmap_summary():
         return _mindmap_summary_degraded(source="timeout")
 
 
+def _kick_mindmap_summary_refresh() -> None:
+    global _MINDMAP_SUMMARY_REFRESHING
+    with _MINDMAP_SUMMARY_BG_LOCK:
+        if _MINDMAP_SUMMARY_REFRESHING:
+            return
+        _MINDMAP_SUMMARY_REFRESHING = True
+
+    def _run() -> None:
+        global _MINDMAP_SUMMARY_REFRESHING
+        try:
+            if not _MINDMAP_SUMMARY_LOCK.acquire(blocking=False):
+                return
+            try:
+                payload = _build_mindmap_summary()
+                _MINDMAP_SUMMARY_CACHE["payload"] = payload
+                _MINDMAP_SUMMARY_CACHE["at"] = time.time()
+            finally:
+                _MINDMAP_SUMMARY_LOCK.release()
+        except Exception as exc:
+            logger.warning("mindmap summary background refresh failed: %s", exc)
+        finally:
+            with _MINDMAP_SUMMARY_BG_LOCK:
+                _MINDMAP_SUMMARY_REFRESHING = False
+
+    threading.Thread(target=_run, name="mindmap-summary-refresh", daemon=True).start()
+
+
 def _build_mindmap_summary_cached() -> Dict[str, Any]:
     now = time.time()
     cached = _MINDMAP_SUMMARY_CACHE.get("payload")
     if isinstance(cached, dict) and now - float(_MINDMAP_SUMMARY_CACHE.get("at") or 0) < _MINDMAP_SUMMARY_TTL:
         return cached
-    if not _MINDMAP_SUMMARY_LOCK.acquire(blocking=False):
-        if isinstance(cached, dict):
-            return cached
-        return _mindmap_summary_degraded(source="busy")
-    try:
-        now = time.time()
-        cached = _MINDMAP_SUMMARY_CACHE.get("payload")
-        if isinstance(cached, dict) and now - float(_MINDMAP_SUMMARY_CACHE.get("at") or 0) < _MINDMAP_SUMMARY_TTL:
-            return cached
-        payload = _build_mindmap_summary()
-        _MINDMAP_SUMMARY_CACHE["payload"] = payload
-        _MINDMAP_SUMMARY_CACHE["at"] = time.time()
-        return payload
-    finally:
-        _MINDMAP_SUMMARY_LOCK.release()
+    _kick_mindmap_summary_refresh()
+    if isinstance(cached, dict):
+        return cached
+    return _mindmap_summary_degraded(source="busy")
 
 
 def _build_mindmap_summary() -> Dict[str, Any]:
