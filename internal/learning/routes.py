@@ -267,15 +267,24 @@ async def api_mindmap_summary():
 
 def _build_mindmap_summary_cached() -> Dict[str, Any]:
     now = time.time()
-    with _MINDMAP_SUMMARY_LOCK:
+    cached = _MINDMAP_SUMMARY_CACHE.get("payload")
+    if isinstance(cached, dict) and now - float(_MINDMAP_SUMMARY_CACHE.get("at") or 0) < _MINDMAP_SUMMARY_TTL:
+        return cached
+    if not _MINDMAP_SUMMARY_LOCK.acquire(blocking=False):
+        if isinstance(cached, dict):
+            return cached
+        return _mindmap_summary_degraded(source="busy")
+    try:
+        now = time.time()
         cached = _MINDMAP_SUMMARY_CACHE.get("payload")
         if isinstance(cached, dict) and now - float(_MINDMAP_SUMMARY_CACHE.get("at") or 0) < _MINDMAP_SUMMARY_TTL:
             return cached
-    payload = _build_mindmap_summary()
-    with _MINDMAP_SUMMARY_LOCK:
+        payload = _build_mindmap_summary()
         _MINDMAP_SUMMARY_CACHE["payload"] = payload
         _MINDMAP_SUMMARY_CACHE["at"] = time.time()
-    return payload
+        return payload
+    finally:
+        _MINDMAP_SUMMARY_LOCK.release()
 
 
 def _build_mindmap_summary() -> Dict[str, Any]:
