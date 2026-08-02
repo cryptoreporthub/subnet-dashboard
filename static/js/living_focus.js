@@ -708,6 +708,11 @@
           done(late.trail);
           return;
         }
+        // LB-11: never duplicate hydrate's in-flight trail fetch (8s timeout race).
+        if (window.__homeTrailHydratePending) {
+          done([]);
+          return;
+        }
         fetchJson('/api/mindmap/trail?limit=40', 10000)
           .then(function (p) { done((p && p.trail) || []); })
           .catch(function () { done([]); });
