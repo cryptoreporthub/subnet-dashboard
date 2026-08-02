@@ -16,14 +16,10 @@ logger = logging.getLogger(__name__)
 
 mindmap_graph_router = APIRouter(tags=["mindmap-graph"])
 
-# get_mindmap_graph() -> build_mindmap_state() -> select_hourly_pick() reloads
-# council weight files from disk per subnet scored, so a single build can take
-# minutes. Without dedup, repeated polling (the frontend, or any monitor) fans
-# out into N independent multi-minute computations that exhaust the whole
-# AnyIO thread pool -> every other route (incl. "/") starts timing out too
-# (production incident: /health stayed up, but "/" and pump-alerts still 503'd
-# once enough concurrent mindmap builds piled up). Cache + serialize per focus
-# key so at most one slow build is ever in flight.
+# Graph build used to call build_mindmap_state() (hourly-pick scoring + every
+# panel summary) and could run for minutes under load. get_mindmap_graph() now
+# skips that path, but we still cache + serialize per focus so concurrent
+# polls share one in-flight trail/integration build.
 _CACHE_TTL_SECONDS = 30
 _BUILD_WAIT_TIMEOUT_SECONDS = 8.0
 _cache: Dict[Any, Dict[str, Any]] = {}
