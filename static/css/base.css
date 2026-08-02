@@ -2,24 +2,29 @@
 /* Fonts loaded via <link> in templates (§31-2 O4) — no blocking @import here */
 
 :root {
-  /* Backgrounds — midnight base with bold smoky slate atmosphere (Claude bolder recipe) */
-  --bg-base: #04060e;
-  --bg-edge: #020308;
-  --bg-midnight: #050a14;
-  --bg-surface: rgba(10, 14, 24, 0.82);
-  --bg-card: rgba(12, 16, 26, 0.72);
-  --bg-elevated: rgba(16, 20, 32, 0.88);
-  --bg-header: rgba(6, 10, 18, 0.92);
-  /* 6 grey smoke blobs — peak opacity ~0.45–0.55, greys #3f–#6b + SVG fallback layer */
+  /* Backgrounds — midnight base with even grey smoke (no left/right seam) */
+  --bg-base: #080a10;
+  --bg-edge: #06080e;
+  --bg-midnight: #0b0d14;
+  --bg-surface: rgba(14, 17, 24, 0.82);
+  --bg-card: rgba(16, 19, 26, 0.78);
+  --bg-elevated: rgba(20, 23, 30, 0.9);
+  --bg-header: rgba(8, 10, 16, 0.72);
+  /* Pewter card smoke — same grey family as page, no green wash */
+  --card-smoke:
+    radial-gradient(ellipse 160% 80% at 50% -40%, rgba(168, 176, 190, 0.18) 0%, transparent 50%),
+    linear-gradient(180deg, rgba(22, 25, 32, 0.88) 0%, rgba(20, 23, 30, 0.9) 100%);
+  --card-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.78 0 0 0 0 0.80 0 0 0 0 0.84 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --line: rgba(255, 255, 255, 0.09);
+  --line-hi: rgba(255, 255, 255, 0.15);
+  /* Even smoke — symmetric radial blobs + SVG layer */
   --bg-atmosphere:
     url("/static/img/simivision-smoke-bg.svg"),
-    radial-gradient(ellipse 70% 65% at 20% 10%, rgba(107, 116, 128, 0.62) 0%, rgba(69, 77, 88, 0.38) 40%, transparent 72%),
-    radial-gradient(ellipse 60% 58% at 85% 22%, rgba(92, 101, 112, 0.55) 0%, rgba(60, 67, 78, 0.32) 45%, transparent 74%),
-    radial-gradient(ellipse 72% 68% at 42% 92%, rgba(82, 91, 102, 0.56) 0%, rgba(54, 61, 71, 0.34) 45%, transparent 74%),
-    radial-gradient(ellipse 50% 48% at 78% 80%, rgba(72, 79, 90, 0.48) 0%, transparent 72%),
-    radial-gradient(ellipse 46% 44% at 8% 65%, rgba(63, 70, 80, 0.44) 0%, transparent 72%),
-    radial-gradient(ellipse 40% 38% at 55% 45%, rgba(86, 95, 106, 0.36) 0%, transparent 70%),
-    linear-gradient(168deg, var(--bg-midnight) 0%, var(--bg-base) 42%, var(--bg-edge) 100%);
+    radial-gradient(ellipse 120% 90% at 50% 0%, rgba(128, 136, 150, 0.34) 0%, transparent 58%),
+    radial-gradient(ellipse 100% 80% at 50% 100%, rgba(100, 108, 122, 0.28) 0%, transparent 55%),
+    radial-gradient(ellipse 80% 70% at 30% 45%, rgba(115, 122, 136, 0.16) 0%, transparent 70%),
+    radial-gradient(ellipse 80% 70% at 70% 55%, rgba(115, 122, 136, 0.16) 0%, transparent 70%),
+    linear-gradient(180deg, var(--bg-midnight) 0%, var(--bg-base) 100%);
 
   /* Accents — green primary, cyan secondary, orange tertiary, violet aurora (replaces magenta) */
   --accent-primary: #1fd47c;
@@ -83,7 +88,9 @@
   /* Typography */
   --font-display: 'Rajdhani', system-ui, sans-serif;
   --font-body: 'Rajdhani', system-ui, sans-serif;
+  --font-brand: 'Syne', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --brand-mist: linear-gradient(100deg, #ffffff 0%, #f0f4f8 18%, #c5d3e0 48%, #9ec4d4 78%, #7eb8d0 100%);
 
   /* Spacing */
   --space-1: 4px;
@@ -109,15 +116,15 @@ html, body {
 body {
   font-family: var(--font-body);
   color: var(--text-primary);
-  line-height: 1.5;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   background-color: var(--bg-base);
   background-image: var(--bg-atmosphere);
   background-attachment: fixed;
   background-repeat: no-repeat;
-  background-size: cover, auto, auto, auto, auto, auto, auto, auto;
+  background-size: cover;
   background-position: center;
-  padding-bottom: 64px;
+  padding-bottom: max(64px, env(safe-area-inset-bottom));
   isolation: isolate;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
