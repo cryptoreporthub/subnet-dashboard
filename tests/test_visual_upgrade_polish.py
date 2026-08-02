@@ -339,17 +339,15 @@ def test_mindmap_is_grouped_trail_not_node_link_graph():
 
 
 def test_mobile_soulmap_stays_two_by_two_not_stacked():
-    """responsive.css forced 1-col grids at ≤768; soul orbs must stay 2×2."""
-    responsive = open("static/css/responsive.css", encoding="utf-8").read()
-    premium = open("static/css/premium.css", encoding="utf-8").read()
-    assert "soulmap-constellation" in responsive
-    assert "repeat(2, minmax(0, 1fr))" in responsive
-    assert "soulmap-constellation" in premium
-    assert "min(var(--orb-px" in premium
+    """ui-legacy.css must keep soul orbs 2×2 at ≤768, not force 1-col grids."""
+    legacy = open("static/css/ui-legacy.css", encoding="utf-8").read()
+    assert "soulmap-constellation" in legacy
+    assert "repeat(2, minmax(0, 1fr))" in legacy
+    assert "min(var(--orb-px" in legacy
 
 
 def test_mobile_telegram_touch_targets_and_week_top():
-    css = open("static/css/council_first.css", encoding="utf-8").read()
+    css = open("static/css/ui-legacy.css", encoding="utf-8").read()
     assert "message-intel__filter-chip" in css
     assert "min-height: 44px" in css
     assert "message-intel__week-top-meta" in css

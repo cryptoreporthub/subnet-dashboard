@@ -1,11 +1,12 @@
-"""Guard: premium.css must use violet accent tokens, not hot-pink magenta literals."""
+"""Guard: accent tokens live in base.css; badge stacks deduped in ui-legacy.css."""
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
-PREMIUM = Path("static/css/premium.css")
+BASE = Path("static/css/base.css")
+LEGACY = Path("static/css/ui-legacy.css")
 FORBIDDEN = (
     "#ff2bd6",
     "#ff69b4",
@@ -16,18 +17,21 @@ FORBIDDEN = (
 )
 
 
-def test_premium_css_has_no_hot_pink_magenta_literals():
-    text = PREMIUM.read_text(encoding="utf-8")
+def test_base_css_has_no_hot_pink_magenta_literals():
+    text = BASE.read_text(encoding="utf-8")
     for needle in FORBIDDEN:
-        assert needle not in text, f"hot-pink literal still in premium.css: {needle}"
-    assert "var(--accent-magenta)" in text
-    assert "var(--important-border-gradient)" in text
-    assert "var(--board-border-gradient)" in text
+        assert needle not in text, f"hot-pink literal still in base.css: {needle}"
+    assert "--accent-magenta: var(--accent-violet)" in text
+    assert "--important-border-gradient" in text
+    assert "--board-border-gradient" in text
 
 
 def test_premium_badge_tag_selectors_deduped():
-    text = PREMIUM.read_text(encoding="utf-8")
+    text = LEGACY.read_text(encoding="utf-8")
     for tag in ("buy", "hold", "sell", "watch"):
         assert len(re.findall(rf"\.badge-{tag},\s*\.tag-{tag}", text)) == 1
         assert not re.search(rf"^\.tag-{tag}\s*\{{", text, re.MULTILINE)
     assert "color: var(--signal-buy) !important" not in text
+    assert "var(--accent-magenta)" in text
+    assert "var(--important-border-gradient)" in text
+    assert "var(--board-border-gradient)" in text
