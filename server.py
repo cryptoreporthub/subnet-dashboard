@@ -508,6 +508,7 @@ HOMEPAGE_BUILD_TIMEOUT = int(os.environ.get("HOMEPAGE_BUILD_TIMEOUT", "12"))
 HOMEPAGE_SHELL_CACHE_SECONDS = float(os.environ.get("HOMEPAGE_SHELL_CACHE_SECONDS", "45"))
 TOP_SCORING_UNIVERSE = int(os.environ.get("TOP_SCORING_UNIVERSE", "40"))
 PICK_HANDLER_TIMEOUT = float(os.environ.get("PICK_HANDLER_TIMEOUT_SECONDS", "8"))
+SUBNETS_HANDLER_TIMEOUT = float(os.environ.get("SUBNETS_HANDLER_TIMEOUT_SECONDS", "8"))
 _HOUR_PICK_TTL = float(os.environ.get("HOUR_PICK_CACHE_SECONDS", "60"))
 _HOUR_PICK_LOCK = threading.Lock()
 _HOUR_PICK_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
@@ -1280,7 +1281,23 @@ def get_registry():
 @app.get("/api/subnets")
 async def list_subnets(request: Request):
     """List subnets with optional filtering, sorting, and pagination."""
-    return await asyncio.to_thread(_list_subnets_sync, request)
+    def _build():
+        return _list_subnets_sync(request)
+
+    try:
+        return await _to_thread_timeout(_build, SUBNETS_HANDLER_TIMEOUT, label="subnets")
+    except asyncio.TimeoutError:
+        return {
+            "status": "timeout",
+            "meta": {
+                "total": 0,
+                "limit": 0,
+                "offset": 0,
+                "source": "timeout",
+                "sources": [],
+            },
+            "subnets": [],
+        }
 
 
 def _list_subnets_sync(request: Request):
