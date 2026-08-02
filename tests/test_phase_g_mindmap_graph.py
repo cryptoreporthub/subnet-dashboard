@@ -3,8 +3,16 @@
 from __future__ import annotations
 
 import pytest
+from fastapi.testclient import TestClient
 
 from internal.mindmap.graph import get_mindmap_graph
+from server import app
+
+
+@pytest.fixture
+def client():
+    with TestClient(app) as c:
+        yield c
 
 
 def test_mindmap_graph_shape():
@@ -203,5 +211,50 @@ def test_brain_recommendations_no_hardcoded_sn123(tmp_path):
     )
     out = bridge.get_brain_recommendations()
     assert out.get("data_available") is False
+    assert out.get("source") == "registry_heuristic"
     assert out.get("recommendations") == {}
     assert "1" not in out.get("recommendations", {})
+
+
+def test_brain_recommendations_registry_heuristic_labeled(tmp_path):
+    import json
+
+    from internal.council.mindmap_bridge import MindmapBridge
+
+    registry = tmp_path / "registry.json"
+    registry.write_text(
+        json.dumps(
+            {
+                "64": {
+                    "status": "active",
+                    "emission": 2.0,
+                    "social_mentions": 1500,
+                }
+            }
+        )
+    )
+    bridge = MindmapBridge(
+        persistence_path=str(tmp_path / "soul.json"),
+        registry_path=str(registry),
+    )
+    out = bridge.get_brain_recommendations()
+    assert out["source"] == "registry_heuristic"
+    assert out["data_available"] is True
+    assert "64" in out["recommendations"]
+    assert out["recommendations"]["64"]["action"] == "accumulate"
+
+
+def test_recommendations_api_surfaces_heuristic_source(client):
+    response = client.get("/api/recommendations")
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data.get("source") == "registry_heuristic"
+    assert "data_available" in data
+
+
+def test_daily_rotation_api_surfaces_recommendations_honesty(client):
+    response = client.get("/api/daily-rotation")
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data.get("source") == "registry_heuristic"
+    assert "data_available" in data
