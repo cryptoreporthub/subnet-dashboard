@@ -160,3 +160,48 @@ def exit_code_for_level(level: str) -> int:
     if level == "alert":
         return 2
     return 0
+
+
+def load_latest_snapshot() -> Optional[Dict[str, Any]]:
+    """Read the most recent persisted desk snapshot, if any."""
+    try:
+        with open(_latest_path(), "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+def summarize_pump_desk_snapshot() -> Dict[str, Any]:
+    """Plain-language summary from data/pump_desk/latest.json (Phase C display)."""
+    snap = load_latest_snapshot()
+    parts: List[str] = []
+    if not snap:
+        parts.append(
+            "No pump desk snapshots on disk yet — the inline scheduler writes "
+            "data/pump_desk/snapshots/ every 15 minutes when PUMP_DESK_SNAPSHOT_ENABLED is on."
+        )
+        return {"text": " ".join(parts), "sentences": parts}
+
+    level = str(snap.get("alert_level") or "ok")
+    captured = snap.get("captured_at") or "unknown time"
+    pump = snap.get("pump_desk") or {}
+    badges = snap.get("actionable_badges") or []
+    parts.append(
+        f"Latest pump desk snapshot ({captured}) is alert_level={level} "
+        f"with {pump.get('count', 0)} ladder rows on the desk."
+    )
+    if badges:
+        names = ", ".join(
+            f"SN{b.get('netuid')} {b.get('badge')}" for b in badges[:3] if isinstance(b, dict)
+        )
+        parts.append(f"Actionable badges in that snapshot: {names}.")
+    else:
+        parts.append("No BUILDING or JUST STARTED badges were flagged in the latest snapshot.")
+    loop = snap.get("learning_loop") or {}
+    parts.append(
+        f"Learning loop was {loop.get('status', 'unknown')} with {loop.get('pending', 0)} pending "
+        "predictions when the snapshot was taken."
+    )
+    text = " ".join(p for p in parts if p)
+    return {"text": text, "sentences": parts[:4]}

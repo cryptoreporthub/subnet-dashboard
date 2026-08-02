@@ -67,8 +67,36 @@ def summarize_judges() -> Dict[str, Any]:
         )
     if not parts:
         parts.append("Oracle, Echo, and Pulse have not recorded paper positions yet.")
-    parts.append("Post-mortems fire automatically when a resolved pick was wrong, feeding the learning loop.")
-    return _sentences(parts)
+
+    try:
+        from internal.judges.postmortems import all_postmortems
+
+        pms = all_postmortems()
+        total_pm = sum(len(v) for v in pms.values() if isinstance(v, list))
+        if total_pm:
+            by_judge = ", ".join(
+                f"{name} {len(pms.get(name) or [])}" for name in ("oracle", "echo", "pulse")
+            )
+            parts.append(
+                f"{total_pm} structured post-mortems on record ({by_judge}) — "
+                "wrong resolutions feed the scientific-method correction loop."
+            )
+        else:
+            parts.append("No judge post-mortems recorded yet; they fire on wrong paper resolutions.")
+    except Exception:
+        parts.append("Post-mortem store unavailable.")
+
+    try:
+        from internal.judges.weights import normalized_judge_weights
+
+        jw = normalized_judge_weights()
+        if jw:
+            ranked = ", ".join(f"{k} {float(v):.2f}" for k, v in sorted(jw.items(), key=lambda kv: -kv[1]))
+            parts.append(f"Per-judge confidence weights (closed loop): {ranked}.")
+    except Exception:
+        pass
+
+    return _sentences(parts[:5])
 
 
 def summarize_learning() -> Dict[str, Any]:
@@ -200,6 +228,28 @@ def summarize_pump_ladder_guarded() -> Optional[Dict[str, Any]]:
         from internal.pump.summary import summarize_pump
 
         return summarize_pump()
+    except ImportError:
+        return None
+    except Exception:
+        return None
+
+
+def summarize_dev_signals_guarded() -> Optional[Dict[str, Any]]:
+    try:
+        from internal.dev_radar.summary import summarize_dev_signals
+
+        return summarize_dev_signals()
+    except ImportError:
+        return None
+    except Exception:
+        return None
+
+
+def summarize_pump_desk_snapshots_guarded() -> Optional[Dict[str, Any]]:
+    try:
+        from internal.pump.desk_snapshot import summarize_pump_desk_snapshot
+
+        return summarize_pump_desk_snapshot()
     except ImportError:
         return None
     except Exception:

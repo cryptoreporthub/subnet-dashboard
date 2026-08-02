@@ -338,6 +338,19 @@ class Database:
             ).fetchone()
             return dict(row) if row else None
 
+    def list_author_reliability(self, limit: int = 5, min_messages: int = 3) -> List[Dict[str, Any]]:
+        """Top authors by accuracy for mindmap summary (Phase C)."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT author_id, author_name, total_messages, correct_predictions, accuracy_score
+                   FROM author_reliability
+                   WHERE total_messages >= ?
+                   ORDER BY accuracy_score DESC, total_messages DESC
+                   LIMIT ?""",
+                (max(1, int(min_messages)), max(1, int(limit))),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
     def increment_author_reliability(
         self, author_id: str, author_name: str, correct: bool
     ) -> Dict[str, Any]:

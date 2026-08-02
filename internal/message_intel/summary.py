@@ -71,4 +71,22 @@ def summarize_message_intel() -> Dict[str, Any]:
             "only manual/API ingest populates the store."
         )
 
-    return _sentences(parts[:4])
+    try:
+        from internal.message_intel.store import get_db
+
+        authors = get_db().list_author_reliability(limit=3, min_messages=2)
+        if authors:
+            top = authors[0]
+            parts.append(
+                f"Author trust (closed loop): {top.get('author_name') or top.get('author_id')} leads at "
+                f"{float(top.get('accuracy_score') or 0) * 100:.0f}% over "
+                f"{int(top.get('total_messages') or 0)} graded calls."
+            )
+        elif stats.get("ok"):
+            parts.append(
+                "Author reliability tracking is wired — trust multipliers apply after price outcomes resolve."
+            )
+    except Exception:
+        pass
+
+    return _sentences(parts[:5])
