@@ -1,4 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="SimiVision">
-  <rect width="32" height="32" rx="8" fill="#05070a"/>
-  <path fill="#00ff41" d="M8 22V10h6.2c3.4 0 5.6 1.8 5.6 4.6 0 2.1-1.2 3.6-3.1 4.2l4.3 3.2H16l-3.8-2.9H12v2.9H8zm4-6.6h2.1c1.2 0 1.9-.6 1.9-1.5s-.7-1.5-1.9-1.5H12v3z"/>
+  <defs>
+    <linearGradient id="mist" x1="6" y1="6" x2="26" y2="26" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="35%" stop-color="#f0f4f8"/>
+      <stop offset="65%" stop-color="#c5d3e0"/>
+      <stop offset="100%" stop-color="#7eb8d0"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="8" fill="#080a10"/>
+  <path fill="url(#mist)" d="M16 7 L24 16 L16 25 L8 16Z"/>
+  <circle cx="14" cy="13" r="2.2" fill="#ffffff" opacity="0.5"/>
 </svg>
