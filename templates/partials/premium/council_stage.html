@@ -264,6 +264,7 @@
         text-shadow: 0 0 14px var(--sn-accent-glow);
       }
       .k3-claim-head .k3-badge { margin: 0; flex-shrink: 0; }
+      .k3-claim-head__meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
       .k3-badge.hold { background: transparent; color: var(--k3-orange); border: 1px solid rgba(255, 165, 0, 0.55); }
       .k3-badge.buy { box-shadow: 0 0 18px color-mix(in srgb, var(--k3-green) 45%, transparent), 0 0 36px color-mix(in srgb, var(--k3-green) 20%, transparent); }
       .k3-claim-main {
@@ -382,6 +383,11 @@
       .k3-temporal-badge--live { color: var(--k3-green); border-color: rgba(57, 255, 20, 0.35); }
       .k3-temporal-badge--resolved { color: var(--k3-muted); }
       .k3-temporal-badge--empty { font-size: 10px; max-width: 280px; line-height: 1.4; }
+      /* Hero A-tier: dossier age badge — driven by #k3-dossier[data-generated-at] */
+      .k3-stale-badge { margin: 0; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
+      .k3-stale-badge--aging { color: var(--k3-blue); border-color: rgba(63, 201, 255, 0.35); }
+      .k3-stale-badge--stale { color: var(--k3-orange); border-color: rgba(255, 159, 63, 0.4); }
+      .k3-evidence-empty { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-muted); letter-spacing: 0.02em; }
       .k3-temporal-grade { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); margin: -4px 0 8px; z-index: 1; }
       @keyframes k3-ring-fill { to { stroke-dashoffset: var(--ring-offset, 389.56); } }
       .k3-orb-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 3; }
@@ -495,15 +501,37 @@
         .k3-orb-particles { opacity: 0.35; }
         .k3-orb-halo { filter: blur(28px); opacity: 0.14; }
       }
+      /* Hero A-tier @390px: presentation order verb → subnet → % → evidence (IDs unchanged) */
       @media (max-width: 400px) {
+        .k3-claim { display: flex; flex-direction: column; align-items: stretch; }
+        .k3-claim-main { display: contents; }
+        .k3-call-lead { display: contents; }
+        #k3-call-headline { order: 1; margin-bottom: 6px; }
+        .k3-claim-head { order: 2; margin-bottom: 10px; }
+        .k3-orb-wrap { order: 3; align-self: center; margin-bottom: 8px; }
+        #k3-evidence-drivers { order: 4; justify-content: flex-start; margin-bottom: 8px; }
+        .k3-claim-identity { order: 5; }
+        .k3-resolve-crumb { order: 6; }
+        .k3-social-crumb { order: 7; }
+        .k3-brief-thesis { order: 8; }
+        .k3-brief-vs, .k3-brief-vs-hold { order: 9; }
+        .k3-brief-trigger { order: 10; }
+        #k3-degraded-note { order: 11; }
+        .k3-claim-foot { order: 12; }
         .k3-orb-wrap, .k3-orb { width: 96px; height: 96px; }
         .k3-orb-bg { width: 140px; height: 140px; }
         .k3-orb-glow { width: 120px; height: 120px; }
         .k3-orb-score { font-size: 26px; }
-        .k3-claim-head { margin-bottom: 12px; gap: 8px; }
+        .k3-claim-head { gap: 8px; }
         .k3-claim-head .k3-claim-name { font-size: 15px; }
         .k3-claim { padding: 10px 8px 10px; }
-        .k3-badge { font-size: 11px; padding: 5px 10px; min-height: 28px; }
+        .k3-badge, .k3-claim-head .k3-badge, #k3-action-badge {
+          font-size: 11px; padding: 8px 14px; min-height: 44px; min-width: 44px;
+          display: inline-flex; align-items: center; justify-content: center;
+        }
+        .k3-horizon-chip {
+          min-height: 44px; min-width: 44px; padding: 10px 16px; border-radius: 22px;
+        }
         .k3-claim-desc { max-width: none; padding: 0 2px; }
         .k3-brief { max-width: none; }
       }
@@ -666,9 +694,12 @@
             <div class="k3-claim k3-claim--glow-{{ glow_tier }} k3-claim--band-{{ sn_band }}{% if not audit_pick and act == 'HOLD' %} k3-claim--hold{% endif %}" id="k3-claim" data-glow="{{ glow_tier }}" data-band="{{ sn_band }}"{% if sn.netuid is not none %} data-netuid="{{ sn.netuid }}"{% endif %}>
               <div class="k3-claim-head">
                 <p class="k3-claim-name" id="k3-claim-head-name">{{ sn.name|default('SN' ~ sn.netuid) }}</p>
-                {% if act == 'LONG' %}<div class="k3-badge buy" id="k3-action-badge">LONG</div>
-                {% elif act == 'SHORT' %}<div class="k3-badge sell" id="k3-action-badge">SHORT</div>
-                {% else %}<div class="k3-badge hold" id="k3-action-badge">{{ act }}</div>{% endif %}
+                <div class="k3-claim-head__meta">
+                  <span id="k3-stale-badge" class="k3-temporal-badge k3-stale-badge" hidden aria-live="polite"></span>
+                  {% if act == 'LONG' %}<div class="k3-badge buy" id="k3-action-badge">LONG</div>
+                  {% elif act == 'SHORT' %}<div class="k3-badge sell" id="k3-action-badge">SHORT</div>
+                  {% else %}<div class="k3-badge hold" id="k3-action-badge">{{ act }}</div>{% endif %}
+                </div>
               </div>
               <div class="k3-claim-main">
                 <div class="k3-orb-wrap" aria-hidden="false">
@@ -723,10 +754,14 @@
                   {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
                   {% if brief.vs %}<p class="k3-brief-vs k3-also-weighed" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
                   {% if brief.vs_hold_tao %}<p class="k3-brief-vs-hold" id="k3-brief-vs-hold">{{ brief.vs_hold_tao }}</p>{% endif %}
-                  <div id="k3-evidence-drivers" class="k3-evidence-drivers"{% if not brief.evidence_drivers %} hidden{% endif %}>
+                  <div id="k3-evidence-drivers" class="k3-evidence-drivers">
+                    {% if brief.evidence_drivers %}
                     {% for driver in (brief.evidence_drivers or [])[:3] %}
                     <span class="k3-evidence-driver k3-evidence-driver--{{ driver.tag|default('tech') }}">{{ driver.tag|default('tech') }} · {{ driver.label }}</span>
                     {% endfor %}
+                    {% else %}
+                    <span class="k3-evidence-empty" id="k3-evidence-empty">No evidence drivers on this call yet.</span>
+                    {% endif %}
                   </div>
                   {% if brief.trigger %}<p class="k3-brief-trigger" id="k3-brief-trigger"><span class="k3-brief-trigger__kicker">FLIP</span>{{ brief.trigger|replace('Flip to LONG when ', 'Long when ', 1) }}</p>{% endif %}
                   {% set scenario_tags = dpick.scenario_tags if dpick.scenario_tags is mapping else {} %}
@@ -826,7 +861,10 @@
             <div class="k3-claim k3-claim--hold k3-claim--glow-cool k3-claim--band-0" id="k3-claim" data-glow="cool" data-band="0">
               <div class="k3-claim-head">
                 <p class="k3-claim-name" id="k3-claim-head-name">No call yet</p>
-                <div class="k3-badge hold" id="k3-action-badge">HOLD</div>
+                <div class="k3-claim-head__meta">
+                  <span id="k3-stale-badge" class="k3-temporal-badge k3-stale-badge" hidden aria-live="polite"></span>
+                  <div class="k3-badge hold" id="k3-action-badge">HOLD</div>
+                </div>
               </div>
               <div class="k3-claim-main">
                 <div class="k3-orb-wrap">
@@ -866,10 +904,14 @@
                   {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
                   {% if brief.vs %}<p class="k3-brief-vs" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
                   {% if brief.vs_hold_tao %}<p class="k3-brief-vs-hold" id="k3-brief-vs-hold">{{ brief.vs_hold_tao }}</p>{% endif %}
-                  <div id="k3-evidence-drivers" class="k3-evidence-drivers"{% if not brief.evidence_drivers %} hidden{% endif %}>
+                  <div id="k3-evidence-drivers" class="k3-evidence-drivers">
+                    {% if brief.evidence_drivers %}
                     {% for driver in (brief.evidence_drivers or [])[:3] %}
                     <span class="k3-evidence-driver k3-evidence-driver--{{ driver.tag|default('tech') }}">{{ driver.tag|default('tech') }} · {{ driver.label }}</span>
                     {% endfor %}
+                    {% else %}
+                    <span class="k3-evidence-empty" id="k3-evidence-empty">No evidence drivers on this call yet.</span>
+                    {% endif %}
                   </div>
                 </div>
               </div>

@@ -1146,6 +1146,43 @@
     dossier.setAttribute('data-action', act);
   }
 
+  // ponytail: 30m aging / 2h stale — upgrade path: align with ring_state fresh/aging/expiring TTLs
+  var K3_STALE_AGING_MS = 30 * 60 * 1000;
+  var K3_STALE_STALE_MS = 2 * 60 * 60 * 1000;
+
+  function k3StaleBadgeState(generatedAtIso) {
+    var ms = parseIsoMs(generatedAtIso);
+    if (!ms) return null;
+    var age = Date.now() - ms;
+    if (age < K3_STALE_AGING_MS) return null;
+    if (age < K3_STALE_STALE_MS) {
+      return { level: 'aging', text: 'Aging · ' + Math.floor(age / 60000) + 'm ago' };
+    }
+    var hours = Math.floor(age / 3600000);
+    var label = hours >= 24 ? Math.floor(hours / 24) + 'd' : hours + 'h';
+    return { level: 'stale', text: 'Stale · ' + label + ' ago' };
+  }
+
+  function patchK3StaleBadge(generatedAtIso) {
+    var badge = document.getElementById('k3-stale-badge');
+    if (!badge) return;
+    var iso = generatedAtIso;
+    if (!iso) {
+      var dossier = document.getElementById('k3-dossier');
+      iso = dossier ? dossier.getAttribute('data-generated-at') : null;
+    }
+    var state = k3StaleBadgeState(iso);
+    if (!state) {
+      badge.hidden = true;
+      badge.textContent = '';
+      badge.className = 'k3-temporal-badge k3-stale-badge';
+      return;
+    }
+    badge.hidden = false;
+    badge.textContent = state.text;
+    badge.className = 'k3-temporal-badge k3-stale-badge k3-stale-badge--' + state.level;
+  }
+
   function patchK3DegradedNote(payload) {
     var tags = payload.scenario_tags || {};
     var isDegraded = !!(payload.hold_reason || tags.fallback);
@@ -1190,7 +1227,13 @@
     items.forEach(function (line) {
       if (unique.indexOf(line) < 0) unique.push(line);
     });
-    if (!unique.length) return;
+    if (!unique.length) {
+      var emptyHtml =
+        (title ? title.outerHTML : '') +
+        '<div class="k3-empty"><div class="k3-empty-icon">📡</div><div class="k3-empty-text">No signals on this call yet.</div></div>';
+      body.innerHTML = emptyHtml;
+      return;
+    }
     var titleHtml = title ? title.outerHTML : '';
     var html = titleHtml;
     unique.slice(0, 5).forEach(function (line) {
@@ -1355,8 +1398,9 @@
       }).join('');
       driversHost.hidden = false;
     } else if (driversHost) {
-      driversHost.innerHTML = '';
-      driversHost.hidden = true;
+      driversHost.innerHTML =
+        '<span class="k3-evidence-empty" id="k3-evidence-empty">No evidence drivers on this call yet.</span>';
+      driversHost.hidden = false;
     }
 
     var pump = payload.pump_chip || {};
@@ -1412,6 +1456,7 @@
     patchK3WeighedAgainst(payload.shortlist || []);
     patchK3DegradedNote(payload);
     syncDailyPickSsrMeta(payload);
+    patchK3StaleBadge(dailyPickGeneratedAt(payload));
     return true;
   }
 
@@ -3773,14 +3818,18 @@
     document.addEventListener('DOMContentLoaded', function () {
       maybeClearShellWarmingEarly();
       bindProofTabs();
+      patchK3StaleBadge();
       run();
     });
   } else {
     maybeClearShellWarmingEarly();
     bindProofTabs();
+    patchK3StaleBadge();
     run();
   }
 
+  // Canonical K3 dossier writer: renderDailyPick → patchK3DossierFromPayload.
+  // home_live_refresh.js delegates here when #k3-dossier exists — no third writer.
   window.__cockpitHome = {
     renderHero: renderHero,
     renderDailyPick: renderDailyPick,
