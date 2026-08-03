@@ -192,6 +192,21 @@ def _start_pick_schedulers() -> None:
     defer_boot("pick-schedulers", _run, delay=max(BOOT_DEFER_SECONDS + 20, 60))
 
 
+def _warm_judges_cache() -> None:
+    """Fill /api/judges cache off the request path so hydrate sees less naked busy."""
+
+    def _run() -> None:
+        try:
+            from internal.judges.council_routes import warm_judges_cache
+
+            warm_judges_cache()
+            logger.info("judges cache warm kicked")
+        except Exception as exc:
+            logger.warning("judges cache warm failed: %s", exc)
+
+    defer_boot("judges-cache-warm", _run, delay=max(BOOT_DEFER_SECONDS + 25, 70))
+
+
 def _message_intel_enabled() -> bool:
     flag = os.environ.get("MESSAGE_INTEL_LISTENER", "auto").strip().lower()
     return flag not in ("off", "false", "0", "no")
@@ -380,6 +395,7 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _start_resolver()
     _start_whale_warm_scheduler()
     _start_pick_schedulers()
+    _warm_judges_cache()
     _start_score_snapshot_scheduler()
     _start_pick_audit_scheduler()
     _start_pump_desk_snapshot_scheduler()
