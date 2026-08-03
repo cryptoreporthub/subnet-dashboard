@@ -1,12 +1,12 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-08-02T11:52:00Z  
-**main:** `4cbfe94` (#765 soul_map deepcopy) · **infra:** v1 stable; GIL unwedge #755–#763 · timeouts #734–#737 #751–#754  
-**Active plan:** `post-hero-finish-plan.md` (Steps 0–6 done; Step 5 human glance **after layout**; Step 7 soak gated Aug 4 / Aug 11)  
+**Last updated:** 2026-08-03T05:55:00Z  
+**main:** `3e13e0a` (#787 hydrate closed) · **infra:** v1 stable; GIL unwedge #755–#763 · timeouts #734–#737 #751–#754  
+**Active plan:** `ditto-opus-transition-handoff-2026-08-03.md` (#789) · H2 soak **2026-08-04**  
 **Models:** `model-guide.md` — Grok LOCK/review; Composer implements; Sonnet low reviews  
-**Plans:** `post-hero-finish-plan.md` · `accuracy-lift-lock.md` · `hero-mindmap-sprint-plan.md` (#723) · `completion-runbook.md`
+**Plans:** `ditto-opus-transition-handoff-2026-08-03.md` · `post-hero-finish-plan.md` · `completion-runbook.md` · `accuracy-lift-lock.md`
 
-## STATUS SNAPSHOT (2026-08-02)
+## STATUS SNAPSHOT (2026-08-03)
 
 | Item | Status |
 |------|--------|
@@ -17,10 +17,14 @@
 | Mindmap graph wedge (full state on graph) | **MERGED** #744 — graph skips `build_mindmap_state` |
 | API unwedge (subnets/judges/simivision/cockpit) | **MERGED** #743 · #759–#761 |
 | API timeout wrappers + mindmap bounds | **MERGED** #734 · #737 · #751 · #753 · #754 |
-| Finish queue Steps 1–6 | **MERGED** #745–#752 · #755–#763 (summary/health GIL unwedge) |
+| Finish queue Steps 0–6 | **MERGED** #745–#752 · #755–#763 (summary/health GIL unwedge) |
+| Frontend mist/pewter wave | **MERGED** #767–#779 (thumb dock, ui.css shell, dead CSS purge) |
+| Hydrate desk P1–P3 | **CLOSED** #781–#787 — honest HOLD, trust banner, judges no naked busy |
+| **Ditto transition** | **ACTIVE** — `ditto-opus-transition-handoff-2026-08-03.md` (#789) |
+| Opus tribunal hero | **PARKED** PR #788 — preview seen; no live wire until explicit ask |
 | Mindmap summary / learning health | **PASS** — summary ~0.5s file-only; health cache+peer; Fly green |
-| Agent babysit + g0 (2026-08-02) | **PASS** — `babysit_phase.sh sprint` + `g0_phone_qa.sh` EXIT 0; mindmap non-5xx (slow 12–17s under load OK) |
-| Human 390px glance (AC7) | **PENDING** — human doing layout change; sign off after — `hero-mindmap-390-signoff-2026-08-02.md` |
+| Agent babysit + g0 (2026-08-02) | **PASS** — re-run after major merges |
+| Human 390px glance (AC7) | **PENDING** — post-layout — `hero-mindmap-390-signoff-2026-08-02.md` |
 | Accuracy PREP (read-only evidence) | **MERGED** #740 — experiments **GATED** Aug 4 H2 soak GO |
 | Stale drafts (#686/#675/#692/#650) | **Do not blind-merge** — superseded / already on main |
 
@@ -132,20 +136,22 @@ Babysit: `./scripts/babysit_phase.sh <phase>`
 
 | Track | Gate |
 |-------|------|
+| **Ditto orchestration** | **ACTIVE** — handoff `ditto-opus-transition-handoff-2026-08-03.md` |
 | Pick audit | 23:45 UTC nightly |
 | Health Monitor | Ditto artifact mode |
-| Track 1 soak | day 7 / day 14 sign-off (`track-1-soak-review-lock.md`) |
-| SS-TG Gate 3 | H1 cleared — polish wave active |
-| **SS-TG visual flagship** | DONE #590 + #605 stale feed backfill · #596 sitewide palette |
-| **Phase C** | **DONE** — `worker_peer.alive: true` · worker HTTP `:8081` · flycast `:8081` |
-| **Finish queue** | Slice 4 **DONE** #664 · **PR3 NEXT** (listener) · PR4–10 queue (`completion-runbook.md`) · Slice 7 gated Aug 4 |
+| Track 1 soak | **H2 review 2026-08-04** / H3 2026-08-11 (`track-1-soak-review-lock.md`) |
+| SS-TG Gate 3 | H1 cleared — polish wave (#672–#674 open) |
+| Opus tribunal #788 | **PARKED** — preview seen; live wire on explicit human ask only |
+| Finish queue | Steps 0–6 **DONE**; Step 7 soak gated Aug 4 |
+| Human 390px glance | PENDING post-layout |
 
-## Prod cache (2026-08-02 post-#765)
+## Prod cache (2026-08-03 post-#787)
 
-- Babysit sprint + g0 phone QA **green** (agent run ~11:35 UTC; g0 re-run ~11:51 UTC)
-- Mindmap graph/trail/state/story-path: **non-5xx**; latency 0.5–17s depending on cache warmth (timeouts serve degraded/cached JSON)
-- `daily-pick` HOLD · `pump-alerts` success · `ops/live` worker alive
-- Human: **390px sign-off after layout** · H2 soak Aug 4 · H3 soak Aug 11
+- Hydrate desk P1–P3 **closed** — honest HOLD, trust `1/30` with shadow explanation, judges usable
+- Frontend mist/pewter stack live (#767–#779)
+- Mindmap graph/trail/state/story-path: **non-5xx**; latency 0.5–17s depending on cache warmth
+- `daily-pick` honest HOLD · `pump-alerts` success · `ops/live` worker alive
+- **Next:** H2 soak **2026-08-04** · human 390px glance · accuracy lift gated until H2 GO
 
 ## Out of scope
 
