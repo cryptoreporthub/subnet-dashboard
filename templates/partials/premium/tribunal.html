@@ -1,0 +1,142 @@
+{# Tribunal hero — sealed-case verdict + four-bench spectrum.
+   Expects `tribunal` dict (from daily_pick.tribunal). Optional weighing_candidates. #}
+{% set t = tribunal if tribunal is defined else (daily_pick_stage.tribunal if daily_pick_stage is defined else {}) %}
+{% set t = t or {} %}
+{% set sn = t.subnet or {} %}
+{% set kind = t.verdict_kind or 'forming' %}
+{% set verdict = t.verdict or 'HOLD' %}
+{% set concur = t.concur or {} %}
+{% set spread = t.spread or {} %}
+{% set gate = t.gate or {} %}
+{% set benches = t.benches or [] %}
+{% set centroid = t.centroid if t.centroid is defined else 0 %}
+{# Map centroid (-100..100) → left % on the track #}
+{% set centroid_pct = ((centroid + 100) / 2) %}
+{% if centroid_pct < 4 %}{% set centroid_pct = 4 %}{% endif %}
+{% if centroid_pct > 96 %}{% set centroid_pct = 96 %}{% endif %}
+
+<section class="tribunal tribunal--{{ kind }} tribunal--{{ verdict|lower }}" id="tribunal-hero" aria-labelledby="tribunal-asset" data-tribunal-kind="{{ kind }}">
+  <header class="tribunal__case">
+    <span class="tribunal__case-id">{% if t.case_id %}Case <span class="tribunal__file-no">{{ t.case_id }}</span>{% else %}Case forming{% endif %}</span>
+    <span class="tribunal__live"><span class="tribunal__dot" aria-hidden="true"></span>{{ t.session_label or 'Council warming up' }}</span>
+  </header>
+
+  <div class="tribunal__verdict">
+    {% if sn.netuid is defined and sn.netuid is not none %}
+    <h2 class="tribunal__asset" id="tribunal-asset">
+      SN{{ sn.netuid }} · {{ sn.name or '—' }}
+      <span class="tribunal__sub-id">{% if sn.description %}{{ sn.description }}{% else %}Subnet {{ sn.netuid }}{% endif %}</span>
+    </h2>
+    {% else %}
+    <h2 class="tribunal__asset" id="tribunal-asset">
+      No name sealed
+      <span class="tribunal__sub-id">Waiting on the next council call</span>
+    </h2>
+    {% endif %}
+
+    <div class="tribunal__stamp tribunal__stamp--{{ verdict|lower }}" id="k3-action-badge" data-verdict="{{ verdict }}">{{ verdict }}</div>
+
+    {% if kind == 'forming' or kind == 'cold' %}
+    <p class="tribunal__conviction" id="k3-orb-label">{{ gate.reason or 'Council warming up — no call yet' }}</p>
+    {% elif kind == 'gated' %}
+    <p class="tribunal__conviction">
+      Candidate conviction <b id="k3-orb-score">{{ t.conviction_pct or 0 }}%</b>
+      · gate held
+    </p>
+    <p class="tribunal__gate" id="k3-call-headline">{{ gate.flip_condition or gate.reason }}</p>
+    {% else %}
+    <p class="tribunal__conviction">
+      Council conviction <b id="k3-orb-score">{{ t.conviction_pct or 0 }}%</b>
+      · {{ concur.n|default(0) }} of {{ concur.of|default(4) }} concur
+    </p>
+    <p class="tribunal__sr-only" id="k3-call-headline">{{ verdict }} SN{{ sn.netuid }} · {{ sn.name }}</p>
+    {% endif %}
+  </div>
+
+  {% if benches|length > 0 %}
+  <div class="tribunal__spectrum" aria-label="Bench spectrum">
+    <div class="tribunal__spectrum-labels">
+      <span class="tribunal__sell">← Sell</span>
+      <span class="tribunal__buy">Buy →</span>
+    </div>
+    <div class="tribunal__track">
+      <div class="tribunal__scan" aria-hidden="true"></div>
+      <div class="tribunal__zero" aria-hidden="true"></div>
+      <div class="tribunal__centroid" style="left: {{ '%.1f'|format(centroid_pct) }}%;" aria-hidden="true"></div>
+      {% for b in benches %}
+      {% set left = ((b.position + 100) / 2) %}
+      {% if left < 4 %}{% set left = 4 %}{% endif %}
+      {% if left > 96 %}{% set left = 96 %}{% endif %}
+      <div class="tribunal__marker tribunal__marker--{{ b.key }}" style="left: {{ '%.1f'|format(left) }}%;" title="{{ b.label }} {{ b.stance }} {{ b.confidence }}%">
+        <span class="tribunal__pin"></span>
+        <span class="tribunal__stem" aria-hidden="true"></span>
+        <span class="tribunal__tag">{{ b.label }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="tribunal__spread">
+      <span>{% if spread.note %}Spread: {{ spread.note }}{% else %}Bench tight{% endif %}</span>
+      {% if spread.pts and spread.pts >= 40 %}
+      <span class="tribunal__flag">Wide split</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="tribunal__docket" id="k3-layer-council" role="list">
+    {% for b in benches %}
+    <div class="tribunal__docket-cell tribunal__docket-cell--{{ b.key }}" role="listitem">
+      <div class="tribunal__who">{{ b.label }}</div>
+      <div class="tribunal__bench-stamp">{{ b.stance }}</div>
+      <div class="tribunal__conf">{{ b.confidence }}% conf</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="tribunal__empty" role="status">
+    <p>Benches not scored yet. The desk stays quiet until contributions land.</p>
+  </div>
+  {% endif %}
+
+  <footer class="tribunal__foot">
+    <div class="tribunal__horizons" id="k3-horizon-chips" aria-label="Horizon">
+      {% set hz = (t.horizon or '24h')|lower %}
+      <span class="{% if hz in ('1h', '1', 'hour') %}on{% endif %}" id="k3-horizon-badge">1H</span>
+      <span class="{% if hz not in ('1h', '1', 'hour') %}on{% endif %}">24H</span>
+    </div>
+    <div id="k3-temporal-badge">
+      {% if t.resolves_in %}Resolves in {{ t.resolves_in }}{% elif t.temporal_badge %}{{ t.temporal_badge }}{% elif kind == 'gated' %}Gate held — no seal{% else %}—{% endif %}
+    </div>
+  </footer>
+</section>
+
+{% if weighing_candidates is defined and weighing_candidates %}
+<section class="tribunal-weighing" id="section-simivision-picks-preview" aria-labelledby="tribunal-weighing-title">
+  <header class="tribunal-weighing__head">
+    <div class="tribunal-weighing__eyebrow"><span class="tribunal__dot tribunal__dot--amber" aria-hidden="true"></span> Under review</div>
+    <h3 class="tribunal-weighing__title" id="tribunal-weighing-title">Council is weighing</h3>
+    <p class="tribunal-weighing__sub">Names still on the table — sorted by proximity to a call, not a scoreboard.</p>
+  </header>
+  {% for c in weighing_candidates %}
+  <article class="tribunal-cand">
+    <div class="tribunal-cand__id">SN{{ c.netuid }}<span class="tribunal-cand__name">{{ c.name }}</span></div>
+    <div class="tribunal-cand__prox">
+      <div class="tribunal-cand__meter" aria-hidden="true"><div class="tribunal-cand__fill" style="width: {{ c.proximity }}%"></div></div>
+      <div class="tribunal-cand__leans">
+        <span class="tribunal-cand__chips" aria-hidden="true">
+          <span class="tribunal-cand__chip q{% if c.leans and c.leans.q %} active{% endif %}"></span>
+          <span class="tribunal-cand__chip h{% if c.leans and c.leans.h %} active{% endif %}"></span>
+          <span class="tribunal-cand__chip d{% if c.leans and c.leans.d %} active{% endif %}"></span>
+          <span class="tribunal-cand__chip t{% if c.leans and c.leans.t %} active{% endif %}"></span>
+        </span>
+        {{ c.leans_label or c.expert_split or '' }}
+      </div>
+    </div>
+    <div class="tribunal-cand__dist"><span class="tribunal-cand__pct">{{ c.proximity }}%</span><span class="tribunal-cand__lbl">to call</span></div>
+  </article>
+  {% endfor %}
+  <footer class="tribunal-weighing__foot">
+    <span>Graded on close · weights update after resolve</span>
+    <span>{{ weighing_candidates|length }} names on the table</span>
+  </footer>
+</section>
+{% endif %}
