@@ -7,10 +7,9 @@
         <div class="logo-sub">Subnet intelligence</div>
       </div>
     </div>
-    <div class="src-tag" aria-hidden="true">
+    <div class="src-tag">
       <span id="headerDataSource" hidden>{{ data_source|default('cache') }}</span>
-      {% set ds_label = data_source|default('snapshot')|replace('_',' ')|title %}
-      <span class="data-freshness-badge data-freshness-snapshot" id="dataFreshnessBadge" role="status" aria-live="polite" aria-atomic="true" title="{{ ds_label }} data freshness">{{ ds_label }}</span>
+      <span class="data-freshness-badge data-freshness-snapshot" id="dataFreshnessBadge" role="status" aria-live="polite" aria-atomic="true" title="Live feed correlation time">Live</span>
       <span class="ops-readiness-badge ops-readiness--warming" id="opsReadinessBadge" role="status" aria-live="polite" hidden title="Production readiness"></span>
     </div>
     <div class="header-actions sr-hud-status">

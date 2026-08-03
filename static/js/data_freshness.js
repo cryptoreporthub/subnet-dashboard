@@ -5,12 +5,16 @@
   var BADGE_ID = 'dataFreshnessBadge';
   var PILL_ID = 'liveFeedPill';
 
-  function formatAge(seconds) {
-    if (seconds == null || seconds < 0) return null;
-    if (seconds < 60) return seconds + 's ago';
-    if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
-    if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
-    return Math.floor(seconds / 86400) + 'd ago';
+  function formatCorrelationLocal(iso) {
+    if (!iso) return null;
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return null;
+    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function liveStatusLabel(prefix, iso) {
+    var localTime = formatCorrelationLocal(iso);
+    return localTime ? prefix + ' · ' + localTime : prefix;
   }
 
   function applyBadge(el, state, label) {
@@ -67,31 +71,17 @@
   }
 
   function badgeLabel(payload, state) {
-    if (!payload || typeof payload !== 'object') return 'Feed: unavailable';
-    if (payload.ci_or_test) return 'Data: registry snapshot';
-    if (!payload.sync_enabled) return 'Data: sync paused';
+    if (!payload || typeof payload !== 'object') return 'Live';
+    if (payload.ci_or_test) return 'Snapshot';
+    if (!payload.sync_enabled) return 'Paused';
 
-    var meta = effectiveMeta(payload);
-    var age = formatAge(payload.age_seconds);
+    var iso = payload.last_sync || null;
 
-    if (state === 'live') {
-      return 'Live · ' + (age || 'just now') + ' · ' + meta.total + ' subnets';
-    }
-    if (state === 'stale') {
-      return (
-        'Stale chain · ' +
-        (age || 'unknown') +
-        (meta.total ? ' · feed ' + meta.total + ' SN' : '')
-      );
-    }
-    if (state === 'warming') {
-      if (meta.total > 0) return meta.eff + ' · ' + meta.total + ' subnets';
-      return 'Chain feed: warming';
-    }
-    if (meta.total > 0) {
-      return meta.eff.replace(/_/g, ' ') + ' · ' + meta.total + ' subnets';
-    }
-    return 'Chain feed: registry snapshot';
+    if (state === 'live') return liveStatusLabel('Live', iso);
+    if (state === 'stale') return liveStatusLabel('Stale', iso);
+    if (state === 'warming') return 'Warming';
+    if (state === 'snapshot') return liveStatusLabel('Snapshot', iso);
+    return 'Live';
   }
 
   function render(payload) {
@@ -110,12 +100,12 @@
     if (!el) return;
     var raw = (chip && chip.textContent ? chip.textContent : '').trim().toLowerCase();
     if (raw && raw !== 'cache') {
-      applyBadge(el, 'snapshot', 'Chain feed: ' + raw.replace(/_/g, ' '));
+      applyBadge(el, 'snapshot', 'Snapshot');
       applyLivePill('snapshot');
       return;
     }
     if (/loading/i.test(el.textContent || '')) {
-      applyBadge(el, 'snapshot', 'Chain feed: registry snapshot');
+      applyBadge(el, 'snapshot', 'Snapshot');
       applyLivePill('snapshot');
     }
   }

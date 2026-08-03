@@ -1101,20 +1101,9 @@
     if (!el) return;
     meta = meta || {};
     var stale = meta.stale === true;
-    var source = String(meta.effective_source || meta.source || subnets[0].source || 'registry').toLowerCase();
-    var label = source.replace(/_/g, ' ') + ' · ' + subnets.length + ' subnets';
-    var state = stale ? 'stale' : (source === 'registry' || source === 'snapshot' ? 'snapshot' : 'live');
-    var prefix = stale ? 'STALE · ' : state === 'live' ? 'LIVE · ' : '';
+    var state = stale ? 'stale' : 'live';
     el.className = 'data-freshness-badge data-freshness-' + state;
-    el.textContent = prefix + label;
-    var pill = document.getElementById('liveFeedPill');
-    if (pill) {
-      var pillLabel = stale ? 'STALE' : state === 'live' ? 'LIVE' : 'SNAPSHOT';
-      var pillCls =
-        'live-pill live-pill--' + (stale ? 'stale' : state === 'live' ? 'live' : 'snapshot');
-      pill.className = pillCls;
-      pill.innerHTML = '<span class="live-dot" aria-hidden="true"></span>' + pillLabel;
-    }
+    el.textContent = stale ? 'Stale' : 'Live';
   }
 
   function dailyPickGeneratedAt(payload) {

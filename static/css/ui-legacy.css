@@ -138,11 +138,7 @@ header.top {
 }
 
 .ops-readiness-badge {
-  display: block;
-  margin-top: 2px;
-  font-size: 10px;
-  letter-spacing: 0.4px;
-  color: var(--text-muted);
+  display: none !important;
 }
 
 .ops-readiness--ready {
