@@ -117,6 +117,17 @@ header.top.sr-hud {
   box-shadow: none;
 }
 
+header.top.sr-hud .live-pill,
+header.top.sr-hud .utc-clock {
+  display: none;
+}
+
+header.top.sr-hud .data-freshness-badge {
+  margin-top: 0;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .top-inner {
   max-width: 720px;
   padding: 12px var(--space-4, 16px);
