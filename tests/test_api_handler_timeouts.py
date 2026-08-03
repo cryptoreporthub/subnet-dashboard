@@ -17,6 +17,7 @@ def test_api_judges_timeout_returns_degraded(monkeypatch):
     council_routes._JUDGES_CACHE["payload"] = None
     council_routes._JUDGES_CACHE["at"] = 0.0
     council_routes._BG_REFRESHING.clear()
+    monkeypatch.setattr(council_routes, "_load_judges_cache_file", lambda: None)
     monkeypatch.setattr(council_routes, "JUDGES_HANDLER_TIMEOUT", 0.05)
     kicked = {"n": 0}
 
@@ -88,6 +89,7 @@ def test_api_judges_cold_miss_does_not_score_on_request_path(monkeypatch):
     council_routes._JUDGES_CACHE["payload"] = None
     council_routes._JUDGES_CACHE["at"] = 0.0
     council_routes._BG_REFRESHING.clear()
+    monkeypatch.setattr(council_routes, "_load_judges_cache_file", lambda: None)
     called = {"score": 0}
 
     def _score(*a, **k):
@@ -101,6 +103,28 @@ def test_api_judges_cold_miss_does_not_score_on_request_path(monkeypatch):
     assert resp.status_code == 200
     assert resp.json()["error"] == "busy"
     assert called["score"] == 0
+
+
+def test_api_judges_cold_miss_serves_volume_stale(monkeypatch):
+    council_routes._JUDGES_CACHE["payload"] = None
+    council_routes._JUDGES_CACHE["at"] = 0.0
+    council_routes._BG_REFRESHING.clear()
+    file_payload = {
+        "success": True,
+        "judges": [{"netuid": 9}],
+        "count": 1,
+        "meta": {"count": 1},
+    }
+    monkeypatch.setattr(council_routes, "_load_judges_cache_file", lambda: file_payload)
+    monkeypatch.setattr(council_routes, "_kick_background_refresh", lambda *a, **k: None)
+    monkeypatch.setattr("internal.judges.subnet_judges.score_all_subnets", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no score")))
+
+    resp = TestClient(app).get("/api/judges")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["success"] is True
+    assert body["judges"][0]["netuid"] == 9
+    assert body["meta"]["source"] == "volume_stale"
 
 
 def test_api_judges_fresh_cache_returns_without_scoring(monkeypatch):

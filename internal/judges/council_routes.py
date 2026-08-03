@@ -31,12 +31,47 @@ JUDGES_HANDLER_TIMEOUT = float(os.environ.get("JUDGES_HANDLER_TIMEOUT_SECONDS", 
 _JUDGES_TTL = float(os.environ.get("JUDGES_CACHE_SECONDS", "60"))
 _JUDGES_LOCK = threading.Lock()
 _JUDGES_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+_JUDGES_CACHE_PATH = os.environ.get(
+    "JUDGES_CACHE_PATH", os.path.join("data", "judges_cache.json")
+)
 _COUNCIL_TTL = float(os.environ.get("COUNCIL_CACHE_SECONDS", "60"))
 _COUNCIL_LOCK = threading.Lock()
 _COUNCIL_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 _HEAVY_SEM = threading.Semaphore(int(os.environ.get("JUDGES_HEAVY_CONCURRENCY", "2")))
 _BG_LOCK = threading.Lock()
 _BG_REFRESHING: set[int] = set()
+
+
+def _persist_judges_cache(payload: Dict[str, Any]) -> None:
+    try:
+        import json
+
+        path = _JUDGES_CACHE_PATH
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump({"at": time.time(), "payload": payload}, handle)
+        os.replace(tmp, path)
+    except Exception as exc:
+        logger.warning("judges cache persist failed: %s", exc)
+
+
+def _load_judges_cache_file() -> Optional[Dict[str, Any]]:
+    try:
+        import json
+
+        with open(_JUDGES_CACHE_PATH, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        payload = data.get("payload") if isinstance(data, dict) else None
+        return payload if isinstance(payload, dict) else None
+    except Exception:
+        return None
+
+
+def warm_judges_cache() -> Dict[str, Any]:
+    """Boot helper — kick background fill so hydrate is less likely to see naked busy."""
+    _kick_background_refresh(_JUDGES_CACHE, _JUDGES_LOCK, _api_judges_sync_inner)
+    return {"kicked": True}
 
 
 async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
@@ -106,16 +141,20 @@ def _kick_background_refresh(
         _BG_REFRESHING.add(key)
 
     def _run() -> None:
+        retry = False
         try:
             if not lock.acquire(blocking=False):
                 return
             try:
                 if not _HEAVY_SEM.acquire(blocking=False):
+                    retry = True
                     return
                 try:
                     payload = build()
                     cache["payload"] = payload
                     cache["at"] = time.time()
+                    if cache is _JUDGES_CACHE and isinstance(payload, dict) and payload.get("success"):
+                        _persist_judges_cache(payload)
                 finally:
                     _HEAVY_SEM.release()
             finally:
@@ -125,6 +164,12 @@ def _kick_background_refresh(
         finally:
             with _BG_LOCK:
                 _BG_REFRESHING.discard(key)
+            if retry:
+                # Heavy slot contested — try again soon instead of staying cold-busy.
+                threading.Timer(
+                    5.0,
+                    lambda: _kick_background_refresh(cache, lock, build),
+                ).start()
 
     threading.Thread(target=_run, name="judges-cache-refresh", daemon=True).start()
 
@@ -137,7 +182,7 @@ def _cached_or_build(
     *,
     busy_fallback: Dict[str, Any],
 ):
-    """Request path never builds — cold miss kicks bg and returns busy; stale kicks bg + stale."""
+    """Request path never builds — cold miss kicks bg; prefer stale/volume over naked busy."""
     now = time.time()
     cached = cache.get("payload")
     if isinstance(cached, dict) and now - float(cache.get("at") or 0) < ttl:
@@ -145,6 +190,17 @@ def _cached_or_build(
     _kick_background_refresh(cache, lock, build)
     if isinstance(cached, dict):
         return cached
+    if cache is _JUDGES_CACHE:
+        file_cached = _load_judges_cache_file()
+        if isinstance(file_cached, dict):
+            out = dict(file_cached)
+            meta = dict(out.get("meta") or {})
+            meta["source"] = "volume_stale"
+            out["meta"] = meta
+            # Hydrate memory so subsequent hits skip the file read.
+            cache["payload"] = out
+            cache["at"] = float(time.time()) - max(ttl, 1.0)  # keep stale so bg still refreshes
+            return out
     return busy_fallback
 
 
