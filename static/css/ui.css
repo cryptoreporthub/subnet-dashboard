@@ -126,6 +126,30 @@ header.top.sr-hud .data-freshness-badge {
   margin-top: 0;
   font-size: 11px;
   white-space: nowrap;
+  color: var(--accent-bright, #7ec8e3);
+  letter-spacing: 0.02em;
+}
+
+header.top.sr-hud .header-actions {
+  gap: 10px;
+}
+
+@media (max-width: 768px) {
+  header.top.sr-hud .logo-sub {
+    display: none;
+  }
+
+  header.top.sr-hud .data-freshness-badge {
+    font-size: 10px;
+    max-width: 38vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  header.top.sr-hud .cmd-palette-trigger {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
 }
 
 .top-inner {
