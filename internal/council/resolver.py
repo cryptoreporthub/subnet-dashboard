@@ -712,6 +712,14 @@ def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
     ]
     correct = sum(1 for r in gradable if r.get("correct") is True)
     wrong = sum(1 for r in gradable if r.get("correct") is False)
+    shadow_gradable = [
+        r
+        for r in resolved
+        if r.get("outcome") not in {"duplicate", "expired", "ungradeable"}
+        and r.get("correct") is not None
+        and _is_shadow(r)
+        and not is_pump_desk_claim(r)
+    ]
     expired = sum(
         1
         for r in resolved
@@ -732,6 +740,7 @@ def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
         "duplicate": duplicates,
         "pending": council_pending,
         "total": total,
+        "shadow_graded": len(shadow_gradable),
     }
     if correct + wrong > 0:
         stats["accuracy"] = round(correct / (correct + wrong), 3)

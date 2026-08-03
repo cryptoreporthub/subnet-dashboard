@@ -110,7 +110,7 @@ Homepage quiet copy matched trust gate: `Not enough graded picks yet (1/30)`.
 
 | Date | Finding | PR | Live verify |
 |------|---------|----|-----------|
-| | | | |
+| 2026-08-03 | Not a resolver stall: 21/22 council day/hour grades are HOLD shadows (excluded from trust by design). Only 1 primary graded → 1/30. Pump grades excluded. Fix: honest trust message + shadow_graded counter; keep min_graded=30. | pending | pending |
 
 ---
 
@@ -160,5 +160,5 @@ Homepage quiet copy matched trust gate: `Not enough graded picks yet (1/30)`.
 |---------|--------|
 | Plan committed | DONE — #780 (or branch) |
 | P1 daily-pick pending | **DONE** main=3c47a3f (#781–#783) |
-| P2 graded 1/30 | IN PROGRESS |
+| P2 graded 1/30 | IN PROGRESS — honesty fix |
 | P3 judges busy | BLOCKED on P2 |

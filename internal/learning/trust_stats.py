@@ -38,7 +38,14 @@ def build_trust_banner(
     watchdog_warn = bool((watchdog or {}).get("warning"))
 
     if graded < min_graded:
-        message = f"Not enough graded picks yet ({graded}/{min_graded})"
+        shadow_graded = int(stats.get("shadow_graded", 0) or 0)
+        if shadow_graded > 0:
+            message = (
+                f"Published council sample {graded}/{min_graded} — "
+                f"{shadow_graded} HOLD shadow grades excluded from trust"
+            )
+        else:
+            message = f"Not enough graded picks yet ({graded}/{min_graded})"
         headline = None
     elif expired_rate >= max_expired_rate:
         message = (
@@ -83,7 +90,11 @@ def build_trust_banner(
         },
         "watchdog": watchdog,
         "source": "/api/learning/stats",
-        "note": "Accuracy is direction-only on graded token price outcomes — excludes expired/duplicate.",
+        "note": (
+            "Accuracy is direction-only on graded token price outcomes — "
+            "excludes expired/duplicate/HOLD-shadow/pump-desk claims."
+        ),
+        "shadow_graded": int(stats.get("shadow_graded", 0) or 0),
         "streak": streak,
         "streak_whisper": streak_whisper,
     }
