@@ -6,6 +6,8 @@
 **Pipeline:** Grok LOCK → Composer build → Sonnet low on diff.  
 **Ownership:** P1–P2 = Agent A (`internal/learning/*`, council/daily-pick); P3 = conflict-surface ok (`/api/judges` + timeout wrappers). Do not touch Agent B modules unless a proven shared root cause forces it.
 
+**Status:** CLOSED — P1+P2+P3 live on `main` (`a8e03d1`).
+
 **North star:** Homepage hydrate empties are mostly *honest product state*, not CSS. Fix the three live soft-failures so the desk either shows a real call or an honest, stable reason — never a silent/pending lie or busy wedge.
 
 ---
@@ -140,7 +142,7 @@ Homepage quiet copy matched trust gate: `Not enough graded picks yet (1/30)`.
 
 | Date | Finding | PR | Live verify |
 |------|---------|----|-----------|
-| 2026-08-03 | Cold-miss busy after deploy: in-memory cache empty; request path correctly never scores. Fix: volume last-good `judges_cache.json` + boot warm + heavy-sem retry. | pending | pending |
+| 2026-08-03 | Cold-miss busy after deploy: in-memory cache empty; request path correctly never scores. Fix: volume last-good `judges_cache.json` + boot warm + heavy-sem retry. | #786 | Live usable: `success=true`, `judges[]` populated; cold path `volume_stale` then fresh. No naked busy. |
 
 ---
 
@@ -161,4 +163,8 @@ Homepage quiet copy matched trust gate: `Not enough graded picks yet (1/30)`.
 | Plan committed | DONE — #780 (or branch) |
 | P1 daily-pick pending | **DONE** main=3c47a3f (#781–#783) |
 | P2 graded 1/30 | **DONE** main=27d792e (#785) |
-| P3 judges busy | IN PROGRESS |
+| P3 judges busy | **DONE** main=a8e03d1 (#786) |
+
+### 2026-08-03 — P3 DONE (#786 → main `a8e03d1`)
+- Live: `/api/judges` returns usable `success`+`judges[]` (not naked busy); volume last-good covers cold miss.
+- Plan CLOSED. Non-blockers: intermittent Acc/GIL timeouts; pick tick can still timeout after `today_ready` (next slot delay OK); primary graded thin until LONGs publish.
