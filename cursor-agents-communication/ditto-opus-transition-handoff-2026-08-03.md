@@ -1,9 +1,58 @@
 # Ditto takeover handoff — all agents + Opus transition
 
-**Created:** 2026-08-03  
+**Updated:** 2026-08-03 (human preview review complete; Ditto transition **ACTIVE**)  
 **main:** `3e13e0a` (#787 hydrate plan closed)  
 **Purpose:** Single artifact for Ditto to resume orchestration after Opus chat ended.  
 **Protocol:** `ditto-cursor-handoff.md` — git lock is spec; Ditto is index + STATUS.
+
+---
+
+## DITTO TRANSITION — ACTIVE (start here)
+
+**Human (2026-08-03):** Has seen tribunal preview (re-rendered from PR #788 `/preview/tribunal`). Opus run is **closed** — do not re-run Opus for screenshots. PR #788 stays **parked** (draft, not live-wired) until human explicitly requests live wire.
+
+### Ditto boot order
+
+```text
+1. cursor-agents-communication/ditto-opus-transition-handoff-2026-08-03.md  (this file)
+2. cursor-agents-communication/board.md  (stale — refresh on next merge)
+3. cursor-agents-communication/model-guide.md
+4. cursor-agents-communication/ditto-cursor-handoff.md
+5. Ditto search_memories: "subnet-dashboard STATUS" (gates only)
+```
+
+### What Ditto owns now
+
+| Lane | Ditto action |
+|------|----------------|
+| **Orchestration** | Post STATUS after merges; enforce gates; no agent starts slice N+1 while gated |
+| **Monitoring** | Health Monitor artifact mode; Track 1 soak countdown to **2026-08-04** |
+| **Cursor dispatch** | One slice at a time from locks/plans — Composer builds, Grok LOCKs when DESIGN |
+| **Human gates** | Remind: 390px hero glance; H2 soak Aug 4; tribunal live-wire only on explicit ask |
+| **Do not** | Re-run Opus; blind-merge stale drafts; start accuracy lift before H2 GO |
+
+### Immediate queue (priority order)
+
+| # | Item | Owner | Status |
+|---|------|-------|--------|
+| 1 | Merge handoff doc PR **#789** | Human/Cursor | OPEN |
+| 2 | Refresh `board.md` to `main=3e13e0a` | Cursor docs slice | Pending |
+| 3 | **H2 soak checkpoint** | Ditto + human | **2026-08-04** — `soak_review_snapshot.sh` |
+| 4 | Human 390px hero glance | Human | PENDING post-layout |
+| 5 | Tribunal #788 live wire | **PARKED** | Only if human says "wire tribunal" |
+| 6 | Accuracy lift Slice 7 | GATED | After H2 GO only |
+| 7 | Completion runbook PRs #672–#674 | Cursor | OPEN (pre-Aug4 polish) |
+
+### Paste-ready Ditto STATUS (post on takeover)
+
+```text
+STATUS main=3e13e0a (2026-08-03). Ditto transition ACTIVE.
+LOCK_PATH: cursor-agents-communication/ditto-opus-transition-handoff-2026-08-03.md
+Opus CLOSED: PR #788 tribunal preview seen by human; PARKED (no live wire).
+Hydrate P1-P3 CLOSED (#781-#787). Frontend mist/pewter MERGED (#767-#779).
+NEXT: merge #789 handoff doc; H2 soak 2026-08-04; human 390px glance.
+GATE: no accuracy lift until H2 GO. Do not blind-merge #692/#675/#686/#650.
+```
 
 ---
 
@@ -15,7 +64,7 @@
 | Hydrate desk P1–P3 | **CLOSED** (#781–#787) — daily-pick honest HOLD, trust banner honest, judges no naked busy |
 | Frontend mist/pewter wave | **MERGED** (#767–#779) — thumb dock, ui.css shell, dead CSS purge |
 | Post-hero finish queue Steps 0–6 | **DONE** on main through #765 era |
-| **Opus tribunal hero** | **OPEN DRAFT** PR #788 — preview only, **not live-wired** |
+| **Opus tribunal hero** | **PARKED** PR #788 — preview seen by human; no live wire until explicit ask |
 | Human gates | 390px hero glance (post-layout); H2 soak **2026-08-04**; H3 **2026-08-11** |
 | Accuracy lift / Slice 7 | **GATED** until H2 GO |
 
@@ -195,7 +244,8 @@ NON-GOALS: rescoring, new expert weights, pd/pds card extract
 
 | Gate | When | Action |
 |------|------|--------|
-| Tribunal visual GO | **Now** | Human reviews PR #788 preview; Ditto records GO/NO-GO |
+| ~~Tribunal preview review~~ | **DONE 2026-08-03** | Human has seen preview; #788 **parked** |
+| Tribunal live wire | On explicit human ask only | Create `tribunal-live-wire-lock.md` → Composer on #788 branch |
 | Human 390px glance | After layout | `hero-mindmap-390-signoff-2026-08-02.md` — still PENDING |
 | H2 Track 1 soak | **2026-08-04** | `soak_review_snapshot.sh` → GO/NO-GO |
 | H3 soak | 2026-08-11 | same |
@@ -216,12 +266,13 @@ NON-GOALS: rescoring, new expert weights, pd/pds card extract
 
 ## DITTO NEXT ACTIONS
 
-1. **Read this file** + `board.md` + `hydrate-desk-investigation-plan.md` (CLOSED)
-2. **Post STATUS** memory: `main=3e13e0a`, Opus PR #788 awaiting human visual GO
-3. **On human GO for tribunal:** create `tribunal-live-wire-lock.md`, assign Composer slice, continue branch `cursor/tribunal-hero-redesign-192d`
-4. **On human NO-GO:** close or iterate #788; do not wire live hero
-5. **Aug 4:** run H2 soak checkpoint; block accuracy experiments until GO
+1. **Post takeover STATUS** (paste block above) — memory id supersedes prior Opus-waiting post
+2. **Merge PR #789** (this handoff doc) so git is canonical
+3. **Schedule H2 soak** for 2026-08-04 — run `soak_review_snapshot.sh`, record GO/NO-GO
+4. **Remind human** on 390px hero glance when layout lands
+5. **Park #788** — do not dispatch live-wire work unless human explicitly requests
 6. **Do not** blind-merge stale drafts (#692, #675, #686, #650)
+7. **Optional:** refresh `board.md` STATUS to `main=3e13e0a` + hydrate closed + Ditto active
 
 ---
 
@@ -241,5 +292,5 @@ NON-GOALS: rescoring, new expert weights, pd/pds card extract
 ---
 
 LOCK_PATH: cursor-agents-communication/ditto-opus-transition-handoff-2026-08-03.md  
-STATUS: promoted  
-WAIT_FOR: human tribunal visual GO on PR #788
+STATUS: promoted · **DITTO_TRANSITION_ACTIVE**  
+WAIT_FOR: H2 soak 2026-08-04 · human 390px glance · tribunal live-wire only on explicit ask
