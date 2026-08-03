@@ -323,6 +323,13 @@ def build_learning_loop_health(
     """Cheap JSON probe for pick→ledger→resolver loop status."""
     daily = _daily_pick_today(daily_picks_path)
 
+    try:
+        from internal.council.pick_scheduler import get_pick_scheduler_state
+
+        pick_scheduler = get_pick_scheduler_state()
+    except Exception:
+        pick_scheduler = {"enabled": None, "daily": {"running": False}, "hour": {"running": False}}
+
     pred_path = predictions_path or PREDICTIONS_PATH
     if predictions_path:
         # Test hook: load from alternate path without mutating global.
@@ -414,6 +421,7 @@ def build_learning_loop_health(
         "worker_peer": worker_peer,
         "watchdog": watchdog,
         "daily_pick": daily,
+        "pick_scheduler": pick_scheduler,
         "ledger": ledger,
         "snapshot_age_seconds": snapshot_age,
         "score_snapshot": score_snapshot,

@@ -77,6 +77,74 @@ def test_start_stop_idempotent(monkeypatch):
     assert "daily" in stop
 
 
+def test_daily_tick_retries_when_today_missing(monkeypatch):
+    """Failed/missing today must not wait until tomorrow's UTC slot."""
+    pick_scheduler.stop_pick_schedulers()
+    scheduled = []
+
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.get_or_create_today_pick",
+        lambda subnets, market_context=None, force=False: (_ for _ in ()).throw(
+            RuntimeError("boom")
+        ),
+    )
+    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+    monkeypatch.setattr(pick_scheduler, "_today_pick_exists", lambda: False)
+    monkeypatch.setattr(
+        pick_scheduler,
+        "schedule_in_seconds",
+        lambda job_id, func, seconds: scheduled.append((job_id, seconds)),
+    )
+    monkeypatch.setenv("DAILY_PICK_RETRY_MINUTES", "15")
+    pick_scheduler.DAILY_PICK_RETRY_MINUTES = 15
+
+    sched = pick_scheduler.DailyPickScheduler()
+    sched._running = True
+    result = sched._tick(reschedule=True)
+    assert result["ok"] is False
+    assert scheduled
+    assert scheduled[0][0] == pick_scheduler.DAILY_JOB_ID
+    assert scheduled[0][1] == 15 * 60
+    assert result["next_delay_seconds"] == 15 * 60
+
+
+def test_daily_tick_uses_slot_when_today_ready(monkeypatch):
+    pick_scheduler.stop_pick_schedulers()
+    scheduled = []
+
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.get_or_create_today_pick",
+        lambda subnets, market_context=None, force=False: {
+            "action": "HOLD",
+            "date": "2026-08-03",
+            "pick": None,
+        },
+    )
+    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+    monkeypatch.setattr(pick_scheduler, "_today_pick_exists", lambda: True)
+    monkeypatch.setattr(
+        pick_scheduler, "_seconds_until_daily_slot", lambda: 12_345.0
+    )
+    monkeypatch.setattr(
+        pick_scheduler,
+        "schedule_in_seconds",
+        lambda job_id, func, seconds: scheduled.append((job_id, seconds)),
+    )
+
+    sched = pick_scheduler.DailyPickScheduler()
+    sched._running = True
+    result = sched._tick(reschedule=True)
+    assert result["ok"] is True
+    assert scheduled[0][1] == 12_345.0
+
+
+def test_seconds_until_next_daily_tick_branches():
+    assert pick_scheduler._seconds_until_next_daily_tick(today_ready=False) == float(
+        max(1, min(pick_scheduler.DAILY_PICK_RETRY_MINUTES, 120)) * 60
+    )
+
 def test_boot_wires_pick_schedulers():
     boot = Path("internal/background_boot.py").read_text(encoding="utf-8")
     assert "_start_pick_schedulers" in boot
