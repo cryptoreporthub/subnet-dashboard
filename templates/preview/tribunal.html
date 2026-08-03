@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<script>document.documentElement.dataset.hydrate = '0';</script>
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<main id="main-content" class="app-shell council-first tribunal-preview" tabindex="-1">
+  <p class="tribunal-preview__label">Preview · tribunal · {{ preview_state }}</p>
+  <div class="tribunal-preview__frame">
+    {% include "partials/premium/tribunal.html" %}
+  </div>
+</main>
+{% endblock %}

@@ -811,11 +811,13 @@ def _enrich_daily_pick_payload_lite(
     from internal.learning.dpick_copy import attach_brief_to_daily_pick
     from internal.learning.dpick_pump import attach_pump_chip_to_daily_pick
     from internal.learning.dpick_temporal import attach_temporal_to_daily_pick
+    from internal.learning.dpick_tribunal import attach_tribunal_to_daily_pick
     from internal.subnet_names import refresh_daily_pick_names
 
     out = refresh_daily_pick_names(pick_payload)
     out = attach_temporal_to_daily_pick(out)
     out = attach_brief_to_daily_pick(out)
+    out = attach_tribunal_to_daily_pick(out)
     if "shortlist" not in out:
         out["shortlist"] = []
     if not isinstance(out.get("horizon_views"), dict):
@@ -857,11 +859,14 @@ def _enrich_daily_pick_payload(
     from internal.learning.dpick_temporal import attach_temporal_to_daily_pick
     from internal.subnet_names import refresh_daily_pick_names
 
+    from internal.learning.dpick_tribunal import attach_tribunal_to_daily_pick
+
     out = refresh_daily_pick_names(pick_payload)
     out = attach_shortlist_to_daily_pick(out, subnets, market_context)
     out = attach_temporal_to_daily_pick(out)
     out = attach_horizon_views_to_daily_pick(out, subnets, market_context)
     out = attach_brief_to_daily_pick(out)
+    out = attach_tribunal_to_daily_pick(out)
     return attach_pump_chip_to_daily_pick(out, subnets)
 
 
@@ -1775,6 +1780,17 @@ async def robots_txt():
         "Disallow: /metrics\n"
         "Disallow: /preview/\n",
         media_type="text/plain",
+    )
+
+
+@app.get("/preview/tribunal")
+async def preview_tribunal(request: Request, state: str = "sealed"):
+    """SSR preview for tribunal hero — hydrate off. ?state=sealed|gated|forming|cold"""
+    from internal.preview.tribunal import build_tribunal_preview_context
+
+    return templates.TemplateResponse(
+        "preview/tribunal.html",
+        build_tribunal_preview_context(request, state=state),
     )
 
 
