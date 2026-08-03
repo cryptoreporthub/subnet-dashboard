@@ -206,3 +206,15 @@ def test_tracker_on_prediction_resolved_nudges_all_three_judges_independently(
     assert after["oracle"] > before["oracle"]
     assert after["echo"] < before["echo"]
     assert after["pulse"] > before["pulse"]
+
+
+def test_learning_stats_exposes_judge_weights():
+    from fastapi.testclient import TestClient
+
+    from server import app
+
+    resp = TestClient(app).get("/api/learning/stats")
+    assert resp.status_code == 200
+    jw = resp.json()["data"]["judge_weights"]
+    assert set(jw) == {"oracle", "echo", "pulse"}
+    assert all(isinstance(v, (int, float)) for v in jw.values())

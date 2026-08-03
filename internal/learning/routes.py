@@ -122,6 +122,18 @@ _learning_snapshot_lock = threading.Lock()
 _learning_snapshot_cache: Dict[str, Any] = {"at": 0.0, "data": None}
 
 
+def _judge_weights_for_snapshot() -> Dict[str, float]:
+    try:
+        from internal.judges.weights import DEFAULT_JUDGE_WEIGHTS, load_judge_weights
+
+        return load_judge_weights()
+    except Exception as exc:
+        logger.warning("judge weights load failed: %s", exc)
+        from internal.judges.weights import DEFAULT_JUDGE_WEIGHTS
+
+        return dict(DEFAULT_JUDGE_WEIGHTS)
+
+
 def _learning_snapshot() -> Dict[str, Any]:
     """Shared ≤30s snapshot for stats / metrics / mindmap (§31-3 O20)."""
     now = time.time()
@@ -151,6 +163,7 @@ def _learning_snapshot() -> Dict[str, Any]:
         "recent": recent,
         "scenario": _scenario_memory_summary(),
         "expert_weights": stats.get("expert_weights", {}),
+        "judge_weights": _judge_weights_for_snapshot(),
     }
     with _learning_snapshot_lock:
         _learning_snapshot_cache["at"] = now
@@ -212,6 +225,7 @@ def _compute_learning_metrics() -> Dict[str, Any]:
     recent = snap["recent"]
     return {
         "expert_weights": stats.get("expert_weights", {}),
+        "judge_weights": snap.get("judge_weights", {}),
         "expert_weight_deltas": recent_expert_weight_deltas(),
         "total_records": stats.get("total_records", 0),
         "predictions_pending": stats.get("pending", 0),
@@ -686,6 +700,7 @@ async def api_learning_stats():
         "status": "success",
         "data": {
             "expert_weights": stats.get("expert_weights", {}),
+            "judge_weights": snap.get("judge_weights", {}),
             "total_records": resolver_stats.get("total", stats.get("total_records", 0)),
             "accuracy": resolver_stats.get("accuracy", stats.get("accuracy", 0.0)),
             "correct": resolver_stats.get("correct", 0),
