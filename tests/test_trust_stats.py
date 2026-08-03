@@ -10,6 +10,19 @@ def test_trust_banner_honest_empty_low_sample():
     assert "not enough" in banner["message"].lower()
 
 
+def test_trust_banner_explains_hold_shadows_excluded():
+    banner = build_trust_banner(
+        {"correct": 1, "wrong": 0, "expired": 0, "total": 1, "shadow_graded": 21},
+        min_graded=30,
+    )
+    assert banner["ready"] is False
+    assert banner["graded"] == 1
+    assert banner["shadow_graded"] == 21
+    assert "shadow" in banner["message"].lower()
+    assert "1/30" in banner["message"]
+    assert banner["min_graded"] == 30
+
+
 def test_trust_banner_blocks_high_expired_rate():
     banner = build_trust_banner(
         {"correct": 40, "wrong": 35, "expired": 30, "total": 105},
