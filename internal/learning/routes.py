@@ -124,9 +124,9 @@ _learning_snapshot_cache: Dict[str, Any] = {"at": 0.0, "data": None}
 
 def _judge_weights_for_snapshot() -> Dict[str, float]:
     try:
-        from internal.judges.weights import DEFAULT_JUDGE_WEIGHTS, load_judge_weights
+        from internal.judges.weights import DEFAULT_JUDGE_WEIGHTS, normalized_judge_weights
 
-        return load_judge_weights()
+        return normalized_judge_weights()
     except Exception as exc:
         logger.warning("judge weights load failed: %s", exc)
         from internal.judges.weights import DEFAULT_JUDGE_WEIGHTS

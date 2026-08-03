@@ -218,3 +218,4 @@ def test_learning_stats_exposes_judge_weights():
     jw = resp.json()["data"]["judge_weights"]
     assert set(jw) == {"oracle", "echo", "pulse"}
     assert all(isinstance(v, (int, float)) for v in jw.values())
+    assert abs(sum(jw.values()) - 1.0) < 1e-6
