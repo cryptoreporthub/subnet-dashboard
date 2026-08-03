@@ -77,7 +77,8 @@ Homepage quiet copy matched trust gate: `Not enough graded picks yet (1/30)`.
 | Date | Finding | PR | Live verify |
 |------|---------|----|-----------|
 | 2026-08-03 | Root cause: DailyPickScheduler always rescheduled to next UTC 00:15 after any tick — one failed/hung cold-start left the desk on eternal `pending`/`today's pick forming`. GET stays read-only (correct). Fix: retry every `DAILY_PICK_RETRY_MINUTES` until today exists; tick timeout; expose `pick_scheduler` on learning/health. | #781 | Partial — retry live but tick wedges VM; still forming |
-| 2026-08-03 | P1b: on tick timeout/fail write `scheduler_hold` HOLD (specific reason); keep retrying; persist `data/pick_scheduler_state.json` for web health | pending | pending |
+| 2026-08-03 | P1b: on tick timeout/fail write `scheduler_hold` HOLD (specific reason); keep retrying; persist `data/pick_scheduler_state.json` for web health | #782 | Live HOLD with reason (revealed datetime bug) |
+| 2026-08-03 | P1c: `state_vector.attach_council_prediction` used `_dt.timezone.utc` but `_dt` is `datetime` class — AttributeError aborted every tick | pending | pending |
 
 ---
 

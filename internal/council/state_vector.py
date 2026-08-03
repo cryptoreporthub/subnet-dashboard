@@ -9,7 +9,7 @@ import json as _json
 import math as _math
 import os as _os
 import uuid as _uuid
-from datetime import datetime as _dt, timedelta as _td
+from datetime import datetime as _dt, timedelta as _td, timezone as _tz
 from typing import Any, Dict, List, Optional
 
 
@@ -1115,7 +1115,7 @@ def attach_council_prediction(
         ref_price=ref,
         signal_source=str(source),
         expert=_expert_from_signal_impact(si),
-        now=_dt.now(_dt.timezone.utc),
+        now=_dt.now(_tz.utc),
         signal_contributions=fields["signal_contributions"],
         horizon_type=horizon_type,
         active_signals=fields["active_signals"] or None,
@@ -1237,7 +1237,7 @@ def build_subnet_state_vector(netuid: int, subnets: List[dict], registry: Option
         ref_price=float(sn.get("price", 0) or 0) or 1.0,
         signal_source=pred_source,
         expert=_expert_from_signal_impact(signal_impact),
-        now=_dt.now(_dt.timezone.utc),
+        now=_dt.now(_tz.utc),
     )
     social_sentiment = _compute_social_sentiment(sn)
 
@@ -1271,7 +1271,7 @@ def build_subnet_state_vector(netuid: int, subnets: List[dict], registry: Option
         "prediction": prediction,
         "social_sentiment": social_sentiment,
         "consensus": {"action": consensus_action, "score": consensus_score},
-        "timestamp": _dt.now(_dt.timezone.utc).isoformat() + "Z",
+        "timestamp": _dt.now(_tz.utc).isoformat() + "Z",
     }
 
 

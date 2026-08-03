@@ -202,3 +202,12 @@ def test_boot_wires_pick_schedulers():
     server = Path("server.py").read_text(encoding="utf-8")
     # api_daily_pick must not call get_or_create on the GET path — coarse guard
     assert "def api_daily_pick" in server or "@app.get(\"/api/daily-pick\")" in server
+
+
+def test_attach_council_prediction_uses_timezone_utc():
+    """Regression: datetime imported as _dt must not call _dt.timezone."""
+    from internal.council import state_vector as sv
+
+    src = Path(sv.__file__).read_text(encoding="utf-8")
+    assert "_dt.timezone" not in src
+    assert "timezone as _tz" in src
