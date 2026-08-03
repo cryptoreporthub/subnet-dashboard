@@ -7,15 +7,13 @@
         <div class="logo-sub">Subnet intelligence</div>
       </div>
     </div>
-    <div class="src-tag">
+    <div class="header-actions sr-hud-status">
       <span id="headerDataSource" hidden>{{ data_source|default('cache') }}</span>
       <span class="data-freshness-badge data-freshness-snapshot" id="dataFreshnessBadge" role="status" aria-live="polite" aria-atomic="true" title="Live feed correlation time">Live</span>
-      <span class="ops-readiness-badge ops-readiness--warming" id="opsReadinessBadge" role="status" aria-live="polite" hidden title="Production readiness"></span>
-    </div>
-    <div class="header-actions sr-hud-status">
       <button type="button" class="cmd-palette-trigger" id="cmd-palette-trigger" title="Search (Ctrl+K)">Search</button>
-      <span class="live-pill live-pill--snapshot" id="liveFeedPill" role="status" aria-live="polite"><span class="live-dot" aria-hidden="true"></span>SNAPSHOT</span>
-      <span class="utc-clock" id="utcClock">--:--:-- UTC</span>
+      <span class="live-pill live-pill--snapshot" id="liveFeedPill" role="status" aria-live="polite" hidden aria-hidden="true"><span class="live-dot" aria-hidden="true"></span>SNAPSHOT</span>
+      <span class="utc-clock" id="utcClock" hidden aria-hidden="true">--:--:-- UTC</span>
+      <span class="ops-readiness-badge ops-readiness--warming" id="opsReadinessBadge" role="status" aria-live="polite" hidden title="Production readiness"></span>
     </div>
   </div>
 </header>
