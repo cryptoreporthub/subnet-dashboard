@@ -135,6 +135,32 @@ def _payload_uses_root(payload: Dict[str, Any]) -> bool:
     return False
 
 
+def write_scheduler_hold(reason: str) -> Dict[str, Any]:
+    """Persist an honest HOLD when the background tick cannot finish scoring."""
+    reason = (reason or "daily pick scheduler failed").strip() or "daily pick scheduler failed"
+    records = _load()
+    payload: Dict[str, Any] = {
+        "status": "ok",
+        "date": _today_str(),
+        "timestamp_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "action": "HOLD",
+        "reason": reason,
+        "pick": None,
+        "candidate": None,
+        "scheduler_hold": True,
+        "regime": "unknown",
+        "rotation_summary": {},
+        "market_context": {},
+    }
+    existing = _find_today(records)
+    if isinstance(existing, dict) and not existing.get("scheduler_hold") and existing.get("pick"):
+        # Never clobber a real published pick.
+        return existing
+    records = _upsert_today(records, payload)
+    _save(records)
+    return payload
+
+
 def get_or_create_today_pick(
     subnets: List[Dict[str, Any]],
     market_context: Optional[Dict[str, Any]] = None,
@@ -155,9 +181,12 @@ def get_or_create_today_pick(
     if not force:
         existing = _find_today(records)
         if existing is not None and not _payload_uses_root(existing):
+            # Scheduler timeout/failure HOLD — keep retrying a real score this UTC day.
+            if existing.get("scheduler_hold"):
+                logger.info("daily pick: regen scheduler_hold")
             # HOLD with no audited pick: attach a live candidate for display only
             # (does not change the persisted HOLD decision or invent a BUY).
-            if (
+            elif (
                 existing.get("pick") is None
                 and str(existing.get("action", "")).upper() == "HOLD"
                 and subnets
@@ -167,7 +196,7 @@ def get_or_create_today_pick(
                 # single-worker Fly (/api/daily-pick 0-byte timeouts). Candidate is
                 # optional display sugar; dossier hydrates without it.
                 return existing
-            if _hold_from_stale_boot_data(existing, subnets):
+            elif _hold_from_stale_boot_data(existing, subnets):
                 logger.info("daily pick: regen stale boot HOLD once subnets hydrated")
             else:
                 return existing

@@ -81,6 +81,7 @@ def test_daily_tick_retries_when_today_missing(monkeypatch):
     """Failed/missing today must not wait until tomorrow's UTC slot."""
     pick_scheduler.stop_pick_schedulers()
     scheduled = []
+    holds = []
 
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.get_or_create_today_pick",
@@ -88,9 +89,18 @@ def test_daily_tick_retries_when_today_missing(monkeypatch):
             RuntimeError("boom")
         ),
     )
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.write_scheduler_hold",
+        lambda reason: holds.append(reason) or {
+            "action": "HOLD",
+            "date": "2026-08-03",
+            "scheduler_hold": True,
+        },
+    )
     monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
-    monkeypatch.setattr(pick_scheduler, "_today_pick_exists", lambda: False)
+    monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: False)
+    monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
     monkeypatch.setattr(
         pick_scheduler,
         "schedule_in_seconds",
@@ -103,6 +113,7 @@ def test_daily_tick_retries_when_today_missing(monkeypatch):
     sched._running = True
     result = sched._tick(reschedule=True)
     assert result["ok"] is False
+    assert holds
     assert scheduled
     assert scheduled[0][0] == pick_scheduler.DAILY_JOB_ID
     assert scheduled[0][1] == 15 * 60
@@ -123,7 +134,8 @@ def test_daily_tick_uses_slot_when_today_ready(monkeypatch):
     )
     monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
-    monkeypatch.setattr(pick_scheduler, "_today_pick_exists", lambda: True)
+    monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: True)
+    monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
     monkeypatch.setattr(
         pick_scheduler, "_seconds_until_daily_slot", lambda: 12_345.0
     )
@@ -138,6 +150,42 @@ def test_daily_tick_uses_slot_when_today_ready(monkeypatch):
     result = sched._tick(reschedule=True)
     assert result["ok"] is True
     assert scheduled[0][1] == 12_345.0
+
+
+def test_daily_tick_timeout_writes_scheduler_hold(monkeypatch):
+    pick_scheduler.stop_pick_schedulers()
+    holds = []
+
+    def _hang(*_a, **_k):
+        import time
+
+        time.sleep(12)
+        return {"action": "HOLD"}
+
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.get_or_create_today_pick", _hang
+    )
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.write_scheduler_hold",
+        lambda reason: holds.append(reason) or {
+            "action": "HOLD",
+            "date": "2026-08-03",
+            "scheduler_hold": True,
+        },
+    )
+    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+    monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: False)
+    monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
+    monkeypatch.setattr(pick_scheduler, "schedule_in_seconds", lambda *_a, **_k: None)
+    pick_scheduler.DAILY_PICK_TICK_TIMEOUT_SECONDS = 5
+
+    sched = pick_scheduler.DailyPickScheduler()
+    sched._running = True
+    result = sched._tick(reschedule=False)
+    assert holds, result
+    assert result.get("scheduler_hold") is True
+    assert "timed out" in str(result.get("error") or holds[0])
 
 
 def test_seconds_until_next_daily_tick_branches():

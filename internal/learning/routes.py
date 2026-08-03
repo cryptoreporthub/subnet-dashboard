@@ -615,6 +615,18 @@ async def api_learning_loop_health():
             _set_learning_health_cache(payload)
         return payload
     except asyncio.TimeoutError:
+        pick_scheduler = {}
+        daily_pick = {}
+        try:
+            from internal.council.pick_scheduler import load_pick_scheduler_state_file
+            from internal.learning.loop_health import _daily_pick_today
+
+            file_state = load_pick_scheduler_state_file()
+            if isinstance(file_state, dict):
+                pick_scheduler = {**file_state, "source": "volume"}
+            daily_pick = _daily_pick_today()
+        except Exception:
+            pass
         return {
             "status": "degraded",
             "meta": {"source": "timeout"},
@@ -630,7 +642,8 @@ async def api_learning_loop_health():
             },
             "worker_peer": _cheap_worker_peer_hint(),
             "watchdog": {},
-            "daily_pick": {},
+            "daily_pick": daily_pick,
+            "pick_scheduler": pick_scheduler,
             "ledger": {"required": False, "present": False, "gap": False, "netuid": None},
             "snapshot_age_seconds": None,
             "score_snapshot": {},
