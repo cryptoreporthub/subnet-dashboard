@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
@@ -25,6 +26,9 @@ HOUR_PICK_REFRESH_MINUTES = int(os.environ.get("HOUR_PICK_REFRESH_MINUTES", "180
 DAILY_PICK_SLOT_UTC_HOUR = int(os.environ.get("DAILY_PICK_SLOT_UTC_HOUR", "0"))
 DAILY_PICK_SLOT_UTC_MINUTE = int(os.environ.get("DAILY_PICK_SLOT_UTC_MINUTE", "15"))
 PICK_SCHEDULER_UNIVERSE_CAP = int(os.environ.get("PICK_SCHEDULER_UNIVERSE_CAP", "24"))
+# ponytail: one failed cold-start/slot tick must not wait until tomorrow 00:15.
+DAILY_PICK_RETRY_MINUTES = int(os.environ.get("DAILY_PICK_RETRY_MINUTES", "15"))
+DAILY_PICK_TICK_TIMEOUT_SECONDS = int(os.environ.get("DAILY_PICK_TICK_TIMEOUT_SECONDS", "180"))
 
 _lock = threading.Lock()
 _daily: Optional["DailyPickScheduler"] = None
@@ -56,6 +60,23 @@ def _seconds_until_daily_slot() -> float:
     if target <= now:
         target = target + timedelta(days=1)
     return max(30.0, (target - now).total_seconds())
+
+
+def _seconds_until_next_daily_tick(*, today_ready: bool) -> float:
+    """Next-day slot when today is written; otherwise retry soon."""
+    if today_ready:
+        return _seconds_until_daily_slot()
+    retry_m = max(1, min(DAILY_PICK_RETRY_MINUTES, 120))
+    return float(retry_m * 60)
+
+
+def _today_pick_exists() -> bool:
+    try:
+        from internal.council.daily_pick_engine import _find_today, _load
+
+        return _find_today(_load()) is not None
+    except Exception:
+        return False
 
 
 def _load_capped_subnets() -> Any:
@@ -170,22 +191,40 @@ class DailyPickScheduler:
 
     def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
         result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
+        today_ready = False
         try:
             from internal.council.daily_pick_engine import get_or_create_today_pick
 
             subnets = _load_capped_subnets()
             ctx = _market_context(subnets)
-            payload = get_or_create_today_pick(subnets, ctx, force=False)
-            result["ok"] = True
-            result["action"] = payload.get("action") if isinstance(payload, dict) else None
-            result["date"] = payload.get("date") if isinstance(payload, dict) else None
-            pick = payload.get("pick") if isinstance(payload, dict) else None
-            if isinstance(pick, dict):
-                sn = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
-                result["netuid"] = pick.get("netuid") or sn.get("netuid")
+            timeout = max(30, min(DAILY_PICK_TICK_TIMEOUT_SECONDS, 600))
+            pool = ThreadPoolExecutor(max_workers=1)
+            payload = None
+            try:
+                fut = pool.submit(get_or_create_today_pick, subnets, ctx, False)
+                try:
+                    payload = fut.result(timeout=timeout)
+                except FuturesTimeoutError:
+                    result["error"] = f"daily pick tick timed out after {timeout}s"
+                    logger.warning("%s", result["error"])
+            finally:
+                pool.shutdown(wait=False, cancel_futures=True)            if isinstance(payload, dict):
+                result["ok"] = True
+                result["action"] = payload.get("action")
+                result["date"] = payload.get("date")
+                pick = payload.get("pick")
+                if isinstance(pick, dict):
+                    sn = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
+                    result["netuid"] = pick.get("netuid") or sn.get("netuid")
+            # Engine return implies today was upserted; file probe covers hang/partial paths.
+            today_ready = isinstance(payload, dict) or _today_pick_exists()
+            if result["ok"] and not today_ready:
+                result["ok"] = False
+                result["error"] = result.get("error") or "today pick missing after tick"
         except Exception as exc:
             result["error"] = str(exc)
             logger.warning("daily pick scheduler tick failed: %s", exc)
+            today_ready = _today_pick_exists()
 
         with _lock:
             self._last_run_at = result["run_at"]
@@ -196,7 +235,10 @@ class DailyPickScheduler:
             }
 
         if reschedule and self._running:
-            schedule_in_seconds(DAILY_JOB_ID, self._tick, _seconds_until_daily_slot())
+            delay = _seconds_until_next_daily_tick(today_ready=today_ready)
+            schedule_in_seconds(DAILY_JOB_ID, self._tick, delay)
+            result["next_delay_seconds"] = delay
+            result["today_ready"] = today_ready
         return result
 
 

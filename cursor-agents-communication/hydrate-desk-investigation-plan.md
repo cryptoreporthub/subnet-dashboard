@@ -76,7 +76,7 @@ Homepage quiet copy matched trust gate: `Not enough graded picks yet (1/30)`.
 
 | Date | Finding | PR | Live verify |
 |------|---------|----|-----------|
-| | | | |
+| 2026-08-03 | Root cause: DailyPickScheduler always rescheduled to next UTC 00:15 after any tick — one failed/hung cold-start left the desk on eternal `pending`/`today's pick forming`. GET stays read-only (correct). Fix: retry every `DAILY_PICK_RETRY_MINUTES` until today exists; tick timeout; expose `pick_scheduler` on learning/health. | pending | pending |
 
 ---
 
@@ -156,7 +156,7 @@ Homepage quiet copy matched trust gate: `Not enough graded picks yet (1/30)`.
 
 | Problem | Status |
 |---------|--------|
-| Plan committed | IN PROGRESS |
-| P1 daily-pick pending | NOT STARTED |
+| Plan committed | DONE — #780 (or branch) |
+| P1 daily-pick pending | IN PROGRESS — retry/timeout fix |
 | P2 graded 1/30 | BLOCKED on P1 |
 | P3 judges busy | BLOCKED on P2 |
