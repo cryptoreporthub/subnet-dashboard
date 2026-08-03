@@ -28,7 +28,10 @@ DAILY_PICK_SLOT_UTC_MINUTE = int(os.environ.get("DAILY_PICK_SLOT_UTC_MINUTE", "1
 PICK_SCHEDULER_UNIVERSE_CAP = int(os.environ.get("PICK_SCHEDULER_UNIVERSE_CAP", "24"))
 # ponytail: one failed cold-start/slot tick must not wait until tomorrow 00:15.
 DAILY_PICK_RETRY_MINUTES = int(os.environ.get("DAILY_PICK_RETRY_MINUTES", "15"))
-DAILY_PICK_TICK_TIMEOUT_SECONDS = int(os.environ.get("DAILY_PICK_TICK_TIMEOUT_SECONDS", "180"))
+DAILY_PICK_TICK_TIMEOUT_SECONDS = int(os.environ.get("DAILY_PICK_TICK_TIMEOUT_SECONDS", "90"))
+PICK_SCHEDULER_STATE_PATH = os.environ.get(
+    "PICK_SCHEDULER_STATE_PATH", os.path.join("data", "pick_scheduler_state.json")
+)
 
 _lock = threading.Lock()
 _daily: Optional["DailyPickScheduler"] = None
@@ -70,13 +73,49 @@ def _seconds_until_next_daily_tick(*, today_ready: bool) -> float:
     return float(retry_m * 60)
 
 
-def _today_pick_exists() -> bool:
+def _today_pick_ready() -> bool:
+    """True when today's record is a finished decision (not a scheduler_hold placeholder)."""
     try:
         from internal.council.daily_pick_engine import _find_today, _load
 
-        return _find_today(_load()) is not None
+        rec = _find_today(_load())
+        if not isinstance(rec, dict):
+            return False
+        if rec.get("scheduler_hold"):
+            return False
+        return True
     except Exception:
         return False
+
+
+def _write_scheduler_state(extra: Optional[Dict[str, Any]] = None) -> None:
+    """Volume file so web /api/learning/health can see worker scheduler status."""
+    try:
+        payload = get_pick_scheduler_state()
+        if extra:
+            payload = {**payload, **extra}
+        payload["written_at"] = _now_iso()
+        path = PICK_SCHEDULER_STATE_PATH
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        tmp = path + ".tmp"
+        import json
+
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+        os.replace(tmp, path)
+    except Exception as exc:
+        logger.warning("pick scheduler state write failed: %s", exc)
+
+
+def load_pick_scheduler_state_file() -> Optional[Dict[str, Any]]:
+    try:
+        import json
+
+        with open(PICK_SCHEDULER_STATE_PATH, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
 
 
 def _load_capped_subnets() -> Any:
@@ -197,7 +236,7 @@ class DailyPickScheduler:
 
             subnets = _load_capped_subnets()
             ctx = _market_context(subnets)
-            timeout = max(30, min(DAILY_PICK_TICK_TIMEOUT_SECONDS, 600))
+            timeout = max(5, min(DAILY_PICK_TICK_TIMEOUT_SECONDS, 600))
             pool = ThreadPoolExecutor(max_workers=1)
             payload = None
             try:
@@ -217,22 +256,41 @@ class DailyPickScheduler:
                 if isinstance(pick, dict):
                     sn = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
                     result["netuid"] = pick.get("netuid") or sn.get("netuid")
-            # Engine return implies today was upserted; file probe covers hang/partial paths.
-            today_ready = isinstance(payload, dict) or _today_pick_exists()
-            if result["ok"] and not today_ready:
-                result["ok"] = False
-                result["error"] = result.get("error") or "today pick missing after tick"
+            today_ready = _today_pick_ready()
+            if not today_ready and result.get("error"):
+                try:
+                    from internal.council.daily_pick_engine import write_scheduler_hold
+
+                    hold = write_scheduler_hold(str(result["error"]))
+                    result["scheduler_hold"] = True
+                    result["action"] = hold.get("action")
+                    result["date"] = hold.get("date")
+                except Exception as hold_exc:
+                    logger.warning("scheduler hold write failed: %s", hold_exc)
+            elif result["ok"] and not today_ready:
+                # Placeholder HOLD still counts as progress for GET, but keep retrying.
+                result["error"] = result.get("error") or "today pick not ready (scheduler_hold)"
         except Exception as exc:
             result["error"] = str(exc)
             logger.warning("daily pick scheduler tick failed: %s", exc)
-            today_ready = _today_pick_exists()
+            today_ready = _today_pick_ready()
+            if not today_ready:
+                try:
+                    from internal.council.daily_pick_engine import write_scheduler_hold
+
+                    write_scheduler_hold(str(exc))
+                    result["scheduler_hold"] = True
+                except Exception as hold_exc:
+                    logger.warning("scheduler hold write failed: %s", hold_exc)
 
         with _lock:
             self._last_run_at = result["run_at"]
-            self._last_ok = result.get("ok")
+            self._last_ok = result.get("ok") and today_ready
             self._last_error = result.get("error")
             self._last_result = {
-                k: result.get(k) for k in ("action", "date", "netuid") if k in result
+                k: result.get(k)
+                for k in ("action", "date", "netuid", "scheduler_hold")
+                if k in result
             }
 
         if reschedule and self._running:
@@ -240,6 +298,7 @@ class DailyPickScheduler:
             schedule_in_seconds(DAILY_JOB_ID, self._tick, delay)
             result["next_delay_seconds"] = delay
             result["today_ready"] = today_ready
+        _write_scheduler_state({"last_tick": result})
         return result
 
 

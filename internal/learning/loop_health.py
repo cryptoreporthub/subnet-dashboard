@@ -324,9 +324,18 @@ def build_learning_loop_health(
     daily = _daily_pick_today(daily_picks_path)
 
     try:
-        from internal.council.pick_scheduler import get_pick_scheduler_state
+        from internal.council.pick_scheduler import (
+            get_pick_scheduler_state,
+            load_pick_scheduler_state_file,
+        )
 
         pick_scheduler = get_pick_scheduler_state()
+        # Web process has BACKGROUND_ON_WEB=off — prefer worker-written volume state.
+        daily_running = bool((pick_scheduler.get("daily") or {}).get("running"))
+        if not daily_running:
+            file_state = load_pick_scheduler_state_file()
+            if isinstance(file_state, dict):
+                pick_scheduler = {**pick_scheduler, **file_state, "source": "volume"}
     except Exception:
         pick_scheduler = {"enabled": None, "daily": {"running": False}, "hour": {"running": False}}
 
