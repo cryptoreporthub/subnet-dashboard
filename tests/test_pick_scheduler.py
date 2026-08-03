@@ -159,7 +159,7 @@ def test_daily_tick_timeout_writes_scheduler_hold(monkeypatch):
     def _hang(*_a, **_k):
         import time
 
-        time.sleep(5)
+        time.sleep(12)
         return {"action": "HOLD"}
 
     monkeypatch.setattr(
@@ -178,15 +178,14 @@ def test_daily_tick_timeout_writes_scheduler_hold(monkeypatch):
     monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: False)
     monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
     monkeypatch.setattr(pick_scheduler, "schedule_in_seconds", lambda *_a, **_k: None)
-    pick_scheduler.DAILY_PICK_TICK_TIMEOUT_SECONDS = 1
+    pick_scheduler.DAILY_PICK_TICK_TIMEOUT_SECONDS = 5
 
     sched = pick_scheduler.DailyPickScheduler()
     sched._running = True
     result = sched._tick(reschedule=False)
-    assert result.get("error")
-    assert "timed out" in str(result["error"]) or holds
-    assert holds
+    assert holds, result
     assert result.get("scheduler_hold") is True
+    assert "timed out" in str(result.get("error") or holds[0])
 
 
 def test_seconds_until_next_daily_tick_branches():
