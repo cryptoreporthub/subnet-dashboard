@@ -208,7 +208,8 @@ class DailyPickScheduler:
                     result["error"] = f"daily pick tick timed out after {timeout}s"
                     logger.warning("%s", result["error"])
             finally:
-                pool.shutdown(wait=False, cancel_futures=True)            if isinstance(payload, dict):
+                pool.shutdown(wait=False, cancel_futures=True)
+            if isinstance(payload, dict):
                 result["ok"] = True
                 result["action"] = payload.get("action")
                 result["date"] = payload.get("date")
