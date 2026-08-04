@@ -2732,7 +2732,8 @@
       });
   }
 
-  function renderPickCards(picks) {
+  function renderPickCards(picks, horizon) {
+    horizon = horizon === 'day' ? 'day' : 'hour';
     return (picks || []).map(function (pick, idx) {
       var tags = pick.scenario_tags || {};
       var isFallback = !!tags.fallback;
@@ -2744,8 +2745,15 @@
       } else if (isHold) {
         statusLine = '<div class="pick-degraded-note pick-degraded-note--hold">HOLD' + (pick.hold_reason ? ' · ' + esc(pick.hold_reason) : '') + '</div>';
       }
+      var leadClass =
+        idx === 0 ? ' pick-card--lead pick-card--lead-' + horizon : '';
       return (
-        '<div class="pick-card' + (isFallback ? ' pick-card--degraded' : '') + '">' +
+        '<div class="pick-card pick-card--reveal' +
+        leadClass +
+        (isFallback ? ' pick-card--degraded' : '') +
+        '" style="--pick-i:' +
+        idx +
+        '">' +
         '<div class="pick-rank">#' + (idx + 1) + '</div>' +
         '<div class="pick-name">' + esc(pickName(pick)) + '</div>' +
         '<div class="pick-meta">SN' + esc(pickNetuid(pick)) + ' · score <b class="accent-bright">' + fmt(pick.score, 1) + '</b></div>' +
@@ -2763,9 +2771,9 @@
     var html =
       '<div class="two-col">' +
       '<div class="card"><div class="card-head"><h3>Hour Horizon</h3><span class="src-tag">top ' + (hourPicks || []).length + ' · 1h</span></div>' +
-      '<div class="picks">' + (hourPicks && hourPicks.length ? renderPickCards(hourPicks) : '<p class="empty">No hour picks yet.</p>') + '</div></div>' +
+      '<div class="picks">' + (hourPicks && hourPicks.length ? renderPickCards(hourPicks, 'hour') : '<p class="empty">No hour picks yet.</p>') + '</div></div>' +
       '<div class="card"><div class="card-head"><h3>Day Horizon</h3><span class="src-tag">top ' + (dayPicks || []).length + ' · 24h</span></div>' +
-      '<div class="picks">' + (dayPicks && dayPicks.length ? renderPickCards(dayPicks) : '<p class="empty">No day picks yet.</p>') + '</div></div></div>';
+      '<div class="picks">' + (dayPicks && dayPicks.length ? renderPickCards(dayPicks, 'day') : '<p class="empty">No day picks yet.</p>') + '</div></div></div>';
     var section = document.getElementById('section-picks');
     if (!section) return;
     var host = section.querySelector('.two-col') || section.querySelector('.card-muted');
@@ -3405,23 +3413,40 @@
     var canvas = document.getElementById('radarChart');
     if (canvas) {
       canvas.setAttribute('data-radar', JSON.stringify(payload));
+      var wrap = canvas.closest('.chart-canvas-wrap');
+      if (wrap) wrap.classList.add('chart-canvas-wrap--radar');
       return;
     }
     var ranked = subnets.slice().sort(function (a, b) {
       return (Number(b.emission) || 0) - (Number(a.emission) || 0);
     }).slice(0, 3);
-    var legend = ranked.map(function (sn) {
+    var legend = ranked.map(function (sn, idx) {
       var nu = subnetNetuid(sn);
       var em = Number(sn.emission) || 0;
       var chg = Number(sn.price_change_24h) || 0;
+      var mom = Math.min(50 + chg * 2, 100);
+      var barClass = chg >= 0 ? 'radar-item__bar--up' : 'radar-item__bar--down';
       return (
-        '<div class="radar-item"><div class="name">' + esc(subnetName(sn)) + '</div>' +
-        '<div class="meta">emission ' + fmt(em, 2) + ' · 24h ' + fmtSigned(chg) + '</div></div>'
+        '<div class="radar-item radar-item--enter' +
+        (idx === 0 ? ' radar-item--lead' : '') +
+        '" style="--radar-i:' +
+        idx +
+        '"><div class="name">' +
+        esc(subnetName(sn)) +
+        '</div><div class="meta">emission ' +
+        fmt(em, 2) +
+        ' · 24h ' +
+        fmtSigned(chg) +
+        '</div><div class="radar-item__track" aria-hidden="true"><div class="radar-item__bar ' +
+        barClass +
+        '" style="width:' +
+        mom +
+        '%"></div></div></div>'
       );
     }).join('');
     var html =
       '<div class="card momentum-grid"><div class="card"><div class="card-head"><h3>Subnet Radar</h3>' +
-      '<span class="src-tag">top 3 · canvas</span></div><div class="chart-box"><div class="chart-canvas-wrap">' +
+      '<span class="src-tag">top 3 · canvas</span></div><div class="chart-box"><div class="chart-canvas-wrap chart-canvas-wrap--radar">' +
       '<canvas id="radarChart" data-radar="' + JSON.stringify(payload).replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '" aria-label="Subnet undervalued radar chart"></canvas>' +
       '</div></div></div><div class="card"><div class="card-head"><h3>Overlay Legend</h3></div>' +
       '<p class="section-sub section-sub--compact">Green = yield-vs-momentum undervalued score. Cyan = 24h momentum overlay.</p>' +
