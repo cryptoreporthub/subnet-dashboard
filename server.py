@@ -207,6 +207,15 @@ def _registry_name_boot_sync() -> None:
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     """Boot background workers on web when BACKGROUND_ON_WEB allows; on dedicated worker VM too."""
+    # Cap the default asyncio thread pool so timed-out 'to_thread' zombies cannot exhaust
+    # all slots and cause subsequent requests to queue >8 s before even starting.
+    # ponytail: min(32, cpu+4) default is 8-12 on Fly hosts; 4 is the right cap for shared-cpu-1x.
+    _pool_cap = int(os.environ.get("AIO_WORKER_POOL_SIZE", "4"))
+    from concurrent.futures import ThreadPoolExecutor as _TPE
+    asyncio.get_running_loop().set_default_executor(
+        _TPE(max_workers=_pool_cap, thread_name_prefix="aio-worker")
+    )
+
     from internal.run_mode import (
         background_boot_allowed,
         background_on_web,
@@ -522,6 +531,10 @@ _SIMIVISION_BG_LOCK = threading.Lock()
 _SIMIVISION_BG_REFRESHING = False
 _HOUR_PICK_TTL = float(os.environ.get("HOUR_PICK_CACHE_SECONDS", "60"))
 _HOUR_PICK_LOCK = threading.Lock()
+# Single-flight guard: at most one thread rebuilds the weighed shortlist at a time.
+# Without this, N concurrent /api/daily-pick/weighed cache-misses each submit to the
+# executor, exhausting the pool and triggering timeout cascades.
+_WEIGHED_BUILD_LOCK = threading.Lock()
 _HOUR_PICK_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 _PUMP_ALERTS_TTL = float(os.environ.get("PUMP_ALERTS_CACHE_SECONDS", "30"))
 _PUMP_ALERTS_LOCK = threading.Lock()
@@ -2520,7 +2533,17 @@ async def api_daily_pick_weighed():
         existing = _find_today(_load())
         if existing is None:
             return {"shortlist": []}
-        return {"shortlist": _daily_pick_weighed_shortlist(existing)}
+        # Single-flight: if another thread is already scoring the shortlist, return
+        # the stale cache rather than piling on another expensive build.
+        if not _WEIGHED_BUILD_LOCK.acquire(blocking=False):
+            from internal.council.shortlist_cache import cached_shortlist
+
+            stale = cached_shortlist(existing, lambda: [])
+            return {"shortlist": stale, "status": "busy"}
+        try:
+            return {"shortlist": _daily_pick_weighed_shortlist(existing)}
+        finally:
+            _WEIGHED_BUILD_LOCK.release()
 
     try:
         return await _to_thread_timeout(_build, PICK_HANDLER_TIMEOUT, label="daily-pick-weighed")
@@ -2611,20 +2634,32 @@ def api_pick_explain(netuid: int):
 
 
 @app.get("/api/top-pick/day")
-def api_top_pick_day():
-    """Top pick for the current day, with a safe highest-emission fallback."""
-    subnets, _ = _get_subnets_with_source()
-    day_pick = None
-    if _PICKS_ENGINE:
-        market_context = _market_context_with_weights(subnets)
-        try:
-            raw = get_or_create_today_pick(subnets, market_context)
-            day_pick = raw.get("pick") if isinstance(raw, dict) and raw.get("pick") else raw
-        except Exception as exc:
-            logger.error("Error selecting daily pick: %s", exc)
-    if not day_pick:
+async def api_top_pick_day():
+    """Top pick for the current day — lite JSON read first, subnet fallback only when needed.
+
+    Runs async with a timeout so a slow subnets fetch cannot wedge the single Fly worker.
+    Never calls select_daily_pick / get_or_create_today_pick on the API path.
+    """
+
+    def _build():
+        # Fast path: return the already-persisted pick without any network call.
+        if _PICKS_ENGINE:
+            from internal.council.daily_pick_engine import _find_today, _load
+
+            existing = _find_today(_load())
+            if isinstance(existing, dict) and existing.get("pick"):
+                return {"picks": [existing["pick"]]}
+        # Fallback: highest emission from a quick subnet fetch.
+        subnets, _ = _get_subnets_with_source(timeout=4.0)
         return {"picks": [_highest_emission_pick(subnets)]}
-    return {"picks": [day_pick]}
+
+    try:
+        return await _to_thread_timeout(_build, PICK_HANDLER_TIMEOUT, label="top-pick-day")
+    except asyncio.TimeoutError:
+        return {"picks": [], "status": "timeout"}
+    except Exception as exc:
+        logger.error("top-pick/day failed: %s", exc)
+        return {"picks": [], "error": str(exc)}
 
 
 @app.get("/api/top-pick/hour")
