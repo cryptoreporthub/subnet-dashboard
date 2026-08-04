@@ -561,7 +561,8 @@ _INSTANT_HOME_SHELL = """<!DOCTYPE html>
 <meta name="theme-color" content="#080a10">
 <style>html,body{margin:0;min-height:100%;background:#04060e;color:#e8f0e9;font-family:system-ui,sans-serif}</style>
 </head>
-<body><p style="padding:1.5rem;font-family:JetBrains Mono,monospace;font-size:14px;color:#8cb39f">Loading council desk…</p></body>
+<body><p style="padding:1.5rem;font-family:JetBrains Mono,monospace;font-size:14px;color:#8cb39f">Loading council desk…</p>
+<script>setTimeout(function(){location.reload()},4000)</script></body>
 </html>"""
 
 
@@ -581,8 +582,12 @@ def _prime_emergency_home_html() -> str:
     global _EMERGENCY_HOME_HTML
     if _EMERGENCY_HOME_HTML:
         return _EMERGENCY_HOME_HTML
-    ctx = _minimal_index_context(_HomepageStubRequest())
-    _EMERGENCY_HOME_HTML = templates.get_template("index.html").render(ctx)
+    try:
+        ctx = _minimal_index_context(_HomepageStubRequest())
+        _EMERGENCY_HOME_HTML = templates.get_template("index.html").render(ctx)
+    except Exception as exc:
+        logger.warning("emergency home prime failed: %s", exc)
+        return _EMERGENCY_HOME_HTML or _INSTANT_HOME_SHELL
     return _EMERGENCY_HOME_HTML
 
 
