@@ -1259,11 +1259,13 @@ def _bailout_homepage_html() -> Optional[str]:
     _schedule_homepage_warm(None)
     if _EMERGENCY_HOME_HTML:
         return _EMERGENCY_HOME_HTML
-    try:
-        return _prime_emergency_home_html()
-    except Exception as exc:
-        logger.warning("bailout emergency prime failed: %s", exc)
-        return _INSTANT_HOME_SHELL
+    # ponytail: never sync-prime here — blocks the ASGI loop and wedges /health (Fly 36s 503).
+    threading.Thread(
+        target=_prime_emergency_home_html,
+        daemon=True,
+        name="bailout-emergency-prime",
+    ).start()
+    return _INSTANT_HOME_SHELL
 
 
 def _schedule_homepage_warm(request: Optional[Request] = None) -> None:

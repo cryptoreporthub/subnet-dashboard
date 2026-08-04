@@ -84,8 +84,8 @@ def test_hardcoded_emergency_has_inline_css():
     assert b"location.reload" not in HARDCODED_EMERGENCY_HTML
 
 
-def test_bailout_homepage_primes_emergency_shell():
-    """Cold bailout must return the full emergency shell, not None → hardcoded pulse."""
+def test_bailout_homepage_cold_returns_instant_shell_without_blocking():
+    """Cold bailout must not sync-render Jinja — that wedges /health on Fly."""
     import server as srv
 
     srv._HOMEPAGE_HTML_CACHE["html"] = None
@@ -94,6 +94,38 @@ def test_bailout_homepage_primes_emergency_shell():
     t0 = time.monotonic()
     html = srv._bailout_homepage_html()
     elapsed = time.monotonic() - t0
-    assert html is not None
-    assert "section-message-intel" in html or "message-intel" in html
-    assert elapsed < 8.0
+    assert html == srv._INSTANT_HOME_SHELL
+    assert elapsed < 0.5
+
+
+def test_bailout_health_instant_when_homepage_prime_would_hang():
+    import server as srv
+    from unittest.mock import patch
+
+    def _hang_prime():
+        time.sleep(30)
+
+    app = wrap_instant_bailout(
+        _wedged_app,
+        get_homepage_html=srv._bailout_homepage_html,
+        schedule_warm=lambda: None,
+    )
+    transport = httpx.ASGITransport(app=app)
+
+    async def _check():
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            srv._HOMEPAGE_HTML_CACHE["html"] = None
+            srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
+            srv._EMERGENCY_HOME_HTML = ""
+            with patch.object(srv, "_prime_emergency_home_html", side_effect=_hang_prime):
+                t0 = time.time()
+                health = await client.get("/health")
+                root = await client.get("/")
+                return health, root, time.time() - t0
+
+    health, root, elapsed = _run(_check())
+    assert health.status_code == 200
+    assert health.text == "OK"
+    assert root.status_code == 200
+    assert "Loading council desk" in root.text
+    assert elapsed < 1.0
