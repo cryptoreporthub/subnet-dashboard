@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<script>document.documentElement.dataset.hydrate = '0';</script>
+<style>
+  .tribunal-preview-frame {
+    max-width: 390px; margin: 0 auto;
+    border-left: 1px solid #222; border-right: 1px solid #222;
+  }
+</style>
+<div class="tribunal-preview-frame app-shell council-first">
+  {% include "partials/premium/tribunal_hero.html" %}
+</div>
+{% endblock %}

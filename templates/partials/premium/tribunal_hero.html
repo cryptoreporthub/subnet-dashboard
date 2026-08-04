@@ -1,0 +1,177 @@
+{# Tribunal hero v3 — preview + future live wire. Preserved IDs: k3-orb-score, k3-action-badge, k3-call-headline #}
+{% set t = tribunal %}
+<section class="tribunal-hero" id="tribunal-hero" data-verdict-kind="{{ t.verdict_kind }}">
+  <header class="tribunal-hero__brand brand-mist" id="tribunal-hero-title">{{ t.subnet_label }}</header>
+
+  <div class="tribunal-hero__stage">
+  <svg class="tribunal-hero__wiring" viewBox="0 0 390 520" aria-hidden="true">
+    <g class="tribunal-hero__mesh">
+      <line class="tribunal-hero__mesh-line" x1="195" y1="240" x2="0" y2="0" />
+      <line class="tribunal-hero__mesh-line" x1="195" y1="240" x2="390" y2="0" />
+      <line class="tribunal-hero__mesh-line" x1="195" y1="240" x2="0" y2="520" />
+      <line class="tribunal-hero__mesh-line" x1="195" y1="240" x2="390" y2="520" />
+      <line class="tribunal-hero__mesh-line" x1="195" y1="240" x2="195" y2="0" />
+      <line class="tribunal-hero__mesh-line" x1="195" y1="240" x2="0" y2="260" />
+      <line class="tribunal-hero__mesh-line" x1="195" y1="240" x2="390" y2="260" />
+      <line class="tribunal-hero__mesh-line" x1="195" y1="240" x2="195" y2="520" />
+      <line class="tribunal-hero__mesh-line" x1="123" y1="168" x2="0" y2="80" />
+      <line class="tribunal-hero__mesh-line" x1="267" y1="168" x2="390" y2="80" />
+      <line class="tribunal-hero__mesh-line" x1="128" y1="272" x2="0" y2="420" />
+      <line class="tribunal-hero__mesh-line" x1="262" y1="272" x2="390" y2="420" />
+      <line class="tribunal-hero__mesh-line" x1="123" y1="168" x2="267" y2="168" />
+      <line class="tribunal-hero__mesh-line" x1="128" y1="272" x2="262" y2="272" />
+      <line class="tribunal-hero__mesh-line" x1="123" y1="168" x2="128" y2="272" />
+      <line class="tribunal-hero__mesh-line" x1="267" y1="168" x2="262" y2="272" />
+      <line class="tribunal-hero__mesh-line" x1="123" y1="168" x2="262" y2="272" />
+      <line class="tribunal-hero__mesh-line" x1="267" y1="168" x2="128" y2="272" />
+      <line class="tribunal-hero__mesh-line" x1="195" y1="168" x2="60" y2="140" />
+      <line class="tribunal-hero__mesh-line" x1="195" y1="168" x2="330" y2="140" />
+      <line class="tribunal-hero__mesh-line" x1="128" y1="272" x2="48" y2="340" />
+      <line class="tribunal-hero__mesh-line" x1="262" y1="272" x2="342" y2="340" />
+      <line class="tribunal-hero__mesh-line" x1="195" y1="312" x2="195" y2="480" />
+      <line class="tribunal-hero__mesh-line" x1="160" y1="200" x2="80" y2="180" />
+      <line class="tribunal-hero__mesh-line" x1="230" y1="200" x2="310" y2="180" />
+      <line class="tribunal-hero__mesh-line" x1="150" y1="300" x2="70" y2="380" />
+      <line class="tribunal-hero__mesh-line" x1="240" y1="300" x2="320" y2="380" />
+      <path class="tribunal-hero__mesh-line" d="M60 140 L195 240 L330 140" />
+      <path class="tribunal-hero__mesh-line" d="M48 340 L128 272 L195 240" />
+      <path class="tribunal-hero__mesh-line" d="M342 340 L262 272 L195 240" />
+      <path class="tribunal-hero__mesh-line" d="M0 260 L128 272 L195 312" />
+      <path class="tribunal-hero__mesh-line" d="M390 260 L262 272 L195 312" />
+    </g>
+
+    <circle class="tribunal-hero__ring-inner" cx="195" cy="240" r="58" fill="none" />
+    <g class="tribunal-hero__ring-ticks">
+      {% for i in range(36) %}
+      <line class="tribunal-hero__ring-tick" x1="195" y1="168" x2="195" y2="164" transform="rotate({{ i * 10 }} 195 240)" />
+      {% endfor %}
+    </g>
+    <circle class="tribunal-hero__ring-track" cx="195" cy="240" r="72" fill="none" />
+    <circle
+      class="tribunal-hero__ring-fill"
+      cx="195"
+      cy="240"
+      r="72"
+      fill="none"
+      transform="rotate(-90 195 240)"
+      stroke-dasharray="{{ t.ring_circ }}"
+      stroke-dashoffset="{{ t.ring_dash_offset }}"
+    />
+    <g class="tribunal-hero__ring-brackets">
+      <path class="tribunal-hero__ring-bracket" d="M118 175 L118 155 L138 155" />
+      <path class="tribunal-hero__ring-bracket" d="M292 175 L292 155 L272 155" />
+      <path class="tribunal-hero__ring-bracket" d="M118 325 L118 345 L138 345" />
+      <path class="tribunal-hero__ring-bracket" d="M292 325 L292 345 L272 345" />
+    </g>
+
+    <path class="tribunal-hero__power tribunal-hero__power--oracle" d="M195 52 C195 92 195 128 195 168" />
+    <path class="tribunal-hero__power tribunal-hero__power--echo" d="M48 420 C72 360 98 310 128 272" />
+    <path class="tribunal-hero__power tribunal-hero__power--pulse" d="M342 420 C318 360 292 310 262 272" />
+    <circle class="tribunal-hero__entry-node" cx="195" cy="168" r="5" />
+    <circle class="tribunal-hero__entry-node" cx="128" cy="272" r="5" />
+    <circle class="tribunal-hero__entry-node" cx="262" cy="272" r="5" />
+  </svg>
+
+  <div class="tribunal-hero__ring-glow" aria-hidden="true"></div>
+  <div class="tribunal-hero__rim-dots" aria-hidden="true">
+    <span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <div class="tribunal-hero__ring-center">
+    <span id="k3-orb-score" class="tribunal-hero__pct">{% if t.conviction_pct is not none %}{{ t.conviction_pct }}%{% else %}—{% endif %}</span>
+    <span class="tribunal-hero__pct-label">VERDICT CONFIDENCE</span>
+    <span id="k3-action-badge" class="tribunal-hero__verdict-label">{{ t.center_label }}</span>
+  </div>
+
+  {% for judge in t.judges %}
+  <article class="tribunal-hero__judge tribunal-hero__judge--{{ judge.key }}" data-judge="{{ judge.key }}">
+    <div class="tribunal-hero__judge-head">
+      <span class="tribunal-hero__judge-weight" data-judge-weight>{{ judge.weight_pct }}</span>
+      <svg class="tribunal-hero__judge-glyph" viewBox="0 0 16 16" aria-hidden="true">
+        {% if judge.key == 'oracle' %}
+        <circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.5" />
+        <circle cx="8" cy="8" r="2" fill="currentColor" />
+        {% elif judge.key == 'echo' %}
+        <path d="M3 8 Q8 3 13 8 Q8 13 3 8" fill="none" stroke="currentColor" stroke-width="1.5" />
+        {% else %}
+        <path d="M4 4 L12 4 L8 12 Z" fill="none" stroke="currentColor" stroke-width="1.5" />
+        {% endif %}
+      </svg>
+    </div>
+    <h3 class="tribunal-hero__judge-name">{{ judge.label }}</h3>
+    <div class="tribunal-hero__last5" data-last5{% if not judge.last5 %} hidden{% endif %}>
+      <span class="tribunal-hero__last5-caption">LAST 5</span>
+      <div class="tribunal-hero__last5-ticks" aria-hidden="true">
+        {% if judge.last5 %}
+          {% for tick in judge.last5 %}
+            {% if tick is sameas true %}
+              <span class="tribunal-hero__tick tribunal-hero__tick--hit"></span>
+            {% elif tick is sameas false %}
+              <span class="tribunal-hero__tick tribunal-hero__tick--miss"></span>
+            {% else %}
+              <span class="tribunal-hero__tick tribunal-hero__tick--empty"></span>
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+  </article>
+  {% endfor %}
+  </div>
+
+  <p id="k3-call-headline" class="tribunal-hero__sr-only">{{ t.headline }}</p>
+
+  <footer class="tribunal-hero__metrics">
+    <div class="tribunal-hero__metric" data-metric="accuracy">
+      <svg class="tribunal-hero__metric-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5" />
+        <path d="M7 14 L10 10 L13 13 L17 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <div class="tribunal-hero__metric-body">
+        <span class="tribunal-hero__metric-label">{{ t.metrics.accuracy.label }}</span>
+        <span class="tribunal-hero__metric-sub" data-metric-sub>{{ t.metrics.accuracy.sub }}</span>
+        {% if t.metrics.accuracy.bar_pct is not none %}
+        <div class="tribunal-hero__metric-bar" aria-hidden="true">
+          <span class="tribunal-hero__metric-bar-fill" style="width: {{ t.metrics.accuracy.bar_pct }}%"></span>
+        </div>
+        {% endif %}
+      </div>
+      <span class="tribunal-hero__metric-value" data-metric-value>{{ t.metrics.accuracy.value }}</span>
+    </div>
+    <div class="tribunal-hero__metric" data-metric="recent">
+      <svg class="tribunal-hero__metric-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5" />
+        <circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.5" />
+        <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+      </svg>
+      <div class="tribunal-hero__metric-body">
+        <span class="tribunal-hero__metric-label">{{ t.metrics.recent.label }}</span>
+        <span class="tribunal-hero__metric-sub" data-metric-sub>{{ t.metrics.recent.sub }}</span>
+        {% if t.metrics.recent.bar_pct is not none %}
+        <div class="tribunal-hero__metric-bar" aria-hidden="true">
+          <span class="tribunal-hero__metric-bar-fill" style="width: {{ t.metrics.recent.bar_pct }}%"></span>
+        </div>
+        {% endif %}
+        {% if t.metrics.recent.ticks %}
+        <div class="tribunal-hero__last5-ticks tribunal-hero__last5-ticks--council" aria-hidden="true">
+          {% for tick in t.metrics.recent.ticks %}
+            {% if tick is sameas true %}
+              <span class="tribunal-hero__tick tribunal-hero__tick--hit"></span>
+            {% elif tick is sameas false %}
+              <span class="tribunal-hero__tick tribunal-hero__tick--miss"></span>
+            {% else %}
+              <span class="tribunal-hero__tick tribunal-hero__tick--empty"></span>
+            {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <span class="tribunal-hero__metric-value" data-metric-value>{{ t.metrics.recent.value }}</span>
+    </div>
+    <div class="tribunal-hero__metric" data-metric="alignment" hidden aria-hidden="true">
+      <span class="tribunal-hero__metric-label">Market Alignment</span>
+      <span class="tribunal-hero__metric-value" aria-hidden="true">—</span>
+    </div>
+  </footer>
+</section>

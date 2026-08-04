@@ -3855,11 +3855,193 @@
     run();
   }
 
+  // ---------- Tribunal hero v3 (preview + future live wire) ----------
+  var TRIBUNAL_RING_CIRC = 452.39;
+
+  function verdictKind(payload) {
+    if (!payload) return 'cold';
+    var act = String(payload.action || 'HOLD').toUpperCase();
+    if (act === 'BUY') act = 'LONG';
+    if (payload.pick && act === 'LONG') return 'sealed';
+    if (!payload.pick && payload.candidate && act === 'HOLD') return 'gated';
+    if (String(payload.status || '').toLowerCase() === 'pending') return 'forming';
+    return 'cold';
+  }
+
+  function tribunalCenterLabel(payload, kind) {
+    kind = kind || verdictKind(payload);
+    if (kind === 'sealed') {
+      var act = String(payload.action || 'LONG').toUpperCase();
+      if (act === 'BUY') act = 'LONG';
+      return 'SEALED · ' + act;
+    }
+    if (kind === 'gated') return 'GATED · HOLD';
+    if (kind === 'forming') return 'FORMING';
+    return 'COLD';
+  }
+
+  function tribunalConvictionPct(payload) {
+    if (!payload) return null;
+    var active = payload.pick || payload.candidate;
+    if (!active) return null;
+    var raw =
+      active.final_confidence != null
+        ? active.final_confidence
+        : active.confidence != null
+          ? active.confidence
+          : active.conviction;
+    if (raw == null || isNaN(Number(raw))) return null;
+    var val = Number(raw);
+    if (val <= 1) val *= 100;
+    return Math.round(val);
+  }
+
+  function tribunalSubnetLabel(payload) {
+    if (!payload) return 'Awaiting subnet';
+    var active = payload.pick || payload.candidate;
+    if (!active) return 'Awaiting subnet';
+    var sn = active.subnet;
+    if (!sn) return 'Awaiting subnet';
+    var name = String(sn.name || '').trim();
+    var netuid = sn.netuid;
+    if (netuid == null) return name || '—';
+    var snPrefix = 'SN' + netuid;
+    if (!name || name.toUpperCase() === snPrefix.toUpperCase() || /^SN\d+$/i.test(name)) {
+      return snPrefix;
+    }
+    return snPrefix + ' · ' + name;
+  }
+
+  function formatJudgeWeightPct(weight) {
+    if (weight == null || isNaN(Number(weight))) return '—';
+    return String(Math.round(Number(weight) * 100)) + '%';
+  }
+
+  function patchTribunalRingFill(pct) {
+    var hero = document.getElementById('tribunal-hero');
+    if (!hero) return;
+    var fill = hero.querySelector('.tribunal-hero__ring-fill');
+    if (!fill) return;
+    var offset = TRIBUNAL_RING_CIRC;
+    if (pct != null && !isNaN(Number(pct))) {
+      var clamped = Math.max(0, Math.min(100, Number(pct)));
+      offset = TRIBUNAL_RING_CIRC - (TRIBUNAL_RING_CIRC * clamped / 100);
+    }
+    fill.setAttribute('stroke-dashoffset', String(offset));
+  }
+
+  function renderTribunalLast5Ticks(container, last5) {
+    if (!container) return;
+    if (!last5 || !last5.length) {
+      container.hidden = true;
+      return;
+    }
+    var ticks = container.querySelector('.tribunal-hero__last5-ticks');
+    if (!ticks) return;
+    ticks.innerHTML = last5.slice(0, 5).map(function (hit) {
+      if (hit === true) return '<span class="tribunal-hero__tick tribunal-hero__tick--hit"></span>';
+      if (hit === false) return '<span class="tribunal-hero__tick tribunal-hero__tick--miss"></span>';
+      return '<span class="tribunal-hero__tick tribunal-hero__tick--empty"></span>';
+    }).join('');
+    container.hidden = false;
+  }
+
+  function patchTribunalJudges(stats) {
+    var hero = document.getElementById('tribunal-hero');
+    if (!hero || !stats) return;
+    var weights = stats.judge_weights || {};
+    var last5Map = stats.judge_last5 || {};
+    hero.querySelectorAll('[data-judge]').forEach(function (seat) {
+      var key = seat.getAttribute('data-judge');
+      var weightEl = seat.querySelector('[data-judge-weight]');
+      if (weightEl) weightEl.textContent = formatJudgeWeightPct(weights[key]);
+      var last5El = seat.querySelector('[data-last5]');
+      if (last5El) renderTribunalLast5Ticks(last5El, last5Map[key]);
+    });
+  }
+
+  function patchTribunalMetrics(stats) {
+    var hero = document.getElementById('tribunal-hero');
+    if (!hero || !stats) return;
+    var tb = stats.trust_banner || {};
+    var acc = hero.querySelector('[data-metric="accuracy"]');
+    if (acc) {
+      var accVal = acc.querySelector('[data-metric-value]');
+      var accSub = acc.querySelector('[data-metric-sub]');
+      if (tb.ready && tb.accuracy != null) {
+        if (accVal) accVal.textContent = String(Math.round(Number(tb.accuracy) * 100)) + '%';
+        if (accSub) accSub.textContent = tb.headline || '';
+      } else {
+        if (accVal) accVal.textContent = '—';
+        if (accSub) accSub.textContent = tb.message || 'Sample building';
+      }
+    }
+    var recent = hero.querySelector('[data-metric="recent"]');
+    if (recent) {
+      var recentVal = recent.querySelector('[data-metric-value]');
+      var recentSub = recent.querySelector('[data-metric-sub]');
+      var graded = Number(tb.graded) || 0;
+      var correct = Number(tb.correct) || 0;
+      var wrong = Number(tb.wrong) || 0;
+      if (graded > 0 && correct + wrong > 0) {
+        if (recentVal) recentVal.textContent = String(Math.round((correct / (correct + wrong)) * 100)) + '%';
+        if (recentSub) recentSub.textContent = 'Last ' + graded + ' graded council calls';
+      } else {
+        if (recentVal) recentVal.textContent = '—';
+        if (recentSub) recentSub.textContent = '';
+      }
+      var councilTicks = recent.querySelector('.tribunal-hero__last5-ticks--council');
+      if (stats.council_last5 && stats.council_last5.length === 5) {
+        if (!councilTicks) {
+          councilTicks = document.createElement('div');
+          councilTicks.className = 'tribunal-hero__last5-ticks tribunal-hero__last5-ticks--council';
+          councilTicks.setAttribute('aria-hidden', 'true');
+          recent.appendChild(councilTicks);
+        }
+        councilTicks.innerHTML = stats.council_last5.map(function (hit) {
+          if (hit === true) return '<span class="tribunal-hero__tick tribunal-hero__tick--hit"></span>';
+          if (hit === false) return '<span class="tribunal-hero__tick tribunal-hero__tick--miss"></span>';
+          return '<span class="tribunal-hero__tick tribunal-hero__tick--empty"></span>';
+        }).join('');
+      } else if (councilTicks) {
+        councilTicks.remove();
+      }
+    }
+  }
+
+  function renderTribunalHero(dailyPick, learningStats) {
+    var hero = document.getElementById('tribunal-hero');
+    if (!hero || !dailyPick) return false;
+    var kind = verdictKind(dailyPick);
+    hero.setAttribute('data-verdict-kind', kind);
+    var title = document.getElementById('tribunal-hero-title');
+    if (title) title.textContent = tribunalSubnetLabel(dailyPick);
+    var badge = document.getElementById('k3-action-badge');
+    if (badge) badge.textContent = tribunalCenterLabel(dailyPick, kind);
+    var pct = kind === 'forming' || kind === 'cold' ? null : tribunalConvictionPct(dailyPick);
+    var orb = document.getElementById('k3-orb-score');
+    if (orb) orb.textContent = pct != null ? String(pct) + '%' : '—';
+    patchTribunalRingFill(pct);
+    var headline = document.getElementById('k3-call-headline');
+    if (headline) {
+      var line = tribunalCenterLabel(dailyPick, kind);
+      if (pct != null) line += ' — ' + pct + '% conviction';
+      headline.textContent = line;
+    }
+    if (learningStats) {
+      patchTribunalJudges(learningStats);
+      patchTribunalMetrics(learningStats);
+    }
+    return true;
+  }
+
   // Canonical K3 dossier writer: renderDailyPick → patchK3DossierFromPayload.
   // home_live_refresh.js delegates here when #k3-dossier exists — no third writer.
   window.__cockpitHome = {
     renderHero: renderHero,
     renderDailyPick: renderDailyPick,
     renderPumpAlerts: renderPumpAlerts,
+    renderTribunalHero: renderTribunalHero,
+    verdictKind: verdictKind,
   };
 })();
