@@ -229,6 +229,8 @@ def test_learning_stats_exposes_judge_and_council_last5():
     resp = TestClient(app).get("/api/learning/stats")
     assert resp.status_code == 200
     data = resp.json()["data"]
+    assert "judge_weight_deltas" in data
+    assert isinstance(data["judge_weight_deltas"], dict)
     assert "judge_last5" in data
     assert "council_last5" in data
     assert set(data["judge_last5"]) == {"oracle", "echo", "pulse"}
