@@ -721,6 +721,8 @@ async def api_learning_loop_health():
 
 @learning_router.get("/api/learning/stats")
 async def api_learning_stats():
+    from internal.learning.weight_deltas import recent_judge_weight_deltas
+
     snap = _learning_snapshot()
     stats = snap["engine_stats"]
     scenario = snap["scenario"]
@@ -733,6 +735,7 @@ async def api_learning_stats():
         "data": {
             "expert_weights": stats.get("expert_weights", {}),
             "judge_weights": snap.get("judge_weights", {}),
+            "judge_weight_deltas": recent_judge_weight_deltas(),
             "judge_last5": snap.get("judge_last5", {}),
             "council_last5": snap.get("council_last5", []),
             "total_records": resolver_stats.get("total", stats.get("total_records", 0)),
