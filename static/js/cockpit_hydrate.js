@@ -31,6 +31,7 @@
 
   function maybeClearShellWarmingEarly() {
     if (
+      document.getElementById('tribunal-hero') ||
       document.getElementById('k3-claim') ||
       document.querySelector('#k3-dossier #k3-claim-identity:not([hidden])')
     ) {
@@ -1254,6 +1255,7 @@
   function patchK3DossierFromPayload(payload) {
     if (!payload || !document.getElementById('k3-dossier')) return false;
     if (!shouldApplyDailyPickPayload(payload)) return false;
+    var tribunalHero = document.getElementById('tribunal-hero');
     if (_k3ConfResolvingTimer) {
       clearTimeout(_k3ConfResolvingTimer);
       _k3ConfResolvingTimer = null;
@@ -1292,10 +1294,12 @@
       _k3ConfResolvingTimer = setTimeout(function () {
         _k3ConfResolvingTimer = null;
         var el = document.getElementById('k3-dossier');
-    if (el && el.getAttribute('data-conf-state') === 'resolving') {
+        if (el && el.getAttribute('data-conf-state') === 'resolving') {
           el.setAttribute('data-conf-state', 'delayed');
-          var delayedLabel = document.getElementById('k3-orb-label');
-          if (delayedLabel) delayedLabel.textContent = 'delayed';
+          if (!tribunalHero) {
+            var delayedLabel = document.getElementById('k3-orb-label');
+            if (delayedLabel) delayedLabel.textContent = 'delayed';
+          }
         }
       }, 15000);
     }
@@ -1303,13 +1307,13 @@
     if (actRaw === 'BUY') actRaw = 'LONG';
     var snLabel = sn.name || (sn.netuid != null ? 'SN' + sn.netuid : '');
 
-    if (brief.move && actRaw === 'LONG') {
+    if (brief.move && actRaw === 'LONG' && !tribunalHero) {
       setText('k3-call-headline', brief.move);
       var headline = document.getElementById('k3-call-headline');
       if (headline) {
         headline.className = 'k3-call-headline k3-call-headline--' + (brief.tone || 'neutral');
       }
-    } else if (snLabel) {
+    } else if (snLabel && !tribunalHero) {
       var headlineEl = document.getElementById('k3-call-headline');
       if (headlineEl) {
         headlineEl.textContent = (actRaw === 'LONG' ? 'LONG' : 'HOLD') + ' · ' + snLabel;
@@ -1322,10 +1326,10 @@
     var claimDesc = document.getElementById('k3-claim-desc');
     var claimIdentity = document.getElementById('k3-claim-identity');
     var claimHeadName = document.getElementById('k3-claim-head-name');
-    if (claimHeadName && snLabel) {
+    if (claimHeadName && snLabel && !tribunalHero) {
       claimHeadName.textContent = snLabel;
     }
-    if (typeof window.k3SyncNetuidBand === 'function') {
+    if (!tribunalHero && typeof window.k3SyncNetuidBand === 'function') {
       window.k3SyncNetuidBand(sn.netuid);
     }
     if (claimName) {
@@ -1356,13 +1360,15 @@
       claimIdentity.hidden = !(snLabel || (claimDesc && !claimDesc.hidden));
     }
     var actionBadge = document.getElementById('k3-action-badge');
-    if (actionBadge) {
+    if (actionBadge && !tribunalHero) {
       actionBadge.hidden = false;
       actionBadge.textContent = actRaw === 'LONG' ? 'LONG' : actRaw === 'SHORT' ? 'SHORT' : actRaw || 'HOLD';
       actionBadge.className =
         'k3-badge ' + (actRaw === 'LONG' ? 'buy' : actRaw === 'SHORT' ? 'sell' : 'hold');
     }
-    syncK3GlowTier(fc.conf, payload.action, confState);
+    if (!tribunalHero) {
+      syncK3GlowTier(fc.conf, payload.action, confState);
+    }
     var horizonBadge = document.getElementById('k3-horizon-badge');
     if (horizonBadge) {
       horizonBadge.textContent = payload.time_horizon || payload.horizon || horizonBadge.textContent || '24h';
@@ -1443,7 +1449,7 @@
     }
 
     var orb = k3OrbScoreEl();
-    if (orb) {
+    if (orb && !tribunalHero) {
       if (confState === 'resolving') {
         orb.innerHTML = '<span class="digit-ones">—</span>';
       } else if (fc.conf != null) {
@@ -1454,7 +1460,9 @@
           '<span class="digit-ones">' + ones + '</span>';
       }
     }
-    patchK3ConvictionRing(fc.conf);
+    if (!tribunalHero) {
+      patchK3ConvictionRing(fc.conf);
+    }
 
     var pin = document.getElementById('habit-pin-btn');
     if (pin && sn.netuid != null) {
@@ -2543,6 +2551,17 @@
       return;
     }
     lastDailyPickPayload = payload;
+    if (document.getElementById('tribunal-hero')) {
+      patchK3DossierFromPayload(payload);
+      renderTribunalHero(payload, window.SimiLearning && window.SimiLearning.stats);
+      loadLearningStats().then(function (stats) {
+        renderTribunalHero(
+          payload,
+          stats || (window.SimiLearning && window.SimiLearning.stats)
+        );
+      });
+      return;
+    }
     if (patchK3DossierFromPayload(payload)) return;
 
     var host = document.getElementById('home-daily-call');

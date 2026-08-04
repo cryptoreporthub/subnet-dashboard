@@ -8,8 +8,20 @@ from fastapi.testclient import TestClient
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 import server
+from internal.council.publish_gate import publish_gate_label
 from internal.learning.dpick_copy import attach_brief_to_daily_pick
+from internal.preview.tribunal_hero import build_tribunal_view
 from internal.subnet_names import refresh_daily_pick_names
+
+
+def _tribunal_ctx(dpick: dict, trust_banner: dict | None = None) -> dict:
+    return build_tribunal_view(
+        dpick,
+        {
+            "judge_weights": {"oracle": 0.333, "echo": 0.333, "pulse": 0.334},
+            "trust_banner": trust_banner or {},
+        },
+    )
 
 
 def _hold_candidate_payload() -> dict:
@@ -52,6 +64,7 @@ def _hold_candidate_payload() -> dict:
 def _minimal_hero_ctx(payload: dict) -> dict:
     return {
         "daily_pick_stage": payload,
+        "tribunal": _tribunal_ctx(payload),
         "conviction_band": {"band": None, "reason": "test"},
         "enrichment_badge": {},
         "story_strip": {},
@@ -76,10 +89,12 @@ def test_council_stage_hold_candidate_renders_full_hero():
         loader=FileSystemLoader("templates"),
         autoescape=select_autoescape(["html", "xml"]),
     )
+    env.globals["publish_gate_label"] = publish_gate_label
     tmpl = env.get_template("partials/premium/council_stage.html")
     payload = attach_brief_to_daily_pick(refresh_daily_pick_names(_hold_candidate_payload()))
     html = tmpl.render(
         dpick=payload,
+        tribunal=_tribunal_ctx(payload),
         conviction_band={"band": None},
         enrichment_badge={},
         hybrid_trust={},
@@ -88,16 +103,15 @@ def test_council_stage_hold_candidate_renders_full_hero():
         habit_alerts={"enabled": False},
         story_path={},
     )
+    assert "tribunal-hero" in html
     assert "k3-horizon-chips" in html
     assert "k3-call-headline" in html
-    assert "HOLD ·" in html
+    assert "GATED · HOLD" in html
     assert "FLIP" in html
     assert "Long when" in html
     assert "k3-pump-chip" in html
     assert "council scan" not in html.lower()
-    orb_html = html.split('id="k3-orb-score"')[1].split("</div>")[0]
-    assert "digit-tens" in orb_html or "digit-ones" in orb_html
-    assert "—" not in orb_html
+    assert 'id="k3-orb-score"' in html
 
 
 def test_council_stage_hold_shell_orb_has_patch_target():
@@ -105,9 +119,12 @@ def test_council_stage_hold_shell_orb_has_patch_target():
         loader=FileSystemLoader("templates"),
         autoescape=select_autoescape(["html", "xml"]),
     )
+    env.globals["publish_gate_label"] = publish_gate_label
     tmpl = env.get_template("partials/premium/council_stage.html")
+    dpick = {"action": "HOLD", "brief": {"move": "HOLD · no long", "tone": "hold"}}
     html = tmpl.render(
-        dpick={"action": "HOLD", "brief": {"move": "HOLD · no long", "tone": "hold"}},
+        dpick=dpick,
+        tribunal=_tribunal_ctx(dpick),
         conviction_band={"band": None},
         enrichment_badge={},
         hybrid_trust={},
@@ -116,8 +133,8 @@ def test_council_stage_hold_shell_orb_has_patch_target():
         habit_alerts={"enabled": False},
         story_path={},
     )
+    assert 'id="tribunal-hero"' in html
     assert 'id="k3-orb-score"' in html
-    assert "HOLD · no long" in html
 
 
 def test_home_live_refresh_never_wipes_k3_dossier():

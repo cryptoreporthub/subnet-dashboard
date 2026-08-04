@@ -753,15 +753,28 @@ def _integrations_strip_ssr() -> Dict[str, Any]:
     }
 
 
-def _fast_home_hero_context(trust_banner: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+def _fast_home_hero_context(
+    trust_banner: Optional[Dict[str, Any]] = None,
+    learning_metrics: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Cheap hero keys for degraded GET / — local pick read, hydrate upgrades live."""
     from internal.analytics.home_habit import (
         conviction_alerts_snapshot,
         watchlist_snapshot,
     )
+    from internal.preview.tribunal_hero import build_tribunal_view
 
     tb = trust_banner if isinstance(trust_banner, dict) else {}
+    lm = learning_metrics if isinstance(learning_metrics, dict) else {}
     pick_payload = _read_shell_daily_pick()
+    judge_weights = lm.get("judge_weights")
+    if not judge_weights:
+        try:
+            from internal.learning.routes import _judge_weights_for_snapshot
+
+            judge_weights = _judge_weights_for_snapshot()
+        except Exception:
+            judge_weights = {}
     ctx = {
         "daily_pick_stage": pick_payload,
         "conviction_band": {"band": None, "reason": "hydrate", "status": "ok"},
@@ -784,6 +797,15 @@ def _fast_home_hero_context(trust_banner: Optional[Dict[str, Any]] = None) -> Di
             "wrong": tb.get("wrong"),
         },
         "trust_banner": tb,
+        "tribunal": build_tribunal_view(
+            pick_payload if isinstance(pick_payload, dict) else {},
+            {
+                "judge_weights": judge_weights or {},
+                "trust_banner": tb,
+                "judge_last5": lm.get("judge_last5"),
+                "council_last5": lm.get("council_last5"),
+            },
+        ),
     }
     try:
         from internal.analytics.soul_weights_chip import soul_weights_chip_context
@@ -919,6 +941,25 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     except Exception:
         hero["soul_weights_chip"] = None
     hero.update(_integrations_strip_ssr())
+    try:
+        from internal.learning.routes import _judge_weights_for_snapshot
+        from internal.preview.tribunal_hero import build_tribunal_view
+
+        hero["tribunal"] = build_tribunal_view(
+            pick_payload if isinstance(pick_payload, dict) else {},
+            {
+                "judge_weights": _judge_weights_for_snapshot(),
+                "trust_banner": hero.get("trust_banner") or {},
+            },
+        )
+    except Exception as exc:
+        logger.warning("tribunal hero context failed: %s", exc)
+        from internal.preview.tribunal_hero import build_tribunal_view
+
+        hero["tribunal"] = build_tribunal_view(
+            pick_payload if isinstance(pick_payload, dict) else {},
+            {"judge_weights": {}, "trust_banner": hero.get("trust_banner") or {}},
+        )
     return hero
 
 
@@ -1000,7 +1041,12 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
             "avg_confidence": 0.0,
         },
     }
-    ctx.update(_fast_home_hero_context(trust_banner))
+    ctx.update(
+        _fast_home_hero_context(
+            trust_banner,
+            shell_learning.get("learning_metrics"),
+        )
+    )
     ctx.update(_safe_brain_letter_context(timeout_s=2.0))
     ctx.update(_safe_mindmap_graph_context(timeout_s=2.0))
     ctx.update(_shell_pump_and_picks(shell_subnets, include_picks=True))
@@ -1075,7 +1121,10 @@ def _minimal_index_context(request: Request) -> Dict[str, Any]:
             "buy_sell_ratio": 0.0,
             "avg_confidence": 0.0,
         },
-        **_fast_home_hero_context(trust_banner),
+        **_fast_home_hero_context(
+            trust_banner,
+            shell_learning.get("learning_metrics"),
+        ),
         **_quiet_brain_letter_stub(),
         "pump_alerts": {
             "status": "quiet",

@@ -205,18 +205,17 @@ def _metrics_rows(stats: Dict[str, Any]) -> Dict[str, Any]:
     return {"accuracy": accuracy_row, "recent": recent_row}
 
 
-def build_tribunal_hero_preview_context(request: Request) -> Dict[str, Any]:
-    """Full SSR context for /preview/tribunal."""
-    state = str(request.query_params.get("state") or "gated").lower()
-    if state not in _VALID_STATES:
-        state = "gated"
-
-    daily_pick = _fixture_daily_pick(state)
-    learning_stats = _fixture_learning_stats(state)
-    kind = verdict_kind(daily_pick)
-    pct = conviction_pct(daily_pick)
-    weights = learning_stats.get("judge_weights") or {}
-    judge_last5 = learning_stats.get("judge_last5")
+def build_tribunal_view(
+    daily_pick: Dict[str, Any],
+    learning_stats: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Build tribunal hero template context from live or fixture data."""
+    pick = daily_pick if isinstance(daily_pick, dict) else {}
+    stats = learning_stats if isinstance(learning_stats, dict) else {}
+    kind = verdict_kind(pick)
+    pct = conviction_pct(pick)
+    weights = stats.get("judge_weights") or {}
+    judge_last5 = stats.get("judge_last5")
     judges: List[Dict[str, Any]] = []
     for key, label in (("oracle", "ORACLE"), ("echo", "ECHO"), ("pulse", "PULSE")):
         w = weights.get(key)
@@ -232,27 +231,39 @@ def build_tribunal_hero_preview_context(request: Request) -> Dict[str, Any]:
             }
         )
 
-    metrics = _metrics_rows(learning_stats)
-    headline = center_label(daily_pick, kind)
+    metrics = _metrics_rows(stats)
+    headline = center_label(pick, kind)
     if pct is not None:
         headline = f"{headline} — {pct}% conviction"
+
+    return {
+        "verdict_kind": kind,
+        "subnet_label": subnet_label(pick),
+        "center_label": center_label(pick, kind),
+        "conviction_pct": pct,
+        "ring_circ": _RING_CIRC,
+        "ring_dash_offset": ring_dash_offset(pct),
+        "judges": judges,
+        "metrics": metrics,
+        "headline": headline,
+        "daily_pick": pick,
+        "learning_stats": stats,
+    }
+
+
+def build_tribunal_hero_preview_context(request: Request) -> Dict[str, Any]:
+    """Full SSR context for /preview/tribunal."""
+    state = str(request.query_params.get("state") or "gated").lower()
+    if state not in _VALID_STATES:
+        state = "gated"
+
+    daily_pick = _fixture_daily_pick(state)
+    learning_stats = _fixture_learning_stats(state)
 
     return {
         "request": request,
         "public_base_url": str(request.base_url).rstrip("/"),
         "preview_mode": True,
         "preview_state": state,
-        "tribunal": {
-            "verdict_kind": kind,
-            "subnet_label": subnet_label(daily_pick),
-            "center_label": center_label(daily_pick, kind),
-            "conviction_pct": pct,
-            "ring_circ": _RING_CIRC,
-            "ring_dash_offset": ring_dash_offset(pct),
-            "judges": judges,
-            "metrics": metrics,
-            "headline": headline,
-            "daily_pick": daily_pick,
-            "learning_stats": learning_stats,
-        },
+        "tribunal": build_tribunal_view(daily_pick, learning_stats),
     }
