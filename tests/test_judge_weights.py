@@ -219,3 +219,46 @@ def test_learning_stats_exposes_judge_weights():
     assert set(jw) == {"oracle", "echo", "pulse"}
     assert all(isinstance(v, (int, float)) for v in jw.values())
     assert abs(sum(jw.values()) - 1.0) < 1e-6
+
+
+def test_learning_stats_exposes_judge_and_council_last5():
+    from fastapi.testclient import TestClient
+
+    from server import app
+
+    resp = TestClient(app).get("/api/learning/stats")
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert "judge_last5" in data
+    assert "council_last5" in data
+    assert set(data["judge_last5"]) == {"oracle", "echo", "pulse"}
+    for ticks in data["judge_last5"].values():
+        assert isinstance(ticks, list)
+        assert len(ticks) == 5
+    assert isinstance(data["council_last5"], list)
+    assert len(data["council_last5"]) == 5
+
+
+def test_build_last5_from_resolved_pads_and_filters():
+    from internal.learning.routes import _build_last5_from_resolved
+
+    payload = {
+        "resolved": [
+            {
+                "outcome": "hit",
+                "correct": True,
+                "judge_scores_at_creation": {"oracle": {"score": 0.9}, "echo": {"score": 0.2}},
+            },
+            {
+                "outcome": "miss",
+                "correct": False,
+                "judge_scores_at_creation": {"echo": {"score": 0.8}, "oracle": {"score": 0.1}},
+            },
+            {"outcome": "duplicate", "correct": True},
+            {"outcome": "hit", "correct": True, "shadow": True},
+        ]
+    }
+    out = _build_last5_from_resolved(payload)
+    assert out["council_last5"] == [None, None, None, True, False]
+    assert out["judge_last5"]["oracle"] == [None, None, None, None, True]
+    assert out["judge_last5"]["echo"] == [None, None, None, None, False]

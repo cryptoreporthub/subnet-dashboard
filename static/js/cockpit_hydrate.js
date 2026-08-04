@@ -3671,6 +3671,10 @@
         stats = tierBatch[1].value;
         renderKpi(stats);
         renderCouncilWeights(stats.expert_weights || {}, stats.expert_weight_deltas || {});
+        if (document.getElementById('tribunal-hero')) {
+          patchTribunalJudges(stats);
+          patchTribunalMetrics(stats);
+        }
         if (stats.trust_banner && window.SimiTrustBanner && window.SimiTrustBanner.render) {
           window.SimiTrustBanner.render(stats.trust_banner);
         }
