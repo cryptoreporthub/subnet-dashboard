@@ -19,3 +19,12 @@ def test_message_intel_phase2_js_hooks():
     assert ".message-intel__sent-gauge" in css
     assert "mi-sent-rim" in css
     assert "mi-feed-enter" in css
+
+
+def test_message_intel_ssr_populates_from_context():
+    html = open("templates/partials/premium/message_intel_feed.html", encoding="utf-8").read()
+    assert "message_intel_ssr_macros" in html
+    assert "feed_rows(mi_messages)" in html
+    assert "trend_rows(mi_trending" in html
+    assert "champion_rows(mi_authors)" in html
+    assert 'aria-busy="{{ \'false\' if mi_messages else \'true\' }}"' in html

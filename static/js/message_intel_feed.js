@@ -1200,7 +1200,11 @@
     var lastErr = null;
     for (var i = 0; i < tries; i++) {
       try {
-        var res = await fetch(url);
+        var opts = {};
+        if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
+          opts.signal = AbortSignal.timeout(18000);
+        }
+        var res = await fetch(url, opts);
         if (res.ok) return await res.json();
         if (res.status === 503 && i < tries - 1) {
           await new Promise(function (r) {

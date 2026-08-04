@@ -141,6 +141,37 @@ def _feed_stale_fields() -> Dict[str, Any]:
     return out
 
 
+def _gap_backfill_seconds() -> float:
+    try:
+        return float(os.environ.get("TELEGRAM_GAP_BACKFILL_SECONDS", "1800"))
+    except ValueError:
+        return 1800.0
+
+
+def _maybe_backfill_if_quiet() -> None:
+    """Backfill when listener is up but the group has gone quiet (gap < stale threshold)."""
+    global _last_backfill_attempt
+    import time
+
+    if _listener is None or not _listener_running_local():
+        return
+    stats = _feed_stale_fields()
+    age = stats.get("last_message_age_seconds")
+    if age is None:
+        return
+    age_f = float(age)
+    gap = _gap_backfill_seconds()
+    stale = _feed_stale_threshold_seconds()
+    if age_f < gap or age_f >= stale:
+        return
+    now = time.time()
+    if now - _last_backfill_attempt < _backfill_interval_seconds():
+        return
+    _last_backfill_attempt = now
+    ok = bool(_listener.trigger_backfill())
+    logger.info("telegram quiet-gap backfill age=%.0fs ok=%s", age_f, ok)
+
+
 def _maybe_backfill_if_stale() -> None:
     """ponytail: periodic backfill when feed quiet — live handler misses disconnect gaps."""
     global _last_backfill_attempt
@@ -327,6 +358,7 @@ def _start_heartbeat_loop() -> None:
                 break
             try:
                 _touch_listener_heartbeat()
+                _maybe_backfill_if_quiet()
                 _maybe_backfill_if_stale()
             except Exception as exc:
                 logger.debug("listener heartbeat refresh failed: %s", exc)
@@ -378,6 +410,7 @@ def _start_listener_watchdog() -> None:
                 continue
             if _listener_running_local() or _listener_alive_cross_process():
                 if _listener_running_local():
+                    _maybe_backfill_if_quiet()
                     _maybe_backfill_if_stale()
                 continue
             if not _has_telegram_creds() or not _has_session_file():

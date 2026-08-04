@@ -171,11 +171,19 @@ def build_message_intel_context(
         from internal.message_intel.summary import summarize_message_intel
 
         listed = _listed_messages_for_home(limit)
+        authors_payload: Dict[str, Any] = {}
+        try:
+            from internal.message_intel.engine import list_authors
+
+            authors_payload = list_authors(days=7, limit=8)
+        except Exception as exc:
+            logger.debug("message_intel authors shell context failed: %s", exc)
         return {
             "message_intel": {
                 "messages": listed.get("messages") or [],
                 "meta": listed.get("meta") or {},
                 "sources": listed.get("sources") or {},
+                "authors": authors_payload.get("authors") or [],
                 "summary": summarize_message_intel(),
             },
             "social_sentiment": social_sentiment,
