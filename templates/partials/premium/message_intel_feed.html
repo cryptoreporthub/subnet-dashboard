@@ -1,4 +1,11 @@
 <!-- SS-TG flagship — Subnet Summers Telegram pulse (v2 + yellow board frame) -->
+{% from "partials/premium/message_intel_ssr_macros.html" import trend_rows, champion_rows, feed_rows %}
+{% set mi = message_intel or {} %}
+{% set mi_meta = mi.meta if mi.meta is mapping else {} %}
+{% set mi_trending = mi_meta.trending if mi_meta.trending is iterable and mi_meta.trending is not string else [] %}
+{% set mi_authors = mi.authors if mi.authors is iterable and mi.authors is not string else [] %}
+{% set mi_messages = mi.messages if mi.messages is iterable and mi.messages is not string else [] %}
+{% set mi_window = mi_meta.trending_window|default('1h') %}
 <section class="row wrap-pad desk-zone" id="section-message-intel" aria-labelledby="message-intel-title" data-home-live>
 <div class="message-intel message-intel--v2">
   <!-- Masthead: brand bar + big title + sub-line -->
@@ -84,10 +91,14 @@
       <div class="message-intel__sec-label">
         <span class="message-intel__sec-bar message-intel__sec-bar--blue" aria-hidden="true"></span>
         <h3 class="message-intel__panel-title" id="message-intel-trending-title">Currently trending</h3>
-        <span class="message-intel__panel-unit">1h</span>
+        <span class="message-intel__panel-unit">{{ mi_window }}</span>
       </div>
       <div id="message-intel-trending" class="message-intel__trending" aria-live="polite">
+        {% if mi_trending %}
+        {{ trend_rows(mi_trending, mi_window) }}
+        {% else %}
         <p class="empty">No subnet chatter in the last hour yet.</p>
+        {% endif %}
       </div>
       <button type="button" class="message-intel__view-all" id="message-intel-trending-refresh">Refresh trending</button>
     </div>
@@ -99,7 +110,11 @@
         <span class="message-intel__panel-unit">hit-rate first</span>
       </div>
       <div id="message-intel-champions" class="message-intel__champions" aria-live="polite">
+        {% if mi_authors %}
+        {{ champion_rows(mi_authors) }}
+        {% else %}
         <p class="empty">No contributor history yet.</p>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -150,13 +165,17 @@
         </div>
       </div>
     </div>
-    <div id="message-intel-feed" class="message-intel__feed" aria-live="polite" aria-busy="true">
+    <div id="message-intel-feed" class="message-intel__feed" aria-live="polite" aria-busy="{{ 'false' if mi_messages else 'true' }}">
+      {% if mi_messages %}
+      {{ feed_rows(mi_messages) }}
+      {% else %}
       <div class="hydrate-skeleton hydrate-skeleton--tall" aria-hidden="true">
         <div class="hydrate-skeleton__line hydrate-skeleton__line--med"></div>
         <div class="hydrate-skeleton__line"></div>
         <div class="hydrate-skeleton__line hydrate-skeleton__line--short"></div>
       </div>
       <p class="sr-only" role="status">Loading Telegram live feed</p>
+      {% endif %}
     </div>
     <div id="message-intel-detail" class="message-intel__detail" hidden aria-live="polite"></div>
   </div>

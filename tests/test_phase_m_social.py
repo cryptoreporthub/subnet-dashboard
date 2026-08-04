@@ -127,6 +127,7 @@ def test_build_message_intel_context_module():
     ctx = build_message_intel_context()
     assert "message_intel" in ctx
     assert isinstance(ctx["message_intel"].get("messages"), list)
+    assert isinstance(ctx["message_intel"].get("authors"), list)
     assert "social_sentiment" in ctx
     assert isinstance(ctx["social_sentiment"], list)
 
