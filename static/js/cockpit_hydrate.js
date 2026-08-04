@@ -960,9 +960,27 @@
     }
   }
 
+  function setK3LayerTeaser(layerId, text) {
+    var layer = typeof layerId === 'string' ? document.getElementById(layerId) : layerId;
+    if (!layer || text == null) return;
+    var teaser = layer.querySelector('.k3-layer-teaser');
+    if (teaser) teaser.textContent = text;
+  }
+
+  function formatExpertWeightDisplay(w) {
+    var n = Number(w) || 0;
+    if (n > 0 && n <= 1) return Math.round(n * 100) + '%';
+    return fmt(n, 2);
+  }
+
   function patchK3WeighedAgainst(shortlist) {
     var layer = document.getElementById('k3-layer-deliberation');
-    if (!layer || !shortlist || !shortlist.length) return;
+    if (!layer) return;
+    if (!shortlist || !shortlist.length) {
+      setK3LayerTeaser(layer, 'None yet');
+      return;
+    }
+    setK3LayerTeaser(layer, shortlist.length + ' name' + (shortlist.length === 1 ? '' : 's'));
     var body = layer.querySelector('.k3-layer-body');
     if (!body || (body.querySelector('.k3-weighed-list') && !body.querySelector('.k3-empty'))) return;
     var gate = 45;
@@ -1084,16 +1102,17 @@
     if (!body) return;
     // Always rewrite when hydrate has live weights — empty SSR or stale judge rows.
     var deltaMap = deltas && typeof deltas === 'object' ? deltas : {};
-    var html = '<div class="k3-layer-title">Judge weights &amp; deltas</div>';
+    var html = '<div class="k3-layer-title">Expert weights</div>';
     keys.forEach(function (name) {
       var w = Number(normalized[name]) || 0;
       html +=
         '<div class="k3-judge"><span class="k3-judge-name">' + esc(expertLabel(name)) + '</span>' +
-        '<span><span class="k3-judge-weight">' + fmt(w, 2) + '</span>' +
+        '<span><span class="k3-judge-weight">' + formatExpertWeightDisplay(w) + '</span>' +
         formatWeightDelta(deltaMap[name]) +
         '</span></div>';
     });
     body.innerHTML = html;
+    setK3LayerTeaser(layer, keys.length + ' seat' + (keys.length === 1 ? '' : 's'));
   }
 
   function patchDataFreshnessFromSubnetMeta(subnets, meta) {
@@ -1236,12 +1255,14 @@
       if (unique.indexOf(line) < 0) unique.push(line);
     });
     if (!unique.length) {
+      setK3LayerTeaser(layer, 'Pending');
       var emptyHtml =
         (title ? title.outerHTML : '') +
-        '<div class="k3-empty"><div class="k3-empty-icon">📡</div><div class="k3-empty-text">No signals on this call yet.</div></div>';
+        '<div class="k3-empty"><div class="k3-empty-text">Reasons appear when the call carries signal notes.</div></div>';
       body.innerHTML = emptyHtml;
       return;
     }
+    setK3LayerTeaser(layer, unique.length + ' signal' + (unique.length === 1 ? '' : 's'));
     var titleHtml = title ? title.outerHTML : '';
     var html = titleHtml;
     unique.slice(0, 5).forEach(function (line) {

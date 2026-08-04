@@ -54,7 +54,7 @@
     } catch (e) {
       /* ignore */
     }
-    return { minConviction: null, netuid: null, topic: null };
+    return { minConviction: 60, netuid: null, topic: null };
   }
 
   function saveFilters() {
@@ -1065,6 +1065,18 @@
     return '<p class="empty">No Telegram messages ingested yet.</p>';
   }
 
+  function isOpsHint(text) {
+    if (!text) return false;
+    return /TELEGRAM_|MESSAGE_INTEL_|DEPLOY\.md|fly logs|bootstrap_telegram/i.test(String(text));
+  }
+
+  function humanModeLabel(mode) {
+    if (mode === "live") return "Live";
+    if (mode === "reconnecting") return "Reconnecting";
+    if (mode === "archive") return "Archive";
+    return "Warming up";
+  }
+
   function applyMeta(payload, status) {
     var listener = (status && status.listener) || (payload.meta && payload.meta.listener) || {};
     var total =
@@ -1087,21 +1099,22 @@
     }
 
     if (meta) {
-      var parts = ["<b>" + esc(group) + "</b>"];
-      if (mode === "live") parts.push("live");
-      else if (mode === "reconnecting") parts.push("reconnecting");
-      else if (mode === "archive") parts.push("archive");
-      else if (deskReady) parts.push("desk ready");
-      else if (listener.reason) parts.push(esc(listener.reason));
+      var parts = ["<b>" + esc(group) + "</b>", humanModeLabel(mode)];
       parts.push(esc(total) + " messages");
       if (highConv) parts.push(esc(highConv) + " high conviction");
       if (mode === "archive" && listener.feed_stale) {
         parts.push("feed quiet — backfill on");
       }
       meta.innerHTML = parts.join(" · ");
-      if (listener.hint && mode === "warming") meta.title = listener.hint;
-      else if (listener.feed_stale && listener.last_message_at) {
+      var tooltip = listener.ops_hint || listener.hint || "";
+      if (tooltip && isOpsHint(tooltip)) {
+        meta.title = tooltip;
+      } else if (listener.feed_stale && listener.last_message_at) {
         meta.title = "Last message " + listener.last_message_at + " — polling Telegram history";
+      } else if (tooltip && mode === "warming") {
+        meta.title = tooltip;
+      } else {
+        meta.removeAttribute("title");
       }
     }
 
@@ -1131,12 +1144,10 @@
         sub.textContent = listener.feed_stale
           ? "Subnet Summers archive — backfill polling Telegram history."
           : "Subnet Summers desk loaded from archive — listener runs on the worker machine.";
-      } else if (listener.hint) {
-        sub.textContent = listener.hint;
-      } else if (listener.reason === "idle_not_started") {
-        sub.textContent = "Credentials present — listener starts ~2 min after worker boot.";
-      } else if (listener.reason === "listener_stopped") {
-        sub.textContent = "Listener stopped — watchdog is restarting Telegram ingest on the worker.";
+      } else if (mode === "reconnecting") {
+        sub.textContent = "Reconnecting to Subnet Summers — graded messages will appear here.";
+      } else {
+        sub.textContent = "Connecting to Subnet Summers — graded messages will appear here.";
       }
     }
 
