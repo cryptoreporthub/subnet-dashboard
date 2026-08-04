@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -61,6 +62,22 @@ def ring_dash_offset(pct: Optional[int]) -> float:
         return _RING_CIRC
     clamped = max(0, min(100, int(pct)))
     return _RING_CIRC - (_RING_CIRC * clamped / 100)
+
+
+def subnet_label(payload: Dict[str, Any]) -> str:
+    """Visible hero title: SN{netuid} · name when name is distinct."""
+    active = payload.get("pick") or payload.get("candidate")
+    if not active:
+        return "Awaiting subnet"
+    subnet = active.get("subnet") if isinstance(active.get("subnet"), dict) else {}
+    name = str(subnet.get("name") or "").strip()
+    netuid = subnet.get("netuid")
+    if netuid is None:
+        return name or "—"
+    sn_prefix = f"SN{netuid}"
+    if not name or name.upper() == sn_prefix.upper() or re.match(r"^SN\d+$", name, re.I):
+        return sn_prefix
+    return f"{sn_prefix} · {name}"
 
 
 def _judge_weight_pct(weight: float) -> str:
@@ -227,6 +244,7 @@ def build_tribunal_hero_preview_context(request: Request) -> Dict[str, Any]:
         "preview_state": state,
         "tribunal": {
             "verdict_kind": kind,
+            "subnet_label": subnet_label(daily_pick),
             "center_label": center_label(daily_pick, kind),
             "conviction_pct": pct,
             "ring_circ": _RING_CIRC,

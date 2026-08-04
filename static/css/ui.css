@@ -827,47 +827,6 @@ body.wrap {
     inset 0 0 8px rgba(255, 184, 0, 0.08);
 }
 
-.tribunal-hero__monument {
-  position: absolute;
-  left: 50%;
-  top: 108px;
-  transform: translateX(-50%);
-  z-index: 2;
-  pointer-events: none;
-  width: 120px;
-  height: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.tribunal-hero__monument-t {
-  position: relative;
-  z-index: 2;
-  font-family: var(--font-brand);
-  font-size: 7rem;
-  font-weight: 800;
-  line-height: 1;
-  color: rgba(255, 184, 0, 0.35);
-  text-shadow: 0 0 30px rgba(255, 184, 0, 0.55),
-    0 0 60px rgba(255, 184, 0, 0.3),
-    0 0 90px rgba(255, 184, 0, 0.15),
-    0 2px 0 rgba(255, 184, 0, 0.2);
-}
-
-.tribunal-hero__monument-glow {
-  position: absolute;
-  inset: 10% 20%;
-  z-index: 1;
-  background: radial-gradient(
-    ellipse 60% 80% at 50% 60%,
-    rgba(255, 184, 0, 0.25) 0%,
-    rgba(255, 184, 0, 0.08) 40%,
-    transparent 70%
-  );
-  filter: blur(8px);
-}
-
 .tribunal-hero__judge {
   position: absolute;
   z-index: 3;

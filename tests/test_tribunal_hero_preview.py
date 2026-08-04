@@ -17,6 +17,10 @@ def test_gated_preview_has_hero_and_three_judges():
     assert html.count('data-judge="pulse"') == 1
     assert "tribunal-hero__wiring" in html
     assert "GATED · HOLD" in html
+    assert "SN99" in html
+    assert "THE TRIBUNAL" not in html
+    assert "tribunal-hero__monument" not in html
+    assert "tribunal-preview-banner" not in html
     assert html.count("data-last5 hidden") == 3
 
 
@@ -26,6 +30,8 @@ def test_sealed_label_is_long_not_buy():
     html = r.text
     assert "SEALED · LONG" in html
     assert "SEALED · BUY" not in html
+    assert "SN14 · TaoHash" in html
+    assert "THE TRIBUNAL" not in html
     assert "71%" in html
     assert "LAST 5" in html
     assert "data-last5 hidden" not in html
@@ -37,6 +43,8 @@ def test_forming_and_cold_have_no_fake_71_percent():
         assert r.status_code == 200
         html = r.text
         assert "71%" not in html
+        assert "THE TRIBUNAL" not in html
+        assert "Awaiting subnet" in html
         if state == "forming":
             assert "FORMING" in html
         else:

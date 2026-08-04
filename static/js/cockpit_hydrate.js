@@ -3896,6 +3896,22 @@
     return Math.round(val);
   }
 
+  function tribunalSubnetLabel(payload) {
+    if (!payload) return 'Awaiting subnet';
+    var active = payload.pick || payload.candidate;
+    if (!active) return 'Awaiting subnet';
+    var sn = active.subnet;
+    if (!sn) return 'Awaiting subnet';
+    var name = String(sn.name || '').trim();
+    var netuid = sn.netuid;
+    if (netuid == null) return name || '—';
+    var snPrefix = 'SN' + netuid;
+    if (!name || name.toUpperCase() === snPrefix.toUpperCase() || /^SN\d+$/i.test(name)) {
+      return snPrefix;
+    }
+    return snPrefix + ' · ' + name;
+  }
+
   function formatJudgeWeightPct(weight) {
     if (weight == null || isNaN(Number(weight))) return '—';
     return String(Math.round(Number(weight) * 100)) + '%';
@@ -3998,6 +4014,8 @@
     if (!hero || !dailyPick) return false;
     var kind = verdictKind(dailyPick);
     hero.setAttribute('data-verdict-kind', kind);
+    var title = document.getElementById('tribunal-hero-title');
+    if (title) title.textContent = tribunalSubnetLabel(dailyPick);
     var badge = document.getElementById('k3-action-badge');
     if (badge) badge.textContent = tribunalCenterLabel(dailyPick, kind);
     var pct = kind === 'forming' || kind === 'cold' ? null : tribunalConvictionPct(dailyPick);

@@ -1,7 +1,7 @@
 {# Tribunal hero v3 — preview + future live wire. Preserved IDs: k3-orb-score, k3-action-badge, k3-call-headline #}
 {% set t = tribunal %}
 <section class="tribunal-hero" id="tribunal-hero" data-verdict-kind="{{ t.verdict_kind }}">
-  <header class="tribunal-hero__brand brand-mist">THE TRIBUNAL</header>
+  <header class="tribunal-hero__brand brand-mist" id="tribunal-hero-title">{{ t.subnet_label }}</header>
 
   <div class="tribunal-hero__stage">
   <svg class="tribunal-hero__wiring" viewBox="0 0 390 520" aria-hidden="true">
@@ -76,11 +76,6 @@
     <span id="k3-orb-score" class="tribunal-hero__pct">{% if t.conviction_pct is not none %}{{ t.conviction_pct }}%{% else %}—{% endif %}</span>
     <span class="tribunal-hero__pct-label">VERDICT CONFIDENCE</span>
     <span id="k3-action-badge" class="tribunal-hero__verdict-label">{{ t.center_label }}</span>
-  </div>
-
-  <div class="tribunal-hero__monument" aria-hidden="true">
-    <span class="tribunal-hero__monument-t">T</span>
-    <span class="tribunal-hero__monument-glow"></span>
   </div>
 
   {% for judge in t.judges %}
