@@ -7,33 +7,43 @@
   {% set social_rows = social_sentiment if social_sentiment is defined and social_sentiment is iterable and social_sentiment is not string and social_sentiment|length > 0 else [] %}
   {% set social_has = sn_list|selectattr('social_mentions', 'defined')|list %}
   {% if social_rows %}
+  {% set soc_max = social_rows|map(attribute='mentions')|map('int')|list|max if social_rows else 1 %}
   <div class="soc-grid">
     {% for row in social_rows[:6] %}
     {% set label = (row.label|default('neutral'))|string|lower %}
-    <div class="card soc-card">
+    {% set tier = 'tier-cyan' if label == 'bullish' else ('tier-gold' if label == 'bearish' else 'tier-lime') %}
+    {% set mentions = row.mentions|default(0)|int %}
+    {% set vol_pct = ((mentions / soc_max) * 100)|round|int if soc_max > 0 else 0 %}
+    <div class="card soc-card soc-card--{{ label }} soc-card--enter{% if loop.first and mentions > 0 %} soc-card--hot{% endif %}" style="--soc-i: {{ loop.index0 }}; --soc-vol: {{ vol_pct }}">
       <div class="soc-head">
         <span class="pick-name">{{ row.name|default('SN' ~ row.netuid) }}</span>
         <span class="soc-score {% if label == 'bullish' %}pos{% elif label == 'bearish' %}neg{% else %}neu{% endif %}">{{ label|upper }}</span>
       </div>
-      <div class="pick-meta">SN{{ row.netuid }} · {{ row.mentions|default(0)|int }} mentions</div>
-      <div class="conviction-bar mt-2"><div class="conviction-fill tier-lime" style="width: {{ ((row.score|default(0.5)|float) * 100)|round }}%;"></div></div>
+      <div class="pick-meta">SN{{ row.netuid }} · {{ mentions }} mentions</div>
+      <div class="soc-vol-track" aria-hidden="true"><span class="soc-vol-fill"></span></div>
+      <div class="conviction-bar mt-2"><div class="conviction-fill {{ tier }}" style="width: {{ ((row.score|default(0.5)|float) * 100)|round }}%;"></div></div>
     </div>
     {% endfor %}
   </div>
   {% elif social_has %}
+  {% set sorted_has = social_has|sort(attribute='social_mentions', reverse=true)|list %}
+  {% set soc_max = sorted_has[0].social_mentions|default(0)|int if sorted_has else 1 %}
   <div class="soc-grid">
-    {% for sn in social_has|sort(attribute='social_mentions', reverse=true)|list %}
+    {% for sn in sorted_has %}
     {% if loop.index <= 6 %}
     {% set mentions = sn.social_mentions|default(0)|int %}
     {% set sent = sn.social_sentiment|default(0.5)|float %}
     {% set label = 'bullish' if sent >= 0.6 else ('bearish' if sent <= 0.4 else 'neutral') %}
-    <div class="card soc-card">
+    {% set tier = 'tier-cyan' if label == 'bullish' else ('tier-gold' if label == 'bearish' else 'tier-lime') %}
+    {% set vol_pct = ((mentions / soc_max) * 100)|round|int if soc_max > 0 else 0 %}
+    <div class="card soc-card soc-card--{{ label }} soc-card--enter{% if loop.first and mentions > 0 %} soc-card--hot{% endif %}" style="--soc-i: {{ loop.index0 }}; --soc-vol: {{ vol_pct }}">
       <div class="soc-head">
         <span class="pick-name">{{ sn.name|default('SN' ~ (sn.netuid|default(sn.id))) }}</span>
         <span class="soc-score {% if label == 'bullish' %}pos{% elif label == 'bearish' %}neg{% else %}neu{% endif %}">{{ label|upper }}</span>
       </div>
       <div class="pick-meta">SN{{ sn.netuid|default(sn.id) }} · {{ mentions }} mentions</div>
-      <div class="conviction-bar mt-2"><div class="conviction-fill tier-lime" style="width: {{ (sent * 100)|round }}%;"></div></div>
+      <div class="soc-vol-track" aria-hidden="true"><span class="soc-vol-fill"></span></div>
+      <div class="conviction-bar mt-2"><div class="conviction-fill {{ tier }}" style="width: {{ (sent * 100)|round }}%;"></div></div>
     </div>
     {% endif %}
     {% endfor %}

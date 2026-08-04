@@ -440,8 +440,8 @@ def test_g12_favicon_and_font_consolidation():
     client = TestClient(app)
     html = client.get("/").text
     assert '/static/favicon.svg' in html
-    assert "Space+Grotesk" not in html
+    assert "Space+Grotesk" in html
     base_css = open("static/css/base.css", encoding="utf-8").read()
     assert "Orbitron" not in base_css
-    assert "--font-display: 'Rajdhani'" in base_css
+    assert "--font-display: 'Space Grotesk'" in base_css
     assert client.get("/static/favicon.svg").status_code == 200

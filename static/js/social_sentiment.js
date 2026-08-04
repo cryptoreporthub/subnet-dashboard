@@ -18,13 +18,36 @@
     return "neu";
   }
 
+  function tierClass(label) {
+    var l = String(label || "neutral").toLowerCase();
+    if (l === "bullish") return "tier-cyan";
+    if (l === "bearish") return "tier-gold";
+    return "tier-lime";
+  }
+
   function renderRows(rows) {
-    var html = '<div class="soc-grid">';
+    var maxMentions = 1;
     rows.forEach(function (row) {
+      var m = Number(row.mentions) || 0;
+      if (m > maxMentions) maxMentions = m;
+    });
+    var html = '<div class="soc-grid">';
+    rows.forEach(function (row, idx) {
       var label = String(row.label || "neutral").toLowerCase();
       var pct = Math.round(Number(row.score || 0.5) * 100);
+      var mentions = Number(row.mentions) || 0;
+      var volPct = maxMentions > 0 ? Math.round((mentions / maxMentions) * 100) : 0;
+      var hotClass = idx === 0 && mentions > 0 ? " soc-card--hot" : "";
       html +=
-        '<div class="card soc-card">' +
+        '<div class="card soc-card soc-card--' +
+        esc(label) +
+        " soc-card--enter" +
+        hotClass +
+        '" style="--soc-i:' +
+        idx +
+        "; --soc-vol:" +
+        volPct +
+        '">' +
         '<div class="soc-head">' +
         '<span class="pick-name">' +
         esc(row.name || "SN" + row.netuid) +
@@ -38,9 +61,12 @@
         '<div class="pick-meta">SN' +
         esc(row.netuid) +
         " · " +
-        esc(row.mentions || 0) +
+        esc(mentions) +
         " mentions</div>" +
-        '<div class="conviction-bar mt-2"><div class="conviction-fill tier-lime" style="width:' +
+        '<div class="soc-vol-track" aria-hidden="true"><span class="soc-vol-fill"></span></div>' +
+        '<div class="conviction-bar mt-2"><div class="conviction-fill ' +
+        tierClass(label) +
+        '" style="width:' +
         pct +
         '%;"></div></div>' +
         "</div>";
