@@ -668,9 +668,13 @@ body.wrap {
 /* ---------- Tribunal hero v3 (preview) ---------- */
 .tribunal-hero {
   position: relative;
-  min-height: 520px;
   padding: var(--space-4) var(--space-3) var(--space-5);
   color: var(--text-primary);
+}
+
+.tribunal-hero__stage {
+  position: relative;
+  height: 520px;
   overflow: hidden;
 }
 
@@ -895,10 +899,15 @@ body.wrap {
   border: 0;
 }
 
+.tribunal-hero__last5[hidden],
+.tribunal-hero__metric[hidden] {
+  display: none !important;
+}
+
 .tribunal-hero__metrics {
   position: relative;
   z-index: 3;
-  margin-top: 360px;
+  margin-top: var(--space-3);
   padding: var(--space-3);
   border-radius: var(--radius-md);
   background: var(--bg-card);

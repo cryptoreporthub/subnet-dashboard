@@ -17,7 +17,7 @@ def test_gated_preview_has_hero_and_three_judges():
     assert html.count('data-judge="pulse"') == 1
     assert "tribunal-hero__wiring" in html
     assert "GATED · HOLD" in html
-    assert 'data-last5 hidden' in html or 'data-last5' in html and "LAST 5" not in html.split("data-judge")[1]
+    assert html.count("data-last5 hidden") == 3
 
 
 def test_sealed_label_is_long_not_buy():
@@ -28,6 +28,7 @@ def test_sealed_label_is_long_not_buy():
     assert "SEALED · BUY" not in html
     assert "71%" in html
     assert "LAST 5" in html
+    assert "data-last5 hidden" not in html
 
 
 def test_forming_and_cold_have_no_fake_71_percent():
