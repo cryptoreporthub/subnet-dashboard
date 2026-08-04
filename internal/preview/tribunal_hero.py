@@ -64,6 +64,18 @@ def ring_dash_offset(pct: Optional[int]) -> float:
     return _RING_CIRC - (_RING_CIRC * clamped / 100)
 
 
+def synced_at_iso(payload: Dict[str, Any]) -> Optional[str]:
+    """ISO timestamp for hero sync stamp — matches dailyPickGeneratedAt() in cockpit_hydrate.js."""
+    pick = payload if isinstance(payload, dict) else {}
+    meta = pick.get("_meta") or {}
+    for source in (pick, meta):
+        for key in ("timestamp_utc", "generated_at"):
+            val = source.get(key)
+            if val:
+                return str(val)
+    return None
+
+
 def subnet_label(payload: Dict[str, Any]) -> str:
     """Visible hero title: SN{netuid} · name when name is distinct."""
     active = payload.get("pick") or payload.get("candidate")
@@ -241,6 +253,7 @@ def build_tribunal_view(
         "subnet_label": subnet_label(pick),
         "center_label": center_label(pick, kind),
         "conviction_pct": pct,
+        "synced_at": synced_at_iso(pick),
         "ring_circ": _RING_CIRC,
         "ring_dash_offset": ring_dash_offset(pct),
         "judges": judges,

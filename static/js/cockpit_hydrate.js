@@ -3987,13 +3987,54 @@
     var hero = document.getElementById('tribunal-hero');
     if (!hero) return;
     var fill = hero.querySelector('.tribunal-hero__ring-fill');
+    var clamped = 0;
+    if (pct != null && !isNaN(Number(pct))) {
+      clamped = Math.max(0, Math.min(100, Number(pct)));
+    }
+    hero.style.setProperty('--p', String(clamped));
     if (!fill) return;
     var offset = TRIBUNAL_RING_CIRC;
     if (pct != null && !isNaN(Number(pct))) {
-      var clamped = Math.max(0, Math.min(100, Number(pct)));
       offset = TRIBUNAL_RING_CIRC - (TRIBUNAL_RING_CIRC * clamped / 100);
     }
     fill.setAttribute('stroke-dashoffset', String(offset));
+  }
+
+  function formatSyncedAge(iso) {
+    var ms = parseIsoMs(iso);
+    if (!ms) return null;
+    var age = Date.now() - ms;
+    if (age < 60000) return 'just now';
+    if (age < 3600000) return Math.floor(age / 60000) + 'm ago';
+    var hours = Math.floor(age / 3600000);
+    if (hours < 24) return hours + 'h ago';
+    return Math.floor(hours / 24) + 'd ago';
+  }
+
+  function patchTribunalSyncStamp(generatedAtIso) {
+    var hero = document.getElementById('tribunal-hero');
+    if (!hero) return;
+    var stamp = document.getElementById('tribunal-hero-sync');
+    var iso = generatedAtIso;
+    if (!iso) {
+      var dossier = document.getElementById('k3-dossier');
+      iso =
+        hero.getAttribute('data-synced-at') ||
+        (dossier ? dossier.getAttribute('data-generated-at') : null);
+    }
+    if (iso) hero.setAttribute('data-synced-at', iso);
+    else hero.removeAttribute('data-synced-at');
+    var age = formatSyncedAge(iso);
+    if (!stamp) return;
+    if (!age) {
+      stamp.hidden = true;
+      stamp.textContent = '';
+      stamp.removeAttribute('data-synced-at');
+      return;
+    }
+    stamp.setAttribute('data-synced-at', iso);
+    stamp.textContent = 'Synced · ' + age;
+    stamp.hidden = false;
   }
 
   function renderTribunalLast5Ticks(container, last5) {
@@ -4088,6 +4129,14 @@
     var orb = document.getElementById('k3-orb-score');
     if (orb) orb.textContent = pct != null ? String(pct) + '%' : '—';
     patchTribunalRingFill(pct);
+    if (pct != null) {
+      hero.setAttribute('data-hero-conviction', String(pct));
+      var dossier = document.getElementById('k3-dossier');
+      if (dossier) dossier.setAttribute('data-hero-conviction', String(pct));
+    } else {
+      hero.removeAttribute('data-hero-conviction');
+    }
+    patchTribunalSyncStamp(dailyPickGeneratedAt(dailyPick));
     var headline = document.getElementById('k3-call-headline');
     if (headline) {
       var line = tribunalCenterLabel(dailyPick, kind);
@@ -4110,4 +4159,8 @@
     renderTribunalHero: renderTribunalHero,
     verdictKind: verdictKind,
   };
+
+  if (document.getElementById('tribunal-hero')) {
+    patchTribunalSyncStamp();
+  }
 })();

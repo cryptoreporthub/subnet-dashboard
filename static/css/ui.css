@@ -875,7 +875,7 @@ body.wrap {
     radial-gradient(circle, rgba(255, 184, 0, 0.2) 0%, transparent 58%),
     radial-gradient(circle at 40% 35%, rgba(255, 184, 0, 0.1) 0%, transparent 62%);
   animation: tribunal-ring-glow-pulse 4s ease-in-out infinite;
-  opacity: 0.38;
+  opacity: calc(0.12 + (var(--p, 0) / 100) * 0.38);
   filter: blur(18px);
   z-index: 0;
   pointer-events: none;
@@ -1275,6 +1275,20 @@ body.wrap {
 .tribunal-hero[data-verdict-kind="cold"] .tribunal-hero__ring-fill {
   stroke-dashoffset: 452.39;
   opacity: 0;
+}
+
+.tribunal-hero__sync {
+  margin: 10px 0 0;
+  padding: 0 4px;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.72);
+}
+
+.tribunal-hero__sync[hidden] {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
