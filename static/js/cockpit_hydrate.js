@@ -796,19 +796,36 @@
         pctEl.classList.remove('proof-band__pct--ice');
       }
       if (metaEl) metaEl.hidden = true;
-      if (!quietEl) {
+      var body =
+        (tb && tb.message) ? tb.message : 'Graded history appears after calls resolve.';
+      if (typeof window.buildDeskEmptyState === 'function') {
+        var wrap = document.createElement('div');
+        wrap.innerHTML = window.buildDeskEmptyState({
+          kind: 'warming',
+          title: 'Track record building',
+          body: body,
+          progressN: graded > 0 ? graded : null,
+          progressMax: graded > 0 ? minG : null,
+          classExtra: 'proof-band__quiet',
+          id: 'proof-band-quiet',
+        });
+        var fresh = wrap.firstChild;
+        if (fresh) {
+          if (quietEl && quietEl.parentNode) quietEl.parentNode.replaceChild(fresh, quietEl);
+          else hero.appendChild(fresh);
+        }
+      } else if (!quietEl) {
         quietEl = document.createElement('p');
         quietEl.className = 'proof-band__quiet';
         quietEl.id = 'proof-band-quiet';
         hero.appendChild(quietEl);
-      }
-      quietEl.hidden = false;
-      if (tb && tb.message) {
-        quietEl.textContent = tb.message;
-      } else if (graded > 0) {
-        quietEl.textContent = 'Building trust gate — ' + graded + '/' + minG + ' graded';
+        quietEl.hidden = false;
+        quietEl.textContent =
+          graded > 0 ? 'Building trust gate — ' + graded + '/' + minG + ' graded' : body;
       } else {
-        quietEl.textContent = 'Building graded history — scores appear after calls resolve.';
+        quietEl.hidden = false;
+        quietEl.textContent =
+          graded > 0 ? 'Building trust gate — ' + graded + '/' + minG + ' graded' : body;
       }
     }
   }

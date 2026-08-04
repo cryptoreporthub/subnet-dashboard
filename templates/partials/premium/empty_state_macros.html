@@ -1,0 +1,20 @@
+{# Branded desk empty states — warming shows n/max progress; stable empty when genuinely no data #}
+{% macro desk_empty(kind='empty', title='', body='', progress_n=none, progress_max=none, element='div', class_extra='', id='') %}
+{% set kind_val = kind if kind in ['warming', 'empty', 'error'] else 'empty' %}
+{% set pct = ((progress_n|float / progress_max|float) * 100)|round(0) if progress_n is not none and progress_max is not none and progress_max|int > 0 else 0 %}
+<{{ element }}
+  class="desk-empty-state desk-empty-state--{{ kind_val }}{% if class_extra %} {{ class_extra }}{% endif %}"
+  {% if id %}id="{{ id }}"{% endif %}
+  role="status"
+>
+  <span class="desk-empty-state__glyph" aria-hidden="true"></span>
+  <div class="desk-empty-state__body">
+    {% if title %}<p class="desk-empty-state__title">{{ title }}</p>{% endif %}
+    {% if body %}<p class="desk-empty-state__text">{{ body }}</p>{% endif %}
+    {% if progress_n is not none and progress_max is not none and progress_max|int > 0 %}
+    <p class="desk-empty-state__progress">Building sample — {{ progress_n|int }}/{{ progress_max|int }}</p>
+    <div class="desk-empty-state__bar" aria-hidden="true"><span style="width: {{ pct }}%"></span></div>
+    {% endif %}
+  </div>
+</{{ element }}>
+{% endmacro %}

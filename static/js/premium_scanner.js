@@ -133,7 +133,14 @@
       }
       render();
     }).catch(function () {
-      tableEl.innerHTML = '<p class="empty">Scanner warming up — registry API unreachable on this deploy.</p>';
+      tableEl.innerHTML = window.buildDeskEmptyState
+        ? window.buildDeskEmptyState({
+            kind: 'error',
+            title: 'Scanner unavailable',
+            body: 'Registry API unreachable on this deploy — will retry.',
+            classExtra: 'desk-empty-state--inline',
+          })
+        : '<p class="empty">Scanner warming up — registry API unreachable on this deploy.</p>';
       if (metaEl) metaEl.textContent = 'unavailable';
     });
   }

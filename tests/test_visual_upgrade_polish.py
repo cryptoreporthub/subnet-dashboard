@@ -10,6 +10,17 @@ from __future__ import annotations
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from internal.council.publish_gate import publish_gate_label
+from internal.preview.tribunal_hero import build_tribunal_view
+
+
+def _tribunal_for(dpick: dict, trust_banner: dict | None = None) -> dict:
+    return build_tribunal_view(
+        dpick,
+        {
+            "judge_weights": {"oracle": 0.333, "echo": 0.333, "pulse": 0.334},
+            "trust_banner": trust_banner or {},
+        },
+    )
 
 
 def netuid_band(netuid: int) -> int:
@@ -33,20 +44,23 @@ def _render_council_stage(netuid: int) -> str:
         autoescape=select_autoescape(["html", "xml"]),
     )
     env.globals["publish_gate_label"] = publish_gate_label
-    return env.get_template("partials/premium/council_stage.html").render(
-        dpick={
-            "action": "HOLD",
-            "pick": None,
-            "candidate": {
-                "subnet": {"netuid": netuid, "name": f"SN{netuid}"},
-                "final_confidence": 0.5,
-            },
+    dpick = {
+        "action": "HOLD",
+        "pick": None,
+        "candidate": {
+            "subnet": {"netuid": netuid, "name": f"SN{netuid}"},
+            "final_confidence": 0.5,
         },
+    }
+    return env.get_template("partials/premium/council_stage.html").render(
+        dpick=dpick,
+        daily_pick_stage=dpick,
         hybrid_trust={},
         trust_banner={},
         story_path={},
         habit_watchlist={"netuids": []},
         habit_alerts={"enabled": False},
+        tribunal=_tribunal_for(dpick),
     )
 
 
@@ -73,13 +87,16 @@ def _render_council_stage_confidence(
         cand["confidence"] = confidence
     if conviction is not _SENTINEL:
         cand["conviction"] = conviction
+    dpick = {"action": "HOLD", "pick": None, "candidate": cand}
     return env.get_template("partials/premium/council_stage.html").render(
-        dpick={"action": "HOLD", "pick": None, "candidate": cand},
+        dpick=dpick,
+        daily_pick_stage=dpick,
         hybrid_trust={},
         trust_banner={},
         story_path={},
         habit_watchlist={"netuids": []},
         habit_alerts={"enabled": False},
+        tribunal=_tribunal_for(dpick),
     )
 
 

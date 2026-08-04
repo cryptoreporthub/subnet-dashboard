@@ -1,4 +1,5 @@
 {# Council-first cockpit — Situation Room spine #}
+{% from "partials/premium/empty_state_macros.html" import desk_empty %}
 <script>document.documentElement.dataset.hydrate='1';</script>
 {% set sn_list = subnets if subnets is iterable and subnets is not string else [] %}
 {% set ti_rows = api_indicators_convergence.subnets if api_indicators_convergence is mapping and api_indicators_convergence.subnets else [] %}
@@ -82,7 +83,16 @@
     {% else %}
     <div class="proof-band__pct" id="proof-band-pct" hidden>—</div>
     <p class="proof-band__meta" id="proof-band-meta" hidden></p>
-    <p class="proof-band__quiet" id="proof-band-quiet">{% if tb.message %}{{ tb.message }}{% elif cal_n|int > 0 %}Building trust gate — {{ cal_n }}/{{ tb_min }} graded{% else %}Building graded history — scores appear after calls resolve.{% endif %}</p>
+    {{ desk_empty(
+      kind='warming',
+      title='Track record building',
+      body=tb.message if tb.message else 'Graded history appears after calls resolve.',
+      progress_n=cal_n|int if cal_n|int > 0 else none,
+      progress_max=tb_min|int if cal_n|int > 0 else none,
+      class_extra='proof-band__quiet',
+      id='proof-band-quiet',
+      element='div'
+    ) }}
     {% endif %}
     {% if soul_weights_chip %}
     <a class="sr-weights-chip" id="proof-weights-chip" href="#pro-cockpit">Weights updated · {{ soul_weights_chip.ago }}</a>
@@ -123,7 +133,12 @@
     <h3 class="whats-working__title" id="whats-working-title">What&apos;s working</h3>
     <p class="whats-working__sub">Signals that predicted token price — learned from graded picks.</p>
     <div id="whats-working-chips" class="whats-working__chips" aria-live="polite" data-brain-state="building">
-      <p class="whats-working__empty">Quiet — signal rankings fill in as picks grade.</p>
+      {{ desk_empty(
+        kind='empty',
+        title='Signal rankings quiet',
+        body='Top predictors fill in as picks grade.',
+        class_extra='whats-working__empty desk-empty-state--inline'
+      ) }}
     </div>
     </div>
   </div>

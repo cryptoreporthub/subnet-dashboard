@@ -1,13 +1,37 @@
 (function () {
+  'use strict';
+
   if (window.matchMedia('(min-width: 900px)').matches) return;
+
   var dock = document.querySelector('.thumb-dock');
-  if (!dock || !('IntersectionObserver' in window)) return;
+  if (!dock) return;
 
   var links = Array.prototype.slice.call(dock.querySelectorAll('.thumb-dock__link'));
-  var sections = links.map(function (link) {
-    var id = (link.getAttribute('href') || '').slice(1);
-    return id ? document.getElementById(id) : null;
-  }).filter(Boolean);
+  if (!links.length) return;
+
+  function openDrawer(id) {
+    if (!id) return;
+    var drawer = document.getElementById(id);
+    if (drawer && drawer.tagName === 'DETAILS') drawer.open = true;
+  }
+
+  links.forEach(function (link) {
+    link.addEventListener('click', function () {
+      openDrawer(link.getAttribute('data-open-drawer'));
+    });
+  });
+
+  function sectionForLink(link) {
+    var drawerId = link.getAttribute('data-open-drawer');
+    if (drawerId) {
+      var drawer = document.getElementById(drawerId);
+      if (drawer) return drawer;
+    }
+    var sectionId = link.getAttribute('data-thumb-section') || (link.getAttribute('href') || '').slice(1);
+    return sectionId ? document.getElementById(sectionId) : null;
+  }
+
+  var sections = links.map(sectionForLink).filter(Boolean);
   if (!sections.length) return;
 
   var activeId = '';
@@ -17,10 +41,16 @@
     if (!id || id === activeId) return;
     activeId = id;
     links.forEach(function (link) {
-      var on = link.getAttribute('href') === '#' + id;
+      var section = sectionForLink(link);
+      var on = section && section.id === id;
       if (on) link.setAttribute('aria-current', 'location');
       else link.removeAttribute('aria-current');
     });
+  }
+
+  if (!('IntersectionObserver' in window)) {
+    setActive(sections[0].id);
+    return;
   }
 
   var observer = new IntersectionObserver(
