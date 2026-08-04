@@ -9,7 +9,7 @@ import threading
 import time
 import asyncio
 from datetime import datetime, timezone
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Tuple
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response
@@ -134,6 +134,32 @@ def _judge_weights_for_snapshot() -> Dict[str, float]:
         return dict(DEFAULT_JUDGE_WEIGHTS)
 
 
+def _build_last5_from_resolved(resolved_payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Last-5 hit/miss tick arrays for tribunal hero (council + per-judge)."""
+    from internal.council.grading import is_pump_desk_claim
+    from internal.council.resolver import _leading_judge_name
+
+    resolved = resolved_payload.get("resolved", [])
+    gradeable = [
+        r
+        for r in resolved
+        if r.get("outcome") not in {"duplicate", "expired", "ungradeable"}
+        and r.get("correct") is not None
+        and not is_pump_desk_claim(r)
+        and not (r.get("shadow") or r.get("counterfactual"))
+    ]
+    tail = gradeable[-5:]
+    council_last5: List[Any] = [None] * (5 - len(tail)) + [bool(r["correct"]) for r in tail]
+
+    judge_last5: Dict[str, List[Any]] = {}
+    for judge in ("oracle", "echo", "pulse"):
+        calls = [r for r in gradeable if _leading_judge_name(r.get("judge_scores_at_creation")) == judge]
+        jtail = calls[-5:]
+        judge_last5[judge] = [None] * (5 - len(jtail)) + [bool(r["correct"]) for r in jtail]
+
+    return {"council_last5": council_last5, "judge_last5": judge_last5}
+
+
 def _learning_snapshot() -> Dict[str, Any]:
     """Shared ≤30s snapshot for stats / metrics / mindmap (§31-3 O20)."""
     now = time.time()
@@ -153,6 +179,7 @@ def _learning_snapshot() -> Dict[str, Any]:
 
     trust_banner = build_trust_banner(resolver_stats, watchdog=watchdog)
     recent = resolved_payload.get("resolved", [])[-10:]
+    last5 = _build_last5_from_resolved(resolved_payload)
     snapshot = {
         "engine_stats": stats,
         "resolver_stats": resolver_stats,
@@ -164,6 +191,8 @@ def _learning_snapshot() -> Dict[str, Any]:
         "scenario": _scenario_memory_summary(),
         "expert_weights": stats.get("expert_weights", {}),
         "judge_weights": _judge_weights_for_snapshot(),
+        "judge_last5": last5["judge_last5"],
+        "council_last5": last5["council_last5"],
     }
     with _learning_snapshot_lock:
         _learning_snapshot_cache["at"] = now
@@ -226,6 +255,8 @@ def _compute_learning_metrics() -> Dict[str, Any]:
     return {
         "expert_weights": stats.get("expert_weights", {}),
         "judge_weights": snap.get("judge_weights", {}),
+        "judge_last5": snap.get("judge_last5", {}),
+        "council_last5": snap.get("council_last5", []),
         "expert_weight_deltas": recent_expert_weight_deltas(),
         "total_records": stats.get("total_records", 0),
         "predictions_pending": stats.get("pending", 0),
@@ -701,6 +732,8 @@ async def api_learning_stats():
         "data": {
             "expert_weights": stats.get("expert_weights", {}),
             "judge_weights": snap.get("judge_weights", {}),
+            "judge_last5": snap.get("judge_last5", {}),
+            "council_last5": snap.get("council_last5", []),
             "total_records": resolver_stats.get("total", stats.get("total_records", 0)),
             "accuracy": resolver_stats.get("accuracy", stats.get("accuracy", 0.0)),
             "correct": resolver_stats.get("correct", 0),
