@@ -7,9 +7,15 @@
       <span class="skel skel-md" style="width:72%;max-width:320px"></span>
     </p>
     <p class="sr-pulse__oneline live-only" role="status">
-      <span class="sr-pulse__oneline-part sr-pulse__oneline-part--{% if mi_breadth == 'bullish' %}bullish{% elif mi_breadth == 'bearish' %}bearish{% else %}neutral{% endif %}">
-        Breadth {{ mi_breadth|default('neutral')|title }}{% if mi_total %} · {{ mi_ns.gainers }}↑ {{ mi_ns.losers }}↓{% else %} · loading{% endif %}
+      <span class="sr-pulse__breadth-wrap">
+        <span class="sr-pulse__breadth-halo" aria-hidden="true"></span>
+        <span class="sr-pulse__oneline-part sr-pulse__oneline-part--{% if mi_breadth == 'bullish' %}bullish{% elif mi_breadth == 'bearish' %}bearish{% else %}neutral{% endif %}">
+          Breadth {{ mi_breadth|default('neutral')|title }}{% if mi_total %} · {{ mi_ns.gainers }}↑ {{ mi_ns.losers }}↓{% else %} · loading{% endif %}
+        </span>
       </span>
+      {% if mi_total and (mi_ns.gainers + mi_ns.losers) > 0 %}
+      <span class="sr-pulse__ratio-meter" style="--pulse-up: {{ mi_ns.gainers }}; --pulse-down: {{ mi_ns.losers }}" aria-hidden="true"></span>
+      {% endif %}
       <span class="sr-pulse__oneline-sep" aria-hidden="true">·</span>
       <span class="sr-pulse__oneline-part{% if mi_avg_chg > 0 %} pos{% elif mi_avg_chg < 0 %} neg{% endif %}">
         Avg 24h {% if mi_total %}{{ '%+.2f'|format(mi_avg_chg) }}%{% else %}—{% endif %}
