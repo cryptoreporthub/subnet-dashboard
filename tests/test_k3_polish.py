@@ -41,3 +41,11 @@ def test_hydrate_registry_name_resolution():
     assert "indexRegistry" in hydrate
     assert "isBadSubnetName" in hydrate
     assert "SubnetNameRegistry.resolve" in living
+
+
+def test_weighed_hydrate_runs_even_when_daily_pick_fails():
+    hydrate = Path("static/js/cockpit_hydrate.js").read_text(encoding="utf-8")
+    assert "function hydrateWeighedAlternatives" in hydrate
+    tier = hydrate.split("// Tier 1a — daily call first", 1)[1].split("// Tier 1b", 1)[0]
+    assert "hydrateWeighedAlternatives(dpResult" in tier
+    assert tier.index("hydrateWeighedAlternatives") > tier.index("catch (e)")

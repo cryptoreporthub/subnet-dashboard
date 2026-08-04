@@ -973,6 +973,18 @@
     return fmt(n, 2);
   }
 
+  function hydrateWeighedAlternatives(shortlist) {
+    if (!document.getElementById('k3-layer-deliberation')) return;
+    if (shortlist && shortlist.length) return;
+    fetchJsonRetry('/api/daily-pick/weighed', 22000, 2)
+      .then(function (weighed) {
+        patchK3WeighedAgainst((weighed && weighed.shortlist) || []);
+      })
+      .catch(function (e) {
+        console.warn('[cockpit_hydrate] weighed shortlist fetch failed', e);
+      });
+  }
+
   function patchK3WeighedAgainst(shortlist) {
     var layer = document.getElementById('k3-layer-deliberation');
     if (!layer) return;
@@ -3595,23 +3607,16 @@
 
     try {
       // Tier 1a — daily call first (hero path wins under load)
+      var dpResult = null;
       try {
-        var dpResult = await fetchJsonRetry('/api/daily-pick', 35000, 3);
+        dpResult = await fetchJsonRetry('/api/daily-pick', 35000, 3);
         renderDailyPick(dpResult);
         prefetchFocusJudges(dpResult);
-        if (!dpResult.shortlist || !dpResult.shortlist.length) {
-          fetchJsonRetry('/api/daily-pick/weighed', 22000, 2)
-            .then(function (weighed) {
-              patchK3WeighedAgainst((weighed && weighed.shortlist) || []);
-            })
-            .catch(function (e) {
-              console.warn('[cockpit_hydrate] weighed shortlist fetch failed', e);
-            });
-        }
       } catch (e) {
         console.warn('[cockpit_hydrate] daily-pick fetch failed', e);
         markSectionFailed('section-daily-pick', 'Quiet — daily call delayed. Retry when /api/daily-pick responds.');
       }
+      hydrateWeighedAlternatives(dpResult && dpResult.shortlist);
 
       // Tier 1b — pump desk before parallel hydrate burst
       try {
