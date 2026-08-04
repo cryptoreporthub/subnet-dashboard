@@ -134,6 +134,18 @@ def build_k3_hold_preview_context(request: Request) -> Dict[str, Any]:
             },
         )
 
+    trust_banner = {
+            "ready": True,
+            "graded": 443,
+            "correct": 139,
+            "wrong": 304,
+            "accuracy": 0.314,
+            "headline": "Last 443 graded: 31% directionally right",
+            "note": "Accuracy is direction-only on graded token price outcomes — excludes expired/duplicate.",
+        }
+
+    from internal.preview.tribunal_hero import build_tribunal_view
+
     return {
         "request": request,
         "public_base_url": str(request.base_url).rstrip("/"),
@@ -143,15 +155,14 @@ def build_k3_hold_preview_context(request: Request) -> Dict[str, Any]:
         "conviction_band": {"band": "low", "reason": "Below sized-long bar", "status": "ok"},
         "enrichment_badge": {"status": "pending", "label": "Whale flow"},
         "hybrid_trust": {"ready": True, "n": 443, "accuracy": 0.314},
-        "trust_banner": {
-            "ready": True,
-            "graded": 443,
-            "correct": 139,
-            "wrong": 304,
-            "accuracy": 0.314,
-            "headline": "Last 443 graded: 31% directionally right",
-            "note": "Accuracy is direction-only on graded token price outcomes — excludes expired/duplicate.",
-        },
+        "trust_banner": trust_banner,
+        "tribunal": build_tribunal_view(
+            daily,
+            {
+                "judge_weights": {"oracle": 0.4, "echo": 0.25, "pulse": 0.35},
+                "trust_banner": trust_banner,
+            },
+        ),
         "habit_watchlist": {"netuids": [], "count": 0},
         "habit_alerts": {"enabled": True, "delivery_mode": "off"},
         "story_path": {

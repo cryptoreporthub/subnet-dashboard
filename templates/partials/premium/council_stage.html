@@ -122,98 +122,50 @@
 
       {# ---- CLAIM LAYER (inside home-daily-call for live-refresh) ---- #}
       {% if sn %}
-      {% set glow_tier = 'cool' if (act == 'HOLD' and not audit_pick) or conviction_pct < 45 else 'hot' %}
       <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
         <div class="k3-dossier" id="k3-dossier" data-conf-state="{{ conf_state }}" data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}" data-action="{{ act }}">
           <div class="k3-layer open" id="k3-layer-claim">
-            <div class="k3-claim surface-aurora rim-chroma k3-claim--glow-{{ glow_tier }} k3-claim--band-{{ sn_band }}{% if not audit_pick and act == 'HOLD' %} k3-claim--hold{% endif %}" id="k3-claim" data-glow="{{ glow_tier }}" data-band="{{ sn_band }}"{% if sn.netuid is not none %} data-netuid="{{ sn.netuid }}"{% endif %}>
-              <div class="k3-claim-head">
-                <p class="k3-claim-name" id="k3-claim-head-name">{{ sn.name|default('SN' ~ sn.netuid) }}</p>
-                <div class="k3-claim-head__meta">
-                  <span id="k3-stale-badge" class="k3-temporal-badge k3-stale-badge" hidden aria-live="polite"></span>
-                  <span class="k3-horizon-badge" id="k3-horizon-badge" title="Call horizon">{{ horizon }}</span>
-                  {% if act == 'LONG' %}<div class="k3-badge buy" id="k3-action-badge">LONG</div>
-                  {% elif act == 'SHORT' %}<div class="k3-badge sell" id="k3-action-badge">SHORT</div>
-                  {% else %}<div class="k3-badge hold" id="k3-action-badge">{{ act }}</div>{% endif %}
+            {% include "partials/premium/tribunal_hero.html" %}
+            <span id="k3-stale-badge" class="k3-temporal-badge k3-stale-badge" hidden aria-live="polite"></span>
+            <span class="k3-horizon-badge" id="k3-horizon-badge" title="Call horizon" hidden>{{ horizon }}</span>
+            <div class="k3-call-lead">
+              <div class="k3-claim-identity" id="k3-claim-identity" hidden>
+                <p class="k3-claim-name k3-claim-name--sub" id="k3-claim-name" hidden>{{ sn.name|default('SN' ~ sn.netuid) }}</p>
+                <div class="hydrate-skel k3-claim-meta-wrap">
+                  <p class="k3-claim-meta skel-only" aria-hidden="true"><span class="skel skel-md" style="width:42%"></span></p>
+                  <p class="k3-claim-meta live-only" id="k3-claim-meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}</p>
                 </div>
+                <p class="k3-claim-desc" id="k3-claim-desc"{% if not subnet_desc %} hidden{% endif %}>{{ subnet_desc|truncate(96, True) if subnet_desc else '' }}</p>
               </div>
-              <div class="k3-claim-main">
-                <div class="k3-orb-wrap" aria-hidden="false">
-                  <div class="k3-orb-halo"></div>
-                  <div class="k3-orb-bg"></div>
-                  <div class="k3-orb-glow"></div>
-                  <div class="k3-orb-particles" aria-hidden="true">
-                    <span></span><span></span><span></span><span></span>
-                    <span></span><span></span><span></span><span></span>
-                    <span></span><span></span>
-                  </div>
-                  <div class="k3-orb k3-ring--{{ ring_state }}"{% if resolve_at_iso %} data-resolve-at="{{ resolve_at_iso }}"{% endif %}>
-                    <svg viewBox="0 0 148 148">
-                      <defs><linearGradient id="k3-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1fd47c"/><stop offset="33%" stop-color="#3fc9ff"/><stop offset="66%" stop-color="#9d8cff"/><stop offset="100%" stop-color="#ff9f3f"/></linearGradient></defs>
-                      <circle class="ring-track" cx="74" cy="74" r="62"/>
-                      <circle class="ring-fill" cx="74" cy="74" r="62" style="--ring-offset: {{ ring_offset }}"/>
-                    </svg>
-                    <div class="k3-orb-center">
-                      {% if conf_state == 'zero' %}
-                        <div class="k3-orb-score" id="k3-orb-score"><span class="digit-ones">0</span></div>
-                      {% elif conf_state == 'value' and conviction_pct > 0 %}
-                        {% set tens = (conviction_pct // 10) %}
-                        {% set ones = conviction_pct % 10 %}
-                        <div class="k3-orb-score" id="k3-orb-score">
-                          {% if tens > 0 %}<span class="digit-tens">{{ tens }}</span>{% endif %}
-                          <span class="digit-ones">{{ ones }}</span>
-                        </div>
-                      {% else %}
-                        <div class="k3-orb-score" id="k3-orb-score"><span class="digit-ones">—</span></div>
-                      {% endif %}
-                      <div class="k3-orb-label" id="k3-orb-label">{% if conf_state == 'resolving' %}resolving{% elif conf_state == 'zero' %}zero{% elif conviction_pct >= 70 %}high{% elif conviction_pct >= 45 %}mid{% else %}low{% endif %}</div>
-                    </div>
-                  </div>
-                </div>
-                <div class="k3-call-lead">
-                  {% if brief.move %}
-                  <h2 class="k3-call-headline k3-call-headline--{{ brief.tone|default('neutral') }}" id="k3-call-headline">{{ brief.move }}</h2>
-                  {% else %}
-                  <h2 class="k3-call-headline k3-call-headline--{{ 'go' if act == 'LONG' else 'hold' }}" id="k3-call-headline">{% if act == 'LONG' %}LONG{% else %}HOLD{% endif %} · {{ sn.name|default('SN' ~ sn.netuid) }}</h2>
-                  {% endif %}
-                  <div class="k3-claim-identity" id="k3-claim-identity">
-                    <p class="k3-claim-name k3-claim-name--sub" id="k3-claim-name" hidden>{{ sn.name|default('SN' ~ sn.netuid) }}</p>
-                    <div class="hydrate-skel k3-claim-meta-wrap">
-                      <p class="k3-claim-meta skel-only" aria-hidden="true"><span class="skel skel-md" style="width:42%"></span></p>
-                      <p class="k3-claim-meta live-only" id="k3-claim-meta">SN{{ sn.netuid }}{% if sn.symbol %} · {{ sn.symbol }}{% endif %}</p>
-                    </div>
-                    <p class="k3-claim-desc" id="k3-claim-desc"{% if not subnet_desc %} hidden{% endif %}>{{ subnet_desc|truncate(96, True) if subnet_desc else '' }}</p>
-                  </div>
-                  {% if resolves_in and outcome_status != 'resolved' %}
-                  <p class="k3-resolve-crumb" id="k3-resolve-crumb">Resolves in {{ resolves_in }} · {{ horizon }} window</p>
-                  {% else %}
-                  <p class="k3-resolve-crumb" id="k3-resolve-crumb" hidden></p>
-                  {% endif %}
-                  <p class="k3-social-crumb" id="k3-social-crumb"{% if not brief.social_crumb %} hidden{% endif %}>{{ brief.social_crumb|default('') }}</p>
-                  {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
-                  {% if brief.vs %}<p class="k3-brief-vs k3-also-weighed" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
-                  {% if brief.vs_hold_tao %}<p class="k3-brief-vs-hold" id="k3-brief-vs-hold">{{ brief.vs_hold_tao }}</p>{% endif %}
-                  <div id="k3-evidence-drivers" class="k3-evidence-drivers">
-                    {% if brief.evidence_drivers %}
-                    {% for driver in (brief.evidence_drivers or [])[:3] %}
-                    <span class="k3-evidence-driver k3-evidence-driver--{{ driver.tag|default('tech') }}">{{ driver.tag|default('tech') }} · {{ driver.label }}</span>
-                    {% endfor %}
-                    {% else %}
-                    <span class="k3-evidence-empty" id="k3-evidence-empty">No evidence drivers on this call yet.</span>
-                    {% endif %}
-                  </div>
-                  {% if brief.trigger %}<p class="k3-brief-trigger" id="k3-brief-trigger"><span class="k3-brief-trigger__kicker">FLIP</span>{{ brief.trigger|replace('Flip to LONG when ', 'Long when ', 1) }}</p>{% endif %}
-                  {% set scenario_tags = dpick.scenario_tags if dpick.scenario_tags is mapping else {} %}
-                  {% if scenario_tags.fallback %}
-                  <p id="k3-degraded-note" class="pick-degraded-note">Council fallback — not a scored call</p>
-                  {% elif act == 'HOLD' and not audit_pick %}
-                  <p id="k3-degraded-note" class="pick-degraded-note pick-degraded-note--hold">HOLD{% if dpick.hold_reason %} · {{ dpick.hold_reason }}{% elif dpick.reason %} · {{ dpick.reason }}{% else %} · below {{ publish_gate_label() }}{% endif %}</p>
-                  {% elif dpick.hold_reason %}
-                  <p id="k3-degraded-note" class="pick-degraded-note pick-degraded-note--hold">{{ dpick.hold_reason }}</p>
-                  {% endif %}
-                </div>
+              {% if resolves_in and outcome_status != 'resolved' %}
+              <p class="k3-resolve-crumb" id="k3-resolve-crumb">Resolves in {{ resolves_in }} · {{ horizon }} window</p>
+              {% else %}
+              <p class="k3-resolve-crumb" id="k3-resolve-crumb" hidden></p>
+              {% endif %}
+              <p class="k3-social-crumb" id="k3-social-crumb"{% if not brief.social_crumb %} hidden{% endif %}>{{ brief.social_crumb|default('') }}</p>
+              {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
+              {% if brief.vs %}<p class="k3-brief-vs k3-also-weighed" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
+              {% if brief.vs_hold_tao %}<p class="k3-brief-vs-hold" id="k3-brief-vs-hold">{{ brief.vs_hold_tao }}</p>{% endif %}
+              <div id="k3-evidence-drivers" class="k3-evidence-drivers">
+                {% if brief.evidence_drivers %}
+                {% for driver in (brief.evidence_drivers or [])[:3] %}
+                <span class="k3-evidence-driver k3-evidence-driver--{{ driver.tag|default('tech') }}">{{ driver.tag|default('tech') }} · {{ driver.label }}</span>
+                {% endfor %}
+                {% else %}
+                <span class="k3-evidence-empty" id="k3-evidence-empty">No evidence drivers on this call yet.</span>
+                {% endif %}
               </div>
-              <div class="k3-claim-foot">
+              {% if brief.trigger %}<p class="k3-brief-trigger" id="k3-brief-trigger"><span class="k3-brief-trigger__kicker">FLIP</span>{{ brief.trigger|replace('Flip to LONG when ', 'Long when ', 1) }}</p>{% endif %}
+              {% set scenario_tags = dpick.scenario_tags if dpick.scenario_tags is mapping else {} %}
+              {% if scenario_tags.fallback %}
+              <p id="k3-degraded-note" class="pick-degraded-note">Council fallback — not a scored call</p>
+              {% elif act == 'HOLD' and not audit_pick %}
+              <p id="k3-degraded-note" class="pick-degraded-note pick-degraded-note--hold">HOLD{% if dpick.hold_reason %} · {{ dpick.hold_reason }}{% elif dpick.reason %} · {{ dpick.reason }}{% else %} · below {{ publish_gate_label() }}{% endif %}</p>
+              {% elif dpick.hold_reason %}
+              <p id="k3-degraded-note" class="pick-degraded-note pick-degraded-note--hold">{{ dpick.hold_reason }}</p>
+              {% endif %}
+            </div>
+            <div class="k3-dossier-footer">
               {% if temporal_badge %}
               <div id="k3-temporal-badge" class="k3-temporal-badge{% if ring_state == 'resolved' %} k3-temporal-badge--resolved{% else %} k3-temporal-badge--live{% endif %}"{% if resolve_at_iso %} data-resolve-at="{{ resolve_at_iso }}"{% endif %} aria-live="polite">{{ temporal_badge }}</div>
               {% if dpick.grade_on_resolve and ring_state != 'resolved' %}<div class="k3-temporal-grade">Graded on resolve · {{ horizon }} window</div>{% endif %}
@@ -245,15 +197,6 @@
               <script type="application/json" id="k3-watchlist-pins">{{ pins | tojson }}</script>
               <p id="k3-horizon-note" class="k3-horizon-note" hidden></p>
               {% endif %}
-              {% if sn.price or sn.change_1h is defined or sn.change_24h is defined or sn.halving_days %}
-              <div class="k3-claim-stats">
-                {% if sn.price %}<div class="k3-stat"><div class="k3-stat-value">{{ '%.4f'|format(sn.price|float) }}</div><div class="k3-stat-label">alpha</div></div>{% endif %}
-                {% if sn.change_1h is defined %}<div class="k3-stat"><div class="k3-stat-value">{{ '%.1f'|format(sn.change_1h|float) }}%</div><div class="k3-stat-label">1h</div></div>{% endif %}
-                {% if sn.change_24h is defined %}<div class="k3-stat"><div class="k3-stat-value">{{ '%.1f'|format(sn.change_24h|float) }}%</div><div class="k3-stat-label">24h</div></div>{% endif %}
-                {% if sn.halving_days %}<div class="k3-stat"><div class="k3-stat-value">{{ sn.halving_days }}</div><div class="k3-stat-label">halving</div></div>{% endif %}
-              </div>
-              {% endif %}
-              </div>
             </div>
           </div>
         </div>
@@ -297,70 +240,35 @@
       <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
         <div class="k3-dossier" id="k3-dossier" data-conf-state="{{ conf_state }}" data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}" data-action="HOLD">
           <div class="k3-layer open" id="k3-layer-claim">
-            <div class="k3-claim surface-aurora rim-chroma k3-claim--hold k3-claim--glow-cool k3-claim--band-0" id="k3-claim" data-glow="cool" data-band="0">
-              <div class="k3-claim-head">
-                <p class="k3-claim-name" id="k3-claim-head-name">No call yet</p>
-                <div class="k3-claim-head__meta">
-                  <span id="k3-stale-badge" class="k3-temporal-badge k3-stale-badge" hidden aria-live="polite"></span>
-                  <span class="k3-horizon-badge" id="k3-horizon-badge" title="Call horizon">{{ horizon }}</span>
-                  <div class="k3-badge hold" id="k3-action-badge">HOLD</div>
+            {% include "partials/premium/tribunal_hero.html" %}
+            <span id="k3-stale-badge" class="k3-temporal-badge k3-stale-badge" hidden aria-live="polite"></span>
+            <span class="k3-horizon-badge" id="k3-horizon-badge" title="Call horizon" hidden>{{ horizon }}</span>
+            <div class="k3-call-lead">
+              <div class="k3-claim-identity" id="k3-claim-identity" hidden>
+                <p class="k3-claim-name k3-claim-name--sub" id="k3-claim-name" hidden></p>
+                <div class="hydrate-skel k3-claim-meta-wrap">
+                  <p class="k3-claim-meta skel-only" aria-hidden="true"><span class="skel skel-md" style="width:38%"></span></p>
+                  <p class="k3-claim-meta live-only" id="k3-claim-meta" hidden></p>
                 </div>
+                <p class="k3-claim-desc" id="k3-claim-desc" hidden></p>
               </div>
-              <div class="k3-claim-main">
-                <div class="k3-orb-wrap">
-                  <div class="k3-orb-halo"></div>
-                  <div class="k3-orb-bg"></div>
-                  <div class="k3-orb-glow"></div>
-                  <div class="k3-orb-particles" aria-hidden="true">
-                    <span></span><span></span><span></span><span></span>
-                    <span></span><span></span><span></span><span></span>
-                    <span></span><span></span>
-                  </div>
-                  <div class="k3-orb k3-ring--{{ ring_state }}">
-                    <svg viewBox="0 0 148 148">
-                      <defs><linearGradient id="k3-gradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1fd47c"/><stop offset="33%" stop-color="#3fc9ff"/><stop offset="66%" stop-color="#9d8cff"/><stop offset="100%" stop-color="#ff9f3f"/></linearGradient></defs>
-                      <circle class="ring-track" cx="74" cy="74" r="62"/>
-                      <circle class="ring-fill" cx="74" cy="74" r="62" style="--ring-offset: 389.56"/>
-                    </svg>
-                    <div class="k3-orb-center">
-                      <div class="k3-orb-score" id="k3-orb-score"><span class="digit-ones">—</span></div>
-                      <div class="k3-orb-label" id="k3-orb-label">{% if conf_state == 'zero' %}zero{% else %}resolving{% endif %}</div>
-                    </div>
-                  </div>
-                </div>
-                <div class="k3-call-lead">
-                  {% if brief.move %}
-                  <h2 class="k3-call-headline k3-call-headline--{{ brief.tone|default('neutral') }}" id="k3-call-headline">{{ brief.move }}</h2>
-                  {% else %}
-                  <h2 class="k3-call-headline k3-call-headline--hold" id="k3-call-headline">HOLD · no long</h2>
-                  {% endif %}
-                  <div class="k3-claim-identity" id="k3-claim-identity" hidden>
-                    <p class="k3-claim-name k3-claim-name--sub" id="k3-claim-name" hidden></p>
-                    <div class="hydrate-skel k3-claim-meta-wrap">
-                      <p class="k3-claim-meta skel-only" aria-hidden="true"><span class="skel skel-md" style="width:38%"></span></p>
-                      <p class="k3-claim-meta live-only" id="k3-claim-meta" hidden></p>
-                    </div>
-                    <p class="k3-claim-desc" id="k3-claim-desc" hidden></p>
-                  </div>
-                  <p class="k3-resolve-crumb" id="k3-resolve-crumb" hidden></p>
-                  <p class="k3-social-crumb" id="k3-social-crumb"{% if not brief.social_crumb %} hidden{% endif %}>{{ brief.social_crumb|default('') }}</p>
-                  {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
-                  {% if brief.vs %}<p class="k3-brief-vs" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
-                  {% if brief.vs_hold_tao %}<p class="k3-brief-vs-hold" id="k3-brief-vs-hold">{{ brief.vs_hold_tao }}</p>{% endif %}
-                  <div id="k3-evidence-drivers" class="k3-evidence-drivers">
-                    {% if brief.evidence_drivers %}
-                    {% for driver in (brief.evidence_drivers or [])[:3] %}
-                    <span class="k3-evidence-driver k3-evidence-driver--{{ driver.tag|default('tech') }}">{{ driver.tag|default('tech') }} · {{ driver.label }}</span>
-                    {% endfor %}
-                    {% else %}
-                    <span class="k3-evidence-empty" id="k3-evidence-empty">No evidence drivers on this call yet.</span>
-                    {% endif %}
-                  </div>
-                </div>
+              <p class="k3-resolve-crumb" id="k3-resolve-crumb" hidden></p>
+              <p class="k3-social-crumb" id="k3-social-crumb"{% if not brief.social_crumb %} hidden{% endif %}>{{ brief.social_crumb|default('') }}</p>
+              {% if brief.thesis %}<p class="k3-brief-thesis" id="k3-brief-thesis">{{ brief.thesis }}</p>{% endif %}
+              {% if brief.vs %}<p class="k3-brief-vs" id="k3-brief-vs">{{ brief.vs }}</p>{% endif %}
+              {% if brief.vs_hold_tao %}<p class="k3-brief-vs-hold" id="k3-brief-vs-hold">{{ brief.vs_hold_tao }}</p>{% endif %}
+              <div id="k3-evidence-drivers" class="k3-evidence-drivers">
+                {% if brief.evidence_drivers %}
+                {% for driver in (brief.evidence_drivers or [])[:3] %}
+                <span class="k3-evidence-driver k3-evidence-driver--{{ driver.tag|default('tech') }}">{{ driver.tag|default('tech') }} · {{ driver.label }}</span>
+                {% endfor %}
+                {% else %}
+                <span class="k3-evidence-empty" id="k3-evidence-empty">No evidence drivers on this call yet.</span>
+                {% endif %}
               </div>
-              <div class="k3-claim-foot">
-                <div id="k3-temporal-badge" class="k3-temporal-badge k3-temporal-badge--empty" aria-live="polite">{{ temporal_badge|default('Window pending — not graded yet') }}</div>
-              </div>
+            </div>
+            <div class="k3-dossier-footer">
+              <div id="k3-temporal-badge" class="k3-temporal-badge k3-temporal-badge--empty" aria-live="polite">{{ temporal_badge|default('Window pending — not graded yet') }}</div>
             </div>
           </div>
         </div>
@@ -627,6 +535,7 @@ if (!window.__k3TemporalInterval) {
 
 // K3-6: Horizon chips — swap conviction/subnet; ring countdown stays on anchor pick
 function k3RenderConviction(pct) {
+  if (document.getElementById('tribunal-hero')) return;
   var scoreEl = document.getElementById('k3-orb-score');
   var fill = document.querySelector('.k3-orb .ring-fill');
   var ringCirc = 389.56;
@@ -664,6 +573,7 @@ window.k3NetuidBand = k3NetuidBand;
 window.k3SyncNetuidBand = k3SyncNetuidBand;
 
 function k3SetActionBadge(action) {
+  if (document.getElementById('tribunal-hero')) return;
   var badge = document.getElementById('k3-action-badge');
   if (!badge) return;
   var act = String(action || 'HOLD').toUpperCase();
