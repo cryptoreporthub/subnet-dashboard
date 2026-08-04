@@ -1221,6 +1221,10 @@
     throw lastErr || new Error("fetch failed");
   }
 
+  function finishFeedHydrate() {
+    if (feed) feed.setAttribute("aria-busy", "false");
+  }
+
   async function hydrate() {
     try {
       var status = null;
@@ -1249,6 +1253,7 @@
                 })
               : '<p class="desk-empty desk-empty--warming">Desk warming — feed will retry shortly.</p>';
           }
+          finishFeedHydrate();
           return;
         }
         throw new Error("message-intel unavailable");
@@ -1304,6 +1309,7 @@
         feed.innerHTML = renderMessages(payload.messages);
         bindFeedClicks();
       }
+      finishFeedHydrate();
     } catch (e) {
       if (meta) meta.textContent = "unavailable";
       if (pulse) pulse.hidden = true;
@@ -1319,6 +1325,7 @@
       if (weekTopEl) weekTopEl.hidden = true;
       feed.innerHTML =
         '<p class="desk-empty desk-empty--error">Telegram desk unreachable — will retry shortly.</p>';
+      finishFeedHydrate();
     }
   }
 

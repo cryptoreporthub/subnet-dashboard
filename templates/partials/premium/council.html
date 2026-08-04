@@ -6,7 +6,7 @@
   <h2 class="section-title" id="council-title">Expert weights</h2>
   <p class="section-sub">Council weights (soul map) — quant, hype, dark horse, technical move when predictions resolve.</p>
   {% if council_weights %}
-  <div class="council-grid soulmap-constellation">
+  <div class="council-grid soulmap-constellation" aria-live="polite">
     {% for cw in council_weights %}
     {% set w = (cw.weight|default(0))|float %}
     {% set trend = (cw.trend|default('even'))|string|lower %}
@@ -25,6 +25,13 @@
     {% endfor %}
   </div>
   {% else %}
-  <div class="card card-muted"><p class="empty empty--quiet">Quiet — council weights load from the soul map when the learning engine has scored experts.</p></div>
+  <div class="card card-muted" aria-live="polite">
+    <div class="hydrate-skeleton hydrate-skeleton--tall" aria-hidden="true">
+      <div class="hydrate-skeleton__line hydrate-skeleton__line--med"></div>
+      <div class="hydrate-skeleton__line"></div>
+      <div class="hydrate-skeleton__line hydrate-skeleton__line--short"></div>
+    </div>
+    <p class="sr-only" role="status">Loading council weights</p>
+  </div>
   {% endif %}
 </section>

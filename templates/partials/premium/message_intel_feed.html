@@ -150,12 +150,13 @@
         </div>
       </div>
     </div>
-    <div id="message-intel-feed" class="message-intel__feed" aria-live="polite">
-      {% if message_intel and message_intel.messages %}
-      <p class="empty">Loading live feed…</p>
-      {% else %}
-      <p class="empty">Warming up Telegram desk…</p>
-      {% endif %}
+    <div id="message-intel-feed" class="message-intel__feed" aria-live="polite" aria-busy="true">
+      <div class="hydrate-skeleton hydrate-skeleton--tall" aria-hidden="true">
+        <div class="hydrate-skeleton__line hydrate-skeleton__line--med"></div>
+        <div class="hydrate-skeleton__line"></div>
+        <div class="hydrate-skeleton__line hydrate-skeleton__line--short"></div>
+      </div>
+      <p class="sr-only" role="status">Loading Telegram live feed</p>
     </div>
     <div id="message-intel-detail" class="message-intel__detail" hidden aria-live="polite"></div>
   </div>
