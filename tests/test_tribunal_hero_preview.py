@@ -16,6 +16,8 @@ def test_gated_preview_has_hero_and_three_judges():
     assert html.count('data-judge="echo"') == 1
     assert html.count('data-judge="pulse"') == 1
     assert "tribunal-hero__wiring" in html
+    assert "tribunal-hero__ring-glow" in html
+    assert "tribunal-hero__rim-dots" in html
     assert "GATED · HOLD" in html
     assert "SN99" in html
     assert "THE TRIBUNAL" not in html
@@ -33,6 +35,8 @@ def test_sealed_label_is_long_not_buy():
     assert "SN14 · TaoHash" in html
     assert "THE TRIBUNAL" not in html
     assert "71%" in html
+    assert "tribunal-hero__ring-glow" in html
+    assert "tribunal-hero__rim-dots" in html
     assert "LAST 5" in html
     assert "data-last5 hidden" not in html
 

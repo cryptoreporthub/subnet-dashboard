@@ -741,6 +741,87 @@ body.wrap {
   stroke-linecap: round;
   filter: drop-shadow(0 0 12px rgba(255, 184, 0, 0.65))
     drop-shadow(0 0 24px rgba(255, 184, 0, 0.35));
+  animation: tribunal-ring-shimmer 6s ease-in-out infinite;
+}
+
+.tribunal-hero__ring-glow {
+  position: absolute;
+  left: 50%;
+  top: 240px;
+  width: 152px;
+  height: 152px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(circle, rgba(255, 184, 0, 0.2) 0%, transparent 58%),
+    radial-gradient(circle at 40% 35%, rgba(255, 184, 0, 0.1) 0%, transparent 62%);
+  animation: tribunal-ring-glow-pulse 4s ease-in-out infinite;
+  opacity: 0.38;
+  filter: blur(18px);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.tribunal-hero__rim-dots {
+  position: absolute;
+  left: 50%;
+  top: 240px;
+  width: 152px;
+  height: 152px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  pointer-events: none;
+  animation: tribunal-rim-drift 14s linear infinite reverse;
+}
+
+.tribunal-hero__rim-dots span {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--signal-amber, #ffb800);
+  box-shadow:
+    0 0 6px 1px rgba(255, 184, 0, 0.55),
+    0 0 12px rgba(255, 184, 0, 0.25);
+  opacity: 0.8;
+}
+
+.tribunal-hero__rim-dots span:nth-child(1) { top: 8%; left: 48%; }
+.tribunal-hero__rim-dots span:nth-child(2) { top: 18%; left: 78%; width: 2px; height: 2px; opacity: 0.55; }
+.tribunal-hero__rim-dots span:nth-child(3) { top: 42%; left: 92%; }
+.tribunal-hero__rim-dots span:nth-child(4) { top: 72%; left: 82%; width: 2px; height: 2px; }
+.tribunal-hero__rim-dots span:nth-child(5) { top: 88%; left: 52%; opacity: 0.45; }
+.tribunal-hero__rim-dots span:nth-child(6) { top: 70%; left: 12%; width: 2px; height: 2px; }
+.tribunal-hero__rim-dots span:nth-child(7) { top: 38%; left: 4%; }
+.tribunal-hero__rim-dots span:nth-child(8) { top: 14%; left: 18%; width: 2px; height: 2px; opacity: 0.65; }
+.tribunal-hero__rim-dots span:nth-child(9) { top: 58%; left: 96%; width: 2px; height: 2px; opacity: 0.5; }
+.tribunal-hero__rim-dots span:nth-child(10) { top: 4%; left: 30%; width: 2px; height: 2px; opacity: 0.6; }
+
+@keyframes tribunal-ring-glow-pulse {
+  0%, 100% {
+    opacity: 0.32;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
+  50% {
+    opacity: 0.5;
+    transform: translate(-50%, -50%) scale(1.04);
+  }
+}
+
+@keyframes tribunal-rim-drift {
+  to { transform: translate(-50%, -50%) rotate(-360deg); }
+}
+
+@keyframes tribunal-ring-shimmer {
+  0%, 100% {
+    filter: drop-shadow(0 0 12px rgba(255, 184, 0, 0.65))
+      drop-shadow(0 0 24px rgba(255, 184, 0, 0.35));
+  }
+  50% {
+    filter: drop-shadow(0 0 14px rgba(255, 184, 0, 0.75))
+      drop-shadow(0 0 28px rgba(255, 184, 0, 0.42));
+  }
 }
 
 .tribunal-hero__ring-bracket {
@@ -1079,9 +1160,20 @@ body.wrap {
 
 @media (prefers-reduced-motion: reduce) {
   .tribunal-hero__ring-fill,
-  .tribunal-hero__power {
+  .tribunal-hero__power,
+  .tribunal-hero__ring-glow,
+  .tribunal-hero__rim-dots {
     transition: none;
     animation: none;
+  }
+
+  .tribunal-hero__ring-glow {
+    opacity: 0.38;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .tribunal-hero__rim-dots {
+    transform: translate(-50%, -50%);
   }
 }
 

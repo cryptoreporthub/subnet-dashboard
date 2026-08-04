@@ -72,6 +72,12 @@
     <circle class="tribunal-hero__entry-node" cx="262" cy="272" r="5" />
   </svg>
 
+  <div class="tribunal-hero__ring-glow" aria-hidden="true"></div>
+  <div class="tribunal-hero__rim-dots" aria-hidden="true">
+    <span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span>
+  </div>
+
   <div class="tribunal-hero__ring-center">
     <span id="k3-orb-score" class="tribunal-hero__pct">{% if t.conviction_pct is not none %}{{ t.conviction_pct }}%{% else %}—{% endif %}</span>
     <span class="tribunal-hero__pct-label">VERDICT CONFIDENCE</span>
