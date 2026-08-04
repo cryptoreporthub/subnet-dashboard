@@ -406,3 +406,9 @@ def test_hero_a_tier_canonical_dossier_writer_documented():
     assert "patchK3DossierFromPayload" in src
     live = open("static/js/home_live_refresh.js", encoding="utf-8").read()
     assert "__cockpitHome.renderDailyPick" in live
+
+
+def test_council_pick_card_uses_pewter_smoke_background():
+    css = open("static/css/ui.css", encoding="utf-8").read()
+    assert ".council-stage .home-job__call-host .k3-dossier" in css
+    assert "var(--card-smoke)" in css.split(".council-stage .home-job__call-host .k3-dossier", 1)[1][:400]

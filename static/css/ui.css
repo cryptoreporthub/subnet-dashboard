@@ -665,12 +665,30 @@ body.wrap {
   }
 }
 
+/* ---------- Council pick card — pewter smoke ---------- */
+.council-stage .home-job__call-host .k3-dossier {
+  background-color: rgba(18, 22, 30, 0.92);
+  background-image: var(--card-grain), var(--card-smoke);
+  background-size: 160px 160px, cover;
+  background-blend-mode: overlay, normal;
+  border: 1px solid var(--line-hi);
+  border-radius: var(--radius-md, 14px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+
 /* ---------- Tribunal hero v3 (preview) ---------- */
 .tribunal-hero {
   position: relative;
   padding: var(--space-4) var(--space-3) var(--space-5);
   color: var(--text-primary);
   background: radial-gradient(ellipse 80% 60% at 50% 35%, rgba(255, 184, 0, 0.06) 0%, transparent 70%);
+}
+
+.council-stage .home-job__call-host .tribunal-hero {
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 35%, rgba(255, 184, 0, 0.07) 0%, transparent 70%),
+    radial-gradient(ellipse 90% 70% at 50% 100%, rgba(100, 108, 122, 0.12) 0%, transparent 62%);
 }
 
 .tribunal-hero__stage {
