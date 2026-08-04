@@ -18,6 +18,7 @@ def test_build_tribunal_view_gated_hold():
             "final_confidence": 0.34,
             "action": "LONG",
         },
+        "timestamp_utc": "2026-08-04T12:00:00Z",
     }
     view = build_tribunal_view(
         payload,
@@ -29,6 +30,39 @@ def test_build_tribunal_view_gated_hold():
     assert view["center_label"] == "GATED · HOLD"
     assert view["verdict_kind"] == "gated"
     assert view["subnet_label"] == "SN99"
+    assert view["synced_at"] == "2026-08-04T12:00:00Z"
+
+
+def test_tribunal_hero_template_sync_and_conviction_hooks():
+    from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+    payload = {
+        "action": "HOLD",
+        "timestamp_utc": "2026-08-04T12:00:00Z",
+        "candidate": {
+            "subnet": {"netuid": 14, "name": "TaoHash"},
+            "final_confidence": 0.71,
+        },
+    }
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    html = env.get_template("partials/premium/tribunal_hero.html").render(
+        tribunal=build_tribunal_view(payload, {}),
+    )
+    assert "data-synced-at=\"2026-08-04T12:00:00Z\"" in html
+    assert "data-hero-conviction=\"71\"" in html
+    assert "style=\"--p: 71;\"" in html
+    assert "id=\"tribunal-hero-sync\"" in html
+    assert "tribunal-hero__sync" in html
+
+
+def test_cockpit_hydrate_tribunal_sync_helpers():
+    src = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()
+    assert "patchTribunalSyncStamp" in src
+    assert "formatSyncedAge" in src
+    assert "setProperty('--p'" in src
 
 
 def test_home_ssr_contains_tribunal_hero():
