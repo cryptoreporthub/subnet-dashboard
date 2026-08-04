@@ -3725,8 +3725,12 @@
         renderKpi(stats);
         renderCouncilWeights(stats.expert_weights || {}, stats.expert_weight_deltas || {});
         if (document.getElementById('tribunal-hero')) {
-          patchTribunalJudges(stats);
-          patchTribunalMetrics(stats);
+          if (lastDailyPickPayload) {
+            renderTribunalHero(lastDailyPickPayload, stats);
+          } else {
+            patchTribunalJudges(stats, {});
+            patchTribunalPanels({}, stats);
+          }
         }
         if (stats.trust_banner && window.SimiTrustBanner && window.SimiTrustBanner.render) {
           window.SimiTrustBanner.render(stats.trust_banner);
@@ -3957,8 +3961,57 @@
     run();
   }
 
-  // ---------- Tribunal hero v3 (preview + future live wire) ----------
-  var TRIBUNAL_RING_CIRC = 452.39;
+  // ---------- Council Hero v4 (tribunal hero slot) ----------
+
+  function formatGaugePct(val) {
+    if (val == null || isNaN(Number(val))) return '—';
+    var n = Number(val);
+    if (Math.abs(n - Math.round(n)) < 0.05) return String(Math.round(n)) + '%';
+    return n.toFixed(1) + '%';
+  }
+
+  function judgeSignalPct(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    var v = raw.confidence != null ? raw.confidence : raw.score;
+    if (v == null || isNaN(Number(v))) return null;
+    var n = Number(v);
+    return n <= 1 ? n * 100 : n;
+  }
+
+  function judgeSignalsFromPick(payload) {
+    var active = (payload && (payload.pick || payload.candidate)) || {};
+    var scores = active.judge_scores_at_creation;
+    var out = { oracle: null, echo: null, pulse: null };
+    if (scores && typeof scores === 'object') {
+      ['oracle', 'echo', 'pulse'].forEach(function (key) {
+        out[key] = judgeSignalPct(scores[key]);
+      });
+    }
+    return out;
+  }
+
+  function weightedVerdictPct(weights, signals) {
+    if (!weights || !signals) return null;
+    var total = 0;
+    var used = false;
+    ['oracle', 'echo', 'pulse'].forEach(function (key) {
+      var w = weights[key];
+      var s = signals[key];
+      if (w == null || s == null || isNaN(Number(w)) || isNaN(Number(s))) return;
+      total += Number(w) * Number(s);
+      used = true;
+    });
+    if (!used) return null;
+    return Math.round(total * 10) / 10;
+  }
+
+  function tribunalGaugePct(dailyPick, learningStats) {
+    var weights = (learningStats && learningStats.judge_weights) || {};
+    var signals = judgeSignalsFromPick(dailyPick);
+    var weighted = weightedVerdictPct(weights, signals);
+    if (weighted != null) return weighted;
+    return tribunalConvictionPct(dailyPick);
+  }
 
   function verdictKind(payload) {
     if (!payload) return 'cold';
@@ -4022,18 +4075,11 @@
   function patchTribunalRingFill(pct) {
     var hero = document.getElementById('tribunal-hero');
     if (!hero) return;
-    var fill = hero.querySelector('.tribunal-hero__ring-fill');
     var clamped = 0;
     if (pct != null && !isNaN(Number(pct))) {
       clamped = Math.max(0, Math.min(100, Number(pct)));
     }
     hero.style.setProperty('--p', String(clamped));
-    if (!fill) return;
-    var offset = TRIBUNAL_RING_CIRC;
-    if (pct != null && !isNaN(Number(pct))) {
-      offset = TRIBUNAL_RING_CIRC - (TRIBUNAL_RING_CIRC * clamped / 100);
-    }
-    fill.setAttribute('stroke-dashoffset', String(offset));
   }
 
   function formatSyncedAge(iso) {
@@ -4089,67 +4135,91 @@
     container.hidden = false;
   }
 
-  function patchTribunalJudges(stats) {
+  function patchTribunalJudges(stats, dailyPick) {
     var hero = document.getElementById('tribunal-hero');
     if (!hero || !stats) return;
     var weights = stats.judge_weights || {};
+    var signals = judgeSignalsFromPick(dailyPick || {});
     var last5Map = stats.judge_last5 || {};
     hero.querySelectorAll('[data-judge]').forEach(function (seat) {
       var key = seat.getAttribute('data-judge');
       var weightEl = seat.querySelector('[data-judge-weight]');
       if (weightEl) weightEl.textContent = formatJudgeWeightPct(weights[key]);
+      var signalEl = seat.querySelector('[data-judge-signal]');
+      if (signalEl) signalEl.textContent = formatGaugePct(signals[key]);
       var last5El = seat.querySelector('[data-last5]');
       if (last5El) renderTribunalLast5Ticks(last5El, last5Map[key]);
     });
   }
 
-  function patchTribunalMetrics(stats) {
+  function patchTribunalPanels(dailyPick, stats) {
     var hero = document.getElementById('tribunal-hero');
     if (!hero || !stats) return;
+    var kind = verdictKind(dailyPick || {});
+    var gauge = tribunalGaugePct(dailyPick, stats);
+    var active = (dailyPick && (dailyPick.pick || dailyPick.candidate)) || {};
     var tb = stats.trust_banner || {};
-    var acc = hero.querySelector('[data-metric="accuracy"]');
-    if (acc) {
-      var accVal = acc.querySelector('[data-metric-value]');
-      var accSub = acc.querySelector('[data-metric-sub]');
-      if (tb.ready && tb.accuracy != null) {
-        if (accVal) accVal.textContent = String(Math.round(Number(tb.accuracy) * 100)) + '%';
-        if (accSub) accSub.textContent = tb.headline || '';
-      } else {
-        if (accVal) accVal.textContent = '—';
-        if (accSub) accSub.textContent = tb.message || 'Sample building';
-      }
+    var deltas = stats.judge_weight_deltas || {};
+
+    var vEl = hero.querySelector('[data-decision-verdict]');
+    if (vEl) vEl.textContent = kind.toUpperCase();
+    var cEl = hero.querySelector('[data-decision-confidence]');
+    if (cEl) cEl.textContent = formatGaugePct(gauge);
+    var consEl = hero.querySelector('[data-decision-consensus]');
+    if (consEl) {
+      var cs = active.consensus_score;
+      if (cs != null && !isNaN(Number(cs))) {
+        var cn = Number(cs);
+        consEl.textContent = (cn <= 1 ? Math.round(cn * 100) : Math.round(cn)) + '%';
+      } else consEl.textContent = '—';
     }
-    var recent = hero.querySelector('[data-metric="recent"]');
-    if (recent) {
-      var recentVal = recent.querySelector('[data-metric-value]');
-      var recentSub = recent.querySelector('[data-metric-sub]');
-      var graded = Number(tb.graded) || 0;
-      var correct = Number(tb.correct) || 0;
-      var wrong = Number(tb.wrong) || 0;
-      if (graded > 0 && correct + wrong > 0) {
-        if (recentVal) recentVal.textContent = String(Math.round((correct / (correct + wrong)) * 100)) + '%';
-        if (recentSub) recentSub.textContent = 'Last ' + graded + ' graded council calls';
-      } else {
-        if (recentVal) recentVal.textContent = '—';
-        if (recentSub) recentSub.textContent = '';
-      }
-      var councilTicks = recent.querySelector('.tribunal-hero__last5-ticks--council');
-      if (stats.council_last5 && stats.council_last5.length === 5) {
-        if (!councilTicks) {
-          councilTicks = document.createElement('div');
-          councilTicks.className = 'tribunal-hero__last5-ticks tribunal-hero__last5-ticks--council';
-          councilTicks.setAttribute('aria-hidden', 'true');
-          recent.appendChild(councilTicks);
-        }
-        councilTicks.innerHTML = stats.council_last5.map(function (hit) {
-          if (hit === true) return '<span class="tribunal-hero__tick tribunal-hero__tick--hit"></span>';
-          if (hit === false) return '<span class="tribunal-hero__tick tribunal-hero__tick--miss"></span>';
-          return '<span class="tribunal-hero__tick tribunal-hero__tick--empty"></span>';
-        }).join('');
-      } else if (councilTicks) {
-        councilTicks.remove();
-      }
+    var brainEl = hero.querySelector('[data-decision-brain]');
+    if (brainEl) {
+      var brain = active.brain_recommendation || active.recommended_action || dailyPick.brain_recommendation;
+      if (brain && typeof brain === 'object') brain = brain.action || brain.recommended_action;
+      brainEl.textContent = brain ? String(brain).toUpperCase() : '—';
     }
+    var dissentEl = hero.querySelector('[data-decision-dissent]');
+    if (dissentEl) {
+      var dissenters = dailyPick.dissenters || active.dissenters;
+      if (dissenters && dissenters.length) dissentEl.textContent = dissenters.join(', ');
+      else if (dailyPick.council_unanimous) dissentEl.textContent = 'Unanimous';
+      else dissentEl.textContent = '—';
+    }
+
+    var graded = Number(tb.graded) || 0;
+    var correct = Number(tb.correct) || 0;
+    var wrong = Number(tb.wrong) || 0;
+    var winRate = '—';
+    if (tb.ready && tb.accuracy != null) winRate = (Math.round(Number(tb.accuracy) * 1000) / 10).toFixed(1) + '%';
+    else if (graded > 0 && correct + wrong > 0) {
+      winRate = (Math.round((correct / (correct + wrong)) * 1000) / 10).toFixed(1) + '%';
+    }
+    var wrEl = hero.querySelector('[data-accuracy-win-rate]');
+    if (wrEl) wrEl.textContent = winRate;
+    var subEl = hero.querySelector('[data-accuracy-sub]');
+    if (subEl) subEl.textContent = tb.headline || tb.message || 'Building sample';
+    var gEl = hero.querySelector('[data-accuracy-graded]');
+    if (gEl) gEl.textContent = String(graded);
+    var hitEl = hero.querySelector('[data-accuracy-correct]');
+    if (hitEl) hitEl.textContent = String(correct);
+    var missEl = hero.querySelector('[data-accuracy-wrong]');
+    if (missEl) missEl.textContent = String(wrong);
+
+    hero.querySelectorAll('[data-jury]').forEach(function (row) {
+      var key = row.getAttribute('data-jury');
+      var delta = deltas[key];
+      var arrowEl = row.querySelector('[data-jury-arrow]');
+      var deltaEl = row.querySelector('[data-jury-delta]');
+      if (delta == null || isNaN(Number(delta))) {
+        if (arrowEl) arrowEl.textContent = '·';
+        if (deltaEl) deltaEl.textContent = '—';
+        return;
+      }
+      var d = Number(delta);
+      if (arrowEl) arrowEl.textContent = d > 0.0005 ? '▲' : d < -0.0005 ? '▼' : '·';
+      if (deltaEl) deltaEl.textContent = (d >= 0 ? '+' : '') + d.toFixed(3);
+    });
   }
 
   function renderTribunalHero(dailyPick, learningStats) {
@@ -4161,9 +4231,9 @@
     if (title) title.textContent = tribunalSubnetLabel(dailyPick);
     var badge = document.getElementById('k3-action-badge');
     if (badge) badge.textContent = tribunalCenterLabel(dailyPick, kind);
-    var pct = kind === 'forming' || kind === 'cold' ? null : tribunalConvictionPct(dailyPick);
+    var pct = kind === 'forming' || kind === 'cold' ? null : tribunalGaugePct(dailyPick, learningStats);
     var orb = document.getElementById('k3-orb-score');
-    if (orb) orb.textContent = pct != null ? String(pct) + '%' : '—';
+    if (orb) orb.textContent = formatGaugePct(pct);
     patchTribunalRingFill(pct);
     if (pct != null) {
       hero.setAttribute('data-hero-conviction', String(pct));
@@ -4176,12 +4246,12 @@
     var headline = document.getElementById('k3-call-headline');
     if (headline) {
       var line = tribunalCenterLabel(dailyPick, kind);
-      if (pct != null) line += ' — ' + pct + '% conviction';
+      if (pct != null) line += ' — ' + formatGaugePct(pct) + ' conviction';
       headline.textContent = line;
     }
     if (learningStats) {
-      patchTribunalJudges(learningStats);
-      patchTribunalMetrics(learningStats);
+      patchTribunalJudges(learningStats, dailyPick);
+      patchTribunalPanels(dailyPick, learningStats);
     }
     return true;
   }

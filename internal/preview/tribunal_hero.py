@@ -1,4 +1,4 @@
-"""SSR fixtures for /preview/tribunal — tribunal hero visual sign-off."""
+"""SSR fixtures for /preview/tribunal — Council Hero v4."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import Request
 
 _VALID_STATES = frozenset({"sealed", "gated", "forming", "cold"})
-_RING_CIRC = 452.39  # 2πr, r=72 — keep in sync with tribunal_hero.html SVG
+_JUDGE_KEYS = ("oracle", "echo", "pulse")
 
 
 def verdict_kind(payload: Dict[str, Any]) -> str:
@@ -38,7 +38,7 @@ def center_label(payload: Dict[str, Any], kind: str) -> str:
     return "COLD"
 
 
-def conviction_pct(payload: Dict[str, Any]) -> Optional[int]:
+def conviction_pct(payload: Dict[str, Any]) -> Optional[float]:
     active = payload.get("pick") or payload.get("candidate")
     if not active:
         return None
@@ -54,18 +54,99 @@ def conviction_pct(payload: Dict[str, Any]) -> Optional[int]:
     val = float(raw)
     if val <= 1:
         val *= 100
-    return int(round(val))
+    return val
 
 
-def ring_dash_offset(pct: Optional[int]) -> float:
-    if pct is None:
-        return _RING_CIRC
-    clamped = max(0, min(100, int(pct)))
-    return _RING_CIRC - (_RING_CIRC * clamped / 100)
+def _judge_score_pct(raw: Any) -> Optional[float]:
+    if isinstance(raw, dict):
+        for key in ("confidence", "score"):
+            if raw.get(key) is not None:
+                try:
+                    val = float(raw[key])
+                    return val * 100 if val <= 1 else val
+                except (TypeError, ValueError):
+                    continue
+    elif raw is not None:
+        try:
+            val = float(raw)
+            return val * 100 if val <= 1 else val
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def judge_signals_from_pick(payload: Dict[str, Any]) -> Dict[str, Optional[float]]:
+    active = payload.get("pick") or payload.get("candidate") or {}
+    scores = active.get("judge_scores_at_creation")
+    if not isinstance(scores, dict):
+        netuid = None
+        sn = active.get("subnet") if isinstance(active.get("subnet"), dict) else {}
+        if isinstance(sn, dict):
+            netuid = sn.get("netuid")
+        if netuid is not None:
+            try:
+                from internal.council.conviction_bands import judge_scores_for_netuid
+
+                scores = judge_scores_for_netuid(netuid)
+            except Exception:
+                scores = None
+    out: Dict[str, Optional[float]] = {k: None for k in _JUDGE_KEYS}
+    if isinstance(scores, dict):
+        for key in _JUDGE_KEYS:
+            out[key] = _judge_score_pct(scores.get(key))
+    return out
+
+
+def weighted_verdict_pct(
+    weights: Dict[str, float],
+    signals: Dict[str, Optional[float]],
+) -> Optional[float]:
+    """Σ(weight_j × signal_j_pct) — e.g. 0.4×36 + 0.3×32 + 0.3×32 = 33.6."""
+    total = 0.0
+    used = False
+    for key in _JUDGE_KEYS:
+        w = weights.get(key)
+        s = signals.get(key)
+        if w is None or s is None:
+            continue
+        total += float(w) * float(s)
+        used = True
+    if not used:
+        return None
+    return round(total, 1)
+
+
+def format_gauge_pct(val: Optional[float]) -> str:
+    if val is None:
+        return "—"
+    if abs(val - round(val)) < 0.05:
+        return f"{int(round(val))}%"
+    return f"{val:.1f}%"
+
+
+def gauge_attr(val: Optional[float]) -> Optional[str]:
+    if val is None:
+        return None
+    if abs(val - round(val)) < 0.05:
+        return str(int(round(val)))
+    return f"{val:.1f}"
+
+
+def gauge_pct_for_view(
+    payload: Dict[str, Any],
+    weights: Dict[str, float],
+) -> Optional[float]:
+    signals = judge_signals_from_pick(payload)
+    weighted = weighted_verdict_pct(weights, signals)
+    if weighted is not None:
+        return weighted
+    raw = conviction_pct(payload)
+    if raw is None:
+        return None
+    return round(raw, 1)
 
 
 def synced_at_iso(payload: Dict[str, Any]) -> Optional[str]:
-    """ISO timestamp for hero sync stamp — matches dailyPickGeneratedAt() in cockpit_hydrate.js."""
     pick = payload if isinstance(payload, dict) else {}
     meta = pick.get("_meta") or {}
     for source in (pick, meta):
@@ -77,7 +158,6 @@ def synced_at_iso(payload: Dict[str, Any]) -> Optional[str]:
 
 
 def subnet_label(payload: Dict[str, Any]) -> str:
-    """Visible hero title: SN{netuid} · name when name is distinct."""
     active = payload.get("pick") or payload.get("candidate")
     if not active:
         return "Awaiting subnet"
@@ -96,6 +176,102 @@ def _judge_weight_pct(weight: float) -> str:
     return f"{int(round(float(weight) * 100))}%"
 
 
+def _format_signal_pct(val: Optional[float]) -> str:
+    if val is None:
+        return "—"
+    if abs(val - round(val)) < 0.05:
+        return f"{int(round(val))}%"
+    return f"{val:.1f}%"
+
+
+def _delta_arrow(delta: Optional[float]) -> str:
+    if delta is None:
+        return "·"
+    if delta > 0.0005:
+        return "▲"
+    if delta < -0.0005:
+        return "▼"
+    return "·"
+
+
+def _decision_log_panel(payload: Dict[str, Any], kind: str, gauge: Optional[float]) -> Dict[str, Any]:
+    active = payload.get("pick") or payload.get("candidate") or {}
+    consensus = active.get("consensus_score")
+    if consensus is not None:
+        try:
+            cval = float(consensus)
+            consensus_str = f"{cval * 100:.0f}%" if cval <= 1 else f"{cval:.0f}%"
+        except (TypeError, ValueError):
+            consensus_str = "—"
+    else:
+        consensus_str = "—"
+
+    brain = (
+        active.get("brain_recommendation")
+        or active.get("recommended_action")
+        or payload.get("brain_recommendation")
+    )
+    if isinstance(brain, dict):
+        brain = brain.get("action") or brain.get("recommended_action")
+    brain_str = str(brain).upper() if brain else "—"
+
+    dissenters = payload.get("dissenters")
+    if not isinstance(dissenters, list):
+        dissenters = active.get("dissenters")
+    if isinstance(dissenters, list) and dissenters:
+        dissent_str = ", ".join(str(d) for d in dissenters)
+    else:
+        dissent_str = "Unanimous" if payload.get("council_unanimous") else "—"
+
+    return {
+        "verdict_kind": kind.upper(),
+        "confidence": format_gauge_pct(gauge),
+        "consensus": consensus_str,
+        "brain": brain_str,
+        "dissent": dissent_str,
+    }
+
+
+def _accuracy_ledger_panel(stats: Dict[str, Any]) -> Dict[str, Any]:
+    tb = stats.get("trust_banner") or {}
+    graded = int(tb.get("graded") or 0)
+    correct = int(tb.get("correct") or 0)
+    wrong = int(tb.get("wrong") or 0)
+    win_rate = None
+    if tb.get("ready") and tb.get("accuracy") is not None:
+        win_rate = round(float(tb["accuracy"]) * 100, 1)
+    elif graded > 0 and correct + wrong > 0:
+        win_rate = round(correct / (correct + wrong) * 100, 1)
+    return {
+        "graded": graded,
+        "correct": correct,
+        "wrong": wrong,
+        "win_rate": f"{win_rate:.1f}%" if win_rate is not None else "—",
+        "sub": tb.get("headline") or tb.get("message") or "Building sample",
+        "ready": bool(tb.get("ready")),
+    }
+
+
+def _jury_move_panel(stats: Dict[str, Any]) -> List[Dict[str, Any]]:
+    deltas = stats.get("judge_weight_deltas") or {}
+    rows: List[Dict[str, Any]] = []
+    for key, label in (("oracle", "ORACLE"), ("echo", "ECHO"), ("pulse", "PULSE")):
+        delta = deltas.get(key) if isinstance(deltas, dict) else None
+        try:
+            delta_f = float(delta) if delta is not None else None
+        except (TypeError, ValueError):
+            delta_f = None
+        rows.append(
+            {
+                "key": key,
+                "label": label,
+                "arrow": _delta_arrow(delta_f),
+                "delta": f"{delta_f:+.3f}" if delta_f is not None else "—",
+            }
+        )
+    return rows
+
+
 def _fixture_daily_pick(state: str) -> Dict[str, Any]:
     today = datetime.now(timezone.utc).date().isoformat()
     if state == "sealed":
@@ -107,6 +283,11 @@ def _fixture_daily_pick(state: str) -> Dict[str, Any]:
                 "subnet": {"netuid": 14, "name": "TaoHash", "symbol": "TH"},
                 "final_confidence": 0.71,
                 "action": "LONG",
+                "judge_scores_at_creation": {
+                    "oracle": {"confidence": 0.72},
+                    "echo": {"confidence": 0.70},
+                    "pulse": {"confidence": 0.71},
+                },
             },
             "candidate": None,
         }
@@ -120,6 +301,11 @@ def _fixture_daily_pick(state: str) -> Dict[str, Any]:
                 "subnet": {"netuid": 99, "name": "SN99", "symbol": "T99"},
                 "final_confidence": 0.34,
                 "action": "LONG",
+                "judge_scores_at_creation": {
+                    "oracle": {"confidence": 0.36},
+                    "echo": {"confidence": 0.32},
+                    "pulse": {"confidence": 0.32},
+                },
             },
         }
     if state == "forming":
@@ -128,7 +314,7 @@ def _fixture_daily_pick(state: str) -> Dict[str, Any]:
 
 
 def _fixture_learning_stats(state: str) -> Dict[str, Any]:
-    weights = {"oracle": 0.333, "echo": 0.333, "pulse": 0.334}
+    weights = {"oracle": 0.40, "echo": 0.30, "pulse": 0.30}
     if state == "sealed":
         trust = {
             "ready": True,
@@ -141,6 +327,7 @@ def _fixture_learning_stats(state: str) -> Dict[str, Any]:
         }
         return {
             "judge_weights": weights,
+            "judge_weight_deltas": {"oracle": 0.02, "echo": -0.01, "pulse": 0.0},
             "judge_last5": {
                 "oracle": [True, True, None, True, False],
                 "echo": [True, False, True, True, False],
@@ -152,6 +339,7 @@ def _fixture_learning_stats(state: str) -> Dict[str, Any]:
     if state == "gated":
         return {
             "judge_weights": weights,
+            "judge_weight_deltas": {"pulse": -0.02},
             "trust_banner": {
                 "ready": False,
                 "graded": 12,
@@ -176,47 +364,6 @@ def _fixture_learning_stats(state: str) -> Dict[str, Any]:
     }
 
 
-def _metrics_rows(stats: Dict[str, Any]) -> Dict[str, Any]:
-    tb = stats.get("trust_banner") or {}
-    accuracy_row: Dict[str, Any]
-    if tb.get("ready") and tb.get("accuracy") is not None:
-        acc_pct = int(round(float(tb["accuracy"]) * 100))
-        accuracy_row = {
-            "label": "Historical Accuracy",
-            "value": f"{acc_pct}%",
-            "sub": tb.get("headline") or "",
-            "bar_pct": acc_pct,
-        }
-    else:
-        accuracy_row = {
-            "label": "Historical Accuracy",
-            "value": "—",
-            "sub": tb.get("message") or "Sample building",
-            "bar_pct": None,
-        }
-
-    graded = int(tb.get("graded") or 0)
-    correct = int(tb.get("correct") or 0)
-    wrong = int(tb.get("wrong") or 0)
-    recent_row: Dict[str, Any] = {
-        "label": "Recent Verdicts",
-        "value": "—",
-        "sub": "",
-        "ticks": [],
-        "bar_pct": None,
-    }
-    if graded > 0:
-        win = int(round(correct / (correct + wrong) * 100)) if (correct + wrong) > 0 else 0
-        recent_row["value"] = f"{win}%"
-        recent_row["sub"] = f"Last {graded} graded council calls"
-        recent_row["bar_pct"] = win
-    council_last5 = stats.get("council_last5")
-    if isinstance(council_last5, list) and len(council_last5) == 5:
-        recent_row["ticks"] = council_last5
-
-    return {"accuracy": accuracy_row, "recent": recent_row}
-
-
 def build_tribunal_view(
     daily_pick: Dict[str, Any],
     learning_stats: Dict[str, Any],
@@ -225,8 +372,9 @@ def build_tribunal_view(
     pick = daily_pick if isinstance(daily_pick, dict) else {}
     stats = learning_stats if isinstance(learning_stats, dict) else {}
     kind = verdict_kind(pick)
-    pct = conviction_pct(pick)
     weights = stats.get("judge_weights") or {}
+    signals = judge_signals_from_pick(pick)
+    gauge = gauge_pct_for_view(pick, weights) if kind not in ("forming", "cold") else None
     judge_last5 = stats.get("judge_last5")
     judges: List[Dict[str, Any]] = []
     for key, label in (("oracle", "ORACLE"), ("echo", "ECHO"), ("pulse", "PULSE")):
@@ -239,25 +387,29 @@ def build_tribunal_view(
                 "key": key,
                 "label": label,
                 "weight_pct": _judge_weight_pct(w) if w is not None else "—",
+                "signal_pct": _format_signal_pct(signals.get(key)),
                 "last5": last5 if isinstance(last5, list) and len(last5) == 5 else None,
             }
         )
 
-    metrics = _metrics_rows(stats)
     headline = center_label(pick, kind)
-    if pct is not None:
-        headline = f"{headline} — {pct}% conviction"
+    if gauge is not None:
+        headline = f"{headline} — {format_gauge_pct(gauge)} conviction"
 
     return {
         "verdict_kind": kind,
         "subnet_label": subnet_label(pick),
         "center_label": center_label(pick, kind),
-        "conviction_pct": pct,
+        "conviction_pct": gauge,
+        "gauge_display": format_gauge_pct(gauge),
+        "gauge_attr": gauge_attr(gauge),
         "synced_at": synced_at_iso(pick),
-        "ring_circ": _RING_CIRC,
-        "ring_dash_offset": ring_dash_offset(pct),
         "judges": judges,
-        "metrics": metrics,
+        "panels": {
+            "decision_log": _decision_log_panel(pick, kind, gauge),
+            "accuracy_ledger": _accuracy_ledger_panel(stats),
+            "jury_move": _jury_move_panel(stats),
+        },
         "headline": headline,
         "daily_pick": pick,
         "learning_stats": stats,

@@ -778,24 +778,22 @@ body.wrap {
   overflow: hidden;
 }
 
-/* ---------- Tribunal hero v3 (preview) ---------- */
+/* ---------- Council Hero v4 (Cold Steel) ---------- */
 .tribunal-hero {
+  --hero-ice: #4aa1e6;
+  --hero-cyan: #57e0ff;
+  --hero-steel: #bfe3ff;
+  --hero-smoke: #070709;
   position: relative;
   padding: var(--space-4) var(--space-3) var(--space-5);
   color: var(--text-primary);
-  background: radial-gradient(ellipse 80% 60% at 50% 35%, rgba(255, 184, 0, 0.06) 0%, transparent 70%);
+  background: var(--hero-smoke);
 }
 
 .council-stage .home-job__call-host .tribunal-hero {
   background:
-    radial-gradient(ellipse 80% 60% at 50% 35%, rgba(255, 184, 0, 0.07) 0%, transparent 70%),
-    radial-gradient(ellipse 90% 70% at 50% 100%, rgba(100, 108, 122, 0.12) 0%, transparent 62%);
-}
-
-.tribunal-hero__stage {
-  position: relative;
-  height: 560px;
-  overflow: hidden;
+    radial-gradient(ellipse 90% 55% at 50% 0%, rgba(120, 128, 140, 0.22) 0%, transparent 68%),
+    var(--hero-smoke);
 }
 
 .tribunal-hero__brand {
@@ -803,14 +801,111 @@ body.wrap {
   z-index: 3;
   text-align: center;
   font-family: var(--font-brand);
-  font-size: clamp(1.5rem, 6vw, 2rem);
+  font-size: clamp(1.25rem, 5vw, 1.75rem);
   font-weight: 700;
-  letter-spacing: 0.12em;
-  margin: 0 0 var(--space-4);
-  text-shadow: 0 0 24px rgba(255, 184, 0, 0.2);
+  letter-spacing: 0.1em;
+  margin: 0 0 var(--space-3);
+  color: var(--hero-steel);
+  text-shadow: 0 0 20px rgba(87, 224, 255, 0.25);
 }
 
-.tribunal-hero__wiring {
+.tribunal-hero__card {
+  position: relative;
+  border-radius: var(--radius-lg, 12px);
+  border: 1px solid rgba(87, 224, 255, 0.12);
+  background: rgba(12, 14, 20, 0.72);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.tribunal-hero__card::before,
+.tribunal-hero__card::after {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.tribunal-hero__card::before {
+  background: radial-gradient(ellipse 70% 55% at 30% 20%, rgba(74, 161, 230, 0.28) 0%, transparent 62%);
+  animation: tribunal-glow-drift 18s ease-in-out infinite alternate;
+}
+
+.tribunal-hero__card::after {
+  background: radial-gradient(ellipse 60% 50% at 75% 85%, rgba(87, 224, 255, 0.18) 0%, transparent 58%);
+  animation: tribunal-glow-drift 22s ease-in-out infinite alternate-reverse;
+}
+
+.tribunal-hero__puffs {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.tribunal-hero__puff {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(160, 168, 180, 0.35) 0%, transparent 70%);
+  filter: blur(28px);
+  mix-blend-mode: screen;
+  opacity: 0.55;
+}
+
+.tribunal-hero__puff--1 {
+  width: 140px;
+  height: 200px;
+  top: 8%;
+  left: -8%;
+  animation: tribunal-puff-1 20s ease-in-out infinite;
+}
+
+.tribunal-hero__puff--2 {
+  width: 180px;
+  height: 120px;
+  top: 42%;
+  right: -12%;
+  animation: tribunal-puff-2 24s ease-in-out infinite;
+}
+
+.tribunal-hero__puff--3 {
+  width: 120px;
+  height: 160px;
+  bottom: 6%;
+  left: 28%;
+  animation: tribunal-puff-3 18s ease-in-out infinite;
+}
+
+@keyframes tribunal-puff-1 {
+  0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 0.45; }
+  50% { transform: translate(18px, -12px) rotate(8deg) scale(1.12); opacity: 0.65; }
+}
+
+@keyframes tribunal-puff-2 {
+  0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 0.4; }
+  50% { transform: translate(-14px, 10px) rotate(-6deg) scale(1.08); opacity: 0.58; }
+}
+
+@keyframes tribunal-puff-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.38; }
+  50% { transform: translate(10px, -8px) scale(1.15); opacity: 0.52; }
+}
+
+@keyframes tribunal-glow-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.85; }
+  50% { transform: translate(3%, 2%) scale(1.05); opacity: 1; }
+}
+
+.tribunal-hero__stage {
+  position: relative;
+  height: 420px;
+  overflow: hidden;
+  z-index: 2;
+}
+
+.tribunal-hero__rays {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -819,225 +914,148 @@ body.wrap {
   pointer-events: none;
 }
 
-.tribunal-hero__mesh-line {
+.tribunal-hero__ray {
   fill: none;
-  stroke: var(--signal-amber, #ffb800);
-  stroke-width: 0.6;
-  opacity: 0.12;
-  filter: drop-shadow(0 0 3px rgba(255, 184, 0, 0.35));
-}
-
-.tribunal-hero__mesh-line:nth-child(-n+8) {
-  opacity: 0.28;
-  stroke-width: 0.8;
-}
-
-.tribunal-hero__mesh-line:nth-child(n+9):nth-child(-n+18) {
-  opacity: 0.2;
-}
-
-.tribunal-hero__ring-inner {
-  stroke: rgba(255, 184, 0, 0.08);
-  stroke-width: 1;
-  filter: drop-shadow(0 0 4px rgba(255, 184, 0, 0.15));
-}
-
-.tribunal-hero__ring-tick {
-  stroke: rgba(255, 184, 0, 0.35);
-  stroke-width: 1.2;
+  stroke-width: 2;
+  stroke-dasharray: 6 8;
   stroke-linecap: round;
+  animation: tribunal-ray-flow 12s linear infinite;
 }
 
-.tribunal-hero__ring-track {
-  stroke: rgba(100, 108, 122, 0.45);
-  stroke-width: 14;
-  filter: drop-shadow(0 0 6px rgba(255, 184, 0, 0.12));
+.tribunal-hero__ray--oracle {
+  stroke: rgba(87, 224, 255, 0.55);
 }
 
-.tribunal-hero__ring-fill {
-  stroke: var(--signal-amber, #ffb800);
-  stroke-width: 14;
-  stroke-linecap: round;
-  filter: drop-shadow(0 0 12px rgba(255, 184, 0, 0.65))
-    drop-shadow(0 0 24px rgba(255, 184, 0, 0.35));
-  animation: tribunal-ring-shimmer 6s ease-in-out infinite;
+.tribunal-hero__ray--echo {
+  stroke: rgba(191, 227, 255, 0.45);
+  animation-delay: -4s;
+}
+
+.tribunal-hero__ray--pulse {
+  stroke: rgba(74, 161, 230, 0.5);
+  animation-delay: -8s;
+}
+
+@keyframes tribunal-ray-flow {
+  to { stroke-dashoffset: -28; }
+}
+
+.tribunal-hero__gauge {
+  position: absolute;
+  left: 50%;
+  top: 195px;
+  width: 148px;
+  height: 148px;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.tribunal-hero__gauge-track,
+.tribunal-hero__gauge-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.tribunal-hero__gauge-track {
+  background: conic-gradient(
+    from -90deg,
+    rgba(100, 108, 122, 0.35) 0deg,
+    rgba(100, 108, 122, 0.35) 360deg
+  );
+  mask: radial-gradient(farthest-side, transparent calc(100% - 14px), #000 calc(100% - 13px));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 14px), #000 calc(100% - 13px));
+}
+
+.tribunal-hero__gauge-fill {
+  background: conic-gradient(
+    from -90deg,
+    var(--hero-cyan) 0deg,
+    var(--hero-ice) calc(var(--p, 0) * 3.6deg),
+    transparent calc(var(--p, 0) * 3.6deg)
+  );
+  mask: radial-gradient(farthest-side, transparent calc(100% - 14px), #000 calc(100% - 13px));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 14px), #000 calc(100% - 13px));
+  filter: drop-shadow(0 0 10px rgba(87, 224, 255, 0.45));
 }
 
 .tribunal-hero__ring-glow {
   position: absolute;
   left: 50%;
-  top: 240px;
-  width: 152px;
-  height: 152px;
+  top: 195px;
+  width: 120px;
+  height: 120px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  background:
-    radial-gradient(circle, rgba(255, 184, 0, 0.2) 0%, transparent 58%),
-    radial-gradient(circle at 40% 35%, rgba(255, 184, 0, 0.1) 0%, transparent 62%);
-  animation: tribunal-ring-glow-pulse 4s ease-in-out infinite;
-  opacity: calc(0.12 + (var(--p, 0) / 100) * 0.38);
-  filter: blur(18px);
-  z-index: 0;
+  background: radial-gradient(circle, rgba(87, 224, 255, 0.22) 0%, transparent 68%);
+  animation: tribunal-ring-glow-pulse 5s ease-in-out infinite;
+  opacity: calc(0.15 + (var(--p, 0) / 100) * 0.35);
+  filter: blur(16px);
+  z-index: 1;
   pointer-events: none;
 }
-
-.tribunal-hero__rim-dots {
-  position: absolute;
-  left: 50%;
-  top: 240px;
-  width: 152px;
-  height: 152px;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 2;
-  pointer-events: none;
-  animation: tribunal-rim-drift 14s linear infinite reverse;
-}
-
-.tribunal-hero__rim-dots span {
-  position: absolute;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--signal-amber, #ffb800);
-  box-shadow:
-    0 0 6px 1px rgba(255, 184, 0, 0.55),
-    0 0 12px rgba(255, 184, 0, 0.25);
-  opacity: 0.8;
-}
-
-.tribunal-hero__rim-dots span:nth-child(1) { top: 8%; left: 48%; }
-.tribunal-hero__rim-dots span:nth-child(2) { top: 18%; left: 78%; width: 2px; height: 2px; opacity: 0.55; }
-.tribunal-hero__rim-dots span:nth-child(3) { top: 42%; left: 92%; }
-.tribunal-hero__rim-dots span:nth-child(4) { top: 72%; left: 82%; width: 2px; height: 2px; }
-.tribunal-hero__rim-dots span:nth-child(5) { top: 88%; left: 52%; opacity: 0.45; }
-.tribunal-hero__rim-dots span:nth-child(6) { top: 70%; left: 12%; width: 2px; height: 2px; }
-.tribunal-hero__rim-dots span:nth-child(7) { top: 38%; left: 4%; }
-.tribunal-hero__rim-dots span:nth-child(8) { top: 14%; left: 18%; width: 2px; height: 2px; opacity: 0.65; }
-.tribunal-hero__rim-dots span:nth-child(9) { top: 58%; left: 96%; width: 2px; height: 2px; opacity: 0.5; }
-.tribunal-hero__rim-dots span:nth-child(10) { top: 4%; left: 30%; width: 2px; height: 2px; opacity: 0.6; }
 
 @keyframes tribunal-ring-glow-pulse {
-  0%, 100% {
-    opacity: 0.32;
-    transform: translate(-50%, -50%) scale(0.96);
-  }
-  50% {
-    opacity: 0.5;
-    transform: translate(-50%, -50%) scale(1.04);
-  }
-}
-
-@keyframes tribunal-rim-drift {
-  to { transform: translate(-50%, -50%) rotate(-360deg); }
-}
-
-@keyframes tribunal-ring-shimmer {
-  0%, 100% {
-    filter: drop-shadow(0 0 12px rgba(255, 184, 0, 0.65))
-      drop-shadow(0 0 24px rgba(255, 184, 0, 0.35));
-  }
-  50% {
-    filter: drop-shadow(0 0 14px rgba(255, 184, 0, 0.75))
-      drop-shadow(0 0 28px rgba(255, 184, 0, 0.42));
-  }
-}
-
-.tribunal-hero__ring-bracket {
-  fill: none;
-  stroke: var(--signal-amber, #ffb800);
-  stroke-width: 2;
-  stroke-linecap: square;
-  opacity: 0.75;
-  filter: drop-shadow(0 0 6px rgba(255, 184, 0, 0.5));
-}
-
-.tribunal-hero__power {
-  fill: none;
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  filter: drop-shadow(0 0 8px rgba(255, 184, 0, 0.45));
-}
-
-.tribunal-hero__power--oracle {
-  stroke: rgba(158, 196, 212, 0.7);
-  filter: drop-shadow(0 0 10px rgba(158, 196, 212, 0.5));
-}
-
-.tribunal-hero__power--echo {
-  stroke: rgba(180, 190, 204, 0.65);
-  filter: drop-shadow(0 0 8px rgba(180, 190, 204, 0.4));
-}
-
-.tribunal-hero__power--pulse {
-  stroke: rgba(255, 184, 0, 0.75);
-  filter: drop-shadow(0 0 12px rgba(255, 184, 0, 0.55));
-}
-
-.tribunal-hero__entry-node {
-  fill: var(--signal-amber, #ffb800);
-  filter: drop-shadow(0 0 8px rgba(255, 184, 0, 0.75))
-    drop-shadow(0 0 16px rgba(255, 184, 0, 0.4));
+  0%, 100% { transform: translate(-50%, -50%) scale(0.96); opacity: 0.35; }
+  50% { transform: translate(-50%, -50%) scale(1.04); opacity: 0.55; }
 }
 
 .tribunal-hero__ring-center {
   position: absolute;
   left: 50%;
-  top: 240px;
+  top: 195px;
   transform: translate(-50%, -50%);
-  z-index: 4;
+  z-index: 5;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   text-align: center;
-  width: 140px;
+  width: 132px;
 }
 
 .tribunal-hero__pct {
   font-family: var(--font-mono);
-  font-size: 2.5rem;
+  font-size: 2.25rem;
   font-weight: 700;
   line-height: 1;
-  color: var(--text-primary);
-  text-shadow: 0 0 20px rgba(255, 184, 0, 0.45),
-    0 0 40px rgba(255, 184, 0, 0.2);
+  color: var(--hero-steel);
+  text-shadow: 0 0 18px rgba(87, 224, 255, 0.4);
 }
 
 .tribunal-hero__pct-label {
-  font-size: 0.6rem;
-  letter-spacing: 0.14em;
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
   color: var(--text-muted);
   text-transform: uppercase;
 }
 
 .tribunal-hero__verdict-label {
-  margin-top: var(--space-1);
-  padding: 3px 10px;
+  margin-top: 2px;
+  padding: 4px 10px;
   font-family: var(--font-mono);
-  font-size: 0.65rem;
+  font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.08em;
-  color: var(--signal-amber, #ffb800);
+  color: var(--hero-cyan);
   text-transform: uppercase;
-  border: 1px solid rgba(255, 184, 0, 0.35);
+  border: 1px solid rgba(87, 224, 255, 0.35);
   border-radius: 999px;
-  background: rgba(255, 184, 0, 0.08);
-  box-shadow: 0 0 12px rgba(255, 184, 0, 0.25),
-    inset 0 0 8px rgba(255, 184, 0, 0.08);
+  background: rgba(74, 161, 230, 0.1);
 }
 
 .tribunal-hero__judge {
   position: absolute;
-  z-index: 3;
+  z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 88px;
+  min-width: 80px;
 }
 
 .tribunal-hero__judge--oracle {
-  top: 28px;
+  top: 24px;
   left: 50%;
   transform: translateX(-50%);
   align-items: center;
@@ -1045,22 +1063,21 @@ body.wrap {
 }
 
 .tribunal-hero__judge--echo {
-  bottom: 172px;
-  left: 8px;
+  bottom: 28px;
+  left: 12px;
   align-items: flex-start;
-  text-align: left;
 }
 
 .tribunal-hero__judge--pulse {
-  bottom: 172px;
-  right: 8px;
+  bottom: 28px;
+  right: 12px;
   align-items: flex-end;
   text-align: right;
 }
 
 .tribunal-hero__judge-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 6px;
 }
 
@@ -1068,30 +1085,27 @@ body.wrap {
   flex-direction: row-reverse;
 }
 
-.tribunal-hero__judge-weight {
+.tribunal-hero__judge-signal {
   font-family: var(--font-mono);
-  font-size: 1.65rem;
-  font-weight: 800;
-  line-height: 1;
-  color: var(--text-primary);
-  text-shadow: 0 0 14px rgba(255, 184, 0, 0.35);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--hero-cyan);
 }
 
-.tribunal-hero__judge-glyph {
-  width: 14px;
-  height: 14px;
-  color: var(--signal-amber, #ffb800);
-  opacity: 0.85;
-  filter: drop-shadow(0 0 4px rgba(255, 184, 0, 0.5));
-  flex-shrink: 0;
+.tribunal-hero__judge-weight {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  opacity: 0.9;
 }
 
 .tribunal-hero__judge-name {
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 0.6rem;
+  font-size: 0.62rem;
   font-weight: 600;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   color: var(--text-secondary);
   text-transform: uppercase;
 }
@@ -1101,25 +1115,13 @@ body.wrap {
   flex-direction: column;
   gap: 4px;
   margin-top: 2px;
-  min-height: 32px;
-}
-
-.tribunal-hero__judge--oracle .tribunal-hero__last5 {
-  align-items: center;
-}
-
-.tribunal-hero__judge--echo .tribunal-hero__last5 {
-  align-items: flex-start;
-}
-
-.tribunal-hero__judge--pulse .tribunal-hero__last5 {
-  align-items: flex-end;
+  min-height: 28px;
 }
 
 .tribunal-hero__last5-caption {
-  font-size: 0.55rem;
+  font-size: 0.58rem;
   letter-spacing: 0.1em;
-  color: rgba(180, 160, 120, 0.75);
+  color: rgba(148, 163, 184, 0.75);
   text-transform: uppercase;
 }
 
@@ -1127,34 +1129,35 @@ body.wrap {
   display: flex;
   align-items: flex-end;
   gap: 3px;
-  height: 18px;
-}
-
-.tribunal-hero__last5-ticks--council {
-  margin-top: 4px;
+  height: 16px;
 }
 
 .tribunal-hero__tick {
   display: block;
   width: 4px;
   border-radius: 1px;
-  background: rgba(107, 90, 69, 0.35);
+  background: rgba(107, 120, 140, 0.35);
 }
 
 .tribunal-hero__tick--hit {
-  height: 16px;
-  background: var(--signal-amber, #ffb800);
-  box-shadow: 0 0 8px rgba(255, 184, 0, 0.65);
+  height: 14px;
+  background: var(--hero-cyan);
+  box-shadow: 0 0 6px rgba(87, 224, 255, 0.55);
 }
 
 .tribunal-hero__tick--miss {
-  height: 8px;
-  background: #6b5a45;
+  height: 7px;
+  background: #5a6470;
 }
 
 .tribunal-hero__tick--empty {
   height: 4px;
-  background: rgba(107, 90, 69, 0.25);
+  background: rgba(90, 100, 112, 0.3);
+}
+
+.tribunal-hero__last5[hidden] {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .tribunal-hero__sr-only {
@@ -1169,111 +1172,122 @@ body.wrap {
   border: 0;
 }
 
-.tribunal-hero__metrics {
+.tribunal-hero__panels {
   position: relative;
   z-index: 3;
   margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tribunal-hero__panel {
   padding: var(--space-3);
   border-radius: var(--radius-md);
-  background: var(--bg-card);
-  border: 1px solid rgba(255, 184, 0, 0.15);
-  box-shadow: 0 0 20px rgba(255, 184, 0, 0.06),
-    inset 0 1px 0 rgba(255, 184, 0, 0.05);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+  background: rgba(10, 12, 18, 0.85);
+  border: 1px solid rgba(87, 224, 255, 0.1);
 }
 
-.tribunal-hero__metric {
-  display: grid;
-  grid-template-columns: 32px 1fr auto;
-  grid-template-rows: auto auto;
-  gap: 2px 10px;
-  align-items: start;
-}
-
-.tribunal-hero__metric-icon {
-  grid-column: 1;
-  grid-row: 1 / span 3;
-  width: 28px;
-  height: 28px;
-  color: var(--signal-amber, #ffb800);
-  opacity: 0.85;
-  filter: drop-shadow(0 0 6px rgba(255, 184, 0, 0.4));
-  align-self: center;
-}
-
-.tribunal-hero__metric-body {
-  grid-column: 2;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.tribunal-hero__metric-label {
+.tribunal-hero__panel-title {
+  margin: 0 0 8px;
+  font-family: var(--font-mono);
   font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--hero-steel);
+}
+
+.tribunal-hero__panel-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  margin: 0;
+  font-size: 0.72rem;
+}
+
+.tribunal-hero__panel-grid dt {
+  margin: 0;
+  font-size: 0.65rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-muted);
-  font-weight: 600;
 }
 
-.tribunal-hero__metric-value {
-  grid-column: 3;
-  grid-row: 1 / span 3;
+.tribunal-hero__panel-grid dd {
+  margin: 2px 0 0;
   font-family: var(--font-mono);
-  font-size: 1.35rem;
-  font-weight: 800;
-  color: var(--signal-amber, #ffb800);
-  text-align: right;
-  align-self: center;
-  text-shadow: 0 0 12px rgba(255, 184, 0, 0.35);
+  font-size: 0.8rem;
+  color: var(--text-primary);
 }
 
-.tribunal-hero__metric-sub {
-  font-size: 0.72rem;
+.tribunal-hero__panel-span {
+  grid-column: 1 / -1;
+}
+
+.tribunal-hero__panel-stat {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--hero-cyan);
+}
+
+.tribunal-hero__panel-sub {
+  margin: 4px 0 0;
+  font-size: 0.75rem;
   color: var(--text-secondary);
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
-.tribunal-hero__metric-bar {
-  margin-top: 4px;
-  height: 4px;
-  width: 100%;
-  max-width: 140px;
-  background: rgba(100, 108, 122, 0.25);
-  border-radius: 2px;
-  overflow: hidden;
+.tribunal-hero__panel-meta {
+  margin: 6px 0 0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
 }
 
-.tribunal-hero__metric-bar-fill {
-  display: block;
-  height: 100%;
-  background: linear-gradient(
-    90deg,
-    rgba(255, 184, 0, 0.5) 0%,
-    var(--signal-amber, #ffb800) 100%
-  );
-  border-radius: 2px;
-  box-shadow: 0 0 8px rgba(255, 184, 0, 0.5);
-  min-width: 2px;
+.tribunal-hero__jury-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-/* Row 3 + [hidden]: after display:grid on .tribunal-hero__metric (Known Delta #6) */
+.tribunal-hero__jury-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.tribunal-hero__jury-name {
+  color: var(--text-secondary);
+  letter-spacing: 0.08em;
+}
+
+.tribunal-hero__jury-arrow {
+  color: var(--hero-cyan);
+  font-size: 0.85rem;
+}
+
+.tribunal-hero__jury-delta {
+  color: var(--text-primary);
+  min-width: 3.5em;
+  text-align: right;
+}
+
 .tribunal-hero__metric[data-metric="alignment"],
 .tribunal-hero__metric[hidden] {
   display: none !important;
 }
 
-.tribunal-hero__last5[hidden] {
-  visibility: hidden;
-  pointer-events: none;
-}
-
-.tribunal-hero[data-verdict-kind="forming"] .tribunal-hero__ring-fill,
-.tribunal-hero[data-verdict-kind="cold"] .tribunal-hero__ring-fill {
-  stroke-dashoffset: 452.39;
+.tribunal-hero[data-verdict-kind="forming"] .tribunal-hero__gauge-fill,
+.tribunal-hero[data-verdict-kind="cold"] .tribunal-hero__gauge-fill {
   opacity: 0;
 }
 
@@ -1281,7 +1295,7 @@ body.wrap {
   margin: 10px 0 0;
   padding: 0 4px;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: rgba(148, 163, 184, 0.72);
@@ -1291,25 +1305,25 @@ body.wrap {
   display: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .tribunal-hero__ring-fill,
-  .tribunal-hero__power,
-  .tribunal-hero__ring-glow,
-  .tribunal-hero__rim-dots {
-    transition: none;
-    animation: none;
+@media (max-width: 390px) {
+  .tribunal-hero__stage {
+    height: 380px;
   }
 
-  .tribunal-hero__ring-glow {
-    opacity: 0.38;
-    transform: translate(-50%, -50%) scale(1);
-  }
-
-  .tribunal-hero__rim-dots {
-    transform: translate(-50%, -50%);
+  .tribunal-hero__pct {
+    font-size: 2rem;
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .tribunal-hero__puff,
+  .tribunal-hero__card::before,
+  .tribunal-hero__card::after,
+  .tribunal-hero__ray,
+  .tribunal-hero__ring-glow {
+    animation: none;
+  }
+}
 
 /* ---- Council stage dossier drawers (tribunal amber / mist) ---- */
 .council-stage .k3-layer {

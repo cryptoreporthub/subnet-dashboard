@@ -1,6 +1,6 @@
 # Tribunal hero v3 — Visual Lock (implementation spec)
 
-**Status:** LOCKED — implement on preview route only until human VISUAL GO
+**Status:** SUPERSEDED by Council Hero v4 (2026-08-04 Ditto) — see `docs/council-hero-cursor-handoff.md`
 **Inputs:** `docs/design/tribunal-hero-v3-reference.png`,
 `docs/design/tribunal-hero-decisions.md`
 **Branch:** `cursor/tribunal-hero-visual-lock-4c3f` (PR #794)
