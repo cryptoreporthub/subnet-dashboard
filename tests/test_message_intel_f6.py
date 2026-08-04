@@ -54,7 +54,7 @@ def test_listener_status_essential_missing_session(monkeypatch, tmp_path):
     status = listener_service.listener_status()
     assert status["reason"] == "missing_session"
     assert status["worker_heavy"] is False
-    assert "bootstrap_telegram_session" in status["hint"]
+    assert "bootstrap_telegram_session" in (status.get("ops_hint") or status.get("hint") or "")
 
 
 def test_listener_status_cross_process_running(monkeypatch, tmp_path):

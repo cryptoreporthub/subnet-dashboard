@@ -261,13 +261,28 @@ def listener_status() -> Dict[str, Any]:
     if not group_connected and running and has_creds:
         err = out.get("entity_resolve_error") or ""
         if "unauthorized" in err.lower():
-            hint = (
+            out["ops_hint"] = (
                 "Stale TELEGRAM_SESSION_STRING Fly secret — unset it to use volume .session "
                 "or paste a fresh string from bootstrap_telegram_session.py"
             )
-        out["hint"] = hint or "Listener thread up but group not resolved — check TELEGRAM_GROUP / TELEGRAM_GROUP_ID"
+            out["hint"] = "Reconnecting to Telegram — session may need refresh."
+        else:
+            out["ops_hint"] = (
+                "Listener thread up but group not resolved — check TELEGRAM_GROUP / TELEGRAM_GROUP_ID"
+            )
+            out["hint"] = "Connecting to Subnet Summers — group link is still resolving."
     elif hint:
         out["hint"] = hint
+        if any(tok in hint for tok in ("TELEGRAM_", "MESSAGE_INTEL_", "bootstrap_telegram")):
+            out["ops_hint"] = hint
+            if "TELEGRAM_SESSION_STRING" in hint:
+                out["hint"] = "Telegram session needed — graded messages will appear when connected."
+            elif "TELEGRAM_API" in hint:
+                out["hint"] = "Telegram credentials needed — desk runs from archive until connected."
+            elif "MESSAGE_INTEL_LISTENER" in hint:
+                out["hint"] = "Listener warming up — archive desk loads first."
+            elif "bootstrap_telegram" in hint:
+                out["hint"] = "Telegram session needed — graded messages will appear when connected."
     out.update(_feed_stale_fields())
     feed_stale = bool(out.get("feed_stale"))
     is_live = bool(out.get("live")) and not feed_stale

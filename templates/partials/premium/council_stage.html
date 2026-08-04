@@ -81,8 +81,19 @@
 
       {# Signals for evidence layer #}
       {% set signals = dpick.signals if dpick.signals is iterable and dpick.signals is not string else [] %}
+      {% set evidence_n = signals|length if signals else (call_reasons|length if call_reasons else 0) %}
 
-      {# Judge weights for council layer #}
+      {# Alternatives shortlist #}
+      {% set alternatives = dpick.shortlist if dpick.shortlist is iterable and dpick.shortlist is not string else [] %}
+      {% set alt_n = alternatives|length %}
+
+      {# Expert bench weights (4 canonical experts — not tribunal judges) #}
+      {% set lm = learning_metrics if learning_metrics is mapping else {} %}
+      {% set expert_w = lm.expert_weights if lm.expert_weights is mapping and lm.expert_weights else (expert_weights if expert_weights is mapping else {}) %}
+      {% set canonical_experts = ['quant', 'hype', 'dark_horse', 'technical'] %}
+      {% set expert_has_weights = expert_w and (expert_w.quant is defined or expert_w.hype is defined or expert_w.dark_horse is defined or expert_w.technical is defined or expert_w.contrarian is defined) %}
+
+      {# Judge weights for council layer (legacy daily_pick field) #}
       {% set judges = dpick.judges if dpick.judges is iterable and dpick.judges is not string else [] %}
 
       {# Learning / calibration — RF-2: accuracy only when trust_banner.ready #}
@@ -281,7 +292,7 @@
       {# ---- EVIDENCE LAYER ---- #}
       <div class="k3-layer" id="k3-layer-evidence">
         <button class="k3-layer-header" onclick="k3Toggle('k3-layer-evidence')" aria-expanded="false">
-          <span>Evidence</span><span class="k3-layer-icon">▸</span>
+          <span class="k3-layer-header-text"><span class="k3-layer-label">Evidence</span><span class="k3-layer-teaser">{% if evidence_n %}{{ evidence_n }} signal{{ 's' if evidence_n != 1 else '' }}{% else %}Pending{% endif %}</span></span><span class="k3-layer-icon">▸</span>
         </button>
         <div class="k3-layer-body">
           <div class="k3-layer-title" id="k3-evidence-title">Why {{ sn.name|default('this subnet') if sn else 'this subnet' }} is the call</div>
@@ -294,7 +305,7 @@
             <div class="k3-signal"><span class="k3-signal-name">{{ reason }}</span></div>
             {% endfor %}
           {% else %}
-            <div class="k3-empty"><div class="k3-empty-icon">📡</div><div class="k3-empty-text">No signals on this call yet.</div></div>
+            <div class="k3-empty"><div class="k3-empty-text">Reasons appear when the call carries signal notes.</div></div>
           {% endif %}
         </div>
       </div>
@@ -302,10 +313,9 @@
       {# ---- WEIGHED AGAINST LAYER ---- #}
       <div class="k3-layer" id="k3-layer-deliberation">
         <button class="k3-layer-header" onclick="k3Toggle('k3-layer-deliberation')" aria-expanded="false">
-          <span>Weighed against</span><span class="k3-layer-icon">▸</span>
+          <span class="k3-layer-header-text"><span class="k3-layer-label">Alternatives</span><span class="k3-layer-teaser">{% if alt_n %}{{ alt_n }} name{{ 's' if alt_n != 1 else '' }}{% else %}None yet{% endif %}</span></span><span class="k3-layer-icon">▸</span>
         </button>
         <div class="k3-layer-body">
-          {% set alternatives = dpick.shortlist if dpick.shortlist is iterable and dpick.shortlist is not string else [] %}
           {% if alternatives and alternatives|length > 0 %}
           <div class="k3-deliberation">
             <div class="k3-weighed-list">
@@ -322,26 +332,28 @@
           </div>
           {% else %}
           <div class="k3-empty">
-            <div class="k3-empty-icon">⚖️</div>
             <div class="k3-empty-text">No alternatives scored today.</div>
           </div>
           {% endif %}
         </div>
       </div>
 
-      {# ---- COUNCIL VOTES LAYER ---- #}
+      {# ---- EXPERT BENCH LAYER ---- #}
       <div class="k3-layer" id="k3-layer-council">
         <button class="k3-layer-header" onclick="k3Toggle('k3-layer-council')" aria-expanded="false">
-          <span>Council votes</span><span class="k3-layer-icon">▸</span>
+          <span class="k3-layer-header-text"><span class="k3-layer-label">Expert bench</span><span class="k3-layer-teaser">{% if expert_has_weights %}4 seats{% else %}Pending{% endif %}</span></span><span class="k3-layer-icon">▸</span>
         </button>
         <div class="k3-layer-body">
-          <div class="k3-layer-title">Judge weights &amp; deltas</div>
-          {% if judges and judges|length > 0 %}
-            {% for j in judges[:6] %}
-            <div class="k3-judge"><span class="k3-judge-name">{{ j.name|default('Judge') }}</span><span><span class="k3-judge-weight">{{ '%.2f'|format(j.weight|float) if j.weight else '—' }}</span>{% if j.delta is defined %}{% set d = j.delta|float %}{% if d > 0.01 %}<span class="k3-judge-delta up">+{{ '%.2f'|format(d) }}</span>{% elif d < -0.01 %}<span class="k3-judge-delta down">{{ '%.2f'|format(d) }}</span>{% else %}<span class="k3-judge-delta flat">0.00</span>{% endif %}{% endif %}</span></div>
+          <div class="k3-layer-title">Expert weights</div>
+          {% if expert_has_weights %}
+            {% for ex in canonical_experts %}
+            {% if expert_w[ex] is defined and expert_w[ex] is not none %}
+            {% set w = expert_w[ex]|float %}
+            <div class="k3-judge"><span class="k3-judge-name">{{ ex|replace('_', ' ')|title }}</span><span class="k3-judge-weight">{% if w > 0 and w <= 1 %}{{ (w * 100)|round|int }}%{% else %}{{ '%.2f'|format(w) }}{% endif %}</span></div>
+            {% endif %}
             {% endfor %}
           {% else %}
-            <div class="k3-empty"><div class="k3-empty-icon">⚖️</div><div class="k3-empty-text">Judge weight history fills in as more picks grade.</div></div>
+            <div class="k3-empty"><div class="k3-empty-text">Expert weights load with learning stats.</div></div>
           {% endif %}
         </div>
       </div>
@@ -349,7 +361,7 @@
       {# ---- OUTCOME LAYER ---- #}
       <div class="k3-layer" id="k3-layer-outcome">
         <button class="k3-layer-header" onclick="k3Toggle('k3-layer-outcome')" aria-expanded="false">
-          <span>Outcome</span><span class="k3-layer-icon">▸</span>
+          <span class="k3-layer-header-text"><span class="k3-layer-label">Outcome</span><span class="k3-layer-teaser">{% if outcome_status == 'resolved' %}Resolved{% else %}Pending{% endif %}</span></span><span class="k3-layer-icon">▸</span>
         </button>
         <div class="k3-layer-body">
           <div class="k3-layer-title">Resolution &amp; grading</div>
@@ -390,7 +402,7 @@
       {# ---- TRACK RECORD LAYER ---- #}
       <div class="k3-layer" id="k3-layer-learning">
         <button class="k3-layer-header" onclick="k3Toggle('k3-layer-learning')" aria-expanded="false">
-          <span>Track record</span><span class="k3-layer-icon">▸</span>
+          <span class="k3-layer-header-text"><span class="k3-layer-label">Track record</span><span class="k3-layer-teaser">{% if cal_n|int > 0 %}{{ cal_n }} graded{% else %}Building{% endif %}</span></span><span class="k3-layer-icon">▸</span>
         </button>
         <div class="k3-layer-body">
           <div class="k3-learning-stats">
