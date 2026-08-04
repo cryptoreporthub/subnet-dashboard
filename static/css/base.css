@@ -86,8 +86,8 @@
   --shadow-bloom: 0 0 8px currentColor, 0 0 20px currentColor;
 
   /* Typography */
-  --font-display: 'Rajdhani', system-ui, sans-serif;
-  --font-body: 'Rajdhani', system-ui, sans-serif;
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Space Grotesk', system-ui, sans-serif;
   --font-brand: 'Syne', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --brand-mist: linear-gradient(100deg, #ffffff 0%, #f0f4f8 18%, #c5d3e0 48%, #9ec4d4 78%, #7eb8d0 100%);

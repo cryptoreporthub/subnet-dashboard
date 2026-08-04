@@ -71,7 +71,7 @@
 
     return (
       '<div class="subnet-int-strip' +
-      (live ? ' subnet-int-strip--live' : '') +
+      (live ? ' subnet-int-strip--live rim-chroma' : '') +
       (extraClass ? ' ' + extraClass : '') +
       '" role="list" aria-label="Bittensor subnet integrations: ' +
       esc(countLabel) +

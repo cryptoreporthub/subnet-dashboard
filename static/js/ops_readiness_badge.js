@@ -8,27 +8,54 @@
     });
   }
 
-  function render(payload, whaleAlerts) {
+  function render(payload) {
     var el = document.getElementById('opsReadinessBadge');
     if (!el) return;
-    el.hidden = true;
-    el.textContent = '';
-    el.removeAttribute('title');
+    payload = payload || {};
+    var ready = payload.ready === true;
+    var status = String(payload.status || '').toLowerCase();
+    var issues = payload.issues || [];
+    var issueCount = issues.length;
+    var thin = payload.thin_ui_likely === true;
+
+    var grade;
+    var stateClass;
+    if (ready && status === 'ready') {
+      grade = 'READY';
+      stateClass = 'ops-readiness--ready';
+    } else if (thin || status === 'warming') {
+      grade = 'WARMING';
+      stateClass = 'ops-readiness--warming';
+    } else {
+      grade = 'DEGRADED';
+      stateClass = 'ops-readiness--degraded';
+    }
+
+    el.hidden = false;
+    el.textContent = grade;
+    el.className = 'ops-readiness-badge ' + stateClass;
+    if (issueCount) {
+      el.title = grade + ' · ' + issueCount + ' issue(s): ' + issues.slice(0, 4).join(', ');
+    } else {
+      el.title = grade + ' · production readiness';
+    }
   }
 
   function poll() {
-    Promise.all([
-      fetch('/api/ops/readiness', { headers: { Accept: 'application/json' } }).then(function (r) {
+    var el = document.getElementById('opsReadinessBadge');
+    fetch('/api/ops/readiness', { headers: { Accept: 'application/json' } })
+      .then(function (r) {
         if (!r.ok) throw new Error(String(r.status));
         return r.json();
-      }),
-      fetch('/api/whales/alerts', { headers: { Accept: 'application/json' } })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .catch(function () { return null; }),
-    ])
-      .then(function (res) { render(res[0], res[1]); })
+      })
+      .then(function (payload) {
+        render(payload);
+      })
       .catch(function () {
-        el.hidden = true;
+        if (el) {
+          el.hidden = true;
+          el.textContent = '';
+        }
       });
   }
 
