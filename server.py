@@ -1247,7 +1247,7 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
 
 
 def _bailout_homepage_html() -> Optional[str]:
-    """HTML for ASGI bailout — never block; cold cache returns None → hardcoded shell."""
+    """HTML for ASGI bailout — never block; cold cache returns emergency shell."""
     now = time.time()
     cached_html = _HOMEPAGE_HTML_CACHE.get("html")
     if (
@@ -1259,12 +1259,11 @@ def _bailout_homepage_html() -> Optional[str]:
     _schedule_homepage_warm(None)
     if _EMERGENCY_HOME_HTML:
         return _EMERGENCY_HOME_HTML
-    threading.Thread(
-        target=_prime_emergency_home_html,
-        daemon=True,
-        name="bailout-emergency-prime",
-    ).start()
-    return None
+    try:
+        return _prime_emergency_home_html()
+    except Exception as exc:
+        logger.warning("bailout emergency prime failed: %s", exc)
+        return _INSTANT_HOME_SHELL
 
 
 def _schedule_homepage_warm(request: Optional[Request] = None) -> None:

@@ -84,8 +84,8 @@ def test_hardcoded_emergency_has_inline_css():
     assert b"location.reload" not in HARDCODED_EMERGENCY_HTML
 
 
-def test_bailout_homepage_does_not_block_on_cold_cache():
-    """Cold bailout must return instantly — ASGI serves HARDCODED_EMERGENCY_HTML."""
+def test_bailout_homepage_primes_emergency_shell():
+    """Cold bailout must return the full emergency shell, not None → hardcoded pulse."""
     import server as srv
 
     srv._HOMEPAGE_HTML_CACHE["html"] = None
@@ -94,5 +94,6 @@ def test_bailout_homepage_does_not_block_on_cold_cache():
     t0 = time.monotonic()
     html = srv._bailout_homepage_html()
     elapsed = time.monotonic() - t0
-    assert elapsed < 0.5
-    assert html is None
+    assert html is not None
+    assert "section-message-intel" in html or "message-intel" in html
+    assert elapsed < 8.0
