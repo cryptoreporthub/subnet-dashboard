@@ -2929,6 +2929,17 @@
       accEl.textContent = ready && acc != null && graded > 0 ? acc + '%' : '—';
       accEl.className = 'val' + (ready && acc != null && acc >= 50 ? ' pos' : ready && acc != null && acc > 0 ? ' neg' : '');
     }
+    var accCard = document.getElementById('kpi-accuracy-card');
+    if (accCard) {
+      if (ready && acc != null && graded > 0) {
+        accCard.style.setProperty('--kpi-p', String(acc));
+        accCard.classList.toggle('kpi--accuracy-gauge--lime', acc >= 50);
+        accCard.classList.toggle('kpi--accuracy-gauge--amber', acc < 50 && acc > 0);
+      } else {
+        accCard.style.removeProperty('--kpi-p');
+        accCard.classList.remove('kpi--accuracy-gauge--lime', 'kpi--accuracy-gauge--amber');
+      }
+    }
     var gradedEl = document.getElementById('kpi-graded');
     if (gradedEl) {
       if (hasTrust && ready && graded > 0) {

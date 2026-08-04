@@ -233,10 +233,12 @@
       esc(storyStripMeta(stats, strip.items.length)) +
       "</p>" +
       '<ol class="story-strip__list" id="story-strip-list">';
-    strip.items.forEach(function (row) {
+    strip.items.forEach(function (row, idx) {
       html +=
-        '<li class="story-strip__item story-strip__item--' +
+        '<li class="story-strip__item story-strip__item--enter story-strip__item--' +
         esc(row.outcome) +
+        '" style="--story-i:' +
+        idx +
         '"' +
         (row.id
           ? ' data-prediction-id="' +

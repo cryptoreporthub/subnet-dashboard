@@ -1745,5 +1745,173 @@ body.wrap {
   }
 }
 
+/* Phase 2 SA4 — market pulse + predictions (Grok LOCK) */
+.sr-pulse__oneline.live-only {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.sr-pulse__breadth-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  isolation: isolate;
+}
+
+.sr-pulse__breadth-halo {
+  position: absolute;
+  inset: -4px -8px;
+  border-radius: 999px;
+  opacity: 0.45;
+  z-index: 0;
+  pointer-events: none;
+  animation: pulse-breadth-halo 4s ease-in-out infinite;
+}
+
+.sr-pulse__oneline-part--bullish + .sr-pulse__breadth-halo,
+.sr-pulse__breadth-wrap:has(.sr-pulse__oneline-part--bullish) .sr-pulse__breadth-halo {
+  background: radial-gradient(circle, rgba(31, 212, 124, 0.35) 0%, transparent 70%);
+}
+
+.sr-pulse__breadth-wrap:has(.sr-pulse__oneline-part--bearish) .sr-pulse__breadth-halo {
+  background: radial-gradient(circle, rgba(255, 159, 63, 0.32) 0%, transparent 70%);
+}
+
+.sr-pulse__breadth-wrap:has(.sr-pulse__oneline-part--neutral) .sr-pulse__breadth-halo {
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.28) 0%, transparent 70%);
+}
+
+.sr-pulse__breadth-wrap .sr-pulse__oneline-part {
+  position: relative;
+  z-index: 1;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(10, 14, 24, 0.55);
+  backdrop-filter: blur(6px);
+}
+
+@keyframes pulse-breadth-halo {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.35;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.55;
+  }
+}
+
+.sr-pulse__ratio-meter {
+  --pulse-up: 1;
+  --pulse-down: 1;
+  --pulse-total: calc(var(--pulse-up) + var(--pulse-down));
+  display: inline-block;
+  width: 52px;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(31, 212, 124, 0.85) 0%,
+    rgba(31, 212, 124, 0.85) calc(var(--pulse-up) / var(--pulse-total) * 100%),
+    rgba(255, 159, 63, 0.75) calc(var(--pulse-up) / var(--pulse-total) * 100%),
+    rgba(255, 159, 63, 0.75) 100%
+  );
+  box-shadow: 0 0 10px rgba(31, 212, 124, 0.15);
+  vertical-align: middle;
+}
+
+.kpi--accuracy-gauge {
+  position: relative;
+  isolation: isolate;
+}
+
+.kpi__gauge-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from -90deg,
+    rgba(31, 212, 124, 0.75) 0deg,
+    rgba(31, 212, 124, 0.75) calc(var(--kpi-p, 0) * 3.6deg),
+    rgba(148, 163, 184, 0.15) calc(var(--kpi-p, 0) * 3.6deg),
+    rgba(148, 163, 184, 0.15) 360deg
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 0;
+  animation: kpi-gauge-fill 0.6s ease-out;
+}
+
+.kpi--accuracy-gauge--amber .kpi__gauge-ring {
+  background: conic-gradient(
+    from -90deg,
+    rgba(255, 159, 63, 0.8) 0deg,
+    rgba(255, 159, 63, 0.8) calc(var(--kpi-p, 0) * 3.6deg),
+    rgba(148, 163, 184, 0.15) calc(var(--kpi-p, 0) * 3.6deg),
+    rgba(148, 163, 184, 0.15) 360deg
+  );
+}
+
+.kpi--accuracy-gauge > :not(.kpi__gauge-ring) {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes kpi-gauge-fill {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.story-strip__item--enter {
+  animation: story-strip-enter 0.4s ease-out backwards;
+  animation-delay: calc(var(--story-i, 0) * 40ms);
+}
+
+.story-strip__item--correct {
+  box-shadow: inset 3px 0 0 rgba(31, 212, 124, 0.65), 0 0 14px rgba(31, 212, 124, 0.08);
+}
+
+.story-strip__item--wrong {
+  box-shadow: inset 3px 0 0 rgba(255, 159, 63, 0.55), 0 0 12px rgba(255, 159, 63, 0.06);
+}
+
+@keyframes story-strip-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sr-pulse__breadth-halo {
+    animation: none;
+    opacity: 0.4;
+  }
+
+  .kpi__gauge-ring {
+    animation: none;
+  }
+
+  .story-strip__item--enter {
+    animation: none;
+  }
+}
+
 /* SimiVision ui.css — consolidated mobile-first (generated 2026-08-02) */
 
