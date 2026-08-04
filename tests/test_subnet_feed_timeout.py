@@ -116,3 +116,41 @@ def test_daily_pick_weighed_endpoint_returns_shortlist(monkeypatch):
     assert resp.status_code == 200
     body = resp.json()
     assert body["shortlist"] == fake_shortlist
+
+
+def test_peek_shortlist_returns_cached_without_rebuild():
+    from internal.council.shortlist_cache import cached_shortlist, peek_shortlist, clear_shortlist_cache
+
+    clear_shortlist_cache()
+    payload = {"date": "2099-02-02", "action": "HOLD", "candidate": {"subnet": {"netuid": 4}}}
+    calls = {"n": 0}
+
+    def _builder():
+        calls["n"] += 1
+        return [{"netuid": 4, "name": "Cached"}]
+
+    assert cached_shortlist(payload, _builder) == [{"netuid": 4, "name": "Cached"}]
+    assert calls["n"] == 1
+    assert peek_shortlist(payload) == [{"netuid": 4, "name": "Cached"}]
+    clear_shortlist_cache()
+
+
+def test_top_pick_day_does_not_invoke_pick_engine(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    import server as srv
+
+    def _boom(*_a, **_k):
+        raise AssertionError("get_or_create_today_pick must not run on API read")
+
+    monkeypatch.setattr("internal.council.daily_pick_engine.get_or_create_today_pick", _boom)
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine._find_today",
+        lambda _rows: {"pick": {"subnet": {"netuid": 9, "name": "Gamma"}}},
+    )
+
+    client = TestClient(srv.app)
+    resp = client.get("/api/top-pick/day")
+    assert resp.status_code == 200
+    picks = resp.json()["picks"]
+    assert picks and picks[0]["subnet"]["netuid"] == 9

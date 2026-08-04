@@ -40,5 +40,14 @@ def cached_shortlist(
     return shortlist
 
 
+def peek_shortlist(pick_payload: Optional[Dict[str, Any]]) -> Optional[List[Dict[str, Any]]]:
+    """Return cached shortlist for this pick key without rebuilding (may be stale)."""
+    key = _cache_key(pick_payload)
+    if _store["key"] != key:
+        return None
+    cached = _store.get("shortlist")
+    return list(cached) if isinstance(cached, list) else None
+
+
 def clear_shortlist_cache() -> None:
     _store.update(key=None, ts=0.0, shortlist=[])

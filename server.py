@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import asyncio
+import concurrent.futures
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -278,6 +279,13 @@ async def _lifespan(app: FastAPI):
         from internal.background_boot import start_background_workers, stop_background_workers
 
         start_background_workers()
+
+    # ponytail: cap default asyncio thread pool — timed-out pick/weighed work can't exhaust all slots
+    pool_cap = int(os.environ.get("AIO_WORKER_POOL_SIZE", "4"))
+    asyncio.get_running_loop().set_default_executor(
+        concurrent.futures.ThreadPoolExecutor(max_workers=pool_cap)
+    )
+
     yield
     if background_on_web() and background_boot_allowed():
         from internal.background_boot import stop_background_workers
@@ -526,6 +534,7 @@ _HOUR_PICK_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 _PUMP_ALERTS_TTL = float(os.environ.get("PUMP_ALERTS_CACHE_SECONDS", "30"))
 _PUMP_ALERTS_LOCK = threading.Lock()
 _PUMP_ALERTS_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+_WEIGHED_BUILD_LOCK = threading.Lock()
 
 
 async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
@@ -2491,21 +2500,27 @@ def _daily_pick_weighed_shortlist(pick_payload: Optional[Dict[str, Any]]) -> Lis
     """Council deliberation rows for hero weighed-against — uses live subnet prices."""
     if not isinstance(pick_payload, dict):
         return []
-    from internal.council.shortlist_cache import cached_shortlist
+    from internal.council.shortlist_cache import cached_shortlist, peek_shortlist
     from internal.learning.dpick_shortlist import attach_shortlist_to_daily_pick
 
     def _build() -> List[Dict[str, Any]]:
-        hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
-        subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
-        if not subnets:
-            subnets, _ = _get_subnets_hydrate()
-        subnets = _cap_subnets_for_scoring(subnets)
-        if not subnets:
-            return []
-        market_context = _market_context_with_weights(subnets)
-        enriched = attach_shortlist_to_daily_pick(dict(pick_payload), subnets, market_context)
-        shortlist = enriched.get("shortlist")
-        return shortlist if isinstance(shortlist, list) else []
+        if not _WEIGHED_BUILD_LOCK.acquire(blocking=False):
+            stale = peek_shortlist(pick_payload)
+            return stale if stale is not None else []
+        try:
+            hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
+            subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
+            if not subnets:
+                subnets, _ = _get_subnets_hydrate()
+            subnets = _cap_subnets_for_scoring(subnets)
+            if not subnets:
+                return []
+            market_context = _market_context_with_weights(subnets)
+            enriched = attach_shortlist_to_daily_pick(dict(pick_payload), subnets, market_context)
+            shortlist = enriched.get("shortlist")
+            return shortlist if isinstance(shortlist, list) else []
+        finally:
+            _WEIGHED_BUILD_LOCK.release()
 
     return cached_shortlist(pick_payload, _build)
 
@@ -2611,20 +2626,29 @@ def api_pick_explain(netuid: int):
 
 
 @app.get("/api/top-pick/day")
-def api_top_pick_day():
-    """Top pick for the current day, with a safe highest-emission fallback."""
-    subnets, _ = _get_subnets_with_source()
-    day_pick = None
-    if _PICKS_ENGINE:
-        market_context = _market_context_with_weights(subnets)
-        try:
-            raw = get_or_create_today_pick(subnets, market_context)
-            day_pick = raw.get("pick") if isinstance(raw, dict) and raw.get("pick") else raw
-        except Exception as exc:
-            logger.error("Error selecting daily pick: %s", exc)
-    if not day_pick:
+async def api_top_pick_day():
+    """Top pick for the current day — read persisted pick only; never run pick engine on API."""
+
+    def _build():
+        from internal.council.daily_pick_engine import _find_today, _load
+
+        existing = _find_today(_load())
+        if isinstance(existing, dict):
+            day_pick = existing.get("pick")
+            if not day_pick and existing.get("candidate"):
+                day_pick = existing.get("candidate")
+            if day_pick:
+                return {"picks": [day_pick]}
+        hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
+        subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
+        if not subnets:
+            subnets, _ = _get_subnets_hydrate()
         return {"picks": [_highest_emission_pick(subnets)]}
-    return {"picks": [day_pick]}
+
+    try:
+        return await _to_thread_timeout(_build, PICK_HANDLER_TIMEOUT, label="top-pick-day")
+    except asyncio.TimeoutError:
+        return {"picks": [], "status": "timeout"}
 
 
 @app.get("/api/top-pick/hour")
