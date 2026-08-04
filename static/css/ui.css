@@ -675,7 +675,7 @@ body.wrap {
 
 .tribunal-hero__stage {
   position: relative;
-  height: 520px;
+  height: 560px;
   overflow: hidden;
 }
 
@@ -886,14 +886,14 @@ body.wrap {
 }
 
 .tribunal-hero__judge--echo {
-  bottom: 140px;
+  bottom: 172px;
   left: 8px;
   align-items: flex-start;
   text-align: left;
 }
 
 .tribunal-hero__judge--pulse {
-  bottom: 140px;
+  bottom: 172px;
   right: 8px;
   align-items: flex-end;
   text-align: right;
@@ -942,6 +942,7 @@ body.wrap {
   flex-direction: column;
   gap: 4px;
   margin-top: 2px;
+  min-height: 32px;
 }
 
 .tribunal-hero__judge--oracle .tribunal-hero__last5 {
@@ -1007,11 +1008,6 @@ body.wrap {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
-}
-
-.tribunal-hero__last5[hidden],
-.tribunal-hero__metric[hidden] {
-  display: none !important;
 }
 
 .tribunal-hero__metrics {
@@ -1103,6 +1099,17 @@ body.wrap {
   border-radius: 2px;
   box-shadow: 0 0 8px rgba(255, 184, 0, 0.5);
   min-width: 2px;
+}
+
+/* Row 3 + [hidden]: after display:grid on .tribunal-hero__metric (Known Delta #6) */
+.tribunal-hero__metric[data-metric="alignment"],
+.tribunal-hero__metric[hidden] {
+  display: none !important;
+}
+
+.tribunal-hero__last5[hidden] {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .tribunal-hero[data-verdict-kind="forming"] .tribunal-hero__ring-fill,
