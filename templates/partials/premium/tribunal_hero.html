@@ -1,6 +1,6 @@
 {# Tribunal hero v3 — preview + future live wire. Preserved IDs: k3-orb-score, k3-action-badge, k3-call-headline #}
 {% set t = tribunal %}
-<section class="tribunal-hero" id="tribunal-hero" data-verdict-kind="{{ t.verdict_kind }}">
+<section class="tribunal-hero" id="tribunal-hero" data-verdict-kind="{{ t.verdict_kind }}" data-testid="tribunal-hero" data-hero-verdict="{{ t.verdict_kind }}">
   <header class="tribunal-hero__brand brand-mist" id="tribunal-hero-title">{{ t.subnet_label }}</header>
 
   <div class="tribunal-hero__stage">

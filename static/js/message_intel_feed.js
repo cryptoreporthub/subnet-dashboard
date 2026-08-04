@@ -1203,8 +1203,14 @@
           applyMeta({ messages: [], meta: { total_messages: 0 }, empty: true }, status);
           if (meta) meta.textContent = "reconnecting";
           if (feed) {
-          feed.innerHTML =
-            '<p class="desk-empty desk-empty--warming">Desk warming — feed will retry shortly.</p>';
+            feed.innerHTML = window.buildDeskEmptyState
+              ? window.buildDeskEmptyState({
+                  kind: 'warming',
+                  title: 'Telegram desk reconnecting',
+                  body: 'Feed will retry shortly.',
+                  classExtra: 'desk-empty-state--inline',
+                })
+              : '<p class="desk-empty desk-empty--warming">Desk warming — feed will retry shortly.</p>';
           }
           return;
         }

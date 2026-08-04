@@ -79,7 +79,14 @@
       return (parseFloat(b.confidence) || 0) - (parseFloat(a.confidence) || 0);
     }).slice(0, 12);
     if (!rows.length) {
-      signalsRoot.innerHTML = '<p class="empty">Signal pipeline warming up — council scores populate after subnet registry loads.</p>';
+      signalsRoot.innerHTML = window.buildDeskEmptyState
+        ? window.buildDeskEmptyState({
+            kind: 'warming',
+            title: 'Signal feed loading',
+            body: 'Council scores populate once the subnet registry is available.',
+            classExtra: 'desk-empty-state--inline',
+          })
+        : '<p class="empty">Signal pipeline warming up — council scores populate after subnet registry loads.</p>';
       if (countMeta) countMeta.textContent = '0 subnets';
       return;
     }

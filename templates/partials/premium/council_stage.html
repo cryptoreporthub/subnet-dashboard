@@ -134,7 +134,18 @@
       {# ---- CLAIM LAYER (inside home-daily-call for live-refresh) ---- #}
       {% if sn %}
       <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
-        <div class="k3-dossier" id="k3-dossier" data-conf-state="{{ conf_state }}" data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}" data-action="{{ act }}">
+        <div
+          class="k3-dossier"
+          id="k3-dossier"
+          data-conf-state="{{ conf_state }}"
+          data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}"
+          data-action="{{ act }}"
+          data-hero-phase="live"
+          data-hero-netuid="{{ sn.netuid }}"
+          data-hero-conviction="{{ conviction_pct }}"
+          data-testid="council-hero"
+          {% if resolve_at_iso %}data-hero-resolve-at="{{ resolve_at_iso }}"{% endif %}
+        >
           <div class="k3-layer open" id="k3-layer-claim">
             {% include "partials/premium/tribunal_hero.html" %}
             <span id="k3-stale-badge" class="k3-temporal-badge k3-stale-badge" hidden aria-live="polite"></span>
@@ -249,7 +260,15 @@
       </div>
       {% else %}
       <div id="home-daily-call" class="home-job__call-host" aria-live="polite">
-        <div class="k3-dossier" id="k3-dossier" data-conf-state="{{ conf_state }}" data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}" data-action="HOLD">
+        <div
+          class="k3-dossier"
+          id="k3-dossier"
+          data-conf-state="{{ conf_state }}"
+          data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}"
+          data-action="HOLD"
+          data-hero-phase="warming"
+          data-testid="council-hero"
+        >
           <div class="k3-layer open" id="k3-layer-claim">
             {% include "partials/premium/tribunal_hero.html" %}
             <span id="k3-stale-badge" class="k3-temporal-badge k3-stale-badge" hidden aria-live="polite"></span>

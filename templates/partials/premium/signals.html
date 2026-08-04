@@ -1,4 +1,5 @@
 <!-- Phase L — Live signals -->
+{% from "partials/premium/empty_state_macros.html" import desk_empty %}
 <section class="row" id="section-signals" aria-labelledby="signals-title">
   <div class="section-label">Live Signals</div>
   <h2 class="section-title" id="signals-title">Council Signal Pipeline</h2>
@@ -32,7 +33,14 @@
     </div>
   </div>
   {% else %}
-  <div class="card card-muted" id="signal-summary-root"><p class="empty">Signal summary warming up — pipeline metrics appear after the first signal generation pass.</p></div>
+  <div class="card card-muted" id="signal-summary-root">
+    {{ desk_empty(
+      kind='warming',
+      title='Signal summary loading',
+      body='Pipeline metrics appear after the first signal generation pass.',
+      class_extra='desk-empty-state--panel'
+    ) }}
+  </div>
   {% endif %}
   <div class="card mt-3">
     <div class="card-head">
@@ -59,7 +67,12 @@
         </tbody>
       </table>
       {% else %}
-      <p class="empty">Signal pipeline warming up — council scores populate after subnet registry loads.</p>
+      {{ desk_empty(
+        kind='warming',
+        title='Signal feed loading',
+        body='Council scores populate once the subnet registry is available.',
+        class_extra='desk-empty-state--inline'
+      ) }}
       {% endif %}
     </div>
   </div>
