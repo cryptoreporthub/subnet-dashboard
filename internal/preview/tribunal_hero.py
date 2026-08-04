@@ -151,26 +151,36 @@ def _metrics_rows(stats: Dict[str, Any]) -> Dict[str, Any]:
     tb = stats.get("trust_banner") or {}
     accuracy_row: Dict[str, Any]
     if tb.get("ready") and tb.get("accuracy") is not None:
+        acc_pct = int(round(float(tb["accuracy"]) * 100))
         accuracy_row = {
             "label": "Historical Accuracy",
-            "value": f"{int(round(float(tb['accuracy']) * 100))}%",
+            "value": f"{acc_pct}%",
             "sub": tb.get("headline") or "",
+            "bar_pct": acc_pct,
         }
     else:
         accuracy_row = {
             "label": "Historical Accuracy",
             "value": "—",
             "sub": tb.get("message") or "Sample building",
+            "bar_pct": None,
         }
 
     graded = int(tb.get("graded") or 0)
     correct = int(tb.get("correct") or 0)
     wrong = int(tb.get("wrong") or 0)
-    recent_row: Dict[str, Any] = {"label": "Recent Verdicts", "value": "—", "sub": "", "ticks": []}
+    recent_row: Dict[str, Any] = {
+        "label": "Recent Verdicts",
+        "value": "—",
+        "sub": "",
+        "ticks": [],
+        "bar_pct": None,
+    }
     if graded > 0:
         win = int(round(correct / (correct + wrong) * 100)) if (correct + wrong) > 0 else 0
         recent_row["value"] = f"{win}%"
         recent_row["sub"] = f"Last {graded} graded council calls"
+        recent_row["bar_pct"] = win
     council_last5 = stats.get("council_last5")
     if isinstance(council_last5, list) and len(council_last5) == 5:
         recent_row["ticks"] = council_last5
