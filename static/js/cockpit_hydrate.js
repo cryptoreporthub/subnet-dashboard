@@ -2872,6 +2872,16 @@
     return 'even';
   }
 
+  function soulTrendFromDelta(delta, w) {
+    var d = Number(delta);
+    if (!isNaN(d) && Math.abs(d) > 0.001) {
+      if (d > 0) return 'up';
+      if (d < 0) return 'down';
+      return 'even';
+    }
+    return soulTrendFromWeight(w);
+  }
+
   function renderCouncilWeights(weights, deltas) {
     var normalized = normalizeWeights(weights);
     var keys = CANONICAL_EXPERTS.filter(function (k) { return normalized[k] != null; });
@@ -2879,9 +2889,9 @@
     var deltaMap = deltas && typeof deltas === 'object' ? deltas : {};
     var ranked = keys.slice().sort(function (a, b) { return (normalized[b] || 0) - (normalized[a] || 0); });
     var top = ranked[0];
-    var cards = keys.map(function (name, index) {
+    var cards = ranked.map(function (name, index) {
       var w = Number(normalized[name]) || 0;
-      var trend = soulTrendFromWeight(w);
+      var trend = soulTrendFromDelta(deltaMap[name], w);
       var biasLabel = trend === 'up' ? '\u25B2 LEARNED UP' : trend === 'down' ? '\u25BC LEARNED DOWN' : 'EVEN';
       var orbColor = SOUL_ORB_COLORS[name] || SOUL_ORB_FALLBACK[index % SOUL_ORB_FALLBACK.length];
       var orbPx = Math.round(58 + Math.min(w, 2.0) / 2.0 * 46);

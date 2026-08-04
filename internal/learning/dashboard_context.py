@@ -43,7 +43,7 @@ def fast_shell_dashboard_context() -> Dict[str, Any]:
     try:
         weights = load_weights_for_ui() or {}
         ctx["expert_weights"] = weights
-        ctx["council_weights"] = _council_weights_list(weights)
+        ctx["council_weights"] = _council_weights_list(weights, _recent_council_deltas())
     except Exception as exc:
         logger.warning("fast shell weights failed: %s", exc)
     try:
@@ -234,27 +234,53 @@ def _learning_metrics() -> Dict[str, Any]:
         return default_learning_dashboard_context()["learning_metrics"]
 
 
-def _council_weights_list(weights: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Shape learned weights for the Bench UI.
+def _recent_council_deltas() -> Dict[str, float]:
+    try:
+        from internal.learning.weight_deltas import recent_expert_weight_deltas
 
-    ``trend`` reflects real movement vs. the neutral default (1.0) — not a
-    fabricated directional bias. "even" means the learning loop hasn't
-    nudged this expert away from baseline yet; that's an honest state, not
-    a missing value.
-    """
+        return recent_expert_weight_deltas()
+    except Exception:
+        return {}
+
+
+def _council_trend(weight: float, delta: float | None, base: float) -> str:
+    if delta is not None and abs(delta) > 0.001:
+        if delta > 0:
+            return "up"
+        if delta < 0:
+            return "down"
+        return "even"
+    w = float(weight)
+    if w > base + 0.005:
+        return "up"
+    if w < base - 0.005:
+        return "down"
+    return "even"
+
+
+def _council_weights_list(
+    weights: Dict[str, Any],
+    deltas: Dict[str, float] | None = None,
+) -> List[Dict[str, Any]]:
+    """Shape learned weights for the Bench soul-orb UI."""
     from internal.council.weights import DEFAULT_WEIGHTS
+    from internal.learning.weight_deltas import _normalize_expert
 
+    delta_map = deltas or {}
     out: List[Dict[str, Any]] = []
     for name, value in (weights or {}).items():
+        key = _normalize_expert(name)
+        if not key:
+            continue
         w = float(value)
-        base = float(DEFAULT_WEIGHTS.get(name, 1.0))
-        if w > base + 0.005:
-            trend = "up"
-        elif w < base - 0.005:
-            trend = "down"
-        else:
-            trend = "even"
-        out.append({"expert": name, "weight": w, "trend": trend})
+        base = float(DEFAULT_WEIGHTS.get(key, DEFAULT_WEIGHTS.get(name, 1.0)))
+        try:
+            delta = float(delta_map.get(key, 0) or 0)
+        except (TypeError, ValueError):
+            delta = 0.0
+        trend = _council_trend(w, delta if key in delta_map else None, base)
+        out.append({"expert": key, "weight": w, "trend": trend, "delta": delta})
+    out.sort(key=lambda row: row["weight"], reverse=True)
     return out
 
 
@@ -386,7 +412,7 @@ def build_learning_dashboard_context(
             "learning_metrics": _learning_metrics(),
             "expert_weights": expert_weights,
             "impact_strength": impact_strength,
-            "council_weights": _council_weights_list(weights),
+            "council_weights": _council_weights_list(weights, _recent_council_deltas()),
             "predictions": _predictions_panel(),
             "patterns": rotation.get("patterns", []),
             "hour_picks": picks["hour_picks"],

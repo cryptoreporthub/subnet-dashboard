@@ -75,6 +75,27 @@ def test_degraded_homepage_has_council_weights():
     assert "Quiet — council weights" not in html or "council-grid" in html
 
 
+def test_degraded_homepage_has_message_intel_skeleton():
+    _ensure_homepage_cache()
+    html = client.get("/").text
+    assert 'id="message-intel-feed"' in html
+    assert "hydrate-skeleton--tall" in html
+    assert "Loading Telegram live feed" in html
+
+
+def test_council_weights_list_trend_from_delta():
+    from internal.learning.dashboard_context import _council_weights_list
+
+    rows = _council_weights_list(
+        {"quant": 1.0, "hype": 1.0},
+        {"quant": 0.02, "hype": -0.01},
+    )
+    by_expert = {row["expert"]: row for row in rows}
+    assert by_expert["quant"]["trend"] == "up"
+    assert by_expert["hype"]["trend"] == "down"
+    assert [row["expert"] for row in rows] == ["quant", "hype"]
+
+
 def test_fast_shell_learning_metrics_has_graded_field():
     from internal.learning.dashboard_context import fast_shell_dashboard_context
 
