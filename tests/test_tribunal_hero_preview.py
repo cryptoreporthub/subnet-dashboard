@@ -1,4 +1,4 @@
-"""Tribunal hero preview route — SSR fixture assertions."""
+"""Tribunal hero preview route — SSR fixture assertions (Council Hero v4)."""
 
 from fastapi.testclient import TestClient
 
@@ -15,14 +15,16 @@ def test_gated_preview_has_hero_and_three_judges():
     assert html.count('data-judge="oracle"') == 1
     assert html.count('data-judge="echo"') == 1
     assert html.count('data-judge="pulse"') == 1
-    assert "tribunal-hero__wiring" in html
-    assert "tribunal-hero__ring-glow" in html
-    assert "tribunal-hero__rim-dots" in html
+    assert "tribunal-hero__puffs" in html
+    assert "tribunal-hero__rays" in html
+    assert 'data-panel="decision-log"' in html
+    assert 'data-panel="accuracy-ledger"' in html
+    assert 'data-panel="jury-move"' in html
+    assert "feTurbulence" not in html
+    assert "33.6%" in html
     assert "GATED · HOLD" in html
     assert "SN99" in html
     assert "THE TRIBUNAL" not in html
-    assert "tribunal-hero__monument" not in html
-    assert "tribunal-preview-banner" not in html
     assert html.count("data-last5 hidden") == 3
 
 
@@ -34,9 +36,6 @@ def test_sealed_label_is_long_not_buy():
     assert "SEALED · BUY" not in html
     assert "SN14 · TaoHash" in html
     assert "THE TRIBUNAL" not in html
-    assert "71%" in html
-    assert "tribunal-hero__ring-glow" in html
-    assert "tribunal-hero__rim-dots" in html
     assert "LAST 5" in html
     assert "data-last5 hidden" not in html
 
