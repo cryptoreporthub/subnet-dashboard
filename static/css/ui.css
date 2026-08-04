@@ -1594,5 +1594,156 @@ body.wrap {
   }
 }
 
+/* Phase 2 SA3 — picks + radar visual enhancements (Grok LOCK) */
+#section-picks .pick-card--reveal .conviction-fill {
+  transform: scaleX(0);
+  transform-origin: left center;
+  animation: pick-conf-reveal 0.55s ease-out forwards;
+  animation-delay: calc(var(--pick-i, 0) * 55ms);
+}
+
+@keyframes pick-conf-reveal {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.pick-card--lead {
+  isolation: isolate;
+}
+
+.pick-card--lead::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--pick-rim-angle, 0deg),
+    rgba(255, 184, 0, 0.55),
+    rgba(56, 189, 248, 0.45),
+    rgba(255, 184, 0, 0.35),
+    rgba(56, 189, 248, 0.55)
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+  animation: pick-lead-rim 8s linear infinite;
+}
+
+.pick-card--lead-hour::after {
+  filter: drop-shadow(0 0 10px rgba(255, 184, 0, 0.35));
+}
+
+.pick-card--lead-day::after {
+  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.35));
+}
+
+@keyframes pick-lead-rim {
+  to {
+    --pick-rim-angle: 360deg;
+  }
+}
+
+.chart-canvas-wrap--radar {
+  position: relative;
+  isolation: isolate;
+}
+
+.chart-canvas-wrap--radar::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 0deg,
+    rgba(31, 212, 124, 0.45),
+    rgba(56, 189, 248, 0.4),
+    rgba(31, 212, 124, 0.25),
+    rgba(56, 189, 248, 0.45)
+  );
+  opacity: 0.55;
+  animation: radar-frame-spin 14s linear infinite;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.chart-canvas-wrap--radar canvas {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes radar-frame-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.radar-item--enter {
+  animation: radar-item-enter 0.45s ease-out backwards;
+  animation-delay: calc(var(--radar-i, 0) * 48ms);
+}
+
+@keyframes radar-item-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.radar-item--lead {
+  box-shadow: inset 0 0 0 1px rgba(31, 212, 124, 0.22);
+  background: rgba(31, 212, 124, 0.04);
+  border-radius: var(--radius-md, 8px);
+  padding: 8px 10px;
+}
+
+.radar-item__track {
+  margin-top: 6px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+  overflow: hidden;
+}
+
+.radar-item__bar {
+  height: 100%;
+  border-radius: inherit;
+  transform-origin: left center;
+  transition: width 0.35s ease;
+}
+
+.radar-item__bar--up {
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.35), rgba(56, 189, 248, 0.85));
+}
+
+.radar-item__bar--down {
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.25), rgba(148, 163, 184, 0.55));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #section-picks .pick-card--reveal .conviction-fill,
+  .pick-card--lead::after,
+  .chart-canvas-wrap--radar::before,
+  .radar-item--enter {
+    animation: none;
+  }
+
+  #section-picks .pick-card--reveal .conviction-fill {
+    transform: scaleX(1);
+  }
+
+  .chart-canvas-wrap--radar::before {
+    transform: none;
+  }
+}
+
 /* SimiVision ui.css — consolidated mobile-first (generated 2026-08-02) */
 

@@ -15,7 +15,7 @@
         {% set pick_tags = pick.scenario_tags if pick.scenario_tags is mapping else {} %}
         {# conviction tiers: canonical cutoffs 75 / 55 / 35 (see static/js/conviction_tiers.js) #}
         {% set tier = 'tier-cyan' if conf > 75 else ('tier-lime' if conf > 55 else ('tier-gold' if conf > 35 else 'tier-red')) %}
-        <div class="pick-card{% if pick_tags.fallback %} pick-card--degraded{% endif %}">
+        <div class="pick-card pick-card--reveal{% if loop.index == 1 %} pick-card--lead pick-card--lead-hour{% endif %}{% if pick_tags.fallback %} pick-card--degraded{% endif %}" style="--pick-i: {{ loop.index0 }}">
           <div class="pick-rank">#{{ loop.index }}</div>
           <div class="pick-name">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
           <div class="pick-meta">SN{{ pick.netuid }} · score <b class="accent-bright">{{ "%.1f"|format((pick.score|default(0))|float) }}</b></div>
@@ -42,7 +42,7 @@
         {% set pick_tags = pick.scenario_tags if pick.scenario_tags is mapping else {} %}
         {# conviction tiers: canonical cutoffs 75 / 55 / 35 (see static/js/conviction_tiers.js) #}
         {% set tier = 'tier-cyan' if conf > 75 else ('tier-lime' if conf > 55 else ('tier-gold' if conf > 35 else 'tier-red')) %}
-        <div class="pick-card{% if pick_tags.fallback %} pick-card--degraded{% endif %}">
+        <div class="pick-card pick-card--reveal{% if loop.index == 1 %} pick-card--lead pick-card--lead-day{% endif %}{% if pick_tags.fallback %} pick-card--degraded{% endif %}" style="--pick-i: {{ loop.index0 }}">
           <div class="pick-rank">#{{ loop.index }}</div>
           <div class="pick-name">{{ pick.name|default('SN' ~ pick.netuid) }}</div>
           <div class="pick-meta">SN{{ pick.netuid }} · score <b class="accent-bright">{{ "%.1f"|format((pick.score|default(0))|float) }}</b></div>
