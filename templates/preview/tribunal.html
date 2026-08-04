@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<script>document.documentElement.dataset.hydrate = '0';</script>
+<style>
+  .tribunal-preview-banner {
+    position: sticky; top: 0; z-index: 9999;
+    background: #1a1200; color: #ffb347; text-align: center;
+    font: 12px/1.4 'JetBrains Mono', monospace; padding: 8px 12px;
+    border-bottom: 1px solid rgba(255,179,71,0.4);
+  }
+  .tribunal-preview-banner a { color: #00ff41; }
+  .tribunal-preview-frame {
+    max-width: 390px; margin: 0 auto;
+    border-left: 1px solid #222; border-right: 1px solid #222;
+  }
+</style>
+<p class="tribunal-preview-banner" role="status">
+  Tribunal hero preview · state={{ preview_state }} · hydrate off ·
+  <a href="/preview/tribunal?state=sealed">sealed</a> ·
+  <a href="/preview/tribunal?state=gated">gated</a> ·
+  <a href="/preview/tribunal?state=forming">forming</a> ·
+  <a href="/preview/tribunal?state=cold">cold</a> ·
+  <a href="/">live home</a>
+</p>
+<div class="tribunal-preview-frame app-shell council-first">
+  {% include "partials/premium/tribunal_hero.html" %}
+</div>
+{% endblock %}

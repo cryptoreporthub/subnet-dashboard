@@ -1778,6 +1778,17 @@ async def robots_txt():
     )
 
 
+@app.get("/preview/tribunal")
+async def preview_tribunal(request: Request):
+    """SSR preview for tribunal hero v3 — hydrate off for visual sign-off."""
+    from internal.preview.tribunal_hero import build_tribunal_hero_preview_context
+
+    return templates.TemplateResponse(
+        "preview/tribunal.html",
+        build_tribunal_hero_preview_context(request),
+    )
+
+
 @app.get("/preview/k3-hold")
 async def preview_k3_hold(request: Request):
     """SSR preview for K3 HOLD+candidate — hydrate off for phone sign-off."""

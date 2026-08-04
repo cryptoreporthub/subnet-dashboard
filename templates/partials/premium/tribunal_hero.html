@@ -1,0 +1,90 @@
+{# Tribunal hero v3 — preview + future live wire. Preserved IDs: k3-orb-score, k3-action-badge, k3-call-headline #}
+{% set t = tribunal %}
+<section class="tribunal-hero" id="tribunal-hero" data-verdict-kind="{{ t.verdict_kind }}">
+  <header class="tribunal-hero__brand brand-mist">THE TRIBUNAL</header>
+
+  <svg class="tribunal-hero__wiring" viewBox="0 0 390 520" aria-hidden="true">
+    <circle class="tribunal-hero__ring-track" cx="195" cy="240" r="72" fill="none" />
+    <circle
+      class="tribunal-hero__ring-fill"
+      cx="195"
+      cy="240"
+      r="72"
+      fill="none"
+      transform="rotate(-90 195 240)"
+      stroke-dasharray="{{ t.ring_circ }}"
+      stroke-dashoffset="{{ t.ring_dash_offset }}"
+    />
+    <path class="tribunal-hero__power tribunal-hero__power--oracle" d="M195 52 C195 92 195 128 195 168" />
+    <path class="tribunal-hero__power tribunal-hero__power--echo" d="M48 420 C72 360 98 310 128 272" />
+    <path class="tribunal-hero__power tribunal-hero__power--pulse" d="M342 420 C318 360 292 310 262 272" />
+    <circle class="tribunal-hero__entry-node" cx="195" cy="168" r="4" />
+    <circle class="tribunal-hero__entry-node" cx="128" cy="272" r="4" />
+    <circle class="tribunal-hero__entry-node" cx="262" cy="272" r="4" />
+  </svg>
+
+  <div class="tribunal-hero__ring-center">
+    <span id="k3-orb-score" class="tribunal-hero__pct">{% if t.conviction_pct is not none %}{{ t.conviction_pct }}%{% else %}—{% endif %}</span>
+    <span class="tribunal-hero__pct-label">VERDICT CONFIDENCE</span>
+    <span id="k3-action-badge" class="tribunal-hero__verdict-label">{{ t.center_label }}</span>
+  </div>
+
+  <div class="tribunal-hero__monument" aria-hidden="true">
+    <span class="tribunal-hero__monument-t">T</span>
+  </div>
+
+  {% for judge in t.judges %}
+  <article class="tribunal-hero__judge tribunal-hero__judge--{{ judge.key }}" data-judge="{{ judge.key }}">
+    <h3 class="tribunal-hero__judge-name">{{ judge.label }}</h3>
+    <span class="tribunal-hero__judge-weight" data-judge-weight>{{ judge.weight_pct }}</span>
+    <div class="tribunal-hero__last5" data-last5{% if not judge.last5 %} hidden{% endif %}>
+      <span class="tribunal-hero__last5-caption">LAST 5</span>
+      <div class="tribunal-hero__last5-ticks" aria-hidden="true">
+        {% if judge.last5 %}
+          {% for tick in judge.last5 %}
+            {% if tick is sameas true %}
+              <span class="tribunal-hero__tick tribunal-hero__tick--hit"></span>
+            {% elif tick is sameas false %}
+              <span class="tribunal-hero__tick tribunal-hero__tick--miss"></span>
+            {% else %}
+              <span class="tribunal-hero__tick tribunal-hero__tick--empty"></span>
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+      </div>
+    </div>
+  </article>
+  {% endfor %}
+
+  <p id="k3-call-headline" class="tribunal-hero__sr-only">{{ t.headline }}</p>
+
+  <footer class="tribunal-hero__metrics">
+    <div class="tribunal-hero__metric" data-metric="accuracy">
+      <span class="tribunal-hero__metric-label">{{ t.metrics.accuracy.label }}</span>
+      <span class="tribunal-hero__metric-value" data-metric-value>{{ t.metrics.accuracy.value }}</span>
+      <span class="tribunal-hero__metric-sub" data-metric-sub>{{ t.metrics.accuracy.sub }}</span>
+    </div>
+    <div class="tribunal-hero__metric" data-metric="recent">
+      <span class="tribunal-hero__metric-label">{{ t.metrics.recent.label }}</span>
+      <span class="tribunal-hero__metric-value" data-metric-value>{{ t.metrics.recent.value }}</span>
+      <span class="tribunal-hero__metric-sub" data-metric-sub>{{ t.metrics.recent.sub }}</span>
+      {% if t.metrics.recent.ticks %}
+      <div class="tribunal-hero__last5-ticks tribunal-hero__last5-ticks--council" aria-hidden="true">
+        {% for tick in t.metrics.recent.ticks %}
+          {% if tick is sameas true %}
+            <span class="tribunal-hero__tick tribunal-hero__tick--hit"></span>
+          {% elif tick is sameas false %}
+            <span class="tribunal-hero__tick tribunal-hero__tick--miss"></span>
+          {% else %}
+            <span class="tribunal-hero__tick tribunal-hero__tick--empty"></span>
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    <div class="tribunal-hero__metric" data-metric="alignment" hidden>
+      <span class="tribunal-hero__metric-label">Market Alignment</span>
+      <span class="tribunal-hero__metric-value">—</span>
+    </div>
+  </footer>
+</section>
