@@ -197,6 +197,36 @@
     }
   }
 
+  function sentimentGaugeDeg(sentiment, avgConv) {
+    var sent = String(sentiment || "cautious").toLowerCase();
+    var conv =
+      avgConv != null && !isNaN(Number(avgConv))
+        ? Math.max(0, Math.min(100, Number(avgConv)))
+        : 50;
+    if (sent === "bullish") return 30 + (conv / 100) * 60;
+    if (sent === "bearish") return 330 - (conv / 100) * 60;
+    return 180;
+  }
+
+  function renderSentimentGauge(pulse, sentiment) {
+    var avgConv = pulse.avg_conviction;
+    var deg = sentimentGaugeDeg(sentiment, avgConv);
+    var convLabel =
+      avgConv != null && !isNaN(Number(avgConv))
+        ? Math.round(Number(avgConv)) + "%"
+        : "—";
+    return (
+      '<div class="message-intel__sent-gauge-wrap" aria-hidden="true">' +
+      '<div class="message-intel__sent-gauge" style="--mi-sent-deg: ' +
+      deg +
+      'deg">' +
+      '<div class="message-intel__sent-gauge-ring"></div>' +
+      '<span class="message-intel__sent-gauge-core">' +
+      esc(convLabel) +
+      "</span></div></div>"
+    );
+  }
+
   function renderSummary24h(summary) {
     if (!summary24hCard || !summary24hBody) return;
     summary = summary || {};
@@ -218,6 +248,8 @@
           ? "message-intel__sent--bear"
           : "";
     var html =
+      '<div class="message-intel__summary-24h-head">' +
+      renderSentimentGauge(pulse, sent) +
       '<p class="message-intel__summary-24h-pulse"><b>' +
       esc(pulse.messages || summary.message_count || 0) +
       "</b> messages · <b>" +
@@ -229,7 +261,7 @@
       "</span>" +
       (pulse.avg_conviction != null ? " · " + esc(pulse.avg_conviction) + "% avg conv" : "") +
       (pulse.group ? " · " + esc(pulse.group) : "") +
-      "</p>";
+      "</p></div>";
 
     function chipRow(label, rows, kind) {
       if (!rows || !rows.length) return "";
@@ -942,7 +974,7 @@
   function renderMessages(rows) {
     if (!rows || !rows.length) return "";
     var html = '<div class="message-intel__feed-rows">';
-    rows.forEach(function (row) {
+    rows.forEach(function (row, i) {
       var verdict = row.verdict || {};
       var analysis = row.analysis || {};
       var label = sentimentLabel(analysis, verdict);
@@ -961,9 +993,14 @@
         : row.author_name || "unknown";
       var netuids = parseEntities(analysis);
       var why = signalChips(analysis, verdict);
+      var hotClass = conv != null && conv >= 60 ? " message-intel__feed-row--hot" : "";
       html +=
-        '<article class="message-intel__feed-row message-intel__feed-row--clickable ' +
+        '<article class="message-intel__feed-row message-intel__feed-row--clickable message-intel__feed-row--enter' +
+        hotClass +
+        " " +
         railClass +
+        '" style="--mi-i: ' +
+        i +
         '" data-msg-id="' +
         esc(row.id) +
         '" tabindex="0" role="button">' +

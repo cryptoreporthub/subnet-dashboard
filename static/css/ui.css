@@ -1508,5 +1508,91 @@ body.wrap {
   border-color: rgba(255, 184, 0, 0.12);
 }
 
+/* Phase 2 SA2 — Telegram desk visual enhancements (Grok LOCK) */
+.message-intel__summary-24h-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.message-intel__sent-gauge-wrap {
+  flex-shrink: 0;
+}
+
+.message-intel__sent-gauge {
+  --mi-sent-deg: 180deg;
+  position: relative;
+  width: 48px;
+  height: 48px;
+}
+
+.message-intel__sent-gauge-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from var(--mi-sent-deg),
+    rgba(56, 189, 248, 0.85) 0deg,
+    rgba(255, 184, 0, 0.75) 120deg,
+    rgba(148, 163, 184, 0.35) 220deg,
+    rgba(251, 113, 133, 0.7) 300deg,
+    rgba(56, 189, 248, 0.85) 360deg
+  );
+  mask: radial-gradient(circle, transparent 58%, #000 60%);
+  -webkit-mask: radial-gradient(circle, transparent 58%, #000 60%);
+  animation: mi-sent-rim 10s linear infinite;
+}
+
+.message-intel__sent-gauge-core {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(226, 232, 240, 0.9);
+}
+
+@keyframes mi-sent-rim {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.message-intel__feed-row--enter {
+  animation: mi-feed-enter 0.42s ease-out backwards;
+  animation-delay: calc(var(--mi-i, 0) * 42ms);
+}
+
+.message-intel__feed-row--hot {
+  box-shadow:
+    inset 3px 0 0 rgba(255, 184, 0, 0.62),
+    inset 6px 0 18px rgba(56, 189, 248, 0.12);
+}
+
+@keyframes mi-feed-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-intel__sent-gauge-ring {
+    animation: none;
+  }
+
+  .message-intel__feed-row--enter {
+    animation: none;
+  }
+}
+
 /* SimiVision ui.css — consolidated mobile-first (generated 2026-08-02) */
 
