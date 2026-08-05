@@ -25,7 +25,7 @@ body.council-first-theme {
   background-position: center;
 }
 
-/* Page atmosphere mist overlay — drift gated in Quiet motion below */
+/* Page atmosphere aurora overlay — drift gated in Quiet motion below */
 body.council-first-theme::before {
   content: "";
   position: fixed;
@@ -33,9 +33,10 @@ body.council-first-theme::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(ellipse 50% 40% at 20% 30%, rgba(160, 168, 180, 0.08), transparent 70%),
-    radial-gradient(ellipse 45% 35% at 80% 70%, rgba(140, 150, 164, 0.07), transparent 70%);
-  opacity: 0.9;
+    var(--aurora-cyan),
+    var(--aurora-green),
+    var(--aurora-violet);
+  opacity: 1;
   transform-origin: center center;
 }
 
@@ -69,7 +70,7 @@ body.council-first-theme .council-stage__brand.brand-mist span {
 body.council-first-theme .council-stage__brand.brand-mist {
   font-size: clamp(2rem, 8vw, 3.25rem);
   line-height: 1.05;
-  filter: drop-shadow(0 4px 28px rgba(142, 197, 216, 0.22));
+  filter: drop-shadow(0 4px 28px var(--brand-glow));
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -203,14 +204,18 @@ nav.top-nav a {
   min-height: 36px;
   display: inline-flex;
   align-items: center;
-  transition: transform 0.12s, background 0.15s;
+  transition: transform 0.12s, background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
 nav.top-nav a[aria-current="page"],
 nav.top-nav a:hover {
-  color: #e8f4f8;
-  background: rgba(126, 200, 227, 0.12);
-  border-color: rgba(126, 200, 227, 0.28);
+  color: #f0f9ff;
+  background: rgba(63, 201, 255, 0.14);
+  border-color: rgba(63, 201, 255, 0.38);
+}
+
+nav.top-nav a[aria-current="page"] {
+  box-shadow: 0 0 14px rgba(63, 201, 255, 0.22);
 }
 
 
@@ -272,6 +277,7 @@ button.home-cta {
   background: linear-gradient(135deg, var(--accent-primary), #18b56a);
   color: #04140b;
   border: 0;
+  box-shadow: 0 6px 24px rgba(31, 212, 124, 0.28);
 }
 
 
@@ -476,10 +482,10 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
 
 /* Double class beats legacy .proof-band__pct { color } (ui-legacy loads later) */
 .proof-band__pct.proof-band__pct--ice {
-  color: #a5f3fc;
+  color: #c9f5ff;
   text-shadow:
-    0 0 18px rgba(103, 232, 249, 0.42),
-    0 0 36px rgba(186, 230, 253, 0.18);
+    0 0 22px rgba(103, 232, 249, 0.5),
+    0 0 44px rgba(63, 201, 255, 0.24);
 }
 
 .pds-desk__skel {
@@ -592,14 +598,15 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--accent-blue);
+  text-shadow: 0 0 10px var(--accent-glow-blue);
   margin: 0 0 14px;
 }
 
 .council-stage__title {
-  font-size: 17px;
-  font-weight: 500;
-  color: var(--text-secondary);
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--text-primary);
   margin: 0 0 22px;
 }
 
@@ -7202,44 +7209,104 @@ body.wrap {
   overflow: hidden;
 }
 
-/* ---------- Council Hero v4 (Cold Steel) ---------- */
+/* ---------- Council Hero v5 (Aurora Instrument) ---------- */
 .tribunal-hero {
   --hero-ice: #4aa1e6;
   --hero-cyan: #57e0ff;
-  --hero-steel: #bfe3ff;
-  --hero-smoke: #070709;
+  --hero-steel: #d6e6f5;
+  --hero-smoke: #070a12;
+  --j-oracle: #3fc9ff;
+  --j-echo: #9d8cff;
+  --j-pulse: #ff9f3f;
+  --verdict-a: #93a3b8;
+  --verdict-b: #7a8a9c;
   position: relative;
   padding: var(--space-4) var(--space-3) var(--space-5);
   color: var(--text-primary);
-  background: var(--hero-smoke);
-}
-
-.council-stage .home-job__call-host .tribunal-hero {
   background:
-    radial-gradient(ellipse 90% 55% at 50% 0%, rgba(120, 128, 140, 0.22) 0%, transparent 68%),
+    radial-gradient(110% 55% at 50% 0%, rgba(63, 201, 255, 0.07) 0%, transparent 62%),
     var(--hero-smoke);
 }
 
-.tribunal-hero__brand {
+.tribunal-hero[data-verdict-kind="sealed"] { --verdict-a: #4aef9a; --verdict-b: #1fd47c; }
+.tribunal-hero[data-verdict-kind="gated"] { --verdict-a: #8fe3ff; --verdict-b: #3fc9ff; }
+.tribunal-hero[data-verdict-kind="forming"] { --verdict-a: #c4b5fd; --verdict-b: #9d8cff; }
+.tribunal-hero[data-verdict-kind="cold"] { --verdict-a: #93a3b8; --verdict-b: #7a8a9c; }
+
+.council-stage .home-job__call-host .tribunal-hero {
+  background:
+    radial-gradient(100% 55% at 50% 0%, rgba(63, 201, 255, 0.08) 0%, transparent 60%),
+    radial-gradient(80% 40% at 85% 90%, rgba(157, 140, 255, 0.06) 0%, transparent 60%),
+    var(--hero-smoke);
+}
+
+.tribunal-hero__masthead {
   position: relative;
   z-index: 3;
   text-align: center;
-  font-family: var(--font-brand);
-  font-size: clamp(1.25rem, 5vw, 1.75rem);
-  font-weight: 700;
-  letter-spacing: 0.1em;
   margin: 0 0 var(--space-3);
+}
+
+.tribunal-hero__kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 8px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent-blue);
+  text-shadow: 0 0 12px var(--accent-glow-blue);
+}
+
+.tribunal-hero__kicker-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  box-shadow: 0 0 8px var(--accent-glow);
+  animation: tribunal-live-pulse 2.6s ease-in-out infinite;
+}
+
+@keyframes tribunal-live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.tribunal-hero__brand {
+  margin: 0;
+  font-family: var(--font-brand);
+  font-size: clamp(1.6rem, 6.4vw, 2.3rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
   color: var(--hero-steel);
-  text-shadow: 0 0 20px rgba(87, 224, 255, 0.25);
+  text-shadow: 0 0 24px rgba(63, 201, 255, 0.3);
 }
 
 .tribunal-hero__card {
   position: relative;
-  border-radius: var(--radius-lg, 12px);
-  border: 1px solid rgba(87, 224, 255, 0.12);
-  background: rgba(12, 14, 20, 0.72);
+  border-radius: 20px;
+  border: 1px solid rgba(63, 201, 255, 0.16);
+  background:
+    radial-gradient(120% 70% at 50% -18%, rgba(63, 201, 255, 0.1) 0%, transparent 58%),
+    url("/static/img/simivision-smoke-bg.svg") center / cover no-repeat,
+    linear-gradient(180deg, rgba(15, 19, 28, 0.92) 0%, rgba(8, 11, 17, 0.94) 100%);
+  background-blend-mode: normal, soft-light, normal;
+  animation: tribunal-smoke-drift 36s ease-in-out infinite alternate;
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
   overflow: hidden;
   isolation: isolate;
+}
+
+@keyframes tribunal-smoke-drift {
+  0% { background-position: 0 0, 46% 42%, 0 0; }
+  50% { background-position: 0 0, 54% 50%, 0 0; }
+  100% { background-position: 0 0, 48% 58%, 0 0; }
 }
 
 .tribunal-hero__card::before,
@@ -7252,12 +7319,12 @@ body.wrap {
 }
 
 .tribunal-hero__card::before {
-  background: radial-gradient(ellipse 70% 55% at 30% 20%, rgba(74, 161, 230, 0.28) 0%, transparent 62%);
+  background: radial-gradient(ellipse 70% 55% at 28% 18%, rgba(63, 201, 255, 0.2) 0%, transparent 62%);
   animation: tribunal-glow-drift 18s ease-in-out infinite alternate;
 }
 
 .tribunal-hero__card::after {
-  background: radial-gradient(ellipse 60% 50% at 75% 85%, rgba(87, 224, 255, 0.18) 0%, transparent 58%);
+  background: radial-gradient(ellipse 60% 50% at 76% 86%, rgba(157, 140, 255, 0.16) 0%, transparent 58%);
   animation: tribunal-glow-drift 22s ease-in-out infinite alternate-reverse;
 }
 
@@ -7272,7 +7339,7 @@ body.wrap {
 .tribunal-hero__puff {
   position: absolute;
   border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(160, 168, 180, 0.35) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(63, 201, 255, 0.2) 0%, transparent 70%);
   filter: blur(28px);
   mix-blend-mode: screen;
   opacity: 0.55;
@@ -7291,6 +7358,7 @@ body.wrap {
   height: 120px;
   top: 42%;
   right: -12%;
+  background: radial-gradient(ellipse at center, rgba(157, 140, 255, 0.2) 0%, transparent 70%);
   animation: tribunal-puff-2 24s ease-in-out infinite;
 }
 
@@ -7299,6 +7367,7 @@ body.wrap {
   height: 160px;
   bottom: 6%;
   left: 28%;
+  background: radial-gradient(ellipse at center, rgba(31, 212, 124, 0.16) 0%, transparent 70%);
   animation: tribunal-puff-3 18s ease-in-out infinite;
 }
 
@@ -7324,9 +7393,23 @@ body.wrap {
 
 .tribunal-hero__stage {
   position: relative;
-  height: 420px;
+  height: 440px;
   overflow: hidden;
   z-index: 2;
+}
+
+.tribunal-hero__stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-radial-gradient(
+    circle at 50% 208px,
+    transparent 0px,
+    transparent 59px,
+    rgba(148, 180, 205, 0.05) 59px,
+    rgba(148, 180, 205, 0.05) 60px
+  );
 }
 
 .tribunal-hero__rays {
@@ -7340,23 +7423,23 @@ body.wrap {
 
 .tribunal-hero__ray {
   fill: none;
-  stroke-width: 2;
-  stroke-dasharray: 6 8;
+  stroke-width: 1.5;
+  stroke-dasharray: 3 7;
   stroke-linecap: round;
   animation: tribunal-ray-flow 12s linear infinite;
 }
 
 .tribunal-hero__ray--oracle {
-  stroke: rgba(87, 224, 255, 0.55);
+  stroke: rgba(63, 201, 255, 0.6);
 }
 
 .tribunal-hero__ray--echo {
-  stroke: rgba(191, 227, 255, 0.45);
+  stroke: rgba(157, 140, 255, 0.55);
   animation-delay: -4s;
 }
 
 .tribunal-hero__ray--pulse {
-  stroke: rgba(74, 161, 230, 0.5);
+  stroke: rgba(255, 159, 63, 0.55);
   animation-delay: -8s;
 }
 
@@ -7367,12 +7450,27 @@ body.wrap {
 .tribunal-hero__gauge {
   position: absolute;
   left: 50%;
-  top: 195px;
-  width: 148px;
-  height: 148px;
+  top: 208px;
+  width: 170px;
+  height: 170px;
   transform: translate(-50%, -50%);
   z-index: 2;
   pointer-events: none;
+}
+
+.tribunal-hero__gauge::before {
+  content: "";
+  position: absolute;
+  inset: -18px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(
+    from -90deg,
+    rgba(148, 180, 205, 0.3) 0deg 0.8deg,
+    transparent 0.8deg 15deg
+  );
+  mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
+  opacity: 0.5;
 }
 
 .tribunal-hero__gauge-track,
@@ -7385,37 +7483,42 @@ body.wrap {
 .tribunal-hero__gauge-track {
   background: conic-gradient(
     from -90deg,
-    rgba(100, 108, 122, 0.35) 0deg,
-    rgba(100, 108, 122, 0.35) 360deg
+    rgba(120, 134, 152, 0.3) 0deg,
+    rgba(120, 134, 152, 0.3) 360deg
   );
-  mask: radial-gradient(farthest-side, transparent calc(100% - 14px), #000 calc(100% - 13px));
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 14px), #000 calc(100% - 13px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 15px), #000 calc(100% - 14px));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 15px), #000 calc(100% - 14px));
 }
 
 .tribunal-hero__gauge-fill {
   background: conic-gradient(
     from -90deg,
-    var(--hero-cyan) 0deg,
-    var(--hero-ice) calc(var(--p, 0) * 3.6deg),
+    var(--verdict-b) 0deg,
+    var(--verdict-a) calc(var(--p, 0) * 3.6deg),
     transparent calc(var(--p, 0) * 3.6deg)
   );
-  mask: radial-gradient(farthest-side, transparent calc(100% - 14px), #000 calc(100% - 13px));
-  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 14px), #000 calc(100% - 13px));
-  filter: drop-shadow(0 0 10px rgba(87, 224, 255, 0.45));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 15px), #000 calc(100% - 14px));
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 15px), #000 calc(100% - 14px));
+  filter: drop-shadow(0 0 12px var(--verdict-b));
+}
+
+.tribunal-hero[data-verdict-kind="forming"] .tribunal-hero__gauge-fill,
+.tribunal-hero[data-verdict-kind="cold"] .tribunal-hero__gauge-fill {
+  opacity: 0;
 }
 
 .tribunal-hero__ring-glow {
   position: absolute;
   left: 50%;
-  top: 195px;
-  width: 120px;
-  height: 120px;
+  top: 208px;
+  width: 138px;
+  height: 138px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(87, 224, 255, 0.22) 0%, transparent 68%);
+  background: radial-gradient(circle, var(--verdict-b) 0%, transparent 68%);
   animation: tribunal-ring-glow-pulse 5s ease-in-out infinite;
-  opacity: calc(0.15 + (var(--p, 0) / 100) * 0.35);
-  filter: blur(16px);
+  opacity: calc(0.12 + (var(--p, 0) / 100) * 0.3);
+  filter: blur(18px);
   z-index: 1;
   pointer-events: none;
 }
@@ -7428,58 +7531,150 @@ body.wrap {
 .tribunal-hero__ring-center {
   position: absolute;
   left: 50%;
-  top: 195px;
+  top: 208px;
   transform: translate(-50%, -50%);
   z-index: 5;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   text-align: center;
-  width: 132px;
+  width: 150px;
+}
+
+.tribunal-hero__ring-center::before {
+  content: "";
+  position: absolute;
+  inset: -24px -16px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(5, 8, 14, 0.92) 0%, rgba(5, 8, 14, 0.55) 62%, transparent 78%);
+  z-index: -1;
 }
 
 .tribunal-hero__pct {
-  font-family: var(--font-mono);
-  font-size: 2.25rem;
+  font-family: var(--font-display);
+  font-size: 2.6rem;
   font-weight: 700;
+  letter-spacing: -0.02em;
   line-height: 1;
-  color: var(--hero-steel);
-  text-shadow: 0 0 18px rgba(87, 224, 255, 0.4);
+  color: #ffffff;
+  text-shadow: 0 0 22px var(--verdict-b);
 }
 
 .tribunal-hero__pct-label {
-  font-size: 0.65rem;
-  letter-spacing: 0.12em;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
   color: var(--text-muted);
   text-transform: uppercase;
 }
 
 .tribunal-hero__verdict-label {
-  margin-top: 2px;
-  padding: 4px 10px;
+  margin-top: 3px;
+  padding: 5px 12px;
   font-family: var(--font-mono);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: var(--hero-cyan);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--verdict-a);
   text-transform: uppercase;
-  border: 1px solid rgba(87, 224, 255, 0.35);
+  border: 1px solid var(--verdict-b);
   border-radius: 999px;
-  background: rgba(74, 161, 230, 0.1);
+  background: rgba(8, 11, 17, 0.6);
+  box-shadow: 0 0 16px var(--verdict-b), inset 0 0 12px rgba(255, 255, 255, 0.03);
 }
 
 .tribunal-hero__judge {
+  --j: var(--j-oracle);
   position: absolute;
   z-index: 5;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 80px;
+  gap: 4px;
+  min-width: 100px;
+  padding: 10px 12px 9px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(17, 21, 31, 0.85), rgba(9, 12, 19, 0.82));
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-top-color: var(--j);
+  box-shadow:
+    0 12px 26px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(6px);
+}
+
+.tribunal-hero__judge::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 14px;
+  right: 14px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--j);
+  box-shadow: 0 0 10px var(--j);
+}
+
+/* Traveling comet glow — one chip at a time (oracle -> echo -> pulse).
+   GPU-only: transform rotation on an oversized pseudo, clipped by a 1.5px
+   masked border ring; opacity fade handles the handoff. */
+.tribunal-hero__orbit {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: tribunal-orbit-fade 9s linear infinite;
+}
+
+.tribunal-hero__orbit::before {
+  content: "";
+  position: absolute;
+  inset: -120%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    var(--j) 30deg,
+    #ffffff 44deg,
+    var(--j) 58deg,
+    transparent 92deg
+  );
+  animation: tribunal-orbit-spin 9s linear infinite;
+}
+
+.tribunal-hero__judge--echo .tribunal-hero__orbit,
+.tribunal-hero__judge--echo .tribunal-hero__orbit::before {
+  animation-delay: -3s;
+}
+
+.tribunal-hero__judge--pulse .tribunal-hero__orbit,
+.tribunal-hero__judge--pulse .tribunal-hero__orbit::before {
+  animation-delay: -6s;
+}
+
+@keyframes tribunal-orbit-spin {
+  0% { transform: rotate(0deg); }
+  33.33% { transform: rotate(360deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes tribunal-orbit-fade {
+  0% { opacity: 0; }
+  3% { opacity: 1; }
+  30% { opacity: 1; }
+  34% { opacity: 0; }
+  100% { opacity: 0; }
 }
 
 .tribunal-hero__judge--oracle {
-  top: 24px;
+  --j: var(--j-oracle);
+  top: 16px;
   left: 50%;
   transform: translateX(-50%);
   align-items: center;
@@ -7487,14 +7682,16 @@ body.wrap {
 }
 
 .tribunal-hero__judge--echo {
-  bottom: 28px;
-  left: 12px;
+  --j: var(--j-echo);
+  bottom: 20px;
+  left: 8px;
   align-items: flex-start;
 }
 
 .tribunal-hero__judge--pulse {
-  bottom: 28px;
-  right: 12px;
+  --j: var(--j-pulse);
+  bottom: 20px;
+  right: 8px;
   align-items: flex-end;
   text-align: right;
 }
@@ -7510,42 +7707,58 @@ body.wrap {
 }
 
 .tribunal-hero__judge-signal {
-  font-family: var(--font-mono);
-  font-size: 1.1rem;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
   font-weight: 700;
-  color: var(--hero-cyan);
+  letter-spacing: -0.01em;
+  color: #ffffff;
 }
 
 .tribunal-hero__judge-weight {
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.6rem;
   font-weight: 600;
   color: var(--text-secondary);
-  opacity: 0.9;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.07);
+}
+
+.tribunal-hero__judge-weight::before {
+  content: "W ";
+  color: var(--text-muted);
 }
 
 .tribunal-hero__judge-name {
-  margin: 0;
+  order: -1;
+  margin: 0 0 2px;
   font-family: var(--font-mono);
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  color: var(--text-secondary);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--j);
   text-transform: uppercase;
+  text-shadow: 0 0 10px var(--j);
 }
 
 .tribunal-hero__last5 {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 2px;
-  min-height: 28px;
+  margin-top: 4px;
+  min-height: 26px;
+}
+
+.tribunal-hero__judge--pulse .tribunal-hero__last5 {
+  align-items: flex-end;
 }
 
 .tribunal-hero__last5-caption {
-  font-size: 0.58rem;
-  letter-spacing: 0.1em;
-  color: rgba(148, 163, 184, 0.75);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
   text-transform: uppercase;
 }
 
@@ -7553,30 +7766,30 @@ body.wrap {
   display: flex;
   align-items: flex-end;
   gap: 3px;
-  height: 16px;
+  height: 15px;
 }
 
 .tribunal-hero__tick {
   display: block;
-  width: 4px;
-  border-radius: 1px;
-  background: rgba(107, 120, 140, 0.35);
+  width: 5px;
+  border-radius: 2px;
+  background: rgba(107, 120, 140, 0.3);
 }
 
 .tribunal-hero__tick--hit {
-  height: 14px;
-  background: var(--hero-cyan);
-  box-shadow: 0 0 6px rgba(87, 224, 255, 0.55);
+  height: 13px;
+  background: var(--j);
+  box-shadow: 0 0 7px var(--j);
 }
 
 .tribunal-hero__tick--miss {
   height: 7px;
-  background: #5a6470;
+  background: #566274;
 }
 
 .tribunal-hero__tick--empty {
   height: 4px;
-  background: rgba(90, 100, 112, 0.3);
+  background: rgba(90, 100, 112, 0.28);
 }
 
 .tribunal-hero__last5[hidden] {
@@ -7599,50 +7812,71 @@ body.wrap {
 .tribunal-hero__panels {
   position: relative;
   z-index: 3;
-  margin-top: var(--space-3);
+  margin: 12px 12px 12px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 10px;
 }
 
 .tribunal-hero__panel {
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  background: rgba(10, 12, 18, 0.85);
-  border: 1px solid rgba(87, 224, 255, 0.1);
+  position: relative;
+  padding: 14px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(15, 19, 28, 0.72), rgba(9, 12, 19, 0.78));
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
+.tribunal-hero__panel[data-panel="decision-log"] { --panel-accent: #3fc9ff; }
+.tribunal-hero__panel[data-panel="accuracy-ledger"] { --panel-accent: #1fd47c; }
+.tribunal-hero__panel[data-panel="jury-move"] { --panel-accent: #9d8cff; }
+
 .tribunal-hero__panel-title {
-  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
   font-family: var(--font-mono);
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--hero-steel);
+  color: var(--text-secondary);
+}
+
+.tribunal-hero__panel-title::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex: none;
+  background: var(--panel-accent, var(--accent-blue));
+  box-shadow: 0 0 8px var(--panel-accent, var(--accent-blue));
 }
 
 .tribunal-hero__panel-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px 12px;
+  gap: 10px 12px;
   margin: 0;
   font-size: 0.72rem;
 }
 
 .tribunal-hero__panel-grid dt {
   margin: 0;
-  font-size: 0.65rem;
-  letter-spacing: 0.06em;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
 
 .tribunal-hero__panel-grid dd {
-  margin: 2px 0 0;
+  margin: 3px 0 0;
   font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #eaf2f8;
 }
 
 .tribunal-hero__panel-span {
@@ -7651,10 +7885,11 @@ body.wrap {
 
 .tribunal-hero__panel-stat {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: 1.5rem;
+  font-family: var(--font-display);
+  font-size: 1.65rem;
   font-weight: 700;
-  color: var(--hero-cyan);
+  letter-spacing: -0.01em;
+  color: var(--hero-steel);
 }
 
 .tribunal-hero__panel-sub {
@@ -7665,9 +7900,9 @@ body.wrap {
 }
 
 .tribunal-hero__panel-meta {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: var(--text-muted);
 }
 
@@ -7677,7 +7912,6 @@ body.wrap {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
 }
 
 .tribunal-hero__jury-row {
@@ -7685,24 +7919,43 @@ body.wrap {
   grid-template-columns: 1fr auto auto;
   gap: 8px;
   align-items: center;
+  padding: 7px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
   font-family: var(--font-mono);
   font-size: 0.75rem;
 }
 
+.tribunal-hero__jury-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
 .tribunal-hero__jury-name {
   color: var(--text-secondary);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
+  font-size: 0.68rem;
 }
 
 .tribunal-hero__jury-arrow {
-  color: var(--hero-cyan);
   font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.tribunal-hero__jury-arrow[data-arrow="▲"] {
+  color: #1fd47c;
+  text-shadow: 0 0 8px rgba(31, 212, 124, 0.5);
+}
+
+.tribunal-hero__jury-arrow[data-arrow="▼"] {
+  color: #ff9f3f;
+  text-shadow: 0 0 8px rgba(255, 159, 63, 0.5);
 }
 
 .tribunal-hero__jury-delta {
   color: var(--text-primary);
   min-width: 3.5em;
   text-align: right;
+  font-weight: 600;
 }
 
 .tribunal-hero__metric[data-metric="alignment"],
@@ -7710,44 +7963,53 @@ body.wrap {
   display: none !important;
 }
 
-.tribunal-hero[data-verdict-kind="forming"] .tribunal-hero__gauge-fill,
-.tribunal-hero[data-verdict-kind="cold"] .tribunal-hero__gauge-fill {
-  opacity: 0;
-}
-
 .tribunal-hero__sync {
   margin: 10px 0 0;
   padding: 0 4px;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  font-size: 10px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: rgba(148, 163, 184, 0.72);
+  text-align: center;
+  color: var(--text-muted);
 }
 
 .tribunal-hero__sync[hidden] {
   display: none;
 }
 
+@media (min-width: 640px) {
+  .tribunal-hero__panels {
+    display: grid;
+    grid-template-columns: 1.25fr 1fr 1fr;
+    align-items: stretch;
+  }
+}
+
 @media (max-width: 390px) {
   .tribunal-hero__stage {
-    height: 380px;
+    height: 420px;
   }
 
   .tribunal-hero__pct {
-    font-size: 2rem;
+    font-size: 2.3rem;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .tribunal-hero__puff,
+  .tribunal-hero__card,
   .tribunal-hero__card::before,
   .tribunal-hero__card::after,
   .tribunal-hero__ray,
-  .tribunal-hero__ring-glow {
+  .tribunal-hero__ring-glow,
+  .tribunal-hero__kicker-dot,
+  .tribunal-hero__orbit,
+  .tribunal-hero__orbit::before {
     animation: none;
   }
 }
+
 
 /* ---- K3 dossier tokens + call-lead utilities (migrated from ui-legacy) ---- */
 :root {
@@ -13003,6 +13265,26 @@ body.wrap {
 
 .driver-popover-arrow {
   border-color: rgba(16, 19, 26, 0.94);
+}
+
+/* ---------- Vivid pass: brand mark + footer legibility (body prefix beats legacy) ---------- */
+body.council-first-theme .logo-mark {
+  background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-primary) 100%);
+  box-shadow:
+    0 0 12px rgba(63, 201, 255, 0.5),
+    0 0 28px rgba(31, 212, 124, 0.28);
+  animation: none;
+}
+
+body.council-first-theme footer.status .status-inner--meta {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+body.council-first-theme .footer-card__lbl {
+  font-size: 10px;
+  color: var(--text-muted);
 }
 
 /* SimiVision ui.css — consolidated mobile-first (generated 2026-08-02) */

@@ -4334,12 +4334,19 @@
       var arrowEl = row.querySelector('[data-jury-arrow]');
       var deltaEl = row.querySelector('[data-jury-delta]');
       if (delta == null || isNaN(Number(delta))) {
-        if (arrowEl) arrowEl.textContent = '·';
+        if (arrowEl) {
+          arrowEl.textContent = '·';
+          arrowEl.setAttribute('data-arrow', '·');
+        }
         if (deltaEl) deltaEl.textContent = '—';
         return;
       }
       var d = Number(delta);
-      if (arrowEl) arrowEl.textContent = d > 0.0005 ? '▲' : d < -0.0005 ? '▼' : '·';
+      if (arrowEl) {
+        var arrowGlyph = d > 0.0005 ? '▲' : d < -0.0005 ? '▼' : '·';
+        arrowEl.textContent = arrowGlyph;
+        arrowEl.setAttribute('data-arrow', arrowGlyph);
+      }
       if (deltaEl) deltaEl.textContent = (d >= 0 ? '+' : '') + d.toFixed(3);
     });
   }
