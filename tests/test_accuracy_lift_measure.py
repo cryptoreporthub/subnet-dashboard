@@ -33,7 +33,9 @@ def test_evidence_includes_accuracy_lift():
     assert "hit_rate_7d" in block
     assert "hit_rate_30d" in block
     assert "by_expert" in block
+    assert "attribution_quality" in block
     assert "note" in block
+    assert "attribution_quality" in report
 
 
 def test_accuracy_lift_honest_empty_when_no_graded_rows():
@@ -62,6 +64,26 @@ def test_accuracy_lift_counts_recent_graded_rows():
     assert block["by_expert"]["quant"]["graded"] == 2
     assert block["by_expert"]["hype"]["graded"] == 1
     assert block["note"] is None
+    assert block["attribution_quality"]["total"] == 3
+    assert block["attribution_quality"]["unknown"] == 0
+
+
+def test_accuracy_lift_attributes_hot_signal_without_expert_field():
+    rows = [
+        {
+            "id": "hot-1",
+            "created_at": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat().replace("+00:00", "Z"),
+            "resolved_at": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat().replace("+00:00", "Z"),
+            "correct": True,
+            "actual_pct": 2.0,
+            "signal_impact": {
+                "impacts": [{"signal_type": "hot", "magnitude_pct": 4.0, "learned_weight": 1.0}],
+            },
+        }
+    ]
+    block = build_accuracy_lift_snapshot(rows=rows)
+    assert block["by_expert"]["hype"]["graded"] == 1
+    assert block["attribution_quality"]["unknown"] == 0
 
 
 def test_evidence_accuracy_lift_no_weight_writes(monkeypatch, tmp_path):

@@ -795,6 +795,28 @@ async def api_learning_rebalance_weights(
         raise HTTPException(status_code=500, detail=public_error(exc, code="rebalance_failed")["error"]) from exc
 
 
+@learning_router.post("/api/learning/backfill-expert-attribution")
+@limit_or_noop(strict_limit(), override_defaults=True)
+async def api_backfill_expert_attribution(
+    request: Request,
+    dry_run: bool = Query(default=True),
+):
+    """Re-stamp council expert labels on ledger rows (dry_run default true; expert fields only)."""
+    from internal.learning.expert_backfill import backfill_expert_attribution
+
+    try:
+        result = await run_in_threadpool(backfill_expert_attribution, dry_run=bool(dry_run))
+        if not dry_run:
+            _learning_snapshot_cache["at"] = 0.0
+        return {"status": "success", "data": result}
+    except Exception as exc:
+        logger.error("backfill-expert-attribution failed: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=public_error(exc, code="expert_backfill_failed")["error"],
+        ) from exc
+
+
 @learning_router.get("/api/learning-metrics")
 async def api_learning_metrics():
     try:

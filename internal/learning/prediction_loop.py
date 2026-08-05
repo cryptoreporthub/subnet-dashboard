@@ -17,7 +17,10 @@ from internal.learning.predictions_store import append_prediction, has_pending_d
 logger = logging.getLogger(__name__)
 
 
-from internal.council.expert_display import dominant_expert_for_learning
+from internal.council.expert_display import (
+    canonical_expert_contributions,
+    dominant_expert_for_learning,
+)
 
 _COUNCIL_EXPERTS = frozenset({"quant", "hype", "dark_horse", "technical"})
 
@@ -289,6 +292,13 @@ def record_pick_prediction(
     prediction["pick_source"] = "council_shadow" if shadow else "council"
     prediction["pick_score"] = pick.get("score")
     prediction["pick_confidence"] = pick.get("confidence", pick.get("final_confidence"))
+    scores = canonical_expert_contributions(expert_contributions)
+    if scores:
+        prediction["experts_involved"] = [
+            name for name, _ in sorted(scores.items(), key=lambda row: (-row[1], row[0]))
+        ][:3]
+    else:
+        prediction["experts_involved"] = [expert]
     prediction["magnitude_source"] = magnitude_source
     if shadow:
         prediction["shadow"] = True

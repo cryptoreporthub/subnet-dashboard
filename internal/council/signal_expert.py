@@ -131,9 +131,9 @@ def expert_for_replay_row(row: Dict[str, Any]) -> Optional[str]:
         if expert != "unclassified":
             return expert
     try:
-        from internal.council.resolver import _normalize_expert
+        from internal.council.expert_attribution import normalize_expert
 
-        return _normalize_expert(row)
+        return normalize_expert(row)
     except Exception:
         return None
 
