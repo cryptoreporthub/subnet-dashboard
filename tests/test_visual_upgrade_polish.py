@@ -154,12 +154,13 @@ def test_council_stage_h2_tribunal_gauge_css_in_ui_stylesheet():
     assert '.tribunal-hero[data-verdict-kind="forming"]' in css
 
 
-def test_council_stage_h2_conf_state_legacy_hooks_in_ui_legacy():
-    """Hydrate still drives dossier conf-state; legacy orb CSS retained in ui-legacy."""
-    legacy = _read_ui_legacy_css()
-    assert '#k3-dossier[data-conf-state="resolving"]' in legacy
-    assert '#k3-dossier[data-conf-state="zero"]' in legacy
-    assert '#k3-dossier[data-conf-state="delayed"]' in legacy
+def test_council_stage_h2_conf_state_hooks_in_ui_css():
+    """Tribunal v4 conf-state visuals live in ui.css (legacy k3-orb rules retired)."""
+    css = _read_ui_css()
+    assert '#k3-dossier[data-conf-state="resolving"]' in css
+    assert '#k3-dossier[data-conf-state="zero"]' in css
+    assert '#k3-dossier[data-conf-state="delayed"]' in css
+    assert ".tribunal-hero__gauge-fill" in css
 
 
 def test_council_stage_h2_tribunal_reduced_motion_disables_animations():
@@ -416,6 +417,20 @@ def test_hero_a_tier_canonical_dossier_writer_documented():
     assert "patchK3DossierFromPayload" in src
     live = open("static/js/home_live_refresh.js", encoding="utf-8").read()
     assert "__cockpitHome.renderDailyPick" in live
+
+
+def test_k3_dossier_utilities_live_in_ui_css():
+    css = _read_ui_css()
+    for selector in (
+        "--k3-green:",
+        ".k3-temporal-badge",
+        ".k3-stale-badge",
+        ".k3-evidence-empty",
+        ".k3-horizon-badge",
+        ".k3-evidence-drivers",
+        ".k3-brief-thesis",
+    ):
+        assert selector in css
 
 
 def test_council_pick_card_uses_pewter_smoke_background():

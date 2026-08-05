@@ -6795,20 +6795,6 @@ button.home-cta {
   color: #fbbf24;
   margin: 4px 0 0;
 }
-.k3-evidence-drivers { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; }
-.k3-evidence-driver {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 3px 7px;
-  border-radius: 6px;
-  border: 1px solid #1a1d24;
-  color: #94a3b8;
-}
-.k3-evidence-driver--flow { color: #7dd3fc; border-color: rgba(125, 211, 252, 0.35); }
-.k3-evidence-driver--tech { color: #c4b5fd; border-color: rgba(196, 181, 253, 0.35); }
-.k3-evidence-driver--social { color: #fda4af; border-color: rgba(253, 164, 175, 0.35); }
 .k3-brief-vs-hold { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); margin: 0 0 6px; text-align: center; }
 
 .home-stage-why-not { margin: 12px 0; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,179,71,0.35); background: rgba(20,12,0,0.25); }
@@ -7183,25 +7169,6 @@ button.home-cta {
 .k3-orb-particles { opacity: 0.45; }
 .k3-orb-particles span {
   box-shadow: 0 0 4px rgba(0, 212, 255, 0.45) !important;
-}
-
-/* Evidence drivers: less pill-cluster */
-.k3-evidence-drivers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0 0 10px;
-}
-.k3-evidence-driver {
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-  border: none;
-  border-bottom: 1px solid rgba(100, 116, 139, 0.35);
-  border-radius: 0;
-  padding: 2px 0;
-  background: transparent;
 }
 
 /* Demoted chrome — after the call, quieter */
@@ -8529,108 +8496,6 @@ header.top {
 }
 
 /* K3 dossier (from council_stage.html) */
-:root {
-        --k3-bg: transparent; --k3-surface: rgba(14, 18, 30, 0.62); --k3-line: rgba(148, 163, 184, 0.14);
-        /* Map onto site accent tokens — no disconnected hot-pink neon quartet. */
-        --k3-accent: var(--accent-primary, #1fd47c);
-        --k3-green: var(--accent-primary, #1fd47c);
-        --k3-blue: var(--accent-blue, #3fc9ff);
-        --k3-pink: var(--accent-violet, #9d8cff);
-        --k3-orange: var(--accent-orange, #ff9f3f);
-        --k3-text: #e2e8f0; --k3-muted: var(--text-muted);
-      }
-      /* H2: confidence-state orb treatments — scoped to #k3-dossier; value keeps glow-tier rules below */
-      @keyframes k3-resolving-ring-sweep {
-        0% { stroke-dashoffset: 389.56; opacity: 0.4; }
-        50% { opacity: 0.75; }
-        100% { stroke-dashoffset: 0; opacity: 0.4; }
-      }
-      @keyframes k3-delayed-dot {
-        0%, 100% { opacity: 0.45; transform: scale(0.88); }
-        50% { opacity: 1; transform: scale(1.12); }
-      }
-      #k3-dossier[data-conf-state="resolving"] .k3-orb-halo,
-      #k3-dossier[data-conf-state="delayed"] .k3-orb-halo {
-        background: conic-gradient(from 0deg, transparent, var(--k3-muted), transparent 42%);
-        opacity: 0.2;
-        filter: blur(32px);
-        animation: k3-spin-reverse 36s linear infinite;
-      }
-      #k3-dossier[data-conf-state="resolving"] .k3-orb-bg,
-      #k3-dossier[data-conf-state="delayed"] .k3-orb-bg {
-        background: conic-gradient(var(--k3-muted), color-mix(in srgb, var(--k3-muted) 35%, transparent), var(--k3-muted));
-        opacity: 0.12;
-        animation: k3-spin 32s linear infinite;
-      }
-      #k3-dossier[data-conf-state="resolving"] .k3-orb-glow,
-      #k3-dossier[data-conf-state="delayed"] .k3-orb-glow {
-        background: radial-gradient(circle, color-mix(in srgb, var(--k3-muted) 22%, transparent) 0%, transparent 58%);
-        opacity: 0.42;
-        animation: k3-pulse 5s ease-in-out infinite;
-      }
-      #k3-dossier[data-conf-state="resolving"] .k3-orb .ring-fill,
-      #k3-dossier[data-conf-state="delayed"] .k3-orb .ring-fill {
-        stroke: var(--k3-muted);
-        filter: drop-shadow(0 0 5px color-mix(in srgb, var(--k3-muted) 35%, transparent));
-        stroke-dasharray: 72 317.56;
-        animation: k3-resolving-ring-sweep 3.4s ease-in-out infinite;
-      }
-      #k3-dossier[data-conf-state="resolving"] .k3-orb-center,
-      #k3-dossier[data-conf-state="delayed"] .k3-orb-center,
-      #k3-dossier[data-conf-state="zero"] .k3-orb-center {
-        animation: none;
-      }
-      #k3-dossier[data-conf-state="resolving"] .k3-orb-score .digit-ones,
-      #k3-dossier[data-conf-state="delayed"] .k3-orb-score .digit-ones {
-        color: var(--k3-muted);
-        text-shadow: none;
-      }
-      #k3-dossier[data-conf-state="delayed"] .k3-orb-glow {
-        background:
-          radial-gradient(circle, color-mix(in srgb, var(--k3-orange) 20%, transparent) 0%, transparent 52%),
-          radial-gradient(circle, color-mix(in srgb, var(--k3-muted) 18%, transparent) 0%, transparent 60%);
-        animation: k3-pulse 2.8s ease-in-out infinite;
-      }
-      #k3-dossier[data-conf-state="delayed"] .k3-orb .ring-fill {
-        filter: drop-shadow(0 0 6px color-mix(in srgb, var(--k3-orange) 40%, transparent));
-      }
-      #k3-dossier[data-conf-state="delayed"] .k3-orb-wrap::after {
-        content: '';
-        position: absolute;
-        top: 6px;
-        right: 10px;
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: var(--k3-orange);
-        box-shadow: 0 0 8px color-mix(in srgb, var(--k3-orange) 55%, transparent);
-        animation: k3-delayed-dot 2.2s ease-in-out infinite;
-        z-index: 4;
-        pointer-events: none;
-      }
-      #k3-dossier[data-conf-state="zero"] .k3-orb .ring-fill {
-        stroke: var(--k3-muted);
-        filter: drop-shadow(0 0 5px color-mix(in srgb, var(--k3-blue) 22%, transparent));
-        animation: k3-ring-fill 1.2s ease-out forwards;
-      }
-      #k3-dossier[data-conf-state="zero"] .k3-orb-glow {
-        background: radial-gradient(circle, color-mix(in srgb, var(--k3-blue) 14%, transparent) 0%, transparent 58%);
-        opacity: 0.38;
-        animation: none;
-      }
-      #k3-dossier[data-conf-state="zero"] .k3-orb-halo,
-      #k3-dossier[data-conf-state="zero"] .k3-orb-bg {
-        opacity: 0.1;
-        animation: none;
-      }
-      #k3-dossier[data-conf-state="zero"] .k3-orb-particles {
-        opacity: 0.35;
-        animation: none;
-      }
-      #k3-dossier[data-conf-state="zero"] .k3-orb-score .digit-ones {
-        color: var(--k3-muted);
-        text-shadow: 0 0 6px color-mix(in srgb, var(--k3-muted) 28%, transparent);
-      }
       /* Subnet identity — 6 vivid hues so every subnet has its own hero personality
          (was flat blue-hold/green-long). Hash: (netuid*47+11)%6, mirrored in JS via
          k3NetuidBand(). Drives the orb, particles, hold-state ring, and claim name —
@@ -8642,7 +8507,6 @@ header.top {
       .k3-claim[data-band="3"] { --sn-accent: #ff5fa8; --sn-accent-glow: rgba(255, 95, 168, 0.4); }
       .k3-claim[data-band="4"] { --sn-accent: #34d399; --sn-accent-glow: rgba(52, 211, 153, 0.4); }
       .k3-claim[data-band="5"] { --sn-accent: #60a5fa; --sn-accent-glow: rgba(96, 165, 250, 0.4); }
-      .k3-dossier { color: var(--k3-text); padding: 0; margin: 0; max-width: 100%; overflow-x: hidden; }
       /* Quiet brand whisper when call is live — keep SimiVision, kill competing H1 chrome */
       .council-stage:has(#k3-claim-identity:not([hidden])) .council-stage__eyebrow,
       .council-stage:has(#k3-claim-identity:not([hidden])) .council-stage__title {
@@ -8791,15 +8655,6 @@ header.top {
       .k3-claim--glow-hot .k3-orb .ring-fill {
         filter: drop-shadow(0 0 7px rgba(57, 255, 20, 0.55));
       }
-      .k3-temporal-badge { display: inline-block; margin: 4px 0 8px; padding: 4px 12px; border-radius: 12px; background: var(--k3-surface); border: 1px solid #1a1d24; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--k3-muted); z-index: 1; }
-      .k3-temporal-badge--live { color: var(--k3-green); border-color: rgba(57, 255, 20, 0.35); }
-      .k3-temporal-badge--resolved { color: var(--k3-muted); }
-      .k3-temporal-badge--empty { font-size: 10px; max-width: 280px; line-height: 1.4; }
-      /* Hero A-tier: dossier age badge — driven by #k3-dossier[data-generated-at] */
-      .k3-stale-badge { margin: 0; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
-      .k3-stale-badge--aging { color: var(--k3-blue); border-color: rgba(63, 201, 255, 0.35); }
-      .k3-stale-badge--stale { color: var(--k3-orange); border-color: rgba(255, 159, 63, 0.4); }
-      .k3-evidence-empty { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-muted); letter-spacing: 0.02em; }
       .k3-temporal-grade { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); margin: -4px 0 8px; z-index: 1; }
       @keyframes k3-ring-fill { to { stroke-dashoffset: var(--ring-offset, 389.56); } }
       .k3-orb-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 3; }
@@ -8823,17 +8678,6 @@ header.top {
         text-shadow: 0 0 8px var(--sn-accent-glow);
       }
       .k3-orb-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
-      #k3-dossier[data-conf-state="resolving"] .k3-orb-label,
-      #k3-dossier[data-conf-state="delayed"] .k3-orb-label { color: var(--k3-blue); }
-      #k3-dossier[data-conf-state="zero"] .k3-orb-label { color: var(--k3-orange); }
-      .k3-horizon-badge {
-        display: inline-flex; align-items: center; justify-content: center;
-        font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600;
-        letter-spacing: 0.06em; text-transform: uppercase;
-        color: var(--k3-blue); border: 1px solid rgba(63, 201, 255, 0.35);
-        background: rgba(63, 201, 255, 0.08); border-radius: 999px;
-        padding: 3px 8px; min-height: 24px; line-height: 1; white-space: nowrap;
-      }
       .k3-claim-name { font-size: 28px; font-weight: 700; background: linear-gradient(90deg, var(--k3-green), var(--k3-blue), var(--k3-pink), var(--k3-orange)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: k3-shimmer 3s ease-in-out infinite; margin: 8px 0 4px; z-index: 1; background-size: 200% 100%; }
       @keyframes k3-shimmer { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
       .k3-claim-meta { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--k3-muted); margin-bottom: 8px; z-index: 1; }
@@ -8981,20 +8825,7 @@ header.top {
       @media (min-width: 768px) { .k3-dossier { max-width: 640px; margin: 0 auto; } .k3-claim { padding: 12px 8px 16px; } }
       @media (prefers-reduced-motion: reduce) {
         .k3-orb-bg, .k3-orb-halo, .k3-orb-glow, .k3-orb-particles, .k3-claim-name, .k3-orb .ring-fill, .k3-orb-center { animation: none !important; }
-        #k3-dossier[data-conf-state="resolving"] .k3-orb-halo,
-        #k3-dossier[data-conf-state="resolving"] .k3-orb-bg,
-        #k3-dossier[data-conf-state="resolving"] .k3-orb-glow,
-        #k3-dossier[data-conf-state="resolving"] .k3-orb .ring-fill,
-        #k3-dossier[data-conf-state="delayed"] .k3-orb-halo,
-        #k3-dossier[data-conf-state="delayed"] .k3-orb-bg,
-        #k3-dossier[data-conf-state="delayed"] .k3-orb-glow,
-        #k3-dossier[data-conf-state="delayed"] .k3-orb .ring-fill,
-        #k3-dossier[data-conf-state="delayed"] .k3-orb-wrap::after { animation: none !important; }
         .k3-orb .ring-fill { stroke-dashoffset: var(--ring-offset, 389.56); }
-        #k3-dossier[data-conf-state="resolving"] .k3-orb .ring-fill,
-        #k3-dossier[data-conf-state="delayed"] .k3-orb .ring-fill {
-          stroke-dasharray: 389.56; stroke-dashoffset: 0; opacity: 0.55;
-        }
         .k3-orb-glow { opacity: 0.75; transform: none; }
       }
       
@@ -9062,12 +8893,8 @@ header.top {
       .k3-lifecycle-title { display: block; font-size: 13px; font-weight: 600; color: var(--k3-text); }
       .k3-lifecycle-detail { display: block; font-size: 11px; color: var(--k3-muted); margin-top: 4px; line-height: 1.4; }
       .k3-candidate-gate { font-size: 11px; color: var(--k3-blue); margin: 8px 0 0; letter-spacing: 0.02em; opacity: 0.85; }
-      .k3-call-lead {
-        width: 100%; max-width: none; margin: 0; text-align: left;
-        z-index: 2; position: relative;
-      }
       .k3-call-headline {
-        font-family: 'Rajdhani', 'JetBrains Mono', sans-serif;
+        font-family: var(--font-body, 'Space Grotesk', system-ui, sans-serif);
         font-size: clamp(1.45rem, 5.2vw, 2.1rem);
         font-weight: 700; letter-spacing: 0.02em; margin: 0 0 10px;
         color: var(--k3-text); line-height: 1.05;
@@ -9077,15 +8904,7 @@ header.top {
       .k3-claim-identity { margin: 0 0 8px; z-index: 1; }
       .k3-claim-name--sub { font-size: 17px; margin: 0 0 2px; animation: none; background: none; -webkit-text-fill-color: var(--k3-text); color: var(--k3-text); font-weight: 600; letter-spacing: 0.02em; }
       .k3-claim-desc { font-size: 12px; line-height: 1.45; color: var(--k3-muted); margin: 0 auto 6px; max-width: 300px; }
-      .k3-resolve-crumb { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-blue); margin: 0 0 8px; letter-spacing: 0.03em; }
-      .k3-social-crumb { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-pink); margin: 0 0 8px; letter-spacing: 0.03em; }
       .k3-brief { text-align: left; width: 100%; max-width: 340px; margin: 0 auto 8px; padding: 0; z-index: 1; }
-      .k3-brief-thesis {
-        font-family: 'Rajdhani', system-ui, sans-serif;
-        font-size: clamp(0.98rem, 2.8vw, 1.12rem);
-        font-weight: 500;
-        line-height: 1.45; color: #c8d4dc; margin: 0 0 10px; text-align: left;
-      }
       .k3-brief-vs { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.45; color: var(--k3-muted); margin: 0 0 8px; text-align: center; }
       .k3-brief-trigger { font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.45; color: var(--k3-blue); margin: 0 0 0; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(0, 212, 255, 0.45); background: rgba(0, 212, 255, 0.08); text-align: left; box-shadow: 0 0 14px rgba(0, 212, 255, 0.12); }
       .k3-brief-trigger__kicker { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: var(--k3-green); margin-bottom: 4px; }
