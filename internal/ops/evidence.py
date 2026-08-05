@@ -81,6 +81,7 @@ def build_evidence_report() -> Dict[str, Any]:
         status = "warn"
 
     accuracy_lift = _build_accuracy_lift()
+    weight_audit = _build_weight_audit()
 
     return {
         "status": status,
@@ -109,6 +110,7 @@ def build_evidence_report() -> Dict[str, Any]:
         },
         "accuracy_lift": accuracy_lift,
         "attribution_quality": accuracy_lift.get("attribution_quality") or {},
+        "weight_audit": weight_audit,
     }
 
 
@@ -150,4 +152,20 @@ def _build_accuracy_lift() -> Dict[str, Any]:
             "window_actual_days": {"w7": None, "w30": None},
             "small_move_miss_share": {"misses": 0, "small_move_misses": 0, "share": None},
             "note": "honest empty until graded>0",
+        }
+
+
+def _build_weight_audit() -> Dict[str, Any]:
+    try:
+        from internal.learning.weight_audit import build_weight_audit_report
+
+        return build_weight_audit_report()
+    except Exception:
+        return {
+            "read_only": True,
+            "online_path": {},
+            "expert_weights": {},
+            "judge_weights": {},
+            "known_gaps": [],
+            "tune_gate": {"recommendation": "audit unavailable"},
         }

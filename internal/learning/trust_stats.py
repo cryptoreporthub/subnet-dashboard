@@ -20,6 +20,7 @@ def build_trust_banner(
     min_graded: int = MIN_GRADED_SAMPLE,
     max_expired_rate: float = MAX_EXPIRED_RATE,
     ledger_context: Optional[Dict[str, Any]] = None,
+    predictions_data: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Build UI-ready trust banner from live resolver stats."""
     correct = int(stats.get("correct", 0) or 0)
@@ -64,7 +65,7 @@ def build_trust_banner(
     try:
         from internal.learning.streaks import compute_streaks
 
-        streak = compute_streaks()
+        streak = compute_streaks(predictions_data)
         streak_whisper = streak.get("whisper")
     except Exception:
         streak = None
