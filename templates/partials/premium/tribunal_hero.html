@@ -11,7 +11,10 @@
   {% if t.synced_at %}data-synced-at="{{ t.synced_at }}"{% endif %}
   style="--p: {{ p }};"
 >
-  <header class="tribunal-hero__brand brand-mist" id="tribunal-hero-title">{{ t.subnet_label }}</header>
+  <header class="tribunal-hero__masthead">
+    <p class="tribunal-hero__kicker"><span class="tribunal-hero__kicker-dot" aria-hidden="true"></span>Council call · Today</p>
+    <h2 class="tribunal-hero__brand brand-mist" id="tribunal-hero-title">{{ t.subnet_label }}</h2>
+  </header>
 
   <div class="tribunal-hero__card">
     <div class="tribunal-hero__puffs" aria-hidden="true">
@@ -21,10 +24,10 @@
     </div>
 
     <div class="tribunal-hero__stage">
-      <svg class="tribunal-hero__rays" viewBox="0 0 390 420" aria-hidden="true">
-        <path class="tribunal-hero__ray tribunal-hero__ray--oracle" d="M195 48 C195 100 195 150 195 195" />
-        <path class="tribunal-hero__ray tribunal-hero__ray--echo" d="M52 360 C90 300 120 250 148 220" />
-        <path class="tribunal-hero__ray tribunal-hero__ray--pulse" d="M338 360 C300 300 270 250 242 220" />
+      <svg class="tribunal-hero__rays" viewBox="0 0 390 440" aria-hidden="true">
+        <path class="tribunal-hero__ray tribunal-hero__ray--oracle" d="M195 100 C195 107 195 114 195 121" />
+        <path class="tribunal-hero__ray tribunal-hero__ray--echo" d="M154 346 C144 324 138 297 134 273" />
+        <path class="tribunal-hero__ray tribunal-hero__ray--pulse" d="M236 346 C246 324 252 297 256 273" />
       </svg>
 
       <div class="tribunal-hero__gauge" aria-hidden="true">
@@ -99,7 +102,7 @@
         {% for row in jm %}
         <li class="tribunal-hero__jury-row" data-jury="{{ row.key }}">
           <span class="tribunal-hero__jury-name">{{ row.label }}</span>
-          <span class="tribunal-hero__jury-arrow" data-jury-arrow>{{ row.arrow }}</span>
+          <span class="tribunal-hero__jury-arrow" data-jury-arrow data-arrow="{{ row.arrow }}">{{ row.arrow }}</span>
           <span class="tribunal-hero__jury-delta" data-jury-delta>{{ row.delta }}</span>
         </li>
         {% endfor %}
