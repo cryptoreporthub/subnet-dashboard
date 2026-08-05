@@ -9,7 +9,7 @@ import threading
 import time
 import asyncio
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response
@@ -40,6 +40,7 @@ learning_router = APIRouter(tags=["learning"])
 learning_router.include_router(create_feedback_router())
 
 LEARNING_HEALTH_TIMEOUT = float(os.environ.get("LEARNING_HEALTH_TIMEOUT_SECONDS", "15"))
+LEARNING_STATS_TIMEOUT = float(os.environ.get("LEARNING_STATS_TIMEOUT_SECONDS", "10"))
 _LEARNING_HEALTH_CACHE_TTL = float(os.environ.get("LEARNING_HEALTH_CACHE_SECONDS", "10"))
 _LEARNING_HEALTH_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 _LEARNING_HEALTH_CACHE_LOCK = threading.Lock()
@@ -169,56 +170,158 @@ def _learning_snapshot() -> Dict[str, Any]:
             if isinstance(cached, dict):
                 return cached
 
-    engine = LearningEngine()
-    stats = engine.get_stats()
-    resolved_payload = resolver.get_resolved_predictions()
-    resolver_stats = resolved_payload.get("stats", {})
-    pending_rows = load_predictions().get("predictions", []) or []
-    watchdog = check_resolver_watchdog(pending_rows)
-    from internal.learning.trust_stats import build_trust_banner
+        data = load_predictions()
+        resolved = data.get("resolved") or []
+        pending_rows = data.get("predictions") or []
+        resolver_stats = resolver._compute_stats(data)
+        weights = load_weights()
+        engine_stats = {
+            "expert_weights": weights,
+            "accuracy": resolver_stats.get("accuracy", 0.0),
+            "total_records": resolver_stats.get("total", 0),
+            "last_updated": _utcnow_z(),
+            "pending": resolver_stats.get("pending", 0),
+            "resolved": int(resolver_stats.get("correct", 0) or 0)
+            + int(resolver_stats.get("wrong", 0) or 0),
+        }
+        resolved_payload = {
+            "resolved": resolved,
+            "predictions": pending_rows,
+            "stats": resolver_stats,
+        }
+        watchdog = check_resolver_watchdog(pending_rows)
+        from internal.learning.trust_stats import build_trust_banner
 
-    ledger_context = None
-    try:
-        from internal.accuracy_lift.measure import build_accuracy_lift_snapshot, iter_resolved
-
-        ledger_rows = iter_resolved(
-            {
-                "resolved": resolved_payload.get("resolved") or [],
-                "predictions": pending_rows,
-            }
-        )
-        ledger_context = build_accuracy_lift_snapshot(ledger_rows)
-    except Exception:
         ledger_context = None
+        if os.environ.get("ACCURACY_LIFT_IN_STATS", "0").lower() in ("1", "true", "yes"):
+            try:
+                from internal.accuracy_lift.measure import build_accuracy_lift_snapshot, iter_resolved
 
-    trust_banner = build_trust_banner(
-        resolver_stats,
-        watchdog=watchdog,
-        ledger_context=ledger_context,
-    )
-    recent = resolved_payload.get("resolved", [])[-10:]
-    last5 = _build_last5_from_resolved(resolved_payload)
-    snapshot = {
-        "engine_stats": stats,
-        "resolver_stats": resolver_stats,
-        "resolved_payload": resolved_payload,
-        "pending_rows": pending_rows,
-        "watchdog": watchdog,
-        "trust_banner": trust_banner,
-        "recent": recent,
-        "scenario": _scenario_memory_summary(),
-        "expert_weights": stats.get("expert_weights", {}),
-        "judge_weights": _judge_weights_for_snapshot(),
-        "judge_last5": last5["judge_last5"],
-        "council_last5": last5["council_last5"],
-    }
-    with _learning_snapshot_lock:
+                ledger_rows = iter_resolved(
+                    {
+                        "resolved": resolved,
+                        "predictions": pending_rows,
+                    }
+                )
+                ledger_context = build_accuracy_lift_snapshot(ledger_rows)
+            except Exception:
+                ledger_context = None
+
+        trust_banner = build_trust_banner(
+            resolver_stats,
+            watchdog=watchdog,
+            ledger_context=ledger_context,
+            predictions_data=data,
+        )
+        snapshot = {
+            "engine_stats": engine_stats,
+            "resolver_stats": resolver_stats,
+            "resolved_payload": resolved_payload,
+            "pending_rows": pending_rows,
+            "predictions_data": data,
+            "watchdog": watchdog,
+            "trust_banner": trust_banner,
+            "recent": resolved[-10:],
+            "scenario": _scenario_memory_summary(),
+            "expert_weights": weights,
+            "judge_weights": _judge_weights_for_snapshot(),
+            "judge_last5": _build_last5_from_resolved(resolved_payload)["judge_last5"],
+            "council_last5": _build_last5_from_resolved(resolved_payload)["council_last5"],
+        }
         _learning_snapshot_cache["at"] = now
         _learning_snapshot_cache["data"] = snapshot
-    return snapshot
+        return snapshot
 
 
 def _utcnow_z() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _learning_stats_payload(
+    snap: Dict[str, Any],
+    *,
+    status: str = "success",
+    meta: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    from internal.learning.weight_deltas import recent_judge_weight_deltas
+
+    stats = snap["engine_stats"]
+    resolver_stats = snap["resolver_stats"]
+    watchdog = snap["watchdog"]
+    trust_banner = snap["trust_banner"]
+    predictions_data = snap.get("predictions_data")
+    unclassified = count_unclassified(predictions_data)
+    payload = {
+        "status": status,
+        "data": {
+            "expert_weights": stats.get("expert_weights", {}),
+            "judge_weights": snap.get("judge_weights", {}),
+            "judge_weight_deltas": recent_judge_weight_deltas(),
+            "judge_last5": snap.get("judge_last5", {}),
+            "council_last5": snap.get("council_last5", []),
+            "total_records": resolver_stats.get("total", stats.get("total_records", 0)),
+            "accuracy": resolver_stats.get("accuracy", stats.get("accuracy", 0.0)),
+            "correct": resolver_stats.get("correct", 0),
+            "wrong": resolver_stats.get("wrong", 0),
+            "expired": resolver_stats.get("expired", 0),
+            "expired_rate": trust_banner.get("expired_rate"),
+            "duplicate": resolver_stats.get("duplicate", 0),
+            "pending": resolver_stats.get("pending", stats.get("pending", 0)),
+            "graded": trust_banner.get("graded"),
+            "unclassified_count": unclassified,
+            "last_updated": stats.get("last_updated") or _utcnow_z(),
+            "scenario_memory": snap.get("scenario"),
+            "watchdog": watchdog,
+            "trust_banner": trust_banner,
+            "integrity": trust_banner.get("integrity_gate"),
+            "brain_ui_ready": trust_banner.get("ready"),
+        },
+    }
+    if meta:
+        payload["meta"] = meta
+    return payload
+
+
+def _learning_stats_degraded(*, source: str = "timeout") -> Dict[str, Any]:
+    from internal.learning.trust_stats import build_trust_banner
+
+    stale = _learning_snapshot_cache.get("data")
+    if isinstance(stale, dict):
+        return _learning_stats_payload(stale, status="degraded", meta={"source": source})
+    trust_banner = build_trust_banner(
+        {"correct": 0, "wrong": 0, "expired": 0, "duplicate": 0, "pending": 0, "total": 0}
+    )
+    trust_banner["ready"] = False
+    trust_banner["message"] = "Learning stats warming up"
+    return {
+        "status": "degraded",
+        "meta": {"source": source},
+        "data": {
+            "expert_weights": {},
+            "judge_weights": {},
+            "judge_weight_deltas": {},
+            "judge_last5": {},
+            "council_last5": [],
+            "total_records": 0,
+            "accuracy": None,
+            "correct": 0,
+            "wrong": 0,
+            "expired": 0,
+            "expired_rate": None,
+            "duplicate": 0,
+            "pending": 0,
+            "graded": 0,
+            "unclassified_count": 0,
+            "last_updated": _utcnow_z(),
+            "scenario_memory": {},
+            "watchdog": {},
+            "trust_banner": trust_banner,
+            "integrity": trust_banner.get("integrity_gate"),
+            "brain_ui_ready": False,
+        },
+    }
+
+
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
@@ -261,10 +364,11 @@ def _rotation_summary() -> Dict[str, Any]:
         }
 
 
-def _compute_learning_metrics() -> Dict[str, Any]:
+def _compute_learning_metrics(snap: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     from internal.learning.weight_deltas import recent_expert_weight_deltas, recent_judge_weight_deltas
 
-    snap = _learning_snapshot()
+    if snap is None:
+        snap = _learning_snapshot()
     stats = snap["engine_stats"]
     resolver_stats = snap["resolver_stats"]
     watchdog = snap["watchdog"]
@@ -739,41 +843,13 @@ async def api_learning_loop_health():
 
 @learning_router.get("/api/learning/stats")
 async def api_learning_stats():
-    from internal.learning.weight_deltas import recent_judge_weight_deltas
-
-    snap = _learning_snapshot()
-    stats = snap["engine_stats"]
-    scenario = snap["scenario"]
-    resolver_stats = snap["resolver_stats"]
-    watchdog = snap["watchdog"]
-    trust_banner = snap["trust_banner"]
-    unclassified = count_unclassified()
-    return {
-        "status": "success",
-        "data": {
-            "expert_weights": stats.get("expert_weights", {}),
-            "judge_weights": snap.get("judge_weights", {}),
-            "judge_weight_deltas": recent_judge_weight_deltas(),
-            "judge_last5": snap.get("judge_last5", {}),
-            "council_last5": snap.get("council_last5", []),
-            "total_records": resolver_stats.get("total", stats.get("total_records", 0)),
-            "accuracy": resolver_stats.get("accuracy", stats.get("accuracy", 0.0)),
-            "correct": resolver_stats.get("correct", 0),
-            "wrong": resolver_stats.get("wrong", 0),
-            "expired": resolver_stats.get("expired", 0),
-            "expired_rate": trust_banner.get("expired_rate"),
-            "duplicate": resolver_stats.get("duplicate", 0),
-            "pending": resolver_stats.get("pending", stats.get("pending", 0)),
-            "graded": trust_banner.get("graded"),
-            "unclassified_count": unclassified,
-            "last_updated": stats.get("last_updated") or _utcnow_z(),
-            "scenario_memory": scenario,
-            "watchdog": watchdog,
-            "trust_banner": trust_banner,
-            "integrity": trust_banner.get("integrity_gate"),
-            "brain_ui_ready": trust_banner.get("ready"),
-        },
-    }
+    try:
+        snap = await _to_thread_timeout(
+            _learning_snapshot, LEARNING_STATS_TIMEOUT, label="learning-stats"
+        )
+        return _learning_stats_payload(snap)
+    except asyncio.TimeoutError:
+        return _learning_stats_degraded(source="timeout")
 
 
 @learning_router.post("/api/learning/rebalance-weights")
@@ -820,10 +896,18 @@ async def api_backfill_expert_attribution(
 @learning_router.get("/api/learning-metrics")
 async def api_learning_metrics():
     try:
-        return _compute_learning_metrics()
-    except Exception as exc:
-        logger.error("Error fetching learning metrics: %s", exc)
-        return {"error": str(exc), "expert_weights": {}, "accuracy": 0.0}
+        snap = await _to_thread_timeout(
+            _learning_snapshot, LEARNING_STATS_TIMEOUT, label="learning-metrics"
+        )
+        return _compute_learning_metrics(snap)
+    except asyncio.TimeoutError:
+        degraded = _learning_stats_degraded(source="timeout")
+        return {
+            "error": "timeout",
+            "expert_weights": degraded["data"].get("expert_weights", {}),
+            "accuracy": degraded["data"].get("accuracy", 0.0),
+            "trust_banner": degraded["data"].get("trust_banner"),
+        }
 
 
 @learning_router.get("/api/predictions")

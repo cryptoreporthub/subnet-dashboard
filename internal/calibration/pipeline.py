@@ -91,6 +91,10 @@ def _gradeable_row(row: Dict[str, Any]) -> bool:
     actual = row.get("actual_pct")
     if actual is None:
         return False
+    from internal.accuracy_lift.populations import is_council_trust_row
+
+    if not is_council_trust_row(row):
+        return False
     return _normalize_expert(row) is not None
 
 

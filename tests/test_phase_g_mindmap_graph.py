@@ -200,6 +200,13 @@ def test_mindmap_graph_wires_whale_rugger_indicator_signals(monkeypatch):
     assert {"indicator", "whale", "risk"} <= kinds
     subnet_edges = {e["source"] for e in graph["edges"]}
     assert "subnet:64" in subnet_edges
+    assert graph.get("source") == "registry_heuristic"
+
+
+def test_mindmap_graph_api_surfaces_heuristic_source(client):
+    response = client.get("/api/mindmap/graph")
+    assert response.status_code == 200
+    assert response.json().get("source") == "registry_heuristic"
 
 
 def test_brain_recommendations_no_hardcoded_sn123(tmp_path):

@@ -16,6 +16,9 @@ _DISPLAY_LIMIT = max(10, int(os.environ.get("PORTFOLIO_DISPLAY_LIMIT", "48")))
 
 
 def _gradeable_resolved(rows: List[Any]) -> List[Dict[str, Any]]:
+    from internal.accuracy_lift.populations import is_shadow_row
+    from internal.council.grading import is_pump_desk_claim
+
     out: List[Dict[str, Any]] = []
     for row in rows or []:
         if not isinstance(row, dict):
@@ -23,6 +26,8 @@ def _gradeable_resolved(rows: List[Any]) -> List[Dict[str, Any]]:
         if row.get("outcome") in _SKIP_OUTCOMES:
             continue
         if row.get("actual_pct") is None:
+            continue
+        if is_pump_desk_claim(row) or is_shadow_row(row):
             continue
         out.append(row)
     return out

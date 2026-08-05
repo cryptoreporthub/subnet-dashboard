@@ -79,6 +79,43 @@ def test_portfolio_follows_resolved_no_fake_fills():
     assert all(p["id"] != "skip" for p in status["closed_positions"])
 
 
+def test_portfolio_excludes_pump_and_shadow_rows():
+    data = {
+        "predictions": [],
+        "resolved": [
+            {
+                "id": "council",
+                "netuid": 40,
+                "direction": "up",
+                "predicted_pct": 5.0,
+                "actual_pct": 10.0,
+                "resolved_at": "2026-07-02T00:00:00Z",
+            },
+            {
+                "id": "pump",
+                "netuid": 41,
+                "pick_source": "pump_lead",
+                "direction": "up",
+                "predicted_pct": 2.0,
+                "actual_pct": 1.0,
+                "resolved_at": "2026-07-02T00:00:00Z",
+            },
+            {
+                "id": "shadow",
+                "netuid": 42,
+                "shadow": True,
+                "direction": "up",
+                "predicted_pct": 3.0,
+                "actual_pct": 4.0,
+                "resolved_at": "2026-07-02T00:00:00Z",
+            },
+        ],
+    }
+    status = build_portfolio_status(data)
+    assert status["summary"]["total_closed"] == 1
+    assert status["closed_positions"][0]["id"] == "council"
+
+
 def test_api_portfolio_status_200():
     client = TestClient(app)
     resp = client.get("/api/portfolio/status")

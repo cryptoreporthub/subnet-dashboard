@@ -81,6 +81,7 @@ def build_evidence_report() -> Dict[str, Any]:
         status = "warn"
 
     accuracy_lift = _build_accuracy_lift()
+    weight_audit = _build_weight_audit()
 
     return {
         "status": status,
@@ -109,6 +110,7 @@ def build_evidence_report() -> Dict[str, Any]:
         },
         "accuracy_lift": accuracy_lift,
         "attribution_quality": accuracy_lift.get("attribution_quality") or {},
+        "weight_audit": weight_audit,
     }
 
 
@@ -126,5 +128,44 @@ def _build_accuracy_lift() -> Dict[str, Any]:
             "hit_rate_30d": None,
             "by_expert": {},
             "attribution_quality": {"total": 0, "unknown": 0, "unknown_pct": None, "attributed": 0},
+            "published_only": {
+                "graded_7d": 0,
+                "hit_rate_7d": None,
+                "graded_30d": 0,
+                "hit_rate_30d": None,
+            },
+            "council_trust": {
+                "graded_7d": 0,
+                "hit_rate_7d": None,
+                "graded_30d": 0,
+                "hit_rate_30d": None,
+            },
+            "full_ledger": {
+                "graded_7d": 0,
+                "hit_rate_7d": None,
+                "graded_30d": 0,
+                "hit_rate_30d": None,
+            },
+            "by_pick_source": {},
+            "by_pick_source_30d": [],
+            "by_horizon_30d": [],
+            "window_actual_days": {"w7": None, "w30": None},
+            "small_move_miss_share": {"misses": 0, "small_move_misses": 0, "share": None},
             "note": "honest empty until graded>0",
+        }
+
+
+def _build_weight_audit() -> Dict[str, Any]:
+    try:
+        from internal.learning.weight_audit import build_weight_audit_report
+
+        return build_weight_audit_report()
+    except Exception:
+        return {
+            "read_only": True,
+            "online_path": {},
+            "expert_weights": {},
+            "judge_weights": {},
+            "known_gaps": [],
+            "tune_gate": {"recommendation": "audit unavailable"},
         }

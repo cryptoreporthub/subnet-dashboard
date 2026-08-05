@@ -3,7 +3,7 @@
 **main at run:** `4cbfe94` (#765 soul_map deepcopy)  
 **Prod:** `https://subnet-dashboard.fly.dev`  
 **Agent script:** `BASE=… ./scripts/g0_phone_qa.sh`  
-**Human sign-off:** deferred — layout change in progress; re-run g0 after layout lands
+**Human sign-off:** **PENDING** — P3-3n responsive + soulmap 2×2 fix landed in PR #845; re-run g0 after merge + deploy
 
 ## Automated SSR / marker checks
 

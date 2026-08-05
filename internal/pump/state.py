@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import concurrent.futures
 import os
@@ -291,8 +291,8 @@ def _scan_all_subnets_locked(
     if not rows:
         return {"ok": False, "error": "no subnet signals", "scanned": 0, "transitions": []}
 
+    resolved = _resolve_path(None)
     with _lock:
-        resolved = _resolve_path(None)
         if state is not None:
             data = state
         else:
@@ -302,26 +302,29 @@ def _scan_all_subnets_locked(
         data.setdefault("subnets", {})
         data.setdefault("meta", {})
 
-        transitions: List[Dict[str, Any]] = []
-        for row in rows:
-            event, changed = transition_subnet(data, row)
-            if changed and event:
-                transitions.append(event)
+    # ponytail: transition loop off lock — GET /api/pump-alerts load_state() must not
+    # wedge behind a full ~129-subnet scan holding _lock (Fly health 503 wedge).
+    transitions: List[Dict[str, Any]] = []
+    for row in rows:
+        event, changed = transition_subnet(data, row)
+        if changed and event:
+            transitions.append(event)
 
-        data.setdefault("meta", {})
-        data["meta"]["last_scan_at"] = _now_z()
-        data["meta"]["tracked_subnets"] = len(data.get("subnets", {}))
-        data["meta"]["last_transition_count"] = len(transitions)
+    data.setdefault("meta", {})
+    data["meta"]["last_scan_at"] = _now_z()
+    data["meta"]["tracked_subnets"] = len(data.get("subnets", {}))
+    data["meta"]["last_transition_count"] = len(transitions)
 
-        phase_counts: Dict[str, int] = {p: 0 for p in PHASE_ORDER}
-        for entry in data.get("subnets", {}).values():
-            phase_counts[str(entry.get("phase", "DORMANT"))] = phase_counts.get(
-                str(entry.get("phase", "DORMANT")), 0
-            ) + 1
-        data["meta"]["phase_counts"] = phase_counts
+    phase_counts: Dict[str, int] = {p: 0 for p in PHASE_ORDER}
+    for entry in data.get("subnets", {}).values():
+        phase_counts[str(entry.get("phase", "DORMANT"))] = phase_counts.get(
+            str(entry.get("phase", "DORMANT")), 0
+        ) + 1
+    data["meta"]["phase_counts"] = phase_counts
 
+    run_at = data["meta"]["last_scan_at"]
+    with _lock:
         safe_write_json(resolved, data)
-        run_at = data["meta"]["last_scan_at"]
 
     # Soul-Map / mindmap-trail write is a separate file (data/soul_map.json,
     # can be large) and must not run inside the pump-ladder _lock — it wedged

@@ -48,6 +48,7 @@ def _recommendations(summary: Dict[str, Any]) -> List[str]:
 
 def render_markdown(summary: Dict[str, Any]) -> str:
     overall = summary["overall"]
+    published = summary.get("published_only") or {}
     horizon = summary["horizon_compare"]
     noise = summary["noise_misses"]
     lines = [
@@ -60,8 +61,14 @@ def render_markdown(summary: Dict[str, Any]) -> str:
         f"- Graded rows: **{overall['n']}**",
         f"- Direction accuracy: **{overall['accuracy']:.1%}**" if overall.get("accuracy") is not None else "- Direction accuracy: n/a",
         "",
-        "## 4h vs 24h horizon",
+        "## Published-only",
+        f"- Graded rows: **{published.get('n', 0)}**",
     ]
+    if published.get("accuracy") is not None:
+        lines.append(f"- Direction accuracy: **{published['accuracy']:.1%}**")
+    else:
+        lines.append("- Direction accuracy: n/a")
+    lines.extend(["", "## 4h vs 24h horizon"])
     for row in horizon.get("by_horizon_hours") or []:
         acc = row.get("accuracy")
         acc_txt = f"{acc:.1%}" if acc is not None else "n/a"
