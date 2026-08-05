@@ -3504,6 +3504,63 @@ body.wrap {
   box-shadow: 0 0 10px var(--j);
 }
 
+/* Traveling comet glow — one chip at a time (oracle -> echo -> pulse).
+   GPU-only: transform rotation on an oversized pseudo, clipped by a 1.5px
+   masked border ring; opacity fade handles the handoff. */
+.tribunal-hero__orbit {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: tribunal-orbit-fade 9s linear infinite;
+}
+
+.tribunal-hero__orbit::before {
+  content: "";
+  position: absolute;
+  inset: -120%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    var(--j) 30deg,
+    #ffffff 44deg,
+    var(--j) 58deg,
+    transparent 92deg
+  );
+  animation: tribunal-orbit-spin 9s linear infinite;
+}
+
+.tribunal-hero__judge--echo .tribunal-hero__orbit,
+.tribunal-hero__judge--echo .tribunal-hero__orbit::before {
+  animation-delay: -3s;
+}
+
+.tribunal-hero__judge--pulse .tribunal-hero__orbit,
+.tribunal-hero__judge--pulse .tribunal-hero__orbit::before {
+  animation-delay: -6s;
+}
+
+@keyframes tribunal-orbit-spin {
+  0% { transform: rotate(0deg); }
+  33.33% { transform: rotate(360deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes tribunal-orbit-fade {
+  0% { opacity: 0; }
+  3% { opacity: 1; }
+  30% { opacity: 1; }
+  34% { opacity: 0; }
+  100% { opacity: 0; }
+}
+
 .tribunal-hero__judge--oracle {
   --j: var(--j-oracle);
   top: 16px;
@@ -3835,7 +3892,9 @@ body.wrap {
   .tribunal-hero__card::after,
   .tribunal-hero__ray,
   .tribunal-hero__ring-glow,
-  .tribunal-hero__kicker-dot {
+  .tribunal-hero__kicker-dot,
+  .tribunal-hero__orbit,
+  .tribunal-hero__orbit::before {
     animation: none;
   }
 }
