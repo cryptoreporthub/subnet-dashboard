@@ -852,3 +852,92 @@ def test_legacy_no_cockpit_cards_styles():
         ".cockpit-highlight {",
     ):
         assert dead not in legacy
+
+
+def test_simivision_learning_trail_live_in_ui_css():
+    """P3-3n-a: SimiVision learning trail + judge panel in ui.css."""
+    css = _read_ui_css()
+    for selector in (
+        "/* ---- SimiVision learning trail (migrated from ui-legacy.css, P3-3n-a) ---- */",
+        ".learning-trail-grid",
+        ".lt-expert-card",
+        ".judge-council-panel",
+    ):
+        assert selector in css
+
+
+def test_legacy_no_simivision_styles():
+    """P3-3n-a: simivision block removed from ui-legacy.css."""
+    legacy = _read_ui_legacy_css()
+    for dead in (
+        "/* --- legacy simivision --- */",
+        ".learning-trail-section",
+        ".lt-expert-card",
+        ".judge-council-panel",
+    ):
+        assert dead not in legacy
+
+
+def test_share_pages_chrome_live_in_ui_css():
+    """P3-3n-b: share page detail chrome in ui.css."""
+    css = _read_ui_css()
+    for selector in (
+        "/* ---- Share pages chrome (migrated from ui-legacy.css, P3-3n-b) ---- */",
+        ".subnet-page__judge-grid",
+        ".flow-svg",
+        ".cmd-palette__panel",
+        ".wallet-page__rug",
+    ):
+        assert selector in css
+
+
+def test_legacy_no_share_pages_styles():
+    """P3-3n-b: share pages block removed from ui-legacy.css."""
+    legacy = _read_ui_legacy_css()
+    for dead in (
+        "/* --- legacy share_pages --- */",
+        ".subnet-page__judge-grid",
+        ".flow-svg",
+        ".cmd-palette__panel",
+    ):
+        assert dead not in legacy
+
+
+def test_responsive_ui_v5_live_in_ui_css():
+    """P3-3n-c: responsive / volatility UI v5 in ui.css."""
+    css = _read_ui_css()
+    for selector in (
+        "/* ---- Responsive / UI v5 (migrated from ui-legacy.css, P3-3n-c) ---- */",
+        ".vol-cluster-bar",
+        ".subnet-group-summary",
+        "UI IMPROVEMENTS v5",
+    ):
+        assert selector in css
+
+
+def test_legacy_no_responsive_styles():
+    """P3-3n-c: responsive block removed from ui-legacy.css."""
+    legacy = _read_ui_legacy_css()
+    for dead in (
+        "/* --- legacy responsive --- */",
+        "UI IMPROVEMENTS v5",
+        ".vol-cluster-grid",
+        ".subnet-groups-stack",
+    ):
+        assert dead not in legacy
+
+
+def test_ui_legacy_is_stub_only():
+    """P3-4: ui-legacy.css is stub-only after purge."""
+    legacy = _read_ui_legacy_css()
+    assert len(legacy.splitlines()) <= 2
+    assert "retired stub" in legacy or legacy.strip() == ""
+
+
+def test_no_legacy_stylesheet_links_in_templates():
+    """P3-4: no template links ui-legacy.css."""
+    import glob
+
+    for path in glob.glob("templates/**/*.html", recursive=True):
+        text = open(path, encoding="utf-8").read()
+        assert "ui-legacy.css" not in text, path

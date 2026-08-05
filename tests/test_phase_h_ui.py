@@ -42,7 +42,7 @@ H_FULL_SECTION_IDS = [
 def test_index_links_split_css():
     client = TestClient(app)
     html = client.get("/").text
-    for name in ("base", "ui", "ui-legacy", "chat"):
+    for name in ("base", "ui", "chat"):
         assert f"/static/css/{name}.css" in html
 
 
@@ -82,7 +82,7 @@ def test_index_council_first_shell():
     html = client.get("/").text
     assert "council-stage" in html
     assert 'id="council-stage-body"' in html
-    assert "ui-legacy.css" in html
+    assert "ui-legacy.css" not in html
     assert 'id="market-drawer"' in html
     # Unicode apostrophe in “Today’s call” — match brand + stage title id
     assert "council-stage__title" in html
@@ -430,10 +430,13 @@ def test_c6_shared_conviction_thresholds_match_hydrate():
     assert "if (c > 35)" in hydrate_src
 
 
-def test_g7_section_titles_use_rajdhani():
-    legacy = open("static/css/ui-legacy.css", encoding="utf-8").read()
-    assert ".section-title" in legacy
-    assert "font-family: var(--font-body)" in legacy.split(".section-title")[1][:120]
+def test_g7_section_titles_use_space_grotesk():
+    ui = open("static/css/ui.css", encoding="utf-8").read()
+    marker = "/* ---- Dashboard components (migrated from ui-legacy.css, P3-3m-b) ---- */"
+    assert marker in ui
+    block = ui.split(marker, 1)[1]
+    assert ".section-title" in block
+    assert "font-family: var(--font-body)" in block.split(".section-title", 1)[1][:120]
 
 
 def test_g12_favicon_and_font_consolidation():
