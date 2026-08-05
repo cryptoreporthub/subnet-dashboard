@@ -6,6 +6,7 @@ counts as correct; endorsing a miss counts as wrong — same rule as backtest.
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, Optional
 
 from internal.council.grading import direction_correct
@@ -15,6 +16,9 @@ JUDGE_THRESHOLDS: Dict[str, float] = {
     "echo": 0.5,
     "pulse": 0.55,
 }
+
+_MIN_PRED_PCT = 0.5
+_MAX_MOVE_SCALE = 3.0
 
 
 def judge_threshold(judge: str) -> float:
@@ -55,3 +59,20 @@ def judge_nudge_correct(
     if pnl_pct is not None:
         return float(pnl_pct) > 0
     return direction_correct(prediction, actual_pct)
+
+
+def judge_nudge_magnitude_scale(
+    prediction: Dict[str, Any],
+    actual_pct: float,
+    correct: bool,
+) -> float:
+    """Horizon-relative market move scale for nudge size (not persona PnL)."""
+    actual = abs(float(actual_pct or 0))
+    predicted = abs(float(prediction.get("predicted_pct") or 0))
+    ratio = actual / max(predicted, _MIN_PRED_PCT)
+    ratio = min(_MAX_MOVE_SCALE, ratio)
+    if ratio > 1.0:
+        ratio = 1.0 + math.log(ratio)
+    if not correct:
+        ratio = max(1.0, ratio)
+    return round(ratio, 4)

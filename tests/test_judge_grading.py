@@ -1,4 +1,6 @@
-from internal.judges.grading import judge_nudge_correct
+import math
+
+from internal.judges.grading import judge_nudge_correct, judge_nudge_magnitude_scale
 
 
 def test_judge_nudge_correct_endorsed_hit():
@@ -37,3 +39,9 @@ def test_judge_nudge_correct_legacy_pnl_fallback():
     pred = {"direction": "up"}
     assert judge_nudge_correct(pred, "oracle", actual_pct=1.0, pnl_pct=2.0) is True
     assert judge_nudge_correct(pred, "oracle", actual_pct=1.0, pnl_pct=-1.0) is False
+
+
+def test_judge_nudge_magnitude_scale_bounds():
+    pred = {"direction": "up", "predicted_pct": 1.0}
+    assert judge_nudge_magnitude_scale(pred, actual_pct=10.0, correct=True) <= 1.0 + math.log(3.0)
+    assert judge_nudge_magnitude_scale(pred, actual_pct=-0.1, correct=False) == 1.0

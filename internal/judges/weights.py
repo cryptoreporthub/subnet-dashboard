@@ -65,16 +65,20 @@ def nudge_judge(
     *,
     delta_correct: Optional[float] = None,
     delta_wrong: Optional[float] = None,
+    scale: float = 1.0,
+    actual_pct: Optional[float] = None,
 ) -> Optional[float]:
     if not judge_name or judge_name not in DEFAULT_JUDGE_WEIGHTS:
         return None
     resolved_path = path or SOUL_MAP_PATH
     weights = load_judge_weights(resolved_path)
-    delta = (
+    move_scale = max(0.0, float(scale))
+    base = (
         (delta_correct if delta_correct is not None else _LEARNING_DELTA_CORRECT)
         if correct
         else (delta_wrong if delta_wrong is not None else _LEARNING_DELTA_WRONG)
     )
+    delta = round(base * move_scale, 4)
     before = float(weights[judge_name])
     after = round(
         max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta)),
@@ -92,6 +96,10 @@ def nudge_judge(
                 after=after,
                 reason="judge_pnl",
                 correct=correct,
+                extra={
+                    "scale": move_scale,
+                    "actual_pct": actual_pct,
+                },
             )
         except Exception:
             pass
