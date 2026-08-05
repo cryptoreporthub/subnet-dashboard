@@ -1,8 +1,8 @@
 """Visual upgrade — subnet identity bands, soul-map orbs, weight-shift viz.
 
 One runnable check per non-trivial piece of new logic (ponytail rule): the
-netuid->band hash, and that the SSR templates actually emit the new markup
-hooks the JS/CSS depend on.
+netuid->band hash, and that the SSR templates emit the tribunal-hero v4 markup
+hooks the JS/CSS depend on (legacy k3-orb digit markup retired).
 """
 
 from __future__ import annotations
@@ -109,71 +109,64 @@ def test_council_stage_h1_resolving_conf_state_ssr():
     )
     assert 'id="k3-dossier"' in html
     assert 'data-conf-state="resolving"' in html
-    orb_html = html.split('id="k3-orb-score"')[1].split("</div>")[0]
-    assert 'digit-ones">—' in orb_html
-    assert ">0</span>" not in orb_html
+    assert 'id="tribunal-hero"' in html
+    gauge = _gauge_score_html(html)
+    assert "data-gauge-value" in gauge
+    assert "—" in gauge
+    assert "0%" not in gauge
 
 
 def test_council_stage_h1_zero_conf_state_ssr():
     html = _render_council_stage_confidence(final_confidence=0)
     assert 'data-conf-state="zero"' in html
-    orb_html = html.split('id="k3-orb-score"')[1].split("</div>")[0]
-    assert ">0</span>" in orb_html
+    gauge = _gauge_score_html(html)
+    assert "0%" in gauge
 
 
 def test_council_stage_h1_value_conf_state_ssr():
     html = _render_council_stage_confidence(final_confidence=0.5)
     assert 'data-conf-state="value"' in html
-    orb_html = html.split('id="k3-orb-score"')[1].split("</div>")[0]
-    assert "digit-ones" in orb_html
-    assert "—" not in orb_html
+    gauge = _gauge_score_html(html)
+    assert "50%" in gauge
+    assert "—" not in gauge
 
 
-def _council_stage_style_block(html: str) -> str:
-    start = html.index("<style>")
-    end = html.index("</style>", start)
-    return html[start:end]
+def _gauge_score_html(html: str) -> str:
+    """Tribunal hero gauge value span (replaces legacy digit-ones orb markup)."""
+    return html.split('id="k3-orb-score"')[1].split("</span>", 1)[0]
 
 
-def test_council_stage_h2_resolving_conf_state_visual_css():
-    """H2: resolving uses animated muted ring sweep, not opacity-only placeholder."""
-    html = _render_council_stage_confidence(
-        final_confidence=None,
-        confidence=None,
-        conviction=None,
-    )
-    css = _council_stage_style_block(html)
-    assert "[data-conf-state=\"resolving\"]" in css
-    assert "k3-resolving-ring-sweep" in css
-    assert "#k3-dossier[data-conf-state=\"resolving\"] .k3-orb .ring-fill" in css
-    assert "animation: k3-resolving-ring-sweep" in css
-    assert "#k3-dossier[data-conf-state=\"resolving\"] { opacity:" not in css
+def _read_ui_css() -> str:
+    return open("static/css/ui.css", encoding="utf-8").read()
 
 
-def test_council_stage_h2_zero_conf_state_visual_css():
-    html = _render_council_stage_confidence(final_confidence=0)
-    css = _council_stage_style_block(html)
-    assert "#k3-dossier[data-conf-state=\"zero\"] .k3-orb .ring-fill" in css
-    zero_ring = css.split("#k3-dossier[data-conf-state=\"zero\"] .k3-orb .ring-fill", 1)[1][:400]
-    assert "stroke" in zero_ring
-    assert "k3-muted" in zero_ring
+def _read_ui_legacy_css() -> str:
+    return open("static/css/ui-legacy.css", encoding="utf-8").read()
 
 
-def test_council_stage_h2_delayed_conf_state_visual_css():
-    css = _council_stage_style_block(_render_council_stage(82))
-    assert "k3-delayed-dot" in css
-    assert "#k3-dossier[data-conf-state=\"delayed\"] .k3-orb-wrap::after" in css
-    delayed_dot = css.split("#k3-dossier[data-conf-state=\"delayed\"] .k3-orb-wrap::after", 1)[1][:400]
-    assert "k3-orange" in delayed_dot
-    assert "animation" in delayed_dot
+def test_council_stage_h2_tribunal_gauge_css_in_ui_stylesheet():
+    """H2: tribunal gauge + motion live in ui.css (no inline council_stage styles)."""
+    css = _read_ui_css()
+    assert ".tribunal-hero__gauge-fill" in css
+    assert ".tribunal-hero__gauge-track" in css
+    assert "tribunal-puff-1" in css
+    assert "tribunal-glow-drift" in css
+    assert '.tribunal-hero[data-verdict-kind="forming"]' in css
 
 
-def test_council_stage_h2_reduced_motion_disables_conf_state_animations():
-    css = _council_stage_style_block(_render_council_stage(82))
+def test_council_stage_h2_conf_state_legacy_hooks_in_ui_legacy():
+    """Hydrate still drives dossier conf-state; legacy orb CSS retained in ui-legacy."""
+    legacy = _read_ui_legacy_css()
+    assert '#k3-dossier[data-conf-state="resolving"]' in legacy
+    assert '#k3-dossier[data-conf-state="zero"]' in legacy
+    assert '#k3-dossier[data-conf-state="delayed"]' in legacy
+
+
+def test_council_stage_h2_tribunal_reduced_motion_disables_animations():
+    css = _read_ui_css()
     assert "prefers-reduced-motion" in css
     reduced = css.split("prefers-reduced-motion", 1)[1]
-    assert "[data-conf-state=\"resolving\"]" in reduced
-    assert "[data-conf-state=\"delayed\"]" in reduced
+    assert ".tribunal-hero__puff" in reduced
     assert "animation: none" in reduced
 
 
@@ -187,25 +180,29 @@ def test_cockpit_hydrate_h1_three_state_hooks_present():
     assert "confState = 'value'" in src
 
 
-def test_council_stage_h1_resolving_orb_label_distinct_from_zero():
+def test_council_stage_h1_resolving_gauge_distinct_from_zero():
     resolving = _render_council_stage_confidence(
         final_confidence=None, confidence=None, conviction=None
     )
     zero = _render_council_stage_confidence(final_confidence=0)
-    assert 'id="k3-orb-label">resolving<' in resolving
-    assert 'id="k3-orb-label">zero<' in zero
-    assert 'id="k3-orb-label">conviction<' not in resolving
-    assert 'id="k3-orb-label">conviction<' not in zero
+    assert "—" in _gauge_score_html(resolving)
+    assert "0%" in _gauge_score_html(zero)
+    assert "GATED" in resolving or "HOLD" in resolving
+    assert 'id="k3-action-badge"' in resolving
+    assert 'id="k3-action-badge"' in zero
 
 
-def test_council_stage_horizon_badge_always_visible_ssr():
-    """AC4: horizon badge present without chip interaction / without resolves_in."""
+def test_council_stage_horizon_badge_ssr_hidden_hydrate_unhides():
+    """Horizon badge ships hidden in SSR; hydrate reveals on live payload."""
     html = _render_council_stage(82)
     assert 'id="k3-horizon-badge"' in html
     assert 'class="k3-horizon-badge"' in html
     badge = html.split('id="k3-horizon-badge"', 1)[1].split("</span>", 1)[0]
     assert "24h" in badge
-    assert "hidden" not in badge.lower()
+    assert " hidden" in badge
+    src = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()
+    assert "k3-horizon-badge" in src
+    assert "horizonBadge.hidden = false" in src
 
 
 def test_council_stage_accuracy_building_sample_size_when_trust_not_ready():
@@ -225,28 +222,25 @@ def test_cockpit_hydrate_horizon_badge_and_conf_label_hooks():
     assert "label.textContent = 'zero'" in src
 
 
-def test_council_stage_emits_identity_band_and_keeps_action_badge_separate():
+def test_council_stage_emits_netuid_hook_and_keeps_action_badge_separate():
     html = _render_council_stage(82)
-    expected_band = netuid_band(82)
-    assert f'data-band="{expected_band}"' in html
-    assert f"k3-claim--band-{expected_band}" in html
-    assert 'data-netuid="82"' in html
-    assert "--sn-accent" in html
-    # 6 identity hues declared, not the old flat 4-color quartet
-    for band in range(6):
-        assert f'.k3-claim[data-band="{band}"]' in html
+    assert 'data-hero-netuid="82"' in html
+    assert 'data-conf-state=' in html
+    stage_src = open("templates/partials/premium/council_stage.html", encoding="utf-8").read()
+    assert "function k3SyncNetuidBand" in stage_src
+    assert "k3-claim--band-' + band" in stage_src
     # action badge markup untouched by identity color (still its own element)
     assert 'id="k3-action-badge"' in html
+    assert 'id="tribunal-hero"' in html
 
 
-def test_hero_keeps_every_existing_animation_and_adds_new_layers():
+def test_tribunal_hero_keeps_motion_layers_in_ui_css():
+    css = _read_ui_css()
+    for anim in ("tribunal-puff-1", "tribunal-puff-2", "tribunal-puff-3", "tribunal-glow-drift", "tribunal-ray-flow"):
+        assert anim in css
     html = _render_council_stage(82)
-    for anim in ("k3-spin", "k3-pulse", "k3-particle-drift", "k3-ring-fill"):
-        assert anim in html
-    # additive-only layers
-    assert "k3-orb-halo" in html
-    assert "k3-spin-reverse" in html
-    assert "k3-score-pop" in html
+    assert "tribunal-hero__puffs" in html
+    assert "tribunal-hero__gauge-fill" in html
 
 
 def test_hydrate_js_mirrors_band_formula():
@@ -294,12 +288,13 @@ def test_learning_loop_weight_nudge_viz_hook_present():
     assert "k3-weight-bar-fill" in src
 
 
-def test_hero_palette_maps_onto_site_accent_tokens():
-    src = open("templates/partials/premium/council_stage.html", encoding="utf-8").read()
-    assert "--k3-pink: var(--accent-violet" in src
-    assert "--k3-green: var(--accent-primary" in src
-    assert "#ff69b4" not in src
-    assert 'stop-color="#9d8cff"' in src
+def test_tribunal_palette_uses_site_tokens_not_hardcoded_hex():
+    css = _read_ui_css()
+    assert ".tribunal-hero" in css
+    assert "#ff69b4" not in css
+    stage = open("templates/partials/premium/council_stage.html", encoding="utf-8").read()
+    assert "#ff69b4" not in stage
+    assert 'stop-color="#9d8cff"' not in stage
 
 
 def test_learning_loop_shows_quiet_empty_state_when_no_deltas():
@@ -309,19 +304,18 @@ def test_learning_loop_shows_quiet_empty_state_when_no_deltas():
     assert "No weight shift this window" in src
 
 
-def test_soul_map_hydrate_trend_matches_ssr_baseline():
+def test_soul_map_hydrate_trend_uses_delta_first_then_weight_baseline():
     src = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()
     assert "soulTrendFromWeight" in src
+    assert "soulTrendFromDelta" in src
     assert "SOUL_WEIGHT_BASELINE" in src
-    # Must not derive orb trend from ephemeral deltas (SSR uses weight vs 1.0)
-    assert "function soulTrendFromWeight" in src
     idx = src.index("function renderCouncilWeights")
     body = src[idx : idx + 1200]
-    assert "soulTrendFromWeight(w)" in body
+    assert "soulTrendFromDelta(deltaMap[name], w)" in body
     assert "delta > 0.005 ? 'up'" not in body
 
 
-def test_empty_hold_shell_emits_identity_band():
+def test_empty_hold_shell_emits_warming_tribunal_without_netuid_band():
     env = Environment(
         loader=FileSystemLoader("templates"),
         autoescape=select_autoescape(["html", "xml"]),
@@ -329,16 +323,19 @@ def test_empty_hold_shell_emits_identity_band():
     from internal.council.publish_gate import publish_gate_label
 
     env.globals["publish_gate_label"] = publish_gate_label
+    dpick = {"action": "HOLD", "brief": {"move": "HOLD · no long", "tone": "hold"}}
     html = env.get_template("partials/premium/council_stage.html").render(
-        dpick={"action": "HOLD", "brief": {"move": "HOLD · no long", "tone": "hold"}},
+        dpick=dpick,
         hybrid_trust={},
         trust_banner={},
         story_path={},
         habit_watchlist={"netuids": []},
         habit_alerts={"enabled": False},
+        tribunal=_tribunal_for(dpick),
     )
-    assert 'data-band="0"' in html
-    assert "k3-claim--band-0" in html
+    assert 'data-hero-phase="warming"' in html
+    assert 'id="tribunal-hero"' in html
+    assert 'data-band=' not in html
 
 
 def test_mindmap_is_grouped_trail_not_node_link_graph():
@@ -387,22 +384,18 @@ def test_hero_a_tier_stale_badge_markup_and_hydrate_hook():
     assert "k3StaleBadgeState" in src
 
 
-def test_hero_a_tier_mobile_hierarchy_verb_before_orb_css():
-    css = _council_stage_style_block(_render_council_stage(82))
-    assert "Hero A-tier @390px" in css
-    assert "#k3-call-headline" in css and "order: 1" in css
-    assert ".k3-orb-wrap" in css and "order: 3" in css
-    assert "display: contents" in css
-    mobile = css.split("@media (max-width: 400px)", 1)[1].split("@media", 1)[0]
-    assert ".k3-claim-foot" in mobile and "order: 12" in mobile
+def test_tribunal_hero_mobile_typography_at_390px():
+    css = _read_ui_css()
+    mobile = css.split("@media (max-width: 390px)", 1)[1].split("@media", 1)[0]
+    assert ".tribunal-hero__stage" in mobile
+    assert ".tribunal-hero__pct" in mobile
 
 
-def test_hero_a_tier_touch_targets_at_390px():
-    css = _council_stage_style_block(_render_council_stage(82))
-    mobile = css.split("@media (max-width: 400px)", 1)[1].split("@media", 1)[0]
-    assert ".k3-horizon-chip" in mobile
-    assert "min-height: 44px" in mobile
-    assert "#k3-action-badge" in mobile or ".k3-badge" in mobile
+def test_council_stage_touch_targets_at_390px():
+    css = _read_ui_css()
+    assert ".council-stage .k3-layer-header" in css
+    header_block = css.split(".council-stage .k3-layer-header", 1)[1][:300]
+    assert "min-height: 44px" in header_block
 
 
 def test_hero_a_tier_empty_evidence_honesty_ssr_and_hydrate():
@@ -411,10 +404,10 @@ def test_hero_a_tier_empty_evidence_honesty_ssr_and_hydrate():
     assert "No evidence drivers on this call yet." in html
     src = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()
     assert "No evidence drivers on this call yet." in src
-    assert "No signals on this call yet." in src
+    assert "Reasons appear when the call carries signal notes." in src
     evidence_idx = src.index("function patchK3Evidence")
     evidence_body = src[evidence_idx : evidence_idx + 1400]
-    assert "No signals on this call yet." in evidence_body
+    assert "Reasons appear when the call carries signal notes." in evidence_body
 
 
 def test_hero_a_tier_canonical_dossier_writer_documented():
