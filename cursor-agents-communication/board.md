@@ -1,10 +1,21 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-08-03T05:55:00Z  
-**main:** `3e13e0a` (#787 hydrate closed) · **infra:** v1 stable; GIL unwedge #755–#763 · timeouts #734–#737 #751–#754  
-**Active plan:** `ditto-opus-transition-handoff-2026-08-03.md` (#789) · H2 soak **2026-08-04**  
+**Last updated:** 2026-08-05T15:50:00Z  
+**main:** `876cbf6` (#823 trust dual-count) · judge P0+P1 **#820/#821** · **infra:** v1 stable  
+**Active plan:** `lane-c-execution-plan.md` · **H2 GO Lane C** (2026-08-05, waivers documented)  
 **Models:** `model-guide.md` — Grok LOCK/review; Composer implements; Sonnet low reviews  
-**Plans:** `ditto-opus-transition-handoff-2026-08-03.md` · `post-hero-finish-plan.md` · `completion-runbook.md` · `accuracy-lift-lock.md`
+**Plans:** `lane-c-execution-plan.md` · `completion-runbook.md` · `accuracy-lift-lock.md`
+
+## STATUS SNAPSHOT (2026-08-05)
+
+| Item | Status |
+|------|--------|
+| **H2 GO Lane C** | **GO** (human delegated via Cursor Aug 5) — ledger metrics; waivers: artifacts null, pump-alerts known, cloud re-probe blocked |
+| Trust dual-count banner | **MERGED** #823 |
+| Judge learning P0 selective grading | **MERGED** #820 |
+| Judge learning P1 magnitude nudges | **MERGED** #821 |
+| Lane C Phase 2 expert attribution | **NEXT** — `cursor/expert-attribution-replay-5deb` |
+| Pump-alerts hardening | **TRACK B** — open Jul-27 issue; does not gate Lane C |
 
 ## STATUS SNAPSHOT (2026-08-03)
 
