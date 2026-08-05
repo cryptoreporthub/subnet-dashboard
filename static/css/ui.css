@@ -1472,6 +1472,168 @@ body.wrap {
   text-align: left;
 }
 
+.pick-degraded-note {
+  margin-top: 8px;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #ffb347;
+  background: rgba(255, 179, 71, 0.1);
+  border-radius: var(--radius-sm, 8px);
+  padding: 4px 8px;
+}
+
+.pick-degraded-note--hold {
+  color: var(--neu);
+  background: var(--neu-dim);
+}
+
+.k3-brief-trigger {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--k3-blue);
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 212, 255, 0.45);
+  background: rgba(0, 212, 255, 0.08);
+  text-align: left;
+  box-shadow: 0 0 14px rgba(0, 212, 255, 0.12);
+}
+
+.k3-brief-trigger__kicker {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--k3-green);
+  margin-bottom: 4px;
+}
+
+.k3-pump-chip {
+  display: inline-block;
+  margin: 4px 0 8px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  z-index: 1;
+  max-width: 320px;
+  line-height: 1.35;
+}
+
+.k3-pump-chip--stirring {
+  color: #ffa500;
+  border: 1px solid rgba(255, 165, 0, 0.35);
+  background: rgba(255, 165, 0, 0.08);
+}
+
+.k3-pump-chip--accumulating {
+  color: var(--k3-pink);
+  border: 1px solid color-mix(in srgb, var(--k3-pink) 35%, transparent);
+  background: color-mix(in srgb, var(--k3-pink) 8%, transparent);
+}
+
+.k3-pump-trigger {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--k3-muted);
+  margin: -4px auto 10px;
+  max-width: 320px;
+  text-align: left;
+  z-index: 1;
+}
+
+.k3-horizon-chips {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 8px 0 4px;
+  z-index: 1;
+}
+
+.k3-horizon-chip {
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 18px;
+  border: 1px solid #1a1d24;
+  background: var(--k3-surface);
+  color: var(--k3-muted);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.k3-horizon-chip--active {
+  color: var(--k3-green);
+  border-color: rgba(57, 255, 20, 0.45);
+  background: rgba(57, 255, 20, 0.08);
+}
+
+.k3-horizon-stage {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  color: var(--k3-blue);
+  margin: 6px 12px 4px;
+  z-index: 1;
+  text-align: center;
+  line-height: 1.45;
+}
+
+.k3-horizon-stage[hidden],
+.k3-horizon-note[hidden] {
+  display: none;
+}
+
+.k3-horizon-note {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  color: var(--k3-orange);
+  margin: 0 0 8px;
+  z-index: 1;
+  text-align: center;
+}
+
+.k3-temporal-grade {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 9px;
+  color: var(--k3-muted);
+  margin: -4px 0 8px;
+  z-index: 1;
+}
+
+.council-stage__trust-whisper {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  color: var(--k3-muted);
+  margin: -4px 0 8px;
+  letter-spacing: 0.04em;
+}
+
+.k3-dossier .k3-horizon-chip {
+  background: rgba(14, 18, 30, 0.48);
+  border-color: rgba(148, 163, 184, 0.14);
+}
+
+@media (max-width: 400px) {
+  .k3-horizon-chip {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 10px 16px;
+    border-radius: 22px;
+  }
+}
+
 /* Tribunal hero — dossier confidence-state (hydrate sets data-conf-state on #k3-dossier) */
 @keyframes tribunal-conf-sweep {
   0%, 100% { opacity: 0.35; }

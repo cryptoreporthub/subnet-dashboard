@@ -429,6 +429,10 @@ def test_k3_dossier_utilities_live_in_ui_css():
         ".k3-horizon-badge",
         ".k3-evidence-drivers",
         ".k3-brief-thesis",
+        ".pick-degraded-note",
+        ".k3-pump-chip",
+        ".k3-horizon-chip",
+        ".k3-brief-trigger",
     ):
         assert selector in css
 
