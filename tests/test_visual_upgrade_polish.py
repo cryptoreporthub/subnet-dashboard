@@ -457,6 +457,48 @@ def test_k3_claim_identity_and_badge_live_in_ui_css():
     assert '.council-stage:has(#k3-dossier)' in css
 
 
+def test_k3_drawer_content_live_in_ui_css():
+    """P3-3e: signal/bench/deliberation/outcome/learning drawer styles in ui.css."""
+    css = _read_ui_css()
+    for selector in (
+        ".council-stage .k3-signal-name",
+        ".council-stage .k3-judge-weight",
+        ".council-stage .k3-judge-delta.up",
+        ".council-stage .k3-outcome-status",
+        ".council-stage .k3-learning-stats",
+        ".council-stage .k3-weight-nudge-viz",
+        ".council-stage .k3-weight-bar-fill--up",
+        "@keyframes k3-weight-bar-glow",
+        ".council-stage .k3-deliberation",
+        ".council-stage .k3-weighed-row",
+        ".council-stage .k3-considered-card",
+        ".council-stage .k3-lifecycle-step",
+        ".council-stage .k3-layer-subtitle",
+        ".council-stage .k3-track-window",
+        ".council-stage .k3-weight-nudge",
+        '.council-stage[data-shell-warming="1"] .k3-empty',
+    ):
+        assert selector in css
+
+
+def test_legacy_no_embedded_k3_drawer_styles():
+    """P3-3e: embedded legacy block must not carry live drawer rules."""
+    legacy = _read_ui_legacy_css()
+    block = legacy.split("/* K3 dossier drawers — migrated to ui.css (P3-3e) */", 1)[1]
+    block = block.split("/* Pump desk (from pump_alert.html) */", 1)[0]
+    for dead in (
+        ".k3-signal {",
+        ".k3-judge {",
+        ".k3-weight-nudge-viz",
+        ".k3-weighed-row",
+        ".k3-considered-card",
+        ".k3-lifecycle-step",
+        ".k3-learning-stats",
+        "@keyframes k3-weight-bar-glow",
+    ):
+        assert dead not in block
+
+
 def test_council_pick_card_uses_pewter_smoke_background():
     css = open("static/css/ui.css", encoding="utf-8").read()
     assert ".council-stage .home-job__call-host .k3-dossier" in css
