@@ -362,7 +362,7 @@ def test_mobile_soulmap_stays_two_by_two_not_stacked():
 
 
 def test_mobile_telegram_touch_targets_and_week_top():
-    css = open("static/css/ui-legacy.css", encoding="utf-8").read()
+    css = _read_ui_css()
     assert "message-intel__filter-chip" in css
     assert "min-height: 44px" in css
     assert "message-intel__week-top-meta" in css
@@ -524,6 +524,35 @@ def test_legacy_no_pump_desk_styles():
         "/* Pump alert scan (from pump_alert_scan.html) */",
         ".pds--polish {",
         "@keyframes pdLivePulse",
+    ):
+        assert dead not in legacy
+
+
+def test_message_intel_desk_live_in_ui_css():
+    """P3-3g: Telegram pulse / message-intel desk CSS in ui.css."""
+    css = _read_ui_css()
+    for selector in (
+        "/* ---- Message intel / Telegram pulse desk (migrated from ui-legacy.css, P3-3g) ---- */",
+        ".message-intel--v2 {",
+        "--mi-green:",
+        ".message-intel__masthead",
+        ".message-intel__pulse-stage",
+        ".message-intel__filter-chip",
+        "message-intel-board-breathe",
+        ".message-intel__week-top",
+    ):
+        assert selector in css
+
+
+def test_legacy_no_message_intel_desk_styles():
+    """P3-3g: message-intel blocks removed from ui-legacy.css."""
+    legacy = _read_ui_legacy_css()
+    for dead in (
+        "SS-TG message-intel",
+        ".message-intel--v2 {",
+        ".message-intel__masthead",
+        "message-intel-board-breathe",
+        ".message-intel__filter-chip",
     ):
         assert dead not in legacy
 
