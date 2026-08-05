@@ -113,6 +113,19 @@ def test_cert_reports_hybrid_mode_when_gated(isolate_paths, monkeypatch):
     assert cert["signal_impact_holdout"] > 0
 
 
+def test_pump_and_shadow_excluded_from_training(isolate_paths):
+    from pathlib import Path
+
+    pred_path = isolate_paths["pred"]
+    council = _resolved_row("quant", True, idx=1)
+    pump = dict(_resolved_row("quant", False, idx=2), pick_source="pump_lead")
+    shadow = dict(_resolved_row("hype", True, idx=3), shadow=True)
+    _write_predictions(Path(pred_path), [council, pump, shadow])
+    rows = cal.load_training_rows(pred_path)
+    assert len(rows) == 1
+    assert rows[0]["id"] == "p-1"
+
+
 def test_dedupe_rows_excluded_from_training(isolate_paths):
     pred_path = isolate_paths["pred"]
     dup = _resolved_row("quant", True, idx=1)
