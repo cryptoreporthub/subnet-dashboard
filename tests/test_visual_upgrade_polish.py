@@ -482,10 +482,8 @@ def test_k3_drawer_content_live_in_ui_css():
 
 
 def test_legacy_no_embedded_k3_drawer_styles():
-    """P3-3e: embedded legacy block must not carry live drawer rules."""
+    """P3-3e: legacy must not carry live k3 drawer rules."""
     legacy = _read_ui_legacy_css()
-    block = legacy.split("/* K3 dossier drawers — migrated to ui.css (P3-3e) */", 1)[1]
-    block = block.split("/* ---------- driver.js onboarding tour", 1)[0]
     for dead in (
         ".k3-signal {",
         ".k3-judge {",
@@ -496,7 +494,7 @@ def test_legacy_no_embedded_k3_drawer_styles():
         ".k3-learning-stats",
         "@keyframes k3-weight-bar-glow",
     ):
-        assert dead not in block
+        assert dead not in legacy
 
 
 def test_pump_desk_styles_live_in_ui_css():
@@ -553,6 +551,42 @@ def test_legacy_no_message_intel_desk_styles():
         ".message-intel__masthead",
         "message-intel-board-breathe",
         ".message-intel__filter-chip",
+    ):
+        assert dead not in legacy
+
+
+def test_council_home_shell_live_in_ui_css():
+    """P3-3h: council warming shell, desk zones, trust banner in ui.css."""
+    css = _read_ui_css()
+    for selector in (
+        "/* ---- Council home shell (migrated from ui-legacy.css, P3-3h) ---- */",
+        ".council-stage__warming",
+        ".desk-zone",
+        "#home-trust-banner.trust-banner",
+        "simivision-smoke-bg.svg",
+        ".home-job__signals--demoted",
+    ):
+        assert selector in css
+
+
+def test_driver_tour_live_in_ui_css():
+    """P3-3h: driver.js popover styles in ui.css."""
+    css = _read_ui_css()
+    assert "/* ---- Driver.js onboarding tour (migrated from ui-legacy.css, P3-3h) ---- */" in css
+    assert ".driver-popover {" in css
+    assert ".driver-popover-arrow" in css
+
+
+def test_legacy_no_council_shell_or_driver_styles():
+    """P3-3h: council shell + driver tour removed from ui-legacy.css."""
+    legacy = _read_ui_legacy_css()
+    for dead in (
+        "Visual upgrade: panel states",
+        ".council-stage__warming",
+        ".desk-zone {",
+        "driver.js onboarding tour",
+        ".driver-popover {",
+        "#home-trust-banner { max-width",
     ):
         assert dead not in legacy
 
