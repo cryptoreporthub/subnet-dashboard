@@ -1,11 +1,12 @@
-"""Pump ladder kick uses force when stale."""
+"""Pump desk GET path — file-backed, no synchronous ladder kick."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
 
-def test_desk_payload_kicks_ladder_with_force_when_stale(tmp_path, monkeypatch):
+def test_desk_payload_does_not_kick_ladder_on_get(tmp_path, monkeypatch):
+    """GET /api/pump-alerts must stay file-backed; refresh runs on scheduler only."""
     monkeypatch.setenv("PUMP_LADDER_STATE_PATH", str(tmp_path / "pump_ladder.json"))
     from internal.pump import constants
 
@@ -17,5 +18,7 @@ def test_desk_payload_kicks_ladder_with_force_when_stale(tmp_path, monkeypatch):
     with patch("internal.pump.refresh.kick_ladder_fresh") as kick:
         from internal.pump.desk_payload import load_pump_alerts_desk_payload
 
-        load_pump_alerts_desk_payload([])
-    kick.assert_called_once_with(force=True)
+        payload = load_pump_alerts_desk_payload([])
+    kick.assert_not_called()
+    assert isinstance(payload, dict)
+    assert "status" in payload

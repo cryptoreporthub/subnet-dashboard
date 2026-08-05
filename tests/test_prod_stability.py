@@ -79,6 +79,51 @@ def test_scan_all_subnets_fetch_outside_state_lock(tmp_path, monkeypatch):
             assert not t.is_alive()
 
 
+def test_scan_transitions_outside_state_lock(tmp_path, monkeypatch):
+    """Subnet transition loop must not hold _lock — pump-alerts reads stay fast."""
+    state_path = str(tmp_path / "pump_ladder.json")
+    monkeypatch.setenv("PUMP_LADDER_STATE_PATH", state_path)
+    from internal.pump import constants
+
+    monkeypatch.setattr(constants, "STATE_PATH", state_path)
+
+    transition_started = threading.Event()
+    release_transition = threading.Event()
+    original = None
+
+    def slow_transition(state, row, **kwargs):
+        transition_started.set()
+        release_transition.wait(timeout=2.0)
+        return original(state, row, **kwargs)
+
+    signal_rows = [
+        {
+            "netuid": 29,
+            "name": "Coldint",
+            "buy_ratio": 0.6,
+            "volume_intensity": 0.4,
+            "price_change_24h": 1.0,
+            "price_change_1h": 0.5,
+        }
+    ]
+
+    import internal.pump.state as pump_state
+
+    original = pump_state.transition_subnet
+    with patch("internal.pump.state.fetch_all_subnet_signals", return_value=signal_rows):
+        with patch("internal.pump.state.transition_subnet", side_effect=slow_transition):
+            with patch("internal.pump.state.apply_phase_transitions", return_value={}):
+                t = threading.Thread(target=pump_state.scan_all_subnets, daemon=True)
+                t.start()
+                assert transition_started.wait(timeout=2.0)
+                t0 = time.monotonic()
+                load_state()
+                assert time.monotonic() - t0 < 0.25
+                release_transition.set()
+                t.join(timeout=3.0)
+                assert not t.is_alive()
+
+
 def test_message_intel_list_route_does_not_block_health():
     """GET /api/message-intel (the most frequently polled endpoint in the app)
     called engine.list_messages() -> build_telegram_proof_band() directly,
