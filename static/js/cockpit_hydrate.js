@@ -936,6 +936,18 @@
       });
   }
 
+  // ponytail: hide ledger hit % on homepage until sample is worth advertising
+  var LEDGER_HIT_RATE_PUBLIC_MIN = 0.3;
+
+  function ledgerMetricsPublic(block) {
+    if (!block || !block.data_available) return false;
+    var rate = block.hit_rate_30d;
+    if (rate == null || Number(rate) < LEDGER_HIT_RATE_PUBLIC_MIN) return false;
+    var aq = block.attribution_quality || {};
+    if (aq.unknown_pct != null && Number(aq.unknown_pct) > 0.5) return false;
+    return true;
+  }
+
   function syncAccuracyLiftPanel(block) {
     var summary = document.getElementById('accuracy-lift-summary');
     var expertsEl = document.getElementById('accuracy-lift-experts');
@@ -954,13 +966,12 @@
     }
 
     var graded = Number(block.graded_30d);
-    var line = graded + ' graded';
-    if (block.hit_rate_30d != null) {
+    var showMetrics = ledgerMetricsPublic(block);
+    var line = graded + ' graded in measurement ledger (30d)';
+    if (showMetrics && block.hit_rate_30d != null) {
       line += ' · ' + Math.round(Number(block.hit_rate_30d) * 100) + '% direction hit';
-    }
-    var aq = block.attribution_quality || {};
-    if (aq.attributed != null && aq.total > 0) {
-      line += ' · ' + aq.attributed + '/' + aq.total + ' attributed';
+    } else {
+      line += ' · hit rates hidden until sample clears';
     }
     summary.textContent = line;
     summary.classList.remove('desk-empty');
@@ -971,7 +982,11 @@
         return { key: key, row: byExpert[key] };
       })
       .filter(function (entry) {
-        return entry.row && Number(entry.row.graded) > 0;
+        return (
+          entry.key !== 'unknown' &&
+          entry.row &&
+          Number(entry.row.graded) > 0
+        );
       })
       .sort(function (a, b) {
         return Number(b.row.graded) - Number(a.row.graded);
@@ -986,17 +1001,16 @@
         expertsEl.innerHTML = rows
           .map(function (entry) {
             var label = formatExpertLabel(entry.key);
-            var hit =
-              entry.row.hit_rate != null
-                ? Math.round(Number(entry.row.hit_rate) * 100) + '%'
-                : '—';
+            var detail = entry.row.graded + ' graded';
+            if (showMetrics && entry.row.hit_rate != null) {
+              detail +=
+                ' · ' + Math.round(Number(entry.row.hit_rate) * 100) + '%';
+            }
             return (
               '<li><span class="accuracy-lift-panel__expert">' +
               esc(label) +
               '</span> · ' +
-              entry.row.graded +
-              ' graded · ' +
-              hit +
+              detail +
               '</li>'
             );
           })
@@ -1005,8 +1019,9 @@
     }
 
     if (noteEl) {
-      noteEl.textContent =
-        'Full resolved ledger (30d); trust gate uses published LONG picks only.';
+      noteEl.textContent = showMetrics
+        ? 'Full resolved ledger (30d); trust gate uses published LONG picks only.'
+        : 'Internal measurement only — published trust uses LONG picks once sample clears.';
     }
   }
 

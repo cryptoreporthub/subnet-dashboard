@@ -16,8 +16,17 @@ def test_proof_band_has_accuracy_lift_panel():
 def test_hydrate_syncs_accuracy_lift_panel():
     js = Path("static/js/cockpit_hydrate.js").read_text(encoding="utf-8")
     assert "function syncAccuracyLiftPanel" in js
+    assert "function ledgerMetricsPublic" in js
+    assert "LEDGER_HIT_RATE_PUBLIC_MIN" in js
+    assert "hit rates hidden until sample clears" in js
     assert "/api/ops/evidence" in js
     assert "accuracy_lift" in js
+
+
+def test_trust_banner_hides_ledger_hit_rate_on_homepage():
+    js = Path("static/js/trust_banner_ui.js").read_text(encoding="utf-8")
+    assert "ledger_graded_30d" in js
+    assert "ledger_hit_rate_30d" not in js
 
 
 def test_accuracy_lift_panel_styles_present():
