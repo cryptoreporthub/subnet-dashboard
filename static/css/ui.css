@@ -570,27 +570,55 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   border-bottom: none;
 }
 
+/* Cool-grey dual-layer smoke — fills stage behind .council-stage__inner */
 .council-stage__atmosphere {
-  background:
-    url("/static/img/simivision-smoke-bg.svg") center / cover no-repeat,
-    radial-gradient(ellipse 65% 55% at 18% 22%, rgba(107, 116, 128, 0.50) 0%, transparent 60%),
-    radial-gradient(ellipse 55% 50% at 88% 18%, rgba(92, 101, 112, 0.42) 0%, transparent 58%),
-    radial-gradient(ellipse 70% 55% at 50% 100%, rgba(15, 23, 42, 0.75) 0%, transparent 58%),
-    linear-gradient(180deg, #02040a 0%, #060a14 42%, #04060e 100%);
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  isolation: isolate;
+  background: #0a0a0c;
 }
 
+.council-stage__atmosphere::before,
 .council-stage__atmosphere::after {
   content: "";
   position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse at 50% 35%, rgba(4, 6, 14, 0.2) 0%, rgba(4, 6, 14, 0.55) 70%, rgba(4, 6, 14, 0.65) 100%),
-    linear-gradient(rgba(148, 163, 184, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.03) 1px, transparent 1px);
-  background-size: auto, 48px 48px, 48px 48px;
-  mask-image: radial-gradient(ellipse 75% 70% at 50% 30%, #000 20%, transparent 75%);
+  inset: -20%;
   pointer-events: none;
-  opacity: 0.55;
+}
+
+/* Layer 1 — slow drifting cool-grey smoke blobs */
+.council-stage__atmosphere::before {
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 30%, rgba(140, 140, 150, 0.22), transparent 60%),
+    radial-gradient(ellipse 50% 60% at 80% 20%, rgba(90, 90, 100, 0.20), transparent 65%),
+    radial-gradient(ellipse 70% 50% at 50% 80%, rgba(60, 60, 68, 0.28), transparent 60%),
+    radial-gradient(ellipse 40% 40% at 90% 90%, rgba(110, 110, 120, 0.16), transparent 60%);
+  filter: blur(40px);
+}
+
+/* Layer 2 — finer counter-drift + vignette pull to center cards */
+.council-stage__atmosphere::after {
+  z-index: 1;
+  background:
+    radial-gradient(ellipse 45% 45% at 65% 55%, rgba(160, 160, 170, 0.14), transparent 55%),
+    radial-gradient(ellipse 55% 35% at 15% 70%, rgba(80, 80, 90, 0.18), transparent 60%),
+    radial-gradient(ellipse 70% 60% at 50% 45%, transparent 40%, rgba(0, 0, 0, 0.55) 100%);
+  filter: blur(60px);
+}
+
+@keyframes council-smoke-drift-1 {
+  0%   { transform: translate(-3%, -2%) scale(1); }
+  50%  { transform: translate(2%, 3%) scale(1.08); }
+  100% { transform: translate(-2%, 4%) scale(1.03); }
+}
+
+@keyframes council-smoke-drift-2 {
+  0%   { transform: translate(3%, -3%) scale(1.05); }
+  100% { transform: translate(-4%, 2%) scale(1); }
 }
 
 .council-stage__eyebrow {
@@ -5933,17 +5961,22 @@ button.home-cta {
   letter-spacing: 0.12em;
 }
 
-/* Stage atmosphere is static — smoky midnight, no drift */
+/* Stage atmosphere — dual cool-grey drift when motion is ok */
 @media (prefers-reduced-motion: no-preference) {
-  .council-stage__atmosphere {
-    animation: none;
+  .council-stage__atmosphere::before {
+    animation: council-smoke-drift-1 22s ease-in-out infinite alternate;
+  }
+  .council-stage__atmosphere::after {
+    animation: council-smoke-drift-2 16s ease-in-out infinite alternate-reverse;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .council-stage__inner,
   .council-call,
-  .council-stage__atmosphere {
+  .council-stage__atmosphere,
+  .council-stage__atmosphere::before,
+  .council-stage__atmosphere::after {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
@@ -7339,9 +7372,8 @@ body.wrap {
 .tribunal-hero__puff {
   position: absolute;
   border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(63, 201, 255, 0.2) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(140, 140, 150, 0.28) 0%, transparent 70%);
   filter: blur(28px);
-  mix-blend-mode: screen;
   opacity: 0.55;
 }
 
@@ -7358,7 +7390,7 @@ body.wrap {
   height: 120px;
   top: 42%;
   right: -12%;
-  background: radial-gradient(ellipse at center, rgba(157, 140, 255, 0.2) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(90, 90, 100, 0.26) 0%, transparent 70%);
   animation: tribunal-puff-2 24s ease-in-out infinite;
 }
 
@@ -7367,23 +7399,23 @@ body.wrap {
   height: 160px;
   bottom: 6%;
   left: 28%;
-  background: radial-gradient(ellipse at center, rgba(31, 212, 124, 0.16) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(110, 110, 120, 0.22) 0%, transparent 70%);
   animation: tribunal-puff-3 18s ease-in-out infinite;
 }
 
 @keyframes tribunal-puff-1 {
-  0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 0.45; }
-  50% { transform: translate(18px, -12px) rotate(8deg) scale(1.12); opacity: 0.65; }
+  0%, 100% { transform: translate(-2%, -1%) scale(1); opacity: 0.45; }
+  50% { transform: translate(3%, 2%) scale(1.1); opacity: 0.65; }
 }
 
 @keyframes tribunal-puff-2 {
-  0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 0.4; }
-  50% { transform: translate(-14px, 10px) rotate(-6deg) scale(1.08); opacity: 0.58; }
+  0%, 100% { transform: translate(2%, -2%) scale(1.05); opacity: 0.4; }
+  50% { transform: translate(-3%, 2%) scale(1); opacity: 0.58; }
 }
 
 @keyframes tribunal-puff-3 {
   0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.38; }
-  50% { transform: translate(10px, -8px) scale(1.15); opacity: 0.52; }
+  50% { transform: translate(2%, -2%) scale(1.12); opacity: 0.52; }
 }
 
 @keyframes tribunal-glow-drift {
@@ -7599,8 +7631,19 @@ body.wrap {
   border-top-color: var(--j);
   box-shadow:
     0 12px 26px rgba(0, 0, 0, 0.5),
+    0 -1px 24px -8px color-mix(in srgb, var(--j) 35%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.tribunal-hero__judge:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 14px 28px rgba(0, 0, 0, 0.55),
+    0 -1px 32px -6px color-mix(in srgb, var(--j) 50%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .tribunal-hero__judge::before {
@@ -7679,6 +7722,10 @@ body.wrap {
   transform: translateX(-50%);
   align-items: center;
   text-align: center;
+}
+
+.tribunal-hero__judge--oracle:hover {
+  transform: translateX(-50%) translateY(-2px);
 }
 
 .tribunal-hero__judge--echo {
@@ -7996,6 +8043,14 @@ body.wrap {
   }
 }
 
+/* Soften backdrop blur on phone — Safari paint cost */
+@media (max-width: 480px) {
+  .tribunal-hero__judge {
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tribunal-hero__puff,
   .tribunal-hero__card,
@@ -8007,6 +8062,18 @@ body.wrap {
   .tribunal-hero__orbit,
   .tribunal-hero__orbit::before {
     animation: none;
+  }
+
+  .tribunal-hero__judge {
+    transition: none;
+  }
+
+  .tribunal-hero__judge:hover {
+    transform: none;
+  }
+
+  .tribunal-hero__judge--oracle:hover {
+    transform: translateX(-50%);
   }
 }
 

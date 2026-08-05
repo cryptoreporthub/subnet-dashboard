@@ -154,6 +154,19 @@ def test_council_stage_h2_tribunal_gauge_css_in_ui_stylesheet():
     assert '.tribunal-hero[data-verdict-kind="forming"]' in css
 
 
+def test_council_stage_atmosphere_cool_grey_smoke_drift():
+    """Hero stage: dual cool-grey atmosphere drift + monochrome card puffs."""
+    css = _read_ui_css()
+    assert ".council-stage__atmosphere" in css
+    assert "council-smoke-drift-1" in css
+    assert "council-smoke-drift-2" in css
+    assert "rgba(140, 140, 150" in css
+    # Neon screen-blend puffs retired — cool grey only
+    puff_block = css.split(".tribunal-hero__puff {", 1)[1].split(".tribunal-hero__puff--1", 1)[0]
+    assert "mix-blend-mode" not in puff_block
+    assert "rgba(140, 140, 150" in puff_block
+
+
 def test_council_stage_h2_conf_state_hooks_in_ui_css():
     """Tribunal v4 conf-state visuals live in ui.css (legacy k3-orb rules retired)."""
     css = _read_ui_css()
@@ -169,7 +182,8 @@ def test_council_stage_h2_tribunal_reduced_motion_disables_animations():
     reduced = css.split("prefers-reduced-motion", 1)[1]
     assert ".tribunal-hero__puff" in reduced
     assert "animation: none" in reduced
-
+    assert ".council-stage__atmosphere::before" in reduced
+    assert ".council-stage__atmosphere::after" in reduced
 
 def test_cockpit_hydrate_h1_three_state_hooks_present():
     """Client-side patchK3DossierFromPayload three-state logic — no JS test runner in repo."""
