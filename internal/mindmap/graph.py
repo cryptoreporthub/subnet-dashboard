@@ -18,6 +18,7 @@ def _empty_graph() -> Dict[str, Any]:
 
     return {
         "status": "success",
+        "source": "registry_heuristic",
         "nodes": [],
         "edges": [],
         "integration_status": _build_integration_status(),
@@ -539,6 +540,7 @@ def get_mindmap_graph(focus_netuid: Optional[int] = None) -> Dict[str, Any]:
 
     return {
         "status": "success",
+        "source": "registry_heuristic",
         "focus_netuid": focus_netuid,
         "scoped": focus_netuid is not None,
         "nodes": node_list,
