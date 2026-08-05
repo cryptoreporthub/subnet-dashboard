@@ -485,7 +485,7 @@ def test_legacy_no_embedded_k3_drawer_styles():
     """P3-3e: embedded legacy block must not carry live drawer rules."""
     legacy = _read_ui_legacy_css()
     block = legacy.split("/* K3 dossier drawers — migrated to ui.css (P3-3e) */", 1)[1]
-    block = block.split("/* Pump desk (from pump_alert.html) */", 1)[0]
+    block = block.split("/* ---------- driver.js onboarding tour", 1)[0]
     for dead in (
         ".k3-signal {",
         ".k3-judge {",
@@ -497,6 +497,35 @@ def test_legacy_no_embedded_k3_drawer_styles():
         "@keyframes k3-weight-bar-glow",
     ):
         assert dead not in block
+
+
+def test_pump_desk_styles_live_in_ui_css():
+    """P3-3f: flagship pump desk + scan lane CSS lives in ui.css."""
+    css = _read_ui_css()
+    for selector in (
+        "/* ---- Pump desk (migrated from ui-legacy.css, P3-3f) ---- */",
+        ".pump-alert {",
+        ".pump-alert--board",
+        ".pd-proof__pct",
+        "@keyframes pdLivePulse",
+        ".pump-alert__lane",
+        ".pds--polish {",
+        ".pds-atmosphere",
+    ):
+        assert selector in css
+
+
+def test_legacy_no_pump_desk_styles():
+    """P3-3f: pump desk blocks removed from ui-legacy.css."""
+    legacy = _read_ui_legacy_css()
+    for dead in (
+        "/* Pump desk (from pump_alert.html) */",
+        ".pump-alert {",
+        "/* Pump alert scan (from pump_alert_scan.html) */",
+        ".pds--polish {",
+        "@keyframes pdLivePulse",
+    ):
+        assert dead not in legacy
 
 
 def test_council_pick_card_uses_pewter_smoke_background():
