@@ -1325,6 +1325,153 @@ body.wrap {
   }
 }
 
+/* ---- K3 dossier tokens + call-lead utilities (migrated from ui-legacy) ---- */
+:root {
+  --k3-bg: transparent;
+  --k3-surface: rgba(14, 18, 30, 0.62);
+  --k3-line: rgba(148, 163, 184, 0.14);
+  --k3-accent: var(--accent-primary, #1fd47c);
+  --k3-green: var(--accent-primary, #1fd47c);
+  --k3-blue: var(--accent-blue, #3fc9ff);
+  --k3-pink: var(--accent-violet, #9d8cff);
+  --k3-orange: var(--accent-orange, #ff9f3f);
+  --k3-text: #e2e8f0;
+  --k3-muted: var(--text-muted);
+}
+
+.council-stage .k3-dossier {
+  color: var(--k3-text);
+  padding: 0;
+  margin: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.k3-temporal-badge {
+  display: inline-block;
+  margin: 4px 0 8px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: var(--k3-surface);
+  border: 1px solid #1a1d24;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  color: var(--k3-muted);
+  z-index: 1;
+}
+
+.k3-temporal-badge--live {
+  color: var(--k3-green);
+  border-color: rgba(57, 255, 20, 0.35);
+}
+
+.k3-temporal-badge--resolved {
+  color: var(--k3-muted);
+}
+
+.k3-temporal-badge--empty {
+  font-size: 10px;
+  max-width: 280px;
+  line-height: 1.4;
+}
+
+.k3-stale-badge {
+  margin: 0;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.k3-stale-badge--aging {
+  color: var(--k3-blue);
+  border-color: rgba(63, 201, 255, 0.35);
+}
+
+.k3-stale-badge--stale {
+  color: var(--k3-orange);
+  border-color: rgba(255, 159, 63, 0.4);
+}
+
+.k3-evidence-empty {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  color: var(--k3-muted);
+  letter-spacing: 0.02em;
+}
+
+.k3-horizon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--k3-blue);
+  border: 1px solid rgba(63, 201, 255, 0.35);
+  background: rgba(63, 201, 255, 0.08);
+  border-radius: 999px;
+  padding: 3px 8px;
+  min-height: 24px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.k3-evidence-drivers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.k3-evidence-driver {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  border: none;
+  border-bottom: 1px solid rgba(100, 116, 139, 0.35);
+  border-radius: 0;
+  padding: 2px 0;
+  background: transparent;
+}
+
+.k3-call-lead {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  text-align: left;
+  z-index: 2;
+  position: relative;
+}
+
+.k3-resolve-crumb,
+.k3-social-crumb {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 10px;
+  margin: 0 0 8px;
+  letter-spacing: 0.03em;
+}
+
+.k3-resolve-crumb {
+  color: var(--k3-blue);
+}
+
+.k3-social-crumb {
+  color: var(--k3-pink);
+}
+
+.k3-brief-thesis {
+  font-family: var(--font-body, 'Space Grotesk', system-ui, sans-serif);
+  font-size: clamp(0.98rem, 2.8vw, 1.12rem);
+  font-weight: 500;
+  line-height: 1.45;
+  color: #c8d4dc;
+  margin: 0 0 10px;
+  text-align: left;
+}
+
 /* Tribunal hero — dossier confidence-state (hydrate sets data-conf-state on #k3-dossier) */
 @keyframes tribunal-conf-sweep {
   0%, 100% { opacity: 0.35; }

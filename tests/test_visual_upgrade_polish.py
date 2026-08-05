@@ -419,6 +419,20 @@ def test_hero_a_tier_canonical_dossier_writer_documented():
     assert "__cockpitHome.renderDailyPick" in live
 
 
+def test_k3_dossier_utilities_live_in_ui_css():
+    css = _read_ui_css()
+    for selector in (
+        "--k3-green:",
+        ".k3-temporal-badge",
+        ".k3-stale-badge",
+        ".k3-evidence-empty",
+        ".k3-horizon-badge",
+        ".k3-evidence-drivers",
+        ".k3-brief-thesis",
+    ):
+        assert selector in css
+
+
 def test_council_pick_card_uses_pewter_smoke_background():
     css = open("static/css/ui.css", encoding="utf-8").read()
     assert ".council-stage .home-job__call-host .k3-dossier" in css
