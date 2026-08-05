@@ -13,22 +13,9 @@ def _local_pump_alerts_desk(
     *,
     subnet_timeout: float,
 ) -> Dict[str, Any]:
-    try:
-        from internal.pump.refresh import kick_ladder_fresh, ladder_age_minutes, STALE_MINUTES
-
-        age = ladder_age_minutes()
-        if age is None or age > float(STALE_MINUTES):
-            kick_ladder_fresh(force=True)
-    except Exception as exc:
-        logger.debug("pump desk ladder kick skipped: %s", exc)
-
     from internal.learning.pump_alert import build_pump_alerts_desk
 
-    rows = subnets
-    if rows is None:
-        from internal.subnets.feed import load_subnets_for_display
-
-        rows = load_subnets_for_display(timeout=subnet_timeout)
+    rows = subnets if subnets is not None else []
     return build_pump_alerts_desk(rows)
 
 
