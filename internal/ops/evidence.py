@@ -80,6 +80,8 @@ def build_evidence_report() -> Dict[str, Any]:
     elif escalation == "WATCH" or (pump_fresh and pump and pump.get("alert_level") == "warn"):
         status = "warn"
 
+    accuracy_lift = _build_accuracy_lift()
+
     return {
         "status": status,
         "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -105,7 +107,8 @@ def build_evidence_report() -> Dict[str, Any]:
             "captured_at": outcomes.get("captured_at") if outcomes else None,
             "council_health": council if outcomes else None,
         },
-        "accuracy_lift": _build_accuracy_lift(),
+        "accuracy_lift": accuracy_lift,
+        "attribution_quality": accuracy_lift.get("attribution_quality") or {},
     }
 
 
@@ -122,5 +125,6 @@ def _build_accuracy_lift() -> Dict[str, Any]:
             "hit_rate_7d": None,
             "hit_rate_30d": None,
             "by_expert": {},
+            "attribution_quality": {"total": 0, "unknown": 0, "unknown_pct": None, "attributed": 0},
             "note": "honest empty until graded>0",
         }

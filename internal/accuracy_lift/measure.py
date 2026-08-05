@@ -121,12 +121,16 @@ def _confidence(row: Dict[str, Any]) -> Optional[float]:
 
 
 def _expert(row: Dict[str, Any]) -> str:
-    expert = row.get("expert")
-    if isinstance(expert, str) and expert:
+    from internal.council.expert_attribution import attribute_expert_for_row, normalize_expert
+
+    expert = attribute_expert_for_row(row)
+    if expert:
         return expert
     experts = row.get("experts_involved")
     if isinstance(experts, list) and experts:
-        return str(experts[0])
+        normalized = normalize_expert({"expert": experts[0]})
+        if normalized:
+            return normalized
     return "unknown"
 
 
@@ -255,6 +259,21 @@ def _by_expert_map(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
 _EMPTY_NOTE = "honest empty until graded>0"
 
 
+def build_attribution_quality(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Rolling attribution coverage for ops evidence."""
+    total = len(rows)
+    if total <= 0:
+        return {"total": 0, "unknown": 0, "unknown_pct": None, "attributed": 0}
+    unknown = sum(1 for row in rows if _expert(row) == "unknown")
+    attributed = total - unknown
+    return {
+        "total": total,
+        "unknown": unknown,
+        "unknown_pct": round(unknown / total, 4),
+        "attributed": attributed,
+    }
+
+
 def build_accuracy_lift_snapshot(rows: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Rolling 7d/30d read-only snapshot for ops evidence."""
     if rows is None:
@@ -280,9 +299,11 @@ def build_accuracy_lift_snapshot(rows: Optional[List[Dict[str, Any]]] = None) ->
             "hit_rate_7d": None,
             "hit_rate_30d": None,
             "by_expert": {},
+            "attribution_quality": build_attribution_quality([]),
             "note": _EMPTY_NOTE,
         }
 
+    window_rows = w30 if graded_30d > 0 else w7
     return {
         "data_available": True,
         "graded_7d": graded_7d,
@@ -290,6 +311,7 @@ def build_accuracy_lift_snapshot(rows: Optional[List[Dict[str, Any]]] = None) ->
         "hit_rate_7d": stats_7d["accuracy"],
         "hit_rate_30d": stats_30d["accuracy"],
         "by_expert": _by_expert_map(w30) if graded_30d > 0 else _by_expert_map(w7),
+        "attribution_quality": build_attribution_quality(window_rows),
         "note": None,
     }
 

@@ -148,6 +148,7 @@ CONTRACT = [
     ),
     ("POST", "/api/learning/trigger", None),
     ("POST", "/api/learning/rebalance-weights", None),
+    ("POST", "/api/learning/backfill-expert-attribution", None),
     ("POST", "/api/predictions/resolver/run", None),
     ("POST", "/api/learning/pump-lead/recover", None),
     ("GET", "/api/learning/pump-lead/train-status", None),

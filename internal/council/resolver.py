@@ -153,33 +153,24 @@ def classify_outcome(
 
 
 def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
-    expert = prediction.get("expert") or prediction.get("signal_source")
-    if not isinstance(expert, str):
-        return None
-    expert = expert.lower().strip()
-    if not expert or expert in {"unclassified", "unknown", "neutral"}:
-        return None
+    from internal.council.expert_attribution import normalize_expert
 
-    if expert in {"quant", "hype", "dark_horse", "technical"}:
-        return expert
+    return normalize_expert(prediction)
 
-    if expert in {"alpha"}:
-        return "quant"
-    if expert in {"beta"}:
-        return "hype"
-    if expert in {"gamma"}:
-        return "dark_horse"
 
-    if "contrarian" in expert or "dark" in expert or "horse" in expert or "onchain" in expert or "on-chain" in expert or "flow" in expert:
-        return "dark_horse"
-    if "whale" in expert or "momentum" in expert or "hype" in expert:
-        return "hype"
-    if "rsi" in expert or "macd" in expert or "technical" in expert:
-        return "technical"
-    if "quant" in expert or "fundamental" in expert or "yield" in expert:
-        return "quant"
+def _stamp_and_nudge_expert(prediction: Dict[str, Any], *, correct: bool) -> Tuple[Optional[str], Optional[str]]:
+    """Stamp rich attribution on the row; nudge only pre-stamp normalize (Grok LOCK)."""
+    from internal.council.expert_attribution import resolve_expert_attribution
 
-    return None
+    nudge_expert = _normalize_expert(prediction)
+    stamped_expert, expert_source = resolve_expert_attribution(prediction)
+    if stamped_expert:
+        prediction["expert"] = stamped_expert
+        if expert_source != "existing":
+            prediction["expert_attribution_source"] = expert_source
+    if nudge_expert and not _skip_council_learning(prediction):
+        _nudge_weights(bool(correct), nudge_expert)
+    return stamped_expert, nudge_expert
 
 
 def _nudge_weights(correct: bool, expert: Optional[str]) -> None:
@@ -552,10 +543,7 @@ def resolve_prediction(
         actual_pct = compute_actual_pct(ref, current_price)
         correct, outcome = grade_prediction(prediction, actual_pct)
         resolved_at = now.isoformat().replace("+00:00", "Z")
-        expert = _normalize_expert(prediction)
-        if expert and not _skip_council_learning(prediction):
-            prediction["expert"] = expert
-            _nudge_weights(bool(correct), expert)
+        expert, _nudge_expert = _stamp_and_nudge_expert(prediction, correct=bool(correct))
         _ensure_subnet_snapshot(prediction)
         # Impact dial before finalize so prediction_resolved trail includes after value.
         if not _skip_council_learning(prediction):
@@ -639,10 +627,7 @@ def resolve_prediction_at_horizon(
     actual_pct = compute_actual_pct(ref, price)
     correct, outcome = grade_prediction(prediction, actual_pct)
     resolved_at = resolve_at.isoformat().replace("+00:00", "Z")
-    expert = _normalize_expert(prediction)
-    if expert and not _skip_council_learning(prediction):
-        prediction["expert"] = expert
-        _nudge_weights(bool(correct), expert)
+    expert, _nudge_expert = _stamp_and_nudge_expert(prediction, correct=bool(correct))
 
     _ensure_subnet_snapshot(prediction, subnet_row=subnet_row)
     # Impact dial before finalize so prediction_resolved trail includes after value.
