@@ -387,9 +387,12 @@ def test_hero_a_tier_stale_badge_markup_and_hydrate_hook():
 
 def test_tribunal_hero_mobile_typography_at_390px():
     css = _read_ui_css()
-    mobile = css.split("@media (max-width: 390px)", 1)[1].split("@media", 1)[0]
-    assert ".tribunal-hero__stage" in mobile
-    assert ".tribunal-hero__pct" in mobile
+    # Any 390px block may hold the tribunal rules (P3-3i added an earlier one);
+    # assert the __stage/__pct pair still shares one block, wherever it sits.
+    blocks = [b.split("@media", 1)[0] for b in css.split("@media (max-width: 390px)")[1:]]
+    assert any(
+        ".tribunal-hero__stage" in b and ".tribunal-hero__pct" in b for b in blocks
+    )
 
 
 def test_council_stage_touch_targets_at_390px():
@@ -595,3 +598,51 @@ def test_council_pick_card_uses_pewter_smoke_background():
     css = open("static/css/ui.css", encoding="utf-8").read()
     assert ".council-stage .home-job__call-host .k3-dossier" in css
     assert "var(--card-smoke)" in css.split(".council-stage .home-job__call-host .k3-dossier", 1)[1][:400]
+
+
+def test_home_drawers_and_section21_live_in_ui_css():
+    """P3-3i: home drawers + §21 modules + living focus/proof band in ui.css."""
+    css = _read_ui_css()
+    for selector in (
+        "/* ---- Home drawers + §21 modules (migrated from ui-legacy.css, P3-3i) ---- */",
+        ".pro-drawer {",
+        ".market-drawer {",
+        ".council-primary {",
+        ".council-bench {",
+        ".driver-card {",
+        ".trust-banner {",
+        ".story-path {",
+        ".chat-presets {",
+        ".time-capsule-modal {",
+        ".graded-call-card {",
+        ".brain-letter {",
+        ".living-focus {",
+        ".proof-band {",
+        ".inv-table {",
+    ):
+        assert selector in css
+
+
+def test_legacy_no_home_drawers_or_section21_styles():
+    """P3-3i: home drawers + §21 modules removed from ui-legacy.css."""
+    legacy = _read_ui_legacy_css()
+    for dead in (
+        "Pro drawer (council bench demoted)",
+        ".pro-drawer {",
+        "Market drawer (demoted landfill)",
+        ".market-drawer {",
+        ".council-primary {",
+        ".council-bench {",
+        "§21 — market drivers UI",
+        ".driver-card {",
+        ".story-path {",
+        ".time-capsule-modal {",
+        ".graded-call-card {",
+        "§27-3 — Living Focus",
+        ".living-focus {",
+        "B0-c — Proof band",
+        ".proof-band {",
+        "§27-3b — investigation tables",
+        ".inv-table {",
+    ):
+        assert dead not in legacy
