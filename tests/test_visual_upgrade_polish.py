@@ -646,3 +646,38 @@ def test_legacy_no_home_drawers_or_section21_styles():
         ".inv-table {",
     ):
         assert dead not in legacy
+
+
+def test_council_first_composition_live_in_ui_css():
+    """P3-3j: council-first home composition CSS in ui.css."""
+    css = _read_ui_css()
+    for selector in (
+        "/* ---- Council-first composition (migrated from ui-legacy.css, P3-3j) ---- */",
+        ".council-first-theme {",
+        ".app-shell.council-first",
+        ".wrap-pad",
+        "@keyframes stage-rise",
+        ".home-job__call-host",
+        ".story-strip",
+        ".paper-portfolio",
+        ".weekly-letter",
+        ".subnet-report",
+    ):
+        assert selector in css
+
+
+def test_legacy_no_council_first_composition_styles():
+    """P3-3j: council-first block removed from ui-legacy.css."""
+    legacy = _read_ui_legacy_css()
+    for dead in (
+        "legacy council_first",
+        "--stage-wash:",
+        "@keyframes stage-rise",
+        "U1 single-job home",
+        "U2 story strip",
+        "F3 paper portfolio",
+        "F4 weekly letter",
+        "O3 subnet report",
+        "Full-bleed council stage (first viewport)",
+    ):
+        assert dead not in legacy
