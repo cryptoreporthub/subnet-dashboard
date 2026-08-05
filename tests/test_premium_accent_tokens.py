@@ -1,4 +1,4 @@
-"""Guard: accent tokens live in base.css; badge stacks deduped in ui-legacy.css."""
+"""Guard: accent tokens live in base.css; badge stacks deduped in ui.css."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 BASE = Path("static/css/base.css")
-LEGACY = Path("static/css/ui-legacy.css")
+UI = Path("static/css/ui.css")
 FORBIDDEN = (
     "#ff2bd6",
     "#ff69b4",
@@ -27,7 +27,7 @@ def test_base_css_has_no_hot_pink_magenta_literals():
 
 
 def test_premium_badge_tag_selectors_deduped():
-    text = LEGACY.read_text(encoding="utf-8")
+    text = UI.read_text(encoding="utf-8")
     for tag in ("buy", "hold", "sell", "watch"):
         assert len(re.findall(rf"\.badge-{tag},\s*\.tag-{tag}", text)) == 1
         assert not re.search(rf"^\.tag-{tag}\s*\{{", text, re.MULTILINE)

@@ -354,11 +354,11 @@ def test_mindmap_is_grouped_trail_not_node_link_graph():
 
 
 def test_mobile_soulmap_stays_two_by_two_not_stacked():
-    """ui-legacy.css must keep soul orbs 2×2 at ≤768, not force 1-col grids."""
-    legacy = open("static/css/ui-legacy.css", encoding="utf-8").read()
-    assert "soulmap-constellation" in legacy
-    assert "repeat(2, minmax(0, 1fr))" in legacy
-    assert "min(var(--orb-px" in legacy
+    """ui.css must keep soul orbs 2×2 at ≤768, not force 1-col grids (P3-3l)."""
+    css = _read_ui_css()
+    assert "soulmap-constellation" in css
+    assert "repeat(2, minmax(0, 1fr))" in css
+    assert "min(var(--orb-px" in css
 
 
 def test_mobile_telegram_touch_targets_and_week_top():
@@ -710,5 +710,38 @@ def test_legacy_no_weighing_room_styles():
         "@keyframes wr-near-pulse",
         ".wr-band__label--near",
         ".caution-cells {",
+    ):
+        assert dead not in legacy
+
+
+def test_premium_cockpit_live_in_ui_css():
+    """P3-3l: premium cockpit / DEGEN protocol CSS in ui.css."""
+    css = _read_ui_css()
+    for selector in (
+        "/* ---- Premium cockpit / DEGEN protocol (migrated from ui-legacy.css, P3-3l) ---- */",
+        "DEGEN PROTOCOL — green / blue / pink / orange neon cockpit",
+        "--cockpit-green:",
+        "@keyframes degen-shimmer",
+        ".soulmap-constellation",
+        "@keyframes soulmap-drift",
+        "/* ---------- DEGEN PROTOCOL neon polish ---------- */",
+        "#section-daily-pick .hero-card::after",
+        "#section-kpi .kpi-strip",
+    ):
+        assert selector in css
+
+
+def test_legacy_no_premium_cockpit_styles():
+    """P3-3l: premium cockpit block removed from ui-legacy.css."""
+    legacy = _read_ui_legacy_css()
+    for dead in (
+        "legacy premium",
+        "DEGEN PROTOCOL — green / blue / pink / orange neon cockpit",
+        "--cockpit-green:",
+        "@keyframes degen-shimmer",
+        ".soulmap-constellation { align-items: end; }",
+        "@keyframes soulmap-drift",
+        "/* ---------- DEGEN PROTOCOL neon polish ---------- */",
+        "#section-daily-pick .hero-card::after",
     ):
         assert dead not in legacy
