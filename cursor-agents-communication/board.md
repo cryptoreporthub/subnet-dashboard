@@ -1,7 +1,7 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-08-05T18:30:00Z  
-**main:** `bd98b65` · **Phase 3 CSS purge:** PRs #844–#847 open (handoff bc-019fcbd1 → 6f2b)  
+**Last updated:** 2026-08-05T19:05:00Z  
+**main:** `7b07b64` (#844–#847 merged) · **Phase 3 CSS purge:** **DONE** — `ui-legacy.css` stub; `ui.css` sole spine  
 **Active plan:** `ditto-opus-transition-handoff-2026-08-03.md` (#789) · H2 soak **2026-08-04**  
 **Models:** `model-guide.md` — Grok LOCK/review; Composer implements; Sonnet low reviews  
 **Plans:** `ditto-opus-transition-handoff-2026-08-03.md` · `post-hero-finish-plan.md` · `completion-runbook.md` · `accuracy-lift-lock.md`
@@ -24,10 +24,10 @@
 | Opus tribunal hero | **PARKED** PR #788 — preview seen; no live wire until explicit ask |
 | Mindmap summary / learning health | **PASS** — summary ~0.5s file-only; health cache+peer; Fly green |
 | Agent babysit + g0 (2026-08-02) | **PASS** — re-run after major merges |
-| **Phase 3 CSS purge (P3-3m–4)** | **IN PR** #844–#845 — ui-legacy retired; `ui.css` sole spine |
-| **Pump desk hardening (Track B)** | **IN PR** #846 — lock scope + fast GET |
-| **Mindmap honesty (Track C3)** | **IN PR** #847 — `source: registry_heuristic` on graph |
-| Human 390px glance (AC7) | **PENDING** — post #845 deploy; see `hero-mindmap-390-signoff-2026-08-02.md` |
+| **Phase 3 CSS purge (P3-3m–4)** | **MERGED** #844–#845 — ui-legacy retired; `ui.css` sole spine |
+| **Pump desk hardening (Track B)** | **MERGED** #846 — lock scope + fast GET |
+| **Mindmap honesty (Track C3)** | **MERGED** #847 — `source: registry_heuristic` on graph |
+| Human 390px glance (AC7) | **PENDING** — prod deployed; g0 blocked on instant bailout shell (separate) |
 | Accuracy PREP (read-only evidence) | **MERGED** #740 — experiments **GATED** Aug 4 H2 soak GO |
 | Stale drafts (#686/#675/#692/#650) | **Do not blind-merge** — superseded / already on main |
 
