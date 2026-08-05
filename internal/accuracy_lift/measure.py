@@ -8,6 +8,13 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
+from internal.accuracy_lift.populations import (
+    is_council_trust_row,
+    is_gradable_row,
+    is_published_council_row,
+    pick_source_bucket,
+    population_of,
+)
 from internal.council.grading import direction_correct
 
 NOISE_MAGNITUDE_PCT = 1.0
@@ -203,6 +210,7 @@ def horizon_compare(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 def build_summary(rows: List[Dict[str, Any]], archive_path: str) -> Dict[str, Any]:
     overall = accuracy_stats(rows)
+    published_rows = [row for row in rows if is_published_council_row(row)]
     horizon = horizon_compare(rows)
     noise = magnitude_noise_share(rows)
     experts = grouped_accuracy(rows, _expert)
@@ -211,12 +219,13 @@ def build_summary(rows: List[Dict[str, Any]], archive_path: str) -> Dict[str, An
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "archive": archive_path,
         "overall": overall,
+        "published_only": accuracy_stats(published_rows),
         "horizon_compare": horizon,
         "noise_misses": noise,
         "experts": experts,
         "net_negative_experts": net_negative,
         "confidence_deciles": confidence_deciles(rows),
-        "pick_source": grouped_accuracy(rows, lambda r: r.get("pick_source") or r.get("signal_source") or "unknown"),
+        "pick_source": grouped_accuracy(rows, population_of),
         "phase_at_prediction": grouped_accuracy(rows, lambda r: r.get("phase_at_prediction") or "unknown"),
     }
 
@@ -257,6 +266,42 @@ def _by_expert_map(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
 
 
 _EMPTY_NOTE = "honest empty until graded>0"
+_MIXED_NOTE = (
+    "mixed ledger — includes HOLD/near-miss shadows + pump-desk claims; see published_only"
+)
+
+
+def _horizon_label(row: Dict[str, Any]) -> str:
+    horizon_type = row.get("horizon_type")
+    if horizon_type:
+        return str(horizon_type)
+    return f"{int(row.get('horizon_hours') or 0)}h"
+
+
+def _graded_window_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [row for row in rows if row_hit(row) is not None]
+
+
+def _published_block(
+    w7_all: List[Dict[str, Any]],
+    w30_all: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    pub_w7 = [row for row in w7_all if is_published_council_row(row)]
+    pub_w30 = [row for row in w30_all if is_published_council_row(row)]
+    s7 = accuracy_stats(pub_w7)
+    s30 = accuracy_stats(pub_w30)
+    graded_7d = int(s7["n"])
+    graded_30d = int(s30["n"])
+    available = graded_7d > 0 or graded_30d > 0
+    return {
+        "data_available": available,
+        "graded_7d": graded_7d,
+        "graded_30d": graded_30d,
+        "hit_rate_7d": s7["accuracy"],
+        "hit_rate_30d": s30["accuracy"],
+        "by_expert": _by_expert_map(pub_w30) if graded_30d > 0 else _by_expert_map(pub_w7),
+        "note": None if available else _EMPTY_NOTE,
+    }
 
 
 def build_attribution_quality(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -274,6 +319,79 @@ def build_attribution_quality(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def _window_actual_days(rows: List[Dict[str, Any]]) -> Optional[float]:
+    timestamps = [ts for row in rows if (ts := row_timestamp(row)) is not None]
+    if len(timestamps) < 2:
+        return None
+    span_days = (max(timestamps) - min(timestamps)).total_seconds() / 86400.0
+    return round(span_days, 2)
+
+
+def _population_rates(
+    w7: List[Dict[str, Any]],
+    w30: List[Dict[str, Any]],
+    *,
+    filter_fn: Callable[[Dict[str, Any]], bool],
+) -> Dict[str, Any]:
+    f7 = [row for row in w7 if filter_fn(row)]
+    f30 = [row for row in w30 if filter_fn(row)]
+    s7 = accuracy_stats(f7)
+    s30 = accuracy_stats(f30)
+    return {
+        "graded_7d": int(s7["n"]),
+        "hit_rate_7d": s7["accuracy"],
+        "graded_30d": int(s30["n"]),
+        "hit_rate_30d": s30["accuracy"],
+    }
+
+
+def _by_pick_source_map(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        if not is_gradable_row(row):
+            continue
+        groups[pick_source_bucket(row)].append(row)
+    out: Dict[str, Dict[str, Any]] = {}
+    for label in sorted(groups):
+        stats = accuracy_stats(groups[label])
+        out[label] = {
+            "n": stats["n"],
+            "correct": stats["correct"],
+            "accuracy": stats["accuracy"],
+        }
+    return out
+
+
+def _empty_accuracy_lift_snapshot() -> Dict[str, Any]:
+    empty_rates = {
+        "graded_7d": 0,
+        "hit_rate_7d": None,
+        "graded_30d": 0,
+        "hit_rate_30d": None,
+    }
+    empty_attr = build_attribution_quality([])
+    empty_published = _published_block([], [])
+    return {
+        "data_available": False,
+        "population": "mixed_all_resolved",
+        "graded_7d": 0,
+        "graded_30d": 0,
+        "hit_rate_7d": None,
+        "hit_rate_30d": None,
+        "by_expert": {},
+        "attribution_quality": empty_attr,
+        "published_only": empty_published,
+        "council_trust": dict(empty_rates),
+        "full_ledger": dict(empty_rates),
+        "by_pick_source": {},
+        "by_pick_source_30d": [],
+        "by_horizon_30d": [],
+        "window_actual_days": {"w7": None, "w30": None},
+        "small_move_miss_share": {"misses": 0, "small_move_misses": 0, "share": None},
+        "note": _EMPTY_NOTE,
+    }
+
+
 def build_accuracy_lift_snapshot(rows: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Rolling 7d/30d read-only snapshot for ops evidence."""
     if rows is None:
@@ -284,34 +402,49 @@ def build_accuracy_lift_snapshot(rows: Optional[List[Dict[str, Any]]] = None) ->
         except Exception:
             rows = []
 
-    w7 = filter_window(rows, 7)
-    w30 = filter_window(rows, 30)
-    stats_7d = accuracy_stats(w7)
-    stats_30d = accuracy_stats(w30)
-    graded_7d = int(stats_7d["n"])
-    graded_30d = int(stats_30d["n"])
+    w7_all = filter_window(rows, 7)
+    w30_all = filter_window(rows, 30)
+    mixed_7d = accuracy_stats(w7_all)
+    mixed_30d = accuracy_stats(w30_all)
+    graded_7d = int(mixed_7d["n"])
+    graded_30d = int(mixed_30d["n"])
+    published_only = _published_block(w7_all, w30_all)
+    council_trust = _population_rates(w7_all, w30_all, filter_fn=is_council_trust_row)
+    full_ledger = {
+        "graded_7d": graded_7d,
+        "hit_rate_7d": mixed_7d["accuracy"],
+        "graded_30d": graded_30d,
+        "hit_rate_30d": mixed_30d["accuracy"],
+    }
 
     if graded_7d == 0 and graded_30d == 0:
-        return {
-            "data_available": False,
-            "graded_7d": 0,
-            "graded_30d": 0,
-            "hit_rate_7d": None,
-            "hit_rate_30d": None,
-            "by_expert": {},
-            "attribution_quality": build_attribution_quality([]),
-            "note": _EMPTY_NOTE,
-        }
+        return _empty_accuracy_lift_snapshot()
 
-    window_rows = w30 if graded_30d > 0 else w7
+    council_w7 = [row for row in w7_all if is_council_trust_row(row)]
+    council_w30 = [row for row in w30_all if is_council_trust_row(row)]
+    window_rows = w30_all if graded_30d > 0 else w7_all
+    graded_w30 = _graded_window_rows(w30_all)
+
     return {
         "data_available": True,
+        "population": "mixed_all_resolved",
         "graded_7d": graded_7d,
         "graded_30d": graded_30d,
-        "hit_rate_7d": stats_7d["accuracy"],
-        "hit_rate_30d": stats_30d["accuracy"],
-        "by_expert": _by_expert_map(w30) if graded_30d > 0 else _by_expert_map(w7),
+        "hit_rate_7d": mixed_7d["accuracy"],
+        "hit_rate_30d": mixed_30d["accuracy"],
+        "by_expert": _by_expert_map(w30_all) if graded_30d > 0 else _by_expert_map(w7_all),
         "attribution_quality": build_attribution_quality(window_rows),
-        "note": None,
+        "published_only": published_only,
+        "council_trust": council_trust,
+        "full_ledger": full_ledger,
+        "by_pick_source": _by_pick_source_map(w30_all),
+        "by_pick_source_30d": grouped_accuracy(graded_w30, population_of),
+        "by_horizon_30d": grouped_accuracy(graded_w30, _horizon_label),
+        "window_actual_days": {
+            "w7": _window_actual_days(council_w7),
+            "w30": _window_actual_days(council_w30),
+        },
+        "small_move_miss_share": magnitude_noise_share(council_w30),
+        "note": _MIXED_NOTE,
     }
 

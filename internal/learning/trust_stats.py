@@ -71,21 +71,38 @@ def build_trust_banner(
 
     ledger_graded_30d = None
     ledger_hit_rate_30d = None
+    ledger_published_graded_30d = None
+    ledger_published_hit_rate_30d = None
     ledger_note = None
     if isinstance(ledger_context, dict) and ledger_context.get("data_available"):
+        full_ledger = ledger_context.get("full_ledger") or {}
+        published = ledger_context.get("published_only") or {}
         try:
-            ledger_graded_30d = int(ledger_context.get("graded_30d") or 0)
+            ledger_graded_30d = int(full_ledger.get("graded_30d") or ledger_context.get("graded_30d") or 0)
         except (TypeError, ValueError):
             ledger_graded_30d = None
-        raw_rate = ledger_context.get("hit_rate_30d")
+        raw_rate = full_ledger.get("hit_rate_30d")
+        if raw_rate is None:
+            raw_rate = ledger_context.get("hit_rate_30d")
         if raw_rate is not None:
             try:
                 ledger_hit_rate_30d = round(float(raw_rate), 4)
             except (TypeError, ValueError):
                 ledger_hit_rate_30d = None
+        if published.get("data_available"):
+            try:
+                ledger_published_graded_30d = int(published.get("graded_30d") or 0)
+            except (TypeError, ValueError):
+                ledger_published_graded_30d = None
+            pub_rate = published.get("hit_rate_30d")
+            if pub_rate is not None:
+                try:
+                    ledger_published_hit_rate_30d = round(float(pub_rate), 4)
+                except (TypeError, ValueError):
+                    ledger_published_hit_rate_30d = None
         ledger_note = (
-            "Full resolved ledger (30d); trust gate uses published LONG picks only "
-            "(excludes HOLD shadows and pump-desk claims)."
+            "Full resolved ledger (30d); panel shows published-only when available. "
+            "Trust gate uses published LONG picks only (excludes HOLD shadows and pump-desk claims)."
         )
 
     return {
@@ -119,5 +136,7 @@ def build_trust_banner(
         "streak_whisper": streak_whisper,
         "ledger_graded_30d": ledger_graded_30d,
         "ledger_hit_rate_30d": ledger_hit_rate_30d,
+        "ledger_published_graded_30d": ledger_published_graded_30d,
+        "ledger_published_hit_rate_30d": ledger_published_hit_rate_30d,
         "ledger_note": ledger_note,
     }

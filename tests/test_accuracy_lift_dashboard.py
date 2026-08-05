@@ -18,6 +18,8 @@ def test_hydrate_syncs_accuracy_lift_panel():
     assert "function syncAccuracyLiftPanel" in js
     assert "function ledgerMetricsPublic" in js
     assert "LEDGER_HIT_RATE_PUBLIC_MIN" in js
+    assert "published_only" in js
+    assert "published council graded" in js
     assert "hit rates hidden until sample clears" in js
     assert "/api/ops/evidence" in js
     assert "accuracy_lift" in js

@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 from internal.council.deduplication import dedupe_predictions
 from internal.council.grading import (
+    classify_outcome_direction_only,
     compute_actual_pct,
     grade_prediction,
     is_pump_desk_claim,
