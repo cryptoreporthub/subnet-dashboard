@@ -3532,6 +3532,12 @@ header.top {
     grid-template-columns: 1fr !important;
     flex-direction: column !important;
   }
+  /* Soul map constellation stays 2×2 on phones — P3-3l owns ≤640; this
+     overrides the blanket 1fr council-grid rule at ≤768. */
+  #section-council .council-grid.soulmap-constellation {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
   /* Scale down large headings and labels. */
   h1 { font-size: clamp(20px, 6vw, 28px) !important; }
   h2 { font-size: clamp(18px, 5vw, 24px) !important; }
