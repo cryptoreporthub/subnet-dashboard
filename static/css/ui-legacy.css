@@ -6745,7 +6745,6 @@ button.home-cta {
 .letters-drawer { margin: 16px 0 24px; }
 .letters-drawer > summary { cursor: pointer; font-weight: 600; padding: 10px 0; }
 .letters-drawer .weekly-letter { margin-top: 12px; }
-.k3-weight-nudge { font-size: 11px; color: #8fd4ff; margin: 8px 0 0; }
 .hour-watch-now {
   display: block;
   font-family: 'JetBrains Mono', monospace;
@@ -6767,7 +6766,6 @@ button.home-cta {
   color: #fbbf24;
   margin: 4px 0 0;
 }
-.k3-brief-vs-hold { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); margin: 0 0 6px; text-align: center; }
 
 .home-stage-why-not { margin: 12px 0; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,179,71,0.35); background: rgba(20,12,0,0.25); }
 .home-stage-why-not__title { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: #ffb347; }
@@ -7062,9 +7060,6 @@ button.home-cta {
   font-size: 13px;
   color: var(--stage-muted, var(--text-muted));
 }
-.council-stage[data-shell-warming="1"] .k3-empty {
-  display: none;
-}
 
 .brain-letter__title.weekly-letter__title {
   font-size: 16px !important;
@@ -7180,37 +7175,6 @@ button.home-cta {
 .k3-layer {
   border-top-color: var(--sr-hairline, rgba(148, 163, 184, 0.12));
 }
-.k3-layer-header {
-  background: rgba(14, 18, 30, 0.42);
-  min-height: 52px;
-  transition: background 0.15s ease;
-}
-.k3-layer-header:hover {
-  background: rgba(20, 26, 42, 0.55);
-}
-.k3-layer-header:active {
-  background: rgba(24, 32, 50, 0.62);
-}
-.k3-layer-body {
-  background: rgba(6, 10, 18, 0.24);
-  border-top: 1px solid rgba(148, 163, 184, 0.08);
-}
-.k3-layer.open .k3-layer-header {
-  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
-}
-.k3-dossier .k3-considered-card,
-.k3-dossier .k3-lifecycle-step,
-.k3-dossier .k3-track-window,
-.k3-dossier .k3-outcome-status,
-.k3-dossier .k3-temporal-badge,
-.k3-dossier .k3-temporal {
-  background: rgba(14, 18, 30, 0.48);
-  border-color: rgba(148, 163, 184, 0.14);
-}
-.k3-dossier .k3-considered-card:active {
-  background: rgba(20, 26, 42, 0.62);
-}
-
 
 @media (prefers-reduced-motion: reduce) {
   .logo-mark,
@@ -8428,80 +8392,7 @@ header.top {
   }
 }
 
-/* K3 dossier drawers — orb/claim shell retired (tribunal v4 in ui.css) */
-      .k3-layer { border-top: 1px solid #1a1d24; margin-top: 0; }
-      .k3-layer-header { width: 100%; min-height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: var(--k3-surface); border: none; color: var(--k3-text); font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; -webkit-tap-highlight-color: transparent; letter-spacing: 0.08em; text-transform: uppercase; }
-      .k3-layer-header:active { background: rgba(22, 28, 44, 0.72); }
-      .k3-layer-icon { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--k3-muted); transition: transform 0.2s ease; }
-      .k3-layer.open .k3-layer-icon { transform: rotate(90deg); }
-      .k3-layer-body { display: none; padding: 16px; }
-      .k3-layer.open .k3-layer-body { display: block; }
-      .k3-layer-title { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 12px; }
-      .k3-signal { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #1a1d24; }
-      .k3-signal:last-child { border-bottom: none; }
-      .k3-signal-name { font-size: 14px; font-weight: 500; }
-      .k3-signal-value { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--k3-accent); }
-      .k3-judge { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #1a1d24; }
-      .k3-judge:last-child { border-bottom: none; }
-      .k3-judge-name { font-size: 14px; font-weight: 500; }
-      .k3-judge-weight { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--k3-blue); }
-      .k3-judge-delta { font-family: 'JetBrains Mono', monospace; font-size: 10px; margin-left: 8px; }
-      .k3-judge-delta.up { color: var(--k3-green); }
-      .k3-judge-delta.down { color: var(--k3-pink); }
-      .k3-judge-delta.flat { color: var(--k3-muted); }
-      .k3-outcome-status { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--k3-surface); border-radius: 6px; margin-bottom: 12px; }
-      .k3-outcome-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; }
-      .k3-outcome-icon.pending { background: var(--k3-blue); color: #000; }
-      .k3-outcome-icon.resolved { background: var(--k3-green); color: #000; }
-      .k3-outcome-text { font-size: 13px; line-height: 1.4; }
-      .k3-learning-stats { display: flex; gap: 24px; justify-content: center; margin-bottom: 12px; }
-      .k3-learning-stat { text-align: center; }
-      .k3-learning-value { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700; color: var(--k3-accent); }
-      .k3-learning-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); text-transform: uppercase; }
-      
-      .k3-weight-nudge-viz { margin-top: 12px; }
-      .k3-weight-nudge-viz__title { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
-      .k3-weight-nudge-viz__empty { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--k3-muted); margin: 0; line-height: 1.45; }
-      .k3-weight-bar-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
-      .k3-weight-bar-name { font-size: 12px; color: var(--k3-text); min-width: 78px; flex-shrink: 0; }
-      .k3-weight-bar-track { position: relative; flex: 1; height: 8px; border-radius: 4px; background: rgba(148, 163, 184, 0.12); overflow: visible; }
-      .k3-weight-bar-track::after { content: ''; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: rgba(148, 163, 184, 0.3); }
-      .k3-weight-bar-fill { position: absolute; top: 0; bottom: 0; border-radius: 4px; transition: width 0.7s cubic-bezier(0.2, 0.8, 0.2, 1); animation: k3-weight-bar-glow 2.2s ease-in-out infinite; }
-      .k3-weight-bar-fill--up { left: 50%; background: var(--k3-green); box-shadow: 0 0 8px rgba(57, 255, 20, 0.55); }
-      .k3-weight-bar-fill--down { right: 50%; background: var(--k3-pink); box-shadow: 0 0 8px color-mix(in srgb, var(--k3-pink) 50%, transparent); }
-      @keyframes k3-weight-bar-glow {
-        0%, 100% { filter: brightness(1); }
-        50% { filter: brightness(1.25); }
-      }
-      .k3-weight-bar-delta { font-family: 'JetBrains Mono', monospace; font-size: 11px; min-width: 44px; text-align: right; flex-shrink: 0; }
-      .k3-weight-bar-delta.up { color: var(--k3-green); }
-      .k3-weight-bar-delta.down { color: var(--k3-pink); }
-      @media (prefers-reduced-motion: reduce) {
-        .k3-weight-bar-fill { animation: none !important; }
-      }
-      .k3-empty { text-align: center; padding: 32px 16px; color: var(--k3-muted); max-width: 32em; margin: 0 auto; }
-      .k3-empty-icon { font-size: 24px; margin-bottom: 8px; opacity: 0.5; }
-      .k3-empty-text { font-size: 13px; line-height: 1.5; }
-      .k3-call-lead { flex: 1; min-width: 0; margin: 0; text-align: left; max-width: none; width: 100%; }
-      .k3-brief-thesis, .k3-brief-vs, .k3-brief-vs-hold, .k3-call-headline { text-align: left; }
-      .k3-brief-trigger { text-align: left; font-size: 10px; padding: 6px 8px; }
-      .k3-claim-identity { text-align: left; }
-      .k3-claim-meta { font-size: 10px; margin-bottom: 4px; }
-      @media (max-width: 640px) {
-        .k3-call-lead { min-width: 0; }
-        .k3-brief-thesis, .k3-call-headline {
-          font-size: clamp(1.05rem, 5.2vw, 1.35rem);
-          line-height: 1.2;
-          overflow-wrap: anywhere;
-        }
-        .k3-layer-header {
-          min-height: 48px;
-          padding: 12px 14px;
-          -webkit-tap-highlight-color: transparent;
-        }
-        .k3-weight-nudge-viz { margin-top: 10px; }
-      }
-      
+/* K3 dossier drawers — migrated to ui.css (P3-3e) */
       #home-trust-banner { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
       @media (max-width: 420px) {
         #home-trust-banner { margin-left: 0; margin-right: 0; padding: 8px 10px; }
@@ -8522,58 +8413,6 @@ header.top {
         background: var(--k3-green);
         box-shadow: 0 0 6px color-mix(in srgb, var(--k3-green) 60%, transparent);
       }
-      
-      .k3-deliberation { margin-top: 4px; }
-      .k3-weighed-list { display: flex; flex-direction: column; gap: 0; }
-      .k3-weighed-row { padding: 12px 0; border-bottom: 1px solid #1a1d24; cursor: pointer; -webkit-tap-highlight-color: transparent; }
-      .k3-weighed-row:last-child { border-bottom: none; }
-      .k3-weighed-row:active { opacity: 0.85; }
-      .k3-weighed-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
-      .k3-weighed-name { font-size: 15px; font-weight: 600; color: var(--k3-text); }
-      .k3-weighed-pct { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; color: var(--k3-green); flex-shrink: 0; }
-      .k3-weighed-why { font-size: 13px; line-height: 1.45; color: var(--k3-muted); margin: 0; }
-      .k3-considered-list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-      .k3-considered-list::-webkit-scrollbar { display: none; }
-      .k3-considered-card { min-width: 120px; background: var(--k3-surface); border-radius: 8px; padding: 10px 12px; flex-shrink: 0; -webkit-tap-highlight-color: transparent; cursor: pointer; transition: background 0.15s; border: 1px solid #1a1d24; }
-      .k3-considered-card:active { background: #111420; }
-      .k3-considered-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--k3-accent); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: #fff; margin-bottom: 6px; }
-      .k3-considered-name { font-size: 11px; font-weight: 600; color: var(--k3-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .k3-considered-role { font-size: 10px; color: var(--k3-muted); margin: 2px 0 4px; }
-      .k3-considered-confidence { font-size: 12px; font-weight: 700; }
-      .k3-considered-stance { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px; }
-      .k3-considered-stance--long { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
-      .k3-considered-stance--short { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
-      .k3-considered-stance--hold { background: rgba(234, 179, 8, 0.15); color: #eab308; }
-      .k3-layer-subtitle { font-size: 12px; color: var(--k3-muted); margin: 0 0 12px; }
-      .k3-lifecycle { margin-top: 12px; }
-      .k3-lifecycle-chain { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-      .k3-lifecycle-step { padding: 10px 12px; border-radius: 8px; background: var(--k3-surface); border: 1px solid #1a1d24; }
-      .k3-lifecycle-step--pending { opacity: 0.85; border-style: dashed; }
-      .k3-lifecycle-label { display: block; font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
-      .k3-lifecycle-title { display: block; font-size: 13px; font-weight: 600; color: var(--k3-text); }
-      .k3-lifecycle-detail { display: block; font-size: 11px; color: var(--k3-muted); margin-top: 4px; line-height: 1.4; }
-      .k3-candidate-gate { font-size: 11px; color: var(--k3-blue); margin: 8px 0 0; letter-spacing: 0.02em; opacity: 0.85; }
-      .k3-call-headline {
-        font-family: var(--font-body, 'Space Grotesk', system-ui, sans-serif);
-        font-size: clamp(1.45rem, 5.2vw, 2.1rem);
-        font-weight: 700; letter-spacing: 0.02em; margin: 0 0 10px;
-        color: var(--k3-text); line-height: 1.05;
-      }
-      .k3-call-headline--hold { color: #7dd3fc; text-shadow: none; }
-      .k3-call-headline--go { color: var(--k3-green); text-shadow: none; }
-      .k3-claim-identity { margin: 0 0 8px; z-index: 1; }
-      .k3-claim-name--sub { font-size: 17px; margin: 0 0 2px; animation: none; background: none; -webkit-text-fill-color: var(--k3-text); color: var(--k3-text); font-weight: 600; letter-spacing: 0.02em; }
-      .k3-claim-desc { font-size: 12px; line-height: 1.45; color: var(--k3-muted); margin: 0 auto 6px; max-width: 300px; }
-      .k3-brief { text-align: left; width: 100%; max-width: 340px; margin: 0 auto 8px; padding: 0; z-index: 1; }
-      .k3-brief-vs { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.45; color: var(--k3-muted); margin: 0 0 8px; text-align: center; }
-      .k3-track-footnote { font-size: 12px; line-height: 1.5; color: var(--k3-muted); margin: 12px 0 0; text-align: center; }
-      .k3-track-window { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--k3-surface); border: 1px solid #1a1d24; }
-      .k3-track-window__label { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
-      .k3-track-window__value { font-size: 13px; font-weight: 600; color: var(--k3-text); }
-      .k3-claim-foot { display: flex; flex-direction: column; align-items: center; width: 100%; margin-top: 10px; z-index: 1; }
-      .home-job__signals--demoted { margin-top: 12px; opacity: 0.88; }
-      .home-job__signals--demoted .home-band,
-      .home-job__signals--demoted .home-enrichment { font-size: 10px; }
 
 /* Pump desk (from pump_alert.html) */
 /* —— Pump desk flagship: Situation Room formation theater —— */

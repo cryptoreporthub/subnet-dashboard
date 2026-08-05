@@ -10,7 +10,7 @@
 | P3-0 | Tribunal test realignment | **Highest** — unblocks CI confidence on council hero | `tests/test_visual_upgrade_polish.py` → tribunal-hero v4 contracts |
 | P3-1 | Share/judge fonts | Medium — brand consistency | `templates/share/base_share.html`, `templates/judge_council.html` → Space Grotesk |
 | P3-2 | Home SEO / babysit warnings | Medium — prod polish | NFA disclaimer, `og:image` on home **instant shells** |
-| P3-3 | `ui-legacy.css` purge | Lower — large diff, incremental | **P3-3a–d:** conf-state, utilities, horizon/pump, **dead k3-orb shell removed** |
+| P3-3 | `ui-legacy.css` purge | Lower — large diff, incremental | **P3-3a–e:** conf-state, utilities, horizon/pump, dead k3-orb shell, **drawer/weight-nudge → ui.css** |
 
 ## P3-0 — tribunal test realignment
 
