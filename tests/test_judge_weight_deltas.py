@@ -19,7 +19,7 @@ def test_recent_judge_weight_deltas_filters_judges(monkeypatch):
             {
                 "event_type": "weight_change",
                 "judge": "pulse",
-                "evidence": {"delta": -0.03, "dial": "pulse"},
+                "evidence": {"delta": -0.02, "dial": "pulse"},
             },
         ]
 
@@ -28,5 +28,5 @@ def test_recent_judge_weight_deltas_filters_judges(monkeypatch):
         fake_events,
     )
     deltas = recent_judge_weight_deltas()
-    assert deltas == {"oracle": 0.02, "pulse": -0.03}
+    assert deltas == {"oracle": 0.02, "pulse": -0.02}
     assert "quant" not in deltas

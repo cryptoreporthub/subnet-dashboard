@@ -15,8 +15,11 @@ DEFAULT_JUDGE_WEIGHTS: Dict[str, float] = {
     "pulse": 0.35,
 }
 
+# Symmetric steps — asymmetric +0.02/−0.03 required ~60% win rate just to stay
+# flat and collapsed all three judges to the floor (equal 33% after normalize).
+# See docs/sciweave-answers-phase-j.md Q5.
 _LEARNING_DELTA_CORRECT = 0.02
-_LEARNING_DELTA_WRONG = -0.03
+_LEARNING_DELTA_WRONG = -0.02
 _LEARNING_MIN_WEIGHT = 0.1
 _LEARNING_MAX_WEIGHT = 2.0
 
@@ -78,6 +81,19 @@ def nudge_judge(
     )
     weights[judge_name] = after
     save_judge_weights(weights, resolved_path)
+    if after != before:
+        try:
+            from internal.learning.trail_bus import emit_weight_change
+
+            emit_weight_change(
+                judge_name,
+                before=before,
+                after=after,
+                reason="judge_pnl",
+                correct=correct,
+            )
+        except Exception:
+            pass
     return after
 
 
