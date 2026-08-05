@@ -1632,6 +1632,133 @@ body.wrap {
     padding: 10px 16px;
     border-radius: 22px;
   }
+
+  .tribunal-hero__verdict-label,
+  #k3-action-badge.k3-badge {
+    font-size: 11px;
+    padding: 8px 14px;
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* Claim identity + action badge (tribunal v4 — no legacy k3-orb shell) */
+.council-stage:has(#k3-claim-identity:not([hidden])) .council-stage__eyebrow,
+.council-stage:has(#k3-claim-identity:not([hidden])) .council-stage__title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.council-stage:has(#k3-claim-identity:not([hidden])) .council-stage__brand {
+  font-size: clamp(1.05rem, 3.2vw, 1.35rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  margin: 0 0 14px;
+  opacity: 0.92;
+}
+
+.council-stage:has(#k3-claim-identity:not([hidden])) .council-stage__inner {
+  padding-top: 4px;
+}
+
+.council-stage:has(#k3-dossier) {
+  min-height: min(92vh, 760px);
+  align-items: flex-start;
+  padding-top: clamp(20px, 4vh, 40px);
+  padding-bottom: clamp(28px, 6vh, 56px);
+}
+
+@media (max-width: 480px) {
+  .council-stage:has(#k3-dossier) {
+    min-height: 0;
+    padding-top: 10px;
+    padding-bottom: 18px;
+  }
+}
+
+.k3-claim-identity {
+  margin: 0 0 8px;
+  text-align: left;
+}
+
+.k3-claim-name--sub {
+  font-size: 17px;
+  margin: 0 0 2px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--k3-text);
+}
+
+.k3-claim-meta {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 12px;
+  color: var(--k3-muted);
+  margin-bottom: 8px;
+}
+
+.k3-claim-desc {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--k3-muted);
+  margin: 0 auto 6px;
+  max-width: 300px;
+}
+
+.k3-badge {
+  display: inline-block;
+  padding: 4px 16px;
+  border-radius: 4px;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.k3-badge.buy {
+  background: var(--k3-green);
+  color: #000;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--k3-green) 45%, transparent);
+}
+
+.k3-badge.sell {
+  background: var(--k3-pink);
+  color: #000;
+}
+
+.k3-badge.hold {
+  background: rgba(125, 211, 252, 0.08);
+  color: #7dd3fc;
+  border: 1px solid rgba(125, 211, 252, 0.4);
+}
+
+.k3-badge.none {
+  background: var(--k3-surface);
+  color: var(--k3-muted);
+  border: 1px solid var(--k3-muted);
+}
+
+@media (min-width: 640px) {
+  .council-stage .k3-dossier {
+    max-width: 560px;
+    margin: 0 auto;
+  }
+}
+
+@media (min-width: 768px) {
+  .council-stage .k3-dossier {
+    max-width: 640px;
+  }
 }
 
 /* Tribunal hero — dossier confidence-state (hydrate sets data-conf-state on #k3-dossier) */
