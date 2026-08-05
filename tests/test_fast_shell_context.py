@@ -16,6 +16,77 @@ def _ensure_homepage_cache():
     srv._warm_homepage_cache(None)
 
 
+def test_resolve_index_context_prefers_full_build(monkeypatch):
+    """Full homepage context sets degraded=False when build succeeds."""
+    import server as srv
+
+    class _R:
+        base_url = "http://test"
+
+    def _full(_request):
+        return {
+            "request": _request,
+            "subnets": [{"netuid": 1, "name": "Alpha"}],
+            "data_source": "live",
+        }
+
+    monkeypatch.setattr(srv, "_build_index_context", _full)
+    ctx = srv._resolve_index_context(_R())
+    assert ctx["degraded"] is False
+    assert ctx["subnets"][0]["netuid"] == 1
+    assert ctx["public_base_url"] == "http://test"
+
+
+def _force_degraded_homepage_warm(monkeypatch):
+    """Tests that assert degraded-shell SSR must not run the full homepage builder."""
+    import server as srv
+
+    def _degraded_only(request):
+        raise RuntimeError("force degraded")
+
+    monkeypatch.setattr(srv, "_build_index_context", _degraded_only)
+
+
+def test_resolve_index_context_falls_back_on_timeout(monkeypatch):
+    """Hung full build falls back to degraded shell."""
+    import server as srv
+
+    class _R:
+        base_url = "http://test"
+
+    def _hang(_request):
+        time.sleep(60)
+        return {}
+
+    monkeypatch.setattr(srv, "_build_index_context", _hang)
+    monkeypatch.setattr(srv, "HOMEPAGE_BUILD_TIMEOUT", 0.05)
+    monkeypatch.setattr(
+        srv,
+        "_degraded_index_context",
+        lambda _r: {"degraded": True, "request": _r, "public_base_url": "http://test"},
+    )
+
+    t0 = time.time()
+    ctx = srv._resolve_index_context(_R())
+    elapsed = time.time() - t0
+    assert elapsed < 1.0, f"fallback took {elapsed:.1f}s"
+    assert ctx.get("degraded") is True
+
+
+def test_resolve_index_context_falls_back_on_error(monkeypatch):
+    import server as srv
+
+    class _R:
+        base_url = "http://test"
+
+    def _boom(_request):
+        raise RuntimeError("subnet fetch failed")
+
+    monkeypatch.setattr(srv, "_build_index_context", _boom)
+    ctx = srv._resolve_index_context(_R())
+    assert ctx.get("degraded") is True
+
+
 def test_degraded_homepage_has_conviction_cards():
     _ensure_homepage_cache()
     html = client.get("/").text
@@ -25,10 +96,11 @@ def test_degraded_homepage_has_conviction_cards():
     assert "SimiVision picks warming up" not in html
 
 
-def test_degraded_shell_ssrs_daily_pick_not_blank():
+def test_degraded_shell_ssrs_daily_pick_not_blank(monkeypatch):
     """Hero must paint from local JSON — not wait for cockpit_hydrate.js."""
     import server as srv
 
+    _force_degraded_homepage_warm(monkeypatch)
     pick = srv._read_shell_daily_pick()
     srv._HOMEPAGE_HTML_CACHE["html"] = None
     srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
@@ -37,17 +109,29 @@ def test_degraded_shell_ssrs_daily_pick_not_blank():
     assert 'id="k3-dossier"' in html
     assert 'id="k3-call-headline"' in html
     if pick:
-        move = (pick.get("brief") or {}).get("move")
-        if move:
-            assert move in html
+        sn = None
+        audit = pick.get("pick") if isinstance(pick.get("pick"), dict) else None
+        cand = pick.get("candidate") if isinstance(pick.get("candidate"), dict) else None
+        if audit and isinstance(audit.get("subnet"), dict):
+            sn = audit["subnet"]
+        elif cand and isinstance(cand.get("subnet"), dict):
+            sn = cand["subnet"]
+        if sn:
+            name = sn.get("name") or f"SN{sn.get('netuid')}"
+            assert name in html or f"SN{sn.get('netuid')}" in html
         else:
-            assert "HOLD · no long" not in html
+            move = (pick.get("brief") or {}).get("move")
+            if move:
+                assert move in html
+            else:
+                assert "HOLD · no long" not in html
 
 
-def test_degraded_shell_ssrs_pump_and_horizons():
+def test_degraded_shell_ssrs_pump_and_horizons(monkeypatch):
     """Pump desk + horizon picks paint from file-backed shell (B0-0)."""
     import server as srv
 
+    _force_degraded_homepage_warm(monkeypatch)
     srv._HOMEPAGE_HTML_CACHE["html"] = None
     srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
     srv._warm_homepage_cache(None)
@@ -210,10 +294,11 @@ def test_homepage_includes_above_fold_scripts():
     assert "apiFetchJson" in html, "missing inline fetch timeout bootstrap"
 
 
-def test_degraded_shell_ssrs_brain_letter_when_available():
+def test_degraded_shell_ssrs_brain_letter_when_available(monkeypatch):
     """B0-b: warm shell prefers file-backed brain letter over quiet stub."""
     import server as srv
 
+    _force_degraded_homepage_warm(monkeypatch)
     srv._HOMEPAGE_HTML_CACHE["html"] = None
     srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
     srv._warm_homepage_cache(None)

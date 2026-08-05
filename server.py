@@ -595,13 +595,45 @@ def _prime_emergency_home_html() -> str:
     return _EMERGENCY_HOME_HTML
 
 
+def _resolve_index_context(request: Request) -> Dict[str, Any]:
+    """Try full homepage context; fall back to fast degraded shell on timeout/error."""
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    fut = pool.submit(_build_index_context, request)
+    try:
+        ctx = fut.result(timeout=HOMEPAGE_BUILD_TIMEOUT)
+    except concurrent.futures.TimeoutError:
+        logger.warning(
+            "homepage context: full build timed out after %ss — degraded fallback",
+            HOMEPAGE_BUILD_TIMEOUT,
+        )
+        pool.shutdown(wait=False, cancel_futures=True)
+        return _degraded_index_context(request)
+    except Exception as exc:
+        logger.warning(
+            "homepage context: full build failed (%s) — degraded fallback",
+            exc,
+        )
+        pool.shutdown(wait=False, cancel_futures=True)
+        return _degraded_index_context(request)
+    else:
+        ctx["degraded"] = False
+        ctx["public_base_url"] = _public_base_url(request)
+        logger.info(
+            "homepage context: full build (subnets=%s source=%s)",
+            len(ctx.get("subnets") or []),
+            ctx.get("data_source"),
+        )
+        pool.shutdown(wait=True)
+        return ctx
+
+
 def _render_index_html(request: Request) -> str:
-    ctx = _degraded_index_context(request)
+    ctx = _resolve_index_context(request)
     return templates.get_template("index.html").render(ctx)
 
 
 def _warm_homepage_cache(request: Optional[Request] = None) -> None:
-    """Build degraded homepage HTML off the request hot path."""
+    """Build homepage HTML off the request hot path (full context, degraded fallback)."""
     global _HOMEPAGE_WARMING
     now = time.time()
     cached_html = _HOMEPAGE_HTML_CACHE.get("html")
