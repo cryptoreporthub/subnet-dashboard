@@ -380,6 +380,11 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
                     "pending": 0,
                     "accuracy": None,
                     "brain_ui_ready": False,
+                    "trust_banner": {
+                        "ready": False,
+                        "message": "Learning stats warming up",
+                        "graded": 0,
+                    },
                 },
                 "detail": "Worker volume temporarily unavailable",
             },
