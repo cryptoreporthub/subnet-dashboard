@@ -2557,21 +2557,6 @@ footer.status[data-source*="fallback"] .st-dot {
 .pick-card--degraded::before {
   background: repeating-linear-gradient(90deg, #ffb347 0, #ffb347 6px, transparent 6px, transparent 12px);
 }
-.pick-degraded-note {
-  margin-top: 8px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: #ffb347;
-  background: rgba(255, 179, 71, 0.1);
-  border-radius: var(--radius-sm, 8px);
-  padding: 4px 8px;
-}
-.pick-degraded-note--hold {
-  color: var(--neu);
-  background: var(--neu-dim);
-}
 
 .k3-claim--degraded {
   opacity: 0.9;
@@ -7269,8 +7254,7 @@ button.home-cta {
 .k3-dossier .k3-track-window,
 .k3-dossier .k3-outcome-status,
 .k3-dossier .k3-temporal-badge,
-.k3-dossier .k3-temporal,
-.k3-dossier .k3-horizon-chip {
+.k3-dossier .k3-temporal {
   background: rgba(14, 18, 30, 0.48);
   border-color: rgba(148, 163, 184, 0.14);
 }
@@ -8655,7 +8639,6 @@ header.top {
       .k3-claim--glow-hot .k3-orb .ring-fill {
         filter: drop-shadow(0 0 7px rgba(57, 255, 20, 0.55));
       }
-      .k3-temporal-grade { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); margin: -4px 0 8px; z-index: 1; }
       @keyframes k3-ring-fill { to { stroke-dashoffset: var(--ring-offset, 389.56); } }
       .k3-orb-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 3; }
       .k3-orb-score { font-family: 'JetBrains Mono', monospace; font-size: 32px; font-weight: 700; line-height: 1; display: flex; }
@@ -8850,19 +8833,6 @@ header.top {
         box-shadow: 0 0 6px color-mix(in srgb, var(--k3-green) 60%, transparent);
       }
       
-      .k3-horizon-chips { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 8px 0 4px; z-index: 1; }
-      .k3-horizon-chip {
-        min-height: 36px; padding: 6px 14px; border-radius: 18px; border: 1px solid #1a1d24;
-        background: var(--k3-surface); color: var(--k3-muted); font-family: 'JetBrains Mono', monospace;
-        font-size: 11px; font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent;
-        text-transform: uppercase; letter-spacing: 0.06em;
-      }
-      .k3-horizon-chip--active { color: var(--k3-green); border-color: rgba(57, 255, 20, 0.45); background: rgba(57, 255, 20, 0.08); }
-      .k3-horizon-stage { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--k3-blue); margin: 6px 12px 4px; z-index: 1; text-align: center; line-height: 1.45; }
-      .k3-horizon-stage[hidden] { display: none; }
-      .k3-horizon-note { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-orange); margin: 0 0 8px; z-index: 1; text-align: center; }
-      .k3-horizon-note[hidden] { display: none; }
-      
       .k3-deliberation { margin-top: 4px; }
       .k3-weighed-list { display: flex; flex-direction: column; gap: 0; }
       .k3-weighed-row { padding: 12px 0; border-bottom: 1px solid #1a1d24; cursor: pointer; -webkit-tap-highlight-color: transparent; }
@@ -8906,18 +8876,11 @@ header.top {
       .k3-claim-desc { font-size: 12px; line-height: 1.45; color: var(--k3-muted); margin: 0 auto 6px; max-width: 300px; }
       .k3-brief { text-align: left; width: 100%; max-width: 340px; margin: 0 auto 8px; padding: 0; z-index: 1; }
       .k3-brief-vs { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.45; color: var(--k3-muted); margin: 0 0 8px; text-align: center; }
-      .k3-brief-trigger { font-family: 'JetBrains Mono', monospace; font-size: 11px; line-height: 1.45; color: var(--k3-blue); margin: 0 0 0; padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(0, 212, 255, 0.45); background: rgba(0, 212, 255, 0.08); text-align: left; box-shadow: 0 0 14px rgba(0, 212, 255, 0.12); }
-      .k3-brief-trigger__kicker { display: block; font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: var(--k3-green); margin-bottom: 4px; }
-      .council-stage__trust-whisper { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-muted); margin: -4px 0 8px; letter-spacing: 0.04em; }
       .k3-track-footnote { font-size: 12px; line-height: 1.5; color: var(--k3-muted); margin: 12px 0 0; text-align: center; }
       .k3-track-window { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--k3-surface); border: 1px solid #1a1d24; }
       .k3-track-window__label { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
       .k3-track-window__value { font-size: 13px; font-weight: 600; color: var(--k3-text); }
       .k3-claim-foot { display: flex; flex-direction: column; align-items: center; width: 100%; margin-top: 10px; z-index: 1; }
-      .k3-pump-chip { display: inline-block; margin: 4px 0 8px; padding: 4px 10px; border-radius: 12px; font-family: 'JetBrains Mono', monospace; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; z-index: 1; max-width: 320px; line-height: 1.35; }
-      .k3-pump-chip--stirring { color: #ffa500; border: 1px solid rgba(255, 165, 0, 0.35); background: rgba(255, 165, 0, 0.08); }
-      .k3-pump-chip--accumulating { color: var(--k3-pink); border: 1px solid color-mix(in srgb, var(--k3-pink) 35%, transparent); background: color-mix(in srgb, var(--k3-pink) 8%, transparent); }
-      .k3-pump-trigger { font-family: 'JetBrains Mono', monospace; font-size: 10px; line-height: 1.4; color: var(--k3-muted); margin: -4px auto 10px; max-width: 320px; text-align: left; z-index: 1; }
       .home-job__signals--demoted { margin-top: 12px; opacity: 0.88; }
       .home-job__signals--demoted .home-band,
       .home-job__signals--demoted .home-enrichment { font-size: 10px; }
