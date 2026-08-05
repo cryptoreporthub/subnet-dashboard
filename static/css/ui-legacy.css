@@ -2558,18 +2558,6 @@ footer.status[data-source*="fallback"] .st-dot {
   background: repeating-linear-gradient(90deg, #ffb347 0, #ffb347 6px, transparent 6px, transparent 12px);
 }
 
-.k3-claim--degraded {
-  opacity: 0.9;
-}
-.k3-claim--degraded::before {
-  content: '';
-  display: block;
-  height: 3px;
-  margin: 0 0 8px;
-  border-radius: 2px;
-  background: repeating-linear-gradient(90deg, #ffb347 0, #ffb347 6px, transparent 6px, transparent 12px);
-}
-
 /* Important sections — orange → pink gradient borders */
 #section-daily-pick .hero-card {
   border-width: var(--border-width-important);
@@ -3028,10 +3016,9 @@ footer.status[data-source*="fallback"] .st-dot {
     padding: 12px var(--space-4, 16px) 20px;
     padding-bottom: max(20px, env(safe-area-inset-bottom, 0px));
   }
-  .council-stage:has(#k3-claim) {
+  .council-stage:has(#k3-dossier) {
     padding-top: 8px;
   }
-  .k3-claim,
   .k3-call-lead,
   .k3-brief-thesis {
     padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
@@ -7118,44 +7105,6 @@ button.home-cta {
   pointer-events: none;
   opacity: 0.55;
 }
-.council-stage:has(#k3-claim) {
-  min-height: min(92vh, 760px);
-  align-items: flex-start;
-  padding-top: clamp(20px, 4vh, 40px);
-  padding-bottom: clamp(28px, 6vh, 56px);
-}
-@media (max-width: 480px) {
-  .council-stage:has(#k3-claim) {
-    min-height: 0;
-    padding-top: 10px;
-    padding-bottom: 18px;
-  }
-}
-
-/* Claim head: quieter name, stronger action badge */
-.k3-claim-head .k3-claim-name {
-  font-family: 'Rajdhani', system-ui, sans-serif;
-  font-size: clamp(1.15rem, 3.5vw, 1.45rem);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: #94a3b8;
-}
-.k3-badge {
-  border-radius: 4px;
-  letter-spacing: 0.12em;
-}
-.k3-badge.hold {
-  background: rgba(125, 211, 252, 0.08);
-  color: #7dd3fc;
-  border: 1px solid rgba(125, 211, 252, 0.4);
-}
-
-/* Particles softer — presence without noise */
-.k3-orb-particles { opacity: 0.45; }
-.k3-orb-particles span {
-  box-shadow: 0 0 4px rgba(0, 212, 255, 0.45) !important;
-}
-
 /* Demoted chrome — after the call, quieter */
 .home-job__signals--demoted {
   margin-top: 18px;
@@ -8479,202 +8428,7 @@ header.top {
   }
 }
 
-/* K3 dossier (from council_stage.html) */
-      /* Subnet identity — 6 vivid hues so every subnet has its own hero personality
-         (was flat blue-hold/green-long). Hash: (netuid*47+11)%6, mirrored in JS via
-         k3NetuidBand(). Drives the orb, particles, hold-state ring, and claim name —
-         action badge (LONG/SHORT/HOLD) stays independently colored so meaning never blurs. */
-      .k3-claim { --sn-accent: #3fc9ff; --sn-accent-glow: rgba(63, 201, 255, 0.4); }
-      .k3-claim[data-band="0"] { --sn-accent: #3fc9ff; --sn-accent-glow: rgba(63, 201, 255, 0.4); }
-      .k3-claim[data-band="1"] { --sn-accent: #a78bfa; --sn-accent-glow: rgba(167, 139, 250, 0.4); }
-      .k3-claim[data-band="2"] { --sn-accent: #ffb74a; --sn-accent-glow: rgba(255, 183, 74, 0.38); }
-      .k3-claim[data-band="3"] { --sn-accent: #ff5fa8; --sn-accent-glow: rgba(255, 95, 168, 0.4); }
-      .k3-claim[data-band="4"] { --sn-accent: #34d399; --sn-accent-glow: rgba(52, 211, 153, 0.4); }
-      .k3-claim[data-band="5"] { --sn-accent: #60a5fa; --sn-accent-glow: rgba(96, 165, 250, 0.4); }
-      /* Quiet brand whisper when call is live — keep SimiVision, kill competing H1 chrome */
-      .council-stage:has(#k3-claim-identity:not([hidden])) .council-stage__eyebrow,
-      .council-stage:has(#k3-claim-identity:not([hidden])) .council-stage__title {
-        position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
-        clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
-      }
-      .council-stage:has(#k3-claim-identity:not([hidden])) .council-stage__brand {
-        font-size: clamp(1.05rem, 3.2vw, 1.35rem);
-        font-weight: 600;
-        letter-spacing: 0.04em;
-        line-height: 1;
-        margin: 0 0 14px;
-        opacity: 0.92;
-      }
-      .council-stage:has(#k3-claim-identity:not([hidden])) .council-stage__inner { padding-top: 4px; }
-      .k3-claim {
-        position: relative; padding: 8px 4px 12px; text-align: center; min-height: 0;
-        display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;
-        border: none; border-radius: 0;
-        background: transparent;
-        box-shadow: none;
-      }
-      .k3-claim-head {
-        display: flex; align-items: center; justify-content: space-between; gap: 12px;
-        margin-bottom: 16px; z-index: 2; text-align: left;
-      }
-      .k3-claim-head .k3-claim-name {
-        font-size: 18px; font-weight: 700; margin: 0; animation: none;
-        background: none; -webkit-text-fill-color: var(--sn-accent); color: var(--sn-accent);
-        letter-spacing: 0.01em; line-height: 1.2;
-        text-shadow: 0 0 14px var(--sn-accent-glow);
-      }
-      .k3-claim-head .k3-badge { margin: 0; flex-shrink: 0; }
-      .k3-claim-head__meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-      .k3-badge.hold { background: transparent; color: var(--k3-orange); border: 1px solid rgba(255, 165, 0, 0.55); }
-      .k3-badge.buy { box-shadow: 0 0 18px color-mix(in srgb, var(--k3-green) 45%, transparent), 0 0 36px color-mix(in srgb, var(--k3-green) 20%, transparent); }
-      .k3-claim-main {
-        display: flex; flex-direction: row; align-items: flex-start; gap: 14px;
-        position: relative; z-index: 1; width: 100%;
-      }
-      .k3-orb-wrap {
-        position: relative; width: 108px; height: 108px; flex-shrink: 0;
-        display: flex; align-items: center; justify-content: center;
-      }
-      /* Additive depth layer — slow counter-rotating halo behind the main orb-bg,
-         gives parallax depth without touching any of the existing loops. */
-      .k3-orb-halo {
-        position: absolute; width: 188px; height: 188px; border-radius: 50%;
-        background: conic-gradient(from 90deg, transparent, var(--sn-accent), transparent 55%);
-        animation: k3-spin-reverse 42s linear infinite; opacity: 0.16; filter: blur(34px); z-index: -1;
-        pointer-events: none;
-      }
-      .k3-orb-bg {
-        position: absolute; width: 160px; height: 160px; border-radius: 50%;
-        background: conic-gradient(var(--sn-accent), var(--k3-green), var(--sn-accent));
-        animation: k3-spin 28s linear infinite; opacity: 0.16; filter: blur(28px); z-index: 0;
-        pointer-events: none;
-      }
-      .k3-orb-glow {
-        position: absolute; width: 140px; height: 140px; border-radius: 50%;
-        background:
-          radial-gradient(circle, var(--sn-accent-glow) 0%, transparent 58%),
-          radial-gradient(circle at 40% 35%, rgba(57, 255, 20, 0.18) 0%, transparent 62%);
-        animation: k3-pulse 4s ease-in-out infinite; opacity: 0.55; filter: blur(18px); z-index: 0;
-        pointer-events: none;
-      }
-      .k3-claim--glow-hot .k3-orb-glow {
-        background:
-          radial-gradient(circle, rgba(57, 255, 20, 0.38) 0%, transparent 55%),
-          radial-gradient(circle at 60% 40%, var(--sn-accent-glow) 0%, transparent 62%);
-        opacity: 0.68; filter: blur(16px);
-      }
-      .k3-claim--glow-cool .k3-orb-glow {
-        background:
-          radial-gradient(circle, var(--sn-accent-glow) 0%, transparent 52%),
-          radial-gradient(circle at 55% 45%, rgba(255, 165, 0, 0.12) 0%, transparent 65%);
-        opacity: 0.62;
-      }
-      .k3-claim--glow-hot .k3-orb-bg {
-        background: conic-gradient(var(--k3-green), var(--sn-accent), var(--k3-green));
-        opacity: 0.2;
-      }
-      @keyframes k3-spin { to { transform: rotate(360deg); } }
-      @keyframes k3-spin-reverse { to { transform: rotate(-360deg); } }
-      @keyframes k3-pulse {
-        0%, 100% { opacity: 0.55; transform: scale(0.96); }
-        50% { opacity: 0.95; transform: scale(1.04); }
-      }
-      .k3-orb-particles {
-        position: absolute; inset: -6px; border-radius: 50%; z-index: 1; pointer-events: none;
-        animation: k3-particle-drift 14s linear infinite;
-      }
-      .k3-orb-particles span {
-        position: absolute; width: 3px; height: 3px; border-radius: 50%;
-        background: var(--sn-accent); box-shadow: 0 0 6px 1px var(--sn-accent-glow), 0 0 12px rgba(57, 255, 20, 0.3);
-        opacity: 0.85;
-      }
-      .k3-orb-particles span:nth-child(1) { top: 8%; left: 48%; }
-      .k3-orb-particles span:nth-child(2) { top: 18%; left: 78%; width: 2px; height: 2px; opacity: 0.6; }
-      .k3-orb-particles span:nth-child(3) { top: 42%; left: 92%; }
-      .k3-orb-particles span:nth-child(4) { top: 72%; left: 82%; width: 2px; height: 2px; }
-      .k3-orb-particles span:nth-child(5) { top: 88%; left: 52%; opacity: 0.5; }
-      .k3-orb-particles span:nth-child(6) { top: 70%; left: 12%; width: 2px; height: 2px; }
-      .k3-orb-particles span:nth-child(7) { top: 38%; left: 4%; }
-      .k3-orb-particles span:nth-child(8) { top: 14%; left: 18%; width: 2px; height: 2px; opacity: 0.7; }
-      .k3-orb-particles span:nth-child(9) { top: 58%; left: 96%; width: 2px; height: 2px; opacity: 0.55; animation-duration: 18s; }
-      .k3-orb-particles span:nth-child(10) { top: 4%; left: 30%; width: 2px; height: 2px; opacity: 0.65; animation-duration: 11s; }
-      .k3-claim--glow-hot .k3-orb-particles span {
-        background: var(--k3-green); box-shadow: 0 0 6px 1px color-mix(in srgb, var(--k3-green) 95%, transparent), 0 0 14px var(--sn-accent-glow);
-      }
-      @keyframes k3-particle-drift { to { transform: rotate(360deg); } }
-      /* Additive one-shot flourish — fires once when the ring finishes filling,
-         a small "the read just landed" pop on the score digits. Not a new loop. */
-      @keyframes k3-score-pop {
-        0% { transform: scale(1); filter: drop-shadow(0 0 0 transparent); }
-        45% { transform: scale(1.12); filter: drop-shadow(0 0 14px var(--sn-accent-glow)); }
-        100% { transform: scale(1); filter: drop-shadow(0 0 0 transparent); }
-      }
-      .k3-orb-center { animation: k3-score-pop 0.6s ease-out 1.05s 1; }
-      .k3-orb { position: relative; width: 108px; height: 108px; z-index: 2; margin: 0; }
-      .k3-orb svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
-      .k3-orb .ring-track { fill: none; stroke: rgba(26, 29, 36, 0.95); stroke-width: 9; }
-      .k3-orb .ring-fill {
-        fill: none; stroke: url(#k3-gradient); stroke-width: 8; stroke-linecap: round;
-        stroke-dasharray: 389.56; stroke-dashoffset: 389.56; animation: k3-ring-fill 1.2s ease-out forwards;
-        filter: drop-shadow(0 0 6px rgba(0, 212, 255, 0.45));
-      }
-      .k3-orb.k3-ring--fresh .ring-fill {
-        stroke: var(--k3-green);
-        filter: drop-shadow(0 0 6px rgba(57, 255, 20, 0.5));
-      }
-      .k3-orb.k3-ring--aging .ring-fill {
-        stroke: #00d4ff;
-        filter: drop-shadow(0 0 6px rgba(0, 212, 255, 0.5));
-      }
-      .k3-orb.k3-ring--expiring .ring-fill {
-        stroke: #ffa500;
-        filter: drop-shadow(0 0 5px rgba(255, 165, 0, 0.45));
-      }
-      .k3-orb.k3-ring--resolved .ring-fill { stroke: #64748b; animation: none; filter: none; }
-      .k3-claim--hold .k3-orb .ring-fill,
-      .k3-claim--glow-cool .k3-orb .ring-fill {
-        stroke: var(--sn-accent);
-        filter: drop-shadow(0 0 7px var(--sn-accent-glow));
-      }
-      .k3-claim--glow-hot .k3-orb .ring-fill {
-        filter: drop-shadow(0 0 7px rgba(57, 255, 20, 0.55));
-      }
-      @keyframes k3-ring-fill { to { stroke-dashoffset: var(--ring-offset, 389.56); } }
-      .k3-orb-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 3; }
-      .k3-orb-score { font-family: 'JetBrains Mono', monospace; font-size: 32px; font-weight: 700; line-height: 1; display: flex; }
-      .k3-orb-score .digit-tens,
-      .k3-orb-score .digit-ones {
-        color: var(--sn-accent);
-        text-shadow: 0 0 10px var(--sn-accent-glow);
-      }
-      .k3-claim--glow-hot .k3-orb-score .digit-tens {
-        color: var(--k3-green);
-        text-shadow: 0 0 10px rgba(57, 255, 20, 0.4);
-      }
-      .k3-claim--glow-hot .k3-orb-score .digit-ones {
-        color: #c8ff9a;
-        text-shadow: 0 0 8px rgba(57, 255, 20, 0.35);
-      }
-      .k3-claim--glow-cool .k3-orb-score .digit-tens,
-      .k3-claim--glow-cool .k3-orb-score .digit-ones {
-        color: var(--sn-accent);
-        text-shadow: 0 0 8px var(--sn-accent-glow);
-      }
-      .k3-orb-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
-      .k3-claim-name { font-size: 28px; font-weight: 700; background: linear-gradient(90deg, var(--k3-green), var(--k3-blue), var(--k3-pink), var(--k3-orange)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: k3-shimmer 3s ease-in-out infinite; margin: 8px 0 4px; z-index: 1; background-size: 200% 100%; }
-      @keyframes k3-shimmer { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
-      .k3-claim-meta { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--k3-muted); margin-bottom: 8px; z-index: 1; }
-      .k3-badge { display: inline-block; padding: 4px 16px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700; letter-spacing: 0.08em; margin-bottom: 12px; z-index: 1; }
-      .k3-badge.buy { background: var(--k3-green); color: #000; }
-      .k3-badge.sell { background: var(--k3-pink); color: #000; }
-      .k3-badge.none { background: var(--k3-surface); color: var(--k3-muted); border: 1px solid var(--k3-muted); }
-      .k3-claim-stats { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-bottom: 8px; z-index: 1; }
-      .k3-stat { text-align: center; min-width: 60px; }
-      .k3-stat-value { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 600; color: var(--k3-text); }
-      .k3-stat-label { font-family: 'JetBrains Mono', monospace; font-size: 9px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.06em; }
-      .k3-temporal { display: inline-block; padding: 4px 12px; border-radius: 12px; background: var(--k3-surface); border: 1px solid var(--k3-muted); font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--k3-muted); z-index: 1; }
-      .k3-why { font-size: 14px; color: var(--k3-text); margin-top: 12px; max-width: 320px; line-height: 1.4; z-index: 1; }
-      .k3-trust { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-muted); margin-top: 8px; z-index: 1; }
+/* K3 dossier drawers — orb/claim shell retired (tribunal v4 in ui.css) */
       .k3-layer { border-top: 1px solid #1a1d24; margin-top: 0; }
       .k3-layer-header { width: 100%; min-height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; background: var(--k3-surface); border: none; color: var(--k3-text); font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; -webkit-tap-highlight-color: transparent; letter-spacing: 0.08em; text-transform: uppercase; }
       .k3-layer-header:active { background: rgba(22, 28, 44, 0.72); }
@@ -8734,8 +8488,6 @@ header.top {
       .k3-claim-identity { text-align: left; }
       .k3-claim-meta { font-size: 10px; margin-bottom: 4px; }
       @media (max-width: 640px) {
-        .k3-claim { overflow: hidden; max-width: 100%; }
-        .k3-claim-main { gap: 12px; }
         .k3-call-lead { min-width: 0; }
         .k3-brief-thesis, .k3-call-headline {
           font-size: clamp(1.05rem, 5.2vw, 1.35rem);
@@ -8748,68 +8500,6 @@ header.top {
           -webkit-tap-highlight-color: transparent;
         }
         .k3-weight-nudge-viz { margin-top: 10px; }
-        .k3-orb-particles { opacity: 0.35; }
-        .k3-orb-halo { filter: blur(28px); opacity: 0.14; }
-      }
-      /* Hero A-tier @390px: presentation order verb → subnet → % → evidence (IDs unchanged) */
-      @media (max-width: 400px) {
-        .k3-claim { display: flex; flex-direction: column; align-items: stretch; }
-        .k3-claim-main { display: contents; }
-        .k3-call-lead { display: contents; }
-        #k3-call-headline { order: 1; margin-bottom: 6px; }
-        .k3-claim-head { order: 2; margin-bottom: 10px; }
-        .k3-orb-wrap { order: 3; align-self: center; margin-bottom: 8px; }
-        #k3-evidence-drivers { order: 4; justify-content: flex-start; margin-bottom: 8px; }
-        .k3-claim-identity { order: 5; }
-        .k3-resolve-crumb { order: 6; }
-        .k3-social-crumb { order: 7; }
-        .k3-brief-thesis { order: 8; }
-        .k3-brief-vs, .k3-brief-vs-hold { order: 9; }
-        .k3-brief-trigger { order: 10; }
-        #k3-degraded-note { order: 11; }
-        .k3-claim-foot { order: 12; }
-        .k3-orb-wrap, .k3-orb { width: 96px; height: 96px; }
-        .k3-orb-bg { width: 140px; height: 140px; }
-        .k3-orb-glow { width: 120px; height: 120px; }
-        .k3-orb-score { font-size: 26px; }
-        .k3-claim-head { gap: 8px; }
-        .k3-claim-head .k3-claim-name { font-size: 15px; }
-        .k3-claim { padding: 10px 8px 10px; }
-        .k3-badge, .k3-claim-head .k3-badge, #k3-action-badge {
-          font-size: 11px; padding: 8px 14px; min-height: 44px; min-width: 44px;
-          display: inline-flex; align-items: center; justify-content: center;
-        }
-        .k3-horizon-chip {
-          min-height: 44px; min-width: 44px; padding: 10px 16px; border-radius: 22px;
-        }
-        .k3-claim-desc { max-width: none; padding: 0 2px; }
-        .k3-brief { max-width: none; }
-      }
-      @media (max-width: 360px) {
-        .k3-claim-main { flex-direction: column; align-items: center; text-align: center; }
-        .k3-call-lead, .k3-brief-thesis, .k3-brief-vs, .k3-brief-vs-hold, .k3-call-headline,
-        .k3-claim-identity { text-align: center; }
-        .k3-orb-wrap, .k3-orb { width: 100px; height: 100px; }
-        .k3-orb-score { font-size: 28px; }
-        .k3-claim-stats { gap: 10px; justify-content: center; }
-        .k3-stat { min-width: 50px; }
-        .k3-stat-value { font-size: 14px; }
-      }
-      @media (min-width: 480px) {
-        .k3-claim-main { align-items: center; gap: 16px; }
-        .k3-orb-wrap, .k3-orb { width: 132px; height: 132px; }
-        .k3-orb-score { font-size: 38px; }
-      }
-      @media (min-width: 640px) {
-        .k3-orb-wrap, .k3-orb { width: 148px; height: 148px; }
-        .k3-orb-score { font-size: 42px; }
-        .k3-dossier { max-width: 560px; margin: 0 auto; }
-      }
-      @media (min-width: 768px) { .k3-dossier { max-width: 640px; margin: 0 auto; } .k3-claim { padding: 12px 8px 16px; } }
-      @media (prefers-reduced-motion: reduce) {
-        .k3-orb-bg, .k3-orb-halo, .k3-orb-glow, .k3-orb-particles, .k3-claim-name, .k3-orb .ring-fill, .k3-orb-center { animation: none !important; }
-        .k3-orb .ring-fill { stroke-dashoffset: var(--ring-offset, 389.56); }
-        .k3-orb-glow { opacity: 0.75; transform: none; }
       }
       
       #home-trust-banner { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }

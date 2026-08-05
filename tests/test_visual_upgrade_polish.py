@@ -437,6 +437,26 @@ def test_k3_dossier_utilities_live_in_ui_css():
         assert selector in css
 
 
+def test_legacy_no_k3_orb_shell_styles():
+    """Tribunal v4 retired the k3-orb / k3-claim layout shell."""
+    legacy = _read_ui_legacy_css()
+    for dead in (
+        ".k3-orb-wrap",
+        ".k3-orb-halo",
+        "@keyframes k3-spin",
+        "k3-resolving-ring-sweep",
+        ".k3-claim-main",
+    ):
+        assert dead not in legacy
+
+
+def test_k3_claim_identity_and_badge_live_in_ui_css():
+    css = _read_ui_css()
+    assert ".k3-claim-identity" in css
+    assert ".k3-badge.hold" in css
+    assert '.council-stage:has(#k3-dossier)' in css
+
+
 def test_council_pick_card_uses_pewter_smoke_background():
     css = open("static/css/ui.css", encoding="utf-8").read()
     assert ".council-stage .home-job__call-host .k3-dossier" in css
