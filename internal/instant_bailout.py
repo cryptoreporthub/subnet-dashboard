@@ -18,6 +18,9 @@ HARDCODED_EMERGENCY_HTML = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#080a10">
 <title>SimiVision — Council</title>
+<meta property="og:image" content="/static/og-share.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="/static/og-share.png">
 <style>
   html,body{margin:0;min-height:100%;background:#0a0a0f;color:#e8e8f0;
     font-family:system-ui,-apple-system,sans-serif}
@@ -26,6 +29,7 @@ HARDCODED_EMERGENCY_HTML = """<!DOCTYPE html>
   p{margin:0;opacity:.78;font-size:.95rem;line-height:1.45}
   .pulse{animation:pulse 1.4s ease-in-out infinite}
   @keyframes pulse{50%{opacity:.45}}
+  .nfa{margin:1.25rem auto 0;max-width:28rem;padding:0 1.25rem;font-size:.68rem;line-height:1.4;color:#7a9186;text-align:center}
 </style>
 </head>
 <body>
@@ -33,6 +37,7 @@ HARDCODED_EMERGENCY_HTML = """<!DOCTYPE html>
   <h1 class="pulse">Loading council…</h1>
   <p>Subnet dashboard is warming up. If this stays blank, tap refresh.</p>
 </div>
+<p class="nfa">SimiVision calls are scored council output, not financial advice. Do your own research.</p>
 </body>
 </html>
 """.encode("utf-8")

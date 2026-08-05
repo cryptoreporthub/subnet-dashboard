@@ -44,3 +44,17 @@ def test_og_share_static_file():
     res = client.get("/static/og-share.png")
     assert res.status_code == 200
     assert res.headers.get("content-type", "").startswith("image/")
+
+
+def test_instant_home_shells_include_nfa_and_og_image():
+    from internal.instant_bailout import HARDCODED_EMERGENCY_HTML
+    import server as srv
+
+    for label, blob in (
+        ("instant", srv._INSTANT_HOME_SHELL),
+        ("emergency", HARDCODED_EMERGENCY_HTML.decode("utf-8")),
+    ):
+        lower = blob.lower()
+        assert "not financial advice" in lower, label
+        assert "og-share.png" in blob, label
+        assert 'property="og:image"' in blob, label
