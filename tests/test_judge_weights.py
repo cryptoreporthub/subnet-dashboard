@@ -248,28 +248,64 @@ def test_tracker_on_prediction_resolved_nudges_all_three_judges_independently(
 
     before = load_judge_weights(path=str(soul_path))
 
-    def _close_oracle(prediction, actual_pct=None, outcome=None):
-        return {"pnl_pct": 5.0}
+    def _close(_prediction, actual_pct=None, outcome=None):
+        return {"pnl_pct": 1.0}
 
-    def _close_echo(prediction, actual_pct=None, outcome=None):
-        return {"pnl_pct": -2.0}
-
-    def _close_pulse(prediction, actual_pct=None, outcome=None):
-        return {"pnl_pct": 3.0}
-
-    monkeypatch.setattr(judges_mod.ORACLE, "close_position", _close_oracle)
-    monkeypatch.setattr(judges_mod.ECHO, "close_position", _close_echo)
-    monkeypatch.setattr(judges_mod.PULSE, "close_position", _close_pulse)
+    monkeypatch.setattr(judges_mod.ORACLE, "close_position", _close)
+    monkeypatch.setattr(judges_mod.ECHO, "close_position", _close)
+    monkeypatch.setattr(judges_mod.PULSE, "close_position", _close)
     monkeypatch.setattr(judges_mod.ORACLE, "record_postmortem", lambda *a, **k: None)
     monkeypatch.setattr(judges_mod.ECHO, "record_postmortem", lambda *a, **k: None)
     monkeypatch.setattr(judges_mod.PULSE, "record_postmortem", lambda *a, **k: None)
 
+    # Council miss (down move); Echo abstains (good), Oracle/Pulse endorse (bad).
     prediction = {
         "id": "judge-weight-test",
+        "direction": "up",
         "correct": False,
         "outcome": "miss",
         "reference_price": 10.0,
         "resolved_price": 9.0,
+        "judge_scores_at_creation": {
+            "oracle": {"score": 0.8},
+            "echo": {"score": 0.45},
+            "pulse": {"score": 0.6},
+        },
+    }
+    on_prediction_resolved(prediction)
+
+    after = load_judge_weights(path=str(soul_path))
+    assert after["oracle"] < before["oracle"]
+    assert after["echo"] > before["echo"]
+    assert after["pulse"] < before["pulse"]
+
+
+def test_tracker_same_pnl_diverges_on_selective_grading(monkeypatch, tmp_path):
+    from internal.judges import judges as judges_mod
+    from internal.judges.tracker import on_prediction_resolved
+
+    soul_path = tmp_path / "soul_map.json"
+    monkeypatch.setattr("internal.judges.weights.SOUL_MAP_PATH", str(soul_path))
+    before = load_judge_weights(path=str(soul_path))
+
+    def _close(_prediction, actual_pct=None, outcome=None):
+        return {"pnl_pct": 5.0}
+
+    for judge in (judges_mod.ORACLE, judges_mod.ECHO, judges_mod.PULSE):
+        monkeypatch.setattr(judge, "close_position", _close)
+        monkeypatch.setattr(judge, "record_postmortem", lambda *a, **k: None)
+
+    prediction = {
+        "id": "same-pnl-diverge",
+        "direction": "up",
+        "correct": True,
+        "outcome": "hit",
+        "actual_pct": 5.0,
+        "judge_scores_at_creation": {
+            "oracle": {"score": 0.9},
+            "echo": {"score": 0.4},
+            "pulse": {"score": 0.7},
+        },
     }
     on_prediction_resolved(prediction)
 
