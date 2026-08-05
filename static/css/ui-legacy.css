@@ -8539,98 +8539,6 @@ header.top {
         --k3-orange: var(--accent-orange, #ff9f3f);
         --k3-text: #e2e8f0; --k3-muted: var(--text-muted);
       }
-      /* H2: confidence-state orb treatments — scoped to #k3-dossier; value keeps glow-tier rules below */
-      @keyframes k3-resolving-ring-sweep {
-        0% { stroke-dashoffset: 389.56; opacity: 0.4; }
-        50% { opacity: 0.75; }
-        100% { stroke-dashoffset: 0; opacity: 0.4; }
-      }
-      @keyframes k3-delayed-dot {
-        0%, 100% { opacity: 0.45; transform: scale(0.88); }
-        50% { opacity: 1; transform: scale(1.12); }
-      }
-      #k3-dossier[data-conf-state="resolving"] .k3-orb-halo,
-      #k3-dossier[data-conf-state="delayed"] .k3-orb-halo {
-        background: conic-gradient(from 0deg, transparent, var(--k3-muted), transparent 42%);
-        opacity: 0.2;
-        filter: blur(32px);
-        animation: k3-spin-reverse 36s linear infinite;
-      }
-      #k3-dossier[data-conf-state="resolving"] .k3-orb-bg,
-      #k3-dossier[data-conf-state="delayed"] .k3-orb-bg {
-        background: conic-gradient(var(--k3-muted), color-mix(in srgb, var(--k3-muted) 35%, transparent), var(--k3-muted));
-        opacity: 0.12;
-        animation: k3-spin 32s linear infinite;
-      }
-      #k3-dossier[data-conf-state="resolving"] .k3-orb-glow,
-      #k3-dossier[data-conf-state="delayed"] .k3-orb-glow {
-        background: radial-gradient(circle, color-mix(in srgb, var(--k3-muted) 22%, transparent) 0%, transparent 58%);
-        opacity: 0.42;
-        animation: k3-pulse 5s ease-in-out infinite;
-      }
-      #k3-dossier[data-conf-state="resolving"] .k3-orb .ring-fill,
-      #k3-dossier[data-conf-state="delayed"] .k3-orb .ring-fill {
-        stroke: var(--k3-muted);
-        filter: drop-shadow(0 0 5px color-mix(in srgb, var(--k3-muted) 35%, transparent));
-        stroke-dasharray: 72 317.56;
-        animation: k3-resolving-ring-sweep 3.4s ease-in-out infinite;
-      }
-      #k3-dossier[data-conf-state="resolving"] .k3-orb-center,
-      #k3-dossier[data-conf-state="delayed"] .k3-orb-center,
-      #k3-dossier[data-conf-state="zero"] .k3-orb-center {
-        animation: none;
-      }
-      #k3-dossier[data-conf-state="resolving"] .k3-orb-score .digit-ones,
-      #k3-dossier[data-conf-state="delayed"] .k3-orb-score .digit-ones {
-        color: var(--k3-muted);
-        text-shadow: none;
-      }
-      #k3-dossier[data-conf-state="delayed"] .k3-orb-glow {
-        background:
-          radial-gradient(circle, color-mix(in srgb, var(--k3-orange) 20%, transparent) 0%, transparent 52%),
-          radial-gradient(circle, color-mix(in srgb, var(--k3-muted) 18%, transparent) 0%, transparent 60%);
-        animation: k3-pulse 2.8s ease-in-out infinite;
-      }
-      #k3-dossier[data-conf-state="delayed"] .k3-orb .ring-fill {
-        filter: drop-shadow(0 0 6px color-mix(in srgb, var(--k3-orange) 40%, transparent));
-      }
-      #k3-dossier[data-conf-state="delayed"] .k3-orb-wrap::after {
-        content: '';
-        position: absolute;
-        top: 6px;
-        right: 10px;
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: var(--k3-orange);
-        box-shadow: 0 0 8px color-mix(in srgb, var(--k3-orange) 55%, transparent);
-        animation: k3-delayed-dot 2.2s ease-in-out infinite;
-        z-index: 4;
-        pointer-events: none;
-      }
-      #k3-dossier[data-conf-state="zero"] .k3-orb .ring-fill {
-        stroke: var(--k3-muted);
-        filter: drop-shadow(0 0 5px color-mix(in srgb, var(--k3-blue) 22%, transparent));
-        animation: k3-ring-fill 1.2s ease-out forwards;
-      }
-      #k3-dossier[data-conf-state="zero"] .k3-orb-glow {
-        background: radial-gradient(circle, color-mix(in srgb, var(--k3-blue) 14%, transparent) 0%, transparent 58%);
-        opacity: 0.38;
-        animation: none;
-      }
-      #k3-dossier[data-conf-state="zero"] .k3-orb-halo,
-      #k3-dossier[data-conf-state="zero"] .k3-orb-bg {
-        opacity: 0.1;
-        animation: none;
-      }
-      #k3-dossier[data-conf-state="zero"] .k3-orb-particles {
-        opacity: 0.35;
-        animation: none;
-      }
-      #k3-dossier[data-conf-state="zero"] .k3-orb-score .digit-ones {
-        color: var(--k3-muted);
-        text-shadow: 0 0 6px color-mix(in srgb, var(--k3-muted) 28%, transparent);
-      }
       /* Subnet identity — 6 vivid hues so every subnet has its own hero personality
          (was flat blue-hold/green-long). Hash: (netuid*47+11)%6, mirrored in JS via
          k3NetuidBand(). Drives the orb, particles, hold-state ring, and claim name —
@@ -8823,9 +8731,6 @@ header.top {
         text-shadow: 0 0 8px var(--sn-accent-glow);
       }
       .k3-orb-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
-      #k3-dossier[data-conf-state="resolving"] .k3-orb-label,
-      #k3-dossier[data-conf-state="delayed"] .k3-orb-label { color: var(--k3-blue); }
-      #k3-dossier[data-conf-state="zero"] .k3-orb-label { color: var(--k3-orange); }
       .k3-horizon-badge {
         display: inline-flex; align-items: center; justify-content: center;
         font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600;
@@ -8981,20 +8886,7 @@ header.top {
       @media (min-width: 768px) { .k3-dossier { max-width: 640px; margin: 0 auto; } .k3-claim { padding: 12px 8px 16px; } }
       @media (prefers-reduced-motion: reduce) {
         .k3-orb-bg, .k3-orb-halo, .k3-orb-glow, .k3-orb-particles, .k3-claim-name, .k3-orb .ring-fill, .k3-orb-center { animation: none !important; }
-        #k3-dossier[data-conf-state="resolving"] .k3-orb-halo,
-        #k3-dossier[data-conf-state="resolving"] .k3-orb-bg,
-        #k3-dossier[data-conf-state="resolving"] .k3-orb-glow,
-        #k3-dossier[data-conf-state="resolving"] .k3-orb .ring-fill,
-        #k3-dossier[data-conf-state="delayed"] .k3-orb-halo,
-        #k3-dossier[data-conf-state="delayed"] .k3-orb-bg,
-        #k3-dossier[data-conf-state="delayed"] .k3-orb-glow,
-        #k3-dossier[data-conf-state="delayed"] .k3-orb .ring-fill,
-        #k3-dossier[data-conf-state="delayed"] .k3-orb-wrap::after { animation: none !important; }
         .k3-orb .ring-fill { stroke-dashoffset: var(--ring-offset, 389.56); }
-        #k3-dossier[data-conf-state="resolving"] .k3-orb .ring-fill,
-        #k3-dossier[data-conf-state="delayed"] .k3-orb .ring-fill {
-          stroke-dasharray: 389.56; stroke-dashoffset: 0; opacity: 0.55;
-        }
         .k3-orb-glow { opacity: 0.75; transform: none; }
       }
       
@@ -9067,7 +8959,7 @@ header.top {
         z-index: 2; position: relative;
       }
       .k3-call-headline {
-        font-family: 'Rajdhani', 'JetBrains Mono', sans-serif;
+        font-family: var(--font-body, 'Space Grotesk', system-ui, sans-serif);
         font-size: clamp(1.45rem, 5.2vw, 2.1rem);
         font-weight: 700; letter-spacing: 0.02em; margin: 0 0 10px;
         color: var(--k3-text); line-height: 1.05;
@@ -9081,7 +8973,7 @@ header.top {
       .k3-social-crumb { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--k3-pink); margin: 0 0 8px; letter-spacing: 0.03em; }
       .k3-brief { text-align: left; width: 100%; max-width: 340px; margin: 0 auto 8px; padding: 0; z-index: 1; }
       .k3-brief-thesis {
-        font-family: 'Rajdhani', system-ui, sans-serif;
+        font-family: var(--font-body, 'Space Grotesk', system-ui, sans-serif);
         font-size: clamp(0.98rem, 2.8vw, 1.12rem);
         font-weight: 500;
         line-height: 1.45; color: #c8d4dc; margin: 0 0 10px; text-align: left;
