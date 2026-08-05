@@ -26,6 +26,18 @@
       html +=
         '<p class="trust-banner__message">Building graded track record — trust surfaces stay honest until sample clears.</p>';
     }
+    if (
+      tb.ledger_graded_30d != null &&
+      tb.min_graded != null &&
+      Number(tb.graded) < Number(tb.min_graded)
+    ) {
+      var ledgerLine = "Measurement ledger (30d): " + tb.ledger_graded_30d + " graded";
+      if (tb.ledger_hit_rate_30d != null) {
+        var ledgerPct = Math.round(Number(tb.ledger_hit_rate_30d) * 100);
+        ledgerLine += " · " + ledgerPct + "% direction hit (ledger, not trust gate)";
+      }
+      html += '<p class="trust-banner__ledger">' + esc(ledgerLine) + "</p>";
+    }
     if (tb.note) {
       html += '<p class="trust-banner__note">' + esc(tb.note) + "</p>";
     }

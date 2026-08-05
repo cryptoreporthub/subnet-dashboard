@@ -177,7 +177,25 @@ def _learning_snapshot() -> Dict[str, Any]:
     watchdog = check_resolver_watchdog(pending_rows)
     from internal.learning.trust_stats import build_trust_banner
 
-    trust_banner = build_trust_banner(resolver_stats, watchdog=watchdog)
+    ledger_context = None
+    try:
+        from internal.accuracy_lift.measure import build_accuracy_lift_snapshot, iter_resolved
+
+        ledger_rows = iter_resolved(
+            {
+                "resolved": resolved_payload.get("resolved") or [],
+                "predictions": pending_rows,
+            }
+        )
+        ledger_context = build_accuracy_lift_snapshot(ledger_rows)
+    except Exception:
+        ledger_context = None
+
+    trust_banner = build_trust_banner(
+        resolver_stats,
+        watchdog=watchdog,
+        ledger_context=ledger_context,
+    )
     recent = resolved_payload.get("resolved", [])[-10:]
     last5 = _build_last5_from_resolved(resolved_payload)
     snapshot = {

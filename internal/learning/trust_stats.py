@@ -19,6 +19,7 @@ def build_trust_banner(
     watchdog: Optional[Dict[str, Any]] = None,
     min_graded: int = MIN_GRADED_SAMPLE,
     max_expired_rate: float = MAX_EXPIRED_RATE,
+    ledger_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Build UI-ready trust banner from live resolver stats."""
     correct = int(stats.get("correct", 0) or 0)
@@ -68,6 +69,25 @@ def build_trust_banner(
     except Exception:
         streak = None
 
+    ledger_graded_30d = None
+    ledger_hit_rate_30d = None
+    ledger_note = None
+    if isinstance(ledger_context, dict) and ledger_context.get("data_available"):
+        try:
+            ledger_graded_30d = int(ledger_context.get("graded_30d") or 0)
+        except (TypeError, ValueError):
+            ledger_graded_30d = None
+        raw_rate = ledger_context.get("hit_rate_30d")
+        if raw_rate is not None:
+            try:
+                ledger_hit_rate_30d = round(float(raw_rate), 4)
+            except (TypeError, ValueError):
+                ledger_hit_rate_30d = None
+        ledger_note = (
+            "Full resolved ledger (30d); trust gate uses published LONG picks only "
+            "(excludes HOLD shadows and pump-desk claims)."
+        )
+
     return {
         "ready": integrity_ok and not watchdog_warn,
         "headline": headline,
@@ -97,4 +117,7 @@ def build_trust_banner(
         "shadow_graded": int(stats.get("shadow_graded", 0) or 0),
         "streak": streak,
         "streak_whisper": streak_whisper,
+        "ledger_graded_30d": ledger_graded_30d,
+        "ledger_hit_rate_30d": ledger_hit_rate_30d,
+        "ledger_note": ledger_note,
     }

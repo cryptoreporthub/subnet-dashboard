@@ -6236,6 +6236,13 @@ button.home-cta {
   color: var(--stage-muted, #8a9a8e);
 }
 
+.trust-banner__ledger {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--stage-muted, #8a9a8e);
+  line-height: 1.35;
+}
+
 /* §21 L5 — story path chain */
 .story-path {
   margin: 8px auto 24px;
