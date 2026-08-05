@@ -745,3 +745,110 @@ def test_legacy_no_premium_cockpit_styles():
         "#section-daily-pick .hero-card::after",
     ):
         assert dead not in legacy
+
+
+def test_layout_shell_live_in_ui_css():
+    """P3-3m-a: layout shell (header, logo, freshness) in ui.css."""
+    css = _read_ui_css()
+    for selector in (
+        "/* ---- Layout shell (migrated from ui-legacy.css, P3-3m-a) ---- */",
+        ".logo {",
+        ".src-tag {",
+        ".data-freshness-live",
+        ".data-freshness-warming,",
+        ".data-freshness-unknown",
+        "@keyframes pulse-neon",
+    ):
+        assert selector in css
+
+
+def test_legacy_no_layout_shell_styles():
+    """P3-3m-a: layout shell removed from ui-legacy.css."""
+    legacy = _read_ui_legacy_css()
+    for dead in (
+        "/* --- legacy layout --- */",
+        ".logo {",
+        ".live-dot {",
+        ".data-freshness-live",
+        ".data-freshness-unknown",
+        "@keyframes pulse-neon",
+        ".row {",
+    ):
+        assert dead not in legacy
+
+
+def test_dashboard_components_live_in_ui_css():
+    """P3-3m-b: dashboard components in ui.css."""
+    css = _read_ui_css()
+    for selector in (
+        "/* ---- Dashboard components (migrated from ui-legacy.css, P3-3m-b) ---- */",
+        ".card-head {",
+        ".card-muted {",
+        ".badge {",
+        ".badge-hold {",
+        ".badge-hot",
+        ".hero-audit",
+        ".kpi-grid {",
+        ".tab-bar {",
+        ".trail {",
+        ".soc-grid {",
+        ".status-inner {",
+        ".footer-tag",
+        "@keyframes conv-pulse",
+        ".judge-summary {",
+    ):
+        assert selector in css
+
+
+def test_legacy_no_dashboard_components_styles():
+    """P3-3m-b: dashboard block removed from ui-legacy.css."""
+    legacy = _read_ui_legacy_css()
+    for dead in (
+        "/* --- legacy dashboard --- */",
+        ".card-head {",
+        ".card-muted {",
+        ".badge {",
+        ".badge-hold {",
+        ".kpi-grid {",
+        ".tab-bar {",
+        ".trail {",
+        "footer.status {",
+        ".footer-tag",
+        "@keyframes conv-pulse",
+    ):
+        assert dead not in legacy
+
+
+def test_cockpit_cards_live_in_ui_css():
+    """P3-3m-c: cockpit cards in ui.css."""
+    css = _read_ui_css()
+    for selector in (
+        "/* ---- Cockpit cards (migrated from ui-legacy.css, P3-3m-c) ---- */",
+        ".cockpit {",
+        ".cockpit-header {",
+        ".cockpit-grid {",
+        ".cockpit-card-head {",
+        '.cockpit-card[data-status="live"]',
+        ".cockpit-status-live",
+        ".cockpit-summary",
+        ".cockpit-metrics",
+        ".cockpit-updated {",
+        ".cockpit-highlight {",
+    ):
+        assert selector in css
+
+
+def test_legacy_no_cockpit_cards_styles():
+    """P3-3m-c: cockpit block removed from ui-legacy.css."""
+    legacy = _read_ui_legacy_css()
+    for dead in (
+        "/* --- legacy cockpit --- */",
+        ".cockpit {",
+        ".cockpit-grid {",
+        ".cockpit-card {",
+        ".cockpit-card-head {",
+        ".cockpit-status-unavailable",
+        ".cockpit-updated {",
+        ".cockpit-highlight {",
+    ):
+        assert dead not in legacy
