@@ -70,11 +70,17 @@ def on_prediction_resolved(prediction: Dict[str, Any]) -> Dict[str, Any]:
         closed = judge.close_position(prediction, actual_pct=actual_pct, outcome=outcome)
         if closed:
             try:
+                from internal.judges.grading import judge_nudge_correct
                 from internal.judges.weights import nudge_judge
 
                 nudge_judge(
                     judge.name,
-                    correct=float(closed.get("pnl_pct", 0) or 0) > 0,
+                    correct=judge_nudge_correct(
+                        prediction,
+                        judge.name,
+                        actual_pct,
+                        pnl_pct=closed.get("pnl_pct"),
+                    ),
                 )
             except Exception:
                 pass

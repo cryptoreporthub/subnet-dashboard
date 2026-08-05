@@ -1,7 +1,8 @@
 """Per-judge (Oracle/Echo/Pulse) confidence weights.
 
-Closes the judges learning loop: each judge's resolved P&L nudges its own
-weight, which is read back into the consensus blend in subnet_judges.py.
+Closes the judges learning loop: each judge's selective endorsement grade
+(score gate vs council outcome) nudges its own weight, read back into the
+consensus blend in subnet_judges.py.
 """
 
 import os

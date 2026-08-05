@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 from internal.analytics.backtest_methodology import build_methodology_payload
 from internal.council.grading import direction_correct
 from internal.judges import echo_judge, oracle_judge, pulse_judge
+from internal.judges.grading import judge_threshold as _judge_threshold
 from internal.judges.portfolios import _compute_pnl
 from internal.learning.predictions_store import load_predictions
 
@@ -15,15 +16,6 @@ JUDGES = ("oracle", "echo", "pulse")
 _SKIP_OUTCOMES = frozenset({"duplicate", "expired", "ungradeable"})
 _CALIBRATION_BINS = 10
 _RISK_COVERAGE_THRESHOLDS = (0.45, 0.5, 0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9)
-_JUDGE_THRESHOLDS: Dict[str, float] = {
-    "oracle": 0.55,
-    "echo": 0.5,
-    "pulse": 0.55,
-}
-
-
-def _judge_threshold(judge: str) -> float:
-    return _JUDGE_THRESHOLDS.get(judge, 0.55)
 
 
 def _gradeable_rows(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
