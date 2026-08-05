@@ -927,6 +927,89 @@
     }
   }
 
+  function formatExpertLabel(name) {
+    if (!name || name === 'unknown') return 'Unknown';
+    return String(name)
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, function (c) {
+        return c.toUpperCase();
+      });
+  }
+
+  function syncAccuracyLiftPanel(block) {
+    var summary = document.getElementById('accuracy-lift-summary');
+    var expertsEl = document.getElementById('accuracy-lift-experts');
+    var noteEl = document.getElementById('accuracy-lift-note');
+    if (!summary) return;
+
+    block = block || {};
+    if (!block.data_available || !block.graded_30d) {
+      summary.textContent = block.note || 'Building graded history';
+      summary.classList.add('desk-empty');
+      if (expertsEl) {
+        expertsEl.hidden = true;
+        expertsEl.innerHTML = '';
+      }
+      return;
+    }
+
+    var graded = Number(block.graded_30d);
+    var line = graded + ' graded';
+    if (block.hit_rate_30d != null) {
+      line += ' · ' + Math.round(Number(block.hit_rate_30d) * 100) + '% direction hit';
+    }
+    var aq = block.attribution_quality || {};
+    if (aq.attributed != null && aq.total > 0) {
+      line += ' · ' + aq.attributed + '/' + aq.total + ' attributed';
+    }
+    summary.textContent = line;
+    summary.classList.remove('desk-empty');
+
+    var byExpert = block.by_expert || {};
+    var rows = Object.keys(byExpert)
+      .map(function (key) {
+        return { key: key, row: byExpert[key] };
+      })
+      .filter(function (entry) {
+        return entry.row && Number(entry.row.graded) > 0;
+      })
+      .sort(function (a, b) {
+        return Number(b.row.graded) - Number(a.row.graded);
+      });
+
+    if (expertsEl) {
+      if (!rows.length) {
+        expertsEl.hidden = true;
+        expertsEl.innerHTML = '';
+      } else {
+        expertsEl.hidden = false;
+        expertsEl.innerHTML = rows
+          .map(function (entry) {
+            var label = formatExpertLabel(entry.key);
+            var hit =
+              entry.row.hit_rate != null
+                ? Math.round(Number(entry.row.hit_rate) * 100) + '%'
+                : '—';
+            return (
+              '<li><span class="accuracy-lift-panel__expert">' +
+              esc(label) +
+              '</span> · ' +
+              entry.row.graded +
+              ' graded · ' +
+              hit +
+              '</li>'
+            );
+          })
+          .join('');
+      }
+    }
+
+    if (noteEl) {
+      noteEl.textContent =
+        'Full resolved ledger (30d); trust gate uses published LONG picks only.';
+    }
+  }
+
   function patchK3ConvictionRing(confPct) {
     if (confPct == null || isNaN(confPct)) return;
     var ring = document.querySelector('#k3-dossier .ring-fill');
@@ -3754,6 +3837,11 @@
                   ? stats.working.top_price_signals.length
                   : null,
             });
+          })
+          .catch(function () {});
+        fetchJsonRetry('/api/ops/evidence', 12000, 1)
+          .then(function (evidence) {
+            syncAccuracyLiftPanel(evidence && evidence.accuracy_lift);
           })
           .catch(function () {});
       } else {
