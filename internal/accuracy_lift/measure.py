@@ -8,6 +8,12 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
+from internal.accuracy_lift.populations import (
+    is_council_trust_row,
+    is_gradable_row,
+    is_published_council_row,
+    pick_source_bucket,
+)
 from internal.council.grading import direction_correct
 
 NOISE_MAGNITUDE_PCT = 1.0
@@ -274,6 +280,75 @@ def build_attribution_quality(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def _window_actual_days(rows: List[Dict[str, Any]]) -> Optional[float]:
+    timestamps = [ts for row in rows if (ts := row_timestamp(row)) is not None]
+    if len(timestamps) < 2:
+        return None
+    span_days = (max(timestamps) - min(timestamps)).total_seconds() / 86400.0
+    return round(span_days, 2)
+
+
+def _population_rates(
+    w7: List[Dict[str, Any]],
+    w30: List[Dict[str, Any]],
+    *,
+    filter_fn: Callable[[Dict[str, Any]], bool],
+) -> Dict[str, Any]:
+    f7 = [row for row in w7 if filter_fn(row)]
+    f30 = [row for row in w30 if filter_fn(row)]
+    s7 = accuracy_stats(f7)
+    s30 = accuracy_stats(f30)
+    return {
+        "graded_7d": int(s7["n"]),
+        "hit_rate_7d": s7["accuracy"],
+        "graded_30d": int(s30["n"]),
+        "hit_rate_30d": s30["accuracy"],
+    }
+
+
+def _by_pick_source_map(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        if not is_gradable_row(row):
+            continue
+        groups[pick_source_bucket(row)].append(row)
+    out: Dict[str, Dict[str, Any]] = {}
+    for label in sorted(groups):
+        stats = accuracy_stats(groups[label])
+        out[label] = {
+            "n": stats["n"],
+            "correct": stats["correct"],
+            "accuracy": stats["accuracy"],
+        }
+    return out
+
+
+def _empty_accuracy_lift_snapshot() -> Dict[str, Any]:
+    empty_rates = {
+        "graded_7d": 0,
+        "hit_rate_7d": None,
+        "graded_30d": 0,
+        "hit_rate_30d": None,
+    }
+    empty_attr = build_attribution_quality([])
+    return {
+        "data_available": False,
+        "graded_7d": 0,
+        "graded_30d": 0,
+        "hit_rate_7d": None,
+        "hit_rate_30d": None,
+        "by_expert": {},
+        "attribution_quality": empty_attr,
+        "published_only": dict(empty_rates),
+        "council_trust": dict(empty_rates),
+        "full_ledger": dict(empty_rates),
+        "by_pick_source": {},
+        "window_actual_days": {"w7": None, "w30": None},
+        "small_move_miss_share": {"misses": 0, "small_move_misses": 0, "share": None},
+        "note": _EMPTY_NOTE,
+    }
+
+
 def build_accuracy_lift_snapshot(rows: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """Rolling 7d/30d read-only snapshot for ops evidence."""
     if rows is None:
@@ -284,34 +359,46 @@ def build_accuracy_lift_snapshot(rows: Optional[List[Dict[str, Any]]] = None) ->
         except Exception:
             rows = []
 
-    w7 = filter_window(rows, 7)
-    w30 = filter_window(rows, 30)
-    stats_7d = accuracy_stats(w7)
-    stats_30d = accuracy_stats(w30)
-    graded_7d = int(stats_7d["n"])
-    graded_30d = int(stats_30d["n"])
+    w7_all = filter_window(rows, 7)
+    w30_all = filter_window(rows, 30)
+    council_trust = _population_rates(w7_all, w30_all, filter_fn=is_council_trust_row)
+    full_stats_7d = accuracy_stats(w7_all)
+    full_stats_30d = accuracy_stats(w30_all)
+    full_ledger = {
+        "graded_7d": int(full_stats_7d["n"]),
+        "hit_rate_7d": full_stats_7d["accuracy"],
+        "graded_30d": int(full_stats_30d["n"]),
+        "hit_rate_30d": full_stats_30d["accuracy"],
+    }
+    graded_7d = int(council_trust["graded_7d"])
+    graded_30d = int(council_trust["graded_30d"])
 
     if graded_7d == 0 and graded_30d == 0:
-        return {
-            "data_available": False,
-            "graded_7d": 0,
-            "graded_30d": 0,
-            "hit_rate_7d": None,
-            "hit_rate_30d": None,
-            "by_expert": {},
-            "attribution_quality": build_attribution_quality([]),
-            "note": _EMPTY_NOTE,
-        }
+        return _empty_accuracy_lift_snapshot()
 
-    window_rows = w30 if graded_30d > 0 else w7
+    council_w7 = [row for row in w7_all if is_council_trust_row(row)]
+    council_w30 = [row for row in w30_all if is_council_trust_row(row)]
+    window_rows = council_w30 if graded_30d > 0 else council_w7
+
     return {
         "data_available": True,
         "graded_7d": graded_7d,
         "graded_30d": graded_30d,
-        "hit_rate_7d": stats_7d["accuracy"],
-        "hit_rate_30d": stats_30d["accuracy"],
-        "by_expert": _by_expert_map(w30) if graded_30d > 0 else _by_expert_map(w7),
+        "hit_rate_7d": council_trust["hit_rate_7d"],
+        "hit_rate_30d": council_trust["hit_rate_30d"],
+        "by_expert": _by_expert_map(council_w30) if graded_30d > 0 else _by_expert_map(council_w7),
         "attribution_quality": build_attribution_quality(window_rows),
+        "published_only": _population_rates(
+            w7_all, w30_all, filter_fn=is_published_council_row
+        ),
+        "council_trust": council_trust,
+        "full_ledger": full_ledger,
+        "by_pick_source": _by_pick_source_map(w30_all),
+        "window_actual_days": {
+            "w7": _window_actual_days(council_w7),
+            "w30": _window_actual_days(council_w30),
+        },
+        "small_move_miss_share": magnitude_noise_share(council_w30),
         "note": None,
     }
 

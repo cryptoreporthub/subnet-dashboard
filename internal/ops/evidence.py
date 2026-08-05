@@ -126,5 +126,26 @@ def _build_accuracy_lift() -> Dict[str, Any]:
             "hit_rate_30d": None,
             "by_expert": {},
             "attribution_quality": {"total": 0, "unknown": 0, "unknown_pct": None, "attributed": 0},
+            "published_only": {
+                "graded_7d": 0,
+                "hit_rate_7d": None,
+                "graded_30d": 0,
+                "hit_rate_30d": None,
+            },
+            "council_trust": {
+                "graded_7d": 0,
+                "hit_rate_7d": None,
+                "graded_30d": 0,
+                "hit_rate_30d": None,
+            },
+            "full_ledger": {
+                "graded_7d": 0,
+                "hit_rate_7d": None,
+                "graded_30d": 0,
+                "hit_rate_30d": None,
+            },
+            "by_pick_source": {},
+            "window_actual_days": {"w7": None, "w30": None},
+            "small_move_miss_share": {"misses": 0, "small_move_misses": 0, "share": None},
             "note": "honest empty until graded>0",
         }

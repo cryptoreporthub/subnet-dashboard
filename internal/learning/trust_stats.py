@@ -73,11 +73,14 @@ def build_trust_banner(
     ledger_hit_rate_30d = None
     ledger_note = None
     if isinstance(ledger_context, dict) and ledger_context.get("data_available"):
+        full_ledger = ledger_context.get("full_ledger") or {}
         try:
-            ledger_graded_30d = int(ledger_context.get("graded_30d") or 0)
+            ledger_graded_30d = int(full_ledger.get("graded_30d") or ledger_context.get("graded_30d") or 0)
         except (TypeError, ValueError):
             ledger_graded_30d = None
-        raw_rate = ledger_context.get("hit_rate_30d")
+        raw_rate = full_ledger.get("hit_rate_30d")
+        if raw_rate is None:
+            raw_rate = ledger_context.get("hit_rate_30d")
         if raw_rate is not None:
             try:
                 ledger_hit_rate_30d = round(float(raw_rate), 4)
