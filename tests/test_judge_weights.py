@@ -19,6 +19,77 @@ def test_default_judge_weights_sum_to_one_and_match_hardcoded_mix():
     assert sum(DEFAULT_JUDGE_WEIGHTS.values()) == 1.0
 
 
+def test_judge_nudge_deltas_are_symmetric():
+    """Asymmetric +0.02/−0.03 required ~60% win rate to stay flat (weight collapse)."""
+    from internal.judges.weights import _LEARNING_DELTA_CORRECT, _LEARNING_DELTA_WRONG
+
+    assert _LEARNING_DELTA_CORRECT == 0.02
+    assert _LEARNING_DELTA_WRONG == -0.02
+    assert _LEARNING_DELTA_CORRECT == -_LEARNING_DELTA_WRONG
+
+
+def test_nudge_judge_fifty_fifty_stays_near_start(tmp_path):
+    """At 50% win rate, symmetric deltas must not drift to the floor."""
+    from internal.judges.weights import _LEARNING_DELTA_CORRECT, save_judge_weights
+
+    soul_path = tmp_path / "soul_map.json"
+    start = 1.0
+    save_judge_weights(
+        {"oracle": start, "echo": start, "pulse": start},
+        path=str(soul_path),
+    )
+    for i in range(100):
+        nudge_judge("oracle", i % 2 == 0, path=str(soul_path))
+    after = load_judge_weights(path=str(soul_path))["oracle"]
+    # 50 wins / 50 losses with ±0.02 cancel; allow rounding noise only
+    assert abs(after - start) < 0.05
+    assert after > _LEARNING_MIN_WEIGHT + abs(_LEARNING_DELTA_CORRECT)
+
+
+def test_nudge_judge_emits_weight_change_trail(tmp_path, monkeypatch):
+    emitted = []
+
+    def _capture(expert, *, before, after, reason, correct=None, extra=None):
+        emitted.append(
+            {
+                "expert": expert,
+                "before": before,
+                "after": after,
+                "reason": reason,
+                "correct": correct,
+            }
+        )
+
+    monkeypatch.setattr("internal.learning.trail_bus.emit_weight_change", _capture)
+    soul_path = tmp_path / "soul_map.json"
+    before = load_judge_weights(path=str(soul_path))["echo"]
+    after = nudge_judge("echo", True, path=str(soul_path))
+    assert after == pytest.approx(before + 0.02)
+    assert len(emitted) == 1
+    assert emitted[0]["expert"] == "echo"
+    assert emitted[0]["before"] == before
+    assert emitted[0]["after"] == after
+    assert emitted[0]["reason"] == "judge_pnl"
+    assert emitted[0]["correct"] is True
+
+
+def test_nudge_judge_skips_trail_when_clamped_unchanged(tmp_path, monkeypatch):
+    from internal.judges.weights import save_judge_weights
+
+    emitted = []
+    monkeypatch.setattr(
+        "internal.learning.trail_bus.emit_weight_change",
+        lambda *a, **k: emitted.append(True),
+    )
+    soul_path = tmp_path / "soul_map.json"
+    save_judge_weights(
+        {"oracle": _LEARNING_MIN_WEIGHT, "echo": 1.0, "pulse": 1.0},
+        path=str(soul_path),
+    )
+    after = nudge_judge("oracle", False, path=str(soul_path))
+    assert after == _LEARNING_MIN_WEIGHT
+    assert emitted == []
+
 def test_load_judge_weights_returns_defaults_when_key_missing(tmp_path):
     soul_path = tmp_path / "soul_map.json"
     write_soul_map(lambda blob: blob.update({"unrelated": 1}), path=str(soul_path))
