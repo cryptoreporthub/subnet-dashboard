@@ -681,3 +681,34 @@ def test_legacy_no_council_first_composition_styles():
         "Full-bleed council stage (first viewport)",
     ):
         assert dead not in legacy
+
+
+def test_weighing_room_live_in_ui_css():
+    """P3-3k: Weighing Room / Conviction Board CSS in ui.css."""
+    css = _read_ui_css()
+    for selector in (
+        "/* ---- Weighing Room / conviction board (migrated from ui-legacy.css, P3-3k) ---- */",
+        "Weighing Room — no rainbow/scoreboard chrome (LOCK)",
+        "Weighing Room (Conviction Board LOCK)",
+        ".weighing-room {",
+        ".wr-chip--near-call",
+        "@keyframes wr-near-pulse",
+        ".caution-cells {",
+        ".conv-ring-gap-tick",
+    ):
+        assert selector in css
+
+
+def test_legacy_no_weighing_room_styles():
+    """P3-3k: weighing room block removed from ui-legacy.css."""
+    legacy = _read_ui_legacy_css()
+    for dead in (
+        "Weighing Room — no rainbow/scoreboard chrome (LOCK)",
+        "Weighing Room (Conviction Board LOCK)",
+        ".weighing-room {",
+        ".wr-chip--near-call",
+        "@keyframes wr-near-pulse",
+        ".wr-band__label--near",
+        ".caution-cells {",
+    ):
+        assert dead not in legacy
