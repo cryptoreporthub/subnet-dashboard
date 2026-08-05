@@ -955,6 +955,10 @@
     if (!summary) return;
 
     block = block || {};
+    var pub = block.published_only;
+    var usePublished = pub && pub.data_available && Number(pub.graded_30d) > 0;
+    var display = usePublished ? pub : block;
+
     if (!block.data_available || !block.graded_30d) {
       summary.textContent = block.note || 'Building graded history';
       summary.classList.add('desk-empty');
@@ -962,21 +966,24 @@
         expertsEl.hidden = true;
         expertsEl.innerHTML = '';
       }
+      if (noteEl) noteEl.textContent = '';
       return;
     }
 
-    var graded = Number(block.graded_30d);
-    var showMetrics = ledgerMetricsPublic(block);
-    var line = graded + ' graded in measurement ledger (30d)';
-    if (showMetrics && block.hit_rate_30d != null) {
-      line += ' · ' + Math.round(Number(block.hit_rate_30d) * 100) + '% direction hit';
+    var graded = Number(display.graded_30d);
+    var showMetrics = ledgerMetricsPublic(display);
+    var line = usePublished
+      ? graded + ' published council graded (30d)'
+      : graded + ' graded in measurement ledger (30d)';
+    if (showMetrics && display.hit_rate_30d != null) {
+      line += ' · ' + Math.round(Number(display.hit_rate_30d) * 100) + '% direction hit';
     } else {
       line += ' · hit rates hidden until sample clears';
     }
     summary.textContent = line;
     summary.classList.remove('desk-empty');
 
-    var byExpert = block.by_expert || {};
+    var byExpert = display.by_expert || {};
     var rows = Object.keys(byExpert)
       .map(function (key) {
         return { key: key, row: byExpert[key] };
@@ -1019,9 +1026,11 @@
     }
 
     if (noteEl) {
-      noteEl.textContent = showMetrics
-        ? 'Full resolved ledger (30d); trust gate uses published LONG picks only.'
-        : 'Internal measurement only — published trust uses LONG picks once sample clears.';
+      noteEl.textContent = usePublished
+        ? 'Published council picks only — shadows and pump-desk excluded.'
+        : showMetrics
+          ? block.note || 'Mixed measurement ledger (30d); see published_only when available.'
+          : 'Internal measurement only — published trust uses LONG picks once sample clears.';
     }
   }
 

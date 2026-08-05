@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from internal.council.grading import is_pump_desk_claim
+from internal.council.grading import is_pump_combined_exp, is_pump_desk_claim, is_pump_lead
 
 _SKIP_OUTCOMES = frozenset({"duplicate", "expired", "ungradeable"})
 _COUNCIL_SOURCES = frozenset({"", "council"})
@@ -40,21 +40,31 @@ def is_council_trust_row(row: Dict[str, Any]) -> bool:
     return True
 
 
-def is_published_council_row(row: Dict[str, Any]) -> bool:
-    """Primary council picks only (excludes shadows and pump desk)."""
-    if not is_council_trust_row(row):
-        return False
-    return _pick_source_raw(row) in _COUNCIL_SOURCES
-
-
-def pick_source_bucket(row: Dict[str, Any]) -> str:
+def population_of(row: Dict[str, Any]) -> str:
+    """LOCK vocabulary: pump | shadow | council | other."""
+    if is_pump_lead(row):
+        return "pump_lead"
+    if is_pump_combined_exp(row):
+        return "pump_combined_exp"
     if is_shadow_row(row):
-        return "council_shadow"
+        return "shadow"
     source = _pick_source_raw(row)
     if source in _COUNCIL_SOURCES:
         return "council"
-    if source in {"pump_lead", "pump_combined_exp"}:
-        return source
-    if is_pump_desk_claim(row):
-        return source or "pump_lead"
     return source if source else "council"
+
+
+def is_published_council_row(row: Dict[str, Any]) -> bool:
+    """Mirror resolver._compute_stats gradable filter (published council picks)."""
+    if population_of(row) != "council":
+        return False
+    if str(row.get("outcome") or "").lower() in _SKIP_OUTCOMES:
+        return False
+    return row.get("correct") is not None or row.get("actual_pct") is not None
+
+
+def pick_source_bucket(row: Dict[str, Any]) -> str:
+    bucket = population_of(row)
+    if bucket == "shadow":
+        return "council_shadow"
+    return bucket

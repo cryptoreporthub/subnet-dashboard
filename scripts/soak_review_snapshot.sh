@@ -105,10 +105,25 @@ checks = {
         "pass": True,
         "present": "accuracy_lift" in evidence,
         "data_available": (evidence.get("accuracy_lift") or {}).get("data_available"),
+        "population": (evidence.get("accuracy_lift") or {}).get("population"),
         "graded_7d": (evidence.get("accuracy_lift") or {}).get("graded_7d"),
         "graded_30d": (evidence.get("accuracy_lift") or {}).get("graded_30d"),
         "hit_rate_7d": (evidence.get("accuracy_lift") or {}).get("hit_rate_7d"),
         "hit_rate_30d": (evidence.get("accuracy_lift") or {}).get("hit_rate_30d"),
+        "published_graded_30d": ((evidence.get("accuracy_lift") or {}).get("published_only") or {}).get(
+            "graded_30d"
+        ),
+        "published_hit_rate_30d": ((evidence.get("accuracy_lift") or {}).get("published_only") or {}).get(
+            "hit_rate_30d"
+        ),
+        "by_pick_source": {
+            row.get("label"): row.get("n")
+            for row in ((evidence.get("accuracy_lift") or {}).get("by_pick_source_30d") or [])
+        },
+        "by_horizon": {
+            row.get("label"): row.get("n")
+            for row in ((evidence.get("accuracy_lift") or {}).get("by_horizon_30d") or [])
+        },
         "note": (evidence.get("accuracy_lift") or {}).get("note"),
     },
 }

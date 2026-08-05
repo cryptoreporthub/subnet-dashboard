@@ -145,6 +145,8 @@ def _build_accuracy_lift() -> Dict[str, Any]:
                 "hit_rate_30d": None,
             },
             "by_pick_source": {},
+            "by_pick_source_30d": [],
+            "by_horizon_30d": [],
             "window_actual_days": {"w7": None, "w30": None},
             "small_move_miss_share": {"misses": 0, "small_move_misses": 0, "share": None},
             "note": "honest empty until graded>0",

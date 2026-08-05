@@ -41,8 +41,9 @@ def test_evidence_includes_accuracy_lift():
     assert "council_trust" in block
     assert "full_ledger" in block
     assert "by_pick_source" in block
-    assert "window_actual_days" in block
-    assert "small_move_miss_share" in block
+    assert "by_pick_source_30d" in block
+    assert "by_horizon_30d" in block
+    assert "population" in block
     assert "note" in block
     assert "attribution_quality" in report
 
@@ -73,7 +74,10 @@ def test_accuracy_lift_counts_recent_graded_rows():
     assert block["hit_rate_30d"] == round(2 / 3, 4)
     assert block["by_expert"]["quant"]["graded"] == 2
     assert block["by_expert"]["hype"]["graded"] == 1
-    assert block["note"] is None
+    assert block["published_only"]["graded_30d"] == 3
+    assert block["note"] == (
+        "mixed ledger — includes HOLD/near-miss shadows + pump-desk claims; see published_only"
+    )
     assert block["attribution_quality"]["total"] == 3
     assert block["attribution_quality"]["unknown"] == 0
 
@@ -129,13 +133,19 @@ def test_accuracy_lift_population_split():
         {"id": "expired", "created_at": rows_ts(1), "resolved_at": rows_ts(1), "outcome": "expired"},
     ]
     block = build_accuracy_lift_snapshot(rows=rows)
-    assert block["graded_30d"] == block["council_trust"]["graded_30d"]
-    assert block["published_only"]["graded_30d"] == 3  # council hits + legacy missing source
-    assert block["full_ledger"]["graded_30d"] == 7  # all stored-correct rows except expired
+    assert block["population"] == "mixed_all_resolved"
+    assert block["graded_30d"] == 7
+    assert block["council_trust"]["graded_30d"] == 3
+    assert block["published_only"]["graded_30d"] == 3
+    assert block["full_ledger"]["graded_30d"] == 7
     buckets = block["by_pick_source"]
     assert buckets["council"]["n"] == 3
     assert buckets["pump_lead"]["n"] == 1
     assert buckets["council_shadow"]["n"] == 2
+    source_rows = block["by_pick_source_30d"]
+    assert sum(row["n"] for row in source_rows) == 7
+    shadow_bucket = next(row for row in source_rows if row["label"] == "shadow")
+    assert shadow_bucket["n"] == 2
 
 
 def test_window_actual_days_and_small_move_miss_share():
@@ -196,6 +206,35 @@ def test_trust_banner_uses_full_ledger_context():
     banner = build_trust_banner({"correct": 1, "wrong": 0}, ledger_context=ledger_context)
     assert banner["ledger_graded_30d"] == ledger_context["full_ledger"]["graded_30d"]
     assert banner["ledger_hit_rate_30d"] == ledger_context["full_ledger"]["hit_rate_30d"]
+    assert banner["ledger_published_graded_30d"] == ledger_context["published_only"]["graded_30d"]
+    assert banner["ledger_published_hit_rate_30d"] == ledger_context["published_only"]["hit_rate_30d"]
+
+
+def test_published_only_matches_resolver_stats():
+    from internal.council.resolver import _compute_stats
+
+    rows = [
+        _recent_row(correct=True, days_ago=1),
+        _recent_row(correct=False, days_ago=2),
+        _recent_row(correct=True, days_ago=1, shadow=True),
+        _recent_row(correct=False, days_ago=1, pick_source="pump_lead"),
+    ]
+    stats = _compute_stats({"resolved": rows, "predictions": []})
+    block = build_accuracy_lift_snapshot(rows=rows)
+    pub = block["published_only"]
+    assert pub["graded_30d"] == stats["correct"] + stats["wrong"]
+    assert pub["hit_rate_30d"] == round(stats["accuracy"], 4)
+
+
+def test_by_horizon_30d_splits_hour_and_day():
+    rows = [
+        _recent_row(correct=True, days_ago=1, horizon_type="hour", horizon_hours=4),
+        _recent_row(correct=False, days_ago=1, horizon_type="day", horizon_hours=24),
+    ]
+    block = build_accuracy_lift_snapshot(rows=rows)
+    labels = {row["label"] for row in block["by_horizon_30d"]}
+    assert "hour" in labels
+    assert "day" in labels
 
 
 def test_acc1_script_reexports_shared_helpers():

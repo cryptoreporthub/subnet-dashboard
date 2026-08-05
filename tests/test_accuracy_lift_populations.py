@@ -7,6 +7,7 @@ from internal.accuracy_lift.populations import (
     is_published_council_row,
     is_shadow_row,
     pick_source_bucket,
+    population_of,
 )
 
 
@@ -31,6 +32,13 @@ def test_missing_pick_source_counts_as_council():
 
 def test_pump_lead_excluded_from_council_trust():
     row = _row(pick_source="pump_lead", correct=False)
+    assert population_of(row) == "pump_lead"
     assert pick_source_bucket(row) == "pump_lead"
     assert is_council_trust_row(row) is False
     assert is_published_council_row(row) is False
+
+
+def test_shadow_population_bucket():
+    row = _row(pick_source="council_shadow")
+    assert population_of(row) == "shadow"
+    assert pick_source_bucket(row) == "council_shadow"
