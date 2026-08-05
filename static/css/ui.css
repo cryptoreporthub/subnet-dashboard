@@ -25,7 +25,7 @@ body.council-first-theme {
   background-position: center;
 }
 
-/* Page atmosphere mist overlay — drift gated in Quiet motion below */
+/* Page atmosphere aurora overlay — drift gated in Quiet motion below */
 body.council-first-theme::before {
   content: "";
   position: fixed;
@@ -33,9 +33,10 @@ body.council-first-theme::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(ellipse 50% 40% at 20% 30%, rgba(160, 168, 180, 0.08), transparent 70%),
-    radial-gradient(ellipse 45% 35% at 80% 70%, rgba(140, 150, 164, 0.07), transparent 70%);
-  opacity: 0.9;
+    var(--aurora-cyan),
+    var(--aurora-green),
+    var(--aurora-violet);
+  opacity: 1;
   transform-origin: center center;
 }
 
@@ -69,7 +70,7 @@ body.council-first-theme .council-stage__brand.brand-mist span {
 body.council-first-theme .council-stage__brand.brand-mist {
   font-size: clamp(2rem, 8vw, 3.25rem);
   line-height: 1.05;
-  filter: drop-shadow(0 4px 28px rgba(142, 197, 216, 0.22));
+  filter: drop-shadow(0 4px 28px var(--brand-glow));
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -203,14 +204,18 @@ nav.top-nav a {
   min-height: 36px;
   display: inline-flex;
   align-items: center;
-  transition: transform 0.12s, background 0.15s;
+  transition: transform 0.12s, background 0.15s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
 nav.top-nav a[aria-current="page"],
 nav.top-nav a:hover {
-  color: #e8f4f8;
-  background: rgba(126, 200, 227, 0.12);
-  border-color: rgba(126, 200, 227, 0.28);
+  color: #f0f9ff;
+  background: rgba(63, 201, 255, 0.14);
+  border-color: rgba(63, 201, 255, 0.38);
+}
+
+nav.top-nav a[aria-current="page"] {
+  box-shadow: 0 0 14px rgba(63, 201, 255, 0.22);
 }
 
 
@@ -272,6 +277,7 @@ button.home-cta {
   background: linear-gradient(135deg, var(--accent-primary), #18b56a);
   color: #04140b;
   border: 0;
+  box-shadow: 0 6px 24px rgba(31, 212, 124, 0.28);
 }
 
 
@@ -476,10 +482,10 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
 
 /* Double class beats legacy .proof-band__pct { color } (ui-legacy loads later) */
 .proof-band__pct.proof-band__pct--ice {
-  color: #a5f3fc;
+  color: #c9f5ff;
   text-shadow:
-    0 0 18px rgba(103, 232, 249, 0.42),
-    0 0 36px rgba(186, 230, 253, 0.18);
+    0 0 22px rgba(103, 232, 249, 0.5),
+    0 0 44px rgba(63, 201, 255, 0.24);
 }
 
 .pds-desk__skel {
@@ -592,14 +598,15 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--accent-blue);
+  text-shadow: 0 0 10px var(--accent-glow-blue);
   margin: 0 0 14px;
 }
 
 .council-stage__title {
-  font-size: 17px;
-  font-weight: 500;
-  color: var(--text-secondary);
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--text-primary);
   margin: 0 0 22px;
 }
 
@@ -8892,6 +8899,26 @@ body.wrap {
 
 .driver-popover-arrow {
   border-color: rgba(16, 19, 26, 0.94);
+}
+
+/* ---------- Vivid pass: brand mark + footer legibility (body prefix beats legacy) ---------- */
+body.council-first-theme .logo-mark {
+  background: linear-gradient(135deg, var(--accent-blue) 0%, var(--accent-primary) 100%);
+  box-shadow:
+    0 0 12px rgba(63, 201, 255, 0.5),
+    0 0 28px rgba(31, 212, 124, 0.28);
+  animation: none;
+}
+
+body.council-first-theme footer.status .status-inner--meta {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+body.council-first-theme .footer-card__lbl {
+  font-size: 10px;
+  color: var(--text-muted);
 }
 
 /* SimiVision ui.css — consolidated mobile-first (generated 2026-08-02) */

@@ -10,21 +10,28 @@
   --bg-card: rgba(16, 19, 26, 0.78);
   --bg-elevated: rgba(20, 23, 30, 0.9);
   --bg-header: rgba(8, 10, 16, 0.72);
-  /* Pewter card smoke — same grey family as page, no green wash */
+  /* Pewter card smoke — grey family with a faint cyan aurora sheen (no green wash) */
   --card-smoke:
     radial-gradient(ellipse 160% 80% at 50% -40%, rgba(168, 176, 190, 0.18) 0%, transparent 50%),
+    radial-gradient(ellipse 120% 65% at 50% -30%, rgba(63, 201, 255, 0.07) 0%, transparent 55%),
     linear-gradient(180deg, rgba(22, 25, 32, 0.88) 0%, rgba(20, 23, 30, 0.9) 100%);
   --card-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.78 0 0 0 0 0.80 0 0 0 0 0.84 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  --line: rgba(255, 255, 255, 0.09);
-  --line-hi: rgba(255, 255, 255, 0.15);
-  /* Even smoke — symmetric radial blobs + SVG layer */
+  --line: rgba(255, 255, 255, 0.1);
+  --line-hi: rgba(255, 255, 255, 0.18);
+  /* Aurora midnight — locked accents at low alpha over smoke texture + midnight gradient */
   --bg-atmosphere:
     url("/static/img/simivision-smoke-bg.svg"),
-    radial-gradient(ellipse 120% 90% at 50% 0%, rgba(128, 136, 150, 0.34) 0%, transparent 58%),
-    radial-gradient(ellipse 100% 80% at 50% 100%, rgba(100, 108, 122, 0.28) 0%, transparent 55%),
-    radial-gradient(ellipse 80% 70% at 30% 45%, rgba(115, 122, 136, 0.16) 0%, transparent 70%),
-    radial-gradient(ellipse 80% 70% at 70% 55%, rgba(115, 122, 136, 0.16) 0%, transparent 70%),
+    radial-gradient(ellipse 120% 90% at 50% -10%, rgba(63, 201, 255, 0.13) 0%, transparent 58%),
+    radial-gradient(ellipse 90% 70% at 12% 42%, rgba(31, 212, 124, 0.08) 0%, transparent 65%),
+    radial-gradient(ellipse 90% 70% at 88% 58%, rgba(157, 140, 255, 0.1) 0%, transparent 65%),
+    radial-gradient(ellipse 110% 80% at 50% 108%, rgba(63, 201, 255, 0.07) 0%, transparent 55%),
     linear-gradient(180deg, var(--bg-midnight) 0%, var(--bg-base) 100%);
+
+  /* Aurora glows — page overlay + focal surfaces (vivid pass, locked accents) */
+  --aurora-cyan: radial-gradient(ellipse 55% 45% at 18% 22%, rgba(63, 201, 255, 0.12), transparent 70%);
+  --aurora-green: radial-gradient(ellipse 50% 40% at 82% 30%, rgba(31, 212, 124, 0.09), transparent 70%);
+  --aurora-violet: radial-gradient(ellipse 55% 45% at 60% 85%, rgba(157, 140, 255, 0.1), transparent 70%);
+  --brand-glow: rgba(63, 201, 255, 0.38);
 
   /* Accents — green primary, cyan secondary, orange tertiary, violet aurora (replaces magenta) */
   --accent-primary: #1fd47c;
@@ -52,10 +59,10 @@
   --signal-watch: var(--accent-orange);
   --signal-amber: var(--accent-orange);
 
-  /* Text */
+  /* Text — cool neutrals, brighter for contrast on midnight */
   --text-primary: #f5f7fa;
-  --text-secondary: #a3b5aa;
-  --text-muted: #7a9186;
+  --text-secondary: #b6c3cd;
+  --text-muted: #8797a5;
 
   /* Borders — hairlines; violet on secondary emphasis */
   --border-subtle: rgba(255, 255, 255, 0.06);
@@ -78,7 +85,7 @@
   --radius-pill: 9999px;
 
   /* Shadows / bloom — mild glow; violet secondary, not dominant */
-  --shadow-card: 0 8px 28px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(31, 212, 124, 0.05) inset;
+  --shadow-card: 0 10px 32px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(63, 201, 255, 0.06) inset;
   --shadow-important: 0 0 22px rgba(31, 212, 124, 0.16), 0 0 40px rgba(63, 201, 255, 0.08);
   --shadow-elevated: 0 14px 48px rgba(0, 0, 0, 0.85);
   --shadow-glow: 0 0 18px var(--accent-glow), 0 0 36px var(--accent-glow-blue);
@@ -90,7 +97,7 @@
   --font-body: 'Space Grotesk', system-ui, sans-serif;
   --font-brand: 'Syne', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-  --brand-mist: linear-gradient(100deg, #ffffff 0%, #f0f4f8 18%, #c5d3e0 48%, #9ec4d4 78%, #7eb8d0 100%);
+  --brand-mist: linear-gradient(100deg, #ffffff 0%, #dcf4ff 22%, #8fe3ff 48%, #3fc9ff 74%, #1fd47c 100%);
 
   /* Spacing */
   --space-1: 4px;
