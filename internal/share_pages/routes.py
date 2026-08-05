@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
 import logging
 import os
-from typing import Any, Dict, List
+import time
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
@@ -19,6 +21,94 @@ _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 templates = Jinja2Templates(directory=os.path.join(_REPO, "templates"))
 
 share_router = APIRouter(tags=["share"])
+
+SUBNET_SHARE_TIMEOUT = float(os.environ.get("SUBNET_SHARE_TIMEOUT", "8"))
+
+
+def _partial_subnet_report(netuid: int, *, reason: str) -> Dict[str, Any]:
+    return {
+        "status": "partial",
+        "netuid": netuid,
+        "name": f"SN{netuid}",
+        "source": "partial",
+        "markdown": f"# Subnet SN{netuid}\n\n_Some report sections are still loading ({reason}). Retry shortly._",
+        "sections": {},
+    }
+
+
+async def _timed_subnet_report(netuid: int) -> tuple[Dict[str, Any], Optional[str]]:
+    from internal.analytics.report import build_subnet_report
+
+    started = time.perf_counter()
+    try:
+        report = await asyncio.wait_for(
+            asyncio.to_thread(build_subnet_report, netuid),
+            timeout=SUBNET_SHARE_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        elapsed = time.perf_counter() - started
+        logger.warning(
+            "subnet share: build_subnet_report timed out after %.2fs (limit=%.1fs) netuid=%s",
+            elapsed,
+            SUBNET_SHARE_TIMEOUT,
+            netuid,
+        )
+        return _partial_subnet_report(netuid, reason="report timeout"), "report_timeout"
+    except Exception as exc:
+        elapsed = time.perf_counter() - started
+        logger.warning(
+            "subnet share: build_subnet_report failed after %.2fs netuid=%s: %s",
+            elapsed,
+            netuid,
+            exc,
+        )
+        return _partial_subnet_report(netuid, reason="report error"), "report_error"
+
+    elapsed = time.perf_counter() - started
+    logger.info(
+        "subnet share: build_subnet_report %.2fs netuid=%s status=%s",
+        elapsed,
+        netuid,
+        report.get("status"),
+    )
+    return report, None
+
+
+async def _timed_explain_subnet(netuid: int) -> tuple[Optional[Dict[str, Any]], Optional[str]]:
+    def _build() -> Dict[str, Any]:
+        from internal.council.pick_explain import explain_subnet
+        from internal.subnets.feed import load_pick_subnets
+
+        return explain_subnet(netuid, load_pick_subnets(), {})
+
+    started = time.perf_counter()
+    try:
+        why_not = await asyncio.wait_for(
+            asyncio.to_thread(_build),
+            timeout=SUBNET_SHARE_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        elapsed = time.perf_counter() - started
+        logger.warning(
+            "subnet share: explain_subnet timed out after %.2fs (limit=%.1fs) netuid=%s",
+            elapsed,
+            SUBNET_SHARE_TIMEOUT,
+            netuid,
+        )
+        return None, "explain_timeout"
+    except Exception as exc:
+        elapsed = time.perf_counter() - started
+        logger.debug(
+            "subnet share: explain_subnet failed after %.2fs netuid=%s: %s",
+            elapsed,
+            netuid,
+            exc,
+        )
+        return None, "explain_error"
+
+    elapsed = time.perf_counter() - started
+    logger.info("subnet share: explain_subnet %.2fs netuid=%s", elapsed, netuid)
+    return why_not, None
 
 
 def _public_base(request: Request) -> str:
@@ -35,27 +125,30 @@ async def api_global_search(q: str = Query("", min_length=1), limit: int = Query
 @share_router.get("/subnet/{netuid}")
 async def subnet_share_page(request: Request, netuid: int):
     """§28-1 — routable per-subnet analysis page."""
-    from internal.analytics.report import build_subnet_report, markdown_subset_html
+    from internal.analytics.report import markdown_subset_html
 
-    report = build_subnet_report(netuid)
+    report, report_err = await _timed_subnet_report(netuid)
+    why_not, explain_err = await _timed_explain_subnet(netuid)
+
     name = report.get("name") or f"SN{netuid}"
     judges = (report.get("sections") or {}).get("judges") or {}
     drivers = (report.get("sections") or {}).get("market_drivers") or {}
     consensus = judges.get("consensus") if isinstance(judges, dict) else {}
-    why_not = None
-    try:
-        from internal.council.pick_explain import explain_subnet
-        from internal.subnets.feed import load_pick_subnets
-
-        why_not = explain_subnet(netuid, load_pick_subnets(), {})
-    except Exception as exc:
-        logger.debug("pick explain for share page failed: %s", exc)
     base = _public_base(request)
     page_url = f"{base}/subnet/{netuid}"
     title = f"{name} (SN{netuid}) — SimiVision"
     desc = (drivers.get("headline") or f"Council analysis and market drivers for Bittensor subnet {netuid}.")[:200]
     og_image = f"{base}/static/favicon.svg"
-    data_available = bool(report) and (bool(drivers) or bool(judges) or bool(report.get("markdown")))
+    partial_notes: List[str] = []
+    if report_err:
+        partial_notes.append("Subnet report timed out — showing a partial view.")
+    if explain_err:
+        partial_notes.append("Council gate notes are still loading.")
+    data_available = bool(report) and (
+        bool(drivers) or bool(judges) or bool(report.get("markdown"))
+    )
+    if report.get("status") == "partial":
+        data_available = True
 
     return templates.TemplateResponse(
         request,
@@ -70,6 +163,7 @@ async def subnet_share_page(request: Request, netuid: int):
             "digest_html": markdown_subset_html(report.get("markdown") or ""),
             "data_available": data_available,
             "error_reason": None if data_available else "Subnet report data unavailable",
+            "partial_notes": partial_notes,
             "why_not": why_not,
             "page_title": title,
             "page_description": desc,

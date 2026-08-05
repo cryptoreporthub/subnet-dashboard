@@ -243,7 +243,15 @@ def _recent_council_deltas() -> Dict[str, float]:
         return {}
 
 
-def _council_trend(weight: float, delta: float | None, base: float) -> str:
+def _council_trend(
+    weight: float,
+    delta: float | None,
+    base: float,
+    *,
+    expert_graded: int = 0,
+) -> str:
+    if expert_graded <= 0:
+        return "prior"
     if delta is not None and abs(delta) > 0.001:
         if delta > 0:
             return "up"
@@ -261,12 +269,15 @@ def _council_trend(weight: float, delta: float | None, base: float) -> str:
 def _council_weights_list(
     weights: Dict[str, Any],
     deltas: Dict[str, float] | None = None,
+    *,
+    expert_graded: Dict[str, int] | None = None,
 ) -> List[Dict[str, Any]]:
     """Shape learned weights for the Bench soul-orb UI."""
     from internal.council.weights import DEFAULT_WEIGHTS
-    from internal.learning.weight_deltas import _normalize_expert
+    from internal.learning.weight_deltas import _normalize_expert, expert_graded_counts
 
     delta_map = deltas or {}
+    graded_map = expert_graded if expert_graded is not None else expert_graded_counts()
     out: List[Dict[str, Any]] = []
     for name, value in (weights or {}).items():
         key = _normalize_expert(name)
@@ -278,8 +289,22 @@ def _council_weights_list(
             delta = float(delta_map.get(key, 0) or 0)
         except (TypeError, ValueError):
             delta = 0.0
-        trend = _council_trend(w, delta if key in delta_map else None, base)
-        out.append({"expert": key, "weight": w, "trend": trend, "delta": delta})
+        graded_n = int(graded_map.get(key, 0) or 0)
+        trend = _council_trend(
+            w,
+            delta if key in delta_map else None,
+            base,
+            expert_graded=graded_n,
+        )
+        out.append(
+            {
+                "expert": key,
+                "weight": w,
+                "trend": trend,
+                "delta": delta,
+                "expert_graded": graded_n,
+            }
+        )
     out.sort(key=lambda row: row["weight"], reverse=True)
     return out
 

@@ -73,7 +73,7 @@ def build_subnet_report(netuid: int) -> Dict[str, Any]:
     try:
         from server import _get_subnets_with_source
 
-        subnets, source = _get_subnets_with_source()
+        subnets, source = _get_subnets_with_source(timeout=4.0)
     except Exception as exc:
         return {
             "status": "error",

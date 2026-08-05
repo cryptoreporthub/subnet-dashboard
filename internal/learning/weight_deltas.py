@@ -15,6 +15,30 @@ def _normalize_expert(raw: Any) -> str | None:
     return name if name in _CANONICAL else None
 
 
+_SKIP_GRADED_OUTCOMES = frozenset({"duplicate", "expired", "ungradeable"})
+
+
+def expert_graded_counts() -> Dict[str, int]:
+    """Resolved prediction count per canonical expert (for honest Bench badges)."""
+    counts = {name: 0 for name in _CANONICAL}
+    try:
+        from internal.learning.predictions_store import load_predictions
+
+        for pred in load_predictions().get("resolved") or []:
+            if not isinstance(pred, dict):
+                continue
+            if pred.get("outcome") in _SKIP_GRADED_OUTCOMES:
+                continue
+            if pred.get("correct") is None:
+                continue
+            expert = _normalize_expert(pred.get("expert"))
+            if expert:
+                counts[expert] = counts.get(expert, 0) + 1
+    except Exception:
+        pass
+    return counts
+
+
 def recent_expert_weight_deltas(limit: int = 80) -> Dict[str, float]:
     """Latest nudge delta per expert from mindmap weight_change trail rows."""
     try:
