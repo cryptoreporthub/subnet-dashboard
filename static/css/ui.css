@@ -665,6 +665,49 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   font-feature-settings: "tnum" 1;
 }
 
+.accuracy-lift-panel {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line-hi);
+  border-radius: var(--radius-md, 14px);
+  background: rgba(8, 14, 18, 0.55);
+}
+.accuracy-lift-panel__title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted, #94a3b8);
+}
+.accuracy-lift-panel__summary {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text, #e8f0e9);
+}
+.accuracy-lift-panel__experts {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+.accuracy-lift-panel__experts li {
+  font-size: 13px;
+  color: var(--text-muted, #94a3b8);
+}
+.accuracy-lift-panel__expert {
+  color: var(--text, #e8f0e9);
+  font-weight: 500;
+}
+.accuracy-lift-panel__note {
+  margin: 10px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted, #7a9186);
+}
+
 /* Demoted chrome — after the call, quieter */
 .home-job__signals--demoted {
   margin-top: 18px;
