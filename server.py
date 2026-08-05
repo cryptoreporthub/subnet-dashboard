@@ -559,9 +559,13 @@ _INSTANT_HOME_SHELL = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SimiVision — Council</title>
 <meta name="theme-color" content="#080a10">
+<meta property="og:image" content="/static/og-share.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="/static/og-share.png">
 <style>html,body{margin:0;min-height:100%;background:#04060e;color:#e8f0e9;font-family:system-ui,sans-serif}</style>
 </head>
 <body><p style="padding:1.5rem;font-family:JetBrains Mono,monospace;font-size:14px;color:#8cb39f">Loading council desk…</p>
+<p style="margin:12px auto 0;max-width:960px;padding:0 16px 8px;font-size:11px;line-height:1.4;color:#7a9186;text-align:center;">SimiVision calls are scored council output, not financial advice. Do your own research.</p>
 <script>setTimeout(function(){location.reload()},4000)</script></body>
 </html>"""
 
