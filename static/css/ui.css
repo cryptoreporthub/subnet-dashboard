@@ -3181,12 +3181,21 @@ body.wrap {
   border: 1px solid rgba(63, 201, 255, 0.16);
   background:
     radial-gradient(120% 70% at 50% -18%, rgba(63, 201, 255, 0.1) 0%, transparent 58%),
+    url("/static/img/simivision-smoke-bg.svg") center / cover no-repeat,
     linear-gradient(180deg, rgba(15, 19, 28, 0.92) 0%, rgba(8, 11, 17, 0.94) 100%);
+  background-blend-mode: normal, soft-light, normal;
+  animation: tribunal-smoke-drift 36s ease-in-out infinite alternate;
   box-shadow:
     0 24px 60px rgba(0, 0, 0, 0.6),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
   overflow: hidden;
   isolation: isolate;
+}
+
+@keyframes tribunal-smoke-drift {
+  0% { background-position: 0 0, 46% 42%, 0 0; }
+  50% { background-position: 0 0, 54% 50%, 0 0; }
+  100% { background-position: 0 0, 48% 58%, 0 0; }
 }
 
 .tribunal-hero__card::before,
@@ -3821,6 +3830,7 @@ body.wrap {
 
 @media (prefers-reduced-motion: reduce) {
   .tribunal-hero__puff,
+  .tribunal-hero__card,
   .tribunal-hero__card::before,
   .tribunal-hero__card::after,
   .tribunal-hero__ray,
