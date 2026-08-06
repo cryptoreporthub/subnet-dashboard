@@ -26,16 +26,24 @@ def verdict_kind(payload: Dict[str, Any]) -> str:
 
 
 def center_label(payload: Dict[str, Any], kind: str) -> str:
+    gate, action = verdict_pills(payload, kind)
+    if action:
+        return f"{gate} · {action}"
+    return gate
+
+
+def verdict_pills(payload: Dict[str, Any], kind: str) -> tuple[str, Optional[str]]:
+    """Gate + action chips for HUD cockpit center (hydrate mirrors in JS)."""
     if kind == "sealed":
         act = str(payload.get("action") or "LONG").upper()
         if act == "BUY":
             act = "LONG"
-        return f"SEALED · {act}"
+        return "SEALED", act
     if kind == "gated":
-        return "GATED · HOLD"
+        return "GATED", "HOLD"
     if kind == "forming":
-        return "FORMING"
-    return "COLD"
+        return "FORMING", None
+    return "COLD", None
 
 
 def conviction_pct(payload: Dict[str, Any]) -> Optional[float]:
@@ -476,14 +484,21 @@ def build_tribunal_view(
             }
         )
 
+    gate_label, action_label = verdict_pills(pick, kind)
     headline = center_label(pick, kind)
     if gauge is not None:
         headline = f"{headline} — {format_gauge_pct(gauge)} conviction"
+
+    epoch_raw = pick.get("epoch") or pick.get("bittensor_epoch")
+    epoch_label = str(epoch_raw) if epoch_raw is not None else None
 
     return {
         "verdict_kind": kind,
         "subnet_label": subnet_label(pick),
         "center_label": center_label(pick, kind),
+        "gate_label": gate_label,
+        "action_label": action_label,
+        "epoch_label": epoch_label,
         "conviction_pct": gauge,
         "gauge_display": format_gauge_pct(gauge),
         "gauge_attr": gauge_attr(gauge),

@@ -4319,14 +4319,20 @@
 
   function tribunalCenterLabel(payload, kind) {
     kind = kind || verdictKind(payload);
+    var pills = tribunalVerdictPills(payload, kind);
+    return pills.action ? pills.gate + ' · ' + pills.action : pills.gate;
+  }
+
+  function tribunalVerdictPills(payload, kind) {
+    kind = kind || verdictKind(payload);
     if (kind === 'sealed') {
       var act = String(payload.action || 'LONG').toUpperCase();
       if (act === 'BUY') act = 'LONG';
-      return 'SEALED · ' + act;
+      return { gate: 'SEALED', action: act };
     }
-    if (kind === 'gated') return 'GATED · HOLD';
-    if (kind === 'forming') return 'FORMING';
-    return 'COLD';
+    if (kind === 'gated') return { gate: 'GATED', action: 'HOLD' };
+    if (kind === 'forming') return { gate: 'FORMING', action: null };
+    return { gate: 'COLD', action: null };
   }
 
   function tribunalConvictionPct(payload) {
@@ -4587,7 +4593,18 @@
     var title = document.getElementById('tribunal-hero-title');
     if (title) title.textContent = tribunalSubnetLabel(dailyPick);
     var badge = document.getElementById('k3-action-badge');
-    if (badge) badge.textContent = tribunalCenterLabel(dailyPick, kind);
+    var pills = tribunalVerdictPills(dailyPick, kind);
+    if (badge) badge.textContent = pills.gate;
+    var holdBadge = document.getElementById('k3-action-hold');
+    if (holdBadge) {
+      if (pills.action) {
+        holdBadge.textContent = pills.action;
+        holdBadge.hidden = false;
+      } else {
+        holdBadge.textContent = '';
+        holdBadge.hidden = true;
+      }
+    }
     var pct = kind === 'forming' || kind === 'cold' ? null : tribunalGaugePct(dailyPick, learningStats);
     var orb = document.getElementById('k3-orb-score');
     if (orb) orb.textContent = formatGaugePct(pct);
