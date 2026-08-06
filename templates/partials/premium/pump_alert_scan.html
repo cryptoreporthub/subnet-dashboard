@@ -75,7 +75,7 @@
       {% set thesis = hero_row.thesis|default('') %}
       {% set trigger = hero_row.trigger|default(hero_row.subtitle|default('')) %}
 
-      <article class="pds-hero pds-hero--{{ timing }} pump-hero__card" id="pump-desk-hero" data-netuid="{{ hero_row.netuid }}">
+      <article class="pds-hero pds-hero--{{ timing }} pump-hero__card" id="pump-desk-hero" data-netuid="{{ hero_row.netuid }}" data-name="{{ hero_row.name|default('SN' ~ hero_row.netuid) }}">
         <div class="pds-hero__stage">
           <div class="pds-hero__visual pds-hero__visual--{{ phase|lower }}" aria-hidden="true" data-slot="hero-visual">
             {% if progress_pts|length >= 2 %}
@@ -203,7 +203,11 @@
         </div>
         {% endif %}
 
-        <a class="pds-hero__cta home-cta home-cta--primary" href="/subnet/{{ hero_row.netuid }}">Open SN{{ hero_row.netuid }} dossier</a>
+        <a class="pds-hero__cta home-cta home-cta--primary"
+           id="pump-desk-cta"
+           href="/subnet/{{ hero_row.netuid }}"
+           data-netuid="{{ hero_row.netuid }}"
+           data-name="{{ hero_row.name|default('SN' ~ hero_row.netuid) }}">Open {{ hero_row.name|default('SN' ~ hero_row.netuid) }} SN{{ hero_row.netuid }} dossier</a>
       </article>
 
       {% if warm_ns.rows|length > 1 or active_ns.rows or exit_ns.rows %}

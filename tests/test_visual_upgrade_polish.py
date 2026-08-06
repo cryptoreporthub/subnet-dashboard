@@ -589,7 +589,7 @@ def test_council_home_shell_live_in_ui_css():
         ".council-stage__warming",
         ".desk-zone",
         "#home-trust-banner.trust-banner",
-        "simivision-smoke-bg.svg",
+        "body.council-first-theme::after",
         ".home-job__signals--demoted",
     ):
         assert selector in css
@@ -958,9 +958,54 @@ def test_ui_legacy_is_stub_only():
 
 
 def test_grey_smoke_bg_base_token():
-    """HUD cockpit — charcoal smoke page base (not blue wash)."""
-    css = open("static/css/base.css", encoding="utf-8").read()
-    assert "--bg-base: #1e2128" in css
+    """Global glass pass — smokey gradient page base + glass tokens."""
+    base_css = open("static/css/base.css", encoding="utf-8").read()
+    ui_css = _read_ui_css()
+    assert "body.council-first-theme" in base_css
+    assert "#20242a" in base_css and "#2d323a" in base_css
+    assert "--glass-fill:" in ui_css
+    assert "body.council-first-theme::after" in ui_css
+    assert "radial-gradient(#000 1px, transparent 1px)" in ui_css
+    assert "body.council-first-theme .app-shell" in ui_css
+    assert "body.council-first-theme > *" not in ui_css
+
+
+def test_global_glass_card_overrides_in_ui_css():
+    """Inner content cards use glass-fill; dial center stays opaque."""
+    css = _read_ui_css()
+    assert "var(--glass-fill)" in css
+    for selector in (
+        ".tribunal-hero__card",
+        ".tribunal-hero__panel",
+        ".tribunal-hero__judge",
+        ".k3-dossier",
+    ):
+        block = css.split(selector + " {", 1)[1].split("}", 1)[0]
+        assert "var(--glass-fill)" in block or "rgba(32, 36, 42, 0.35)" in block, selector
+    assert "background: var(--glass-fill)" in css.split(".pump-alert__card", 1)[1]
+    grouped = css.split(".pd-lead,", 1)[1].split("}", 1)[0]
+    assert "var(--glass-fill)" in grouped
+    pds = css.split(".pds-hero,", 1)[1].split("}", 1)[0]
+    assert "var(--glass-fill)" in pds
+    ring = css.split(".tribunal-hero__ring-center::before {", 1)[1].split("}", 1)[0]
+    assert "#111518" in ring
+
+
+def test_pump_dossier_cta_not_hardcoded_sn_only():
+    """Pump desk CTA uses name + netuid; hydrate builds dynamic label."""
+    import re
+
+    scan = open("templates/partials/premium/pump_alert_scan.html", encoding="utf-8").read()
+    full = open("templates/partials/premium/pump_alert.html", encoding="utf-8").read()
+    js = open("static/js/cockpit_hydrate.js", encoding="utf-8").read()
+    assert 'id="pump-desk-cta"' in scan and 'id="pump-desk-cta"' in full
+    assert "data-name=" in scan and "data-name=" in full
+    assert re.search(r"Open \{\{ hero_row\.name", scan)
+    assert "pumpDossierCtaLabel" in js
+    assert "patchPumpDeskCta" in js
+    assert '">Open SN' not in scan
+    assert '">Open SN' not in full
+    assert "'Open SN'" not in js
 
 
 def test_no_legacy_stylesheet_links_in_templates():

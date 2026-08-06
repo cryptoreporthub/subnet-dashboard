@@ -1822,6 +1822,8 @@
       esc(timing) +
       ' pump-hero__card" id="pump-desk-hero" data-netuid="' +
       esc(row.netuid) +
+      '" data-name="' +
+      esc(pumpRowDisplayName(row)) +
       '">' +
       '<div class="pds-hero__stage">' +
       buildPumpHeroVisual(phase, progress) +
@@ -1892,11 +1894,15 @@
         ? '<p class="pds-hero__chip pds-hero__chip--owner">' + esc(row.owner_chip) + '</p>'
         : '') +
       renderAnglesBlock(row) +
-      '<a class="pds-hero__cta home-cta home-cta--primary" href="/subnet/' +
+      '<a class="pds-hero__cta home-cta home-cta--primary" id="pump-desk-cta" href="/subnet/' +
       esc(row.netuid) +
-      '">Open SN' +
+      '" data-netuid="' +
       esc(row.netuid) +
-      ' dossier</a></article>'
+      '" data-name="' +
+      esc(pumpRowDisplayName(row)) +
+      '">' +
+      esc(pumpDossierCtaLabel(row)) +
+      '</a></article>'
     );
   }
 
@@ -2396,6 +2402,8 @@
       highlightCls +
       ' pump-hero__card" id="pump-desk-hero" data-netuid="' +
       esc(row.netuid) +
+      '" data-name="' +
+      esc(pumpRowDisplayName(row)) +
       '">' +
       '<div class="pd-lead__identity">' +
       '<span class="pd-lead__badge pd-lead__badge--' +
@@ -2439,11 +2447,15 @@
       chipsHtml +
       renderAnglesBlock(row, 'pd-angles') +
       '<div class="pd-cta" role="group" aria-label="Lead actions">' +
-      '<a class="home-cta home-cta--primary" href="/subnet/' +
+      '<a class="home-cta home-cta--primary" id="pump-desk-cta" href="/subnet/' +
       esc(row.netuid) +
-      '">Open SN' +
+      '" data-netuid="' +
       esc(row.netuid) +
-      ' dossier</a>' +
+      '" data-name="' +
+      esc(pumpRowDisplayName(row)) +
+      '">' +
+      esc(pumpDossierCtaLabel(row)) +
+      '</a>' +
       '<a class="home-cta home-cta--ghost" href="#pro-cockpit">Open depth</a></div></article>'
     );
   }
@@ -2451,6 +2463,48 @@
   function pumpRowDisplayName(row) {
     if (!row) return '';
     return resolveSubnetDisplayName({ name: row.name, netuid: row.netuid }, row.netuid);
+  }
+
+  function pumpDossierCtaLabel(rowOrName, netuid) {
+    var name =
+      rowOrName && typeof rowOrName === 'object'
+        ? pumpRowDisplayName(rowOrName)
+        : String(rowOrName || '').trim();
+    var nu =
+      netuid != null
+        ? netuid
+        : rowOrName && typeof rowOrName === 'object'
+          ? rowOrName.netuid
+          : null;
+    if (nu == null || nu === '') return 'Open dossier';
+    if (!name) name = 'SN' + nu;
+    return 'Open ' + name + ' SN' + nu + ' dossier';
+  }
+
+  function patchPumpDeskCta(row) {
+    var cta = document.getElementById('pump-desk-cta');
+    if (!cta) return;
+    var hero = document.getElementById('pump-desk-hero');
+    var source = row || hero;
+    if (!source) {
+      var ladder = document.querySelector('.pds-ladder[data-netuid], .pd-r[data-netuid]');
+      if (ladder) {
+        source = {
+          netuid: ladder.getAttribute('data-netuid'),
+          name: ladder.getAttribute('data-name'),
+        };
+      }
+    }
+    if (!source || source.netuid == null) {
+      cta.textContent = 'Open dossier';
+      return;
+    }
+    var nu = source.netuid;
+    var name = source.name || (hero && hero.getAttribute('data-name')) || null;
+    cta.href = '/subnet/' + encodeURIComponent(String(nu));
+    cta.setAttribute('data-netuid', String(nu));
+    if (name) cta.setAttribute('data-name', String(name));
+    cta.textContent = pumpDossierCtaLabel(name ? { name: name, netuid: nu } : { netuid: nu }, nu);
   }
 
   function renderPumpDeskRow(row, tone) {
@@ -2830,6 +2884,14 @@
     if (window.PumpMap) window.PumpMap.refresh(mapRows);
     if (typeof window.__paintSparks === 'function') window.__paintSparks();
     renderProofPumpTab(trust);
+    var heroForCta = payload.hero;
+    if (!heroForCta && alerts.length) {
+      heroForCta =
+        alerts.find(function (r) {
+          return r.timing === 'lead';
+        }) || alerts[0];
+    }
+    patchPumpDeskCta(heroForCta);
   }
 
   function renderDailyPick(payload) {

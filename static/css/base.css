@@ -169,6 +169,11 @@ body::after {
   body::after { opacity: 0.35; }
 }
 
+/* Council-first home — smokey grey gradient (glass cards sit above) */
+body.council-first-theme {
+  background: linear-gradient(135deg, #20242a, #2d323a);
+}
+
 a { color: var(--accent-blue); text-decoration: none; }
 a:hover { color: var(--accent-orange); text-shadow: 0 0 12px var(--accent-glow-orange); }
 
