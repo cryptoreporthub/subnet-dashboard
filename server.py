@@ -637,13 +637,13 @@ def _resolve_index_context(request: Request) -> Dict[str, Any]:
 
 
 def _render_index_html(request: Request) -> str:
-    """Fast degraded SSR for warm/cache — hydrate upgrades live APIs in the browser."""
-    ctx = _degraded_index_context(request)
+    """Fast minimal SSR for warm/cache — hydrate upgrades live APIs in the browser."""
+    ctx = _minimal_index_context(request)
     return templates.get_template("index.html").render(ctx)
 
 
 def _warm_homepage_cache(request: Optional[Request] = None) -> None:
-    """Build homepage HTML off the request hot path — degraded shell only (never full build)."""
+    """Build homepage HTML off the request hot path — minimal shell only (never full/degraded build)."""
     global _HOMEPAGE_WARMING
     now = time.time()
     cached_html = _HOMEPAGE_HTML_CACHE.get("html")
@@ -1114,17 +1114,33 @@ def _degraded_index_context(request: Request) -> Dict[str, Any]:
     ctx.update(_safe_mindmap_graph_context(timeout_s=2.0))
     ctx.update(_shell_pump_and_picks(shell_subnets, include_picks=True))
     ctx.update(_simileads_context(shell_subnets, simivision_data))
-    ctx.update(_message_intel_shell_context(shell_subnets))
+    ctx.update(_message_intel_shell_context(shell_subnets, fast=True))
     stash = {k: v for k, v in ctx.items() if k != "request"}
     _DEGRADED_INDEX_CACHE["at"] = now
     _DEGRADED_INDEX_CACHE["ctx"] = stash
     return ctx
 
 
+def _message_intel_shell_skeleton() -> Dict[str, Any]:
+    """Instant message-intel placeholder — hydrate fills live feed."""
+    return {
+        "message_intel": {
+            "messages": [],
+            "meta": {"total_messages": 0, "ok": False},
+            "sources": {},
+            "summary": {},
+        }
+    }
+
+
 def _message_intel_shell_context(
     subnets: Optional[List[Dict[str, Any]]] = None,
+    *,
+    fast: bool = False,
 ) -> Dict[str, Any]:
     """Summers desk SSR for degraded/emergency homepage shells (worker proxy on split_v2)."""
+    if fast:
+        return _message_intel_shell_skeleton()
     try:
         from internal.data_volume import needs_worker_volume_proxy
 
@@ -1145,14 +1161,7 @@ def _message_intel_shell_context(
         return build_message_intel_context(subnets or [], limit=8)
     except Exception as exc:
         logger.debug("message_intel shell context unavailable: %s", exc)
-        return {
-            "message_intel": {
-                "messages": [],
-                "meta": {"total_messages": 0, "ok": False},
-                "sources": {},
-                "summary": {},
-            }
-        }
+        return _message_intel_shell_skeleton()
 
 
 def _minimal_index_context(request: Request) -> Dict[str, Any]:
@@ -1199,7 +1208,7 @@ def _minimal_index_context(request: Request) -> Dict[str, Any]:
             "empty_message": "Loading pump desk…",
         },
     }
-    ctx.update(_message_intel_shell_context(shell_subnets))
+    ctx.update(_message_intel_shell_context(shell_subnets, fast=True))
     return ctx
 
 

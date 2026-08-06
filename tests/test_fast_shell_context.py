@@ -87,8 +87,8 @@ def test_resolve_index_context_falls_back_on_error(monkeypatch):
     assert ctx.get("degraded") is True
 
 
-def test_warm_homepage_cache_uses_degraded_not_full_build(monkeypatch):
-    """Background warm must not run full homepage build (Fly wedge / stuck loading)."""
+def test_warm_homepage_cache_uses_minimal_not_full_build(monkeypatch):
+    """Background warm must not run full or degraded homepage build (Fly wedge / stuck loading)."""
     import server as srv
 
     class _R:
