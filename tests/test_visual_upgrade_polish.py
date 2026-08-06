@@ -590,6 +590,7 @@ def test_council_home_shell_live_in_ui_css():
         ".desk-zone",
         "#home-trust-banner.trust-banner",
         "body.council-first-theme::after",
+        "simivision-smoke-bg.svg",
         ".home-job__signals--demoted",
     ):
         assert selector in css
@@ -963,11 +964,19 @@ def test_grey_smoke_bg_base_token():
     ui_css = _read_ui_css()
     assert "body.council-first-theme" in base_css
     assert "#20242a" in base_css and "#2d323a" in base_css
+    assert "simivision-smoke-bg.svg" in base_css
     assert "--glass-fill:" in ui_css
     assert "body.council-first-theme::after" in ui_css
     assert "radial-gradient(#000 1px, transparent 1px)" in ui_css
     assert "body.council-first-theme .app-shell" in ui_css
     assert "body.council-first-theme > *" not in ui_css
+    assert ".council-stage__atmosphere" in ui_css
+    atm = ui_css.split(".council-stage__atmosphere {", 1)[1].split("}", 1)[0]
+    assert "#0a0a0c" not in atm
+    assert "transparent" in atm
+    dossier = ui_css.split(".council-stage .home-job__call-host .k3-dossier {", 1)[1].split("}", 1)[0]
+    assert "var(--glass-fill)" in dossier
+    assert "card-smoke" not in dossier
 
 
 def test_global_glass_card_overrides_in_ui_css():
