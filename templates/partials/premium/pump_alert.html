@@ -68,7 +68,7 @@
       {% set thesis = hero_row.thesis|default('') %}
       {% set trigger = hero_row.trigger|default(hero_row.subtitle|default('')) %}
 
-      <article class="pd-lead pd-lead--{{ timing }}{% if hero_row.pattern_highlight %} pd-lead--pattern-highlight{% endif %} pump-hero__card" id="pump-desk-hero" data-netuid="{{ hero_row.netuid }}">
+      <article class="pd-lead pd-lead--{{ timing }}{% if hero_row.pattern_highlight %} pd-lead--pattern-highlight{% endif %} pump-hero__card" id="pump-desk-hero" data-netuid="{{ hero_row.netuid }}" data-name="{{ hero_row.name|default('SN' ~ hero_row.netuid) }}">
         <div class="pd-lead__visual pd-lead__visual--{{ phase|lower }}" aria-hidden="true" data-slot="hero-visual">
           {% if progress_pts|length >= 2 %}
           {% set arc_first = progress_pts[0]|float %}
@@ -212,7 +212,11 @@
         {% endif %}
 
         <div class="pd-cta" role="group" aria-label="Lead actions">
-          <a class="home-cta home-cta--primary" href="/subnet/{{ hero_row.netuid }}">Open SN{{ hero_row.netuid }} dossier</a>
+          <a class="home-cta home-cta--primary"
+             id="pump-desk-cta"
+             href="/subnet/{{ hero_row.netuid }}"
+             data-netuid="{{ hero_row.netuid }}"
+             data-name="{{ hero_row.name|default('SN' ~ hero_row.netuid) }}">Open {{ hero_row.name|default('SN' ~ hero_row.netuid) }} SN{{ hero_row.netuid }} dossier</a>
           <a class="home-cta home-cta--ghost" href="#pro-cockpit">Open depth</a>
         </div>
       </article>

@@ -1,5 +1,13 @@
 /* ui.css — mobile-first SimiVision shell (LOCK 2026-08-02) */
 
+:root {
+  --glass-fill: rgba(32, 36, 42, 0.35);
+  --glass-blur: 16px;
+  --glass-blur-secondary: 8px;
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-radius: 12px;
+}
+
 /* ---------- Mobile shell: 390px primary, desktop capped column ---------- */
 .app-shell.council-first {
   max-width: 720px;
@@ -15,14 +23,9 @@
   padding: 0 var(--space-4, 16px);
 }
 
-/* No situation_room grid overlay — smoke only */
+/* No situation_room grid overlay — smokey gradient + aurora + noise */
 body.council-first-theme {
-  background-color: var(--bg-base);
-  background-image: var(--bg-atmosphere);
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
-  background-position: center;
+  background: linear-gradient(135deg, #20242a, #2d323a);
 }
 
 /* Page atmosphere aurora overlay — drift gated in Quiet motion below */
@@ -36,11 +39,26 @@ body.council-first-theme::before {
     var(--aurora-cyan),
     var(--aurora-green),
     var(--aurora-violet);
-  opacity: 0.42;
+  opacity: 0.12;
   transform-origin: center center;
 }
 
-body.council-first-theme > * {
+body.council-first-theme::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  opacity: 0.04;
+  z-index: 0;
+  background-image: radial-gradient(#000 1px, transparent 1px);
+  background-size: 4px 4px;
+}
+
+body.council-first-theme .app-shell,
+body.council-first-theme main {
   position: relative;
   z-index: 1;
 }
@@ -237,7 +255,6 @@ nav.top-nav a[aria-current="page"] {
 .card,
 .sr-panel,
 .proof-band__subpanel,
-.pd-lead,
 .pd-r,
 .pd-evidence__cell {
   background-image: var(--card-grain), var(--card-smoke);
@@ -797,24 +814,22 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   margin-top: 0;
 }
 
-/* ---------- Desk zones + glass panels (charcoal HUD; readability via blur) ---------- */
+/* ---------- Desk zones (wrapper — no glass; inner cards glass separately) ---------- */
 .desk-zone {
   padding-block: var(--desk-zone-pad, 16px);
   border-top: 1px solid var(--sr-hairline, rgba(148, 163, 184, 0.1));
-  background: rgba(22, 25, 32, 0.28);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
 }
 @media (max-width: 480px) {
   .desk-zone { --desk-zone-pad: 12px; }
 }
 
 .k3-dossier {
-  border: 1px solid var(--sr-hairline, rgba(148, 163, 184, 0.12));
-  border-radius: var(--radius-md, 12px);
-  background: rgba(18, 21, 28, 0.55);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius);
+  background: var(--glass-fill) !important;
+  background-image: none !important;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   overflow: hidden;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.32);
 }
@@ -7352,15 +7367,12 @@ body.wrap {
 
 .tribunal-hero__card {
   position: relative;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background:
-    url("/static/img/simivision-smoke-bg.svg") center / cover no-repeat,
-    linear-gradient(180deg, rgba(24, 27, 34, 0.62) 0%, rgba(18, 21, 28, 0.68) 100%);
-  background-blend-mode: soft-light, normal;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  animation: tribunal-smoke-drift 36s ease-in-out infinite alternate;
+  border-radius: var(--glass-radius);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-fill) !important;
+  background-image: none !important;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   box-shadow:
     0 20px 48px rgba(0, 0, 0, 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
@@ -7369,9 +7381,7 @@ body.wrap {
 }
 
 @keyframes tribunal-smoke-drift {
-  0% { background-position: 46% 42%, 0 0; }
-  50% { background-position: 54% 50%, 0 0; }
-  100% { background-position: 48% 58%, 0 0; }
+  0%, 100% { opacity: 1; }
 }
 
 .tribunal-hero__card::before,
@@ -7384,13 +7394,13 @@ body.wrap {
 }
 
 .tribunal-hero__card::before {
-  background: radial-gradient(ellipse 70% 55% at 28% 18%, rgba(140, 148, 160, 0.12) 0%, transparent 62%);
-  animation: tribunal-glow-drift 18s ease-in-out infinite alternate;
+  background: transparent;
+  animation: none;
 }
 
 .tribunal-hero__card::after {
-  background: radial-gradient(ellipse 60% 50% at 76% 86%, rgba(100, 108, 120, 0.1) 0%, transparent 58%);
-  animation: tribunal-glow-drift 22s ease-in-out infinite alternate-reverse;
+  background: transparent;
+  animation: none;
 }
 
 .tribunal-hero__puffs {
@@ -7656,7 +7666,8 @@ body.wrap {
   position: absolute;
   inset: -24px -16px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(5, 8, 14, 0.92) 0%, rgba(5, 8, 14, 0.55) 62%, transparent 78%);
+  background: #111518;
+  opacity: 1;
   z-index: -1;
 }
 
@@ -7725,16 +7736,17 @@ body.wrap {
   gap: 4px;
   min-width: 92px;
   padding: 8px 10px 7px;
-  border-radius: 12px;
-  background: rgba(14, 17, 24, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--glass-radius);
+  background: var(--glass-fill) !important;
+  background-image: none !important;
+  border: 1px solid var(--glass-border);
   border-top-color: var(--j);
   box-shadow:
     0 10px 22px rgba(0, 0, 0, 0.42),
     0 -1px 20px -8px color-mix(in srgb, var(--j) 28%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   transition: box-shadow 0.3s ease, transform 0.3s ease;
 }
 
@@ -7990,11 +8002,12 @@ body.wrap {
 .tribunal-hero__panel {
   position: relative;
   padding: 14px;
-  border-radius: 14px;
-  background: rgba(16, 19, 26, 0.52);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  border-radius: var(--glass-radius);
+  background: var(--glass-fill) !important;
+  background-image: none !important;
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
@@ -8075,6 +8088,31 @@ body.wrap {
   font-family: var(--font-mono);
   font-size: 0.68rem;
   color: var(--text-muted);
+}
+
+/* Text legibility inside glass cards only */
+.tribunal-hero__card h1,
+.tribunal-hero__card h2,
+.tribunal-hero__card h3,
+.tribunal-hero__card h4,
+.tribunal-hero__pct,
+.tribunal-hero__judge-signal,
+.pds-hero__pct,
+.pd-lead__meter-val,
+.pd-angles__section h3,
+.pds-angles__section h3 {
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.tribunal-hero__judge-weight,
+.tribunal-hero__judge-signal-caption,
+.tribunal-hero__panel-grid dt,
+.pds-hero__pct-lbl,
+.pd-lead__meter-lbl,
+.pds-hero__ago,
+.pd-lead__ago {
+  color: #d0dae8;
+  opacity: 0.85;
 }
 
 .tribunal-hero__jury-list {
@@ -8185,29 +8223,17 @@ body.wrap {
       radial-gradient(ellipse 70% 60% at 50% 45%, transparent 40%, rgba(0, 0, 0, 0.5) 100%);
   }
 
-  .tribunal-hero__card {
-    background:
-      radial-gradient(120% 70% at 50% -18%, rgba(63, 201, 255, 0.14) 0%, transparent 58%),
-      url("/static/img/simivision-smoke-bg.svg") center / cover no-repeat,
-      linear-gradient(180deg, rgba(15, 19, 28, 0.88) 0%, rgba(8, 11, 17, 0.9) 100%);
-  }
-
-  .tribunal-hero__card::before {
-    background: radial-gradient(ellipse 70% 55% at 28% 18%, rgba(63, 201, 255, 0.26) 0%, transparent 62%);
-  }
-
-  .tribunal-hero__card::after {
-    background: radial-gradient(ellipse 60% 50% at 76% 86%, rgba(157, 140, 255, 0.21) 0%, transparent 58%);
-  }
-
   .tribunal-hero__puff {
     background: radial-gradient(ellipse at center, rgba(140, 140, 150, 0.34) 0%, transparent 70%);
     opacity: 0.68;
   }
 
-  .tribunal-hero__judge {
-    backdrop-filter: blur(3px);
-    -webkit-backdrop-filter: blur(3px);
+  .pds-angles__section,
+  .pd-angles__section,
+  .pds-ladder,
+  .pump-alert__card {
+    backdrop-filter: blur(var(--glass-blur-secondary));
+    -webkit-backdrop-filter: blur(var(--glass-blur-secondary));
   }
 }
 
@@ -12156,14 +12182,22 @@ body.wrap {
 .pd-census__chip--exit b { color: #34d399; }
 
 /* Primary lead theater */
+.pd-lead,
+.pds-hero,
+.pump-hero__card,
+#pump-desk-hero {
+    background: var(--glass-fill) !important;
+    background-image: none !important;
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--glass-radius);
+}
+
 .pd-lead {
     margin-bottom: 16px;
     padding: 14px 14px 16px;
-    border-radius: 14px;
-    background: linear-gradient(165deg, rgba(45, 50, 58, 0.62), rgba(40, 45, 53, 0.68));
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(251, 191, 36, 0.28);
+    border-color: rgba(251, 191, 36, 0.28);
     box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.04), 0 12px 32px rgba(0, 0, 0, 0.28);
 }
 .pd-lead--confirmed {
@@ -12339,7 +12373,7 @@ body.wrap {
     margin-top: 12px;
     height: 28px;
     border-radius: 8px;
-    background: rgba(15, 23, 42, 0.9);
+    background: rgba(20, 24, 31, 0.85);
     border: 1px solid var(--pd-line);
     overflow: hidden;
 }
@@ -12592,7 +12626,18 @@ body.wrap {
     flex-direction: column;
     gap: 14px;
 }
-.pd-angles__section { display: flex; flex-direction: column; gap: 8px; }
+.pd-angles__section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: var(--glass-radius);
+    background: var(--glass-fill) !important;
+    background-image: none !important;
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+}
 .pd-angles__head {
     display: flex;
     flex-wrap: wrap;
@@ -12849,7 +12894,7 @@ body.wrap {
 
 /* Legacy non-compact card lane */
 .pump-alert__lane { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
-.pump-alert__card { flex: 0 0 min(88vw, 300px); scroll-snap-align: start; padding: 12px; border-radius: 12px; background: var(--pd-panel); border: 1px solid var(--pd-line); }
+.pump-alert__card { flex: 0 0 min(88vw, 300px); scroll-snap-align: start; padding: 12px; border-radius: var(--glass-radius); background: var(--glass-fill) !important; background-image: none !important; border: 1px solid var(--glass-border); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur)); }
 .pump-alert__card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
 .pump-alert__name { font-size: 13px; font-weight: 700; color: var(--pd-ink); text-decoration: none; }
 .pump-alert__badge { font-family: 'JetBrains Mono', monospace; font-size: 8px; letter-spacing: 0.1em; padding: 3px 7px; border-radius: 6px; text-transform: uppercase; color: #fbbf24; }
@@ -13003,11 +13048,7 @@ body.wrap {
   .pds-hero {
     margin-bottom: 16px;
     padding: 12px;
-    border-radius: 12px;
-    background: rgba(45, 50, 58, 0.58);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(251, 191, 36, 0.22);
+    border-color: rgba(251, 191, 36, 0.22);
   }
   .pds-hero--confirmed { border-color: rgba(251, 113, 133, 0.28); }
   .pds-hero--exit { border-color: rgba(52, 211, 153, 0.28); }
@@ -13131,7 +13172,7 @@ body.wrap {
     margin-top: 10px;
     height: 22px;
     border-radius: 6px;
-    background: rgba(15, 23, 42, 0.9);
+    background: rgba(20, 24, 31, 0.85);
     border: 1px solid var(--pds-line);
     overflow: hidden;
   }
@@ -13286,7 +13327,18 @@ body.wrap {
     flex-direction: column;
     gap: 14px;
   }
-  .pds-angles__section { display: flex; flex-direction: column; gap: 8px; }
+  .pds-angles__section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: var(--glass-radius);
+    background: var(--glass-fill) !important;
+    background-image: none !important;
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+  }
   .pds-angles__head {
     display: flex;
     flex-wrap: wrap;
@@ -13442,11 +13494,14 @@ body.wrap {
     display: block;
     margin-bottom: 8px;
     padding: 12px;
-    border-radius: 12px;
+    border-radius: var(--glass-radius);
     text-decoration: none;
     color: inherit;
-    background: var(--pds-panel);
-    border: 1px solid var(--pds-line);
+    background: var(--glass-fill) !important;
+    background-image: none !important;
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
     transition: border-color 0.15s, box-shadow 0.15s;
   }
   .pds--polish .pds-ladder:hover, .pds--polish .pds-ladder:focus-visible {
