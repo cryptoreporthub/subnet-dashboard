@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from internal.preview.tribunal_hero import (
     _format_judge_weight_pct,
     _judge_agreement_labels,
+    attach_judge_scores_to_daily_pick,
     build_tribunal_view,
     weighted_verdict_pct,
 )
@@ -31,6 +32,38 @@ def test_judge_agreement_from_signal_spread():
     labels = _judge_agreement_labels({"oracle": 85.9, "echo": 84.0, "pulse": 45.0})
     assert labels["consensus"] == "Low agreement"
     assert labels["dissent"] == "High dissent · 41 pts"
+
+
+def test_attach_judge_scores_to_daily_pick_backfills_from_predictions(monkeypatch):
+    scores = {
+        "oracle": {"confidence": 0.859},
+        "echo": {"confidence": 0.84},
+        "pulse": {"confidence": 0.45},
+    }
+    monkeypatch.setattr(
+        "internal.council.conviction_bands.judge_scores_for_netuid",
+        lambda netuid: scores if int(netuid) == 29 else None,
+    )
+    payload = {
+        "action": "long",
+        "pick": {"subnet": {"netuid": 29, "name": "Coldint"}, "final_confidence": 0.72},
+    }
+    out = attach_judge_scores_to_daily_pick(payload)
+    assert out["pick"]["judge_scores_at_creation"] == scores
+
+
+def test_daily_pick_lite_enrich_attaches_judge_scores(monkeypatch):
+    import server as srv
+
+    scores = {"oracle": {"confidence": 0.8}, "echo": {"confidence": 0.7}, "pulse": {"confidence": 0.6}}
+    monkeypatch.setattr(
+        "internal.council.conviction_bands.judge_scores_for_netuid",
+        lambda netuid: scores,
+    )
+    out = srv._enrich_daily_pick_payload_lite(
+        {"action": "long", "pick": {"subnet": {"netuid": 12, "name": "SN12"}}}
+    )
+    assert out["pick"]["judge_scores_at_creation"] == scores
 
 
 def test_build_tribunal_view_decision_log_from_judge_scores():
@@ -118,7 +151,8 @@ def test_cockpit_hydrate_tribunal_sync_helpers():
     assert "weightedVerdictPct" in src
     assert "patchTribunalPanels" in src
     assert "judgeAgreementLabels" in src
-    assert "setProperty('--p'" in src
+    assert "judgeSignalsFromDom" in src
+    assert "setTribunalPanelField" in src
 
 
 def test_home_ssr_contains_tribunal_hero():

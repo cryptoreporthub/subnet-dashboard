@@ -4114,6 +4114,25 @@
     return n <= 1 ? n * 100 : n;
   }
 
+  function judgeSignalsFromDom() {
+    var hero = document.getElementById('tribunal-hero');
+    if (!hero) return null;
+    var out = { oracle: null, echo: null, pulse: null };
+    var used = false;
+    hero.querySelectorAll('[data-judge]').forEach(function (seat) {
+      var key = seat.getAttribute('data-judge');
+      var signalEl = seat.querySelector('[data-judge-signal]');
+      if (!key || !signalEl) return;
+      var txt = String(signalEl.textContent || '').trim().replace('%', '');
+      if (!txt || txt === '—') return;
+      var n = Number(txt);
+      if (isNaN(n)) return;
+      out[key] = n;
+      used = true;
+    });
+    return used ? out : null;
+  }
+
   function judgeSignalsFromPick(payload) {
     var active = (payload && (payload.pick || payload.candidate)) || {};
     var scores = active.judge_scores_at_creation;
@@ -4122,6 +4141,13 @@
       ['oracle', 'echo', 'pulse'].forEach(function (key) {
         out[key] = judgeSignalPct(scores[key]);
       });
+    }
+    var hasSignal = ['oracle', 'echo', 'pulse'].some(function (key) {
+      return out[key] != null && !isNaN(Number(out[key]));
+    });
+    if (!hasSignal) {
+      var dom = judgeSignalsFromDom();
+      if (dom) return dom;
     }
     return out;
   }
@@ -4324,6 +4350,13 @@
     });
   }
 
+  function setTribunalPanelField(el, next) {
+    if (!el || next == null) return;
+    var cur = (el.textContent || '').trim();
+    if (next === '—' && cur && cur !== '—') return;
+    el.textContent = next;
+  }
+
   function patchTribunalPanels(dailyPick, stats) {
     var hero = document.getElementById('tribunal-hero');
     if (!hero || !stats) return;
@@ -4341,13 +4374,16 @@
     if (consEl) {
       var agreement = judgeAgreementLabels(judgeSignalsFromPick(dailyPick || {}));
       if (agreement.consensus !== '—') {
-        consEl.textContent = agreement.consensus;
+        setTribunalPanelField(consEl, agreement.consensus);
       } else {
         var cs = active.consensus_score;
         if (cs != null && !isNaN(Number(cs))) {
           var cn = Number(cs);
-          consEl.textContent = (cn <= 1 ? Math.round(cn * 100) : Math.round(cn)) + '%';
-        } else consEl.textContent = '—';
+          setTribunalPanelField(
+            consEl,
+            (cn <= 1 ? Math.round(cn * 100) : Math.round(cn)) + '%'
+          );
+        } else setTribunalPanelField(consEl, '—');
       }
     }
     var brainEl = hero.querySelector('[data-decision-brain]');
@@ -4360,12 +4396,12 @@
     if (dissentEl) {
       var spreadAgreement = judgeAgreementLabels(judgeSignalsFromPick(dailyPick || {}));
       if (spreadAgreement.dissent !== '—') {
-        dissentEl.textContent = spreadAgreement.dissent;
+        setTribunalPanelField(dissentEl, spreadAgreement.dissent);
       } else {
         var dissenters = dailyPick.dissenters || active.dissenters;
-        if (dissenters && dissenters.length) dissentEl.textContent = dissenters.join(', ');
-        else if (dailyPick.council_unanimous) dissentEl.textContent = 'Unanimous';
-        else dissentEl.textContent = '—';
+        if (dissenters && dissenters.length) setTribunalPanelField(dissentEl, dissenters.join(', '));
+        else if (dailyPick.council_unanimous) setTribunalPanelField(dissentEl, 'Unanimous');
+        else setTribunalPanelField(dissentEl, '—');
       }
     }
 

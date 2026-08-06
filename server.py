@@ -901,6 +901,9 @@ def _enrich_daily_pick_payload_lite(
     out = refresh_daily_pick_names(pick_payload)
     out = attach_temporal_to_daily_pick(out)
     out = attach_brief_to_daily_pick(out)
+    from internal.preview.tribunal_hero import attach_judge_scores_to_daily_pick
+
+    out = attach_judge_scores_to_daily_pick(out)
     if "shortlist" not in out:
         out["shortlist"] = []
     if not isinstance(out.get("horizon_views"), dict):

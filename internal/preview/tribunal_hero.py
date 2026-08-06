@@ -97,6 +97,33 @@ def judge_signals_from_pick(payload: Dict[str, Any]) -> Dict[str, Optional[float
     return out
 
 
+def attach_judge_scores_to_daily_pick(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Backfill judge_scores_at_creation on pick/candidate for API + hydrate SSR parity."""
+    if not isinstance(payload, dict):
+        return {}
+    out = dict(payload)
+    for block_key in ("pick", "candidate"):
+        block = out.get(block_key)
+        if not isinstance(block, dict):
+            continue
+        existing = block.get("judge_scores_at_creation")
+        if isinstance(existing, dict) and existing:
+            continue
+        sn = block.get("subnet") if isinstance(block.get("subnet"), dict) else {}
+        netuid = sn.get("netuid") if isinstance(sn, dict) else None
+        try:
+            from internal.council.conviction_bands import judge_scores_for_netuid
+
+            scores = judge_scores_for_netuid(netuid)
+        except Exception:
+            scores = None
+        if isinstance(scores, dict) and scores:
+            updated = dict(block)
+            updated["judge_scores_at_creation"] = scores
+            out[block_key] = updated
+    return out
+
+
 def weighted_verdict_pct(
     weights: Dict[str, float],
     signals: Dict[str, Optional[float]],
