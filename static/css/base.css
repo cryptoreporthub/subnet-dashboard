@@ -2,35 +2,35 @@
 /* Fonts loaded via <link> in templates (§31-2 O4) — no blocking @import here */
 
 :root {
-  /* Backgrounds — grey-smoke family (even wash, no left/right seam) */
-  --bg-base: #2d323a;
-  --bg-edge: #272c34;
-  --bg-midnight: #2a2f37;
-  --bg-surface: rgba(45, 50, 58, 0.82);
-  --bg-card: rgba(48, 53, 61, 0.78);
-  --bg-elevated: rgba(55, 60, 68, 0.9);
-  --bg-header: rgba(40, 45, 53, 0.72);
-  /* Pewter card smoke — grey family with a faint cyan aurora sheen (no green wash) */
+  /* Backgrounds — charcoal smoke (HUD cockpit; cyan only as accent) */
+  --bg-base: #1e2128;
+  --bg-edge: #181b21;
+  --bg-midnight: #1a1d24;
+  --bg-surface: rgba(30, 33, 40, 0.82);
+  --bg-card: rgba(34, 37, 44, 0.78);
+  --bg-elevated: rgba(40, 43, 50, 0.9);
+  --bg-header: rgba(28, 31, 38, 0.72);
+  /* Pewter card smoke — grey family, faint cyan sheen only at focal points */
   --card-smoke:
-    radial-gradient(ellipse 160% 80% at 50% -40%, rgba(168, 176, 190, 0.18) 0%, transparent 50%),
-    radial-gradient(ellipse 120% 65% at 50% -30%, rgba(63, 201, 255, 0.07) 0%, transparent 55%),
-    linear-gradient(180deg, rgba(22, 25, 32, 0.88) 0%, rgba(20, 23, 30, 0.9) 100%);
+    radial-gradient(ellipse 160% 80% at 50% -40%, rgba(168, 176, 190, 0.14) 0%, transparent 50%),
+    radial-gradient(ellipse 120% 65% at 50% -30%, rgba(63, 201, 255, 0.04) 0%, transparent 55%),
+    linear-gradient(180deg, rgba(18, 20, 26, 0.92) 0%, rgba(16, 18, 24, 0.94) 100%);
   --card-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.78 0 0 0 0 0.80 0 0 0 0 0.84 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --line: rgba(255, 255, 255, 0.1);
   --line-hi: rgba(255, 255, 255, 0.18);
-  /* Aurora midnight — locked accents at low alpha over smoke texture + midnight gradient */
+  /* Charcoal smoke atmosphere — cyan/green/violet kept subtle; glass sections carry readability */
   --bg-atmosphere:
     url("/static/img/simivision-smoke-bg.svg"),
-    radial-gradient(ellipse 120% 90% at 50% -10%, rgba(63, 201, 255, 0.13) 0%, transparent 58%),
-    radial-gradient(ellipse 90% 70% at 12% 42%, rgba(31, 212, 124, 0.08) 0%, transparent 65%),
-    radial-gradient(ellipse 90% 70% at 88% 58%, rgba(157, 140, 255, 0.1) 0%, transparent 65%),
-    radial-gradient(ellipse 110% 80% at 50% 108%, rgba(63, 201, 255, 0.07) 0%, transparent 55%),
+    radial-gradient(ellipse 120% 90% at 50% -10%, rgba(63, 201, 255, 0.05) 0%, transparent 58%),
+    radial-gradient(ellipse 90% 70% at 12% 42%, rgba(31, 212, 124, 0.03) 0%, transparent 65%),
+    radial-gradient(ellipse 90% 70% at 88% 58%, rgba(157, 140, 255, 0.04) 0%, transparent 65%),
+    radial-gradient(ellipse 110% 80% at 50% 108%, rgba(63, 201, 255, 0.03) 0%, transparent 55%),
     linear-gradient(180deg, var(--bg-midnight) 0%, var(--bg-base) 100%);
 
-  /* Aurora glows — page overlay + focal surfaces (vivid pass, locked accents) */
-  --aurora-cyan: radial-gradient(ellipse 55% 45% at 18% 22%, rgba(63, 201, 255, 0.12), transparent 70%);
-  --aurora-green: radial-gradient(ellipse 50% 40% at 82% 30%, rgba(31, 212, 124, 0.09), transparent 70%);
-  --aurora-violet: radial-gradient(ellipse 55% 45% at 60% 85%, rgba(157, 140, 255, 0.1), transparent 70%);
+  /* Aurora glows — page overlay (low alpha; glass panels do the heavy lifting) */
+  --aurora-cyan: radial-gradient(ellipse 55% 45% at 18% 22%, rgba(63, 201, 255, 0.05), transparent 70%);
+  --aurora-green: radial-gradient(ellipse 50% 40% at 82% 30%, rgba(31, 212, 124, 0.04), transparent 70%);
+  --aurora-violet: radial-gradient(ellipse 55% 45% at 60% 85%, rgba(157, 140, 255, 0.04), transparent 70%);
   --brand-glow: rgba(63, 201, 255, 0.38);
 
   /* Accents — green primary, cyan secondary, orange tertiary, violet aurora (replaces magenta) */

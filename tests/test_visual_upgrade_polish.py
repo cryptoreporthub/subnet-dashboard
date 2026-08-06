@@ -958,9 +958,9 @@ def test_ui_legacy_is_stub_only():
 
 
 def test_grey_smoke_bg_base_token():
-    """Pump desk visual lock — grey-smoke page base."""
+    """HUD cockpit — charcoal smoke page base (not blue wash)."""
     css = open("static/css/base.css", encoding="utf-8").read()
-    assert "--bg-base: #2d323a" in css
+    assert "--bg-base: #1e2128" in css
 
 
 def test_no_legacy_stylesheet_links_in_templates():

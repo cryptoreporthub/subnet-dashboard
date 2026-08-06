@@ -1,4 +1,4 @@
-{# Council Hero v4 — preserved IDs: k3-orb-score, k3-action-badge, k3-call-headline #}
+{# Council Hero HUD — preserved IDs: k3-orb-score, k3-action-badge, k3-call-headline #}
 {% set t = tribunal %}
 {% set p = t.conviction_pct|default(0) %}
 <section
@@ -12,8 +12,19 @@
   style="--p: {{ p }};"
 >
   <header class="tribunal-hero__masthead">
-    <p class="tribunal-hero__kicker"><span class="tribunal-hero__kicker-dot" aria-hidden="true"></span>Council call · Today</p>
-    <h2 class="tribunal-hero__brand brand-mist" id="tribunal-hero-title">{{ t.subnet_label }}</h2>
+    <div class="tribunal-hero__masthead-row">
+      <h2 class="tribunal-hero__brand" id="tribunal-hero-title">{{ t.subnet_label }}</h2>
+      <p class="tribunal-hero__live" role="status">
+        <span class="tribunal-hero__kicker-dot" aria-hidden="true"></span>LIVE
+      </p>
+    </div>
+    <div class="tribunal-hero__meta-pills" aria-label="Council metadata">
+      {% if t.epoch_label %}
+      <span class="tribunal-hero__meta-pill">EPOCH {{ t.epoch_label }}</span>
+      {% endif %}
+      <span class="tribunal-hero__meta-pill">3 VOTERS</span>
+      <span class="tribunal-hero__meta-pill">AUDIT GATE {{ publish_gate_label() }}</span>
+    </div>
   </header>
 
   <div class="tribunal-hero__card">
@@ -24,6 +35,13 @@
     </div>
 
     <div class="tribunal-hero__stage">
+      <div class="tribunal-hero__hud-frame" aria-hidden="true">
+        <span class="tribunal-hero__bracket tribunal-hero__bracket--tl"></span>
+        <span class="tribunal-hero__bracket tribunal-hero__bracket--tr"></span>
+        <span class="tribunal-hero__bracket tribunal-hero__bracket--bl"></span>
+        <span class="tribunal-hero__bracket tribunal-hero__bracket--br"></span>
+      </div>
+
       <svg class="tribunal-hero__rays" viewBox="0 0 390 440" aria-hidden="true">
         <path class="tribunal-hero__ray tribunal-hero__ray--oracle" d="M195 100 C195 107 195 114 195 121" />
         <path class="tribunal-hero__ray tribunal-hero__ray--echo" d="M154 346 C144 324 138 297 134 273" />
@@ -39,7 +57,14 @@
       <div class="tribunal-hero__ring-center">
         <span id="k3-orb-score" class="tribunal-hero__pct" data-gauge-value>{{ t.gauge_display }}</span>
         <span class="tribunal-hero__pct-label">VERDICT CONFIDENCE</span>
-        <span id="k3-action-badge" class="tribunal-hero__verdict-label">{{ t.center_label }}</span>
+        <div class="tribunal-hero__verdict-pills">
+          <span id="k3-action-badge" class="tribunal-hero__verdict-label tribunal-hero__verdict-label--gate">{{ t.gate_label }}</span>
+          {% if t.action_label %}
+          <span id="k3-action-hold" class="tribunal-hero__verdict-label tribunal-hero__verdict-label--hold">{{ t.action_label }}</span>
+          {% else %}
+          <span id="k3-action-hold" class="tribunal-hero__verdict-label tribunal-hero__verdict-label--hold" hidden></span>
+          {% endif %}
+        </div>
       </div>
 
       {% for judge in t.judges %}
