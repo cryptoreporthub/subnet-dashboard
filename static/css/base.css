@@ -21,16 +21,16 @@
   /* Monochrome grey smoke atmosphere — pure grey washes only; accents stay on text/HUD */
   --bg-atmosphere:
     url("/static/img/simivision-smoke-bg.svg"),
-    radial-gradient(ellipse 120% 90% at 50% -10%, rgba(150, 150, 150, 0.09) 0%, transparent 58%),
-    radial-gradient(ellipse 90% 70% at 12% 42%, rgba(128, 128, 128, 0.07) 0%, transparent 65%),
-    radial-gradient(ellipse 90% 70% at 88% 58%, rgba(140, 140, 140, 0.08) 0%, transparent 65%),
-    radial-gradient(ellipse 110% 80% at 50% 108%, rgba(120, 120, 120, 0.07) 0%, transparent 55%),
+    radial-gradient(ellipse 120% 90% at 50% -10%, rgba(160, 160, 168, 0.22) 0%, transparent 58%),
+    radial-gradient(ellipse 90% 70% at 12% 42%, rgba(140, 140, 148, 0.18) 0%, transparent 65%),
+    radial-gradient(ellipse 90% 70% at 88% 58%, rgba(150, 150, 158, 0.19) 0%, transparent 65%),
+    radial-gradient(ellipse 110% 80% at 50% 108%, rgba(130, 130, 138, 0.18) 0%, transparent 55%),
     linear-gradient(180deg, var(--bg-midnight) 0%, var(--bg-base) 100%);
 
   /* Aurora glows — page overlay, desaturated to grey-only (token names kept for ui.css) */
-  --aurora-cyan: radial-gradient(ellipse 55% 45% at 18% 22%, rgba(150, 150, 150, 0.08), transparent 70%);
-  --aurora-green: radial-gradient(ellipse 50% 40% at 82% 30%, rgba(132, 132, 132, 0.07), transparent 70%);
-  --aurora-violet: radial-gradient(ellipse 55% 45% at 60% 85%, rgba(140, 140, 140, 0.07), transparent 70%);
+  --aurora-cyan: radial-gradient(ellipse 55% 45% at 18% 22%, rgba(150, 150, 158, 0.16), transparent 70%);
+  --aurora-green: radial-gradient(ellipse 50% 40% at 82% 30%, rgba(142, 142, 150, 0.15), transparent 70%);
+  --aurora-violet: radial-gradient(ellipse 55% 45% at 60% 85%, rgba(150, 150, 158, 0.16), transparent 70%);
   --brand-glow: rgba(63, 201, 255, 0.38);
 
   /* Accents — green primary, cyan secondary, orange tertiary, violet aurora (replaces magenta) */

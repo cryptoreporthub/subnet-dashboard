@@ -49,7 +49,7 @@ body.council-first-theme::before {
     var(--aurora-cyan),
     var(--aurora-green),
     var(--aurora-violet);
-  opacity: 0.38;
+  opacity: 0.55;
   transform-origin: center center;
 }
 
