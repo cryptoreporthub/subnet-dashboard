@@ -210,27 +210,52 @@ def _maybe_emit_segment_close(entry: Dict[str, Any], netuid: int, name: Optional
         logger.debug("pump segment trail skipped SN%s: %s", netuid, exc)
 
 
-def format_direction_strip(segments: List[Dict[str, Any]]) -> str:
-    """Latest leg only: ``↑ +2.4% (11m)`` — magnitude from segment delta, time in parens."""
+def _segment_arrow(direction: str) -> str:
+    if direction == "up":
+        return "↑"
+    if direction == "down":
+        return "↓"
+    return "→"
+
+
+def _format_magnitude_pct(mag: Any) -> str:
+    try:
+        val = float(mag)
+    except (TypeError, ValueError):
+        return "—"
+    if abs(val) < 1e-9:
+        return "—"
+    if val > 0:
+        return f"+{val:.1f}%"
+    return f"{val:.1f}%"
+
+
+def _format_segment_leg(seg: Dict[str, Any], *, live: bool = False) -> str:
+    direction = str(seg.get("direction") or "flat")
+    arrow = _segment_arrow(direction)
+    pct_txt = _format_magnitude_pct(seg.get("magnitude_pct"))
+    dur = float(seg.get("duration_min") or 0)
+    suffix = "*" if live else ""
+    return f"{arrow} {pct_txt} ({_bucket_duration(dur)}){suffix}"
+
+
+def format_direction_strip(
+    segments: List[Dict[str, Any]],
+    *,
+    max_legs: int = 5,
+    live_last: bool = False,
+) -> str:
+    """Directional path: ``↑ +4.0% (2h) → ↓ -2.0% (1h) → ↑ +2.5% (45m)*``."""
     if not segments:
         return ""
-    seg = segments[-1]
-    if not isinstance(seg, dict):
-        return ""
-    direction = str(seg.get("direction") or "flat")
-    arrow = "↑" if direction == "up" else "↓" if direction == "down" else "→"
-    try:
-        mag = float(seg.get("magnitude_pct"))
-    except (TypeError, ValueError):
-        mag = None
-    if mag is None or abs(mag) < 1e-9:
-        pct_txt = "—"
-    elif mag > 0:
-        pct_txt = f"+{mag:.1f}%"
-    else:
-        pct_txt = f"{mag:.1f}%"
-    dur = float(seg.get("duration_min") or 0)
-    return f"{arrow} {pct_txt} ({_bucket_duration(dur)})"
+    legs: List[str] = []
+    window = segments[-max_legs:]
+    for idx, seg in enumerate(window):
+        if not isinstance(seg, dict):
+            continue
+        live = live_last and idx == len(window) - 1
+        legs.append(_format_segment_leg(seg, live=live))
+    return " → ".join(legs)
 
 
 def _bucket_duration(minutes: float) -> str:
@@ -364,6 +389,7 @@ def pattern_payload(netuid: Any, path: Optional[str] = None) -> Dict[str, Any]:
     entry = (data.get("subnets") or {}).get(str(nu)) or {}
     segments = list(entry.get("segments") or [])
     open_seg = entry.get("open_segment")
+    live_last = False
     if isinstance(open_seg, dict):
         now = datetime.now(timezone.utc)
         live = dict(open_seg)
@@ -374,8 +400,11 @@ def pattern_payload(netuid: Any, path: Optional[str] = None) -> Dict[str, Any]:
         if start_price > 0:
             live["magnitude_pct"] = round((last_price - start_price) / start_price * 100.0, 4)
         segments = segments + [live]
+        live_last = True
     match = classify_waveform(segments)
-    direction_strip = format_direction_strip(segments) if segments else ""
+    direction_strip = (
+        format_direction_strip(segments, live_last=live_last) if segments else ""
+    )
     display_label = direction_strip or match["pattern_label"] or _waveform_label(entry)
     return {
         "netuid": nu,

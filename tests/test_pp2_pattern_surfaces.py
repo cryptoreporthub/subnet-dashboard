@@ -60,7 +60,7 @@ def test_classify_user_example_waveform():
     assert match["pattern_class"] == "PUMP_DROP_RE_PUMP"
 
 
-def test_format_direction_strip_latest_leg():
+def test_format_direction_strip_single_leg():
     segments = [
         {"direction": "up", "duration_min": 11.2, "magnitude_pct": 2.4},
     ]
@@ -68,3 +68,16 @@ def test_format_direction_strip_latest_leg():
     assert strip.startswith("↑")
     assert "+2.4%" in strip
     assert "11m" in strip
+
+
+def test_format_direction_strip_full_path():
+    segments = [
+        {"direction": "up", "duration_min": 120, "magnitude_pct": 4.0},
+        {"direction": "down", "duration_min": 60, "magnitude_pct": -2.0},
+        {"direction": "up", "duration_min": 45, "magnitude_pct": 2.5, "end": "2026-08-06T12:00:00Z"},
+    ]
+    strip = format_direction_strip(segments, live_last=True)
+    assert "↑ +4.0% (2h)" in strip
+    assert "↓ -2.0% (1h)" in strip
+    assert "↑ +2.5%" in strip and "*" in strip.split("→")[-1]
+    assert strip.count("→") == 2
