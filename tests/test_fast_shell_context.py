@@ -87,6 +87,29 @@ def test_resolve_index_context_falls_back_on_error(monkeypatch):
     assert ctx.get("degraded") is True
 
 
+def test_warm_homepage_cache_uses_degraded_not_full_build(monkeypatch):
+    """Background warm must not run full homepage build (Fly wedge / stuck loading)."""
+    import server as srv
+
+    class _R:
+        base_url = "http://test"
+
+    full_called = {"n": 0}
+
+    def _full(_request):
+        full_called["n"] += 1
+        return {"subnets": [], "data_source": "live"}
+
+    monkeypatch.setattr(srv, "_build_index_context", _full)
+    srv._HOMEPAGE_HTML_CACHE["html"] = None
+    srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
+    srv._HOMEPAGE_WARMING = False
+    srv._warm_homepage_cache(_R())
+    assert full_called["n"] == 0
+    assert srv._HOMEPAGE_HTML_CACHE.get("html")
+    assert "tribunal-hero" in srv._HOMEPAGE_HTML_CACHE["html"]
+
+
 def test_degraded_homepage_has_conviction_cards():
     _ensure_homepage_cache()
     html = client.get("/").text

@@ -587,8 +587,13 @@ def _prime_emergency_home_html() -> str:
     if _EMERGENCY_HOME_HTML:
         return _EMERGENCY_HOME_HTML
     try:
-        ctx = _minimal_index_context(_HomepageStubRequest())
-        _EMERGENCY_HOME_HTML = templates.get_template("index.html").render(ctx)
+        def _build() -> str:
+            ctx = _minimal_index_context(_HomepageStubRequest())
+            return templates.get_template("index.html").render(ctx)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            fut = pool.submit(_build)
+            _EMERGENCY_HOME_HTML = fut.result(timeout=8.0)
     except Exception as exc:
         logger.warning("emergency home prime failed: %s", exc)
         return _EMERGENCY_HOME_HTML or _INSTANT_HOME_SHELL
@@ -596,7 +601,11 @@ def _prime_emergency_home_html() -> str:
 
 
 def _resolve_index_context(request: Request) -> Dict[str, Any]:
-    """Try full homepage context; fall back to fast degraded shell on timeout/error."""
+    """Try full homepage context; fall back to fast degraded shell on timeout/error.
+
+    Not used on the warm/cache hot path — background warm must stay degraded-only
+    so Fly web never wedges on a 12s+ full build (see #851 outage).
+    """
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     fut = pool.submit(_build_index_context, request)
     try:
@@ -628,12 +637,13 @@ def _resolve_index_context(request: Request) -> Dict[str, Any]:
 
 
 def _render_index_html(request: Request) -> str:
-    ctx = _resolve_index_context(request)
+    """Fast degraded SSR for warm/cache — hydrate upgrades live APIs in the browser."""
+    ctx = _degraded_index_context(request)
     return templates.get_template("index.html").render(ctx)
 
 
 def _warm_homepage_cache(request: Optional[Request] = None) -> None:
-    """Build homepage HTML off the request hot path (full context, degraded fallback)."""
+    """Build homepage HTML off the request hot path — degraded shell only (never full build)."""
     global _HOMEPAGE_WARMING
     now = time.time()
     cached_html = _HOMEPAGE_HTML_CACHE.get("html")
@@ -649,7 +659,10 @@ def _warm_homepage_cache(request: Optional[Request] = None) -> None:
         _HOMEPAGE_WARMING = True
     try:
         req: Any = request if request is not None else _HomepageStubRequest()
-        html = _render_index_html(req)
+        warm_timeout = HOMEPAGE_BUILD_TIMEOUT + 5.0
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            fut = pool.submit(_render_index_html, req)
+            html = fut.result(timeout=warm_timeout)
         _HOMEPAGE_HTML_CACHE["html"] = html
         _HOMEPAGE_HTML_CACHE["at"] = time.time()
     except Exception as exc:
