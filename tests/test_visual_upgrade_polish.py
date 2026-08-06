@@ -621,7 +621,10 @@ def test_legacy_no_council_shell_or_driver_styles():
 def test_council_pick_card_uses_pewter_smoke_background():
     css = open("static/css/ui.css", encoding="utf-8").read()
     assert ".council-stage .home-job__call-host .k3-dossier" in css
-    assert "var(--card-smoke)" in css.split(".council-stage .home-job__call-host .k3-dossier", 1)[1][:400]
+    dossier = css.split(".council-stage .home-job__call-host .k3-dossier", 1)[1][:400]
+    assert "transparent" in dossier
+    hero = css.split(".tribunal-hero__card {", 1)[1].split("}", 1)[0]
+    assert "simivision-smoke-bg.svg" in hero
 
 
 def test_home_drawers_and_section21_live_in_ui_css():
@@ -959,32 +962,39 @@ def test_ui_legacy_is_stub_only():
 
 
 def test_grey_smoke_bg_base_token():
-    """Global glass pass — smokey gradient page base + glass tokens."""
+    """Global glass pass — full atmosphere page base + glass tokens."""
     base_css = open("static/css/base.css", encoding="utf-8").read()
     ui_css = _read_ui_css()
-    assert "body.council-first-theme" in base_css
-    assert "#20242a" in base_css and "#2d323a" in base_css
+    assert "--bg-atmosphere" in base_css
     assert "simivision-smoke-bg.svg" in base_css
+    body_block = ui_css.split("body.council-first-theme {", 1)[1].split("}", 1)[0]
+    assert "var(--bg-atmosphere)" in body_block
     assert "--glass-fill:" in ui_css
     assert "body.council-first-theme::after" in ui_css
     assert "radial-gradient(#000 1px, transparent 1px)" in ui_css
     assert "body.council-first-theme .app-shell" in ui_css
     assert "body.council-first-theme > *" not in ui_css
+    aurora = ui_css.split("body.council-first-theme::before {", 1)[1].split("}", 1)[0]
+    assert "opacity:" in aurora
+    assert float(aurora.split("opacity:")[1].split(";")[0].strip()) >= 0.30
     assert ".council-stage__atmosphere" in ui_css
     atm = ui_css.split(".council-stage__atmosphere {", 1)[1].split("}", 1)[0]
     assert "#0a0a0c" not in atm
     assert "transparent" in atm
     dossier = ui_css.split(".council-stage .home-job__call-host .k3-dossier {", 1)[1].split("}", 1)[0]
-    assert "var(--glass-fill)" in dossier
-    assert "card-smoke" not in dossier
+    assert "transparent" in dossier
 
 
 def test_global_glass_card_overrides_in_ui_css():
-    """Inner content cards use glass-fill; dial center stays opaque."""
+    """Hero card uses baked smoke; panels/judges use glass-fill; dial center stays opaque."""
     css = _read_ui_css()
     assert "var(--glass-fill)" in css
+    hero_card = css.split(".tribunal-hero__card {", 1)[1].split("}", 1)[0]
+    assert "simivision-smoke-bg.svg" in hero_card
+    assert "soft-light" in hero_card
+    assert "tribunal-smoke-drift" in css
+    assert "background-position:" in css.split("@keyframes tribunal-smoke-drift", 1)[1].split("}", 1)[0]
     for selector in (
-        ".tribunal-hero__card",
         ".tribunal-hero__panel",
         ".tribunal-hero__judge",
         ".k3-dossier",

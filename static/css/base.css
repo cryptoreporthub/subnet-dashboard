@@ -169,18 +169,6 @@ body::after {
   body::after { opacity: 0.35; }
 }
 
-/* Council-first home — smokey grey gradient + smoke texture (glass cards sit above) */
-body.council-first-theme {
-  background-color: #252a31;
-  background-image:
-    url("/static/img/simivision-smoke-bg.svg"),
-    linear-gradient(135deg, #20242a, #2d323a);
-  background-size: cover, 100% 100%;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
-  background-position: center;
-}
-
 a { color: var(--accent-blue); text-decoration: none; }
 a:hover { color: var(--accent-orange); text-shadow: 0 0 12px var(--accent-glow-orange); }
 
