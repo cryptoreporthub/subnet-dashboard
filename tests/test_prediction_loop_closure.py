@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
 import internal.council.resolver as resolver
+import internal.council.resolver_scheduler as resolver_scheduler
 import internal.council.weights as weights
 from internal.learning import predictions_store
 from internal.learning.prediction_loop import record_pick_prediction
@@ -20,6 +22,17 @@ def isolate_paths(tmp_path, monkeypatch):
     monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", pred_path)
     monkeypatch.setattr(resolver, "PREDICTIONS_PATH", pred_path)
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", soul_path)
+    Path(pred_path).write_text(
+        json.dumps(predictions_store._default_data()),
+        encoding="utf-8",
+    )
+    # Contract tests start the resolver singleton; its heal tick can race here once
+    # PREDICTIONS_PATH is patched to this module's tmp ledger.
+    resolver_scheduler.stop_prediction_resolver_scheduler()
+    monkeypatch.setattr(
+        "internal.learning.ledger_heal.heal_daily_pick_ledger",
+        lambda *args, **kwargs: {"ok": True, "healed": False, "reason": "test_isolated"},
+    )
     soul_path_obj = tmp_path / "soul_map.json"
     soul_path_obj.write_text(
         json.dumps(
