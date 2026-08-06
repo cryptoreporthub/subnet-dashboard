@@ -113,3 +113,20 @@ def test_scanner_extracts_wallet_from_delegation(monkeypatch, watchlist):
     result = scan_subnet_delegations(12, watchlist=watchlist)
     assert result["ingested"] == 1
     assert result["has_wallet_data"] is True
+
+
+def test_rug_count_increments_on_record_rug_alert(whale_service):
+    wallet = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+    assert whale_service.get_rug_count(wallet) == 0
+    assert whale_service.record_rug_alert(wallet, 12) == 1
+    assert whale_service.record_rug_alert(wallet, 12) == 2
+    assert whale_service.get_rug_count(wallet) == 2
+
+
+def test_log_subnet_owner_tracks_netuids(whale_service):
+    wallet = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+    whale_service.log_subnet_owner(wallet, 7)
+    whale_service.log_subnet_owner(wallet, 12)
+    profile = whale_service.get_profile(wallet)
+    assert profile["last_owner_netuid"] == 12
+    assert set(profile["owner_netuids"]) == {7, 12}

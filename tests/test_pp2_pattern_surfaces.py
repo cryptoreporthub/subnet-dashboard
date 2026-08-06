@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from internal.learning.prediction_loop import _pattern_at_prediction
-from internal.pump.pattern_ledger import classify_waveform
+from internal.pump.pattern_ledger import classify_waveform, format_direction_strip
 from server import app
 
 client = TestClient(app)
@@ -58,3 +58,13 @@ def test_classify_user_example_waveform():
     ]
     match = classify_waveform(segments)
     assert match["pattern_class"] == "PUMP_DROP_RE_PUMP"
+
+
+def test_format_direction_strip_latest_leg():
+    segments = [
+        {"direction": "up", "duration_min": 11.2, "magnitude_pct": 2.4},
+    ]
+    strip = format_direction_strip(segments)
+    assert strip.startswith("↑")
+    assert "+2.4%" in strip
+    assert "11m" in strip

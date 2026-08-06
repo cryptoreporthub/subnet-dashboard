@@ -128,6 +128,54 @@ def _row(
     }
 
 
+def _partition_angle_groups(
+    next_up: List[Dict[str, Any]],
+    peer_matches: List[Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Group angle candidates by to_lead_pct — top matches vs correlated peers."""
+    merged: Dict[int, Dict[str, Any]] = {}
+    for row in list(next_up) + list(peer_matches or []):
+        if not isinstance(row, dict):
+            continue
+        try:
+            nid = int(row.get("netuid"))
+        except (TypeError, ValueError):
+            continue
+        if nid <= 0:
+            continue
+        merged[nid] = row
+
+    at_100: List[Dict[str, Any]] = []
+    correlated: List[Dict[str, Any]] = []
+    for row in merged.values():
+        try:
+            lead = int(row.get("to_lead_pct") or 0)
+        except (TypeError, ValueError):
+            lead = 0
+        if lead == 100:
+            at_100.append(row)
+        elif 70 <= lead <= 90:
+            correlated.append(row)
+
+    lead_replicas: List[Dict[str, Any]] = []
+    if len(at_100) >= 2:
+        netuids = sorted(int(r.get("netuid")) for r in at_100 if r.get("netuid") is not None)
+        lead_replicas.append(
+            {
+                "grouped": True,
+                "count": len(at_100),
+                "label": "Top Match",
+                "to_lead_pct": 100,
+                "netuids": netuids,
+            }
+        )
+    else:
+        lead_replicas = list(at_100)
+
+    correlated.sort(key=lambda r: (-int(r.get("to_lead_pct") or 0), -_f(r.get("score"))))
+    return lead_replicas, correlated
+
+
 def rank_desk_angles(
     focus_netuid: int,
     state: Dict[str, Any],
@@ -142,6 +190,8 @@ def rank_desk_angles(
         "peers": {"lane": None, "rarity": None, "matches": [], "why": None},
         "combined": None,
         "tracked": [],
+        "lead_replicas": [],
+        "correlated_peers": [],
         "why": None,
     }
     subnets = state.get("subnets") or {}
@@ -234,6 +284,9 @@ def rank_desk_angles(
             "Next up and Peers stay separate; this line needs both axes."
         )
 
+    peer_matches = peers_payload.get("matches") if isinstance(peers_payload, dict) else []
+    lead_replicas, correlated_peers = _partition_angle_groups(next_up, peer_matches or [])
+
     return {
         "experimental": True,
         "weights": {"timing": W_TIMING, "peer": W_PEER},
@@ -243,6 +296,8 @@ def rank_desk_angles(
         "peers": peers_payload,
         "combined": shown,
         "tracked": tracked,
+        "lead_replicas": lead_replicas,
+        "correlated_peers": correlated_peers,
         "why": why,
     }
 
@@ -267,6 +322,8 @@ def attach_angles_to_desk(
     hero["lane"] = peers.get("lane")
     hero["signature_rarity"] = peers.get("rarity")
     hero["next_up"] = angles.get("next_up") or []
+    hero["lead_replicas"] = angles.get("lead_replicas") or []
+    hero["correlated_peers"] = angles.get("correlated_peers") or []
     hero["combined"] = angles.get("combined")
     hero["combined_experimental"] = True
 

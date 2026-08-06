@@ -130,3 +130,36 @@ def test_grading_flags():
     assert is_pump_lead(lead) and not is_pump_combined_exp(lead)
     assert is_pump_combined_exp(exp) and not is_pump_lead(exp)
     assert is_pump_desk_claim(lead) and is_pump_desk_claim(exp)
+
+
+def test_lead_replicas_group_when_two_at_100_percent():
+    focus = _entry(23, "PUMPING", 0.80, buy=0.62, vol=0.4, mom=0.004)
+    twin_a = _entry(11, "PUMPING", 0.80, buy=0.60, vol=0.35, mom=0.003)
+    twin_b = _entry(12, "PUMPING", 0.80, buy=0.61, vol=0.36, mom=0.0035)
+    state = {"subnets": {"23": focus, "11": twin_a, "12": twin_b}}
+    out = rank_desk_angles(23, state, track_limit=5)
+    assert out["lead_replicas"]
+    grouped = out["lead_replicas"][0]
+    assert grouped.get("grouped") is True
+    assert grouped.get("count") == 2
+    assert grouped.get("label") == "Top Match"
+    assert grouped.get("to_lead_pct") == 100
+    assert set(grouped.get("netuids") or []) == {11, 12}
+
+
+def test_attach_angles_sets_lead_replicas_on_hero(tmp_path, monkeypatch):
+    ledger = tmp_path / "combined_calls.json"
+    monkeypatch.setattr(combined_ledger, "LEDGER_PATH", str(ledger))
+    monkeypatch.setattr(
+        combined_ledger,
+        "_freeze_shown_prediction",
+        lambda *a, **k: None,
+    )
+    focus = _entry(23, "PUMPING", 0.80, buy=0.62, vol=0.4)
+    twin_a = _entry(11, "PUMPING", 0.80, buy=0.60, vol=0.35)
+    twin_b = _entry(12, "PUMPING", 0.80, buy=0.61, vol=0.36)
+    state = {"subnets": {"23": focus, "11": twin_a, "12": twin_b}}
+    payload = {"hero": {"netuid": 23, "name": "Trishool", "timing": "lead"}, "alerts": []}
+    attach_angles_to_desk(payload, state)
+    assert payload["hero"].get("lead_replicas")
+    assert payload["hero"]["lead_replicas"][0].get("grouped") is True

@@ -425,6 +425,56 @@ class WhaleIntelligenceService:
     def get_profile(self, wallet: str) -> Optional[Dict[str, Any]]:
         return self.data.get("profiles", {}).get(wallet.strip())
 
+    def log_subnet_owner(self, wallet: str, netuid: int) -> None:
+        """Upsert owner wallet profile with last-owned subnet tracking."""
+        wallet = (wallet or "").strip()
+        if not wallet:
+            return
+        profiles: Dict[str, Any] = self.data.setdefault("profiles", {})
+        profile = profiles.setdefault(
+            wallet,
+            {
+                "wallet": wallet,
+                "first_seen": _now_iso(),
+                "last_seen": _now_iso(),
+                "rug_count": 0,
+                "owner_netuids": [],
+            },
+        )
+        nu = int(netuid)
+        profile["last_owner_netuid"] = nu
+        owner_netuids = profile.setdefault("owner_netuids", [])
+        if nu not in owner_netuids:
+            owner_netuids.append(nu)
+        profile["last_seen"] = _now_iso()
+        self._save_data()
+
+    def record_rug_alert(self, wallet: str, netuid: int) -> int:
+        """Increment rug_count on owner profile; simple per-evaluation bump."""
+        wallet = (wallet or "").strip()
+        if not wallet:
+            return 0
+        profiles: Dict[str, Any] = self.data.setdefault("profiles", {})
+        profile = profiles.setdefault(
+            wallet,
+            {
+                "wallet": wallet,
+                "first_seen": _now_iso(),
+                "last_seen": _now_iso(),
+                "rug_count": 0,
+            },
+        )
+        profile["rug_count"] = int(profile.get("rug_count") or 0) + 1
+        profile["last_seen"] = _now_iso()
+        self._save_data()
+        return int(profile["rug_count"])
+
+    def get_rug_count(self, wallet: str) -> int:
+        profile = self.data.get("profiles", {}).get((wallet or "").strip())
+        if not profile:
+            return 0
+        return int(profile.get("rug_count") or 0)
+
     def get_rugger_watchlist(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         return self.get_leaderboard("ruggers", limit)
 

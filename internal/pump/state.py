@@ -210,6 +210,15 @@ def transition_subnet(
     _append_score_trail(entry, score)
     entry["score_layer"] = classification.get("score_layer") or score_layer_for_phase(new_phase)
     entry["updated_at"] = _now_z()
+    try:
+        from internal.learning.pump_alert import _resolve_owner_wallet
+        from internal.whales.service import WhaleIntelligenceService
+
+        owner = _resolve_owner_wallet(int(netuid), signals)
+        if owner:
+            WhaleIntelligenceService().log_subnet_owner(owner, int(netuid))
+    except Exception as exc:
+        logger.debug("subnet owner log skipped SN%s: %s", netuid, exc)
     entry["signal_snapshot"] = classification.get("signals")
     subnets[key] = entry
 
