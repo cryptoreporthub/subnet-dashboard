@@ -167,6 +167,15 @@ def test_council_stage_atmosphere_cool_grey_smoke_drift():
     assert "rgba(140, 140, 150" in puff_block
 
 
+def test_mobile_hero_atmosphere_bump_in_ui_css():
+    """Mobile ≤480px gets stronger stage smoke + card glow without changing soft-light blend."""
+    css = _read_ui_css()
+    assert "hero-mobile-atmosphere" in css
+    mobile = css.split("hero-mobile-atmosphere", 1)[1].split("@media", 2)[0]
+    assert ".council-stage__atmosphere::before" in mobile
+    assert "background-blend-mode" not in mobile
+
+
 def test_council_stage_h2_conf_state_hooks_in_ui_css():
     """Tribunal v4 conf-state visuals live in ui.css (legacy k3-orb rules retired)."""
     css = _read_ui_css()
