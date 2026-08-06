@@ -22,6 +22,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
+from internal.static_version import STATIC_V
+
 logger = logging.getLogger(__name__)
 
 council_router = APIRouter()
@@ -482,7 +484,8 @@ async def judge_council_page():
     try:
         with open(path, "r", encoding="utf-8") as f:
             html = f.read()
-        return HTMLResponse(content=html)
+        # Served as raw HTML, not via Jinja — resolve the cache-bust token inline.
+        return HTMLResponse(content=html.replace("{{ static_v }}", STATIC_V))
     except Exception as e:
         logger.warning("Judge council template not found: %s", e)
         return HTMLResponse(content="<h1>Judge Council page not available</h1>", status_code=503)

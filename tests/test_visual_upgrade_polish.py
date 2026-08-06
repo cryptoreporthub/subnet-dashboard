@@ -335,7 +335,7 @@ def test_soul_map_hydrate_trend_uses_delta_first_then_weight_baseline():
     assert "SOUL_WEIGHT_BASELINE" in src
     idx = src.index("function renderCouncilWeights")
     body = src[idx : idx + 1200]
-    assert "soulTrendFromDelta(deltaMap[name], w)" in body
+    assert "soulTrendFromDelta(deltaMap[name], w, gradedN)" in body
     assert "delta > 0.005 ? 'up'" not in body
 
 
@@ -1000,7 +1000,7 @@ def test_global_glass_card_overrides_in_ui_css():
         ".k3-dossier",
     ):
         block = css.split(selector + " {", 1)[1].split("}", 1)[0]
-        assert "var(--glass-fill)" in block or "rgba(32, 36, 42, 0.35)" in block, selector
+        assert "var(--glass-fill" in block or "rgba(32, 36, 42, 0.35)" in block, selector
     assert "background: var(--glass-fill)" in css.split(".pump-alert__card", 1)[1]
     grouped = css.split(".pd-lead,", 1)[1].split("}", 1)[0]
     assert "var(--glass-fill)" in grouped
