@@ -23,9 +23,16 @@
   padding: 0 var(--space-4, 16px);
 }
 
-/* No situation_room grid overlay — smokey gradient + aurora + noise */
+/* No situation_room grid overlay — smokey gradient + smoke texture + aurora + noise */
 body.council-first-theme {
-  background: linear-gradient(135deg, #20242a, #2d323a);
+  background-color: #252a31;
+  background-image:
+    url("/static/img/simivision-smoke-bg.svg"),
+    linear-gradient(135deg, #20242a, #2d323a);
+  background-size: cover, 100% 100%;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  background-position: center;
 }
 
 /* Page atmosphere aurora overlay — drift gated in Quiet motion below */
@@ -51,7 +58,7 @@ body.council-first-theme::after {
   width: 100vw;
   height: 100vh;
   pointer-events: none;
-  opacity: 0.04;
+  opacity: 0.06;
   z-index: 0;
   background-image: radial-gradient(#000 1px, transparent 1px);
   background-size: 4px 4px;
@@ -61,6 +68,19 @@ body.council-first-theme .app-shell,
 body.council-first-theme main {
   position: relative;
   z-index: 1;
+  background: transparent;
+}
+
+/* Parent wrappers must stay transparent so body smoke + glass blur work */
+body.council-first-theme .council-stage,
+body.council-first-theme .council-stage__inner,
+body.council-first-theme .council-stage__body,
+body.council-first-theme .home-job__body,
+body.council-first-theme .home-job__call-host,
+body.council-first-theme #pump-desk-panel,
+body.council-first-theme .pump-desk,
+body.council-first-theme .pds-desk {
+  background: transparent !important;
 }
 
 /* ---------- Syne mist brand (body prefix beats legacy .logo-text / .council-stage__brand color) ---------- */
@@ -587,7 +607,7 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   border-bottom: none;
 }
 
-/* Cool-grey dual-layer smoke — fills stage behind .council-stage__inner */
+/* Cool-grey dual-layer smoke — transparent; page smoke shows through glass */
 .council-stage__atmosphere {
   position: absolute;
   inset: 0;
@@ -595,7 +615,7 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   pointer-events: none;
   overflow: hidden;
   isolation: isolate;
-  background: #0a0a0c;
+  background: transparent;
 }
 
 .council-stage__atmosphere::before,
@@ -617,13 +637,12 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   filter: blur(40px);
 }
 
-/* Layer 2 — finer counter-drift + vignette pull to center cards */
+/* Layer 2 — soft counter-drift (no opaque vignette wash) */
 .council-stage__atmosphere::after {
   z-index: 1;
   background:
-    radial-gradient(ellipse 45% 45% at 65% 55%, rgba(160, 160, 170, 0.14), transparent 55%),
-    radial-gradient(ellipse 55% 35% at 15% 70%, rgba(80, 80, 90, 0.18), transparent 60%),
-    radial-gradient(ellipse 70% 60% at 50% 45%, transparent 40%, rgba(0, 0, 0, 0.55) 100%);
+    radial-gradient(ellipse 45% 45% at 65% 55%, rgba(160, 160, 170, 0.1), transparent 55%),
+    radial-gradient(ellipse 55% 35% at 15% 70%, rgba(80, 80, 90, 0.08), transparent 60%);
   filter: blur(60px);
 }
 
@@ -5025,6 +5044,7 @@ footer.status[data-source*="fallback"] .st-dot {
   padding: clamp(48px, 8vh, 96px) var(--space-5, 24px) clamp(56px, 10vh, 120px);
   overflow: hidden;
   border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  background: transparent;
 }
 
 @media (max-width: 480px) {
@@ -5049,6 +5069,7 @@ footer.status[data-source*="fallback"] .st-dot {
   width: min(920px, 100%);
   margin: 0 auto;
   opacity: 1;
+  background: transparent;
   animation: stage-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -7248,15 +7269,15 @@ body.wrap {
   }
 }
 
-/* ---------- Council pick card — pewter smoke ---------- */
+/* ---------- Council pick card — glass (page smoke must show through) ---------- */
 .council-stage .home-job__call-host .k3-dossier {
-  background-color: rgba(18, 22, 30, 0.92);
-  background-image: var(--card-grain), var(--card-smoke);
-  background-size: 160px 160px, cover;
-  background-blend-mode: overlay, normal;
-  border: 1px solid var(--line-hi);
-  border-radius: var(--radius-md, 14px);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  background: var(--glass-fill) !important;
+  background-image: none !important;
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   overflow: hidden;
 }
 
@@ -12945,15 +12966,14 @@ body.wrap {
     margin-left: -2px;
     color: var(--pds-ink);
     overflow: hidden;
+    background: transparent !important;
   }
   .pds-atmosphere {
     position: absolute;
     inset: -20% -10% auto -10%;
     height: 65%;
     pointer-events: none;
-    background:
-      radial-gradient(ellipse 70% 55% at 12% 20%, rgba(56, 189, 248, 0.08), transparent 60%),
-      radial-gradient(ellipse 50% 40% at 88% 8%, rgba(251, 191, 36, 0.05), transparent 55%);
+    background: transparent;
     z-index: 0;
   }
   .pds--polish > *:not(.pds-atmosphere) { position: relative; z-index: 1; }
