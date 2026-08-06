@@ -46,7 +46,10 @@
       <article class="tribunal-hero__judge tribunal-hero__judge--{{ judge.key }}" data-judge="{{ judge.key }}">
         <span class="tribunal-hero__orbit" aria-hidden="true"></span>
         <div class="tribunal-hero__judge-head">
-          <span class="tribunal-hero__judge-signal" data-judge-signal>{{ judge.signal_pct }}</span>
+          <span class="tribunal-hero__judge-signal-wrap">
+            <span class="tribunal-hero__judge-signal-caption">SIGNAL</span>
+            <span class="tribunal-hero__judge-signal" data-judge-signal>{{ judge.signal_pct }}</span>
+          </span>
           <span class="tribunal-hero__judge-weight" data-judge-weight>{{ judge.weight_pct }}</span>
         </div>
         <h3 class="tribunal-hero__judge-name">{{ judge.label }}</h3>

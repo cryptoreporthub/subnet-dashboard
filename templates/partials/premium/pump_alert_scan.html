@@ -93,6 +93,9 @@
           <div class="pds-hero__copy">
             <div class="pds-hero__top">
               <span class="pds-hero__badge pds-hero__badge--{{ badge_slug }}">{{ hero_row.badge }}</span>
+              {% if hero_row.pattern_label and hero_row.pattern_class and hero_row.pattern_class != 'insufficient_data' %}
+              <span class="pump-pattern-chip" title="{{ hero_row.pattern_class }}">{{ hero_row.pattern_label }}</span>
+              {% endif %}
               <a class="pds-hero__name" href="/subnet/{{ hero_row.netuid }}">{{ hero_row.name|default('SN' ~ hero_row.netuid) }} <b>SN{{ hero_row.netuid }}</b></a>
               {% if hero_row.updated_ago %}<span class="pds-hero__ago">{{ hero_row.updated_ago }}</span>{% endif %}
             </div>
@@ -119,13 +122,19 @@
         {% if trigger %}<p class="pds-hero__trigger">{{ trigger }}</p>{% endif %}
 
         <div class="pds-strip" aria-label="Metrics and triad">
-          <p class="pds-strip__metrics">
-            <span>Form <b>{{ form_pct }}</b></span>
-            <span>Conf <b>{{ confirm_pct }}</b></span>
-            <span>Gap <b class="pds-strip__gap">{{ hero_row.distance|default('—') }}</b></span>
-            {% if hero_row.buy_pct is not none %}<span>{{ hero_row.buy_pct }}% buys</span>{% endif %}
-            {% if hero_row.vol_pct is not none %}<span>{{ hero_row.vol_pct }}% vol</span>{% endif %}
-          </p>
+          <div class="pds-metrics-bar" aria-label="Formation metrics">
+            <p class="pds-metrics-bar__line">
+              <span>Form <b>{{ form_pct }}</b></span>
+              <span>Conf <b>{{ confirm_pct }}</b></span>
+              <span>Gap <b>{{ hero_row.distance|default('—') }}</b></span>
+            </p>
+            {% if hero_row.vol_pct is not none or hero_row.buy_pct is not none %}
+            <p class="pds-metrics-bar__line">
+              {% if hero_row.vol_pct is not none %}<span>Vol <b>{{ hero_row.vol_pct }}%</b></span>{% endif %}
+              {% if hero_row.buy_pct is not none %}<span>Buys <b>{{ hero_row.buy_pct }}%</b></span>{% endif %}
+            </p>
+            {% endif %}
+          </div>
           <p class="pds-strip__triad">
             <span class="pds-strip__pill{% if triad.inflow_quiet_load %} pds-strip__pill--on{% endif %}">In {{ labels.inflow|default('WATCH') }}</span>
             <span class="pds-strip__pill{% if triad.buy_pressure %} pds-strip__pill--on{% endif %}">Pr {{ labels.pressure|default('FLAT') }}</span>
@@ -135,48 +144,42 @@
 
         {% if hero_row.whale_archetype %}<p class="pds-hero__chip pds-hero__chip--whale">{{ hero_row.whale_archetype }}</p>{% endif %}
         {% if hero_row.wallet_chip %}<p class="pds-hero__chip pds-hero__chip--wallet">{{ hero_row.wallet_chip }}</p>{% endif %}
+        {% if hero_row.owner_rug_count and hero_row.owner_rug_count > 0 %}
+        <p class="pds-hero__chip pds-hero__chip--rug-history">(Flagged in {{ hero_row.owner_rug_count }} recent rugs)</p>
+        {% endif %}
         {% if hero_row.size_line %}<p class="pds-hero__chip">{{ hero_row.size_line }}</p>{% endif %}
         {% if hero_row.telegram_chip %}<p class="pds-hero__chip pds-hero__chip--tg">{{ hero_row.telegram_chip }}</p>{% endif %}
         {% if hero_row.owner_chip %}<p class="pds-hero__chip pds-hero__chip--owner">{{ hero_row.owner_chip }}</p>{% endif %}
-        {% set next_up = hero_row.next_up if hero_row.next_up is iterable and hero_row.next_up is not string else [] %}
+        {% set lead_replicas = hero_row.lead_replicas if hero_row.lead_replicas is iterable and hero_row.lead_replicas is not string else [] %}
+        {% set correlated_peers = hero_row.correlated_peers if hero_row.correlated_peers is iterable and hero_row.correlated_peers is not string else [] %}
         {% set peers = hero_row.peers if hero_row.peers is mapping else none %}
         {% set combined = hero_row.combined if hero_row.combined is mapping else none %}
-        {% if next_up or (peers and (peers.lane or (peers.matches is iterable and peers.matches|length > 0))) or combined %}
-        <div class="pds-angles" aria-label="Next up, Peers, Combined">
-          {% if next_up and next_up|length > 0 %}
-          <section class="pds-angles__section pds-angles__section--next">
+        {% if lead_replicas or correlated_peers or (peers and (peers.lane or peers.rarity is not none)) or combined %}
+        <div class="pds-angles" aria-label="Lead Replicas, Correlated Peers, Combined">
+          {% if lead_replicas and lead_replicas|length > 0 %}
+          <section class="pds-angles__section pds-angles__section--replicas">
             <header class="pds-angles__head">
-              <h3 class="pds-angles__label">Next up</h3>
+              <h3 class="pds-angles__label">Lead Replicas</h3>
               <a class="pds-angles__more" href="#pump-desk-more">View ladder</a>
             </header>
-            <div class="pds-angles__list">
-              {% for k in next_up[:3] %}
-              {% set lead_pct = k.to_lead_pct|default(0)|int %}
-              <a class="pds-angles__chip" href="/subnet/{{ k.netuid }}" title="{{ lead_pct }}% of #1 heat">
-                <span class="pds-angles__chip-head">{{ k.name|default('SN' ~ k.netuid) }} <b>SN{{ k.netuid }}</b></span>
-                <span class="pds-angles__chip-meta"><i>{{ lead_pct }}% of #1</i></span>
-                <span class="pds-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ lead_pct }} percent of lead"><span class="pds-angles__bar-fill" style="width:{{ lead_pct }}%"></span></span>
-              </a>
+            <div class="pds-angles__grouped-list">
+              {% for g in lead_replicas[:3] %}
+              <span class="pds-angles__grouped">{{ g.count|default(1) }}× {{ g.label|default(g.name|default('Match')) }} <b>[{{ g.pct|default(g.to_lead_pct|default(0))|int }}%]</b></span>
               {% endfor %}
             </div>
           </section>
           {% endif %}
-          {% if peers and (peers.lane or (peers.matches is iterable and peers.matches|length > 0)) %}
+          {% if correlated_peers and correlated_peers|length > 0 or (peers and (peers.lane or peers.rarity is not none)) %}
           <section class="pds-angles__section pds-angles__section--peers pds-peers">
             <header class="pds-angles__head pds-peers__meta">
-              <h3 class="pds-angles__label pds-peers__label">Peers</h3>
-              {% if peers.lane %}<span class="pds-peers__lane" title="Pulse lane">{{ peers.lane }}</span>{% endif %}
-              {% if peers.rarity is not none %}<span class="pds-peers__rarity" title="Signature rarity">{{ peers.rarity }} rarity</span>{% endif %}
+              <h3 class="pds-angles__label pds-peers__label">Correlated Peers</h3>
+              {% if peers and peers.lane %}<span class="pds-peers__lane" title="Pulse lane">{{ peers.lane }}</span>{% endif %}
+              {% if peers and peers.rarity is not none %}<span class="pds-peers__rarity" title="Signature rarity">{{ peers.rarity }} rarity</span>{% endif %}
             </header>
-            {% if peers.matches is iterable and peers.matches|length > 0 %}
-            <div class="pds-angles__list pds-peers__list">
-              {% for k in peers.matches[:3] %}
-              {% set lead_pct = k.to_lead_pct|default(0)|int %}
-              <a class="pds-peers__match" href="/subnet/{{ k.netuid }}" title="{{ lead_pct }}% of #1 · {{ (k.shared|default([]))[:2]|join(' · ') or k.lane|default('peer') }}">
-                <span class="pds-peers__match-head">{{ k.name|default('SN' ~ k.netuid) }} <b>SN{{ k.netuid }}</b>{% if k.lane %} <i>{{ k.lane }}</i>{% endif %}</span>
-                <span class="pds-angles__chip-meta"><em>{{ lead_pct }}% of #1</em></span>
-                <span class="pds-angles__bar" role="progressbar" aria-valuenow="{{ lead_pct }}" aria-valuemin="0" aria-valuemax="100"><span class="pds-angles__bar-fill" style="width:{{ lead_pct }}%"></span></span>
-              </a>
+            {% if correlated_peers and correlated_peers|length > 0 %}
+            <div class="pds-angles__grouped-list">
+              {% for g in correlated_peers[:3] %}
+              <span class="pds-angles__grouped">{{ g.count|default(1) }}× {{ g.label|default(g.name|default('Peer')) }} <b>[{{ g.pct|default(g.to_lead_pct|default(0))|int }}%]</b></span>
               {% endfor %}
             </div>
             {% endif %}

@@ -9,6 +9,9 @@
 <a class="pds-ladder pds-ladder--{{ tone }}" href="/subnet/{{ row.netuid }}" data-netuid="{{ row.netuid }}">
   <div class="pds-ladder__head">
     <span class="pds-ladder__badge pds-ladder__badge--{{ badge_slug }}">{{ BADGE_ABBR.get(row.badge, row.badge) }}</span>
+    {% if row.pattern_label and row.pattern_class and row.pattern_class != 'insufficient_data' %}
+    <span class="pump-pattern-chip pump-pattern-chip--row" title="{{ row.pattern_class }}">{{ row.pattern_label }}</span>
+    {% endif %}
     <span class="pds-ladder__name">{{ row.name|default('SN' ~ row.netuid) }} <b>SN{{ row.netuid }}</b></span>
     <span class="pds-ladder__nums">
       <span class="pds-ladder__num"><i>Flow</i>{% if form_pct is not none %}{{ form_pct }}{% else %}—{% endif %}</span>

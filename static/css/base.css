@@ -2,14 +2,14 @@
 /* Fonts loaded via <link> in templates (§31-2 O4) — no blocking @import here */
 
 :root {
-  /* Backgrounds — midnight base with even grey smoke (no left/right seam) */
-  --bg-base: #080a10;
-  --bg-edge: #06080e;
-  --bg-midnight: #0b0d14;
-  --bg-surface: rgba(14, 17, 24, 0.82);
-  --bg-card: rgba(16, 19, 26, 0.78);
-  --bg-elevated: rgba(20, 23, 30, 0.9);
-  --bg-header: rgba(8, 10, 16, 0.72);
+  /* Backgrounds — grey-smoke family (even wash, no left/right seam) */
+  --bg-base: #2d323a;
+  --bg-edge: #272c34;
+  --bg-midnight: #2a2f37;
+  --bg-surface: rgba(45, 50, 58, 0.82);
+  --bg-card: rgba(48, 53, 61, 0.78);
+  --bg-elevated: rgba(55, 60, 68, 0.9);
+  --bg-header: rgba(40, 45, 53, 0.72);
   /* Pewter card smoke — grey family with a faint cyan aurora sheen (no green wash) */
   --card-smoke:
     radial-gradient(ellipse 160% 80% at 50% -40%, rgba(168, 176, 190, 0.18) 0%, transparent 50%),

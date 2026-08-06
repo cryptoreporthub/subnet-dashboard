@@ -7326,8 +7326,10 @@ body.wrap {
   background:
     radial-gradient(120% 70% at 50% -18%, rgba(63, 201, 255, 0.1) 0%, transparent 58%),
     url("/static/img/simivision-smoke-bg.svg") center / cover no-repeat,
-    linear-gradient(180deg, rgba(15, 19, 28, 0.92) 0%, rgba(8, 11, 17, 0.94) 100%);
+    linear-gradient(180deg, rgba(45, 50, 58, 0.72) 0%, rgba(40, 45, 53, 0.78) 100%);
   background-blend-mode: normal, soft-light, normal;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   animation: tribunal-smoke-drift 36s ease-in-out infinite alternate;
   box-shadow:
     0 24px 60px rgba(0, 0, 0, 0.6),
@@ -7753,12 +7755,34 @@ body.wrap {
   flex-direction: row-reverse;
 }
 
+.tribunal-hero__judge-signal-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+
+.tribunal-hero__judge--pulse .tribunal-hero__judge-signal-wrap {
+  align-items: flex-end;
+}
+
+.tribunal-hero__judge-signal-caption {
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  line-height: 1;
+}
+
 .tribunal-hero__judge-signal {
   font-family: var(--font-display);
   font-size: 1.35rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: #ffffff;
+  line-height: 1;
 }
 
 .tribunal-hero__judge-weight {
@@ -7773,7 +7797,7 @@ body.wrap {
 }
 
 .tribunal-hero__judge-weight::before {
-  content: "W ";
+  content: "Weight ";
   color: var(--text-muted);
 }
 
@@ -12014,7 +12038,9 @@ body.wrap {
     margin-bottom: 16px;
     padding: 14px 14px 16px;
     border-radius: 14px;
-    background: linear-gradient(165deg, rgba(15, 23, 42, 0.92), rgba(8, 12, 22, 0.95));
+    background: linear-gradient(165deg, rgba(45, 50, 58, 0.62), rgba(40, 45, 53, 0.68));
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(251, 191, 36, 0.28);
     box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.04), 0 12px 32px rgba(0, 0, 0, 0.28);
 }
@@ -12316,6 +12342,46 @@ body.wrap {
     font-size: 10px;
     line-height: 1.35;
     color: var(--pd-dim);
+}
+
+.pd-metrics-bar,
+.pds-metrics-bar {
+    margin-top: 12px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(40, 45, 53, 0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--pd-line);
+}
+.pds-metrics-bar {
+    border-color: var(--pds-line);
+    background: rgba(40, 45, 53, 0.55);
+}
+.pd-metrics-bar__line,
+.pds-metrics-bar__line {
+    margin: 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--pd-dim);
+}
+.pds-metrics-bar__line { color: var(--pds-dim); }
+.pd-metrics-bar__line + .pd-metrics-bar__line,
+.pds-metrics-bar__line + .pds-metrics-bar__line {
+    margin-top: 4px;
+}
+.pd-metrics-bar__line b,
+.pds-metrics-bar__line b {
+    color: var(--pd-ink);
+    font-weight: 700;
+}
+.pds-metrics-bar__line b { color: var(--pds-ink); }
+.pd-metrics-bar__line span + span::before,
+.pds-metrics-bar__line span + span::before {
+    content: " | ";
+    color: rgba(148, 163, 184, 0.45);
+    font-weight: 400;
 }
 
 .pd-raw {
@@ -12816,7 +12882,9 @@ body.wrap {
     margin-bottom: 16px;
     padding: 12px;
     border-radius: 12px;
-    background: var(--pds-panel);
+    background: rgba(45, 50, 58, 0.58);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(251, 191, 36, 0.22);
   }
   .pds-hero--confirmed { border-color: rgba(251, 113, 133, 0.28); }
@@ -13057,6 +13125,32 @@ body.wrap {
   .pds-hero__chip--tg { color: #7dd3fc; }
   .pds-hero__chip--whale { color: #fbbf24; }
   .pds-hero__chip--wallet { color: #a7f3d0; }
+  .pds-hero__chip--rug-history { color: #fca5a5; }
+  .pd-chip--rug-history { color: #fca5a5; }
+  .pds-angles__grouped,
+  .pd-angles__grouped {
+    display: block;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--pds-sub);
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: rgba(40, 45, 53, 0.5);
+    border: 1px solid rgba(148, 163, 184, 0.12);
+  }
+  .pd-angles__grouped { color: var(--pd-sub); }
+  .pds-angles__grouped b,
+  .pd-angles__grouped b {
+    color: #6ee7b7;
+    font-weight: 700;
+  }
+  .pds-angles__grouped-list,
+  .pd-angles__grouped-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
   .pds-peers {
     margin-top: 10px;
     padding-top: 10px;
