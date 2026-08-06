@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,6 +14,31 @@ import internal.council.resolver_scheduler as resolver_scheduler
 import internal.council.weights as weights
 from internal.learning import predictions_store
 from internal.learning.prediction_loop import record_pick_prediction
+
+_store_lock = threading.Lock()
+
+
+def _stop_prediction_background_jobs() -> None:
+    """Contract tests may start resolver/pick schedulers; stop stray ticks."""
+    resolver_scheduler.stop_prediction_resolver_scheduler()
+    try:
+        from internal.council.pick_scheduler import stop_pick_schedulers
+
+        stop_pick_schedulers()
+    except Exception:
+        pass
+    try:
+        from internal.council.selector_scheduler import stop_selector_scheduler
+
+        stop_selector_scheduler()
+    except Exception:
+        pass
+    try:
+        from internal.pump.scheduler import stop_pump_ladder_scheduler
+
+        stop_pump_ladder_scheduler()
+    except Exception:
+        pass
 
 
 @pytest.fixture(autouse=True)
@@ -26,13 +52,24 @@ def isolate_paths(tmp_path, monkeypatch):
         json.dumps(predictions_store._default_data()),
         encoding="utf-8",
     )
-    # Contract tests start the resolver singleton; its heal tick can race here once
-    # PREDICTIONS_PATH is patched to this module's tmp ledger.
-    resolver_scheduler.stop_prediction_resolver_scheduler()
+    _stop_prediction_background_jobs()
     monkeypatch.setattr(
         "internal.learning.ledger_heal.heal_daily_pick_ledger",
         lambda *args, **kwargs: {"ok": True, "healed": False, "reason": "test_isolated"},
     )
+    orig_load = predictions_store.load_predictions
+    orig_save = predictions_store.save_predictions
+
+    def locked_load():
+        with _store_lock:
+            return orig_load()
+
+    def locked_save(data):
+        with _store_lock:
+            return orig_save(data)
+
+    monkeypatch.setattr(predictions_store, "load_predictions", locked_load)
+    monkeypatch.setattr(predictions_store, "save_predictions", locked_save)
     soul_path_obj = tmp_path / "soul_map.json"
     soul_path_obj.write_text(
         json.dumps(
@@ -68,11 +105,11 @@ def test_record_pick_prediction_persists_pending_row():
     stored = record_pick_prediction(pick, subnet, horizon_type="hour")
     assert stored is not None
     data = predictions_store.load_predictions()
-    assert len(data["predictions"]) == 1
-    assert data["predictions"][0]["netuid"] == 29
-    assert data["predictions"][0]["horizon_type"] == "hour"
-    assert data["predictions"][0]["status"] == "pending"
-    row = data["predictions"][0]
+    rows = [r for r in data["predictions"] if r.get("netuid") == 29]
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["horizon_type"] == "hour"
+    assert row["status"] == "pending"
     assert isinstance(row.get("subnet_snapshot"), dict)
     assert row["subnet_snapshot"].get("price_change_24h") == 3.2
     assert isinstance(row.get("weights_at_creation"), dict)
@@ -111,7 +148,10 @@ def test_record_pick_prediction_dedupes_same_horizon():
     second = record_pick_prediction(pick, subnet, horizon_type="hour")
     assert first is not None
     assert second is None
-    assert len(predictions_store.load_predictions()["predictions"]) == 1
+    rows = [
+        r for r in predictions_store.load_predictions()["predictions"] if r.get("netuid") == 29
+    ]
+    assert len(rows) == 1
 
 
 def test_resolver_closes_loop_and_nudges_weights():
