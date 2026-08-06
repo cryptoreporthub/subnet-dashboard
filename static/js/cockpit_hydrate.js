@@ -2979,7 +2979,15 @@
     return 'even';
   }
 
-  function soulTrendFromDelta(delta, w) {
+  function councilBiasLabel(trend, expertGraded) {
+    if ((expertGraded || 0) <= 0) return 'PRIOR';
+    if (trend === 'up') return '\u25B2 LEARNED UP';
+    if (trend === 'down') return '\u25BC LEARNED DOWN';
+    return 'EVEN';
+  }
+
+  function soulTrendFromDelta(delta, w, expertGraded) {
+    if ((expertGraded || 0) <= 0) return 'prior';
     var d = Number(delta);
     if (!isNaN(d) && Math.abs(d) > 0.001) {
       if (d > 0) return 'up';
@@ -2989,17 +2997,19 @@
     return soulTrendFromWeight(w);
   }
 
-  function renderCouncilWeights(weights, deltas) {
+  function renderCouncilWeights(weights, deltas, expertGraded) {
     var normalized = normalizeWeights(weights);
     var keys = CANONICAL_EXPERTS.filter(function (k) { return normalized[k] != null; });
     if (!keys.length) return;
     var deltaMap = deltas && typeof deltas === 'object' ? deltas : {};
+    var gradedMap = expertGraded && typeof expertGraded === 'object' ? expertGraded : {};
     var ranked = keys.slice().sort(function (a, b) { return (normalized[b] || 0) - (normalized[a] || 0); });
     var top = ranked[0];
     var cards = ranked.map(function (name, index) {
       var w = Number(normalized[name]) || 0;
-      var trend = soulTrendFromDelta(deltaMap[name], w);
-      var biasLabel = trend === 'up' ? '\u25B2 LEARNED UP' : trend === 'down' ? '\u25BC LEARNED DOWN' : 'EVEN';
+      var gradedN = Number(gradedMap[name]) || 0;
+      var trend = soulTrendFromDelta(deltaMap[name], w, gradedN);
+      var biasLabel = councilBiasLabel(trend, gradedN);
       var orbColor = SOUL_ORB_COLORS[name] || SOUL_ORB_FALLBACK[index % SOUL_ORB_FALLBACK.length];
       var orbPx = Math.round(58 + Math.min(w, 2.0) / 2.0 * 46);
       return (
@@ -3840,7 +3850,11 @@
       if (tierBatch[1].status === 'fulfilled' && tierBatch[1].value) {
         stats = tierBatch[1].value;
         renderKpi(stats);
-        renderCouncilWeights(stats.expert_weights || {}, stats.expert_weight_deltas || {});
+        renderCouncilWeights(
+          stats.expert_weights || {},
+          stats.expert_weight_deltas || {},
+          stats.expert_graded_counts || {}
+        );
         if (document.getElementById('tribunal-hero')) {
           if (lastDailyPickPayload) {
             renderTribunalHero(lastDailyPickPayload, stats);

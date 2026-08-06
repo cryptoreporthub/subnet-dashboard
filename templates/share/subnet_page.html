@@ -13,6 +13,14 @@
   </div>
   {% else %}
 
+  {% if partial_notes %}
+  <div class="share-page__partial" role="status">
+    {% for note in partial_notes %}
+    <p>{{ note }}</p>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {% if drivers.headline %}
   <section class="subnet-page__drivers">
     <h2 class="subnet-page__section">Market drivers</h2>
