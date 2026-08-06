@@ -10,6 +10,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from internal.learning.dpick_pump import build_pump_chip
 from internal.learning.pump_alert import (
+    _entry_band_phrase,
     _progress_series_from_trail,
     build_alert_row,
     build_desk_row,
@@ -401,11 +402,12 @@ def test_pump_alert_compact_renders_hero_card():
     assert "pd-lead__meter" in html
     assert "pd-verdict" in html
     assert "pd-evidence" in html
+    assert "pd-metrics-bar" in html
     assert "pd-triad" in html
     assert "pd-phase" in html
     assert "Pump desk" in html
-    assert "Formation" in html
-    assert "Confirm" in html
+    assert "Form" in html
+    assert "Conf" in html
     assert "Gap" in html
     assert "Inflow" in html
     assert "Open SN" in html and "dossier" in html
@@ -699,3 +701,24 @@ def test_preview_pump_desk_full_route():
     assert "pd-evidence" in html
     assert "pd-phase" in html
     assert "pd-proof__pct" in html
+
+
+def test_entry_band_phrase_stable_per_netuid():
+    a = _entry_band_phrase(42, 0.12)
+    b = _entry_band_phrase(42, 0.12)
+    c = _entry_band_phrase(43, 0.12)
+    assert a == b
+    assert a != c or 42 % 5 == 43 % 5
+
+
+def test_pump_desk_templates_have_no_last5_caption():
+    from pathlib import Path
+
+    for rel in (
+        "templates/partials/premium/pump_alert.html",
+        "templates/partials/premium/pump_alert_scan.html",
+        "templates/partials/premium/pump_desk_row.html",
+        "templates/pump.html",
+    ):
+        html = Path(rel).read_text(encoding="utf-8")
+        assert "LAST 5" not in html, rel

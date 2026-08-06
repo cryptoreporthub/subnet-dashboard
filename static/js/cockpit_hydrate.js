@@ -1804,15 +1804,19 @@
         : '';
     var thesis = row.thesis || '';
     var triggerCopy = row.trigger || row.subtitle || '';
-    var metrics = [
-      '<span>Form <b>' + esc(formPct) + '</b></span>',
-      '<span>Conf <b>' + esc(confirmPct) + '</b></span>',
-      '<span>Gap <b class="pds-strip__gap">' +
-        esc(row.distance != null ? row.distance : '—') +
-        '</b></span>',
-    ];
-    if (row.buy_pct != null) metrics.push('<span>' + esc(row.buy_pct) + '% buys</span>');
-    if (row.vol_pct != null) metrics.push('<span>' + esc(row.vol_pct) + '% vol</span>');
+    var patternChip = '';
+    if (
+      row.pattern_label &&
+      row.pattern_class &&
+      row.pattern_class !== 'insufficient_data'
+    ) {
+      patternChip =
+        '<span class="pump-pattern-chip" title="' +
+        esc(row.pattern_class) +
+        '">' +
+        esc(row.pattern_label) +
+        '</span>';
+    }
     return (
       '<article class="pds-hero pds-hero--' +
       esc(timing) +
@@ -1828,6 +1832,7 @@
       '">' +
       esc(row.badge || '') +
       '</span>' +
+      patternChip +
       '<a class="pds-hero__name" href="/subnet/' +
       esc(row.netuid) +
       '">' +
@@ -1854,9 +1859,9 @@
       '</ol>' +
       (thesis ? '<p class="pds-hero__thesis">' + esc(thesis) + '</p>' : '') +
       (triggerCopy ? '<p class="pds-hero__trigger">' + esc(triggerCopy) + '</p>' : '') +
-      '<div class="pds-strip" aria-label="Metrics and triad"><p class="pds-strip__metrics">' +
-      metrics.join('') +
-      '</p><p class="pds-strip__triad">' +
+      '<div class="pds-strip" aria-label="Metrics and triad">' +
+      renderPumpMetricsBar(row, 'pds') +
+      '<p class="pds-strip__triad">' +
       '<span class="pds-strip__pill' +
       (triad.inflow_quiet_load ? ' pds-strip__pill--on' : '') +
       '">In ' +
@@ -1879,6 +1884,7 @@
       (row.wallet_chip
         ? '<p class="pds-hero__chip pds-hero__chip--wallet">' + esc(row.wallet_chip) + '</p>'
         : '') +
+      renderRugHistoryChip(row, 'pds-hero__chip') +
       (row.telegram_chip
         ? '<p class="pds-hero__chip pds-hero__chip--tg">' + esc(row.telegram_chip) + '</p>'
         : '') +
@@ -1977,6 +1983,84 @@
     return Math.max(0, Math.min(100, Math.round(Number(k && k.to_lead_pct != null ? k.to_lead_pct : 0))));
   }
 
+  function renderPumpMetricsBar(row, prefix) {
+    if (!row) return '';
+    var root = prefix || 'pds';
+    var cls = root + '-metrics-bar';
+    var score = row.score != null ? Number(row.score) : 0;
+    var formPct =
+      row.formation_pct != null ? Number(row.formation_pct) : Math.min(100, Math.round(score * 100));
+    var confirmPct =
+      row.confirm_pct != null
+        ? Number(row.confirm_pct)
+        : row.momentum_pct != null
+          ? Number(row.momentum_pct)
+          : formPct;
+    var line1 =
+      '<span>Form <b>' +
+      esc(formPct) +
+      '</b></span><span>Conf <b>' +
+      esc(confirmPct) +
+      '</b></span><span>Gap <b>' +
+      esc(row.distance != null ? row.distance : '—') +
+      '</b></span>';
+    var line2Parts = [];
+    if (row.vol_pct != null) line2Parts.push('<span>Vol <b>' + esc(row.vol_pct) + '%</b></span>');
+    if (row.buy_pct != null) line2Parts.push('<span>Buys <b>' + esc(row.buy_pct) + '%</b></span>');
+    return (
+      '<div class="' +
+      cls +
+      '" aria-label="Formation metrics"><p class="' +
+      cls +
+      '__line">' +
+      line1 +
+      '</p>' +
+      (line2Parts.length
+        ? '<p class="' + cls + '__line">' + line2Parts.join('') + '</p>'
+        : '') +
+      '</div>'
+    );
+  }
+
+  function renderRugHistoryChip(row, chipClass) {
+    var n = row && row.owner_rug_count != null ? Number(row.owner_rug_count) : 0;
+    if (!n || n <= 0) return '';
+    return (
+      '<p class="' +
+      chipClass +
+      ' ' +
+      chipClass +
+      '--rug-history">(Flagged in ' +
+      esc(n) +
+      ' recent rugs)</p>'
+    );
+  }
+
+  function groupedAnglePct(g) {
+    if (!g) return 0;
+    if (g.pct != null) return Math.max(0, Math.min(100, Math.round(Number(g.pct))));
+    if (g.to_lead_pct != null) return leadPctOf(g);
+    return 0;
+  }
+
+  function renderGroupedAngleEntry(root, g) {
+    if (!g) return '';
+    var count = g.count != null ? Math.max(1, Math.round(Number(g.count))) : 1;
+    var label = g.label || g.name || 'Match';
+    var pct = groupedAnglePct(g);
+    return (
+      '<span class="' +
+      root +
+      '__grouped">' +
+      esc(count) +
+      '× ' +
+      esc(label) +
+      ' <b>[' +
+      pct +
+      '%]</b></span>'
+    );
+  }
+
   function angleChipHtml(root, k, opts) {
     opts = opts || {};
     var lead = leadPctOf(k);
@@ -2020,32 +2104,83 @@
   function renderAnglesBlock(row, prefix) {
     var root = prefix || 'pds-angles';
     var peerPrefix = root.indexOf('pd-') === 0 ? 'pd-peers' : 'pds-peers';
-    var nextUp = Array.isArray(row && row.next_up) ? row.next_up : [];
+    var leadReplicas = Array.isArray(row && row.lead_replicas) ? row.lead_replicas : [];
+    var correlatedPeers = Array.isArray(row && row.correlated_peers) ? row.correlated_peers : [];
+    var peers = row && row.peers;
     var combined = row && row.combined;
-    var peersHtml = renderPeersBlock(row, peerPrefix);
-    if (!nextUp.length && !peersHtml && !combined) return '';
-    var html = '<div class="' + root + '" aria-label="Next up, Peers, Combined">';
-    if (nextUp.length) {
+    var hasPeerMeta =
+      peers &&
+      (peers.lane || peers.rarity != null);
+    if (!leadReplicas.length && !correlatedPeers.length && !hasPeerMeta && !combined) return '';
+    var html =
+      '<div class="' +
+      root +
+      '" aria-label="Lead Replicas, Correlated Peers, Combined">';
+    if (leadReplicas.length) {
       html +=
         '<section class="' +
         root +
         '__section ' +
         root +
-        '__section--next"><header class="' +
+        '__section--replicas"><header class="' +
         root +
         '__head"><h3 class="' +
         root +
-        '__label">Next up</h3><a class="' +
+        '__label">Lead Replicas</h3><a class="' +
         root +
         '__more" href="#pump-desk-more">View ladder</a></header><div class="' +
         root +
-        '__list">';
-      nextUp.slice(0, 3).forEach(function (k) {
-        html += angleChipHtml(root, k);
+        '__grouped-list">';
+      leadReplicas.slice(0, 3).forEach(function (g) {
+        html += renderGroupedAngleEntry(root, g);
       });
       html += '</div></section>';
     }
-    if (peersHtml) html += peersHtml;
+    if (correlatedPeers.length || hasPeerMeta) {
+      var peerChips = '';
+      if (peers && peers.lane) {
+        peerChips +=
+          '<span class="' +
+          peerPrefix +
+          '__lane" title="Pulse lane">' +
+          esc(peers.lane) +
+          '</span>';
+      }
+      if (peers && peers.rarity != null) {
+        peerChips +=
+          '<span class="' +
+          peerPrefix +
+          '__rarity" title="Signature rarity">' +
+          esc(peers.rarity) +
+          ' rarity</span>';
+      }
+      html +=
+        '<section class="' +
+        root +
+        '__section ' +
+        root +
+        '__section--peers ' +
+        peerPrefix +
+        '"><header class="' +
+        root +
+        '__head ' +
+        peerPrefix +
+        '__meta"><h3 class="' +
+        root +
+        '__label ' +
+        peerPrefix +
+        '__label">Correlated Peers</h3>' +
+        peerChips +
+        '</header>';
+      if (correlatedPeers.length) {
+        html += '<div class="' + root + '__grouped-list">';
+        correlatedPeers.slice(0, 3).forEach(function (g) {
+          html += renderGroupedAngleEntry(root, g);
+        });
+        html += '</div>';
+      }
+      html += '</section>';
+    }
     if (combined && combined.netuid != null) {
       html +=
         '<section class="' +
@@ -2109,6 +2244,13 @@
       '">' +
       esc(shortBadge) +
       '</span>' +
+      (row.pattern_label && row.pattern_class && row.pattern_class !== 'insufficient_data'
+        ? '<span class="pump-pattern-chip pump-pattern-chip--row" title="' +
+          esc(row.pattern_class) +
+          '">' +
+          esc(row.pattern_label) +
+          '</span>'
+        : '') +
       '<span class="pds-ladder__name">' +
       esc(pumpRowDisplayName(row)) +
       ' <b>SN' +
@@ -2225,14 +2367,12 @@
     var move = row.move || (row.badge || '') + ' · ' + (row.name || '');
     var thesis = row.thesis || '';
     var triggerCopy = row.trigger || row.subtitle || '';
-    var rawBits = [];
-    if (row.buy_pct != null) rawBits.push('<span>' + esc(row.buy_pct) + '% buys</span>');
-    if (row.vol_pct != null) rawBits.push('<span>' + esc(row.vol_pct) + '% vol intensity</span>');
     var chipsHtml = '';
     if (row.size_line) chipsHtml += '<p class="pd-chip">' + esc(row.size_line) + '</p>';
     if (row.whale_archetype)
       chipsHtml += '<p class="pd-chip pd-chip--whale">' + esc(row.whale_archetype) + '</p>';
     if (row.wallet_chip) chipsHtml += '<p class="pd-chip pd-chip--wallet">' + esc(row.wallet_chip) + '</p>';
+    chipsHtml += renderRugHistoryChip(row, 'pd-chip');
     if (row.telegram_chip)
       chipsHtml += '<p class="pd-chip pd-chip--tg">' + esc(row.telegram_chip) + '</p>';
     if (row.owner_chip) chipsHtml += '<p class="pd-chip pd-chip--owner">' + esc(row.owner_chip) + '</p>';
@@ -2292,17 +2432,9 @@
       (thesis ? '<p class="pd-verdict__thesis">' + esc(thesis) + '</p>' : '') +
       (triggerCopy ? '<p class="pd-verdict__trigger">' + esc(triggerCopy) + '</p>' : '') +
       '</div>' +
-      '<div class="pd-evidence" aria-label="Formation evidence">' +
-      '<div class="pd-evidence__cell"><span class="pd-evidence__k">Formation</span><span class="pd-evidence__v">' +
-      esc(formPct) +
-      '</span><span class="pd-evidence__cap">Quiet inflow loading before price runs</span></div>' +
-      '<div class="pd-evidence__cell"><span class="pd-evidence__k">Confirm</span><span class="pd-evidence__v">' +
-      esc(confirmPct) +
-      '</span><span class="pd-evidence__cap">Buy pressure + volume intensity</span></div>' +
-      '<div class="pd-evidence__cell"><span class="pd-evidence__k">Gap</span><span class="pd-evidence__v pd-evidence__v--gap">' +
-      esc(row.distance != null ? row.distance : '—') +
-      '</span><span class="pd-evidence__cap">Distance left to act band</span></div></div>' +
-      (rawBits.length ? '<p class="pd-raw">' + rawBits.join('') + '</p>' : '') +
+      '<div class="pd-evidence" aria-label="Formation metrics">' +
+      renderPumpMetricsBar(row, 'pd') +
+      '</div>' +
       _pdTriadLegs(triad, labels) +
       chipsHtml +
       renderAnglesBlock(row, 'pd-angles') +

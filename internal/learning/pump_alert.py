@@ -234,6 +234,25 @@ def _watch_row_copy(
     }
 
 
+_ENTRY_BAND_PHRASES = (
+    "act before JUST STARTED",
+    "in before the move",
+    "early to this one",
+    "get in before momentum",
+)
+
+
+def _entry_band_phrase(netuid: Optional[int], distance: Optional[float]) -> str:
+    """Stable per-netuid entry-band callout — no random()."""
+    pool = list(_ENTRY_BAND_PHRASES)
+    if distance is not None and float(distance) > 0:
+        pool.append(f"get in ~{float(distance):.2f} early")
+    if netuid is None:
+        return pool[0]
+    idx = int(netuid) % len(pool)
+    return pool[idx]
+
+
 def _row_copy(
     phase: str,
     name: str,
@@ -267,7 +286,7 @@ def _row_copy(
                 f"Flow and volume aligning — high chance of 2%+ soon if buyers hold "
                 f"({br:.0%} buys, vol {vi:.0%})."
             ),
-            "trigger": "Best entry band — act before JUST STARTED or you only get a partial move.",
+            "trigger": _entry_band_phrase(netuid_int, None),
         }
     if phase == "PUMPING":
         just_max = _lead_thresholds()["just_started_max_score"]
@@ -312,8 +331,11 @@ def _row_copy(
     }
 
 
-def _wallet_chip(netuid_int: Optional[int]) -> Optional[str]:
-    return whale_intel_line(netuid_int).get("wallet_chip")
+def _wallet_chip(
+    netuid_int: Optional[int],
+    subnet_row: Optional[Dict[str, Any]] = None,
+) -> Optional[str]:
+    return whale_intel_line(netuid_int, subnet_row=subnet_row).get("wallet_chip")
 
 
 _whale_service_singleton: Any = None
@@ -328,9 +350,39 @@ def _whale_service():
     return _whale_service_singleton
 
 
-def whale_intel_line(netuid_int: Optional[int]) -> Dict[str, Optional[str]]:
+def _resolve_owner_wallet(
+    netuid_int: Optional[int],
+    subnet_row: Optional[Dict[str, Any]] = None,
+) -> Optional[str]:
+    owner = None
+    if isinstance(subnet_row, dict):
+        owner = subnet_row.get("owner") or subnet_row.get("owner_coldkey")
+    if not owner and netuid_int is not None:
+        try:
+            from internal.subnet_names import _load_local_registry
+
+            item = _load_local_registry().get(str(netuid_int))
+            if isinstance(item, dict):
+                owner = item.get("owner")
+        except Exception:
+            owner = None
+    if not owner:
+        return None
+    addr = str(owner).strip()
+    return addr if len(addr) >= 8 else None
+
+
+def whale_intel_line(
+    netuid_int: Optional[int],
+    *,
+    subnet_row: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Whale accumulation one-liner for desk cards and push alerts."""
-    out: Dict[str, Optional[str]] = {"wallet_chip": None, "whale_archetype": None}
+    out: Dict[str, Any] = {
+        "wallet_chip": None,
+        "whale_archetype": None,
+        "owner_rug_count": None,
+    }
     if netuid_int is None:
         return out
     try:
@@ -347,6 +399,10 @@ def whale_intel_line(netuid_int: Optional[int]) -> Dict[str, Optional[str]]:
         if flow.get("avoid_follow") or (ruggers and not n_smart):
             out["wallet_chip"] = "Rugger wallets active — caution"
             out["whale_archetype"] = "Rug risk"
+            owner = _resolve_owner_wallet(netuid_int, subnet_row)
+            if owner:
+                count = _whale_service().record_rug_alert(owner, int(netuid_int))
+                out["owner_rug_count"] = count
             return out
 
         if n_smart > 0:
@@ -577,7 +633,7 @@ def build_alert_row(
         copy["badge"] = badge
 
     size_line = _size_cliff_line(subnet_row)
-    wallet_chip = _wallet_chip(netuid_int)
+    wallet_chip = _wallet_chip(netuid_int, subnet_row)
     owner_chip = _owner_chip(netuid_int, subnet_row)
     telegram_chip = _telegram_chip(ladder_entry)
     day_chips = _whale_day_chips(netuid_int, subnet_row)
@@ -797,6 +853,8 @@ def build_desk_row(
     metrics = _desk_metrics(ladder_entry, leads, score)
     triad = metrics.get("triad") or {}
     pills = _triad_pill_labels(triad if isinstance(triad, dict) else {})
+    if copy.get("badge") == "BUILDING":
+        copy["trigger"] = _entry_band_phrase(netuid_int, metrics.get("distance"))
     subtitle = _HERO_SUBTITLES.get(copy["badge"], copy["badge"])
     spark_closes: List[float] = []
     if isinstance(subnet_row, dict):
@@ -812,9 +870,10 @@ def build_desk_row(
         metrics["trigger_score"],
     )
     # ponytail: one whale-service load per request; in-memory scan per netuid is cheap.
-    whale = whale_intel_line(netuid_int)
+    whale = whale_intel_line(netuid_int, subnet_row=subnet_row)
     wallet_chip = whale.get("wallet_chip")
     whale_archetype = whale.get("whale_archetype")
+    owner_rug_count = whale.get("owner_rug_count")
     size_line = _size_cliff_line(subnet_row)
     owner_chip = _owner_chip(netuid_int, subnet_row)
     telegram_chip = _telegram_chip(ladder_entry)
@@ -866,6 +925,7 @@ def build_desk_row(
         "telegram_chip": telegram_chip,
         "wallet_chip": wallet_chip,
         "whale_archetype": whale_archetype,
+        "owner_rug_count": owner_rug_count,
         "buy_pct": buy_pct,
         "vol_pct": vol_pct,
         "updated_at": ladder_entry.get("updated_at"),

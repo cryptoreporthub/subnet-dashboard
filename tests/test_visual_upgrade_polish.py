@@ -957,6 +957,12 @@ def test_ui_legacy_is_stub_only():
     assert "retired stub" in legacy or legacy.strip() == ""
 
 
+def test_grey_smoke_bg_base_token():
+    """Pump desk visual lock — grey-smoke page base."""
+    css = open("static/css/base.css", encoding="utf-8").read()
+    assert "--bg-base: #2d323a" in css
+
+
 def test_no_legacy_stylesheet_links_in_templates():
     """P3-4: no template links ui-legacy.css."""
     import glob
