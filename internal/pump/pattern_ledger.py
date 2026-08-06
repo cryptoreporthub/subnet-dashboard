@@ -210,6 +210,29 @@ def _maybe_emit_segment_close(entry: Dict[str, Any], netuid: int, name: Optional
         logger.debug("pump segment trail skipped SN%s: %s", netuid, exc)
 
 
+def format_direction_strip(segments: List[Dict[str, Any]]) -> str:
+    """Latest leg only: ``↑ +2.4% (11m)`` — magnitude from segment delta, time in parens."""
+    if not segments:
+        return ""
+    seg = segments[-1]
+    if not isinstance(seg, dict):
+        return ""
+    direction = str(seg.get("direction") or "flat")
+    arrow = "↑" if direction == "up" else "↓" if direction == "down" else "→"
+    try:
+        mag = float(seg.get("magnitude_pct"))
+    except (TypeError, ValueError):
+        mag = None
+    if mag is None or abs(mag) < 1e-9:
+        pct_txt = "—"
+    elif mag > 0:
+        pct_txt = f"+{mag:.1f}%"
+    else:
+        pct_txt = f"{mag:.1f}%"
+    dur = float(seg.get("duration_min") or 0)
+    return f"{arrow} {pct_txt} ({_bucket_duration(dur)})"
+
+
 def _bucket_duration(minutes: float) -> str:
     if minutes < 45:
         return f"{int(round(minutes))}m"
@@ -352,6 +375,8 @@ def pattern_payload(netuid: Any, path: Optional[str] = None) -> Dict[str, Any]:
             live["magnitude_pct"] = round((last_price - start_price) / start_price * 100.0, 4)
         segments = segments + [live]
     match = classify_waveform(segments)
+    direction_strip = format_direction_strip(segments) if segments else ""
+    display_label = direction_strip or match["pattern_label"] or _waveform_label(entry)
     return {
         "netuid": nu,
         "name": entry.get("name"),
@@ -359,7 +384,8 @@ def pattern_payload(netuid: Any, path: Optional[str] = None) -> Dict[str, Any]:
         "waveform": _waveform_label(entry),
         "segment_count": len(entry.get("segments") or []),
         "pattern_class": match["pattern_class"],
-        "pattern_label": match["pattern_label"] or _waveform_label(entry),
+        "direction_strip": direction_strip,
+        "pattern_label": display_label,
         "confidence": match["confidence"],
         "shape_hash": match["shape_hash"],
         "typical_pattern": match["pattern_class"],

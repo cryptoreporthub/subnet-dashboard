@@ -402,11 +402,12 @@ def test_pump_alert_compact_renders_hero_card():
     assert "pd-lead__meter" in html
     assert "pd-verdict" in html
     assert "pd-evidence" in html
+    assert "pd-metrics-bar" in html
     assert "pd-triad" in html
     assert "pd-phase" in html
     assert "Pump desk" in html
-    assert "Formation" in html
-    assert "Confirm" in html
+    assert "Form" in html
+    assert "Conf" in html
     assert "Gap" in html
     assert "Inflow" in html
     assert "Open SN" in html and "dossier" in html
