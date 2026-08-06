@@ -172,8 +172,56 @@ def subnet_label(payload: Dict[str, Any]) -> str:
     return f"{sn_prefix} · {name}"
 
 
-def _judge_weight_pct(weight: float) -> str:
-    return f"{int(round(float(weight) * 100))}%"
+_EQUAL_WEIGHT_SPREAD = 0.015  # normalized fractions (~1.5pp)
+
+
+def _format_judge_weight_pct(weights: Dict[str, float], key: str) -> str:
+    """Trust-weight share for verdict blend — not the judge's signal score."""
+    if weights.get(key) is None:
+        return "—"
+    try:
+        vals = [float(weights[k]) for k in _JUDGE_KEYS if weights.get(k) is not None]
+        w = float(weights[key])
+    except (TypeError, ValueError):
+        return "—"
+    if len(vals) >= 2 and max(vals) - min(vals) < _EQUAL_WEIGHT_SPREAD:
+        return "Equal weight"
+    pct = w * 100.0
+    if abs(pct - round(pct)) < 0.05:
+        return f"{int(round(pct))}%"
+    return f"{pct:.1f}%"
+
+
+def _judge_agreement_labels(signals: Dict[str, Optional[float]]) -> Dict[str, str]:
+    """Consensus/dissent from the three judge signal scores already on the pick."""
+    vals: List[float] = []
+    for key in _JUDGE_KEYS:
+        raw = signals.get(key)
+        if raw is None:
+            continue
+        try:
+            vals.append(float(raw))
+        except (TypeError, ValueError):
+            continue
+    if len(vals) < 2:
+        return {"consensus": "—", "dissent": "—"}
+
+    spread = max(vals) - min(vals)
+    if spread <= 10:
+        consensus = "High agreement"
+    elif spread <= 25:
+        consensus = "Moderate agreement"
+    else:
+        consensus = "Low agreement"
+
+    if spread < 1:
+        dissent = "Unanimous"
+    elif spread >= 30:
+        dissent = f"High dissent · {spread:.0f} pts"
+    else:
+        dissent = f"{spread:.0f} pt spread"
+
+    return {"consensus": consensus, "dissent": dissent}
 
 
 def _format_signal_pct(val: Optional[float]) -> str:
@@ -194,17 +242,24 @@ def _delta_arrow(delta: Optional[float]) -> str:
     return "·"
 
 
-def _decision_log_panel(payload: Dict[str, Any], kind: str, gauge: Optional[float]) -> Dict[str, Any]:
+def _decision_log_panel(
+    payload: Dict[str, Any],
+    kind: str,
+    gauge: Optional[float],
+    signals: Optional[Dict[str, Optional[float]]] = None,
+) -> Dict[str, Any]:
     active = payload.get("pick") or payload.get("candidate") or {}
-    consensus = active.get("consensus_score")
-    if consensus is not None:
-        try:
-            cval = float(consensus)
-            consensus_str = f"{cval * 100:.0f}%" if cval <= 1 else f"{cval:.0f}%"
-        except (TypeError, ValueError):
-            consensus_str = "—"
-    else:
-        consensus_str = "—"
+    agreement = _judge_agreement_labels(signals or {})
+
+    consensus_str = agreement["consensus"]
+    if consensus_str == "—":
+        consensus = active.get("consensus_score")
+        if consensus is not None:
+            try:
+                cval = float(consensus)
+                consensus_str = f"{cval * 100:.0f}%" if cval <= 1 else f"{cval:.0f}%"
+            except (TypeError, ValueError):
+                consensus_str = "—"
 
     brain = (
         active.get("brain_recommendation")
@@ -215,13 +270,15 @@ def _decision_log_panel(payload: Dict[str, Any], kind: str, gauge: Optional[floa
         brain = brain.get("action") or brain.get("recommended_action")
     brain_str = str(brain).upper() if brain else "—"
 
-    dissenters = payload.get("dissenters")
-    if not isinstance(dissenters, list):
-        dissenters = active.get("dissenters")
-    if isinstance(dissenters, list) and dissenters:
-        dissent_str = ", ".join(str(d) for d in dissenters)
-    else:
-        dissent_str = "Unanimous" if payload.get("council_unanimous") else "—"
+    dissent_str = agreement["dissent"]
+    if dissent_str == "—":
+        dissenters = payload.get("dissenters")
+        if not isinstance(dissenters, list):
+            dissenters = active.get("dissenters")
+        if isinstance(dissenters, list) and dissenters:
+            dissent_str = ", ".join(str(d) for d in dissenters)
+        else:
+            dissent_str = "Unanimous" if payload.get("council_unanimous") else "—"
 
     return {
         "verdict_kind": kind.upper(),
@@ -386,7 +443,7 @@ def build_tribunal_view(
             {
                 "key": key,
                 "label": label,
-                "weight_pct": _judge_weight_pct(w) if w is not None else "—",
+                "weight_pct": _format_judge_weight_pct(weights, key),
                 "signal_pct": _format_signal_pct(signals.get(key)),
                 "last5": last5 if isinstance(last5, list) and len(last5) == 5 else None,
             }
@@ -406,7 +463,7 @@ def build_tribunal_view(
         "synced_at": synced_at_iso(pick),
         "judges": judges,
         "panels": {
-            "decision_log": _decision_log_panel(pick, kind, gauge),
+            "decision_log": _decision_log_panel(pick, kind, gauge, signals),
             "accuracy_ledger": _accuracy_ledger_panel(stats),
             "jury_move": _jury_move_panel(stats),
         },

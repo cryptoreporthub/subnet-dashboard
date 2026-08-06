@@ -3,6 +3,8 @@
 from fastapi.testclient import TestClient
 
 from internal.preview.tribunal_hero import (
+    _format_judge_weight_pct,
+    _judge_agreement_labels,
     build_tribunal_view,
     weighted_verdict_pct,
 )
@@ -15,6 +17,40 @@ def test_weighted_verdict_pct_gauge_math():
     weights = {"oracle": 0.40, "echo": 0.30, "pulse": 0.30}
     signals = {"oracle": 36.0, "echo": 32.0, "pulse": 32.0}
     assert weighted_verdict_pct(weights, signals) == 33.6
+
+
+def test_judge_weight_display_equal_vs_different():
+    equal = {"oracle": 1 / 3, "echo": 1 / 3, "pulse": 1 / 3}
+    assert _format_judge_weight_pct(equal, "oracle") == "Equal weight"
+    mixed = {"oracle": 0.40, "echo": 0.30, "pulse": 0.30}
+    assert _format_judge_weight_pct(mixed, "oracle") == "40%"
+    assert _format_judge_weight_pct(mixed, "echo") == "30%"
+
+
+def test_judge_agreement_from_signal_spread():
+    labels = _judge_agreement_labels({"oracle": 85.9, "echo": 84.0, "pulse": 45.0})
+    assert labels["consensus"] == "Low agreement"
+    assert labels["dissent"] == "High dissent · 41 pts"
+
+
+def test_build_tribunal_view_decision_log_from_judge_scores():
+    payload = {
+        "status": "ok",
+        "action": "LONG",
+        "pick": {
+            "subnet": {"netuid": 29, "name": "Coldint"},
+            "final_confidence": 0.72,
+            "judge_scores_at_creation": {
+                "oracle": {"confidence": 0.859},
+                "echo": {"confidence": 0.84},
+                "pulse": {"confidence": 0.45},
+            },
+        },
+    }
+    view = build_tribunal_view(payload, {"judge_weights": {"oracle": 0.4, "echo": 0.3, "pulse": 0.3}})
+    dl = view["panels"]["decision_log"]
+    assert dl["consensus"] == "Low agreement"
+    assert dl["dissent"] == "High dissent · 41 pts"
 
 
 def test_build_tribunal_view_gated_hold():
@@ -81,6 +117,7 @@ def test_cockpit_hydrate_tribunal_sync_helpers():
     assert "formatSyncedAge" in src
     assert "weightedVerdictPct" in src
     assert "patchTribunalPanels" in src
+    assert "judgeAgreementLabels" in src
     assert "setProperty('--p'" in src
 
 

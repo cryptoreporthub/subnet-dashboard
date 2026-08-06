@@ -4203,9 +4203,45 @@
     return snPrefix + ' · ' + name;
   }
 
-  function formatJudgeWeightPct(weight) {
+  function formatJudgeWeightPct(weight, weights) {
     if (weight == null || isNaN(Number(weight))) return '—';
-    return String(Math.round(Number(weight) * 100)) + '%';
+    weights = weights || {};
+    var vals = ['oracle', 'echo', 'pulse']
+      .map(function (k) {
+        return weights[k];
+      })
+      .filter(function (v) {
+        return v != null && !isNaN(Number(v));
+      })
+      .map(Number);
+    if (vals.length >= 2) {
+      var spread = Math.max.apply(null, vals) - Math.min.apply(null, vals);
+      if (spread < 0.015) return 'Equal weight';
+    }
+    var pct = Number(weight) * 100;
+    if (Math.abs(pct - Math.round(pct)) < 0.05) return String(Math.round(pct)) + '%';
+    return pct.toFixed(1) + '%';
+  }
+
+  function judgeAgreementLabels(signals) {
+    signals = signals || {};
+    var vals = ['oracle', 'echo', 'pulse']
+      .map(function (k) {
+        return signals[k];
+      })
+      .filter(function (v) {
+        return v != null && !isNaN(Number(v));
+      })
+      .map(Number);
+    if (vals.length < 2) return { consensus: '—', dissent: '—' };
+    var spread = Math.max.apply(null, vals) - Math.min.apply(null, vals);
+    var consensus =
+      spread <= 10 ? 'High agreement' : spread <= 25 ? 'Moderate agreement' : 'Low agreement';
+    var dissent;
+    if (spread < 1) dissent = 'Unanimous';
+    else if (spread >= 30) dissent = 'High dissent · ' + Math.round(spread) + ' pts';
+    else dissent = Math.round(spread) + ' pt spread';
+    return { consensus: consensus, dissent: dissent };
   }
 
   function patchTribunalRingFill(pct) {
@@ -4280,7 +4316,7 @@
     hero.querySelectorAll('[data-judge]').forEach(function (seat) {
       var key = seat.getAttribute('data-judge');
       var weightEl = seat.querySelector('[data-judge-weight]');
-      if (weightEl) weightEl.textContent = formatJudgeWeightPct(weights[key]);
+      if (weightEl) weightEl.textContent = formatJudgeWeightPct(weights[key], weights);
       var signalEl = seat.querySelector('[data-judge-signal]');
       if (signalEl) signalEl.textContent = formatGaugePct(signals[key]);
       var last5El = seat.querySelector('[data-last5]');
@@ -4303,11 +4339,16 @@
     if (cEl) cEl.textContent = formatGaugePct(gauge);
     var consEl = hero.querySelector('[data-decision-consensus]');
     if (consEl) {
-      var cs = active.consensus_score;
-      if (cs != null && !isNaN(Number(cs))) {
-        var cn = Number(cs);
-        consEl.textContent = (cn <= 1 ? Math.round(cn * 100) : Math.round(cn)) + '%';
-      } else consEl.textContent = '—';
+      var agreement = judgeAgreementLabels(judgeSignalsFromPick(dailyPick || {}));
+      if (agreement.consensus !== '—') {
+        consEl.textContent = agreement.consensus;
+      } else {
+        var cs = active.consensus_score;
+        if (cs != null && !isNaN(Number(cs))) {
+          var cn = Number(cs);
+          consEl.textContent = (cn <= 1 ? Math.round(cn * 100) : Math.round(cn)) + '%';
+        } else consEl.textContent = '—';
+      }
     }
     var brainEl = hero.querySelector('[data-decision-brain]');
     if (brainEl) {
@@ -4317,10 +4358,15 @@
     }
     var dissentEl = hero.querySelector('[data-decision-dissent]');
     if (dissentEl) {
-      var dissenters = dailyPick.dissenters || active.dissenters;
-      if (dissenters && dissenters.length) dissentEl.textContent = dissenters.join(', ');
-      else if (dailyPick.council_unanimous) dissentEl.textContent = 'Unanimous';
-      else dissentEl.textContent = '—';
+      var spreadAgreement = judgeAgreementLabels(judgeSignalsFromPick(dailyPick || {}));
+      if (spreadAgreement.dissent !== '—') {
+        dissentEl.textContent = spreadAgreement.dissent;
+      } else {
+        var dissenters = dailyPick.dissenters || active.dissenters;
+        if (dissenters && dissenters.length) dissentEl.textContent = dissenters.join(', ');
+        else if (dailyPick.council_unanimous) dissentEl.textContent = 'Unanimous';
+        else dissentEl.textContent = '—';
+      }
     }
 
     var graded = Number(tb.graded) || 0;
