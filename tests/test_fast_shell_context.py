@@ -193,9 +193,11 @@ def test_degraded_homepage_has_message_intel_skeleton():
 def test_council_weights_list_trend_from_delta():
     from internal.learning.dashboard_context import _council_weights_list
 
+    graded = {"quant": 1, "hype": 1}
     rows = _council_weights_list(
         {"quant": 1.0, "hype": 1.0},
         {"quant": 0.02, "hype": -0.01},
+        expert_graded=graded,
     )
     by_expert = {row["expert"]: row for row in rows}
     assert by_expert["quant"]["trend"] == "up"

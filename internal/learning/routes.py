@@ -365,7 +365,11 @@ def _rotation_summary() -> Dict[str, Any]:
 
 
 def _compute_learning_metrics(snap: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    from internal.learning.weight_deltas import recent_expert_weight_deltas, recent_judge_weight_deltas
+    from internal.learning.weight_deltas import (
+        expert_graded_counts,
+        recent_expert_weight_deltas,
+        recent_judge_weight_deltas,
+    )
 
     if snap is None:
         snap = _learning_snapshot()
@@ -380,6 +384,7 @@ def _compute_learning_metrics(snap: Optional[Dict[str, Any]] = None) -> Dict[str
         "judge_last5": snap.get("judge_last5", {}),
         "council_last5": snap.get("council_last5", []),
         "expert_weight_deltas": recent_expert_weight_deltas(),
+        "expert_graded_counts": expert_graded_counts(),
         "judge_weight_deltas": recent_judge_weight_deltas(),
         "total_records": stats.get("total_records", 0),
         "predictions_pending": stats.get("pending", 0),

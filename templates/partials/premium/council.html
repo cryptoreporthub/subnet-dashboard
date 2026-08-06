@@ -20,7 +20,7 @@
         </div>
       </div>
       <div class="name">{{ cw.expert|default('expert')|replace('_', ' ')|title }}</div>
-      <span class="bias trend-{{ trend }}">{% if trend == 'up' %}▲ LEARNED UP{% elif trend == 'down' %}▼ LEARNED DOWN{% else %}EVEN{% endif %}</span>
+      <span class="bias trend-{{ trend }}">{% if trend == 'up' %}▲ LEARNED UP{% elif trend == 'down' %}▼ LEARNED DOWN{% elif trend == 'prior' %}PRIOR{% else %}EVEN{% endif %}</span>
     </div>
     {% endfor %}
   </div>
