@@ -23,13 +23,11 @@
   padding: 0 var(--space-4, 16px);
 }
 
-/* No situation_room grid overlay — smokey gradient + smoke texture + aurora + noise */
+/* No situation_room grid overlay — full atmosphere stack (smoke SVG + accent radials) */
 body.council-first-theme {
-  background-color: #252a31;
-  background-image:
-    url("/static/img/simivision-smoke-bg.svg"),
-    linear-gradient(135deg, #20242a, #2d323a);
-  background-size: cover, 100% 100%;
+  background-color: var(--bg-base);
+  background-image: var(--bg-atmosphere);
+  background-size: cover;
   background-repeat: no-repeat;
   background-attachment: fixed;
   background-position: center;
@@ -46,7 +44,7 @@ body.council-first-theme::before {
     var(--aurora-cyan),
     var(--aurora-green),
     var(--aurora-violet);
-  opacity: 0.12;
+  opacity: 0.38;
   transform-origin: center center;
 }
 
@@ -550,6 +548,16 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
     animation: mistDrift 28s ease-in-out infinite alternate;
   }
 
+  body.council-first-theme {
+    animation: page-smoke-drift 40s ease-in-out infinite alternate;
+  }
+
+  @keyframes page-smoke-drift {
+    0% { background-position: 48% 42%; }
+    50% { background-position: 52% 48%; }
+    100% { background-position: 47% 55%; }
+  }
+
   @keyframes mistDrift {
     from { transform: translate3d(-2%, -1%, 0) scale(1); }
     to { transform: translate3d(2%, 1.5%, 0) scale(1.04); }
@@ -592,6 +600,7 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
 
 @media (prefers-reduced-motion: reduce) {
   body.council-first-theme::before { animation: none; transform: none; }
+  body.council-first-theme { animation: none; }
   nav.top-nav a:active,
   .home-cta--primary:active,
   .btn-primary:active { transform: none; filter: none; }
@@ -7269,16 +7278,16 @@ body.wrap {
   }
 }
 
-/* ---------- Council pick card — glass (page smoke must show through) ---------- */
+/* ---------- Council pick card — transparent shell; hero card carries smoke + glass ---------- */
 .council-stage .home-job__call-host .k3-dossier {
-  background: var(--glass-fill) !important;
+  background: transparent !important;
   background-image: none !important;
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid var(--glass-border);
-  border-radius: var(--glass-radius);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  overflow: hidden;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
 }
 
 /* ---------- Council Hero HUD (charcoal cockpit + glass sections) ---------- */
@@ -7390,8 +7399,10 @@ body.wrap {
   position: relative;
   border-radius: var(--glass-radius);
   border: 1px solid var(--glass-border);
-  background: var(--glass-fill) !important;
-  background-image: none !important;
+  background:
+    url("/static/img/simivision-smoke-bg.svg") center / cover no-repeat,
+    linear-gradient(180deg, rgba(24, 27, 34, 0.55) 0%, rgba(18, 21, 28, 0.62) 100%);
+  background-blend-mode: soft-light, normal;
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   box-shadow:
@@ -7399,10 +7410,13 @@ body.wrap {
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
   overflow: hidden;
   isolation: isolate;
+  animation: tribunal-smoke-drift 36s ease-in-out infinite alternate;
 }
 
 @keyframes tribunal-smoke-drift {
-  0%, 100% { opacity: 1; }
+  0% { background-position: 46% 42%, 0 0; }
+  50% { background-position: 54% 50%, 0 0; }
+  100% { background-position: 48% 58%, 0 0; }
 }
 
 .tribunal-hero__card::before,
@@ -7415,13 +7429,13 @@ body.wrap {
 }
 
 .tribunal-hero__card::before {
-  background: transparent;
-  animation: none;
+  background: radial-gradient(ellipse 70% 55% at 28% 18%, rgba(63, 201, 255, 0.14) 0%, transparent 62%);
+  animation: tribunal-glow-drift 18s ease-in-out infinite alternate;
 }
 
 .tribunal-hero__card::after {
-  background: transparent;
-  animation: none;
+  background: radial-gradient(ellipse 60% 50% at 76% 86%, rgba(90, 160, 200, 0.12) 0%, transparent 58%);
+  animation: tribunal-glow-drift 22s ease-in-out infinite alternate-reverse;
 }
 
 .tribunal-hero__puffs {
@@ -7435,9 +7449,9 @@ body.wrap {
 .tribunal-hero__puff {
   position: absolute;
   border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(140, 140, 150, 0.28) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(140, 140, 150, 0.42) 0%, transparent 70%);
   filter: blur(28px);
-  opacity: 0.55;
+  opacity: 0.75;
 }
 
 .tribunal-hero__puff--1 {
@@ -8245,8 +8259,16 @@ body.wrap {
   }
 
   .tribunal-hero__puff {
-    background: radial-gradient(ellipse at center, rgba(140, 140, 150, 0.34) 0%, transparent 70%);
-    opacity: 0.68;
+    background: radial-gradient(ellipse at center, rgba(140, 140, 150, 0.48) 0%, transparent 70%);
+    opacity: 0.85;
+  }
+
+  .tribunal-hero__card::before {
+    background: radial-gradient(ellipse 70% 55% at 28% 18%, rgba(63, 201, 255, 0.26) 0%, transparent 62%);
+  }
+
+  .tribunal-hero__card::after {
+    background: radial-gradient(ellipse 60% 50% at 76% 86%, rgba(157, 140, 255, 0.21) 0%, transparent 58%);
   }
 
   .pds-angles__section,
