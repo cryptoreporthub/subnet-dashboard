@@ -257,3 +257,72 @@ class TestCalibrationSnapshotSchedulerSlot:
         result = smod.start_calibration_snapshot_scheduler()
         assert result["started"] is False
         assert result["reason"] == "disabled"
+
+    def test_run_once_tick_result_keys(self, tmp_path, monkeypatch):
+        """run_once() (reschedule=False) returns expected result keys and values."""
+        import internal.message_intel.calibration_snapshot_scheduler as smod
+        import internal.message_intel.calibration_snapshot as csmod
+        monkeypatch.setattr(csmod, "_snapshots_dir", lambda: str(tmp_path))
+        monkeypatch.setattr(smod, "schedule_in_seconds", lambda *a: None)
+
+        with patch(_PATCH_HEALTH, return_value=_fake_health(1.04)):
+            s = smod.CalibrationSnapshotScheduler()
+            result = s.run_once()
+
+        assert result["ok"] is True
+        assert "alert_level" in result
+        assert "drifted" in result
+        assert "factor" in result
+        assert "path" in result
+        assert result["alert_level"] in ("ok", "warn", "alert")
+        assert isinstance(result["drifted"], bool)
+        # No next_run_at when reschedule=False
+        assert "next_run_at" not in result
+
+    def test_run_once_drift_above_epsilon_flows_through_tick(self, tmp_path, monkeypatch):
+        """Scheduler run_once() with a seeded prior snapshot + shifted factor reports drifted=True and alert_level=warn."""
+        monkeypatch.setenv("CALIBRATION_SNAPSHOT_DRIFT_EPSILON", "0.01")
+        import internal.message_intel.calibration_snapshot_scheduler as smod
+        import internal.message_intel.calibration_snapshot as csmod
+        monkeypatch.setattr(csmod, "_snapshots_dir", lambda: str(tmp_path))
+        monkeypatch.setattr(smod, "schedule_in_seconds", lambda *a: None)
+
+        # Seed a previous latest.json with factor=1.05
+        prev = {"calibration_health": _fake_health(1.05)}
+        (tmp_path / "latest.json").write_text(json.dumps(prev), encoding="utf-8")
+
+        # Run the tick with factor=1.09 (delta=0.04 > epsilon=0.01)
+        with patch(_PATCH_HEALTH, return_value=_fake_health(1.09)):
+            s = smod.CalibrationSnapshotScheduler()
+            result = s.run_once()
+
+        assert result["ok"] is True
+        assert result["drifted"] is True
+        assert result["alert_level"] == "warn"
+        # latest.json must be updated with the new snapshot
+        latest = json.loads((tmp_path / "latest.json").read_text())
+        assert latest["drift"]["drifted"] is True
+        drift_reasons = latest["alert_reasons"]
+        assert any("factor_drift" in r for r in drift_reasons)
+
+    def test_run_once_snapshot_failure_returns_error_and_does_not_raise(self, tmp_path, monkeypatch):
+        """A failing snapshot invocation returns ok=False with error key; tick does not raise or reschedule."""
+        import internal.message_intel.calibration_snapshot_scheduler as smod
+        import internal.message_intel.calibration_snapshot as csmod
+        monkeypatch.setattr(csmod, "_snapshots_dir", lambda: str(tmp_path))
+
+        scheduled_calls = []
+        monkeypatch.setattr(smod, "schedule_in_seconds", lambda *a: scheduled_calls.append(a))
+
+        def _boom(**kwargs):
+            raise RuntimeError("calibration db unavailable")
+
+        with patch("internal.message_intel.calibration_snapshot.run_calibration_snapshot", side_effect=_boom):
+            s = smod.CalibrationSnapshotScheduler()
+            result = s.run_once()  # reschedule=False
+
+        assert result["ok"] is False
+        assert "error" in result
+        assert "calibration db unavailable" in result["error"]
+        # reschedule=False: schedule_in_seconds must NOT have been called
+        assert scheduled_calls == []
