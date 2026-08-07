@@ -35,3 +35,16 @@ htmlcov/
 /COPY-FOR-DITTO.txt
 /INTERNAL_COUNCIL_STATE_VECTOR_PY.txt
 /VERSION.txt
+
+# Transient runtime state files
+data/.message_intel_outcome_loop
+data/daily_picks.json
+data/live_subnets_boot.json
+data/predictions.json
+data/pump_ladder.json
+data/pump_pattern_ledger.json
+data/scenario_memory.json
+data/soul_map.json
+data/whale_intelligence.json
+config/registry.json
+config/watchlist.json
