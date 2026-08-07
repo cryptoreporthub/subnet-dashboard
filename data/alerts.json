@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-07T17:32:59.301312Z",
+  "updated_at": "2026-08-07T22:03:17.295416Z",
   "alerts": [
     {
       "alert_type": "subnet_price_flash",
@@ -7156,6 +7156,21 @@
       "timestamp": "2026-08-07T17:32:59.301223Z",
       "active": true,
       "id": "subnet_price_flash-2026-08-07T17:32:59.301223Z"
+    },
+    {
+      "alert_type": "subnet_price_flash",
+      "severity": "info",
+      "message": "SN107 Minos moved +20.8% in 24h",
+      "details": {
+        "subnet_id": 107,
+        "name": "Minos",
+        "price_change_24h": 20.8178
+      },
+      "dedupe_key": "price_flash_107",
+      "subnet_id": 107,
+      "timestamp": "2026-08-07T22:03:17.295356Z",
+      "active": true,
+      "id": "subnet_price_flash-2026-08-07T22:03:17.295356Z"
     }
   ]
 }

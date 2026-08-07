@@ -1,15 +1,28 @@
 {
   "active": {
-    "netuid": 15,
-    "name": "ORO",
-    "entry_price": 0.01957724,
-    "picked_at": "2026-08-07T21:50:48.105577Z",
-    "prediction_id": "56ad12f6c1",
+    "netuid": 94,
+    "name": "pending...",
+    "entry_price": 0.0037061,
+    "picked_at": "2026-08-07T22:02:54.641053Z",
+    "prediction_id": "d3c9bfb276",
     "direction": "long",
-    "confidence": 0.5522,
+    "confidence": 0.5772,
     "finalized": false
   },
   "history": [
+    {
+      "netuid": 15,
+      "name": "ORO",
+      "entry_price": 0.01957724,
+      "picked_at": "2026-08-07T21:50:48.105577Z",
+      "prediction_id": "56ad12f6c1",
+      "direction": "long",
+      "confidence": 0.5522,
+      "finalized": true,
+      "success": null,
+      "outcome": "replaced",
+      "resolved_at": "2026-08-07T22:02:54.641032Z"
+    },
     {
       "netuid": 15,
       "name": "ORO",
