@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "lead_buy_ratio_min": 0.57,
-  "lead_volume_intensity_min": 0.24,
+  "lead_buy_ratio_min": 0.61,
+  "lead_volume_intensity_min": 0.28,
   "just_started_max_score": 0.72,
   "phase_entry": {
-    "STIRRING": 0.24,
-    "ACCUMULATING": 0.44,
+    "STIRRING": 0.28,
+    "ACCUMULATING": 0.48,
     "PUMPING": 0.62
   },
   "blend_weights": {
@@ -15,7 +15,7 @@
     "flow": 0.1,
     "chatter": 0.1
   },
-  "adapted_at": "2026-08-07T14:41:00.878855Z",
-  "adapted_from_n": 30,
+  "adapted_at": "2026-08-07T15:29:50.737966Z",
+  "adapted_from_n": 32,
   "last_adapt_hit_rate": 0.0
 }
