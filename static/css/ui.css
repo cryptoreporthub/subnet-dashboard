@@ -542,9 +542,9 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   position: relative;
   border-radius: 16px;
   background:
-    radial-gradient(ellipse 80% 60% at 18% 12%, rgba(224, 242, 254, 0.08) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 55% at 88% 18%, rgba(125, 211, 252, 0.06) 0%, transparent 52%),
-    radial-gradient(ellipse 90% 70% at 50% 100%, rgba(186, 230, 253, 0.04) 0%, transparent 62%);
+    radial-gradient(ellipse 80% 60% at 18% 12%, rgba(190, 198, 210, 0.07) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 55% at 88% 18%, rgba(178, 187, 199, 0.05) 0%, transparent 52%),
+    radial-gradient(ellipse 90% 70% at 50% 100%, rgba(184, 192, 203, 0.04) 0%, transparent 62%);
 }
 
 .rim-chroma {
@@ -560,9 +560,9 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   padding: 1px;
   background: linear-gradient(
     135deg,
-    rgba(248, 250, 252, 0.38) 0%,
-    rgba(186, 230, 253, 0.42) 48%,
-    rgba(34, 211, 238, 0.32) 100%
+    rgba(248, 250, 252, 0.36) 0%,
+    rgba(200, 206, 214, 0.4) 48%,
+    rgba(176, 184, 194, 0.32) 100%
   );
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
@@ -7421,22 +7421,22 @@ body.wrap {
 
 .tribunal-hero[data-temp="warm"] .tribunal-hero__card,
 .tribunal-hero[data-temp="cool"] .tribunal-hero__card {
-  border-color: rgba(75, 192, 232, 0.14);
+  border-color: rgba(168, 178, 190, 0.16);
   box-shadow:
     0 12px 40px rgba(0, 0, 0, 0.55),
-    0 0 28px rgba(75, 192, 232, 0.08),
+    0 0 28px rgba(170, 180, 195, 0.1),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .tribunal-hero[data-temp="warm"] .tribunal-hero__bracket,
 .tribunal-hero[data-temp="cool"] .tribunal-hero__bracket {
-  border-color: rgba(107, 197, 240, 0.55);
-  box-shadow: 0 0 12px rgba(75, 192, 232, 0.2);
+  border-color: rgba(176, 184, 194, 0.5);
+  box-shadow: 0 0 12px rgba(170, 180, 195, 0.18);
 }
 
 .tribunal-hero[data-temp="warm"] .tribunal-hero__gauge-fill,
 .tribunal-hero[data-temp="cool"] .tribunal-hero__gauge-fill {
-  filter: drop-shadow(0 0 14px var(--verdict-b)) drop-shadow(0 0 24px rgba(75, 192, 232, 0.25));
+  filter: drop-shadow(0 0 14px rgba(170, 180, 195, 0.45)) drop-shadow(0 0 24px rgba(170, 180, 195, 0.22));
 }
 
 .council-stage .home-job__call-host .tribunal-hero {
@@ -7791,7 +7791,7 @@ body.wrap {
   transform: translate(-50%, -50%);
   z-index: 2;
   pointer-events: none;
-  box-shadow: 0 0 20px rgba(75, 192, 232, 0.15);
+  box-shadow: 0 0 20px rgba(170, 180, 195, 0.14);
   border-radius: 50%;
 }
 
@@ -7852,7 +7852,7 @@ body.wrap {
   height: 138px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  background: radial-gradient(circle, var(--verdict-b) 0%, transparent 68%);
+  background: radial-gradient(circle, rgba(178, 188, 200, 0.5) 0%, transparent 68%);
   animation: tribunal-ring-glow-pulse 5s ease-in-out infinite;
   opacity: calc(0.12 + (var(--p, 0) / 100) * 0.3);
   filter: blur(18px);
@@ -7899,7 +7899,7 @@ body.wrap {
   letter-spacing: -0.02em;
   line-height: 1;
   color: var(--verdict-a);
-  text-shadow: 0 0 18px rgba(75, 192, 232, 0.45), 0 0 36px rgba(75, 192, 232, 0.2);
+  text-shadow: 0 0 18px rgba(190, 200, 212, 0.32), 0 0 36px rgba(190, 200, 212, 0.16);
 }
 
 .tribunal-hero__pct-label {
