@@ -477,8 +477,128 @@
       "claim_pct": 2.0,
       "horizon_hours": 1,
       "outcomes": null
+    },
+    {
+      "id": "399858842f",
+      "created_at": "2026-08-07T12:21:29.582766Z",
+      "experimental": true,
+      "focus_netuid": 35,
+      "shown_netuid": 46,
+      "shown": {
+        "netuid": 46,
+        "name": "Zipcode",
+        "lane": "Coil",
+        "phase": "ACCUMULATING",
+        "score": 0.72,
+        "timing_pts": 100.0,
+        "peer_pts": 91.8,
+        "combined_pts": 97.5,
+        "to_lead_pct": 100,
+        "to_trigger_pct": 100,
+        "price": 0.00463815
+      },
+      "tracked": [
+        {
+          "netuid": 46,
+          "name": "Zipcode",
+          "lane": "Coil",
+          "phase": "ACCUMULATING",
+          "score": 0.72,
+          "timing_pts": 100.0,
+          "peer_pts": 91.8,
+          "combined_pts": 97.5,
+          "to_lead_pct": 100,
+          "to_trigger_pct": 100,
+          "price": 0.00463815
+        },
+        {
+          "netuid": 53,
+          "name": "engy",
+          "lane": "Coil",
+          "phase": "ACCUMULATING",
+          "score": 0.75,
+          "timing_pts": 100.0,
+          "peer_pts": 87.9,
+          "combined_pts": 96.4,
+          "to_lead_pct": 100,
+          "to_trigger_pct": 100,
+          "price": 0.03246713
+        },
+        {
+          "netuid": 75,
+          "name": "Hippius",
+          "lane": "Lift",
+          "phase": "PUMPING",
+          "score": 0.66,
+          "timing_pts": 92.3,
+          "peer_pts": 75.6,
+          "combined_pts": 87.3,
+          "to_lead_pct": 100,
+          "to_trigger_pct": 92,
+          "price": 0.01929493
+        },
+        {
+          "netuid": 72,
+          "name": "StreetVision by NATIX",
+          "lane": "Coil",
+          "phase": "ACCUMULATING",
+          "score": 0.61,
+          "timing_pts": 84.5,
+          "peer_pts": 67.5,
+          "combined_pts": 79.4,
+          "to_lead_pct": 100,
+          "to_trigger_pct": 85,
+          "price": 0.00302693
+        },
+        {
+          "netuid": 3,
+          "name": "Templar",
+          "lane": "Coil",
+          "phase": "ACCUMULATING",
+          "score": 0.6,
+          "timing_pts": 83.0,
+          "peer_pts": 65.9,
+          "combined_pts": 77.9,
+          "to_lead_pct": 100,
+          "to_trigger_pct": 83,
+          "price": 0.02597053
+        }
+      ],
+      "next_up_top": {
+        "netuid": 53,
+        "name": "engy",
+        "lane": "Coil",
+        "phase": "ACCUMULATING",
+        "score": 0.75,
+        "timing_pts": 100.0,
+        "peer_pts": 87.9,
+        "combined_pts": 96.4,
+        "to_lead_pct": 100,
+        "to_trigger_pct": 100,
+        "price": 0.03246713
+      },
+      "peer_top": {
+        "netuid": 66,
+        "name": "conjectures",
+        "lane": "Coil",
+        "phase": "STIRRING",
+        "distance": 0.134,
+        "shared": [
+          "vol heat"
+        ],
+        "score": 0.3,
+        "to_lead_pct": 69
+      },
+      "weights": {
+        "timing": 0.7,
+        "peer": 0.3
+      },
+      "prediction_id": "bfd9cd16a8",
+      "claim_pct": 2.0,
+      "horizon_hours": 1,
+      "outcomes": null
     }
   ],
   "version": 1,
-  "updated_at": "2026-08-07T12:00:15.555213Z"
+  "updated_at": "2026-08-07T12:21:29.582766Z"
 }

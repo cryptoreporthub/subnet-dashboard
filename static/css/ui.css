@@ -7351,7 +7351,7 @@ body.wrap {
 /* ---------- Council Hero HUD (smoky control room + glass sections) ---------- */
 .tribunal-hero {
   --hero-void: #080b0e;
-  --hero-glass: rgba(8, 11, 14, 0.75);
+  --hero-glass: rgba(12, 22, 38, 0.32);
   --hero-glass-blur: 20px;
   --hero-cyan: #4bc0e8;
   --hero-cyan-bright: #6bc5f0;
