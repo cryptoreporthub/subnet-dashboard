@@ -138,7 +138,7 @@ def _judge_weights_for_snapshot() -> Dict[str, float]:
 def _build_last5_from_resolved(resolved_payload: Dict[str, Any]) -> Dict[str, Any]:
     """Last-5 hit/miss tick arrays for tribunal hero (council + per-judge)."""
     from internal.council.grading import is_pump_desk_claim
-    from internal.council.resolver import _leading_judge_name
+    from internal.judges.grading import judge_endorsed, judge_score_at_creation
 
     resolved = resolved_payload.get("resolved", [])
     gradeable = [
@@ -152,11 +152,30 @@ def _build_last5_from_resolved(resolved_payload: Dict[str, Any]) -> Dict[str, An
     tail = gradeable[-5:]
     council_last5: List[Any] = [None] * (5 - len(tail)) + [bool(r["correct"]) for r in tail]
 
+    # Per-judge ticks grade each judge's own call (endorse vs abstain vs the
+    # outcome) instead of crediting only the leading judge. Judge attribution
+    # lives on records that stored judge_scores_at_creation — including
+    # shadow/counterfactual replays, whose judge calls and graded outcomes are
+    # real even though they stay out of council ticks above.
+    attributed = [
+        r
+        for r in resolved
+        if r.get("outcome") not in {"duplicate", "expired", "ungradeable"}
+        and r.get("correct") is not None
+        and not is_pump_desk_claim(r)
+        and isinstance(r.get("judge_scores_at_creation"), dict)
+    ]
     judge_last5: Dict[str, List[Any]] = {}
     for judge in ("oracle", "echo", "pulse"):
-        calls = [r for r in gradeable if _leading_judge_name(r.get("judge_scores_at_creation")) == judge]
-        jtail = calls[-5:]
-        judge_last5[judge] = [None] * (5 - len(jtail)) + [bool(r["correct"]) for r in jtail]
+        ticks: List[bool] = []
+        for r in attributed:
+            score = judge_score_at_creation(r, judge)
+            if score is None:
+                continue
+            ok = bool(r["correct"])
+            ticks.append(ok if judge_endorsed(score, judge) else not ok)
+        jtail = ticks[-5:]
+        judge_last5[judge] = [None] * (5 - len(jtail)) + jtail
 
     return {"council_last5": council_last5, "judge_last5": judge_last5}
 
@@ -243,7 +262,11 @@ def _learning_stats_payload(
     status: str = "success",
     meta: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    from internal.learning.weight_deltas import recent_judge_weight_deltas
+    from internal.learning.weight_deltas import (
+        expert_graded_counts,
+        recent_expert_weight_deltas,
+        recent_judge_weight_deltas,
+    )
 
     stats = snap["engine_stats"]
     resolver_stats = snap["resolver_stats"]
@@ -257,6 +280,8 @@ def _learning_stats_payload(
             "expert_weights": stats.get("expert_weights", {}),
             "judge_weights": snap.get("judge_weights", {}),
             "judge_weight_deltas": recent_judge_weight_deltas(),
+            "expert_weight_deltas": recent_expert_weight_deltas(),
+            "expert_graded_counts": expert_graded_counts(),
             "judge_last5": snap.get("judge_last5", {}),
             "council_last5": snap.get("council_last5", []),
             "total_records": resolver_stats.get("total", stats.get("total_records", 0)),

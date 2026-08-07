@@ -39,7 +39,14 @@ def expert_graded_counts() -> Dict[str, int]:
     return counts
 
 
-def recent_expert_weight_deltas(limit: int = 80) -> Dict[str, float]:
+# collect_trail_events returns oldest-first and truncates at limit, so a small
+# window silently drops the newest weight_change rows. Scan a window wider than
+# the persisted trail (capped at 200 rows) and walk it newest-first so the
+# first delta seen per dial really is the latest.
+_TRAIL_SCAN_LIMIT = 500
+
+
+def recent_expert_weight_deltas(limit: int = _TRAIL_SCAN_LIMIT) -> Dict[str, float]:
     """Latest nudge delta per expert from mindmap weight_change trail rows."""
     try:
         from internal.learning.mindmap_aggregator import collect_trail_events
@@ -48,7 +55,7 @@ def recent_expert_weight_deltas(limit: int = 80) -> Dict[str, float]:
         return {}
 
     out: Dict[str, float] = {}
-    for row in collect_trail_events(limit):
+    for row in reversed(collect_trail_events(limit)):
         if not isinstance(row, dict):
             continue
         if normalize_event_type(row.get("event_type")) != "weight_change":
@@ -69,7 +76,7 @@ def _normalize_judge(raw: Any) -> str | None:
     return name if name in _JUDGES else None
 
 
-def recent_judge_weight_deltas(limit: int = 80) -> Dict[str, float]:
+def recent_judge_weight_deltas(limit: int = _TRAIL_SCAN_LIMIT) -> Dict[str, float]:
     """Latest nudge delta per judge (oracle/echo/pulse) from weight_change trail."""
     try:
         from internal.learning.mindmap_aggregator import collect_trail_events
@@ -78,7 +85,7 @@ def recent_judge_weight_deltas(limit: int = 80) -> Dict[str, float]:
         return {}
 
     out: Dict[str, float] = {}
-    for row in collect_trail_events(limit):
+    for row in reversed(collect_trail_events(limit)):
         if not isinstance(row, dict):
             continue
         if normalize_event_type(row.get("event_type")) != "weight_change":

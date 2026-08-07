@@ -369,5 +369,39 @@ def test_build_last5_from_resolved_pads_and_filters():
     }
     out = _build_last5_from_resolved(payload)
     assert out["council_last5"] == [None, None, None, True, False]
-    assert out["judge_last5"]["oracle"] == [None, None, None, None, True]
-    assert out["judge_last5"]["echo"] == [None, None, None, None, False]
+    # oracle: endorsed the hit (0.9 >= 0.55) right; abstained the miss (0.1) right
+    assert out["judge_last5"]["oracle"] == [None, None, None, True, True]
+    # echo: abstained the hit (0.2 < 0.5) wrong; endorsed the miss (0.8) wrong
+    assert out["judge_last5"]["echo"] == [None, None, None, False, False]
+    # pulse: no scores recorded -> no ticks
+    assert out["judge_last5"]["pulse"] == [None, None, None, None, None]
+
+
+def test_build_last5_includes_shadow_records_with_real_attribution():
+    """Shadow/counterfactual replays carry the only genuine judge calls; their
+    graded outcomes count for per-judge ticks (but never for council ticks)."""
+    from internal.learning.routes import _build_last5_from_resolved
+
+    payload = {
+        "resolved": [
+            {"outcome": "hit", "correct": True},
+            {
+                "outcome": "hit",
+                "correct": True,
+                "shadow": True,
+                "counterfactual": True,
+                "judge_scores_at_creation": {"pulse": {"score": 0.4}},
+            },
+            {
+                "outcome": "miss",
+                "correct": False,
+                "shadow": True,
+                "judge_scores_at_creation": {"pulse": {"score": 0.3}},
+            },
+        ]
+    }
+    out = _build_last5_from_resolved(payload)
+    # council ignores shadow replays entirely
+    assert out["council_last5"] == [None, None, None, None, True]
+    # pulse abstained both (0.4/0.3 < 0.55): bad abstain on hit, good on miss
+    assert out["judge_last5"]["pulse"] == [None, None, None, False, True]
