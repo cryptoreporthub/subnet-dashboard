@@ -1,6 +1,6 @@
 {
   "status": "ok",
-  "captured_at": "2026-08-07T14:25:18.944246Z",
+  "captured_at": "2026-08-07T14:20:46.452844Z",
   "alert_level": "ok",
   "alert_reasons": [],
   "resolver_stats": {
@@ -22,8 +22,8 @@
   },
   "watchdog": {
     "warning": false,
-    "pending_count": 8,
-    "oldest_pending_age_hours": 0.99,
+    "pending_count": 7,
+    "oldest_pending_age_hours": 0.91,
     "oldest_prediction_id": "882b0c1e33"
   },
   "loop_health": {

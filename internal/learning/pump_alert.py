@@ -884,6 +884,7 @@ def build_desk_row(
     )
     pattern_class = None
     pattern_label = None
+    direction_strip = None
     pattern_highlight = False
     if netuid_int is not None:
         try:
@@ -892,6 +893,7 @@ def build_desk_row(
             pat = pattern_payload(netuid_int)
             pattern_class = pat.get("pattern_class")
             pattern_label = pat.get("pattern_label") or pat.get("waveform")
+            direction_strip = pat.get("direction_strip") or pattern_label
             if pattern_class in {"PUMP_DROP_RE_PUMP", "FLAT_COIL"} and phase in {
                 "STIRRING",
                 "ACCUMULATING",
@@ -932,6 +934,7 @@ def build_desk_row(
         "updated_ago": _human_updated_ago(ladder_entry.get("updated_at")),
         "pattern_class": pattern_class,
         "pattern_label": pattern_label,
+        "direction_strip": direction_strip if netuid_int is not None else None,
         "pattern_highlight": pattern_highlight,
     }
 

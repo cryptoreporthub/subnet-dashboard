@@ -80,6 +80,13 @@
       ' <b class="pd-r__sn">' +
       esc(sn) +
       '</b></span></div>' +
+      (row.direction_strip && row.timing !== 'exit'
+        ? '<span class="pd-r__dir pump-pattern-chip pump-pattern-chip--row" title="Direction: ' +
+          esc(row.direction_strip) +
+          '">' +
+          esc(row.direction_strip) +
+          '</span>'
+        : '') +
       (why ? '<p class="pd-r__why">' + esc(why) + '</p>' : '') +
       '<span class="pd-r__legs">' +
       '<span class="pd-r__leg' +

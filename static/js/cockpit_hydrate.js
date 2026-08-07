@@ -2250,6 +2250,13 @@
       '">' +
       esc(shortBadge) +
       '</span>' +
+      (row.direction_strip && row.timing !== 'exit'
+        ? '<span class="pds-ladder__dir pump-pattern-chip pump-pattern-chip--row" title="Direction: ' +
+          esc(row.direction_strip) +
+          '">' +
+          esc(row.direction_strip) +
+          '</span>'
+        : '') +
       (row.pattern_label && row.pattern_class && row.pattern_class !== 'insufficient_data'
         ? '<span class="pump-pattern-chip pump-pattern-chip--row" title="' +
           esc(row.pattern_class) +
@@ -2549,6 +2556,13 @@
       ' <b class="pd-r__sn">SN' +
       esc(row.netuid) +
       '</b></span></div>' +
+      (row.direction_strip && row.timing !== 'exit'
+        ? '<span class="pd-r__dir pump-pattern-chip pump-pattern-chip--row" title="Direction: ' +
+          esc(row.direction_strip) +
+          '">' +
+          esc(row.direction_strip) +
+          '</span>'
+        : '') +
       (row.pattern_label && row.pattern_class && row.pattern_class !== 'insufficient_data'
         ? '<span class="pump-pattern-chip pump-pattern-chip--row" title="' +
           esc(row.pattern_class) +
