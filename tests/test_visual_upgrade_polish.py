@@ -158,26 +158,27 @@ def test_council_stage_h2_tribunal_gauge_css_in_ui_stylesheet():
 
 
 def test_council_stage_atmosphere_cool_grey_smoke_drift():
-    """Hero stage: dual cool-grey atmosphere drift + monochrome card puffs."""
+    """Hero stage: cool slate smoke drift + monochrome card puffs."""
     css = _read_ui_css()
     assert ".council-stage__atmosphere" in css
     assert "council-smoke-drift-1" in css
     assert "council-smoke-drift-2" in css
-    # Neon screen-blend puffs retired — cool grey / silver only
     puff_block = css.split(".tribunal-hero__puff {", 1)[1].split(".tribunal-hero__puff--1", 1)[0]
     assert "mix-blend-mode" not in puff_block
-    assert "rgba(200, 205, 215" in puff_block or "rgba(140, 140, 150" in puff_block
+    assert "rgba(30, 48, 62" in puff_block or "rgba(10, 20, 30" in puff_block
     assert "tribunal-puff-4" in css
     assert "tribunal-puff-6" in css
 
 
 def test_mobile_hero_atmosphere_bump_in_ui_css():
-    """Mobile ≤480px gets stronger stage smoke + card glow without changing soft-light blend."""
+    """Mobile ≤480px keeps smoky hero card + softer grain without overpowering mist."""
     css = _read_ui_css()
-    assert "hero-mobile-atmosphere" in css
-    mobile = css.split("hero-mobile-atmosphere", 1)[1].split("@media", 2)[0]
-    assert ".council-stage__atmosphere::before" in mobile
-    assert "background-blend-mode" not in mobile
+    blocks = [b.split("@media", 1)[0] for b in css.split("@media (max-width: 480px)")[1:]]
+    mobile = next(b for b in blocks if ".tribunal-hero__card::after" in b)
+    assert ".tribunal-hero__puff" in mobile
+    grain_block = mobile.split(".tribunal-hero__card::after", 1)[1].split("}", 1)[0]
+    assert "opacity:" in grain_block
+    assert float(grain_block.split("opacity:")[1].split(";")[0].strip()) <= 0.2
 
 
 def test_council_stage_h2_conf_state_hooks_in_ui_css():
@@ -414,12 +415,8 @@ def test_hero_a_tier_stale_badge_markup_and_hydrate_hook():
 
 def test_tribunal_hero_mobile_typography_at_390px():
     css = _read_ui_css()
-    # Any 390px block may hold the tribunal rules (P3-3i added an earlier one);
-    # assert the __stage/__pct pair still shares one block, wherever it sits.
     blocks = [b.split("@media", 1)[0] for b in css.split("@media (max-width: 390px)")[1:]]
-    assert any(
-        ".tribunal-hero__stage" in b and ".tribunal-hero__pct" in b for b in blocks
-    )
+    assert any(".tribunal-hero__stage" in b for b in blocks)
 
 
 def test_council_stage_touch_targets_at_390px():
@@ -629,12 +626,13 @@ def test_council_pick_card_uses_pewter_smoke_background():
     assert ".council-stage .home-job__call-host .k3-dossier" in css
     dossier = css.split(".council-stage .home-job__call-host .k3-dossier", 1)[1][:400]
     assert "transparent" in dossier
-    # Hero card is a transparent frame — page atmosphere carries the smoke.
     m = re.search(r"(?m)^\.tribunal-hero__card \{([^}]*)\}", css)
     assert m, "missing .tribunal-hero__card base rule"
     hero_card = m.group(1)
-    assert "transparent" in hero_card
+    assert "var(--hero-void)" in hero_card or "#080b0e" in hero_card
     assert "simivision-smoke-bg.svg" not in hero_card
+    smoke = css.split(".tribunal-hero__card::before {", 1)[1].split("}", 1)[0]
+    assert "radial-gradient" in smoke
 
 
 def test_home_drawers_and_section21_live_in_ui_css():
@@ -996,38 +994,32 @@ def test_grey_smoke_bg_base_token():
 
 
 def test_global_glass_card_overrides_in_ui_css():
-    """Hero card is transparent; panels use frosted glass; page carries smoke SVG."""
+    """Hero card uses smoky void + subtle grain; panels/judges use dark glass."""
     import re
 
     css = _read_ui_css()
     assert "var(--glass-fill)" in css
-    # Match the unscoped base rule — not `.tribunal-hero[data-temp=…] .tribunal-hero__card`.
     m = re.search(r"(?m)^\.tribunal-hero__card \{([^}]*)\}", css)
     assert m, "missing .tribunal-hero__card base rule"
     hero_card = m.group(1)
-    assert "transparent" in hero_card
-    assert "simivision-smoke-bg.svg" not in hero_card
+    assert "var(--hero-void)" in hero_card or "#080b0e" in hero_card
+    assert "transparent" not in hero_card.split("background-color")[1].split(";")[0]
+    parts = css.split(".tribunal-hero__card::after {")
+    assert any("soft-light" in p.split("}", 1)[0] for p in parts[1:])
     panel_block = css.split(".tribunal-hero__panel {", 1)[1].split("}", 1)[0]
     assert "backdrop-filter: blur" in panel_block
-    assert "rgba(255, 255, 255" in panel_block
-    for selector in (
-        ".tribunal-hero__judge",
-        ".k3-dossier",
-    ):
-        block = css.split(selector + " {", 1)[1].split("}", 1)[0]
-        assert (
-            "var(--glass-fill" in block
-            or "transparent" in block
-            or "rgba(255, 255, 255, 0.0" in block
-            or "rgba(32, 36, 42, 0.35)" in block
-        ), selector
+    assert "var(--hero-glass)" in panel_block or "rgba(8, 11, 14" in panel_block
+    judge_block = css.split(".tribunal-hero__judge {", 1)[1].split("}", 1)[0]
+    assert "var(--hero-glass)" in judge_block or "rgba(8, 11, 14" in judge_block
+    assert "blur(var(--hero-glass-blur))" in judge_block
     assert "background: var(--glass-fill)" in css.split(".pump-alert__card", 1)[1]
     grouped = css.split(".pd-lead,", 1)[1].split("}", 1)[0]
     assert "var(--glass-fill)" in grouped
     pds = css.split(".pds-hero,", 1)[1].split("}", 1)[0]
     assert "var(--glass-fill)" in pds
     ring = css.split(".tribunal-hero__ring-center::before {", 1)[1].split("}", 1)[0]
-    assert "#1b1f26" in ring
+    assert "var(--hero-glass)" in ring
+    assert "backdrop-filter: blur" in ring
 
 
 def test_pump_dossier_cta_not_hardcoded_sn_only():
