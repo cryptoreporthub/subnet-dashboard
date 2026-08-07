@@ -32,6 +32,7 @@
   --cool-ice: #9fd4f5;
   --cool-ice-bright: #d2ecff;
   --cool-hairline: rgba(159, 212, 245, 0.28);
+  --cool-glow: rgba(159, 212, 245, 0.42);
 }
 
 /* ---------- Mobile shell: 390px primary, desktop capped column ---------- */
@@ -7317,6 +7318,16 @@ body.wrap {
     background: rgba(140, 140, 150, 0.12);
     border-color: rgba(126, 200, 227, 0.32);
   }
+
+  body[data-council-temp="warm"] .thumb-dock__link[data-thumb-section="section-daily-pick"][aria-current="location"] {
+    border-color: var(--warm-hairline);
+    box-shadow: 0 0 18px var(--warm-glow), inset 0 0 12px rgba(255, 170, 100, 0.08);
+  }
+
+  body[data-council-temp="cool"] .thumb-dock__link[data-thumb-section="section-daily-pick"][aria-current="location"] {
+    border-color: var(--cool-hairline);
+    box-shadow: 0 0 20px var(--cool-glow), inset 0 0 12px rgba(159, 212, 245, 0.08);
+  }
 }
 
 @media (min-width: 900px) {
@@ -7358,6 +7369,56 @@ body.wrap {
 .tribunal-hero[data-verdict-kind="gated"] { --verdict-a: var(--warm-gold); --verdict-b: var(--warm-ember); }
 .tribunal-hero[data-verdict-kind="forming"] { --verdict-a: var(--warm-gold); --verdict-b: var(--warm-ember); }
 .tribunal-hero[data-verdict-kind="cold"] { --verdict-a: var(--cool-ice-bright); --verdict-b: var(--cool-ice); }
+
+/* Conviction temperature — cool flips gated holds below 70% to icy blue */
+.tribunal-hero[data-temp="cool"] {
+  --verdict-a: var(--cool-ice-bright);
+  --verdict-b: var(--cool-ice);
+}
+
+.tribunal-hero[data-temp="warm"] .tribunal-hero__card {
+  border-color: var(--warm-hairline);
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.5),
+    0 0 36px var(--warm-glow),
+    0 0 0 1px var(--warm-hairline),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.tribunal-hero[data-temp="cool"] .tribunal-hero__card {
+  border-color: var(--cool-hairline);
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.5),
+    0 0 40px var(--cool-glow),
+    0 0 0 1px var(--cool-hairline),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.tribunal-hero[data-temp="warm"] .tribunal-hero__card::before {
+  background: radial-gradient(ellipse 70% 55% at 28% 18%, var(--warm-glow) 0%, transparent 62%);
+}
+
+.tribunal-hero[data-temp="cool"] .tribunal-hero__card::before {
+  background: radial-gradient(ellipse 70% 55% at 28% 18%, var(--cool-glow) 0%, transparent 62%);
+}
+
+.tribunal-hero[data-temp="warm"] .tribunal-hero__bracket {
+  border-color: var(--warm-gold);
+  box-shadow: 0 0 14px var(--warm-glow);
+}
+
+.tribunal-hero[data-temp="cool"] .tribunal-hero__bracket {
+  border-color: var(--cool-ice-bright);
+  box-shadow: 0 0 16px var(--cool-glow);
+}
+
+.tribunal-hero[data-temp="warm"] .tribunal-hero__gauge-fill {
+  filter: drop-shadow(0 0 16px var(--verdict-b)) drop-shadow(0 0 28px var(--warm-glow));
+}
+
+.tribunal-hero[data-temp="cool"] .tribunal-hero__gauge-fill {
+  filter: drop-shadow(0 0 16px var(--verdict-b)) drop-shadow(0 0 32px var(--cool-glow));
+}
 
 .council-stage .home-job__call-host .tribunal-hero {
   background: transparent;

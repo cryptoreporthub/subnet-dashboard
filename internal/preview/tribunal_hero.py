@@ -10,6 +10,8 @@ from fastapi import Request
 
 _VALID_STATES = frozenset({"sealed", "gated", "forming", "cold"})
 _JUDGE_KEYS = ("oracle", "echo", "pulse")
+# ponytail: single cutoff — warm orange ≥70%, icy blue below (Ditto temperature spec)
+_CONVICTION_WARM_PCT = 70.0
 
 
 def verdict_kind(payload: Dict[str, Any]) -> str:
@@ -44,6 +46,17 @@ def verdict_pills(payload: Dict[str, Any], kind: str) -> tuple[str, Optional[str
     if kind == "forming":
         return "FORMING", None
     return "COLD", None
+
+
+def conviction_temp(kind: str, gauge_pct: Optional[float]) -> str:
+    """Warm vs cool climate for hero ring + council border (conviction-scaled)."""
+    if kind in ("cold", "forming"):
+        return "cool"
+    if kind == "sealed":
+        return "warm"
+    if gauge_pct is None:
+        return "cool"
+    return "warm" if float(gauge_pct) >= _CONVICTION_WARM_PCT else "cool"
 
 
 def conviction_pct(payload: Dict[str, Any]) -> Optional[float]:
@@ -494,6 +507,7 @@ def build_tribunal_view(
 
     return {
         "verdict_kind": kind,
+        "conviction_temp": conviction_temp(kind, gauge),
         "subnet_label": subnet_label(pick),
         "center_label": center_label(pick, kind),
         "gate_label": gate_label,

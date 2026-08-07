@@ -7,6 +7,7 @@ from internal.preview.tribunal_hero import (
     _judge_agreement_labels,
     attach_judge_scores_to_daily_pick,
     build_tribunal_view,
+    conviction_temp,
     weighted_verdict_pct,
 )
 from server import app
@@ -18,6 +19,16 @@ def test_weighted_verdict_pct_gauge_math():
     weights = {"oracle": 0.40, "echo": 0.30, "pulse": 0.30}
     signals = {"oracle": 36.0, "echo": 32.0, "pulse": 32.0}
     assert weighted_verdict_pct(weights, signals) == 33.6
+
+
+def test_conviction_temp_warm_above_threshold_cool_below():
+    assert conviction_temp("gated", 71.6) == "warm"
+    assert conviction_temp("gated", 70.0) == "warm"
+    assert conviction_temp("gated", 69.9) == "cool"
+    assert conviction_temp("gated", 33.6) == "cool"
+    assert conviction_temp("sealed", 85.0) == "warm"
+    assert conviction_temp("cold", None) == "cool"
+    assert conviction_temp("forming", 50.0) == "cool"
 
 
 def test_judge_weight_display_equal_vs_different():
@@ -116,10 +127,33 @@ def test_build_tribunal_view_gated_hold():
     assert view["synced_at"] == "2026-08-04T12:00:00Z"
     assert view["gauge_display"] == "33.6%"
     assert view["conviction_pct"] == 33.6
+    assert view["conviction_temp"] == "cool"
+
+
+def test_build_tribunal_view_gated_warm_when_high_conviction():
+    payload = {
+        "action": "HOLD",
+        "candidate": {
+            "subnet": {"netuid": 15, "name": "ORO"},
+            "final_confidence": 0.716,
+        },
+        "judge_scores": {
+            "oracle": {"confidence": 0.859},
+            "echo": {"confidence": 0.84},
+            "pulse": {"confidence": 0.45},
+        },
+    }
+    view = build_tribunal_view(
+        payload,
+        {"judge_weights": {"oracle": 0.40, "echo": 0.30, "pulse": 0.30}},
+    )
+    assert view["conviction_temp"] == "warm"
 
 
 def test_tribunal_hero_template_sync_and_conviction_hooks():
     from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+    from internal.council.publish_gate import publish_gate_label
 
     payload = {
         "action": "HOLD",
@@ -133,11 +167,13 @@ def test_tribunal_hero_template_sync_and_conviction_hooks():
         loader=FileSystemLoader("templates"),
         autoescape=select_autoescape(["html", "xml"]),
     )
+    env.globals["publish_gate_label"] = publish_gate_label
     html = env.get_template("partials/premium/tribunal_hero.html").render(
         tribunal=build_tribunal_view(payload, {}),
     )
     assert "data-synced-at=\"2026-08-04T12:00:00Z\"" in html
     assert "data-hero-conviction=\"71\"" in html
+    assert 'data-temp="warm"' in html
     assert "style=\"--p: 71.0;\"" in html or "style=\"--p: 71;\"" in html
     assert "id=\"tribunal-hero-sync\"" in html
     assert "tribunal-hero__sync" in html
@@ -152,7 +188,8 @@ def test_cockpit_hydrate_tribunal_sync_helpers():
     assert "patchTribunalPanels" in src
     assert "judgeAgreementLabels" in src
     assert "judgeSignalsFromDom" in src
-    assert "setTribunalPanelField" in src
+    assert "convictionTemp" in src
+    assert "syncCouncilTemp" in src
 
 
 def test_home_ssr_contains_tribunal_hero():
