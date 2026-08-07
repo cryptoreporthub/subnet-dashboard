@@ -74,29 +74,12 @@
       {% for judge in t.judges %}
       <article class="tribunal-hero__judge tribunal-hero__judge--{{ judge.key }}" data-judge="{{ judge.key }}">
         <span class="tribunal-hero__orbit" aria-hidden="true"></span>
-        <div class="tribunal-hero__judge-head">
-          <span class="tribunal-hero__judge-signal-wrap">
-            <span class="tribunal-hero__judge-signal-caption">SIGNAL</span>
-            <span class="tribunal-hero__judge-signal" data-judge-signal>{{ judge.signal_pct }}</span>
-          </span>
-          <span class="tribunal-hero__judge-weight" data-judge-weight>{{ judge.weight_pct }}</span>
-        </div>
+        <span class="tribunal-hero__judge-signal" data-judge-signal>{{ judge.signal_pct }}</span>
         <h3 class="tribunal-hero__judge-name">{{ judge.label }}</h3>
-        <div class="tribunal-hero__last5" data-last5{% if not judge.last5 %} hidden{% endif %}>
+        <span class="tribunal-hero__judge-weight" data-judge-weight>weight {{ judge.weight_dec }}</span>
+        <div class="tribunal-hero__last5" data-last5 hidden aria-hidden="true">
           <span class="tribunal-hero__last5-caption">LAST 5</span>
-          <div class="tribunal-hero__last5-ticks" aria-hidden="true">
-            {% if judge.last5 %}
-              {% for tick in judge.last5 %}
-                {% if tick is sameas true %}
-                  <span class="tribunal-hero__tick tribunal-hero__tick--hit"></span>
-                {% elif tick is sameas false %}
-                  <span class="tribunal-hero__tick tribunal-hero__tick--miss"></span>
-                {% else %}
-                  <span class="tribunal-hero__tick tribunal-hero__tick--empty"></span>
-                {% endif %}
-              {% endfor %}
-            {% endif %}
-          </div>
+          <div class="tribunal-hero__last5-ticks" aria-hidden="true"></div>
         </div>
       </article>
       {% endfor %}
@@ -105,59 +88,13 @@
 
   <p id="k3-call-headline" class="tribunal-hero__sr-only">{{ t.headline }}</p>
 
-  <footer class="tribunal-hero__panels">
-    {% set dl = t.panels.decision_log %}
-    <div class="tribunal-hero__panel" data-panel="decision-log">
-      <h4 class="tribunal-hero__panel-title">Decision log</h4>
-      <dl class="tribunal-hero__panel-grid">
-        <div><dt>Verdict</dt><dd data-decision-verdict>{{ dl.verdict_kind }}</dd></div>
-        <div><dt>Confidence</dt><dd data-decision-confidence>{{ dl.confidence }}</dd></div>
-        <div><dt>Consensus</dt><dd data-decision-consensus>{{ dl.consensus }}</dd></div>
-        <div><dt>Brain</dt><dd data-decision-brain>{{ dl.brain }}</dd></div>
-        <div class="tribunal-hero__panel-span"><dt>Dissent</dt><dd data-decision-dissent>{{ dl.dissent }}</dd></div>
-      </dl>
+  <footer class="tribunal-hero__metrics" aria-label="Council and subnet metrics">
+    {% for cell in t.metrics_strip %}
+    <div class="tribunal-hero__metric-cell" data-metric="{{ cell.key }}">
+      <span class="tribunal-hero__metric-val tribunal-hero__metric-val--{{ cell.tone }}" data-metric-val="{{ cell.key }}">{{ cell.value }}</span>
+      <span class="tribunal-hero__metric-label">{{ cell.label }}</span>
     </div>
-    {% set al = t.panels.accuracy_ledger %}
-    <div class="tribunal-hero__panel" data-panel="accuracy-ledger">
-      <h4 class="tribunal-hero__panel-title">Council accuracy</h4>
-      <p class="tribunal-hero__panel-stat" data-accuracy-win-rate>{{ al.win_rate }}</p>
-      <p class="tribunal-hero__panel-sub" data-accuracy-sub>{{ al.sub }}</p>
-      <p class="tribunal-hero__panel-meta">
-        <span data-accuracy-graded>{{ al.graded }}</span> graded ·
-        <span data-accuracy-correct>{{ al.correct }}</span> hit ·
-        <span data-accuracy-wrong>{{ al.wrong }}</span> miss
-      </p>
-      <div class="tribunal-hero__last5 tribunal-hero__panel-last5" data-council-last5{% if not al.last5 %} hidden{% endif %}>
-        <span class="tribunal-hero__last5-caption">LAST 5</span>
-        <div class="tribunal-hero__last5-ticks" aria-hidden="true">
-          {% if al.last5 %}
-            {% for tick in al.last5 %}
-              {% if tick is sameas true %}
-                <span class="tribunal-hero__tick tribunal-hero__tick--hit"></span>
-              {% elif tick is sameas false %}
-                <span class="tribunal-hero__tick tribunal-hero__tick--miss"></span>
-              {% else %}
-                <span class="tribunal-hero__tick tribunal-hero__tick--empty"></span>
-              {% endif %}
-            {% endfor %}
-          {% endif %}
-        </div>
-      </div>
-    </div>
-    {% set jm = t.panels.jury_move %}
-    <div class="tribunal-hero__panel" data-panel="jury-move">
-      <h4 class="tribunal-hero__panel-title">Jury · last grading move</h4>
-      <ul class="tribunal-hero__jury-list">
-        {% for row in jm %}
-        <li class="tribunal-hero__jury-row" data-jury="{{ row.key }}">
-          <span class="tribunal-hero__jury-name">{{ row.label }}</span>
-          <span class="tribunal-hero__jury-arrow" data-jury-arrow data-arrow="{{ row.arrow }}">{{ row.arrow }}</span>
-          <span class="tribunal-hero__jury-delta" data-jury-delta>{{ row.delta }}</span>
-        </li>
-        {% endfor %}
-      </ul>
-    </div>
-    <div class="tribunal-hero__metric" data-metric="alignment" hidden aria-hidden="true"></div>
+    {% endfor %}
   </footer>
 
   <p class="tribunal-hero__sync" id="tribunal-hero-sync" role="status" aria-live="polite"{% if t.synced_at %} data-synced-at="{{ t.synced_at }}"{% else %} hidden{% endif %}></p>

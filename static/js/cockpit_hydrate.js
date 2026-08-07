@@ -4054,7 +4054,7 @@
             renderTribunalHero(lastDailyPickPayload, stats);
           } else {
             patchTribunalJudges(stats, {});
-            patchTribunalPanels({}, stats);
+            patchTribunalMetrics({}, stats);
           }
         }
         if (stats.trust_banner && window.SimiTrustBanner && window.SimiTrustBanner.render) {
@@ -4442,6 +4442,20 @@
     return snPrefix + ' · ' + name;
   }
 
+  function formatJudgeWeightDec(weight, weights) {
+    if (weight == null || isNaN(Number(weight))) return '—';
+    weights = weights || {};
+    var vals = ['oracle', 'echo', 'pulse']
+      .map(function (k) { return weights[k]; })
+      .filter(function (v) { return v != null && !isNaN(Number(v)); })
+      .map(Number);
+    if (vals.length >= 2) {
+      var spread = Math.max.apply(null, vals) - Math.min.apply(null, vals);
+      if (spread < 0.015) return 'equal';
+    }
+    return Number(weight).toFixed(2);
+  }
+
   function formatJudgeWeightPct(weight, weights) {
     if (weight == null || isNaN(Number(weight))) return '—';
     weights = weights || {};
@@ -4563,7 +4577,7 @@
     hero.querySelectorAll('[data-judge]').forEach(function (seat) {
       var key = seat.getAttribute('data-judge');
       var weightEl = seat.querySelector('[data-judge-weight]');
-      if (weightEl) weightEl.textContent = formatJudgeWeightPct(weights[key], weights);
+      if (weightEl) weightEl.textContent = 'weight ' + formatJudgeWeightDec(weights[key], weights);
       var signalEl = seat.querySelector('[data-judge-signal]');
       if (signalEl) signalEl.textContent = formatGaugePct(signals[key]);
       var last5El = seat.querySelector('[data-last5]');
@@ -4576,6 +4590,78 @@
     var cur = (el.textContent || '').trim();
     if (next === '—' && cur && cur !== '—') return;
     el.textContent = next;
+  }
+
+  function metricTone(val) {
+    if (val == null || isNaN(Number(val))) return 'neutral';
+    var n = Number(val);
+    if (n > 0.05) return 'up';
+    if (n < -0.05) return 'down';
+    return 'neutral';
+  }
+
+  function setTribunalMetricCell(hero, key, value, tone) {
+    var el = hero.querySelector('[data-metric-val="' + key + '"]');
+    if (!el || value == null) return;
+    el.textContent = value;
+    el.className = 'tribunal-hero__metric-val tribunal-hero__metric-val--' + (tone || 'neutral');
+  }
+
+  function formatSignedPct(val) {
+    if (val == null || isNaN(Number(val))) return '—';
+    var n = Number(val);
+    var sign = n > 0 ? '+' : '';
+    if (Math.abs(n - Math.round(n)) < 0.05) return sign + Math.round(n) + '%';
+    return sign + n.toFixed(1) + '%';
+  }
+
+  function formatMetricNum(val) {
+    if (val == null || isNaN(Number(val))) return '—';
+    var n = Number(val);
+    if (Math.abs(n - Math.round(n)) < 0.05) return String(Math.round(n));
+    return n.toFixed(1);
+  }
+
+  function patchTribunalMetrics(dailyPick, stats) {
+    var hero = document.getElementById('tribunal-hero');
+    if (!hero) return;
+    var weights = (stats && stats.judge_weights) || {};
+    var signals = judgeSignalsFromPick(dailyPick || {});
+    var tb = (stats && stats.trust_banner) || {};
+
+    var avgAcc = null;
+    if (tb.ready && tb.accuracy != null) avgAcc = Math.round(Number(tb.accuracy) * 1000) / 10;
+
+    var correct = Number(tb.correct) || 0;
+    var wrong = Number(tb.wrong) || 0;
+    var winRate = null;
+    if (correct + wrong > 0) winRate = Math.round((correct / (correct + wrong)) * 1000) / 10;
+
+    var signalScore = weightedVerdictPct(weights, signals);
+    if (signalScore == null) {
+      var sigVals = ['oracle', 'echo', 'pulse']
+        .map(function (k) { return signals[k]; })
+        .filter(function (v) { return v != null && !isNaN(Number(v)); })
+        .map(Number);
+      if (sigVals.length) {
+        signalScore = Math.round((sigVals.reduce(function (a, b) { return a + b; }, 0) / sigVals.length) * 10) / 10;
+      }
+    }
+
+    var active = (dailyPick && (dailyPick.pick || dailyPick.candidate)) || {};
+    var sn = active.subnet || {};
+    var pct7d = sn.price_change_7d != null ? Number(sn.price_change_7d) : (sn.change_7d != null ? Number(sn.change_7d) : null);
+
+    setTribunalMetricCell(hero, 'avg_accuracy', formatGaugePct(avgAcc), metricTone(avgAcc != null ? avgAcc - 50 : null));
+    setTribunalMetricCell(hero, 'win_rate', formatGaugePct(winRate), metricTone(winRate != null ? winRate - 50 : null));
+    setTribunalMetricCell(hero, 'signal_score', formatGaugePct(signalScore), metricTone(signalScore != null ? signalScore - 50 : null));
+
+    var ind = (stats && stats.indicator_row) || {};
+    var rsi = ind.rsi != null ? Number(ind.rsi) : null;
+    var stoch = ind.stochastic_k != null ? Number(ind.stochastic_k) : null;
+    setTribunalMetricCell(hero, 'rsi', formatMetricNum(rsi), metricTone(rsi != null ? 50 - rsi : null));
+    setTribunalMetricCell(hero, 'stochastic', formatMetricNum(stoch), metricTone(stoch != null ? 50 - stoch : null));
+    setTribunalMetricCell(hero, 'price_7d', formatSignedPct(pct7d), metricTone(pct7d));
   }
 
   function patchTribunalPanels(dailyPick, stats) {
@@ -4713,7 +4799,7 @@
     }
     if (learningStats) {
       patchTribunalJudges(learningStats, dailyPick);
-      patchTribunalPanels(dailyPick, learningStats);
+      patchTribunalMetrics(dailyPick, learningStats);
     }
     return true;
   }

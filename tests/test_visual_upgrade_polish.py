@@ -1007,9 +1007,9 @@ def test_global_glass_card_overrides_in_ui_css():
     hero_card = m.group(1)
     assert "transparent" in hero_card
     assert "simivision-smoke-bg.svg" not in hero_card
-    panel_block = css.split(".tribunal-hero__panel {", 1)[1].split("}", 1)[0]
-    assert "backdrop-filter: blur" in panel_block
-    assert "rgba(255, 255, 255" in panel_block
+    metric_block = css.split(".tribunal-hero__metric-cell {", 1)[1].split("}", 1)[0]
+    assert "backdrop-filter: blur" in metric_block
+    assert "rgba(255, 255, 255" in metric_block
     for selector in (
         ".tribunal-hero__judge",
         ".k3-dossier",

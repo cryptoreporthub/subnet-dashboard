@@ -17,16 +17,17 @@ def test_gated_preview_has_hero_and_three_judges():
     assert html.count('data-judge="pulse"') == 1
     assert "tribunal-hero__puffs" in html
     assert "tribunal-hero__rays" in html
-    assert 'data-panel="decision-log"' in html
-    assert 'data-panel="accuracy-ledger"' in html
-    assert 'data-panel="jury-move"' in html
+    assert 'data-panel="decision-log"' not in html
+    assert 'data-panel="accuracy-ledger"' not in html
+    assert 'data-metric="avg_accuracy"' in html
+    assert 'data-metric="signal_score"' in html
+    assert "tribunal-hero__metrics" in html
     assert "feTurbulence" not in html
     assert "33.6%" in html
     assert "GATED · HOLD" in html
     assert "SN99" in html
     assert "THE TRIBUNAL" not in html
     assert html.count("data-last5 hidden") == 3
-
 
 def test_sealed_label_is_long_not_buy():
     r = client.get("/preview/tribunal?state=sealed")
@@ -36,10 +37,8 @@ def test_sealed_label_is_long_not_buy():
     assert "SEALED · BUY" not in html
     assert "SN14 · TaoHash" in html
     assert "THE TRIBUNAL" not in html
-    assert "LAST 5" in html
-    assert "data-last5 hidden" not in html
-    assert 'data-council-last5' in html
-    assert 'data-council-last5 hidden' not in html
+    assert "LAST 5" not in html or "data-last5 hidden" in html
+    assert 'data-metric="win_rate"' in html
 
 
 def test_forming_and_cold_have_no_fake_71_percent():
@@ -73,8 +72,10 @@ def test_all_states_return_200_with_distinct_labels():
     assert len(set(labels.values())) == 4
 
 
-def test_row_three_alignment_hidden():
+def test_metrics_strip_renders_six_cells():
     r = client.get("/preview/tribunal?state=gated")
     assert r.status_code == 200
-    assert 'data-metric="alignment"' in r.text
-    assert "hidden" in r.text.split('data-metric="alignment"')[1].split(">")[0]
+    html = r.text
+    assert "tribunal-hero__metrics" in html
+    for key in ("avg_accuracy", "win_rate", "signal_score", "rsi", "stochastic", "price_7d"):
+        assert 'data-metric="' + key + '"' in html

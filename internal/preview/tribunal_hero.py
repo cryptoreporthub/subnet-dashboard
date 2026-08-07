@@ -240,6 +240,20 @@ def _format_judge_weight_pct(weights: Dict[str, float], key: str) -> str:
     return f"{pct:.1f}%"
 
 
+def _format_judge_weight_dec(weights: Dict[str, float], key: str) -> str:
+    """Decimal council weight for compact hero chips (e.g. weight 0.40)."""
+    if weights.get(key) is None:
+        return "—"
+    try:
+        vals = [float(weights[k]) for k in _JUDGE_KEYS if weights.get(k) is not None]
+        w = float(weights[key])
+    except (TypeError, ValueError):
+        return "—"
+    if len(vals) >= 2 and max(vals) - min(vals) < _EQUAL_WEIGHT_SPREAD:
+        return "equal"
+    return f"{w:.2f}"
+
+
 def _judge_agreement_labels(signals: Dict[str, Optional[float]]) -> Dict[str, str]:
     """Consensus/dissent from the three judge signal scores already on the pick."""
     vals: List[float] = []
@@ -360,6 +374,148 @@ def _accuracy_ledger_panel(stats: Dict[str, Any]) -> Dict[str, Any]:
         "ready": bool(tb.get("ready")),
         "last5": last5,
     }
+
+
+def _focus_subnet(pick: Dict[str, Any]) -> Dict[str, Any]:
+    active = pick.get("pick") or pick.get("candidate") or {}
+    sn = active.get("subnet")
+    return sn if isinstance(sn, dict) else {}
+
+
+def _indicator_row(netuid: Any) -> Dict[str, Any]:
+    if netuid is None:
+        return {}
+    try:
+        from internal.indicators.indicator_engine import IndicatorEngine
+
+        state = IndicatorEngine().get_indicator_state()
+        row = (state.get("per_subnet") or {}).get(str(netuid))
+        return row if isinstance(row, dict) else {}
+    except Exception:
+        return {}
+
+
+def _metric_tone(val: Optional[float], *, invert: bool = False) -> str:
+    if val is None:
+        return "neutral"
+    try:
+        n = float(val)
+    except (TypeError, ValueError):
+        return "neutral"
+    if invert:
+        n = -n
+    if n > 0.05:
+        return "up"
+    if n < -0.05:
+        return "down"
+    return "neutral"
+
+
+def _fmt_metric_pct(val: Optional[float]) -> str:
+    if val is None:
+        return "—"
+    if abs(val - round(val)) < 0.05:
+        return f"{int(round(val))}%"
+    return f"{val:.1f}%"
+
+
+def _fmt_metric_num(val: Any, decimals: int = 1) -> str:
+    if val is None:
+        return "—"
+    try:
+        n = float(val)
+    except (TypeError, ValueError):
+        return "—"
+    if abs(n - round(n)) < 0.05:
+        return str(int(round(n)))
+    return f"{n:.{decimals}f}"
+
+
+def _fmt_signed_pct(val: Optional[float]) -> str:
+    if val is None:
+        return "—"
+    sign = "+" if val > 0 else ""
+    if abs(val - round(val)) < 0.05:
+        return f"{sign}{int(round(val))}%"
+    return f"{sign}{val:.1f}%"
+
+
+def _metrics_strip(stats: Dict[str, Any], pick: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Compact glass KPI row under the hero gauge (reference layout)."""
+    tb = stats.get("trust_banner") or {}
+    weights = stats.get("judge_weights") or {}
+    signals = judge_signals_from_pick(pick)
+
+    avg_acc: Optional[float] = None
+    if tb.get("ready") and tb.get("accuracy") is not None:
+        avg_acc = round(float(tb["accuracy"]) * 100, 1)
+
+    correct = int(tb.get("correct") or 0)
+    wrong = int(tb.get("wrong") or 0)
+    win_rate: Optional[float] = None
+    if correct + wrong > 0:
+        win_rate = round(correct / (correct + wrong) * 100, 1)
+
+    signal_score = weighted_verdict_pct(weights, signals)
+    if signal_score is None:
+        vals = [float(v) for v in signals.values() if v is not None]
+        if vals:
+            signal_score = round(sum(vals) / len(vals), 1)
+
+    sn = _focus_subnet(pick)
+    ind = _indicator_row(sn.get("netuid"))
+    rsi = ind.get("rsi")
+    stoch = ind.get("stochastic_k")
+
+    pct_7d: Optional[float] = None
+    for key in ("price_change_7d", "change_7d"):
+        raw = sn.get(key)
+        if raw is None:
+            continue
+        try:
+            pct_7d = float(raw)
+            break
+        except (TypeError, ValueError):
+            continue
+
+    return [
+        {
+            "key": "avg_accuracy",
+            "label": "AVG ACCURACY",
+            "value": _fmt_metric_pct(avg_acc),
+            "tone": _metric_tone((avg_acc - 50.0) if avg_acc is not None else None),
+        },
+        {
+            "key": "win_rate",
+            "label": "WIN RATE",
+            "value": _fmt_metric_pct(win_rate),
+            "tone": _metric_tone((win_rate - 50.0) if win_rate is not None else None),
+        },
+        {
+            "key": "signal_score",
+            "label": "SIGNAL SCORE",
+            "value": _fmt_metric_pct(signal_score),
+            "tone": _metric_tone((signal_score - 50.0) if signal_score is not None else None),
+        },
+        {
+            "key": "rsi",
+            "label": "RSI",
+            "value": _fmt_metric_num(rsi),
+            "tone": _metric_tone((50.0 - rsi) if rsi is not None else None),
+        },
+        {
+            "key": "stochastic",
+            "label": "STOCH",
+            "value": _fmt_metric_num(stoch),
+            "tone": _metric_tone((50.0 - stoch) if stoch is not None else None),
+        },
+        {
+            "key": "price_7d",
+            "label": "7D PRICE",
+            "value": _fmt_signed_pct(pct_7d),
+            "tone": _metric_tone(pct_7d),
+        },
+    ]
 
 
 def _jury_move_panel(stats: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -497,6 +653,7 @@ def build_tribunal_view(
                 "key": key,
                 "label": label,
                 "weight_pct": _format_judge_weight_pct(weights, key),
+                "weight_dec": _format_judge_weight_dec(weights, key),
                 "signal_pct": _format_signal_pct(signals.get(key)),
                 "last5": last5 if isinstance(last5, list) and len(last5) == 5 else None,
             }
@@ -523,6 +680,7 @@ def build_tribunal_view(
         "gauge_attr": gauge_attr(gauge),
         "synced_at": synced_at_iso(pick),
         "judges": judges,
+        "metrics_strip": _metrics_strip(stats, pick),
         "panels": {
             "decision_log": _decision_log_panel(pick, kind, gauge, signals),
             "accuracy_ledger": _accuracy_ledger_panel(stats),
