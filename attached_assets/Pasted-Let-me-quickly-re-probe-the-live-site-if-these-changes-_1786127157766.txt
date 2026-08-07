@@ -1,0 +1,39 @@
+Let me quickly re-probe the live site — if these changes deployed, I want to check whether they actually moved the numbers, not just assess them on the merits.
+
+I re-probed live after the changes deployed. Honest verdict: **these are good engineering moves, but they are not the fix — and they missed the actual root cause.** Here's the evidence.
+
+## What actually changed on the live site after their work
+
+| Endpoint | Before | After |
+|---|---|---|
+| `/api/daily-pick` | 422 | **200** ✅ (improvement) |
+| `/api/learning/stats` | 422 | **422 still** ❌ |
+| `/api/learning/health` | 422 | **422 still** ❌ |
+| `/api/predictions/resolver` | never ran | **still `running:false, last_run_at:null`** ❌ |
+
+So their work did fix *one* endpoint (`daily-pick` moved from 422 to 200). That's real progress and worth crediting. But the two most important learning endpoints **still 422**, and — the decisive one — **the resolver still has never run** (`last_run_at: null`).
+
+## Why the list they gave you is the wrong layer
+
+Look at what they actually did — every single bullet is **frontend / request-layer**:
+- browser response cache + in-flight dedup
+- retry backoff + jitter
+- first-paint priority
+- driver-card dedup
+- backpressure / moving endpoints off the "light" bypass
+
+That's all legitimate, careful browser-side and routing hardening. **Nothing in it touches the server-side grader** — and that's where the actual disease lives.
+
+Here's the core mismatch: `/api/learning/stats` **422 is a server-side timeout** (the route wraps its whole snapshot build in a 10s `asyncio.wait_for` and re-raises as 422 on timeout). **No amount of browser caching, request dedup, or client backoff can turn a server that returns 422 into one that returns data.** Those techniques make the *client* faster and gentler, but they can't make a timed-out server endpoint succeed. The one win (`daily-pick` → 200) came from their **backpressure** change — which *is* server-side — but it only helped that one route; `stats` and `health` are still blowing their timeout.
+
+And the biggest thing is entirely outside their scope: **the resolver scheduler still hasn't booted.** Since nothing is running, there are still **zero grades** — the trust gate stays blocked, the scoreboard stays empty, the "First resolution pending" banner stays. All five bullets combined can't change that, because it's not a load problem — it's a "the background worker that grades predictions never started on this deploy" problem (same `WORKER_SPLIT_V2` / "scale worker=0" issue you've hit before).
+
+## The bottom line
+
+- **Good news:** every change on that list is sound and safe — caching, dedup, backoff, priority paint, backpressure are all things you'd want regardless. And `daily-pick` genuinely improved. I would not call any of it wrong.
+- **But it was the wrong subtree.** They optimized the *delivery* of a dashboard whose *brain isn't running*. Fixing the paint doesn't fix the data being painted (and empty).
+- **What's still broken and untouched:** (1) `/api/learning/stats` + `/health` still 422 (server timeout), and (2) **the resolver has still never run** — the actual reason the scoreboard shows "0 graded" and the trust gate is "blocked."
+
+**The next prompt to Replit should be about the resolver server-side, not the frontend.** Specifically: why does `/api/predictions/resolver` report `running:false, last_run_at:null` on this deploy — is the background worker booting, is `background_boot_allowed()` true on the running machine, is the resolver scheduler being started by `_start_resolver()` in `internal/background_boot.py`? That, plus fixing the `stats`/`health` timeout so they fail-open with stale data instead of 422 — those are the changes that will actually make the screen show real grades.
+
+Want me to write that revised prompt — leading with "the resolver isn't running, that's the whole problem" and demoting the frontend work to "nice, keep it"? That's the version likely to actually get the scoreboard populated.

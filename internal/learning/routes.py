@@ -41,6 +41,7 @@ learning_router.include_router(create_feedback_router())
 
 LEARNING_HEALTH_TIMEOUT = float(os.environ.get("LEARNING_HEALTH_TIMEOUT_SECONDS", "15"))
 LEARNING_STATS_TIMEOUT = float(os.environ.get("LEARNING_STATS_TIMEOUT_SECONDS", "10"))
+RESOLVER_STATE_TIMEOUT = float(os.environ.get("RESOLVER_STATE_TIMEOUT_SECONDS", "8"))
 _LEARNING_HEALTH_CACHE_TTL = float(os.environ.get("LEARNING_HEALTH_CACHE_SECONDS", "10"))
 _LEARNING_HEALTH_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 _LEARNING_HEALTH_CACHE_LOCK = threading.Lock()
@@ -232,8 +233,22 @@ def _learning_snapshot() -> Dict[str, Any]:
             ledger_context=ledger_context,
             predictions_data=data,
         )
+        # Weight dials read the mindmap trail (soul map + ledger + dev signals).
+        # That scan costs seconds on a warm volume, so it belongs in this cached
+        # snapshot — the request handlers must never run it on the event loop.
+        from internal.learning.weight_deltas import (
+            collect_weight_trail_events,
+            expert_graded_counts,
+            recent_expert_weight_deltas,
+            recent_judge_weight_deltas,
+        )
+
+        trail_events = collect_weight_trail_events()
         snapshot = {
             "engine_stats": engine_stats,
+            "expert_weight_deltas": recent_expert_weight_deltas(events=trail_events),
+            "judge_weight_deltas": recent_judge_weight_deltas(events=trail_events),
+            "expert_graded_counts": expert_graded_counts(),
             "resolver_stats": resolver_stats,
             "resolved_payload": resolved_payload,
             "pending_rows": pending_rows,
@@ -262,12 +277,6 @@ def _learning_stats_payload(
     status: str = "success",
     meta: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    from internal.learning.weight_deltas import (
-        expert_graded_counts,
-        recent_expert_weight_deltas,
-        recent_judge_weight_deltas,
-    )
-
     stats = snap["engine_stats"]
     resolver_stats = snap["resolver_stats"]
     watchdog = snap["watchdog"]
@@ -279,9 +288,9 @@ def _learning_stats_payload(
         "data": {
             "expert_weights": stats.get("expert_weights", {}),
             "judge_weights": snap.get("judge_weights", {}),
-            "judge_weight_deltas": recent_judge_weight_deltas(),
-            "expert_weight_deltas": recent_expert_weight_deltas(),
-            "expert_graded_counts": expert_graded_counts(),
+            "judge_weight_deltas": snap.get("judge_weight_deltas", {}),
+            "expert_weight_deltas": snap.get("expert_weight_deltas", {}),
+            "expert_graded_counts": snap.get("expert_graded_counts", {}),
             "judge_last5": snap.get("judge_last5", {}),
             "council_last5": snap.get("council_last5", []),
             "total_records": resolver_stats.get("total", stats.get("total_records", 0)),
@@ -390,12 +399,6 @@ def _rotation_summary() -> Dict[str, Any]:
 
 
 def _compute_learning_metrics(snap: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    from internal.learning.weight_deltas import (
-        expert_graded_counts,
-        recent_expert_weight_deltas,
-        recent_judge_weight_deltas,
-    )
-
     if snap is None:
         snap = _learning_snapshot()
     stats = snap["engine_stats"]
@@ -408,9 +411,9 @@ def _compute_learning_metrics(snap: Optional[Dict[str, Any]] = None) -> Dict[str
         "judge_weights": snap.get("judge_weights", {}),
         "judge_last5": snap.get("judge_last5", {}),
         "council_last5": snap.get("council_last5", []),
-        "expert_weight_deltas": recent_expert_weight_deltas(),
-        "expert_graded_counts": expert_graded_counts(),
-        "judge_weight_deltas": recent_judge_weight_deltas(),
+        "expert_weight_deltas": snap.get("expert_weight_deltas", {}),
+        "expert_graded_counts": snap.get("expert_graded_counts", {}),
+        "judge_weight_deltas": snap.get("judge_weight_deltas", {}),
         "total_records": stats.get("total_records", 0),
         "predictions_pending": stats.get("pending", 0),
         "predictions_resolved": stats.get("resolved", 0),
@@ -982,12 +985,58 @@ async def api_predictions_resolved(resolve: bool = Query(default=False)):
         return {"status": "error", "resolved": [], "stats": {}, "error": str(exc)}
 
 
+def _resolver_state_cross_process() -> Dict[str, Any]:
+    """Resolver truth for the web process — the scheduler lives on the worker.
+
+    In prod the web process serves HTTP only (``BACKGROUND_ON_WEB=off``), so its
+    in-memory scheduler singleton is never started and reports ``running=false``
+    / ``last_run_at=null`` even while the inline worker is ticking normally.
+    The shared volume holds the real evidence: the resolver's cycle summary in
+    the soul map plus the worker heartbeat.
+    """
+    from internal.run_mode import worker_mode_label
+
+    state = dict(get_prediction_resolver_scheduler_state())
+    state["in_process"] = {
+        "running": state.get("running"),
+        "last_run_at": state.get("last_run_at"),
+    }
+    try:
+        from internal.learning.loop_health import _last_resolver_tick
+    except Exception:
+        state["source"] = "memory"
+        return state
+
+    try:
+        tick = _last_resolver_tick()
+    except Exception as exc:
+        logger.warning("resolver cross-process state failed: %s", exc)
+        state["source"] = "memory"
+        return state
+
+    peer = tick.get("worker_peer") if isinstance(tick.get("worker_peer"), dict) else {}
+    state["running"] = bool(tick.get("running"))
+    if tick.get("at"):
+        state["last_run_at"] = tick.get("at")
+        state["last_run_ok"] = tick.get("ok")
+    state["refresh_minutes"] = tick.get("refresh_minutes") or state.get("refresh_minutes")
+    state["worker_peer"] = peer
+    state["run_mode"] = worker_mode_label()
+    state["source"] = "volume" if tick.get("at") else "memory"
+    return state
+
+
 @learning_router.get("/api/predictions/resolver")
 async def api_predictions_resolver_state():
-    return {
-        "status": "success",
-        "data": get_prediction_resolver_scheduler_state(),
-    }
+    try:
+        data = await _to_thread_timeout(
+            _resolver_state_cross_process,
+            RESOLVER_STATE_TIMEOUT,
+            label="resolver-state",
+        )
+    except asyncio.TimeoutError:
+        data = {**get_prediction_resolver_scheduler_state(), "source": "memory", "error": "timeout"}
+    return {"status": "success", "data": data}
 
 
 def _resolver_allowed_on_this_process() -> bool:

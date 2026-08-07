@@ -46,16 +46,36 @@ def expert_graded_counts() -> Dict[str, int]:
 _TRAIL_SCAN_LIMIT = 500
 
 
-def recent_expert_weight_deltas(limit: int = _TRAIL_SCAN_LIMIT) -> Dict[str, float]:
-    """Latest nudge delta per expert from mindmap weight_change trail rows."""
+def collect_weight_trail_events(limit: int = _TRAIL_SCAN_LIMIT) -> list:
+    """Trail rows for delta scans — collect once, reuse for expert + judge dials.
+
+    ``collect_trail_events`` re-reads the soul map, the prediction ledger and the
+    dev-signal trail on every call (seconds on a warm prod volume). Callers that
+    need both dial families should collect once and pass the result in.
+    """
     try:
         from internal.learning.mindmap_aggregator import collect_trail_events
+    except Exception:
+        return []
+    try:
+        return collect_trail_events(limit)
+    except Exception:
+        return []
+
+
+def recent_expert_weight_deltas(
+    limit: int = _TRAIL_SCAN_LIMIT,
+    events: Any = None,
+) -> Dict[str, float]:
+    """Latest nudge delta per expert from mindmap weight_change trail rows."""
+    try:
         from internal.learning.trail_bus import normalize_event_type
     except Exception:
         return {}
 
+    rows = events if isinstance(events, list) else collect_weight_trail_events(limit)
     out: Dict[str, float] = {}
-    for row in reversed(collect_trail_events(limit)):
+    for row in reversed(rows):
         if not isinstance(row, dict):
             continue
         if normalize_event_type(row.get("event_type")) != "weight_change":
@@ -76,16 +96,19 @@ def _normalize_judge(raw: Any) -> str | None:
     return name if name in _JUDGES else None
 
 
-def recent_judge_weight_deltas(limit: int = _TRAIL_SCAN_LIMIT) -> Dict[str, float]:
+def recent_judge_weight_deltas(
+    limit: int = _TRAIL_SCAN_LIMIT,
+    events: Any = None,
+) -> Dict[str, float]:
     """Latest nudge delta per judge (oracle/echo/pulse) from weight_change trail."""
     try:
-        from internal.learning.mindmap_aggregator import collect_trail_events
         from internal.learning.trail_bus import normalize_event_type
     except Exception:
         return {}
 
+    rows = events if isinstance(events, list) else collect_weight_trail_events(limit)
     out: Dict[str, float] = {}
-    for row in reversed(collect_trail_events(limit)):
+    for row in reversed(rows):
         if not isinstance(row, dict):
             continue
         if normalize_event_type(row.get("event_type")) != "weight_change":
