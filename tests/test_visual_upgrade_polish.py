@@ -1007,7 +1007,7 @@ def test_global_glass_card_overrides_in_ui_css():
     pds = css.split(".pds-hero,", 1)[1].split("}", 1)[0]
     assert "var(--glass-fill)" in pds
     ring = css.split(".tribunal-hero__ring-center::before {", 1)[1].split("}", 1)[0]
-    assert "#111518" in ring
+    assert "#1b1f26" in ring
 
 
 def test_pump_dossier_cta_not_hardcoded_sn_only():
