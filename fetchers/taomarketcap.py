@@ -191,6 +191,43 @@ def _rows_have_market_fields(rows: List[Dict]) -> bool:
     return with_price >= max(1, (len(sample) + 1) // 2)
 
 
+def _rows_missing_market_values(rows: List[Dict]) -> bool:
+    """True when sampled tradable rows already have a price but lack volume/change.
+
+    Live blockmachine rows carry a live price yet leave ``volume`` and the
+    ``price_change_*`` fields None. That price-passing state must not skip the
+    TMC overlay, or market-driver cards / the weighing room show 0.0/None
+    volume and change where real market data should appear.
+    """
+    sample = []
+    for r in rows or []:
+        n = r.get("netuid")
+        if n is None:
+            n = r.get("id")
+        try:
+            if n is not None and int(n) > 0:
+                sample.append(r)
+        except (TypeError, ValueError):
+            continue
+        if len(sample) >= 20:
+            break
+    if not sample:
+        return False
+    lacking = 0
+    has_price = 0
+    for r in sample:
+        if r.get("price") in (None, "", 0, 0.0):
+            continue
+        has_price += 1
+        vol = r.get("volume")
+        chg = r.get("price_change_24h")
+        if vol in (None, "", 0, 0.0) and chg in (None, "", 0, 0.0):
+            lacking += 1
+    if has_price == 0:
+        return False
+    return lacking >= max(1, (has_price + 1) // 2)
+
+
 def _overlay_market_fields(base: List[Dict], market: List[Dict]) -> List[Dict]:
     """Copy TMC price/volume/chg onto registry/chain rows; append TMC-only netuids."""
     by_netuid: Dict[int, Dict] = {}
@@ -258,6 +295,12 @@ def get_all_subnets() -> List[Dict]:
         logger.warning("Live subnet feed unavailable, using TaoMarketCap: %s", exc)
 
     if live and _rows_have_market_fields(live):
+        if not _rows_missing_market_values(live):
+            return live
+        # Live rows carry price but lack volume/change — overlay TMC market data.
+        tmc = _get_all_subnets_tao()
+        if tmc:
+            return _overlay_market_fields(live, tmc)
         return live
 
     tmc = _get_all_subnets_tao()
