@@ -86,12 +86,13 @@ def test_market_driver_snapshot_avoids_repeated_disk_scans(monkeypatch):
 def test_homepage_fetch_layer_coalesces_same_url_requests():
     source = Path("static/js/api_fetch.js").read_text(encoding="utf-8")
     assert "var inFlight = {}" in source
+    assert "var responseCache = {}" in source
     assert "if (inFlight[key]) return inFlight[key]" in source
     assert "delete inFlight[key]" in source
 
 
-def test_hydration_keeps_daily_pick_available_before_secondary_batch():
+def test_hydration_keeps_daily_pick_available_before_deferred_secondary_batch():
     source = Path("static/js/cockpit_hydrate.js").read_text(encoding="utf-8")
     daily_index = source.index("window.HomeHydrateCache.dailyPick = lastDailyPickPayload")
-    secondary_index = source.index("// Tier 1c + 2")
+    secondary_index = source.index("// Tier 2 — secondary panels")
     assert daily_index < secondary_index

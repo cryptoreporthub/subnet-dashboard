@@ -1,6 +1,7 @@
 /** §21 L1/L3 — market driver card + what's-working chips (API-driven, honest-empty). */
 (function () {
   "use strict";
+  var lastDriverNetuid = null;
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -55,12 +56,14 @@
   function loadDriverCard(netuid) {
     var id = parseInt(String(netuid), 10);
     if (!id && id !== 0) return;
-    fetch("/api/market-drivers/" + id)
-      .then(function (r) {
-        return r.ok ? r.json() : null;
-      })
+    if (lastDriverNetuid === id) return;
+    lastDriverNetuid = id;
+    var fetchJson = window.apiFetchJson || function (url) {
+      return fetch(url).then(function (r) { return r.ok ? r.json() : null; });
+    };
+    fetchJson("/api/market-drivers/" + id, 12000)
       .then(renderDriverCard)
-      .catch(function () {});
+      .catch(function () { lastDriverNetuid = null; });
   }
 
   function renderWorkingChips(payload) {

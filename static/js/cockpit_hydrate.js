@@ -4024,7 +4024,7 @@
         }
       }
 
-      // Tier 1c + 2 — registry, council, proof band (parallel, capped burst)
+      // Tier 1c — data needed to make the main dashboard useful.
       var tierBatch = await Promise.allSettled([
         fetchJsonRetry(
           '/api/subnets?fields=' + encodeURIComponent(SUBNET_FIELDS),
@@ -4036,17 +4036,7 @@
           if (window.HomeLiveRefresh && window.HomeLiveRefresh.patchStoryStrip) {
             window.HomeLiveRefresh.patchStoryStrip(strip);
           }
-        }),
-        fetchJsonRetry('/api/simivision', 35000, 2).then(function (payload) {
-          var data = safePayload(safePayload(payload).data);
-          renderSimivision(data.top || [], data.meta || {});
-        }),
-        window.PaperPortfolio && window.PaperPortfolio.hydrate
-          ? window.PaperPortfolio.hydrate()
-          : fetchJsonRetry('/api/portfolio/status', 25000, 2),
-        window.BrainLetter && window.BrainLetter.hydrate
-          ? window.BrainLetter.hydrate()
-          : fetchJsonRetry('/api/letter/brain', 12000, 1),
+        })
       ]);
 
       if (tierBatch[0].status === 'fulfilled') {
@@ -4099,6 +4089,23 @@
         markSectionFailed('section-kpi', 'Quiet — learning stats unavailable. KPIs stay on last SSR snapshot.');
         markSectionFailed('section-council', 'Quiet — council weights unavailable. Expert cards stay on last SSR snapshot.');
       }
+
+      // Tier 2 — secondary panels start only after the critical dashboard path
+      // paints, so a slow council/portfolio provider cannot hold the whole site.
+      setTimeout(function () {
+        Promise.allSettled([
+          fetchJsonRetry('/api/simivision', 16000, 1).then(function (payload) {
+            var data = safePayload(safePayload(payload).data);
+            renderSimivision(data.top || [], data.meta || {});
+          }),
+          window.PaperPortfolio && window.PaperPortfolio.hydrate
+            ? window.PaperPortfolio.hydrate()
+            : fetchJsonRetry('/api/portfolio/status', 15000, 1),
+          window.BrainLetter && window.BrainLetter.hydrate
+            ? window.BrainLetter.hydrate()
+            : fetchJsonRetry('/api/letter/brain', 10000, 0)
+        ]).catch(function () {});
+      }, 350);
 
       renderFooterStatus({
         dataSource: subnetsMeta.source,

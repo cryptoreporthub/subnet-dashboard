@@ -13,7 +13,10 @@ from starlette.responses import PlainTextResponse, Response
 # GET / bypasses so a cold hydrate storm cannot 503 the shell into a blank phone screen.
 _BYPASS_PATHS = frozenset({"/", "/health", "/api/health", "/api/ops/live", "/metrics", "/pump"})
 _BYPASS_PREFIXES = ("/static/",)
-# Above-fold hydrate reads — never 503 these while GET / holds a slot.
+# Cheap cached reads — never 503 these while GET / holds a slot.  Expensive
+# snapshots (subnets, picks, market drivers, SimiVision and Telegram rollups)
+# intentionally stay behind the bounded queue below: allowing a whole hydrate
+# burst to bypass it starves every other section on a single web worker.
 _LIGHT_API_PREFIXES = (
     "/api/learning/",
     "/api/learning-metrics",
@@ -23,16 +26,11 @@ _LIGHT_API_PREFIXES = (
     "/api/subnet-integrations",
     "/api/letter/",
     "/api/portfolio/",
-    "/api/market-drivers",
-    "/api/daily-pick",
     "/api/pump-alerts",
-    "/api/simivision",
     "/api/mindmap/story-path",
     "/api/mindmap/trail",
     "/api/cockpit/sections",
     "/api/indicators-convergence",
-    "/api/message-intel",
-    "/api/subnets",
     "/api/judges/",  # single-netuid only — /api/judges (all) stays shedable
 )
 _ACQUIRE_TIMEOUT = float(os.environ.get("LOAD_SHED_ACQUIRE_SECONDS", "2.0"))
