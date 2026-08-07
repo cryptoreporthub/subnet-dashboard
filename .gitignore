@@ -64,5 +64,6 @@ data/pump_desk/snapshots/2026-08-07T134551Z.json
 data/pump_desk/snapshots/2026-08-07T135609Z.json
 data/score_snapshots.json
 data/pick_scheduler_state.json
+data/pump_calibration.json
 config/registry.json
 config/watchlist.json
