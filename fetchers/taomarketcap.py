@@ -298,7 +298,11 @@ def get_all_subnets() -> List[Dict]:
         if not _rows_missing_market_values(live):
             return live
         # Live rows carry price but lack volume/change — overlay TMC market data.
-        tmc = _get_all_subnets_tao()
+        try:
+            tmc = _get_all_subnets_tao()
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("TMC overlay unavailable for market backfill: %s", exc)
+            tmc = None
         if tmc:
             return _overlay_market_fields(live, tmc)
         return live

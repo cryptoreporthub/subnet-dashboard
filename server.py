@@ -1604,6 +1604,16 @@ def get_subnet(subnet_id: int):
     data = load_data("config/registry.json")
     subnet_data = data.get(str(subnet_id))
     if subnet_data is None:
+        # Registry is gitignored runtime data, absent in a fresh checkout (CI).
+        # Fall back to the live feed so a real netuid never 404s on a cold build.
+        try:
+            live_rows = load_subnets_source()
+            for row in live_rows:
+                if int(row.get("netuid", row.get("id", -1))) == subnet_id:
+                    return {"subnet_id": subnet_id,
+                            "data": enrich_subnet_row(dict(row), use_taostats=False)}
+        except Exception:
+            pass
         return JSONResponse(status_code=404, content={"error": "Subnet not found"})
     merged = enrich_subnet_row(dict(subnet_data), use_taostats=False)
     try:
