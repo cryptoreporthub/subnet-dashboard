@@ -622,12 +622,16 @@ def test_legacy_no_council_shell_or_driver_styles():
 
 
 def test_council_pick_card_uses_pewter_smoke_background():
+    import re
+
     css = open("static/css/ui.css", encoding="utf-8").read()
     assert ".council-stage .home-job__call-host .k3-dossier" in css
     dossier = css.split(".council-stage .home-job__call-host .k3-dossier", 1)[1][:400]
     assert "transparent" in dossier
-    hero = css.split(".tribunal-hero__card {", 1)[1].split("}", 1)[0]
-    assert "simivision-smoke-bg.svg" in hero
+    # Match the unscoped base rule — not `.tribunal-hero[data-temp=…] .tribunal-hero__card`.
+    m = re.search(r"(?m)^\.tribunal-hero__card \{([^}]*)\}", css)
+    assert m, "missing .tribunal-hero__card base rule"
+    assert "simivision-smoke-bg.svg" in m.group(1)
 
 
 def test_home_drawers_and_section21_live_in_ui_css():
@@ -990,9 +994,14 @@ def test_grey_smoke_bg_base_token():
 
 def test_global_glass_card_overrides_in_ui_css():
     """Hero card uses baked smoke; panels/judges use glass-fill; dial center stays opaque."""
+    import re
+
     css = _read_ui_css()
     assert "var(--glass-fill)" in css
-    hero_card = css.split(".tribunal-hero__card {", 1)[1].split("}", 1)[0]
+    # Match the unscoped base rule — not `.tribunal-hero[data-temp=…] .tribunal-hero__card`.
+    m = re.search(r"(?m)^\.tribunal-hero__card \{([^}]*)\}", css)
+    assert m, "missing .tribunal-hero__card base rule"
+    hero_card = m.group(1)
     assert "simivision-smoke-bg.svg" in hero_card
     assert "soft-light" in hero_card
     assert "tribunal-smoke-drift" in css
