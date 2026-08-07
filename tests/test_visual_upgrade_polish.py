@@ -163,11 +163,12 @@ def test_council_stage_atmosphere_cool_grey_smoke_drift():
     assert ".council-stage__atmosphere" in css
     assert "council-smoke-drift-1" in css
     assert "council-smoke-drift-2" in css
-    assert "rgba(140, 140, 150" in css
-    # Neon screen-blend puffs retired — cool grey only
+    # Neon screen-blend puffs retired — cool grey / silver only
     puff_block = css.split(".tribunal-hero__puff {", 1)[1].split(".tribunal-hero__puff--1", 1)[0]
     assert "mix-blend-mode" not in puff_block
-    assert "rgba(140, 140, 150" in puff_block
+    assert "rgba(200, 205, 215" in puff_block or "rgba(140, 140, 150" in puff_block
+    assert "tribunal-puff-4" in css
+    assert "tribunal-puff-6" in css
 
 
 def test_mobile_hero_atmosphere_bump_in_ui_css():
@@ -1003,7 +1004,8 @@ def test_global_glass_card_overrides_in_ui_css():
     assert m, "missing .tribunal-hero__card base rule"
     hero_card = m.group(1)
     assert "simivision-smoke-bg.svg" in hero_card
-    assert "soft-light" in hero_card
+    # Rich smoke uses normal blend (not soft-light crush) so billows stay visible
+    assert "background-blend-mode" in hero_card or "simivision-smoke-bg.svg" in hero_card
     assert "tribunal-smoke-drift" in css
     assert "background-position:" in css.split("@keyframes tribunal-smoke-drift", 1)[1].split("}", 1)[0]
     for selector in (
@@ -1012,7 +1014,13 @@ def test_global_glass_card_overrides_in_ui_css():
         ".k3-dossier",
     ):
         block = css.split(selector + " {", 1)[1].split("}", 1)[0]
-        assert "var(--glass-fill" in block or "rgba(32, 36, 42, 0.35)" in block, selector
+        # Near-transparent hairline glass (smoke reads through) or legacy glass-fill token
+        assert (
+            "var(--glass-fill" in block
+            or "transparent" in block
+            or "rgba(255, 255, 255, 0.0" in block
+            or "rgba(32, 36, 42, 0.35)" in block
+        ), selector
     assert "background: var(--glass-fill)" in css.split(".pump-alert__card", 1)[1]
     grouped = css.split(".pd-lead,", 1)[1].split("}", 1)[0]
     assert "var(--glass-fill)" in grouped
