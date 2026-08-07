@@ -226,3 +226,17 @@ async def api_message_intel_social(limit: int = Query(default=6, ge=1, le=24)):
         pass
     rows = await run_in_threadpool(build_social_sentiment_rows, subnets, limit=limit)
     return {"status": "success", "rows": rows, "empty": len(rows) == 0}
+
+
+@message_intel_router.get("/api/message-intel/subnet-conviction")
+async def api_subnet_telegram_conviction(
+    limit: int = Query(default=12, ge=1, le=50),
+):
+    """Evidence-qualified current Telegram consensus, grouped by subnet."""
+    return await run_in_threadpool(engine.list_subnet_telegram_conviction, limit=limit)
+
+
+@message_intel_router.get("/api/message-intel/subnet-conviction/{netuid}")
+async def api_subnet_telegram_conviction_detail(netuid: int):
+    """One subnet's consensus plus current calls and resolved proof receipts."""
+    return await run_in_threadpool(engine.list_subnet_telegram_conviction, netuid=netuid, limit=1)

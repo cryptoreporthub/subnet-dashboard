@@ -13,6 +13,7 @@ from internal.message_intel.store import get_db
 from internal.message_intel.proof import (
     MIN_LEADERBOARD_SAMPLE,
     classify_call,
+    resolve_direction,
     stable_author_id,
 )
 
@@ -20,6 +21,16 @@ logger = logging.getLogger(__name__)
 
 _EMOJI_WEIGHTS = {"🔥": 3, "❤": 2, "❤️": 2, "👍": 1, "🚀": 2, "💯": 2}
 _SENTIMENT_LABEL = {1.0: "Bullish", 0.0: "Cautious", -1.0: "Bearish"}
+
+# Public Telegram consensus methodology.  These constants are deliberately
+# conservative: the signal is a small, auditable evidence layer, not a proxy
+# for a trading recommendation.
+CONVICTION_WINDOW_HOURS = 72
+CONVICTION_HALF_LIFE_HOURS = 24
+CONVICTION_MIN_CALLS = 2
+CONVICTION_MIN_CONTRIBUTORS = 2
+CONVICTION_MIN_AUTHOR_SAMPLE = MIN_LEADERBOARD_SAMPLE
+CONVICTION_MIN_JURY_SCORE = 60.0
 
 
 def _parse_ts(raw: Optional[str]) -> Optional[datetime]:
@@ -634,6 +645,225 @@ def _proof_rows(db=None, *, days: Optional[int] = None, author_id: Optional[str]
             continue
         out.append(row)
     return out
+
+
+def _conviction_rows(db=None) -> List[Dict[str, Any]]:
+    """Load only the fields needed to audit current calls and past receipts."""
+    database = db or get_db()
+    with database._connect() as conn:
+        rows = conn.execute(
+            """SELECT m.id, m.source, m.author_id, m.author_name, m.author_username,
+                      m.content, m.timestamp, m.created_at, a.entities_json,
+                      v.verdict, v.predicted_direction, v.conviction,
+                      ps.tao_usd_price, ps.netuid AS snap_netuid,
+                      po.outcome, po.pump_pct_max, po.price_24h
+               FROM messages m
+               LEFT JOIN message_analysis a ON a.message_id = m.id
+               LEFT JOIN message_verdicts v ON v.message_id = m.id
+               LEFT JOIN price_snapshots ps ON ps.message_id = m.id
+               LEFT JOIN price_outcomes po ON po.message_id = m.id
+               WHERE m.source = 'telegram'
+               ORDER BY m.id DESC LIMIT 3000"""
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def _conviction_methodology() -> Dict[str, Any]:
+    return {
+        "window_hours": CONVICTION_WINDOW_HOURS,
+        "freshness_half_life_hours": CONVICTION_HALF_LIFE_HOURS,
+        "minimum_calls": CONVICTION_MIN_CALLS,
+        "minimum_contributors": CONVICTION_MIN_CONTRIBUTORS,
+        "minimum_author_resolved_calls": CONVICTION_MIN_AUTHOR_SAMPLE,
+        "minimum_call_conviction": CONVICTION_MIN_JURY_SCORE,
+        "score_range": [-100, 100],
+        "formula": (
+            "Each current up/down call is weighted by jury conviction, "
+            "a 24-hour freshness decay, and the caller's smoothed resolved-call accuracy. "
+            "Only callers with at least 5 resolved qualifying calls contribute."
+        ),
+        "disclaimer": "Telegram consensus is evidence-qualified community commentary, not investment advice.",
+    }
+
+
+def _author_reliability_for_conviction(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """Reliability uses resolved qualified receipts only, with beta smoothing."""
+    stats: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        proof = classify_call(row)
+        if not proof["resolved"] or proof["status"] not in ("hit", "miss"):
+            continue
+        aid = stable_author_id(row)
+        item = stats.setdefault(aid, {"scored": 0, "hits": 0})
+        item["scored"] += 1
+        if proof["status"] == "hit":
+            item["hits"] += 1
+    for item in stats.values():
+        # Beta(2,2) prior avoids treating a small perfect record as certainty.
+        item["accuracy"] = (item["hits"] + 2.0) / (item["scored"] + 4.0)
+        item["qualified"] = item["scored"] >= CONVICTION_MIN_AUTHOR_SAMPLE
+    return stats
+
+
+def _current_call_receipt(row: Dict[str, Any], direction: str, reliability: Dict[str, Any], age_hours: float, weight: float) -> Dict[str, Any]:
+    return {
+        "message_id": int(row["id"]),
+        "author_id": stable_author_id(row),
+        "author_name": row.get("author_name") or "Unknown",
+        "author_username": row.get("author_username") or "",
+        "content": str(row.get("content") or "")[:280],
+        "timestamp": row.get("timestamp") or row.get("created_at"),
+        "direction": direction,
+        "jury_conviction": round(float(row.get("conviction") or 0.0), 1),
+        "age_hours": round(age_hours, 1),
+        "author_accuracy": round(float(reliability["accuracy"]) * 100.0, 1),
+        "author_resolved_calls": int(reliability["scored"]),
+        "weight": round(weight, 4),
+    }
+
+
+def build_subnet_telegram_conviction(
+    *,
+    netuid: Optional[int] = None,
+    limit: int = 12,
+    db=None,
+    registry_names: Optional[Dict[int, str]] = None,
+) -> Dict[str, Any]:
+    """Evidence-weighted current Telegram direction per subnet.
+
+    Resolved outcomes establish caller reliability; they never become current
+    directional votes.  Current votes are explicit up/down calls in a rolling
+    72-hour window from authors with enough independently resolved history.
+    """
+    now = datetime.now(timezone.utc)
+    names = registry_names or {}
+    methodology = _conviction_methodology()
+    try:
+        rows = _conviction_rows(db)
+    except Exception as exc:
+        logger.warning("subnet Telegram conviction query failed: %s", exc)
+        return {"items": [], "count": 0, "empty": True, "methodology": methodology}
+
+    reliability = _author_reliability_for_conviction(rows)
+    buckets: Dict[int, Dict[str, Any]] = {}
+    cutoff = now - timedelta(hours=CONVICTION_WINDOW_HOURS)
+    for row in rows:
+        timestamp = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if timestamp is None or timestamp < cutoff:
+            continue
+        direction = resolve_direction(row.get("verdict"), row.get("predicted_direction"))
+        try:
+            jury_score = float(row.get("conviction") or 0.0)
+        except (TypeError, ValueError):
+            continue
+        if direction not in ("up", "down") or jury_score < CONVICTION_MIN_JURY_SCORE:
+            continue
+        author = reliability.get(stable_author_id(row))
+        if not author or not author["qualified"]:
+            continue
+        age_hours = max(0.0, (now - timestamp).total_seconds() / 3600.0)
+        freshness = 0.5 ** (age_hours / CONVICTION_HALF_LIFE_HOURS)
+        weight = (jury_score / 100.0) * freshness * float(author["accuracy"])
+        for subnet_id in _netuids_from_row(row):
+            if netuid is not None and int(subnet_id) != int(netuid):
+                continue
+            bucket = buckets.setdefault(
+                int(subnet_id),
+                {"signed_weight": 0.0, "total_weight": 0.0, "calls": [], "contributors": set()},
+            )
+            bucket["signed_weight"] += weight * (1.0 if direction == "up" else -1.0)
+            bucket["total_weight"] += weight
+            bucket["contributors"].add(stable_author_id(row))
+            bucket["calls"].append(_current_call_receipt(row, direction, author, age_hours, weight))
+
+    items: List[Dict[str, Any]] = []
+    for subnet_id, bucket in buckets.items():
+        calls = sorted(bucket["calls"], key=lambda call: call["timestamp"] or "", reverse=True)
+        call_count, contributor_count = len(calls), len(bucket["contributors"])
+        sufficient = call_count >= CONVICTION_MIN_CALLS and contributor_count >= CONVICTION_MIN_CONTRIBUTORS
+        score = 0.0
+        if bucket["total_weight"] > 0:
+            score = max(-100.0, min(100.0, bucket["signed_weight"] / bucket["total_weight"] * 100.0))
+        label = "mixed"
+        if sufficient and score >= 20:
+            label = "bullish"
+        elif sufficient and score <= -20:
+            label = "bearish"
+        latest = calls[0]["timestamp"] if calls else None
+        items.append(
+            {
+                "netuid": subnet_id,
+                "name": names.get(subnet_id) or f"Subnet {subnet_id}",
+                "ready": sufficient,
+                "state": "ready" if sufficient else "insufficient_data",
+                "label": label if sufficient else None,
+                "score": round(score, 1) if sufficient else None,
+                "call_count": call_count,
+                "contributor_count": contributor_count,
+                "latest_call_at": latest,
+                "current_calls": calls[:6],
+                "resolved_receipts": [],
+                "insufficient_reason": None if sufficient else (
+                    f"Needs {CONVICTION_MIN_CALLS} current calls from "
+                    f"{CONVICTION_MIN_CONTRIBUTORS} evidence-qualified contributors."
+                ),
+            }
+        )
+
+    # Include honest empty-state rows for explicitly requested subnets and for
+    # recent subnet mentions that cannot yet meet the evidence threshold.
+    recent_subnets: Set[int] = set()
+    for row in rows:
+        timestamp = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if timestamp is not None and timestamp >= cutoff:
+            recent_subnets.update(_netuids_from_row(row))
+    if netuid is not None:
+        recent_subnets.add(int(netuid))
+    existing = {int(item["netuid"]) for item in items}
+    for subnet_id in sorted(recent_subnets - existing):
+        items.append(
+            {
+                "netuid": subnet_id,
+                "name": names.get(subnet_id) or f"Subnet {subnet_id}",
+                "ready": False,
+                "state": "insufficient_data",
+                "label": None,
+                "score": None,
+                "call_count": 0,
+                "contributor_count": 0,
+                "latest_call_at": None,
+                "current_calls": [],
+                "resolved_receipts": [],
+                "insufficient_reason": (
+                    f"Needs {CONVICTION_MIN_CALLS} current calls from "
+                    f"{CONVICTION_MIN_CONTRIBUTORS} evidence-qualified contributors."
+                ),
+            }
+        )
+
+    # Add a small auditable receipt set per subnet, independently of current
+    # freshness, so visitors can see why contributing callers are qualified.
+    for item in items:
+        contributors = {call["author_id"] for call in item["current_calls"]}
+        receipts = []
+        for row in rows:
+            if item["netuid"] not in _netuids_from_row(row) or stable_author_id(row) not in contributors:
+                continue
+            proof = classify_call(row)
+            if proof["resolved"]:
+                receipts.append(_receipt(row, proof))
+            if len(receipts) >= 6:
+                break
+        item["resolved_receipts"] = receipts
+
+    items.sort(key=lambda item: (item["ready"], abs(item["score"] or 0), item["call_count"]), reverse=True)
+    return {
+        "items": items[:max(1, int(limit))],
+        "count": len(items),
+        "empty": not items,
+        "generated_at": now.isoformat().replace("+00:00", "Z"),
+        "methodology": methodology,
+    }
 
 
 def proof_for_message(row: Dict[str, Any]) -> Dict[str, Any]:

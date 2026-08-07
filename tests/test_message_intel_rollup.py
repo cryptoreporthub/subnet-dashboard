@@ -316,3 +316,49 @@ def test_trending_falls_back_to_24h_when_1h_empty(monkeypatch):
     day = rollup.build_trending_subnets(rank_hours=24, window_hours=24)
     assert {r["netuid"] for r in day} == {59, 63}
     assert all(r.get("window") == "24h" for r in day)
+
+
+def test_subnet_telegram_conviction_weights_qualified_callers_and_bounds_score(monkeypatch):
+    """Only evidence-qualified authors vote; opposing calls produce mixed."""
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc)
+    def row(i, author, direction, outcome=None, hours=1):
+        return {
+            "id": i, "source": "telegram", "author_id": author, "author_name": author,
+            "timestamp": (now - timedelta(hours=hours)).isoformat(), "content": "SN7 call",
+            "entities_json": json.dumps({"subnets": ["Subnet 7"]}), "verdict": "bullish" if direction == "up" else "bearish",
+            "predicted_direction": direction, "conviction": 80, "tao_usd_price": 1.0,
+            "outcome": outcome, "pump_pct_max": 5 if outcome == "pump" else None,
+        }
+    # Each caller has five scored resolved calls, then one fresh current call.
+    rows = [row(i, "bull", "up", "pump", hours=96 + i) for i in range(1, 6)]
+    rows += [row(i, "bear", "down", "dump", hours=96 + i) for i in range(6, 11)]
+    rows += [row(11, "bull", "up"), row(12, "bear", "down")]
+    monkeypatch.setattr(rollup, "_conviction_rows", lambda db=None: rows)
+    result = rollup.build_subnet_telegram_conviction()
+    item = result["items"][0]
+    assert item["ready"] is True
+    assert item["label"] == "mixed"
+    assert -100 <= item["score"] <= 100
+    assert item["call_count"] == 2
+    assert item["contributor_count"] == 2
+    assert len(item["resolved_receipts"]) >= 1
+
+
+def test_subnet_telegram_conviction_insufficient_and_stale_calls(monkeypatch):
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc)
+    base = {
+        "id": 1, "source": "telegram", "author_id": "a", "author_name": "A",
+        "content": "SN8 call", "entities_json": json.dumps({"subnets": ["Subnet 8"]}),
+        "verdict": "bullish", "predicted_direction": "up", "conviction": 80, "tao_usd_price": 1.0,
+    }
+    history = [{**base, "id": i, "timestamp": (now - timedelta(hours=100 + i)).isoformat(), "outcome": "pump", "pump_pct_max": 4} for i in range(2, 7)]
+    stale = {**base, "id": 9, "timestamp": (now - timedelta(hours=80)).isoformat(), "outcome": None}
+    monkeypatch.setattr(rollup, "_conviction_rows", lambda db=None: [*history, stale])
+    item = rollup.build_subnet_telegram_conviction()["items"][0]
+    assert item["state"] == "insufficient_data"
+    assert item["score"] is None
+    assert item["call_count"] == 0

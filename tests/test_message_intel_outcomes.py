@@ -163,3 +163,15 @@ def test_telegram_listener_uses_snapshot_true():
 
     src = inspect.getsource(listener_service._on_telegram_message)
     assert "snapshot_price=True" in src
+
+
+def test_subnet_telegram_conviction_api_empty_contract(client):
+    listed = client.get("/api/message-intel/subnet-conviction").json()
+    detail = client.get("/api/message-intel/subnet-conviction/7").json()
+    assert listed["status"] == "success"
+    assert listed["empty"] is True
+    assert listed["items"] == []
+    assert listed["methodology"]["score_range"] == [-100, 100]
+    assert detail["status"] == "success"
+    assert detail["item"]["state"] == "insufficient_data"
+    assert detail["item"]["score"] is None

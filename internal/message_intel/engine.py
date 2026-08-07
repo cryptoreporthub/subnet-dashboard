@@ -446,6 +446,22 @@ def list_authors(*, days: int = 7, limit: int = 8) -> Dict[str, Any]:
         }
 
 
+def list_subnet_telegram_conviction(*, netuid: Optional[int] = None, limit: int = 12) -> Dict[str, Any]:
+    """Public, bounded Telegram-only consensus view; synchronous DB work is routed off-loop."""
+    from internal.message_intel.rollup import build_subnet_telegram_conviction
+
+    result = build_subnet_telegram_conviction(
+        netuid=netuid, limit=limit, db=get_db(), registry_names=_registry_subnet_names()
+    )
+    items = result.get("items") or []
+    return {
+        "status": "success",
+        **result,
+        "item": items[0] if netuid is not None and items else None,
+        "empty": not items,
+    }
+
+
 def list_topics(*, limit: int = 12) -> Dict[str, Any]:
     from internal.message_intel.rollup import build_topics
 

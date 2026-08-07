@@ -29,6 +29,7 @@
   var detailPanel = document.getElementById("message-intel-detail");
   var callersEl = document.getElementById("message-intel-callers");
   var callersBody = document.getElementById("message-intel-callers-body");
+  var consensusBody = document.getElementById("message-intel-consensus-body");
   var convFiltersEl = document.getElementById("message-intel-conv-filters");
   var subnetFiltersEl = document.getElementById("message-intel-subnet-filters");
   var topicFiltersEl = document.getElementById("message-intel-topic-filters");
@@ -435,6 +436,49 @@
       callersBody.innerHTML = '<p class="empty">Caller proof is temporarily unavailable.</p>';
     } finally {
       callersBody.setAttribute("aria-busy", "false");
+    }
+  }
+
+  function renderConsensus(payload) {
+    if (!consensusBody) return;
+    var items = (payload && payload.items) || [];
+    if (!items.length) {
+      consensusBody.innerHTML = '<p class="empty">No evidence-qualified current Telegram calls yet. This stays empty until callers have resolved history and fresh directional calls.</p>';
+      return;
+    }
+    consensusBody.innerHTML = '<div class="message-intel__consensus-list">' + items.map(function (row) {
+      var state = row.ready ? String(row.label || "mixed") : "insufficient";
+      var score = row.ready ? (Number(row.score) > 0 ? "+" : "") + Math.round(Number(row.score)) : "—";
+      var calls = row.current_calls || [];
+      var receipts = row.resolved_receipts || [];
+      var current = calls.map(function (call) {
+        var who = call.author_username ? "@" + String(call.author_username).replace(/^@/, "") : call.author_name;
+        return '<button type="button" class="message-intel__consensus-receipt" data-receipt-id="' + esc(call.message_id) + '">' +
+          '<b>' + esc(String(call.direction).toUpperCase()) + '</b> ' + esc(who) + ' · ' + esc(call.jury_conviction) + '% jury · ' + esc(call.author_accuracy) + '% proven</button>';
+      }).join("");
+      var resolved = receipts.map(function (receipt) {
+        return '<button type="button" class="message-intel__consensus-receipt" data-receipt-id="' + esc(receipt.message_id) + '">' + proofPill(receipt.proof) + esc(snippet(receipt.content, 74)) + '</button>';
+      }).join("");
+      return '<article class="message-intel__consensus-row message-intel__consensus-row--' + esc(state) + '">' +
+        '<div class="message-intel__consensus-head"><a href="/subnet/' + esc(row.netuid) + '"><b>' + esc(row.name) + '</b> <span>SN' + esc(row.netuid) + '</span></a>' +
+        '<strong>' + esc(row.ready ? String(row.label).toUpperCase() + ' ' + score : "INSUFFICIENT DATA") + '</strong></div>' +
+        '<p>' + esc(row.call_count) + ' current calls · ' + esc(row.contributor_count) + ' proven contributors' +
+        (row.ready ? ' · bounded score ' + esc(score) + '/100' : ' · ' + esc(row.insufficient_reason || "") ) + '</p>' +
+        '<details><summary>Inspect ' + esc(calls.length) + ' current calls and ' + esc(receipts.length) + ' resolved receipts</summary>' +
+        '<div class="message-intel__consensus-receipts"><p>Current calls</p>' + (current || '<span>No current calls.</span>') +
+        '<p>Resolved-call receipts</p>' + (resolved || '<span>No matching resolved receipts available.</span>') + '</div></details></article>';
+    }).join("") + '</div><p class="message-intel__caller-disclaimer">Telegram consensus is evidence-qualified community commentary, not investment advice.</p>';
+    consensusBody.querySelectorAll("[data-receipt-id]").forEach(function (button) {
+      button.addEventListener("click", function () { toggleMessageDetail(button.getAttribute("data-receipt-id")); });
+    });
+  }
+
+  async function hydrateConsensus() {
+    if (!consensusBody) return;
+    try {
+      renderConsensus(await fetchJsonWithRetry("/api/message-intel/subnet-conviction?limit=8"));
+    } catch (e) {
+      consensusBody.innerHTML = '<p class="empty">Evidence-weighted Telegram consensus is temporarily unavailable.</p>';
     }
   }
 
@@ -1354,6 +1398,7 @@
       renderSummary24h((payload.meta && payload.meta.summary_24h) || null);
       renderTelegramProof((payload.meta && payload.meta.telegram_proof) || null);
       hydrateCallerLeaderboard();
+      hydrateConsensus();
       renderHighConvictionStrip((payload.meta && payload.meta.high_conviction_strip) || []);
       renderSubnetFilterChips(trending);
       syncFilterChipStates();
