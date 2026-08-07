@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import asyncio
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query
@@ -148,7 +149,7 @@ async def api_backtest(limit: int = Query(default=200, ge=1, le=500)):
 async def api_market_drivers():
     """What predicted token price moves — learned from resolved predictions + scenarios."""
     try:
-        return {"status": "success", **learned_price_drivers()}
+        return {"status": "success", **await asyncio.to_thread(learned_price_drivers)}
     except Exception as exc:
         logger.warning("market-drivers failed: %s", exc)
         return {
@@ -164,7 +165,7 @@ async def api_market_drivers():
 async def api_market_drivers_subnet(netuid: int):
     """Per-subnet driver card: price vs staking yield, grade, learned context."""
     try:
-        payload = build_driver_card_for_netuid(netuid)
+        payload = await asyncio.to_thread(build_driver_card_for_netuid, netuid)
         return payload
     except Exception as exc:
         logger.warning("market-drivers SN%s failed: %s", netuid, exc)

@@ -450,6 +450,12 @@ _CACHE_PATHS = {
 }
 
 
+_DASHBOARD_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+    max_workers=max(2, int(os.environ.get("DASHBOARD_WORKER_POOL_SIZE", "4"))),
+    thread_name_prefix="dashboard-work",
+)
+
+
 def load_data(filename):
     if os.path.exists(filename):
         with open(filename, "r") as f:
@@ -494,8 +500,20 @@ _ALLOWED_ORIGINS = frozenset(
 
 @app.middleware("http")
 async def add_cors_headers(request: Request, call_next):
-    """Allow dashboard embedding and cross-origin API access (parity with prior Flask behavior)."""
+    """Allow dashboard embedding and expose route timing for dashboard waterfalls."""
+    started = time.perf_counter()
     response = await call_next(request)
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    # Browser DevTools exposes this directly and structured logs retain the
+    # route-level baseline without adding a second telemetry dependency.
+    response.headers["Server-Timing"] = f"app;dur={elapsed_ms:.1f}"
+    if request.url.path.startswith("/api/"):
+        logger.info(
+            "dashboard_request path=%s status=%s duration_ms=%.1f",
+            request.url.path,
+            response.status_code,
+            elapsed_ms,
+        )
     origin = request.headers.get("origin")
     if origin and origin in _ALLOWED_ORIGINS:
         response.headers["Access-Control-Allow-Origin"] = origin
@@ -549,12 +567,21 @@ _PUMP_ALERTS_TTL = float(os.environ.get("PUMP_ALERTS_CACHE_SECONDS", "30"))
 _PUMP_ALERTS_LOCK = threading.Lock()
 _PUMP_ALERTS_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 _WEIGHED_BUILD_LOCK = threading.Lock()
+_TOP_PICKS_TTL = float(os.environ.get("TOP_PICKS_CACHE_SECONDS", "45"))
+_TOP_PICKS_LOCK = threading.Lock()
+_TOP_PICKS_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+_TOP_PICKS_BG_LOCK = threading.Lock()
+_TOP_PICKS_BG_REFRESHING = False
 
 
 async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
-    """Run sync work off the event loop; raise TimeoutError on soft deadline."""
+    """Run dashboard work in its bounded pool, never the default request executor."""
     try:
-        return await asyncio.wait_for(asyncio.to_thread(fn), timeout=timeout_s)
+        loop = asyncio.get_running_loop()
+        return await asyncio.wait_for(
+            loop.run_in_executor(_DASHBOARD_EXECUTOR, fn),
+            timeout=timeout_s,
+        )
     except asyncio.TimeoutError:
         logger.warning("%s timed out after %.1fs", label, timeout_s)
         raise
@@ -2281,15 +2308,10 @@ def _safe_simivision_payload(
             and r.get("deliberation_state") == "FADING"
             and r.get("netuid") is not None
         }
-        market_context = None
-        try:
-            market_context = _market_context_with_weights(subnets)
-        except Exception:
-            market_context = {}
         caution_cells = build_caution_cells(
             subnets,
             daily_pick=daily_pick,
-            market_context=market_context,
+            market_context=market_context or {},
             fading_netuids=fading,
         )
     except Exception as exc:
@@ -2514,58 +2536,111 @@ async def api_simivision():
         return {"top": [], "meta": {"count": 0, "source": "error"}}
 
 
+def _build_top_picks() -> Dict[str, Any]:
+    from internal.council.score_cache import score_universe
+
+    hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
+    subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
+    if not subnets:
+        subnets, _ = _get_subnets_hydrate()
+    subnets = _cap_subnets_for_scoring(subnets)
+    if not _PICKS_ENGINE:
+        return {"hour_picks": [], "day_picks": [], "error": "pick engine unavailable"}
+    market_context = _market_context_with_weights(subnets)
+    hour_scored, day_scored = score_universe(
+        subnets,
+        market_context,
+        score_hour=score_subnet_for_hour,
+        score_day=score_subnet_for_day,
+    )
+    hour_scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
+    day_scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
+
+    def _format(item):
+        sn, sc = item["subnet"], item["score"]
+        return {
+            "netuid": sn.get("netuid"),
+            "name": sn.get("name"),
+            "symbol": sn.get("symbol"),
+            "score": sc["total_score"],
+            "confidence": sc["confidence"],
+            "expert_contributions": sc["expert_contributions"],
+            "signals": {
+                "price_change_24h": sn.get("price_change_24h"),
+                "price_change_7d": sn.get("price_change_7d"),
+                "emission": sn.get("emission"),
+                "apy": sn.get("apy"),
+                "volume": sn.get("volume"),
+            },
+            "scenario_tags": sc["scenario_tags"],
+        }
+
+    return {
+        "hour_picks": [_format(i) for i in hour_scored[:3]],
+        "day_picks": [_format(i) for i in day_scored[:3]],
+    }
+
+
+def _kick_top_picks_background_refresh() -> None:
+    global _TOP_PICKS_BG_REFRESHING
+    with _TOP_PICKS_BG_LOCK:
+        if _TOP_PICKS_BG_REFRESHING:
+            return
+        _TOP_PICKS_BG_REFRESHING = True
+
+    def _run() -> None:
+        global _TOP_PICKS_BG_REFRESHING
+        try:
+            if not _TOP_PICKS_LOCK.acquire(blocking=False):
+                return
+            try:
+                payload = _build_top_picks()
+                if not payload.get("error"):
+                    _TOP_PICKS_CACHE.update(payload=payload, at=time.time())
+            finally:
+                _TOP_PICKS_LOCK.release()
+        except Exception as exc:
+            logger.warning("top-picks background refresh failed: %s", exc)
+        finally:
+            with _TOP_PICKS_BG_LOCK:
+                _TOP_PICKS_BG_REFRESHING = False
+
+    threading.Thread(target=_run, name="top-picks-cache-refresh", daemon=True).start()
+
+
+def _build_top_picks_cached() -> Dict[str, Any]:
+    now = time.time()
+    cached = _TOP_PICKS_CACHE.get("payload")
+    if isinstance(cached, dict) and now - float(_TOP_PICKS_CACHE.get("at") or 0) < _TOP_PICKS_TTL:
+        return cached
+    if isinstance(cached, dict):
+        _kick_top_picks_background_refresh()
+        return cached
+    # A single cold caller earns a bounded real build so the first visible
+    # horizon panel stays populated. Everyone else gets an honest busy
+    # shape while that build is in flight rather than piling onto scoring.
+    if not _TOP_PICKS_LOCK.acquire(blocking=False):
+        return {"hour_picks": [], "day_picks": [], "status": "busy"}
+    try:
+        payload = _build_top_picks()
+        if not payload.get("error"):
+            _TOP_PICKS_CACHE.update(payload=payload, at=time.time())
+        return payload
+    finally:
+        _TOP_PICKS_LOCK.release()
+
+
 @app.get("/api/top-picks")
 async def api_top_picks():
     """Top 3 subnets by short-horizon (hour) and 24h (day) Council scores."""
 
-    def _build():
-        from internal.council.score_cache import score_universe
-
-        hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
-        subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
-        if not subnets:
-            subnets, _ = _get_subnets_hydrate()
-        subnets = _cap_subnets_for_scoring(subnets)
-        if not _PICKS_ENGINE:
-            return {"hour_picks": [], "day_picks": [], "error": "pick engine unavailable"}
-        market_context = _market_context_with_weights(subnets)
-        hour_scored, day_scored = score_universe(
-            subnets,
-            market_context,
-            score_hour=score_subnet_for_hour,
-            score_day=score_subnet_for_day,
-        )
-        hour_scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
-        day_scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
-
-        def _format(item):
-            sn, sc = item["subnet"], item["score"]
-            return {
-                "netuid": sn.get("netuid"),
-                "name": sn.get("name"),
-                "symbol": sn.get("symbol"),
-                "score": sc["total_score"],
-                "confidence": sc["confidence"],
-                "expert_contributions": sc["expert_contributions"],
-                "signals": {
-                    "price_change_24h": sn.get("price_change_24h"),
-                    "price_change_7d": sn.get("price_change_7d"),
-                    "emission": sn.get("emission"),
-                    "apy": sn.get("apy"),
-                    "volume": sn.get("volume"),
-                },
-                "scenario_tags": sc["scenario_tags"],
-            }
-
-        return {
-            "hour_picks": [_format(i) for i in hour_scored[:3]],
-            "day_picks": [_format(i) for i in day_scored[:3]],
-        }
-
     try:
-        return await _to_thread_timeout(_build, PICK_HANDLER_TIMEOUT, label="top-picks")
+        return await _to_thread_timeout(_build_top_picks_cached, PICK_HANDLER_TIMEOUT, label="top-picks")
     except asyncio.TimeoutError:
         logger.warning("top-picks timed out after %.1fs", PICK_HANDLER_TIMEOUT)
+        cached = _TOP_PICKS_CACHE.get("payload")
+        if isinstance(cached, dict):
+            return cached
         return {"hour_picks": [], "day_picks": [], "status": "timeout"}
     except Exception as exc:
         logger.warning("top-picks failed: %s", exc)

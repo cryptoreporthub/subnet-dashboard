@@ -7,6 +7,10 @@ surfaces which signals/scenarios actually predicted price moves.
 
 from __future__ import annotations
 
+import copy
+import os
+import threading
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from internal.subnets.apy import subnet_apy_percent, undervalued_verdict
@@ -16,6 +20,9 @@ YIELD_TRAP_APY_PCT = 15.0
 YIELD_TRAP_PRICE_7D_PCT = -2.0
 MIN_SIGNAL_SAMPLES = 5
 MIN_SCENARIO_SAMPLES = 3
+_LEARNED_DRIVERS_TTL = float(os.environ.get("MARKET_DRIVERS_CACHE_SECONDS", "45"))
+_LEARNED_DRIVERS_LOCK = threading.Lock()
+_LEARNED_DRIVERS_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 
 
 def _f(value: Any, default: float = 0.0) -> float:
@@ -259,6 +266,14 @@ def _yield_trap_learning(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 def learned_price_drivers(*, min_signal_n: int = MIN_SIGNAL_SAMPLES) -> Dict[str, Any]:
     """Aggregate learning-loop evidence for what predicted token *price* moves."""
+    now = time.monotonic()
+    cached = _LEARNED_DRIVERS_CACHE.get("payload")
+    if (
+        min_signal_n == MIN_SIGNAL_SAMPLES
+        and isinstance(cached, dict)
+        and now - float(_LEARNED_DRIVERS_CACHE.get("at") or 0) < _LEARNED_DRIVERS_TTL
+    ):
+        return copy.deepcopy(cached)
     rows = _gradeable_resolved()
     signals = _signal_bucket_stats(rows)
     scenarios = _scenario_bucket_stats()
@@ -285,7 +300,7 @@ def learned_price_drivers(*, min_signal_n: int = MIN_SIGNAL_SAMPLES) -> Dict[str
     ]
 
     ready = bool(top_signals or top_scenarios or yield_trap.get("ready"))
-    return {
+    payload = {
         "ready": ready,
         "graded_predictions": len(rows),
         "min_signal_samples": min_signal_n,
@@ -297,6 +312,10 @@ def learned_price_drivers(*, min_signal_n: int = MIN_SIGNAL_SAMPLES) -> Dict[str
             "staking APY is tracked separately and never treated as price appreciation."
         ),
     }
+    if min_signal_n == MIN_SIGNAL_SAMPLES:
+        with _LEARNED_DRIVERS_LOCK:
+            _LEARNED_DRIVERS_CACHE.update(at=time.monotonic(), payload=payload)
+    return copy.deepcopy(payload)
 
 
 def _risk_label(decomp: Dict[str, Any], sn: Dict[str, Any]) -> str:
@@ -386,10 +405,14 @@ def _why_lines(
     return lines[:4]
 
 
-def build_subnet_driver_card(sn: Dict[str, Any]) -> Dict[str, Any]:
+def build_subnet_driver_card(
+    sn: Dict[str, Any],
+    *,
+    learned: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Plain-English driver card — never labels APY as '7d yield' price gain."""
     decomp = decompose_returns(sn)
-    learned = learned_price_drivers()
+    learned = learned if isinstance(learned, dict) else learned_price_drivers()
     risk = _risk_label(decomp, sn)
     grade = _letter_grade(decomp, risk)
     momentum = _momentum_arrow(decomp["price_change_7d"])

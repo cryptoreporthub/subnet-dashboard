@@ -3999,6 +3999,11 @@
       try {
         dpResult = await fetchJsonRetry('/api/daily-pick', 35000, 3);
         renderDailyPick(dpResult);
+        // Make the Daily Call immediately reusable by SSE / hot-refresh
+        // listeners instead of leaving a race window before tier-2 completes.
+        window.HomeHydrateCache = window.HomeHydrateCache || {};
+        window.HomeHydrateCache.dailyPick = lastDailyPickPayload;
+        window.HomeHydrateCache.at = Date.now();
         prefetchFocusJudges(dpResult);
       } catch (e) {
         console.warn('[cockpit_hydrate] daily-pick fetch failed', e);

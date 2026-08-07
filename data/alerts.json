@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-07T14:31:58.648467Z",
+  "updated_at": "2026-08-07T16:50:40.984915Z",
   "alerts": [
     {
       "alert_type": "subnet_price_flash",
@@ -7111,6 +7111,36 @@
       "active": true,
       "timestamp": "2026-08-07T14:31:58.648310Z",
       "id": "social_intel-2026-08-07T14:31:58.648310Z"
+    },
+    {
+      "alert_type": "subnet_price_flash",
+      "severity": "info",
+      "message": "SN92 Enclave moved -18.2% in 24h",
+      "details": {
+        "subnet_id": 92,
+        "name": "Enclave",
+        "price_change_24h": -18.22
+      },
+      "dedupe_key": "price_flash_92",
+      "subnet_id": 92,
+      "timestamp": "2026-08-07T16:50:40.968488Z",
+      "active": true,
+      "id": "subnet_price_flash-2026-08-07T16:50:40.968488Z"
+    },
+    {
+      "alert_type": "subnet_price_flash",
+      "severity": "info",
+      "message": "SN118 Ditto moved -19.8% in 24h",
+      "details": {
+        "subnet_id": 118,
+        "name": "Ditto",
+        "price_change_24h": -19.8322
+      },
+      "dedupe_key": "price_flash_118",
+      "subnet_id": 118,
+      "timestamp": "2026-08-07T16:50:40.984791Z",
+      "active": true,
+      "id": "subnet_price_flash-2026-08-07T16:50:40.984791Z"
     }
   ]
 }

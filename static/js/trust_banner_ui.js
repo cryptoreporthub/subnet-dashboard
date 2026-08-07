@@ -66,6 +66,10 @@
   }
 
   function loadTrustBanner() {
+    if (window.SimiLearning && window.SimiLearning.stats) {
+      applyPayload(window.SimiLearning.stats);
+      return;
+    }
     fetchJson("/api/learning/stats")
       .then(function (payload) {
         if (payload) {
@@ -80,10 +84,17 @@
       .catch(function () {});
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", loadTrustBanner);
-  } else {
-    loadTrustBanner();
+  // Cockpit hydration owns the first learning-stats request. This listener
+  // still covers pages where the cockpit script is intentionally absent.
+  document.addEventListener("home:hydrate-cache", function () {
+    if (window.SimiLearning && window.SimiLearning.stats) applyPayload(window.SimiLearning.stats);
+  });
+  if (!document.documentElement.dataset.hydrate) {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", loadTrustBanner);
+    } else {
+      loadTrustBanner();
+    }
   }
 
   document.addEventListener("home:cockpit-tick", loadTrustBanner);

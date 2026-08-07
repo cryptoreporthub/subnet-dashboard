@@ -1,14 +1,17 @@
 /** Shared JSON fetch with hard timeout (single-worker Fly safety). */
 (function (global) {
   'use strict';
+  var inFlight = {};
 
   function fetchJson(url, ms) {
+    var key = String(url);
+    if (inFlight[key]) return inFlight[key];
     ms = ms == null ? 12000 : ms;
     var ctrl = new AbortController();
     var timer = setTimeout(function () {
       ctrl.abort();
     }, ms);
-    return fetch(url, {
+    var request = fetch(url, {
       headers: { Accept: 'application/json' },
       signal: ctrl.signal,
     })
@@ -21,6 +24,12 @@
         clearTimeout(timer);
         throw err;
       });
+    inFlight[key] = request;
+    request.then(
+      function () { delete inFlight[key]; },
+      function () { delete inFlight[key]; }
+    );
+    return request;
   }
 
   global.apiFetchJson = fetchJson;
