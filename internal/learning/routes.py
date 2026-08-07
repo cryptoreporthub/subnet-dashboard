@@ -75,6 +75,73 @@ def _learning_health_cacheable(payload: Any) -> bool:
     return True
 
 
+def _learning_health_degraded(
+    *,
+    source: str,
+    error: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Bounded, shape-stable fallback for the public learning-health contract."""
+    pick_scheduler: Dict[str, Any] = {}
+    daily_pick: Dict[str, Any] = {}
+    try:
+        from internal.council.pick_scheduler import load_pick_scheduler_state_file
+        from internal.learning.loop_health import _daily_pick_today
+
+        file_state = load_pick_scheduler_state_file()
+        if isinstance(file_state, dict):
+            pick_scheduler = {**file_state, "source": "volume"}
+        daily_pick = _daily_pick_today()
+    except Exception:
+        pass
+    return {
+        "status": "degraded",
+        "meta": {"source": source},
+        "checked_at": _utcnow_z(),
+        "pending": 0,
+        "last_resolver_tick": None,
+        "resolver": {
+            "running": False,
+            "last_ok": None,
+            "age_seconds": None,
+            "refresh_minutes": None,
+            "peer": None,
+        },
+        "worker_peer": _cheap_worker_peer_hint(),
+        "watchdog": {},
+        "daily_pick": daily_pick,
+        "pick_scheduler": pick_scheduler,
+        "ledger": {"required": False, "present": False, "gap": False, "netuid": None},
+        "snapshot_age_seconds": None,
+        "score_snapshot": {},
+        "error": error or source,
+    }
+
+
+def _valid_learning_health(payload: Any) -> bool:
+    """Only cache/serve complete health documents so malformed data cannot 422."""
+    if not isinstance(payload, dict):
+        return False
+    required = (
+        "status",
+        "pending",
+        "last_resolver_tick",
+        "resolver",
+        "worker_peer",
+        "watchdog",
+        "daily_pick",
+        "ledger",
+        "snapshot_age_seconds",
+        "score_snapshot",
+        "checked_at",
+    )
+    if any(key not in payload for key in required):
+        return False
+    return all(
+        isinstance(payload.get(key), dict)
+        for key in ("resolver", "worker_peer", "watchdog", "daily_pick", "ledger", "score_snapshot")
+    )
+
+
 def _get_cached_learning_health() -> Dict[str, Any] | None:
     now = time.time()
     with _LEARNING_HEALTH_CACHE_LOCK:
@@ -85,7 +152,7 @@ def _get_cached_learning_health() -> Dict[str, Any] | None:
 
 
 def _set_learning_health_cache(payload: Dict[str, Any]) -> None:
-    if not _learning_health_cacheable(payload):
+    if not _learning_health_cacheable(payload) or not _valid_learning_health(payload):
         return
     with _LEARNING_HEALTH_CACHE_LOCK:
         _LEARNING_HEALTH_CACHE["at"] = time.time()
@@ -812,66 +879,16 @@ async def api_learning_loop_health():
         payload = await _to_thread_timeout(
             build_learning_loop_health, LEARNING_HEALTH_TIMEOUT, label="learning-health"
         )
-        if isinstance(payload, dict):
+        if _valid_learning_health(payload):
             _set_learning_health_cache(payload)
-        return payload
+            return payload
+        logger.warning("learning health returned malformed payload")
+        return _learning_health_degraded(source="invalid_payload", error="invalid_payload")
     except asyncio.TimeoutError:
-        pick_scheduler = {}
-        daily_pick = {}
-        try:
-            from internal.council.pick_scheduler import load_pick_scheduler_state_file
-            from internal.learning.loop_health import _daily_pick_today
-
-            file_state = load_pick_scheduler_state_file()
-            if isinstance(file_state, dict):
-                pick_scheduler = {**file_state, "source": "volume"}
-            daily_pick = _daily_pick_today()
-        except Exception:
-            pass
-        return {
-            "status": "degraded",
-            "meta": {"source": "timeout"},
-            "checked_at": _utcnow_z(),
-            "pending": 0,
-            "last_resolver_tick": None,
-            "resolver": {
-                "running": False,
-                "last_ok": None,
-                "age_seconds": None,
-                "refresh_minutes": None,
-                "peer": None,
-            },
-            "worker_peer": _cheap_worker_peer_hint(),
-            "watchdog": {},
-            "daily_pick": daily_pick,
-            "pick_scheduler": pick_scheduler,
-            "ledger": {"required": False, "present": False, "gap": False, "netuid": None},
-            "snapshot_age_seconds": None,
-            "score_snapshot": {},
-            "error": "timeout",
-        }
+        return _learning_health_degraded(source="timeout")
     except Exception as exc:
         logger.warning("learning health failed: %s", exc)
-        return {
-            "status": "degraded",
-            "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "pending": 0,
-            "last_resolver_tick": None,
-            "resolver": {
-                "running": False,
-                "last_ok": None,
-                "age_seconds": None,
-                "refresh_minutes": None,
-                "peer": None,
-            },
-            "worker_peer": {},
-            "watchdog": {},
-            "daily_pick": {},
-            "ledger": {"required": False, "present": False, "gap": False, "netuid": None},
-            "snapshot_age_seconds": None,
-            "score_snapshot": {},
-            "error": str(exc),
-        }
+        return _learning_health_degraded(source="error", error="health_probe_failed")
 
 
 @learning_router.get("/api/learning/stats")
@@ -883,6 +900,9 @@ async def api_learning_stats():
         return _learning_stats_payload(snap)
     except asyncio.TimeoutError:
         return _learning_stats_degraded(source="timeout")
+    except Exception as exc:
+        logger.warning("learning stats failed: %s", exc)
+        return _learning_stats_degraded(source="error")
 
 
 @learning_router.post("/api/learning/rebalance-weights")
@@ -1036,6 +1056,13 @@ async def api_predictions_resolver_state():
         )
     except asyncio.TimeoutError:
         data = {**get_prediction_resolver_scheduler_state(), "source": "memory", "error": "timeout"}
+    except Exception as exc:
+        logger.warning("resolver state failed: %s", exc)
+        data = {
+            **get_prediction_resolver_scheduler_state(),
+            "source": "memory",
+            "error": "state_unavailable",
+        }
     return {"status": "success", "data": data}
 
 

@@ -94,3 +94,20 @@ def test_api_learning_stats_timeout_returns_stale_cache(monkeypatch):
     body = resp.json()
     assert body.get("status") == "degraded"
     assert body["data"]["graded"] == 5
+
+
+def test_api_learning_stats_error_returns_degraded(monkeypatch):
+    learning_routes._learning_snapshot_cache["data"] = None
+    learning_routes._learning_snapshot_cache["at"] = 0.0
+
+    async def _boom(*_a, **_k):
+        raise ValueError("malformed snapshot")
+
+    monkeypatch.setattr(learning_routes, "_to_thread_timeout", _boom)
+
+    resp = TestClient(app).get("/api/learning/stats")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("status") == "degraded"
+    assert body.get("meta", {}).get("source") == "error"
+    assert body["data"]["trust_banner"]["ready"] is False

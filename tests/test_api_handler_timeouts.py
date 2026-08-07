@@ -191,6 +191,24 @@ def test_api_learning_health_timeout_returns_degraded(monkeypatch):
     assert elapsed < 1.0
 
 
+def test_api_learning_health_malformed_payload_returns_degraded(monkeypatch):
+    import internal.learning.loop_health as loop_health
+    import internal.learning.routes as learning_routes
+
+    learning_routes._LEARNING_HEALTH_CACHE["payload"] = None
+    learning_routes._LEARNING_HEALTH_CACHE["at"] = 0.0
+    monkeypatch.setattr(loop_health, "build_learning_loop_health", lambda: {"status": "ok"})
+
+    resp = TestClient(app).get("/api/learning/health")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "degraded"
+    assert body["meta"]["source"] == "invalid_payload"
+    assert body["error"] == "invalid_payload"
+    assert set(body["ledger"]) >= {"required", "present", "gap"}
+
+
 def test_api_learning_health_warm_cache_skips_builder(monkeypatch):
     import internal.learning.loop_health as loop_health
     import internal.learning.routes as learning_routes
@@ -204,7 +222,25 @@ def test_api_learning_health_warm_cache_skips_builder(monkeypatch):
         calls["n"] += 1
         if calls["n"] > 1:
             raise AssertionError("cached health must not call builder twice")
-        return {"status": "ok", "pending": 3, "worker_peer": {"alive": True}}
+        return {
+            "status": "ok",
+            "checked_at": "2026-08-07T00:00:00Z",
+            "pending": 3,
+            "last_resolver_tick": "2026-08-07T00:00:00Z",
+            "resolver": {
+                "running": True,
+                "last_ok": True,
+                "age_seconds": 0,
+                "refresh_minutes": 15,
+                "peer": "inline_worker",
+            },
+            "worker_peer": {"alive": True},
+            "watchdog": {},
+            "daily_pick": {},
+            "ledger": {"required": False, "present": False, "gap": False},
+            "snapshot_age_seconds": 0,
+            "score_snapshot": {},
+        }
 
     monkeypatch.setattr(loop_health, "build_learning_loop_health", _build_once)
 
