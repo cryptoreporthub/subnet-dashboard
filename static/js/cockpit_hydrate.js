@@ -4546,6 +4546,14 @@
     container.hidden = false;
   }
 
+  function patchTribunalCouncilLast5(stats) {
+    var hero = document.getElementById('tribunal-hero');
+    if (!hero) return;
+    var el = hero.querySelector('[data-council-last5]');
+    if (!el) return;
+    renderTribunalLast5Ticks(el, stats && stats.council_last5);
+  }
+
   function patchTribunalJudges(stats, dailyPick) {
     var hero = document.getElementById('tribunal-hero');
     if (!hero || !stats) return;
@@ -4636,6 +4644,8 @@
     if (hitEl) hitEl.textContent = String(correct);
     var missEl = hero.querySelector('[data-accuracy-wrong]');
     if (missEl) missEl.textContent = String(wrong);
+
+    patchTribunalCouncilLast5(stats);
 
     hero.querySelectorAll('[data-jury]').forEach(function (row) {
       var key = row.getAttribute('data-jury');

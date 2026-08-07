@@ -347,6 +347,10 @@ def _accuracy_ledger_panel(stats: Dict[str, Any]) -> Dict[str, Any]:
         win_rate = round(float(tb["accuracy"]) * 100, 1)
     elif graded > 0 and correct + wrong > 0:
         win_rate = round(correct / (correct + wrong) * 100, 1)
+    council_last5 = stats.get("council_last5")
+    last5 = None
+    if isinstance(council_last5, list) and len(council_last5) == 5:
+        last5 = council_last5
     return {
         "graded": graded,
         "correct": correct,
@@ -354,6 +358,7 @@ def _accuracy_ledger_panel(stats: Dict[str, Any]) -> Dict[str, Any]:
         "win_rate": f"{win_rate:.1f}%" if win_rate is not None else "—",
         "sub": tb.get("headline") or tb.get("message") or "Building sample",
         "ready": bool(tb.get("ready")),
+        "last5": last5,
     }
 
 

@@ -594,7 +594,7 @@ def test_council_home_shell_live_in_ui_css():
         ".desk-zone",
         "#home-trust-banner.trust-banner",
         "body.council-first-theme::after",
-        "simivision-smoke-bg.svg",
+        "var(--bg-atmosphere)",
         ".home-job__signals--demoted",
     ):
         assert selector in css
@@ -629,10 +629,12 @@ def test_council_pick_card_uses_pewter_smoke_background():
     assert ".council-stage .home-job__call-host .k3-dossier" in css
     dossier = css.split(".council-stage .home-job__call-host .k3-dossier", 1)[1][:400]
     assert "transparent" in dossier
-    # Match the unscoped base rule — not `.tribunal-hero[data-temp=…] .tribunal-hero__card`.
+    # Hero card is a transparent frame — page atmosphere carries the smoke.
     m = re.search(r"(?m)^\.tribunal-hero__card \{([^}]*)\}", css)
     assert m, "missing .tribunal-hero__card base rule"
-    assert "simivision-smoke-bg.svg" in m.group(1)
+    hero_card = m.group(1)
+    assert "transparent" in hero_card
+    assert "simivision-smoke-bg.svg" not in hero_card
 
 
 def test_home_drawers_and_section21_live_in_ui_css():
@@ -984,7 +986,7 @@ def test_grey_smoke_bg_base_token():
     assert "body.council-first-theme > *" not in ui_css
     aurora = ui_css.split("body.council-first-theme::before {", 1)[1].split("}", 1)[0]
     assert "opacity:" in aurora
-    assert float(aurora.split("opacity:")[1].split(";")[0].strip()) >= 0.30
+    assert float(aurora.split("opacity:")[1].split(";")[0].strip()) >= 0.55
     assert ".council-stage__atmosphere" in ui_css
     atm = ui_css.split(".council-stage__atmosphere {", 1)[1].split("}", 1)[0]
     assert "#0a0a0c" not in atm
@@ -994,7 +996,7 @@ def test_grey_smoke_bg_base_token():
 
 
 def test_global_glass_card_overrides_in_ui_css():
-    """Hero card uses baked smoke; panels/judges use glass-fill; dial center stays opaque."""
+    """Hero card is transparent; panels use frosted glass; page carries smoke SVG."""
     import re
 
     css = _read_ui_css()
@@ -1003,18 +1005,16 @@ def test_global_glass_card_overrides_in_ui_css():
     m = re.search(r"(?m)^\.tribunal-hero__card \{([^}]*)\}", css)
     assert m, "missing .tribunal-hero__card base rule"
     hero_card = m.group(1)
-    assert "simivision-smoke-bg.svg" in hero_card
-    # Rich smoke uses normal blend (not soft-light crush) so billows stay visible
-    assert "background-blend-mode" in hero_card or "simivision-smoke-bg.svg" in hero_card
-    assert "tribunal-smoke-drift" in css
-    assert "background-position:" in css.split("@keyframes tribunal-smoke-drift", 1)[1].split("}", 1)[0]
+    assert "transparent" in hero_card
+    assert "simivision-smoke-bg.svg" not in hero_card
+    panel_block = css.split(".tribunal-hero__panel {", 1)[1].split("}", 1)[0]
+    assert "backdrop-filter: blur" in panel_block
+    assert "rgba(255, 255, 255" in panel_block
     for selector in (
-        ".tribunal-hero__panel",
         ".tribunal-hero__judge",
         ".k3-dossier",
     ):
         block = css.split(selector + " {", 1)[1].split("}", 1)[0]
-        # Near-transparent hairline glass (smoke reads through) or legacy glass-fill token
         assert (
             "var(--glass-fill" in block
             or "transparent" in block
