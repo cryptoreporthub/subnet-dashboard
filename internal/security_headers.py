@@ -10,7 +10,7 @@ from starlette.responses import Response
 _DEFAULT_CSP_REPORT_ONLY = (
     "default-src 'self'; "
     "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
     "img-src 'self' data: https:; "
     "connect-src 'self' https: wss:; "
     "font-src 'self' data: https://fonts.gstatic.com; "
