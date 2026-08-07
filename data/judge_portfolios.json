@@ -221,6 +221,19 @@
         "bucket": "daily",
         "horizon_hours": 24,
         "entered_at": "2026-08-07T12:12:12.745040Z"
+      },
+      {
+        "id": "f98b24c5f6",
+        "netuid": 1,
+        "name": "Apex",
+        "direction": "up",
+        "predicted_pct": 1.51,
+        "reference_price": 0.00830188,
+        "size": 0.9294,
+        "risk_multiplier": 1.0,
+        "bucket": "daily",
+        "horizon_hours": 24,
+        "entered_at": "2026-08-07T12:27:25.107732Z"
       }
     ],
     "closed_positions": [
@@ -1386,7 +1399,7 @@
       }
     ],
     "summary": {
-      "open_positions": 17,
+      "open_positions": 18,
       "total_closed": 70,
       "win_count": 43,
       "loss_count": 27,
@@ -1628,6 +1641,19 @@
         "bucket": "daily",
         "horizon_hours": 24,
         "entered_at": "2026-08-07T12:12:12.753206Z"
+      },
+      {
+        "id": "f98b24c5f6",
+        "netuid": 1,
+        "name": "Apex",
+        "direction": "up",
+        "predicted_pct": 1.51,
+        "reference_price": 0.00830188,
+        "size": 0.644,
+        "risk_multiplier": 0.7,
+        "bucket": "daily",
+        "horizon_hours": 24,
+        "entered_at": "2026-08-07T12:27:25.118190Z"
       }
     ],
     "closed_positions": [
@@ -2793,7 +2819,7 @@
       }
     ],
     "summary": {
-      "open_positions": 17,
+      "open_positions": 18,
       "total_closed": 70,
       "win_count": 43,
       "loss_count": 27,
@@ -3035,6 +3061,19 @@
         "bucket": "daily",
         "horizon_hours": 24,
         "entered_at": "2026-08-07T12:12:12.761450Z"
+      },
+      {
+        "id": "f98b24c5f6",
+        "netuid": 1,
+        "name": "Apex",
+        "direction": "up",
+        "predicted_pct": 1.51,
+        "reference_price": 0.00830188,
+        "size": 0.9425,
+        "risk_multiplier": 1.3,
+        "bucket": "daily",
+        "horizon_hours": 24,
+        "entered_at": "2026-08-07T12:27:25.126695Z"
       }
     ],
     "closed_positions": [
@@ -4200,7 +4239,7 @@
       }
     ],
     "summary": {
-      "open_positions": 17,
+      "open_positions": 18,
       "total_closed": 70,
       "win_count": 43,
       "loss_count": 27,
