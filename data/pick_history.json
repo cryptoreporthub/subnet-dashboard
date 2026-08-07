@@ -3,13 +3,26 @@
     "netuid": 94,
     "name": "pending...",
     "entry_price": 0.0037061,
-    "picked_at": "2026-08-07T22:02:54.641053Z",
-    "prediction_id": "d3c9bfb276",
+    "picked_at": "2026-08-07T22:06:02.123638Z",
+    "prediction_id": "09d9cc4834",
     "direction": "long",
-    "confidence": 0.5772,
+    "confidence": 0.5778,
     "finalized": false
   },
   "history": [
+    {
+      "netuid": 94,
+      "name": "pending...",
+      "entry_price": 0.0037061,
+      "picked_at": "2026-08-07T22:02:54.641053Z",
+      "prediction_id": "d3c9bfb276",
+      "direction": "long",
+      "confidence": 0.5772,
+      "finalized": true,
+      "success": null,
+      "outcome": "replaced",
+      "resolved_at": "2026-08-07T22:06:02.123612Z"
+    },
     {
       "netuid": 15,
       "name": "ORO",
