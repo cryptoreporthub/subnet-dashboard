@@ -276,7 +276,7 @@
       },
       "outcome": "wrong",
       "created_at": "2026-07-03T18:45:18.015097Z",
-      "resolved_at": "2026-08-07T11:27:11.449819Z",
+      "resolved_at": "2026-08-07T11:32:06.126889Z",
       "metadata": {
         "prediction_id": "0214aff267",
         "actual_pct": -81.28,
@@ -322,7 +322,7 @@
       },
       "outcome": "correct",
       "created_at": "2026-07-03T18:45:18.045409Z",
-      "resolved_at": "2026-08-07T11:27:11.454484Z",
+      "resolved_at": "2026-08-07T11:32:06.128695Z",
       "metadata": {
         "prediction_id": "bc2ce48f3b",
         "actual_pct": -81.28,
@@ -345,7 +345,7 @@
       },
       "outcome": "correct",
       "created_at": "2026-07-03T18:45:18.060980Z",
-      "resolved_at": "2026-08-07T11:27:11.458292Z",
+      "resolved_at": "2026-08-07T11:32:06.130355Z",
       "metadata": {
         "prediction_id": "4bbdb8ad4b",
         "actual_pct": -81.28,
@@ -368,7 +368,7 @@
       },
       "outcome": "correct",
       "created_at": "2026-07-03T18:45:18.078044Z",
-      "resolved_at": "2026-08-07T11:27:11.463449Z",
+      "resolved_at": "2026-08-07T11:32:06.131963Z",
       "metadata": {
         "prediction_id": "c4ab208245",
         "actual_pct": 36.6357,
@@ -414,7 +414,7 @@
       },
       "outcome": "wrong",
       "created_at": "2026-07-03T18:45:18.110139Z",
-      "resolved_at": "2026-08-07T11:27:11.464830Z",
+      "resolved_at": "2026-08-07T11:32:06.133582Z",
       "metadata": {
         "prediction_id": "ec7d1107a2",
         "actual_pct": 36.6357,
@@ -460,7 +460,7 @@
       },
       "outcome": "wrong",
       "created_at": "2026-07-03T18:45:18.144396Z",
-      "resolved_at": "2026-08-07T11:27:11.469235Z",
+      "resolved_at": "2026-08-07T11:32:06.135933Z",
       "metadata": {
         "prediction_id": "1632a45b26",
         "actual_pct": 3.1363,
@@ -483,7 +483,7 @@
       },
       "outcome": "wrong",
       "created_at": "2026-07-03T18:45:18.161438Z",
-      "resolved_at": "2026-08-07T11:27:11.470976Z",
+      "resolved_at": "2026-08-07T11:32:06.137997Z",
       "metadata": {
         "prediction_id": "08a9782f2d",
         "actual_pct": 3.1363,
@@ -506,7 +506,7 @@
       },
       "outcome": "correct",
       "created_at": "2026-07-03T18:45:18.178450Z",
-      "resolved_at": "2026-08-07T11:27:11.475811Z",
+      "resolved_at": "2026-08-07T11:32:06.140279Z",
       "metadata": {
         "prediction_id": "81e1767203",
         "actual_pct": 3.1363,
@@ -552,7 +552,7 @@
       },
       "outcome": "correct",
       "created_at": "2026-07-03T18:45:18.215468Z",
-      "resolved_at": "2026-08-07T11:27:11.477112Z",
+      "resolved_at": "2026-08-07T11:32:06.142550Z",
       "metadata": {
         "prediction_id": "b71ec3863b",
         "actual_pct": -31.1916,
@@ -575,7 +575,7 @@
       },
       "outcome": "wrong",
       "created_at": "2026-07-03T18:45:18.233234Z",
-      "resolved_at": "2026-08-07T11:27:11.479084Z",
+      "resolved_at": "2026-08-07T11:32:06.144874Z",
       "metadata": {
         "prediction_id": "7ae77c6bc3",
         "actual_pct": -31.1916,
@@ -598,7 +598,7 @@
       },
       "outcome": "correct",
       "created_at": "2026-07-03T18:45:18.250884Z",
-      "resolved_at": "2026-08-07T11:27:11.483843Z",
+      "resolved_at": "2026-08-07T11:32:06.146444Z",
       "metadata": {
         "prediction_id": "1ad81f1439",
         "actual_pct": -31.1916,
@@ -621,7 +621,7 @@
       },
       "outcome": "correct",
       "created_at": "2026-07-03T18:45:18.268721Z",
-      "resolved_at": "2026-08-07T11:27:11.485105Z",
+      "resolved_at": "2026-08-07T11:32:06.148146Z",
       "metadata": {
         "prediction_id": "062e3a9bc3",
         "actual_pct": -31.1916,
@@ -644,7 +644,7 @@
       },
       "outcome": "correct",
       "created_at": "2026-07-03T18:45:18.288210Z",
-      "resolved_at": "2026-08-07T11:27:11.489548Z",
+      "resolved_at": "2026-08-07T11:32:06.149855Z",
       "metadata": {
         "prediction_id": "6cf1372184",
         "actual_pct": 5.2055,
@@ -713,7 +713,7 @@
       },
       "outcome": "wrong",
       "created_at": "2026-07-03T18:45:18.343975Z",
-      "resolved_at": "2026-08-07T11:27:11.490870Z",
+      "resolved_at": "2026-08-07T11:32:06.151631Z",
       "metadata": {
         "prediction_id": "7db71108a4",
         "actual_pct": 5.2055,
@@ -736,7 +736,7 @@
       },
       "outcome": "wrong",
       "created_at": "2026-07-03T18:45:18.364154Z",
-      "resolved_at": "2026-08-07T11:27:11.495946Z",
+      "resolved_at": "2026-08-07T11:32:06.153363Z",
       "metadata": {
         "prediction_id": "fdbe722242",
         "actual_pct": 18.3387,
@@ -759,7 +759,7 @@
       },
       "outcome": "wrong",
       "created_at": "2026-07-03T18:45:18.383303Z",
-      "resolved_at": "2026-08-07T11:27:11.504516Z",
+      "resolved_at": "2026-08-07T11:32:06.155075Z",
       "metadata": {
         "prediction_id": "04fed4b0dd",
         "actual_pct": 18.3387,
@@ -957,6 +957,6 @@
     ]
   },
   "meta": {
-    "last_updated": "2026-08-07T11:27:14.717133Z"
+    "last_updated": "2026-08-07T11:32:06.155105Z"
   }
 }

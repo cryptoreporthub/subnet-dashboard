@@ -1,7 +1,728 @@
 {
-  "updated_at": "2026-06-01T00:00:00+00:00",
+  "updated_at": "2026-08-07T11:29:43.725292+00:00",
   "events": [],
   "open_positions": {},
-  "profiles": {},
+  "profiles": {
+    "5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM": {
+      "wallet": "5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM",
+      "first_seen": "2026-08-07T11:29:43.403337+00:00",
+      "last_seen": "2026-08-07T11:29:43.403355+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        0
+      ],
+      "last_owner_netuid": 0
+    },
+    "5HCFWvRqzSHWRPecN7q8J6c7aKQnrCZTMHstPv39xL1wgDHh": {
+      "wallet": "5HCFWvRqzSHWRPecN7q8J6c7aKQnrCZTMHstPv39xL1wgDHh",
+      "first_seen": "2026-08-07T11:29:43.404872+00:00",
+      "last_seen": "2026-08-07T11:29:43.404888+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        1
+      ],
+      "last_owner_netuid": 1
+    },
+    "5EcYQ3W77ndrmMWdvVQusoFqY8doxfP3U2zrh7xZQiaz7avY": {
+      "wallet": "5EcYQ3W77ndrmMWdvVQusoFqY8doxfP3U2zrh7xZQiaz7avY",
+      "first_seen": "2026-08-07T11:29:43.407190+00:00",
+      "last_seen": "2026-08-07T11:29:43.407203+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        2
+      ],
+      "last_owner_netuid": 2
+    },
+    "5G26HqQg8M6hfw9q84gM3udYHHymThmswRKgSGtwdcduBSos": {
+      "wallet": "5G26HqQg8M6hfw9q84gM3udYHHymThmswRKgSGtwdcduBSos",
+      "first_seen": "2026-08-07T11:29:43.422160+00:00",
+      "last_seen": "2026-08-07T11:29:43.422174+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        3
+      ],
+      "last_owner_netuid": 3
+    },
+    "5CXGPMnq9RCCLUEvp9G2iUuabw69TSFM155UVS1S4Zmusaxv": {
+      "wallet": "5CXGPMnq9RCCLUEvp9G2iUuabw69TSFM155UVS1S4Zmusaxv",
+      "first_seen": "2026-08-07T11:29:43.428605+00:00",
+      "last_seen": "2026-08-07T11:29:43.428616+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        4
+      ],
+      "last_owner_netuid": 4
+    },
+    "5CFmgJ2SQZBjgdyDvwsWhAQatEENLt6k2gWvpkjeHeMm95yv": {
+      "wallet": "5CFmgJ2SQZBjgdyDvwsWhAQatEENLt6k2gWvpkjeHeMm95yv",
+      "first_seen": "2026-08-07T11:29:43.435746+00:00",
+      "last_seen": "2026-08-07T11:29:43.435756+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        5
+      ],
+      "last_owner_netuid": 5
+    },
+    "5CfSg4e23Z3aTXvc2XZie8ZE1xkqRPoyVRFdWUuyyjGxJrMA": {
+      "wallet": "5CfSg4e23Z3aTXvc2XZie8ZE1xkqRPoyVRFdWUuyyjGxJrMA",
+      "first_seen": "2026-08-07T11:29:43.437449+00:00",
+      "last_seen": "2026-08-07T11:29:43.437457+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        6
+      ],
+      "last_owner_netuid": 6
+    },
+    "5CiQ1cxLB1ABBJyf9FAR8CRhfcKgs4M8QaRgmHh318PKLqvb": {
+      "wallet": "5CiQ1cxLB1ABBJyf9FAR8CRhfcKgs4M8QaRgmHh318PKLqvb",
+      "first_seen": "2026-08-07T11:29:43.444308+00:00",
+      "last_seen": "2026-08-07T11:29:43.444318+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        7
+      ],
+      "last_owner_netuid": 7
+    },
+    "5F6tnxzAAxbhaWRmeUmB63JEM3VXBNSmqb3AwYJVDStQjw8y": {
+      "wallet": "5F6tnxzAAxbhaWRmeUmB63JEM3VXBNSmqb3AwYJVDStQjw8y",
+      "first_seen": "2026-08-07T11:29:43.450981+00:00",
+      "last_seen": "2026-08-07T11:29:43.450991+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        8
+      ],
+      "last_owner_netuid": 8
+    },
+    "5FsbubeciqtB5Nik3umL2iD4fG8FcC9GbT9nHJfXMj4mJJZ9": {
+      "wallet": "5FsbubeciqtB5Nik3umL2iD4fG8FcC9GbT9nHJfXMj4mJJZ9",
+      "first_seen": "2026-08-07T11:29:43.452619+00:00",
+      "last_seen": "2026-08-07T11:29:43.452627+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        9
+      ],
+      "last_owner_netuid": 9
+    },
+    "5EvNESR7DfSMmdwJ3crtBW1ENAhq3f99X4FCbTi1hDUNCWAW": {
+      "wallet": "5EvNESR7DfSMmdwJ3crtBW1ENAhq3f99X4FCbTi1hDUNCWAW",
+      "first_seen": "2026-08-07T11:29:43.454649+00:00",
+      "last_seen": "2026-08-07T11:29:43.454684+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        10
+      ],
+      "last_owner_netuid": 10
+    },
+    "5EtM9iXMAYRsmt6aoQAoWNDX6yaBnjhmnEQhWKv8HpwkVtML": {
+      "wallet": "5EtM9iXMAYRsmt6aoQAoWNDX6yaBnjhmnEQhWKv8HpwkVtML",
+      "first_seen": "2026-08-07T11:29:43.458541+00:00",
+      "last_seen": "2026-08-07T11:29:43.458551+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        11
+      ],
+      "last_owner_netuid": 11
+    },
+    "5ELzhHvgUqmnAYs74vFWjMMehXNeHkRtkreAa3g8QQS96PCp": {
+      "wallet": "5ELzhHvgUqmnAYs74vFWjMMehXNeHkRtkreAa3g8QQS96PCp",
+      "first_seen": "2026-08-07T11:29:43.461557+00:00",
+      "last_seen": "2026-08-07T11:29:43.461566+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        12
+      ],
+      "last_owner_netuid": 12
+    },
+    "5HBswBt1A9Ahx6U76abXXGd7VmabmCNBGhSK2vrP71GSxtgZ": {
+      "wallet": "5HBswBt1A9Ahx6U76abXXGd7VmabmCNBGhSK2vrP71GSxtgZ",
+      "first_seen": "2026-08-07T11:29:43.463409+00:00",
+      "last_seen": "2026-08-07T11:29:43.463417+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        13
+      ],
+      "last_owner_netuid": 13
+    },
+    "5FsuF1ufC1S1rPeqYWTdmZz6KD6zchmDJraxQumHmeDxxa8T": {
+      "wallet": "5FsuF1ufC1S1rPeqYWTdmZz6KD6zchmDJraxQumHmeDxxa8T",
+      "first_seen": "2026-08-07T11:29:43.465226+00:00",
+      "last_seen": "2026-08-07T11:29:43.465234+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        14
+      ],
+      "last_owner_netuid": 14
+    },
+    "5DLd6s3A9xLRapjnM54drzpn3K4qEEd73XJ2rz66L6J2xWD8": {
+      "wallet": "5DLd6s3A9xLRapjnM54drzpn3K4qEEd73XJ2rz66L6J2xWD8",
+      "first_seen": "2026-08-07T11:29:43.472210+00:00",
+      "last_seen": "2026-08-07T11:29:43.472219+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        15
+      ],
+      "last_owner_netuid": 15
+    },
+    "5DnhT8EDV3ufCVHHfi7GFD4Z93MKNwWPwVZqh5o7UPYuwn6d": {
+      "wallet": "5DnhT8EDV3ufCVHHfi7GFD4Z93MKNwWPwVZqh5o7UPYuwn6d",
+      "first_seen": "2026-08-07T11:29:43.474195+00:00",
+      "last_seen": "2026-08-07T11:29:43.474204+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        16
+      ],
+      "last_owner_netuid": 16
+    },
+    "5E7a4a7QETrNjoZ2SbVSJMaavrQeyTEaHgjBPDUDxBKjUaMZ": {
+      "wallet": "5E7a4a7QETrNjoZ2SbVSJMaavrQeyTEaHgjBPDUDxBKjUaMZ",
+      "first_seen": "2026-08-07T11:29:43.476115+00:00",
+      "last_seen": "2026-08-07T11:29:43.476122+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        17
+      ],
+      "last_owner_netuid": 17
+    },
+    "5G9FYbXLvGTvGEgYF9tm56oW7RzkSFRCduhJeQq8EML54BXs": {
+      "wallet": "5G9FYbXLvGTvGEgYF9tm56oW7RzkSFRCduhJeQq8EML54BXs",
+      "first_seen": "2026-08-07T11:29:43.478768+00:00",
+      "last_seen": "2026-08-07T11:29:43.478778+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        18
+      ],
+      "last_owner_netuid": 18
+    },
+    "5CFJNoUYbdw9NvU2MuvQuxG88BWBKYbEQPxg1sVieck16TRq": {
+      "wallet": "5CFJNoUYbdw9NvU2MuvQuxG88BWBKYbEQPxg1sVieck16TRq",
+      "first_seen": "2026-08-07T11:29:43.480843+00:00",
+      "last_seen": "2026-08-07T11:29:43.480852+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        19
+      ],
+      "last_owner_netuid": 19
+    },
+    "5CMEwRYLefRmtJg7zzRyJtcXrQqmspr9B1r1nKySDReA37Z1": {
+      "wallet": "5CMEwRYLefRmtJg7zzRyJtcXrQqmspr9B1r1nKySDReA37Z1",
+      "first_seen": "2026-08-07T11:29:43.488087+00:00",
+      "last_seen": "2026-08-07T11:29:43.488098+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        20
+      ],
+      "last_owner_netuid": 20
+    },
+    "5GsHpHeCGhxstoEEZTR64VUashnDP4n7ir7LbNdRfXpkMU7R": {
+      "wallet": "5GsHpHeCGhxstoEEZTR64VUashnDP4n7ir7LbNdRfXpkMU7R",
+      "first_seen": "2026-08-07T11:29:43.490164+00:00",
+      "last_seen": "2026-08-07T11:29:43.490174+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        21
+      ],
+      "last_owner_netuid": 21
+    },
+    "5HZ3rviPkBERT9H5dE5km4hML1PCyjLo5yX8B3Y4fvamBwxw": {
+      "wallet": "5HZ3rviPkBERT9H5dE5km4hML1PCyjLo5yX8B3Y4fvamBwxw",
+      "first_seen": "2026-08-07T11:29:43.493046+00:00",
+      "last_seen": "2026-08-07T11:29:43.493054+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        22
+      ],
+      "last_owner_netuid": 22
+    },
+    "5GvTa4JUKbUHqeJH8YLUDaV7jHChrfUy4n5zWrcCiU7bySoc": {
+      "wallet": "5GvTa4JUKbUHqeJH8YLUDaV7jHChrfUy4n5zWrcCiU7bySoc",
+      "first_seen": "2026-08-07T11:29:43.495238+00:00",
+      "last_seen": "2026-08-07T11:29:43.495247+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        23
+      ],
+      "last_owner_netuid": 23
+    },
+    "5FpX2DN3A38JzXfEDZwBsDhCM527L6BDPi6MKGeXvGxFPipx": {
+      "wallet": "5FpX2DN3A38JzXfEDZwBsDhCM527L6BDPi6MKGeXvGxFPipx",
+      "first_seen": "2026-08-07T11:29:43.497324+00:00",
+      "last_seen": "2026-08-07T11:29:43.497332+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        24
+      ],
+      "last_owner_netuid": 24
+    },
+    "5F6aRdsBHajN2NhZHBTB6ibBFu7YuZZEWruWzB8x6B6GiZ4D": {
+      "wallet": "5F6aRdsBHajN2NhZHBTB6ibBFu7YuZZEWruWzB8x6B6GiZ4D",
+      "first_seen": "2026-08-07T11:29:43.499513+00:00",
+      "last_seen": "2026-08-07T11:29:43.499521+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        25
+      ],
+      "last_owner_netuid": 25
+    },
+    "5Cyfk5Jjee6uCafjZyUUjtKd7Q4qh1yJ48Ts7bkT9xXaDqe1": {
+      "wallet": "5Cyfk5Jjee6uCafjZyUUjtKd7Q4qh1yJ48Ts7bkT9xXaDqe1",
+      "first_seen": "2026-08-07T11:29:43.503701+00:00",
+      "last_seen": "2026-08-07T11:29:43.503709+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        27
+      ],
+      "last_owner_netuid": 27
+    },
+    "5Ca8L8PkbqXUtzohKtSM3i1naGQxANGLx51kJsEPNB14Admz": {
+      "wallet": "5Ca8L8PkbqXUtzohKtSM3i1naGQxANGLx51kJsEPNB14Admz",
+      "first_seen": "2026-08-07T11:29:43.505841+00:00",
+      "last_seen": "2026-08-07T11:29:43.505849+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        28
+      ],
+      "last_owner_netuid": 28
+    },
+    "5HHHHHzgLnYRvnKkHd45cRUDMHXTSwx7MjUzxBrKbY4JfZWn": {
+      "wallet": "5HHHHHzgLnYRvnKkHd45cRUDMHXTSwx7MjUzxBrKbY4JfZWn",
+      "first_seen": "2026-08-07T11:29:43.508847+00:00",
+      "last_seen": "2026-08-07T11:29:43.508855+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        29
+      ],
+      "last_owner_netuid": 29
+    },
+    "5DcErZoVeG7ZShXwKFgJURuGXmdAVwmYzyvLAgpPjrPznDMB": {
+      "wallet": "5DcErZoVeG7ZShXwKFgJURuGXmdAVwmYzyvLAgpPjrPznDMB",
+      "first_seen": "2026-08-07T11:29:43.516217+00:00",
+      "last_seen": "2026-08-07T11:29:43.516227+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        30
+      ],
+      "last_owner_netuid": 30
+    },
+    "5CwLjwPdkwM9Rhia5VA5WSDVsL5FKWH24j5Tb96WnuUnqcst": {
+      "wallet": "5CwLjwPdkwM9Rhia5VA5WSDVsL5FKWH24j5Tb96WnuUnqcst",
+      "first_seen": "2026-08-07T11:29:43.518325+00:00",
+      "last_seen": "2026-08-07T11:29:43.518334+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        31
+      ],
+      "last_owner_netuid": 31
+    },
+    "5DWgkCSvq4brWSNLDU9FBgTk1ZpAQ2y6t3ky97CvEVuS9Qad": {
+      "wallet": "5DWgkCSvq4brWSNLDU9FBgTk1ZpAQ2y6t3ky97CvEVuS9Qad",
+      "first_seen": "2026-08-07T11:29:43.520709+00:00",
+      "last_seen": "2026-08-07T11:29:43.520718+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        32
+      ],
+      "last_owner_netuid": 32
+    },
+    "5HinUfk5SqBUAbkMtgdNoum3VJvwrLgdvwW5sbXA1UPYZ8uB": {
+      "wallet": "5HinUfk5SqBUAbkMtgdNoum3VJvwrLgdvwW5sbXA1UPYZ8uB",
+      "first_seen": "2026-08-07T11:29:43.527590+00:00",
+      "last_seen": "2026-08-07T11:29:43.527600+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        33
+      ],
+      "last_owner_netuid": 33
+    },
+    "5DthmKBR83sUdudSfgFnsxBkTYtYTFLJUgovNfb1TSKVLiTH": {
+      "wallet": "5DthmKBR83sUdudSfgFnsxBkTYtYTFLJUgovNfb1TSKVLiTH",
+      "first_seen": "2026-08-07T11:29:43.529779+00:00",
+      "last_seen": "2026-08-07T11:29:43.529787+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        34
+      ],
+      "last_owner_netuid": 34
+    },
+    "5EsmkLf4VnpgNM31syMjAWsUrQdW2Yu5xzWbv6oDQydP9vVx": {
+      "wallet": "5EsmkLf4VnpgNM31syMjAWsUrQdW2Yu5xzWbv6oDQydP9vVx",
+      "first_seen": "2026-08-07T11:29:43.532793+00:00",
+      "last_seen": "2026-08-07T11:29:43.532801+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        35
+      ],
+      "last_owner_netuid": 35
+    },
+    "5DPtMdkMau8G8fGbPxdYSKCBo94oC7mDyHKMvVdNdsLVT3EF": {
+      "wallet": "5DPtMdkMau8G8fGbPxdYSKCBo94oC7mDyHKMvVdNdsLVT3EF",
+      "first_seen": "2026-08-07T11:29:43.535278+00:00",
+      "last_seen": "2026-08-07T11:29:43.535286+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        36
+      ],
+      "last_owner_netuid": 36
+    },
+    "5DXqqdrvu5FK3dASRVTCdGPZKx4Q9nkAZZSmibKG6PEEeW4j": {
+      "wallet": "5DXqqdrvu5FK3dASRVTCdGPZKx4Q9nkAZZSmibKG6PEEeW4j",
+      "first_seen": "2026-08-07T11:29:43.542887+00:00",
+      "last_seen": "2026-08-07T11:29:43.542898+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        37
+      ],
+      "last_owner_netuid": 37
+    },
+    "5EFJ7mEVyjxT3iXqxuHyMMuGgJKFt85tb5s4vEvnCTpSoP3w": {
+      "wallet": "5EFJ7mEVyjxT3iXqxuHyMMuGgJKFt85tb5s4vEvnCTpSoP3w",
+      "first_seen": "2026-08-07T11:29:43.550846+00:00",
+      "last_seen": "2026-08-07T11:29:43.550857+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        38
+      ],
+      "last_owner_netuid": 38
+    },
+    "5G3qVaXzKMPDm5AJ3dpzbpUC27kpccBvDwzSWXrq8M6qMmbC": {
+      "wallet": "5G3qVaXzKMPDm5AJ3dpzbpUC27kpccBvDwzSWXrq8M6qMmbC",
+      "first_seen": "2026-08-07T11:29:43.553333+00:00",
+      "last_seen": "2026-08-07T11:29:43.553342+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        39
+      ],
+      "last_owner_netuid": 39
+    },
+    "5F9Qvcz22Fwq4cm58o2bShiL6n8BnJmhqXB1cispBpqRfN6w": {
+      "wallet": "5F9Qvcz22Fwq4cm58o2bShiL6n8BnJmhqXB1cispBpqRfN6w",
+      "first_seen": "2026-08-07T11:29:43.561441+00:00",
+      "last_seen": "2026-08-07T11:29:43.561451+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        40
+      ],
+      "last_owner_netuid": 40
+    },
+    "5FCSevLkofmKZRixMawp6jyyjBty1AeSCLa7N5Fv892DYkXX": {
+      "wallet": "5FCSevLkofmKZRixMawp6jyyjBty1AeSCLa7N5Fv892DYkXX",
+      "first_seen": "2026-08-07T11:29:43.564740+00:00",
+      "last_seen": "2026-08-07T11:29:43.564748+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        41
+      ],
+      "last_owner_netuid": 41
+    },
+    "5Gbdb5s2WrRaFXTgMUiVNBKACe3cgSLwZNyK2Vwvjfvf6jUJ": {
+      "wallet": "5Gbdb5s2WrRaFXTgMUiVNBKACe3cgSLwZNyK2Vwvjfvf6jUJ",
+      "first_seen": "2026-08-07T11:29:43.567226+00:00",
+      "last_seen": "2026-08-07T11:29:43.567234+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        42
+      ],
+      "last_owner_netuid": 42
+    },
+    "5HjMs5JDrLH3Hknmfm1gDq7nFYAv6M7t9v3EWMctSRXJS9HC": {
+      "wallet": "5HjMs5JDrLH3Hknmfm1gDq7nFYAv6M7t9v3EWMctSRXJS9HC",
+      "first_seen": "2026-08-07T11:29:43.570488+00:00",
+      "last_seen": "2026-08-07T11:29:43.570497+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        43
+      ],
+      "last_owner_netuid": 43
+    },
+    "5FsREvyUXSZWYRqVyQLDdpYmZZPnkhZyW6HjooozKP1nQkwu": {
+      "wallet": "5FsREvyUXSZWYRqVyQLDdpYmZZPnkhZyW6HjooozKP1nQkwu",
+      "first_seen": "2026-08-07T11:29:43.578470+00:00",
+      "last_seen": "2026-08-07T11:29:43.578479+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        44
+      ],
+      "last_owner_netuid": 44
+    },
+    "5FbcZiAHA75i2bPVrF7wa9mFaxV1eM27HR63kJtbpb8spvmf": {
+      "wallet": "5FbcZiAHA75i2bPVrF7wa9mFaxV1eM27HR63kJtbpb8spvmf",
+      "first_seen": "2026-08-07T11:29:43.580895+00:00",
+      "last_seen": "2026-08-07T11:29:43.580903+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        45
+      ],
+      "last_owner_netuid": 45
+    },
+    "5Ek83SLwZi1P6s3E3kCfmxZJ5HHVepDsdpxJERfvpiopG5jz": {
+      "wallet": "5Ek83SLwZi1P6s3E3kCfmxZJ5HHVepDsdpxJERfvpiopG5jz",
+      "first_seen": "2026-08-07T11:29:43.583426+00:00",
+      "last_seen": "2026-08-07T11:29:43.583434+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        46
+      ],
+      "last_owner_netuid": 46
+    },
+    "5CS2niAKFcmvE3i2Lb9ukR66Enkn26ygievde3dMepJ9ha9x": {
+      "wallet": "5CS2niAKFcmvE3i2Lb9ukR66Enkn26ygievde3dMepJ9ha9x",
+      "first_seen": "2026-08-07T11:29:43.585908+00:00",
+      "last_seen": "2026-08-07T11:29:43.585916+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        47
+      ],
+      "last_owner_netuid": 47
+    },
+    "5D2Qc9ud7vTJrPzk8mT1ruY8oV8UaDP3ttepD7zVNNi943ch": {
+      "wallet": "5D2Qc9ud7vTJrPzk8mT1ruY8oV8UaDP3ttepD7zVNNi943ch",
+      "first_seen": "2026-08-07T11:29:43.588410+00:00",
+      "last_seen": "2026-08-07T11:29:43.588417+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        48
+      ],
+      "last_owner_netuid": 48
+    },
+    "5C6z6jXv1iuwKMwfuWrZgPrrtxQZh7YKYThLXoMA2VgFG8w2": {
+      "wallet": "5C6z6jXv1iuwKMwfuWrZgPrrtxQZh7YKYThLXoMA2VgFG8w2",
+      "first_seen": "2026-08-07T11:29:43.591025+00:00",
+      "last_seen": "2026-08-07T11:29:43.591033+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        49
+      ],
+      "last_owner_netuid": 49
+    },
+    "5HgrQSNzy7Jq2kjVhT9LHmtcFuQzrTTzpAYcd4uAFumuwAyj": {
+      "wallet": "5HgrQSNzy7Jq2kjVhT9LHmtcFuQzrTTzpAYcd4uAFumuwAyj",
+      "first_seen": "2026-08-07T11:29:43.599061+00:00",
+      "last_seen": "2026-08-07T11:29:43.599071+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        50
+      ],
+      "last_owner_netuid": 50
+    },
+    "5FqACMtcegZxxopgu1g7TgyrnyD8skurr9QDPLPhxNQzsThe": {
+      "wallet": "5FqACMtcegZxxopgu1g7TgyrnyD8skurr9QDPLPhxNQzsThe",
+      "first_seen": "2026-08-07T11:29:43.607037+00:00",
+      "last_seen": "2026-08-07T11:29:43.607047+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        51
+      ],
+      "last_owner_netuid": 51
+    },
+    "5EgfUiH6A99dhihMzp7eMM8UDkvmFjCWgM5gnpBN8UgLrVuz": {
+      "wallet": "5EgfUiH6A99dhihMzp7eMM8UDkvmFjCWgM5gnpBN8UgLrVuz",
+      "first_seen": "2026-08-07T11:29:43.610710+00:00",
+      "last_seen": "2026-08-07T11:29:43.610719+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        52
+      ],
+      "last_owner_netuid": 52
+    },
+    "5F2HTUqtk9VWQwXkkUX9oFSXUkAib74qw7s3W7KyZP88AmYe": {
+      "wallet": "5F2HTUqtk9VWQwXkkUX9oFSXUkAib74qw7s3W7KyZP88AmYe",
+      "first_seen": "2026-08-07T11:29:43.613681+00:00",
+      "last_seen": "2026-08-07T11:29:43.613690+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        53
+      ],
+      "last_owner_netuid": 53
+    },
+    "5GENieJS4p6oKVPbDoXhAo46E38hxR7MxvbgMpJE4bf6xCb3": {
+      "wallet": "5GENieJS4p6oKVPbDoXhAo46E38hxR7MxvbgMpJE4bf6xCb3",
+      "first_seen": "2026-08-07T11:29:43.616401+00:00",
+      "last_seen": "2026-08-07T11:29:43.616409+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        54
+      ],
+      "last_owner_netuid": 54
+    },
+    "5G77DNXrfAxbvi53p3mh88kRMySBcJsv9j9cH4KU6ALWXgQF": {
+      "wallet": "5G77DNXrfAxbvi53p3mh88kRMySBcJsv9j9cH4KU6ALWXgQF",
+      "first_seen": "2026-08-07T11:29:43.626465+00:00",
+      "last_seen": "2026-08-07T11:29:43.626475+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        56
+      ],
+      "last_owner_netuid": 56
+    },
+    "5GmhjCqDTsRcKqPFw4FDig8tVBfFGNrwP8ywe5En5hnELwDQ": {
+      "wallet": "5GmhjCqDTsRcKqPFw4FDig8tVBfFGNrwP8ywe5En5hnELwDQ",
+      "first_seen": "2026-08-07T11:29:43.634884+00:00",
+      "last_seen": "2026-08-07T11:29:43.634894+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        57
+      ],
+      "last_owner_netuid": 57
+    },
+    "5DyEYZ2pB3bP6BN8Xpo5ova3TEPiT82j5oHXqgQ8csKE9stH": {
+      "wallet": "5DyEYZ2pB3bP6BN8Xpo5ova3TEPiT82j5oHXqgQ8csKE9stH",
+      "first_seen": "2026-08-07T11:29:43.638713+00:00",
+      "last_seen": "2026-08-07T11:29:43.638723+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        58
+      ],
+      "last_owner_netuid": 58
+    },
+    "5FH9AQM4kqbkdC9jyV5FrdEWVYt41nkhFstop7Vhyfb9ZsXt": {
+      "wallet": "5FH9AQM4kqbkdC9jyV5FrdEWVYt41nkhFstop7Vhyfb9ZsXt",
+      "first_seen": "2026-08-07T11:29:43.641913+00:00",
+      "last_seen": "2026-08-07T11:29:43.641922+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        59
+      ],
+      "last_owner_netuid": 59
+    },
+    "5CXLwkK1Scd1uiMUrXYjJUTTPxqqyH2FTJQNLp9uXQhA9rhR": {
+      "wallet": "5CXLwkK1Scd1uiMUrXYjJUTTPxqqyH2FTJQNLp9uXQhA9rhR",
+      "first_seen": "2026-08-07T11:29:43.645029+00:00",
+      "last_seen": "2026-08-07T11:29:43.645037+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        60
+      ],
+      "last_owner_netuid": 60
+    },
+    "5ECEsYL82fbXx9KfTZy7G2KXSurnScciJyAVMHZjekc8jUbn": {
+      "wallet": "5ECEsYL82fbXx9KfTZy7G2KXSurnScciJyAVMHZjekc8jUbn",
+      "first_seen": "2026-08-07T11:29:43.648889+00:00",
+      "last_seen": "2026-08-07T11:29:43.648897+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        61
+      ],
+      "last_owner_netuid": 61
+    },
+    "5EsNzkZ3DwDqCsYmSJDeGXX51dQJd5broUCH6dbDjvkTcicD": {
+      "wallet": "5EsNzkZ3DwDqCsYmSJDeGXX51dQJd5broUCH6dbDjvkTcicD",
+      "first_seen": "2026-08-07T11:29:43.659263+00:00",
+      "last_seen": "2026-08-07T11:29:43.659276+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        62
+      ],
+      "last_owner_netuid": 62
+    },
+    "5DyV8a62E2t2C4FoSqjihdV5USVXPEZYvZtUjXxZq1Mnvwwg": {
+      "wallet": "5DyV8a62E2t2C4FoSqjihdV5USVXPEZYvZtUjXxZq1Mnvwwg",
+      "first_seen": "2026-08-07T11:29:43.677027+00:00",
+      "last_seen": "2026-08-07T11:29:43.677038+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        64
+      ],
+      "last_owner_netuid": 64
+    },
+    "5C8UAnEkWyuDTMysj3Hg3n2q787R6xvvcqvV5x4bujEWGRgE": {
+      "wallet": "5C8UAnEkWyuDTMysj3Hg3n2q787R6xvvcqvV5x4bujEWGRgE",
+      "first_seen": "2026-08-07T11:29:43.680348+00:00",
+      "last_seen": "2026-08-07T11:29:43.680358+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        65
+      ],
+      "last_owner_netuid": 65
+    },
+    "5Grk5jAYsWSUMkAqKX5fmLyEKG8StdjbNPBXTPvz413MWik5": {
+      "wallet": "5Grk5jAYsWSUMkAqKX5fmLyEKG8StdjbNPBXTPvz413MWik5",
+      "first_seen": "2026-08-07T11:29:43.683423+00:00",
+      "last_seen": "2026-08-07T11:29:43.683434+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        66
+      ],
+      "last_owner_netuid": 66
+    },
+    "5H9djFYLbh72qDkXq3283FfnhzL5np4TmQgir9kBQmg99GkG": {
+      "wallet": "5H9djFYLbh72qDkXq3283FfnhzL5np4TmQgir9kBQmg99GkG",
+      "first_seen": "2026-08-07T11:29:43.686708+00:00",
+      "last_seen": "2026-08-07T11:29:43.686718+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        67
+      ],
+      "last_owner_netuid": 67
+    },
+    "5EcdJLAeYoxM3Tsf5VZ3NQPenPku218gqnjSoo3iJNy4V12V": {
+      "wallet": "5EcdJLAeYoxM3Tsf5VZ3NQPenPku218gqnjSoo3iJNy4V12V",
+      "first_seen": "2026-08-07T11:29:43.690440+00:00",
+      "last_seen": "2026-08-07T11:29:43.690450+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        68
+      ],
+      "last_owner_netuid": 68
+    },
+    "5EsorPyFCP7TaNz3QrNvDvr8ZDVtG9hfzNEfGeAVG9wbFi2B": {
+      "wallet": "5EsorPyFCP7TaNz3QrNvDvr8ZDVtG9hfzNEfGeAVG9wbFi2B",
+      "first_seen": "2026-08-07T11:29:43.694168+00:00",
+      "last_seen": "2026-08-07T11:29:43.694182+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        69
+      ],
+      "last_owner_netuid": 69
+    },
+    "5GayCfNEMcf3jLsVbXK9wMNsWpXg6axNSooPAeKuJfjJfkSz": {
+      "wallet": "5GayCfNEMcf3jLsVbXK9wMNsWpXg6axNSooPAeKuJfjJfkSz",
+      "first_seen": "2026-08-07T11:29:43.698861+00:00",
+      "last_seen": "2026-08-07T11:29:43.698872+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        70
+      ],
+      "last_owner_netuid": 70
+    },
+    "5G9yDFTi5DMYdbCz15H4m7r54b8gC8BGDmpqmsYxUbGKKwf6": {
+      "wallet": "5G9yDFTi5DMYdbCz15H4m7r54b8gC8BGDmpqmsYxUbGKKwf6",
+      "first_seen": "2026-08-07T11:29:43.703273+00:00",
+      "last_seen": "2026-08-07T11:29:43.703282+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        71
+      ],
+      "last_owner_netuid": 71
+    },
+    "5HTYVBxrF2WbVN8RBtFxAkBGuHJxjgLd9Sze5gxH4KC6GLCv": {
+      "wallet": "5HTYVBxrF2WbVN8RBtFxAkBGuHJxjgLd9Sze5gxH4KC6GLCv",
+      "first_seen": "2026-08-07T11:29:43.715103+00:00",
+      "last_seen": "2026-08-07T11:29:43.715117+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        72
+      ],
+      "last_owner_netuid": 72
+    },
+    "5FJ2nf4JecSFHpd9tCcN34NzJVX9VFdiUrkQGd9gLPqM8ohM": {
+      "wallet": "5FJ2nf4JecSFHpd9tCcN34NzJVX9VFdiUrkQGd9gLPqM8ohM",
+      "first_seen": "2026-08-07T11:29:43.720556+00:00",
+      "last_seen": "2026-08-07T11:29:43.720568+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        73
+      ],
+      "last_owner_netuid": 73
+    },
+    "5HdKJJHNG2Zh2rkSrHjPoRa8xQ9Mq8NgQwfREDCpTawLa1aQ": {
+      "wallet": "5HdKJJHNG2Zh2rkSrHjPoRa8xQ9Mq8NgQwfREDCpTawLa1aQ",
+      "first_seen": "2026-08-07T11:29:43.725280+00:00",
+      "last_seen": "2026-08-07T11:29:43.725290+00:00",
+      "rug_count": 0,
+      "owner_netuids": [
+        74
+      ],
+      "last_owner_netuid": 74
+    }
+  },
   "closed_trades": []
 }

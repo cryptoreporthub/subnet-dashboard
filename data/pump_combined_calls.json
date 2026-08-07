@@ -117,8 +117,128 @@
       "claim_pct": 2.0,
       "horizon_hours": 1,
       "outcomes": null
+    },
+    {
+      "id": "290e4b7017",
+      "created_at": "2026-08-07T11:40:38.576386Z",
+      "experimental": true,
+      "focus_netuid": 35,
+      "shown_netuid": 41,
+      "shown": {
+        "netuid": 41,
+        "name": "Almanac",
+        "lane": "Coil",
+        "phase": "ACCUMULATING",
+        "score": 0.75,
+        "timing_pts": 100.0,
+        "peer_pts": 87.9,
+        "combined_pts": 96.4,
+        "to_lead_pct": 100,
+        "to_trigger_pct": 100,
+        "price": 0.00506577
+      },
+      "tracked": [
+        {
+          "netuid": 41,
+          "name": "Almanac",
+          "lane": "Coil",
+          "phase": "ACCUMULATING",
+          "score": 0.75,
+          "timing_pts": 100.0,
+          "peer_pts": 87.9,
+          "combined_pts": 96.4,
+          "to_lead_pct": 100,
+          "to_trigger_pct": 100,
+          "price": 0.00506577
+        },
+        {
+          "netuid": 61,
+          "name": "RedTeam",
+          "lane": "Coil",
+          "phase": "ACCUMULATING",
+          "score": 0.75,
+          "timing_pts": 100.0,
+          "peer_pts": 87.9,
+          "combined_pts": 96.4,
+          "to_lead_pct": 100,
+          "to_trigger_pct": 100,
+          "price": 0.00611578
+        },
+        {
+          "netuid": 85,
+          "name": "Vidaio",
+          "lane": "Coil",
+          "phase": "ACCUMULATING",
+          "score": 0.75,
+          "timing_pts": 100.0,
+          "peer_pts": 87.9,
+          "combined_pts": 96.4,
+          "to_lead_pct": 100,
+          "to_trigger_pct": 100,
+          "price": 0.00585034
+        },
+        {
+          "netuid": 102,
+          "name": "ConnitoAI",
+          "lane": "Coil",
+          "phase": "ACCUMULATING",
+          "score": 0.75,
+          "timing_pts": 100.0,
+          "peer_pts": 87.9,
+          "combined_pts": 96.4,
+          "to_lead_pct": 100,
+          "to_trigger_pct": 100,
+          "price": 0.00967995
+        },
+        {
+          "netuid": 117,
+          "name": "glyph",
+          "lane": "Coil",
+          "phase": "ACCUMULATING",
+          "score": 0.75,
+          "timing_pts": 100.0,
+          "peer_pts": 87.9,
+          "combined_pts": 96.4,
+          "to_lead_pct": 100,
+          "to_trigger_pct": 100,
+          "price": 0.00263278
+        }
+      ],
+      "next_up_top": {
+        "netuid": 41,
+        "name": "Almanac",
+        "lane": "Coil",
+        "phase": "ACCUMULATING",
+        "score": 0.75,
+        "timing_pts": 100.0,
+        "peer_pts": 87.9,
+        "combined_pts": 96.4,
+        "to_lead_pct": 100,
+        "to_trigger_pct": 100,
+        "price": 0.00506577
+      },
+      "peer_top": {
+        "netuid": 13,
+        "name": "Data Universe",
+        "lane": "Coil",
+        "phase": "STIRRING",
+        "distance": 0.202,
+        "shared": [
+          "vol heat"
+        ],
+        "score": 0.3,
+        "to_lead_pct": 68
+      },
+      "weights": {
+        "timing": 0.7,
+        "peer": 0.3
+      },
+      "prediction_id": "4292bdf30a",
+      "claim_pct": 2.0,
+      "horizon_hours": 1,
+      "outcomes": null
     }
   ],
   "version": 1,
-  "updated_at": "2026-08-07T11:24:13.450791Z"
+  "updated_at": "2026-08-07T11:40:38.576386Z"
 }

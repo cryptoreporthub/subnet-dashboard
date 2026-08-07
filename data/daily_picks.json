@@ -2991,22 +2991,16 @@
   {
     "status": "ok",
     "date": "2026-08-07",
-    "timestamp_utc": "2026-08-07T11:27:18.287304Z",
+    "timestamp_utc": "2026-08-07T11:32:16.837395Z",
     "regime": "neutral",
     "rotation_summary": {
-      "timestamp": "2026-08-07T11:27:18.287317Z",
+      "timestamp": "2026-08-07T11:32:16.837408Z",
       "patterns": [],
       "volatility_clusters": {
         "high": [
           {
             "netuid": 1,
             "name": "Apex",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
-            "netuid": 2,
-            "name": "DSperse",
             "volatility": 0.0,
             "price_change_24h": 0.0
           },
@@ -3035,26 +3029,14 @@
             "price_change_24h": 0.0
           },
           {
+            "netuid": 15,
+            "name": "ORO",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
             "netuid": 7,
             "name": "Allways",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
-            "netuid": 8,
-            "name": "Vanta",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
-            "netuid": 9,
-            "name": "iota",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
-            "netuid": 10,
-            "name": "Pareton",
             "volatility": 0.0,
             "price_change_24h": 0.0
           },
@@ -3071,26 +3053,8 @@
             "price_change_24h": 0.0
           },
           {
-            "netuid": 13,
-            "name": "Data Universe",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
             "netuid": 14,
             "name": "Cacheon",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
-            "netuid": 15,
-            "name": "ORO",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
-            "netuid": 16,
-            "name": "TC",
             "volatility": 0.0,
             "price_change_24h": 0.0
           },
@@ -3101,26 +3065,8 @@
             "price_change_24h": 0.0
           },
           {
-            "netuid": 18,
-            "name": "Zeus",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
-            "netuid": 19,
-            "name": "blockmachine",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
             "netuid": 20,
             "name": "ChronoSeek",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
-            "netuid": 21,
-            "name": "AdTAO",
             "volatility": 0.0,
             "price_change_24h": 0.0
           },
@@ -3131,14 +3077,68 @@
             "price_change_24h": 0.0
           },
           {
-            "netuid": 23,
-            "name": "Trishool",
+            "netuid": 24,
+            "name": "Quasar",
             "volatility": 0.0,
             "price_change_24h": 0.0
           },
           {
-            "netuid": 24,
-            "name": "Quasar",
+            "netuid": 25,
+            "name": "Mainframe",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 26,
+            "name": "Perturb",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 29,
+            "name": "ho\u03c4floa\u03c4",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 30,
+            "name": "Endure Network",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 2,
+            "name": "DSperse",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 31,
+            "name": "rec4ll",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 32,
+            "name": "ItsAI",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 33,
+            "name": "ReadyAI",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 34,
+            "name": "BitMind",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 21,
+            "name": "AdTAO",
             "volatility": 0.0,
             "price_change_24h": 0.0
           }
@@ -3151,12 +3151,6 @@
             "price_change_24h": 0.0
           },
           {
-            "netuid": 2,
-            "name": "DSperse",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
             "netuid": 3,
             "name": "Templar",
             "volatility": 0.0,
@@ -3181,26 +3175,14 @@
             "price_change_24h": 0.0
           },
           {
+            "netuid": 15,
+            "name": "ORO",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
             "netuid": 7,
             "name": "Allways",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
-            "netuid": 8,
-            "name": "Vanta",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
-            "netuid": 9,
-            "name": "iota",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
-            "netuid": 10,
-            "name": "Pareton",
             "volatility": 0.0,
             "price_change_24h": 0.0
           },
@@ -3217,26 +3199,8 @@
             "price_change_24h": 0.0
           },
           {
-            "netuid": 13,
-            "name": "Data Universe",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
             "netuid": 14,
             "name": "Cacheon",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
-            "netuid": 15,
-            "name": "ORO",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
-            "netuid": 16,
-            "name": "TC",
             "volatility": 0.0,
             "price_change_24h": 0.0
           },
@@ -3247,26 +3211,8 @@
             "price_change_24h": 0.0
           },
           {
-            "netuid": 18,
-            "name": "Zeus",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
-            "netuid": 19,
-            "name": "blockmachine",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
             "netuid": 20,
             "name": "ChronoSeek",
-            "volatility": 0.0,
-            "price_change_24h": 0.0
-          },
-          {
-            "netuid": 21,
-            "name": "AdTAO",
             "volatility": 0.0,
             "price_change_24h": 0.0
           },
@@ -3277,14 +3223,68 @@
             "price_change_24h": 0.0
           },
           {
-            "netuid": 23,
-            "name": "Trishool",
+            "netuid": 24,
+            "name": "Quasar",
             "volatility": 0.0,
             "price_change_24h": 0.0
           },
           {
-            "netuid": 24,
-            "name": "Quasar",
+            "netuid": 25,
+            "name": "Mainframe",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 26,
+            "name": "Perturb",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 29,
+            "name": "ho\u03c4floa\u03c4",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 30,
+            "name": "Endure Network",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 2,
+            "name": "DSperse",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 31,
+            "name": "rec4ll",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 32,
+            "name": "ItsAI",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 33,
+            "name": "ReadyAI",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 34,
+            "name": "BitMind",
+            "volatility": 0.0,
+            "price_change_24h": 0.0
+          },
+          {
+            "netuid": 21,
+            "name": "AdTAO",
             "volatility": 0.0,
             "price_change_24h": 0.0
           }
@@ -3306,8 +3306,8 @@
         "name": "Apex",
         "symbol": "APEX"
       },
-      "score": 74.01,
-      "confidence": 0.4196,
+      "score": 73.9,
+      "confidence": 0.4193,
       "expert_contributions": {
         "quant": 0.7228,
         "hype": 0.75,
@@ -3375,23 +3375,23 @@
           "Missing critical field: volume",
           "Very thin volume: $0 < $100"
         ],
-        "adjusted_confidence": 0.3692,
+        "adjusted_confidence": 0.369,
         "confidence_multiplier": 0.88,
         "max_haircut": 0.12
       },
-      "final_confidence": 0.3692,
+      "final_confidence": 0.369,
       "action": "long",
       "tie_break": null,
       "prediction": {
-        "id": "96f9c9fcda",
+        "id": "4e231759ed",
         "netuid": 1,
         "name": "Apex",
         "direction": "up",
         "predicted_pct": 1.51,
         "horizon_hours": 24,
         "reference_price": 0.00830189,
-        "created_at": "2026-08-07T11:27:18.286755+00:00Z",
-        "resolve_at": "2026-08-08T11:27:18.286755+00:00Z",
+        "created_at": "2026-08-07T11:32:16.836926+00:00Z",
+        "resolve_at": "2026-08-08T11:32:16.836926+00:00Z",
         "status": "pending",
         "signal_source": "social_sentiment",
         "expert": "hype",
@@ -3634,7 +3634,7 @@
     "market_context": {
       "tao_change_24h": 0.0,
       "weights": {
-        "quant": 1.0165428,
+        "quant": 1.0587668,
         "hype": 0.74214,
         "dark_horse": 1.0872680000000001,
         "technical": 0.9570000000000001
