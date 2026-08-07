@@ -1,10 +1,10 @@
 {
   "status": "ok",
-  "captured_at": "2026-08-07T13:41:08.810840Z",
+  "captured_at": "2026-08-07T13:26:10.220180Z",
   "alert_level": "alert",
   "alert_reasons": [
     "worker_peer not alive",
-    "actionable badges: SN35 BUILDING, SN72 BUILDING, SN3 BUILDING, SN30 BUILDING, SN44 BUILDING"
+    "actionable badges: SN35 BUILDING, SN66 BUILDING, SN72 BUILDING, SN3 BUILDING, SN30 BUILDING"
   ],
   "pump_desk": {
     "status": "success",
@@ -33,6 +33,12 @@
       "move": "BUILDING \u00b7 OxMarkets (SN35)"
     },
     {
+      "netuid": 66,
+      "name": "conjectures",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 conjectures (SN66)"
+    },
+    {
       "netuid": 72,
       "name": "StreetVision by NATIX",
       "badge": "BUILDING",
@@ -49,12 +55,6 @@
       "name": "Endure Network",
       "badge": "BUILDING",
       "move": "BUILDING \u00b7 Endure Network (SN30)"
-    },
-    {
-      "netuid": 44,
-      "name": "Score",
-      "badge": "BUILDING",
-      "move": "BUILDING \u00b7 Score (SN44)"
     }
   ]
 }

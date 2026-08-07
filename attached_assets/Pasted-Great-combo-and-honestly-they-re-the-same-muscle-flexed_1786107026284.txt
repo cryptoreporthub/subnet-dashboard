@@ -1,0 +1,36 @@
+Great combo — and honestly they're the same muscle flexed twice: **3 is the "why," 1 is the "how."** The features are literally what makes the premium pitch true, not decorations on top of it. Let me lay out the plan that fuses them.
+
+## The tie-in: your flagship *is* a feature
+
+The premium reason-to-return (3) is the **Conviction Index** — *"who in the ecosystem has actually been right, on the record, and what does the crowd believe right now."* Most of it already exists in your schema as data; the features (1) are what turn that data into something people visit for.
+
+## Roadmap that builds the pitch, in order of closure
+
+**Phase 1 — Surface the receipts (fastest win, ships this week)**
+The infrastructure is already there (`author_reliability`, `price_outcomes`, `message_verdicts`). This phase is mostly *exposure*, not new plumbing:
+- **Public Caller Leaderboard** — per-author strike rate over 7/30/90d, with their actual calls listed as receipts. Assignment: read `author_reliability.accuracy_score` → new dashboard panel + `/api/caller-leaderboard` endpoint. Small, high-bling.
+- **Call Proof cards in the Live Feed** — when a call resolves, show ✓/✗ inline under the original message ("called 4h out — hit ✔"). This is the visible loop that builds trust.
+
+**Phase 2 — One consensus number (the compounding asset)**
+- **Live "market conviction" per subnet** — conviction-weighted by each caller's track record, so the site's number gets *smarter* the longer it runs. Feeds from `message_verdicts` + `author_reliability`. This is the thing that has no equivalent in a raw sentiment feed — it's *earned* credibility, and it compounds daily.
+
+**Phase 3 — The "they said it first" proof (differentiation)**
+- **Divergence panel** — crowd was early & right, or loud & wrong. Maps to the narrative curve (new → rising → peaking → decaying) so it reads as *stories*, not ranks.
+
+**Phase 4 — Close the price-to-message learning loop**
+- Wire `pattern_correlations` (trend → success) back into council weights so the engine literally learns from every resolved call. This is the "it gets smarter" proof — the honest moat.
+
+---
+
+Let me put this down as a proper one-pager you can look at and hand to Cursor — the pitch + exactly which tables/files each phase touches.
+
+Drafted it into **[conviction-index-plan.md](ditto://artifact/1786086749615/7fe795cc-ba60-4ed9-bb3d-e7abb8892d68)** — the full pitch + the phased feature plan, each phase mapped to the tables/files it actually touches in `message_intel/`. It's the doc you can hand to Cursor (or that I can implement).
+
+The short version of the through-line:
+
+- **Phase 1 (ship first):** Public Caller Leaderboard + Call Proof in the Live Feed — both are mostly *exposing* data your schema already stores (`author_reliability`, `price_outcomes`). Small surface, immediate bling.
+- **Phase 2:** the one live "market conviction" number per subnet, weighted by caller track record — *the* compounding asset no raw sentiment feed has.
+- **Phase 3:** the divergence/"they said it first" panel — the differentiation.
+- **Phase 4:** wire `pattern_correlations` back into council weights — the literal self-learning moat.
+
+Since Phase 1 is the fastest win and closest to done, that's where I'd point a first implementation pass. Want me to **kick off a Ditto Code job for Phase 1** (build the `/api/caller-leaderboard` endpoint + the leaderboard + call-proof panels on the dashboard)? It'll run against `cryptoreporthub/subnet-dashboard`, gated by your approval, and we validate it live before touching anything else. Or do you want to review the doc / adjust phase order first?

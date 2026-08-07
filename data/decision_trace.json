@@ -1,7 +1,7 @@
 {
   "meta": {
     "version": 1,
-    "last_updated": "2026-08-07T12:27:25.077101Z"
+    "last_updated": "2026-08-07T13:27:16.995749Z"
   },
   "records": [
     {
@@ -3996,6 +3996,1491 @@
       ],
       "subnet": "Apex",
       "netuid": 1
+    },
+    {
+      "id": "tr_20260807124126173035",
+      "created_at": "2026-08-07T12:41:26.173064Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "da20281a36",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.02594721,
+        "resolved_price": 0.025971819,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.412637Z",
+        "resolved_at": "2026-08-07T12:29:43.412637Z",
+        "resolve_at": "2026-08-07T12:29:43.412637Z",
+        "actual_pct": 0.0948,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "SN3",
+      "netuid": 3
+    },
+    {
+      "id": "tr_20260807124127915486",
+      "created_at": "2026-08-07T12:41:27.915513Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "f2ef1c0d50",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.0582064,
+        "resolved_price": 0.058248333,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.423649Z",
+        "resolved_at": "2026-08-07T12:29:43.423649Z",
+        "resolve_at": "2026-08-07T12:29:43.423649Z",
+        "actual_pct": 0.072,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "Targon",
+      "netuid": 4
+    },
+    {
+      "id": "tr_20260807124129528552",
+      "created_at": "2026-08-07T12:41:29.528580Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "b1fa93a5c6",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.01387843,
+        "resolved_price": 0.013853747,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.430312Z",
+        "resolved_at": "2026-08-07T12:29:43.430312Z",
+        "resolve_at": "2026-08-07T12:29:43.430312Z",
+        "actual_pct": -0.1779,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "Hone",
+      "netuid": 5
+    },
+    {
+      "id": "tr_20260807124131139968",
+      "created_at": "2026-08-07T12:41:31.139998Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "32be737f1b",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.00338124,
+        "resolved_price": 0.003381232,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.439016Z",
+        "resolved_at": "2026-08-07T12:29:43.439016Z",
+        "resolve_at": "2026-08-07T12:29:43.439016Z",
+        "actual_pct": -0.0002,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "Allways",
+      "netuid": 7
+    },
+    {
+      "id": "tr_20260807124133169942",
+      "created_at": "2026-08-07T12:41:33.169968Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "bb6ed285d7",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.029868,
+        "resolved_price": 0.029910415,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.445929Z",
+        "resolved_at": "2026-08-07T12:29:43.445929Z",
+        "resolve_at": "2026-08-07T12:29:43.445929Z",
+        "actual_pct": 0.142,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "Vanta",
+      "netuid": 8
+    },
+    {
+      "id": "tr_20260807124135498229",
+      "created_at": "2026-08-07T12:41:35.498258Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "df971b4e37",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.0197967,
+        "resolved_price": 0.019708686,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.467056Z",
+        "resolved_at": "2026-08-07T12:29:43.467056Z",
+        "resolve_at": "2026-08-07T12:29:43.467056Z",
+        "actual_pct": -0.4446,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "ORO",
+      "netuid": 15
+    },
+    {
+      "id": "tr_20260807124137460109",
+      "created_at": "2026-08-07T12:41:37.460139Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "d78c450365",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.00289763,
+        "resolved_price": 0.002881281,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.482786Z",
+        "resolved_at": "2026-08-07T12:29:43.482786Z",
+        "resolve_at": "2026-08-07T12:29:43.482786Z",
+        "actual_pct": -0.5642,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "GroundLayer",
+      "netuid": 20
+    },
+    {
+      "id": "tr_20260807124139092513",
+      "created_at": "2026-08-07T12:41:39.092674Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "417f114458",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.00400969,
+        "resolved_price": 0.004009687,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.511047Z",
+        "resolved_at": "2026-08-07T12:29:43.511047Z",
+        "resolve_at": "2026-08-07T12:29:43.511047Z",
+        "actual_pct": -0.0001,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "Endure Network",
+      "netuid": 30
+    },
+    {
+      "id": "tr_20260807124140656210",
+      "created_at": "2026-08-07T12:41:40.656239Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "431225c69c",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.00576185,
+        "resolved_price": 0.00576183,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.522856Z",
+        "resolved_at": "2026-08-07T12:29:43.522856Z",
+        "resolve_at": "2026-08-07T12:29:43.522856Z",
+        "actual_pct": -0.0003,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "ReadyAI",
+      "netuid": 33
+    },
+    {
+      "id": "tr_20260807124142169639",
+      "created_at": "2026-08-07T12:41:42.169705Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "547809dc9e",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.00362914,
+        "resolved_price": 0.003629126,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.537766Z",
+        "resolved_at": "2026-08-07T12:29:43.537766Z",
+        "resolve_at": "2026-08-07T12:29:43.537766Z",
+        "actual_pct": -0.0004,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "Aurelius",
+      "netuid": 37
+    },
+    {
+      "id": "tr_20260807124143747354",
+      "created_at": "2026-08-07T12:41:43.747390Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "9beef1d2ea",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.01225997,
+        "resolved_price": 0.012267496,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.545316Z",
+        "resolved_at": "2026-08-07T12:29:43.545316Z",
+        "resolve_at": "2026-08-07T12:29:43.545316Z",
+        "actual_pct": 0.0614,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "ChronoLLM",
+      "netuid": 38
+    },
+    {
+      "id": "tr_20260807124145342103",
+      "created_at": "2026-08-07T12:41:45.342130Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "5289b76855",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.00729349,
+        "resolved_price": 0.007291674,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.555899Z",
+        "resolved_at": "2026-08-07T12:29:43.555899Z",
+        "resolve_at": "2026-08-07T12:29:43.555899Z",
+        "actual_pct": -0.0249,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "Ralph",
+      "netuid": 40
+    },
+    {
+      "id": "tr_20260807124146973213",
+      "created_at": "2026-08-07T12:41:46.973242Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "10d8d6faa3",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.03998424,
+        "resolved_price": 0.04005032,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.573159Z",
+        "resolved_at": "2026-08-07T12:29:43.573159Z",
+        "resolve_at": "2026-08-07T12:29:43.573159Z",
+        "actual_pct": 0.1653,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "Score",
+      "netuid": 44
+    },
+    {
+      "id": "tr_20260807124148566818",
+      "created_at": "2026-08-07T12:41:48.566845Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "c4c899c9af",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.0050882,
+        "resolved_price": 0.005087484,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.593516Z",
+        "resolved_at": "2026-08-07T12:29:43.593516Z",
+        "resolve_at": "2026-08-07T12:29:43.593516Z",
+        "actual_pct": -0.0141,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "Synth",
+      "netuid": 50
+    },
+    {
+      "id": "tr_20260807124150184430",
+      "created_at": "2026-08-07T12:41:50.184456Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "4d3994b6cb",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.07159667,
+        "resolved_price": 0.071606384,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.601650Z",
+        "resolved_at": "2026-08-07T12:29:43.601650Z",
+        "resolve_at": "2026-08-07T12:29:43.601650Z",
+        "actual_pct": 0.0136,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "lium.io",
+      "netuid": 51
+    },
+    {
+      "id": "tr_20260807124151687860",
+      "created_at": "2026-08-07T12:41:51.687887Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "0b5f2ed0c0",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.01702102,
+        "resolved_price": 0.016988337,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.621044Z",
+        "resolved_at": "2026-08-07T12:29:43.621044Z",
+        "resolve_at": "2026-08-07T12:29:43.621044Z",
+        "actual_pct": -0.192,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "Gradients",
+      "netuid": 56
+    },
+    {
+      "id": "tr_20260807124153257779",
+      "created_at": "2026-08-07T12:41:53.257807Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "1386846f03",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.00549928,
+        "resolved_price": 0.005498401,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.629349Z",
+        "resolved_at": "2026-08-07T12:29:43.629349Z",
+        "resolve_at": "2026-08-07T12:29:43.629349Z",
+        "actual_pct": -0.016,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "SN57",
+      "netuid": 57
+    },
+    {
+      "id": "tr_20260807124154812697",
+      "created_at": "2026-08-07T12:41:54.812728Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "18aeb13a2f",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.01303862,
+        "resolved_price": 0.013078506,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.651882Z",
+        "resolved_at": "2026-08-07T12:29:43.651882Z",
+        "resolve_at": "2026-08-07T12:29:43.651882Z",
+        "actual_pct": 0.3059,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "Ridges",
+      "netuid": 62
+    },
+    {
+      "id": "tr_20260807124156403005",
+      "created_at": "2026-08-07T12:41:56.403038Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "a7f8df00f1",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.00834336,
+        "resolved_price": 0.008453104,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.662653Z",
+        "resolved_at": "2026-08-07T12:29:43.662653Z",
+        "resolve_at": "2026-08-07T12:29:43.662653Z",
+        "actual_pct": 1.3153,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "Enigma",
+      "netuid": 63
+    },
+    {
+      "id": "tr_20260807124158081825",
+      "created_at": "2026-08-07T12:41:58.081855Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "0feb133889",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.0876521,
+        "resolved_price": 0.08765729,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.670900Z",
+        "resolved_at": "2026-08-07T12:29:43.670900Z",
+        "resolve_at": "2026-08-07T12:29:43.670900Z",
+        "actual_pct": 0.0059,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 701
+      },
+      "signals": [],
+      "subnet": "Chutes",
+      "netuid": 64
+    },
+    {
+      "id": "tr_20260807124159637437",
+      "created_at": "2026-08-07T12:41:59.637465Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "c8e59b7e54",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.00302694,
+        "resolved_price": 0.003002249,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.707127Z",
+        "resolved_at": "2026-08-07T12:29:43.707127Z",
+        "resolve_at": "2026-08-07T12:29:43.707127Z",
+        "actual_pct": -0.8157,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 700
+      },
+      "signals": [],
+      "subnet": "StreetVision by NATIX",
+      "netuid": 72
+    },
+    {
+      "id": "tr_20260807124201123130",
+      "created_at": "2026-08-07T12:42:01.123161Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "6402156836",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.01962177,
+        "resolved_price": 0.019389241,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.728926Z",
+        "resolved_at": "2026-08-07T12:29:43.728926Z",
+        "resolve_at": "2026-08-07T12:29:43.728926Z",
+        "actual_pct": -1.1851,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 700
+      },
+      "signals": [],
+      "subnet": "Hippius",
+      "netuid": 75
+    },
+    {
+      "id": "tr_20260807124202537182",
+      "created_at": "2026-08-07T12:42:02.537210Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "c6eb8b2b1f",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.00501708,
+        "resolved_price": 0.004983408,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.784880Z",
+        "resolved_at": "2026-08-07T12:29:43.784880Z",
+        "resolve_at": "2026-08-07T12:29:43.784880Z",
+        "actual_pct": -0.6711,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 700
+      },
+      "signals": [],
+      "subnet": "wgmi",
+      "netuid": 92
+    },
+    {
+      "id": "tr_20260807124203804814",
+      "created_at": "2026-08-07T12:42:03.804854Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "7e483452ec",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.00535796,
+        "resolved_price": 0.005313452,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.810116Z",
+        "resolved_at": "2026-08-07T12:29:43.810116Z",
+        "resolve_at": "2026-08-07T12:29:43.810116Z",
+        "actual_pct": -0.8307,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 700
+      },
+      "signals": [],
+      "subnet": "SN99",
+      "netuid": 99
+    },
+    {
+      "id": "tr_20260807124204994206",
+      "created_at": "2026-08-07T12:42:04.994236Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "c0c62cc819",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.00476322,
+        "resolved_price": 0.004762766,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.821589Z",
+        "resolved_at": "2026-08-07T12:29:43.821589Z",
+        "resolve_at": "2026-08-07T12:29:43.821589Z",
+        "actual_pct": -0.0095,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 700
+      },
+      "signals": [],
+      "subnet": "Tag101",
+      "netuid": 101
+    },
+    {
+      "id": "tr_20260807124206202390",
+      "created_at": "2026-08-07T12:42:06.202420Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "68747cbe17",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.06164247,
+        "resolved_price": 0.061391709,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.846972Z",
+        "resolved_at": "2026-08-07T12:29:43.846972Z",
+        "resolve_at": "2026-08-07T12:29:43.846972Z",
+        "actual_pct": -0.4068,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 700
+      },
+      "signals": [],
+      "subnet": "Minos",
+      "netuid": 107
+    },
+    {
+      "id": "tr_20260807124207512337",
+      "created_at": "2026-08-07T12:42:07.512365Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "edb1a21700",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.00796062,
+        "resolved_price": 0.007957545,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.881988Z",
+        "resolved_at": "2026-08-07T12:29:43.881988Z",
+        "resolve_at": "2026-08-07T12:29:43.881988Z",
+        "actual_pct": -0.0386,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 700
+      },
+      "signals": [],
+      "subnet": "Memo",
+      "netuid": 116
+    },
+    {
+      "id": "tr_20260807124209030808",
+      "created_at": "2026-08-07T12:42:09.030838Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "14a237d2e3",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.05775376,
+        "resolved_price": 0.05804922,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:29:43.904872Z",
+        "resolved_at": "2026-08-07T12:29:43.904872Z",
+        "resolve_at": "2026-08-07T12:29:43.904872Z",
+        "actual_pct": 0.5116,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 700
+      },
+      "signals": [],
+      "subnet": "Affine",
+      "netuid": 120
+    },
+    {
+      "id": "tr_20260807124210508701",
+      "created_at": "2026-08-07T12:42:10.508728Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "4292bdf30a",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.00506577,
+        "resolved_price": 0.005065604,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:40:38.568033Z",
+        "resolved_at": "2026-08-07T12:40:38.568033Z",
+        "resolve_at": "2026-08-07T12:40:38.568033Z",
+        "actual_pct": -0.0033,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 46
+      },
+      "signals": [],
+      "subnet": "Almanac",
+      "netuid": 41
+    },
+    {
+      "id": "tr_20260807124233223637",
+      "created_at": "2026-08-07T12:42:33.223701Z",
+      "decision_type": "prediction_create",
+      "decision": {
+        "prediction_id": "0629f0b501",
+        "event": "created",
+        "signals": [
+          {
+            "type": "pick_signal",
+            "source": "rsi_crossover",
+            "payload": {
+              "score": 0.571,
+              "weight": 1.0,
+              "contribution": 0.571
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "macd_cross",
+            "payload": {
+              "score": 0.7006,
+              "weight": 1.0,
+              "contribution": 0.7006
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "stochastic_reversal",
+            "payload": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "bollinger_squeeze",
+            "payload": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "mfi_flow",
+            "payload": {
+              "score": 0.5067,
+              "weight": 1.0,
+              "contribution": 0.5067
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "cci_divergence",
+            "payload": {
+              "score": 0.6705,
+              "weight": 1.0,
+              "contribution": 0.6705
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "williams_r",
+            "payload": {
+              "score": 0.5257,
+              "weight": 1.0,
+              "contribution": 0.5257
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "keltner_channel",
+            "payload": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "rsi_crossover",
+            "payload": {}
+          },
+          {
+            "type": "pick_signal",
+            "source": "macd_cross",
+            "payload": {}
+          },
+          {
+            "type": "pick_signal",
+            "source": "cci_divergence",
+            "payload": {}
+          }
+        ],
+        "expert": "hype",
+        "weights_at_creation": {
+          "quant": 1.043,
+          "hype": 0.868,
+          "dark_horse": 1.03,
+          "technical": 0.87
+        },
+        "impact_strength_at_creation": 1.0,
+        "impact_tier": "small",
+        "market_impact": {
+          "tier": "small",
+          "market_cap": 0.0,
+          "relative_flow": 0.0,
+          "sensitivity": 1.0,
+          "strength": 1.0,
+          "scale_factor": 1.0,
+          "ref_tao": 50.0,
+          "ref_impact_pct": 5000.0,
+          "summary": "small-cap: size unknown \u2014 neutral impact"
+        },
+        "learning_state_at_creation": {
+          "council_weights": {
+            "quant": 1.043,
+            "hype": 0.868,
+            "dark_horse": 1.03,
+            "technical": 0.87
+          },
+          "impact_strength": 1.0,
+          "impact_tier": "small"
+        },
+        "regime": null,
+        "reference_price": 0.008301678,
+        "resolved_price": null,
+        "horizon_hours": 24,
+        "created_at": "2026-08-07T12:42:32.815053+00:00Z",
+        "resolved_at": null,
+        "resolve_at": "2026-08-08T12:42:32.815053+00:00Z",
+        "actual_pct": null,
+        "outcome": null,
+        "direction": "up",
+        "price_source": null,
+        "price_lag_seconds": null
+      },
+      "signals": [
+        {
+          "type": "pick_signal",
+          "source": "rsi_crossover",
+          "payload": {
+            "score": 0.571,
+            "weight": 1.0,
+            "contribution": 0.571
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "macd_cross",
+          "payload": {
+            "score": 0.7006,
+            "weight": 1.0,
+            "contribution": 0.7006
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "stochastic_reversal",
+          "payload": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "bollinger_squeeze",
+          "payload": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "mfi_flow",
+          "payload": {
+            "score": 0.5067,
+            "weight": 1.0,
+            "contribution": 0.5067
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "cci_divergence",
+          "payload": {
+            "score": 0.6705,
+            "weight": 1.0,
+            "contribution": 0.6705
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "williams_r",
+          "payload": {
+            "score": 0.5257,
+            "weight": 1.0,
+            "contribution": 0.5257
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "keltner_channel",
+          "payload": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "rsi_crossover",
+          "payload": {}
+        },
+        {
+          "type": "pick_signal",
+          "source": "macd_cross",
+          "payload": {}
+        },
+        {
+          "type": "pick_signal",
+          "source": "cci_divergence",
+          "payload": {}
+        }
+      ],
+      "subnet": "Apex",
+      "netuid": 1
+    },
+    {
+      "id": "tr_20260807125712100250",
+      "created_at": "2026-08-07T12:57:12.100282Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "00e3526cfe",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.01008305,
+        "resolved_price": 0.009736502,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:49:50.262755Z",
+        "resolved_at": "2026-08-07T12:49:50.262755Z",
+        "resolve_at": "2026-08-07T12:49:50.262755Z",
+        "actual_pct": -3.4369,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 440
+      },
+      "signals": [],
+      "subnet": "cascade",
+      "netuid": 91
+    },
+    {
+      "id": "tr_20260807125713299625",
+      "created_at": "2026-08-07T12:57:13.299694Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "011612f79b",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.00967995,
+        "resolved_price": 0.009666556,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T11:50:56.082349Z",
+        "resolved_at": "2026-08-07T12:50:56.082349Z",
+        "resolve_at": "2026-08-07T12:50:56.082349Z",
+        "actual_pct": -0.1384,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 374
+      },
+      "signals": [],
+      "subnet": "ConnitoAI",
+      "netuid": 102
+    },
+    {
+      "id": "tr_20260807125745763501",
+      "created_at": "2026-08-07T12:57:45.763528Z",
+      "decision_type": "prediction_create",
+      "decision": {
+        "prediction_id": "52ff518639",
+        "event": "created",
+        "signals": [
+          {
+            "type": "pick_signal",
+            "source": "rsi_crossover",
+            "payload": {
+              "score": 0.571,
+              "weight": 1.0,
+              "contribution": 0.571
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "macd_cross",
+            "payload": {
+              "score": 0.7006,
+              "weight": 1.0,
+              "contribution": 0.7006
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "stochastic_reversal",
+            "payload": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "bollinger_squeeze",
+            "payload": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "mfi_flow",
+            "payload": {
+              "score": 0.5067,
+              "weight": 1.0,
+              "contribution": 0.5067
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "cci_divergence",
+            "payload": {
+              "score": 0.6705,
+              "weight": 1.0,
+              "contribution": 0.6705
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "williams_r",
+            "payload": {
+              "score": 0.5257,
+              "weight": 1.0,
+              "contribution": 0.5257
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "keltner_channel",
+            "payload": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            }
+          },
+          {
+            "type": "pick_signal",
+            "source": "rsi_crossover",
+            "payload": {}
+          },
+          {
+            "type": "pick_signal",
+            "source": "macd_cross",
+            "payload": {}
+          },
+          {
+            "type": "pick_signal",
+            "source": "cci_divergence",
+            "payload": {}
+          }
+        ],
+        "expert": "hype",
+        "weights_at_creation": {
+          "quant": 1.043,
+          "hype": 0.868,
+          "dark_horse": 1.03,
+          "technical": 0.87
+        },
+        "impact_strength_at_creation": 1.0,
+        "impact_tier": "small",
+        "market_impact": {
+          "tier": "small",
+          "market_cap": 0.0,
+          "relative_flow": 0.0,
+          "sensitivity": 1.0,
+          "strength": 1.0,
+          "scale_factor": 1.0,
+          "ref_tao": 50.0,
+          "ref_impact_pct": 5000.0,
+          "summary": "small-cap: size unknown \u2014 neutral impact"
+        },
+        "learning_state_at_creation": {
+          "council_weights": {
+            "quant": 1.043,
+            "hype": 0.868,
+            "dark_horse": 1.03,
+            "technical": 0.87
+          },
+          "impact_strength": 1.0,
+          "impact_tier": "small"
+        },
+        "regime": null,
+        "reference_price": 0.008301678,
+        "resolved_price": null,
+        "horizon_hours": 24,
+        "created_at": "2026-08-07T12:57:45.349167+00:00Z",
+        "resolved_at": null,
+        "resolve_at": "2026-08-08T12:57:45.349167+00:00Z",
+        "actual_pct": null,
+        "outcome": null,
+        "direction": "up",
+        "price_source": null,
+        "price_lag_seconds": null
+      },
+      "signals": [
+        {
+          "type": "pick_signal",
+          "source": "rsi_crossover",
+          "payload": {
+            "score": 0.571,
+            "weight": 1.0,
+            "contribution": 0.571
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "macd_cross",
+          "payload": {
+            "score": 0.7006,
+            "weight": 1.0,
+            "contribution": 0.7006
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "stochastic_reversal",
+          "payload": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "bollinger_squeeze",
+          "payload": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "mfi_flow",
+          "payload": {
+            "score": 0.5067,
+            "weight": 1.0,
+            "contribution": 0.5067
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "cci_divergence",
+          "payload": {
+            "score": 0.6705,
+            "weight": 1.0,
+            "contribution": 0.6705
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "williams_r",
+          "payload": {
+            "score": 0.5257,
+            "weight": 1.0,
+            "contribution": 0.5257
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "keltner_channel",
+          "payload": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          }
+        },
+        {
+          "type": "pick_signal",
+          "source": "rsi_crossover",
+          "payload": {}
+        },
+        {
+          "type": "pick_signal",
+          "source": "macd_cross",
+          "payload": {}
+        },
+        {
+          "type": "pick_signal",
+          "source": "cci_divergence",
+          "payload": {}
+        }
+      ],
+      "subnet": "Apex",
+      "netuid": 1
+    },
+    {
+      "id": "tr_20260807131214972638",
+      "created_at": "2026-08-07T13:12:14.972707Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "e63434a2f7",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.01933218,
+        "resolved_price": 0.019329671,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T12:00:15.517834Z",
+        "resolved_at": "2026-08-07T13:00:15.517834Z",
+        "resolve_at": "2026-08-07T13:00:15.517834Z",
+        "actual_pct": -0.013,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 718
+      },
+      "signals": [],
+      "subnet": "Hippius",
+      "netuid": 75
+    },
+    {
+      "id": "tr_20260807132716992216",
+      "created_at": "2026-08-07T13:27:16.992251Z",
+      "decision_type": "prediction_resolve",
+      "decision": {
+        "prediction_id": "bfd9cd16a8",
+        "event": "resolved",
+        "signals": [],
+        "expert": null,
+        "weights_at_creation": null,
+        "impact_strength_at_creation": null,
+        "impact_tier": null,
+        "market_impact": null,
+        "learning_state_at_creation": null,
+        "regime": null,
+        "reference_price": 0.00463815,
+        "resolved_price": 0.00455107,
+        "horizon_hours": 1,
+        "created_at": "2026-08-07T12:21:29.544628Z",
+        "resolved_at": "2026-08-07T13:21:29.544628Z",
+        "resolve_at": "2026-08-07T13:21:29.544628Z",
+        "actual_pct": -1.8775,
+        "outcome": "miss",
+        "direction": "up",
+        "price_source": "live_oracle",
+        "price_lag_seconds": 345
+      },
+      "signals": [],
+      "subnet": "Zipcode",
+      "netuid": 46
     }
   ]
 }
