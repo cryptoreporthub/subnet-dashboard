@@ -7348,76 +7348,58 @@ body.wrap {
   overflow: visible;
 }
 
-/* ---------- Council Hero HUD (charcoal cockpit + glass sections) ---------- */
+/* ---------- Council Hero HUD (smoky control room + glass sections) ---------- */
 .tribunal-hero {
-  --hero-ice: #6fb3e8;
-  --hero-cyan: #7dd6f5;
-  --hero-steel: #f6f9fc;
-  --hero-smoke: transparent;
-  --j-oracle: #6fb3e8;
-  --j-echo: #b3a1f0;
-  --j-pulse: #e8b06f;
-  --verdict-a: var(--warm-gold);
-  --verdict-b: var(--warm-ember);
+  --hero-void: #080b0e;
+  --hero-glass: rgba(8, 11, 14, 0.75);
+  --hero-glass-blur: 20px;
+  --hero-cyan: #4bc0e8;
+  --hero-cyan-bright: #6bc5f0;
+  --hero-slate: #64748b;
+  --hero-steel: #f1f5f9;
+  --hero-muted: #94a3b8;
+  --hero-smoke-a: rgba(10, 20, 30, 0.4);
+  --hero-smoke-b: rgba(12, 22, 34, 0.32);
+  --hero-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.72 0 0 0 0 0.78 0 0 0 0 0.86 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  --j-oracle: #6bc5f0;
+  --j-echo: #7a9cc4;
+  --j-pulse: #64748b;
+  --verdict-a: var(--hero-cyan-bright);
+  --verdict-b: var(--hero-cyan);
   position: relative;
-  padding: var(--space-3) var(--space-3) var(--space-4);
-  color: var(--text-primary);
+  padding: var(--space-4) var(--space-3) var(--space-4);
+  color: var(--hero-steel);
   background: transparent;
 }
 
-.tribunal-hero[data-verdict-kind="sealed"] { --verdict-a: #6fe8a4; --verdict-b: #2fdc85; }
-.tribunal-hero[data-verdict-kind="gated"] { --verdict-a: var(--warm-gold); --verdict-b: var(--warm-ember); }
-.tribunal-hero[data-verdict-kind="forming"] { --verdict-a: var(--warm-gold); --verdict-b: var(--warm-ember); }
-.tribunal-hero[data-verdict-kind="cold"] { --verdict-a: var(--cool-ice-bright); --verdict-b: var(--cool-ice); }
-
-/* Conviction temperature — cool flips gated holds below 70% to icy blue */
+.tribunal-hero[data-verdict-kind="sealed"],
+.tribunal-hero[data-verdict-kind="gated"],
+.tribunal-hero[data-verdict-kind="forming"],
+.tribunal-hero[data-verdict-kind="cold"],
+.tribunal-hero[data-temp="warm"],
 .tribunal-hero[data-temp="cool"] {
-  --verdict-a: var(--cool-ice-bright);
-  --verdict-b: var(--cool-ice);
+  --verdict-a: var(--hero-cyan-bright);
+  --verdict-b: var(--hero-cyan);
 }
 
-.tribunal-hero[data-temp="warm"] .tribunal-hero__card {
-  border-color: var(--warm-hairline);
-  box-shadow:
-    0 20px 48px rgba(0, 0, 0, 0.5),
-    0 0 36px var(--warm-glow),
-    0 0 0 1px var(--warm-hairline),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
+.tribunal-hero[data-temp="warm"] .tribunal-hero__card,
 .tribunal-hero[data-temp="cool"] .tribunal-hero__card {
-  border-color: var(--cool-hairline);
+  border-color: rgba(75, 192, 232, 0.14);
   box-shadow:
-    0 20px 48px rgba(0, 0, 0, 0.5),
-    0 0 40px var(--cool-glow),
-    0 0 0 1px var(--cool-hairline),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    0 12px 40px rgba(0, 0, 0, 0.55),
+    0 0 28px rgba(75, 192, 232, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
-.tribunal-hero[data-temp="warm"] .tribunal-hero__card::before {
-  background: radial-gradient(ellipse 70% 55% at 28% 18%, var(--warm-glow) 0%, transparent 62%);
-}
-
-.tribunal-hero[data-temp="cool"] .tribunal-hero__card::before {
-  background: radial-gradient(ellipse 70% 55% at 28% 18%, var(--cool-glow) 0%, transparent 62%);
-}
-
-.tribunal-hero[data-temp="warm"] .tribunal-hero__bracket {
-  border-color: var(--warm-gold);
-  box-shadow: 0 0 14px var(--warm-glow);
-}
-
+.tribunal-hero[data-temp="warm"] .tribunal-hero__bracket,
 .tribunal-hero[data-temp="cool"] .tribunal-hero__bracket {
-  border-color: var(--cool-ice-bright);
-  box-shadow: 0 0 16px var(--cool-glow);
+  border-color: rgba(107, 197, 240, 0.55);
+  box-shadow: 0 0 12px rgba(75, 192, 232, 0.2);
 }
 
-.tribunal-hero[data-temp="warm"] .tribunal-hero__gauge-fill {
-  filter: drop-shadow(0 0 16px var(--verdict-b)) drop-shadow(0 0 28px var(--warm-glow));
-}
-
+.tribunal-hero[data-temp="warm"] .tribunal-hero__gauge-fill,
 .tribunal-hero[data-temp="cool"] .tribunal-hero__gauge-fill {
-  filter: drop-shadow(0 0 16px var(--verdict-b)) drop-shadow(0 0 32px var(--cool-glow));
+  filter: drop-shadow(0 0 14px var(--verdict-b)) drop-shadow(0 0 24px rgba(75, 192, 232, 0.25));
 }
 
 .council-stage .home-job__call-host .tribunal-hero {
@@ -7448,7 +7430,7 @@ body.wrap {
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--accent-primary);
+  color: var(--hero-cyan);
 }
 
 .tribunal-hero__meta-pills {
@@ -7481,8 +7463,8 @@ body.wrap {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent-primary);
-  box-shadow: 0 0 8px var(--accent-glow);
+  background: var(--hero-cyan);
+  box-shadow: 0 0 8px rgba(75, 192, 232, 0.45);
   animation: tribunal-live-pulse 2.6s ease-in-out infinite;
 }
 
@@ -7505,49 +7487,49 @@ body.wrap {
 
 .tribunal-hero__card {
   position: relative;
-  border-radius: var(--glass-radius);
-  border: 1px solid var(--zone-dark-card-border);
-  /* Transparent shell — page smoke + puffs read through; border carries the frame */
-  background: transparent;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  /* Priority 1: deep void base — smoke + grain layer on top */
+  background-color: var(--hero-void);
   background-image: none;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   box-shadow:
-    0 20px 48px rgba(0, 0, 0, 0.55),
-    0 0 0 1px var(--warm-hairline),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    0 12px 40px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   overflow: hidden;
   isolation: isolate;
-}
-
-@keyframes tribunal-smoke-drift {
-  0% { background-position: 38% 34%; }
-  50% { background-position: 62% 54%; }
-  100% { background-position: 44% 66%; }
 }
 
 .tribunal-hero__card::before,
 .tribunal-hero__card::after {
   content: "";
   position: absolute;
-  inset: -20%;
+  inset: 0;
   pointer-events: none;
   z-index: 0;
 }
 
 .tribunal-hero__card::before {
-  /* Soft warm breath only — keep opacity low so smoke stays primary */
-  background: radial-gradient(ellipse 70% 55% at 28% 18%, var(--warm-glow) 0%, transparent 62%);
-  animation: tribunal-glow-drift 18s ease-in-out infinite alternate;
-  opacity: 0.28;
+  /* Priority 1: atmospheric smoke — diffuse fog bleeding into the void */
+  background:
+    radial-gradient(ellipse 95% 75% at 6% 10%, var(--hero-smoke-a) 0%, transparent 68%),
+    radial-gradient(ellipse 90% 70% at 94% 90%, var(--hero-smoke-a) 0%, transparent 65%),
+    radial-gradient(ellipse 110% 85% at 50% 48%, var(--hero-smoke-b) 0%, transparent 72%),
+    radial-gradient(ellipse 75% 60% at 12% 88%, rgba(10, 18, 28, 0.34) 0%, transparent 62%),
+    radial-gradient(ellipse 70% 55% at 88% 14%, rgba(14, 26, 38, 0.28) 0%, transparent 58%);
+  animation: tribunal-glow-drift 24s ease-in-out infinite alternate;
+  opacity: 1;
 }
 
 .tribunal-hero__card::after {
-  /* Whisper edge — keep transparent so page smoke stays primary */
-  background:
-    radial-gradient(ellipse 80% 70% at 50% 45%, transparent 55%, rgba(6, 8, 12, 0.18) 100%);
-  animation: none;
-  opacity: 1;
+  /* Priority 2: subtle film grain — must not overpower smoke */
+  background-image: var(--hero-grain);
+  background-repeat: repeat;
+  background-size: 180px 180px;
+  background-blend-mode: soft-light;
+  mix-blend-mode: soft-light;
+  opacity: 0.2;
 }
 
 .tribunal-hero__puffs {
@@ -7561,9 +7543,9 @@ body.wrap {
 .tribunal-hero__puff {
   position: absolute;
   border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(200, 205, 215, 0.55) 0%, rgba(120, 125, 135, 0.18) 42%, transparent 72%);
-  filter: blur(36px);
-  opacity: 0.85;
+  background: radial-gradient(ellipse at center, rgba(30, 48, 62, 0.42) 0%, rgba(12, 20, 30, 0.22) 42%, transparent 72%);
+  filter: blur(40px);
+  opacity: 0.72;
   will-change: transform, opacity;
 }
 
@@ -7580,7 +7562,7 @@ body.wrap {
   height: 180px;
   top: 38%;
   right: -18%;
-  background: radial-gradient(ellipse at center, rgba(160, 165, 175, 0.42) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(22, 36, 50, 0.38) 0%, transparent 70%);
   animation: tribunal-puff-2 26s ease-in-out infinite;
 }
 
@@ -7589,7 +7571,7 @@ body.wrap {
   height: 240px;
   bottom: -4%;
   left: 22%;
-  background: radial-gradient(ellipse at center, rgba(180, 185, 195, 0.38) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(18, 30, 44, 0.34) 0%, transparent 70%);
   animation: tribunal-puff-3 20s ease-in-out infinite;
 }
 
@@ -7598,7 +7580,7 @@ body.wrap {
   height: 160px;
   top: 18%;
   left: 42%;
-  background: radial-gradient(ellipse at center, rgba(230, 233, 240, 0.32) 0%, transparent 68%);
+  background: radial-gradient(ellipse at center, rgba(28, 44, 58, 0.28) 0%, transparent 68%);
   animation: tribunal-puff-4 28s ease-in-out infinite;
 }
 
@@ -7607,7 +7589,7 @@ body.wrap {
   height: 200px;
   bottom: 18%;
   right: 8%;
-  background: radial-gradient(ellipse at center, rgba(140, 145, 155, 0.36) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(16, 28, 40, 0.32) 0%, transparent 70%);
   animation: tribunal-puff-5 24s ease-in-out infinite;
 }
 
@@ -7616,7 +7598,7 @@ body.wrap {
   height: 200px;
   top: 55%;
   left: -6%;
-  background: radial-gradient(ellipse at center, rgba(210, 214, 222, 0.30) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(24, 38, 52, 0.26) 0%, transparent 70%);
   animation: tribunal-puff-6 30s ease-in-out infinite;
 }
 
@@ -7739,16 +7721,16 @@ body.wrap {
 }
 
 .tribunal-hero__ray--oracle {
-  stroke: rgba(63, 201, 255, 0.6);
+  stroke: rgba(75, 192, 232, 0.55);
 }
 
 .tribunal-hero__ray--echo {
-  stroke: rgba(157, 140, 255, 0.55);
+  stroke: rgba(100, 116, 139, 0.5);
   animation-delay: -4s;
 }
 
 .tribunal-hero__ray--pulse {
-  stroke: rgba(255, 159, 63, 0.55);
+  stroke: rgba(75, 192, 232, 0.4);
   animation-delay: -8s;
 }
 
@@ -7765,6 +7747,8 @@ body.wrap {
   transform: translate(-50%, -50%);
   z-index: 2;
   pointer-events: none;
+  box-shadow: 0 0 20px rgba(75, 192, 232, 0.15);
+  border-radius: 50%;
 }
 
 .tribunal-hero__gauge::before {
@@ -7856,26 +7840,29 @@ body.wrap {
   position: absolute;
   inset: -24px -16px;
   border-radius: 50%;
-  background: #1b1f26;
+  background: var(--hero-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   opacity: 1;
   z-index: -1;
 }
 
 .tribunal-hero__pct {
-  font-family: var(--font-display);
-  font-size: 2.6rem;
+  font-family: var(--font-mono);
+  font-size: clamp(2.1rem, 9vw, 2.6rem);
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1;
   color: var(--verdict-a);
-  text-shadow: 0 0 18px var(--verdict-b), 0 0 44px var(--verdict-b);
+  text-shadow: 0 0 18px rgba(75, 192, 232, 0.45), 0 0 36px rgba(75, 192, 232, 0.2);
 }
 
 .tribunal-hero__pct-label {
   font-family: var(--font-mono);
   font-size: 0.58rem;
-  letter-spacing: 0.18em;
-  color: var(--text-muted);
+  letter-spacing: 0.2em;
+  color: var(--hero-muted);
   text-transform: uppercase;
 }
 
@@ -7897,7 +7884,7 @@ body.wrap {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   border-radius: 999px;
-  background: rgba(8, 11, 17, 0.55);
+  background: rgba(8, 11, 14, 0.55);
   border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
@@ -7923,27 +7910,27 @@ body.wrap {
   z-index: 5;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 92px;
-  padding: 8px 10px 7px;
-  border-radius: var(--glass-radius);
-  /* True hairline glass — no frosted fill, smoke reads straight through */
-  background: transparent !important;
+  gap: 3px;
+  min-width: 80px;
+  max-width: 108px;
+  padding: 7px 8px 6px;
+  border-radius: 12px;
+  background: var(--hero-glass) !important;
   background-image: none !important;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(var(--hero-glass-blur));
+  -webkit-backdrop-filter: blur(var(--hero-glass-blur));
   transition: box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
 }
 
 .tribunal-hero__judge:hover {
   transform: translateY(-2px);
-  background: rgba(255, 255, 255, 0.03) !important;
-  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(8, 11, 14, 0.82) !important;
+  border-color: rgba(107, 197, 240, 0.18);
   box-shadow:
-    0 8px 18px rgba(0, 0, 0, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 10px 28px rgba(0, 0, 0, 0.4),
+    0 0 16px rgba(75, 192, 232, 0.08);
 }
 
 .tribunal-hero__judge::before {
@@ -8074,11 +8061,11 @@ body.wrap {
 }
 
 .tribunal-hero__judge-signal {
-  font-family: var(--font-display);
-  font-size: 1.35rem;
+  font-family: var(--font-mono);
+  font-size: 1.2rem;
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: #ffffff;
+  color: var(--hero-steel);
   line-height: 1;
 }
 
@@ -8100,64 +8087,68 @@ body.wrap {
 
 .tribunal-hero__judge-name {
   order: -1;
-  margin: 0 0 2px;
+  margin: 0 0 1px;
   font-family: var(--font-mono);
-  font-size: 0.6rem;
+  font-size: 0.56rem;
   font-weight: 700;
   letter-spacing: 0.2em;
   color: var(--j);
   text-transform: uppercase;
-  text-shadow: 0 0 10px var(--j);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--j) 40%, transparent);
 }
 
 .tribunal-hero__last5 {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 4px;
-  min-height: 26px;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 5px;
+  margin-top: 2px;
+  min-height: 0;
 }
 
 .tribunal-hero__judge--pulse .tribunal-hero__last5 {
   align-items: flex-end;
+  justify-content: flex-end;
 }
 
 .tribunal-hero__last5-caption {
   font-family: var(--font-mono);
-  font-size: 0.56rem;
-  letter-spacing: 0.14em;
-  color: var(--text-muted);
+  font-size: 0.48rem;
+  letter-spacing: 0.12em;
+  color: var(--hero-muted);
   text-transform: uppercase;
+  opacity: 0.85;
+  flex: none;
 }
 
 .tribunal-hero__last5-ticks {
   display: flex;
   align-items: flex-end;
-  gap: 3px;
-  height: 15px;
+  gap: 2px;
+  height: 10px;
 }
 
 .tribunal-hero__tick {
   display: block;
-  width: 5px;
-  border-radius: 2px;
-  background: rgba(107, 120, 140, 0.3);
+  width: 3px;
+  border-radius: 1px;
+  background: rgba(71, 85, 105, 0.35);
 }
 
 .tribunal-hero__tick--hit {
-  height: 13px;
-  background: var(--j);
-  box-shadow: 0 0 7px var(--j);
+  height: 9px;
+  background: var(--hero-cyan);
+  box-shadow: 0 0 4px rgba(75, 192, 232, 0.45);
 }
 
 .tribunal-hero__tick--miss {
-  height: 7px;
-  background: #566274;
+  height: 5px;
+  background: #475569;
 }
 
 .tribunal-hero__tick--empty {
-  height: 4px;
-  background: rgba(90, 100, 112, 0.28);
+  height: 3px;
+  background: rgba(71, 85, 105, 0.28);
 }
 
 .tribunal-hero__last5[hidden] {
@@ -8166,16 +8157,16 @@ body.wrap {
 }
 
 .tribunal-hero__panel-last5 {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .tribunal-hero__panel-last5 .tribunal-hero__last5-caption {
-  margin-bottom: 4px;
+  margin-bottom: 0;
 }
 
 .tribunal-hero__panel-last5 .tribunal-hero__tick--hit {
-  background: var(--accent-primary);
-  box-shadow: 0 0 7px var(--accent-glow);
+  background: var(--hero-cyan);
+  box-shadow: 0 0 4px rgba(75, 192, 232, 0.45);
 }
 
 .tribunal-hero__sr-only {
@@ -8202,14 +8193,13 @@ body.wrap {
 .tribunal-hero__panel {
   position: relative;
   padding: 14px;
-  border-radius: var(--glass-radius);
-  /* Very light white glass — smoke still reads through */
-  background: rgba(255, 255, 255, 0.035) !important;
+  border-radius: 16px;
+  background: var(--hero-glass) !important;
   background-image: none !important;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(var(--hero-glass-blur));
+  -webkit-backdrop-filter: blur(var(--hero-glass-blur));
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .tribunal-hero__panel[data-panel="decision-log"] { --panel-accent: rgba(140, 140, 150, 0.5); }
@@ -8224,9 +8214,9 @@ body.wrap {
   font-family: var(--font-mono);
   font-size: 0.64rem;
   font-weight: 700;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--text-secondary);
+  color: var(--hero-muted);
 }
 
 .tribunal-hero__panel-title::before {
@@ -8253,7 +8243,7 @@ body.wrap {
   font-size: 0.6rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--hero-muted);
 }
 
 .tribunal-hero__panel-grid dd {
@@ -8261,7 +8251,7 @@ body.wrap {
   font-family: var(--font-mono);
   font-size: 0.85rem;
   font-weight: 600;
-  color: #eaf2f8;
+  color: var(--hero-steel);
 }
 
 .tribunal-hero__panel-span {
@@ -8389,6 +8379,46 @@ body.wrap {
 }
 
 @media (min-width: 640px) {
+  .tribunal-hero {
+    padding: 40px var(--space-4) var(--space-5);
+  }
+
+  .tribunal-hero__judge {
+    min-width: 92px;
+    max-width: none;
+    padding: 8px 10px 7px;
+    gap: 4px;
+  }
+
+  .tribunal-hero__judge-signal {
+    font-size: 1.35rem;
+  }
+
+  .tribunal-hero__last5-caption {
+    font-size: 0.52rem;
+  }
+
+  .tribunal-hero__last5-ticks {
+    height: 12px;
+    gap: 3px;
+  }
+
+  .tribunal-hero__tick {
+    width: 4px;
+  }
+
+  .tribunal-hero__tick--hit {
+    height: 11px;
+  }
+
+  .tribunal-hero__tick--miss {
+    height: 6px;
+  }
+
+  .tribunal-hero__tick--empty {
+    height: 3px;
+  }
+
   .tribunal-hero__panels {
     display: grid;
     grid-template-columns: 1.25fr 1fr 1fr;
@@ -8401,49 +8431,44 @@ body.wrap {
     height: 420px;
   }
 
-  .tribunal-hero__pct {
-    font-size: 2.3rem;
+  .tribunal-hero__judge--oracle {
+    top: 12px;
+  }
+
+  .tribunal-hero__judge--echo {
+    bottom: 16px;
+    left: 6px;
+  }
+
+  .tribunal-hero__judge--pulse {
+    bottom: 16px;
+    right: 6px;
   }
 }
 
-/* Soften backdrop blur on phone — Safari paint cost */
+/* Soften backdrop blur on phone — Safari paint cost; smoke stays primary */
 @media (max-width: 480px) {
-  /* hero-mobile-atmosphere — stronger stage smoke + card glow; smoke texture blend unchanged */
-  .council-stage__atmosphere::before {
-    background:
-      radial-gradient(ellipse 60% 50% at 20% 30%, rgba(140, 140, 150, 0.32), transparent 60%),
-      radial-gradient(ellipse 50% 60% at 80% 20%, rgba(90, 90, 100, 0.29), transparent 65%),
-      radial-gradient(ellipse 70% 50% at 50% 80%, rgba(60, 60, 68, 0.36), transparent 60%),
-      radial-gradient(ellipse 40% 40% at 90% 90%, rgba(110, 110, 120, 0.24), transparent 60%);
-  }
-
-  .council-stage__atmosphere::after {
-    background:
-      radial-gradient(ellipse 45% 45% at 65% 55%, rgba(160, 160, 170, 0.21), transparent 55%),
-      radial-gradient(ellipse 55% 35% at 15% 70%, rgba(80, 80, 90, 0.26), transparent 60%),
-      radial-gradient(ellipse 70% 60% at 50% 45%, transparent 40%, rgba(0, 0, 0, 0.5) 100%);
-  }
-
-  .tribunal-hero__puff {
-    background: radial-gradient(ellipse at center, rgba(140, 140, 150, 0.48) 0%, transparent 70%);
-    opacity: 0.85;
-  }
-
-  .tribunal-hero__card::before {
-    background: radial-gradient(ellipse 70% 55% at 28% 18%, rgba(140, 140, 150, 0.16) 0%, transparent 62%);
+  .tribunal-hero {
+    --hero-glass-blur: 14px;
   }
 
   .tribunal-hero__card::after {
-    background: radial-gradient(ellipse 60% 50% at 76% 86%, rgba(140, 140, 150, 0.13) 0%, transparent 58%);
+    opacity: 0.16;
+  }
+
+  .tribunal-hero__puff {
+    background: radial-gradient(ellipse at center, rgba(22, 36, 50, 0.36) 0%, transparent 70%);
+    opacity: 0.65;
   }
 
   .pds-angles__section,
   .pd-angles__section,
   .pds-ladder,
   .pump-alert__card,
-  .tribunal-hero__panel {
-    backdrop-filter: blur(var(--glass-blur-secondary));
-    -webkit-backdrop-filter: blur(var(--glass-blur-secondary));
+  .tribunal-hero__panel,
+  .tribunal-hero__judge {
+    backdrop-filter: blur(var(--hero-glass-blur));
+    -webkit-backdrop-filter: blur(var(--hero-glass-blur));
   }
 }
 
