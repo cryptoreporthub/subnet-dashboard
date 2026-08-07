@@ -55,6 +55,9 @@ data/postmortems/pulse.json
 data/pump_combined_calls.json
 data/pump_desk/latest.json
 data/pump_desk/snapshots/2026-08-07T132610Z.json
+data/pump_desk/snapshots/2026-08-07T132016Z.json
+data/pump_desk/snapshots/2026-08-07T134551Z.json
+data/pump_desk/snapshots/2026-08-07T135609Z.json
 data/score_snapshots.json
 config/registry.json
 config/watchlist.json
