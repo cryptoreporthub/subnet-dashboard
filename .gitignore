@@ -48,6 +48,10 @@ data/soul_map.json
 data/whale_intelligence.json
 data/decision_trace.json
 data/judge_portfolios.json
+data/judges_cache.json
+data/learning_outcomes/combined_angles_effectiveness.json
+data/learning_outcomes/latest.json
+data/learning_outcomes/snapshots/
 data/live_subnets.json
 data/postmortems/echo.json
 data/postmortems/oracle.json
@@ -59,5 +63,6 @@ data/pump_desk/snapshots/2026-08-07T132016Z.json
 data/pump_desk/snapshots/2026-08-07T134551Z.json
 data/pump_desk/snapshots/2026-08-07T135609Z.json
 data/score_snapshots.json
+data/pick_scheduler_state.json
 config/registry.json
 config/watchlist.json
