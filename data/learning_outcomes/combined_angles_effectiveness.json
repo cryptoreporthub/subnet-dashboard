@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-08-07T14:32:32.105026Z",
+  "generated_at": "2026-08-07T14:57:31.738841Z",
   "experimental": true,
   "ledger": {
-    "calls": 11,
+    "calls": 12,
     "graded_calls": 4,
     "path": "data/pump_combined_calls.json"
   },
@@ -25,18 +25,18 @@
   },
   "pick_source": {
     "pump_combined_exp": {
-      "n": 5,
+      "n": 6,
       "hits": 0,
       "hit_rate": 0.0
     },
     "pump_lead": {
-      "n": 29,
+      "n": 31,
       "hits": 0,
       "hit_rate": 0.0
     }
   },
   "gates": {
-    "graded_predictions": 34,
+    "graded_predictions": 37,
     "tune_ready": false,
     "min_tune_n": 20,
     "weights_locked": true
