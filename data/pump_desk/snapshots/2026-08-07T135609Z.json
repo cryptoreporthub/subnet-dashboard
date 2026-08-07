@@ -1,6 +1,6 @@
 {
   "status": "ok",
-  "captured_at": "2026-08-07T13:41:08.810840Z",
+  "captured_at": "2026-08-07T13:56:09.072281Z",
   "alert_level": "alert",
   "alert_reasons": [
     "worker_peer not alive",
@@ -22,7 +22,7 @@
   },
   "learning_loop": {
     "status": "ok",
-    "pending": 4,
+    "pending": 0,
     "worker_peer_alive": null
   },
   "actionable_badges": [

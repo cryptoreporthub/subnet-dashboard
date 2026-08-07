@@ -46,5 +46,15 @@ data/pump_pattern_ledger.json
 data/scenario_memory.json
 data/soul_map.json
 data/whale_intelligence.json
+data/decision_trace.json
+data/judge_portfolios.json
+data/live_subnets.json
+data/postmortems/echo.json
+data/postmortems/oracle.json
+data/postmortems/pulse.json
+data/pump_combined_calls.json
+data/pump_desk/latest.json
+data/pump_desk/snapshots/2026-08-07T132610Z.json
+data/score_snapshots.json
 config/registry.json
 config/watchlist.json
