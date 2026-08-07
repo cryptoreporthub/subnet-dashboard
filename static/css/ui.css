@@ -1,26 +1,26 @@
 /* ui.css — mobile-first SimiVision shell (LOCK 2026-08-02) */
 
 :root {
-  /* Tiered silver glass — lighter + more translucent so the smoke reads through */
-  --glass-fill-hero: rgba(56, 62, 73, 0.46);
-  --glass-fill-card: rgba(54, 60, 70, 0.36);
-  --glass-fill-section: rgba(50, 55, 65, 0.30);
-  --glass-fill-subtle: rgba(46, 51, 60, 0.22);
+  /* Tiered silver glass — near-transparent so volumetric smoke reads through */
+  --glass-fill-hero: rgba(255, 255, 255, 0.045);
+  --glass-fill-card: rgba(255, 255, 255, 0.04);
+  --glass-fill-section: rgba(255, 255, 255, 0.035);
+  --glass-fill-subtle: rgba(255, 255, 255, 0.025);
   --glass-fill: var(--glass-fill-card);
-  --glass-blur: 16px;
-  --glass-blur-secondary: 8px;
-  --glass-border: rgba(255, 255, 255, 0.10);
+  --glass-blur: 12px;
+  --glass-blur-secondary: 6px;
+  --glass-border: rgba(255, 255, 255, 0.14);
   --glass-radius: 12px;
 
-  /* Dual Depth Smoke — zone + climate tokens */
-  --zone-dark-bg: linear-gradient(180deg, rgba(12, 14, 20, 0.88) 0%, rgba(16, 19, 26, 0.94) 100%);
-  --zone-dark-card: rgba(240, 244, 252, 0.08);
-  --zone-dark-card-border: rgba(255, 255, 255, 0.14);
+  /* Dual Depth Smoke — zone + climate tokens (wash stays translucent) */
+  --zone-dark-bg: linear-gradient(180deg, rgba(10, 12, 17, 0.22) 0%, rgba(12, 14, 20, 0.38) 100%);
+  --zone-dark-card: rgba(255, 255, 255, 0.04);
+  --zone-dark-card-border: rgba(255, 255, 255, 0.16);
   --zone-dark-text: #f8fafc;
   --zone-dark-muted: #b8c2d2;
-  --zone-light-bg: rgba(228, 232, 238, 0.06);
-  --zone-light-card: rgba(255, 255, 255, 0.10);
-  --zone-light-card-border: rgba(255, 255, 255, 0.16);
+  --zone-light-bg: rgba(228, 232, 238, 0.04);
+  --zone-light-card: rgba(255, 255, 255, 0.05);
+  --zone-light-card-border: rgba(255, 255, 255, 0.14);
   --zone-light-text: #eef2f6;
   --zone-light-muted: #aeb8c6;
   /* Warm climate accents (living surface) */
@@ -3864,7 +3864,7 @@ header.top {
   --cockpit-green-soft: rgba(126, 200, 227, 0.12);
   --cockpit-green-line: rgba(126, 200, 227, 0.22);
   --cockpit-green-glow: rgba(126, 200, 227, 0.28);
-  --bg-cockpit: #2e3138;
+  --bg-cockpit: #12141a;
   --bg-cockpit-edge: #1c1f26;
   --bg-cockpit-card: rgba(46, 51, 61, 0.78);
   --bg-cockpit-surface: rgba(42, 47, 56, 0.82);
@@ -5061,7 +5061,7 @@ footer.status[data-source*="fallback"] .st-dot {
   --stage-ink: #f4f9f4;
   --stage-muted: #9fb0c2;
   --stage-accent: #1fd47c;
-  --stage-wash: #383b43;
+  --stage-wash: #12141a;
 }
 
 /* Dual Depth — hero is the dark monumental zone */
@@ -7507,25 +7507,28 @@ body.wrap {
   position: relative;
   border-radius: var(--glass-radius);
   border: 1px solid var(--zone-dark-card-border);
-  background:
-    url("/static/img/simivision-smoke-bg.svg") center / cover no-repeat,
-    var(--zone-dark-bg);
-  background-blend-mode: soft-light, normal;
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  /* Baked volumetric smoke is the surface — no opaque crush layer */
+  background-color: #0a0c11;
+  background-image: url("/static/img/simivision-smoke-bg.svg");
+  background-position: center;
+  background-size: 145% auto;
+  background-repeat: no-repeat;
+  background-blend-mode: normal;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   box-shadow:
-    0 20px 48px rgba(0, 0, 0, 0.5),
+    0 20px 48px rgba(0, 0, 0, 0.55),
     0 0 0 1px var(--warm-hairline),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
   overflow: hidden;
   isolation: isolate;
-  animation: tribunal-smoke-drift 36s ease-in-out infinite alternate;
+  animation: tribunal-smoke-drift 42s ease-in-out infinite alternate;
 }
 
 @keyframes tribunal-smoke-drift {
-  0% { background-position: 46% 42%, 0 0; }
-  50% { background-position: 54% 50%, 0 0; }
-  100% { background-position: 48% 58%, 0 0; }
+  0% { background-position: 38% 34%; }
+  50% { background-position: 62% 54%; }
+  100% { background-position: 44% 66%; }
 }
 
 .tribunal-hero__card::before,
@@ -7538,19 +7541,24 @@ body.wrap {
 }
 
 .tribunal-hero__card::before {
+  /* Soft warm breath only — keep opacity low so smoke stays primary */
   background: radial-gradient(ellipse 70% 55% at 28% 18%, var(--warm-glow) 0%, transparent 62%);
   animation: tribunal-glow-drift 18s ease-in-out infinite alternate;
+  opacity: 0.28;
 }
 
 .tribunal-hero__card::after {
-  background: radial-gradient(ellipse 60% 50% at 76% 86%, rgba(180, 182, 190, 0.10) 0%, transparent 58%);
-  animation: tribunal-glow-drift 22s ease-in-out infinite alternate-reverse;
+  /* Edge vignette only — never a flat wash over the billows */
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 45%, transparent 35%, rgba(6, 8, 12, 0.55) 100%);
+  animation: none;
+  opacity: 1;
 }
 
 .tribunal-hero__puffs {
   position: absolute;
   inset: 0;
-  z-index: 4;
+  z-index: 1;
   pointer-events: none;
   overflow: hidden;
 }
@@ -7558,50 +7566,93 @@ body.wrap {
 .tribunal-hero__puff {
   position: absolute;
   border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(140, 140, 150, 0.42) 0%, transparent 70%);
-  filter: blur(28px);
-  opacity: 0.75;
+  background: radial-gradient(ellipse at center, rgba(200, 205, 215, 0.55) 0%, rgba(120, 125, 135, 0.18) 42%, transparent 72%);
+  filter: blur(36px);
+  opacity: 0.85;
+  will-change: transform, opacity;
 }
 
 .tribunal-hero__puff--1 {
-  width: 140px;
-  height: 200px;
-  top: 8%;
-  left: -8%;
-  animation: tribunal-puff-1 20s ease-in-out infinite;
+  width: 220px;
+  height: 280px;
+  top: -6%;
+  left: -14%;
+  animation: tribunal-puff-1 22s ease-in-out infinite;
 }
 
 .tribunal-hero__puff--2 {
-  width: 180px;
-  height: 120px;
-  top: 42%;
-  right: -12%;
-  background: radial-gradient(ellipse at center, rgba(90, 90, 100, 0.26) 0%, transparent 70%);
-  animation: tribunal-puff-2 24s ease-in-out infinite;
+  width: 260px;
+  height: 180px;
+  top: 38%;
+  right: -18%;
+  background: radial-gradient(ellipse at center, rgba(160, 165, 175, 0.42) 0%, transparent 70%);
+  animation: tribunal-puff-2 26s ease-in-out infinite;
 }
 
 .tribunal-hero__puff--3 {
-  width: 120px;
+  width: 200px;
+  height: 240px;
+  bottom: -4%;
+  left: 22%;
+  background: radial-gradient(ellipse at center, rgba(180, 185, 195, 0.38) 0%, transparent 70%);
+  animation: tribunal-puff-3 20s ease-in-out infinite;
+}
+
+.tribunal-hero__puff--4 {
+  width: 180px;
   height: 160px;
-  bottom: 6%;
-  left: 28%;
-  background: radial-gradient(ellipse at center, rgba(110, 110, 120, 0.22) 0%, transparent 70%);
-  animation: tribunal-puff-3 18s ease-in-out infinite;
+  top: 18%;
+  left: 42%;
+  background: radial-gradient(ellipse at center, rgba(230, 233, 240, 0.32) 0%, transparent 68%);
+  animation: tribunal-puff-4 28s ease-in-out infinite;
+}
+
+.tribunal-hero__puff--5 {
+  width: 240px;
+  height: 200px;
+  bottom: 18%;
+  right: 8%;
+  background: radial-gradient(ellipse at center, rgba(140, 145, 155, 0.36) 0%, transparent 70%);
+  animation: tribunal-puff-5 24s ease-in-out infinite;
+}
+
+.tribunal-hero__puff--6 {
+  width: 160px;
+  height: 200px;
+  top: 55%;
+  left: -6%;
+  background: radial-gradient(ellipse at center, rgba(210, 214, 222, 0.30) 0%, transparent 70%);
+  animation: tribunal-puff-6 30s ease-in-out infinite;
 }
 
 @keyframes tribunal-puff-1 {
-  0%, 100% { transform: translate(-2%, -1%) scale(1); opacity: 0.45; }
-  50% { transform: translate(3%, 2%) scale(1.1); opacity: 0.65; }
+  0%, 100% { transform: translate(-2%, -1%) scale(1); opacity: 0.55; }
+  50% { transform: translate(4%, 3%) scale(1.14); opacity: 0.9; }
 }
 
 @keyframes tribunal-puff-2 {
-  0%, 100% { transform: translate(2%, -2%) scale(1.05); opacity: 0.4; }
-  50% { transform: translate(-3%, 2%) scale(1); opacity: 0.58; }
+  0%, 100% { transform: translate(2%, -2%) scale(1.05); opacity: 0.5; }
+  50% { transform: translate(-4%, 3%) scale(1); opacity: 0.82; }
 }
 
 @keyframes tribunal-puff-3 {
-  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.38; }
-  50% { transform: translate(2%, -2%) scale(1.12); opacity: 0.52; }
+  0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.48; }
+  50% { transform: translate(3%, -3%) scale(1.16); opacity: 0.78; }
+}
+
+@keyframes tribunal-puff-4 {
+  0%, 100% { transform: translate(1%, 2%) scale(0.95); opacity: 0.4; }
+  50% { transform: translate(-2%, -2%) scale(1.12); opacity: 0.72; }
+}
+
+@keyframes tribunal-puff-5 {
+  0%, 100% { transform: translate(-1%, 1%) scale(1.02); opacity: 0.45; }
+  50% { transform: translate(3%, -2%) scale(1.1); opacity: 0.8; }
+}
+
+@keyframes tribunal-puff-6 {
+  0%, 100% { transform: translate(0, -1%) scale(1); opacity: 0.42; }
+  50% { transform: translate(2%, 2%) scale(1.18); opacity: 0.75; }
 }
 
 @keyframes tribunal-glow-drift {
@@ -7881,22 +7932,23 @@ body.wrap {
   min-width: 92px;
   padding: 8px 10px 7px;
   border-radius: var(--glass-radius);
-  background: var(--glass-fill-card) !important;
+  /* True hairline glass — no frosted fill, smoke reads straight through */
+  background: transparent !important;
   background-image: none !important;
-  border: 1px solid var(--glass-border);
-  box-shadow:
-    0 10px 22px rgba(0, 0, 0, 0.42),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  transition: box-shadow 0.3s ease, transform 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
 }
 
 .tribunal-hero__judge:hover {
   transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.28);
   box-shadow:
-    0 14px 28px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    0 8px 18px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .tribunal-hero__judge::before {
@@ -8143,12 +8195,13 @@ body.wrap {
   position: relative;
   padding: 14px;
   border-radius: var(--glass-radius);
-  background: var(--glass-fill-card) !important;
+  /* Transparent subsections — hairline only, smoke shows through */
+  background: transparent !important;
   background-image: none !important;
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .tribunal-hero__panel[data-panel="decision-log"] { --panel-accent: rgba(140, 140, 150, 0.5); }
