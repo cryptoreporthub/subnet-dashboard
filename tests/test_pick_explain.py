@@ -210,6 +210,10 @@ def test_pick_explain_calibration_field_contract():
         f"telegram_evidence_calibration value mismatch in /api/pick-explain; "
         f"expected {_SENTINEL_CAL!r}, got {body['telegram_evidence_calibration']!r}"
     )
+    assert body.get("calibration_source") == "persisted", (
+        f"Expected calibration_source 'persisted' when pick record carries calibration; "
+        f"got {body.get('calibration_source')!r}"
+    )
 
 
 def test_calibration_field_consistent_across_endpoints():
@@ -277,10 +281,70 @@ def test_calibration_field_consistent_across_endpoints():
         f"pick-explain calibration should equal the persisted sentinel; "
         f"got {explain_cal!r}"
     )
+    assert explain.get("calibration_source") == "persisted", (
+        f"Expected calibration_source 'persisted' when persisted pick carries calibration; "
+        f"got {explain.get('calibration_source')!r}"
+    )
 
     daily_cal = pick_obj["telegram_evidence_calibration"]
     # Both endpoints must now agree on the exact value.
     assert daily_cal == explain_cal, (
         f"Calibration value mismatch across endpoints: "
         f"daily-pick={daily_cal!r}, pick-explain={explain_cal!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fallback path: persisted pick record lacks telegram_evidence_calibration
+# ---------------------------------------------------------------------------
+
+# A today-pick state where the pick sub-object has NO calibration field —
+# simulates an older persisted record written before the calibration feature.
+_FIXTURE_TODAY_PICK_NO_CAL = {
+    "date": _TODAY,
+    "action": "long",
+    "pick": {
+        "subnet": {"netuid": 42, "name": "MockNet"},
+        # telegram_evidence_calibration intentionally absent
+    },
+    "candidate": None,
+    "reason": None,
+}
+
+
+def test_pick_explain_calibration_source_live_when_persisted_record_lacks_field():
+    """When the persisted pick record predates the calibration feature (field absent),
+    pick-explain must fall back to the live re-score value and annotate the response
+    with calibration_source='live' so callers know the value was not stored at
+    pick-creation time.
+    """
+    with (
+        patch("server._get_subnets_with_source", return_value=([_FIXTURE_SUBNET], "mock")),
+        patch("server._market_context_with_weights", return_value={"weights": {}}),
+        patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
+        patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
+        patch(
+            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            return_value=_FIXTURE_TODAY_PICK_NO_CAL,
+        ),
+    ):
+        resp = client.get("/api/pick-explain/42")
+
+    assert resp.status_code == 200
+    body = resp.json()
+
+    assert body.get("status") == "ok", (
+        f"Expected status 'ok' from /api/pick-explain/42 with no-cal fixture; got: {body!r}"
+    )
+    assert "telegram_evidence_calibration" in body, (
+        "telegram_evidence_calibration absent from /api/pick-explain ok response even in fallback path"
+    )
+    # Fallback must return the live re-score calibration, not None.
+    assert body["telegram_evidence_calibration"] == _LIVE_SCORE_CAL, (
+        f"Expected live re-score calibration (_LIVE_SCORE_CAL) in fallback path; "
+        f"got {body['telegram_evidence_calibration']!r}"
+    )
+    assert body.get("calibration_source") == "live", (
+        f"Expected calibration_source 'live' when persisted record lacks calibration field; "
+        f"got {body.get('calibration_source')!r}"
     )

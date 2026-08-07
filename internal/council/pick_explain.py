@@ -101,13 +101,19 @@ def explain_subnet(
     # explained subnet is the published pick.  This prevents pick-explain from
     # showing a different (live re-scored) calibration value than daily-pick,
     # which always returns the stored record.
+    # When the persisted record predates the calibration field (older picks),
+    # fall back to the live re-score value and annotate calibration_source as
+    # "live" so callers know the value was not stored at pick-creation time.
     persisted_cal: Optional[Any] = None
     if verdict == "published" and isinstance(today.get("pick"), dict):
         persisted_cal = today["pick"].get("telegram_evidence_calibration")
 
-    calibration = persisted_cal if persisted_cal is not None else scored.get(
-        "telegram_evidence_calibration"
-    )
+    if persisted_cal is not None:
+        calibration = persisted_cal
+        calibration_source = "persisted"
+    else:
+        calibration = scored.get("telegram_evidence_calibration")
+        calibration_source = "live"
 
     return {
         "status": "ok",
@@ -123,4 +129,5 @@ def explain_subnet(
         "candidate_netuid": candidate_n,
         "date": today.get("date"),
         "telegram_evidence_calibration": calibration,
+        "calibration_source": calibration_source,
     }
