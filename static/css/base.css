@@ -61,8 +61,8 @@
 
   /* Text — warm-bright neutrals for readability on the lighter smoke */
   --text-primary: #f8fafc;
-  --text-secondary: #c4ccd6;
-  --text-muted: #99a4b2;
+  --text-secondary: #cdd6df;
+  --text-muted: #b6c1cc; /* lifted from #99a4b2 for AA legibility on smoke */
 
   /* Borders — hairlines; violet on secondary emphasis */
   --border-subtle: rgba(255, 255, 255, 0.06);

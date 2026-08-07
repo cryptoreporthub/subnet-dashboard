@@ -5096,7 +5096,7 @@ footer.status[data-source*="fallback"] .st-dot {
 
 .council-first-theme {
   --stage-ink: #f4f9f4;
-  --stage-muted: #9fb0c2;
+  --stage-muted: #c0cbd8; /* lifted from #9fb0c2 for AA legibility on smoke */
   --stage-accent: #1fd47c;
   --stage-wash: #12141a;
 }
@@ -5128,10 +5128,10 @@ footer.status[data-source*="fallback"] .st-dot {
 /* ---------- Full-bleed council stage (first viewport) ---------- */
 .council-stage {
   position: relative;
-  min-height: calc(100vh - 64px);
+  min-height: 0;
   display: flex;
   align-items: center;
-  padding: clamp(48px, 8vh, 96px) var(--space-5, 24px) clamp(56px, 10vh, 120px);
+  padding: clamp(28px, 5vh, 56px) var(--space-5, 24px) clamp(32px, 6vh, 64px);
   overflow: hidden;
   border-bottom: 1px solid rgba(148, 163, 184, 0.14);
   background: transparent;

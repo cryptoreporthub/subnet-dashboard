@@ -42,6 +42,11 @@
     });
   }
 
+  // Explicit, user-initiated only — no auto-start timer. The tour used to fire
+  // ~2.2s after first load and cover the Daily call / footer unprompted; now it
+  // runs only when the visitor asks (help button / ?tour=1), so a first visit is
+  // never hijacked. Completing it is still remembered to suppress the ?tour=1
+  // replay unless the visitor opts back in via the help button.
   function startTour() {
     if (typeof window.driver === 'undefined' || !window.driver.js) return;
     var steps = resolveSteps();
@@ -59,17 +64,41 @@
     d.drive();
   }
 
-  function maybeStart() {
+  // Public entry points.
+  //  - help button: always allowed to (re)start the tour.
+  //  - ?tour=1: only if not already completed in this browser.
+  function startOnDemand() {
+    startTour();
+  }
+
+  function startIfRequested() {
     try {
       if (localStorage.getItem(STORAGE_KEY) === '1') return;
     } catch (e) { /* ignore */ }
     if (document.documentElement.dataset.hydrate !== '1') return;
-    setTimeout(startTour, 2200);
+    if (window.location.search.indexOf('tour=1') === -1) return;
+    startTour();
   }
 
+  function onDemand() {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', startOnDemand);
+    } else {
+      startOnDemand();
+    }
+  }
+
+  window.SimiTour = { start: onDemand };
+
+  // Header "?" help button — explicit opt-in to (re)start the tour.
+  document.addEventListener('DOMContentLoaded', function () {
+    var btn = document.getElementById('tour-trigger');
+    if (btn) btn.addEventListener('click', startOnDemand);
+  });
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', maybeStart);
+    document.addEventListener('DOMContentLoaded', startIfRequested);
   } else {
-    maybeStart();
+    startIfRequested();
   }
 })();
