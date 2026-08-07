@@ -1,31 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900" preserveAspectRatio="xMidYMid slice">
   <defs>
     <radialGradient id="smokeA" cx="20%" cy="10%" r="55%">
-      <stop offset="0%" stop-color="#737373" stop-opacity="0.62"/>
-      <stop offset="40%" stop-color="#4c4c4c" stop-opacity="0.40"/>
-      <stop offset="100%" stop-color="#04060e" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#8a8d94" stop-opacity="0.70"/>
+      <stop offset="40%" stop-color="#61646c" stop-opacity="0.46"/>
+      <stop offset="100%" stop-color="#3a3d44" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="smokeB" cx="85%" cy="22%" r="50%">
-      <stop offset="0%" stop-color="#646464" stop-opacity="0.55"/>
-      <stop offset="45%" stop-color="#424242" stop-opacity="0.33"/>
-      <stop offset="100%" stop-color="#04060e" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#7c7f87" stop-opacity="0.62"/>
+      <stop offset="45%" stop-color="#565a61" stop-opacity="0.38"/>
+      <stop offset="100%" stop-color="#3a3d44" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="smokeC" cx="42%" cy="92%" r="60%">
-      <stop offset="0%" stop-color="#5a5a5a" stop-opacity="0.57"/>
-      <stop offset="45%" stop-color="#3c3c3c" stop-opacity="0.35"/>
-      <stop offset="100%" stop-color="#04060e" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#71747c" stop-opacity="0.64"/>
+      <stop offset="45%" stop-color="#4e5158" stop-opacity="0.40"/>
+      <stop offset="100%" stop-color="#3a3d44" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="smokeD" cx="78%" cy="80%" r="42%">
-      <stop offset="0%" stop-color="#4e4e4e" stop-opacity="0.48"/>
-      <stop offset="100%" stop-color="#04060e" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#666972" stop-opacity="0.54"/>
+      <stop offset="100%" stop-color="#3a3d44" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="smokeE" cx="8%" cy="65%" r="38%">
-      <stop offset="0%" stop-color="#454545" stop-opacity="0.44"/>
-      <stop offset="100%" stop-color="#04060e" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#5d6068" stop-opacity="0.50"/>
+      <stop offset="100%" stop-color="#3a3d44" stop-opacity="0"/>
     </radialGradient>
     <radialGradient id="smokeF" cx="55%" cy="45%" r="32%">
-      <stop offset="0%" stop-color="#5e5e5e" stop-opacity="0.36"/>
-      <stop offset="100%" stop-color="#04060e" stop-opacity="0"/>
+      <stop offset="0%" stop-color="#76797f" stop-opacity="0.42"/>
+      <stop offset="100%" stop-color="#3a3d44" stop-opacity="0"/>
     </radialGradient>
     <filter id="grain" x="0" y="0" width="100%" height="100%">
       <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="3" stitchTiles="stitch" result="noise" seed="7"/>
@@ -44,7 +44,7 @@
                 0 0 0 0.035 0"/>
     </filter>
   </defs>
-  <rect width="1400" height="900" fill="#04060e"/>
+  <rect width="1400" height="900" fill="#3a3d44"/>
   <rect width="1400" height="900" fill="url(#smokeA)"/>
   <rect width="1400" height="900" fill="url(#smokeB)"/>
   <rect width="1400" height="900" fill="url(#smokeC)"/>

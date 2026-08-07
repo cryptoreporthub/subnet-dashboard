@@ -3864,7 +3864,7 @@ header.top {
   --cockpit-green-soft: rgba(126, 200, 227, 0.12);
   --cockpit-green-line: rgba(126, 200, 227, 0.22);
   --cockpit-green-glow: rgba(126, 200, 227, 0.28);
-  --bg-cockpit: #23262e;
+  --bg-cockpit: #2e3138;
   --bg-cockpit-edge: #1c1f26;
   --bg-cockpit-card: rgba(46, 51, 61, 0.78);
   --bg-cockpit-surface: rgba(42, 47, 56, 0.82);
@@ -5061,7 +5061,7 @@ footer.status[data-source*="fallback"] .st-dot {
   --stage-ink: #f4f9f4;
   --stage-muted: #9fb0c2;
   --stage-accent: #1fd47c;
-  --stage-wash: #2b2f38;
+  --stage-wash: #383b43;
 }
 
 /* Dual Depth — hero is the dark monumental zone */
