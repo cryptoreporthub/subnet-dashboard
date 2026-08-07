@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-07T16:50:40.984915Z",
+  "updated_at": "2026-08-07T17:32:59.301312Z",
   "alerts": [
     {
       "alert_type": "subnet_price_flash",
@@ -7141,6 +7141,21 @@
       "timestamp": "2026-08-07T16:50:40.984791Z",
       "active": true,
       "id": "subnet_price_flash-2026-08-07T16:50:40.984791Z"
+    },
+    {
+      "alert_type": "subnet_price_flash",
+      "severity": "info",
+      "message": "SN46 Instant moved -18.2% in 24h",
+      "details": {
+        "subnet_id": 46,
+        "name": "Instant",
+        "price_change_24h": -18.1748
+      },
+      "dedupe_key": "price_flash_46",
+      "subnet_id": 46,
+      "timestamp": "2026-08-07T17:32:59.301223Z",
+      "active": true,
+      "id": "subnet_price_flash-2026-08-07T17:32:59.301223Z"
     }
   ]
 }
