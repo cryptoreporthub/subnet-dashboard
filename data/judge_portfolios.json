@@ -182,6 +182,32 @@
         "bucket": "daily",
         "horizon_hours": 24,
         "entered_at": "2026-08-07T11:50:55.635239Z"
+      },
+      {
+        "id": "40f5c8753a",
+        "netuid": 1,
+        "name": "Apex",
+        "direction": "up",
+        "predicted_pct": 1.51,
+        "reference_price": 0.00830189,
+        "size": 0.9294,
+        "risk_multiplier": 1.0,
+        "bucket": "hourly",
+        "horizon_hours": 1,
+        "entered_at": "2026-08-07T11:57:04.683098Z"
+      },
+      {
+        "id": "37c4570cc8",
+        "netuid": 1,
+        "name": "Apex",
+        "direction": "up",
+        "predicted_pct": 1.51,
+        "reference_price": 0.00830189,
+        "size": 0.9294,
+        "risk_multiplier": 1.0,
+        "bucket": "daily",
+        "horizon_hours": 24,
+        "entered_at": "2026-08-07T11:57:05.635162Z"
       }
     ],
     "closed_positions": [
@@ -1347,7 +1373,7 @@
       }
     ],
     "summary": {
-      "open_positions": 14,
+      "open_positions": 16,
       "total_closed": 70,
       "win_count": 43,
       "loss_count": 27,
@@ -1550,6 +1576,32 @@
         "bucket": "daily",
         "horizon_hours": 24,
         "entered_at": "2026-08-07T11:50:55.648262Z"
+      },
+      {
+        "id": "40f5c8753a",
+        "netuid": 1,
+        "name": "Apex",
+        "direction": "up",
+        "predicted_pct": 1.51,
+        "reference_price": 0.00830189,
+        "size": 0.644,
+        "risk_multiplier": 0.7,
+        "bucket": "hourly",
+        "horizon_hours": 1,
+        "entered_at": "2026-08-07T11:57:04.710599Z"
+      },
+      {
+        "id": "37c4570cc8",
+        "netuid": 1,
+        "name": "Apex",
+        "direction": "up",
+        "predicted_pct": 1.51,
+        "reference_price": 0.00830189,
+        "size": 0.644,
+        "risk_multiplier": 0.7,
+        "bucket": "daily",
+        "horizon_hours": 24,
+        "entered_at": "2026-08-07T11:57:05.654985Z"
       }
     ],
     "closed_positions": [
@@ -2715,7 +2767,7 @@
       }
     ],
     "summary": {
-      "open_positions": 14,
+      "open_positions": 16,
       "total_closed": 70,
       "win_count": 43,
       "loss_count": 27,
@@ -2918,6 +2970,32 @@
         "bucket": "daily",
         "horizon_hours": 24,
         "entered_at": "2026-08-07T11:50:55.663899Z"
+      },
+      {
+        "id": "40f5c8753a",
+        "netuid": 1,
+        "name": "Apex",
+        "direction": "up",
+        "predicted_pct": 1.51,
+        "reference_price": 0.00830189,
+        "size": 0.9425,
+        "risk_multiplier": 1.3,
+        "bucket": "hourly",
+        "horizon_hours": 1,
+        "entered_at": "2026-08-07T11:57:04.745247Z"
+      },
+      {
+        "id": "37c4570cc8",
+        "netuid": 1,
+        "name": "Apex",
+        "direction": "up",
+        "predicted_pct": 1.51,
+        "reference_price": 0.00830189,
+        "size": 0.9425,
+        "risk_multiplier": 1.3,
+        "bucket": "daily",
+        "horizon_hours": 24,
+        "entered_at": "2026-08-07T11:57:05.679155Z"
       }
     ],
     "closed_positions": [
@@ -4083,7 +4161,7 @@
       }
     ],
     "summary": {
-      "open_positions": 14,
+      "open_positions": 16,
       "total_closed": 70,
       "win_count": 43,
       "loss_count": 27,

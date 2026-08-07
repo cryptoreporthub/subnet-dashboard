@@ -2,7 +2,7 @@
   "enabled": true,
   "daily": {
     "running": true,
-    "last_run_at": "2026-08-07T11:35:14.675820Z",
+    "last_run_at": "2026-08-07T11:56:18.694438Z",
     "last_run_ok": true,
     "last_run_error": null,
     "last_result": {
@@ -21,12 +21,12 @@
   },
   "last_tick": {
     "ok": true,
-    "run_at": "2026-08-07T11:35:14.675820Z",
+    "run_at": "2026-08-07T11:56:18.694438Z",
     "error": null,
     "action": "HOLD",
     "date": "2026-08-07",
-    "next_delay_seconds": 45585.0318,
+    "next_delay_seconds": 44320.693534,
     "today_ready": true
   },
-  "written_at": "2026-08-07T11:35:14.968386Z"
+  "written_at": "2026-08-07T11:56:19.307034Z"
 }

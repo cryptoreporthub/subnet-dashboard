@@ -357,8 +357,128 @@
       "claim_pct": 2.0,
       "horizon_hours": 1,
       "outcomes": null
+    },
+    {
+      "id": "9560b654ee",
+      "created_at": "2026-08-07T12:00:15.555213Z",
+      "experimental": true,
+      "focus_netuid": 35,
+      "shown_netuid": 75,
+      "shown": {
+        "netuid": 75,
+        "name": "Hippius",
+        "lane": "Lift",
+        "phase": "PUMPING",
+        "score": 0.66,
+        "timing_pts": 91.8,
+        "peer_pts": 75.1,
+        "combined_pts": 86.8,
+        "to_lead_pct": 100,
+        "to_trigger_pct": 92,
+        "price": 0.01933218
+      },
+      "tracked": [
+        {
+          "netuid": 75,
+          "name": "Hippius",
+          "lane": "Lift",
+          "phase": "PUMPING",
+          "score": 0.66,
+          "timing_pts": 91.8,
+          "peer_pts": 75.1,
+          "combined_pts": 86.8,
+          "to_lead_pct": 100,
+          "to_trigger_pct": 92,
+          "price": 0.01933218
+        },
+        {
+          "netuid": 72,
+          "name": "StreetVision by NATIX",
+          "lane": "Coil",
+          "phase": "ACCUMULATING",
+          "score": 0.61,
+          "timing_pts": 84.5,
+          "peer_pts": 67.5,
+          "combined_pts": 79.4,
+          "to_lead_pct": 100,
+          "to_trigger_pct": 85,
+          "price": 0.00302694
+        },
+        {
+          "netuid": 3,
+          "name": "Templar",
+          "lane": "Coil",
+          "phase": "ACCUMULATING",
+          "score": 0.6,
+          "timing_pts": 82.9,
+          "peer_pts": 65.8,
+          "combined_pts": 77.8,
+          "to_lead_pct": 100,
+          "to_trigger_pct": 83,
+          "price": 0.02594877
+        },
+        {
+          "netuid": 30,
+          "name": "Endure Network",
+          "lane": "Coil",
+          "phase": "ACCUMULATING",
+          "score": 0.59,
+          "timing_pts": 82.5,
+          "peer_pts": 65.4,
+          "combined_pts": 77.4,
+          "to_lead_pct": 100,
+          "to_trigger_pct": 82,
+          "price": 0.00400969
+        },
+        {
+          "netuid": 120,
+          "name": "Affine",
+          "lane": "Coil",
+          "phase": "ACCUMULATING",
+          "score": 0.62,
+          "timing_pts": 85.8,
+          "peer_pts": 57.3,
+          "combined_pts": 77.2,
+          "to_lead_pct": 100,
+          "to_trigger_pct": 86,
+          "price": 0.05775588
+        }
+      ],
+      "next_up_top": {
+        "netuid": 75,
+        "name": "Hippius",
+        "lane": "Lift",
+        "phase": "PUMPING",
+        "score": 0.66,
+        "timing_pts": 91.8,
+        "peer_pts": 75.1,
+        "combined_pts": 86.8,
+        "to_lead_pct": 100,
+        "to_trigger_pct": 92,
+        "price": 0.01933218
+      },
+      "peer_top": {
+        "netuid": 13,
+        "name": "Data Universe",
+        "lane": "Coil",
+        "phase": "STIRRING",
+        "distance": 0.203,
+        "shared": [
+          "vol heat"
+        ],
+        "score": 0.3,
+        "to_lead_pct": 68
+      },
+      "weights": {
+        "timing": 0.7,
+        "peer": 0.3
+      },
+      "prediction_id": "e63434a2f7",
+      "claim_pct": 2.0,
+      "horizon_hours": 1,
+      "outcomes": null
     }
   ],
   "version": 1,
-  "updated_at": "2026-08-07T11:50:56.228478Z"
+  "updated_at": "2026-08-07T12:00:15.555213Z"
 }
