@@ -7488,17 +7488,21 @@ body.wrap {
 .tribunal-hero__card {
   position: relative;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  /* Glassmorphism: translucent base with backdrops blur so the smoky
-     dashboard background shows through instead of opaque black. */
-  background-color: rgba(10, 20, 32, 0.28);
-  background-image: none;
-  backdrop-filter: blur(var(--hero-glass-blur, 20px)) saturate(1.25);
-  -webkit-backdrop-filter: blur(var(--hero-glass-blur, 20px)) saturate(1.25);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  /* Glassmorphism: translucent dark-glass base with backdrop blur so the
+     smoky dashboard background visibly glows through, plus a specular
+     sheen across the top for the frosted-glass reflection look. */
+  background-color: rgba(12, 22, 38, 0.16);
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.02) 34%, transparent 58%),
+    linear-gradient(180deg, rgba(12, 22, 38, 0.16) 0%, rgba(8, 14, 26, 0.34) 100%);
+  backdrop-filter: blur(var(--hero-glass-blur, 24px)) saturate(1.5) brightness(1.12);
+  -webkit-backdrop-filter: blur(var(--hero-glass-blur, 24px)) saturate(1.5) brightness(1.12);
   box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.45),
-    0 0 28px rgba(75, 192, 232, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    0 16px 44px rgba(0, 0, 0, 0.42),
+    0 0 32px rgba(75, 192, 232, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04);
   overflow: hidden;
   isolation: isolate;
 }
@@ -7513,13 +7517,14 @@ body.wrap {
 }
 
 .tribunal-hero__card::before {
-  /* Priority 1: atmospheric smoke — diffuse fog bleeding into the void */
+  /* Priority 1: soft glass tint — keep it light so the frosted-glass
+     translucency reads; the smoke no longer dominates the surface. */
   background:
-    radial-gradient(ellipse 95% 75% at 6% 10%, var(--hero-smoke-a) 0%, transparent 68%),
-    radial-gradient(ellipse 90% 70% at 94% 90%, var(--hero-smoke-a) 0%, transparent 65%),
-    radial-gradient(ellipse 110% 85% at 50% 48%, var(--hero-smoke-b) 0%, transparent 72%),
-    radial-gradient(ellipse 75% 60% at 12% 88%, rgba(10, 18, 28, 0.34) 0%, transparent 62%),
-    radial-gradient(ellipse 70% 55% at 88% 14%, rgba(14, 26, 38, 0.28) 0%, transparent 58%);
+    radial-gradient(ellipse 95% 75% at 6% 10%, rgba(107, 197, 240, 0.06) 0%, transparent 68%),
+    radial-gradient(ellipse 90% 70% at 94% 90%, rgba(107, 197, 240, 0.04) 0%, transparent 65%),
+    radial-gradient(ellipse 110% 85% at 50% 48%, rgba(12, 22, 38, 0.14) 0%, transparent 72%),
+    radial-gradient(ellipse 75% 60% at 12% 88%, rgba(10, 18, 28, 0.10) 0%, transparent 62%),
+    radial-gradient(ellipse 70% 55% at 88% 14%, rgba(14, 26, 38, 0.08) 0%, transparent 58%);
   animation: tribunal-glow-drift 24s ease-in-out infinite alternate;
   opacity: 1;
 }
