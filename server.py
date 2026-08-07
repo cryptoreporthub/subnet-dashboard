@@ -153,6 +153,16 @@ except Exception as _dev_radar_exc:  # pragma: no cover - defensive import guard
     dev_radar_router = None  # type: ignore[assignment,misc]
     _DEV_RADAR_ROUTES = False
 
+try:
+    from internal.conviction_index.routes import conviction_index_router
+    from internal.conviction_index import populate_author_reliability
+
+    _CONVICTION_INDEX_ROUTES = True
+except Exception as _conviction_idx_exc:  # pragma: no cover - defensive import guard
+    logger.warning("Conviction index routes unavailable: %s", _conviction_idx_exc)
+    conviction_index_router = None  # type: ignore[assignment,misc]
+    _CONVICTION_INDEX_ROUTES = False
+
 # Council pick engine (guarded so a broken/missing engine module can never stop
 # the app from booting — the picks endpoints degrade to a safe fallback).
 try:
@@ -380,6 +390,8 @@ if _INVESTIGATION_ROUTES:
     app.include_router(investigation_router)
 if _SHARE_ROUTES:
     app.include_router(share_router)
+if _CONVICTION_INDEX_ROUTES:
+    app.include_router(conviction_index_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
