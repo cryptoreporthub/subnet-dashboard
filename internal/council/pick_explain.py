@@ -110,4 +110,5 @@ def explain_subnet(
         "published_netuid": published_n,
         "candidate_netuid": candidate_n,
         "date": today.get("date"),
+        "telegram_evidence_calibration": scored.get("telegram_evidence_calibration"),
     }

@@ -205,6 +205,16 @@ async def api_message_intel_patterns(limit: int = Query(default=20, ge=1, le=100
         return {"status": "error", "patterns": [], "error": str(exc)}
 
 
+@message_intel_router.get("/api/message-intel/calibration")
+async def api_message_intel_calibration():
+    """Operator-visible health for outcome-backed Telegram calibration."""
+    try:
+        return {"status": "success", **await run_in_threadpool(engine.telegram_calibration_status)}
+    except Exception as exc:
+        logger.error("message-intel calibration status failed: %s", exc)
+        return {"status": "error", "active": False, "error": str(exc)}
+
+
 @message_intel_router.get("/api/message-intel/summary")
 async def api_message_intel_summary():
     """Panel summary endpoint (also folded into /api/mindmap/state)."""

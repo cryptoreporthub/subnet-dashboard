@@ -119,6 +119,7 @@ def select_daily_pick(
         "signal_impact": learning["signal_impact"],
         "signal_contributions": learning["signal_contributions"],
         "active_signals": learning["active_signals"],
+        "telegram_evidence_calibration": score_payload.get("telegram_evidence_calibration"),
     }
 
 

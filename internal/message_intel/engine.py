@@ -417,6 +417,13 @@ def list_patterns(limit: int = 20) -> Dict[str, Any]:
     }
 
 
+def telegram_calibration_status() -> Dict[str, Any]:
+    """Read-only health for guarded council Telegram-evidence calibration."""
+    from internal.message_intel.calibration import calibration_health
+
+    return calibration_health(db=get_db())
+
+
 def list_authors(*, days: int = 7, limit: int = 8) -> Dict[str, Any]:
     from internal.message_intel.rollup import build_reaction_crowns, build_weekly_authors
 

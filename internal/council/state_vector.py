@@ -1809,6 +1809,19 @@ def score_subnet_for_day(
         memory_adj = 0.0
     total = round((weighted + value_boost + flow_boost + size_tilt) * 100 + memory_adj, 2)
     total = min(100.0, max(0.0, total))
+    telegram_calibration = None
+    try:
+        # Lazy, read-only boundary: Telegram history never changes council weights
+        # and is default-off until operators explicitly enable it.
+        from internal.message_intel.calibration import calibration_for_subnet
+
+        telegram_calibration = calibration_for_subnet(sn.get("netuid") or sn.get("id"))
+        total = min(100.0, max(0.0, round(total + telegram_calibration["adjustment_points"], 2)))
+    except Exception:
+        telegram_calibration = {
+            "active": False, "applied": False, "adjustment_points": 0.0,
+            "withheld_reasons": ["calibration_unavailable"],
+        }
     pump_overlay = None
     if not (market_context or {}).get("skip_pump_overlay"):
         try:
@@ -1839,6 +1852,7 @@ def score_subnet_for_day(
         "weights_used": day_weights,
         "signal_impact": signal_impact,
         "pump_overlay": pump_overlay,
+        "telegram_evidence_calibration": telegram_calibration,
     }
 
 
