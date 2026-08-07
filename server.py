@@ -218,6 +218,10 @@ def _registry_name_boot_sync() -> None:
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     """Boot background workers on web when BACKGROUND_ON_WEB allows; on dedicated worker VM too."""
+    from internal.message_intel.calibration import validate_calibration_config
+
+    validate_calibration_config()
+
     from internal.run_mode import (
         background_boot_allowed,
         background_on_web,

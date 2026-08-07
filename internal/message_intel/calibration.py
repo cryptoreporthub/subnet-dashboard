@@ -7,9 +7,13 @@ council weights, or writes to the message-intel database.
 
 from __future__ import annotations
 
+import logging
+import math
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 from internal.message_intel.proof import classify_call, stable_author_id
 from internal.message_intel.rollup import _conviction_rows, _netuids_from_row, _parse_ts
@@ -35,9 +39,118 @@ def _int_env(name: str, default: int, minimum: int = 1) -> int:
 
 def _float_env(name: str, default: float, minimum: float = 0.0) -> float:
     try:
-        return max(minimum, float(os.environ.get(name, str(default))))
+        val = float(os.environ.get(name, str(default)))
+        if not math.isfinite(val):
+            return default
+        return max(minimum, val)
     except ValueError:
         return default
+
+
+def validate_calibration_config() -> List[str]:
+    """Validate calibration env vars and log a warning for each bad value.
+
+    Returns a list of human-readable issue strings so callers (and tests) can
+    inspect exactly what was wrong.  Values are still clamped to safe ranges
+    by the private helpers; this function only surfaces the problems.
+    """
+    issues: List[str] = []
+
+    # MIN_SAMPLES – must be a positive integer (>= 1)
+    raw = os.environ.get("TELEGRAM_EVIDENCE_CALIBRATION_MIN_SAMPLES")
+    if raw is not None:
+        try:
+            val = int(raw)
+            if val < 1:
+                msg = (
+                    f"TELEGRAM_EVIDENCE_CALIBRATION_MIN_SAMPLES={raw!r} is < 1; "
+                    f"clamped to 1"
+                )
+                issues.append(msg)
+                logger.warning("calibration config: %s", msg)
+        except ValueError:
+            msg = (
+                f"TELEGRAM_EVIDENCE_CALIBRATION_MIN_SAMPLES={raw!r} is not a valid "
+                f"integer; using default {DEFAULT_MIN_SAMPLES}"
+            )
+            issues.append(msg)
+            logger.warning("calibration config: %s", msg)
+
+    # MIN_HIT_RATE – must be a finite float in [0.0, 1.0]
+    raw = os.environ.get("TELEGRAM_EVIDENCE_CALIBRATION_MIN_HIT_RATE")
+    if raw is not None:
+        try:
+            val = float(raw)
+            if not math.isfinite(val):
+                msg = (
+                    f"TELEGRAM_EVIDENCE_CALIBRATION_MIN_HIT_RATE={raw!r} is non-finite "
+                    f"(nan/inf); using default {DEFAULT_MIN_HIT_RATE}"
+                )
+                issues.append(msg)
+                logger.warning("calibration config: %s", msg)
+            elif val > 1.0:
+                msg = (
+                    f"TELEGRAM_EVIDENCE_CALIBRATION_MIN_HIT_RATE={raw!r} is > 1.0; "
+                    f"clamped to 1.0"
+                )
+                issues.append(msg)
+                logger.warning("calibration config: %s", msg)
+            elif val < 0.0:
+                msg = (
+                    f"TELEGRAM_EVIDENCE_CALIBRATION_MIN_HIT_RATE={raw!r} is < 0.0; "
+                    f"clamped to 0.0"
+                )
+                issues.append(msg)
+                logger.warning("calibration config: %s", msg)
+        except ValueError:
+            msg = (
+                f"TELEGRAM_EVIDENCE_CALIBRATION_MIN_HIT_RATE={raw!r} is not a valid "
+                f"float; using default {DEFAULT_MIN_HIT_RATE}"
+            )
+            issues.append(msg)
+            logger.warning("calibration config: %s", msg)
+
+    # MAX_ADJUSTMENT_POINTS – must be a finite non-negative float; also capped at 5.0
+    raw = os.environ.get("TELEGRAM_EVIDENCE_CALIBRATION_MAX_ADJUSTMENT_POINTS")
+    if raw is not None:
+        try:
+            val = float(raw)
+            if not math.isfinite(val):
+                msg = (
+                    f"TELEGRAM_EVIDENCE_CALIBRATION_MAX_ADJUSTMENT_POINTS={raw!r} is non-finite "
+                    f"(nan/inf); using default {DEFAULT_MAX_ADJUSTMENT_POINTS}"
+                )
+                issues.append(msg)
+                logger.warning("calibration config: %s", msg)
+            elif val < 0.0:
+                msg = (
+                    f"TELEGRAM_EVIDENCE_CALIBRATION_MAX_ADJUSTMENT_POINTS={raw!r} is < 0; "
+                    f"clamped to 0.0"
+                )
+                issues.append(msg)
+                logger.warning("calibration config: %s", msg)
+            elif val > 5.0:
+                msg = (
+                    f"TELEGRAM_EVIDENCE_CALIBRATION_MAX_ADJUSTMENT_POINTS={raw!r} is > 5.0; "
+                    f"clamped to 5.0"
+                )
+                issues.append(msg)
+                logger.warning("calibration config: %s", msg)
+        except ValueError:
+            msg = (
+                f"TELEGRAM_EVIDENCE_CALIBRATION_MAX_ADJUSTMENT_POINTS={raw!r} is not a valid "
+                f"float; using default {DEFAULT_MAX_ADJUSTMENT_POINTS}"
+            )
+            issues.append(msg)
+            logger.warning("calibration config: %s", msg)
+
+    return issues
+
+
+# Run startup validation once when the module is first imported so that bad
+# environment values are surfaced immediately in the application logs rather
+# than silently degrading behaviour at call time.
+validate_calibration_config()
 
 
 def _config() -> Dict[str, Any]:
