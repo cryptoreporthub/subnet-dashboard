@@ -1,0 +1,66 @@
+{
+  "status": "ok",
+  "captured_at": "2026-08-07T16:28:44.584014Z",
+  "alert_level": "alert",
+  "alert_reasons": [
+    "learning_loop status=stalled",
+    "actionable badges: SN49 BUILDING, SN30 BUILDING, SN62 BUILDING, SN107 BUILDING, SN68 BUILDING"
+  ],
+  "pump_desk": {
+    "status": "success",
+    "count": 8,
+    "early_count": 5,
+    "confirmed_count": 3,
+    "error": null
+  },
+  "daily_pick": {
+    "date": "2026-08-07",
+    "action": "HOLD",
+    "has_pick": false,
+    "pick_netuid": null,
+    "reason": "Confidence 45% below 50% audit gate \u2014 no long call published"
+  },
+  "learning_loop": {
+    "status": "stalled",
+    "pending": 6,
+    "worker_peer_alive": null
+  },
+  "actionable_badges": [
+    {
+      "netuid": 49,
+      "name": "Nepher Robotics",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 Nepher Robotics (SN49)"
+    },
+    {
+      "netuid": 30,
+      "name": "Endure Network",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 Endure Network (SN30)"
+    },
+    {
+      "netuid": 62,
+      "name": "Ridges",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 Ridges (SN62)"
+    },
+    {
+      "netuid": 107,
+      "name": "Minos",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 Minos (SN107)"
+    },
+    {
+      "netuid": 68,
+      "name": "NOVA",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 NOVA (SN68)"
+    },
+    {
+      "netuid": 3,
+      "name": "Templar",
+      "badge": "JUST STARTED",
+      "move": "LIVE \u00b7 Templar (SN3)"
+    }
+  ]
+}
