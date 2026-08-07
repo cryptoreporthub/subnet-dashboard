@@ -42,3 +42,5 @@ All external API keys are **optional** — the app degrades gracefully without t
 - A circular import warning on startup (`MindmapBridge`) is non-fatal — the app starts fine
 
 ## User preferences
+
+- **Mobile-first design**: this is a mobile-first site. Build and verify UI against narrow/phone viewports first, then scale up to desktop — not the reverse. When changing layout/visuals, confirm nothing breaks or clips at phone width.
