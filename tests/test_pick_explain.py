@@ -348,3 +348,115 @@ def test_pick_explain_calibration_source_live_when_persisted_record_lacks_field(
         f"Expected calibration_source 'live' when persisted record lacks calibration field; "
         f"got {body.get('calibration_source')!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# HOLD/candidate subnet paths: gated_candidate and not_today_pick verdicts
+# ---------------------------------------------------------------------------
+
+# Today-pick state where SN42 is the gated candidate (no published pick yet).
+# The pick sub-object belongs to a different subnet so published_n is None;
+# candidate.subnet.netuid == 42 triggers the gated_candidate branch.
+_FIXTURE_TODAY_PICK_GATED_CANDIDATE = {
+    "date": _TODAY,
+    "action": None,
+    "pick": None,
+    "candidate": {
+        "subnet": {"netuid": 42, "name": "MockNet"},
+        "telegram_evidence_calibration": _SENTINEL_CAL,
+    },
+    "reason": "Below publish-gate confidence threshold",
+}
+
+# Today-pick state where SN42 is neither the published pick nor the candidate —
+# some other subnet (SN99) is the published pick.
+_FIXTURE_TODAY_PICK_OTHER_PUBLISHED = {
+    "date": _TODAY,
+    "action": "long",
+    "pick": {
+        "subnet": {"netuid": 99, "name": "OtherNet"},
+        "telegram_evidence_calibration": _SENTINEL_CAL,
+    },
+    "candidate": None,
+    "reason": None,
+}
+
+
+def test_pick_explain_gated_candidate_calibration_from_live_score():
+    """For a gated_candidate subnet pick-explain must return
+    telegram_evidence_calibration sourced from the live re-score (calibration_source='live'),
+    because the persisted-calibration optimisation only applies to the published pick.
+    """
+    with (
+        patch("server._get_subnets_with_source", return_value=([_FIXTURE_SUBNET], "mock")),
+        patch("server._market_context_with_weights", return_value={"weights": {}}),
+        patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
+        patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
+        patch(
+            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            return_value=_FIXTURE_TODAY_PICK_GATED_CANDIDATE,
+        ),
+    ):
+        resp = client.get("/api/pick-explain/42")
+
+    assert resp.status_code == 200
+    body = resp.json()
+
+    assert body.get("status") == "ok", (
+        f"Expected status 'ok' for gated_candidate path; got: {body!r}"
+    )
+    assert body.get("verdict") == "gated_candidate", (
+        f"Expected verdict 'gated_candidate'; got {body.get('verdict')!r}"
+    )
+    assert "telegram_evidence_calibration" in body, (
+        "telegram_evidence_calibration absent from pick-explain response for gated_candidate"
+    )
+    # Calibration must come from the live scorer for non-published verdicts.
+    assert body["telegram_evidence_calibration"] == _LIVE_SCORE_CAL, (
+        f"Expected live re-score calibration (_LIVE_SCORE_CAL) for gated_candidate; "
+        f"got {body['telegram_evidence_calibration']!r}"
+    )
+    assert body.get("calibration_source") == "live", (
+        f"Expected calibration_source 'live' for gated_candidate; "
+        f"got {body.get('calibration_source')!r}"
+    )
+
+
+def test_pick_explain_not_today_pick_calibration_from_live_score():
+    """For a not_today_pick subnet pick-explain must return
+    telegram_evidence_calibration sourced from the live re-score (calibration_source='live'),
+    because the persisted-calibration optimisation only applies to the published pick.
+    """
+    with (
+        patch("server._get_subnets_with_source", return_value=([_FIXTURE_SUBNET], "mock")),
+        patch("server._market_context_with_weights", return_value={"weights": {}}),
+        patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
+        patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
+        patch(
+            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            return_value=_FIXTURE_TODAY_PICK_OTHER_PUBLISHED,
+        ),
+    ):
+        resp = client.get("/api/pick-explain/42")
+
+    assert resp.status_code == 200
+    body = resp.json()
+
+    assert body.get("status") == "ok", (
+        f"Expected status 'ok' for not_today_pick path; got: {body!r}"
+    )
+    assert body.get("verdict") == "not_today_pick", (
+        f"Expected verdict 'not_today_pick'; got {body.get('verdict')!r}"
+    )
+    assert "telegram_evidence_calibration" in body, (
+        "telegram_evidence_calibration absent from pick-explain response for not_today_pick"
+    )
+    # Calibration must come from the live scorer for non-published verdicts.
+    assert body["telegram_evidence_calibration"] == _LIVE_SCORE_CAL, (
+        f"Expected live re-score calibration (_LIVE_SCORE_CAL) for not_today_pick; "
+        f"got {body['telegram_evidence_calibration']!r}"
+    )
+    assert body.get("calibration_source") == "live", (
+        f"Expected calibration_source 'live' for not_today_pick; "
+        f"got {body.get('calibration_source')!r}"
+    )
