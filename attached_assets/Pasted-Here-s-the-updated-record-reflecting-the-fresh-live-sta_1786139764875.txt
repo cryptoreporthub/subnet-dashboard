@@ -1,0 +1,74 @@
+Here's the updated record, reflecting the fresh live state from my latest probe. Items are marked with what changed since the last review.
+
+# Subnet Dashboard — Pre-Release Issues Report (updated 21:48 UTC)
+
+**Framing:** API layer mostly healthy/fast; most "empty" UI is hydration, not missing data. The pending deploy landed partially and fixed the watchdog, but introduced two regressions that must be stabilized first.
+
+## 🔁 Since last review — what changed
+
+| Issue | Before | Now |
+|---|---|---|
+| #9 Watchdog `pending_past_grace` | ⚠️ warning:true | ✅ **warning:false** (pending 10→8, oldest 2.39h→1.52h). `watchdog_ok:true` green first time. **DONE** |
+| #2 Resolver endpoint | bare dead singleton | Changed to `source:"memory"` (real lookup wired) — but now **returns `error:"timeout"`** |
+| New regression | — | **`/api/learning/health` → 422** (was healthy 200 degraded) |
+| New regression | — | **`/api/learning/stats` → `status:"degraded", meta.source:"timeout"`** (was clean 200) |
+| #7 Expired rate | 0.4 | ⚠️ **0.5** (expired 2→3) — moved the wrong way, trust gate further from green |
+
+---
+
+## P0 — Release-blocking
+
+**1. Learning loop produces zero grades** (`graded:0, correct:0, wrong:0`, `council_last5` all null, trust "0/30"). ⛔ **Unchanged** — every scoreboard/accuracy/Brain-Letter/trust surface still empty because no prediction has ever resolved. Engine/data problem, not display.
+
+**2. Resolver endpoint — partially fixed, still timing out.** Now `source:"memory"` (the proxy to cross-process truth is wired, good), but reports `error:"timeout"` with `running:false, last_run_at:null`. It's honest now, but the worker-evidence lookup itself hangs. **Needs stabilization.**
+
+**3. `/Pump` (capital P) 404s.** ⛔ **Unchanged** — nav link case is wrong; `/pump` works. One-line fix.
+
+**4. Hero shows unapproved, stale pick as "SEALED LONG · 71.6%."** ⛔ **Unchanged** — ORO has `audit.approved:false` (thin volume $0, unstable rank) and is 18h stale, yet hero stamps SEALED/LONG.
+
+---
+
+## P1 — High
+
+**5. Below-fold placeholder wall (hydration, not missing data).** ⛔ **Unchanged** — subnets (129), alerts (50), mindmap, pump all return 200 instantly while panels say "Loading…". Frontend fetch/mount bug, likely stale JS/service-worker cache → test hard-refresh/incognito first.
+
+**6. `/api/council` degraded/empty (`source:"busy"`).** ⛔ **Unchanged.**
+
+**7. Expired-rate blocks trust gate — now worse.** `expired_rate:0.5` (cap 0.1), `integrity.expired_ok:false`. **Regressed** from 0.4. Needs expired backlog reconciled so rate < 0.1.
+
+**8. Score-snapshot starved (`heavy_job_busy`)** ⛔ **Unchanged** — council/scanner/signals/undervalued stay stale off a snapshot that never cycles.
+
+**9. Watchdog `pending_past_grace`.** ✅ **RESOLVED** — `warning:false`. Close this one.
+
+**New — Stabilize health/stats (top priority).** `/api/learning/health` → **422** and `/api/learning/stats` → **`source:"timeout"`**. The snapshot-cache fast path appears to be timing out on the request path again. This is now the most urgent item — the learning endpoints must hold 200.
+
+---
+
+## P2 — Untouched bugs
+
+**10. `unresolvable_count:50` = one Targon prediction (`827b367fb9`) duplicated 50×.** ⛔ **Unchanged.** (scenario_count now 193.)
+
+**11. Several API paths 404** (`/api/market-pulse`, `/api/trail`, `/api/telegram/consensus`, etc.). ⛔ **Unchanged** — verify frontend actually calls them before filing.
+
+**12. Daily-pick may render blank volume/mcap** if it skips the live-feed overlay. ⛔ **Unchanged.**
+
+**13. Empty-state copy reads as "warming up."** ⛔ **Unchanged.**
+
+---
+
+## ✅ Verified healthy (don't re-open)
+- `/api/subnets` → 200, all 129. `/pump` → populated. `/api/predictions` → real ledger. `/health`, `/api/health` → OK. `/api/top-pick/hour` → real scored data.
+
+---
+
+## New recommended action order
+1. **Stabilize `/api/learning/health` (422) and `/api/learning/stats` (timeout)** — hold 200. Most urgent, and it's a regression from the push just landed.
+2. Unblock the resolver so it stops timing out and starts resolving (**#1, #2**) — first real grade + scoreboard.
+3. Fix the two cheap UI/untrust time-bombs (**#3 Pump case, #4 hero trust**).
+4. Unblock score snapshot (**#8**) → lights up largest cluster of empty panels.
+5. Then hydration (**#5, #6**) + accounting (**#7 expiry, #10 dupes**).
+6. Copy polish (**#13**).
+
+---
+
+Want me to also fold the two regressions + "stabilize first" into the Replit prompt next, so they fix the timeout/422 before anything else?
